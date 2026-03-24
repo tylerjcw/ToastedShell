@@ -1,0 +1,30 @@
+namespace Tosh.Core.Commands;
+
+public sealed class CastCommand : ShellCommand
+{
+    public CastCommand()
+        : base("cast", "Casts pipeline values to a CLR type.", "cast <type> [value ...]") { }
+
+    public override async IAsyncEnumerable<object?> ExecuteAsync(CommandContext context)
+    {
+        if (context.Arguments.Count == 0)
+        {
+            throw new InvalidOperationException("cast requires a target type.");
+        }
+
+        var targetType = ReflectionMetadataUtilities.ResolveType(context, context.Arguments[0]);
+        IReadOnlyList<object?> inputs = context.Arguments.Count > 1
+            ? context.Arguments.Skip(1).ToArray()
+            : await AsyncEnumerableExtensions.ToListAsync(context.Input, context.CancellationToken);
+
+        foreach (var input in inputs)
+        {
+            if (!TypeConversion.TryConvert(input, targetType, out var converted))
+            {
+                throw new InvalidOperationException($"Could not cast '{input}' to {ReflectionMetadataUtilities.GetDisplayName(targetType)}.");
+            }
+
+            yield return converted;
+        }
+    }
+}
