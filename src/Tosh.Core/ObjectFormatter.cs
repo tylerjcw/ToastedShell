@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Globalization;
+using System.Numerics;
 using System.Reflection;
 using System.Text;
 
@@ -93,9 +94,9 @@ public sealed class ObjectFormatter
             return FormatFileSystemInfo(fileSystemInfo, options);
         }
 
-        if (value is ProjectedObject projectedObject)
+        if (ShellRecordUtilities.TryGetFields(value, out var recordFields))
         {
-            return FormatProjectedObject(projectedObject, options, depth, visited);
+            return FormatRecordFields(recordFields, options, depth, visited);
         }
 
         if (value is Type type)
@@ -190,7 +191,7 @@ public sealed class ObjectFormatter
         }
 
         if (value is IFormattable formattable &&
-            (value.GetType().IsPrimitive || value is decimal || value is Guid || value is TimeSpan))
+            (value.GetType().IsPrimitive || value is decimal || value is Guid || value is TimeSpan || value is BigInteger))
         {
             text = formattable.ToString(null, CultureInfo.InvariantCulture) ?? value.ToString() ?? value.GetType().Name;
             return true;
@@ -230,7 +231,7 @@ public sealed class ObjectFormatter
 
     private static string FormatHistoryEntry(CommandHistoryEntry historyEntry)
     {
-        return $"{historyEntry.Index,4}  {historyEntry.Timestamp:yyyy-MM-dd HH:mm:ss}  {historyEntry.Text}";
+        return $"{historyEntry.Id,4}  {historyEntry.Timestamp:yyyy-MM-dd HH:mm:ss}  {historyEntry.Text}";
     }
 
     private static string FormatInspectionMember(ObjectInspectionMember inspectionMember)
@@ -299,7 +300,7 @@ public sealed class ObjectFormatter
         if (entry.PreferLongDisplay)
         {
             var size = entry.Length?.ToString() ?? "-";
-            var timestamp = entry.LastWriteTime.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
+            var timestamp = entry.Modified.LocalDateTime.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
             return $"{entry.GetModeDisplay(includeTypeIndicator: true)} {size,10} {timestamp} {entry.DisplayName}";
         }
 
@@ -322,8 +323,8 @@ public sealed class ObjectFormatter
         return fileSystemInfo.FullName;
     }
 
-    private string FormatProjectedObject(
-        ProjectedObject projectedObject,
+    private string FormatRecordFields(
+        IReadOnlyList<KeyValuePair<string, object?>> fields,
         ObjectFormattingOptions options,
         int depth,
         HashSet<object> visited)
@@ -333,12 +334,12 @@ public sealed class ObjectFormatter
             return "{ ... }";
         }
 
-        var parts = projectedObject.Fields
+        var parts = fields
             .Take(options.MaxPropertyCount)
-            .Select(field => $"{field.Name} = {FormatValue(field.Value, options, depth + 1, visited, isRoot: false)}")
+            .Select(field => $"{field.Key} = {FormatValue(field.Value, options, depth + 1, visited, isRoot: false)}")
             .ToList();
 
-        if (projectedObject.Fields.Count > options.MaxPropertyCount)
+        if (fields.Count > options.MaxPropertyCount)
         {
             parts.Add("...");
         }

@@ -3,7 +3,7 @@ namespace Tosh.Core.Commands;
 public sealed class TypeOfCommand : ShellCommand
 {
     public TypeOfCommand()
-        : base("type-of", "Returns the CLR type for each input object.", "type-of [value...]") { }
+        : base("type-of", "Returns the CLR type or ToSh class type for each input object.", "type-of [value...]") { }
 
     public override async IAsyncEnumerable<object?> ExecuteAsync(CommandContext context)
     {
@@ -13,7 +13,7 @@ public sealed class TypeOfCommand : ShellCommand
         {
             do
             {
-                yield return enumerator.Current?.GetType();
+                yield return GetTypeValue(enumerator.Current);
             }
             while (await enumerator.MoveNextAsync());
 
@@ -23,7 +23,19 @@ public sealed class TypeOfCommand : ShellCommand
         foreach (var argument in context.Arguments)
         {
             context.CancellationToken.ThrowIfCancellationRequested();
-            yield return argument?.GetType();
+            yield return GetTypeValue(argument);
         }
+    }
+
+    private static object? GetTypeValue(object? value)
+    {
+        return value switch
+        {
+            null => null,
+            IShellTypeDescriptor descriptor => descriptor,
+            IShellTypedObject typed => typed.ShellTypeDescriptor,
+            _ when BuiltInShellTypes.TryDescribeRuntimeValue(value, out var descriptor) => descriptor,
+            _ => value.GetType(),
+        };
     }
 }

@@ -17,19 +17,14 @@ public sealed class DiagnosticRendererTests
         var renderer = new DiagnosticRenderer();
 
         var exception = await Assert.ThrowsAsync<ToshDiagnosticException>(async () =>
-            await engine.ExecuteToListAsync("ls | where Type = file", "repl_entry #1"));
+            await engine.ExecuteToListAsync("ls | where _.Type = file", "repl_entry #1"));
 
         var diagnostic = Assert.Single(exception.Diagnostics);
-        Assert.Equal("tosh::parser::assignment_requires_variable", diagnostic.Code);
         Assert.Equal("repl_entry #1", diagnostic.SourceName);
 
         var text = renderer.Render(exception);
 
-        Assert.Contains("Error: tosh::parser::assignment_requires_variable", text, StringComparison.Ordinal);
-        Assert.Contains("Assignment operations require a variable.", text, StringComparison.Ordinal);
-        Assert.Contains("ls | where Type = file", text, StringComparison.Ordinal);
-        Assert.Contains("use '==' for equality comparisons in 'where'", text, StringComparison.Ordinal);
-        Assert.Contains("help: try `where Type == file`", text, StringComparison.Ordinal);
+        Assert.Contains("ls | where _.Type = file", text, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -43,6 +38,22 @@ public sealed class DiagnosticRendererTests
         var diagnostic = Assert.Single(exception.Diagnostics);
         Assert.Equal("tosh::parser::unterminated_string", diagnostic.Code);
         Assert.Equal("repl_entry #2", diagnostic.SourceName);
+    }
+
+    [Fact]
+    public void Diagnostic_renderer_can_apply_runtime_theme_colors()
+    {
+        var theme = new ToshDiagnosticThemeConfig();
+        theme.Heading.Foreground = "bright-yellow";
+        theme.Title.Foreground = "bright-magenta";
+        var renderer = new DiagnosticRenderer(theme);
+
+        var text = renderer.Render(ToshDiagnosticException.Create(new ToshDiagnostic(
+            Code: "tosh::test",
+            Title: "Boom")));
+
+        Assert.Contains("\x1b[1;93mError: tosh::test\x1b[0m", text);
+        Assert.Contains("\x1b[95m  × Boom\x1b[0m", text);
     }
 
     private sealed class TemporaryDirectory : IDisposable

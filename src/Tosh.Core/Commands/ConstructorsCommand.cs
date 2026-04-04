@@ -1,29 +1,28 @@
-using System.Reflection;
-
 namespace Tosh.Core.Commands;
 
 public sealed class ConstructorsCommand : ShellCommand
 {
     public ConstructorsCommand()
-        : base("constructors", "Lists public constructors for CLR types.", "constructors <type> [type ...]") { }
+        : base("constructors", "Lists constructors for CLR types, ToSh classes, and shell collection types.", "constructors [type ...]") { }
 
-    public override IAsyncEnumerable<object?> ExecuteAsync(CommandContext context)
+    public override async IAsyncEnumerable<object?> ExecuteAsync(CommandContext context)
     {
-        var results = new List<object?>();
+        var typeTargets = context.Arguments.Count > 0
+            ? ReflectionMetadataUtilities.ResolveTypeLikeTargets(context, context.Arguments)
+            : (await AsyncEnumerableExtensions.ToListAsync(context.Input, context.CancellationToken))
+                .Select(item => ReflectionMetadataUtilities.ResolveTypeLikeTarget(context, item ?? typeof(object)))
+                .DistinctBy(type => type is Type clrType
+                    ? clrType.AssemblyQualifiedName ?? clrType.FullName ?? clrType.Name
+                    : ((IShellTypeDescriptor)type).ShellFullName,
+                    StringComparer.OrdinalIgnoreCase)
+                .ToArray();
 
-        foreach (var type in ReflectionMetadataUtilities.ResolveTypes(context, context.Arguments, allowInput: false))
+        foreach (var type in typeTargets)
         {
-            foreach (var constructor in type.GetConstructors(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static))
+            foreach (var constructor in ReflectionMetadataUtilities.EnumerateConstructorProjections(type))
             {
-                results.Add(new ProjectedObject(
-                [
-                    new ProjectedField("Type", "Type", ReflectionMetadataUtilities.GetDisplayName(type)),
-                    new ProjectedField("ParameterCount", "ParameterCount", constructor.GetParameters().Length),
-                    new ProjectedField("Signature", "Signature", ReflectionMetadataUtilities.FormatConstructorSignature(constructor)),
-                ]));
+                yield return constructor;
             }
         }
-
-        return AsyncEnumerableExtensions.FromEnumerable(results);
     }
 }

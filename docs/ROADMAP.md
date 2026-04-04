@@ -1,5 +1,7 @@
 # Tosh Roadmap
 
+For the current implementation snapshot and near-term priorities, see [STATUS.md](STATUS.md). This document stays focused on longer-term direction and design intent.
+
 ## Vision
 
 `tosh` should grow into a shell, REPL, and scripting language with these end goals:
@@ -20,7 +22,7 @@ Pipeline output should always be the best available object model for the domain.
 
 Examples:
 
-- File permissions should be a `FilePermissions` value, not a raw `"drwxr-xr-x"` string.
+- File permissions should be a native `UnixFileMode` value when available, not a raw `"drwxr-xr-x"` string.
 - File sizes should ideally be a dedicated type or at least a richer numeric wrapper with units/helpers, not just presentation text.
 - File modification times should stay as `DateTime` or `DateTimeOffset` values.
 - Exceptions, processes, paths, and diagnostics should have shell-friendly object models with meaningful members.
@@ -60,7 +62,7 @@ We should gradually replace display-oriented properties with semantic types.
 
 Near-term targets:
 
-- `FilePermissions` instead of `Mode : string`
+- native `UnixFileMode` instead of `Mode : string`
 - `FileKind` or similar instead of free-form file type strings
 - better path/value wrappers where plain strings are currently overloaded
 - shell-specific diagnostic objects where appropriate
@@ -81,7 +83,7 @@ The display layer should answer questions like:
 
 Examples:
 
-- `FilePermissions` renders as `drwxr-xr-x` in tables, but remains queryable as a typed object.
+- `UnixFileMode` renders as `drwxr-xr-x` in tables, but remains queryable as a typed object.
 - `DateTimeOffset` renders as `14 minutes ago` in compact table mode, but can be configured to render as ISO-8601 or Unix time.
 - file sizes can render as `36.8 kB` while still being sortable/filterable numerically.
 
@@ -100,150 +102,184 @@ This should eventually live in shell configuration, profiles, or modules.
 
 ## Roadmap Phases
 
-### Phase 1: Object Model and Display Foundations
+### Phase 1: Object Model and Display Foundations — DONE
 
-This is the highest-priority area right now.
+The typed value layer is in place. Runtime objects stay semantic throughout the pipeline and display is a projection over them.
 
-Goals:
+What shipped:
 
-- strengthen the boundary between runtime objects and textual rendering
-- replace stringly-typed shell values with semantic types where it matters
-- expand display profiles beyond the current table heuristics
+- native `UnixFileMode`, `FileAttributes`, and `FileSystemInfo` rendering
+- `FileSystemEntry` carries domain values, not display strings
+- display profiles for 40+ CLR types including `DateTime`, `DateTimeOffset`, `Exception`, `Process`, `Regex`, `Uri`, `IPAddress`, and more
+- cell formatters distinct from raw property values
+- raw/table/detail/compact display modes with user-configurable rendering for dates, sizes, permissions, and file attributes
+- `view columns <type> ...` for user-defined per-type table column overrides
 
-Concrete work:
+### Phase 2: REPL Quality — DONE
 
-- introduce `FilePermissions`
-- revisit `FileSystemEntry` so its properties represent domain values first and display aliases second
-- add richer display profiles for:
-  - `FileSystemEntry`
-  - `DateTime` / `DateTimeOffset`
-  - exceptions
-  - dictionaries and common collections
-  - inspection/diagnostic objects
-- support cell formatters distinct from raw property values
-- support raw/table/detail display modes more explicitly
-- add user-configurable date/time and size rendering
+The REPL is the primary development surface.
 
-Success criteria:
+What shipped:
 
-- `ls | get Mode | inspect` shows a permissions object, not `System.String`
-- `ls` still renders beautifully as a table
-- filtering and sorting continue to operate on typed values
-
-### Phase 2: REPL Quality
-
-Goals:
-
-- make the interactive environment feel polished and dependable
-- reduce friction when exploring objects and writing pipelines
-
-Concrete work:
-
-- tab completion for commands, members, paths, and types
-- multiline editing that understands brackets, quotes, and pipelines
-- history search
-- word-wise cursor movement
+- tab completion for commands, members, paths, types, modules, and CLR types
+- multiline editing with bracket/quote/pipeline awareness
+- reverse history search
 - syntax highlighting
 - paging for large output
-- color themes for tables and diagnostics
-- terminal-width-aware layouts that degrade gracefully
+- live color themes for tables, diagnostics, prompt, completion, and TUI
+- dropdown-style completion picker
+- ghost text completions
 
-Success criteria:
+### Phase 3: Diagnostics and Observability — DONE
 
-- the REPL is good enough that we prefer testing the language inside it rather than through one-off CLI invocations
+Structured diagnostics are in place across the parser and runtime.
 
-### Phase 3: Diagnostics and Observability
+What shipped:
 
-Goals:
+- pointed, actionable errors with notes, secondary spans, and help messages
+- command-specific diagnostics for common mistakes
+- `inspect`, `members`, `describe-type`, and `constructors` for object exploration
+- full-screen `help browse` with CLR namespace tree and topic search
 
-- make errors feel native to the shell
-- make object behavior easy to understand
+### Phase 4: Language Core — DONE
 
-Concrete work:
+ToSh is a real language, not just a command runner.
 
-- broaden structured diagnostics across parser and runtime errors
-- add notes, secondary spans, and richer help messages
-- add command-specific diagnostics for common user mistakes
-- expand `inspect`
-- add focused commands like `members`, `describe`, or `schema` if needed
+What shipped:
 
-Success criteria:
+- variables, assignment, expressions, operators
+- closures, blocks, `if`, loops, `match`, `switch`, ternary
+- `func`, `class`, `enum`, `record`, `module`
+- `try` / `catch` / `finally`, `throw`, `return`, `break`, `continue`
+- `shy`, `global`, `export` visibility
+- script files with `source` vs execution semantics
 
-- common mistakes get pointed, actionable errors
-- inspecting unfamiliar objects feels easy
+### Phase 5: External Command Integration — DONE
 
-### Phase 4: Language Core
+ToSh runs native processes and typed adapters side by side.
 
-Goals:
+What shipped:
 
-- move from command-only pipelines into a real language
+- native process invocation with stdout/stderr/exit-status capture
+- explicit redirection (`out>`, `err>`, `o+e>`, `<<<`)
+- background jobs with `&`, `jobs`, `wait-for`, `kill`, `signal`
+- `exec` for process replacement
+- typed Linux adapters for `ip addr`, `lsblk`, `findmnt`, `lscpu`, `lsfd`, `lsipc`
+- `pipefail` policy
+- globbing with `*`, `?`, `[]`, `**`, `@(...)`
 
-Concrete work:
+### Phase 6: Modules, Profiles, and Extensibility — DONE
 
-- variables and assignment
-- expressions and operators
-- blocks / closures
-- `if`, loops, and pattern/match-style control flow
-- functions and aliases
-- script files
+Users can extend and configure the shell.
 
-Success criteria:
+What shipped:
 
-- users can write reusable scripts that still feel shell-native
-
-### Phase 5: External Command Integration
-
-Goals:
-
-- make `tosh` useful in the real world outside purely managed commands
-
-Concrete work:
-
-- invoke native processes
-- capture stdout/stderr/exit status as meaningful shell values
-- add adapters from text streams into structured objects
-- support command composition between external tools and typed `.NET` pipelines
-
-Success criteria:
-
-- `tosh` can work as a daily shell, not just an experimental REPL
-
-### Phase 6: Modules, Profiles, and Extensibility
-
-Goals:
-
-- let users extend the shell and tailor it to their workflows
-
-Concrete work:
-
-- modules and imports
-- startup profiles
-- configuration for display and REPL behavior
+- `module`, `using`, `require`, `export`, `shy`
+- `config.tosh` → `profile.tosh` → `autoload/` startup chain
+- runtime-backed `$tosh.Config` with `config` command for get/set/reset/init/browse
+- live theme configuration for prompt, syntax highlighting, completion, diagnostics, tables, and TUI
 - command discovery from loaded assemblies
-- type/display profile registration from modules
+- `view columns` for user-defined display profiles
 
-Success criteria:
+### Phase 7: TUI Platform — DONE
 
-- users can install or write their own shell extensions cleanly
+A reusable terminal UI platform powers full-screen apps and inline prompts.
 
-## Immediate Next Steps
+What shipped:
 
-The next best chunk of work is:
+- `ITuiHost` / `ConsoleTuiHost` terminal abstraction
+- `ITuiScreen` / `TuiApplication` app runtime with alternate-screen rendering
+- reusable widget model: list, text, text-input, file-picker, option-picker, confirmation
+- layout system: single, split-horizontal, split-vertical, stacked with configurable ratios
+- `help browse` — full-screen help/API browser with CLR namespace tree
+- `config browse` — full-screen config editor with live preview, validation, and staged edits
+- `tui pick`, `tui filter`, `tui input`, `tui confirm`, `tui filepick`, `tui run` commands
+- inline prompt rendering (`--cli` flag) with themed box-drawn tables, selection highlighting, search/filter, and multi-select
+- `IInlinePromptProvider` abstraction for testable programmatic access
+- 100+ TUI-specific tests
 
-1. Add top-notch globbing and path expansion:
-   hidden-file rules, `**`, command-aware expansion, and a clean escape story.
-2. Continue growing the Unix-flavored builtin surface with typed object returns:
-   process, environment, command-resolution, and system-introspection commands.
-3. Extend control flow after `if` / `for` / `while`:
-   `break`, `continue`, `until`, and then closures on top of the same block model.
-4. Expand the generic pipeline toolkit:
-   sorting, skipping, grouping, distinctness, and projection/transformation commands.
+## Near-Term Direction
 
-That keeps us aligned with the core thesis:
+The active near-term work should continue to align with the core thesis:
+
+1. Keep the shell object-first.
+2. Prefer semantic runtime values over display-shaped strings.
+3. Make interactive shell use pleasant enough that people want to stay in ToSh.
+4. Harden the boring daily-driver details before chasing broad new surface area.
 
 - the pipeline stays strongly typed
 - the terminal stays pleasant to read
 - the REPL becomes the primary development surface for the language
+
+## What Still Separates ToSh From A Daily-Driver Shell
+
+ToSh is no longer missing a single giant subsystem. The remaining gap is mostly breadth, hardening, and long-tail behavior.
+
+### 1. Shell Semantics Hardening
+
+These are the behaviors long-time shell users expect without thinking about them:
+
+- predictable stdout/stderr redirection behavior
+- predictable exit-status flow back to parent shells and calling scripts
+- stronger native process composition, especially around pipes and errors
+- richer globbing and path expansion
+- coherent regex and text-pattern behavior across command surfaces
+- more complete job/process edge-case handling
+
+### 2. Native Interop Depth
+
+ToSh already runs native commands well, but daily-driver shell use pushes harder on:
+
+- process lifecycle control
+- stream behavior under load
+- path, quoting, and argument edge cases
+- more typed adapters at the shell/text boundary
+
+### 3. Display And Inspection Customization
+
+The built-in display layer is strong, but a daily shell needs users to be able to shape it:
+
+- per-type display profiles
+- per-property column choices
+- compact/table/detail/raw defaults per type
+- config- or module-defined overrides
+
+### 4. Testing And Weird-Case Coverage
+
+Mature shells earn their size by surviving endless strange cases:
+
+- mixed object/text pipelines
+- partial failures
+- unusual filesystem/process states
+- nested script/module scope interactions
+- interactive REPL editing edge cases
+
+### 5. Performance And Startup Discipline
+
+Users tolerate a lot less latency from a shell than from most apps:
+
+- startup time
+- memory footprint
+- command dispatch overhead
+- display/pager cost on large outputs
+
+### 6. Packaging, Distribution, And Ecosystem
+
+The core shell may be sound, but a daily-driver tool also needs:
+
+- reliable publish/install/update stories
+- more examples and batteries-included modules
+- stable extension surfaces for users
+- docs that answer real workflow questions quickly
+
+### 7. Clear Compatibility Boundaries
+
+ToSh does not need to be `sh`, `zsh`, NuShell, or PowerShell. It does need a clear story about where it fits:
+
+- object-first shell, not POSIX-sh compatibility shell
+- strong `.NET` interop, not every shell feature copied blindly
+- great Unix/native interop where it materially improves the shell
+- deliberate non-goals instead of accidental gaps
 
 ## Non-Goals Right Now
 

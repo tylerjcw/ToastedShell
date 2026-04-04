@@ -1,6 +1,6 @@
 namespace Tosh.Core.Commands;
 
-public sealed class WriteCommand : ShellCommand
+public sealed class WriteCommand : ShellCommand, IImplicitGlobCommand
 {
     public WriteCommand()
         : base("write", "Writes rendered values without a trailing newline.", "write [value...]") { }
@@ -23,7 +23,7 @@ public sealed class WriteCommand : ShellCommand
 
         if (context.Arguments.Count > 0)
         {
-            return string.Join(" ", context.Arguments.Select(argument => context.Runtime.Display.Render(argument)));
+            return string.Join(" ", context.Arguments.Select(ExternalTextSerializer.Serialize));
         }
 
         var values = await AsyncEnumerableExtensions.ToListAsync(context.Input, context.CancellationToken);
@@ -33,6 +33,8 @@ public sealed class WriteCommand : ShellCommand
             return string.Empty;
         }
 
-        return context.Runtime.Display.RenderMany(values);
+        return string.Join(
+            Environment.NewLine,
+            values.Select(value => value is ShellTextLine line ? line.Text : ExternalTextSerializer.Serialize(value)));
     }
 }

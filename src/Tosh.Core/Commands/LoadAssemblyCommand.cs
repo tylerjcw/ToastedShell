@@ -8,13 +8,18 @@ public sealed class LoadAssemblyCommand : ShellCommand
     public LoadAssemblyCommand()
         : base("load-assembly", "Loads a .NET assembly from disk into the current process.", "load-assembly <path> [path...]") { }
 
-    public override IAsyncEnumerable<object?> ExecuteAsync(CommandContext context)
+    public override async IAsyncEnumerable<object?> ExecuteAsync(CommandContext context)
     {
-        var results = new List<object?>();
+        var paths = await ShellPathArguments.CollectAsync(context, context.Arguments, context.CancellationToken);
 
-        foreach (var rawPath in context.Arguments.Select(argument => argument?.ToString()).Where(path => !string.IsNullOrWhiteSpace(path)).Cast<string>())
+        if (paths.Count == 0)
         {
-            var path = PathUtilities.ResolvePath(context.Runtime.CurrentDirectory, rawPath);
+            throw new InvalidOperationException("load-assembly requires at least one assembly path or pipeline input.");
+        }
+
+        foreach (var path in paths)
+        {
+            context.CancellationToken.ThrowIfCancellationRequested();
 
             if (!File.Exists(path))
             {
@@ -22,15 +27,13 @@ public sealed class LoadAssemblyCommand : ShellCommand
             }
 
             var assembly = AssemblyLoadContext.Default.LoadFromAssemblyPath(path);
-            results.Add(new ProjectedObject(
+            yield return ShellRecordUtilities.CreateExpando(
             [
-                new ProjectedField("Name", "Name", assembly.GetName().Name),
-                new ProjectedField("FullName", "FullName", assembly.FullName),
-                new ProjectedField("Path", "Path", assembly.Location),
-                new ProjectedField("Types", "Types", assembly.GetTypes().Length),
-            ]));
+                new KeyValuePair<string, object?>("Name", assembly.GetName().Name),
+                new KeyValuePair<string, object?>("FullName", assembly.FullName),
+                new KeyValuePair<string, object?>("Path", path),
+                new KeyValuePair<string, object?>("Types", assembly.GetTypes().Length),
+            ]);
         }
-
-        return AsyncEnumerableExtensions.FromEnumerable(results);
     }
 }

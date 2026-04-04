@@ -1,0 +1,100 @@
+#!/usr/bin/env tosh
+# library_demo.tosh
+# Demonstrates modules, enums, records, classes, lexical using/require,
+# loops, try/catch, wrappers, dynamic records, and the typed object pipeline.
+
+require Inventory from "./toastlib.tosh" as Inv
+require { Reporting, Utilities } from "./toastlib.tosh"
+
+func item_names => get Name
+
+func demo_path() -> string {
+    using System.IO = IO
+    return IO.Path.Combine((IO.Path.GetDirectoryName($tosh.Script.Path)), "toastlib.tosh")
+}
+
+Utilities.banner("ToSh / ToastScript Demo")
+writeline $"Script: {Utilities.script_name()}"
+writeline $"Library: {(demo_path)}"
+
+var items = Inv.sample_items()
+var shelf = new Inv.Shelf("Pantry")
+
+for item in ($items) {
+    $shelf.Add($item) | ignore
+}
+
+writeline $"Shelf {$shelf.Label} holds {$shelf.ItemCount} items and uses accent {$shelf.Accent.Name}."
+
+Utilities.banner("Names Through A Wrapper Function")
+$items | item_names | each { writeline _ }
+
+Utilities.banner("Enums, Records, And Equality")
+var bread = new Inv.Item("Bread", 2, "Food", "BurlyWood")
+var breadClone = new Inv.Item("Bread", 2, "Food", "BurlyWood")
+var restocked = Inv.restock($bread, 5)
+
+writeline $"State: {Inv.state_of($bread).ToString()}"
+writeline $"Equal before restock: {($bread == $breadClone)}"
+writeline $"Restocked quantity: {$restocked.Quantity}"
+
+Utilities.banner("Switch Over Enum Values")
+$items | each {
+    var state = Inv.state_of(_)
+
+    switch ($state) {
+        case Inv.StockState.Low {
+            writeline $"LOW: {_.Name} x{_.Quantity}"
+        }
+        case Inv.StockState.Out {
+            writeline $"OUT: {_.Name}"
+        }
+        default {
+            writeline $"OK: {_.Name} x{_.Quantity}"
+        }
+    }
+}
+
+Utilities.banner("Dynamic Records In A List")
+var report = new list()
+
+$items | each {
+    var state = Inv.state_of(_)
+    $report.Add({
+        Name = _.Name,
+        Category = _.Category,
+        Quantity = _.Quantity,
+        State = $state
+    }) | ignore
+}
+
+$report | sort Quantity | reverse | each {
+    writeline $"[{_.Category}] {_.Name} x{_.Quantity} => {_.State.ToString()}"
+}
+
+Utilities.banner("Grouping And The Current Result Slot")
+Reporting.category_groups($report) | flatten | each {
+    writeline $"{_.Key}: {_.Count}"
+}
+
+Utilities.banner("Lexical Using And Try/Catch")
+try {
+    using System.IO = IO
+    echo IO.File.ReadAllText("/definitely/not-here.txt")
+} catch (err) {
+    writeline $"Handled a missing file cleanly: {$err.Message}"
+}
+
+Utilities.banner("Until Loop")
+var countdown = 3
+until (($countdown == 0)) {
+    writeline $"Countdown: {$countdown}"
+    $countdown -= 1
+}
+
+Utilities.banner("Styled Text And Real Color")
+styled "Color-aware table follows." --fg bright-yellow --bold | writeline
+styled "Accent sample: LightGoldenrodYellow" --fg FAEAA8 --bold | writeline
+
+Utilities.banner("Structured Table Output")
+Reporting.summary_rows($items) | flatten | sort Quantity | reverse | writeline

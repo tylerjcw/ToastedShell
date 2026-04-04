@@ -3,17 +3,34 @@ namespace Tosh.Core.Commands;
 public sealed class DfCommand : ShellCommand
 {
     public DfCommand(string name = "df")
-        : base(name, "Returns mounted file system usage information.", $"{name} [path ...]") { }
+        : base(name, "Returns mounted file system usage information.", $"{name} [-hTl] [-t type[,type...]] [-x type[,type...]] [--total] [--output columns] [--show columns] [--hide columns] [--show-all] [path ...]") { }
 
     public override async IAsyncEnumerable<object?> ExecuteAsync(CommandContext context)
     {
-        var entries = UnixSystemServices.GetFileSystemUsage();
+        var selection = CommandDisplaySelectionParser.Parse(context.Arguments, showOptionAliases: ["--output"]);
+        var options = ParseOptions(selection.RemainingArguments);
+        var effectiveSelection = GetEffectiveSelection(selection.Selection, options);
+        var rawEntries = UnixSystemServices.GetFileSystemUsage()
+            .Where(entry => MatchesFilters(entry, options))
+            .ToArray();
+        var entries = FileSystemUsageUtilities.GetDefaultVisibleEntries(rawEntries);
+        var paths = await ShellPathArguments.CollectAsync(context, options.Paths, context.CancellationToken);
+        var yielded = new List<FileSystemUsageInfo>();
 
-        if (context.Arguments.Count == 0)
+        if (paths.Count == 0)
         {
             foreach (var entry in entries)
             {
-                yield return entry;
+                yielded.Add(entry);
+                yield return CommandDisplaySelectionParser.Apply(context.Runtime, effectiveSelection, entry);
+            }
+
+            if (options.IncludeTotal && yielded.Count > 0)
+            {
+                yield return CommandDisplaySelectionParser.Apply(
+                    context.Runtime,
+                    effectiveSelection,
+                    FileSystemUsageUtilities.CreateTotalRow(yielded));
             }
 
             yield break;
@@ -21,46 +38,219 @@ public sealed class DfCommand : ShellCommand
 
         var yieldedMounts = new HashSet<string>(StringComparer.Ordinal);
 
-        foreach (var argument in context.Arguments)
+        foreach (var resolvedPath in paths)
         {
-            var path = argument?.ToString();
-
-            if (string.IsNullOrWhiteSpace(path))
-            {
-                continue;
-            }
-
-            var resolvedPath = PathUtilities.ResolvePath(context.Runtime.CurrentDirectory, path);
-
             if (!File.Exists(resolvedPath) && !Directory.Exists(resolvedPath))
             {
                 throw new InvalidOperationException($"Path '{resolvedPath}' does not exist.");
             }
 
-            var match = entries
-                .Where(entry => PathIsWithinMount(resolvedPath, entry.MountedOn))
-                .OrderByDescending(entry => entry.MountedOn.Length)
-                .FirstOrDefault();
+            var match = FileSystemUsageUtilities.FindContainingMount(rawEntries, resolvedPath);
 
             if (match is not null && yieldedMounts.Add(match.MountedOn))
             {
-                yield return match;
+                yielded.Add(match);
+                yield return CommandDisplaySelectionParser.Apply(context.Runtime, effectiveSelection, match);
+            }
+        }
+
+        if (options.IncludeTotal && yielded.Count > 0)
+        {
+            yield return CommandDisplaySelectionParser.Apply(
+                context.Runtime,
+                effectiveSelection,
+                FileSystemUsageUtilities.CreateTotalRow(yielded));
+        }
+    }
+
+    private static DisplayColumnSelection GetEffectiveSelection(DisplayColumnSelection selection, DfOptions options)
+    {
+        if (selection.HasOverrides || !options.PrintType)
+        {
+            return selection;
+        }
+
+        return new DisplayColumnSelection(showColumns: ["FileSystem", "Type", "Size", "Used", "Available", "UsePercent", "MountedOn"]);
+    }
+
+    private static bool MatchesFilters(FileSystemUsageInfo entry, DfOptions options)
+    {
+        if (options.LocalOnly && !entry.IsLocal)
+        {
+            return false;
+        }
+
+        if (options.IncludeTypes.Count > 0 &&
+            (string.IsNullOrWhiteSpace(entry.Type) || !options.IncludeTypes.Contains(entry.Type)))
+        {
+            return false;
+        }
+
+        if (options.ExcludeTypes.Count > 0 &&
+            !string.IsNullOrWhiteSpace(entry.Type) &&
+            options.ExcludeTypes.Contains(entry.Type))
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    private static DfOptions ParseOptions(IReadOnlyList<object?> arguments)
+    {
+        var options = new DfOptions();
+        var parseOptions = true;
+
+        for (var index = 0; index < arguments.Count; index++)
+        {
+            var argument = arguments[index];
+
+            if (!parseOptions || argument is not string text || text.Length == 0)
+            {
+                options.Paths.Add(argument);
+                continue;
+            }
+
+            if (text == "--")
+            {
+                parseOptions = false;
+                continue;
+            }
+
+            if (text.StartsWith("--", StringComparison.Ordinal))
+            {
+                ParseLongOption(text, arguments, ref index, options);
+                continue;
+            }
+
+            if (text.StartsWith("-", StringComparison.Ordinal) && text.Length > 1)
+            {
+                ParseShortOptions(text, arguments, ref index, options);
+                continue;
+            }
+
+            options.Paths.Add(argument);
+        }
+
+        return options;
+    }
+
+    private static void ParseLongOption(string text, IReadOnlyList<object?> arguments, ref int index, DfOptions options)
+    {
+        SplitLongOption(text, out var name, out var inlineValue);
+
+        switch (name)
+        {
+            case "human-readable":
+                return;
+            case "print-type":
+                options.PrintType = true;
+                return;
+            case "local":
+                options.LocalOnly = true;
+                return;
+            case "total":
+                options.IncludeTotal = true;
+                return;
+            case "type":
+                AddStrings(options.IncludeTypes, inlineValue ?? RequireOptionValue(arguments, ref index, "--type"));
+                return;
+            case "exclude-type":
+                AddStrings(options.ExcludeTypes, inlineValue ?? RequireOptionValue(arguments, ref index, "--exclude-type"));
+                return;
+            default:
+                throw new InvalidOperationException($"Unsupported df option '{text}'.");
+        }
+    }
+
+    private static void ParseShortOptions(string text, IReadOnlyList<object?> arguments, ref int index, DfOptions options)
+    {
+        for (var characterIndex = 1; characterIndex < text.Length; characterIndex++)
+        {
+            var option = text[characterIndex];
+
+            switch (option)
+            {
+                case 'h':
+                    break;
+                case 'T':
+                    options.PrintType = true;
+                    break;
+                case 'l':
+                    options.LocalOnly = true;
+                    break;
+                case 't':
+                case 'x':
+                    var value = characterIndex + 1 < text.Length
+                        ? text[(characterIndex + 1)..]
+                        : RequireOptionValue(arguments, ref index, $"-{option}");
+
+                    if (option == 't')
+                    {
+                        AddStrings(options.IncludeTypes, value);
+                    }
+                    else
+                    {
+                        AddStrings(options.ExcludeTypes, value);
+                    }
+
+                    return;
+                default:
+                    throw new InvalidOperationException($"Unsupported df option '-{option}'.");
             }
         }
     }
 
-    private static bool PathIsWithinMount(string path, string mountPoint)
+    private static void SplitLongOption(string text, out string name, out string? value)
     {
-        if (string.Equals(path, mountPoint, StringComparison.Ordinal))
+        var separatorIndex = text.IndexOf('=', StringComparison.Ordinal);
+
+        if (separatorIndex < 0)
         {
-            return true;
+            name = text[2..];
+            value = null;
+            return;
         }
 
-        if (mountPoint == Path.DirectorySeparatorChar.ToString())
+        name = text[2..separatorIndex];
+        value = text[(separatorIndex + 1)..];
+    }
+
+    private static string RequireOptionValue(IReadOnlyList<object?> arguments, ref int index, string optionName)
+    {
+        index++;
+
+        if (index >= arguments.Count || arguments[index]?.ToString() is not { Length: > 0 } text)
         {
-            return path.StartsWith(mountPoint, StringComparison.Ordinal);
+            throw new InvalidOperationException($"Option '{optionName}' requires a value.");
         }
 
-        return path.StartsWith(mountPoint + Path.DirectorySeparatorChar, StringComparison.Ordinal);
+        return text;
+    }
+
+    private static void AddStrings(HashSet<string> target, string specification)
+    {
+        foreach (var candidate in specification.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (!string.IsNullOrWhiteSpace(candidate))
+            {
+                target.Add(candidate);
+            }
+        }
+    }
+
+    private sealed class DfOptions
+    {
+        public List<object?> Paths { get; } = [];
+
+        public HashSet<string> IncludeTypes { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+        public HashSet<string> ExcludeTypes { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+        public bool PrintType { get; set; }
+
+        public bool LocalOnly { get; set; }
+
+        public bool IncludeTotal { get; set; }
     }
 }

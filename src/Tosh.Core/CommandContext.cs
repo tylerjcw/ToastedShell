@@ -5,8 +5,13 @@ public sealed record CommandContext(
     IAsyncEnumerable<object?> Input,
     IReadOnlyList<object?> Arguments,
     CancellationToken CancellationToken,
-    CommandInvocation? Invocation = null)
+    CommandInvocation? Invocation = null,
+    bool IsPipelined = false,
+    ITypeResolver? ScopedTypeResolver = null,
+    PipelineExitStatusTracker? PipelineExitStatusTracker = null)
 {
+    public ITypeResolver TypeResolver => ScopedTypeResolver ?? Runtime.TypeResolver;
+
     public TextSpan? GetArgumentSpan(int index) => Invocation?.GetArgumentSpan(index);
 
     public ToshDiagnosticException CreateDiagnostic(

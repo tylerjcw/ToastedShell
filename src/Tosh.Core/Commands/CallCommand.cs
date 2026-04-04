@@ -29,11 +29,12 @@ public sealed class CallCommand : ShellCommand
             yield break;
         }
 
-        var typeName = CommandArguments.RequireString(context.Arguments, 0, "type name");
-        var method = CommandArguments.RequireString(context.Arguments, 1, "method name");
-        var type = context.Runtime.TypeResolver.Resolve(typeName)
+        var parsedTypeName = CommandArguments.RequireParsedTypeName(context.Arguments, 0, "type name");
+        var typeName = parsedTypeName.TypeName;
+        var method = CommandArguments.RequireString(context.Arguments, parsedTypeName.ConsumedArgumentCount, "method name");
+        var type = context.TypeResolver.Resolve(typeName)
                    ?? throw new InvalidOperationException($"Unable to resolve type '{typeName}'.");
-        var staticInvocation = context.Runtime.Invoker.InvokeStatic(type, method, CommandArguments.Slice(context.Arguments, 2));
+        var staticInvocation = context.Runtime.Invoker.InvokeStatic(type, method, CommandArguments.Slice(context.Arguments, parsedTypeName.ConsumedArgumentCount + 1));
 
         if (!staticInvocation.ReturnedVoid)
         {

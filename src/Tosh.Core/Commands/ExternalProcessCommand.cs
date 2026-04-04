@@ -2,7 +2,7 @@ using System.Diagnostics;
 
 namespace Tosh.Core.Commands;
 
-public sealed class ExternalProcessCommand : IShellCommand, ICommandResolutionMetadata
+public sealed class ExternalProcessCommand : IShellCommand, ICommandResolutionMetadata, IImplicitGlobCommand
 {
     private readonly string _resolvedPath;
 
@@ -14,6 +14,8 @@ public sealed class ExternalProcessCommand : IShellCommand, ICommandResolutionMe
 
     public string Name { get; }
 
+    public string ResolvedPath => _resolvedPath;
+
     public string Description => $"Executes the external program at '{_resolvedPath}'.";
 
     public string Usage => $"{Name} [arg ...]";
@@ -22,7 +24,61 @@ public sealed class ExternalProcessCommand : IShellCommand, ICommandResolutionMe
 
     public async IAsyncEnumerable<object?> ExecuteAsync(CommandContext context)
     {
-        using var process = CreateProcess(context);
+        if (ShouldUseTerminalPassthrough(context))
+        {
+            await ExecuteWithTerminalPassthroughAsync(context);
+            yield break;
+        }
+
+        await foreach (var item in ExecuteWithPipesAsync(context))
+        {
+            yield return item;
+        }
+    }
+
+    private bool ShouldUseTerminalPassthrough(CommandContext context)
+    {
+        return !context.IsPipelined
+               && !Console.IsInputRedirected
+               && !Console.IsOutputRedirected
+               && ReferenceEquals(context.Runtime.Output, Console.Out)
+               && ReferenceEquals(context.Runtime.Error, Console.Error);
+    }
+
+    private async Task ExecuteWithTerminalPassthroughAsync(CommandContext context)
+    {
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = _resolvedPath,
+            WorkingDirectory = context.Runtime.CurrentDirectory,
+            UseShellExecute = false,
+            RedirectStandardInput = false,
+            RedirectStandardOutput = false,
+            RedirectStandardError = false,
+        };
+
+        foreach (var argument in context.Arguments)
+        {
+            startInfo.ArgumentList.Add(ExternalTextSerializer.SerializeArgument(argument));
+        }
+
+        using var process = new Process { StartInfo = startInfo, EnableRaisingEvents = true };
+        using var cancellationRegistration = context.CancellationToken.Register(() => TryKill(process));
+
+        if (!process.Start())
+        {
+            throw new InvalidOperationException($"Failed to start external command '{Name}'.");
+        }
+
+        await process.WaitForExitAsync(context.CancellationToken);
+        context.Runtime.SetLastExitCode(process.ExitCode);
+        context.PipelineExitStatusTracker?.Record(process.ExitCode);
+    }
+
+    private async IAsyncEnumerable<object?> ExecuteWithPipesAsync(
+        CommandContext context)
+    {
+        using var process = CreatePipedProcess(context);
         using var cancellationRegistration = context.CancellationToken.Register(() => TryKill(process));
 
         if (!process.Start())
@@ -50,13 +106,14 @@ public sealed class ExternalProcessCommand : IShellCommand, ICommandResolutionMe
         finally
         {
             await AwaitAndIgnoreClosedPipeAsync(stdinTask);
-            await stderrTask;
-            await process.WaitForExitAsync(context.CancellationToken);
+            await AwaitAndIgnoreClosedPipeAsync(stderrTask);
+            await process.WaitForExitAsync(CancellationToken.None);
             context.Runtime.SetLastExitCode(process.ExitCode);
+            context.PipelineExitStatusTracker?.Record(process.ExitCode);
         }
     }
 
-    private Process CreateProcess(CommandContext context)
+    private Process CreatePipedProcess(CommandContext context)
     {
         var startInfo = new ProcessStartInfo
         {
@@ -70,7 +127,7 @@ public sealed class ExternalProcessCommand : IShellCommand, ICommandResolutionMe
 
         foreach (var argument in context.Arguments)
         {
-            startInfo.ArgumentList.Add(ExternalTextSerializer.Serialize(argument));
+            startInfo.ArgumentList.Add(ExternalTextSerializer.SerializeArgument(argument));
         }
 
         return new Process
@@ -132,6 +189,9 @@ public sealed class ExternalProcessCommand : IShellCommand, ICommandResolutionMe
         catch (InvalidOperationException)
         {
         }
+        catch (OperationCanceledException)
+        {
+        }
     }
 
     private static void TryKill(Process process)
@@ -141,6 +201,17 @@ public sealed class ExternalProcessCommand : IShellCommand, ICommandResolutionMe
             if (!process.HasExited)
             {
                 process.Kill(entireProcessTree: true);
+            }
+        }
+        catch (Exception ex) when (ex is not InvalidOperationException)
+        {
+            try
+            {
+                Console.Error.WriteLine($"tosh: warning: failed to kill process {process.Id}: {ex.Message}");
+            }
+            catch
+            {
+                Console.Error.WriteLine($"tosh: warning: failed to kill process: {ex.Message}");
             }
         }
         catch

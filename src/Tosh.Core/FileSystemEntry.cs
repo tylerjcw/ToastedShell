@@ -1,24 +1,48 @@
 namespace Tosh.Core;
 
-public sealed record FileSystemEntry
+public sealed record FileSystemEntry : IDisplayTreeNode
 {
     private readonly UnixFileSystemMetadata? _unixMetadata;
 
-    public FileSystemEntry(FileSystemInfo entry, bool preferLongDisplay = false)
-        : this(entry, preferLongDisplay, UnixFileSystemMetadata.TryRead(entry))
+    public FileSystemEntry(
+        FileSystemInfo entry,
+        bool preferLongDisplay = false,
+        bool classifyNames = false,
+        bool includeInodeInShortDisplay = false,
+        FileSystemEntryTimeField listingTimeField = FileSystemEntryTimeField.Modified)
+        : this(entry, preferLongDisplay, classifyNames, includeInodeInShortDisplay, listingTimeField, UnixFileSystemMetadata.TryRead(entry))
     {
     }
 
-    private FileSystemEntry(FileSystemInfo entry, bool preferLongDisplay, UnixFileSystemMetadata? unixMetadata)
+    private FileSystemEntry(
+        FileSystemInfo entry,
+        bool preferLongDisplay,
+        bool classifyNames,
+        bool includeInodeInShortDisplay,
+        FileSystemEntryTimeField listingTimeField,
+        UnixFileSystemMetadata? unixMetadata)
     {
         Entry = entry ?? throw new ArgumentNullException(nameof(entry));
         PreferLongDisplay = preferLongDisplay;
+        ClassifyNames = classifyNames;
+        IncludeInodeInShortDisplay = includeInodeInShortDisplay;
+        ListingTimeField = listingTimeField;
         _unixMetadata = unixMetadata;
     }
 
     public FileSystemInfo Entry { get; }
 
     public bool PreferLongDisplay { get; }
+
+    public bool ClassifyNames { get; }
+
+    public bool IncludeInodeInShortDisplay { get; }
+
+    public FileSystemEntryTimeField ListingTimeField { get; }
+
+    public IReadOnlyList<FileSystemEntry> Children { get; init; } = Array.Empty<FileSystemEntry>();
+
+    IEnumerable<object> IDisplayTreeNode.GetDisplayChildren() => Children;
 
     public string Name => Entry.Name;
 
@@ -54,15 +78,15 @@ public sealed record FileSystemEntry
 
     public DateTime CreationTime => Entry.CreationTime;
 
-    public DateTime Created => CreationTime;
+    public DateTimeOffset Created => ToInstant(CreationTime);
 
     public DateTime LastAccessTime => Entry.LastAccessTime;
 
-    public DateTime Accessed => LastAccessTime;
+    public DateTimeOffset Accessed => ToInstant(LastAccessTime);
 
     public DateTime LastWriteTime => Entry.LastWriteTime;
 
-    public DateTime Modified => LastWriteTime;
+    public DateTimeOffset Modified => ToInstant(LastWriteTime);
 
     public DateTime LastWriteTimeUtc => Entry.LastWriteTimeUtc;
 
@@ -100,19 +124,80 @@ public sealed record FileSystemEntry
 
     public string? Target => LinkTarget;
 
-    public string DisplayName => IsDirectory ? $"{Name}/" : Name;
+    public DateTimeOffset DisplayTime => ListingTimeField switch
+    {
+        FileSystemEntryTimeField.Accessed => Accessed,
+        FileSystemEntryTimeField.Created => Created,
+        _ => Modified,
+    };
 
-    public static FileSystemEntry From(FileSystemInfo entry, bool preferLongDisplay = false)
+    public string DisplayTimeColumnName => ListingTimeField switch
+    {
+        FileSystemEntryTimeField.Accessed => "Accessed",
+        FileSystemEntryTimeField.Created => "Created",
+        _ => "Modified",
+    };
+
+    public string DisplayName => GetDisplayName();
+
+    public string ReadAllText()
+    {
+        EnsureReadableFile("ReadAllText");
+        return File.ReadAllText(Entry.FullName);
+    }
+
+    public string[] ReadAllLines()
+    {
+        EnsureReadableFile("ReadAllLines");
+        return File.ReadAllLines(Entry.FullName);
+    }
+
+    public byte[] ReadAllBytes()
+    {
+        EnsureReadableFile("ReadAllBytes");
+        return File.ReadAllBytes(Entry.FullName);
+    }
+
+    public ManagedFileHandle OpenText()
+    {
+        EnsureReadableFile("OpenText");
+        return ManagedFileHandle.OpenTextRead(Entry.FullName);
+    }
+
+    public ManagedFileHandle OpenRead()
+    {
+        EnsureReadableFile("OpenRead");
+        return ManagedFileHandle.OpenBinaryRead(Entry.FullName);
+    }
+
+    public ManagedFileHandle OpenWrite()
+    {
+        EnsureFilePath("OpenWrite");
+        return ManagedFileHandle.OpenBinaryWrite(Entry.FullName, append: false);
+    }
+
+    public ManagedFileHandle OpenAppend()
+    {
+        EnsureFilePath("OpenAppend");
+        return ManagedFileHandle.OpenBinaryWrite(Entry.FullName, append: true);
+    }
+
+    public static FileSystemEntry From(
+        FileSystemInfo entry,
+        bool preferLongDisplay = false,
+        bool classifyNames = false,
+        bool includeInodeInShortDisplay = false,
+        FileSystemEntryTimeField listingTimeField = FileSystemEntryTimeField.Modified)
     {
         ArgumentNullException.ThrowIfNull(entry);
-        return new FileSystemEntry(entry, preferLongDisplay);
+        return new FileSystemEntry(entry, preferLongDisplay, classifyNames, includeInodeInShortDisplay, listingTimeField);
     }
 
     internal string GetModeDisplay(bool includeTypeIndicator)
     {
         if (Permissions is UnixFileMode permissions)
         {
-            return FormatModeString(Kind, permissions, includeTypeIndicator);
+            return FormatModeString(GetTypeIndicator(), permissions, includeTypeIndicator);
         }
 
         return FormatFallbackModeString(this, includeTypeIndicator);
@@ -121,6 +206,47 @@ public sealed record FileSystemEntry
     private static bool IsHiddenEntry(FileSystemInfo entry)
     {
         return entry.Name.StartsWith(".", StringComparison.Ordinal) || entry.Attributes.HasFlag(FileAttributes.Hidden);
+    }
+
+    private string GetDisplayName()
+    {
+        if (ClassifyNames && IsSymbolicLink)
+        {
+            return $"{Name}@";
+        }
+
+        if (IsDirectory)
+        {
+            return Name.EndsWith(Path.DirectorySeparatorChar) ? Name : $"{Name}/";
+        }
+
+        if (ClassifyNames && IsExecutableEntry())
+        {
+            return $"{Name}*";
+        }
+
+        return Name;
+    }
+
+    private void EnsureReadableFile(string operation)
+    {
+        if (Entry is not FileInfo)
+        {
+            throw new InvalidOperationException($"{operation} requires a file entry, but '{FullName}' is not a file.");
+        }
+
+        if (!Entry.Exists)
+        {
+            throw new InvalidOperationException($"File '{FullName}' does not exist.");
+        }
+    }
+
+    private void EnsureFilePath(string operation)
+    {
+        if (Entry is not FileInfo)
+        {
+            throw new InvalidOperationException($"{operation} requires a file entry, but '{FullName}' is not a file.");
+        }
     }
 
     private static string? TryGetLinkTarget(FileSystemInfo entry)
@@ -151,14 +277,34 @@ public sealed record FileSystemEntry
         return null;
     }
 
-    private static string FormatModeString(FileSystemEntryType kind, UnixFileMode mode, bool includeTypeIndicator)
+    private char GetTypeIndicator()
+    {
+        if (IsSymbolicLink)
+        {
+            return 'l';
+        }
+
+        return Kind == FileSystemEntryType.Dir ? 'd' : '-';
+    }
+
+    private static DateTimeOffset ToInstant(DateTime value)
+    {
+        return value.Kind switch
+        {
+            DateTimeKind.Utc => new DateTimeOffset(value, TimeSpan.Zero),
+            DateTimeKind.Local => new DateTimeOffset(value),
+            _ => new DateTimeOffset(DateTime.SpecifyKind(value, DateTimeKind.Local)),
+        };
+    }
+
+    private static string FormatModeString(char typeIndicator, UnixFileMode mode, bool includeTypeIndicator)
     {
         Span<char> characters = stackalloc char[includeTypeIndicator ? 10 : 9];
         var offset = 0;
 
         if (includeTypeIndicator)
         {
-            characters[offset++] = kind == FileSystemEntryType.Dir ? 'd' : '-';
+            characters[offset++] = typeIndicator;
         }
 
         characters[offset++] = HasMode(mode, UnixFileMode.UserRead) ? 'r' : '-';
@@ -176,7 +322,7 @@ public sealed record FileSystemEntry
 
     private static string FormatFallbackModeString(FileSystemEntry entry, bool includeTypeIndicator)
     {
-        var prefix = includeTypeIndicator ? (entry.IsDirectory ? "d" : "-") : string.Empty;
+        var prefix = includeTypeIndicator ? entry.GetTypeIndicator().ToString() : string.Empty;
         var writable = !entry.Attributes.HasFlag(FileAttributes.ReadOnly);
         var executable = entry.IsDirectory || IsExecutableName(entry.Name);
         var triplet = $"r{(writable ? 'w' : '-')}{(executable ? 'x' : '-')}";
@@ -212,4 +358,23 @@ public sealed record FileSystemEntry
                extension.Equals(".cmd", StringComparison.OrdinalIgnoreCase) ||
                extension.Equals(".sh", StringComparison.OrdinalIgnoreCase);
     }
+
+    private bool IsExecutableEntry()
+    {
+        if (Permissions is UnixFileMode mode)
+        {
+            return HasMode(mode, UnixFileMode.UserExecute) ||
+                   HasMode(mode, UnixFileMode.GroupExecute) ||
+                   HasMode(mode, UnixFileMode.OtherExecute);
+        }
+
+        return IsExecutableName(Name);
+    }
+}
+
+public enum FileSystemEntryTimeField
+{
+    Modified,
+    Accessed,
+    Created,
 }

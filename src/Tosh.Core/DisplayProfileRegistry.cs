@@ -27,6 +27,12 @@ public sealed class DisplayProfileRegistry
             return exactMatch;
         }
 
+        if (actualType.IsGenericType &&
+            _profiles.TryGetValue(actualType.GetGenericTypeDefinition(), out var genericDefinitionMatch))
+        {
+            return genericDefinitionMatch;
+        }
+
         return _registrationOrder
             .Where(profile => profile.AppliesTo(actualType))
             .OrderBy(profile => GetSpecificity(actualType, profile.TargetType))

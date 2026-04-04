@@ -3,23 +3,37 @@ namespace Tosh.Core.Commands;
 public sealed class SkipWhileCommand : ShellCommand
 {
     public SkipWhileCommand()
-        : base("skip-while", "Skips input values while the predicate remains true.", "skip-while { <predicate> }") { }
+        : base("skip-while", "Skips input values while the predicate remains true.", "skip-while <predicate-expression|callable>") { }
 
     public override async IAsyncEnumerable<object?> ExecuteAsync(CommandContext context)
     {
-        var block = context.Arguments.Count == 1 ? context.Arguments[0] as ShellBlock : null;
-        var hasPredicateBlock = block is not null;
-        var clauses = hasPredicateBlock ? null : WherePredicateMatcher.GetClauses(context);
-        var nullablePathCache = new Dictionary<(Type Type, string MemberPath), bool>();
+        if (context.Arguments.Count != 1)
+        {
+            throw context.CreateDiagnostic(
+                code: "tosh::runtime::predicate_expression_required",
+                title: "'skip-while' requires a predicate expression.",
+                label: "write a predicate block like '{ ... }' or pass a callable value",
+                help: "predicate commands now use one expression mode everywhere.");
+        }
+
+        var predicate = await FunctionalCommandUtilities.ResolveCallableOrBlockAsync(
+            context,
+            FunctionalCommandUtilities.RequireCallableOrBlock(context, 0));
         var skipping = true;
 
-        await foreach (var item in context.Input.WithCancellation(context.CancellationToken))
+        await foreach (var item in ShellIterationUtilities.ReplaySingleInputCollectionAsync(context.Input, context.CancellationToken)
+                           .WithCancellation(context.CancellationToken))
         {
             if (skipping)
             {
-                skipping = hasPredicateBlock
-                    ? await PredicateBlockEvaluator.EvaluateAsync(context, block!, item)
-                    : WherePredicateMatcher.MatchesAll(item, clauses!, nullablePathCache, context.Runtime.ObjectAccessor);
+                skipping = await FunctionalCommandUtilities.EvaluatePredicateAsync(
+                    context,
+                    predicate,
+                    [item],
+                    new Dictionary<string, object?>(StringComparer.Ordinal)
+                    {
+                        ["_"] = item,
+                    });
 
                 if (skipping)
                 {

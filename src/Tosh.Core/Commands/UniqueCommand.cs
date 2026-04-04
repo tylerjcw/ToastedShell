@@ -13,9 +13,7 @@ public sealed class UniqueCommand : ShellCommand
 
         if (parsed.Positionals.Count > 0)
         {
-            var paths = parsed.Positionals
-                .Select(argument => PathUtilities.ResolvePath(context.Runtime.CurrentDirectory, CommandArguments.RequireString([argument], 0, "path")))
-                .ToArray();
+            var paths = ShellPathArguments.ExpandMany(context.Runtime.CurrentDirectory, parsed.Positionals);
             var lines = await TextInputUtilities.ReadLinesFromFilesAsync(paths, context.CancellationToken);
 
             foreach (var item in Collapse(lines.Select(line => (object?)new ShellTextLine(line.Text)).ToList(), countOccurrences, ignoreCase))
@@ -66,12 +64,12 @@ public sealed class UniqueCommand : ShellCommand
         yield return countOccurrences ? CreateCountProjection(count, current) : current;
     }
 
-    private static ProjectedObject CreateCountProjection(int count, object? value)
+    private static System.Dynamic.ExpandoObject CreateCountProjection(int count, object? value)
     {
-        return new ProjectedObject(
+        return ShellRecordUtilities.CreateExpando(
         [
-            new ProjectedField("Count", "Count", count),
-            new ProjectedField("Value", "Value", value),
+            new KeyValuePair<string, object?>("Count", count),
+            new KeyValuePair<string, object?>("Value", value),
         ]);
     }
 }

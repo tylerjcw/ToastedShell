@@ -1,0 +1,217 @@
+#!/usr/bin/env tosh
+#
+# Build a single-file ToSh executable.
+#
+
+class PublishPlan {
+    prop Binary: string? = null
+    prop Trimmed: bool = false
+    prop SelfContained: bool = true
+
+    shy prop requested_directory: string? = null
+    shy prop requested_runtime_id: string? = null
+
+    prop RepoRoot: string {
+        get => (dirname (dirname (realpath $tosh.Script.Path)))
+    }
+
+    prop RuntimeId: string {
+        get => $this.effective_runtime_id()
+        set => $this.requested_runtime_id = $value
+    }
+
+    prop Directory: string {
+        get => $this.effective_directory()
+        set => $this.requested_directory = $value
+    }
+
+    prop PublishArgs: array => $this.build_publish_args()
+
+    shy prop mode_dir: string => ($this.Trimmed ? "single-file-trimmed" : "single-file")
+
+    PublishPlan() { }
+
+    shy func effective_runtime_id() -> string {
+        if ($this.requested_runtime_id != null and $this.requested_runtime_id != "") {
+            return $this.requested_runtime_id
+        }
+
+        return System.Runtime.InteropServices.RuntimeInformation.RuntimeIdentifier
+    }
+
+    shy func effective_directory() -> string {
+        if ($this.requested_directory != null and $this.requested_directory != "") {
+            return System.IO.Path.GetFullPath($this.requested_directory)
+        }
+
+        return System.IO.Path.Join($this.RepoRoot, "artifacts", "publish", $this.RuntimeId, $this.mode_dir)
+    }
+
+    shy func build_publish_args() -> array {
+        var args = [
+            "publish",
+            $"{$this.RepoRoot}/src/Tosh.Cli/Tosh.Cli.csproj",
+            "-c", "Release",
+            "-r", $this.RuntimeId,
+            "-o", $this.Directory,
+            "-p:PublishSingleFile=true",
+            "-p:DebugType=None",
+            "-p:DebugSymbols=false",
+            "-p:DisableToshVsCodeExtensionSync=true",
+            $"-p:SelfContained={$this.SelfContained}"
+        ]
+
+        if ($this.SelfContained) {
+            $args = echo $args ["-p:EnableCompressionInSingleFile=true"] | flatten
+        }
+
+        if ($this.Trimmed) {
+            $args = echo $args ["-p:PublishTrimmed=true", "-p:TrimMode=partial"] | flatten
+        }
+
+        return $args
+    }
+}
+
+record BuildResult(
+    Binary: string,
+    Size: StorageSize,
+    RID: string,
+    Output: string,
+    SelfContained: bool,
+    Trimmed: bool,
+    Duration: timespan
+)
+
+func usage() {
+    echo """
+        Usage: scripts/publish_tosh.tosh [options]
+
+        Build a single-file ToSh executable.
+
+        Options:
+          --rid <RID>            Runtime identifier to publish for.
+                                 Default: current host RID via .NET interop.
+          --output <DIR>         Output directory.
+                                 Default: artifacts/publish/<rid>/(single-file|single-file-trimmed)
+          --trimmed              Enable trimmed single-file publish.
+                                 This is experimental for ToSh because the runtime uses
+                                 extensive reflection and dynamic loading.
+          --framework-dependent  Publish framework-dependent instead of self-contained.
+          --help                 Show this help text.
+        """
+}
+
+var publish = new PublishPlan()
+
+# Parse arguments
+var i = 0
+while ($i < ($tosh.Script.Args | count)) {
+    var arg = ($tosh.Script.Args | get $i)
+
+    switch ($arg) {
+        case "--rid" {
+            $i = ($i + 1)
+            $publish.RuntimeId = ($tosh.Script.Args | get $i)
+        }
+        case "--output" {
+            $i = ($i + 1)
+            $publish.Directory = ($tosh.Script.Args | get $i)
+        }
+        case "--trimmed" {
+            $publish.Trimmed = true
+        }
+        case "--framework-dependent" {
+            $publish.SelfContained = false
+        }
+        case "--help" {
+            usage
+            return
+        }
+        case "-h" {
+            usage
+            return
+        }
+        default {
+            writeline $"Unknown option: {$arg}" e> /dev/stderr
+            usage e> /dev/stderr
+            throw $"Unknown option: {$arg}"
+        }
+    }
+
+    $i = ($i + 1)
+}
+
+mkdir -p $publish.Directory | ignore
+
+styled $"Publishing ToSh ({$publish.RuntimeId})..." --fg bright-cyan --bold | writeline
+
+# Run dotnet publish (output streams through to terminal)
+var build_start = (date now)
+dotnet ...$publish.PublishArgs o> /dev/null
+var build_duration = ((date now) - $build_start)
+
+if ($tosh.Last.ExitCode != 0) {
+    throw "dotnet publish failed."
+}
+
+writeline ""
+
+# Find the published binary
+var candidates = [
+    System.IO.Path.Join($publish.Directory, "Tosh.Cli"),
+    System.IO.Path.Join($publish.Directory, "Tosh.Cli.exe"),
+    System.IO.Path.Join($publish.Directory, "tosh"),
+    System.IO.Path.Join($publish.Directory, "tosh.exe")
+]
+
+for candidate in ($candidates) {
+    var candidate_check = (is-file $candidate)
+
+    if ($candidate_check.IsFile) {
+        $publish.Binary = $candidate
+        break
+    }
+}
+
+if ($publish.Binary == null or $publish.Binary == "") {
+    throw $"Publish completed, but no executable was found in {$publish.Directory}"
+}
+
+# Rename to tosh / tosh.exe
+var target_name = "tosh"
+
+if ($publish.Binary ends-with ".exe" or $publish.RuntimeId starts-with "win-") {
+    $target_name = "tosh.exe"
+}
+
+var target_path = System.IO.Path.Join($publish.Directory, $target_name)
+
+if ($publish.Binary != $target_path) {
+    rm -f $target_path | ignore
+    mv $publish.Binary $target_path | ignore
+    $publish.Binary = $target_path
+}
+
+var binary_info = (ls $publish.Binary | first)
+
+styled $"Published: {$publish.Binary}" --fg bright-green --bold | writeline
+styled $"""
+    Size: {$binary_info.Size} 
+    RID: {$publish.RuntimeId} 
+    Duration: {$build_duration}
+    Directory: {$publish.Directory}
+    Self-contained: {$publish.SelfContained}
+    Trimmed: {$publish.Trimmed}
+
+    """ --fg gray --dim | writeline
+
+return new BuildResult(
+    $publish.Binary,
+    $binary_info.Size,
+    $publish.RuntimeId,
+    $publish.Directory,
+    $publish.SelfContained,
+    $publish.Trimmed,
+    $build_duration
+)

@@ -40,6 +40,21 @@ public sealed class ReflectionInvoker
         ArgumentException.ThrowIfNullOrWhiteSpace(methodName);
         ArgumentNullException.ThrowIfNull(arguments);
 
+        if (target is IShellInvocableObject shellInvocable)
+        {
+            return shellInvocable.InvokeInstanceMethod(methodName, arguments);
+        }
+
+        if (target is IShellStaticType shellStaticType)
+        {
+            return shellStaticType.InvokeStaticMethod(methodName, arguments);
+        }
+
+        if (target is Type staticType)
+        {
+            return InvokeStatic(staticType, methodName, arguments);
+        }
+
         return Invoke(
             target.GetType().GetMethods(BindingFlags.Instance | BindingFlags.Public),
             target,
@@ -83,6 +98,36 @@ public sealed class ReflectionInvoker
         }
 
         throw new InvalidOperationException($"Static member '{memberName}' was not found on type '{type.FullName}'.");
+    }
+
+    public InvocationResult InvokeStatic(IShellStaticType type, string methodName, IReadOnlyList<object?> arguments)
+    {
+        ArgumentNullException.ThrowIfNull(type);
+        ArgumentException.ThrowIfNullOrWhiteSpace(methodName);
+        ArgumentNullException.ThrowIfNull(arguments);
+
+        return type.InvokeStaticMethod(methodName, arguments);
+    }
+
+    public object CreateInstance(IShellStaticType type, IReadOnlyList<object?> arguments)
+    {
+        ArgumentNullException.ThrowIfNull(type);
+        ArgumentNullException.ThrowIfNull(arguments);
+
+        return type.CreateInstance(arguments);
+    }
+
+    public object? GetStaticMember(IShellStaticType type, string memberName)
+    {
+        ArgumentNullException.ThrowIfNull(type);
+        ArgumentException.ThrowIfNullOrWhiteSpace(memberName);
+
+        if (type.TryGetStaticMember(memberName, out var value))
+        {
+            return value;
+        }
+
+        throw new InvalidOperationException($"Static member '{memberName}' was not found on type '{type.ShellTypeName}'.");
     }
 
     private static InvocationResult Invoke(

@@ -3,24 +3,49 @@ namespace Tosh.Core.Commands;
 public sealed class GroupByCommand : ShellCommand
 {
     public GroupByCommand()
-        : base("group-by", "Groups pipeline values by a member path.", "group-by <member-path>") { }
+        : base("group-by", "Groups pipeline values by a member path, block, or callable.", "group-by <member-path|callable|block>") { }
 
     public override async IAsyncEnumerable<object?> ExecuteAsync(CommandContext context)
     {
-        var memberPath = CommandArguments.RequireString(context.Arguments, 0, "member path");
+        if (context.Arguments.Count != 1)
+        {
+            throw context.CreateDiagnostic(
+                code: "tosh::runtime::group_by_requires_selector",
+                title: "'group-by' requires exactly one member path, callable, or block.",
+                label: "pass a member path like 'Name', a lambda, or a block");
+        }
+
+        var selector = context.Arguments[0];
         var groups = new Dictionary<string, (object? Key, List<object?> Items)>(StringComparer.Ordinal);
 
-        await foreach (var item in context.Input.WithCancellation(context.CancellationToken))
+        await foreach (var item in ShellIterationUtilities.ReplaySingleInputCollectionAsync(context.Input, context.CancellationToken)
+                           .WithCancellation(context.CancellationToken))
         {
             object? keyValue;
 
-            try
+            if (selector is IShellCallable or ShellBlock)
             {
-                keyValue = context.Runtime.ObjectAccessor.GetValue(item, memberPath);
+                keyValue = await FunctionalCommandUtilities.RequireSingleResultAsync(
+                    context,
+                    selector,
+                    [item],
+                    new Dictionary<string, object?>(StringComparer.Ordinal)
+                    {
+                        ["_"] = item,
+                    });
             }
-            catch (Exception exception) when (exception is not InvalidOperationException)
+            else
             {
-                throw new InvalidOperationException($"Could not read member '{memberPath}' for grouping: {exception.Message}");
+                var memberPath = CommandArguments.RequireString(context.Arguments, 0, "member path");
+
+                try
+                {
+                    keyValue = context.Runtime.ObjectAccessor.GetValue(item, memberPath);
+                }
+                catch (Exception exception) when (exception is not InvalidOperationException)
+                {
+                    throw new InvalidOperationException($"Could not read member '{memberPath}' for grouping: {exception.Message}");
+                }
             }
 
             var key = ShellDataSerializer.GetStableKey(keyValue) ?? string.Empty;

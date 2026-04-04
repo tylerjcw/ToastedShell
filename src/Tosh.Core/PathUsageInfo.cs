@@ -5,9 +5,11 @@ public sealed record PathUsageInfo(
     string FullName,
     int Depth,
     bool IsDirectory,
-    StorageSize Size)
+    StorageSize Size,
+    DateTimeOffset? Modified = null,
+    bool IsTotal = false)
 {
     public string Path => FullName;
 
-    public string Type => IsDirectory ? "dir" : "file";
+    public string Type => IsTotal ? "total" : IsDirectory ? "dir" : "file";
 }

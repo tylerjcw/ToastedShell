@@ -1,41 +1,19 @@
 # tosh
 
-`tosh` (ToastedSHell) is an early shell / REPL / language scaffold that borrows NuShell-style pipeline syntax but keeps `.NET` objects alive all the way through execution, closer to the spirit of PowerShell.
+ToSh (ToastedShell) is a Unix-style shell, REPL, and scripting language built on .NET. It keeps real objects alive through the pipeline, gives them rich terminal rendering, and still aims to feel terse and comfortable for interactive shell work.
 
-The current codebase is intentionally small, but it already has the right seams:
+## What Ships Today
 
-- a lexer and parser for a tiny Unix-like pipeline language
-- a streaming execution model based on `IAsyncEnumerable<object?>`
-- a command registry and session runtime
-- reflection-backed `.NET` interop for object construction, method calls, and member access
-- a configurable renderer so the REPL can display arbitrary CLR objects consistently
-- an adaptive batch display layer that can render homogeneous object sequences as text tables
-
-## Current Commands
-
-- `help`
-- `man`
-- `apropos`
-- `exit`
-- `clear`
-- `history`
-- `view`
-- `echo`
-- `pwd`
-- `cd`
-- `ls`
-- `cat`
-- `mkdir`
-- `touch`
-- `rm`
-- `cp`
-- `mv`
-- `get`
-- `inspect`
-- `where`
-- `type-of`
-- `new`
-- `call`
+- Object-first pipelines over real CLR values
+- ToastScript language features: functions, modules, classes, records, enums, pattern matching, exceptions, and typed parameters
+- Rich display profiles and configurable rendering through `view` and `$tosh.Config.Display`
+- Full-screen TUI apps: `help browse` and `config browse`
+- Managed stream and file-handle commands for text and binary I/O
+- Unix-style built-ins with typed output: `ls`, `ps`, `df`, `du`, `stat`, `find`, `grep`, `cat`, `wc`, `mv`, `touch`, `env`, and more
+- Structured Linux adapters over machine-readable command output: `ip`, `lsblk`, `findmnt`, `lscpu`, `lsfd`, `lsipc`
+- CLR interop (`new`, `call`, `cast`, `members`, `constructors`, `describe-type`)
+- Native interop (`require native`, `bind`, buffers, `out` / `ref`, `read-buffer`, `write-buffer`)
+- Modular prompt system with live prompt previews in `config browse`
 
 ## Quick Start
 
@@ -44,104 +22,86 @@ dotnet run --project src/Tosh.Cli
 ```
 
 ```bash
-dotnet run --project src/Tosh.Cli -- 'help'
-dotnet run --project src/Tosh.Cli -- 'help search json'
-dotnet run --project src/Tosh.Cli -- 'man where'
-dotnet run --project src/Tosh.Cli -- 'apropos loop'
-dotnet run --project src/Tosh.Cli -- 'view detail'
-dotnet run --project src/Tosh.Cli -- 'echo 42 true hello | type-of'
-dotnet run --project src/Tosh.Cli -- 'ls -la'
-dotnet run --project src/Tosh.Cli -- 'ls | where Extension == .csproj | get Name'
-dotnet run --project src/Tosh.Cli -- 'mkdir -p scratch'
-dotnet run --project src/Tosh.Cli -- 'touch scratch/demo.txt'
-dotnet run --project src/Tosh.Cli -- 'new System.Text.StringBuilder hello | call Append world | call ToString'
-dotnet run --project src/Tosh.Cli -- 'new System.Text.StringBuilder hello | inspect'
-dotnet run --project src/Tosh.Cli -- 'call System.DateTime Parse 2026-03-22T00:00:00Z | type-of'
+dotnet run --project src/Tosh.Cli -- -c 'help browse'
+dotnet run --project src/Tosh.Cli -- -c 'config browse'
+dotnet run --project src/Tosh.Cli -- -c 'ls -la | where _.Type == file | sort Size | reverse | first 10'
+dotnet run --project src/Tosh.Cli -- -c 'ip addr | where { _.State == up }'
+dotnet run --project src/Tosh.Cli -- -c 'lsblk -l | summarize --sum Size'
+dotnet run --project src/Tosh.Cli -- -c 'date -dt now'
+dotnet run --project src/Tosh.Cli -- -c 'guid new v7'
 ```
 
-Inside the REPL there are no side-channel meta commands. Session control is part of the shell itself:
+## A Quick Taste
 
-- `help`
-- `help search <query>`
-- `man <topic>`
-- `apropos <query>`
-- `view compact`
-- `view detail`
-- `history`
-- `clear`
-- `exit`
+```tosh
+# Typed object pipelines
+ls -la | where _.Type == file | sort Size | reverse | first 5 | get { Name, Size, Modified }
 
-The prompt itself now supports in-line editing with:
+# CLR interop
+new System.Net.IPEndPoint 127.0.0.1 8080
+call System.String Join ", " ["objects", "pipelines", "types"]
 
-- left/right arrows
-- up/down history recall
-- `Home` / `End`
-- `Delete` / `Backspace`
+# Managed file I/O
+write-file scratch/notes.txt "hello"
+var reader = (open-file scratch/notes.txt)
+read-line-from $reader
+close $reader
 
-## Project Layout
+# Structured summaries
+df | summarize _.Used
+seq 5 | summarize --sum --avg --min --max --count
 
-- `src/Tosh.Core`: runtime primitives, command model, reflection helpers, built-in commands
-- `src/Tosh.Language`: lexer, parser, AST, and execution engine
-- `src/Tosh.Cli`: interactive REPL host
-- `tests/Tosh.Tests`: parser and execution tests
-
-## Supported Syntax Right Now
-
-- bareword arguments: `echo hello`
-- quoted strings: `echo "hello world"`
-- numbers, booleans, and `null`
-- pipelines with `|`
-- comments beginning with `#`
-- Unix-style short and long flags inside commands, such as `ls -la` and `mkdir -p`
-- shell/REPL control as normal commands instead of special REPL directives
-- adaptive table rendering for batches of similarly shaped objects such as `help`, `history`, and `ls`
-- nullable member-path syntax with `?`, such as `ls -la | where Size? > 1000 | get Name`
-- newline-separated top-level scripts and block statements, so `.tosh` files do not need `;` between every statement
-- `return` statements for early exits from functions and scripts
-- `break` / `continue` for `for`, `while`, and `each`
-- `using` for CLR namespace/type imports, aliases, and `.tosh` module files
+# Full-screen tooling
+help browse regex
+config browse prompt
+```
 
 ## Scripts
 
-`tosh` now treats ordinary newlines as statement separators in script files, sourced files, and blocks:
+ToSh supports normal `.tosh` scripts and shebang-driven scripts without requiring a file extension.
 
 ```tosh
-alias ll = ls -la
-
-def recent(days: TimeSpan) {
-    ls -la | where Modified > ((date now) - $days)
-}
-
-ll | first 5 | get { Name, Owner, Group }
-
-def names() {
-    return get Name
-}
-
-using System.IO = IO
-
-def nonHiddenNames() {
-    ll | each {
-        if ($it.IsHidden) { continue }
-        echo $it.Name
-    }
-}
-
-using "./common.tosh"
+#!/usr/bin/env tosh
+echo $"hello from {$env.USER}"
 ```
 
-Startup files follow the same model:
+```bash
+chmod +x ./hello
+./hello
+tosh --no-startup ./hello
+```
 
-- `~/.config/tosh/profile.tosh`
-- `~/.config/tosh/autoload/*.tosh`
+ToSh distinguishes between:
 
-## Good Next Steps
+- `(...)`: capture exactly one object value
+- `$(...)`: capture text output
+- `source ./file.tosh`: run a file in the current scope
+- `./file` or `tosh ./file`: execute a script as a script
 
-- see [docs/ROADMAP.md](docs/ROADMAP.md) for the longer-term plan
-- variables and assignment
-- blocks / closures for commands like `where`
-- richer expression syntax for direct member access and method calls
-- external process execution with object-aware adapters
-- command discovery from loaded `.NET` assemblies
-- script files, modules, and startup profiles
-- readline-style input editing, completion, and richer object-aware REPL UX
+## Documentation
+
+- [Docs Index](docs/INDEX.md)
+- [Getting Started](docs/reference/GETTING_STARTED.md)
+- [Language Reference](docs/reference/LANGUAGE.md)
+- [Command Map](docs/reference/COMMANDS.md)
+- [Pipeline Model](docs/reference/PIPELINES.md)
+- [Type System](docs/reference/TYPES.md)
+- [Configuration Guide](docs/CONFIGURATION.md)
+- [Project Status](docs/STATUS.md)
+- [Architecture](docs/ARCHITECTURE.md)
+
+The live in-shell help system is also a primary source of truth:
+
+- `help <topic>`
+- `help search <text>`
+- `help browse`
+
+## Current Status
+
+ToSh is already strong as:
+
+- an exploratory REPL
+- a scripting shell
+- a daily side shell for real work
+
+It is not yet fully hardened as a default login shell. The main remaining work is startup/login-shell hardening, common-command parity polish, and more real-world shell edge-case coverage.

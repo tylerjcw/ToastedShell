@@ -2,6 +2,7 @@ namespace Tosh.Core;
 
 public sealed class DisplayProfile
 {
+    private readonly List<TableCase> _selectableColumnCases = [];
     private readonly List<TableCase> _tableCases = [];
     private readonly Type _targetType;
     private readonly List<ValueCase> _valueCases = [];
@@ -47,11 +48,43 @@ public sealed class DisplayProfile
         return this;
     }
 
+    public DisplayProfile AddSelectableTableColumns(Func<DisplayTableContext, IReadOnlyList<DisplayTableColumn>> buildColumns)
+    {
+        return AddSelectableTableColumns(_ => true, buildColumns);
+    }
+
+    public DisplayProfile AddSelectableTableColumns(
+        Func<DisplayTableContext, bool> when,
+        Func<DisplayTableContext, IReadOnlyList<DisplayTableColumn>> buildColumns)
+    {
+        ArgumentNullException.ThrowIfNull(when);
+        ArgumentNullException.ThrowIfNull(buildColumns);
+        _selectableColumnCases.Add(new TableCase(when, buildColumns));
+        return this;
+    }
+
     internal bool AppliesTo(Type actualType) => _targetType.IsAssignableFrom(actualType);
 
     internal bool TryBuildTable(DisplayTableContext context, out IReadOnlyList<DisplayTableColumn> columns)
     {
         foreach (var tableCase in _tableCases)
+        {
+            if (!tableCase.When(context))
+            {
+                continue;
+            }
+
+            columns = tableCase.BuildColumns(context);
+            return true;
+        }
+
+        columns = Array.Empty<DisplayTableColumn>();
+        return false;
+    }
+
+    internal bool TryBuildSelectableColumns(DisplayTableContext context, out IReadOnlyList<DisplayTableColumn> columns)
+    {
+        foreach (var tableCase in _selectableColumnCases)
         {
             if (!tableCase.When(context))
             {

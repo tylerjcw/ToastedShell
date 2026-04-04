@@ -16,10 +16,10 @@ public sealed class UndefCommand : ShellCommand
                           metadata.ResolutionKind == CommandResolutionKind.Function &&
                           context.Runtime.Commands.Remove(name);
 
-            results.Add(new ProjectedObject(
+            results.Add(ShellRecordUtilities.CreateExpando(
             [
-                new ProjectedField("Name", "Name", name),
-                new ProjectedField("Removed", "Removed", removed),
+                new KeyValuePair<string, object?>("Name", name),
+                new KeyValuePair<string, object?>("Removed", removed),
             ]));
         }
 

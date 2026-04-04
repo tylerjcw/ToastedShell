@@ -1,6 +1,6 @@
 namespace Tosh.Core.Commands;
 
-public sealed class MinCommand : ShellCommand
+public sealed class MinCommand : ShellCommand, ICurrentItemMemberPathCommand
 {
     public MinCommand()
         : base("min", "Returns the minimum pipeline value.", "min [member-path]") { }

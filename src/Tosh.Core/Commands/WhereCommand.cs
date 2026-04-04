@@ -3,42 +3,89 @@ namespace Tosh.Core.Commands;
 public sealed class WhereCommand : ShellCommand
 {
     public WhereCommand()
-        : base("where", "Filters pipeline objects with a comparison, predicate expression, or predicate block.", "where <member-path> <operator> <value> or where <expression> or where { <predicate>; ... }") { }
+        : base("where", "Filters pipeline objects with a predicate block or callable.", "where <predicate-expression|callable>") { }
 
     public override async IAsyncEnumerable<object?> ExecuteAsync(CommandContext context)
     {
-        if (context.Arguments.Count == 1 && context.Arguments[0] is ShellBlock predicateBlock)
+        if (context.Arguments.Count != 1)
         {
-            await foreach (var item in ExecutePredicateBlockAsync(context, predicateBlock).WithCancellation(context.CancellationToken))
+            throw context.CreateDiagnostic(
+                code: "tosh::runtime::predicate_expression_required",
+                title: "'where' requires a predicate expression.",
+                label: "write a predicate block like '{ ... }' or pass a callable value",
+                help: "predicate commands now use one expression mode everywhere.");
+        }
+
+        var predicate = await FunctionalCommandUtilities.ResolveCallableOrBlockAsync(
+            context,
+            FunctionalCommandUtilities.RequireCallableOrBlock(context, 0));
+        var (tree, items) = await ShellIterationUtilities.PeekForTreeAsync(context.Input, context.CancellationToken);
+
+        if (tree is not null)
+        {
+            var pruned = await PruneTreeAsync(context, predicate, tree);
+
+            if (pruned is not null)
             {
-                yield return item;
+                yield return pruned;
             }
 
             yield break;
         }
 
-        var clauses = WherePredicateMatcher.GetClauses(context);
-        var nullablePathCache = new Dictionary<(Type Type, string MemberPath), bool>();
-
-        await foreach (var item in context.Input.WithCancellation(context.CancellationToken))
+        await foreach (var item in items.WithCancellation(context.CancellationToken))
         {
-            if (WherePredicateMatcher.MatchesAll(item, clauses, nullablePathCache, context.Runtime.ObjectAccessor))
+            if (await FunctionalCommandUtilities.EvaluatePredicateAsync(
+                    context,
+                    predicate,
+                    [item],
+                    new Dictionary<string, object?>(StringComparer.Ordinal)
+                    {
+                        ["_"] = item,
+                    }))
             {
                 yield return item;
             }
         }
     }
 
-    private static async IAsyncEnumerable<object?> ExecutePredicateBlockAsync(
+    private static async Task<TreeEntryInfo?> PruneTreeAsync(
         CommandContext context,
-        ShellBlock predicateBlock)
+        object predicate,
+        TreeEntryInfo node)
     {
-        await foreach (var item in context.Input.WithCancellation(context.CancellationToken))
-        {
-            if (await PredicateBlockEvaluator.EvaluateAsync(context, predicateBlock, item))
+        var selfMatches = await FunctionalCommandUtilities.EvaluatePredicateAsync(
+            context,
+            predicate,
+            [node],
+            new Dictionary<string, object?>(StringComparer.Ordinal)
             {
-                yield return item;
+                ["_"] = node,
+            });
+
+        if (node.Children.Count == 0)
+        {
+            return selfMatches ? node : null;
+        }
+
+        var prunedChildren = new List<TreeEntryInfo>();
+
+        foreach (var child in node.Children)
+        {
+            context.CancellationToken.ThrowIfCancellationRequested();
+            var pruned = await PruneTreeAsync(context, predicate, child);
+
+            if (pruned is not null)
+            {
+                prunedChildren.Add(pruned);
             }
         }
+
+        if (selfMatches || prunedChildren.Count > 0)
+        {
+            return node with { Children = prunedChildren.ToArray() };
+        }
+
+        return null;
     }
 }

@@ -14,7 +14,8 @@ public sealed class ReverseCommand : ShellCommand
 
         var items = new List<object?>();
 
-        await foreach (var item in context.Input.WithCancellation(context.CancellationToken))
+        await foreach (var item in ShellIterationUtilities.ReplaySingleInputCollectionAsync(context.Input, context.CancellationToken)
+                           .WithCancellation(context.CancellationToken))
         {
             items.Add(item);
         }

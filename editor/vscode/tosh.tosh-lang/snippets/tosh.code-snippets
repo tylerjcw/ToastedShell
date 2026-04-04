@@ -1,0 +1,253 @@
+{
+  "Function": {
+    "prefix": "func",
+    "body": [
+      "func ${1:name}(${2}) {",
+      "\t$0",
+      "}"
+    ],
+    "description": "Define a ToSh function"
+  },
+  "Function Wrapper": {
+    "prefix": "func=>",
+    "body": [
+      "func ${1:name} => ${2:command}"
+    ],
+    "description": "Define a simple command-wrapper function"
+  },
+  "Exported Function": {
+    "prefix": "export-func",
+    "body": [
+      "export func ${1:name}(${2}) {",
+      "\t$0",
+      "}"
+    ],
+    "description": "Define a function exported from a required module"
+  },
+  "Variable": {
+    "prefix": "var",
+    "body": [
+      "var ${1:name} = ${2:value}"
+    ],
+    "description": "Declare a variable"
+  },
+  "Config Set": {
+    "prefix": "config-set",
+    "body": [
+      "config set ${1:prompt.name-text} ${2:toast}"
+    ],
+    "description": "Set a ToSh runtime configuration value"
+  },
+  "Config Variable": {
+    "prefix": "config-var",
+    "body": [
+      "$tosh.Config.${1:Prompt}.${2:NameText} = ${3:\"toast\"}"
+    ],
+    "description": "Mutate the live ToSh configuration object"
+  },
+  "Theme Variable": {
+    "prefix": "theme-var",
+    "body": [
+      "$tosh.Config.Theme.${1:Syntax}.${2:Keyword}.${3:Foreground} = ${4:\"bright-magenta\"}"
+    ],
+    "description": "Customize the live ToSh theme object"
+  },
+  "Config Init": {
+    "prefix": "config-init",
+    "body": [
+      "config init${1:}"
+    ],
+    "description": "Scaffold a ToSh config directory"
+  },
+  "Config Reload": {
+    "prefix": "config-reload",
+    "body": [
+      "config reload"
+    ],
+    "description": "Replay config.tosh, profile.tosh, and autoload files in the current session"
+  },
+  "View Permissions": {
+    "prefix": "view-perms",
+    "body": [
+      "view permissions ${1:both}"
+    ],
+    "description": "Set Unix permission rendering mode for the current session"
+  },
+  "View Attributes": {
+    "prefix": "view-attrs",
+    "body": [
+      "view attributes ${1:hex}"
+    ],
+    "description": "Set file-attribute rendering mode for the current session"
+  },
+  "Allocated Variable": {
+    "prefix": "varalloc",
+    "body": [
+      "var ${1:name}"
+    ],
+    "description": "Declare an allocated variable without an initial value"
+  },
+  "Alloc Native Buffer": {
+    "prefix": "alloc",
+    "body": [
+      "alloc ${1:buffer} = ${2:256}"
+    ],
+    "description": "Allocate a native buffer by byte count or interop type"
+  },
+  "Write Buffer": {
+    "prefix": "write-buffer",
+    "body": [
+      "write-buffer ${1:$buffer} ${2:\"toast\"}"
+    ],
+    "description": "Write text, bytes, or a struct-layout value into native memory"
+  },
+  "Read Buffer": {
+    "prefix": "read-buffer",
+    "body": [
+      "read-buffer ${1:cstring} ${2:$buffer}"
+    ],
+    "description": "Read a cstring, byte range, or struct-layout value from native memory"
+  },
+  "Record Literal": {
+    "prefix": "record",
+    "body": [
+      "var ${1:name} = {",
+      "\t${2:Field} = ${3:value}",
+      "}"
+    ],
+    "description": "Declare an anonymous table (dynamic record)"
+  },
+  "Generic List": {
+    "prefix": "newlist",
+    "body": [
+      "var ${1:name} = new list<${2:string}>(${3})"
+    ],
+    "description": "Construct a typed ToSh list"
+  },
+  "Generic Dictionary": {
+    "prefix": "newdict",
+    "body": [
+      "var ${1:name} = new dict<${2:string}, ${3:int}>(${4:key}, ${5:value})"
+    ],
+    "description": "Construct a typed ToSh dictionary"
+  },
+  "Generic Array": {
+    "prefix": "newarray",
+    "body": [
+      "var ${1:name} = new array<${2:int}>(${3})"
+    ],
+    "description": "Construct a typed ToSh array"
+  },
+  "Require Module": {
+    "prefix": "require",
+    "body": [
+      "require ${1:\"./module.tosh\"}"
+    ],
+    "description": "Require a ToSh module, DLL, or project"
+  },
+  "Require Native Library": {
+    "prefix": "require-native",
+    "body": [
+      "require native ${1:\"libc.so.6\"} as ${2:LibC}"
+    ],
+    "description": "Load a native shared library into a named ToSh module"
+  },
+  "Bind Native Functions": {
+    "prefix": "bind-native",
+    "body": [
+      "bind ${1:LibC} {",
+      "\tfunc ${2:abs}(${3:int}) -> ${4:int}",
+      "}"
+    ],
+    "description": "Bind native exports onto a required native library module"
+  },
+  "Bind Native Out Struct": {
+    "prefix": "bind-native-out",
+    "body": [
+      "bind ${1:LibC} {",
+      "\tfunc ${2:time}(out ${3:value}: ${4:long}) -> ${5:long}",
+      "}"
+    ],
+    "description": "Bind a native export with an output parameter"
+  },
+  "Using Alias": {
+    "prefix": "using",
+    "body": [
+      "using ${1:System.IO} = ${2:IO}"
+    ],
+    "description": "Import a CLR namespace with an alias"
+  },
+  "If Else": {
+    "prefix": "if",
+    "body": [
+      "if (${1:condition}) {",
+      "\t$2",
+      "} else {",
+      "\t$0",
+      "}"
+    ],
+    "description": "If / else block"
+  },
+  "Ternary": {
+    "prefix": "ternary",
+    "body": [
+      "var ${1:name} = (${2:condition}) ? ${3:whenTrue} : ${4:whenFalse}"
+    ],
+    "description": "Conditional ternary expression"
+  },
+  "Match Expression": {
+    "prefix": "match",
+    "body": [
+      "match (${1:value}) {",
+      "\t${2:pattern} => ${3:result}",
+      "\tdefault => ${4:fallback}",
+      "}"
+    ],
+    "description": "Expression-style match with ordered arms"
+  },
+  "Try Catch Finally": {
+    "prefix": "try",
+    "body": [
+      "try {",
+      "\t$1",
+      "} catch (${2:err}) {",
+      "\t$3",
+      "} finally {",
+      "\t$0",
+      "}"
+    ],
+    "description": "Try / catch / finally block"
+  },
+  "For Loop": {
+    "prefix": "for",
+    "body": [
+      "for ${1:item} in (${2:source}) {",
+      "\t$0",
+      "}"
+    ],
+    "description": "For loop"
+  },
+  "Where Block": {
+    "prefix": "where",
+    "body": [
+      "where {",
+      "\t$0",
+      "}"
+    ],
+    "description": "Where predicate block"
+  },
+  "Switch": {
+    "prefix": "switch",
+    "body": [
+      "switch (${1:value}) {",
+      "\tcase ${2:match} {",
+      "\t\t$3",
+      "\t}",
+      "\tdefault {",
+      "\t\t$0",
+      "\t}",
+      "}"
+    ],
+    "description": "Switch statement"
+  }
+}

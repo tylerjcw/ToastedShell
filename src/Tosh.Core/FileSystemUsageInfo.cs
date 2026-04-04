@@ -10,7 +10,13 @@ public sealed record FileSystemUsageInfo(
     StorageSize? Used,
     StorageSize? Available,
     int? UsePercent,
-    DriveType? DriveType)
+    DriveType? DriveType,
+    bool IsLocal,
+    string? MountRoot = null,
+    string? RequestedPath = null,
+    bool IsTotal = false)
 {
     public string MountPoint => MountedOn;
+
+    public string? SourcePath => RequestedPath;
 }

@@ -5,13 +5,19 @@ public sealed class TimeSpanCommand : ShellCommand
     public TimeSpanCommand()
         : base(
             "timespan",
-            "Parses a duration into a CLR TimeSpan.",
+            "Parses a duration into a CLR duration value.",
             "timespan <duration>") { }
 
     public override async IAsyncEnumerable<object?> ExecuteAsync(CommandContext context)
     {
-        var value = CommandArguments.RequireConverted<TimeSpan>(context.Arguments, 0, "duration");
-        yield return value;
+        var text = CommandArguments.RequireString(context.Arguments, 0, "duration");
+
+        if (!TemporalParser.TryParseTemporalAmount(text, out var value))
+        {
+            throw new InvalidOperationException($"Could not parse '{text}' as a duration.");
+        }
+
+        yield return value.IsPureTimeSpan ? value.Duration : value;
         await Task.CompletedTask;
     }
 }

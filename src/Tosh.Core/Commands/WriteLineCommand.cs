@@ -1,6 +1,6 @@
 namespace Tosh.Core.Commands;
 
-public sealed class WriteLineCommand : ShellCommand
+public sealed class WriteLineCommand : ShellCommand, IImplicitGlobCommand
 {
     public WriteLineCommand()
         : base("writeline", "Writes rendered values with a trailing newline.", "writeline [value...]") { }

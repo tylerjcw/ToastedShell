@@ -1,11 +1,14 @@
 using Tosh.Core;
 using Tosh.Language;
+using Tosh.Cli.Tui;
+using System.Diagnostics;
 
 namespace Tosh.Cli;
 
 public sealed class ToshRepl
 {
     private readonly DiagnosticRenderer _diagnostics;
+    private readonly ReplCompletionEngine _completionEngine;
     private readonly ToshEngine _engine;
     private readonly ReplLineEditor _lineEditor;
     private readonly ToshRuntime _runtime;
@@ -13,16 +16,16 @@ public sealed class ToshRepl
     public ToshRepl(ToshEngine engine)
     {
         _engine = engine;
-        _diagnostics = new DiagnosticRenderer();
-        _lineEditor = new ReplLineEditor();
         _runtime = engine.Runtime;
+        _diagnostics = new DiagnosticRenderer(_runtime.Config.Theme.Diagnostics);
+        _lineEditor = new ReplLineEditor();
+        _completionEngine = new ReplCompletionEngine(_runtime);
     }
 
     public async Task RunAsync()
     {
         await PrintBannerAsync();
 
-        var buffer = new List<string>();
         string[]? cachedHistory = null;
         var lastHistoryCount = -1;
 
@@ -34,36 +37,58 @@ public sealed class ToshRepl
                 lastHistoryCount = _runtime.History.Count;
             }
 
-            var prompt = buffer.Count == 0 ? BuildPrompt() : "....> ";
-            var line = _lineEditor.ReadLine(prompt, cachedHistory!);
+            var source = _lineEditor.ReadLine(
+                BuildPrompt(),
+                cachedHistory ?? Array.Empty<string>(),
+                (text, cursor) => _completionEngine.GetCompletions(text, cursor),
+                highlighter: _runtime.Config.Repl.SyntaxHighlightingEnabled ? text => SyntaxHighlighter.Highlight(text, _runtime) : null,
+                continuationPrompt: _runtime.Config.Repl.ContinuationPrompt,
+                maxVisibleSuggestions: _runtime.Config.Repl.CompletionMaxVisible,
+                showGhostText: _runtime.Config.Repl.GhostTextEnabled,
+                completionTheme: _runtime.Config.Theme.Completion,
+                continuationHandler: ReplInputClassifier.GetContinuationState);
 
-            if (line is null)
+            if (source is null)
             {
                 break;
             }
 
-            var trimmed = line.Trim();
+            var trimmed = source.Trim();
 
-            if (buffer.Count == 0 && trimmed.Length == 0)
+            if (trimmed.Length == 0)
             {
                 continue;
             }
-
-            buffer.Add(line);
-
-            if (ReplInputClassifier.RequiresContinuation(buffer))
-            {
-                continue;
-            }
-
-            var source = string.Join(Environment.NewLine, buffer);
-            buffer.Clear();
-            _runtime.RecordHistory(source);
 
             try
             {
-                var sourceName = $"repl_entry #{_runtime.History[^1].Index}";
-                await ExecuteAndPrintAsync(source, sourceName);
+                var expansion = ReplHistoryExpander.Expand(source, _runtime.History.ToArray());
+
+                if (expansion.Expanded)
+                {
+                    await Console.Out.WriteLineAsync(
+                        StyledText.RenderSegments(
+                        [
+                            _runtime.Config.Theme.Completion.Footer.Apply(expansion.Text),
+                        ]));
+                    source = expansion.Text;
+                }
+
+                var historyEntry = _runtime.RecordHistory(source);
+                var sourceName = historyEntry is not null
+                    ? $"repl_entry #{historyEntry.Id}"
+                    : "repl_entry transient";
+                var stopwatch = Stopwatch.StartNew();
+
+                try
+                {
+                    await ExecuteAndPrintAsync(source, sourceName);
+                }
+                finally
+                {
+                    stopwatch.Stop();
+                    _runtime.SetLastCommandDuration(stopwatch.Elapsed);
+                }
             }
             catch (Exception exception)
             {
@@ -80,34 +105,66 @@ public sealed class ToshRepl
     private async Task ExecuteAndPrintAsync(string source, string sourceName)
     {
         var values = await _engine.ExecuteToListAsync(source, sourceName);
-        var rendered = _runtime.Display.RenderMany(values, ConsoleDisplay.CreateRenderOptions(_runtime));
 
-        if (rendered.Length > 0)
+        try
         {
-            await Console.Out.WriteLineAsync(rendered);
+            if (TuiRequestDispatcher.TryHandle(values, _runtime, out var outcomeValues))
+            {
+                if (outcomeValues is { Count: > 0 })
+                {
+                    var rendered = _runtime.Display.RenderMany(outcomeValues, ConsoleDisplay.CreateRenderOptions(_runtime));
+                    await ConsoleDisplay.WriteRenderedAsync(rendered, _runtime);
+                }
+
+                return;
+            }
+
+            var rendered2 = _runtime.Display.RenderMany(values, ConsoleDisplay.CreateRenderOptions(_runtime));
+            await ConsoleDisplay.WriteRenderedAsync(rendered2, _runtime);
+        }
+        finally
+        {
+            _runtime.ClearDisplaySelections();
         }
     }
 
     private string BuildPrompt()
     {
-        var currentDirectory = _runtime.CurrentDirectory;
-        var home = PathUtilities.UserHomeDirectory;
-
-        if (currentDirectory.StartsWith(home, PathUtilities.GetPathComparison()))
+        if (_runtime.Commands.TryGet("prompt", out _))
         {
-            currentDirectory = $"~{currentDirectory[home.Length..]}";
+            try
+            {
+                var results = _engine.ExecuteToListAsync("prompt", "<prompt>").GetAwaiter().GetResult();
+
+                if (results.Count > 0)
+                {
+                    // If any result is a StyledText, render all segments together.
+                    if (results.Any(r => r is StyledText))
+                    {
+                        return StyledText.RenderSegments(results);
+                    }
+
+                    // Legacy: plain string return.
+                    if (results[0] is string promptText)
+                    {
+                        return promptText;
+                    }
+                }
+            }
+            catch
+            {
+                // Fall through to default prompt on any error.
+            }
         }
 
-        return $"tosh {currentDirectory}> ";
+        return ToshPromptRenderer.BuildDefaultPrompt(_runtime);
     }
 
     private static async Task PrintBannerAsync()
     {
-        await Console.Out.WriteLineAsync("tosh (ToastedSHell)");
-        await Console.Out.WriteLineAsync("Nu-inspired pipeline syntax with a CLR object runtime.");
+        await Console.Out.WriteLineAsync("ToSh (ToastedShell)");
+        await Console.Out.WriteLineAsync("Nu-inspired pipeline syntax with a PowerShell inspired CLR object runtime.");
         await Console.Out.WriteLineAsync("Everything in the session is a shell command.");
-        await Console.Out.WriteLineAsync("Prompt editing supports arrows, home/end, delete/backspace, and history recall.");
-        await Console.Out.WriteLineAsync("Try: help search json, man where, alias ll = ls -la, def recent(days) { ls -la | where Modified > ((date now) - $days) }, source ~/.config/tosh/profile.tosh, exit");
         await Console.Out.WriteLineAsync(string.Empty);
     }
 }

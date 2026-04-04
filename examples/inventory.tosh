@@ -1,0 +1,111 @@
+# inventory.tosh — A small inventory manager using dynamic records
+func log(message: string) {
+    writeline $"[{$tosh.Function.Name} @ {$tosh.Script.Path}] {$message}"
+}
+
+class TestItem {
+    prop Name: string? = null
+    prop Quantity: int? = null
+    prop Category: string? = null
+    prop Tags: string? = null
+
+    TestItem(name: string, quantity: int, category: string) {
+        $this.Name = $name
+        $this.Quantity = $quantity
+        $this.Category = $category
+        log $"Created item: {$name}"
+    }
+
+    func AddTag(tag: string) {
+        if ($this.Tags != null) {
+            $this.Tags = ($this.Tags + "," + $tag)
+        } else {
+            $this.Tags = $tag
+        }
+    }
+}
+
+class TestColor {
+    prop Hex: string? {
+        get => $this.hex_color
+        set => $this.hex_color = $value
+    }
+
+    shy prop hex_color: string? = null
+
+    TestColor() {
+        $this.hex_color = (echo "{\"hex\":\"#ADFF2F\"}" | from-json | get hex)
+    }
+}
+
+func summarize(items) {
+    var total = 0
+    $items | each { $total = ($total + _.Quantity) }
+    var cat_count = ($items | each { _.Category } | distinct | count)
+
+    writeline "=== Inventory Summary ==="
+    writeline $"  Items:      {$items | count}"
+    writeline $"  Total qty:  {$total}"
+    writeline $"  Categories: {$cat_count}"
+    writeline ""
+
+    $items | each {
+        var label = _.Name
+        var qty = _.Quantity
+        var cat = _.Category
+        var tags = ""
+        if (_.Tags != null) {
+            $tags = _.Tags
+        }
+        writeline $"  [{$cat}] {$label} x{$qty} {$tags}"
+    }
+}
+
+# Build some items
+var bread = new TestItem("Bread", 3, "Food")
+var wrench = new TestItem("Wrench", 1, "Tools")
+var butter = new TestItem("Butter", 2, "Food")
+var hammer = new TestItem("Hammer", 4, "Tools")
+var milk = new TestItem("Milk", 6, "Food")
+var items = [$bread, $wrench, $butter, $hammer, $milk]
+
+# Tag a few items
+$bread.AddTag("fresh") | ignore
+$bread.AddTag("daily") | ignore
+$milk.AddTag("refrigerated") | ignore
+
+# Show everything
+summarize $items
+
+writeline ""
+writeline "--- Food items with quantity > 2 ---"
+$items | where (_.Category == "Food") and (_.Quantity > 2) | each {
+    var props = (_ | get-props | join-lines ", ")
+    writeline $"  {_.Name} has props: {$props}"
+}
+
+writeline ""
+writeline "--- Cloning and mutating ---"
+var original = ($items | first)
+var copy = (clone $original)
+set-prop $copy Name "Toast" | ignore
+writeline $"  Original: {get-prop $original Name}"
+writeline $"  Clone:    {get-prop $copy Name}"
+
+writeline ""
+writeline "--- Dynamic method calls ---"
+writeline (echo "hello world" | call-method ToUpper)
+writeline (echo "hello world" | call-method Replace "world" "tosh")
+
+writeline ""
+writeline "--- Introspection ---"
+var sample = ($items | first)
+writeline $"  has Name?    {$sample | has-prop Name} = \"{$sample.Name}\""
+writeline $"  has Color?   {$sample | has-prop Color}"
+writeline $"  has ToUpper? {$sample | has-method ToUpper}"
+writeline $"  type:        {$sample | type-of}"
+writeline $"  name-of:     {name-of $sample}"
+
+$items
+var t = new TestColor()
+writeline $t.Hex

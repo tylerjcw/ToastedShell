@@ -1,0 +1,25 @@
+<Project>
+
+  <!--
+    Post-build hooks for all projects in the Tosh solution.
+    Imported automatically by MSBuild from the repo root.
+
+    `dotnet clean` now removes:
+      - The normal bin/ and obj/ (built-in)
+      - artifacts/test-results/   (hang dumps, coverage, xml reports)
+      - artifacts/publish/        (published single-file binaries)
+  -->
+
+  <Target Name="CleanTestResults" AfterTargets="Clean"
+          Condition="Exists('$(ArtifactsRoot)test-results')">
+    <RemoveDir Directories="$(ArtifactsRoot)test-results" />
+    <Message Importance="high" Text="Cleaned test results: $(ArtifactsRoot)test-results" />
+  </Target>
+
+  <Target Name="CleanPublishArtifacts" AfterTargets="Clean"
+          Condition="Exists('$(ArtifactsRoot)publish')">
+    <RemoveDir Directories="$(ArtifactsRoot)publish" />
+    <Message Importance="high" Text="Cleaned publish artifacts: $(ArtifactsRoot)publish" />
+  </Target>
+
+</Project>

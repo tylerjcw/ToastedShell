@@ -3,7 +3,7 @@ namespace Tosh.Core.Commands;
 public sealed class RenameCommand : ShellCommand
 {
     public RenameCommand()
-        : base("rename", "Renames fields on projected objects.", "rename <old> <new> [old2 new2 ...]") { }
+        : base("rename", "Renames fields on record-like objects.", "rename <old> <new> [old2 new2 ...]") { }
 
     public override async IAsyncEnumerable<object?> ExecuteAsync(CommandContext context)
     {
@@ -23,16 +23,15 @@ public sealed class RenameCommand : ShellCommand
 
         await foreach (var item in context.Input.WithCancellation(context.CancellationToken))
         {
-            if (item is not ProjectedObject projected)
+            if (!ShellRecordUtilities.TryGetFields(item, out var fields))
             {
-                throw new InvalidOperationException("rename expects projected objects, for example from 'get { ... }'.");
+                throw new InvalidOperationException("rename expects record-like objects, for example from 'get { ... }'.");
             }
 
-            yield return new ProjectedObject(projected.Fields
-                .Select(field => renames.TryGetValue(field.Name, out var newName)
-                    ? new ProjectedField(newName, field.SourcePath, field.Value)
-                    : field)
-                .ToArray());
+            yield return ShellRecordUtilities.CreateExpando(fields.Select(field =>
+                new KeyValuePair<string, object?>(
+                    renames.TryGetValue(field.Key, out var newName) ? newName : field.Key,
+                    field.Value)));
         }
     }
 }

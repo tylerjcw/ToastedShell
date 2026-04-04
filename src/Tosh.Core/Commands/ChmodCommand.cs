@@ -23,7 +23,7 @@ public sealed class ChmodCommand : ShellCommand
         var modeText = parsed.Positionals[0]?.ToString()
                        ?? throw new InvalidOperationException("Missing required argument: mode.");
         var paths = parsed.Positionals.Count > 1
-            ? parsed.Positionals.Skip(1).Select(argument => ShellPathArguments.Resolve(context.Runtime.CurrentDirectory, argument)).ToArray()
+            ? ShellPathArguments.ExpandMany(context.Runtime.CurrentDirectory, parsed.Positionals.Skip(1).ToArray())
             : await ShellPathArguments.CollectAsync(context, Array.Empty<object?>(), context.CancellationToken);
 
         if (paths.Count == 0)

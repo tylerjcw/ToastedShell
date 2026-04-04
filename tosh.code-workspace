@@ -1,0 +1,27 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../PowerShell"
+		},
+		{
+			"path": "../nushell"
+		},
+		{
+			"path": "../lua"
+		},
+		{
+			"path": "../zsh"
+		},
+		{
+			"path": "../../.config/tosh"
+		}
+	],
+	"settings": {
+		"chat.tools.terminal.autoApprove": {
+			"dotnet test": true
+		}
+	}
+}

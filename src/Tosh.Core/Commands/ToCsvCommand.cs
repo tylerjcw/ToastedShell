@@ -18,7 +18,7 @@ public sealed class ToCsvCommand : ShellCommand
         if (values.Count == 1 &&
             values[0] is IEnumerable enumerable &&
             values[0] is not string &&
-            values[0] is not ProjectedObject &&
+            !ShellRecordUtilities.IsRecordLike(values[0]) &&
             values[0] is not IDictionary)
         {
             values = enumerable.Cast<object?>().ToArray();

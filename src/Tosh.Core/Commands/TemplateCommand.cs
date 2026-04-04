@@ -25,7 +25,7 @@ public sealed partial class TemplateCommand : ShellCommand
                 match =>
                 {
                     var path = match.Groups["path"].Value.Trim();
-                    var value = path is "." or "it"
+                    var value = path is "." or "_"
                         ? item
                         : context.Runtime.ObjectAccessor.GetValue(item, path);
                     return value is null ? string.Empty : context.Runtime.Formatter.Format(value);

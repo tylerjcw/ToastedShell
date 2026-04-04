@@ -10,4 +10,9 @@ public sealed record HelpTopic(
     IReadOnlyList<string> Related,
     IReadOnlyList<string> Examples,
     string? Path,
-    string? Notes);
+    string? Notes,
+    IReadOnlyList<HelpArgumentInfo>? Arguments = null,
+    IReadOnlyList<HelpOptionInfo>? Options = null,
+    HelpPipelineInputInfo? PipelineInput = null,
+    string? Output = null,
+    IReadOnlyList<HelpExample>? ExampleItems = null);

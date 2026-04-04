@@ -14,20 +14,19 @@ public sealed class HashCommand : ShellCommand
             ? context.Arguments[0]?.ToString() ?? "sha256"
             : "sha256";
         var startIndex = context.Arguments.Count > 0 && !LooksLikePath(context.Arguments[0]?.ToString()) ? 1 : 0;
-        var explicitPaths = context.Arguments.Skip(startIndex).Select(argument => argument?.ToString()).Where(path => !string.IsNullOrWhiteSpace(path)).Cast<string>().ToArray();
+        var explicitPaths = ShellPathArguments.ExpandMany(context.Runtime.CurrentDirectory, context.Arguments.Skip(startIndex).ToArray());
 
-        if (explicitPaths.Length > 0)
+        if (explicitPaths.Count > 0)
         {
-            foreach (var rawPath in explicitPaths)
+            foreach (var path in explicitPaths)
             {
-                var path = PathUtilities.ResolvePath(context.Runtime.CurrentDirectory, rawPath);
                 if (!File.Exists(path))
                 {
                     throw new InvalidOperationException($"File '{path}' does not exist.");
                 }
 
                 await using var stream = File.OpenRead(path);
-                yield return CreateProjection(rawPath, path, algorithmName, await ComputeHashAsync(stream, algorithmName, context.CancellationToken));
+                yield return CreateProjection(Path.GetFileName(path), path, algorithmName, await ComputeHashAsync(stream, algorithmName, context.CancellationToken));
             }
 
             yield break;
@@ -41,30 +40,30 @@ public sealed class HashCommand : ShellCommand
         }
     }
 
-    private static ProjectedObject CreateProjection(string? name, string? path, string algorithm, string hash, object? value = null)
+    private static System.Dynamic.ExpandoObject CreateProjection(string? name, string? path, string algorithm, string hash, object? value = null)
     {
-        var fields = new List<ProjectedField>
+        var fields = new List<KeyValuePair<string, object?>>
         {
-            new("Algorithm", "Algorithm", algorithm.ToUpperInvariant()),
-            new("Hash", "Hash", hash),
+            new("Algorithm", algorithm.ToUpperInvariant()),
+            new("Hash", hash),
         };
 
         if (name is not null)
         {
-            fields.Add(new ProjectedField("Name", "Name", name));
+            fields.Add(new KeyValuePair<string, object?>("Name", name));
         }
 
         if (path is not null)
         {
-            fields.Add(new ProjectedField("Path", "Path", path));
+            fields.Add(new KeyValuePair<string, object?>("Path", path));
         }
 
         if (value is not null)
         {
-            fields.Add(new ProjectedField("Value", "Value", value));
+            fields.Add(new KeyValuePair<string, object?>("Value", value));
         }
 
-        return new ProjectedObject(fields);
+        return ShellRecordUtilities.CreateExpando(fields);
     }
 
     private static async Task<string> ComputeHashAsync(Stream stream, string algorithmName, CancellationToken cancellationToken)

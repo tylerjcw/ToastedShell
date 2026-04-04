@@ -3,8 +3,11 @@
     <Project Path="src/Tosh.Cli/Tosh.Cli.csproj" />
     <Project Path="src/Tosh.Core/Tosh.Core.csproj" />
     <Project Path="src/Tosh.Language/Tosh.Language.csproj" />
+    <Project Path="src/Tosh.Lsp/Tosh.Lsp.csproj" />
+    <Project Path="src/Tosh.Tui/Tosh.Tui.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/Tosh.LspFixture/Tosh.LspFixture.csproj" />
     <Project Path="tests/Tosh.Tests/Tosh.Tests.csproj" />
   </Folder>
 </Solution>

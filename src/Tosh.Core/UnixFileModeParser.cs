@@ -61,7 +61,7 @@ internal static partial class UnixFileModeParser
     {
         var index = clause.IndexOfAny(['+', '-', '=']);
 
-        if (index <= 0 || index == clause.Length - 1)
+        if (index < 0 || index == clause.Length - 1)
         {
             throw new InvalidOperationException($"Unsupported symbolic mode clause '{clause}'.");
         }

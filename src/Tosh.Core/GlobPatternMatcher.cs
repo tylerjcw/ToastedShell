@@ -21,8 +21,25 @@ internal static class GlobPatternMatcher
     {
         var builder = new StringBuilder("^");
 
-        foreach (var character in pattern)
+        for (var index = 0; index < pattern.Length; index++)
         {
+            var character = pattern[index];
+
+            if (character == '[')
+            {
+                var closeIndex = pattern.IndexOf(']', index + 1);
+
+                if (closeIndex <= index + 1)
+                {
+                    builder.Append(@"\[");
+                    continue;
+                }
+
+                builder.Append(BuildCharacterClass(pattern[(index + 1)..closeIndex]));
+                index = closeIndex;
+                continue;
+            }
+
             builder.Append(character switch
             {
                 '*' => ".*",
@@ -41,5 +58,41 @@ internal static class GlobPatternMatcher
         }
 
         return new Regex(builder.ToString(), options);
+    }
+
+    private static string BuildCharacterClass(string contents)
+    {
+        var builder = new StringBuilder("[");
+        var startIndex = 0;
+
+        if (contents.Length > 0 && contents[0] is '!' or '^')
+        {
+            builder.Append('^');
+            startIndex = 1;
+        }
+
+        for (var index = startIndex; index < contents.Length; index++)
+        {
+            var character = contents[index];
+
+            switch (character)
+            {
+                case '\\':
+                    builder.Append(@"\\");
+                    break;
+                case ']':
+                    builder.Append(@"\]");
+                    break;
+                case '^' when index == startIndex:
+                    builder.Append(@"\^");
+                    break;
+                default:
+                    builder.Append(character);
+                    break;
+            }
+        }
+
+        builder.Append(']');
+        return builder.ToString();
     }
 }

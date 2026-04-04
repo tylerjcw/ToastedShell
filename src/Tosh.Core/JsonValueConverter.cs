@@ -20,14 +20,11 @@ public static class JsonValueConverter
         };
     }
 
-    private static ProjectedObject ConvertObject(JsonElement element)
+    private static object ConvertObject(JsonElement element)
     {
-        var fields = element
+        return ShellRecordUtilities.CreateExpando(element
             .EnumerateObject()
-            .Select(property => new ProjectedField(property.Name, property.Name, Convert(property.Value)))
-            .ToArray();
-
-        return new ProjectedObject(fields);
+            .Select(property => new KeyValuePair<string, object?>(property.Name, Convert(property.Value))));
     }
 
     private static object ConvertNumber(JsonElement element)

@@ -19,15 +19,16 @@ public enum SyntaxTokenKind
     Null,
 
     // Operators and combinators
-    AmpersandAmpersand,     // &&
-    PipePipe,               // ||
     Ampersand,              // & (background)
-    Bang,                   // !
+    QuestionQuestion,       // ?? (null-coalescing)
+    QuestionDot,            // ?. (null-safe member access)
 
     // Comparison operators (previously barewords, now distinct tokens)
     GreaterThanEqual,       // >=
     LessThanEqual,          // <=
     BangEqual,              // !=
+    BangTilde,              // !~
+    Bang,                   // !
 
     // Redirection
     GreaterThan,            // >
@@ -37,13 +38,13 @@ public enum SyntaxTokenKind
 
     // Expansion prefixes
     DollarOpenParen,        // $(
-    DollarDoubleOpenParen,  // $((
-    DollarOpenBrace,        // ${
 
-    // ANSI-C quoting
-    DollarSingleQuote,      // $'
+    // Interpolated strings
+    InterpolatedString,     // $"...{expr}..."
+
+    // Range
+    DotDot,                 // ..
 
     // Process substitution
     LessThanOpenParen,      // <(
-    GreaterThanOpenParen,   // >(
 }

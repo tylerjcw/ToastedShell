@@ -8,13 +8,21 @@ public sealed class WhichCommand : ShellCommand
     public override async IAsyncEnumerable<object?> ExecuteAsync(CommandContext context)
     {
         var parsed = ParsedCommandArguments.Parse(context.Arguments);
+        IReadOnlyList<object?> names = parsed.Positionals;
 
-        if (parsed.Positionals.Count == 0)
+        if (names.Count == 0)
         {
-            throw new InvalidOperationException($"The '{Name}' command requires at least one command name.");
+            var pipedNames = await TextInputUtilities.ReadScalarValuesFromInputAsync(context, allowEmpty: true);
+
+            if (pipedNames.Count == 0)
+            {
+                throw new InvalidOperationException($"The '{Name}' command requires at least one command name.");
+            }
+
+            names = pipedNames.Cast<object?>().ToArray();
         }
 
-        foreach (var argument in parsed.Positionals)
+        foreach (var argument in names)
         {
             context.CancellationToken.ThrowIfCancellationRequested();
             var name = argument?.ToString();

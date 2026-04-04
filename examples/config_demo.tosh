@@ -1,0 +1,42 @@
+writeline "=== Current Prompt Name ==="
+writeline (config get prompt.name-text)
+
+writeline ""
+writeline "=== Mutating Live Session Config ==="
+$tosh.Config.Prompt.NameText = "toast"
+$tosh.Config.Prompt.IndicatorText = " >> "
+$tosh.Config.Theme.Syntax.Keyword.Foreground = "bright-magenta"
+$tosh.Config.Theme.Completion.GhostText.Foreground = "gray"
+$tosh.Config.Theme.Diagnostics.Help.Foreground = "bright-yellow"
+$tosh.Config.Theme.Tables.BoxStyle = "Double"
+$tosh.Config.Theme.Tables.Header.Foreground = "bright-yellow"
+$tosh.Config.Theme.Tables.RecordKey.Bold = true
+$tosh.Config.Repl.ContinuationPrompt = "..> "
+$tosh.Config.Repl.CompletionMaxVisible = 10
+$tosh.Config.Display.Style = "Detail"
+$tosh.Config.Display.StorageSize.Mode = "Bytes"
+$tosh.Config.History.MaxEntries = 100
+
+writeline ""
+writeline "=== Theme Section ==="
+writeline (config get theme)
+
+writeline ""
+writeline "=== Prompt Section ==="
+writeline (config get prompt)
+
+writeline ""
+writeline "=== Repl Section ==="
+writeline (config get repl)
+
+writeline ""
+writeline "=== Display Section ==="
+writeline (config get display)
+
+writeline ""
+writeline "=== Startup Layout ==="
+writeline (config get startup)
+
+writeline ""
+writeline "=== Table Preview ==="
+ls | first 3

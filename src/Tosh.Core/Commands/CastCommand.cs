@@ -3,7 +3,7 @@ namespace Tosh.Core.Commands;
 public sealed class CastCommand : ShellCommand
 {
     public CastCommand()
-        : base("cast", "Casts pipeline values to a CLR type.", "cast <type> [value ...]") { }
+        : base("cast", "Casts pipeline values to a CLR type, including constructed generic collection types.", "cast <type> [value ...]") { }
 
     public override async IAsyncEnumerable<object?> ExecuteAsync(CommandContext context)
     {

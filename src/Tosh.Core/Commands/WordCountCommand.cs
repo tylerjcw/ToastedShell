@@ -5,15 +5,17 @@ namespace Tosh.Core.Commands;
 public sealed class WordCountCommand : ShellCommand
 {
     public WordCountCommand()
-        : base("wc", "Counts lines, words, bytes, and characters.", "wc [path ...]") { }
+        : base("wc", "Counts lines, words, bytes, characters, and longest-line length.", "wc [-lwmcL] [path ...]") { }
 
     public override async IAsyncEnumerable<object?> ExecuteAsync(CommandContext context)
     {
-        if (context.Arguments.Count > 0)
+        var parsed = ParsedCommandArguments.Parse(context.Arguments);
+        var implicitSelection = BuildImplicitSelection(parsed);
+
+        if (parsed.Positionals.Count > 0)
         {
-            var paths = context.Arguments
-                .Select(argument => PathUtilities.ResolvePath(context.Runtime.CurrentDirectory, CommandArguments.RequireString([argument], 0, "path")))
-                .ToArray();
+            var paths = ShellPathArguments.ExpandMany(context.Runtime.CurrentDirectory, parsed.Positionals);
+            var statistics = new List<TextStatistics>();
 
             foreach (var path in paths)
             {
@@ -25,7 +27,14 @@ public sealed class WordCountCommand : ShellCommand
                 }
 
                 var fileText = await File.ReadAllTextAsync(path, context.CancellationToken);
-                yield return CreateStatistics(path, fileText, new FileInfo(path).Length);
+                var stats = CreateStatistics(path, fileText, new FileInfo(path).Length);
+                statistics.Add(stats);
+                yield return ApplySelection(context, implicitSelection, stats);
+            }
+
+            if (statistics.Count > 1)
+            {
+                yield return ApplySelection(context, implicitSelection, CreateTotalStatistics(statistics));
             }
 
             yield break;
@@ -40,12 +49,77 @@ public sealed class WordCountCommand : ShellCommand
 
         var text = string.Join(Environment.NewLine, values.Select(ExternalTextSerializer.Serialize));
         var bytes = Encoding.UTF8.GetByteCount(text);
-        yield return CreateStatistics(null, text, bytes);
+        yield return ApplySelection(context, implicitSelection, CreateStatistics(null, text, bytes));
     }
 
     private static TextStatistics CreateStatistics(string? path, string text, long bytes)
     {
-        var lines = TextInputUtilities.SplitLines(text).Count();
-        return new TextStatistics(path, lines, TextInputUtilities.CountWords(text), bytes, text.Length);
+        var lines = TextInputUtilities.SplitLines(text).ToArray();
+        return new TextStatistics(
+            path,
+            lines.Length,
+            TextInputUtilities.CountWords(text),
+            bytes,
+            text.Length,
+            lines.Length == 0 ? 0 : lines.Max(line => line.Length));
+    }
+
+    private static TextStatistics CreateTotalStatistics(IReadOnlyList<TextStatistics> statistics)
+    {
+        checked
+        {
+            return new TextStatistics(
+                "total",
+                statistics.Sum(item => item.Lines),
+                statistics.Sum(item => item.Words),
+                statistics.Sum(item => item.Bytes),
+                statistics.Sum(item => item.Characters),
+                statistics.Count == 0 ? 0 : statistics.Max(item => item.LongestLine),
+                IsTotal: true);
+        }
+    }
+
+    private static DisplayColumnSelection BuildImplicitSelection(ParsedCommandArguments parsed)
+    {
+        var showColumns = new List<string>();
+
+        if (parsed.HasFlag("l"))
+        {
+            showColumns.Add("Path");
+            showColumns.Add("Lines");
+        }
+
+        if (parsed.HasFlag("w"))
+        {
+            showColumns.Add("Path");
+            showColumns.Add("Words");
+        }
+
+        if (parsed.HasFlag("c"))
+        {
+            showColumns.Add("Path");
+            showColumns.Add("Bytes");
+        }
+
+        if (parsed.HasFlag("m"))
+        {
+            showColumns.Add("Path");
+            showColumns.Add("Chars");
+        }
+
+        if (parsed.HasFlag("L"))
+        {
+            showColumns.Add("Path");
+            showColumns.Add("MaxLine");
+        }
+
+        return new DisplayColumnSelection(showColumns, [], showAll: false);
+    }
+
+    private static object ApplySelection(CommandContext context, DisplayColumnSelection selection, TextStatistics statistics)
+    {
+        return selection.HasOverrides
+            ? CommandDisplaySelectionParser.Apply(context.Runtime, selection, statistics)!
+            : statistics;
     }
 }

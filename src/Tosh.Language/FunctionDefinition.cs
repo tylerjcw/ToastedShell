@@ -8,6 +8,8 @@ public sealed record FunctionDefinition(
     IReadOnlyList<FunctionParameterDefinition> Parameters,
     string? ReturnTypeName,
     BlockSyntax Body,
+    bool IsCommandWrapper,
     string SourceName,
     string SourceText,
-    TextSpan Span);
+    TextSpan Span,
+    IReadOnlyList<LexicalScope>? CapturedScopes = null);

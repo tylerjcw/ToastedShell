@@ -19,14 +19,27 @@ public sealed class ExportCommand : ShellCommand
             throw new InvalidOperationException($"'{name}' is not a valid environment variable name.");
         }
 
-        object? value = context.Arguments.Count == 2
-            ? context.Arguments[1]
-            : context.Runtime.Variables.TryGetValue(name, out var existing)
-                ? existing
-                : throw new InvalidOperationException($"Variable '{name}' was not found.");
+        object? value;
+
+        if (context.Arguments.Count == 2)
+        {
+            value = context.Arguments[1];
+        }
+        else if (context.Runtime.Evaluator?.TryGetVariableValue(name, out var existing) == true)
+        {
+            value = existing;
+        }
+        else if (context.Runtime.Variables.TryGetValue(name, out existing))
+        {
+            value = existing;
+        }
+        else
+        {
+            throw new InvalidOperationException($"Variable '{name}' was not found.");
+        }
+
+        context.Runtime.ExportEnvironmentVariable(name, value);
         var text = ExternalTextSerializer.Serialize(value);
-        Environment.SetEnvironmentVariable(name, text);
-        context.Runtime.Variables[name] = value;
         return AsyncEnumerableExtensions.FromEnumerable<object?>([new EnvironmentVariableEntry(name, text, IsSet: true)]);
     }
 }

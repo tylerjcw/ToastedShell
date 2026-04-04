@@ -13,4 +13,8 @@ public sealed record DisplayTableColumn(
     int MinWidth = 4,
     int MaxWidth = 36,
     int Priority = 100,
-    bool CanHide = true);
+    bool CanHide = true,
+    string? SelectionKey = null,
+    bool IsTree = false,
+    bool UseHeaderTheme = true,
+    bool UseIndexTheme = true);

@@ -14,7 +14,9 @@ public sealed class CountCommand : ShellCommand
 
         var count = 0;
 
-        await foreach (var _ in context.Input.WithCancellation(context.CancellationToken))
+        var input = ShellIterationUtilities.ReplaySingleInputCollectionAsync(context.Input, context.CancellationToken);
+
+        await foreach (var _ in input.WithCancellation(context.CancellationToken))
         {
             count++;
         }

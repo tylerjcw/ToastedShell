@@ -65,7 +65,7 @@ public sealed class CutCommand : ShellCommand
         string? delimiter = "\t";
         IReadOnlyList<(int Start, int End)>? ranges = null;
         var mode = CutMode.None;
-        var paths = new List<string>();
+        var pathArguments = new List<object?>();
 
         for (var index = 0; index < arguments.Count; index++)
         {
@@ -98,7 +98,7 @@ public sealed class CutCommand : ShellCommand
                         throw new InvalidOperationException($"Unsupported cut option '{text}'.");
                     }
 
-                    paths.Add(PathUtilities.ResolvePath(currentDirectory, text));
+                    pathArguments.Add(arguments[index]);
                     break;
             }
         }
@@ -108,7 +108,7 @@ public sealed class CutCommand : ShellCommand
             throw new InvalidOperationException("cut requires either -f or -c.");
         }
 
-        return new CutOptions(mode, delimiter, ranges, paths);
+        return new CutOptions(mode, delimiter, ranges, ShellPathArguments.ExpandMany(currentDirectory, pathArguments));
     }
 
     private static IReadOnlyList<(int Start, int End)> ParseRanges(string text)

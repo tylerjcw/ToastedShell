@@ -87,7 +87,108 @@ public sealed class DisplayProfileTests
         Assert.Contains("2 MB", text, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void Display_engine_uses_record_value_surface_for_nested_profile_overrides()
+    {
+        var registry = DisplayProfileRegistry.CreateDefault();
+        registry.Register(
+            DisplayProfile
+                .For<RecordValueDemo>()
+                .AddValueCase(DisplaySurface.TableCell, _ => "compact")
+                .AddValueCase(DisplaySurface.RecordValue, _ => "detail line 1\ndetail line 2"));
+
+        IDictionary<string, object?> record = new System.Dynamic.ExpandoObject();
+        record["Demo"] = new RecordValueDemo("alpha");
+
+        var display = new DisplayEngine(new ObjectFormatter(registry));
+        var text = display.RenderMany([record]);
+
+        Assert.Contains("detail line 1", text, StringComparison.Ordinal);
+        Assert.Contains("detail line 2", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("compact", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Display_engine_applies_user_defined_table_column_overrides()
+    {
+        IDictionary<string, object?> first = new System.Dynamic.ExpandoObject();
+        first["Name"] = "alpha";
+        first["Value"] = 1;
+        first["Kind"] = "demo";
+
+        IDictionary<string, object?> second = new System.Dynamic.ExpandoObject();
+        second["Name"] = "beta";
+        second["Value"] = 2;
+        second["Kind"] = "demo";
+
+        var preferences = new DisplayPreferences();
+        preferences.Profiles.GetOrCreate("table").SetTableColumns(["Kind", "Name"]);
+
+        var display = new DisplayEngine(new ObjectFormatter(DisplayProfileRegistry.CreateDefault(preferences)))
+        {
+            Preferences = preferences,
+        };
+
+        var text = display.RenderMany([first, second]);
+
+        Assert.Contains("Kind", text, StringComparison.Ordinal);
+        Assert.Contains("Name", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("Value", text, StringComparison.Ordinal);
+        Assert.True(text.IndexOf("Kind", StringComparison.Ordinal) < text.IndexOf("Name", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Single_color_renders_with_three_row_swatch_and_all_columns()
+    {
+        var display = new DisplayEngine(new ObjectFormatter());
+        var color = System.Drawing.Color.CornflowerBlue;
+        var rendered = display.Render(color);
+        var plain = StyledText.StripAnsi(rendered);
+
+        Assert.Contains("Sample", plain, StringComparison.Ordinal);
+        Assert.Contains("Name", plain, StringComparison.Ordinal);
+        Assert.Contains("Hex", plain, StringComparison.Ordinal);
+        Assert.Contains("CornflowerBlue", plain, StringComparison.Ordinal);
+        Assert.Contains("#6495ED", plain, StringComparison.Ordinal);
+        Assert.Contains("IsKnown", plain, StringComparison.Ordinal);
+        Assert.Contains("IsNamed", plain, StringComparison.Ordinal);
+        Assert.Contains("IsSystem", plain, StringComparison.Ordinal);
+
+        // Should have multiline swatch (3 lines of block chars)
+        Assert.Contains("███████", plain, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Color_collection_renders_with_sample_last()
+    {
+        var display = new DisplayEngine(new ObjectFormatter());
+        var values = new object?[]
+        {
+            System.Drawing.Color.Red,
+            System.Drawing.Color.Green,
+            System.Drawing.Color.Blue,
+        };
+        var rendered = display.RenderMany(values);
+        var plain = StyledText.StripAnsi(rendered);
+
+        Assert.Contains("Name", plain, StringComparison.Ordinal);
+        Assert.Contains("Hex", plain, StringComparison.Ordinal);
+        Assert.Contains("Sample", plain, StringComparison.Ordinal);
+        Assert.Contains("Red", plain, StringComparison.Ordinal);
+        Assert.Contains("Green", plain, StringComparison.Ordinal);
+        Assert.Contains("Blue", plain, StringComparison.Ordinal);
+
+        // Sample should be after Hex in the header line
+        var headerLine = plain.Split('\n').First(l => l.Contains("Name", StringComparison.Ordinal) && l.Contains("Sample", StringComparison.Ordinal));
+        Assert.True(
+            headerLine.IndexOf("Sample", StringComparison.Ordinal) >
+            headerLine.IndexOf("Hex", StringComparison.Ordinal));
+
+    }
+
     private sealed record ConditionalDemo(string Name, bool Highlight);
 
     private sealed record SizedDemo(string Name, StorageSize Size);
+
+    private sealed record RecordValueDemo(string Name);
 }

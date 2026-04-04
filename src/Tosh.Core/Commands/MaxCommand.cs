@@ -1,6 +1,6 @@
 namespace Tosh.Core.Commands;
 
-public sealed class MaxCommand : ShellCommand
+public sealed class MaxCommand : ShellCommand, ICurrentItemMemberPathCommand
 {
     public MaxCommand()
         : base("max", "Returns the maximum pipeline value.", "max [member-path]") { }

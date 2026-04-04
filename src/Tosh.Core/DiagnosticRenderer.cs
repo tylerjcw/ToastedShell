@@ -5,6 +5,13 @@ namespace Tosh.Core;
 
 public sealed class DiagnosticRenderer
 {
+    private readonly ToshDiagnosticThemeConfig? _theme;
+
+    public DiagnosticRenderer(ToshDiagnosticThemeConfig? theme = null)
+    {
+        _theme = theme;
+    }
+
     public string Render(Exception exception)
     {
         ArgumentNullException.ThrowIfNull(exception);
@@ -33,20 +40,20 @@ public sealed class DiagnosticRenderer
         ArgumentNullException.ThrowIfNull(diagnostic);
 
         var builder = new StringBuilder();
-        builder.AppendLine($"Error: {diagnostic.Code}");
+        builder.AppendLine(Style(_theme?.Heading, $"Error: {diagnostic.Code}"));
         builder.AppendLine();
-        builder.AppendLine($"  × {diagnostic.Title}");
+        builder.AppendLine(Style(_theme?.Title, $"  × {diagnostic.Title}"));
 
         if (!string.IsNullOrWhiteSpace(diagnostic.SourceText) &&
             !string.IsNullOrWhiteSpace(diagnostic.SourceName) &&
             diagnostic.Span is TextSpan span)
         {
-            RenderSourceSnippet(builder, diagnostic.SourceName, diagnostic.SourceText!, span, diagnostic.Label);
+            RenderSourceSnippet(builder, diagnostic.SourceName, diagnostic.SourceText!, span, diagnostic.Label, _theme);
         }
 
         if (!string.IsNullOrWhiteSpace(diagnostic.Help))
         {
-            builder.AppendLine($"  help: {diagnostic.Help}");
+            builder.AppendLine(Style(_theme?.Help, $"  help: {diagnostic.Help}"));
         }
 
         return builder.ToString().TrimEnd();
@@ -57,7 +64,8 @@ public sealed class DiagnosticRenderer
         string sourceName,
         string sourceText,
         TextSpan span,
-        string? label)
+        string? label,
+        ToshDiagnosticThemeConfig? theme)
     {
         var location = SourceLocation.From(sourceText, span);
         var lineNumberText = location.LineNumber.ToString(CultureInfo.InvariantCulture);
@@ -68,16 +76,16 @@ public sealed class DiagnosticRenderer
         var pointerOffset = underlineStart + Math.Max(0, (underlineLength - 1) / 2);
         var underline = BuildUnderline(underlineLength, pointerOffset - underlineStart);
 
-        builder.AppendLine($"   ╭─[{sourceName}:{location.LineNumber}:{location.ColumnNumber}]");
+        builder.AppendLine(Style(theme?.SourceLocation, $"   ╭─[{sourceName}:{location.LineNumber}:{location.ColumnNumber}]"));
         builder.AppendLine($" {lineNumberText.PadLeft(gutterWidth)} │ {sourceLine}");
-        builder.AppendLine($" {new string(' ', gutterWidth)} · {new string(' ', underlineStart)}{underline}");
+        builder.AppendLine($" {new string(' ', gutterWidth)} · {new string(' ', underlineStart)}{Style(theme?.Underline, underline)}");
 
         if (!string.IsNullOrWhiteSpace(label))
         {
-            builder.AppendLine($" {new string(' ', gutterWidth)} · {new string(' ', pointerOffset)}╰── {label}");
+            builder.AppendLine($" {new string(' ', gutterWidth)} · {new string(' ', pointerOffset)}{Style(theme?.Label, $"╰── {label}")}");
         }
 
-        builder.AppendLine($" {new string(' ', gutterWidth)} ╰────");
+        builder.AppendLine(Style(theme?.SourceLocation, $" {new string(' ', gutterWidth)} ╰────"));
     }
 
     private static string BuildUnderline(int length, int pointerOffset)
@@ -136,5 +144,10 @@ public sealed class DiagnosticRenderer
             var endColumnNumber = Math.Max(columnNumber + 1, boundedEnd - lineStart + 1);
             return new SourceLocation(lineNumber, columnNumber, endColumnNumber, lineText);
         }
+    }
+
+    private static string Style(ToshTextStyleConfig? style, string text)
+    {
+        return style is null ? text : style.Apply(text).ToAnsi();
     }
 }

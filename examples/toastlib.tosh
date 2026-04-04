@@ -1,0 +1,101 @@
+# toastlib.tosh
+# Shared demo library for ToSh / ToastScript examples.
+
+module Utilities {
+    func banner(title: string) {
+        writeline ""
+        styled $"=== {$title} ===" --fg bright-cyan --bold | writeline
+    }
+
+    func script_name() -> string {
+        using System.IO = IO
+        return IO.Path.GetFileName($tosh.Script.Path)
+    }
+
+    func script_dir() -> string {
+        using System.IO = IO
+        return IO.Path.GetDirectoryName($tosh.Script.Path)
+    }
+
+    func repeat_line(text: string, count: int) {
+        var index = 0
+        until (($index >= $count)) {
+            writeline $text
+            $index += 1
+        }
+    }
+}
+
+module Inventory {
+    using System.Drawing = Drawing
+
+    enum StockState {
+        Unknown
+        Healthy
+        Low
+        Out
+    }
+
+    record Item(
+        Name: string,
+        Quantity: int,
+        Category?: string = "General",
+        Tint?: string = "White")
+
+    class Shelf(label: string) {
+        prop Label: string = label
+        prop Items = new list()
+        prop Accent: System.Drawing.Color => (System.Drawing.Color.Green)
+        prop ItemCount: int => ($this.Items | flatten | count)
+
+        func Add(item: Item) -> Shelf {
+            $this.Items.Add($item) | ignore
+            return $this
+        }
+    }
+
+    func sample_items() {
+        return [
+            new Item("Bread", 2, "Food", "BurlyWood"),
+            new Item("Coffee", 1, "Food", "SaddleBrown"),
+            new Item("Soap", 6, "Household", "LightBlue"),
+            new Item("Notebook", 4, "Office", "Khaki")
+        ]
+    }
+
+    func state_of(item: Item) -> StockState {
+        if ($item.Quantity <= 0) {
+            return StockState.Out
+        }
+
+        if ($item.Quantity < 3) {
+            return StockState.Low
+        }
+
+        return StockState.Healthy
+    }
+
+    func restock(item: Item, amount: int) -> Item {
+        return new Item(
+            $item.Name,
+            ($item.Quantity + $amount),
+            $item.Category,
+            $item.Tint)
+    }
+}
+
+module Reporting {
+    func summary_rows(items) {
+        $items | flatten | each {
+            {
+                Name = _.Name,
+                Category = _.Category,
+                Quantity = _.Quantity
+            }
+        }
+    }
+
+    func category_groups(items) {
+        $items | flatten | group-by Category
+    }
+}

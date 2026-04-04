@@ -18,10 +18,10 @@ public sealed class PathPredicateCommand : ShellCommand
 
         foreach (var path in paths)
         {
-            yield return new ProjectedObject(
+            yield return ShellRecordUtilities.CreateExpando(
             [
-                new ProjectedField("Path", "Path", path),
-                new ProjectedField(_fieldName, _fieldName, _predicate(path)),
+                new KeyValuePair<string, object?>("Path", path),
+                new KeyValuePair<string, object?>(_fieldName, _predicate(path)),
             ]);
         }
     }

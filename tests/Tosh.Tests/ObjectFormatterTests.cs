@@ -1,4 +1,6 @@
 using Tosh.Core;
+using System.Globalization;
+using System.Text;
 
 namespace Tosh.Tests;
 
@@ -78,7 +80,7 @@ public sealed class ObjectFormatterTests
     }
 
     [Fact]
-    public void Formatter_uses_preferences_for_datetime_and_storage_size()
+    public void Formatter_uses_preferences_for_datetime_timespan_and_storage_size()
     {
         var preferences = new DisplayPreferences
         {
@@ -86,12 +88,69 @@ public sealed class ObjectFormatterTests
         };
         preferences.DateTime.ScalarMode = TemporalDisplayMode.Custom;
         preferences.DateTime.ScalarFormat = "yyyy/MM/dd";
+        preferences.TimeSpan.ScalarMode = DurationDisplayMode.TotalSeconds;
         preferences.StorageSize.Mode = StorageSizeDisplayMode.Bytes;
 
         var formatter = new ObjectFormatter(DisplayProfileRegistry.CreateDefault(preferences));
 
         Assert.Equal("2026/03/21", formatter.Format(new DateTime(2026, 3, 21, 8, 30, 0, DateTimeKind.Utc)));
+        Assert.Equal("90", formatter.Format(TimeSpan.FromSeconds(90)));
+        Assert.Equal("90", formatter.Format(TemporalAmount.FromTimeSpan(TimeSpan.FromSeconds(90))));
         Assert.Equal("1536 B", formatter.Format(StorageSize.FromBytes(1536)));
+    }
+
+    [Fact]
+    public void Formatter_uses_preferences_for_dateonly_and_timeonly()
+    {
+        var preferences = new DisplayPreferences
+        {
+            NowProvider = () => new DateTimeOffset(2026, 3, 23, 12, 0, 0, TimeSpan.Zero),
+        };
+        preferences.DateOnly.ScalarMode = DateOnlyDisplayMode.Relative;
+        preferences.TimeOnly.ScalarMode = TimeOnlyDisplayMode.TwentyFourHour;
+
+        var formatter = new ObjectFormatter(DisplayProfileRegistry.CreateDefault(preferences));
+
+        Assert.Equal("tomorrow", formatter.Format(new DateOnly(2026, 3, 24)));
+        Assert.Equal("15:31:42", formatter.Format(new TimeOnly(15, 31, 42)));
+    }
+
+    [Fact]
+    public void Formatter_uses_preferences_for_permissions_and_file_attributes()
+    {
+        var preferences = new DisplayPreferences();
+        preferences.UnixFileMode.Mode = UnixFileModeDisplayMode.Both;
+        preferences.FileAttributes.Mode = FileAttributesDisplayMode.Hex;
+
+        var formatter = new ObjectFormatter(DisplayProfileRegistry.CreateDefault(preferences));
+
+        var permissions = formatter.Format(UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.GroupRead | UnixFileMode.OtherRead);
+        var attributes = formatter.Format(FileAttributes.ReadOnly | FileAttributes.Hidden);
+
+        Assert.Equal("rw-r--r-- (0644)", permissions);
+        Assert.Equal($"0x{((int)(FileAttributes.ReadOnly | FileAttributes.Hidden)):X}", attributes);
+    }
+
+    [Fact]
+    public void Formatter_renders_additional_basic_clr_values_through_profiles()
+    {
+        var formatter = new ObjectFormatter();
+
+        Assert.Equal("Sunday, March 29, 2026", formatter.Format(new DateOnly(2026, 3, 29)));
+        Assert.Equal("3:31:42 AM", formatter.Format(new TimeOnly(3, 31, 42)));
+        Assert.Equal("fr-FR", formatter.Format(new CultureInfo("fr-FR")));
+        Assert.Equal("utf-8", formatter.Format(Encoding.UTF8));
+        Assert.Contains("2 bytes", formatter.Format(new byte[] { 0x48, 0x69 }), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Formatter_renders_plain_enums_as_typed_values()
+    {
+        var formatter = new ObjectFormatter();
+
+        var rootText = formatter.Format(DayOfWeek.Friday);
+
+        Assert.Equal("System.DayOfWeek.Friday", rootText);
     }
 
     [Fact]
@@ -167,6 +226,27 @@ public sealed class ObjectFormatterTests
         Assert.Contains("Modified", text, StringComparison.Ordinal);
         Assert.Contains("alpha.txt", text, StringComparison.Ordinal);
         Assert.Contains("nested/", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Formatter_renders_long_symlink_entries_with_unix_link_indicator()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        using var tempDirectory = new TemporaryDirectory();
+        var targetPath = System.IO.Path.Combine(tempDirectory.Path, "target.txt");
+        var linkPath = System.IO.Path.Combine(tempDirectory.Path, "target-link.txt");
+        File.WriteAllText(targetPath, "alpha");
+        File.CreateSymbolicLink(linkPath, targetPath);
+
+        var formatter = new ObjectFormatter();
+        var text = formatter.Format(FileSystemEntry.From(new FileInfo(linkPath), preferLongDisplay: true));
+
+        Assert.StartsWith("l", text, StringComparison.Ordinal);
+        Assert.Contains("target-link.txt", text, StringComparison.Ordinal);
     }
 
     [Fact]

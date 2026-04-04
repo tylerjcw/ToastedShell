@@ -1,0 +1,18 @@
+<Project>
+
+  <!--
+    Shared properties for all projects in the Tosh solution.
+    Imported automatically by MSBuild from the repo root.
+  -->
+
+  <PropertyGroup>
+    <RepoRoot>$([MSBuild]::GetDirectoryNameOfFileAbove($(MSBuildProjectDirectory), 'Tosh.slnx'))\</RepoRoot>
+    <ArtifactsRoot>$(RepoRoot)artifacts\</ArtifactsRoot>
+  </PropertyGroup>
+
+  <!-- Redirect test results into artifacts/test-results/ so they don't accumulate next to test sources. -->
+  <PropertyGroup Condition="'$(IsTestProject)' == 'true' or '$(IsPackable)' == 'false'">
+    <VSTestResultsDirectory>$(ArtifactsRoot)test-results\</VSTestResultsDirectory>
+  </PropertyGroup>
+
+</Project>

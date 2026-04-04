@@ -7,7 +7,7 @@ public sealed class SourceCommand : ShellCommand
     private readonly ToshEngine _engine;
 
     public SourceCommand(ToshEngine engine)
-        : base("source", "Executes one or more Tosh script files in the current session.", "source <path> [path...]")
+        : base("source", "Executes a Tosh script file in the current session and lets it affect the caller scope.", "source <path> [arg...]")
     {
         _engine = engine;
     }
@@ -19,31 +19,17 @@ public sealed class SourceCommand : ShellCommand
             throw new InvalidOperationException("The 'source' command requires at least one path.");
         }
 
-        foreach (var argument in context.Arguments)
+        var rawPath = context.Arguments[0]?.ToString();
+
+        if (string.IsNullOrWhiteSpace(rawPath))
         {
-            context.CancellationToken.ThrowIfCancellationRequested();
+            throw new InvalidOperationException("The 'source' command requires a non-empty path.");
+        }
 
-            var rawPath = argument?.ToString();
-
-            if (string.IsNullOrWhiteSpace(rawPath))
-            {
-                throw new InvalidOperationException("The 'source' command requires non-empty paths.");
-            }
-
-            var resolvedPath = PathUtilities.ResolvePath(context.Runtime.CurrentDirectory, rawPath);
-
-            if (!File.Exists(resolvedPath))
-            {
-                throw new InvalidOperationException($"Script file '{resolvedPath}' was not found.");
-            }
-
-            var source = await File.ReadAllTextAsync(resolvedPath, context.CancellationToken);
-
-            await foreach (var value in _engine.EvaluateAsync(source, resolvedPath, context.CancellationToken)
-                               .WithCancellation(context.CancellationToken))
-            {
-                yield return value;
-            }
+        await foreach (var value in _engine.ExecuteScriptFileAsync(rawPath, context.Arguments.Skip(1).ToArray(), isolateScope: false, context.CancellationToken)
+                           .WithCancellation(context.CancellationToken))
+        {
+            yield return value;
         }
     }
 }

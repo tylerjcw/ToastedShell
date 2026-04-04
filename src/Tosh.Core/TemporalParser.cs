@@ -1,9 +1,8 @@
 using System.Globalization;
-using System.Text.RegularExpressions;
 
 namespace Tosh.Core;
 
-public static partial class TemporalParser
+public static class TemporalParser
 {
     private static readonly string[] DateTimeOffsetFormats =
     [
@@ -48,6 +47,15 @@ public static partial class TemporalParser
             return true;
         }
 
+        if (DateTimeOffset.TryParse(
+                trimmed,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.AllowWhiteSpaces | DateTimeStyles.AssumeLocal,
+                out value))
+        {
+            return true;
+        }
+
         if (DateTime.TryParseExact(
                 trimmed,
                 DateTimeFormats,
@@ -58,6 +66,23 @@ public static partial class TemporalParser
             value = dateTime.Kind == DateTimeKind.Unspecified
                 ? new DateTimeOffset(DateTime.SpecifyKind(dateTime, DateTimeKind.Local))
                 : new DateTimeOffset(dateTime);
+            return true;
+        }
+
+        if (DateTime.TryParse(
+                trimmed,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.AllowWhiteSpaces | DateTimeStyles.AssumeLocal,
+                out dateTime))
+        {
+            value = dateTime.Kind == DateTimeKind.Unspecified
+                ? new DateTimeOffset(DateTime.SpecifyKind(dateTime, DateTimeKind.Local))
+                : new DateTimeOffset(dateTime);
+            return true;
+        }
+
+        if (TryParseSystemdLocalTimestamp(trimmed, out value))
+        {
             return true;
         }
 
@@ -91,62 +116,204 @@ public static partial class TemporalParser
             return false;
         }
 
-        var trimmed = text.Trim();
-
-        if (TryParseUnitDuration(trimmed, out value))
+        if (TryParseTemporalAmount(text, out var amount) &&
+            amount.TryAsTimeSpan(out value))
         {
             return true;
         }
 
-        return TimeSpan.TryParse(trimmed, CultureInfo.InvariantCulture, out value);
+        return TimeSpan.TryParse(text.Trim(), CultureInfo.InvariantCulture, out value);
     }
 
-    private static bool TryParseUnitDuration(string text, out TimeSpan value)
+    public static bool TryParseTemporalAmount(string? text, out TemporalAmount value)
     {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            value = default;
+            return false;
+        }
+
         var normalized = text.Replace(" ", string.Empty, StringComparison.Ordinal);
-        var matches = DurationPartRegex().Matches(normalized);
 
-        if (matches.Count == 0)
+        if (string.IsNullOrWhiteSpace(normalized))
         {
             value = default;
             return false;
         }
 
-        var consumed = string.Concat(matches.Select(match => match.Value));
+        long totalMonths = 0;
+        decimal totalTicks = 0m;
+        var index = 0;
+        var inheritedSign = 1;
+        var sawAny = false;
 
-        if (!string.Equals(consumed, normalized, StringComparison.Ordinal))
+        while (index < normalized.Length)
         {
-            value = default;
-            return false;
-        }
+            var sign = inheritedSign;
 
-        decimal totalSeconds = 0m;
+            if (normalized[index] is '+' or '-')
+            {
+                sign = normalized[index] == '-' ? -1 : 1;
+                inheritedSign = sign;
+                index++;
+            }
 
-        foreach (Match match in matches)
-        {
-            if (!decimal.TryParse(match.Groups["value"].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var numeric))
+            var numberStart = index;
+            var seenDigit = false;
+            var seenDecimalPoint = false;
+
+            while (index < normalized.Length)
+            {
+                var current = normalized[index];
+
+                if (char.IsDigit(current))
+                {
+                    seenDigit = true;
+                    index++;
+                    continue;
+                }
+
+                if (current == '.' && !seenDecimalPoint)
+                {
+                    seenDecimalPoint = true;
+                    index++;
+                    continue;
+                }
+
+                break;
+            }
+
+            if (!seenDigit)
             {
                 value = default;
                 return false;
             }
 
-            var unit = match.Groups["unit"].Value.ToLowerInvariant();
-            totalSeconds += unit switch
+            var numberText = normalized[numberStart..index];
+
+            if (!decimal.TryParse(numberText, NumberStyles.Float, CultureInfo.InvariantCulture, out var numeric))
             {
-                "w" => numeric * 7m * 24m * 60m * 60m,
-                "d" => numeric * 24m * 60m * 60m,
-                "h" => numeric * 60m * 60m,
-                "m" => numeric * 60m,
-                "s" => numeric,
-                "ms" => numeric / 1000m,
-                _ => throw new InvalidOperationException($"Unsupported duration unit '{unit}'."),
-            };
+                value = default;
+                return false;
+            }
+
+            if (!TryReadUnit(normalized, ref index, out var unit))
+            {
+                value = default;
+                return false;
+            }
+
+            switch (unit)
+            {
+                case "Ta":
+                    if (!TryAddCalendarMonths(ref totalMonths, numeric, 12_000_000_000_000L, sign))
+                    {
+                        value = default;
+                        return false;
+                    }
+                    break;
+
+                case "Ga":
+                    if (!TryAddCalendarMonths(ref totalMonths, numeric, 12_000_000_000L, sign))
+                    {
+                        value = default;
+                        return false;
+                    }
+                    break;
+
+                case "Ma":
+                    if (!TryAddCalendarMonths(ref totalMonths, numeric, 12_000_000L, sign))
+                    {
+                        value = default;
+                        return false;
+                    }
+                    break;
+
+                case "ka":
+                    if (!TryAddCalendarMonths(ref totalMonths, numeric, 12_000L, sign))
+                    {
+                        value = default;
+                        return false;
+                    }
+                    break;
+
+                case "c":
+                    if (!TryAddCalendarMonths(ref totalMonths, numeric, 1_200L, sign))
+                    {
+                        value = default;
+                        return false;
+                    }
+                    break;
+
+                case "da":
+                    if (!TryAddCalendarMonths(ref totalMonths, numeric, 120L, sign))
+                    {
+                        value = default;
+                        return false;
+                    }
+                    break;
+
+                case "y":
+                    if (!TryAddCalendarMonths(ref totalMonths, numeric, 12L, sign))
+                    {
+                        value = default;
+                        return false;
+                    }
+                    break;
+
+                case "mo":
+                    if (!TryAddCalendarMonths(ref totalMonths, numeric, 1L, sign))
+                    {
+                        value = default;
+                        return false;
+                    }
+                    break;
+
+                case "w":
+                    totalTicks += sign * numeric * (TimeSpan.TicksPerDay * 7m);
+                    break;
+
+                case "d":
+                    totalTicks += sign * numeric * TimeSpan.TicksPerDay;
+                    break;
+
+                case "h":
+                    totalTicks += sign * numeric * TimeSpan.TicksPerHour;
+                    break;
+
+                case "m":
+                    totalTicks += sign * numeric * TimeSpan.TicksPerMinute;
+                    break;
+
+                case "s":
+                    totalTicks += sign * numeric * TimeSpan.TicksPerSecond;
+                    break;
+
+                case "ms":
+                    totalTicks += sign * numeric * TimeSpan.TicksPerMillisecond;
+                    break;
+
+                case "us":
+                    totalTicks += sign * numeric * 10m;
+                    break;
+
+                case "ns":
+                    totalTicks += sign * (numeric / 100m);
+                    break;
+
+                default:
+                    value = default;
+                    return false;
+            }
+
+            sawAny = true;
         }
 
         try
         {
-            value = TimeSpan.FromSeconds((double)totalSeconds);
-            return true;
+            var roundedTicks = decimal.ToInt64(decimal.Round(totalTicks, MidpointRounding.AwayFromZero));
+            value = new TemporalAmount(totalMonths, TimeSpan.FromTicks(roundedTicks));
+            return sawAny;
         }
         catch
         {
@@ -155,6 +322,97 @@ public static partial class TemporalParser
         }
     }
 
-    [GeneratedRegex(@"(?<value>[+-]?(?:\d+(?:\.\d+)?|\.\d+))(?<unit>ms|w|d|h|m|s)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
-    private static partial Regex DurationPartRegex();
+    public static bool TryParseExpressionLiteral(string? text, out object? value)
+    {
+        return IntrinsicLiteralParser.TryParseExpressionLiteral(text, out value);
+    }
+
+    private static bool TryReadUnit(string text, ref int index, out string unit)
+    {
+        foreach (var candidate in OrderedUnits)
+        {
+            if (!text.AsSpan(index).StartsWith(candidate, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            index += candidate.Length;
+            unit = candidate;
+            return true;
+        }
+
+        unit = string.Empty;
+        return false;
+    }
+
+    private static bool TryParseSystemdLocalTimestamp(string text, out DateTimeOffset value)
+    {
+        value = default;
+
+        var parts = text.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        if (parts.Length < 4 ||
+            parts[0].Length != 3 ||
+            !char.IsLetter(parts[0][0]) ||
+            !char.IsLetter(parts[^1][0]))
+        {
+            return false;
+        }
+
+        var candidate = string.Join(" ", parts.Skip(1).Take(parts.Length - 2));
+
+        if (!DateTime.TryParseExact(
+                candidate,
+                ["yyyy-MM-dd HH:mm:ss.FFFFFFF", "yyyy-MM-dd HH:mm:ss"],
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.AllowWhiteSpaces | DateTimeStyles.AssumeLocal,
+                out var dateTime))
+        {
+            return false;
+        }
+
+        value = dateTime.Kind == DateTimeKind.Unspecified
+            ? new DateTimeOffset(DateTime.SpecifyKind(dateTime, DateTimeKind.Local))
+            : new DateTimeOffset(dateTime);
+        return true;
+    }
+
+    private static bool TryAddCalendarMonths(ref long totalMonths, decimal numeric, long multiplier, int sign)
+    {
+        if (numeric != decimal.Truncate(numeric))
+        {
+            return false;
+        }
+
+        try
+        {
+            var scaled = decimal.ToInt64(numeric);
+            totalMonths = checked(totalMonths + (scaled * multiplier * sign));
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static readonly string[] OrderedUnits =
+    [
+        "Ta",
+        "Ga",
+        "Ma",
+        "ka",
+        "mo",
+        "da",
+        "ns",
+        "us",
+        "ms",
+        "y",
+        "c",
+        "w",
+        "d",
+        "h",
+        "m",
+        "s",
+    ];
 }

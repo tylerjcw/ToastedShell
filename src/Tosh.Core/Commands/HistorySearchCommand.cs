@@ -7,16 +7,28 @@ public sealed class HistorySearchCommand : ShellCommand
 
     public override IAsyncEnumerable<object?> ExecuteAsync(CommandContext context)
     {
-        if (context.Arguments.Count != 1)
+        return ExecuteCoreAsync(context);
+    }
+
+    private static async IAsyncEnumerable<object?> ExecuteCoreAsync(CommandContext context)
+    {
+        var search = string.Join(" ", context.Arguments.Select(ExternalTextSerializer.Serialize)).Trim();
+
+        if (search.Length == 0)
         {
-            throw new InvalidOperationException("history-search expects exactly one search string.");
+            var pipedSearch = await TextInputUtilities.ReadScalarValuesFromInputAsync(context, allowEmpty: true);
+            search = string.Join(" ", pipedSearch).Trim();
         }
 
-        var search = CommandArguments.RequireString(context.Arguments, 0, "search text");
-        var results = context.Runtime.History
-            .Where(entry => entry.Text.Contains(search, StringComparison.OrdinalIgnoreCase))
-            .Cast<object?>()
-            .ToArray();
-        return AsyncEnumerableExtensions.FromEnumerable(results);
+        if (search.Length == 0)
+        {
+            throw new InvalidOperationException("history-search expects a search string.");
+        }
+
+        foreach (var result in context.Runtime.History.Where(entry => entry.Text.Contains(search, StringComparison.OrdinalIgnoreCase)))
+        {
+            context.CancellationToken.ThrowIfCancellationRequested();
+            yield return result;
+        }
     }
 }

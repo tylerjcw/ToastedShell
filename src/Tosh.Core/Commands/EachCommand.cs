@@ -1,37 +1,44 @@
-using System.Collections;
-
 namespace Tosh.Core.Commands;
 
 public sealed class EachCommand : ShellCommand
 {
-    public EachCommand()
-        : base("each", "Executes a block once for each input object.", "each { <statement>; ... }") { }
+    public EachCommand(string name = "each")
+        : base(name, "Executes a block or callable once for each input object.", $"{name} <callable|block>") { }
 
     public override async IAsyncEnumerable<object?> ExecuteAsync(CommandContext context)
     {
-        if (context.Arguments.Count != 1 || context.Arguments[0] is not ShellBlock block)
+        if (context.Arguments.Count != 1)
         {
-            throw new InvalidOperationException("The 'each' command requires a single block argument.");
+            throw context.CreateDiagnostic(
+                code: "tosh::runtime::each_requires_callable_or_block",
+                title: "'each' requires exactly one callable value or block.",
+                label: "pass a lambda like 'func(x) => ...' or a block like '{ ... }'");
         }
 
-        var executor = context.Runtime.BlockExecutor
-                       ?? throw new InvalidOperationException("Block execution is not available in this runtime.");
+        var operation = FunctionalCommandUtilities.RequireCallableOrBlock(context, 0);
+        var executor = context.Runtime.BlockExecutor;
 
-        await foreach (var item in context.Input.WithCancellation(context.CancellationToken))
+        await foreach (var item in ShellIterationUtilities.ReplaySingleInputCollectionAsync(context.Input, context.CancellationToken)
+                           .WithCancellation(context.CancellationToken))
         {
-            foreach (var current in ExpandIterationItems(item))
-            {
-                var iterationValues = new List<object?>();
-                var shouldBreak = false;
-                var shouldContinue = false;
+            var iterationValues = new List<object?>();
+            var shouldBreak = false;
+            var shouldContinue = false;
 
-                try
+            try
+            {
+                if (operation is ShellBlock block)
                 {
+                    if (executor is null)
+                    {
+                        throw new InvalidOperationException("Block execution is not available in this runtime.");
+                    }
+
                     await foreach (var value in executor.ExecuteAsync(
                                        block,
                                        new Dictionary<string, object?>(StringComparer.Ordinal)
                                        {
-                                           ["it"] = current,
+                                           ["_"] = item,
                                        },
                                        context.CancellationToken)
                                        .WithCancellation(context.CancellationToken))
@@ -39,44 +46,46 @@ public sealed class EachCommand : ShellCommand
                         iterationValues.Add(value);
                     }
                 }
-                catch (ContinueSignalException)
+                else
                 {
-                    shouldContinue = true;
-                }
-                catch (BreakSignalException)
-                {
-                    shouldBreak = true;
-                }
+                    var results = await FunctionalCommandUtilities.ExecuteAsync(
+                        context,
+                        operation,
+                        [item],
+                        new Dictionary<string, object?>(StringComparer.Ordinal)
+                        {
+                            ["_"] = item,
+                        });
 
-                foreach (var value in iterationValues)
-                {
-                    yield return value;
-                }
-
-                if (shouldBreak)
-                {
-                    yield break;
-                }
-
-                if (shouldContinue)
-                {
-                    continue;
+                    foreach (var value in results)
+                    {
+                        iterationValues.Add(value);
+                    }
                 }
             }
-        }
-    }
+            catch (ContinueSignalException)
+            {
+                shouldContinue = true;
+            }
+            catch (BreakSignalException)
+            {
+                shouldBreak = true;
+            }
 
-    private static IEnumerable<object?> ExpandIterationItems(object? item)
-    {
-        if (item is null || item is string || item is not IEnumerable enumerable)
-        {
-            yield return item;
-            yield break;
-        }
+            foreach (var value in iterationValues)
+            {
+                yield return value;
+            }
 
-        foreach (var element in enumerable)
-        {
-            yield return element;
+            if (shouldBreak)
+            {
+                yield break;
+            }
+
+            if (shouldContinue)
+            {
+                continue;
+            }
         }
     }
 }

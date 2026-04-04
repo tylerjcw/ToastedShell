@@ -23,7 +23,7 @@ public sealed class ChownCommand : ShellCommand
         var spec = CommandArguments.RequireString(parsed.Positionals, 0, "owner");
         var (uid, gid) = ParseOwnership(spec);
         var paths = parsed.Positionals.Count > 1
-            ? parsed.Positionals.Skip(1).Select(argument => ShellPathArguments.Resolve(context.Runtime.CurrentDirectory, argument)).ToArray()
+            ? ShellPathArguments.ExpandMany(context.Runtime.CurrentDirectory, parsed.Positionals.Skip(1).ToArray())
             : await ShellPathArguments.CollectAsync(context, Array.Empty<object?>(), context.CancellationToken);
 
         if (paths.Count == 0)

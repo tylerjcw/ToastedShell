@@ -1,14 +1,42 @@
+using System.Collections.Concurrent;
 using Tosh.Core.Commands;
 
 namespace Tosh.Core;
 
 public sealed class ToshRuntime
 {
+    private int _nextJobId;
+    private long _nextHistoryId;
+    private readonly ConcurrentDictionary<int, ShellJob> _jobs = new();
+    private readonly object _historyGate = new();
+    private readonly object _displaySelectionGate = new();
+    private readonly object _directoryStackGate = new();
+    private readonly List<string> _directoryStack = new();
+    private int _directoryStackIndex = -1;
+    private readonly Dictionary<object, DisplayColumnSelection> _displaySelections = new(ReferenceEqualityComparer.Instance);
+    private bool _historyStorageInitialized;
+    private bool _historyWriteThroughEnabled;
+    private string _currentDirectory = null!;
+    private bool _directoryStackStorageInitialized;
+    private string? _directoryStackFilePath;
+
     public ToshRuntime(TextWriter? output = null, TextWriter? error = null)
     {
         Output = output ?? TextWriter.Null;
         Error = error ?? TextWriter.Null;
-        CurrentDirectory = Environment.CurrentDirectory;
+
+        string initialDirectory;
+        try
+        {
+            initialDirectory = Environment.CurrentDirectory;
+        }
+        catch (Exception)
+        {
+            initialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        }
+
+        _currentDirectory = initialDirectory;
+        PushDirectory(initialDirectory);
         Commands = new ShellCommandRegistry();
         ObjectAccessor = new ReflectionObjectAccessor();
         TypeResolver = new DotNetTypeResolver();
@@ -17,18 +45,32 @@ public sealed class ToshRuntime
         DisplayProfiles = DisplayProfileRegistry.CreateDefault(DisplayPreferences);
         Formatter = new ObjectFormatter(DisplayProfiles);
         Display = new DisplayEngine(Formatter);
+        Display.Preferences = DisplayPreferences;
         Inspector = new ObjectInspector(Formatter);
+        Config = new ToshConfig(Display, DisplayPreferences, ToshConfigDefaults.GetDefaultConfigDirectory());
+        PathUtilities.DirectoryAliases = Config.Shell.Dirs;
+        Display.TableTheme = Config.Theme.Tables;
         History = new List<CommandHistoryEntry>();
         Variables = new Dictionary<string, object?>(StringComparer.Ordinal);
+        Classes = new Dictionary<string, object?>(StringComparer.Ordinal);
+        Modules = new Dictionary<string, object?>(StringComparer.Ordinal);
         LoadedModules = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        ExportedEnvironmentVariables = new HashSet<string>(StringComparer.Ordinal);
+        InvocationArguments = Array.Empty<object?>();
+        ExecHandler = new DefaultShellExecHandler();
         SetLastExitCode(0);
+        SetLastResult(null);
     }
 
-    public TextWriter Output { get; }
+    public TextWriter Output { get; set; }
 
-    public TextWriter Error { get; }
+    public TextWriter Error { get; set; }
 
-    public string CurrentDirectory { get; set; }
+    public string CurrentDirectory
+    {
+        get => _currentDirectory;
+        set => _currentDirectory = value;
+    }
 
     public ShellCommandRegistry Commands { get; }
 
@@ -48,28 +90,343 @@ public sealed class ToshRuntime
 
     public ObjectInspector Inspector { get; }
 
+    public ToshConfig Config { get; }
+
     public IList<CommandHistoryEntry> History { get; }
 
     public IDictionary<string, object?> Variables { get; }
 
+    public IDictionary<string, object?> Classes { get; }
+
+    public IDictionary<string, object?> Modules { get; }
+
     public ISet<string> LoadedModules { get; }
+
+    public ISet<string> ExportedEnvironmentVariables { get; }
+
+    public IReadOnlyList<object?> InvocationArguments { get; set; }
+
+    public IShellExecHandler ExecHandler { get; set; }
+
+    public IInlinePromptProvider? InlinePrompts { get; set; }
+
+    public ShellEventBus Events { get; } = new();
+
+    public Func<ShellEventSender>? EventSenderFactory { get; set; }
 
     public IShellBlockExecutor? BlockExecutor { get; set; }
 
     public IShellEvaluator? Evaluator { get; set; }
 
+    public bool HistoryStorageInitialized => _historyStorageInitialized;
+
+    public bool HistoryWriteThroughEnabled => _historyWriteThroughEnabled;
+
     public bool ExitRequested { get; private set; }
+
+    public bool IsLoginShell { get; set; }
 
     public int LastExitCode { get; private set; }
 
-    public void RecordHistory(string source)
+    public object? LastResult { get; private set; }
+
+    public TimeSpan? LastCommandDuration { get; private set; }
+
+    public long NextHistoryId => Math.Max(1, _nextHistoryId + 1);
+
+    public IReadOnlyList<ShellJob> GetJobs()
     {
-        if (string.IsNullOrWhiteSpace(source))
+        ReapCompletedJobs();
+        return _jobs.Values
+            .OrderBy(job => job.Id)
+            .ToArray();
+    }
+
+    public int AllocateJobId()
+    {
+        return Interlocked.Increment(ref _nextJobId);
+    }
+
+    public ShellJob RegisterJob(ShellJob job)
+    {
+        ArgumentNullException.ThrowIfNull(job);
+        ReapCompletedJobs();
+        _jobs[job.Id] = job;
+        return job;
+    }
+
+    public bool TryGetJob(int id, out ShellJob job)
+    {
+        return _jobs.TryGetValue(id, out job!);
+    }
+
+    public void KillAllJobs()
+    {
+        foreach (var job in _jobs.Values)
+        {
+            job.Kill();
+        }
+
+        _jobs.Clear();
+    }
+
+    private void ReapCompletedJobs()
+    {
+        foreach (var kvp in _jobs)
+        {
+            if (kvp.Value.Status is not ShellJobStatus.Running)
+            {
+                _jobs.TryRemove(kvp.Key, out _);
+            }
+        }
+    }
+
+    public CommandHistoryEntry? RecordHistory(string source)
+    {
+        lock (_historyGate)
+        {
+            if (!TryAddHistoryEntryUnsafe(source, DateTimeOffset.Now))
+            {
+                return null;
+            }
+
+            var entry = History[^1];
+
+            if (_historyWriteThroughEnabled)
+            {
+                SaveHistoryUnsafe();
+            }
+
+            return entry;
+        }
+    }
+
+    public void InitializeHistoryStorage(bool writeThrough)
+    {
+        lock (_historyGate)
+        {
+            _historyStorageInitialized = true;
+            _historyWriteThroughEnabled = writeThrough;
+            ReloadHistoryUnsafe();
+        }
+    }
+
+    public void ReloadHistoryFromFile()
+    {
+        lock (_historyGate)
+        {
+            _historyStorageInitialized = true;
+            ReloadHistoryUnsafe();
+        }
+    }
+
+    public void SaveHistoryToFile()
+    {
+        lock (_historyGate)
+        {
+            _historyStorageInitialized = true;
+            SaveHistoryUnsafe();
+        }
+    }
+
+    public void ClearHistory()
+    {
+        lock (_historyGate)
+        {
+            _historyStorageInitialized = true;
+            History.Clear();
+            _nextHistoryId = 0;
+            SaveHistoryUnsafe();
+        }
+    }
+
+    public bool RemoveHistoryEntry(long id)
+    {
+        lock (_historyGate)
+        {
+            var removed = false;
+
+            for (var index = History.Count - 1; index >= 0; index--)
+            {
+                if (History[index].Id != id)
+                {
+                    continue;
+                }
+
+                History.RemoveAt(index);
+                removed = true;
+                break;
+            }
+
+            if (!removed)
+            {
+                return false;
+            }
+
+            if (_historyStorageInitialized)
+            {
+                SaveHistoryUnsafe();
+            }
+
+            return true;
+        }
+    }
+
+    public void InitializeDirectoryStackStorage()
+    {
+        lock (_directoryStackGate)
+        {
+            _directoryStackFilePath = Path.Combine(ToshConfigDefaults.GetDefaultStateDirectory(), "dirstack.json");
+            _directoryStackStorageInitialized = true;
+
+            var state = DirectoryStackFileStore.Load(_directoryStackFilePath);
+
+            if (state.Entries.Count > 0)
+            {
+                _directoryStack.Clear();
+                _directoryStack.AddRange(state.Entries);
+                _directoryStackIndex = state.Index;
+                CurrentDirectory = _directoryStack[_directoryStackIndex];
+            }
+        }
+    }
+
+    public void PushDirectory(string path)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+
+        lock (_directoryStackGate)
+        {
+            if (_directoryStackIndex < _directoryStack.Count - 1)
+            {
+                _directoryStack.RemoveRange(_directoryStackIndex + 1, _directoryStack.Count - _directoryStackIndex - 1);
+            }
+
+            _directoryStack.Add(path);
+            _directoryStackIndex = _directoryStack.Count - 1;
+            SaveDirectoryStackUnsafe();
+        }
+    }
+
+    public string? GoBack()
+    {
+        lock (_directoryStackGate)
+        {
+            if (_directoryStackIndex <= 0)
+            {
+                return null;
+            }
+
+            _directoryStackIndex--;
+            SaveDirectoryStackUnsafe();
+            return _directoryStack[_directoryStackIndex];
+        }
+    }
+
+    public string? GoForward()
+    {
+        lock (_directoryStackGate)
+        {
+            if (_directoryStackIndex >= _directoryStack.Count - 1)
+            {
+                return null;
+            }
+
+            _directoryStackIndex++;
+            SaveDirectoryStackUnsafe();
+            return _directoryStack[_directoryStackIndex];
+        }
+    }
+
+    public string? GoToStackIndex(int index)
+    {
+        lock (_directoryStackGate)
+        {
+            if (index < 0 || index >= _directoryStack.Count)
+            {
+                return null;
+            }
+
+            _directoryStackIndex = index;
+            SaveDirectoryStackUnsafe();
+            return _directoryStack[_directoryStackIndex];
+        }
+    }
+
+    public IReadOnlyList<DirectoryStackEntry> GetDirectoryStack()
+    {
+        lock (_directoryStackGate)
+        {
+            var entries = new DirectoryStackEntry[_directoryStack.Count];
+
+            for (var index = 0; index < _directoryStack.Count; index++)
+            {
+                entries[index] = new DirectoryStackEntry(index, _directoryStack[index], index == _directoryStackIndex);
+            }
+
+            return entries;
+        }
+    }
+
+    public int DirectoryStackIndex
+    {
+        get { lock (_directoryStackGate) { return _directoryStackIndex; } }
+    }
+
+    public int DirectoryStackCount
+    {
+        get { lock (_directoryStackGate) { return _directoryStack.Count; } }
+    }
+
+    public bool RemoveDirectoryStackEntry(int index)
+    {
+        lock (_directoryStackGate)
+        {
+            if (index < 0 || index >= _directoryStack.Count)
+            {
+                return false;
+            }
+
+            if (index == _directoryStackIndex)
+            {
+                return false;
+            }
+
+            _directoryStack.RemoveAt(index);
+
+            if (index < _directoryStackIndex)
+            {
+                _directoryStackIndex--;
+            }
+
+            SaveDirectoryStackUnsafe();
+            return true;
+        }
+    }
+
+    public void ClearDirectoryStack()
+    {
+        lock (_directoryStackGate)
+        {
+            var current = _directoryStackIndex >= 0 && _directoryStackIndex < _directoryStack.Count
+                ? _directoryStack[_directoryStackIndex]
+                : CurrentDirectory;
+
+            _directoryStack.Clear();
+            _directoryStack.Add(current);
+            _directoryStackIndex = 0;
+            SaveDirectoryStackUnsafe();
+        }
+    }
+
+    private void SaveDirectoryStackUnsafe()
+    {
+        if (!_directoryStackStorageInitialized || _directoryStackFilePath is null)
         {
             return;
         }
 
-        History.Add(new CommandHistoryEntry(History.Count + 1, source, DateTimeOffset.Now));
+        DirectoryStackFileStore.Save(_directoryStackFilePath, _directoryStack, _directoryStackIndex);
     }
 
     public void RequestExit()
@@ -80,13 +437,178 @@ public sealed class ToshRuntime
     public void SetLastExitCode(int exitCode)
     {
         LastExitCode = exitCode;
-        Variables["LastExitCode"] = exitCode;
+    }
+
+    public void SetLastResult(object? value)
+    {
+        LastResult = value;
+    }
+
+    public void SetLastCommandDuration(TimeSpan? duration)
+    {
+        LastCommandDuration = duration;
+    }
+
+    public void RegisterDisplaySelection(object value, DisplayColumnSelection selection)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        ArgumentNullException.ThrowIfNull(selection);
+
+        if (!selection.HasOverrides)
+        {
+            return;
+        }
+
+        lock (_displaySelectionGate)
+        {
+            _displaySelections[value] = selection;
+        }
+    }
+
+    public DisplayColumnSelection? GetDisplaySelection(object? value)
+    {
+        if (value is null)
+        {
+            return null;
+        }
+
+        lock (_displaySelectionGate)
+        {
+            return _displaySelections.TryGetValue(value, out var selection) ? selection : null;
+        }
+    }
+
+    public void ClearDisplaySelections()
+    {
+        lock (_displaySelectionGate)
+        {
+            _displaySelections.Clear();
+        }
+    }
+
+    public void ExportEnvironmentVariable(string name, object? value)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        ExportedEnvironmentVariables.Add(name);
+        Variables[name] = value;
+        Environment.SetEnvironmentVariable(name, ExternalTextSerializer.Serialize(value));
+    }
+
+    public void SyncExportedEnvironmentVariable(string name, object? value)
+    {
+        if (!ExportedEnvironmentVariables.Contains(name))
+        {
+            return;
+        }
+
+        Environment.SetEnvironmentVariable(name, ExternalTextSerializer.Serialize(value));
+    }
+
+    public void RemoveExportedEnvironmentVariable(string name)
+    {
+        ExportedEnvironmentVariables.Remove(name);
+        Environment.SetEnvironmentVariable(name, null);
     }
 
     public static ToshRuntime CreateDefault(TextWriter? output = null, TextWriter? error = null)
     {
         var runtime = new ToshRuntime(output, error);
+        BuiltInShellTypes.RegisterDefaults(runtime.Classes);
         BuiltInCommands.RegisterDefaults(runtime.Commands);
         return runtime;
+    }
+
+    private void ReloadHistoryUnsafe()
+    {
+        History.Clear();
+        _nextHistoryId = 0;
+
+        if (!Config.History.Persistent || Config.History.MaxEntries == 0)
+        {
+            return;
+        }
+
+        var entries = HistoryFileStore.Load(Config.History.FilePath);
+
+        foreach (var entry in entries)
+        {
+            AddLoadedHistoryEntryUnsafe(entry);
+        }
+    }
+
+    private void SaveHistoryUnsafe()
+    {
+        if (!_historyStorageInitialized || !Config.History.Persistent)
+        {
+            return;
+        }
+
+        HistoryFileStore.Save(Config.History.FilePath, History.ToArray());
+    }
+
+    private bool TryAddHistoryEntryUnsafe(string source, DateTimeOffset timestamp)
+    {
+        if (string.IsNullOrWhiteSpace(source))
+        {
+            return false;
+        }
+
+        if (Config.History.MaxEntries == 0)
+        {
+            return false;
+        }
+
+        if (Config.History.IgnoreLeadingSpace && char.IsWhiteSpace(source[0]))
+        {
+            return false;
+        }
+
+        switch (Config.History.Deduplication)
+        {
+            case ToshHistoryDeduplicationMode.Consecutive
+                when History.Count > 0 &&
+                     string.Equals(History[^1].Text, source, StringComparison.Ordinal):
+                return false;
+            case ToshHistoryDeduplicationMode.All:
+                for (var index = History.Count - 1; index >= 0; index--)
+                {
+                    if (string.Equals(History[index].Text, source, StringComparison.Ordinal))
+                    {
+                        History.RemoveAt(index);
+                    }
+                }
+
+                break;
+        }
+
+        var id = ++_nextHistoryId;
+        History.Add(new CommandHistoryEntry(id, source, timestamp));
+        TrimHistoryUnsafe();
+        return true;
+    }
+
+    private void AddLoadedHistoryEntryUnsafe(CommandHistoryEntry entry)
+    {
+        if (string.IsNullOrWhiteSpace(entry.Text))
+        {
+            return;
+        }
+
+        _nextHistoryId = Math.Max(_nextHistoryId, entry.Id);
+        History.Add(entry);
+        TrimHistoryUnsafe();
+    }
+
+    private void TrimHistoryUnsafe()
+    {
+        if (Config.History.MaxEntries is not int maxEntries)
+        {
+            return;
+        }
+
+        while (History.Count > maxEntries)
+        {
+            History.RemoveAt(0);
+        }
     }
 }

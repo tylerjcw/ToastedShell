@@ -1,0 +1,46 @@
+namespace Tosh.Core.Commands;
+
+public sealed class ChunkCommand : ShellCommand
+{
+    public ChunkCommand()
+        : base("chunk", "Groups pipeline items into fixed-size batches.", "chunk <size>") { }
+
+    public override async IAsyncEnumerable<object?> ExecuteAsync(CommandContext context)
+    {
+        if (context.Arguments.Count != 1)
+        {
+            throw context.CreateDiagnostic(
+                code: "tosh::runtime::chunk_requires_size",
+                title: "'chunk' requires exactly one integer size argument.",
+                label: "use 'chunk <size>'");
+        }
+
+        if (!TypeConversion.TryConvert(context.Arguments[0], typeof(int), out var converted) || converted is not int size || size <= 0)
+        {
+            throw context.CreateDiagnostic(
+                code: "tosh::runtime::chunk_requires_positive_integer",
+                title: "'chunk' requires a positive integer size.",
+                argumentIndex: 0,
+                label: "expected a positive integer");
+        }
+
+        var buffer = new List<object?>(size);
+
+        await foreach (var item in ShellIterationUtilities.ReplaySingleInputCollectionAsync(context.Input, context.CancellationToken)
+                           .WithCancellation(context.CancellationToken))
+        {
+            buffer.Add(item);
+
+            if (buffer.Count == size)
+            {
+                yield return buffer.ToArray();
+                buffer.Clear();
+            }
+        }
+
+        if (buffer.Count > 0)
+        {
+            yield return buffer.ToArray();
+        }
+    }
+}

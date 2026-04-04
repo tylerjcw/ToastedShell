@@ -3,13 +3,13 @@ namespace Tosh.Core.Commands;
 public sealed class DescribeTypeCommand : ShellCommand
 {
     public DescribeTypeCommand()
-        : base("describe-type", "Describes CLR types for input objects or explicit type names.", "describe-type [type ...]") { }
+        : base("describe-type", "Describes CLR types, ToSh named types, or shell collection types.", "describe-type [type ...]") { }
 
     public override async IAsyncEnumerable<object?> ExecuteAsync(CommandContext context)
     {
         if (context.Arguments.Count > 0)
         {
-            foreach (var type in ReflectionMetadataUtilities.ResolveTypes(context, context.Arguments))
+            foreach (var type in ReflectionMetadataUtilities.ResolveTypeLikeTargets(context, context.Arguments))
             {
                 yield return ReflectionMetadataUtilities.CreateTypeProjection(type);
             }
@@ -19,7 +19,8 @@ public sealed class DescribeTypeCommand : ShellCommand
 
         await foreach (var item in context.Input.WithCancellation(context.CancellationToken))
         {
-            yield return ReflectionMetadataUtilities.CreateTypeProjection(item?.GetType() ?? typeof(object));
+            yield return ReflectionMetadataUtilities.CreateTypeProjection(
+                ReflectionMetadataUtilities.ResolveTypeLikeTarget(context, item ?? typeof(object)));
         }
     }
 }

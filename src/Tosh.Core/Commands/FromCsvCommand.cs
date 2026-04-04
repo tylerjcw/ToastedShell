@@ -3,7 +3,7 @@ namespace Tosh.Core.Commands;
 public sealed class FromCsvCommand : ShellCommand
 {
     public FromCsvCommand()
-        : base("from-csv", "Parses CSV text into projected row objects.", "from-csv [csv-text]") { }
+        : base("from-csv", "Parses CSV text into shell row objects.", "from-csv [csv-text]") { }
 
     public override async IAsyncEnumerable<object?> ExecuteAsync(CommandContext context)
     {
@@ -26,7 +26,7 @@ public sealed class FromCsvCommand : ShellCommand
 
         if (records.Count == 0)
         {
-            yield return Array.Empty<ProjectedObject>();
+            yield return Array.Empty<System.Dynamic.ExpandoObject>();
             yield break;
         }
 
@@ -39,16 +39,12 @@ public sealed class FromCsvCommand : ShellCommand
         yield return rows;
     }
 
-    private static ProjectedObject CreateRow(IReadOnlyList<string> headers, IReadOnlyList<string> values)
+    private static System.Dynamic.ExpandoObject CreateRow(IReadOnlyList<string> headers, IReadOnlyList<string> values)
     {
-        var fields = headers
-            .Select((header, index) => new ProjectedField(
+        return ShellRecordUtilities.CreateExpando(headers.Select((header, index) =>
+            new KeyValuePair<string, object?>(
                 header,
-                header,
-                index < values.Count ? values[index] : string.Empty))
-            .ToArray();
-
-        return new ProjectedObject(fields);
+                index < values.Count ? values[index] : string.Empty)));
     }
 
     private static IReadOnlyList<string> NormalizeHeaders(IReadOnlyList<string> headers)

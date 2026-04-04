@@ -1,0 +1,197 @@
+# ============================================================================
+#  ToastedShell (tosh) -- Showcase Script
+#  "If NuShell and PowerShell had a child raised by ZSH and Lua"
+# ============================================================================
+#
+#  Run with:  source examples/showcase.tosh
+#
+#  This script demonstrates the core power of tosh: a Unix shell with
+#  .NET object pipelines, typed functions, and rich table rendering.
+# ============================================================================
+
+# --- 1. Object Pipelines --------------------------------------------------
+# Everything is an object. `ls` returns FileSystemEntry objects, not text.
+# Pipe them through filters and projections just like LINQ.
+# Use _.Property to access object members -- the underscore is the current item.
+
+echo "--- 1. Object Pipelines ---"
+ls -la | where _.Type == file | sort Size | get { Name, Size }
+
+# --- 2. Typed Functions ----------------------------------------------------
+# Define functions with typed parameters. tosh validates and converts
+# arguments at call time -- pass "1kb" and it becomes a StorageSize.
+
+func bigFiles(minSize: StorageSize) {
+    ls -la | where _.Type == file | where _.Size >= $minSize | sort Size | reverse
+}
+
+echo "--- 2. Typed Functions: bigFiles 512b ---"
+bigFiles 512b | get { Name, Size }
+
+# --- 3. Date Arithmetic & Time Filters -------------------------------------
+# Dates are first-class. Subtract timespans, compare in predicates.
+
+func recentFiles(age: TimeSpan) {
+    ls -la | where _.Type == file | where _.Modified > ((date now) - $age)
+}
+
+echo "--- 3. Recent Files (last 7 days) ---"
+recentFiles 7d | get { Name, Modified, Size }
+
+# --- 4. Multi-Clause Predicate Blocks --------------------------------------
+# Filter on multiple properties at once inside { }.
+
+echo "--- 4. Multi-Clause Predicates ---"
+ls -la | where { _.Type == file; _.Size >= 1b; } | get { Name, Size }
+
+# --- 5. Data Format Pipelines ----------------------------------------------
+# Parse JSON, CSV, TSV -- they become .NET objects in the pipeline.
+
+echo "--- 5. JSON Pipeline ---"
+echo "[{\"name\":\"alpha\",\"score\":95},{\"name\":\"beta\",\"score\":87},{\"name\":\"gamma\",\"score\":92}]" | from-json | flatten | sort score | reverse | get { name, score }
+
+# --- 6. Aggregation --------------------------------------------------------
+# Sum, average, min, max work on any numeric property.
+
+echo "--- 6. Aggregation ---"
+echo "Total file size in current directory:"
+ls -la | where _.Type == file | sum Size
+
+echo "File count:"
+ls -la | where _.Type == file | count
+
+# --- 7. Group By -----------------------------------------------------------
+# Group objects by a property, then inspect each group.
+
+echo "--- 7. Group By Type ---"
+ls -la | group-by Type
+
+# --- 8. Control Flow -------------------------------------------------------
+# Familiar if/else, for/in, while -- all operating on objects.
+
+echo "--- 8. Control Flow ---"
+var names = (echo "alice" "bob" "carol")
+for name in ($names) {
+    echo $name
+}
+
+var counter = 0
+while (($counter < 3)) {
+    echo $counter
+    counter = ($counter + 1)
+}
+
+# --- 9. String Interpolation -----------------------------------------------
+# Use $"..." to embed expressions directly in strings.
+
+echo "--- 9. String Interpolation ---"
+var user = (whoami)
+var host = (hostname)
+echo $"Welcome, {$user}@{$host}!"
+echo $"There are {ls | where _.Type == file | count} files here."
+echo $"2 + 2 = {2 + 2}"
+
+# --- 10. Typed Variable Declarations ----------------------------------------
+# Declare variables with explicit types. tosh validates and converts at
+# assignment time -- the type goes before the variable name.
+
+echo "--- 10. Typed Variables ---"
+string greeting = "hello, tosh"
+int answer = 42
+echo $"greeting is: {$greeting}, answer is: {$answer}"
+echo $"Types: greeting={$greeting | type-of}, answer={$answer | type-of}"
+
+# --- 11. .NET Interop -------------------------------------------------------
+# Reach into the full .NET runtime when you need it.
+
+echo "--- 11. .NET Interop ---"
+echo "GUID:" (new System.Guid "d3b07384-d113-4ec6-a5d2-5b1d0d2e8c39")
+echo "Random:" (new System.Random | call Next 1 100)
+echo "Upper:" ("hello, tosh".ToUpper())
+echo "Join:" (String.Join " + " ["objects", "pipelines", "types"])
+echo "PI:" (Math.Round Math.PI 4)
+
+# --- 12. Command Wrappers --------------------------------------------------
+# Shorthand for common pipelines using arrow functions.
+
+func ll   => ls -la
+func dirs => ls -la | where { _.Type == dir }
+func big  => ls -la | where { _.Type == file } | sort Size | reverse | first 5
+
+echo "--- 12. Command Wrappers ---"
+echo "Top 5 largest files:"
+big | get { Name, Size }
+
+# --- 13. Return Types & Pipeline Functions ---------------------------------
+# Functions can declare return types. The engine converts automatically.
+
+func fileCount() -> String {
+    count
+}
+
+echo "--- 13. Return Type Conversion ---"
+echo "File count as string:" (ls | fileCount)
+echo "Type:" (ls | fileCount | type-of)
+
+# --- 14. Optional Parameters ------------------------------------------------
+# Mark parameters optional with ? -- they default to null if not provided.
+
+func greet(name: String, title?: String) {
+    if ($title) {
+        echo $"Hello, {$title} {$name}!"
+    } else {
+        echo $"Hello, {$name}!"
+    }
+}
+
+echo "--- 14. Optional Parameters ---"
+greet "Alice" "Dr."
+greet "Bob"
+
+# --- 15. System Introspection ----------------------------------------------
+# Built-in commands for system info, all returning typed objects.
+
+echo "--- 15. System Info ---"
+uname | get { SystemName, Release, Machine }
+whoami
+hostname
+
+# --- 16. Process Inspection -------------------------------------------------
+# ps returns ProcessInfo objects. Filter and project like anything else.
+
+echo "--- 16. Top 5 Processes by Memory ---"
+ps | sort WorkingSet | reverse | first 5 | get { Name, WorkingSet, Cpu }
+
+# --- 17. Text Processing ----------------------------------------------------
+# grep, split, replace, cut -- but they return objects you can pipe further.
+
+echo "--- 17. Text Processing ---"
+echo "the quick brown fox" "jumps over the lazy dog" | grep -n "the" | get { LineNumber, Text }
+
+# --- 18. Hash & Inspect -----------------------------------------------------
+# Hash anything, inspect any object's structure.
+
+echo "--- 18. Hashing ---"
+echo "toasted" | hash sha256
+
+echo "--- 18b. Type Inspection ---"
+ls | first | type-of
+ls | first | members | first 5
+
+# --- 19. Disk Usage ---------------------------------------------------------
+
+echo "--- 19. Disk & Memory ---"
+df | first 3
+free
+
+# --- 20. Chaining It All Together -------------------------------------------
+# The real power: compose everything into expressive one-liners.
+
+echo "--- 20. Composition ---"
+echo "Files modified today, sorted by size, with their SHA256:"
+ls -la | where _.Type == file | where _.Modified > ((date now) - (timespan 1d)) | sort Size | reverse | each { echo $"{_.Name}: {cat $_.Name | hash sha256}" }
+
+# ============================================================================
+echo ""
+echo "ToastedShell -- typed objects, rich tables, full .NET, zero friction."
+echo "============================================================================"

@@ -1,6 +1,6 @@
 namespace Tosh.Core.Commands;
 
-public sealed class AverageCommand : ShellCommand
+public sealed class AverageCommand : ShellCommand, ICurrentItemMemberPathCommand
 {
     public AverageCommand(string name = "average")
         : base(name, "Averages numeric, storage size, or timespan values.", $"{name} [member-path]") { }

@@ -22,10 +22,36 @@ public sealed class LineEditorBuffer
         CursorIndex = _buffer.Length;
     }
 
+    public void SetCursor(int cursorIndex)
+    {
+        CursorIndex = Math.Clamp(cursorIndex, 0, _buffer.Length);
+    }
+
+    public bool ReplaceRange(int start, int length, string replacement)
+    {
+        ArgumentNullException.ThrowIfNull(replacement);
+
+        start = Math.Clamp(start, 0, _buffer.Length);
+        length = Math.Clamp(length, 0, _buffer.Length - start);
+
+        _buffer.Remove(start, length);
+        _buffer.Insert(start, replacement);
+        CursorIndex = start + replacement.Length;
+        return true;
+    }
+
     public bool Insert(char value)
     {
         _buffer.Insert(CursorIndex, value);
         CursorIndex++;
+        return true;
+    }
+
+    public bool Insert(string value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        _buffer.Insert(CursorIndex, value);
+        CursorIndex += value.Length;
         return true;
     }
 
@@ -71,6 +97,62 @@ public sealed class LineEditorBuffer
         }
 
         CursorIndex++;
+        return true;
+    }
+
+    public bool MoveWordLeft()
+    {
+        if (CursorIndex == 0)
+        {
+            return false;
+        }
+
+        var position = CursorIndex;
+
+        while (position > 0 && char.IsWhiteSpace(_buffer[position - 1]))
+        {
+            position--;
+        }
+
+        while (position > 0 && !char.IsWhiteSpace(_buffer[position - 1]))
+        {
+            position--;
+        }
+
+        if (position == CursorIndex)
+        {
+            return false;
+        }
+
+        CursorIndex = position;
+        return true;
+    }
+
+    public bool MoveWordRight()
+    {
+        if (CursorIndex >= _buffer.Length)
+        {
+            return false;
+        }
+
+        var position = CursorIndex;
+
+        while (position < _buffer.Length && char.IsWhiteSpace(_buffer[position]))
+        {
+            position++;
+        }
+
+        while (position < _buffer.Length && !char.IsWhiteSpace(_buffer[position]))
+        {
+            position++;
+        }
+
+        if (position == CursorIndex)
+        {
+            return false;
+        }
+
+        CursorIndex = position;
         return true;
     }
 

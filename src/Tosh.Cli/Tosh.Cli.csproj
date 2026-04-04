@@ -3,6 +3,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Tosh.Language\Tosh.Language.csproj" />
     <ProjectReference Include="..\Tosh.Core\Tosh.Core.csproj" />
+    <ProjectReference Include="..\Tosh.Tui\Tosh.Tui.csproj" />
   </ItemGroup>
 
   <PropertyGroup>
@@ -11,5 +12,12 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
+
+  <Target Name="SyncVsCodeExtension"
+          AfterTargets="Build"
+          Condition="'$(DesignTimeBuild)' != 'true' and '$(DisableToshVsCodeExtensionSync)' != 'true' and Exists('$(MSBuildProjectDirectory)/../../scripts/sync_vscode_extension.py')">
+    <Exec Command="python3 &quot;$(MSBuildProjectDirectory)/../../scripts/sync_vscode_extension.py&quot; --quiet"
+          WorkingDirectory="$(MSBuildProjectDirectory)/../.." />
+  </Target>
 
 </Project>

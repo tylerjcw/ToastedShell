@@ -5,7 +5,7 @@ namespace Tosh.Core.Commands;
 public sealed class ReplaceCommand : ShellCommand
 {
     public ReplaceCommand()
-        : base("replace", "Replaces text in each input value.", "replace [-i] [-r] <pattern> <replacement> [text ...]") { }
+        : base("replace", "Replaces text in each input value.", "replace [-i] [-m] [-s] [-x] [--explicit-capture] [-r] <pattern|regex> <replacement> [text ...]") { }
 
     public override async IAsyncEnumerable<object?> ExecuteAsync(CommandContext context)
     {
@@ -16,7 +16,7 @@ public sealed class ReplaceCommand : ShellCommand
             throw new InvalidOperationException("replace requires a pattern and replacement.");
         }
 
-        var pattern = CommandArguments.RequireString(parsed.Positionals, 0, "pattern");
+        var patternValue = parsed.Positionals[0];
         var replacement = parsed.Positionals[1]?.ToString() ?? string.Empty;
         IReadOnlyList<object?> inputs = parsed.Positionals.Count > 2
             ? parsed.Positionals.Skip(2).ToArray()
@@ -27,18 +27,25 @@ public sealed class ReplaceCommand : ShellCommand
             yield break;
         }
 
-        var ignoreCase = parsed.HasFlag("i");
-        var regexMode = parsed.HasFlag("r", "regex");
+        var ignoreCase = parsed.HasFlag("i", "ignore-case");
+        var regexMode = parsed.HasFlag("r", "regex") || patternValue is Regex;
+
+        if (!regexMode && ShellRegexUtilities.HasRegexOnlyModifierFlags(parsed))
+        {
+            throw new InvalidOperationException("replace regex modifier flags require -r or a regex pattern.");
+        }
+
         var regex = regexMode
-            ? new Regex(pattern, RegexOptions.Compiled | (ignoreCase ? RegexOptions.IgnoreCase : RegexOptions.None))
+            ? ShellRegexUtilities.RequireRegex(context, parsed, patternValue, "pattern", timeout: TimeSpan.FromSeconds(5))
             : null;
+        var pattern = regexMode ? null : CommandArguments.RequireString(parsed.Positionals, 0, "pattern");
         var comparison = ignoreCase ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
 
         foreach (var input in inputs)
         {
             var text = input is ShellTextLine line ? line.Text : ExternalTextSerializer.Serialize(input);
             var output = regex is null
-                ? text.Replace(pattern, replacement, comparison)
+                ? text.Replace(pattern!, replacement, comparison)
                 : regex.Replace(text, replacement);
             yield return new ShellTextLine(output);
         }

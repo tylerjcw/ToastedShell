@@ -11,6 +11,12 @@ public sealed class AproposCommand : ShellCommand
 
         if (query.Length == 0)
         {
+            var pipedQuery = await TextInputUtilities.ReadScalarValuesFromInputAsync(context, allowEmpty: true);
+            query = string.Join(" ", pipedQuery).Trim();
+        }
+
+        if (query.Length == 0)
+        {
             throw new InvalidOperationException("The 'apropos' command requires a search query.");
         }
 

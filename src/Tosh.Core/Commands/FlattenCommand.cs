@@ -20,7 +20,7 @@ public sealed class FlattenCommand : ShellCommand
                 item is string ||
                 item is ShellTextLine ||
                 item is IDictionary ||
-                item is ProjectedObject ||
+                ShellRecordUtilities.IsRecordLike(item) ||
                 item is not IEnumerable enumerable)
             {
                 yield return item;

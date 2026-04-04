@@ -11,17 +11,44 @@ public sealed class HelpCommandTests
         var engine = new ToshEngine(ToshRuntime.CreateDefault());
         var externalPath = Environment.ProcessPath ?? throw new InvalidOperationException("Unable to resolve the current process path.");
 
-        var aliasTopic = Assert.IsType<HelpTopic>(Assert.Single(await engine.ExecuteToListAsync("help alias")));
+        var functionTopic = Assert.IsType<HelpTopic>(Assert.Single(await engine.ExecuteToListAsync("help func")));
+        var allocTopic = Assert.IsType<HelpTopic>(Assert.Single(await engine.ExecuteToListAsync("help alloc")));
+        var ipTopic = Assert.IsType<HelpTopic>(Assert.Single(await engine.ExecuteToListAsync("help ip")));
         var newTopic = Assert.IsType<HelpTopic>(Assert.Single(await engine.ExecuteToListAsync("help new")));
+        var ternaryTopic = Assert.IsType<HelpTopic>(Assert.Single(await engine.ExecuteToListAsync("help ternary")));
+        var matchExprTopic = Assert.IsType<HelpTopic>(Assert.Single(await engine.ExecuteToListAsync("help match-expr")));
         var typeTopic = Assert.IsType<HelpTopic>(Assert.Single(await engine.ExecuteToListAsync("help System.String")));
+        var regexTopic = Assert.IsType<HelpTopic>(Assert.Single(await engine.ExecuteToListAsync("help regex")));
+        var listTopic = Assert.IsType<HelpTopic>(Assert.Single(await engine.ExecuteToListAsync("help list")));
+        var mapTopic = Assert.IsType<HelpTopic>(Assert.Single(await engine.ExecuteToListAsync("help map")));
+        var dictTopic = Assert.IsType<HelpTopic>(Assert.Single(await engine.ExecuteToListAsync("help dict")));
+        var genericListTopic = Assert.IsType<HelpTopic>(Assert.Single(await engine.ExecuteToListAsync("help list<int>")));
         var externalTopic = Assert.IsType<HelpTopic>(Assert.Single(await engine.ExecuteToListAsync($"help \"{externalPath}\"")));
 
-        Assert.Equal(HelpSubjectKind.Language, aliasTopic.Kind);
-        Assert.Equal("Language", aliasTopic.Category);
-        Assert.Equal(HelpSubjectKind.BuiltIn, newTopic.Kind);
-        Assert.Contains("C#-style", newTopic.Notes, StringComparison.Ordinal);
+        Assert.Equal(HelpSubjectKind.Language, functionTopic.Kind);
+        Assert.Equal("Language", functionTopic.Category);
+        Assert.Equal(HelpSubjectKind.BuiltIn, allocTopic.Kind);
+        Assert.Equal(HelpSubjectKind.BuiltIn, ipTopic.Kind);
+        Assert.Equal("Network", ipTopic.Category);
+        Assert.Equal(HelpSubjectKind.Language, newTopic.Kind);
+        Assert.Contains("requires `new`", newTopic.Notes, StringComparison.Ordinal);
+        Assert.Equal(HelpSubjectKind.Language, ternaryTopic.Kind);
+        Assert.Contains("?", ternaryTopic.Usage, StringComparison.Ordinal);
+        Assert.Equal(HelpSubjectKind.Language, matchExprTopic.Kind);
+        Assert.Contains("default", matchExprTopic.Usage, StringComparison.Ordinal);
         Assert.Equal(HelpSubjectKind.Type, typeTopic.Kind);
         Assert.Contains("System.String", typeTopic.Description, StringComparison.Ordinal);
+        Assert.Equal(HelpSubjectKind.Type, regexTopic.Kind);
+        Assert.Contains("System.Text.RegularExpressions.Regex", regexTopic.Description, StringComparison.Ordinal);
+        Assert.Equal(HelpSubjectKind.Type, listTopic.Kind);
+        Assert.Equal("Shell Types", listTopic.Category);
+        Assert.Equal(HelpSubjectKind.BuiltIn, mapTopic.Kind);
+        Assert.Equal("map", mapTopic.Name);
+        Assert.Equal("Shell", mapTopic.Category);
+        Assert.Equal(HelpSubjectKind.Type, dictTopic.Kind);
+        Assert.Contains("map", dictTopic.Aliases, StringComparer.OrdinalIgnoreCase);
+        Assert.Equal(HelpSubjectKind.Type, genericListTopic.Kind);
+        Assert.Equal("list<int>", genericListTopic.Name);
         Assert.Equal(HelpSubjectKind.External, externalTopic.Kind);
         Assert.Equal(externalPath, externalTopic.Path);
     }
@@ -33,15 +60,42 @@ public sealed class HelpCommandTests
 
         var searchResults = await engine.ExecuteToListAsync("help search json");
         var aproposResults = await engine.ExecuteToListAsync("apropos loop");
-        var relatedResults = await engine.ExecuteToListAsync("help related alias");
+        var relatedResults = await engine.ExecuteToListAsync("help related func");
         var categoryResults = await engine.ExecuteToListAsync("help categories");
-        var manResults = await engine.ExecuteToListAsync("man ls | get Name");
+        var helpResults = await engine.ExecuteToListAsync("help ls | get Name");
 
         Assert.Contains(searchResults, item => Assert.IsType<HelpSearchResult>(item).Name == "from-json");
         Assert.Contains(aproposResults, item => Assert.IsType<HelpSearchResult>(item).Name == "while");
-        Assert.Contains(relatedResults, item => Assert.IsType<HelpSearchResult>(item).Name == "def");
+        Assert.Contains(relatedResults, item => Assert.IsType<HelpSearchResult>(item).Name == "return");
         Assert.Contains(categoryResults, item => Assert.IsType<HelpCategoryInfo>(item).Category == "Filesystem");
         Assert.Contains(categoryResults, item => Assert.IsType<HelpCategoryInfo>(item).Category == "Language");
-        Assert.Collection(manResults, item => Assert.Equal("ls", item));
+        Assert.Collection(helpResults, item => Assert.Equal("ls", item));
+    }
+
+    [Fact]
+    public async Task Help_and_apropos_accept_pipeline_input()
+    {
+        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+
+        var helpResults = await engine.ExecuteToListAsync("echo list | help | get Name");
+        var searchResults = await engine.ExecuteToListAsync("echo json | help search | get Name");
+        var relatedResults = await engine.ExecuteToListAsync("echo func | help related | get Name");
+        var aproposResults = await engine.ExecuteToListAsync("echo loop | apropos | get Name");
+
+        Assert.Collection(helpResults, item => Assert.Equal("list", item));
+        Assert.Contains("from-json", searchResults.Cast<string>());
+        Assert.Contains("return", relatedResults.Cast<string>());
+        Assert.Contains("while", aproposResults.Cast<string>());
+    }
+
+    [Fact]
+    public async Task Help_can_request_the_interactive_browser()
+    {
+        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+
+        var results = await engine.ExecuteToListAsync("help browse regex");
+
+        var request = Assert.IsType<HelpBrowseRequest>(Assert.Single(results));
+        Assert.Equal("regex", request.InitialQuery);
     }
 }

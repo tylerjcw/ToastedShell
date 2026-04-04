@@ -5,4 +5,6 @@ public sealed record TextStatistics(
     int Lines,
     int Words,
     long Bytes,
-    int Characters);
+    int Characters,
+    int LongestLine = 0,
+    bool IsTotal = false);

@@ -1,6 +1,18 @@
+# Build output
 bin/
 obj/
-.vs/
+artifacts/
+
+# Test results
 TestResults/
+
+# IDE / editor caches
+.vs/
 *.user
 *.suo
+
+# VS Code extension dependencies
+editor/vscode/tosh.tosh-lang/node_modules/
+
+# Claude Code local settings
+.claude/

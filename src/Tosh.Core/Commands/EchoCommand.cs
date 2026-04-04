@@ -1,6 +1,6 @@
 namespace Tosh.Core.Commands;
 
-public sealed class EchoCommand : ShellCommand
+public sealed class EchoCommand : ShellCommand, IImplicitGlobCommand
 {
     public EchoCommand()
         : base("echo", "Emits its arguments as pipeline objects.", "echo <value> [value...]") { }

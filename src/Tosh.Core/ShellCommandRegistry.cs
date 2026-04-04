@@ -2,7 +2,7 @@ namespace Tosh.Core;
 
 public sealed class ShellCommandRegistry
 {
-    private readonly Dictionary<string, IShellCommand> _commands = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, IShellCommand> _commands = new(StringComparer.Ordinal);
 
     public IEnumerable<IShellCommand> All => _commands.Values.OrderBy(command => command.Name, StringComparer.OrdinalIgnoreCase);
 

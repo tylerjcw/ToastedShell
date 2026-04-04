@@ -21,7 +21,8 @@ public sealed class DistinctCommand : ShellCommand
 
         var seen = new HashSet<string>(StringComparer.Ordinal);
 
-        await foreach (var item in context.Input.WithCancellation(context.CancellationToken))
+        await foreach (var item in ShellIterationUtilities.ReplaySingleInputCollectionAsync(context.Input, context.CancellationToken)
+                           .WithCancellation(context.CancellationToken))
         {
             var keyValue = memberPath is null ? item : context.Runtime.ObjectAccessor.GetValue(item, memberPath);
             var key = ShellDataSerializer.GetStableKey(keyValue);

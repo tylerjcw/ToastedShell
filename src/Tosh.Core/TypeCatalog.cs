@@ -5,19 +5,21 @@ namespace Tosh.Core;
 
 internal static class TypeCatalog
 {
+    public static IReadOnlyList<Assembly> GetAssemblies()
+    {
+        return EnumerateAssemblies()
+            .OrderBy(assembly => assembly.GetName().Name, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
+
     public static IReadOnlyList<Type> GetAllTypes(bool includeNonPublic = false)
     {
         var result = new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase);
 
-        foreach (var assembly in EnumerateAssemblies())
+        foreach (var assembly in GetAssemblies())
         {
-            foreach (var type in SafeGetTypes(assembly))
+            foreach (var type in GetAssemblyTypes(assembly, includeNonPublic))
             {
-                if (!includeNonPublic && !IsVisible(type))
-                {
-                    continue;
-                }
-
                 var key = type.FullName ?? type.Name;
                 result.TryAdd(key, type);
             }
@@ -25,6 +27,15 @@ internal static class TypeCatalog
 
         return result.Values
             .OrderBy(type => type.FullName ?? type.Name, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
+
+    public static IReadOnlyList<Type> GetAssemblyTypes(Assembly assembly, bool includeNonPublic = false)
+    {
+        ArgumentNullException.ThrowIfNull(assembly);
+
+        return SafeGetTypes(assembly)
+            .Where(type => includeNonPublic || IsVisible(type))
             .ToArray();
     }
 

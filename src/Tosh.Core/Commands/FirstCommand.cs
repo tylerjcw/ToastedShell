@@ -16,7 +16,9 @@ public sealed class FirstCommand : ShellCommand
 
         var emitted = 0;
 
-        await foreach (var item in context.Input.WithCancellation(context.CancellationToken))
+        var input = ShellIterationUtilities.ReplaySingleInputCollectionAsync(context.Input, context.CancellationToken);
+
+        await foreach (var item in input.WithCancellation(context.CancellationToken))
         {
             yield return item;
             emitted++;

@@ -81,7 +81,7 @@ public sealed class TranslateCommand : ShellCommand
         var delete = false;
         string? set1 = null;
         string? set2 = null;
-        var paths = new List<string>();
+        var pathArguments = new List<object?>();
 
         for (var index = 0; index < arguments.Count; index++)
         {
@@ -115,7 +115,7 @@ public sealed class TranslateCommand : ShellCommand
                 throw new InvalidOperationException($"Unsupported tr option '{text}'.");
             }
 
-            paths.Add(PathUtilities.ResolvePath(currentDirectory, text));
+            pathArguments.Add(arguments[index]);
         }
 
         if (string.IsNullOrWhiteSpace(set1))
@@ -128,7 +128,7 @@ public sealed class TranslateCommand : ShellCommand
             throw new InvalidOperationException("tr requires a replacement set unless -d is used.");
         }
 
-        return new TrOptions(delete, set1, set2, paths);
+        return new TrOptions(delete, set1, set2, ShellPathArguments.ExpandMany(currentDirectory, pathArguments));
     }
 
     private sealed record TrOptions(bool Delete, string Set1, string? Set2, IReadOnlyList<string> Paths);

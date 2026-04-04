@@ -36,3 +36,17 @@ public sealed class ContinueSignalException : ShellControlFlowException
     {
     }
 }
+
+public sealed class ThrowSignalException : Exception
+{
+    public ThrowSignalException(TextSpan span, object? value)
+        : base(value?.ToString() ?? "An error was thrown.")
+    {
+        Span = span;
+        Value = value;
+    }
+
+    public TextSpan Span { get; }
+
+    public object? Value { get; }
+}

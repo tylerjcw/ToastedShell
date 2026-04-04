@@ -1,0 +1,35 @@
+# interop_demo.tosh
+# Demonstrates shell interop: wrappers, as-file, command substitution,
+# process substitution, and background jobs working alongside ToSh modules.
+
+require Inventory from "./toastlib.tosh" as Inv
+require Utilities from "./toastlib.tosh"
+
+func item_names => get Name
+
+Utilities.banner("Interop Demo")
+styled "Native process output stays plain text until you choose to parse it." --fg bright-yellow --bold | writeline
+
+var items = Inv.sample_items()
+var namesFile = ($items | item_names | sort | as-file text)
+
+writeline $"Materialized names to: {$namesFile.FullName}"
+
+Utilities.banner("Native Commands Reading ToSh Materialized Files")
+/bin/cat $namesFile | each { writeline _ }
+
+Utilities.banner("Command Substitution")
+var firstName = $(/bin/head -n 1 $namesFile)
+writeline $"First sorted item: {$firstName}"
+
+Utilities.banner("Input Process Substitution")
+/bin/cat <($items | item_names | sort) | each { writeline _ }
+
+Utilities.banner("Final Structured Result")
+$items | get { Name, Quantity, Category } | sort Name | writeline
+
+Utilities.banner("Background Jobs")
+/bin/sh -c "sleep 0.1; printf background-ready\n" &
+var jobId = $tosh.Last.Result.Id
+jobs | each { writeline $"Job #{_.Id} => {_.Status}" }
+wait-for $jobId | each { writeline $"Job #{_.Id} finished as {_.Status}" }

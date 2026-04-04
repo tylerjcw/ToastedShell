@@ -1,6 +1,6 @@
 namespace Tosh.Core.Commands;
 
-public sealed class SumCommand : ShellCommand
+public sealed class SumCommand : ShellCommand, ICurrentItemMemberPathCommand
 {
     public SumCommand()
         : base("sum", "Sums numeric, storage size, or timespan values.", "sum [member-path]") { }

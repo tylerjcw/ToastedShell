@@ -50,12 +50,12 @@ internal static class ShellDataSerializer
         {
             case ShellTextLine line:
                 return line.Text;
-            case ProjectedObject projected:
-                return projected.Fields.ToDictionary(field => field.Name, field => Normalize(field.Value, visited, depth + 1), StringComparer.OrdinalIgnoreCase);
             case FileSystemPrincipalInfo principal:
                 return principal.DisplayName;
             case StorageSize size:
                 return size.Bytes;
+            case TemporalAmount amount:
+                return amount.ToString();
             case FileSystemEntry entry:
                 return new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
                 {
@@ -80,6 +80,14 @@ internal static class ShellDataSerializer
                 return type.FullName ?? type.Name;
         }
 
+        if (ShellRecordUtilities.TryGetFields(value, out var recordFields))
+        {
+            return recordFields.ToDictionary(
+                field => field.Key,
+                field => Normalize(field.Value, visited, depth + 1),
+                StringComparer.OrdinalIgnoreCase);
+        }
+
         var typeInfo = value.GetType();
         var effectiveType = Nullable.GetUnderlyingType(typeInfo) ?? typeInfo;
 
@@ -97,6 +105,7 @@ internal static class ShellDataSerializer
             value is Guid ||
             value is DateTime ||
             value is DateTimeOffset ||
+            value is TemporalAmount ||
             value is TimeSpan ||
             value is Uri)
         {

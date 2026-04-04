@@ -2,6 +2,13 @@ namespace Tosh.Core;
 
 public static class ExternalCommandResolver
 {
+    private static readonly StringComparer PathStringComparer =
+        OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+
+    private static readonly object CacheLock = new();
+    private static string? _cachedPathValue;
+    private static Dictionary<string, string> _resolvedPathCache = new(PathStringComparer);
+
     public static ExternalCommandLookupResult Resolve(string currentDirectory, string name)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(currentDirectory);
@@ -10,6 +17,15 @@ public static class ExternalCommandResolver
         return LooksLikeExplicitPath(name)
             ? ResolveExplicitPath(currentDirectory, name)
             : ResolveFromPath(currentDirectory, name);
+    }
+
+    public static void InvalidateCache()
+    {
+        lock (CacheLock)
+        {
+            _cachedPathValue = null;
+            _resolvedPathCache = new Dictionary<string, string>(PathStringComparer);
+        }
     }
 
     public static IReadOnlyList<string> FindAllExecutables(string currentDirectory, string name)
@@ -36,6 +52,65 @@ public static class ExternalCommandResolver
         return matches;
     }
 
+    public static IReadOnlyList<string> FindExecutableNamesByPrefix(string currentDirectory, string prefix)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(currentDirectory);
+
+        var seenPaths = new HashSet<string>(PathStringComparer);
+        var seenNames = new HashSet<string>(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
+        var matches = new List<string>();
+        var pathValue = Environment.GetEnvironmentVariable("PATH");
+
+        if (string.IsNullOrWhiteSpace(pathValue))
+        {
+            return matches;
+        }
+
+        var normalizedPrefix = prefix ?? string.Empty;
+
+        foreach (var directory in pathValue.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            if (!Directory.Exists(directory))
+            {
+                continue;
+            }
+
+            IEnumerable<string> candidates;
+
+            try
+            {
+                candidates = Directory.EnumerateFiles(directory);
+            }
+            catch
+            {
+                continue;
+            }
+
+            foreach (var candidate in candidates)
+            {
+                if (!seenPaths.Add(candidate) || !IsExecutable(candidate))
+                {
+                    continue;
+                }
+
+                var commandName = GetCommandDisplayName(candidate);
+
+                if (!commandName.StartsWith(normalizedPrefix, OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                if (seenNames.Add(commandName))
+                {
+                    matches.Add(commandName);
+                }
+            }
+        }
+
+        matches.Sort(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
+        return matches;
+    }
+
     private static ExternalCommandLookupResult ResolveExplicitPath(string currentDirectory, string name)
     {
         var resolvedPath = PathUtilities.ResolvePath(currentDirectory, name);
@@ -57,6 +132,21 @@ public static class ExternalCommandResolver
 
     private static ExternalCommandLookupResult ResolveFromPath(string currentDirectory, string name)
     {
+        var currentPathValue = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
+
+        lock (CacheLock)
+        {
+            if (!string.Equals(_cachedPathValue, currentPathValue, StringComparison.Ordinal))
+            {
+                _cachedPathValue = currentPathValue;
+                _resolvedPathCache = new Dictionary<string, string>(PathStringComparer);
+            }
+            else if (_resolvedPathCache.TryGetValue(name, out var cached))
+            {
+                return new ExternalCommandLookupResult(name, ExternalCommandLookupStatus.Found, cached, IsExplicitPath: false);
+            }
+        }
+
         string? firstNonExecutable = null;
         string? firstDirectory = null;
         var seen = new HashSet<string>(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
@@ -81,6 +171,11 @@ public static class ExternalCommandResolver
 
             if (IsExecutable(candidate))
             {
+                lock (CacheLock)
+                {
+                    _resolvedPathCache[name] = candidate;
+                }
+
                 return new ExternalCommandLookupResult(name, ExternalCommandLookupStatus.Found, candidate, IsExplicitPath: false);
             }
 
@@ -188,5 +283,18 @@ public static class ExternalCommandResolver
             .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
+    }
+
+    private static string GetCommandDisplayName(string path)
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return Path.GetFileName(path);
+        }
+
+        var extension = Path.GetExtension(path);
+        return GetExecutableExtensions().Contains(extension, StringComparer.OrdinalIgnoreCase)
+            ? Path.GetFileNameWithoutExtension(path)
+            : Path.GetFileName(path);
     }
 }

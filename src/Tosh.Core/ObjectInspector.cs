@@ -1,5 +1,4 @@
 using System.Collections;
-using System.Globalization;
 using System.Reflection;
 
 namespace Tosh.Core;
@@ -36,35 +35,50 @@ public sealed class ObjectInspector
         var runtimeType = value.GetType();
         var previewOptions = new ObjectFormattingOptions(ObjectRenderStyle.Compact, MaxDepth: 1, MaxCollectionItemCount: 4, MaxPropertyCount: 4);
         var memberLimit = includeAllMembers ? int.MaxValue : DefaultMemberLimit;
-        var projectedObject = value as ProjectedObject;
+        var hasRecordFields = ShellRecordUtilities.TryGetFields(value, out var recordFields);
+        var shellRecord = value as IShellRecordObject;
+        IShellTypeDescriptor? shellDescriptor = value as IShellTypeDescriptor;
+
+        if (shellDescriptor is null && value is IShellTypedObject typed)
+        {
+            shellDescriptor = typed.ShellTypeDescriptor;
+        }
+
+        if (shellDescriptor is null &&
+            BuiltInShellTypes.TryDescribeRuntimeValue(value, out var builtInDescriptor))
+        {
+            shellDescriptor = builtInDescriptor;
+        }
 
         return new ObjectInspection(
             index,
-            TypeName: runtimeType.FullName ?? runtimeType.Name,
-            AssemblyName: runtimeType.Assembly.GetName().Name,
-            BaseTypeName: runtimeType.BaseType?.FullName,
+            TypeName: shellDescriptor?.ShellTypeName ?? shellRecord?.ShellTypeName ?? runtimeType.FullName ?? runtimeType.Name,
+            AssemblyName: shellDescriptor is null && shellRecord is null ? runtimeType.Assembly.GetName().Name : "ToSh",
+            BaseTypeName: shellDescriptor is null && shellRecord is null ? runtimeType.BaseType?.FullName : "System.Object",
             Display: _formatter.Format(value, previewOptions),
-            IsEnumerable: projectedObject is null && value is IEnumerable and not string,
-            ItemCount: projectedObject is null ? TryGetCount(value) : null,
-            Interfaces: runtimeType.GetInterfaces()
-                .Select(type => type.FullName ?? type.Name)
-                .OrderBy(name => name, StringComparer.Ordinal)
-                .Take(12)
-                .ToArray(),
+            IsEnumerable: !hasRecordFields && value is IEnumerable and not string,
+            ItemCount: hasRecordFields ? null : TryGetCount(value),
+            Interfaces: shellDescriptor is null && shellRecord is null
+                ? runtimeType.GetInterfaces()
+                    .Select(type => type.FullName ?? type.Name)
+                    .OrderBy(name => name, StringComparer.Ordinal)
+                    .Take(12)
+                    .ToArray()
+                : Array.Empty<string>(),
             Members: runtimeType.IsEnum
                 ? GetEnumMembers(value, runtimeType, previewOptions)
-                : projectedObject is not null
-                    ? GetProjectedMembers(projectedObject, memberLimit, previewOptions)
+                : hasRecordFields
+                    ? GetRecordMembers(recordFields, memberLimit, previewOptions)
                     : GetMembers(value, runtimeType, memberLimit, previewOptions),
-            ItemsPreview: projectedObject is null ? GetItemsPreview(value, previewOptions) : Array.Empty<string>(),
-            HasMoreItems: projectedObject is null && HasMoreItems(value, DefaultItemPreviewLimit));
+            ItemsPreview: hasRecordFields ? Array.Empty<string>() : GetItemsPreview(value, previewOptions),
+            HasMoreItems: !hasRecordFields && HasMoreItems(value, DefaultItemPreviewLimit));
     }
 
     private IReadOnlyList<ObjectInspectionMember> GetEnumMembers(object value, Type runtimeType, ObjectFormattingOptions previewOptions)
     {
         var members = new List<ObjectInspectionMember>();
         var underlyingType = Enum.GetUnderlyingType(runtimeType);
-        var numericValue = Convert.ChangeType(value, underlyingType, CultureInfo.InvariantCulture);
+        var numericValue = ReflectionMetadataUtilities.GetEnumNumericValue((Enum)value);
 
         members.Add(new ObjectInspectionMember(
             Name: "NumericValue",
@@ -72,7 +86,7 @@ public sealed class ObjectInspector
             TypeName: underlyingType.FullName ?? underlyingType.Name,
             Display: _formatter.Format(numericValue, previewOptions)));
 
-        var names = GetEnumNames((Enum)value);
+        var names = ReflectionMetadataUtilities.GetEnumNames((Enum)value);
 
         if (names.Count > 0)
         {
@@ -157,13 +171,16 @@ public sealed class ObjectInspector
         return members;
     }
 
-    private IReadOnlyList<ObjectInspectionMember> GetProjectedMembers(ProjectedObject projectedObject, int memberLimit, ObjectFormattingOptions previewOptions)
+    private IReadOnlyList<ObjectInspectionMember> GetRecordMembers(
+        IReadOnlyList<KeyValuePair<string, object?>> fields,
+        int memberLimit,
+        ObjectFormattingOptions previewOptions)
     {
-        return projectedObject.Fields
+        return fields
             .Take(memberLimit)
             .Select(field => new ObjectInspectionMember(
-                field.Name,
-                MemberKind: "projection",
+                field.Key,
+                MemberKind: "record",
                 TypeName: field.Value?.GetType().FullName ?? "null",
                 Display: _formatter.Format(field.Value, previewOptions)))
             .ToArray();
@@ -236,20 +253,5 @@ public sealed class ObjectInspector
         {
             return null;
         }
-    }
-
-    private static IReadOnlyList<string> GetEnumNames(Enum value)
-    {
-        var text = value.ToString();
-
-        if (string.IsNullOrWhiteSpace(text) ||
-            long.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out _))
-        {
-            return Array.Empty<string>();
-        }
-
-        return text
-            .Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
-            .ToArray();
     }
 }

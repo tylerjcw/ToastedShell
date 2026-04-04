@@ -19,12 +19,12 @@ public sealed class UnameCommand : ShellCommand
         var fields = selectors
             .Select(selector => selector switch
             {
-                's' => new ProjectedField("SystemName", "SystemName", info.SystemName),
-                'n' => new ProjectedField("NodeName", "NodeName", info.NodeName),
-                'r' => new ProjectedField("Release", "Release", info.Release),
-                'v' => new ProjectedField("Version", "Version", info.Version),
-                'm' => new ProjectedField("Machine", "Machine", info.Machine),
-                'o' => new ProjectedField("OperatingSystem", "OperatingSystem", info.OperatingSystem),
+                's' => new KeyValuePair<string, object?>("SystemName", info.SystemName),
+                'n' => new KeyValuePair<string, object?>("NodeName", info.NodeName),
+                'r' => new KeyValuePair<string, object?>("Release", info.Release),
+                'v' => new KeyValuePair<string, object?>("Version", info.Version),
+                'm' => new KeyValuePair<string, object?>("Machine", info.Machine),
+                'o' => new KeyValuePair<string, object?>("OperatingSystem", info.OperatingSystem),
                 _ => throw new InvalidOperationException($"Unsupported uname selector '-{selector}'."),
             })
             .ToArray();
@@ -35,7 +35,7 @@ public sealed class UnameCommand : ShellCommand
             yield break;
         }
 
-        yield return new ProjectedObject(fields);
+        yield return ShellRecordUtilities.CreateExpando(fields);
     }
 
     private static IReadOnlyList<char> ParseSelectors(IReadOnlyList<object?> arguments)

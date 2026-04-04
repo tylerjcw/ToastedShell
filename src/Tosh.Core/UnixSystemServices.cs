@@ -41,6 +41,11 @@ internal static class UnixSystemServices
         return new UserIdentityInfo(user, uid, euid, group, gid, egid, groups);
     }
 
+    public static FileSystemPrincipalInfo? TryGetUser(uint uid)
+    {
+        return TryGetPasswd(uid);
+    }
+
     public static IReadOnlyList<FileSystemUsageInfo> GetFileSystemUsage()
     {
         if (OperatingSystem.IsLinux() && File.Exists("/proc/self/mountinfo"))
@@ -59,6 +64,7 @@ internal static class UnixSystemServices
                 mountedOn: drive.Name,
                 type: SafeGet(() => drive.DriveFormat, (string?)null),
                 driveType: SafeGet(() => drive.DriveType, (DriveType?)null),
+                mountRoot: "/",
                 size: TryGetStorageSize(() => drive.TotalSize),
                 used: TryGetUsedStorageSize(drive),
                 available: TryGetStorageSize(() => drive.AvailableFreeSpace)))
@@ -191,6 +197,7 @@ internal static class UnixSystemServices
                 mountedOn: mountInfo.MountedOn,
                 type: mountInfo.Type,
                 driveType: driveType,
+                mountRoot: mountInfo.Root,
                 size: size,
                 used: used,
                 available: available));
@@ -207,6 +214,7 @@ internal static class UnixSystemServices
         string mountedOn,
         string? type,
         DriveType? driveType,
+        string? mountRoot,
         StorageSize? size,
         StorageSize? used,
         StorageSize? available)
@@ -231,7 +239,24 @@ internal static class UnixSystemServices
             used,
             available,
             usePercent,
-            driveType);
+            driveType,
+            IsLocal: DetermineIsLocal(type, driveType),
+            MountRoot: mountRoot);
+    }
+
+    private static bool DetermineIsLocal(string? type, DriveType? driveType)
+    {
+        if (driveType == DriveType.Network)
+        {
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(type))
+        {
+            return true;
+        }
+
+        return !RemoteFileSystemTypes.Contains(type);
     }
 
     private static DriveInfo? TryCreateDriveInfo(string mountedOn)
@@ -245,6 +270,25 @@ internal static class UnixSystemServices
             return null;
         }
     }
+
+    private static readonly HashSet<string> RemoteFileSystemTypes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "nfs",
+        "nfs4",
+        "cifs",
+        "smbfs",
+        "smb3",
+        "sshfs",
+        "fuse.sshfs",
+        "9p",
+        "ceph",
+        "afs",
+        "gfs",
+        "glusterfs",
+        "davfs",
+        "ftpfs",
+        "curlftpfs",
+    };
 
     private static bool TryParseMountInfo(string line, out LinuxMountInfo mountInfo)
     {
@@ -269,6 +313,7 @@ internal static class UnixSystemServices
 
         mountInfo = new LinuxMountInfo(
             FileSystem: UnescapeMountField(rightParts[1]),
+            Root: UnescapeMountField(leftParts[3]),
             MountedOn: UnescapeMountField(leftParts[4]),
             Type: rightParts[0]);
         return true;
@@ -319,7 +364,7 @@ internal static class UnixSystemServices
         }
     }
 
-    private readonly record struct LinuxMountInfo(string FileSystem, string MountedOn, string Type);
+    private readonly record struct LinuxMountInfo(string FileSystem, string Root, string MountedOn, string Type);
 
     private static class Interop
     {

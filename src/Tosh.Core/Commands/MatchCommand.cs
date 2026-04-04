@@ -5,7 +5,7 @@ namespace Tosh.Core.Commands;
 public sealed class MatchCommand : ShellCommand
 {
     public MatchCommand()
-        : base("match", "Matches text with a regular expression and returns structured match objects.", "match [-i] <pattern> [text ...]") { }
+        : base("match", "Matches text with a regular expression and returns shell record objects.", "match [-i] [-m] [-s] [-x] [--explicit-capture] <pattern|regex> [text ...]") { }
 
     public override async IAsyncEnumerable<object?> ExecuteAsync(CommandContext context)
     {
@@ -16,11 +16,10 @@ public sealed class MatchCommand : ShellCommand
             throw new InvalidOperationException("match requires a regular expression pattern.");
         }
 
-        var pattern = CommandArguments.RequireString(parsed.Positionals, 0, "pattern");
+        var regex = ShellRegexUtilities.RequireRegex(context, parsed, parsed.Positionals[0], "pattern", timeout: TimeSpan.FromSeconds(5));
         var inputs = parsed.Positionals.Count > 1
             ? parsed.Positionals.Skip(1).Select(value => new TextInputLine(value?.ToString() ?? string.Empty, null, 1)).ToArray()
             : await TextInputUtilities.ReadLinesFromInputAsync(context, "match expects text from the pipeline or explicit text arguments.");
-        var regex = new Regex(pattern, RegexOptions.Compiled | (parsed.HasFlag("i") ? RegexOptions.IgnoreCase : RegexOptions.None));
         var namedGroups = regex.GetGroupNames().Where(name => !int.TryParse(name, out _)).ToArray();
 
         foreach (var input in inputs)
@@ -32,15 +31,15 @@ public sealed class MatchCommand : ShellCommand
                     continue;
                 }
 
-                var fields = new List<ProjectedField>
+                var fields = new List<KeyValuePair<string, object?>>
                 {
-                    new("Value", "Value", match.Value),
-                    new("Index", "Index", match.Index),
-                    new("LineNumber", "LineNumber", input.LineNumber),
+                    new("Value", match.Value),
+                    new("Index", match.Index),
+                    new("LineNumber", input.LineNumber),
                 };
 
-                fields.AddRange(namedGroups.Select(name => new ProjectedField(name, name, match.Groups[name].Success ? match.Groups[name].Value : null)));
-                yield return new ProjectedObject(fields);
+                fields.AddRange(namedGroups.Select(name => new KeyValuePair<string, object?>(name, match.Groups[name].Success ? match.Groups[name].Value : null)));
+                yield return ShellRecordUtilities.CreateExpando(fields);
             }
         }
     }

@@ -10,7 +10,8 @@ public sealed class SkipCommand : ShellCommand
         var count = GetCount(context);
         var skipped = 0;
 
-        await foreach (var item in context.Input.WithCancellation(context.CancellationToken))
+        await foreach (var item in ShellIterationUtilities.ReplaySingleInputCollectionAsync(context.Input, context.CancellationToken)
+                           .WithCancellation(context.CancellationToken))
         {
             if (skipped < count)
             {

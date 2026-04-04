@@ -2,7 +2,7 @@ using Tosh.Core;
 
 namespace Tosh.Language.Commands;
 
-public sealed class FunctionCommand : IShellCommand, ICommandResolutionMetadata
+public sealed class FunctionCommand : IShellCommand, ICommandResolutionMetadata, IShellCallable
 {
     private readonly FunctionDefinition _definition;
     private readonly ToshEngine _engine;
@@ -23,21 +23,43 @@ public sealed class FunctionCommand : IShellCommand, ICommandResolutionMetadata
 
     public CommandResolutionKind ResolutionKind => CommandResolutionKind.Function;
 
+    public string CallableName => Name;
+
+    internal FunctionDefinition Definition => _definition;
+
+    public int RequiredParameterCount => _definition.Parameters.Count(parameter => !parameter.IsOptional && !parameter.IsRest);
+
+    public int? MaximumParameterCount => _definition.Parameters.Count > 0 && _definition.Parameters[^1].IsRest
+        ? null
+        : _definition.Parameters.Count;
+
     public IAsyncEnumerable<object?> ExecuteAsync(CommandContext context)
     {
         return _engine.ExecuteFunctionAsync(_definition, context);
     }
 
-    private string BuildUsage()
+    public IAsyncEnumerable<object?> InvokeAsync(CommandContext context) => ExecuteAsync(context);
+
+    internal static string FormatUsage(FunctionDefinition definition)
     {
         var parameters = string.Join(
             " ",
-            _definition.Parameters.Select(parameter => parameter.TypeName is null
-                ? $"<{parameter.Name}>"
-                : $"<{parameter.Name}: {parameter.TypeName}>"));
-        var returnType = _definition.ReturnTypeName is null ? string.Empty : $" -> {_definition.ReturnTypeName}";
+            definition.Parameters.Select(parameter =>
+            {
+                var optional = parameter.IsOptional ? "?" : "";
+                var rest = parameter.IsRest ? "..." : "";
+                return parameter.TypeName is null
+                    ? $"<{parameter.Name}{optional}{rest}>"
+                    : $"<{parameter.Name}{optional}{rest}: {parameter.TypeName}>";
+            }));
+        var returnType = definition.ReturnTypeName is null ? string.Empty : $" -> {definition.ReturnTypeName}";
         return string.IsNullOrEmpty(parameters)
-            ? $"{Name}{returnType}"
-            : $"{Name} {parameters}{returnType}";
+            ? $"{definition.Name}{returnType}"
+            : $"{definition.Name} {parameters}{returnType}";
+    }
+
+    private string BuildUsage()
+    {
+        return FormatUsage(_definition);
     }
 }

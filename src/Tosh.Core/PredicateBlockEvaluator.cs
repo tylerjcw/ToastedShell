@@ -10,45 +10,35 @@ internal static class PredicateBlockEvaluator
         var executor = context.Runtime.BlockExecutor
                        ?? throw new InvalidOperationException("Block execution is not available in this runtime.");
 
-        var outputs = new List<object?>();
+        var hasValue = false;
 
-        await foreach (var value in executor.ExecuteAsync(
+        await foreach (var output in executor.ExecuteAsync(
                            block,
                            new Dictionary<string, object?>(StringComparer.Ordinal)
                            {
-                               ["it"] = item,
+                               ["_"] = item,
                            },
                            context.CancellationToken)
                            .WithCancellation(context.CancellationToken))
         {
-            outputs.Add(value);
+            if (!TypeConversion.TryConvert(output, typeof(bool), out var converted) || converted is not bool value)
+            {
+                throw context.CreateDiagnostic(
+                    code: "tosh::runtime::predicate_requires_boolean",
+                    title: "Predicate expressions must return boolean values.",
+                    argumentIndex: 0,
+                    label: "this predicate did not evaluate to true or false",
+                    help: "return booleans, for example with 'Contains(...)', '==', '&&', or '!'.");
+            }
+
+            hasValue = true;
+
+            if (!value)
+            {
+                return false;
+            }
         }
 
-        if (outputs.Count == 0)
-        {
-            return false;
-        }
-
-        if (outputs.Count != 1)
-        {
-            throw context.CreateDiagnostic(
-                code: "tosh::runtime::predicate_requires_single_value",
-                title: "Predicate expressions must produce exactly one value for each input object.",
-                argumentIndex: 0,
-                label: $"this predicate produced {outputs.Count} values for one object",
-                help: "return a single boolean value from the predicate.");
-        }
-
-        if (!TypeConversion.TryConvert(outputs[0], typeof(bool), out var converted) || converted is not bool matches)
-        {
-            throw context.CreateDiagnostic(
-                code: "tosh::runtime::predicate_requires_boolean",
-                title: "Predicate expressions must return a boolean value.",
-                argumentIndex: 0,
-                label: "this predicate did not evaluate to true or false",
-                help: "return a boolean, for example with 'Contains(...)' or '=='.");
-        }
-
-        return matches;
+        return hasValue;
     }
 }

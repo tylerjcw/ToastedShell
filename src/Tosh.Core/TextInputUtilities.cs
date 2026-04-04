@@ -4,6 +4,30 @@ namespace Tosh.Core;
 
 internal static class TextInputUtilities
 {
+    public static async Task<IReadOnlyList<string>> ReadScalarValuesFromInputAsync(
+        CommandContext context,
+        string? missingInputMessage = null,
+        bool allowEmpty = false)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
+        var inputValues = await AsyncEnumerableExtensions.ToListAsync(context.Input, context.CancellationToken);
+
+        if (inputValues.Count == 0)
+        {
+            if (allowEmpty)
+            {
+                return Array.Empty<string>();
+            }
+
+            throw new InvalidOperationException(missingInputMessage ?? "This command expects scalar input.");
+        }
+
+        return inputValues
+            .Select(ExternalTextSerializer.Serialize)
+            .ToArray();
+    }
+
     public static async Task<IReadOnlyList<TextInputLine>> ReadLinesFromInputAsync(
         CommandContext context,
         string? missingInputMessage = null)

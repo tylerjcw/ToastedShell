@@ -1,0 +1,68 @@
+{
+	"name": "tosh-lang",
+	"displayName": "ToastedShell (tosh)",
+	"description": "Syntax highlighting for ToastedShell (.tosh) scripts",
+	"version": "0.1.0",
+	"publisher": "tosh",
+	"engines": {
+		"vscode": "^1.75.0"
+	},
+	"dependencies": {
+		"vscode-languageclient": "8.1.0"
+	},
+	"categories": [
+		"Programming Languages"
+	],
+	"main": "./extension.js",
+	"activationEvents": [
+		"onLanguage:tosh"
+	],
+	"contributes": {
+		"languages": [
+			{
+				"id": "tosh",
+				"aliases": [
+					"ToastedShell",
+					"tosh"
+				],
+				"extensions": [
+					".tosh"
+				],
+				"configuration": "./language-configuration.json"
+			}
+		],
+		"grammars": [
+			{
+				"language": "tosh",
+				"scopeName": "source.tosh",
+				"path": "./syntaxes/tosh.tmLanguage.json"
+			}
+		],
+		"snippets": [
+			{
+				"language": "tosh",
+				"path": "./snippets/tosh.code-snippets"
+			}
+		],
+		"configuration": {
+			"title": "ToSh",
+			"properties": {
+				"tosh.languageServer.enabled": {
+					"type": "boolean",
+					"default": true,
+					"description": "Enable the ToSh language server when a workspace server or configured server path is available."
+				},
+				"tosh.languageServer.dotnetPath": {
+					"type": "string",
+					"default": "dotnet",
+					"description": "Path to the dotnet executable used to start the ToSh language server."
+				},
+				"tosh.languageServer.serverPath": {
+					"type": "string",
+					"default": "",
+					"description": "Optional path to a Tosh.Lsp.dll or Tosh.Lsp.csproj. Relative paths are resolved from the first workspace folder."
+				}
+			}
+		}
+	}
+}
