@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[CommandCategory("Filesystem")]
 public sealed class LengthCommand : ShellCommand
 {
     public LengthCommand()

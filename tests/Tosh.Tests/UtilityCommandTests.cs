@@ -1,5 +1,8 @@
 using System.Diagnostics;
 using System.Net;
+using System.Net.Http;
+using System.Net.Http.Headers;
+using System.Text;
 using Tosh.Core;
 using Tosh.Language;
 
@@ -449,6 +452,287 @@ public sealed class UtilityCommandTests
         var first = Assert.IsType<SystemdNetworkLinkInfo>(results[0]);
         Assert.False(string.IsNullOrWhiteSpace(first.Link));
         Assert.False(string.IsNullOrWhiteSpace(first.SetupState));
+    }
+
+    [Fact]
+    public async Task Http_get_can_decode_json_responses()
+    {
+        using var server = await TestHttpServer.StartAsync(async context =>
+        {
+            context.Response.StatusCode = 200;
+            context.Response.ContentType = "application/json; charset=utf-8";
+
+            var payload = Encoding.UTF8.GetBytes("""{"Name":"Toast","Count":2}""");
+            context.Response.ContentLength64 = payload.Length;
+            await context.Response.OutputStream.WriteAsync(payload);
+            context.Response.Close();
+        });
+
+        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var results = await engine.ExecuteToListAsync($"http get {server.Url} --as json");
+
+        var record = Assert.IsAssignableFrom<IDictionary<string, object?>>(Assert.Single(results));
+        Assert.Equal("Toast", record["Name"]);
+        Assert.Equal(2L, record["Count"]);
+    }
+
+    [Fact]
+    public async Task Http_post_can_send_json_and_return_structured_response()
+    {
+        string? requestBody = null;
+        string? requestHeader = null;
+
+        using var server = await TestHttpServer.StartAsync(async context =>
+        {
+            requestHeader = context.Request.Headers["X-Test"];
+
+            using var reader = new StreamReader(context.Request.InputStream, context.Request.ContentEncoding);
+            requestBody = await reader.ReadToEndAsync();
+
+            context.Response.StatusCode = 201;
+            context.Response.ContentType = "application/json; charset=utf-8";
+            context.Response.Headers["X-Reply"] = "beta";
+
+            var payload = Encoding.UTF8.GetBytes("""{"ok":true}""");
+            context.Response.ContentLength64 = payload.Length;
+            await context.Response.OutputStream.WriteAsync(payload);
+            context.Response.Close();
+        });
+
+        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var results = await engine.ExecuteToListAsync($"http post {server.Url} --json ({{ Name = \"Toast\" }}) --header X-Test alpha --as response");
+
+        var response = Assert.IsType<HttpResponseInfo>(Assert.Single(results));
+        Assert.Equal(201, response.StatusCode);
+        Assert.Equal("POST", response.Method);
+        Assert.True(response.IsSuccess);
+        Assert.Equal("application/json; charset=utf-8", response.ContentType);
+        Assert.Equal("alpha", requestHeader);
+        Assert.Equal("""{"Name":"Toast"}""", requestBody);
+
+        var body = Assert.IsAssignableFrom<IDictionary<string, object?>>(response.Body);
+        Assert.Equal(true, body["ok"]);
+        Assert.Equal("beta", Assert.Single(response.Headers["X-Reply"]));
+    }
+
+    [Fact]
+    public async Task Http_request_and_send_support_request_objects_and_out_files()
+    {
+        using var temporaryDirectory = new TemporaryDirectory();
+        var outputPath = Path.Combine(temporaryDirectory.Path, "response.txt");
+
+        using var server = await TestHttpServer.StartAsync(async context =>
+        {
+            context.Response.StatusCode = 200;
+            context.Response.ContentType = "text/plain; charset=utf-8";
+
+            var payload = Encoding.UTF8.GetBytes("hello from http");
+            context.Response.ContentLength64 = payload.Length;
+            await context.Response.OutputStream.WriteAsync(payload);
+            context.Response.Close();
+        });
+
+        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var requestResults = await engine.ExecuteToListAsync($"http request GET {server.Url} --header Accept text/plain");
+        var request = Assert.IsType<HttpRequestDefinition>(Assert.Single(requestResults));
+        Assert.Equal("GET", request.Method);
+        Assert.Equal(server.Url, request.RequestUri);
+        Assert.Equal("text/plain", Assert.Single(request.Headers["Accept"]));
+
+        var sendResults = await engine.ExecuteToListAsync($"""http request GET {server.Url} --header Accept text/plain | http send --as text --out {Quote(outputPath)}""");
+        var responseText = Assert.IsType<ShellTextLine>(Assert.Single(sendResults));
+
+        Assert.Equal("hello from http", responseText.Text);
+        Assert.Equal("hello from http", await File.ReadAllTextAsync(outputPath));
+    }
+
+    [Fact]
+    public async Task Http_serve_can_host_static_files_and_be_stopped()
+    {
+        using var temporaryDirectory = new TemporaryDirectory();
+        var filePath = Path.Combine(temporaryDirectory.Path, "hello.txt");
+        await File.WriteAllTextAsync(filePath, "hello from server");
+
+        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var results = await engine.ExecuteToListAsync($"""http serve {Quote(temporaryDirectory.Path)} --browse""");
+        var handle = Assert.IsType<HttpFileServerHandle>(Assert.Single(results));
+
+        try
+        {
+            using var client = new HttpClient();
+            var fileText = await client.GetStringAsync(new Uri(handle.Url, "hello.txt"));
+            var directoryText = await client.GetStringAsync(handle.Url);
+
+            Assert.Equal("hello from server", fileText);
+            Assert.Contains("hello.txt", directoryText, StringComparison.Ordinal);
+            Assert.True(handle.IsOpen);
+            Assert.True(handle.RequestCount >= 2);
+
+            var serverResults = await engine.ExecuteToListAsync("http servers");
+            Assert.Contains(serverResults, item => item is HttpFileServerHandle server && server.Id == handle.Id);
+
+            var stopResults = await engine.ExecuteToListAsync($"http stop {handle.Id}");
+            var stopped = Assert.IsType<HttpFileServerHandle>(Assert.Single(stopResults));
+            Assert.Equal(handle.Id, stopped.Id);
+            Assert.False(stopped.IsOpen);
+        }
+        finally
+        {
+            handle.Dispose();
+        }
+    }
+
+    [Fact]
+    public async Task Http_serve_can_accept_uploads_and_auto_stop_after_one_request()
+    {
+        using var temporaryDirectory = new TemporaryDirectory();
+
+        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var results = await engine.ExecuteToListAsync($"""http serve {Quote(temporaryDirectory.Path)} --upload --once""");
+        var handle = Assert.IsType<HttpFileServerHandle>(Assert.Single(results));
+
+        try
+        {
+            using var client = new HttpClient();
+            using var content = new StringContent("uploaded from test", Encoding.UTF8, "text/plain");
+            using var response = await client.PutAsync(new Uri(handle.Url, "nested/upload.txt"), content);
+
+            Assert.True(response.IsSuccessStatusCode);
+            Assert.Equal("uploaded from test", await File.ReadAllTextAsync(Path.Combine(temporaryDirectory.Path, "nested", "upload.txt")));
+
+            for (var attempt = 0; attempt < 20 && handle.IsOpen; attempt++)
+            {
+                await Task.Delay(25);
+            }
+
+            Assert.False(handle.IsOpen);
+        }
+        finally
+        {
+            handle.Dispose();
+        }
+    }
+
+    [Fact]
+    public async Task Http_serve_can_require_tokens_and_expose_share_urls()
+    {
+        using var temporaryDirectory = new TemporaryDirectory();
+        var filePath = Path.Combine(temporaryDirectory.Path, "hello.txt");
+        await File.WriteAllTextAsync(filePath, "protected hello");
+
+        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var results = await engine.ExecuteToListAsync($"""http serve {Quote(temporaryDirectory.Path)} --browse --token secret-token""");
+        var handle = Assert.IsType<HttpFileServerHandle>(Assert.Single(results));
+
+        try
+        {
+            Assert.True(handle.RequiresToken);
+            Assert.Equal("secret-token", handle.AccessToken);
+            Assert.Contains("token=secret-token", handle.ShareUrl.ToString(), StringComparison.Ordinal);
+
+            using var unauthorizedClient = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false });
+            using var unauthorizedResponse = await unauthorizedClient.GetAsync(handle.Url);
+            Assert.Equal(HttpStatusCode.Unauthorized, unauthorizedResponse.StatusCode);
+            var unauthorizedText = await unauthorizedResponse.Content.ReadAsStringAsync();
+            Assert.Contains("Authorization required", unauthorizedText, StringComparison.Ordinal);
+
+            using var authorizedClient = new HttpClient();
+            var directoryHtml = await authorizedClient.GetStringAsync(handle.ShareUrl);
+            authorizedClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", "SECRETTOKEN");
+            var fileText = await authorizedClient.GetStringAsync(new Uri(handle.Url, "hello.txt"));
+
+            Assert.Contains("secret-token", directoryHtml, StringComparison.Ordinal);
+            Assert.Contains("Hyphens and casing are ignored", directoryHtml, StringComparison.Ordinal);
+            Assert.Contains("Share URL", directoryHtml, StringComparison.Ordinal);
+            Assert.Contains("Capabilities", directoryHtml, StringComparison.Ordinal);
+            Assert.Equal("protected hello", fileText);
+        }
+        finally
+        {
+            handle.Dispose();
+        }
+    }
+
+    [Fact]
+    public async Task Http_serve_can_render_browser_upload_page_and_accept_multipart_uploads()
+    {
+        using var temporaryDirectory = new TemporaryDirectory();
+        await File.WriteAllTextAsync(Path.Combine(temporaryDirectory.Path, "existing.txt"), "already here");
+
+        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var results = await engine.ExecuteToListAsync($"""http serve {Quote(temporaryDirectory.Path)} --upload --generate-token""");
+        var handle = Assert.IsType<HttpFileServerHandle>(Assert.Single(results));
+
+        try
+        {
+            Assert.True(handle.UploadEnabled);
+            Assert.True(handle.RequiresToken);
+            Assert.NotNull(handle.AccessToken);
+            Assert.Matches("^[a-z]+-[a-z]+$", handle.AccessToken!);
+
+            using var client = new HttpClient();
+            var directoryHtml = await client.GetStringAsync(handle.ShareUrl);
+
+            Assert.Contains("Upload files", directoryHtml, StringComparison.Ordinal);
+            Assert.Contains("multipart/form-data", directoryHtml, StringComparison.Ordinal);
+            Assert.Contains("curl -T ./file.txt", directoryHtml, StringComparison.Ordinal);
+            Assert.Contains("existing.txt", directoryHtml, StringComparison.Ordinal);
+
+            using var form = new MultipartFormDataContent();
+            form.Add(new ByteArrayContent(Encoding.UTF8.GetBytes("browser upload one")), "file", "browser-one.txt");
+            form.Add(new ByteArrayContent(Encoding.UTF8.GetBytes("browser upload two")), "file", "browser-two.txt");
+
+            using var response = await client.PostAsync(handle.ShareUrl, form);
+            Assert.True(response.IsSuccessStatusCode);
+
+            var savedNames = Directory.GetFiles(temporaryDirectory.Path)
+                .Select(Path.GetFileName)
+                .OrderBy(name => name, StringComparer.Ordinal)
+                .ToArray();
+            Assert.Contains("browser-one.txt", savedNames);
+            Assert.Contains("browser-two.txt", savedNames);
+            Assert.Equal("browser upload one", await File.ReadAllTextAsync(Path.Combine(temporaryDirectory.Path, "browser-one.txt")));
+            Assert.Equal("browser upload two", await File.ReadAllTextAsync(Path.Combine(temporaryDirectory.Path, "browser-two.txt")));
+
+            var refreshedHtml = await client.GetStringAsync(handle.ShareUrl);
+            Assert.Contains("browser-one.txt", refreshedHtml, StringComparison.Ordinal);
+            Assert.Contains("browser-two.txt", refreshedHtml, StringComparison.Ordinal);
+        }
+        finally
+        {
+            handle.Dispose();
+        }
+    }
+
+    [Fact]
+    public async Task Http_serve_lan_binding_keeps_local_url_and_exposes_share_urls()
+    {
+        using var temporaryDirectory = new TemporaryDirectory();
+        await File.WriteAllTextAsync(Path.Combine(temporaryDirectory.Path, "hello.txt"), "lan hello");
+
+        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var results = await engine.ExecuteToListAsync($"""http serve {Quote(temporaryDirectory.Path)} --lan --browse""");
+        var handle = Assert.IsType<HttpFileServerHandle>(Assert.Single(results));
+
+        try
+        {
+            Assert.Equal("0.0.0.0", handle.BindAddress);
+            Assert.Equal("localhost", handle.Url.Host);
+            Assert.NotEmpty(handle.ShareUrls);
+            Assert.All(handle.ShareUrls, uri =>
+            {
+                Assert.Equal("http", uri.Scheme);
+                Assert.Equal(handle.Port, uri.Port);
+            });
+
+            using var client = new HttpClient();
+            var fileText = await client.GetStringAsync(new Uri(handle.Url, "hello.txt"));
+            Assert.Equal("lan hello", fileText);
+        }
+        finally
+        {
+            handle.Dispose();
+        }
     }
 
     [Fact]
@@ -1318,6 +1602,71 @@ public sealed class UtilityCommandTests
             if (Directory.Exists(Path))
             {
                 Directory.Delete(Path, recursive: true);
+            }
+        }
+    }
+
+    private sealed class TestHttpServer : IDisposable
+    {
+        private readonly HttpListener _listener;
+        private readonly Task _backgroundTask;
+
+        private TestHttpServer(HttpListener listener, Uri url, Func<HttpListenerContext, Task> handler)
+        {
+            _listener = listener;
+            Url = url;
+            _backgroundTask = Task.Run(async () =>
+            {
+                while (_listener.IsListening)
+                {
+                    HttpListenerContext context;
+
+                    try
+                    {
+                        context = await _listener.GetContextAsync();
+                    }
+                    catch (HttpListenerException)
+                    {
+                        break;
+                    }
+                    catch (ObjectDisposedException)
+                    {
+                        break;
+                    }
+
+                    await handler(context);
+                }
+            });
+        }
+
+        public Uri Url { get; }
+
+        public static Task<TestHttpServer> StartAsync(Func<HttpListenerContext, Task> handler)
+        {
+            var portProbe = new System.Net.Sockets.TcpListener(IPAddress.Loopback, 0);
+            portProbe.Start();
+            var port = ((IPEndPoint)portProbe.LocalEndpoint).Port;
+            portProbe.Stop();
+
+            var prefix = $"http://127.0.0.1:{port}/";
+            var listener = new HttpListener();
+            listener.Prefixes.Add(prefix);
+            listener.Start();
+
+            return Task.FromResult(new TestHttpServer(listener, new Uri(prefix), handler));
+        }
+
+        public void Dispose()
+        {
+            _listener.Stop();
+            _listener.Close();
+
+            try
+            {
+                _backgroundTask.Wait(TimeSpan.FromSeconds(5));
+            }
+            catch
+            {
             }
         }
     }

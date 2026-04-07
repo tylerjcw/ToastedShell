@@ -1,3 +1,4 @@
+using Tosh.LanguageServices;
 using Tosh.Lsp;
 
 var useStdio = args.Any(argument => string.Equals(argument, "--stdio", StringComparison.OrdinalIgnoreCase));

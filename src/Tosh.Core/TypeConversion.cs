@@ -212,6 +212,12 @@ public static class TypeConversion
             return true;
         }
 
+        if (effectiveType == typeof(TimeSpan) && value is byte or short or int or long or float or double or decimal)
+        {
+            converted = TimeSpan.FromSeconds(Convert.ToDouble(value));
+            return true;
+        }
+
         if (effectiveType == typeof(TemporalAmount))
         {
             if (value is string temporalText && TemporalParser.TryParseTemporalAmount(temporalText, out var parsedTemporalAmount))

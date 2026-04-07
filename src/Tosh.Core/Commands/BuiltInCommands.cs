@@ -1,3 +1,5 @@
+using Tosh.Core.Formats;
+
 namespace Tosh.Core.Commands;
 
 public static class BuiltInCommands
@@ -5,6 +7,14 @@ public static class BuiltInCommands
     public static void RegisterDefaults(ShellCommandRegistry commands)
     {
         ArgumentNullException.ThrowIfNull(commands);
+
+        var formats = new DataFormatRegistry();
+        formats.Register(new JsonDataFormat());
+        formats.Register(new DelimitedDataFormat("csv", ','));
+        formats.Register(new DelimitedDataFormat("tsv", '\t'));
+        formats.Register(new DelimitedDataFormat("delimited", ',', ["delim"]));
+        formats.Register(new XmlDataFormat());
+        formats.Register(new TomlDataFormat());
 
         commands.Register(new HelpCommand());
         commands.Register(new AproposCommand());
@@ -47,6 +57,7 @@ public static class BuiltInCommands
         commands.Register(new SeqCommand());
         commands.Register(new SleepCommand());
         commands.Register(new PingCommand());
+        commands.Register(new HttpCommand(formats));
         commands.Register(new IpCommand());
         commands.Register(new SystemctlCommand());
         commands.Register(new JournalctlCommand());
@@ -103,10 +114,8 @@ public static class BuiltInCommands
         commands.Register(new TranslateCommand());
         commands.Register(new GrepCommand());
         commands.Register(new GlobCommand());
-        commands.Register(new FromJsonCommand());
-        commands.Register(new FromCsvCommand());
-        commands.Register(new FromTsvCommand());
-        commands.Register(new FromXmlCommand());
+        commands.Register(new FromCommand(formats));
+        commands.Register(new ToCommand(formats));
         commands.Register(new ParseCommand());
         commands.Register(new MakeDirectoryCommand());
         commands.Register(new TouchCommand());
@@ -167,8 +176,6 @@ public static class BuiltInCommands
         commands.Register(new DateCommand());
         commands.Register(new TimeSpanCommand());
         commands.Register(new GuidCommand());
-        commands.Register(new ToJsonCommand());
-        commands.Register(new ToCsvCommand());
         commands.Register(new SplitCommand());
         commands.Register(new JoinLinesCommand());
         commands.Register(new ReplaceCommand());

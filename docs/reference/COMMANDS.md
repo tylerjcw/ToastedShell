@@ -7,13 +7,22 @@ ToSh has a large built-in command surface. This page is the curated command map:
 For the full live surface of any command, including flags, aliases, and examples, use:
 
 - `help <command>`
+- `help --cli`
 - `help browse`
+
+In the interactive REPL:
+
+- `F1` opens `help --cli` seeded from the token under the cursor
+- `Alt+H` opens the same inline help browser on terminals that do not expose function keys cleanly
+- `F2` tries to inline-inspect the reference under the cursor
+- `Alt+I` opens the same inline inspector on terminals that do not expose function keys cleanly
+- `i` inside inline help or inspect inserts back into the active line at the cursor
 
 ## Discovery And Session
 
 | Commands | Purpose |
 |----------|---------|
-| `help`, `apropos` | Help lookup, search, and the full-screen help browser |
+| `help`, `apropos` | Help lookup, search, the inline fuzzy help browser, and the full-screen help browser |
 | `history`, `history-search` | Interactive and persisted history management |
 | `config` | Live config access, reload, init, and the full-screen config editor |
 | `view` | Display mode and per-type rendering preferences |
@@ -22,6 +31,7 @@ For the full live surface of any command, including flags, aliases, and examples
 Useful examples:
 
 ```tosh
+help --cli
 help browse
 help summarize
 apropos prompt

@@ -46,5 +46,10 @@ public enum SyntaxTokenKind
     DotDot,                 // ..
 
     // Process substitution
-    LessThanOpenParen,      // <(
+    LessThanOpenParen,
+    DoublePipe,
+    DoubleAmpersand,      // <(
+
+    // Unit literals (e.g. 100`m, 9.8`m/s^2)
+    UnitLiteral,
 }

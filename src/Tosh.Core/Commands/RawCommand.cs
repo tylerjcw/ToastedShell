@@ -2,6 +2,7 @@ using System.Globalization;
 
 namespace Tosh.Core.Commands;
 
+[CommandCategory("Text")]
 public sealed class RawCommand : ShellCommand, IImplicitGlobCommand
 {
     public RawCommand()

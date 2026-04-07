@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[CommandCategory("Pipeline")]
 public sealed class QuantifierCommand : ShellCommand
 {
     private readonly QuantifierKind _kind;
@@ -25,52 +26,52 @@ public sealed class QuantifierCommand : ShellCommand
         switch (_kind)
         {
             case QuantifierKind.Any:
-            {
-                await foreach (var item in ShellIterationUtilities.ReplaySingleInputCollectionAsync(context.Input, context.CancellationToken)
-                                   .WithCancellation(context.CancellationToken))
                 {
-                    if (await EvaluatePredicateAsync(context, operation, item))
+                    await foreach (var item in ShellIterationUtilities.ReplaySingleInputCollectionAsync(context.Input, context.CancellationToken)
+                                       .WithCancellation(context.CancellationToken))
                     {
-                        yield return true;
-                        yield break;
+                        if (await EvaluatePredicateAsync(context, operation, item))
+                        {
+                            yield return true;
+                            yield break;
+                        }
                     }
-                }
 
-                yield return false;
-                yield break;
-            }
+                    yield return false;
+                    yield break;
+                }
 
             case QuantifierKind.All:
-            {
-                await foreach (var item in ShellIterationUtilities.ReplaySingleInputCollectionAsync(context.Input, context.CancellationToken)
-                                   .WithCancellation(context.CancellationToken))
                 {
-                    if (!await EvaluatePredicateAsync(context, operation, item))
+                    await foreach (var item in ShellIterationUtilities.ReplaySingleInputCollectionAsync(context.Input, context.CancellationToken)
+                                       .WithCancellation(context.CancellationToken))
                     {
-                        yield return false;
-                        yield break;
+                        if (!await EvaluatePredicateAsync(context, operation, item))
+                        {
+                            yield return false;
+                            yield break;
+                        }
                     }
-                }
 
-                yield return true;
-                yield break;
-            }
+                    yield return true;
+                    yield break;
+                }
 
             case QuantifierKind.None:
-            {
-                await foreach (var item in ShellIterationUtilities.ReplaySingleInputCollectionAsync(context.Input, context.CancellationToken)
-                                   .WithCancellation(context.CancellationToken))
                 {
-                    if (await EvaluatePredicateAsync(context, operation, item))
+                    await foreach (var item in ShellIterationUtilities.ReplaySingleInputCollectionAsync(context.Input, context.CancellationToken)
+                                       .WithCancellation(context.CancellationToken))
                     {
-                        yield return false;
-                        yield break;
+                        if (await EvaluatePredicateAsync(context, operation, item))
+                        {
+                            yield return false;
+                            yield break;
+                        }
                     }
-                }
 
-                yield return true;
-                yield break;
-            }
+                    yield return true;
+                    yield break;
+                }
 
             default:
                 throw new InvalidOperationException($"Unsupported quantifier kind '{_kind}'.");

@@ -21,7 +21,9 @@
 	],
 	"settings": {
 		"chat.tools.terminal.autoApprove": {
-			"dotnet test": true
+			"dotnet test": true,
+			"awk": true,
+			"printf": true
 		}
 	}
 }

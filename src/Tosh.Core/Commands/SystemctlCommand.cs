@@ -2,6 +2,7 @@ using System.Diagnostics;
 
 namespace Tosh.Core.Commands;
 
+[CommandCategory("System")]
 public sealed class SystemctlCommand : ShellCommand
 {
     private static readonly IReadOnlySet<string> KnownNonStructuredSubcommands = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
@@ -109,83 +110,83 @@ public sealed class SystemctlCommand : ShellCommand
         switch (request.Mode)
         {
             case StructuredSystemctlMode.ListUnits:
-            {
-                IReadOnlyList<SystemdUnitInfo> units;
-
-                try
                 {
-                    units = SystemctlJsonParser.ParseUnitList(result.StandardOutput);
-                }
-                catch (Exception exception) when (exception is InvalidOperationException or System.Text.Json.JsonException)
-                {
-                    throw context.CreateDiagnostic(
-                        code: "tosh::runtime::systemctl_json_parse_failed",
-                        title: $"Could not parse structured 'systemctl list-units' output. {exception.Message}",
-                        help: "Try running the external `systemctl` command directly if you are using an unsupported output mode.");
-                }
+                    IReadOnlyList<SystemdUnitInfo> units;
 
-                foreach (var unit in units)
-                {
-                    context.CancellationToken.ThrowIfCancellationRequested();
-                    yield return CommandDisplaySelectionParser.Apply(context.Runtime, parsedSelection.Selection, unit);
-                }
+                    try
+                    {
+                        units = SystemctlJsonParser.ParseUnitList(result.StandardOutput);
+                    }
+                    catch (Exception exception) when (exception is InvalidOperationException or System.Text.Json.JsonException)
+                    {
+                        throw context.CreateDiagnostic(
+                            code: "tosh::runtime::systemctl_json_parse_failed",
+                            title: $"Could not parse structured 'systemctl list-units' output. {exception.Message}",
+                            help: "Try running the external `systemctl` command directly if you are using an unsupported output mode.");
+                    }
 
-                yield break;
-            }
+                    foreach (var unit in units)
+                    {
+                        context.CancellationToken.ThrowIfCancellationRequested();
+                        yield return CommandDisplaySelectionParser.Apply(context.Runtime, parsedSelection.Selection, unit);
+                    }
+
+                    yield break;
+                }
             case StructuredSystemctlMode.ListUnitFiles:
-            {
-                IReadOnlyList<SystemdUnitFileInfo> unitFiles;
-
-                try
                 {
-                    unitFiles = SystemctlJsonParser.ParseUnitFileList(result.StandardOutput);
-                }
-                catch (Exception exception) when (exception is InvalidOperationException or System.Text.Json.JsonException)
-                {
-                    throw context.CreateDiagnostic(
-                        code: "tosh::runtime::systemctl_json_parse_failed",
-                        title: $"Could not parse structured 'systemctl list-unit-files' output. {exception.Message}",
-                        help: "Try running the external `systemctl` command directly if you are using an unsupported output mode.");
-                }
+                    IReadOnlyList<SystemdUnitFileInfo> unitFiles;
 
-                foreach (var unitFile in unitFiles)
-                {
-                    context.CancellationToken.ThrowIfCancellationRequested();
-                    yield return CommandDisplaySelectionParser.Apply(context.Runtime, parsedSelection.Selection, unitFile);
-                }
+                    try
+                    {
+                        unitFiles = SystemctlJsonParser.ParseUnitFileList(result.StandardOutput);
+                    }
+                    catch (Exception exception) when (exception is InvalidOperationException or System.Text.Json.JsonException)
+                    {
+                        throw context.CreateDiagnostic(
+                            code: "tosh::runtime::systemctl_json_parse_failed",
+                            title: $"Could not parse structured 'systemctl list-unit-files' output. {exception.Message}",
+                            help: "Try running the external `systemctl` command directly if you are using an unsupported output mode.");
+                    }
 
-                yield break;
-            }
+                    foreach (var unitFile in unitFiles)
+                    {
+                        context.CancellationToken.ThrowIfCancellationRequested();
+                        yield return CommandDisplaySelectionParser.Apply(context.Runtime, parsedSelection.Selection, unitFile);
+                    }
+
+                    yield break;
+                }
             case StructuredSystemctlMode.Show:
             case StructuredSystemctlMode.Status:
-            {
-                IReadOnlyList<SystemdUnitPropertySet> units;
-
-                try
                 {
-                    units = SystemctlJsonParser.ParseShowOutput(result.StandardOutput);
-                }
-                catch (Exception exception) when (exception is InvalidOperationException)
-                {
-                    throw context.CreateDiagnostic(
-                        code: "tosh::runtime::systemctl_show_parse_failed",
-                        title: $"Could not parse structured 'systemctl show' output. {exception.Message}",
-                        help: "Try running the external `systemctl show` command directly if you are using an unsupported property/value mode.");
-                }
+                    IReadOnlyList<SystemdUnitPropertySet> units;
 
-                if (request.Mode is StructuredSystemctlMode.Status)
-                {
-                    await EnrichStatusResultsAsync(context, units);
-                }
+                    try
+                    {
+                        units = SystemctlJsonParser.ParseShowOutput(result.StandardOutput);
+                    }
+                    catch (Exception exception) when (exception is InvalidOperationException)
+                    {
+                        throw context.CreateDiagnostic(
+                            code: "tosh::runtime::systemctl_show_parse_failed",
+                            title: $"Could not parse structured 'systemctl show' output. {exception.Message}",
+                            help: "Try running the external `systemctl show` command directly if you are using an unsupported property/value mode.");
+                    }
 
-                foreach (var unit in units)
-                {
-                    context.CancellationToken.ThrowIfCancellationRequested();
-                    yield return CommandDisplaySelectionParser.Apply(context.Runtime, parsedSelection.Selection, unit);
-                }
+                    if (request.Mode is StructuredSystemctlMode.Status)
+                    {
+                        await EnrichStatusResultsAsync(context, units);
+                    }
 
-                yield break;
-            }
+                    foreach (var unit in units)
+                    {
+                        context.CancellationToken.ThrowIfCancellationRequested();
+                        yield return CommandDisplaySelectionParser.Apply(context.Runtime, parsedSelection.Selection, unit);
+                    }
+
+                    yield break;
+                }
             default:
                 throw new InvalidOperationException($"Unexpected structured systemctl mode '{request.Mode}'.");
         }
@@ -563,7 +564,7 @@ public sealed class SystemctlCommand : ShellCommand
 
     private static bool SystemctlStatusOptionRequiresFallback(string argument)
     {
-        return argument is "-l" or "--full" or "-n" or "--lines" or "--quiet" or "--plain" or "--value" || 
+        return argument is "-l" or "--full" or "-n" or "--lines" or "--quiet" or "--plain" or "--value" ||
                string.Equals(argument, "-P", StringComparison.Ordinal) ||
                string.Equals(argument, "-o", StringComparison.Ordinal) ||
                string.Equals(argument, "--output", StringComparison.Ordinal) ||

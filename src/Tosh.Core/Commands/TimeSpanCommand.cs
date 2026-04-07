@@ -1,12 +1,14 @@
 namespace Tosh.Core.Commands;
 
+[CommandCategory("System")]
 public sealed class TimeSpanCommand : ShellCommand
 {
     public TimeSpanCommand()
         : base(
             "timespan",
             "Parses a duration into a CLR duration value.",
-            "timespan <duration>") { }
+            "timespan <duration>")
+    { }
 
     public override async IAsyncEnumerable<object?> ExecuteAsync(CommandContext context)
     {

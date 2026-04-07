@@ -2,7 +2,7 @@ using System.Reflection;
 using Tosh.Core;
 using Tosh.Language.Parsing;
 
-namespace Tosh.Lsp;
+namespace Tosh.LanguageServices;
 
 public sealed class ToshLanguageFeatures
 {
@@ -63,10 +63,17 @@ public sealed class ToshLanguageFeatures
     };
 
     private readonly ToshRuntime _runtime;
+    private IReadOnlyDictionary<string, CommandManifestEntry>? _manifestCache;
 
     public ToshLanguageFeatures()
     {
         _runtime = ToshRuntime.CreateDefault();
+    }
+
+    private IReadOnlyDictionary<string, CommandManifestEntry> GetManifestLookup()
+    {
+        return _manifestCache ??= CommandManifestExporter.BuildManifest(_runtime.Commands)
+            .ToDictionary(entry => entry.Name, StringComparer.OrdinalIgnoreCase);
     }
 
     public IReadOnlyList<LspDiagnostic> GetDiagnostics(string text, string sourceName)
@@ -131,6 +138,33 @@ public sealed class ToshLanguageFeatures
                 if (clrCatalog.NamespaceExists(expandedTarget))
                 {
                     AddItems(items, clrCatalog.GetNamespaceAndTypeCompletions(expandedTarget, qualifiedPartial));
+                }
+            }
+
+            if (items.Count > 0)
+            {
+                return items.Values.OrderBy(item => item.Label, StringComparer.OrdinalIgnoreCase).ToArray();
+            }
+        }
+
+        if (TryGetCommandFlagCompletionContext(text, offset, out var flagPrefix, out var commandName))
+        {
+            if (GetManifestLookup().TryGetValue(commandName, out var manifestEntry))
+            {
+                foreach (var option in manifestEntry.Options)
+                {
+                    var flags = option.Syntax.Split(',', StringSplitOptions.TrimEntries);
+                    foreach (var flag in flags)
+                    {
+                        if (flag.StartsWith(flagPrefix, StringComparison.OrdinalIgnoreCase))
+                        {
+                            items[flag] = new LspCompletionItem(
+                                flag,
+                                Kind: 20,
+                                Detail: $"Option ({commandName})",
+                                Documentation: option.Description);
+                        }
+                    }
                 }
             }
 
@@ -236,6 +270,12 @@ public sealed class ToshLanguageFeatures
             {
                 return CreateTopLevelFunctionSignatureHelp(overloads, commandCallSite.ActiveParameter);
             }
+
+            if (GetManifestLookup().TryGetValue(commandCallSite.Command.Name, out var manifestEntry) &&
+                manifestEntry.Arguments.Count > 0)
+            {
+                return CreateBuiltInCommandSignatureHelp(manifestEntry, commandCallSite.ActiveParameter);
+            }
         }
 
         if (FindCallSite(parseResult.Statement, parseResult.SourceText, offset) is not { } callSite)
@@ -314,7 +354,14 @@ public sealed class ToshLanguageFeatures
         }
         else if (HelpCatalog.ResolveTopic(_runtime, normalizedWord) is { } topic)
         {
-            description = topic.Description;
+            if (topic.Kind == HelpSubjectKind.BuiltIn && GetManifestLookup().TryGetValue(normalizedWord, out var manifestEntry))
+            {
+                description = FormatCommandHoverMarkdown(manifestEntry);
+            }
+            else
+            {
+                description = topic.Description;
+            }
         }
 
         if (description is null)
@@ -356,6 +403,194 @@ public sealed class ToshLanguageFeatures
                 new LspLocation(sourceName, symbol.Range),
                 symbol.Detail))
             .ToArray();
+    }
+
+    private static string FormatCommandHoverMarkdown(CommandManifestEntry entry)
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine(entry.Description);
+        sb.AppendLine();
+
+        if (entry.Aliases.Count > 0)
+        {
+            sb.AppendLine($"*Aliases:* {string.Join(", ", entry.Aliases.Select(a => $"`{a}`"))}");
+            sb.AppendLine();
+        }
+
+        sb.AppendLine("```tosh");
+        sb.AppendLine(entry.Usage);
+        sb.AppendLine("```");
+
+        if (entry.Arguments.Count > 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine("**Arguments**");
+            foreach (var arg in entry.Arguments)
+            {
+                var req = arg.Required ? "" : " *(optional)*";
+                var typePart = arg.TypeName is not null ? $" `{arg.TypeName}`" : "";
+                sb.AppendLine($"- `{arg.Name}`{typePart} — {arg.Description}{req}");
+            }
+        }
+
+        if (entry.Options.Count > 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine("**Options**");
+            foreach (var opt in entry.Options)
+            {
+                sb.AppendLine($"- `{opt.Syntax}` — {opt.Description}");
+            }
+        }
+
+        if (entry.PipelineInput is { } pi)
+        {
+            var accepts = new List<string>();
+            if (pi.AcceptsScalar) accepts.Add("scalar");
+            if (pi.AcceptsRecord) accepts.Add("record");
+            if (pi.AcceptsList) accepts.Add("list");
+            if (pi.AcceptsTable) accepts.Add("table");
+            if (accepts.Count > 0)
+            {
+                sb.AppendLine();
+                sb.AppendLine($"**Pipeline input:** {string.Join(", ", accepts)}");
+                if (pi.Description is not null)
+                    sb.AppendLine($"  {pi.Description}");
+            }
+        }
+
+        if (entry.Output is not null)
+        {
+            sb.AppendLine();
+            sb.AppendLine($"**Output:** {entry.Output}");
+        }
+
+        if (entry.Examples.Count > 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine("**Examples**");
+            sb.AppendLine("```tosh");
+            foreach (var ex in entry.Examples)
+            {
+                var comment = ex.Title is not null ? $"  # {ex.Title}" : "";
+                sb.AppendLine($"{ex.Code}{comment}");
+            }
+            sb.AppendLine("```");
+        }
+
+        if (entry.Notes.Count > 0)
+        {
+            sb.AppendLine();
+            foreach (var note in entry.Notes)
+            {
+                sb.AppendLine($"> {note}");
+            }
+        }
+
+        return sb.ToString().TrimEnd();
+    }
+
+    private static bool TryGetCommandFlagCompletionContext(string text, int offset, out string flagPrefix, out string commandName)
+    {
+        flagPrefix = string.Empty;
+        commandName = string.Empty;
+
+        // Walk back from offset to find the current token being typed
+        var tokenEnd = offset;
+        var tokenStart = offset;
+        while (tokenStart > 0 && !char.IsWhiteSpace(text[tokenStart - 1]))
+        {
+            tokenStart--;
+        }
+
+        if (tokenStart >= tokenEnd)
+        {
+            return false;
+        }
+
+        var currentToken = text[tokenStart..tokenEnd];
+        if (!currentToken.StartsWith('-'))
+        {
+            return false;
+        }
+
+        flagPrefix = currentToken;
+
+        // Walk backwards from tokenStart to find the command name (first non-whitespace word on this logical line)
+        var searchPos = tokenStart;
+        while (searchPos > 0 && char.IsWhiteSpace(text[searchPos - 1]) && text[searchPos - 1] != '\n')
+        {
+            searchPos--;
+        }
+
+        // Find words before to identify the command (first word in the pipeline stage)
+        var lineStart = text.LastIndexOf('\n', Math.Max(0, searchPos - 1));
+        lineStart = lineStart < 0 ? 0 : lineStart + 1;
+
+        // Skip leading whitespace
+        while (lineStart < searchPos && char.IsWhiteSpace(text[lineStart]))
+        {
+            lineStart++;
+        }
+
+        // Also check after a pipe character for pipeline stages
+        var pipePos = text.LastIndexOf('|', Math.Max(0, searchPos - 1));
+        if (pipePos >= lineStart)
+        {
+            lineStart = pipePos + 1;
+            while (lineStart < searchPos && char.IsWhiteSpace(text[lineStart]))
+            {
+                lineStart++;
+            }
+        }
+
+        // Read command name
+        var cmdEnd = lineStart;
+        while (cmdEnd < searchPos && !char.IsWhiteSpace(text[cmdEnd]))
+        {
+            cmdEnd++;
+        }
+
+        if (cmdEnd <= lineStart)
+        {
+            return false;
+        }
+
+        commandName = text[lineStart..cmdEnd];
+        return !commandName.StartsWith('-') && !commandName.StartsWith('$');
+    }
+
+    private static LspSignatureHelp CreateBuiltInCommandSignatureHelp(CommandManifestEntry entry, int activeParameter)
+    {
+        var parameterLabels = entry.Arguments
+            .Select(arg =>
+            {
+                var typePart = arg.TypeName is not null ? $": {arg.TypeName}" : "";
+                var optPart = arg.Required ? "" : "?";
+                return $"{arg.Name}{optPart}{typePart}";
+            })
+            .ToArray();
+
+        var signatureLabel = $"{entry.Name} {string.Join(' ', parameterLabels.Select(p => $"<{p}>"))}";
+
+        var parameters = entry.Arguments
+            .Select(arg => new LspParameterInformation(
+                Label: arg.TypeName is not null
+                    ? $"{arg.Name}{(arg.Required ? "" : "?")}: {arg.TypeName}"
+                    : $"{arg.Name}{(arg.Required ? "" : "?")}",
+                Documentation: arg.Description))
+            .ToArray();
+
+        var signature = new LspSignatureInformation(
+            signatureLabel,
+            Documentation: entry.Description,
+            Parameters: parameters);
+
+        var boundedActive = entry.Arguments.Count == 0
+            ? 0
+            : Math.Min(activeParameter, entry.Arguments.Count - 1);
+
+        return new LspSignatureHelp([signature], ActiveSignature: 0, ActiveParameter: boundedActive);
     }
 
     private static (string Word, int Start, int End) FindWordAt(string text, int offset)

@@ -462,7 +462,7 @@ public static class HelpCatalog
                 Notes: "Continue works in loops and each blocks."),
         };
 
-    private static readonly IReadOnlyDictionary<string, string[]> ExamplesByName =
+    internal static readonly IReadOnlyDictionary<string, string[]> ExamplesByName =
         new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
         {
             ["help"] = ["help search json", "help ls", "help related where"],
@@ -473,6 +473,7 @@ public static class HelpCatalog
             ["mv"] = ["mv old.txt new.txt", "mv -n *.txt archive/", "mv -t archive alpha.txt beta.txt"],
             ["env"] = ["env PATH", "echo $env.PATH", "env FOO=bar env FOO | get Value", "env -u PATH env PATH | get IsSet"],
             ["exec"] = ["exec tosh", "exec zsh", "exec /bin/sh -c \"echo hi\""],
+            ["http"] = ["http get https://example.com --as text", "http post https://example.com/api --json { Name = \"Toast\" } --as response", "http request GET https://example.com | http send --as response"],
             ["ip"] = ["ip addr", "ip link | where _.IsUp", "ip route | where _.IsDefault"],
             ["systemctl"] = ["systemctl", "systemctl list-unit-files --type service | where _.Enabled", "systemctl status sshd.service | get { Id, ActiveState, MainPID, RecentLogCount }"],
             ["journalctl"] = ["journalctl -n 20", "journalctl -u sshd.service | first 10", "journalctl --since yesterday | where _.Priority <= 3"],
@@ -528,8 +529,9 @@ public static class HelpCatalog
             ["group-by"] = ["ls | group-by Extension", "ps | group-by func(p) => ($p.Name.Substring(0, 1))"],
             ["take-while"] = ["echo 1 2 3 4 | take-while { _ < 3 }", "echo 1 2 3 4 | take-while func(x) => ($x < 3)"],
             ["skip-while"] = ["echo 1 2 3 4 | skip-while { _ < 3 }", "echo 1 2 3 4 | skip-while func(x) => ($x < 3)"],
-            ["inspect"] = ["ls -la | first | inspect", "new System.Random() | inspect"],
-            ["from-json"] = ["echo \"{\\\"name\\\":\\\"toast\\\"}\" | from-json", "curl https://example/api | from-json | flatten"],
+            ["inspect"] = ["ls -la | first | inspect", "new System.Random() | inspect -a", "new System.Random() | inspect --flat"],
+            ["from"] = ["echo \"{\\\"name\\\":\\\"toast\\\"}\" | from json", "curl https://example/api | from json | flatten", "cat data.toml | from toml", "cat data.csv | from csv"],
+            ["to"] = ["ls | to json", "ls | to csv", "ls | to toml", "ls | to json --compact"],
             ["parse"] = ["ping -c 3 localhost | parse \"time=(?<time_ms>[0-9.]+) ms\"", "echo \"PID=42\" | parse \"PID=(?<Pid>[0-9]+)\"", "echo \"first\\nsecond\" | parse -am \"^(?<Value>\\\\w+)$\" | get Value"],
             ["grep"] = ["echo one two three | grep tw", "echo \"Alpha\" | grep -i \"^alpha$\"", "grep -F literal README.md"],
             ["match"] = ["echo \"PID=42\" | match \"PID=(?<Pid>[0-9]+)\" | get Pid", "echo \"Alpha\" | match -i \"^alpha$\""],
@@ -566,24 +568,26 @@ public static class HelpCatalog
             ["prompt-newline"] = ["prompt-newline"],
         };
 
-    private static readonly IReadOnlyDictionary<string, HelpDetailDefinition> CommandDetailsByName =
+    internal static readonly IReadOnlyDictionary<string, HelpDetailDefinition> CommandDetailsByName =
         new Dictionary<string, HelpDetailDefinition>(StringComparer.OrdinalIgnoreCase)
         {
             ["help"] = new(
                 Arguments:
                 [
                     new("topic", "The command, language topic, type, or external executable to describe.", Required: false),
+                    new("--cli [query]", "Opens the inline fuzzy tree browser, optionally seeded with an initial query or topic.", Required: false),
                     new("browse [query]", "Opens the full-screen help browser, optionally filtered by an initial query.", Required: false),
                     new("search <query>", "Searches help topics by name, alias, category, and description.", Required: false),
                     new("related <topic>", "Shows related topics for the given command or language feature.", Required: false),
                     new("categories", "Lists help categories and topic counts.", Required: false),
                 ],
                 PipelineInput: new(false, true, false, false, "With no explicit args, piped scalar values are treated as help topics. `search` and `related` also consume piped query/topic text."),
-                Output: "Produces help summaries, full help topics, search results, category rows, or an interactive browser request depending on the form.",
+                Output: "Produces help summaries, full help topics, search results, category rows, launches the inline browser with `--cli`, or returns an interactive browser request for `help browse` depending on the form.",
                 Examples:
                 [
                     new("help ls", "Describe a command"),
                     new("help search regex", "Search help"),
+                    new("help --cli regex", "Open the inline fuzzy help browser"),
                     new("help browse grep", "Open the help browser"),
                 ]),
             ["raw"] = new(
@@ -1063,6 +1067,53 @@ public static class HelpCatalog
                     new("networkctl | where _.Setup == unmanaged", "Filter links by setup state in the pipeline"),
                     new("networkctl --show Link,Operational,Setup,Managed", "Render a focused network-link summary"),
                 ]),
+            ["http"] = new(
+                Arguments:
+                [
+                    new("<get|post|put|patch|delete|head|options> <url>", "Send an HTTP request immediately.", Required: false),
+                    new("request <method> <url>", "Build an immutable HTTP request definition without sending it yet.", Required: false),
+                    new("send [request]", "Send an HttpRequestDefinition or HttpRequestMessage from an argument or the pipeline.", Required: false),
+                    new("serve|host <dir>", "Start a temporary HTTP file server rooted at a directory and return a live server handle.", Required: false),
+                    new("servers", "List open HTTP file server handles.", Required: false),
+                    new("stop [handle|id ...]", "Stop one or more HTTP file servers, or all of them when no target is provided.", Required: false),
+                ],
+                Options:
+                [
+                    new("--header <name> <value>", "Add a request header. Repeatable."),
+                    new("--json <value>", "Serialize a value as JSON request content."),
+                    new("--body <text>", "Send plain text request content."),
+                    new("--file <path>", "Send request content from a file."),
+                    new("--form <record>", "Send application/x-www-form-urlencoded content from a record-like value."),
+                    new("--content-type <value>", "Override the request content type."),
+                    new("--timeout <duration>", "Set the per-request timeout."),
+                    new("--bearer <token>", "Add a Bearer authorization header."),
+                    new("--auth basic <user> <pass>", "Add a Basic authorization header."),
+                    new("--follow | --no-follow", "Control redirect following for the request."),
+                    new("--as <response|json|text|bytes|lines>", "Choose how the response should be materialized."),
+                    new("--out <path>", "Write the raw response body bytes to a file."),
+                    new("--fail", "Turn HTTP non-success status codes into diagnostics instead of returning a response object/body."),
+                    new("--browse", "For `http serve`, render a lightweight browser page with directory listings and share metadata."),
+                    new("--upload", "For `http serve`, accept uploads. Browser uploads and raw PUT/POST uploads are both supported."),
+                    new("--once", "For `http serve`, close the server after the first handled request."),
+                    new("--bind <address>", "Bind `http serve` to a specific address."),
+                    new("--lan", "Bind `http serve` to all interfaces and advertise LAN-friendly share URLs for other devices."),
+                    new("--port <port>", "Bind `http serve` to a specific port. Use `0` to request an ephemeral port."),
+                    new("--index <file>", "Serve this index file for directories before directory listings."),
+                    new("--token <token>", "Protect `http serve` with a fixed token. The returned ShareUrl includes it automatically."),
+                    new("--generate-token", "Generate a random token for `http serve` and return it on the server handle."),
+                ],
+                PipelineInput: new(false, true, false, false, "`http send` accepts a single HttpRequestDefinition or HttpRequestMessage from the pipeline."),
+                Output: "Returns either a structured HttpResponseInfo object or a decoded body, depending on `--as`. `http serve` returns live HttpFileServerHandle objects.",
+                Examples:
+                [
+                    new("http get https://example.com --as text", "Fetch a text response"),
+                    new("http post https://example.com/api --json { Name = \"Toast\" } --as response", "Send JSON and keep the structured response"),
+                    new("http request GET https://example.com | http send --as response", "Build then send a request object"),
+                    new("http serve ./share --browse", "Start a temporary file server with a lightweight share page"),
+                    new("http serve ./share --browse --lan", "Share a directory with other devices on the same network"),
+                    new("http serve ./dropbox --upload --generate-token", "Start a temporary upload server with a generated access token"),
+                    new("http servers | get { Id, ShareUrl, Upload }", "Inspect open temporary file servers"),
+                ]),
             ["ip"] = new(
                 Arguments:
                 [
@@ -1499,7 +1550,7 @@ public static class HelpCatalog
     {
         ArgumentNullException.ThrowIfNull(runtime);
 
-        return BuildStaticTopics(runtime)
+        return BuildTopics(runtime)
             .OrderBy(topic => topic.Category, StringComparer.OrdinalIgnoreCase)
             .ThenBy(topic => topic.Name, StringComparer.OrdinalIgnoreCase)
             .Select(topic => new HelpSummary(
@@ -1510,6 +1561,12 @@ public static class HelpCatalog
                 topic.Usage,
                 topic.Aliases))
             .ToArray();
+    }
+
+    public static IReadOnlyList<HelpTopic> BuildTopics(ToshRuntime runtime)
+    {
+        ArgumentNullException.ThrowIfNull(runtime);
+        return BuildStaticTopics(runtime);
     }
 
     public static IReadOnlyList<HelpCategoryInfo> BuildCategories(ToshRuntime runtime)
@@ -1700,7 +1757,7 @@ public static class HelpCatalog
         return AddRelatedTopics(topics);
     }
 
-    private static IReadOnlyDictionary<string, IReadOnlyList<string>> BuildBuiltInAliasMap(IEnumerable<IShellCommand> commands)
+    internal static IReadOnlyDictionary<string, IReadOnlyList<string>> BuildBuiltInAliasMap(IEnumerable<IShellCommand> commands)
     {
         var groups = commands
             .Where(command => ToHelpSubjectKind(command) == HelpSubjectKind.BuiltIn)
@@ -1887,7 +1944,7 @@ public static class HelpCatalog
             : HelpSubjectKind.BuiltIn;
     }
 
-    private static string DetermineCommandCategory(string name, HelpSubjectKind kind)
+    internal static string DetermineCommandCategory(string name, HelpSubjectKind kind)
     {
         if (kind is HelpSubjectKind.Alias or HelpSubjectKind.Function)
         {
@@ -1903,7 +1960,7 @@ public static class HelpCatalog
             "pwd" or "cd" or "ls" or "df" or "mounts" or "du" or "usage" or "disk-usage" or "stat" or "find" or "cat" or "read-file" or "read-lines" or "write-file" or "append-file" or "read-bytes" or "write-bytes" or "open-file" or "read-from" or "read-line-from" or "read-to-end" or "write-to" or "write-line-to" or "flush" or "close" or "seek" or "position" or "length" or "copy-to" or "mkdir" or "touch" or "rm" or "cp" or "mv" or "chmod" or "chown" or "ln" or "readlink" or "realpath" or "dirname" or "basename" or "exists" or "is-file" or "is-dir" or "is-link" or "mkdir-temp" or "tempfile"
                 => "Filesystem",
             "ps" or "jobs" or "wait-for" or "kill" or "signal" => "Process",
-            "ping" or "ip" => "Network",
+            "ping" or "ip" or "http" => "Network",
             "lsblk" => "Filesystem",
             "findmnt" => "Filesystem",
             "lscpu" => "System",
@@ -1915,7 +1972,7 @@ public static class HelpCatalog
                 => "Pipeline",
             "styled" or "prompt-time" or "prompt-dir" or "prompt-git" or "prompt-userhost" or "prompt-history" or "prompt-jobs" or "prompt-duration" or "prompt-exit" or "prompt-text" or "prompt-newline"
                 => "Prompt",
-            "from-json" or "from-csv" or "from-xml" or "parse" or "to-json" or "to-csv" or "hash" or "as-file"
+            "from" or "to" or "parse" or "hash" or "as-file"
                 => "Data",
             "type-of" or "describe-type" or "members" or "methods" or "constructors" or "types" or "load-assembly" or "cast" or "new" or "call"
                 or "has-prop" or "has-method" or "get-props" or "get-methods"
@@ -1925,18 +1982,19 @@ public static class HelpCatalog
         };
     }
 
-    private static string? GetCommandNotes(string name)
+    internal static string? GetCommandNotes(string name)
     {
         return name switch
         {
-            "help" => "Use `help search <query>` or `apropos <query>` to find commands and language topics quickly, or `help browse` for the interactive split-pane browser.",
+            "help" => "Use `help search <query>` or `apropos <query>` to find commands and language topics quickly, `help --cli` for the inline fuzzy tree browser, or `help browse` for the fullscreen split-pane browser. In the REPL, `F1` opens the inline help browser seeded from the token under the cursor, and `Alt+H` is available as a fallback on terminals that do not expose function keys cleanly.",
             "apropos" => "Apropos performs fuzzy help search across commands and Tosh language topics.",
             "history" => "History is file-backed in normal interactive sessions and each entry now has a stable id. Use `history path`, `history search <text>`, `history delete <spec>`, `history save`, `history reload`, `history clear`, `history expand 237`, or `history run 237` to inspect or replay it. In the REPL, `Ctrl+R`, `!!`, `!237`, `!-2`, `!prefix`, `!?text?`, `!$`, `!^`, `!*`, and `^old^new^` also work as interactive history features.",
             "where" => "Inside predicate expressions, bare member access resolves against the current pipeline object.",
             "each" => "Collections stay intact until you explicitly expand them with `each` or `flatten`.",
-            "inspect" => "Inspect shows CLR type, assembly, interfaces, and member previews for pipeline values.",
+            "inspect" => "Inspect opens an inline tree browser for CLR values in interactive sessions. Use `-a` for non-public/static members, `--flat` for the legacy static inspection object output, and `i` inside the browser to insert the selected member text into the active REPL line at the cursor (or queue it for the next prompt when no line is active). In the REPL, `F2` tries to inspect the reference under the cursor, and `Alt+I` is available as a fallback on terminals that do not expose function keys cleanly.",
             "parse" => "Parse and match use .NET regular expressions, including named groups and inline modifiers like `(?im)`.",
-            "from-json" or "from-csv" or "from-xml" => "Structured input commands keep parsed values as CLR objects until you explicitly flatten them.",
+            "from" or "to"
+                => "The `from` and `to` commands convert between text formats (json, csv, tsv, xml, toml) and CLR objects. Parsed values stay as CLR objects until you explicitly flatten them.",
             "as-file" => "As-file materializes pipeline values into a temporary file and returns a file object you can pass to external executables.",
             "jobs" => "Jobs lists ToSh background jobs started with a trailing `&`. A background launch updates `$tosh.Last.Result` with the started job info, while `jobs` and `wait-for` are the primary inspection commands.",
             "exec" => "Exec replaces the current ToSh process with an external command. On Unix-like systems it uses native process replacement, so `exec tosh` or `exec zsh` behaves like the shell built-in you may know from zsh.",
@@ -1945,6 +2003,7 @@ public static class HelpCatalog
             "touch" => "Touch now supports `-a`, `-m`, `-c`, `-d`, and `-r`, plus grouped short flags like `-am`.",
             "mv" => "Mv now overwrites existing file targets by default, closer to Unix `mv`. `-n`, `-u`, `-t`, and `-T` are available to control that behavior explicitly.",
             "env" => "Env keeps its object-returning query mode, but it can also build a temporary environment snapshot with `name=value` and `-u name`, optionally running a nested command under that snapshot.",
+            "http" => "The native `http` builtin is object-first and backed by .NET HttpClient. Use `--as response` for a structured response object, or `--as json|text|bytes|lines` to project the body directly. `http serve <dir>` starts a temporary file server and returns a live server handle; `--browse`, `--upload`, `--token`, `--generate-token`, and `--lan` turn it into a lightweight cross-platform sharing tool. Use `http servers`, `http stop`, or `close` to manage it.",
             "ip" => "ToSh now wraps `ip addr`, `ip link`, and `ip route` around the JSON-capable system utility so the result flows through the pipeline as typed interface, address, and route objects. Other subcommands still fall back to the external `ip` utility unchanged.",
             "lsblk" => "ToSh wraps `lsblk --json --bytes --output-all` so block devices stay as typed objects in the pipeline while the default renderer can still show them as a tree with columns. The default result is hierarchical, so use `-l` when you want flat filtering in a pipeline, and shell-facing aliases like `FsType`, `FsVer`, and `FsAvail` match the visible column names. Output-format-only flags like `--pairs`, `--raw`, and `--noheadings` currently fall back to the external `lsblk` utility unchanged.",
             "lscpu" => "ToSh wraps the JSON-capable `lscpu` modes instead of scraping text output. The default command yields a structured CPU summary, `-e` yields per-CPU topology rows, and `-C` yields cache rows. `--parse`, raw-only, help, version, and sysroot modes currently fall back to the external `lscpu` utility unchanged.",
@@ -2068,7 +2127,7 @@ public static class HelpCatalog
             Description: "External executable resolved from PATH or an explicit executable path.",
             Usage: $"{name} [args ...]",
             Aliases: Array.Empty<string>(),
-            Related: ["which", "parse", "from-json", "from-csv", "from-xml", "xargs"],
+            Related: ["which", "parse", "from", "to", "xargs"],
             Examples: Array.Empty<string>(),
             Path: path,
             Notes: "External stdout displays as plain text by default and can be adapted into objects with parse/from-* commands.");
@@ -2124,7 +2183,7 @@ public static class HelpCatalog
         IReadOnlyList<string> Examples,
         string? Notes);
 
-    private sealed record HelpDetailDefinition(
+    internal sealed record HelpDetailDefinition(
         IReadOnlyList<HelpArgumentInfo>? Arguments = null,
         IReadOnlyList<HelpOptionInfo>? Options = null,
         HelpPipelineInputInfo? PipelineInput = null,

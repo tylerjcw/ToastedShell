@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[CommandCategory("Text")]
 public sealed class TailCommand : ShellCommand
 {
     public TailCommand()

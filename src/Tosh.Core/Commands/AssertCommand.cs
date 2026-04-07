@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[CommandCategory("Scripting")]
 public sealed class AssertCommand : ShellCommand
 {
     public AssertCommand()

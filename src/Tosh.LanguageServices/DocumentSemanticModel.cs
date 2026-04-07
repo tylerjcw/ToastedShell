@@ -4,9 +4,9 @@ using System.Runtime.Loader;
 using Tosh.Core;
 using Tosh.Language.Parsing;
 
-namespace Tosh.Lsp;
+namespace Tosh.LanguageServices;
 
-internal sealed class DocumentSemanticModel
+public sealed class DocumentSemanticModel
 {
     private static readonly object AssemblyLoadSync = new();
     private static readonly HashSet<string> AttemptedAssemblyLoads = new(StringComparer.OrdinalIgnoreCase);
@@ -1218,13 +1218,13 @@ internal sealed class DocumentSemanticModel
         int ScopeDepth,
         int SelectionStart);
 
-    internal sealed record ShellClassSymbol(
+    public sealed record ShellClassSymbol(
         string Name,
         IReadOnlyList<ShellClassPropertySymbol> Properties,
         IReadOnlyList<ShellClassMethodSymbol> Methods,
         IReadOnlyList<ShellClassConstructorSymbol> Constructors);
 
-    internal sealed record ShellClassPropertySymbol(
+    public sealed record ShellClassPropertySymbol(
         string Name,
         string? TypeName,
         bool IsStatic,
@@ -1232,25 +1232,25 @@ internal sealed class DocumentSemanticModel
         bool IsComputed,
         bool IsHidden);
 
-    internal sealed record ShellClassMethodSymbol(
+    public sealed record ShellClassMethodSymbol(
         string Name,
         string? ReturnTypeName,
         IReadOnlyList<FunctionParameterSyntax> Parameters,
         bool IsStatic,
         bool IsHidden);
 
-    internal sealed record ShellClassConstructorSymbol(
+    public sealed record ShellClassConstructorSymbol(
         IReadOnlyList<FunctionParameterSyntax> Parameters);
 
-    internal abstract record ShellReferenceSymbol
+    public abstract record ShellReferenceSymbol
     {
         private ShellReferenceSymbol() { }
 
-        internal sealed record Class(ShellClassSymbol Symbol) : ShellReferenceSymbol;
+        public sealed record Class(ShellClassSymbol Symbol) : ShellReferenceSymbol;
 
-        internal sealed record Property(ShellClassSymbol DeclaringClass, ShellClassPropertySymbol Symbol) : ShellReferenceSymbol;
+        public sealed record Property(ShellClassSymbol DeclaringClass, ShellClassPropertySymbol Symbol) : ShellReferenceSymbol;
 
-        internal sealed record Method(ShellClassSymbol DeclaringClass, IReadOnlyList<ShellClassMethodSymbol> Overloads) : ShellReferenceSymbol;
+        public sealed record Method(ShellClassSymbol DeclaringClass, IReadOnlyList<ShellClassMethodSymbol> Overloads) : ShellReferenceSymbol;
     }
 
     private sealed record ShellClassDeclaration(

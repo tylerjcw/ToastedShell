@@ -1,5 +1,12 @@
 namespace Tosh.Core.Commands;
 
+[CommandCategory("Pipeline")]
+[CommandArgument("predicate", "A predicate block or callable that returns a boolean.", TypeName = "block|callable")]
+[CommandExample("ls -la | where _.Type == file", Title = "Filter by property")]
+[CommandExample("ls -la | where func(item) => ($item.Name.ToLower().EndsWith(\".md\"))", Title = "Lambda predicate")]
+[CommandNote("Inside predicate expressions, bare member access resolves against the current pipeline object.")]
+[CommandOutput("Pipeline objects for which the predicate returned true.")]
+[PipelineInput(AcceptsScalar = true, Description = "Consumes any pipeline objects and tests each against the predicate.")]
 public sealed class WhereCommand : ShellCommand
 {
     public WhereCommand()

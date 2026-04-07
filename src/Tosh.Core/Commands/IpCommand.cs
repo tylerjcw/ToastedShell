@@ -2,6 +2,7 @@ using System.Diagnostics;
 
 namespace Tosh.Core.Commands;
 
+[CommandCategory("Network")]
 public sealed class IpCommand : ShellCommand
 {
     public IpCommand()

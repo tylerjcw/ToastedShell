@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[CommandCategory("Shell")]
 public sealed class ExitCommand : ShellCommand
 {
     public ExitCommand()

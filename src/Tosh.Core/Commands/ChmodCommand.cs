@@ -1,5 +1,14 @@
 namespace Tosh.Core.Commands;
 
+[CommandCategory("Filesystem")]
+[CommandArgument("mode", "Permission mode string (e.g. 755, u+rw, a+x).")]
+[CommandArgument("path", "One or more files or directories.", TypeName = "path-like")]
+[CommandOption("-R", "Operate recursively on directories.")]
+[CommandExample("chmod +x script.sh")]
+[CommandExample("chmod 755 script.sh", Title = "Octal mode")]
+[CommandExample("chmod u+rw,go-w file.txt", Title = "Symbolic mode")]
+[CommandExample("chmod -R a+r ./docs", Title = "Recursive")]
+[CommandOutput("Returns FileSystemEntry objects with long display for each changed path.")]
 public sealed class ChmodCommand : ShellCommand
 {
     public ChmodCommand()

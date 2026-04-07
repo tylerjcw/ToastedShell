@@ -23,6 +23,7 @@ ToSh also ships a live help system that is often the fastest way to get accurate
 
 - `help <topic>`
 - `help search <text>`
+- `help --cli`
 - `help browse`
 
 Use the reference docs for broader explanation and examples. Use `help` for the current live surface of a specific command, topic, or CLR type.

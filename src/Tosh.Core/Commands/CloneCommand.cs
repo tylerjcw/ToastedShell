@@ -2,6 +2,7 @@ using System.Dynamic;
 
 namespace Tosh.Core.Commands;
 
+[CommandCategory("CLR")]
 public sealed class CloneCommand : ShellCommand
 {
     public CloneCommand()

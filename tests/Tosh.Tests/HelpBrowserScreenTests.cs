@@ -279,6 +279,50 @@ public sealed class HelpBrowserScreenTests
     }
 
     [Fact]
+    public void Help_browser_can_insert_the_selected_topic_into_the_next_prompt()
+    {
+        var runtime = ToshRuntime.CreateDefault();
+        var sink = new RecordingInsertionSink();
+        runtime.CommandLineInsertion = sink;
+        var screen = new HelpBrowserScreen(runtime, new HelpBrowseRequest(null, "grep"));
+
+        var result = screen.HandleKey(new ConsoleKeyInfo('i', ConsoleKey.I, shift: false, alt: false, control: false));
+
+        Assert.Equal(TuiScreenResult.Exit, result);
+        Assert.Equal("grep", Assert.Single(sink.Inserted));
+    }
+
+    [Fact]
+    public void Help_browser_can_insert_selected_clr_members_into_the_next_prompt()
+    {
+        var runtime = ToshRuntime.CreateDefault();
+        var sink = new RecordingInsertionSink();
+        runtime.CommandLineInsertion = sink;
+        var screen = new HelpBrowserScreen(runtime, new HelpBrowseRequest(null, null));
+
+        screen.HandleKey(new ConsoleKeyInfo('\0', ConsoleKey.F4, shift: false, alt: false, control: false));
+        ExpandClrPath(screen, "System");
+        Assert.True(screen.SelectSidebarEntryContaining("System.String"));
+        screen.HandleKey(new ConsoleKeyInfo('\r', ConsoleKey.Enter, shift: false, alt: false, control: false));
+
+        var labels = screen.BuildSidebarLabels();
+        var memberSectionIndex = Array.FindIndex(labels.ToArray(), label => label.Contains("Properties & Fields", StringComparison.Ordinal));
+        Assert.True(memberSectionIndex >= 0);
+
+        var memberLabel = labels
+            .Skip(memberSectionIndex + 1)
+            .First(label => label.StartsWith("  ", StringComparison.Ordinal) && label.Contains(" : ", StringComparison.Ordinal));
+        var expectedMemberName = memberLabel.TrimStart()[..memberLabel.TrimStart().IndexOf(" : ", StringComparison.Ordinal)];
+
+        Assert.True(screen.SelectSidebarEntryContaining(memberLabel.Trim()));
+
+        var result = screen.HandleKey(new ConsoleKeyInfo('i', ConsoleKey.I, shift: false, alt: false, control: false));
+
+        Assert.Equal(TuiScreenResult.Exit, result);
+        Assert.Equal(expectedMemberName, Assert.Single(sink.Inserted));
+    }
+
+    [Fact]
     public void Help_browser_can_follow_base_type_navigation_inside_a_clr_type_scope()
     {
         var screen = OpenClrBrowser();
@@ -389,6 +433,17 @@ public sealed class HelpBrowserScreenTests
         {
             Assert.True(screen.SelectSidebarEntryContaining(namespaceName));
             screen.HandleKey(new ConsoleKeyInfo('\r', ConsoleKey.Enter, shift: false, alt: false, control: false));
+        }
+    }
+
+    private sealed class RecordingInsertionSink : ICommandLineInsertionSink
+    {
+        public List<string> Inserted { get; } = [];
+
+        public bool TryInsertText(string text)
+        {
+            Inserted.Add(text);
+            return true;
         }
     }
 }

@@ -12,7 +12,7 @@ public sealed class ExtensionCommandTests
 
         var variableResults = await engine.ExecuteToListAsync("var greeting = \"hello\"\necho $greeting");
         var projectionResults = await engine.ExecuteToListAsync(
-            "echo \"{\\\"name\\\":\\\"alpha\\\",\\\"size\\\":1}\" | from-json | get { name, size } | rename name Name size Bytes");
+            "echo \"{\\\"name\\\":\\\"alpha\\\",\\\"size\\\":1}\" | from json | get { name, size } | rename name Name size Bytes");
 
         Assert.Collection(variableResults, item => Assert.Equal("hello", item));
 
@@ -50,7 +50,7 @@ public sealed class ExtensionCommandTests
         var replaceResults = await engine.ExecuteToListAsync("echo alpha-beta | replace beta BETA");
         var joinedResults = await engine.ExecuteToListAsync("echo one two | join-lines \", \"");
         var matchResults = await engine.ExecuteToListAsync("echo \"PID=42\" | match \"PID=(?<Pid>[0-9]+)\" | get Pid");
-        var templateResults = await engine.ExecuteToListAsync("echo \"{\\\"name\\\":\\\"toast\\\",\\\"size\\\":2}\" | from-json | template \"{{ name }}: {{ size }}\"");
+        var templateResults = await engine.ExecuteToListAsync("echo \"{\\\"name\\\":\\\"toast\\\",\\\"size\\\":2}\" | from json | template \"{{ name }}: {{ size }}\"");
         var hashResults = await engine.ExecuteToListAsync("echo hello | hash sha256");
 
         Assert.Equal(["alpha", "beta", "gamma"], splitResults.Cast<ShellTextLine>().Select(item => item.Text).ToArray());
@@ -95,8 +95,8 @@ public sealed class ExtensionCommandTests
         var tempDirectoryResults = await engine.ExecuteToListAsync("mkdir-temp test-shell");
         var tempFileResults = await engine.ExecuteToListAsync("tempfile test-shell txt");
         var materializedTextResults = await engine.ExecuteToListAsync("echo alpha beta | as-file text");
-        var materializedJsonResults = await engine.ExecuteToListAsync("echo \"{\\\"name\\\":\\\"toast\\\"}\" | from-json | as-file json");
-        var materializedCsvResults = await engine.ExecuteToListAsync("echo \"{\\\"name\\\":\\\"toast\\\",\\\"size\\\":2}\" | from-json | as-file csv");
+        var materializedJsonResults = await engine.ExecuteToListAsync("echo \"{\\\"name\\\":\\\"toast\\\"}\" | from json | as-file json");
+        var materializedCsvResults = await engine.ExecuteToListAsync("echo \"{\\\"name\\\":\\\"toast\\\",\\\"size\\\":2}\" | from json | as-file csv");
 
         Assert.Equal(true, Assert.IsAssignableFrom<IDictionary<string, object?>>(Assert.Single(existsResults))["Exists"]);
         Assert.Equal(true, Assert.IsAssignableFrom<IDictionary<string, object?>>(Assert.Single(fileResults))["IsFile"]);

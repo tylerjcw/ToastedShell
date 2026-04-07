@@ -2,6 +2,7 @@ using System.Collections;
 using System.Globalization;
 using System.Numerics;
 using System.Text.RegularExpressions;
+using Tosh.Core.Units;
 
 namespace Tosh.Core;
 
@@ -40,6 +41,9 @@ public static class OperatorEvaluator
             "ends-with" => EndsWith(left, right),
             "is" => IsType(left, right),
             "is-not" => !IsType(left, right),
+            "as" => CastAs(left, right),
+            "is-in" => IsIn(left, right),
+            "is-not-in" => !IsIn(left, right),
             "and" => ToBoolean(left) && ToBoolean(right),
             "or" => ToBoolean(left) || ToBoolean(right),
             "=" => throw new InvalidOperationException("Assignment operations require a variable."),
@@ -229,6 +233,64 @@ public static class OperatorEvaluator
         return actual?.ToString()?.EndsWith(expected?.ToString() ?? string.Empty, StringComparison.Ordinal) == true;
     }
 
+    private static object? CastAs(object? value, object? typeSpecifier)
+    {
+        if (value is null)
+        {
+            return null;
+        }
+
+        var typeName = typeSpecifier?.ToString();
+        if (string.IsNullOrEmpty(typeName))
+        {
+            throw new InvalidOperationException("The 'as' operator requires a type name on the right-hand side.");
+        }
+
+        // Resolve via built-in alias table first
+        Type? targetType = null;
+        if (DotNetTypeResolver.BuiltInAliases.TryGetValue(typeName, out var aliased))
+        {
+            targetType = aliased;
+        }
+        else
+        {
+            targetType = typeName.ToLowerInvariant() switch
+            {
+                "str" => typeof(string),
+                "boolean" => typeof(bool),
+                "single" or "float32" => typeof(float),
+                "float64" => typeof(double),
+                "int8" => typeof(sbyte),
+                "uint8" => typeof(byte),
+                "int16" => typeof(short),
+                "uint16" => typeof(ushort),
+                "int32" => typeof(int),
+                "uint32" => typeof(uint),
+                "int64" => typeof(long),
+                "uint64" => typeof(ulong),
+                _ => Type.GetType(typeName, throwOnError: false),
+            };
+        }
+
+        if (targetType is null)
+        {
+            throw new InvalidOperationException($"Unknown type '{typeName}' in 'as' expression.");
+        }
+
+        if (targetType.IsInstanceOfType(value))
+        {
+            return value;
+        }
+
+        if (TypeConversion.TryConvert(value, targetType, out var converted))
+        {
+            return converted;
+        }
+
+        throw new InvalidOperationException(
+            $"Cannot convert '{value?.GetType().Name}' to '{typeName}'.");
+    }
+
     private static bool IsType(object? value, object? typeSpecifier)
     {
         if (value is null)
@@ -289,6 +351,12 @@ public static class OperatorEvaluator
         if (left is null || right is null)
         {
             throw new InvalidOperationException("The '+' operator requires non-null operands.");
+        }
+
+        // Quantity arithmetic (including bridge promotion from TimeSpan/StorageSize)
+        if (TryPromoteToQuantity(left, out var leftQ) && TryPromoteToQuantity(right, out var rightQ))
+        {
+            return leftQ + rightQ;
         }
 
         if (left is string leftText)
@@ -366,6 +434,12 @@ public static class OperatorEvaluator
         if (left is null || right is null)
         {
             throw new InvalidOperationException("The '-' operator requires non-null operands.");
+        }
+
+        // Quantity arithmetic (including bridge promotion from TimeSpan/StorageSize)
+        if (TryPromoteToQuantity(left, out var leftQ) && TryPromoteToQuantity(right, out var rightQ))
+        {
+            return leftQ - rightQ;
         }
 
         if (left is DateTimeOffset leftOffset)
@@ -514,6 +588,22 @@ public static class OperatorEvaluator
             throw new InvalidOperationException("The '*' operator requires non-null operands.");
         }
 
+        // Quantity * Quantity or Quantity * scalar
+        if (left is Quantity lq && right is Quantity rq) return lq * rq;
+        if (left is Quantity lqs && IsNumeric(right)) return lqs * ToDouble(right);
+        if (IsNumeric(left) && right is Quantity rqs) return ToDouble(left) * rqs;
+
+        // String repetition: "ha" * 3 => "hahaha", 3 * "ha" => "hahaha"
+        if (left is string str && TryConvertToInt(right, out var count))
+        {
+            return count <= 0 ? string.Empty : string.Concat(Enumerable.Repeat(str, count));
+        }
+
+        if (right is string str2 && TryConvertToInt(left, out var count2))
+        {
+            return count2 <= 0 ? string.Empty : string.Concat(Enumerable.Repeat(str2, count2));
+        }
+
         return EvaluateNumeric(
             left,
             right,
@@ -522,12 +612,27 @@ public static class OperatorEvaluator
             (lhs, rhs) => lhs * rhs);
     }
 
+    private static bool TryConvertToInt(object? value, out int result)
+    {
+        switch (value)
+        {
+            case int i: result = i; return true;
+            case long l when l is >= int.MinValue and <= int.MaxValue: result = (int)l; return true;
+            case double d when d == Math.Truncate(d) && d is >= int.MinValue and <= int.MaxValue: result = (int)d; return true;
+            default: result = 0; return false;
+        }
+    }
+
     private static object? Divide(object? left, object? right)
     {
         if (left is null || right is null)
         {
             throw new InvalidOperationException("The '/' operator requires non-null operands.");
         }
+
+        // Quantity / Quantity or Quantity / scalar
+        if (left is Quantity lq && right is Quantity rq) return lq / rq;
+        if (left is Quantity lqs && IsNumeric(right)) return lqs / ToDouble(right);
 
         return EvaluateNumeric(
             left,
@@ -626,4 +731,31 @@ public static class OperatorEvaluator
     private static decimal ToDecimal(object value) => value is BigInteger integer
         ? (decimal)integer
         : Convert.ToDecimal(value, CultureInfo.InvariantCulture);
+
+    private static bool IsNumeric(object? value) => value is not null && (IsIntegral(value) || IsFloating(value) || IsDecimal(value));
+
+    /// <summary>
+    /// Attempts to promote a value to a Quantity. Returns true for:
+    /// - Quantity (pass-through)
+    /// - TimeSpan → DurationQuantity (bridge)
+    /// - StorageSize → DataSizeQuantity (bridge)
+    /// </summary>
+    private static bool TryPromoteToQuantity(object? value, out Quantity quantity)
+    {
+        switch (value)
+        {
+            case Quantity q:
+                quantity = q;
+                return true;
+            case TimeSpan ts:
+                quantity = new DurationQuantity(ts.TotalSeconds, "s");
+                return true;
+            case StorageSize ss:
+                quantity = new DataSizeQuantity(ss.Bytes, "B");
+                return true;
+            default:
+                quantity = null!;
+                return false;
+        }
+    }
 }

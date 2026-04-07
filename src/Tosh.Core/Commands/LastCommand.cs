@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[CommandCategory("Pipeline")]
 public sealed class LastCommand : ShellCommand
 {
     public LastCommand()

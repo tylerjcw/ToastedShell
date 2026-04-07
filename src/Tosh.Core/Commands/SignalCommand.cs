@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[CommandCategory("Process")]
 public sealed class SignalCommand : ShellCommand
 {
     public SignalCommand()

@@ -2,6 +2,7 @@ using System.Collections;
 
 namespace Tosh.Core.Commands;
 
+[CommandCategory("Pipeline")]
 public sealed class FlattenCommand : ShellCommand
 {
     public FlattenCommand()

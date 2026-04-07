@@ -1,12 +1,14 @@
 namespace Tosh.Core.Commands;
 
+[CommandCategory("System")]
 public sealed class DateCommand : ShellCommand
 {
     public DateCommand()
         : base(
             "date",
             "Creates, parses, and adjusts date/time values.",
-            "date [-d|--date-only] [-t|--time-only] <now|utc-now|today|tomorrow|yesterday|parse|from-unix|from-unix-ms|date-only|time-only|<iso-date>> ... or <date> | date [-d] [-t] <add|sub|date-only|time-only> ...") { }
+            "date [-d|--date-only] [-t|--time-only] <now|utc-now|today|tomorrow|yesterday|parse|from-unix|from-unix-ms|date-only|time-only|<iso-date>> ... or <date> | date [-d] [-t] <add|sub|date-only|time-only> ...")
+    { }
 
     public override async IAsyncEnumerable<object?> ExecuteAsync(CommandContext context)
     {
@@ -82,21 +84,21 @@ public sealed class DateCommand : ShellCommand
                 yield break;
 
             case "parse":
-            {
-                var text = CommandArguments.RequireString(parsed.Positionals, 1, "value");
-
-                if (!TemporalParser.TryParseDateTimeOffset(text, out var parsedValue))
                 {
-                    throw new InvalidOperationException(
-                        $"Could not parse '{text}' as a date/time. Use ISO-style forms like 2026-03-23, 2026-03-23T14:05:00, or 2026-03-23T14:05:00Z.");
-                }
+                    var text = CommandArguments.RequireString(parsed.Positionals, 1, "value");
 
-                foreach (var item in ProjectTemporalValue(parsedValue, emitDateOnly, emitTimeOnly))
-                {
-                    yield return item;
+                    if (!TemporalParser.TryParseDateTimeOffset(text, out var parsedValue))
+                    {
+                        throw new InvalidOperationException(
+                            $"Could not parse '{text}' as a date/time. Use ISO-style forms like 2026-03-23, 2026-03-23T14:05:00, or 2026-03-23T14:05:00Z.");
+                    }
+
+                    foreach (var item in ProjectTemporalValue(parsedValue, emitDateOnly, emitTimeOnly))
+                    {
+                        yield return item;
+                    }
+                    yield break;
                 }
-                yield break;
-            }
 
             case "from-unix":
                 foreach (var item in ProjectTemporalValue(DateTimeOffset.FromUnixTimeSeconds(CommandArguments.RequireConverted<long>(parsed.Positionals, 1, "seconds")), emitDateOnly, emitTimeOnly))

@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[CommandCategory("Text")]
 public sealed class WriteLineCommand : ShellCommand, IImplicitGlobCommand
 {
     public WriteLineCommand()

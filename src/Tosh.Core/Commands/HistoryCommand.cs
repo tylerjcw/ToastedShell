@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[CommandCategory("Shell")]
 public sealed class HistoryCommand : ShellCommand
 {
     public HistoryCommand()
@@ -33,53 +34,53 @@ public sealed class HistoryCommand : ShellCommand
                 yield return context.Runtime.Config.History.FilePath;
                 yield break;
             case "expand":
-            {
-                var spec = RequireHistorySpec(parsed);
-                yield return HistoryExpansionUtilities.Expand(context.Runtime.History.ToArray(), spec);
-                yield break;
-            }
+                {
+                    var spec = RequireHistorySpec(parsed);
+                    yield return HistoryExpansionUtilities.Expand(context.Runtime.History.ToArray(), spec);
+                    yield break;
+                }
             case "run":
-            {
-                var spec = RequireHistorySpec(parsed);
-                var evaluator = context.Runtime.Evaluator
-                    ?? throw context.CreateDiagnostic(
-                        code: "tosh::history::run_unavailable",
-                        title: "History replay is not available in this session.",
-                        help: "History replay requires a live evaluator. In normal ToSh sessions, `history run` should be available.");
-                var expanded = HistoryExpansionUtilities.Expand(context.Runtime.History.ToArray(), spec);
-
-                await foreach (var value in evaluator.EvaluateAsync(expanded, $"history_expand {spec}", context.CancellationToken))
                 {
-                    yield return value;
-                }
+                    var spec = RequireHistorySpec(parsed);
+                    var evaluator = context.Runtime.Evaluator
+                        ?? throw context.CreateDiagnostic(
+                            code: "tosh::history::run_unavailable",
+                            title: "History replay is not available in this session.",
+                            help: "History replay requires a live evaluator. In normal ToSh sessions, `history run` should be available.");
+                    var expanded = HistoryExpansionUtilities.Expand(context.Runtime.History.ToArray(), spec);
 
-                yield break;
-            }
+                    await foreach (var value in evaluator.EvaluateAsync(expanded, $"history_expand {spec}", context.CancellationToken))
+                    {
+                        yield return value;
+                    }
+
+                    yield break;
+                }
             case "search":
-            {
-                var search = await ResolveSearchTextAsync(context, parsed);
-
-                foreach (var result in context.Runtime.History.Where(entry => entry.Text.Contains(search, StringComparison.OrdinalIgnoreCase)))
                 {
-                    context.CancellationToken.ThrowIfCancellationRequested();
-                    yield return result;
-                }
+                    var search = await ResolveSearchTextAsync(context, parsed);
 
-                yield break;
-            }
+                    foreach (var result in context.Runtime.History.Where(entry => entry.Text.Contains(search, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        context.CancellationToken.ThrowIfCancellationRequested();
+                        yield return result;
+                    }
+
+                    yield break;
+                }
             case "delete":
-            {
-                var spec = RequireHistorySpec(parsed);
-                var entry = HistoryExpansionUtilities.ResolveEntry(context.Runtime.History.ToArray(), spec);
-
-                if (!context.Runtime.RemoveHistoryEntry(entry.Id))
                 {
-                    throw new InvalidOperationException($"History entry '{entry.Id}' was not found.");
-                }
+                    var spec = RequireHistorySpec(parsed);
+                    var entry = HistoryExpansionUtilities.ResolveEntry(context.Runtime.History.ToArray(), spec);
 
-                yield return new HistoryDeletionResult(entry.Id, entry.Text);
-                yield break;
-            }
+                    if (!context.Runtime.RemoveHistoryEntry(entry.Id))
+                    {
+                        throw new InvalidOperationException($"History entry '{entry.Id}' was not found.");
+                    }
+
+                    yield return new HistoryDeletionResult(entry.Id, entry.Text);
+                    yield break;
+                }
             case "save":
                 context.Runtime.SaveHistoryToFile();
                 yield return CreateStatus("save", context);

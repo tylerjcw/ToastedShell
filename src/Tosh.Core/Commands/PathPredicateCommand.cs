@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[CommandCategory("Filesystem")]
 public sealed class PathPredicateCommand : ShellCommand
 {
     private readonly Func<string, bool> _predicate;

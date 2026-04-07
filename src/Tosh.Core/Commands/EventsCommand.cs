@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[CommandCategory("Shell")]
 public sealed class EventsCommand : ShellCommand
 {
     public EventsCommand()
@@ -45,39 +46,39 @@ public sealed class EventsCommand : ShellCommand
                 yield break;
 
             case "handlers":
-            {
-                var eventName = CommandArguments.RequireString(parsed.Positionals, 1, "event name");
-
-                foreach (var handler in context.Runtime.Events.GetHandlers(eventName))
                 {
-                    context.CancellationToken.ThrowIfCancellationRequested();
-                    yield return handler;
-                }
+                    var eventName = CommandArguments.RequireString(parsed.Positionals, 1, "event name");
 
-                yield break;
-            }
+                    foreach (var handler in context.Runtime.Events.GetHandlers(eventName))
+                    {
+                        context.CancellationToken.ThrowIfCancellationRequested();
+                        yield return handler;
+                    }
+
+                    yield break;
+                }
 
             case "remove":
-            {
-                var eventName = CommandArguments.RequireString(parsed.Positionals, 1, "event name");
-                var handlerName = CommandArguments.RequireString(parsed.Positionals, 2, "handler name");
-
-                if (!context.Runtime.Events.Remove(eventName, handlerName))
                 {
-                    throw new InvalidOperationException($"No handler '{handlerName}' found for event '{eventName}'.");
+                    var eventName = CommandArguments.RequireString(parsed.Positionals, 1, "event name");
+                    var handlerName = CommandArguments.RequireString(parsed.Positionals, 2, "handler name");
+
+                    if (!context.Runtime.Events.Remove(eventName, handlerName))
+                    {
+                        throw new InvalidOperationException($"No handler '{handlerName}' found for event '{eventName}'.");
+                    }
+
+                    yield return new EventHandlerRemovalResult(eventName, handlerName);
+                    yield break;
                 }
 
-                yield return new EventHandlerRemovalResult(eventName, handlerName);
-                yield break;
-            }
-
             case "clear":
-            {
-                var eventName = CommandArguments.RequireString(parsed.Positionals, 1, "event name");
-                var count = context.Runtime.Events.RemoveAll(eventName);
-                yield return new EventClearResult(eventName, count);
-                yield break;
-            }
+                {
+                    var eventName = CommandArguments.RequireString(parsed.Positionals, 1, "event name");
+                    var count = context.Runtime.Events.RemoveAll(eventName);
+                    yield return new EventClearResult(eventName, count);
+                    yield break;
+                }
 
             default:
                 throw new InvalidOperationException("events action must be 'list', 'names', 'handlers', 'remove', or 'clear'.");

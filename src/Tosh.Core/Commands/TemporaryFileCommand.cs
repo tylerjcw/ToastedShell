@@ -1,5 +1,11 @@
 namespace Tosh.Core.Commands;
 
+[CommandCategory("Filesystem")]
+[CommandArgument("prefix", "Optional prefix for the file name. Defaults to 'tosh'.", Required = false)]
+[CommandArgument("extension", "Optional file extension.", Required = false)]
+[CommandExample("tempfile")]
+[CommandExample("tempfile data .csv", Title = "Custom prefix and extension")]
+[CommandOutput("Returns a FileSystemEntry for the created temporary file.")]
 public sealed class TemporaryFileCommand : ShellCommand
 {
     public TemporaryFileCommand()

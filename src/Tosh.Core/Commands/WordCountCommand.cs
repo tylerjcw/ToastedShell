@@ -2,6 +2,7 @@ using System.Text;
 
 namespace Tosh.Core.Commands;
 
+[CommandCategory("Text")]
 public sealed class WordCountCommand : ShellCommand
 {
     public WordCountCommand()

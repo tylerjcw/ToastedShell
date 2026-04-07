@@ -10,6 +10,7 @@ The in-shell help system is also a live source of truth:
 
 - `help <topic>`
 - `help search <text>`
+- `help --cli`
 - `help browse`
 
 ## Start Here

@@ -1,5 +1,11 @@
 namespace Tosh.Core.Commands;
 
+[CommandCategory("Filesystem")]
+[CommandArgument("path", "One or more symbolic link paths.", TypeName = "path-like")]
+[CommandOption("-f", "Resolve the final target, following chains of symbolic links.")]
+[CommandExample("readlink ./link")]
+[CommandExample("readlink -f ./chain", Title = "Canonicalize")]
+[CommandOutput("Returns the target path of each symbolic link.")]
 public sealed class ReadLinkCommand : ShellCommand
 {
     public ReadLinkCommand()

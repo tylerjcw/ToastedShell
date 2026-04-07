@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[CommandCategory("Functional")]
 public sealed class ConvergeCommand : ShellCommand
 {
     public ConvergeCommand()

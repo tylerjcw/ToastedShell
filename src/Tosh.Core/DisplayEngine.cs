@@ -2953,6 +2953,14 @@ public sealed class DisplayEngine
             return true;
         }
 
+        if (value is Units.Quantity quantity)
+        {
+            typeName = quantity.CategoryName;
+            valueText = quantity.ToString();
+            valueAlignment = DisplayTableAlignment.Right;
+            return true;
+        }
+
         if (value is decimal decimalValue)
         {
             typeName = runtimeType.Name;
@@ -3054,6 +3062,7 @@ public sealed class DisplayEngine
                effectiveType == typeof(TimeSpan) ||
                effectiveType == typeof(StorageSize) ||
                effectiveType == typeof(TemporalAmount) ||
+               typeof(Units.Quantity).IsAssignableFrom(effectiveType) ||
                effectiveType == typeof(Uri) ||
                effectiveType == typeof(IPAddress) ||
                effectiveType == typeof(UnixFileMode) ||
@@ -3670,6 +3679,7 @@ public sealed class DisplayEngine
                effectiveType == typeof(Guid) ||
                effectiveType == typeof(TimeSpan) ||
                effectiveType == typeof(Uri) ||
+               typeof(Units.Quantity).IsAssignableFrom(effectiveType) ||
                effectiveType.IsEnum ||
                effectiveType.IsPrimitive;
     }
@@ -3800,7 +3810,8 @@ public sealed class DisplayEngine
                effectiveType == typeof(StorageSize) ||
                effectiveType == typeof(float) ||
                effectiveType == typeof(double) ||
-               effectiveType == typeof(decimal);
+               effectiveType == typeof(decimal) ||
+               typeof(Units.Quantity).IsAssignableFrom(effectiveType);
     }
 
     private static int GetPreferredColumnOrder(string propertyName)

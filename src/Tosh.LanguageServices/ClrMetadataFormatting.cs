@@ -1,8 +1,8 @@
 using System.Reflection;
 
-namespace Tosh.Lsp;
+namespace Tosh.LanguageServices;
 
-internal static class ClrMetadataFormatting
+public static class ClrMetadataFormatting
 {
     public static string FormatTypeDisplayName(Type type)
     {

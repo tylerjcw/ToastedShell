@@ -3,6 +3,7 @@ using System.Dynamic;
 
 namespace Tosh.Core.Commands;
 
+[CommandCategory("System")]
 public sealed class LsipcCommand : ShellCommand
 {
     public LsipcCommand()

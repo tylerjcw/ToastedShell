@@ -64,7 +64,7 @@ public sealed class HelpCommandTests
         var categoryResults = await engine.ExecuteToListAsync("help categories");
         var helpResults = await engine.ExecuteToListAsync("help ls | get Name");
 
-        Assert.Contains(searchResults, item => Assert.IsType<HelpSearchResult>(item).Name == "from-json");
+        Assert.Contains(searchResults, item => Assert.IsType<HelpSearchResult>(item).Name == "from");
         Assert.Contains(aproposResults, item => Assert.IsType<HelpSearchResult>(item).Name == "while");
         Assert.Contains(relatedResults, item => Assert.IsType<HelpSearchResult>(item).Name == "return");
         Assert.Contains(categoryResults, item => Assert.IsType<HelpCategoryInfo>(item).Category == "Filesystem");
@@ -83,7 +83,7 @@ public sealed class HelpCommandTests
         var aproposResults = await engine.ExecuteToListAsync("echo loop | apropos | get Name");
 
         Assert.Collection(helpResults, item => Assert.Equal("list", item));
-        Assert.Contains("from-json", searchResults.Cast<string>());
+        Assert.Contains("from", searchResults.Cast<string>());
         Assert.Contains("return", relatedResults.Cast<string>());
         Assert.Contains("while", aproposResults.Cast<string>());
     }

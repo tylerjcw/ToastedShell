@@ -2,6 +2,7 @@ using System.Diagnostics;
 
 namespace Tosh.Core.Commands;
 
+[CommandCategory("System")]
 public sealed class NetworkctlCommand : ShellCommand
 {
     private static readonly IReadOnlySet<string> KnownNonStructuredSubcommands = new HashSet<string>(StringComparer.OrdinalIgnoreCase)

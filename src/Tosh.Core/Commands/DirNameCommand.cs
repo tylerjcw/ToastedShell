@@ -1,5 +1,10 @@
 namespace Tosh.Core.Commands;
 
+[CommandCategory("Filesystem")]
+[CommandArgument("path", "One or more paths to extract the directory from.", TypeName = "path-like")]
+[CommandExample("dirname /home/user/file.txt")]
+[CommandOutput("Returns the directory component of each path.")]
+[PipelineInput(AcceptsScalar = true, AcceptsList = true, Description = "Accepts piped path-like values.")]
 public sealed class DirNameCommand : ShellCommand
 {
     public DirNameCommand()

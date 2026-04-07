@@ -1,9 +1,9 @@
 using System.Reflection;
 using Tosh.Core;
 
-namespace Tosh.Lsp;
+namespace Tosh.LanguageServices;
 
-internal sealed class ClrCompletionCatalog
+public sealed class ClrCompletionCatalog
 {
     private static readonly object SyncRoot = new();
     private static ClrCompletionCatalog? _sharedCatalog;

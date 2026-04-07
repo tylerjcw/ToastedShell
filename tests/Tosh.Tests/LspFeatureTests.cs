@@ -1,4 +1,4 @@
-using Tosh.Lsp;
+using Tosh.LanguageServices;
 
 namespace Tosh.Tests;
 
@@ -543,6 +543,93 @@ public sealed class LspFeatureTests
         Assert.Equal(2, definitions.Count);
         Assert.Contains(definitions, definition => definition.Range.Start.Line == 0);
         Assert.Contains(definitions, definition => definition.Range.Start.Line == 1);
+    }
+
+    [Fact]
+    public void Hover_shows_rich_markdown_for_builtin_commands()
+    {
+        var (text, position) = ExtractCursor("sor¦t -r");
+
+        var hover = _features.GetHover(text, "file:///hover-builtin.tosh", position);
+
+        Assert.NotNull(hover);
+        var md = hover!.Contents.Value;
+        Assert.Contains("sort", md, StringComparison.Ordinal);
+        // Should include usage code block
+        Assert.Contains("```tosh", md, StringComparison.Ordinal);
+        // Should include the arguments section
+        Assert.Contains("**Arguments**", md, StringComparison.Ordinal);
+        Assert.Contains("key", md, StringComparison.Ordinal);
+        // Should include the options section
+        Assert.Contains("**Options**", md, StringComparison.Ordinal);
+        Assert.Contains("-r", md, StringComparison.Ordinal);
+        // Should include examples
+        Assert.Contains("**Examples**", md, StringComparison.Ordinal);
+        // Should include pipeline input info
+        Assert.Contains("**Pipeline input:**", md, StringComparison.Ordinal);
+        // Should include output info
+        Assert.Contains("**Output:**", md, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Completion_items_include_flags_for_builtin_commands()
+    {
+        var items = _features.GetCompletionItems("sort -", new LspPosition(0, 6));
+
+        Assert.Contains(items, item => item.Label == "-r");
+        Assert.Contains(items, item => item.Label == "-n");
+        Assert.Contains(items, item => item.Label == "-u");
+        Assert.Contains(items, item => item.Label == "-h");
+        Assert.All(items, item => Assert.Equal(20, item.Kind));
+    }
+
+    [Fact]
+    public void Completion_items_filter_flags_by_prefix()
+    {
+        var items = _features.GetCompletionItems("tree --sh", new LspPosition(0, 9));
+
+        Assert.Contains(items, item => item.Label == "--show <columns>");
+        Assert.Contains(items, item => item.Label == "--show-all");
+        Assert.DoesNotContain(items, item => item.Label == "--hide <columns>");
+    }
+
+    [Fact]
+    public void Completion_items_include_flags_after_pipeline()
+    {
+        var items = _features.GetCompletionItems("ls | sort -", new LspPosition(0, 11));
+
+        Assert.Contains(items, item => item.Label == "-r");
+        Assert.Contains(items, item => item.Label == "-n");
+    }
+
+    [Fact]
+    public void Signature_help_shows_builtin_command_arguments()
+    {
+        var (text, position) = ExtractCursor("echo hell¦o");
+
+        var help = _features.GetSignatureHelp(text, "file:///sig-builtin.tosh", position);
+
+        Assert.NotNull(help);
+        Assert.Single(help!.Signatures);
+        var signature = help.Signatures[0];
+        Assert.Contains("echo", signature.Label, StringComparison.Ordinal);
+        Assert.Contains("value", signature.Label, StringComparison.Ordinal);
+        Assert.Equal("Emits its arguments as pipeline objects.", signature.Documentation);
+        Assert.NotEmpty(signature.Parameters!);
+        Assert.Equal(0, help.ActiveParameter);
+    }
+
+    [Fact]
+    public void Signature_help_shows_optional_argument_with_type()
+    {
+        var (text, position) = ExtractCursor("sort ¦key");
+
+        var help = _features.GetSignatureHelp(text, "file:///sig-sort.tosh", position);
+
+        Assert.NotNull(help);
+        var signature = Assert.Single(help!.Signatures);
+        Assert.Contains("key?", signature.Label, StringComparison.Ordinal);
+        Assert.Contains("member-path|callable|block", signature.Label, StringComparison.Ordinal);
     }
 
     private static (string Text, LspPosition Position) ExtractCursor(string textWithCursor)

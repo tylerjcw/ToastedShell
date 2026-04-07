@@ -2,6 +2,7 @@ using System.Diagnostics;
 
 namespace Tosh.Core.Commands;
 
+[CommandCategory("System")]
 public sealed class JournalctlCommand : ShellCommand
 {
     public JournalctlCommand()

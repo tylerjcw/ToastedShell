@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[CommandCategory("Shell")]
 public sealed class WhichCommand : ShellCommand
 {
     public WhichCommand(string name = "which")

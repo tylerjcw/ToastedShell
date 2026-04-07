@@ -1,5 +1,12 @@
 namespace Tosh.Core.Commands;
 
+[CommandCategory("Filesystem")]
+[CommandArgument("owner[:group]", "Owner and optional group specification.")]
+[CommandArgument("path", "One or more files or directories.", TypeName = "path-like")]
+[CommandOption("-R", "Operate recursively on directories.")]
+[CommandExample("chown user:group file.txt")]
+[CommandExample("chown -R www-data /var/www", Title = "Recursive change")]
+[CommandOutput("Returns FileSystemEntry objects for each changed path.")]
 public sealed class ChownCommand : ShellCommand
 {
     public ChownCommand()

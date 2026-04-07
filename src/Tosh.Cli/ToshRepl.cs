@@ -9,6 +9,7 @@ public sealed class ToshRepl
 {
     private readonly DiagnosticRenderer _diagnostics;
     private readonly ReplCompletionEngine _completionEngine;
+    private readonly ReplCommandLineInsertionSink _commandLineInsertion;
     private readonly ToshEngine _engine;
     private readonly ReplLineEditor _lineEditor;
     private readonly ToshRuntime _runtime;
@@ -19,6 +20,8 @@ public sealed class ToshRepl
         _runtime = engine.Runtime;
         _diagnostics = new DiagnosticRenderer(_runtime.Config.Theme.Diagnostics);
         _lineEditor = new ReplLineEditor();
+        _commandLineInsertion = new ReplCommandLineInsertionSink();
+        _runtime.CommandLineInsertion = _commandLineInsertion;
         _completionEngine = new ReplCompletionEngine(_runtime);
     }
 
@@ -37,16 +40,29 @@ public sealed class ToshRepl
                 lastHistoryCount = _runtime.History.Count;
             }
 
+            var initialText = string.Empty;
+            int? initialCursorIndex = null;
+            if (_commandLineInsertion.TryConsume(out var pendingCommandLine))
+            {
+                initialText = pendingCommandLine.Text;
+                initialCursorIndex = pendingCommandLine.CursorIndex;
+            }
+
             var source = _lineEditor.ReadLine(
                 BuildPrompt(),
                 cachedHistory ?? Array.Empty<string>(),
                 (text, cursor) => _completionEngine.GetCompletions(text, cursor),
+                initialText: initialText,
+                initialCursorIndex: initialCursorIndex,
                 highlighter: _runtime.Config.Repl.SyntaxHighlightingEnabled ? text => SyntaxHighlighter.Highlight(text, _runtime) : null,
                 continuationPrompt: _runtime.Config.Repl.ContinuationPrompt,
                 maxVisibleSuggestions: _runtime.Config.Repl.CompletionMaxVisible,
                 showGhostText: _runtime.Config.Repl.GhostTextEnabled,
                 completionTheme: _runtime.Config.Theme.Completion,
-                continuationHandler: ReplInputClassifier.GetContinuationState);
+                continuationHandler: ReplInputClassifier.GetContinuationState,
+                specialKeyHandler: TryHandleInlineToolShortcut,
+                onBufferActivated: buffer => _commandLineInsertion.ActivateBuffer(buffer),
+                onBufferDeactivated: buffer => _commandLineInsertion.DeactivateBuffer(buffer));
 
             if (source is null)
             {
@@ -158,6 +174,67 @@ public sealed class ToshRepl
         }
 
         return ToshPromptRenderer.BuildDefaultPrompt(_runtime);
+    }
+
+    private bool TryHandleInlineToolShortcut(LineEditorBuffer buffer, ConsoleKeyInfo key)
+    {
+        var inlinePrompts = _runtime.InlinePrompts;
+
+        if (inlinePrompts is null)
+        {
+            return false;
+        }
+
+        switch (key.Key)
+        {
+            case ConsoleKey.F1:
+            case ConsoleKey.H when key.Modifiers.HasFlag(ConsoleModifiers.Alt):
+            {
+                var tokenSpan = ReplCompletionEngine.GetTokenSpanAtCursor(buffer.Text, buffer.CursorIndex);
+                var query = ReplCompletionEngine.GetInlineHelpQuery(buffer.Text, buffer.CursorIndex);
+                var topicName = string.IsNullOrWhiteSpace(query) ? null : HelpCatalog.ResolveTopic(_runtime, query)?.Name;
+                _commandLineInsertion.SetPendingReplacement(tokenSpan.Start, tokenSpan.Length);
+
+                try
+                {
+                    inlinePrompts.BrowseHelp(query, topicName);
+                }
+                finally
+                {
+                    _commandLineInsertion.ClearPendingReplacement();
+                }
+
+                return true;
+            }
+
+            case ConsoleKey.F2:
+            case ConsoleKey.I when key.Modifiers.HasFlag(ConsoleModifiers.Alt):
+            {
+                var tokenSpan = ReplCompletionEngine.GetInspectTargetSpanAtCursor(buffer.Text, buffer.CursorIndex);
+                var token = tokenSpan.Token;
+
+                if (!_completionEngine.TryResolveInspectableReference(token, out var value))
+                {
+                    return false;
+                }
+
+                _commandLineInsertion.SetPendingReplacement(tokenSpan.Start, tokenSpan.Length);
+
+                try
+                {
+                    inlinePrompts.Inspect(value, sourceExpression: ReplCompletionEngine.BuildInspectableSourceExpression(token, value));
+                }
+                finally
+                {
+                    _commandLineInsertion.ClearPendingReplacement();
+                }
+
+                return true;
+            }
+
+            default:
+                return false;
+        }
     }
 
     private static async Task PrintBannerAsync()

@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[CommandCategory("Pipeline")]
 public sealed class GetCommand : ShellCommand
 {
     public GetCommand(string name = "get")

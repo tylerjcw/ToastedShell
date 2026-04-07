@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[CommandCategory("CLR")]
 public sealed class MethodsCommand : ShellCommand
 {
     public MethodsCommand()

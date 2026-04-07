@@ -26,6 +26,12 @@ if (plan.Kind == CliInvocationKind.Help)
     return;
 }
 
+if (plan.Kind == CliInvocationKind.ExportManifest)
+{
+    await ExportCommandManifestAsync(plan);
+    return;
+}
+
 if (plan.LoadStartup)
 {
     try
@@ -229,4 +235,43 @@ static async Task PrintUsageAsync()
     await Console.Out.WriteLineAsync("  tosh 'require ./common.tosh'");
     await Console.Out.WriteLineAsync("  tosh 'func llf => ls -la | where _.Type == file'");
     await Console.Out.WriteLineAsync("  tosh 'func recent(days: TimeSpan) { ls -la | where _.Modified > ((date now) - $days) }'");
+}
+
+static async Task ExportCommandManifestAsync(CliInvocationPlan plan)
+{
+    var format = plan.ScriptOrCommand ?? "json";
+    var outputPath = plan.Arguments.Length > 0 ? plan.Arguments[0] : null;
+
+    // Build a minimal runtime just for command registration — no startup/config needed.
+    var registry = new ShellCommandRegistry();
+    Tosh.Core.Commands.BuiltInCommands.RegisterDefaults(registry);
+
+    string output;
+
+    if (string.Equals(format, "latex", StringComparison.OrdinalIgnoreCase))
+    {
+        var manifest = CommandManifestExporter.BuildManifest(registry);
+        output = CommandLatexEmitter.Emit(manifest);
+    }
+    else
+    {
+        output = CommandManifestExporter.ExportJson(registry);
+    }
+
+    if (outputPath is not null)
+    {
+        var dir = Path.GetDirectoryName(outputPath);
+
+        if (dir is not null && !Directory.Exists(dir))
+        {
+            Directory.CreateDirectory(dir);
+        }
+
+        await File.WriteAllTextAsync(outputPath, output);
+        await Console.Error.WriteLineAsync($"Wrote {format} manifest to {outputPath}");
+    }
+    else
+    {
+        await Console.Out.WriteAsync(output);
+    }
 }

@@ -43,6 +43,13 @@ public sealed class TuiInlineTests
         await Assert.ThrowsAsync<ToshDiagnosticException>(() => engine.ExecuteToListAsync("tui filter a b c"));
     }
 
+    [Fact]
+    public async Task Help_cli_without_provider_throws()
+    {
+        var engine = CreateEngine();
+        await Assert.ThrowsAsync<ToshDiagnosticException>(() => engine.ExecuteToListAsync("help --cli"));
+    }
+
     // ── --cli flag with mock provider ─────────────────────────
 
     [Fact]
@@ -262,6 +269,65 @@ public sealed class TuiInlineTests
         Assert.IsType<TuiInputRequest>(Assert.Single(results));
     }
 
+    [Fact]
+    public async Task Inspect_with_inline_provider_uses_interactive_path()
+    {
+        var mock = new MockInlineProvider();
+        var engine = CreateEngine(mock);
+        var results = await engine.ExecuteToListAsync("new System.Text.StringBuilder hello | inspect");
+
+        Assert.Empty(results);
+        Assert.IsType<System.Text.StringBuilder>(mock.LastInspectValue);
+        Assert.False(mock.LastInspectIncludeAllMembers);
+    }
+
+    [Fact]
+    public async Task Inspect_with_flat_flag_returns_legacy_object_inspection()
+    {
+        var mock = new MockInlineProvider();
+        var engine = CreateEngine(mock);
+        var results = await engine.ExecuteToListAsync("new System.Text.StringBuilder hello | inspect --flat");
+
+        var inspection = Assert.IsType<ObjectInspection>(Assert.Single(results));
+        Assert.Equal("System.Text.StringBuilder", inspection.TypeName);
+        Assert.Null(mock.LastInspectValue);
+    }
+
+    [Fact]
+    public async Task Inspect_passes_all_members_flag_to_inline_provider()
+    {
+        var mock = new MockInlineProvider();
+        var engine = CreateEngine(mock);
+        var results = await engine.ExecuteToListAsync("new System.Text.StringBuilder hello | inspect -a");
+
+        Assert.Empty(results);
+        Assert.True(mock.LastInspectIncludeAllMembers);
+    }
+
+    [Fact]
+    public async Task Help_cli_with_inline_provider_uses_interactive_path()
+    {
+        var mock = new MockInlineProvider();
+        var engine = CreateEngine(mock);
+        var results = await engine.ExecuteToListAsync("help --cli regex");
+
+        Assert.Empty(results);
+        Assert.Equal("regex", mock.LastHelpInitialQuery);
+        Assert.Equal("Regex", mock.LastHelpInitialTopicName);
+    }
+
+    [Fact]
+    public async Task Help_browse_cli_with_inline_provider_uses_interactive_path()
+    {
+        var mock = new MockInlineProvider();
+        var engine = CreateEngine(mock);
+        var results = await engine.ExecuteToListAsync("help browse --cli func");
+
+        Assert.Empty(results);
+        Assert.Equal("func", mock.LastHelpInitialQuery);
+        Assert.Equal("func", mock.LastHelpInitialTopicName);
+    }
+
     // ── Mock ──────────────────────────────────────────────────
 
     private sealed class MockInlineProvider : IInlinePromptProvider
@@ -276,6 +342,11 @@ public sealed class TuiInlineTests
         public int LastPickPageSize { get; private set; }
         public bool LastInputPassword { get; private set; }
         public string? LastFilterPrompt { get; private set; }
+        public object? LastInspectValue { get; private set; }
+        public bool LastInspectIncludeAllMembers { get; private set; }
+        public string? LastInspectSourceExpression { get; private set; }
+        public string? LastHelpInitialQuery { get; private set; }
+        public string? LastHelpInitialTopicName { get; private set; }
 
         public MockInlineProvider(
             IReadOnlyList<object?>? pickResult = null,
@@ -287,6 +358,19 @@ public sealed class TuiInlineTests
             _confirmResult = confirmResult;
             _inputResult = inputResult;
             _filterResult = filterResult;
+        }
+
+        public void Inspect(object? value, bool includeAllMembers = false, string? sourceExpression = null)
+        {
+            LastInspectValue = value;
+            LastInspectIncludeAllMembers = includeAllMembers;
+            LastInspectSourceExpression = sourceExpression;
+        }
+
+        public void BrowseHelp(string? initialQuery = null, string? initialTopicName = null)
+        {
+            LastHelpInitialQuery = initialQuery;
+            LastHelpInitialTopicName = initialTopicName;
         }
 
         public IReadOnlyList<object?>? Pick(IReadOnlyList<object?> items, string? prompt, string? displayProperty, bool multiSelect, int pageSize)

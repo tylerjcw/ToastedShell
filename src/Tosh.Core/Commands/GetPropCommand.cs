@@ -2,6 +2,7 @@ using System.Reflection;
 
 namespace Tosh.Core.Commands;
 
+[CommandCategory("CLR")]
 public sealed class GetPropCommand : ShellCommand
 {
     public GetPropCommand()

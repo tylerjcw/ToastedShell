@@ -33,6 +33,7 @@ tosh --no-startup
 ## First Things To Try
 
 ```tosh
+help --cli
 help browse
 config browse
 ls -la | where _.Type == file | sort Size | reverse | first 10
@@ -41,6 +42,14 @@ lsblk -l | summarize --sum Size
 date -dt now
 guid new v7
 ```
+
+In the interactive REPL:
+
+- `F1` opens the inline help browser, seeded from the token under the cursor
+- `Alt+H` opens the same inline help browser when function keys are not exposed cleanly by the terminal
+- `F2` tries to inline-inspect the reference under the cursor
+- `Alt+I` opens the same inline inspector when function keys are not exposed cleanly by the terminal
+- `i` inside inline help/inspect inserts into the active command line at the cursor
 
 ## Core Ideas
 

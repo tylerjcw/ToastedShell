@@ -2,6 +2,7 @@ using System.Runtime.InteropServices;
 
 namespace Tosh.Core.Commands;
 
+[CommandCategory("CLR")]
 public sealed class NativeSizeOfCommand : ShellCommand
 {
     public NativeSizeOfCommand(string name = "native-sizeof")

@@ -2,6 +2,7 @@ using System.Runtime.InteropServices;
 
 namespace Tosh.Core.Commands;
 
+[CommandCategory("CLR")]
 public sealed class NativeOffsetOfCommand : ShellCommand
 {
     public NativeOffsetOfCommand(string name = "native-offsetof")

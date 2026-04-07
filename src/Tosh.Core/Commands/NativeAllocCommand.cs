@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[CommandCategory("CLR")]
 public sealed class NativeAllocCommand : ShellCommand
 {
     public NativeAllocCommand(string name = "native-alloc")

@@ -1,5 +1,8 @@
 namespace Tosh.Core.Commands;
 
+[CommandCategory("Filesystem")]
+[CommandExample("pwd")]
+[CommandOutput("Returns the current working directory as a DirectoryInfo object.")]
 public sealed class PrintWorkingDirectoryCommand : ShellCommand
 {
     public PrintWorkingDirectoryCommand()

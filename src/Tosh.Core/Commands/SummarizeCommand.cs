@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[CommandCategory("Pipeline")]
 public sealed class SummarizeCommand : ShellCommand, ICurrentItemMemberPathCommand
 {
     public SummarizeCommand(string name = "summarize")

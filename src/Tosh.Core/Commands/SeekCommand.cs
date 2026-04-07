@@ -2,6 +2,7 @@ using System.IO;
 
 namespace Tosh.Core.Commands;
 
+[CommandCategory("Filesystem")]
 public sealed class SeekCommand : ShellCommand
 {
     public SeekCommand()

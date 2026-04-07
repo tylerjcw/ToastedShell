@@ -1,5 +1,17 @@
 namespace Tosh.Core.Commands;
 
+[CommandCategory("Filesystem")]
+[CommandArgument("path", "One or more paths to inspect.", TypeName = "path-like")]
+[CommandOption("-L", "Dereference symlinks before reading metadata.")]
+[CommandOption("-f", "Return filesystem usage information for the containing mount instead of file-entry metadata.")]
+[CommandOption("--show <columns>", "Select which properties are rendered.")]
+[CommandOption("--hide <columns>", "Hide specific properties from the output.")]
+[CommandOption("--show-all", "Display every available column.")]
+[CommandExample("stat ./README.md")]
+[CommandExample("stat -L ./link.txt", Title = "Dereference symlink")]
+[CommandExample("stat -f . | get { RequestedPath, FileSystem, MountedOn }", Title = "Filesystem mode")]
+[CommandOutput("Typed filesystem-entry metadata, or filesystem-usage objects in -f mode.")]
+[PipelineInput(AcceptsList = true, Description = "Uses piped path-like values when explicit paths are omitted.")]
 public sealed class StatCommand : ShellCommand
 {
     public StatCommand()

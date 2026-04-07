@@ -255,16 +255,16 @@ public sealed class ObjectFormatterTests
         var formatter = new ObjectFormatter();
         var values = new object?[]
         {
-            new HelpSearchResult("from-json", 98.2, HelpSubjectKind.BuiltIn, "Data", "Parses JSON text into CLR objects.", "from-json", Array.Empty<string>()),
-            new HelpSearchResult("to-json", 82.5, HelpSubjectKind.BuiltIn, "Data", "Serializes CLR objects to JSON text.", "to-json", Array.Empty<string>()),
+            new HelpSearchResult("from", 98.2, HelpSubjectKind.BuiltIn, "Data", "Parses structured text into objects.", "from <format> [options] [text]", Array.Empty<string>()),
+            new HelpSearchResult("to", 82.5, HelpSubjectKind.BuiltIn, "Data", "Serializes objects into structured text.", "to <format> [options]", Array.Empty<string>()),
         };
 
         var text = formatter.FormatMany(values);
 
         Assert.Contains("Score", text, StringComparison.Ordinal);
         Assert.Contains("Name", text, StringComparison.Ordinal);
-        Assert.Contains("from-json", text, StringComparison.Ordinal);
-        Assert.Contains("to-json", text, StringComparison.Ordinal);
+        Assert.Contains("from", text, StringComparison.Ordinal);
+        Assert.Contains("to", text, StringComparison.Ordinal);
     }
 
     private sealed record DemoObject(string Name, int Count);

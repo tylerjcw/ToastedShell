@@ -2,13 +2,15 @@ using System.Globalization;
 
 namespace Tosh.Core.Commands;
 
+[CommandCategory("System")]
 public sealed class GuidCommand : ShellCommand
 {
     public GuidCommand()
         : base(
             "guid",
             "Creates, parses, formats, and inspects GUID values.",
-            "guid [new [v4|v7]|empty|parse|format <d|n|b|p|x>|info] [value ...]") { }
+            "guid [new [v4|v7]|empty|parse|format <d|n|b|p|x>|info] [value ...]")
+    { }
 
     public override async IAsyncEnumerable<object?> ExecuteAsync(CommandContext context)
     {
@@ -23,50 +25,50 @@ public sealed class GuidCommand : ShellCommand
         switch (mode.ToLowerInvariant())
         {
             case "new":
-            {
-                var version = context.Arguments.Count > 1
-                    ? CommandArguments.RequireString(context.Arguments, 1, "version")
-                    : "v4";
+                {
+                    var version = context.Arguments.Count > 1
+                        ? CommandArguments.RequireString(context.Arguments, 1, "version")
+                        : "v4";
 
-                yield return CreateGuid(version);
-                yield break;
-            }
+                    yield return CreateGuid(version);
+                    yield break;
+                }
 
             case "empty":
                 yield return Guid.Empty;
                 yield break;
 
             case "parse":
-            {
-                await foreach (var value in EnumerateGuidValuesAsync(context, 1))
                 {
-                    yield return value;
-                }
+                    await foreach (var value in EnumerateGuidValuesAsync(context, 1))
+                    {
+                        yield return value;
+                    }
 
-                yield break;
-            }
+                    yield break;
+                }
 
             case "format":
-            {
-                var format = NormalizeFormatSpecifier(CommandArguments.RequireString(context.Arguments, 1, "format"));
-
-                await foreach (var value in EnumerateGuidValuesAsync(context, 2))
                 {
-                    yield return value.ToString(format, CultureInfo.InvariantCulture);
-                }
+                    var format = NormalizeFormatSpecifier(CommandArguments.RequireString(context.Arguments, 1, "format"));
 
-                yield break;
-            }
+                    await foreach (var value in EnumerateGuidValuesAsync(context, 2))
+                    {
+                        yield return value.ToString(format, CultureInfo.InvariantCulture);
+                    }
+
+                    yield break;
+                }
 
             case "info":
-            {
-                await foreach (var value in EnumerateGuidValuesAsync(context, 1))
                 {
-                    yield return CreateGuidInfo(value);
-                }
+                    await foreach (var value in EnumerateGuidValuesAsync(context, 1))
+                    {
+                        yield return CreateGuidInfo(value);
+                    }
 
-                yield break;
-            }
+                    yield break;
+                }
         }
 
         throw new InvalidOperationException("guid mode must be 'new', 'empty', 'parse', 'format', or 'info'.");

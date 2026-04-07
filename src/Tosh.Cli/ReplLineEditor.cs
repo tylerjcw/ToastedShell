@@ -16,12 +16,16 @@ public sealed class ReplLineEditor
         IReadOnlyList<string> history,
         Func<string, int, ReplCompletionResult?>? completionProvider = null,
         string initialText = "",
+        int? initialCursorIndex = null,
         Func<string, string>? highlighter = null,
         string continuationPrompt = "....> ",
         int maxVisibleSuggestions = 8,
         bool showGhostText = true,
         ToshCompletionThemeConfig? completionTheme = null,
-        Func<string, ReplContinuationState>? continuationHandler = null)
+        Func<string, ReplContinuationState>? continuationHandler = null,
+        Func<LineEditorBuffer, ConsoleKeyInfo, bool>? specialKeyHandler = null,
+        Action<LineEditorBuffer>? onBufferActivated = null,
+        Action<LineEditorBuffer>? onBufferDeactivated = null)
     {
         ArgumentNullException.ThrowIfNull(prompt);
         ArgumentNullException.ThrowIfNull(history);
@@ -35,113 +39,259 @@ public sealed class ReplLineEditor
 
         var theme = completionTheme ?? DefaultCompletionTheme;
         var buffer = new LineEditorBuffer(NormalizeLineEndings(initialText));
+        if (initialCursorIndex is not null)
+        {
+            buffer.SetCursor(initialCursorIndex.Value);
+        }
+
         var historyNavigator = new LineEditorHistory(history);
+        var pendingKeys = new Queue<ConsoleKeyInfo>();
         var cursorRow = 1;
         int? preferredColumn = null;
         LineEditorCompletionState? completionState = null;
         LineEditorHistorySearchState? historySearchState = null;
 
-        cursorRow = Render(prompt, continuationPrompt, buffer, cursorRow, completionState, historySearchState, highlighter, maxVisibleSuggestions, showGhostText, theme);
+        onBufferActivated?.Invoke(buffer);
 
-        while (true)
+        try
         {
-            var key = Console.ReadKey(intercept: true);
+            cursorRow = Render(prompt, continuationPrompt, buffer, cursorRow, completionState, historySearchState, highlighter, maxVisibleSuggestions, showGhostText, theme);
 
-            if (completionState is not null)
+            while (true)
             {
-                if (TryHandleCompletionPickerKey(buffer, key, ref completionState))
+                var key = ReadInputKey(pendingKeys);
+
+                if (specialKeyHandler is not null && specialKeyHandler(buffer, key))
                 {
+                    completionState = null;
+                    historySearchState = null;
+                    preferredColumn = null;
                     cursorRow = Render(prompt, continuationPrompt, buffer, cursorRow, completionState, historySearchState, highlighter, maxVisibleSuggestions, showGhostText, theme);
                     continue;
                 }
-            }
 
-            if (historySearchState is not null)
-            {
-                if (TryHandleHistorySearchKey(buffer, key, ref historySearchState, out var shouldSubmit))
+                if (completionState is not null)
                 {
-                    completionState = null;
-                    preferredColumn = null;
-                    cursorRow = Render(prompt, continuationPrompt, buffer, cursorRow, completionState, historySearchState, highlighter, maxVisibleSuggestions, showGhostText, theme);
-
-                    if (shouldSubmit)
+                    if (TryHandleCompletionPickerKey(buffer, key, ref completionState))
                     {
-                        Console.WriteLine();
-                        return buffer.Text;
+                        cursorRow = Render(prompt, continuationPrompt, buffer, cursorRow, completionState, historySearchState, highlighter, maxVisibleSuggestions, showGhostText, theme);
+                        continue;
+                    }
+                }
+
+                if (historySearchState is not null)
+                {
+                    if (TryHandleHistorySearchKey(buffer, key, ref historySearchState, out var shouldSubmit))
+                    {
+                        completionState = null;
+                        preferredColumn = null;
+                        cursorRow = Render(prompt, continuationPrompt, buffer, cursorRow, completionState, historySearchState, highlighter, maxVisibleSuggestions, showGhostText, theme);
+
+                        if (shouldSubmit)
+                        {
+                            Console.WriteLine();
+                            return buffer.Text;
+                        }
+
+                        continue;
                     }
 
+                    historySearchState = null;
+                }
+
+                if (key.Modifiers == ConsoleModifiers.Control && key.Key == ConsoleKey.R)
+                {
+                    historySearchState = new LineEditorHistorySearchState(history, buffer.Text, buffer.CursorIndex);
+                    historySearchState.Activate(buffer);
+                    completionState = null;
+                    preferredColumn = null;
+                    cursorRow = Render(prompt, continuationPrompt, buffer, cursorRow, completionState, historySearchState, highlighter, maxVisibleSuggestions, showGhostText, theme);
                     continue;
                 }
 
-                historySearchState = null;
-            }
-
-            if (key.Modifiers == ConsoleModifiers.Control && key.Key == ConsoleKey.R)
-            {
-                historySearchState = new LineEditorHistorySearchState(history, buffer.Text, buffer.CursorIndex);
-                historySearchState.Activate(buffer);
-                completionState = null;
-                preferredColumn = null;
-                cursorRow = Render(prompt, continuationPrompt, buffer, cursorRow, completionState, historySearchState, highlighter, maxVisibleSuggestions, showGhostText, theme);
-                continue;
-            }
-
-            if (key.Modifiers == ConsoleModifiers.Control && key.Key == ConsoleKey.D && buffer.Text.Length == 0)
-            {
-                Console.WriteLine();
-                return null;
-            }
-
-            if (key.Key == ConsoleKey.Enter && key.Modifiers.HasFlag(ConsoleModifiers.Shift))
-            {
-                var continuationState = continuationHandler?.Invoke(buffer.Text) ?? default;
-                InsertRequestedNewLine(buffer, BuildInsertedNewLineText(buffer.Text, buffer.CursorIndex, continuationState));
-                preferredColumn = null;
-                completionState = null;
-                cursorRow = Render(prompt, continuationPrompt, buffer, cursorRow, completionState, historySearchState, highlighter, maxVisibleSuggestions, showGhostText, theme);
-                continue;
-            }
-
-            if (key.Key == ConsoleKey.Enter)
-            {
-                var continuationState = continuationHandler?.Invoke(buffer.Text) ?? default;
-
-                if (continuationState.RequiresContinuation)
+                if (key.Modifiers == ConsoleModifiers.Control && key.Key == ConsoleKey.D && buffer.Text.Length == 0)
                 {
-                    InsertRequestedNewLine(buffer, "\n" + continuationState.SuggestedIndent);
+                    Console.WriteLine();
+                    return null;
+                }
+
+                if (key.Key == ConsoleKey.Enter && key.Modifiers.HasFlag(ConsoleModifiers.Shift))
+                {
+                    var continuationState = continuationHandler?.Invoke(buffer.Text) ?? default;
+                    InsertRequestedNewLine(buffer, BuildInsertedNewLineText(buffer.Text, buffer.CursorIndex, continuationState));
                     preferredColumn = null;
                     completionState = null;
                     cursorRow = Render(prompt, continuationPrompt, buffer, cursorRow, completionState, historySearchState, highlighter, maxVisibleSuggestions, showGhostText, theme);
                     continue;
                 }
 
-                buffer.SetCursor(buffer.Text.Length);
-                completionState = null;
-                cursorRow = Render(prompt, continuationPrompt, buffer, cursorRow, completionState, historySearchState, highlighter, maxVisibleSuggestions, showGhostText, theme);
-                Console.WriteLine();
-                return buffer.Text;
-            }
+                if (key.Key == ConsoleKey.Enter)
+                {
+                    var continuationState = continuationHandler?.Invoke(buffer.Text) ?? default;
 
-            var shouldRender = false;
+                    if (continuationState.RequiresContinuation)
+                    {
+                        InsertRequestedNewLine(buffer, "\n" + continuationState.SuggestedIndent);
+                        preferredColumn = null;
+                        completionState = null;
+                        cursorRow = Render(prompt, continuationPrompt, buffer, cursorRow, completionState, historySearchState, highlighter, maxVisibleSuggestions, showGhostText, theme);
+                        continue;
+                    }
 
-            if (key.Key == ConsoleKey.Tab && completionProvider is not null)
-            {
-                shouldRender = ApplyCompletion(buffer, completionProvider, ref completionState, reverse: key.Modifiers.HasFlag(ConsoleModifiers.Shift));
-            }
-            else
-            {
-                shouldRender = HandleKey(buffer, historyNavigator, prompt, continuationPrompt, key, ref preferredColumn);
+                    buffer.SetCursor(buffer.Text.Length);
+                    completionState = null;
+                    cursorRow = Render(prompt, continuationPrompt, buffer, cursorRow, completionState, historySearchState, highlighter, maxVisibleSuggestions, showGhostText, theme);
+                    Console.WriteLine();
+                    return buffer.Text;
+                }
+
+                var shouldRender = false;
+
+                if (key.Key == ConsoleKey.Tab && completionProvider is not null)
+                {
+                    shouldRender = ApplyCompletion(buffer, completionProvider, ref completionState, reverse: key.Modifiers.HasFlag(ConsoleModifiers.Shift));
+                }
+                else
+                {
+                    shouldRender = HandleKey(buffer, historyNavigator, prompt, continuationPrompt, key, ref preferredColumn);
+
+                    if (shouldRender)
+                    {
+                        completionState = null;
+                    }
+                }
 
                 if (shouldRender)
                 {
-                    completionState = null;
+                    cursorRow = Render(prompt, continuationPrompt, buffer, cursorRow, completionState, historySearchState, highlighter, maxVisibleSuggestions, showGhostText, theme);
                 }
             }
+        }
+        finally
+        {
+            onBufferDeactivated?.Invoke(buffer);
+        }
+    }
 
-            if (shouldRender)
+    private static ConsoleKeyInfo ReadInputKey(Queue<ConsoleKeyInfo> pendingKeys)
+    {
+        ArgumentNullException.ThrowIfNull(pendingKeys);
+
+        if (pendingKeys.Count > 0)
+        {
+            return pendingKeys.Dequeue();
+        }
+
+        var key = Console.ReadKey(intercept: true);
+
+        if (key.Key != ConsoleKey.Escape)
+        {
+            return key;
+        }
+
+        var trailingKeys = ReadPendingEscapeSequenceKeys();
+
+        if (trailingKeys.Count == 0)
+        {
+            return key;
+        }
+
+        var sequence = new string(trailingKeys.Select(static trailingKey => trailingKey.KeyChar).ToArray());
+
+        if (TryTranslateEscapeSequence(sequence, out var translated))
+        {
+            return translated;
+        }
+
+        foreach (var trailingKey in trailingKeys)
+        {
+            pendingKeys.Enqueue(trailingKey);
+        }
+
+        return key;
+    }
+
+    private static List<ConsoleKeyInfo> ReadPendingEscapeSequenceKeys()
+    {
+        var trailingKeys = new List<ConsoleKeyInfo>();
+
+        if (!WaitForPendingConsoleKey(maxWaitMilliseconds: 8))
+        {
+            return trailingKeys;
+        }
+
+        do
+        {
+            trailingKeys.Add(Console.ReadKey(intercept: true));
+        }
+        while (trailingKeys.Count < 8 && WaitForPendingConsoleKey(maxWaitMilliseconds: 2));
+
+        return trailingKeys;
+    }
+
+    private static bool WaitForPendingConsoleKey(int maxWaitMilliseconds)
+    {
+        if (Console.KeyAvailable)
+        {
+            return true;
+        }
+
+        var deadline = Environment.TickCount64 + Math.Max(0, maxWaitMilliseconds);
+
+        while (Environment.TickCount64 < deadline)
+        {
+            Thread.Sleep(1);
+
+            if (Console.KeyAvailable)
             {
-                cursorRow = Render(prompt, continuationPrompt, buffer, cursorRow, completionState, historySearchState, highlighter, maxVisibleSuggestions, showGhostText, theme);
+                return true;
             }
+        }
+
+        return Console.KeyAvailable;
+    }
+
+    internal static bool TryTranslateEscapeSequence(string sequence, out ConsoleKeyInfo key)
+    {
+        ArgumentNullException.ThrowIfNull(sequence);
+
+        switch (sequence)
+        {
+            case "OP":
+            case "[11~":
+            case "[[A":
+                key = new ConsoleKeyInfo('\0', ConsoleKey.F1, shift: false, alt: false, control: false);
+                return true;
+            case "OQ":
+            case "[12~":
+            case "[[B":
+                key = new ConsoleKeyInfo('\0', ConsoleKey.F2, shift: false, alt: false, control: false);
+                return true;
+            case "OR":
+            case "[13~":
+            case "[[C":
+                key = new ConsoleKeyInfo('\0', ConsoleKey.F3, shift: false, alt: false, control: false);
+                return true;
+            case "OS":
+            case "[14~":
+            case "[[D":
+                key = new ConsoleKeyInfo('\0', ConsoleKey.F4, shift: false, alt: false, control: false);
+                return true;
+            case "h":
+                key = new ConsoleKeyInfo('h', ConsoleKey.H, shift: false, alt: true, control: false);
+                return true;
+            case "H":
+                key = new ConsoleKeyInfo('H', ConsoleKey.H, shift: true, alt: true, control: false);
+                return true;
+            case "i":
+                key = new ConsoleKeyInfo('i', ConsoleKey.I, shift: false, alt: true, control: false);
+                return true;
+            case "I":
+                key = new ConsoleKeyInfo('I', ConsoleKey.I, shift: true, alt: true, control: false);
+                return true;
+            default:
+                key = default;
+                return false;
         }
     }
 

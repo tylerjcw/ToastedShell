@@ -226,4 +226,55 @@ public sealed class ReplCompletionEngineTests
         Assert.NotNull(result);
         Assert.Contains(result!.Suggestions, suggestion => string.Equals(suggestion.Label, "dotnet", StringComparison.OrdinalIgnoreCase));
     }
+
+    [Fact]
+    public void Inline_help_query_uses_token_under_cursor_and_prefers_last_member_segment()
+    {
+        Assert.Equal("filter", ReplCompletionEngine.GetInlineHelpQuery("echo filter", "echo fil".Length));
+        Assert.Equal("Path", ReplCompletionEngine.GetInlineHelpQuery("$env.Path", "$env.Path".Length));
+        Assert.Equal("Name", ReplCompletionEngine.GetInlineHelpQuery("$person.Name", "$person.Na".Length));
+    }
+
+    [Fact]
+    public void Inspect_reference_resolution_supports_runtime_variables_and_bare_types()
+    {
+        var runtime = ToshRuntime.CreateDefault();
+        runtime.Variables["person"] = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Name"] = "Toast",
+        };
+
+        var engine = new ReplCompletionEngine(runtime);
+
+        Assert.True(engine.TryResolveInspectableReference("$person.Name", out var memberValue));
+        Assert.Equal("Toast", memberValue);
+
+        Assert.True(engine.TryResolveInspectableReference("string", out var bareType));
+        Assert.Equal(typeof(string), bareType);
+    }
+
+    [Fact]
+    public void Inspect_target_span_includes_wrapping_quotes_for_string_literals()
+    {
+        var span = ReplCompletionEngine.GetInspectTargetSpanAtCursor("\"Hello\"", "\"Hello\"".Length);
+
+        Assert.Equal(0, span.Start);
+        Assert.Equal("\"Hello\"".Length, span.Length);
+        Assert.Equal("\"Hello\"", span.Token);
+    }
+
+    [Fact]
+    public void Inspect_reference_resolution_supports_quoted_and_bareword_string_values()
+    {
+        var runtime = ToshRuntime.CreateDefault();
+        var engine = new ReplCompletionEngine(runtime);
+
+        Assert.True(engine.TryResolveInspectableReference("\"Hello\"", out var quotedValue));
+        Assert.Equal("Hello", quotedValue);
+        Assert.Equal("\"Hello\"", ReplCompletionEngine.BuildInspectableSourceExpression("\"Hello\"", quotedValue));
+
+        Assert.True(engine.TryResolveInspectableReference("Hello", out var barewordValue));
+        Assert.Equal("Hello", barewordValue);
+        Assert.Equal("\"Hello\"", ReplCompletionEngine.BuildInspectableSourceExpression("Hello", barewordValue));
+    }
 }

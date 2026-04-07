@@ -22,4 +22,69 @@
     <Message Importance="high" Text="Cleaned publish artifacts: $(ArtifactsRoot)publish" />
   </Target>
 
+  <!--
+    Recompile the ToastScript language specification when the .tex source
+    is newer than the PDF.  Runs only during Tosh.Cli builds (to avoid
+    firing once per project) and only when latexmk is installed.
+
+    Opt-out:  dotnet build -p:DisableToshSpecBuild=true
+  -->
+  <PropertyGroup>
+    <SpecDir>$(RepoRoot)docs/spec/</SpecDir>
+    <SpecTex>$(SpecDir)toastscript-spec.tex</SpecTex>
+    <SpecPdf>$(SpecDir)ToastScript.pdf</SpecPdf>
+    <SpecCommandRef>$(SpecDir)command-reference.tex</SpecCommandRef>
+  </PropertyGroup>
+
+  <!--
+    Generate the command reference LaTeX from introspected command metadata.
+    Runs only during Tosh.Cli builds, before BuildSpec.
+    The generated file is \input'd by the main spec.
+
+    Opt-out:  dotnet build -p:DisableToshSpecBuild=true
+  -->
+  <Target Name="GenerateCommandRef"
+          AfterTargets="Build"
+          BeforeTargets="BuildSpec"
+          Condition="'$(DesignTimeBuild)' != 'true'
+                     and '$(DisableToshSpecBuild)' != 'true'
+                     and '$(MSBuildProjectName)' == 'Tosh.Cli'">
+    <Exec Command="dotnet run --project &quot;$(RepoRoot)src/Tosh.Cli/Tosh.Cli.csproj&quot; --no-build -- --export-command-manifest --latex -o &quot;$(SpecCommandRef)&quot;"
+          WorkingDirectory="$(RepoRoot)"
+          IgnoreExitCode="true"
+          ConsoleToMSBuild="true">
+      <Output TaskParameter="ExitCode" PropertyName="_ManifestExit" />
+    </Exec>
+    <Message Importance="high"
+             Text="Command reference generated: $(SpecCommandRef)"
+             Condition="'$(_ManifestExit)' == '0'" />
+    <Warning Text="Command reference generation failed (exit $(_ManifestExit))"
+             Condition="'$(_ManifestExit)' != '0'" />
+  </Target>
+
+  <Target Name="BuildSpec"
+          AfterTargets="Build"
+          Inputs="$(SpecTex)"
+          Outputs="$(SpecPdf)"
+          Condition="'$(DesignTimeBuild)' != 'true'
+                     and '$(DisableToshSpecBuild)' != 'true'
+                     and '$(MSBuildProjectName)' == 'Tosh.Cli'
+                     and Exists('$(SpecTex)')">
+    <Exec Command="latexmk -pdf -interaction=nonstopmode -quiet toastscript-spec.tex"
+          WorkingDirectory="$(SpecDir)"
+          IgnoreExitCode="true"
+          ConsoleToMSBuild="true">
+      <Output TaskParameter="ExitCode" PropertyName="_LatexMkExit" />
+    </Exec>
+    <Copy SourceFiles="$(SpecDir)toastscript-spec.pdf"
+          DestinationFiles="$(SpecPdf)"
+          Condition="'$(_LatexMkExit)' == '0' and Exists('$(SpecDir)toastscript-spec.pdf')"
+          SkipUnchangedFiles="true" />
+    <Message Importance="high"
+             Text="Spec PDF updated: $(SpecPdf)"
+             Condition="'$(_LatexMkExit)' == '0'" />
+    <Warning Text="Spec PDF build failed (latexmk exit $(_LatexMkExit)) — check $(SpecDir)toastscript-spec.log"
+             Condition="'$(_LatexMkExit)' != '0'" />
+  </Target>
+
 </Project>

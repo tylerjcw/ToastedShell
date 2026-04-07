@@ -11,8 +11,8 @@ public sealed class StructuredDataCommandTests
     {
         var engine = new ToshEngine();
 
-        var typeResults = await engine.ExecuteToListAsync("echo \"{\\\"name\\\":\\\"toast\\\",\\\"size\\\":1024}\" | from-json | type-of | get Name");
-        var results = await engine.ExecuteToListAsync("echo \"{\\\"name\\\":\\\"toast\\\",\\\"size\\\":1024}\" | from-json | get { name, size }");
+        var typeResults = await engine.ExecuteToListAsync("echo \"{\\\"name\\\":\\\"toast\\\",\\\"size\\\":1024}\" | from json | type-of | get Name");
+        var results = await engine.ExecuteToListAsync("echo \"{\\\"name\\\":\\\"toast\\\",\\\"size\\\":1024}\" | from json | get { name, size }");
 
         Assert.Collection(typeResults, item => Assert.Equal("table", item));
         var projection = Assert.IsAssignableFrom<IDictionary<string, object?>>(Assert.Single(results));
@@ -27,8 +27,8 @@ public sealed class StructuredDataCommandTests
     {
         var engine = new ToshEngine();
 
-        var typeResults = await engine.ExecuteToListAsync("echo \"[{\\\"name\\\":\\\"alpha\\\"},{\\\"name\\\":\\\"beta\\\"}]\" | from-json | type-of | get Name");
-        var expandedResults = await engine.ExecuteToListAsync("echo \"[{\\\"name\\\":\\\"alpha\\\"},{\\\"name\\\":\\\"beta\\\"}]\" | from-json | each { _ } | get name");
+        var typeResults = await engine.ExecuteToListAsync("echo \"[{\\\"name\\\":\\\"alpha\\\"},{\\\"name\\\":\\\"beta\\\"}]\" | from json | type-of | get Name");
+        var expandedResults = await engine.ExecuteToListAsync("echo \"[{\\\"name\\\":\\\"alpha\\\"},{\\\"name\\\":\\\"beta\\\"}]\" | from json | each { _ } | get name");
 
         Assert.Collection(typeResults, item => Assert.Equal("array", item));
         Assert.Equal(["alpha", "beta"], expandedResults);
@@ -39,8 +39,8 @@ public sealed class StructuredDataCommandTests
     {
         var engine = new ToshEngine();
 
-        var typeResults = await engine.ExecuteToListAsync("echo \"name,size\" \"alpha,1\" \"beta,2\" | from-csv | type-of | get Name");
-        var expandedResults = await engine.ExecuteToListAsync("echo \"name,size\" \"alpha,1\" \"beta,2\" | from-csv | each { _ } | get name");
+        var typeResults = await engine.ExecuteToListAsync("echo \"name,size\" \"alpha,1\" \"beta,2\" | from csv | type-of | get Name");
+        var expandedResults = await engine.ExecuteToListAsync("echo \"name,size\" \"alpha,1\" \"beta,2\" | from csv | each { _ } | get name");
 
         Assert.Collection(typeResults, item => Assert.Equal("array<table>", item));
         Assert.Equal(["alpha", "beta"], expandedResults);
@@ -51,8 +51,8 @@ public sealed class StructuredDataCommandTests
     {
         var engine = new ToshEngine();
 
-        var typeResults = await engine.ExecuteToListAsync("echo \"<root><item name=\\\"alpha\\\" /></root>\" | from-xml | type-of");
-        var rootNameResults = await engine.ExecuteToListAsync("echo \"<root><item name=\\\"alpha\\\" /></root>\" | from-xml | get \"Root.Name.LocalName\"");
+        var typeResults = await engine.ExecuteToListAsync("echo \"<root><item name=\\\"alpha\\\" /></root>\" | from xml | type-of");
+        var rootNameResults = await engine.ExecuteToListAsync("echo \"<root><item name=\\\"alpha\\\" /></root>\" | from xml | get \"Root.Name.LocalName\"");
 
         Assert.Collection(typeResults, item => Assert.Equal(typeof(XDocument), item));
         Assert.Equal(["root"], rootNameResults);
@@ -239,7 +239,7 @@ public sealed class StructuredDataCommandTests
     {
         var engine = new ToshEngine();
 
-        var results = await engine.ExecuteToListAsync("echo \"{\\\"x\\\":1}\" | from-json | where { false } | summarize");
+        var results = await engine.ExecuteToListAsync("echo \"{\\\"x\\\":1}\" | from json | where { false } | summarize");
 
         Assert.Empty(results);
     }

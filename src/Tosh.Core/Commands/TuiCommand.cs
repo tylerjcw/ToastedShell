@@ -4,6 +4,7 @@ using Tosh.Tui.Widgets;
 
 namespace Tosh.Core.Commands;
 
+[CommandCategory("Shell")]
 public sealed class TuiCommand : ShellCommand
 {
     public TuiCommand()

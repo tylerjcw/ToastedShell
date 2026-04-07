@@ -2,6 +2,7 @@ using System.Diagnostics;
 
 namespace Tosh.Core.Commands;
 
+[CommandCategory("System")]
 public sealed class LscpuCommand : ShellCommand
 {
     public LscpuCommand()
@@ -48,72 +49,72 @@ public sealed class LscpuCommand : ShellCommand
         switch (request.Mode)
         {
             case LscpuStructuredMode.Summary:
-            {
-                CpuInfo summary;
-
-                try
                 {
-                    summary = LscpuJsonParser.ParseSummary(result.StandardOutput);
-                }
-                catch (Exception exception) when (exception is InvalidOperationException or System.Text.Json.JsonException)
-                {
-                    throw context.CreateDiagnostic(
-                        code: "tosh::runtime::lscpu_json_parse_failed",
-                        title: $"Could not parse structured 'lscpu' summary output. {exception.Message}",
-                        help: "Try running the external `lscpu` command directly if you are using an output mode that does not support JSON.");
-                }
+                    CpuInfo summary;
 
-                yield return CommandDisplaySelectionParser.Apply(context.Runtime, request.DisplaySelection, summary);
-                yield break;
-            }
+                    try
+                    {
+                        summary = LscpuJsonParser.ParseSummary(result.StandardOutput);
+                    }
+                    catch (Exception exception) when (exception is InvalidOperationException or System.Text.Json.JsonException)
+                    {
+                        throw context.CreateDiagnostic(
+                            code: "tosh::runtime::lscpu_json_parse_failed",
+                            title: $"Could not parse structured 'lscpu' summary output. {exception.Message}",
+                            help: "Try running the external `lscpu` command directly if you are using an output mode that does not support JSON.");
+                    }
+
+                    yield return CommandDisplaySelectionParser.Apply(context.Runtime, request.DisplaySelection, summary);
+                    yield break;
+                }
             case LscpuStructuredMode.Extended:
-            {
-                IReadOnlyList<CpuTopologyInfo> rows;
-
-                try
                 {
-                    rows = LscpuJsonParser.ParseTopology(result.StandardOutput);
-                }
-                catch (Exception exception) when (exception is InvalidOperationException or System.Text.Json.JsonException)
-                {
-                    throw context.CreateDiagnostic(
-                        code: "tosh::runtime::lscpu_json_parse_failed",
-                        title: $"Could not parse structured 'lscpu --extended' output. {exception.Message}",
-                        help: "Try running the external `lscpu` command directly if you are using an output mode that does not support JSON.");
-                }
+                    IReadOnlyList<CpuTopologyInfo> rows;
 
-                foreach (var row in rows)
-                {
-                    context.CancellationToken.ThrowIfCancellationRequested();
-                    yield return CommandDisplaySelectionParser.Apply(context.Runtime, request.DisplaySelection, row);
-                }
+                    try
+                    {
+                        rows = LscpuJsonParser.ParseTopology(result.StandardOutput);
+                    }
+                    catch (Exception exception) when (exception is InvalidOperationException or System.Text.Json.JsonException)
+                    {
+                        throw context.CreateDiagnostic(
+                            code: "tosh::runtime::lscpu_json_parse_failed",
+                            title: $"Could not parse structured 'lscpu --extended' output. {exception.Message}",
+                            help: "Try running the external `lscpu` command directly if you are using an output mode that does not support JSON.");
+                    }
 
-                yield break;
-            }
+                    foreach (var row in rows)
+                    {
+                        context.CancellationToken.ThrowIfCancellationRequested();
+                        yield return CommandDisplaySelectionParser.Apply(context.Runtime, request.DisplaySelection, row);
+                    }
+
+                    yield break;
+                }
             case LscpuStructuredMode.Caches:
-            {
-                IReadOnlyList<CpuCacheInfo> rows;
-
-                try
                 {
-                    rows = LscpuJsonParser.ParseCaches(result.StandardOutput, request.PreferByteSizes);
-                }
-                catch (Exception exception) when (exception is InvalidOperationException or System.Text.Json.JsonException)
-                {
-                    throw context.CreateDiagnostic(
-                        code: "tosh::runtime::lscpu_json_parse_failed",
-                        title: $"Could not parse structured 'lscpu --caches' output. {exception.Message}",
-                        help: "Try running the external `lscpu` command directly if you are using an output mode that does not support JSON.");
-                }
+                    IReadOnlyList<CpuCacheInfo> rows;
 
-                foreach (var row in rows)
-                {
-                    context.CancellationToken.ThrowIfCancellationRequested();
-                    yield return CommandDisplaySelectionParser.Apply(context.Runtime, request.DisplaySelection, row);
-                }
+                    try
+                    {
+                        rows = LscpuJsonParser.ParseCaches(result.StandardOutput, request.PreferByteSizes);
+                    }
+                    catch (Exception exception) when (exception is InvalidOperationException or System.Text.Json.JsonException)
+                    {
+                        throw context.CreateDiagnostic(
+                            code: "tosh::runtime::lscpu_json_parse_failed",
+                            title: $"Could not parse structured 'lscpu --caches' output. {exception.Message}",
+                            help: "Try running the external `lscpu` command directly if you are using an output mode that does not support JSON.");
+                    }
 
-                yield break;
-            }
+                    foreach (var row in rows)
+                    {
+                        context.CancellationToken.ThrowIfCancellationRequested();
+                        yield return CommandDisplaySelectionParser.Apply(context.Runtime, request.DisplaySelection, row);
+                    }
+
+                    yield break;
+                }
             default:
                 throw new InvalidOperationException($"Unexpected lscpu structured mode '{request.Mode}'.");
         }

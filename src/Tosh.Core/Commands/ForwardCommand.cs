@@ -1,5 +1,8 @@
 namespace Tosh.Core.Commands;
 
+[CommandCategory("Filesystem")]
+[CommandExample("forward")]
+[CommandOutput("The FileSystemEntry for the next directory.")]
 public sealed class ForwardCommand : ShellCommand
 {
     public ForwardCommand()

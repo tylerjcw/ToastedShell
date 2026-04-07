@@ -76,6 +76,9 @@ public static class BuiltInDisplayProfiles
         registry.Register(CreateDictionaryEntryProfile());
         registry.Register(CreateAssemblyNameProfile());
         registry.Register(CreateTypeProfile());
+        registry.Register(CreateHttpRequestDefinitionProfile());
+        registry.Register(CreateHttpResponseInfoProfile());
+        registry.Register(CreateHttpFileServerHandleProfile());
         registry.Register(CreateHttpRequestMessageProfile());
         registry.Register(CreateHttpResponseMessageProfile());
         registry.Register(CreateAssemblyProfile());
@@ -849,6 +852,18 @@ public static class BuiltInDisplayProfiles
                 context => FormatHttpRequestMessageSummary((HttpRequestMessage)context.Value));
     }
 
+    private static DisplayProfile CreateHttpRequestDefinitionProfile()
+    {
+        return DisplayProfile
+            .For<HttpRequestDefinition>()
+            .AddTableCase(
+                context => context.Rows.Count == 1,
+                _ => BuildHttpRequestDefinitionColumns())
+            .AddValueCase(
+                DisplaySurface.Root | DisplaySurface.Nested | DisplaySurface.TableCell,
+                context => FormatHttpRequestDefinitionSummary((HttpRequestDefinition)context.Value));
+    }
+
     private static DisplayProfile CreateHttpResponseMessageProfile()
     {
         return DisplayProfile
@@ -859,6 +874,30 @@ public static class BuiltInDisplayProfiles
             .AddValueCase(
                 DisplaySurface.Root | DisplaySurface.Nested | DisplaySurface.TableCell,
                 context => FormatHttpResponseMessageSummary((HttpResponseMessage)context.Value));
+    }
+
+    private static DisplayProfile CreateHttpResponseInfoProfile()
+    {
+        return DisplayProfile
+            .For<HttpResponseInfo>()
+            .AddTableCase(
+                context => context.Rows.Count == 1,
+                _ => BuildHttpResponseInfoColumns())
+            .AddValueCase(
+                DisplaySurface.Root | DisplaySurface.Nested | DisplaySurface.TableCell,
+                context => FormatHttpResponseInfoSummary((HttpResponseInfo)context.Value));
+    }
+
+    private static DisplayProfile CreateHttpFileServerHandleProfile()
+    {
+        return DisplayProfile
+            .For<HttpFileServerHandle>()
+            .AddTableCase(
+                context => context.Rows.Count == 1,
+                _ => BuildHttpFileServerHandleColumns())
+            .AddValueCase(
+                DisplaySurface.Root | DisplaySurface.Nested | DisplaySurface.TableCell,
+                context => FormatHttpFileServerHandleSummary((HttpFileServerHandle)context.Value));
     }
 
     private static DisplayProfile CreateAssemblyProfile()
@@ -2308,6 +2347,22 @@ public static class BuiltInDisplayProfiles
         ];
     }
 
+    private static IReadOnlyList<DisplayTableColumn> BuildHttpRequestDefinitionColumns()
+    {
+        return
+        [
+            new DisplayTableColumn("Method", row => ((HttpRequestDefinition)row).Method, MinWidth: 3, MaxWidth: 12, Priority: 0, CanHide: false),
+            new DisplayTableColumn("RequestUri", row => ((HttpRequestDefinition)row).RequestUri.ToString(), MinWidth: 8, MaxWidth: 128, Priority: 10),
+            new DisplayTableColumn("FollowRedirects", row => ((HttpRequestDefinition)row).FollowRedirects, MinWidth: 4, MaxWidth: 5, Priority: 20),
+            new DisplayTableColumn("Timeout", row => ((HttpRequestDefinition)row).Timeout, MinWidth: 3, MaxWidth: 24, Priority: 30),
+            new DisplayTableColumn("ContentType", row => ((HttpRequestDefinition)row).ContentType, MinWidth: 3, MaxWidth: 64, Priority: 40),
+            new DisplayTableColumn("ContentLength", row => ((HttpRequestDefinition)row).ContentLength, DisplayTableAlignment.Right, MinWidth: 1, MaxWidth: 12, Priority: 50),
+            new DisplayTableColumn("Headers", row => FormatHttpHeaderDictionary(((HttpRequestDefinition)row).Headers), MinWidth: 4, MaxWidth: 128, Priority: 60),
+            new DisplayTableColumn("BodyKind", row => ((HttpRequestDefinition)row).BodyKind, MinWidth: 3, MaxWidth: 16, Priority: 70),
+            new DisplayTableColumn("BodyPreview", row => ((HttpRequestDefinition)row).BodyPreview, MinWidth: 3, MaxWidth: 128, Priority: 80),
+        ];
+    }
+
     private static IReadOnlyList<DisplayTableColumn> BuildHttpResponseMessageColumns()
     {
         return
@@ -2320,6 +2375,46 @@ public static class BuiltInDisplayProfiles
             new DisplayTableColumn("ContentType", row => ((HttpResponseMessage)row).Content?.Headers.ContentType?.ToString(), MinWidth: 3, MaxWidth: 64, Priority: 50),
             new DisplayTableColumn("ContentLength", row => ((HttpResponseMessage)row).Content?.Headers.ContentLength, DisplayTableAlignment.Right, MinWidth: 1, MaxWidth: 12, Priority: 60),
             new DisplayTableColumn("ContentHeaders", row => FormatHttpHeaders(((HttpResponseMessage)row).Content?.Headers), MinWidth: 4, MaxWidth: 128, Priority: 70),
+        ];
+    }
+
+    private static IReadOnlyList<DisplayTableColumn> BuildHttpResponseInfoColumns()
+    {
+        return
+        [
+            new DisplayTableColumn("Status", row => ((HttpResponseInfo)row).Status, MinWidth: 3, MaxWidth: 24, Priority: 0, CanHide: false),
+            new DisplayTableColumn("Method", row => ((HttpResponseInfo)row).Method, MinWidth: 3, MaxWidth: 12, Priority: 10),
+            new DisplayTableColumn("RequestUri", row => ((HttpResponseInfo)row).RequestUri?.ToString(), MinWidth: 8, MaxWidth: 128, Priority: 20),
+            new DisplayTableColumn("FinalUri", row => ((HttpResponseInfo)row).FinalUri?.ToString(), MinWidth: 8, MaxWidth: 128, Priority: 30),
+            new DisplayTableColumn("Version", row => ((HttpResponseInfo)row).Version, MinWidth: 3, MaxWidth: 12, Priority: 40),
+            new DisplayTableColumn("IsSuccess", row => ((HttpResponseInfo)row).IsSuccess, MinWidth: 4, MaxWidth: 5, Priority: 50),
+            new DisplayTableColumn("ContentType", row => ((HttpResponseInfo)row).ContentType, MinWidth: 3, MaxWidth: 64, Priority: 60),
+            new DisplayTableColumn("ContentLength", row => ((HttpResponseInfo)row).ContentLength, DisplayTableAlignment.Right, MinWidth: 1, MaxWidth: 12, Priority: 70),
+            new DisplayTableColumn("Duration", row => ((HttpResponseInfo)row).Duration, MinWidth: 3, MaxWidth: 24, Priority: 80),
+            new DisplayTableColumn("Headers", row => FormatHttpHeaderDictionary(((HttpResponseInfo)row).Headers), MinWidth: 4, MaxWidth: 128, Priority: 90),
+            new DisplayTableColumn("ContentHeaders", row => FormatHttpHeaderDictionary(((HttpResponseInfo)row).ContentHeaders), MinWidth: 4, MaxWidth: 128, Priority: 100),
+            new DisplayTableColumn("Body", row => FormatDisplaySummaryValue(((HttpResponseInfo)row).Body), MinWidth: 3, MaxWidth: 128, Priority: 110),
+            new DisplayTableColumn("SavedTo", row => ((HttpResponseInfo)row).SavedTo, MinWidth: 3, MaxWidth: 128, Priority: 120),
+        ];
+    }
+
+    private static IReadOnlyList<DisplayTableColumn> BuildHttpFileServerHandleColumns()
+    {
+        return
+        [
+            new DisplayTableColumn("#", row => ((HttpFileServerHandle)row).Id, DisplayTableAlignment.Right, MinWidth: 1, MaxWidth: 6, Priority: 0, CanHide: false),
+            new DisplayTableColumn("Open", row => ((HttpFileServerHandle)row).IsOpen, MinWidth: 4, MaxWidth: 5, Priority: 10),
+            new DisplayTableColumn("Url", row => ((HttpFileServerHandle)row).Url.ToString(), MinWidth: 8, MaxWidth: 128, Priority: 20, CanHide: false),
+            new DisplayTableColumn("ShareUrl", row => ((HttpFileServerHandle)row).ShareUrl.ToString(), MinWidth: 8, MaxWidth: 128, Priority: 25),
+            new DisplayTableColumn("Protected", row => ((HttpFileServerHandle)row).RequiresToken, MinWidth: 4, MaxWidth: 5, Priority: 30),
+            new DisplayTableColumn("Bind", row => ((HttpFileServerHandle)row).BindAddress, MinWidth: 4, MaxWidth: 24, Priority: 40),
+            new DisplayTableColumn("Port", row => ((HttpFileServerHandle)row).Port, DisplayTableAlignment.Right, MinWidth: 1, MaxWidth: 8, Priority: 50),
+            new DisplayTableColumn("Browse", row => ((HttpFileServerHandle)row).DirectoryBrowsingEnabled, MinWidth: 4, MaxWidth: 5, Priority: 60),
+            new DisplayTableColumn("Upload", row => ((HttpFileServerHandle)row).UploadEnabled, MinWidth: 4, MaxWidth: 5, Priority: 70),
+            new DisplayTableColumn("Once", row => ((HttpFileServerHandle)row).ServeOnce, MinWidth: 4, MaxWidth: 5, Priority: 80),
+            new DisplayTableColumn("Requests", row => ((HttpFileServerHandle)row).RequestCount, DisplayTableAlignment.Right, MinWidth: 1, MaxWidth: 12, Priority: 90),
+            new DisplayTableColumn("Root", row => ((HttpFileServerHandle)row).RootPath, MinWidth: 8, MaxWidth: 128, Priority: 100),
+            new DisplayTableColumn("Started", row => ((HttpFileServerHandle)row).StartedAt, MinWidth: 8, MaxWidth: 32, Priority: 110),
         ];
     }
 
@@ -3561,6 +3656,9 @@ public static class BuiltInDisplayProfiles
             ProcessStartInfo startInfo => FormatProcessStartInfoSummary(startInfo),
             ProcessModule processModule => FormatProcessModuleSummary(processModule),
             FileSystemWatcher watcher => FormatFileSystemWatcherSummary(watcher),
+            HttpRequestDefinition requestDefinition => FormatHttpRequestDefinitionSummary(requestDefinition),
+            HttpResponseInfo responseInfo => FormatHttpResponseInfoSummary(responseInfo),
+            HttpFileServerHandle serverHandle => FormatHttpFileServerHandleSummary(serverHandle),
             HttpRequestMessage request => FormatHttpRequestMessageSummary(request),
             HttpResponseMessage response => FormatHttpResponseMessageSummary(response),
             Assembly assembly => assembly.GetName().FullName ?? assembly.GetName().Name ?? "<unknown>",
@@ -3859,9 +3957,29 @@ public static class BuiltInDisplayProfiles
         return $"{method} {target}";
     }
 
+    private static string FormatHttpRequestDefinitionSummary(HttpRequestDefinition request)
+    {
+        return $"{request.Method} {request.RequestUri}";
+    }
+
     private static string FormatHttpResponseMessageSummary(HttpResponseMessage response)
     {
         return FormatHttpResponseStatus(response);
+    }
+
+    private static string FormatHttpResponseInfoSummary(HttpResponseInfo response)
+    {
+        var target = response.FinalUri ?? response.RequestUri;
+        return target is null
+            ? response.Status
+            : $"{response.Status} {response.Method} {target}";
+    }
+
+    private static string FormatHttpFileServerHandleSummary(HttpFileServerHandle handle)
+    {
+        var status = handle.IsOpen ? "open" : "closed";
+        var protection = handle.RequiresToken ? " protected" : string.Empty;
+        return $"{status}{protection} {handle.ShareUrl} -> {handle.RootPath}";
     }
 
     private static string FormatHttpResponseStatus(HttpResponseMessage response)
@@ -4099,6 +4217,26 @@ public static class BuiltInDisplayProfiles
         {
             return "<none>";
         }
+
+        if (entries.Count > maxEntries)
+        {
+            entries = entries.Take(maxEntries).Append("…").ToList();
+        }
+
+        return string.Join(Environment.NewLine, entries);
+    }
+
+    private static string FormatHttpHeaderDictionary(IReadOnlyDictionary<string, IReadOnlyList<string>>? headers, int maxEntries = 8)
+    {
+        if (headers is null || headers.Count == 0)
+        {
+            return "<none>";
+        }
+
+        var entries = headers
+            .Select(header => $"{header.Key}: {string.Join(", ", header.Value)}")
+            .Take(maxEntries + 1)
+            .ToList();
 
         if (entries.Count > maxEntries)
         {

@@ -6,6 +6,12 @@ namespace Tosh.Core;
 /// </summary>
 public interface IInlinePromptProvider
 {
+    /// <summary>Shows an inline interactive object inspector for a value.</summary>
+    void Inspect(object? value, bool includeAllMembers = false, string? sourceExpression = null);
+
+    /// <summary>Shows an inline searchable help browser.</summary>
+    void BrowseHelp(string? initialQuery = null, string? initialTopicName = null);
+
     /// <summary>Shows an inline selection list. Returns the selected item(s) or null if cancelled.</summary>
     IReadOnlyList<object?>? Pick(IReadOnlyList<object?> items, string? prompt = null, string? displayProperty = null, bool multiSelect = false, int pageSize = 10);
 

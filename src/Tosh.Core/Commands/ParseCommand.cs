@@ -2,6 +2,7 @@ using System.Text.RegularExpressions;
 
 namespace Tosh.Core.Commands;
 
+[CommandCategory("Data")]
 public sealed class ParseCommand : ShellCommand
 {
     public ParseCommand()

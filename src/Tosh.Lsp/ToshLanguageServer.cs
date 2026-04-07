@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Tosh.LanguageServices;
 
 namespace Tosh.Lsp;
 
@@ -110,55 +111,55 @@ public sealed class ToshLanguageServer
                 break;
 
             case "textDocument/completion":
-            {
-                var uri = parameters.GetProperty("textDocument").GetProperty("uri").GetString() ?? string.Empty;
-                var position = parameters.GetProperty("position").Deserialize<LspPosition>(_jsonOptions) ?? new LspPosition(0, 0);
-                _documents.TryGetValue(uri, out var text);
-                var items = _features.GetCompletionItems(text ?? string.Empty, position, uri);
-                await WriteResponseAsync(id, items, cancellationToken);
-                break;
-            }
+                {
+                    var uri = parameters.GetProperty("textDocument").GetProperty("uri").GetString() ?? string.Empty;
+                    var position = parameters.GetProperty("position").Deserialize<LspPosition>(_jsonOptions) ?? new LspPosition(0, 0);
+                    _documents.TryGetValue(uri, out var text);
+                    var items = _features.GetCompletionItems(text ?? string.Empty, position, uri);
+                    await WriteResponseAsync(id, items, cancellationToken);
+                    break;
+                }
 
             case "textDocument/signatureHelp":
-            {
-                var uri = parameters.GetProperty("textDocument").GetProperty("uri").GetString() ?? string.Empty;
-                var position = parameters.GetProperty("position").Deserialize<LspPosition>(_jsonOptions) ?? new LspPosition(0, 0);
-                _documents.TryGetValue(uri, out var text);
-                var signatureHelp = _features.GetSignatureHelp(text ?? string.Empty, uri, position);
-                await WriteResponseAsync(id, signatureHelp, cancellationToken);
-                break;
-            }
+                {
+                    var uri = parameters.GetProperty("textDocument").GetProperty("uri").GetString() ?? string.Empty;
+                    var position = parameters.GetProperty("position").Deserialize<LspPosition>(_jsonOptions) ?? new LspPosition(0, 0);
+                    _documents.TryGetValue(uri, out var text);
+                    var signatureHelp = _features.GetSignatureHelp(text ?? string.Empty, uri, position);
+                    await WriteResponseAsync(id, signatureHelp, cancellationToken);
+                    break;
+                }
 
             case "textDocument/hover":
-            {
-                var uri = parameters.GetProperty("textDocument").GetProperty("uri").GetString() ?? string.Empty;
-                var position = parameters.GetProperty("position").Deserialize<LspPosition>(_jsonOptions) ?? new LspPosition(0, 0);
-                _documents.TryGetValue(uri, out var text);
-                var hover = _features.GetHover(text ?? string.Empty, uri, position);
-                await WriteResponseAsync(id, hover, cancellationToken);
-                break;
-            }
+                {
+                    var uri = parameters.GetProperty("textDocument").GetProperty("uri").GetString() ?? string.Empty;
+                    var position = parameters.GetProperty("position").Deserialize<LspPosition>(_jsonOptions) ?? new LspPosition(0, 0);
+                    _documents.TryGetValue(uri, out var text);
+                    var hover = _features.GetHover(text ?? string.Empty, uri, position);
+                    await WriteResponseAsync(id, hover, cancellationToken);
+                    break;
+                }
 
             case "textDocument/definition":
-            {
-                var uri = parameters.GetProperty("textDocument").GetProperty("uri").GetString() ?? string.Empty;
-                var position = parameters.GetProperty("position").Deserialize<LspPosition>(_jsonOptions) ?? new LspPosition(0, 0);
-                _documents.TryGetValue(uri, out var text);
-                var definitions = _features.GetDefinitions(text ?? string.Empty, uri, position);
-                await WriteResponseAsync(id, definitions.Count == 0 ? null : definitions, cancellationToken);
-                break;
-            }
+                {
+                    var uri = parameters.GetProperty("textDocument").GetProperty("uri").GetString() ?? string.Empty;
+                    var position = parameters.GetProperty("position").Deserialize<LspPosition>(_jsonOptions) ?? new LspPosition(0, 0);
+                    _documents.TryGetValue(uri, out var text);
+                    var definitions = _features.GetDefinitions(text ?? string.Empty, uri, position);
+                    await WriteResponseAsync(id, definitions.Count == 0 ? null : definitions, cancellationToken);
+                    break;
+                }
 
             case "textDocument/documentSymbol":
-            {
-                var uri = parameters.GetProperty("textDocument").GetProperty("uri").GetString() ?? string.Empty;
-                _documents.TryGetValue(uri, out var text);
-                object symbols = _supportsHierarchicalDocumentSymbols
-                    ? _features.GetDocumentSymbols(text ?? string.Empty, uri)
-                    : _features.GetSymbolInformations(text ?? string.Empty, uri);
-                await WriteResponseAsync(id, symbols, cancellationToken);
-                break;
-            }
+                {
+                    var uri = parameters.GetProperty("textDocument").GetProperty("uri").GetString() ?? string.Empty;
+                    _documents.TryGetValue(uri, out var text);
+                    object symbols = _supportsHierarchicalDocumentSymbols
+                        ? _features.GetDocumentSymbols(text ?? string.Empty, uri)
+                        : _features.GetSymbolInformations(text ?? string.Empty, uri);
+                    await WriteResponseAsync(id, symbols, cancellationToken);
+                    break;
+                }
 
             default:
                 await WriteErrorAsync(id, -32601, $"Method '{method}' is not supported.", cancellationToken);
@@ -178,41 +179,41 @@ public sealed class ToshLanguageServer
                 return;
 
             case "textDocument/didOpen":
-            {
-                var document = parameters.GetProperty("textDocument");
-                var uri = document.GetProperty("uri").GetString() ?? string.Empty;
-                var text = document.GetProperty("text").GetString() ?? string.Empty;
-                _documents[uri] = text;
-                await PublishDiagnosticsAsync(uri, text, cancellationToken);
-                return;
-            }
-
-            case "textDocument/didChange":
-            {
-                var uri = parameters.GetProperty("textDocument").GetProperty("uri").GetString() ?? string.Empty;
-                var changes = parameters.GetProperty("contentChanges");
-
-                if (changes.GetArrayLength() > 0)
                 {
-                    var text = changes[0].GetProperty("text").GetString() ?? string.Empty;
+                    var document = parameters.GetProperty("textDocument");
+                    var uri = document.GetProperty("uri").GetString() ?? string.Empty;
+                    var text = document.GetProperty("text").GetString() ?? string.Empty;
                     _documents[uri] = text;
                     await PublishDiagnosticsAsync(uri, text, cancellationToken);
+                    return;
                 }
 
-                return;
-            }
+            case "textDocument/didChange":
+                {
+                    var uri = parameters.GetProperty("textDocument").GetProperty("uri").GetString() ?? string.Empty;
+                    var changes = parameters.GetProperty("contentChanges");
+
+                    if (changes.GetArrayLength() > 0)
+                    {
+                        var text = changes[0].GetProperty("text").GetString() ?? string.Empty;
+                        _documents[uri] = text;
+                        await PublishDiagnosticsAsync(uri, text, cancellationToken);
+                    }
+
+                    return;
+                }
 
             case "textDocument/didClose":
-            {
-                var uri = parameters.GetProperty("textDocument").GetProperty("uri").GetString() ?? string.Empty;
-                _documents.Remove(uri);
-                await WriteNotificationAsync("textDocument/publishDiagnostics", new
                 {
-                    uri,
-                    diagnostics = Array.Empty<LspDiagnostic>()
-                }, cancellationToken);
-                return;
-            }
+                    var uri = parameters.GetProperty("textDocument").GetProperty("uri").GetString() ?? string.Empty;
+                    _documents.Remove(uri);
+                    await WriteNotificationAsync("textDocument/publishDiagnostics", new
+                    {
+                        uri,
+                        diagnostics = Array.Empty<LspDiagnostic>()
+                    }, cancellationToken);
+                    return;
+                }
         }
     }
 

@@ -110,6 +110,8 @@ public sealed class ToshRuntime
 
     public IInlinePromptProvider? InlinePrompts { get; set; }
 
+    public ICommandLineInsertionSink? CommandLineInsertion { get; set; }
+
     public ShellEventBus Events { get; } = new();
 
     public Func<ShellEventSender>? EventSenderFactory { get; set; }

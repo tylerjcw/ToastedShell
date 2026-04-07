@@ -34,7 +34,7 @@ class TestColor {
     shy prop hex_color: string? = null
 
     TestColor() {
-        $this.hex_color = (echo "{\"hex\":\"#ADFF2F\"}" | from-json | get hex)
+        $this.hex_color = (echo "{\"hex\":\"#ADFF2F\"}" | from json | get hex)
     }
 }
 

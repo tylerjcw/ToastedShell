@@ -1,5 +1,9 @@
 namespace Tosh.Core.Commands;
 
+[CommandCategory("Filesystem")]
+[CommandArgument("path", "One or more paths to resolve.", TypeName = "path-like")]
+[CommandExample("realpath ./relative/path")]
+[CommandOutput("Returns fully resolved absolute path strings.")]
 public sealed class RealPathCommand : ShellCommand
 {
     public RealPathCommand()

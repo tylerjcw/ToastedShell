@@ -2,9 +2,9 @@ using System.Text.RegularExpressions;
 using Tosh.Core;
 using Tosh.Language.Parsing;
 
-namespace Tosh.Lsp;
+namespace Tosh.LanguageServices;
 
-internal sealed class DeclarationIndex
+public sealed class DeclarationIndex
 {
     private readonly string _sourceName;
     private readonly string _text;
@@ -291,14 +291,14 @@ internal sealed class DeclarationIndex
         Record,
     }
 
-    internal sealed record IndexedSymbol(
+    public sealed record IndexedSymbol(
         string Name,
         string Detail,
         int SymbolKind,
         LspRange Range,
         LspRange SelectionRange);
 
-    internal sealed record IndexedFunctionDeclaration(
+    public sealed record IndexedFunctionDeclaration(
         string Name,
         IReadOnlyList<FunctionParameterSyntax> Parameters,
         string? ReturnTypeName,

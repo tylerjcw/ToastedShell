@@ -1,5 +1,11 @@
 namespace Tosh.Core.Commands;
 
+[CommandCategory("Filesystem")]
+[CommandArgument("subcommand", "goto <index>, remove <index>, or clear.", Required = false)]
+[CommandExample("dirs")]
+[CommandExample("dirs goto 2", Title = "Navigate to stack entry")]
+[CommandExample("dirs clear", Title = "Clear the directory stack")]
+[CommandOutput("Lists the current directory stack.")]
 public sealed class DirsCommand : ShellCommand
 {
     public DirsCommand()
@@ -27,50 +33,50 @@ public sealed class DirsCommand : ShellCommand
         switch (action.ToLowerInvariant())
         {
             case "goto":
-            {
-                var index = RequireIndex(parsed, context);
-                var path = context.Runtime.GoToStackIndex(index);
-
-                if (path is null)
                 {
-                    throw new InvalidOperationException($"Invalid stack index: {index}.");
-                }
+                    var index = RequireIndex(parsed, context);
+                    var path = context.Runtime.GoToStackIndex(index);
 
-                context.Runtime.CurrentDirectory = path;
-                yield return FileSystemEntry.From(new DirectoryInfo(path));
-                yield break;
-            }
+                    if (path is null)
+                    {
+                        throw new InvalidOperationException($"Invalid stack index: {index}.");
+                    }
+
+                    context.Runtime.CurrentDirectory = path;
+                    yield return FileSystemEntry.From(new DirectoryInfo(path));
+                    yield break;
+                }
             case "remove":
-            {
-                var index = RequireIndex(parsed, context);
-
-                if (!context.Runtime.RemoveDirectoryStackEntry(index))
                 {
-                    throw new InvalidOperationException(
-                        index == context.Runtime.DirectoryStackIndex
-                            ? "Cannot remove the current directory from the stack."
-                            : $"Invalid stack index: {index}.");
-                }
+                    var index = RequireIndex(parsed, context);
 
-                foreach (var entry in context.Runtime.GetDirectoryStack())
-                {
-                    context.CancellationToken.ThrowIfCancellationRequested();
-                    yield return entry;
-                }
+                    if (!context.Runtime.RemoveDirectoryStackEntry(index))
+                    {
+                        throw new InvalidOperationException(
+                            index == context.Runtime.DirectoryStackIndex
+                                ? "Cannot remove the current directory from the stack."
+                                : $"Invalid stack index: {index}.");
+                    }
 
-                yield break;
-            }
+                    foreach (var entry in context.Runtime.GetDirectoryStack())
+                    {
+                        context.CancellationToken.ThrowIfCancellationRequested();
+                        yield return entry;
+                    }
+
+                    yield break;
+                }
             case "clear":
-            {
-                context.Runtime.ClearDirectoryStack();
-
-                foreach (var entry in context.Runtime.GetDirectoryStack())
                 {
-                    yield return entry;
-                }
+                    context.Runtime.ClearDirectoryStack();
 
-                yield break;
-            }
+                    foreach (var entry in context.Runtime.GetDirectoryStack())
+                    {
+                        yield return entry;
+                    }
+
+                    yield break;
+                }
             default:
                 throw new InvalidOperationException("dirs action must be 'goto', 'remove', or 'clear'.");
         }

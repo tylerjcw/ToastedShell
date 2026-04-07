@@ -2,6 +2,7 @@ using System.Text.RegularExpressions;
 
 namespace Tosh.Core.Commands;
 
+[CommandCategory("Text")]
 public sealed class SplitCommand : ShellCommand
 {
     public SplitCommand()

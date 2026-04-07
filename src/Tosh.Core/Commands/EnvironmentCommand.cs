@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[CommandCategory("System")]
 public sealed class EnvironmentCommand : ShellCommand
 {
     public EnvironmentCommand()

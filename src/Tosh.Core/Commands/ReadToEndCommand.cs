@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[CommandCategory("Filesystem")]
 public sealed class ReadToEndCommand : ShellCommand
 {
     public ReadToEndCommand(string name = "read-to-end")

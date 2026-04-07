@@ -10,8 +10,8 @@ public sealed class PipelineDataCommandTests
     {
         var engine = new ToshEngine(ToshRuntime.CreateDefault());
 
-        var arrayResults = await engine.ExecuteToListAsync("echo \"[1,2,3]\" | from-json | type-of | get Name");
-        var flattenedResults = await engine.ExecuteToListAsync("echo \"[1,2,3]\" | from-json | flatten");
+        var arrayResults = await engine.ExecuteToListAsync("echo \"[1,2,3]\" | from json | type-of | get Name");
+        var flattenedResults = await engine.ExecuteToListAsync("echo \"[1,2,3]\" | from json | flatten");
 
         Assert.Collection(arrayResults, item => Assert.Equal("array", item));
         Assert.Equal([1L, 2L, 3L], flattenedResults.Cast<long>().ToArray());
@@ -24,8 +24,8 @@ public sealed class PipelineDataCommandTests
         const string json = "[{\"kind\":\"a\",\"value\":1},{\"kind\":\"a\",\"value\":2},{\"kind\":\"b\",\"value\":3}]";
         var escapedJson = Quote(json);
 
-        var distinctResults = await engine.ExecuteToListAsync($"echo {escapedJson} | from-json | flatten | distinct kind | get value");
-        var groupedResults = await engine.ExecuteToListAsync($"echo {escapedJson} | from-json | flatten | group-by kind");
+        var distinctResults = await engine.ExecuteToListAsync($"echo {escapedJson} | from json | flatten | distinct kind | get value");
+        var groupedResults = await engine.ExecuteToListAsync($"echo {escapedJson} | from json | flatten | group-by kind");
 
         Assert.Equal([1L, 3L], distinctResults.Cast<long>().ToArray());
 
@@ -42,11 +42,11 @@ public sealed class PipelineDataCommandTests
     {
         var engine = new ToshEngine(ToshRuntime.CreateDefault());
 
-        var sumResults = await engine.ExecuteToListAsync("echo \"[1,2,3]\" | from-json | flatten | sum");
-        var averageResults = await engine.ExecuteToListAsync("echo \"[1,2,3]\" | from-json | flatten | average");
-        var avgResults = await engine.ExecuteToListAsync("echo \"[1,2,3]\" | from-json | flatten | avg");
-        var minResults = await engine.ExecuteToListAsync("echo \"[3,1,2]\" | from-json | flatten | min");
-        var maxResults = await engine.ExecuteToListAsync("echo \"[3,1,2]\" | from-json | flatten | max");
+        var sumResults = await engine.ExecuteToListAsync("echo \"[1,2,3]\" | from json | flatten | sum");
+        var averageResults = await engine.ExecuteToListAsync("echo \"[1,2,3]\" | from json | flatten | average");
+        var avgResults = await engine.ExecuteToListAsync("echo \"[1,2,3]\" | from json | flatten | avg");
+        var minResults = await engine.ExecuteToListAsync("echo \"[3,1,2]\" | from json | flatten | min");
+        var maxResults = await engine.ExecuteToListAsync("echo \"[3,1,2]\" | from json | flatten | max");
 
         Assert.Collection(sumResults, item => Assert.Equal(6L, item));
         Assert.Collection(averageResults, item => Assert.Equal(2L, item));
@@ -70,7 +70,7 @@ public sealed class PipelineDataCommandTests
     {
         var engine = new ToshEngine(ToshRuntime.CreateDefault());
 
-        var results = await engine.ExecuteToListAsync("echo \"[1,2,3,4,5]\" | from-json | flatten | summarize --sum --avg --min --max --count");
+        var results = await engine.ExecuteToListAsync("echo \"[1,2,3,4,5]\" | from json | flatten | summarize --sum --avg --min --max --count");
 
         var summary = Assert.IsType<ColumnSummary>(Assert.Single(results));
         Assert.Equal("Value", summary.Column);
@@ -91,7 +91,7 @@ public sealed class PipelineDataCommandTests
         var escapedJson = Quote(json);
 
         var results = await engine.ExecuteToListAsync(
-            $"echo {escapedJson} | from-json | flatten | summary --sum size,used --avg size --count size");
+            $"echo {escapedJson} | from json | flatten | summary --sum size,used --avg size --count size");
 
         var summaries = results.Cast<ColumnSummary>().OrderBy(summary => summary.Column, StringComparer.Ordinal).ToArray();
 
@@ -122,10 +122,10 @@ public sealed class PipelineDataCommandTests
         var engine = new ToshEngine(ToshRuntime.CreateDefault());
 
         var jsonResults = await engine.ExecuteToListAsync(
-            "echo \"{\\\"name\\\":\\\"toast\\\",\\\"size\\\":2}\" | from-json | to-json -c");
+            "echo \"{\\\"name\\\":\\\"toast\\\",\\\"size\\\":2}\" | from json | to json -c");
 
         var csvResults = await engine.ExecuteToListAsync(
-            "echo \"[{\\\"name\\\":\\\"alpha\\\",\\\"size\\\":1},{\\\"name\\\":\\\"beta\\\",\\\"size\\\":2}]\" | from-json | flatten | to-csv");
+            "echo \"[{\\\"name\\\":\\\"alpha\\\",\\\"size\\\":1},{\\\"name\\\":\\\"beta\\\",\\\"size\\\":2}]\" | from json | flatten | to csv");
 
         Assert.Equal("{\"name\":\"toast\",\"size\":2}", Assert.IsType<ShellTextLine>(Assert.Single(jsonResults)).Text);
 
@@ -152,7 +152,7 @@ public sealed class PipelineDataCommandTests
                 shy prop InternalName: string? = null
             }
 
-            new Item("Bread", 2) | to-json -c
+            new Item("Bread", 2) | to json -c
             """);
 
         var csvResults = await engine.ExecuteToListAsync(
@@ -163,7 +163,7 @@ public sealed class PipelineDataCommandTests
                 shy prop InternalName: string? = null
             }
 
-            echo [new Item("Bread", 2), new Item("Coffee", 1)] | flatten | to-csv
+            echo [new Item("Bread", 2), new Item("Coffee", 1)] | flatten | to csv
             """);
 
         var json = Assert.IsType<ShellTextLine>(Assert.Single(jsonResults)).Text;

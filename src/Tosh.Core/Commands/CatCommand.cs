@@ -2,6 +2,7 @@ using System.Dynamic;
 
 namespace Tosh.Core.Commands;
 
+[CommandCategory("Filesystem")]
 public sealed class CatCommand : ShellCommand
 {
     public CatCommand()

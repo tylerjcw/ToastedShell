@@ -2,6 +2,7 @@ using System.Diagnostics;
 
 namespace Tosh.Core.Commands;
 
+[CommandCategory("Process")]
 public sealed class KillCommand : ShellCommand
 {
     public KillCommand()

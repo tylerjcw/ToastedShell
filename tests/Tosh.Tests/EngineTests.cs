@@ -2205,7 +2205,7 @@ public sealed class EngineTests
         var usageResults = await engine.ExecuteToListAsync("whence help | get Usage");
 
         Assert.Contains(CommandResolutionKind.BuiltIn, kindResults.Cast<CommandResolutionKind>());
-        Assert.Contains("help [topic ... | browse [query] | search <query> | related <topic> | categories]", usageResults.Cast<string>());
+        Assert.Contains("help [--cli] [topic ... | browse [query] | search <query> | related <topic> | categories]", usageResults.Cast<string>());
     }
 
     [Fact]
@@ -4325,7 +4325,7 @@ $output");
     {
         var engine = new ToshEngine(ToshRuntime.CreateDefault());
 
-        var results = await engine.ExecuteToListAsync("echo \"{\\\"name\\\":\\\"toast\\\"}\" | from-json | has-prop name");
+        var results = await engine.ExecuteToListAsync("echo \"{\\\"name\\\":\\\"toast\\\"}\" | from json | has-prop name");
 
         Assert.Equal(true, Assert.Single(results));
     }
@@ -4335,7 +4335,7 @@ $output");
     {
         var engine = new ToshEngine(ToshRuntime.CreateDefault());
 
-        var results = await engine.ExecuteToListAsync("echo \"{\\\"name\\\":\\\"toast\\\"}\" | from-json | has-prop missing");
+        var results = await engine.ExecuteToListAsync("echo \"{\\\"name\\\":\\\"toast\\\"}\" | from json | has-prop missing");
 
         Assert.Equal(false, Assert.Single(results));
     }

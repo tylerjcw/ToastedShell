@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[CommandCategory("Filesystem")]
 public sealed class WriteLineToCommand : ShellCommand
 {
     public WriteLineToCommand(string name = "write-line-to")

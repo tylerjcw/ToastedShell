@@ -3,6 +3,7 @@ using System.Text;
 
 namespace Tosh.Core.Commands;
 
+[CommandCategory("Data")]
 public sealed class HashCommand : ShellCommand
 {
     public HashCommand()

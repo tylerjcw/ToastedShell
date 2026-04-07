@@ -2,6 +2,7 @@ using System.Diagnostics;
 
 namespace Tosh.Core.Commands;
 
+[CommandCategory("Filesystem")]
 public sealed class LsblkCommand : ShellCommand
 {
     public LsblkCommand()

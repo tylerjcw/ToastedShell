@@ -26,6 +26,53 @@ public sealed class ReplLineEditorTests
     }
 
     [Fact]
+    public void Repl_command_line_insertion_sink_prefills_the_next_prompt_buffer()
+    {
+        var sink = new ReplCommandLineInsertionSink();
+
+        Assert.True(sink.TryInsertText("$person."));
+        Assert.True(sink.TryInsertText("Name"));
+        Assert.True(sink.TryConsume(out var pending));
+
+        Assert.Equal("$person.Name", pending.Text);
+        Assert.Equal("$person.Name".Length, pending.CursorIndex);
+        Assert.False(sink.TryConsume(out _));
+    }
+
+    [Fact]
+    public void Repl_command_line_insertion_sink_inserts_into_active_buffer_at_cursor()
+    {
+        var sink = new ReplCommandLineInsertionSink();
+        var buffer = new LineEditorBuffer("filter");
+        buffer.SetCursor(3);
+
+        sink.ActivateBuffer(buffer);
+        Assert.True(sink.TryInsertText("X"));
+        sink.DeactivateBuffer(buffer);
+
+        Assert.Equal("filXter", buffer.Text);
+        Assert.Equal(4, buffer.CursorIndex);
+        Assert.False(sink.TryConsume(out _));
+    }
+
+    [Fact]
+    public void Repl_command_line_insertion_sink_can_replace_active_buffer_range()
+    {
+        var sink = new ReplCommandLineInsertionSink();
+        var buffer = new LineEditorBuffer("5");
+        buffer.SetCursor(1);
+
+        sink.ActivateBuffer(buffer);
+        sink.SetPendingReplacement(0, 1);
+        Assert.True(sink.TryInsertText("(5).GetType()"));
+        sink.DeactivateBuffer(buffer);
+
+        Assert.Equal("(5).GetType()", buffer.Text);
+        Assert.Equal("(5).GetType()".Length, buffer.CursorIndex);
+        Assert.False(sink.TryConsume(out _));
+    }
+
+    [Fact]
     public void Line_editor_buffer_handles_home_end_and_clear()
     {
         var buffer = new LineEditorBuffer("toasted");
@@ -229,6 +276,29 @@ public sealed class ReplLineEditorTests
 
         Assert.Equal("$person.Describe(", buffer.Text);
         Assert.Equal("$person.Describe(".Length, buffer.CursorIndex);
+    }
+
+    [Theory]
+    [InlineData("OP", ConsoleKey.F1)]
+    [InlineData("OQ", ConsoleKey.F2)]
+    [InlineData("[11~", ConsoleKey.F1)]
+    [InlineData("[12~", ConsoleKey.F2)]
+    [InlineData("[[A", ConsoleKey.F1)]
+    [InlineData("[[B", ConsoleKey.F2)]
+    public void Escape_sequence_translation_recognizes_common_function_key_sequences(string sequence, ConsoleKey expectedKey)
+    {
+        Assert.True(ReplLineEditor.TryTranslateEscapeSequence(sequence, out var translated));
+        Assert.Equal(expectedKey, translated.Key);
+    }
+
+    [Theory]
+    [InlineData("h", ConsoleKey.H, ConsoleModifiers.Alt)]
+    [InlineData("i", ConsoleKey.I, ConsoleModifiers.Alt)]
+    public void Escape_sequence_translation_recognizes_alt_shortcut_fallbacks(string sequence, ConsoleKey expectedKey, ConsoleModifiers expectedModifiers)
+    {
+        Assert.True(ReplLineEditor.TryTranslateEscapeSequence(sequence, out var translated));
+        Assert.Equal(expectedKey, translated.Key);
+        Assert.Equal(expectedModifiers, translated.Modifiers);
     }
 
     [Fact]

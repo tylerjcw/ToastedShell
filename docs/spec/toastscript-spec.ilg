@@ -7,12 +7,10 @@ Scanning input file toastscript-spec.idx....
 !! Input index error (file = toastscript-spec.idx, line = 16):
    -- Illegal null field.
 
-!! Input index error (file = toastscript-spec.idx, line = 18):
+!! Input index error (file = toastscript-spec.idx, line = 20):
    -- Extra `|' at position 2 of first argument.
-!! Input index error (file = toastscript-spec.idx, line = 19):
-   -- Illegal null field.
-done (285 entries accepted, 4 rejected).
-Sorting entries.....done (2535 comparisons).
-Generating output file toastscript-spec.ind....done (386 lines written, 0 warnings).
+done (502 entries accepted, 3 rejected).
+Sorting entries.......done (4990 comparisons).
+Generating output file toastscript-spec.ind....done (398 lines written, 0 warnings).
 Output written in toastscript-spec.ind.
 Transcript written in toastscript-spec.ilg.

@@ -3398,6 +3398,7 @@ public static class ToshParser
                         return true;
                     }
                 case SyntaxTokenKind.Number:
+                case SyntaxTokenKind.UnitLiteral:
                     {
                         var token = NextToken();
                         text = token.Value switch
@@ -3432,7 +3433,7 @@ public static class ToshParser
 
         private static bool IsSimpleCommandArgumentToken(SyntaxTokenKind kind)
         {
-            return kind is SyntaxTokenKind.Bareword or SyntaxTokenKind.String or SyntaxTokenKind.Number or SyntaxTokenKind.Boolean or SyntaxTokenKind.Null;
+            return kind is SyntaxTokenKind.Bareword or SyntaxTokenKind.String or SyntaxTokenKind.Number or SyntaxTokenKind.Boolean or SyntaxTokenKind.Null or SyntaxTokenKind.UnitLiteral;
         }
 
         private List<ArgumentSyntax> ParseGetArguments(
@@ -3674,6 +3675,7 @@ public static class ToshParser
                 case SyntaxTokenKind.Number:
                 case SyntaxTokenKind.Boolean:
                 case SyntaxTokenKind.Null:
+                case SyntaxTokenKind.UnitLiteral:
                     {
                         var token = NextToken();
                         return ParsePostfixChain(new LiteralArgumentSyntax(token.Value, token.Span), implicitCurrentItem);
@@ -5098,6 +5100,22 @@ public static class ToshParser
                     normalizedOperator = "is-not";
                 }
 
+                // Handle "is in" as a compound operator → "is-in"
+                if (normalizedOperator == "is" && Current.Kind == SyntaxTokenKind.Bareword &&
+                    string.Equals(Current.Text, "in", StringComparison.OrdinalIgnoreCase))
+                {
+                    NextToken(); // consume "in"
+                    normalizedOperator = "is-in";
+                }
+
+                // Handle "is not in" as a compound operator → "is-not-in"
+                if (normalizedOperator == "is-not" && Current.Kind == SyntaxTokenKind.Bareword &&
+                    string.Equals(Current.Text, "in", StringComparison.OrdinalIgnoreCase))
+                {
+                    NextToken(); // consume "in"
+                    normalizedOperator = "is-not-in";
+                }
+
                 // Handle "not in" as a compound operator → "not-in"
                 if (normalizedOperator == "not" && Current.Kind == SyntaxTokenKind.Bareword &&
                     string.Equals(Current.Text, "in", StringComparison.OrdinalIgnoreCase))
@@ -5463,6 +5481,7 @@ public static class ToshParser
                 SyntaxTokenKind.Number or
                 SyntaxTokenKind.Boolean or
                 SyntaxTokenKind.Null or
+                SyntaxTokenKind.UnitLiteral or
                 SyntaxTokenKind.OpenBrace or
                 SyntaxTokenKind.OpenParen or
                 SyntaxTokenKind.OpenBracket => true,
@@ -6003,7 +6022,7 @@ public static class ToshParser
         {
             return Current.Kind switch
             {
-                SyntaxTokenKind.String or SyntaxTokenKind.Number or SyntaxTokenKind.Boolean or SyntaxTokenKind.Null or SyntaxTokenKind.OpenParen or SyntaxTokenKind.DollarOpenParen or SyntaxTokenKind.LessThanOpenParen or SyntaxTokenKind.OpenBracket or SyntaxTokenKind.OpenBrace or SyntaxTokenKind.InterpolatedString => true,
+                SyntaxTokenKind.String or SyntaxTokenKind.Number or SyntaxTokenKind.Boolean or SyntaxTokenKind.Null or SyntaxTokenKind.UnitLiteral or SyntaxTokenKind.OpenParen or SyntaxTokenKind.DollarOpenParen or SyntaxTokenKind.LessThanOpenParen or SyntaxTokenKind.OpenBracket or SyntaxTokenKind.OpenBrace or SyntaxTokenKind.InterpolatedString => true,
                 SyntaxTokenKind.Ampersand => Peek(1).Kind == SyntaxTokenKind.Bareword && IsValidCommandName(Peek(1).Text),
                 SyntaxTokenKind.Bareword => IsVariableReferenceLikeToken(Current) ||
                                             LooksLikeAnonymousFunctionExpression() ||
@@ -6182,8 +6201,9 @@ public static class ToshParser
 
         private static bool IsLogicalOrOperatorToken(SyntaxToken token)
         {
-            return token.Kind == SyntaxTokenKind.Bareword &&
-                   string.Equals(token.Text, "or", StringComparison.OrdinalIgnoreCase);
+            return token.Kind == SyntaxTokenKind.DoublePipe
+                || (token.Kind == SyntaxTokenKind.Bareword &&
+                    string.Equals(token.Text, "or", StringComparison.OrdinalIgnoreCase));
         }
 
         private static bool IsTernaryQuestionToken(SyntaxToken token)
@@ -6205,8 +6225,9 @@ public static class ToshParser
 
         private static bool IsLogicalAndOperatorToken(SyntaxToken token)
         {
-            return token.Kind == SyntaxTokenKind.Bareword &&
-                   string.Equals(token.Text, "and", StringComparison.OrdinalIgnoreCase);
+            return token.Kind == SyntaxTokenKind.DoubleAmpersand
+                || (token.Kind == SyntaxTokenKind.Bareword &&
+                    string.Equals(token.Text, "and", StringComparison.OrdinalIgnoreCase));
         }
 
         private static bool IsComparisonOperatorToken(SyntaxToken token)
@@ -6216,7 +6237,7 @@ public static class ToshParser
                 or SyntaxTokenKind.BangEqual or SyntaxTokenKind.BangTilde
                 || IsEqualsToken(token)
                 || (token.Kind == SyntaxTokenKind.Bareword && token.Text is
-                    "==" or "=~" or "in" or "not-in" or "contains" or "starts-with" or "ends-with" or "is" or "is-not" or "not");
+                    "==" or "=~" or "in" or "not-in" or "contains" or "starts-with" or "ends-with" or "is" or "is-not" or "not" or "as");
         }
 
         private static bool IsAdditiveOperatorToken(SyntaxToken token)
@@ -6245,6 +6266,8 @@ public static class ToshParser
                 SyntaxTokenKind.LessThanEqual => "<=",
                 SyntaxTokenKind.BangEqual => "!=",
                 SyntaxTokenKind.BangTilde => "!~",
+                SyntaxTokenKind.DoublePipe => "or",
+                SyntaxTokenKind.DoubleAmpersand => "and",
                 _ when IsEqualsToken(token) => "=",
                 _ => token.Text.ToLowerInvariant() switch
                 {
@@ -6257,6 +6280,7 @@ public static class ToshParser
                     "contains" => "contains",
                     "starts-with" => "starts-with",
                     "ends-with" => "ends-with",
+                    "as" => "as",
                     "+" => "+",
                     "-" => "-",
                     "*" => "*",

@@ -3,6 +3,7 @@ using System.Runtime.Loader;
 
 namespace Tosh.Core.Commands;
 
+[CommandCategory("CLR")]
 public sealed class LoadAssemblyCommand : ShellCommand
 {
     public LoadAssemblyCommand()

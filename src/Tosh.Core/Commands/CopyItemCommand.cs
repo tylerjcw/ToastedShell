@@ -1,5 +1,16 @@
 namespace Tosh.Core.Commands;
 
+[CommandCategory("Filesystem")]
+[CommandArgument("source", "One or more source files or directories.", TypeName = "path-like")]
+[CommandArgument("destination", "The target path.", TypeName = "path-like")]
+[CommandOption("-r", "Copy directories recursively.")]
+[CommandOption("-f", "Force overwrite of existing files.")]
+[CommandOption("-n", "Do not overwrite existing files.")]
+[CommandOption("-p", "Preserve file attributes such as timestamps.")]
+[CommandOption("-u", "Only copy when the source is newer than the destination.")]
+[CommandExample("cp file.txt backup.txt")]
+[CommandExample("cp -r src/ dst/", Title = "Recursive directory copy")]
+[CommandOutput("Returns FileInfo or DirectoryInfo objects for each copied target.")]
 public sealed class CopyItemCommand : ShellCommand
 {
     public CopyItemCommand()

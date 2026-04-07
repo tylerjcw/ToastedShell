@@ -1,5 +1,16 @@
 namespace Tosh.Core.Commands;
 
+[CommandCategory("Pipeline")]
+[CommandArgument("key", "A member path, callable, or block to extract the sort key.", Required = false, TypeName = "member-path|callable|block")]
+[CommandOption("-r", "Reverse the sort order.")]
+[CommandOption("-n", "Use numeric comparison.")]
+[CommandOption("-u", "Remove duplicate values after sorting.")]
+[CommandOption("-h", "Human-numeric sort (understands storage sizes).")]
+[CommandExample("ps | sort Memory", Title = "Sort by property")]
+[CommandExample("ls -la | sort Modified | reverse", Title = "Sort then reverse")]
+[CommandExample("ps | sort func(p) => ($p.Name.Length)", Title = "Lambda sort key")]
+[CommandOutput("The input pipeline objects in sorted order.")]
+[PipelineInput(AcceptsScalar = true, Description = "Collects all pipeline objects, sorts them, then re-emits.")]
 public sealed class SortCommand : ShellCommand
 {
     public SortCommand(string name = "sort")

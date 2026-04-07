@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[CommandCategory("Shell")]
 public sealed class ConfigCommand : ShellCommand
 {
     public ConfigCommand()
@@ -22,81 +23,81 @@ public sealed class ConfigCommand : ShellCommand
         switch (action.ToLowerInvariant())
         {
             case "browse":
-            {
-                var initialQuery = parsed.Positionals.Count > 1
-                    ? string.Join(" ", parsed.Positionals.Skip(1).Select(value => value?.ToString() ?? string.Empty)).Trim()
-                    : null;
-                yield return new ConfigBrowseRequest(string.IsNullOrWhiteSpace(initialQuery) ? null : initialQuery, null);
-                yield break;
-            }
+                {
+                    var initialQuery = parsed.Positionals.Count > 1
+                        ? string.Join(" ", parsed.Positionals.Skip(1).Select(value => value?.ToString() ?? string.Empty)).Trim()
+                        : null;
+                    yield return new ConfigBrowseRequest(string.IsNullOrWhiteSpace(initialQuery) ? null : initialQuery, null);
+                    yield break;
+                }
 
             case "get":
-            {
-                if (parsed.Positionals.Count == 1)
                 {
-                    yield return context.Runtime.Config;
+                    if (parsed.Positionals.Count == 1)
+                    {
+                        yield return context.Runtime.Config;
+                        yield break;
+                    }
+
+                    var path = CommandArguments.RequireString(parsed.Positionals, 1, "path");
+                    yield return ResolveValue(context.Runtime, path);
                     yield break;
                 }
-
-                var path = CommandArguments.RequireString(parsed.Positionals, 1, "path");
-                yield return ResolveValue(context.Runtime, path);
-                yield break;
-            }
 
             case "set":
-            {
-                var path = CommandArguments.RequireString(parsed.Positionals, 1, "path");
-                var value = parsed.Positionals.Count > 2
-                    ? parsed.Positionals[2]
-                    : await ResolvePipelinedValueAsync(context, path);
-                var normalizedPath = ConfigPathUtilities.NormalizeMemberPath(context.Runtime.Config, path);
-                context.Runtime.ObjectAccessor.SetValue(context.Runtime.Config, normalizedPath, value);
-                yield return new ConfigMutationResult(normalizedPath, context.Runtime.ObjectAccessor.GetValue(context.Runtime.Config, normalizedPath));
-                yield break;
-            }
-
-            case "reset":
-            {
-                if (parsed.Positionals.Count == 1)
                 {
-                    context.Runtime.Config.Reset();
-                    yield return context.Runtime.Config;
+                    var path = CommandArguments.RequireString(parsed.Positionals, 1, "path");
+                    var value = parsed.Positionals.Count > 2
+                        ? parsed.Positionals[2]
+                        : await ResolvePipelinedValueAsync(context, path);
+                    var normalizedPath = ConfigPathUtilities.NormalizeMemberPath(context.Runtime.Config, path);
+                    context.Runtime.ObjectAccessor.SetValue(context.Runtime.Config, normalizedPath, value);
+                    yield return new ConfigMutationResult(normalizedPath, context.Runtime.ObjectAccessor.GetValue(context.Runtime.Config, normalizedPath));
                     yield break;
                 }
 
-                var path = CommandArguments.RequireString(parsed.Positionals, 1, "path");
-                var target = ResolveValue(context.Runtime, path);
-
-                if (target is not IResettableShellConfig resettable)
+            case "reset":
                 {
-                    throw new InvalidOperationException($"Configuration path '{path}' is not resettable.");
-                }
+                    if (parsed.Positionals.Count == 1)
+                    {
+                        context.Runtime.Config.Reset();
+                        yield return context.Runtime.Config;
+                        yield break;
+                    }
 
-                resettable.Reset();
-                yield return target;
-                yield break;
-            }
+                    var path = CommandArguments.RequireString(parsed.Positionals, 1, "path");
+                    var target = ResolveValue(context.Runtime, path);
+
+                    if (target is not IResettableShellConfig resettable)
+                    {
+                        throw new InvalidOperationException($"Configuration path '{path}' is not resettable.");
+                    }
+
+                    resettable.Reset();
+                    yield return target;
+                    yield break;
+                }
 
             case "init":
-            {
-                var rootDirectory = parsed.Positionals.Count > 1
-                    ? PathUtilities.ResolvePath(context.Runtime.CurrentDirectory, CommandArguments.RequireString(parsed.Positionals, 1, "path"))
-                    : context.Runtime.Config.Startup.RootDirectory;
-
-                yield return InitializeConfigDirectory(rootDirectory);
-                yield break;
-            }
-
-            case "reload":
-            {
-                if (parsed.Positionals.Count > 1)
                 {
-                    throw new InvalidOperationException("The 'config reload' action does not accept additional arguments.");
+                    var rootDirectory = parsed.Positionals.Count > 1
+                        ? PathUtilities.ResolvePath(context.Runtime.CurrentDirectory, CommandArguments.RequireString(parsed.Positionals, 1, "path"))
+                        : context.Runtime.Config.Startup.RootDirectory;
+
+                    yield return InitializeConfigDirectory(rootDirectory);
+                    yield break;
                 }
 
-                yield return await ReloadConfigurationAsync(context);
-                yield break;
-            }
+            case "reload":
+                {
+                    if (parsed.Positionals.Count > 1)
+                    {
+                        throw new InvalidOperationException("The 'config reload' action does not accept additional arguments.");
+                    }
+
+                    yield return await ReloadConfigurationAsync(context);
+                    yield break;
+                }
 
             default:
                 throw new InvalidOperationException("config action must be 'get', 'set', 'reset', 'init', or 'reload'.");

@@ -1,5 +1,14 @@
 namespace Tosh.Core.Commands;
 
+[CommandCategory("Filesystem")]
+[CommandArgument("path", "One or more files or directories to remove.", TypeName = "path-like")]
+[CommandOption("-r", "Remove directories and their contents recursively.")]
+[CommandOption("-f", "Ignore nonexistent files; never prompt.")]
+[CommandOption("-i", "Prompt before each removal.")]
+[CommandExample("rm temp.txt")]
+[CommandExample("rm -rf build/", Title = "Force recursive delete")]
+[CommandOutput("Returns a RemovalResult with total size and descendant tree.")]
+[PipelineInput(AcceptsList = true, Description = "Accepts piped path-like values.")]
 public sealed class RemoveItemCommand : ShellCommand
 {
     public RemoveItemCommand()

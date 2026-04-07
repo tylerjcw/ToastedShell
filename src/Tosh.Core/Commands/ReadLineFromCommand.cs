@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[CommandCategory("Filesystem")]
 public sealed class ReadLineFromCommand : ShellCommand
 {
     public ReadLineFromCommand(string name = "read-line-from")

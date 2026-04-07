@@ -149,4 +149,55 @@ internal static class HelpFuzzyMatcher
 
         return 0.0;
     }
+
+    public static double FuzzyMatchLower(string textLower, string queryLower)
+    {
+        if (string.IsNullOrEmpty(textLower) || string.IsNullOrEmpty(queryLower))
+        {
+            return 0.0;
+        }
+
+        if (textLower == queryLower)
+        {
+            return 1.0;
+        }
+
+        if (textLower.Contains(queryLower, StringComparison.Ordinal))
+        {
+            return 0.9;
+        }
+
+        var words = textLower.Split([' ', '-', '_', '.'], StringSplitOptions.RemoveEmptyEntries);
+
+        foreach (var word in words)
+        {
+            if (IsSimilar(word, queryLower))
+            {
+                return Similarity(word, queryLower) * 0.8;
+            }
+        }
+
+        foreach (var word in words)
+        {
+            if (word.Length < 2 || queryLower.Length < 2)
+            {
+                continue;
+            }
+
+            var minLength = Math.Min(word.Length, queryLower.Length);
+
+            if (IsSimilar(word[..minLength], queryLower[..minLength]))
+            {
+                return Similarity(word[..minLength], queryLower[..minLength]) * 0.6;
+            }
+        }
+
+        if (IsSimilar(textLower, queryLower))
+        {
+            return Similarity(textLower, queryLower) * 0.7;
+        }
+
+        return 0.0;
+    }
+
 }

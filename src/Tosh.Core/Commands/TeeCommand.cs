@@ -2,6 +2,7 @@ using System.Text;
 
 namespace Tosh.Core.Commands;
 
+[CommandCategory("Pipeline")]
 public sealed class TeeCommand : ShellCommand
 {
     public TeeCommand()

@@ -1,5 +1,12 @@
 namespace Tosh.Core.Commands;
 
+[CommandCategory("Data")]
+[CommandArgument("format", "Output format: text, json, or csv. Defaults to text.", Required = false)]
+[CommandArgument("value", "Values to materialize. Can also come from pipeline.", Required = false)]
+[CommandExample("ls | as-file", Title = "Materialize pipeline to temp file")]
+[CommandExample("as-file json $data", Title = "JSON format")]
+[CommandOutput("Returns a FileSystemEntry for the created temporary file.")]
+[PipelineInput(AcceptsScalar = true, AcceptsList = true, AcceptsTable = true, Description = "Materializes pipeline values into a temporary file.")]
 public sealed class AsFileCommand : ShellCommand
 {
     private static readonly HashSet<string> SupportedFormats = new(StringComparer.OrdinalIgnoreCase)

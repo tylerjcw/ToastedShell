@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[CommandCategory("Pipeline")]
 public sealed class EachCommand : ShellCommand
 {
     public EachCommand(string name = "each")

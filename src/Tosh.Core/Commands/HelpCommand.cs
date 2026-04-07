@@ -1,13 +1,36 @@
 namespace Tosh.Core.Commands;
 
+[CommandCategory("Shell")]
 public sealed class HelpCommand : ShellCommand
 {
     public HelpCommand(string name = "help")
-        : base(name, "Shows searchable Tosh help for commands, language topics, CLR types, and externals.", $"{name} [topic ... | browse [query] | search <query> | related <topic> | categories]") { }
+        : base(name, "Shows searchable Tosh help for commands, language topics, CLR types, and externals.", $"{name} [--cli] [topic ... | browse [query] | search <query> | related <topic> | categories]") { }
 
     public override async IAsyncEnumerable<object?> ExecuteAsync(CommandContext context)
     {
-        if (context.Arguments.Count == 0)
+        var inlineCli = false;
+        var arguments = new List<object?>(context.Arguments.Count);
+
+        foreach (var argument in context.Arguments)
+        {
+            if (argument is string text && string.Equals(text, "--cli", StringComparison.OrdinalIgnoreCase))
+            {
+                inlineCli = true;
+                continue;
+            }
+
+            arguments.Add(argument);
+        }
+
+        if (inlineCli)
+        {
+            var provider = RequireInlineProvider(context);
+            var (initialQuery, initialTopicName) = await ResolveInlineBrowseSeedAsync(context, arguments);
+            provider.BrowseHelp(initialQuery, initialTopicName);
+            yield break;
+        }
+
+        if (arguments.Count == 0)
         {
             var pipedTopics = await TextInputUtilities.ReadScalarValuesFromInputAsync(context, allowEmpty: true);
 
@@ -45,11 +68,11 @@ public sealed class HelpCommand : ShellCommand
             yield break;
         }
 
-        var first = CommandArguments.RequireString(context.Arguments, 0, "topic");
+        var first = CommandArguments.RequireString(arguments, 0, "topic");
 
         if (string.Equals(first, "search", StringComparison.OrdinalIgnoreCase))
         {
-            var query = string.Join(" ", context.Arguments.Skip(1).Select(argument => argument?.ToString() ?? string.Empty)).Trim();
+            var query = string.Join(" ", arguments.Skip(1).Select(argument => argument?.ToString() ?? string.Empty)).Trim();
 
             if (query.Length == 0)
             {
@@ -73,8 +96,8 @@ public sealed class HelpCommand : ShellCommand
 
         if (string.Equals(first, "browse", StringComparison.OrdinalIgnoreCase))
         {
-            var initialQuery = context.Arguments.Count > 1
-                ? string.Join(" ", context.Arguments.Skip(1).Select(argument => argument?.ToString() ?? string.Empty)).Trim()
+            var initialQuery = arguments.Count > 1
+                ? string.Join(" ", arguments.Skip(1).Select(argument => argument?.ToString() ?? string.Empty)).Trim()
                 : null;
             yield return new HelpBrowseRequest(string.IsNullOrWhiteSpace(initialQuery) ? null : initialQuery, null);
             yield break;
@@ -82,9 +105,9 @@ public sealed class HelpCommand : ShellCommand
 
         if (string.Equals(first, "related", StringComparison.OrdinalIgnoreCase))
         {
-            if (context.Arguments.Count >= 2)
+            if (arguments.Count >= 2)
             {
-                var relatedTopic = CommandArguments.RequireString(context.Arguments, 1, "topic");
+                var relatedTopic = CommandArguments.RequireString(arguments, 1, "topic");
 
                 foreach (var result in HelpCatalog.GetRelated(context.Runtime, relatedTopic))
                 {
@@ -141,5 +164,72 @@ public sealed class HelpCommand : ShellCommand
         }
 
         yield return resolvedTopic;
+    }
+
+    private static async Task<(string? InitialQuery, string? InitialTopicName)> ResolveInlineBrowseSeedAsync(
+        CommandContext context,
+        IReadOnlyList<object?> arguments)
+    {
+        string? initialQuery = null;
+
+        if (arguments.Count == 0)
+        {
+            initialQuery = await ReadInlinePipedQueryAsync(context);
+        }
+        else
+        {
+            var first = CommandArguments.RequireString(arguments, 0, "topic");
+
+            if (string.Equals(first, "browse", StringComparison.OrdinalIgnoreCase))
+            {
+                initialQuery = arguments.Count > 1
+                    ? string.Join(" ", arguments.Skip(1).Select(argument => argument?.ToString() ?? string.Empty)).Trim()
+                    : await ReadInlinePipedQueryAsync(context);
+            }
+            else if (string.Equals(first, "search", StringComparison.OrdinalIgnoreCase))
+            {
+                initialQuery = arguments.Count > 1
+                    ? string.Join(" ", arguments.Skip(1).Select(argument => argument?.ToString() ?? string.Empty)).Trim()
+                    : await ReadInlinePipedQueryAsync(context);
+            }
+            else if (string.Equals(first, "related", StringComparison.OrdinalIgnoreCase))
+            {
+                initialQuery = arguments.Count > 1
+                    ? CommandArguments.RequireString(arguments, 1, "topic")
+                    : await ReadInlinePipedQueryAsync(context);
+            }
+            else if (string.Equals(first, "categories", StringComparison.OrdinalIgnoreCase))
+            {
+                initialQuery = null;
+            }
+            else
+            {
+                initialQuery = string.Join(" ", arguments.Select(argument => argument?.ToString() ?? string.Empty)).Trim();
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(initialQuery))
+        {
+            return (null, null);
+        }
+
+        var initialTopicName = HelpCatalog.ResolveTopic(context.Runtime, initialQuery)?.Name;
+        return (initialQuery, initialTopicName);
+    }
+
+    private static async Task<string?> ReadInlinePipedQueryAsync(CommandContext context)
+    {
+        var pipedTopics = await TextInputUtilities.ReadScalarValuesFromInputAsync(context, allowEmpty: true);
+        var query = string.Join(" ", pipedTopics.Where(topic => !string.IsNullOrWhiteSpace(topic))).Trim();
+        return query.Length == 0 ? null : query;
+    }
+
+    private static IInlinePromptProvider RequireInlineProvider(CommandContext context)
+    {
+        return context.Runtime.InlinePrompts
+            ?? throw context.CreateDiagnostic(
+                code: "tosh::help::no_inline_provider",
+                title: "Inline help (--cli) is not available in this environment.",
+                help: "The --cli flag requires an interactive terminal. Remove --cli to use the fullscreen help browser or normal help output.");
     }
 }

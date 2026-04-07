@@ -2,6 +2,7 @@ using System.Net.NetworkInformation;
 
 namespace Tosh.Core.Commands;
 
+[CommandCategory("Network")]
 public sealed class PingCommand : ShellCommand
 {
     public PingCommand()

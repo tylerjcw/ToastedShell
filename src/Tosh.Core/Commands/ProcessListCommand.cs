@@ -2,6 +2,25 @@ using System.Diagnostics;
 
 namespace Tosh.Core.Commands;
 
+[CommandCategory("Process")]
+[CommandArgument("name-or-id", "Optional process names or PIDs to filter.", Required = false)]
+[CommandOption("-e", "Show every process.")]
+[CommandOption("-A", "Show every process (alias for -e).")]
+[CommandOption("-f", "Full listing with extra columns.")]
+[CommandOption("-p <pid,...>", "Select processes by PID.")]
+[CommandOption("--ppid <pid,...>", "Select by parent PID.")]
+[CommandOption("-u <user,...>", "Select by owning user.")]
+[CommandOption("-t <tty,...>", "Select by terminal.")]
+[CommandOption("-o <columns>", "Specify output columns.")]
+[CommandOption("--sort <field,...>", "Sort by the given fields.")]
+[CommandOption("--show <columns>", "Select which properties are rendered.")]
+[CommandOption("--hide <columns>", "Hide specific properties from the output.")]
+[CommandOption("--show-all", "Display every available column.")]
+[CommandExample("ps -f --sort -Id", Title = "Full listing sorted by ID descending")]
+[CommandExample("ps -u root | get { Name, Id, User }", Title = "Filter by user")]
+[CommandExample("ps | sort Memory | reverse | first 5", Title = "Top 5 by memory")]
+[CommandNote("Process memory values are surfaced as Tosh StorageSize objects, not raw strings.")]
+[CommandOutput("Typed process objects with properties like Name, Id, Memory, CPU, User.")]
 public sealed class ProcessListCommand : ShellCommand
 {
     public ProcessListCommand()

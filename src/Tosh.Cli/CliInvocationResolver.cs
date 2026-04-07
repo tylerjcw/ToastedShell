@@ -42,6 +42,32 @@ internal static class CliInvocationResolver
             return CliInvocationPlan.Help(skipStartup);
         }
 
+        if (effectiveArgs[0] is "--export-command-manifest")
+        {
+            var format = "json";
+            string? outputPath = null;
+
+            for (var i = 1; i < effectiveArgs.Count; i++)
+            {
+                switch (effectiveArgs[i])
+                {
+                    case "--latex":
+                        format = "latex";
+                        break;
+                    case "--json":
+                        format = "json";
+                        break;
+                    case "-o" or "--output" when i + 1 < effectiveArgs.Count:
+                        outputPath = effectiveArgs[++i];
+                        break;
+                    default:
+                        throw new InvalidOperationException($"Unknown option '{effectiveArgs[i]}' for --export-command-manifest.");
+                }
+            }
+
+            return CliInvocationPlan.ExportManifest(format, outputPath);
+        }
+
         if (effectiveArgs[0] is "-c" or "--command")
         {
             if (effectiveArgs.Count < 2)
@@ -160,6 +186,8 @@ internal readonly record struct CliInvocationPlan(
     public static CliInvocationPlan ToshScript(string path, string[] arguments, bool skipStartup = false) => new(CliInvocationKind.ToshScript, path, arguments, LoadStartup: !skipStartup);
 
     public static CliInvocationPlan ExternalScript(string path, string[] invocation, bool skipStartup = false) => new(CliInvocationKind.ExternalScript, path, invocation, LoadStartup: !skipStartup);
+
+    public static CliInvocationPlan ExportManifest(string format, string? outputPath) => new(CliInvocationKind.ExportManifest, format, outputPath is not null ? [outputPath] : Array.Empty<string>(), LoadStartup: false);
 }
 
 internal enum CliInvocationKind
@@ -169,4 +197,5 @@ internal enum CliInvocationKind
     Command,
     ToshScript,
     ExternalScript,
+    ExportManifest,
 }

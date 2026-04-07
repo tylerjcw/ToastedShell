@@ -1,5 +1,8 @@
 using System.Collections;
+using System.Globalization;
+using System.Numerics;
 using System.Reflection;
+using System.Text;
 using Tosh.Core;
 
 namespace Tosh.Cli;
@@ -147,6 +150,248 @@ internal sealed class ReplCompletionEngine
         return suggestions.Count == 0
             ? null
             : new ReplCompletionResult(replacementStart, replacementLength, suggestions);
+    }
+
+    internal static string GetTokenAtCursor(string text, int cursorIndex)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+
+        cursorIndex = Math.Clamp(cursorIndex, 0, text.Length);
+        var tokenStart = FindCompletionTokenStart(text, cursorIndex);
+        var tokenEnd = FindCompletionTokenEnd(text, cursorIndex);
+
+        return tokenEnd <= tokenStart
+            ? string.Empty
+            : text[tokenStart..tokenEnd];
+    }
+
+    internal static (int Start, int Length, string Token) GetTokenSpanAtCursor(string text, int cursorIndex)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+
+        cursorIndex = Math.Clamp(cursorIndex, 0, text.Length);
+        var tokenStart = FindCompletionTokenStart(text, cursorIndex);
+        var tokenEnd = FindCompletionTokenEnd(text, cursorIndex);
+
+        return tokenEnd <= tokenStart
+            ? (cursorIndex, 0, string.Empty)
+            : (tokenStart, tokenEnd - tokenStart, text[tokenStart..tokenEnd]);
+    }
+
+    internal static (int Start, int Length, string Token) GetInspectTargetSpanAtCursor(string text, int cursorIndex)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+
+        cursorIndex = Math.Clamp(cursorIndex, 0, text.Length);
+
+        return TryGetQuotedSpanAtCursor(text, cursorIndex, out var quotedSpan)
+            ? quotedSpan
+            : GetTokenSpanAtCursor(text, cursorIndex);
+    }
+
+    internal static string? GetInlineHelpQuery(string text, int cursorIndex)
+    {
+        var token = GetTokenSpanAtCursor(text, cursorIndex).Token.Trim();
+
+        if (token.Length == 0)
+        {
+            return null;
+        }
+
+        if (token.StartsWith('$'))
+        {
+            token = token[1..];
+        }
+
+        if (token.StartsWith("env.", StringComparison.OrdinalIgnoreCase))
+        {
+            token = token[4..];
+        }
+        else
+        {
+            var dotIndex = token.LastIndexOf('.');
+
+            if (dotIndex >= 0 && dotIndex + 1 < token.Length)
+            {
+                token = token[(dotIndex + 1)..];
+            }
+        }
+
+        return token.Length == 0 ? null : token;
+    }
+
+    internal bool TryResolveInspectableReference(string token, out object? value)
+    {
+        ArgumentNullException.ThrowIfNull(token);
+
+        var trimmed = token.Trim();
+
+        if (trimmed.Length == 0)
+        {
+            value = null;
+            return false;
+        }
+
+        if (TryParseInspectableLiteral(trimmed, out value))
+        {
+            return true;
+        }
+
+        value = trimmed.StartsWith("$", StringComparison.Ordinal)
+            ? ResolveValueReference(trimmed)
+            : ResolveBareReference(trimmed);
+
+        if (value is not null)
+        {
+            return true;
+        }
+
+        if (!trimmed.StartsWith("$", StringComparison.Ordinal))
+        {
+            value = trimmed;
+            return true;
+        }
+
+        return false;
+    }
+
+    internal static string? BuildInspectableSourceExpression(string token, object? value)
+    {
+        ArgumentNullException.ThrowIfNull(token);
+
+        var trimmed = token.Trim();
+
+        if (trimmed.Length == 0)
+        {
+            return null;
+        }
+
+        if (IsQuotedInspectableLiteral(trimmed) ||
+            trimmed.StartsWith("$", StringComparison.Ordinal) ||
+            string.Equals(trimmed, "null", StringComparison.OrdinalIgnoreCase) ||
+            bool.TryParse(trimmed, out _) ||
+            BigInteger.TryParse(trimmed, NumberStyles.Integer, CultureInfo.InvariantCulture, out _) ||
+            decimal.TryParse(trimmed, NumberStyles.Float, CultureInfo.InvariantCulture, out _) ||
+            value is Type)
+        {
+            return trimmed;
+        }
+
+        return value is string stringValue
+            ? QuoteInspectableString(stringValue)
+            : trimmed;
+    }
+
+    private static bool TryParseInspectableLiteral(string text, out object? value)
+    {
+        if (TryParseQuotedInspectableLiteral(text, out value))
+        {
+            return true;
+        }
+
+        if (string.Equals(text, "null", StringComparison.OrdinalIgnoreCase))
+        {
+            value = null;
+            return true;
+        }
+
+        if (bool.TryParse(text, out var boolean))
+        {
+            value = boolean;
+            return true;
+        }
+
+        if (int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var intValue))
+        {
+            value = intValue;
+            return true;
+        }
+
+        if (long.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var longValue))
+        {
+            value = longValue;
+            return true;
+        }
+
+        if (BigInteger.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var bigInteger))
+        {
+            value = bigInteger;
+            return true;
+        }
+
+        if (decimal.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var decimalValue))
+        {
+            value = decimalValue;
+            return true;
+        }
+
+        if (double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var doubleValue))
+        {
+            value = doubleValue;
+            return true;
+        }
+
+        value = null;
+        return false;
+    }
+
+    private static bool TryParseQuotedInspectableLiteral(string text, out object? value)
+    {
+        if (!IsQuotedInspectableLiteral(text))
+        {
+            value = null;
+            return false;
+        }
+
+        value = UnescapeInspectableString(text[1..^1]);
+        return true;
+    }
+
+    private static bool IsQuotedInspectableLiteral(string text)
+    {
+        return text.Length >= 2 &&
+               ((text[0] == '"' && text[^1] == '"') ||
+                (text[0] == '\'' && text[^1] == '\''));
+    }
+
+    private static string QuoteInspectableString(string value)
+    {
+        return "\"" + value
+            .Replace("\\", "\\\\", StringComparison.Ordinal)
+            .Replace("\"", "\\\"", StringComparison.Ordinal)
+            .Replace("\r", "\\r", StringComparison.Ordinal)
+            .Replace("\n", "\\n", StringComparison.Ordinal)
+            .Replace("\t", "\\t", StringComparison.Ordinal) + "\"";
+    }
+
+    private static string UnescapeInspectableString(string value)
+    {
+        var builder = new StringBuilder(value.Length);
+
+        for (var index = 0; index < value.Length; index += 1)
+        {
+            var character = value[index];
+
+            if (character == '\\' && index + 1 < value.Length)
+            {
+                index += 1;
+                builder.Append(value[index] switch
+                {
+                    'n' => '\n',
+                    'r' => '\r',
+                    't' => '\t',
+                    '\\' => '\\',
+                    '"' => '"',
+                    '\'' => '\'',
+                    _ => value[index],
+                });
+                continue;
+            }
+
+            builder.Append(character);
+        }
+
+        return builder.ToString();
     }
 
     private bool TryGetVariableOrMemberSuggestions(string tokenPrefix, int replacementStart, int replacementLength, out ReplCompletionResult? result)
@@ -846,10 +1091,93 @@ internal sealed class ReplCompletionEngine
         return index;
     }
 
+    private static int FindCompletionTokenEnd(string text, int cursorIndex)
+    {
+        var index = cursorIndex;
+
+        while (index < text.Length && IsCompletionTokenCharacter(text[index]))
+        {
+            index++;
+        }
+
+        return index;
+    }
+
     private static bool IsCompletionTokenCharacter(char character)
     {
         return !char.IsWhiteSpace(character) &&
                character is not ('|' or '#' or '(' or ')' or '{' or '}' or '[' or ']' or ';' or '"' or '\'' or '>' or '<' or '&' or '!' or '=' or ':');
+    }
+
+    private static bool TryGetQuotedSpanAtCursor(string text, int cursorIndex, out (int Start, int Length, string Token) span)
+    {
+        foreach (var quote in new[] { '"', '\'' })
+        {
+            if (TryGetQuotedSpanAtCursor(text, cursorIndex, quote, out span))
+            {
+                return true;
+            }
+        }
+
+        span = default;
+        return false;
+    }
+
+    private static bool TryGetQuotedSpanAtCursor(string text, int cursorIndex, char quote, out (int Start, int Length, string Token) span)
+    {
+        var searchIndex = cursorIndex;
+
+        if (searchIndex > 0 && text[searchIndex - 1] == quote && !IsEscaped(text, searchIndex - 1))
+        {
+            searchIndex -= 1;
+        }
+
+        var openIndex = -1;
+        for (var index = searchIndex - 1; index >= 0; index -= 1)
+        {
+            if (text[index] == quote && !IsEscaped(text, index))
+            {
+                openIndex = index;
+                break;
+            }
+        }
+
+        if (openIndex < 0)
+        {
+            span = default;
+            return false;
+        }
+
+        var closeIndex = -1;
+        for (var index = openIndex + 1; index < text.Length; index += 1)
+        {
+            if (text[index] == quote && !IsEscaped(text, index))
+            {
+                closeIndex = index;
+                break;
+            }
+        }
+
+        if (closeIndex < 0 || cursorIndex < openIndex || cursorIndex > closeIndex + 1)
+        {
+            span = default;
+            return false;
+        }
+
+        span = (openIndex, closeIndex - openIndex + 1, text[openIndex..(closeIndex + 1)]);
+        return true;
+    }
+
+    private static bool IsEscaped(string text, int index)
+    {
+        var slashCount = 0;
+
+        for (var current = index - 1; current >= 0 && text[current] == '\\'; current -= 1)
+        {
+            slashCount += 1;
+        }
+
+        return slashCount % 2 == 1;
     }
 
     private static bool MatchesPrefix(string text, string prefix)

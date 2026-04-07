@@ -1,5 +1,12 @@
 namespace Tosh.Core.Commands;
 
+[CommandCategory("System")]
+[CommandOption("-s", "System Name")]
+[CommandOption("-n", "Node Name")]
+[CommandOption("-r", "Kernel Release")]
+[CommandOption("-v", "Kernel Version")]
+[CommandOption("-m", "Machine")]
+[CommandOption("-o", "Operating System")]
 public sealed class UnameCommand : ShellCommand
 {
     public UnameCommand()

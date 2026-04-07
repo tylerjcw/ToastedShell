@@ -2,6 +2,7 @@ using System.Diagnostics;
 
 namespace Tosh.Core.Commands;
 
+[CommandCategory("System")]
 public sealed class LoginctlCommand : ShellCommand
 {
     private static readonly IReadOnlySet<string> KnownNonStructuredSubcommands = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
@@ -69,101 +70,101 @@ public sealed class LoginctlCommand : ShellCommand
         switch (request.Mode)
         {
             case StructuredLoginctlMode.ListSessions:
-            {
-                IReadOnlyList<SystemdLoginSessionInfo> sessions;
-
-                try
                 {
-                    sessions = LoginctlJsonParser.ParseSessionList(result.StandardOutput);
-                }
-                catch (Exception exception) when (exception is InvalidOperationException or System.Text.Json.JsonException)
-                {
-                    throw context.CreateDiagnostic(
-                        code: "tosh::runtime::loginctl_json_parse_failed",
-                        title: $"Could not parse structured 'loginctl list-sessions' output. {exception.Message}",
-                        help: "Try running the external `loginctl` command directly if you are using an unsupported output mode.");
-                }
+                    IReadOnlyList<SystemdLoginSessionInfo> sessions;
 
-                foreach (var session in sessions)
-                {
-                    context.CancellationToken.ThrowIfCancellationRequested();
-                    yield return CommandDisplaySelectionParser.Apply(context.Runtime, parsedSelection.Selection, session);
-                }
+                    try
+                    {
+                        sessions = LoginctlJsonParser.ParseSessionList(result.StandardOutput);
+                    }
+                    catch (Exception exception) when (exception is InvalidOperationException or System.Text.Json.JsonException)
+                    {
+                        throw context.CreateDiagnostic(
+                            code: "tosh::runtime::loginctl_json_parse_failed",
+                            title: $"Could not parse structured 'loginctl list-sessions' output. {exception.Message}",
+                            help: "Try running the external `loginctl` command directly if you are using an unsupported output mode.");
+                    }
 
-                yield break;
-            }
+                    foreach (var session in sessions)
+                    {
+                        context.CancellationToken.ThrowIfCancellationRequested();
+                        yield return CommandDisplaySelectionParser.Apply(context.Runtime, parsedSelection.Selection, session);
+                    }
+
+                    yield break;
+                }
             case StructuredLoginctlMode.ListUsers:
-            {
-                IReadOnlyList<SystemdLoginUserInfo> users;
-
-                try
                 {
-                    users = LoginctlJsonParser.ParseUserList(result.StandardOutput);
-                }
-                catch (Exception exception) when (exception is InvalidOperationException or System.Text.Json.JsonException)
-                {
-                    throw context.CreateDiagnostic(
-                        code: "tosh::runtime::loginctl_json_parse_failed",
-                        title: $"Could not parse structured 'loginctl list-users' output. {exception.Message}",
-                        help: "Try running the external `loginctl` command directly if you are using an unsupported output mode.");
-                }
+                    IReadOnlyList<SystemdLoginUserInfo> users;
 
-                foreach (var user in users)
-                {
-                    context.CancellationToken.ThrowIfCancellationRequested();
-                    yield return CommandDisplaySelectionParser.Apply(context.Runtime, parsedSelection.Selection, user);
-                }
+                    try
+                    {
+                        users = LoginctlJsonParser.ParseUserList(result.StandardOutput);
+                    }
+                    catch (Exception exception) when (exception is InvalidOperationException or System.Text.Json.JsonException)
+                    {
+                        throw context.CreateDiagnostic(
+                            code: "tosh::runtime::loginctl_json_parse_failed",
+                            title: $"Could not parse structured 'loginctl list-users' output. {exception.Message}",
+                            help: "Try running the external `loginctl` command directly if you are using an unsupported output mode.");
+                    }
 
-                yield break;
-            }
+                    foreach (var user in users)
+                    {
+                        context.CancellationToken.ThrowIfCancellationRequested();
+                        yield return CommandDisplaySelectionParser.Apply(context.Runtime, parsedSelection.Selection, user);
+                    }
+
+                    yield break;
+                }
             case StructuredLoginctlMode.ListSeats:
-            {
-                IReadOnlyList<SystemdLoginSeatInfo> seats;
-
-                try
                 {
-                    seats = LoginctlJsonParser.ParseSeatList(result.StandardOutput);
-                }
-                catch (Exception exception) when (exception is InvalidOperationException or System.Text.Json.JsonException)
-                {
-                    throw context.CreateDiagnostic(
-                        code: "tosh::runtime::loginctl_json_parse_failed",
-                        title: $"Could not parse structured 'loginctl list-seats' output. {exception.Message}",
-                        help: "Try running the external `loginctl` command directly if you are using an unsupported output mode.");
-                }
+                    IReadOnlyList<SystemdLoginSeatInfo> seats;
 
-                foreach (var seat in seats)
-                {
-                    context.CancellationToken.ThrowIfCancellationRequested();
-                    yield return CommandDisplaySelectionParser.Apply(context.Runtime, parsedSelection.Selection, seat);
-                }
+                    try
+                    {
+                        seats = LoginctlJsonParser.ParseSeatList(result.StandardOutput);
+                    }
+                    catch (Exception exception) when (exception is InvalidOperationException or System.Text.Json.JsonException)
+                    {
+                        throw context.CreateDiagnostic(
+                            code: "tosh::runtime::loginctl_json_parse_failed",
+                            title: $"Could not parse structured 'loginctl list-seats' output. {exception.Message}",
+                            help: "Try running the external `loginctl` command directly if you are using an unsupported output mode.");
+                    }
 
-                yield break;
-            }
+                    foreach (var seat in seats)
+                    {
+                        context.CancellationToken.ThrowIfCancellationRequested();
+                        yield return CommandDisplaySelectionParser.Apply(context.Runtime, parsedSelection.Selection, seat);
+                    }
+
+                    yield break;
+                }
             case StructuredLoginctlMode.Show:
-            {
-                IReadOnlyList<SystemdPropertySet> rows;
-
-                try
                 {
-                    rows = LoginctlJsonParser.ParseShowOutput(result.StandardOutput, request.IdentityPropertyName!);
-                }
-                catch (Exception exception) when (exception is InvalidOperationException)
-                {
-                    throw context.CreateDiagnostic(
-                        code: "tosh::runtime::loginctl_show_parse_failed",
-                        title: $"Could not parse structured 'loginctl show' output. {exception.Message}",
-                        help: "Try running the external `loginctl show-*` command directly if you are using an unsupported property/value mode.");
-                }
+                    IReadOnlyList<SystemdPropertySet> rows;
 
-                foreach (var row in rows)
-                {
-                    context.CancellationToken.ThrowIfCancellationRequested();
-                    yield return CommandDisplaySelectionParser.Apply(context.Runtime, parsedSelection.Selection, row);
-                }
+                    try
+                    {
+                        rows = LoginctlJsonParser.ParseShowOutput(result.StandardOutput, request.IdentityPropertyName!);
+                    }
+                    catch (Exception exception) when (exception is InvalidOperationException)
+                    {
+                        throw context.CreateDiagnostic(
+                            code: "tosh::runtime::loginctl_show_parse_failed",
+                            title: $"Could not parse structured 'loginctl show' output. {exception.Message}",
+                            help: "Try running the external `loginctl show-*` command directly if you are using an unsupported property/value mode.");
+                    }
 
-                yield break;
-            }
+                    foreach (var row in rows)
+                    {
+                        context.CancellationToken.ThrowIfCancellationRequested();
+                        yield return CommandDisplaySelectionParser.Apply(context.Runtime, parsedSelection.Selection, row);
+                    }
+
+                    yield break;
+                }
             default:
                 throw new InvalidOperationException($"Unexpected structured loginctl mode '{request.Mode}'.");
         }

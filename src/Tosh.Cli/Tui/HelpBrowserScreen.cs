@@ -175,6 +175,14 @@ internal sealed class HelpBrowserScreen : ITuiScreen
                 }
 
                 break;
+            case ConsoleKey.Insert or ConsoleKey.I:
+                if (_focus != HelpBrowserFocus.Search && TryInsertCurrentSelection())
+                {
+                    _shouldExit = true;
+                    return TuiScreenResult.Exit;
+                }
+
+                break;
         }
 
         return _focus switch
@@ -224,6 +232,26 @@ internal sealed class HelpBrowserScreen : ITuiScreen
     }
 
     internal string? CurrentTopicName => _currentTopicName;
+
+    internal string? GetSelectedInsertionText()
+    {
+        if (_sidebar.TryGetSelected(out var selected))
+        {
+            return selected.Kind switch
+            {
+                HelpBrowserListEntryKind.Topic => selected.TopicName,
+                HelpBrowserListEntryKind.ClrType => selected.Value,
+                HelpBrowserListEntryKind.ClrAssembly => selected.Value,
+                HelpBrowserListEntryKind.ClrNamespace => selected.Value,
+                HelpBrowserListEntryKind.ClrMethod => BuildMethodInsertionText(selected.Value),
+                HelpBrowserListEntryKind.ClrMember => ExtractClrMemberInsertionText(selected.Value),
+                HelpBrowserListEntryKind.ClrConstructor => BuildConstructorInsertionText(selected.Value),
+                _ => ResolveCurrentTopic()?.Name,
+            };
+        }
+
+        return ResolveCurrentTopic()?.Name;
+    }
 
     internal bool SelectSidebarEntryContaining(string text)
     {
@@ -2411,8 +2439,17 @@ internal sealed class HelpBrowserScreen : ITuiScreen
     {
         var focus = _focus.ToString().ToLowerInvariant();
         var theme = _runtime.Config.Theme.Tui;
-        var text = TrimOrPadPlain($"focus:{focus}  F1-F4 groups  / search  Enter open/toggle  [ back  ] forward  Left up  1-9 related  q quit", width);
+        var text = TrimOrPadPlain($"focus:{focus}  F1-F4 groups  / search  Enter open/toggle  i insert  [ back  ] forward  Left up  1-9 related  q quit", width);
         return theme.Footer.Apply(text).ToAnsi();
+    }
+
+    private bool TryInsertCurrentSelection()
+    {
+        var sink = _runtime.CommandLineInsertion;
+        var text = GetSelectedInsertionText();
+        return sink is not null &&
+               !string.IsNullOrWhiteSpace(text) &&
+               sink.TryInsertText(text);
     }
 
     private bool OpenRelatedTopic(int relatedIndex)
@@ -2993,6 +3030,62 @@ internal sealed class HelpBrowserScreen : ITuiScreen
     }
 
     private static string FormatBoolean(bool value) => value ? "yes" : "no";
+
+    private string? BuildConstructorInsertionText(string? signature)
+    {
+        if (string.IsNullOrWhiteSpace(signature))
+        {
+            return null;
+        }
+
+        var type = ResolveCurrentClrTypeScope();
+        if (type is null)
+        {
+            return null;
+        }
+
+        var constructor = type.GetConstructors(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static)
+            .FirstOrDefault(candidate =>
+                string.Equals(
+                    ReflectionMetadataUtilities.FormatConstructorSignature(candidate),
+                    signature,
+                    StringComparison.OrdinalIgnoreCase));
+
+        if (constructor is not null)
+        {
+            return $"new {BuildConstructorInvocationExample(constructor)}";
+        }
+
+        if (type.IsValueType &&
+            !type.IsEnum &&
+            string.Equals(signature, $"{ReflectionMetadataUtilities.GetDisplayName(type)}()", StringComparison.OrdinalIgnoreCase))
+        {
+            return $"new {ReflectionMetadataUtilities.GetDisplayName(type)}()";
+        }
+
+        return $"new {ReflectionMetadataUtilities.GetDisplayName(type)}(";
+    }
+
+    private static string? ExtractClrMemberInsertionText(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        var parts = value.Split('|', 3);
+        return parts.Length == 3 ? parts[2] : value;
+    }
+
+    private static string? BuildMethodInsertionText(string? methodName)
+    {
+        if (string.IsNullOrWhiteSpace(methodName))
+        {
+            return null;
+        }
+
+        return methodName + "(";
+    }
 
     private static string RenderTopBorder(int width, string title, ToshTuiThemeConfig theme, TuiBoxCharacters box)
     {

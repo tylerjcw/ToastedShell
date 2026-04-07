@@ -2,6 +2,18 @@ using System.Diagnostics;
 
 namespace Tosh.Core.Commands;
 
+[CommandCategory("Filesystem")]
+[CommandArgument("path", "Directory paths to tree. Defaults to current directory.", Required = false, TypeName = "path-like")]
+[CommandOption("-a", "Include hidden files.")]
+[CommandOption("-d", "List directories only.")]
+[CommandOption("-f", "Print full path for each entry.")]
+[CommandOption("-L <level>", "Limit recursion depth.")]
+[CommandOption("--show <columns>", "Select which properties are rendered.")]
+[CommandOption("--hide <columns>", "Hide specific properties from the output.")]
+[CommandOption("--show-all", "Display every available column.")]
+[CommandExample("tree")]
+[CommandExample("tree -L 2 -d", Title = "Directories only, 2 levels")]
+[CommandOutput("Returns typed tree-entry objects.")]
 public sealed class TreeCommand : ShellCommand
 {
     public TreeCommand()

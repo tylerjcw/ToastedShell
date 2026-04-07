@@ -1,8 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
-    <ProjectReference Include="..\Tosh.Language\Tosh.Language.csproj" />
-    <ProjectReference Include="..\Tosh.Core\Tosh.Core.csproj" />
+    <ProjectReference Include="..\Tosh.LanguageServices\Tosh.LanguageServices.csproj" />
   </ItemGroup>
 
   <PropertyGroup>

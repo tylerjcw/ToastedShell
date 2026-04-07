@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[CommandCategory("Shell")]
 public sealed class ExecCommand : ShellCommand
 {
     public ExecCommand()

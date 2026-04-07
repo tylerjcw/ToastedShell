@@ -1,5 +1,12 @@
 namespace Tosh.Core.Commands;
 
+[CommandCategory("Filesystem")]
+[CommandArgument("pattern", "One or more glob patterns to expand.")]
+[CommandOption("-a", "Include hidden entries in results.")]
+[CommandExample("glob *.txt")]
+[CommandExample("glob -a **/*.cs", Title = "Recursive with hidden files")]
+[CommandOutput("Returns FileSystemEntry objects for each matched path.")]
+[PipelineInput(AcceptsList = true, Description = "Uses piped patterns when no arguments are given.")]
 public sealed class GlobCommand : ShellCommand
 {
     public GlobCommand()

@@ -2,6 +2,7 @@ using System.Globalization;
 
 namespace Tosh.Core.Commands;
 
+[CommandCategory("System")]
 public sealed class SeqCommand : ShellCommand
 {
     public SeqCommand()

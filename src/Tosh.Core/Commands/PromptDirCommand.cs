@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[CommandCategory("Prompt")]
 public sealed class PromptDirCommand : ShellCommand
 {
     public PromptDirCommand()

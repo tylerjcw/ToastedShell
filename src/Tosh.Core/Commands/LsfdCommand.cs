@@ -2,6 +2,7 @@ using System.Diagnostics;
 
 namespace Tosh.Core.Commands;
 
+[CommandCategory("Process")]
 public sealed class LsfdCommand : ShellCommand
 {
     private static readonly string[] DefaultColumns =

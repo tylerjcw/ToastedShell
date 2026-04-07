@@ -1,5 +1,14 @@
 namespace Tosh.Core.Commands;
 
+[CommandCategory("Filesystem")]
+[CommandArgument("path", "Absolute or relative directory path. Tilde expands to the home directory.", Required = false, TypeName = "path-like")]
+[CommandArgument("-", "Go back to the previous directory (pop from stack).", Required = false)]
+[CommandArgument("+", "Go forward in the directory stack.", Required = false)]
+[CommandExample("cd ~/projects", Title = "Absolute path")]
+[CommandExample("cd ..", Title = "Parent directory")]
+[CommandExample("cd -", Title = "Previous directory")]
+[CommandExample("cd", Title = "Home directory")]
+[CommandOutput("The FileSystemEntry for the new working directory.")]
 public sealed class ChangeDirectoryCommand : ShellCommand
 {
     public ChangeDirectoryCommand()

@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[CommandCategory("Pipeline")]
 public sealed class ReverseCommand : ShellCommand
 {
     public ReverseCommand()

@@ -3,6 +3,7 @@ using System.Runtime.InteropServices;
 
 namespace Tosh.Core.Commands;
 
+[CommandCategory("CLR")]
 public sealed class NativeWriteCommand : ShellCommand
 {
     public NativeWriteCommand(string name = "native-write")

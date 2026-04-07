@@ -2,6 +2,7 @@ using System.Text.RegularExpressions;
 
 namespace Tosh.Core.Commands;
 
+[CommandCategory("Filesystem")]
 public sealed class FindCommand : ShellCommand
 {
     public FindCommand()

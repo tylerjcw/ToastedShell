@@ -1,5 +1,8 @@
 namespace Tosh.Core.Commands;
 
+[CommandCategory("Filesystem")]
+[CommandExample("back")]
+[CommandOutput("The FileSystemEntry for the previous directory.")]
 public sealed class BackCommand : ShellCommand
 {
     public BackCommand()

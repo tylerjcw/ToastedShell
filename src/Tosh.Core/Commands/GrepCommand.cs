@@ -3,6 +3,22 @@ using System.Text.RegularExpressions;
 
 namespace Tosh.Core.Commands;
 
+[CommandCategory("Text")]
+[CommandArgument("pattern|regex", "The text pattern or .NET regular expression to search for.", TypeName = "string|regex")]
+[CommandArgument("path", "Optional file paths to search instead of consuming piped text.", Required = false, TypeName = "path-like")]
+[CommandOption("-i", "Ignore case.")]
+[CommandOption("-v", "Invert the match.")]
+[CommandOption("-F", "Treat the pattern as a literal string instead of a regex.")]
+[CommandOption("-n", "Include source line numbers in text-file results.")]
+[CommandOption("-m", "Multiline mode.")]
+[CommandOption("-s", "Singleline mode so '.' matches newlines.")]
+[CommandOption("-x", "Require a full-line match.")]
+[CommandOption("--explicit-capture", "Return structured capture results instead of plain matching lines.")]
+[CommandExample("echo one two three | grep tw", Title = "Pipe text into grep")]
+[CommandExample("echo \"Alpha\" | grep -i \"^alpha$\"", Title = "Use regex flags")]
+[CommandExample("grep -F literal README.md", Title = "Search a file literally")]
+[CommandOutput("Matching text lines, or structured regex capture objects with --explicit-capture.")]
+[PipelineInput(AcceptsScalar = true, Description = "Consumes scalar text from the pipeline. When paths are supplied explicitly, grep reads file contents instead.")]
 public sealed class GrepCommand : ShellCommand
 {
     public GrepCommand()

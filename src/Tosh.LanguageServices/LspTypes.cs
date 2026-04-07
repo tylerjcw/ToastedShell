@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace Tosh.Lsp;
+namespace Tosh.LanguageServices;
 
 public sealed record LspPosition(
     [property: JsonPropertyName("line")] int Line,

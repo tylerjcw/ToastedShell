@@ -1,6 +1,6 @@
-namespace Tosh.Lsp;
+namespace Tosh.LanguageServices;
 
-internal sealed class TextCoordinateMap
+public sealed class TextCoordinateMap
 {
     private readonly string _text;
     private readonly int[] _lineStarts;

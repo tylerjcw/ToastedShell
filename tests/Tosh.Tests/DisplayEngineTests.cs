@@ -678,6 +678,63 @@ public sealed class DisplayEngineTests
     }
 
     [Fact]
+    public void Display_engine_renders_http_request_definition_and_response_info_readably()
+    {
+        var display = new DisplayEngine(new ObjectFormatter());
+        var request = new HttpRequestDefinition(
+            "POST",
+            new Uri("https://example.com/api/items"),
+            new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Accept"] = ["application/json"],
+                ["X-Test"] = ["alpha"],
+            },
+            Encoding.UTF8.GetBytes("""{"Name":"Toast"}"""),
+            "application/json; charset=utf-8",
+            TimeSpan.FromSeconds(5),
+            followRedirects: false,
+            bodyKind: "json",
+            bodyPreview: """{"Name":"Toast"}""");
+        var response = new HttpResponseInfo(
+            201,
+            "Created",
+            true,
+            "POST",
+            request.RequestUri,
+            new Uri("https://example.com/api/items/42"),
+            "1.1",
+            new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["X-Reply"] = ["beta"],
+            },
+            new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Content-Type"] = ["application/json; charset=utf-8"],
+            },
+            "application/json; charset=utf-8",
+            11,
+            TimeSpan.FromMilliseconds(125),
+            ShellRecordUtilities.CreateExpando([new KeyValuePair<string, object?>("ok", true)]),
+            "/tmp/response.json");
+
+        var requestText = display.RenderMany([request]);
+        var responseText = display.RenderMany([response]);
+
+        Assert.Contains("Method", requestText, StringComparison.Ordinal);
+        Assert.Contains("POST", requestText, StringComparison.Ordinal);
+        Assert.Contains("https://example.com/api/items", requestText, StringComparison.Ordinal);
+        Assert.Contains("FollowRedirects", requestText, StringComparison.Ordinal);
+        Assert.Contains("X-Test: alpha", requestText, StringComparison.Ordinal);
+        Assert.Contains("BodyKind", requestText, StringComparison.Ordinal);
+
+        Assert.Contains("201 Created", responseText, StringComparison.Ordinal);
+        Assert.Contains("FinalUri", responseText, StringComparison.Ordinal);
+        Assert.Contains("https://example.com/api/items/42", responseText, StringComparison.Ordinal);
+        Assert.Contains("X-Reply: beta", responseText, StringComparison.Ordinal);
+        Assert.Contains("/tmp/response.json", responseText, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Display_engine_renders_cookie_process_and_http_header_batches_readably()
     {
         var display = new DisplayEngine(new ObjectFormatter());

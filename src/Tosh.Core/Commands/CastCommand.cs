@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[CommandCategory("CLR")]
 public sealed class CastCommand : ShellCommand
 {
     public CastCommand()

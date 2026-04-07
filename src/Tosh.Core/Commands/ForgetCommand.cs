@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[CommandCategory("System")]
 public sealed class ForgetCommand : ShellCommand
 {
     public ForgetCommand(string name = "forget")

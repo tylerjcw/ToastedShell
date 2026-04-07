@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[CommandCategory("Pipeline")]
 public sealed class GroupByCommand : ShellCommand
 {
     public GroupByCommand()

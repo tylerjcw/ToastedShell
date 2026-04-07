@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[CommandCategory("Filesystem")]
 public sealed class TouchCommand : ShellCommand
 {
     public TouchCommand()
@@ -224,24 +225,24 @@ public sealed class TouchCommand : ShellCommand
                     break;
                 case 'r':
                 case 'd':
-                {
-                    if (timestamp is not null)
                     {
-                        throw new InvalidOperationException("touch accepts either '-d/--date' or '-r/--reference', but not both.");
+                        if (timestamp is not null)
+                        {
+                            throw new InvalidOperationException("touch accepts either '-d/--date' or '-r/--reference', but not both.");
+                        }
+
+                        var inlineValue = flagIndex + 1 < text.Length
+                            ? text[(flagIndex + 1)..]
+                            : null;
+                        var value = !string.IsNullOrEmpty(inlineValue)
+                            ? inlineValue
+                            : RequireOptionValue(arguments, ref index, $"-{text[flagIndex]}");
+
+                        timestamp = text[flagIndex] == 'r'
+                            ? GetReferenceTimestamp(ShellPathArguments.Resolve(currentDirectory, value))
+                            : ParseTimestamp(value);
+                        return true;
                     }
-
-                    var inlineValue = flagIndex + 1 < text.Length
-                        ? text[(flagIndex + 1)..]
-                        : null;
-                    var value = !string.IsNullOrEmpty(inlineValue)
-                        ? inlineValue
-                        : RequireOptionValue(arguments, ref index, $"-{text[flagIndex]}");
-
-                    timestamp = text[flagIndex] == 'r'
-                        ? GetReferenceTimestamp(ShellPathArguments.Resolve(currentDirectory, value))
-                        : ParseTimestamp(value);
-                    return true;
-                }
                 default:
                     return false;
             }

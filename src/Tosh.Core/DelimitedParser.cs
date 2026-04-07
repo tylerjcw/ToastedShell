@@ -2,9 +2,9 @@ using System.Text;
 
 namespace Tosh.Core;
 
-public static class TsvParser
+public static class DelimitedParser
 {
-    public static IReadOnlyList<string[]> Parse(string text)
+    public static IReadOnlyList<string[]> Parse(string text, char delimiter)
     {
         ArgumentNullException.ThrowIfNull(text);
 
@@ -44,44 +44,47 @@ public static class TsvParser
                 continue;
             }
 
-            switch (character)
+            if (character == '"')
             {
-                case '"':
-                    inQuotes = true;
-                    break;
-
-                case '\t':
-                    fields.Add(field.ToString());
-                    field.Clear();
-                    break;
-
-                case '\r':
-                    fields.Add(field.ToString());
-                    field.Clear();
-                    AddRecord(records, fields);
-
-                    if (index + 1 < text.Length && text[index + 1] == '\n')
-                    {
-                        index++;
-                    }
-
-                    break;
-
-                case '\n':
-                    fields.Add(field.ToString());
-                    field.Clear();
-                    AddRecord(records, fields);
-                    break;
-
-                default:
-                    field.Append(character);
-                    break;
+                inQuotes = true;
+                continue;
             }
+
+            if (character == delimiter)
+            {
+                fields.Add(field.ToString());
+                field.Clear();
+                continue;
+            }
+
+            if (character == '\r')
+            {
+                fields.Add(field.ToString());
+                field.Clear();
+                AddRecord(records, fields);
+
+                if (index + 1 < text.Length && text[index + 1] == '\n')
+                {
+                    index++;
+                }
+
+                continue;
+            }
+
+            if (character == '\n')
+            {
+                fields.Add(field.ToString());
+                field.Clear();
+                AddRecord(records, fields);
+                continue;
+            }
+
+            field.Append(character);
         }
 
         if (inQuotes)
         {
-            throw new InvalidOperationException("TSV input ended while still inside a quoted field.");
+            throw new InvalidOperationException("Input ended while still inside a quoted field.");
         }
 
         fields.Add(field.ToString());

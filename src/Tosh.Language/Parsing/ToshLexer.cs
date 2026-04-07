@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 using Tosh.Core;
+using Tosh.Core.Units;
 
 namespace Tosh.Language.Parsing;
 
@@ -71,17 +72,31 @@ public sealed class ToshLexer
                 // Otherwise fall through to bareword (e.g. $variable)
             }
 
-            // |
+            // || , |
             if (Current == '|')
             {
+                if (Peek() == '|')
+                {
+                    tokens.Add(new SyntaxToken(SyntaxTokenKind.DoublePipe, _position, "||"));
+                    _position += 2;
+                    continue;
+                }
+
                 tokens.Add(new SyntaxToken(SyntaxTokenKind.Pipe, _position, "|"));
                 _position++;
                 continue;
             }
 
-            // & (background)
+            // && , & (background)
             if (Current == '&')
             {
+                if (Peek() == '&')
+                {
+                    tokens.Add(new SyntaxToken(SyntaxTokenKind.DoubleAmpersand, _position, "&&"));
+                    _position += 2;
+                    continue;
+                }
+
                 tokens.Add(new SyntaxToken(SyntaxTokenKind.Ampersand, _position, "&"));
                 _position++;
                 continue;
@@ -922,6 +937,25 @@ public sealed class ToshLexer
 
         var text = _source[start.._position];
 
+        // Unit literal: number`unit (e.g. 100`m, 9.8`m/s^2, 1_000`kg)
+        var backtickIndex = text.IndexOf('`');
+        if (backtickIndex > 0 && backtickIndex < text.Length - 1)
+        {
+            var numPart = text[..backtickIndex];
+            var unitPart = text[(backtickIndex + 1)..];
+
+            // Strip underscore separators from the numeric part
+            var numForParsing = numPart.Contains('_') ? numPart.Replace("_", "", StringComparison.Ordinal) : numPart;
+
+            if (double.TryParse(numForParsing, NumberStyles.Float | NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var magnitude)
+                && UnitExpressionParser.TryParse(unitPart, out var unitFactor, out var dimension, out var normalizedSymbol))
+            {
+                var baseValue = magnitude * unitFactor;
+                var quantity = Quantity.FromParsed(baseValue, magnitude, dimension, normalizedSymbol);
+                return new SyntaxToken(SyntaxTokenKind.UnitLiteral, start, text, quantity);
+            }
+        }
+
         if (string.Equals(text, "true", StringComparison.OrdinalIgnoreCase))
         {
             return new SyntaxToken(SyntaxTokenKind.Boolean, start, text, true);
@@ -937,7 +971,44 @@ public sealed class ToshLexer
             return new SyntaxToken(SyntaxTokenKind.Null, start, text, null);
         }
 
-        if (long.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var integerValue))
+        // Strip underscore digit separators (e.g. 1_000_000) for numeric parsing.
+        var textForParsing = text.Contains('_') ? text.Replace("_", "", StringComparison.Ordinal) : text;
+
+        // Hex: 0x/0X prefix
+        if (textForParsing.Length > 2 && textForParsing[0] == '0' && textForParsing[1] is 'x' or 'X')
+        {
+            if (long.TryParse(textForParsing.AsSpan(2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var hexValue))
+            {
+                object boxed = hexValue is >= int.MinValue and <= int.MaxValue ? (object)(int)hexValue : hexValue;
+                return new SyntaxToken(SyntaxTokenKind.Number, start, text, boxed);
+            }
+        }
+
+        // Binary: 0b/0B prefix
+        if (textForParsing.Length > 2 && textForParsing[0] == '0' && textForParsing[1] is 'b' or 'B')
+        {
+            try
+            {
+                var binValue = Convert.ToInt64(textForParsing[2..], 2);
+                object boxed = binValue is >= int.MinValue and <= int.MaxValue ? (object)(int)binValue : binValue;
+                return new SyntaxToken(SyntaxTokenKind.Number, start, text, boxed);
+            }
+            catch (FormatException) { /* not a valid binary literal */ }
+        }
+
+        // Octal: 0o/0O prefix
+        if (textForParsing.Length > 2 && textForParsing[0] == '0' && textForParsing[1] is 'o' or 'O')
+        {
+            try
+            {
+                var octValue = Convert.ToInt64(textForParsing[2..], 8);
+                object boxed = octValue is >= int.MinValue and <= int.MaxValue ? (object)(int)octValue : octValue;
+                return new SyntaxToken(SyntaxTokenKind.Number, start, text, boxed);
+            }
+            catch (FormatException) { /* not a valid octal literal */ }
+        }
+
+        if (long.TryParse(textForParsing, NumberStyles.Integer, CultureInfo.InvariantCulture, out var integerValue))
         {
             object boxed = integerValue is >= int.MinValue and <= int.MaxValue
                 ? (object)(int)integerValue
@@ -945,7 +1016,7 @@ public sealed class ToshLexer
             return new SyntaxToken(SyntaxTokenKind.Number, start, text, boxed);
         }
 
-        if (double.TryParse(text, NumberStyles.Float | NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var floatingValue))
+        if (double.TryParse(textForParsing, NumberStyles.Float | NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var floatingValue))
         {
             return new SyntaxToken(SyntaxTokenKind.Number, start, text, floatingValue);
         }
