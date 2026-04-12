@@ -21,6 +21,27 @@ public sealed class TreeCommand : ShellCommand
 
     public override async IAsyncEnumerable<object?> ExecuteAsync(CommandContext context)
     {
+        // On Windows there is no compatible `tree` binary; enumerate the filesystem directly.
+        if (OperatingSystem.IsWindows())
+        {
+            var winSelection = CommandDisplaySelectionParser.Parse(context.Arguments);
+            var winOptions = WindowsTreeTraversal.ParseOptions(
+                winSelection.RemainingArguments,
+                context.Runtime.CurrentDirectory);
+
+            foreach (var rootPath in winOptions.Paths)
+            {
+                context.CancellationToken.ThrowIfCancellationRequested();
+                var rootEntry = WindowsTreeTraversal.BuildRoot(rootPath, winOptions);
+                yield return CommandDisplaySelectionParser.Apply(
+                    context.Runtime,
+                    winSelection.Selection,
+                    rootEntry);
+            }
+
+            yield break;
+        }
+
         var resolvedPath = ResolveTreeExecutable(context);
         var parsedSelection = CommandDisplaySelectionParser.Parse(context.Arguments);
 
