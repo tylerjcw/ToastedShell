@@ -3,6 +3,21 @@ using System.Diagnostics;
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Process")]
+[CommandArgument("[-p pid[,pid...]]", "Optionally restrict the query to specific processes.", Required = false)]
+[CommandOption("-l", "Include thread-level rows with a `TID` column.")]
+[CommandOption("-p <pid(s)>", "Restrict the query to one or more process ids.")]
+[CommandOption("-i[4|6]", "Restrict the result set to IPv4 and/or IPv6 sockets.")]
+[CommandOption("-o <columns>", "Select lsfd-style columns such as `COMMAND,PID,FD,TYPE,NAME`.")]
+[CommandOption("--summary[=only|append|never]", "Include or isolate lsfd summary counters alongside structured descriptor rows.")]
+[CommandOption("--show <columns>", "Use ToSh display-only column selection without changing the underlying `FileDescriptorInfo` objects.")]
+[CommandOption("--hide <columns>", "Hide display columns while keeping the full typed rows in the pipeline.")]
+[CommandOption("--show-all", "Expose every selectable structured lsfd column discoverable from the local `lsfd -H` catalog.")]
+[CommandExample("lsfd", Title = "Browse open file descriptors as typed rows")]
+[CommandExample("lsfd -p 1 -o COMMAND,PID,ASSOC,TYPE,NAME", Title = "Inspect a specific process with explicit lsfd columns")]
+[CommandExample("lsfd --summary=only", Title = "Show typed summary counters only")]
+[CommandNote("ToSh wraps `lsfd --json` so open-file-descriptor rows stay typed in the pipeline. `--summary=only` yields typed counters, and `--summary=append` returns both row and summary objects. Text-format-only modes like `--raw`, `--noheadings`, filter expressions, and custom counters currently fall back to the external `lsfd` utility unchanged.")]
+[CommandOutput("Returns typed open-file-descriptor rows and, when summary mode is enabled, typed counter rows describing totals such as open files and sockets.")]
+[PipelineInput(Description = "The structured `lsfd` builtin is explicit-arg-first and does not currently consume pipeline input.")]
 public sealed class LsfdCommand : ShellCommand
 {
     private static readonly string[] DefaultColumns =
@@ -39,6 +54,14 @@ public sealed class LsfdCommand : ShellCommand
 
     public override async IAsyncEnumerable<object?> ExecuteAsync(CommandContext context)
     {
+        if (OperatingSystem.IsWindows())
+        {
+            throw context.CreateDiagnostic(
+                code: "tosh::runtime::command_windows_unavailable",
+                title: $"'{Name}' is not available on Windows.",
+                help: "This command lists open Linux file descriptors via /proc and the kernel fd table, which have no Windows equivalent.");
+        }
+
         var resolvedPath = ResolveLsfdExecutable(context);
         var parsedSelection = CommandDisplaySelectionParser.Parse(context.Arguments);
 

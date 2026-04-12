@@ -3,6 +3,17 @@ using System.Diagnostics;
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Network")]
+[CommandArgument("addr|address|a [filter ...]", "Returns typed network-interface objects by invoking `ip -j addr` under the hood.", Required = false)]
+[CommandArgument("link|l [filter ...]", "Returns typed network-interface link objects by invoking `ip -j link`.", Required = false)]
+[CommandArgument("route|r [filter ...]", "Returns typed route objects by invoking `ip -j route`.", Required = false)]
+[CommandArgument("<other-subcommand ...>", "For now, unsupported subcommands fall back to the system `ip` utility unchanged.", Required = false)]
+[CommandExample("ip addr", Title = "List interfaces as structured objects")]
+[CommandExample("ip link | where _.IsUp", Title = "Filter active interfaces in the pipeline")]
+[CommandExample("ip route | where _.IsDefault", Title = "Show the default route as a typed object")]
+[CommandExample("ip addr | each { _.Addresses } | flatten | get Address", Title = "Project nested typed IP addresses")]
+[CommandNote("ToSh now wraps `ip addr`, `ip link`, and `ip route` around the JSON-capable system utility so the result flows through the pipeline as typed interface, address, and route objects. Other subcommands still fall back to the external `ip` utility unchanged.")]
+[CommandOutput("For `ip addr` and `ip link`, returns typed interface objects with nested typed address objects where available. For `ip route`, returns typed route objects. Other subcommands currently pass through to the system `ip` utility's normal text output.")]
+[PipelineInput(Description = "The structured `ip` builtin is explicit-arg-first and does not currently consume pipeline input.")]
 public sealed class IpCommand : ShellCommand
 {
     public IpCommand()
@@ -10,6 +21,37 @@ public sealed class IpCommand : ShellCommand
 
     public override async IAsyncEnumerable<object?> ExecuteAsync(CommandContext context)
     {
+        // On Windows there is no system 'ip' utility; use .NET NetworkInformation APIs instead.
+        if (OperatingSystem.IsWindows())
+        {
+            if (!TryBuildStructuredArguments(context.Arguments, out var windowsRequest))
+            {
+                throw context.CreateDiagnostic(
+                    code: "tosh::runtime::ip_command_missing",
+                    title: "The system 'ip' command is not available on Windows.",
+                    help: "Only 'ip addr', 'ip link', and 'ip route' are supported on Windows.");
+            }
+
+            IReadOnlyList<object?> windowsItems = windowsRequest.Mode switch
+            {
+                StructuredIpMode.Addr =>
+                    NetworkInformationServices.GetWindowsInterfaces(includeAddresses: true).Cast<object?>().ToArray(),
+                StructuredIpMode.Link =>
+                    NetworkInformationServices.GetWindowsInterfaces(includeAddresses: false).Cast<object?>().ToArray(),
+                StructuredIpMode.Route =>
+                    NetworkInformationServices.GetWindowsRoutes().Cast<object?>().ToArray(),
+                _ => throw new InvalidOperationException($"Unsupported ip mode '{windowsRequest.Mode}'."),
+            };
+
+            foreach (var item in windowsItems)
+            {
+                context.CancellationToken.ThrowIfCancellationRequested();
+                yield return item;
+            }
+
+            yield break;
+        }
+
         var resolvedPath = ResolveIpExecutable(context);
 
         if (!TryBuildStructuredArguments(context.Arguments, out var structuredRequest))

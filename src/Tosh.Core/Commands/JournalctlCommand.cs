@@ -3,6 +3,24 @@ using System.Diagnostics;
 namespace Tosh.Core.Commands;
 
 [CommandCategory("System")]
+[CommandArgument("[query ...]", "Structured journal queries accept common `journalctl` filters such as match expressions, unit filters, priorities, boot selectors, and time windows.", Required = false)]
+[CommandOption("-n <count>|--lines <count>", "Limit the structured result set to the most recent entries.")]
+[CommandOption("-u <unit>|--unit <unit>", "Restrict structured output to a specific systemd unit.")]
+[CommandOption("--since <when>", "Restrict entries to those at or after the supplied time.")]
+[CommandOption("--until <when>", "Restrict entries to those at or before the supplied time.")]
+[CommandOption("-p <range>|--priority <range>", "Restrict entries to a priority or priority range.")]
+[CommandOption("-b [id]|--boot [id]", "Restrict entries to the current boot or a selected boot.")]
+[CommandOption("-g <pattern>|--grep <pattern>", "Restrict structured output to entries whose messages match a pattern.")]
+[CommandOption("--user", "Query the user journal instead of the system journal.")]
+[CommandOption("--system", "Query the system journal explicitly.")]
+[CommandOption("--show <columns>", "Use ToSh display-only column selection on the structured journal-entry rows.")]
+[CommandOption("--hide <columns>", "Hide display columns while preserving the underlying structured journal entries.")]
+[CommandOption("--show-all", "Expose every selectable structured journal-entry display column.")]
+[CommandExample("journalctl -n 20", Title = "Stream the newest journal entries as structured objects")]
+[CommandExample("journalctl -u sshd.service | first 10", Title = "Inspect a unit's logs in the pipeline")]
+[CommandExample("journalctl --since yesterday | where _.Priority <= 3", Title = "Filter recent high-priority entries")]
+[CommandOutput("Streams structured journal-entry objects from `journalctl -o json` for supported non-follow query paths. Unsupported or text-oriented modes fall back to the native utility.")]
+[PipelineInput(Description = "The structured `journalctl` builtin is explicit-arg-first and does not currently consume pipeline input.")]
 public sealed class JournalctlCommand : ShellCommand
 {
     public JournalctlCommand()
@@ -10,6 +28,14 @@ public sealed class JournalctlCommand : ShellCommand
 
     public override async IAsyncEnumerable<object?> ExecuteAsync(CommandContext context)
     {
+        if (OperatingSystem.IsWindows())
+        {
+            throw context.CreateDiagnostic(
+                code: "tosh::runtime::command_windows_unavailable",
+                title: $"'{Name}' is not available on Windows.",
+                help: "This command requires the systemd journal, which is a Linux-only service.");
+        }
+
         var resolvedPath = ResolveExecutable(context);
         var parsedSelection = CommandDisplaySelectionParser.Parse(context.Arguments);
 

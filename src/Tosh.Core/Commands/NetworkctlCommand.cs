@@ -3,6 +3,18 @@ using System.Diagnostics;
 namespace Tosh.Core.Commands;
 
 [CommandCategory("System")]
+[CommandArgument("[list [pattern ...]]", "With no subcommand, ToSh treats `networkctl` as a structured `list` query. Explicit `list` behaves the same way.", Required = false)]
+[CommandArgument("<other-command ...>", "Unsupported, detail, and mutating commands currently fall back to the native `networkctl` utility unchanged.", Required = false)]
+[CommandOption("-a|--all", "Pass through to the structured `networkctl list` query to include all visible links.")]
+[CommandOption("-l|--full", "Pass through to the structured `networkctl list` query.")]
+[CommandOption("--show <columns>", "Use ToSh display-only column selection on the structured network-link rows.")]
+[CommandOption("--hide <columns>", "Hide display columns while preserving the underlying typed link objects.")]
+[CommandOption("--show-all", "Expose every selectable structured network-link display column.")]
+[CommandExample("networkctl", Title = "List network links as typed rows")]
+[CommandExample("networkctl | where _.Setup == unmanaged", Title = "Filter links by setup state in the pipeline")]
+[CommandExample("networkctl --show Link,Operational,Setup,Managed", Title = "Render a focused network-link summary")]
+[CommandOutput("Returns typed network-link rows for supported `networkctl list` queries. Other commands currently fall back to the native `networkctl` output.")]
+[PipelineInput(Description = "The structured `networkctl` builtin is explicit-arg-first and does not currently consume pipeline input.")]
 public sealed class NetworkctlCommand : ShellCommand
 {
     private static readonly IReadOnlySet<string> KnownNonStructuredSubcommands = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
@@ -29,6 +41,14 @@ public sealed class NetworkctlCommand : ShellCommand
 
     public override async IAsyncEnumerable<object?> ExecuteAsync(CommandContext context)
     {
+        if (OperatingSystem.IsWindows())
+        {
+            throw context.CreateDiagnostic(
+                code: "tosh::runtime::command_windows_unavailable",
+                title: $"'{Name}' is not available on Windows.",
+                help: "This command requires systemd-networkd, which is a Linux-only service.");
+        }
+
         var resolvedPath = ResolveExecutable(context);
         var parsedSelection = CommandDisplaySelectionParser.Parse(context.Arguments);
 

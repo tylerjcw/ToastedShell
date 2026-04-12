@@ -3,6 +3,19 @@ using System.Diagnostics;
 namespace Tosh.Core.Commands;
 
 [CommandCategory("System")]
+[CommandArgument("[list-sessions|list-users|list-seats]", "With no subcommand, ToSh treats `loginctl` as a structured `list-sessions` query. The explicit list subcommands return typed rows.", Required = false)]
+[CommandArgument("show-session <id ...>|show-user <user ...>|show-seat <seat ...>", "Returns structured login property sets for supported `show-*` queries.", Required = false)]
+[CommandArgument("<other-subcommand ...>", "Unsupported subcommands fall back to the native `loginctl` utility unchanged.", Required = false)]
+[CommandOption("-p <property[,property...]>|--property <property[,property...]>", "Restrict `show-*` to specific fetched properties. ToSh still injects the relevant identity property internally so multiple-result output stays structured.")]
+[CommandOption("--all", "Include empty properties in supported `show-*` queries when the underlying `loginctl` invocation supports it.")]
+[CommandOption("--show <columns>", "Use ToSh display-only column selection on structured list rows or property sets.")]
+[CommandOption("--hide <columns>", "Hide display columns while preserving the underlying typed objects.")]
+[CommandOption("--show-all", "Expose every selectable structured display column for the current output shape.")]
+[CommandExample("loginctl", Title = "List sessions as typed rows")]
+[CommandExample("loginctl list-users | where _.State == active", Title = "Filter active login users in the pipeline")]
+[CommandExample("loginctl show-user 1000 | get { UID, Name, State, Sessions }", Title = "Inspect structured user-login properties")]
+[CommandOutput("Returns typed session, user, or seat rows for supported list queries, and structured property-set objects for supported `show-*` queries. Other subcommands currently fall back to the native `loginctl` output.")]
+[PipelineInput(Description = "The structured `loginctl` builtin is explicit-arg-first and does not currently consume pipeline input.")]
 public sealed class LoginctlCommand : ShellCommand
 {
     private static readonly IReadOnlySet<string> KnownNonStructuredSubcommands = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
@@ -31,6 +44,14 @@ public sealed class LoginctlCommand : ShellCommand
 
     public override async IAsyncEnumerable<object?> ExecuteAsync(CommandContext context)
     {
+        if (OperatingSystem.IsWindows())
+        {
+            throw context.CreateDiagnostic(
+                code: "tosh::runtime::command_windows_unavailable",
+                title: $"'{Name}' is not available on Windows.",
+                help: "This command requires systemd-logind, which is a Linux-only service.");
+        }
+
         var resolvedPath = ResolveExecutable(context);
         var parsedSelection = CommandDisplaySelectionParser.Parse(context.Arguments);
 

@@ -3,6 +3,16 @@ using System.Diagnostics;
 namespace Tosh.Core.Commands;
 
 [CommandCategory("System")]
+[CommandArgument("[status]", "With no subcommand, ToSh treats `hostnamectl` as a structured status query. Explicit `status` behaves the same way.", Required = false)]
+[CommandArgument("<other-command ...>", "Mutating or unsupported commands fall back to the native `hostnamectl` utility unchanged.", Required = false)]
+[CommandOption("--show <columns>", "Use ToSh display-only column selection on the structured host-status object.")]
+[CommandOption("--hide <columns>", "Hide display columns while preserving the underlying typed host object.")]
+[CommandOption("--show-all", "Expose every selectable structured host-status display column.")]
+[CommandExample("hostnamectl", Title = "Inspect structured host status")]
+[CommandExample("hostnamectl --show Hostname,OperatingSystem,KernelRelease", Title = "Render a focused host summary")]
+[CommandExample("hostnamectl | get { Hostname, MachineID, BootID }", Title = "Project host identity properties in the pipeline")]
+[CommandOutput("Returns a structured host-status object for supported JSON-backed `hostnamectl status` queries. Other commands currently fall back to the native `hostnamectl` output.")]
+[PipelineInput(Description = "The structured `hostnamectl` builtin is explicit-arg-first and does not currently consume pipeline input.")]
 public sealed class HostnamectlCommand : ShellCommand
 {
     public HostnamectlCommand()
@@ -10,6 +20,15 @@ public sealed class HostnamectlCommand : ShellCommand
 
     public override async IAsyncEnumerable<object?> ExecuteAsync(CommandContext context)
     {
+        // On Windows there is no hostnamectl; build the host info from Environment instead.
+        if (OperatingSystem.IsWindows())
+        {
+            var winSelection = CommandDisplaySelectionParser.Parse(context.Arguments);
+            var winHost = BuildWindowsHostInfo();
+            yield return CommandDisplaySelectionParser.Apply(context.Runtime, winSelection.Selection, winHost);
+            yield break;
+        }
+
         var resolvedPath = ResolveExecutable(context);
         var parsedSelection = CommandDisplaySelectionParser.Parse(context.Arguments);
 
@@ -61,6 +80,27 @@ public sealed class HostnamectlCommand : ShellCommand
         }
 
         yield return CommandDisplaySelectionParser.Apply(context.Runtime, parsedSelection.Selection, host);
+    }
+
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
+    private static SystemdHostInfo BuildWindowsHostInfo()
+    {
+        var osVersion = Environment.OSVersion;
+        var osDesc = System.Runtime.InteropServices.RuntimeInformation.OSDescription;
+        var arch = System.Runtime.InteropServices.RuntimeInformation.OSArchitecture.ToString().ToLowerInvariant();
+
+        var props = new Dictionary<string, object?>
+        {
+            ["Hostname"] = Environment.MachineName,
+            ["StaticHostname"] = Environment.MachineName,
+            ["KernelName"] = "Windows",
+            ["KernelRelease"] = osVersion.Version.ToString(),
+            ["KernelVersion"] = osDesc,
+            ["OperatingSystem"] = osDesc,
+            ["Architecture"] = arch,
+        };
+
+        return new SystemdHostInfo(props);
     }
 
     private static string ResolveExecutable(CommandContext context)

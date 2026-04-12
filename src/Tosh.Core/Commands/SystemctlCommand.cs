@@ -3,6 +3,25 @@ using System.Diagnostics;
 namespace Tosh.Core.Commands;
 
 [CommandCategory("System")]
+[CommandArgument("[list-units [pattern ...]]", "With no subcommand, ToSh treats `systemctl` as a structured `list-units` query. Explicit `list-units` behaves the same way.", Required = false)]
+[CommandArgument("list-unit-files [pattern ...]", "Returns typed unit-file state rows for installed unit files.", Required = false)]
+[CommandArgument("show <unit ...>", "Returns structured systemd unit property sets for one or more units.", Required = false)]
+[CommandArgument("status <unit ...>", "Returns structured unit status objects for one or more units, including recent logs when available.", Required = false)]
+[CommandArgument("<other-subcommand ...>", "Unsupported subcommands fall back to the native `systemctl` utility unchanged.", Required = false)]
+[CommandOption("--type <type[,type...]>|-t <type[,type...]>", "Restrict structured `list-units` or `list-unit-files` output to specific unit types such as `service` or `socket`.")]
+[CommandOption("--state <state[,state...]>", "Restrict structured `list-units` output to specific load/active states.")]
+[CommandOption("--all", "Include inactive and unloaded units in the structured listing.")]
+[CommandOption("--failed", "Restrict the structured listing to failed units.")]
+[CommandOption("-p <property[,property...]>|--property <property[,property...]>", "Restrict `show` to specific fetched properties. ToSh still injects `Id` internally so multiple-unit output stays structured.")]
+[CommandOption("--show <columns>", "Use ToSh display-only column selection on structured unit rows or property sets.")]
+[CommandOption("--hide <columns>", "Hide display columns while preserving the underlying typed objects.")]
+[CommandOption("--show-all", "Expose every selectable structured display column for the current output shape.")]
+[CommandExample("systemctl", Title = "List units as typed rows")]
+[CommandExample("systemctl --type service | where _.Active == active", Title = "Filter active services in the pipeline")]
+[CommandExample("systemctl list-unit-files --type service | where _.Enabled", Title = "Inspect installed enabled service unit files")]
+[CommandExample("systemctl status sshd.service | get { Id, ActiveState, MainPID, RecentLogCount }", Title = "Inspect structured unit status details")]
+[CommandOutput("Returns typed systemd unit rows for `list-units`, typed unit-file rows for `list-unit-files`, and structured unit property-set objects for supported `show` and `status` queries. Other subcommands currently fall back to the native `systemctl` output.")]
+[PipelineInput(Description = "The structured `systemctl` builtin is explicit-arg-first and does not currently consume pipeline input.")]
 public sealed class SystemctlCommand : ShellCommand
 {
     private static readonly IReadOnlySet<string> KnownNonStructuredSubcommands = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
@@ -71,6 +90,14 @@ public sealed class SystemctlCommand : ShellCommand
 
     public override async IAsyncEnumerable<object?> ExecuteAsync(CommandContext context)
     {
+        if (OperatingSystem.IsWindows())
+        {
+            throw context.CreateDiagnostic(
+                code: "tosh::runtime::command_windows_unavailable",
+                title: $"'{Name}' is not available on Windows.",
+                help: "This command requires systemd, which is a Linux-only service manager.");
+        }
+
         var resolvedPath = ResolveExecutable(context);
         var parsedSelection = CommandDisplaySelectionParser.Parse(context.Arguments);
 

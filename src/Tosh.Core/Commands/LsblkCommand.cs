@@ -3,6 +3,31 @@ using System.Diagnostics;
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Filesystem")]
+[CommandArgument("[device ...]", "Optional device paths or names to scope the query to.", Required = false, TypeName = "path-like|string")]
+[CommandOption("-a", "Include empty devices.")]
+[CommandOption("-A", "Hide empty devices.")]
+[CommandOption("-d", "Suppress dependencies and child devices.")]
+[CommandOption("-b", "Render size-oriented columns in raw bytes.")]
+[CommandOption("-f", "Use the filesystem-oriented display preset.")]
+[CommandOption("-m", "Use the permissions-oriented display preset.")]
+[CommandOption("-t", "Use the topology-oriented display preset.")]
+[CommandOption("-D", "Use the discard-oriented display preset.")]
+[CommandOption("-z", "Use the zoned-device display preset.")]
+[CommandOption("-p", "Show full device paths.")]
+[CommandOption("-S", "Restrict the query to SCSI devices.")]
+[CommandOption("-N", "Restrict the query to NVMe devices.")]
+[CommandOption("-v", "Restrict the query to virtio devices.")]
+[CommandOption("-I <majors>", "Include only the specified major numbers.")]
+[CommandOption("-e <majors>", "Exclude the specified major numbers.")]
+[CommandOption("-x <column>", "Sort by an lsblk column name such as `NAME`, `SIZE`, or `PATH`.")]
+[CommandOption("-o <columns>", "Select lsblk-style output columns such as `NAME,SIZE,FSTYPE,MOUNTPOINTS`.")]
+[CommandOption("-O", "Expose every selectable structured lsblk column.")]
+[CommandExample("lsblk", Title = "Browse block devices as a tree-with-columns object table")]
+[CommandExample("lsblk -l -f | where _.FsType == \"ntfs\"", Title = "Flatten the block-device view and filter by filesystem type")]
+[CommandExample("lsblk -o NAME,PATH,SIZE", Title = "Pick explicit lsblk-style display columns without changing the underlying objects")]
+[CommandNote("ToSh wraps `lsblk --json --bytes --output-all` so block devices stay as typed objects in the pipeline while the default renderer can still show them as a tree with columns. The default result is hierarchical, so use `-l` when you want flat filtering in a pipeline, and shell-facing aliases like `FsType`, `FsVer`, and `FsAvail` match the visible column names. Output-format-only flags like `--pairs`, `--raw`, and `--noheadings` currently fall back to the external `lsblk` utility unchanged.")]
+[CommandOutput("Returns reusable block-device objects with nested child devices when the underlying `lsblk --json` output is hierarchical.")]
+[PipelineInput(Description = "The structured `lsblk` builtin is explicit-arg-first and does not currently consume pipeline input.")]
 public sealed class LsblkCommand : ShellCommand
 {
     public LsblkCommand()
@@ -10,6 +35,28 @@ public sealed class LsblkCommand : ShellCommand
 
     public override async IAsyncEnumerable<object?> ExecuteAsync(CommandContext context)
     {
+        // On Windows there is no lsblk; enumerate volumes via DriveInfo instead.
+        if (OperatingSystem.IsWindows())
+        {
+            var winSelection = CommandDisplaySelectionParser.Parse(
+                context.Arguments,
+                showOptionAliases: ["-o", "--output"],
+                showAllAliases: ["-O", "--output-all"]);
+
+            var winDevices = WindowsBlockDeviceServices.GetBlockDevices();
+
+            foreach (var device in winDevices)
+            {
+                context.CancellationToken.ThrowIfCancellationRequested();
+                yield return CommandDisplaySelectionParser.Apply(
+                    context.Runtime,
+                    winSelection.Selection,
+                    device);
+            }
+
+            yield break;
+        }
+
         var resolvedPath = ResolveLsblkExecutable(context);
         var parsedSelection = CommandDisplaySelectionParser.Parse(
             context.Arguments,

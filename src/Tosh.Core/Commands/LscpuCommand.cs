@@ -3,6 +3,24 @@ using System.Diagnostics;
 namespace Tosh.Core.Commands;
 
 [CommandCategory("System")]
+[CommandArgument("[-e|-C]", "Without a mode flag, `lscpu` returns a structured CPU summary. `-e` switches to per-CPU topology rows and `-C` switches to CPU cache rows.", Required = false)]
+[CommandOption("-B", "Render cache sizes in raw bytes for summary and cache views.")]
+[CommandOption("-e", "Return per-CPU topology rows from `lscpu --extended --json`.")]
+[CommandOption("-C", "Return CPU cache rows from `lscpu --caches --json`.")]
+[CommandOption("-a", "Include both online and offline CPUs in extended mode.")]
+[CommandOption("-b", "Restrict extended mode to online CPUs.")]
+[CommandOption("-c", "Restrict extended mode to offline CPUs.")]
+[CommandOption("-x", "Request hexadecimal CPU masks where the underlying `lscpu` mode supports them.")]
+[CommandOption("-y", "Request physical IDs instead of logical IDs in extended mode.")]
+[CommandOption("-o <columns>", "Select lscpu-style columns such as `CPU,NODE,SOCKET,CORE,ONLINE,MHZ` for `-e` or `NAME,LEVEL,TYPE,ONE-SIZE` for `-C`.")]
+[CommandOption("--output-all", "Expose every selectable structured column for `-e` or `-C`.")]
+[CommandOption("--hierarchic <when>", "Pass through `auto`, `always`, or `never` for the summary view.")]
+[CommandExample("lscpu", Title = "Show the structured CPU summary")]
+[CommandExample("lscpu -e | where _.Online == true | first 8", Title = "Browse structured per-CPU topology rows")]
+[CommandExample("lscpu -C -B | get { Name, Level, OneSize, AllSize }", Title = "Inspect cache metadata with byte-oriented sizes")]
+[CommandNote("ToSh wraps the JSON-capable `lscpu` modes instead of scraping text output. The default command yields a structured CPU summary, `-e` yields per-CPU topology rows, and `-C` yields cache rows. `--parse`, raw-only, help, version, and sysroot modes currently fall back to the external `lscpu` utility unchanged.")]
+[CommandOutput("Returns a structured CPU summary by default, typed per-CPU topology rows with `-e`, or typed CPU cache rows with `-C`.")]
+[PipelineInput(Description = "The structured `lscpu` builtin is explicit-arg-first and does not currently consume pipeline input.")]
 public sealed class LscpuCommand : ShellCommand
 {
     public LscpuCommand()
@@ -10,6 +28,46 @@ public sealed class LscpuCommand : ShellCommand
 
     public override async IAsyncEnumerable<object?> ExecuteAsync(CommandContext context)
     {
+        // On Windows there is no lscpu; use Windows CPU APIs instead.
+        if (OperatingSystem.IsWindows())
+        {
+            var parsedSelectionWin = CommandDisplaySelectionParser.Parse(context.Arguments);
+
+            // Detect extended (-e) or caches (-C) mode from the raw argument list.
+            bool isExtended = context.Arguments.Any(a => a?.ToString() is "-e" or "--extended");
+            bool isCaches = context.Arguments.Any(a => a?.ToString() is "-C" or "--caches");
+
+            if (isCaches)
+            {
+                // We don't have cache details on Windows without WMI — yield nothing.
+                yield break;
+            }
+
+            if (isExtended)
+            {
+                var rows = WindowsCpuServices.GetCpuTopology();
+
+                foreach (var row in rows)
+                {
+                    context.CancellationToken.ThrowIfCancellationRequested();
+                    yield return CommandDisplaySelectionParser.Apply(
+                        context.Runtime,
+                        parsedSelectionWin.Selection,
+                        row);
+                }
+
+                yield break;
+            }
+
+            var summary = WindowsCpuServices.GetCpuInfo();
+            yield return CommandDisplaySelectionParser.Apply(
+                context.Runtime,
+                parsedSelectionWin.Selection,
+                summary);
+
+            yield break;
+        }
+
         var resolvedPath = ResolveLscpuExecutable(context);
         var parsedSelection = CommandDisplaySelectionParser.Parse(context.Arguments);
 

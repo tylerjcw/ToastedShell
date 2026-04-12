@@ -3,6 +3,27 @@ using System.Diagnostics;
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Filesystem")]
+[CommandArgument("[path-or-device ...]", "Optional mountpoints or source devices to match.", Required = false, TypeName = "path-like|string")]
+[CommandOption("-S <source>", "Match a source device or source specification.")]
+[CommandOption("-T <target>", "Match the filesystem that contains a target path.")]
+[CommandOption("-M <mountpoint>", "Match a specific mountpoint.")]
+[CommandOption("-t <types>", "Limit the result set to specific filesystem types.")]
+[CommandOption("-O <options>", "Limit the result set to mounts with matching options.")]
+[CommandOption("-R", "Include submounts for matching filesystems.")]
+[CommandOption("-U", "Drop duplicate targets.")]
+[CommandOption("-l", "Return a flattened list instead of a hierarchy.")]
+[CommandOption("-A", "Disable built-in filters and include everything findmnt normally hides.")]
+[CommandOption("-b", "Render size-oriented columns in raw bytes.")]
+[CommandOption("-D", "Use a `df`-style display preset.")]
+[CommandOption("-I", "Use a `df -i`-style inode display preset.")]
+[CommandOption("-o <columns>", "Select findmnt-style output columns such as `TARGET,SOURCE,FSTYPE,OPTIONS`.")]
+[CommandOption("--output-all", "Expose every selectable structured findmnt column.")]
+[CommandExample("findmnt", Title = "Browse the mounted-filesystem tree as typed objects")]
+[CommandExample("findmnt -l | where _.Target.StartsWith(\"/run\")", Title = "Flatten the mount tree and filter by target path")]
+[CommandExample("findmnt -o TARGET,SOURCE,FSTYPE", Title = "Pick explicit findmnt-style display columns without changing the underlying objects")]
+[CommandNote("ToSh wraps `findmnt --json --bytes --output-all` so mounted filesystems stay as typed objects in the pipeline while the default renderer can still show them as a tree with columns. The default result is hierarchical, so use `-l` when you want flat filtering in a pipeline, and shell-facing aliases like `FsType` and `FsRoot` match the visible column names. Output-format-only modes like `--pairs`, `--raw`, `--noheadings`, polling, and verification currently fall back to the external `findmnt` utility unchanged.")]
+[CommandOutput("Returns reusable mounted-filesystem objects with nested child mounts when the underlying `findmnt --json` output is hierarchical.")]
+[PipelineInput(Description = "The structured `findmnt` builtin is explicit-arg-first and does not currently consume pipeline input.")]
 public sealed class FindmntCommand : ShellCommand
 {
     public FindmntCommand()
@@ -10,6 +31,28 @@ public sealed class FindmntCommand : ShellCommand
 
     public override async IAsyncEnumerable<object?> ExecuteAsync(CommandContext context)
     {
+        // On Windows there is no findmnt; enumerate volumes via DriveInfo instead.
+        if (OperatingSystem.IsWindows())
+        {
+            var winSelection = CommandDisplaySelectionParser.Parse(
+                context.Arguments,
+                showOptionAliases: ["-o", "--output"],
+                showAllAliases: ["--output-all"]);
+
+            var winMounts = WindowsMountServices.GetMounts();
+
+            foreach (var mount in winMounts)
+            {
+                context.CancellationToken.ThrowIfCancellationRequested();
+                yield return CommandDisplaySelectionParser.Apply(
+                    context.Runtime,
+                    winSelection.Selection,
+                    mount);
+            }
+
+            yield break;
+        }
+
         var resolvedPath = ResolveFindmntExecutable(context);
         var parsedSelection = CommandDisplaySelectionParser.Parse(
             context.Arguments,

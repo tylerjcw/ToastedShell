@@ -4,6 +4,30 @@ using System.Dynamic;
 namespace Tosh.Core.Commands;
 
 [CommandCategory("System")]
+[CommandArgument("[-m|-M|-q|-Q|-s|-S]", "Select a specific IPC resource family. With no resource flag, `lsipc` returns the global IPC limits and usage summary.", Required = false)]
+[CommandOption("-m", "Return System V shared-memory rows.")]
+[CommandOption("-M", "Return POSIX shared-memory rows.")]
+[CommandOption("-q", "Return System V message-queue rows.")]
+[CommandOption("-Q", "Return POSIX message-queue rows.")]
+[CommandOption("-s", "Return System V semaphore rows.")]
+[CommandOption("-S", "Return POSIX semaphore rows.")]
+[CommandOption("-g", "Return global usage/limit rows, optionally scoped by `-m`, `-q`, or `-s`.")]
+[CommandOption("-i <id>", "Restrict the query to a specific System V IPC id.")]
+[CommandOption("-N <name>", "Restrict the query to a specific POSIX IPC name.")]
+[CommandOption("-c", "Include creator-related fields such as creator uid, user, and group.")]
+[CommandOption("-t", "Include time-oriented fields such as attach, detach, change, or last-operation timestamps.")]
+[CommandOption("-b", "Request byte-oriented numeric sizes from the underlying `lsipc` command.")]
+[CommandOption("-P", "Render permissions numerically instead of symbolically.")]
+[CommandOption("-l", "Force list output shape where the underlying `lsipc` mode supports it.")]
+[CommandOption("-o <columns>", "Select lsipc-style columns such as `KEY,ID,OWNER,SIZE,NATTCH` or `RESOURCE,LIMIT,USED,USE%`.")]
+[CommandOption("--show <columns>", "Use ToSh display-only column selection on the structured rows after parsing.")]
+[CommandOption("--hide <columns>", "Hide display columns while keeping the full structured rows in the pipeline.")]
+[CommandExample("lsipc", Title = "Browse global IPC limits and current usage as structured rows")]
+[CommandExample("lsipc -m | first 5", Title = "Inspect System V shared-memory rows")]
+[CommandExample("lsipc -g -m | get { Resource, Limit, Used, UsePercent }", Title = "Show the global shared-memory limits and utilization summary")]
+[CommandNote("ToSh wraps `lsipc -J` so IPC resources and global IPC limits flow through the pipeline as structured rows instead of terminal-shaped text. Text-format-only modes like `--raw`, `--export`, `--newline`, and shell-variable output currently fall back to the external `lsipc` utility unchanged.")]
+[CommandOutput("Returns structured IPC resource rows or global IPC limit/usage rows, with typed sizes, counts, and ISO-normalized timestamps where the underlying data supports them.")]
+[PipelineInput(Description = "The structured `lsipc` builtin is explicit-arg-first and does not currently consume pipeline input.")]
 public sealed class LsipcCommand : ShellCommand
 {
     public LsipcCommand()
@@ -11,6 +35,14 @@ public sealed class LsipcCommand : ShellCommand
 
     public override async IAsyncEnumerable<object?> ExecuteAsync(CommandContext context)
     {
+        if (OperatingSystem.IsWindows())
+        {
+            throw context.CreateDiagnostic(
+                code: "tosh::runtime::command_windows_unavailable",
+                title: $"'{Name}' is not available on Windows.",
+                help: "This command queries Linux IPC resources (System V / POSIX semaphores, shared memory, message queues) which have no direct Windows equivalent.");
+        }
+
         var resolvedPath = ResolveLsipcExecutable(context);
         var parsedSelection = CommandDisplaySelectionParser.Parse(context.Arguments);
 
