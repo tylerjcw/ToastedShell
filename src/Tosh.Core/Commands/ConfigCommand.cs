@@ -1,6 +1,14 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Shell")]
+[CommandArgument("browse [query]", "Opens the full-screen config browser, optionally filtered by an initial query, with staged editing, subtree diffs, structured section and collection editors, reusable confirmation and validation surfaces, filesystem browsing, apply/save flows, startup reload/init actions, live prompt/style/theme previews, and raw text editing for advanced cases.", Required = false)]
+[CommandArgument("get <path>", "Reads one config value.", Required = false)]
+[CommandArgument("set <path> [value]", "Sets one config value.", Required = false)]
+[CommandArgument("reset [section]", "Resets a section or the whole config object.", Required = false)]
+[CommandArgument("reload", "Replays startup config files into the current session.", Required = false)]
+[CommandArgument("init [directory]", "Scaffolds a new config directory.", Required = false)]
+[CommandOutput("Produces the live config object, one config value, status rows, or an interactive browser request depending on the form.")]
+[PipelineInput(AcceptsScalar = true, Description = "Only `config set` consumes piped scalar input, using it as the new value when no explicit value argument is present.")]
 public sealed class ConfigCommand : ShellCommand
 {
     public ConfigCommand()

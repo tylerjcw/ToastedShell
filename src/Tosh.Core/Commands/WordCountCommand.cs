@@ -3,6 +3,18 @@ using System.Text;
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Text")]
+[CommandArgument("path ...", "Optional file paths to measure. When omitted, `wc` measures the current text pipeline.", Required = false, TypeName = "path-like")]
+[CommandOption("-l", "Show line counts.")]
+[CommandOption("-w", "Show word counts.")]
+[CommandOption("-c", "Show byte counts.")]
+[CommandOption("-m", "Show character counts.")]
+[CommandOption("-L", "Show the longest-line length.")]
+[CommandExample("wc README.md")]
+[CommandExample("wc -lwm README.md")]
+[CommandExample("echo one two three | wc")]
+[CommandNote("Wc returns typed statistics objects instead of formatted text, so you can still `get`, `where`, or `summarize` them later. Selector flags like `-l` and `-w` only change the visible columns, not the underlying objects.")]
+[CommandOutput("Returns typed text-statistics objects, and appends a `total` row when multiple files are counted.")]
+[PipelineInput(AcceptsScalar = true, AcceptsRecord = true, Description = "Consumes the current text pipeline when explicit file paths are omitted.")]
 public sealed class WordCountCommand : ShellCommand
 {
     public WordCountCommand()

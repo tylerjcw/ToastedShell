@@ -1,6 +1,8 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Prompt")]
+[CommandExample("prompt-git")]
+[CommandExample("prompt-git --fg bright-green --bold")]
 public sealed class PromptGitCommand : ShellCommand
 {
     public PromptGitCommand()

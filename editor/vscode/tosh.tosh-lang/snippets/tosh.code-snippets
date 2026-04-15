@@ -249,5 +249,77 @@
       "}"
     ],
     "description": "Switch statement"
+  },
+  "Class with Props": {
+    "prefix": "class",
+    "body": [
+      "${1|shy,global,export|} class ${2:Name} {",
+      "\tprop ${3:Field}: ${4:string}",
+      "",
+      "\tfunc new(${5:field}: ${4:string}) {",
+      "\t\t$0",
+      "\t}",
+      "}"
+    ],
+    "description": "Define a class with a property and constructor"
+  },
+  "Enum Definition": {
+    "prefix": "enum",
+    "body": [
+      "enum ${1:Name} {",
+      "\t${2:Member1}",
+      "\t${3:Member2}",
+      "\t$0",
+      "}"
+    ],
+    "description": "Define an enum with members"
+  },
+  "Record Definition": {
+    "prefix": "record-type",
+    "body": [
+      "record ${1:Name}(${2:field}: ${3:string})"
+    ],
+    "description": "Define a named record type"
+  },
+  "While Loop": {
+    "prefix": "while",
+    "body": [
+      "while (${1:condition}) {",
+      "\t$0",
+      "}"
+    ],
+    "description": "While loop"
+  },
+  "Until Loop": {
+    "prefix": "until",
+    "body": [
+      "until (${1:condition}) {",
+      "\t$0",
+      "}"
+    ],
+    "description": "Until loop"
+  },
+  "Each Block": {
+    "prefix": "each",
+    "body": [
+      "each {",
+      "\t$0",
+      "}"
+    ],
+    "description": "Each iterator block"
+  },
+  "Pipeline Filter Transform": {
+    "prefix": "pipe-filter",
+    "body": [
+      "| where { ${1:_.Property} ${2|==,!=,>,<,>=,<=|} ${3:value} } | each { $0 }"
+    ],
+    "description": "Pipeline with where filter and each transform"
+  },
+  "Pipeline Sort Take": {
+    "prefix": "pipe-sort",
+    "body": [
+      "| sort ${1:Property} | first ${2:10}"
+    ],
+    "description": "Pipeline with sort and take first N"
   }
 }

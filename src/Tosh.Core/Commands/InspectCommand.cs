@@ -1,6 +1,10 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Pipeline")]
+[CommandExample("ls -la | first | inspect")]
+[CommandExample("new System.Random() | inspect -a")]
+[CommandExample("new System.Random() | inspect --flat")]
+[CommandNote("Inspect opens an inline tree browser for CLR values in interactive sessions. Use `-a` for non-public/static members, `--flat` for the legacy static inspection object output, and `i` inside the browser to insert the selected member text into the active REPL line at the cursor (or queue it for the next prompt when no line is active). In the REPL, `F2` tries to inspect the reference under the cursor, and `Alt+I` is available as a fallback on terminals that do not expose function keys cleanly.")]
 public sealed class InspectCommand : ShellCommand
 {
     public InspectCommand()

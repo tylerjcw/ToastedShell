@@ -1,6 +1,18 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Filesystem")]
+[CommandArgument("path ...", "One or more filesystem paths to create or timestamp.", TypeName = "path-like")]
+[CommandOption("-a", "Update only the access time.")]
+[CommandOption("-m", "Update only the modification time.")]
+[CommandOption("-c", "Do not create missing files.")]
+[CommandOption("-d <time>", "Use an explicit timestamp value.")]
+[CommandOption("-r <path>", "Copy the timestamp from another file or directory.")]
+[CommandExample("touch notes.txt")]
+[CommandExample("touch -c -a notes.txt")]
+[CommandExample("touch -d 2026-03-28T12:00:00 notes.txt")]
+[CommandNote("Touch now supports `-a`, `-m`, `-c`, `-d`, and `-r`, plus grouped short flags like `-am`.")]
+[CommandOutput("Returns updated FileInfo or DirectoryInfo objects for the paths it touched.")]
+[PipelineInput(AcceptsList = true, Description = "Consumes piped path-like input when explicit paths are omitted.")]
 public sealed class TouchCommand : ShellCommand
 {
     public TouchCommand()

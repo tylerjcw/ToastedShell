@@ -518,6 +518,21 @@ public sealed class EngineTests
     }
 
     [Fact]
+    public void Parser_supports_callable_invocation_postfix_on_variables()
+    {
+        var result = ToshParser.Parse("echo $double(21)");
+
+        Assert.Empty(result.Diagnostics);
+
+        var command = Assert.Single(result.Pipeline.Commands);
+        var invocation = Assert.IsType<CallableInvocationArgumentSyntax>(Assert.Single(command.Arguments));
+        Assert.Equal("double", Assert.IsType<VariableReferenceArgumentSyntax>(invocation.Target).Name);
+        Assert.Collection(
+            invocation.Arguments,
+            argument => Assert.Equal(21, Assert.IsType<LiteralArgumentSyntax>(argument).Value));
+    }
+
+    [Fact]
     public void Parser_supports_static_method_calls_with_list_literals()
     {
         var result = ToshParser.Parse("echo String.Join(\" \", [\"Hello\", \"World\"])");
@@ -1196,7 +1211,7 @@ public sealed class EngineTests
         var results = await engine.ExecuteToListAsync("echo $items.Length\ntype-of $items | get Name");
 
         Assert.Equal(2, results[0]);
-        Assert.Equal("array", results[1]);
+        Assert.Equal("array<string>", results[1]);
     }
 
     [Fact]
@@ -2022,10 +2037,12 @@ public sealed class EngineTests
         Assert.Collection(singleArray, item => Assert.Equal(1, item));
 
         var firstNested = Assert.Single(nestedArray);
-        Assert.Equal(new object?[] { 1, 2 }, Assert.IsAssignableFrom<IEnumerable<object?>>(firstNested).ToArray());
+        Assert.IsAssignableFrom<Array>(firstNested);
+        Assert.Equal(new object?[] { 1, 2 }, ((Array)firstNested!).Cast<object?>().ToArray());
 
         var firstPipelineRow = Assert.Single(multipleRows);
-        Assert.Equal(new object?[] { 1, 2 }, Assert.IsAssignableFrom<IEnumerable<object?>>(firstPipelineRow).ToArray());
+        Assert.IsAssignableFrom<Array>(firstPipelineRow);
+        Assert.Equal(new object?[] { 1, 2 }, ((Array)firstPipelineRow!).Cast<object?>().ToArray());
     }
 
     [Fact]
@@ -2039,7 +2056,8 @@ public sealed class EngineTests
         Assert.Collection(indexResult, item => Assert.Equal(1, item));
 
         var firstRow = Assert.Single(firstPipelineRow);
-        Assert.Equal(new object?[] { 1, 2 }, Assert.IsAssignableFrom<IEnumerable<object?>>(firstRow).ToArray());
+        Assert.IsAssignableFrom<Array>(firstRow);
+        Assert.Equal(new object?[] { 1, 2 }, ((Array)firstRow!).Cast<object?>().ToArray());
     }
 
     [Fact]
@@ -4623,8 +4641,8 @@ $output");
         var results = await engine.ExecuteToListAsync("mydir");
 
         Assert.Equal(subDir, runtime.CurrentDirectory);
-        var dirInfo = Assert.IsType<DirectoryInfo>(Assert.Single(results));
-        Assert.Equal("mydir", dirInfo.Name);
+        var entry = Assert.IsType<FileSystemEntry>(Assert.Single(results));
+        Assert.Equal("mydir", entry.Name);
     }
 
     [Fact]
@@ -4872,6 +4890,49 @@ $output");
             """);
 
         Assert.Equal(42, Assert.Single(results));
+    }
+
+    [Fact]
+    public async Task Callable_invocation_postfix_can_invoke_lambda_values()
+    {
+        var engine = new ToshEngine();
+
+        var results = await engine.ExecuteToListAsync(
+            """
+            var double = func(x) => ($x * 2)
+            $double(21)
+            """);
+
+        Assert.Equal(42, Assert.Single(results));
+    }
+
+    [Fact]
+    public async Task Callable_invocation_postfix_supports_currying_chains()
+    {
+        var engine = new ToshEngine();
+
+        var results = await engine.ExecuteToListAsync(
+            """
+            var add3 = func(a, b, c) => ($a + $b + $c)
+            (curry $add3)(1)(2)(39)
+            """);
+
+        Assert.Equal(42, Assert.Single(results));
+    }
+
+    [Fact]
+    public async Task Callable_invocation_postfix_requires_callable_targets()
+    {
+        var engine = new ToshEngine();
+
+        var exception = await Assert.ThrowsAsync<ToshDiagnosticException>(
+            () => engine.ExecuteToListAsync(
+                """
+                var x = 42
+                $x(1)
+                """));
+
+        Assert.Equal("tosh::runtime::value_not_callable", Assert.Single(exception.Diagnostics).Code);
     }
 
     [Fact]
@@ -5584,5 +5645,52 @@ $output");
             results,
             item => Assert.Equal(typeof(BigInteger), item),
             item => Assert.Equal("218922995834555169026", item?.ToString()));
+    }
+
+    [Fact]
+    public void Where_predicate_in_arrow_function_does_not_cause_parse_errors()
+    {
+        var source = """
+            func recent(span: TimeSpan) => ls -la | where _.Modified > ((date now) - $span)
+            func other() => echo done
+            """;
+
+        var result = ToshParser.Parse(source);
+
+        Assert.Empty(result.Diagnostics);
+    }
+
+    [Fact]
+    public async Task Cd_tilde_alias_resolves_when_alias_is_set_directly()
+    {
+        using var tempDirectory = new TemporaryDirectory();
+        var targetPath = System.IO.Path.Combine(tempDirectory.Path, "target");
+        Directory.CreateDirectory(targetPath);
+
+        var runtime = ToshRuntime.CreateDefault();
+        runtime.CurrentDirectory = tempDirectory.Path;
+        runtime.Config.Shell.Dirs.TrySetMember("myalias", targetPath);
+        var engine = new ToshEngine(runtime);
+
+        await engine.ExecuteToListAsync("cd ~myalias");
+
+        Assert.Equal(targetPath, runtime.CurrentDirectory);
+    }
+
+    [Fact]
+    public async Task Cd_tilde_alias_resolves_when_alias_is_set_via_config_assignment()
+    {
+        using var tempDirectory = new TemporaryDirectory();
+        var targetPath = System.IO.Path.Combine(tempDirectory.Path, "target");
+        Directory.CreateDirectory(targetPath);
+
+        var runtime = ToshRuntime.CreateDefault();
+        runtime.CurrentDirectory = tempDirectory.Path;
+        var engine = new ToshEngine(runtime);
+
+        await engine.ExecuteToListAsync("$tosh.Config.Shell.Dirs = { myalias = \"" + targetPath.Replace("\\", "\\\\") + "\" }");
+        await engine.ExecuteToListAsync("cd ~myalias");
+
+        Assert.Equal(targetPath, runtime.CurrentDirectory);
     }
 }

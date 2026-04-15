@@ -12,4 +12,5 @@ public sealed record FunctionDefinition(
     string SourceName,
     string SourceText,
     TextSpan Span,
-    IReadOnlyList<LexicalScope>? CapturedScopes = null);
+    IReadOnlyList<LexicalScope>? CapturedScopes = null,
+    DocComment? DocComment = null);

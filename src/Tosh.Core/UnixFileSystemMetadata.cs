@@ -1,3 +1,6 @@
+using System.Runtime.Versioning;
+using System.Security.AccessControl;
+using System.Security.Principal;
 using System.Runtime.InteropServices;
 
 namespace Tosh.Core;
@@ -11,6 +14,11 @@ internal sealed record UnixFileSystemMetadata(
     public static UnixFileSystemMetadata? TryRead(FileSystemInfo entry)
     {
         ArgumentNullException.ThrowIfNull(entry);
+
+        if (OperatingSystem.IsWindows())
+        {
+            return TryReadWindows(entry);
+        }
 
         if (!OperatingSystem.IsLinux())
         {
@@ -29,6 +37,33 @@ internal sealed record UnixFileSystemMetadata(
                 ResolveGroup(stat.st_gid),
                 checked((long)stat.st_ino),
                 checked((long)stat.st_nlink));
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    [SupportedOSPlatform("windows")]
+    private static UnixFileSystemMetadata? TryReadWindows(FileSystemInfo entry)
+    {
+        try
+        {
+            FileSystemSecurity security = entry switch
+            {
+                DirectoryInfo directory => directory.GetAccessControl(),
+                FileInfo file => file.GetAccessControl(),
+                _ => new FileInfo(entry.FullName).GetAccessControl(),
+            };
+
+            var ownerSid = security.GetOwner(typeof(SecurityIdentifier)) as SecurityIdentifier;
+            var groupSid = security.GetGroup(typeof(SecurityIdentifier)) as SecurityIdentifier;
+
+            return new UnixFileSystemMetadata(
+                ownerSid is null ? null : UnixSystemServices.CreateWindowsPrincipalInfo(ownerSid, UnixSystemServices.TranslateSid(ownerSid)),
+                groupSid is null ? null : UnixSystemServices.CreateWindowsPrincipalInfo(groupSid, UnixSystemServices.TranslateSid(groupSid)),
+                null,
+                null);
         }
         catch
         {

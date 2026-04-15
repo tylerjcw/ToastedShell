@@ -3,6 +3,8 @@ using System.Text.RegularExpressions;
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Text")]
+[CommandExample("echo alpha-beta | replace beta BETA")]
+[CommandExample("echo \"A1 B2\" | replace -r \"[0-9]\" \"#\"")]
 public sealed class ReplaceCommand : ShellCommand
 {
     public ReplaceCommand()

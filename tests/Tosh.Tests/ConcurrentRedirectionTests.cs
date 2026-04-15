@@ -8,20 +8,31 @@ public sealed class ConcurrentRedirectionTests
     [Fact]
     public async Task Separate_stdout_and_stderr_redirections_to_different_files()
     {
-        if (OperatingSystem.IsWindows())
-        {
-            return;
-        }
-
         using var tempDirectory = new TemporaryDirectory();
         var stdoutFile = Path.Combine(tempDirectory.Path, "stdout.txt");
         var stderrFile = Path.Combine(tempDirectory.Path, "stderr.txt");
+        var emitter = CreateScript(
+            tempDirectory.Path,
+            "emit-both",
+            unixBody:
+            """
+            printf 'out1\nout2\n'
+            printf 'err1\nerr2\n' >&2
+            """,
+            windowsBody:
+            """
+            @echo out1
+            @echo out2
+            @>&2 echo err1
+            @>&2 echo err2
+            """);
 
         var runtime = ToshRuntime.CreateDefault();
+        runtime.CurrentDirectory = tempDirectory.Path;
         var engine = new ToshEngine(runtime);
 
         await engine.ExecuteToListAsync(
-            $"/bin/sh -c \"printf 'out1\\nout2\\n'; printf 'err1\\nerr2\\n' >&2\" out> \"{stdoutFile}\" err> \"{stderrFile}\"");
+            $"./{emitter} out> \"{stdoutFile}\" err> \"{stderrFile}\"");
 
         var stdoutContent = (await File.ReadAllLinesAsync(stdoutFile)).Where(l => l.Length > 0).ToArray();
         var stderrContent = (await File.ReadAllLinesAsync(stderrFile)).Where(l => l.Length > 0).ToArray();
@@ -33,19 +44,28 @@ public sealed class ConcurrentRedirectionTests
     [Fact]
     public async Task Combined_output_and_error_redirection_to_single_file()
     {
-        if (OperatingSystem.IsWindows())
-        {
-            return;
-        }
-
         using var tempDirectory = new TemporaryDirectory();
         var combinedFile = Path.Combine(tempDirectory.Path, "combined.txt");
+        var emitter = CreateScript(
+            tempDirectory.Path,
+            "emit-both",
+            unixBody:
+            """
+            printf 'out\n'
+            printf 'err\n' >&2
+            """,
+            windowsBody:
+            """
+            @echo out
+            @>&2 echo err
+            """);
 
         var runtime = ToshRuntime.CreateDefault();
+        runtime.CurrentDirectory = tempDirectory.Path;
         var engine = new ToshEngine(runtime);
 
         await engine.ExecuteToListAsync(
-            $"/bin/sh -c \"printf 'out\\n'; printf 'err\\n' >&2\" o+e> \"{combinedFile}\"");
+            $"./{emitter} o+e> \"{combinedFile}\"");
 
         var content = (await File.ReadAllLinesAsync(combinedFile)).Where(l => l.Length > 0).ToArray();
 
@@ -56,19 +76,26 @@ public sealed class ConcurrentRedirectionTests
     [Fact]
     public async Task Append_redirection_preserves_existing_content()
     {
-        if (OperatingSystem.IsWindows())
-        {
-            return;
-        }
-
         using var tempDirectory = new TemporaryDirectory();
         var file = Path.Combine(tempDirectory.Path, "output.txt");
         await File.WriteAllTextAsync(file, "existing\n");
+        var emitter = CreateScript(
+            tempDirectory.Path,
+            "emit-appended",
+            unixBody:
+            """
+            printf 'appended\n'
+            """,
+            windowsBody:
+            """
+            @echo appended
+            """);
 
         var runtime = ToshRuntime.CreateDefault();
+        runtime.CurrentDirectory = tempDirectory.Path;
         var engine = new ToshEngine(runtime);
 
-        await engine.ExecuteToListAsync($"/bin/sh -c \"printf 'appended\\n'\" out>> \"{file}\"");
+        await engine.ExecuteToListAsync($"./{emitter} out>> \"{file}\"");
 
         var content = (await File.ReadAllLinesAsync(file)).Where(l => l.Length > 0).ToArray();
         Assert.Equal(["existing", "appended"], content);
@@ -77,22 +104,51 @@ public sealed class ConcurrentRedirectionTests
     [Fact]
     public async Task Sequential_redirections_to_same_file_do_not_corrupt()
     {
-        if (OperatingSystem.IsWindows())
-        {
-            return;
-        }
-
         using var tempDirectory = new TemporaryDirectory();
         var file = Path.Combine(tempDirectory.Path, "output.txt");
+        var first = CreateScript(
+            tempDirectory.Path,
+            "emit-first",
+            unixBody:
+            """
+            printf 'first\n'
+            """,
+            windowsBody:
+            """
+            @echo first
+            """);
+        var second = CreateScript(
+            tempDirectory.Path,
+            "emit-second",
+            unixBody:
+            """
+            printf 'second\n'
+            """,
+            windowsBody:
+            """
+            @echo second
+            """);
+        var third = CreateScript(
+            tempDirectory.Path,
+            "emit-third",
+            unixBody:
+            """
+            printf 'third\n'
+            """,
+            windowsBody:
+            """
+            @echo third
+            """);
 
         var runtime = ToshRuntime.CreateDefault();
+        runtime.CurrentDirectory = tempDirectory.Path;
         var engine = new ToshEngine(runtime);
 
         await engine.ExecuteToListAsync(
             $"""
-            /bin/sh -c "printf 'first\n'" out> "{file}"
-            /bin/sh -c "printf 'second\n'" out>> "{file}"
-            /bin/sh -c "printf 'third\n'" out>> "{file}"
+            ./{first} out> "{file}"
+            ./{second} out>> "{file}"
+            ./{third} out>> "{file}"
             """);
 
         var content = (await File.ReadAllLinesAsync(file)).Where(l => l.Length > 0).ToArray();
@@ -114,22 +170,31 @@ public sealed class ConcurrentRedirectionTests
     [Fact]
     public async Task Background_job_with_concurrent_stdout_and_stderr_redirections()
     {
-        if (OperatingSystem.IsWindows())
-        {
-            return;
-        }
-
         using var tempDirectory = new TemporaryDirectory();
         var stdoutFile = Path.Combine(tempDirectory.Path, "bg-stdout.txt");
         var stderrFile = Path.Combine(tempDirectory.Path, "bg-stderr.txt");
+        var emitter = CreateScript(
+            tempDirectory.Path,
+            "emit-both",
+            unixBody:
+            """
+            printf 'bg-out\n'
+            printf 'bg-err\n' >&2
+            """,
+            windowsBody:
+            """
+            @echo bg-out
+            @>&2 echo bg-err
+            """);
 
         var runtime = ToshRuntime.CreateDefault();
+        runtime.CurrentDirectory = tempDirectory.Path;
         var engine = new ToshEngine(runtime);
 
         await engine.ExecuteToListAsync(
             $"var so = \"{stdoutFile}\"\nvar se = \"{stderrFile}\"");
         await engine.ExecuteToListAsync(
-            "/bin/sh -c \"printf 'bg-out\\n'; printf 'bg-err\\n' >&2\" out> $so err> $se &");
+            $"./{emitter} out> $so err> $se &");
         var startedInfo = Assert.IsType<ShellJobInfo>(runtime.LastResult);
 
         await engine.ExecuteToListAsync($"wait-for {startedInfo.Id}");
@@ -139,6 +204,25 @@ public sealed class ConcurrentRedirectionTests
 
         Assert.Equal(["bg-out"], stdoutContent);
         Assert.Equal(["bg-err"], stderrContent);
+    }
+
+    private static string CreateScript(string directory, string name, string unixBody, string windowsBody)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            var path = Path.Combine(directory, name + ".cmd");
+            File.WriteAllText(path, $"@echo off{Environment.NewLine}{windowsBody.Trim().Replace("\n", Environment.NewLine, StringComparison.Ordinal)}{Environment.NewLine}");
+            return Path.GetFileName(path);
+        }
+
+        var scriptPath = Path.Combine(directory, name);
+        File.WriteAllText(scriptPath, $"#!/usr/bin/env sh\n{unixBody.Trim()}\n");
+        File.SetUnixFileMode(
+            scriptPath,
+            UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute |
+            UnixFileMode.GroupRead | UnixFileMode.GroupExecute |
+            UnixFileMode.OtherRead | UnixFileMode.OtherExecute);
+        return Path.GetFileName(scriptPath);
     }
 
     private sealed class TemporaryDirectory : IDisposable

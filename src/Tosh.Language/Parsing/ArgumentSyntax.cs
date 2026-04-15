@@ -35,6 +35,10 @@ public sealed record SpreadRecordEntrySyntax(ArgumentSyntax Value, TextSpan Span
 
 public sealed record RecordLiteralArgumentSyntax(IReadOnlyList<RecordEntrySyntax> Fields, TextSpan Span) : ArgumentSyntax(Span);
 
+public sealed record DictEntrySyntax(ArgumentSyntax Key, ArgumentSyntax Value, TextSpan Span);
+
+public sealed record DictLiteralArgumentSyntax(IReadOnlyList<DictEntrySyntax> Entries, TextSpan Span) : ArgumentSyntax(Span);
+
 public sealed record FunctionReferenceArgumentSyntax(string Name, TextSpan Span) : ArgumentSyntax(Span);
 
 public sealed record BlockArgumentSyntax(BlockSyntax Block, TextSpan Span) : ArgumentSyntax(Span);
@@ -60,6 +64,11 @@ public sealed record MethodCallArgumentSyntax(
     IReadOnlyList<ArgumentSyntax> Arguments,
     TextSpan Span,
     bool NullSafe = false) : ArgumentSyntax(Span);
+
+public sealed record CallableInvocationArgumentSyntax(
+    ArgumentSyntax Target,
+    IReadOnlyList<ArgumentSyntax> Arguments,
+    TextSpan Span) : ArgumentSyntax(Span);
 
 public sealed record SubexpressionArgumentSyntax(PipelineSyntax Pipeline, TextSpan Span) : ArgumentSyntax(Span);
 
@@ -129,3 +138,7 @@ public sealed record RangeArgumentSyntax(
     TextSpan Span) : ArgumentSyntax(Span);
 
 public sealed record NameOfArgumentSyntax(string Identifier, bool IsVariableReference, TextSpan Span) : ArgumentSyntax(Span);
+
+public sealed record TupleLiteralArgumentSyntax(IReadOnlyList<ArgumentSyntax> Items, TextSpan Span) : ArgumentSyntax(Span);
+
+public sealed record SetLiteralArgumentSyntax(IReadOnlyList<ArgumentSyntax> Items, TextSpan Span) : ArgumentSyntax(Span);

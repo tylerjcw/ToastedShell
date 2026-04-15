@@ -1,6 +1,18 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Pipeline")]
+[CommandArgument("[column|member-path] [--sum [columns]] [--avg [columns]] [--min [columns]] [--max [columns]] [--count [columns]]", "With no arguments, infer every sensible aggregate for every summarizable column. A single bare column or member path such as `Size` or `_.Used` narrows auto mode to that one target. Flags request explicit operations.", Required = false)]
+[CommandOption("--sum [columns]", "Compute sums for scalar input or the named columns.")]
+[CommandOption("--avg [columns], --average [columns]", "Compute averages for scalar input or the named columns.")]
+[CommandOption("--min [columns]", "Compute minima for scalar input or the named columns.")]
+[CommandOption("--max [columns]", "Compute maxima for scalar input or the named columns.")]
+[CommandOption("--count [columns]", "Count input rows when no columns are supplied, or non-null values for the named columns.")]
+[CommandExample("df | summarize", Title = "Infer every sensible aggregate for every summarizable df column")]
+[CommandExample("df | summarize _.Used", Title = "Infer every sensible aggregate for a single member path target")]
+[CommandExample("seq 5 | summarize --sum --avg --min --max --count", Title = "Summarize a scalar numeric pipeline explicitly")]
+[CommandExample("ps | summarize --avg Memory --max Memory", Title = "Compute multiple aggregates over one column")]
+[CommandOutput("Returns ColumnSummary objects describing the requested or inferred aggregates. The original input rows are not appended back into the result.")]
+[PipelineInput(AcceptsScalar = true, AcceptsRecord = true, AcceptsList = true, AcceptsTable = true, Description = "Consumes the current pipeline rows and returns one structured ColumnSummary object per requested or inferred scalar target or member path.")]
 public sealed class SummarizeCommand : ShellCommand, ICurrentItemMemberPathCommand
 {
     public SummarizeCommand(string name = "summarize")

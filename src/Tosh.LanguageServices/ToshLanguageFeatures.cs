@@ -63,16 +63,16 @@ public sealed class ToshLanguageFeatures
     };
 
     private readonly ToshRuntime _runtime;
-    private IReadOnlyDictionary<string, CommandManifestEntry>? _manifestCache;
+    private IReadOnlyDictionary<string, CommandMetadata>? _metadataCache;
 
     public ToshLanguageFeatures()
     {
         _runtime = ToshRuntime.CreateDefault();
     }
 
-    private IReadOnlyDictionary<string, CommandManifestEntry> GetManifestLookup()
+    private IReadOnlyDictionary<string, CommandMetadata> GetMetadataLookup()
     {
-        return _manifestCache ??= CommandManifestExporter.BuildManifest(_runtime.Commands)
+        return _metadataCache ??= CommandMetadataExporter.BuildMetadata(_runtime.Commands)
             .ToDictionary(entry => entry.Name, StringComparer.OrdinalIgnoreCase);
     }
 
@@ -149,9 +149,9 @@ public sealed class ToshLanguageFeatures
 
         if (TryGetCommandFlagCompletionContext(text, offset, out var flagPrefix, out var commandName))
         {
-            if (GetManifestLookup().TryGetValue(commandName, out var manifestEntry))
+            if (GetMetadataLookup().TryGetValue(commandName, out var metadataEntry))
             {
-                foreach (var option in manifestEntry.Options)
+                foreach (var option in metadataEntry.Options)
                 {
                     var flags = option.Syntax.Split(',', StringSplitOptions.TrimEntries);
                     foreach (var flag in flags)
@@ -215,29 +215,41 @@ public sealed class ToshLanguageFeatures
         foreach (var symbol in index.GetVisibleFunctions(offset))
         {
             var overloads = index.GetVisibleFunctionOverloads(offset, symbol);
+            var doc = overloads.Select(o => o.DocComment).FirstOrDefault(d => d is not null);
+            var docLine = doc?.Description is { Length: > 0 } desc ? $"\n{desc}" : string.Empty;
+            var deprecatedTags = doc?.IsDeprecated == true ? (IReadOnlyList<int>)[1] : null;
             items[symbol] = new LspCompletionItem(
                 symbol,
                 Kind: 18,
                 Detail: overloads.Count == 1 ? "Function" : $"Function ({overloads.Count} overloads)",
-                Documentation: string.Join("\n", overloads.Take(6).Select(FormatTopLevelFunctionSignature)));
+                Documentation: string.Join("\n", overloads.Take(6).Select(FormatTopLevelFunctionSignature)) + docLine,
+                Tags: deprecatedTags);
         }
 
         foreach (var symbol in index.GetVisibleTypeLikeSymbols(offset))
         {
+            var typeDoc = index.GetDeclarationDocComment(offset, symbol);
+            var typeDocumentation = typeDoc?.Description is { Length: > 0 } td ? td : "ToSh type declared in the current document.";
+            var typeDeprecatedTags = typeDoc?.IsDeprecated == true ? (IReadOnlyList<int>)[1] : null;
             items[symbol] = new LspCompletionItem(
                 symbol,
                 Kind: 7,
                 Detail: "Type declared in current document",
-                Documentation: "ToSh type declared in the current document.");
+                Documentation: typeDocumentation,
+                Tags: typeDeprecatedTags);
         }
 
         foreach (var symbol in index.GetVisibleModules(offset))
         {
+            var modDoc = index.GetDeclarationDocComment(offset, symbol);
+            var modDocumentation = modDoc?.Description is { Length: > 0 } md ? md : "ToSh module declared in the current document.";
+            var modDeprecatedTags = modDoc?.IsDeprecated == true ? (IReadOnlyList<int>)[1] : null;
             items[symbol] = new LspCompletionItem(
                 symbol,
                 Kind: 9,
                 Detail: "Module declared in current document",
-                Documentation: "ToSh module declared in the current document.");
+                Documentation: modDocumentation,
+                Tags: modDeprecatedTags);
         }
 
         var rootPrefix = GetSimpleCompletionPrefix(text, offset);
@@ -271,10 +283,10 @@ public sealed class ToshLanguageFeatures
                 return CreateTopLevelFunctionSignatureHelp(overloads, commandCallSite.ActiveParameter);
             }
 
-            if (GetManifestLookup().TryGetValue(commandCallSite.Command.Name, out var manifestEntry) &&
-                manifestEntry.Arguments.Count > 0)
+            if (GetMetadataLookup().TryGetValue(commandCallSite.Command.Name, out var metadataEntry) &&
+                metadataEntry.Arguments.Count > 0)
             {
-                return CreateBuiltInCommandSignatureHelp(manifestEntry, commandCallSite.ActiveParameter);
+                return CreateBuiltInCommandSignatureHelp(metadataEntry, commandCallSite.ActiveParameter);
             }
         }
 
@@ -344,6 +356,10 @@ public sealed class ToshLanguageFeatures
         {
             description = keyword;
         }
+        else if (GetTypeLikeDeclarationHoverDescription(index, offset, normalizedWord) is { } typeDescription)
+        {
+            description = typeDescription;
+        }
         else if (GetShellHoverDescription(semantics, offset, normalizedWord) is { } shellDescription)
         {
             description = shellDescription;
@@ -354,9 +370,9 @@ public sealed class ToshLanguageFeatures
         }
         else if (HelpCatalog.ResolveTopic(_runtime, normalizedWord) is { } topic)
         {
-            if (topic.Kind == HelpSubjectKind.BuiltIn && GetManifestLookup().TryGetValue(normalizedWord, out var manifestEntry))
+            if (topic.Kind == HelpSubjectKind.BuiltIn && GetMetadataLookup().TryGetValue(normalizedWord, out var metadataEntry))
             {
-                description = FormatCommandHoverMarkdown(manifestEntry);
+                description = FormatCommandHoverMarkdown(metadataEntry);
             }
             else
             {
@@ -405,7 +421,182 @@ public sealed class ToshLanguageFeatures
             .ToArray();
     }
 
-    private static string FormatCommandHoverMarkdown(CommandManifestEntry entry)
+    public static readonly IReadOnlyList<string> SemanticTokenTypes =
+    [
+        "comment",    // 0
+        "keyword",    // 1
+        "string",     // 2
+        "number",     // 3
+        "variable",   // 4
+        "function",   // 5
+        "type",       // 6
+        "operator",   // 7
+    ];
+
+    public static readonly IReadOnlyList<string> SemanticTokenModifiers =
+    [
+        "declaration",     // bit 0
+        "defaultLibrary",  // bit 1
+        "documentation",   // bit 2
+    ];
+
+    public LspSemanticTokens GetSemanticTokens(string text, string sourceName)
+    {
+        var map = new TextCoordinateMap(text);
+        var rawTokens = new List<(int Line, int Start, int Length, int Type, int Modifiers)>();
+
+        // 1. Scan for comments (lexer skips them)
+        var lines = text.Split('\n');
+        for (var lineIdx = 0; lineIdx < lines.Length; lineIdx++)
+        {
+            var line = lines[lineIdx];
+            var inString = false;
+            var stringChar = '\0';
+            for (var ci = 0; ci < line.Length; ci++)
+            {
+                var ch = line[ci];
+                if (inString)
+                {
+                    if (ch == '\\') { ci++; continue; }
+                    if (ch == stringChar) inString = false;
+                    continue;
+                }
+                if (ch is '"' or '\'') { inString = true; stringChar = ch; continue; }
+                if (ch == '#')
+                {
+                    var isDocComment = ci + 1 < line.Length && line[ci + 1] == '#';
+                    var modifiers = isDocComment ? 0x04 : 0; // documentation modifier for ##
+                    rawTokens.Add((lineIdx, ci, line.Length - ci, 0, modifiers)); // comment
+                    break;
+                }
+            }
+        }
+
+        // 2. Lex the source to get tokens
+        var lexer = new ToshLexer(text);
+        IReadOnlyList<SyntaxToken> tokens;
+        try { tokens = lexer.Lex(); }
+        catch { return new LspSemanticTokens([]); }
+
+        var index = DeclarationIndex.Create(sourceName, text);
+        var builtinNames = new HashSet<string>(
+            _runtime.Commands.All.Select(c => c.Name),
+            StringComparer.OrdinalIgnoreCase);
+
+        foreach (var token in tokens)
+        {
+            if (token.Kind == SyntaxTokenKind.EndOfFile) continue;
+
+            var pos = map.ToPosition(token.Position);
+
+            switch (token.Kind)
+            {
+                case SyntaxTokenKind.String or SyntaxTokenKind.InterpolatedString:
+                    rawTokens.Add((pos.Line, pos.Character, token.Text.Length, 2, 0));
+                    break;
+
+                case SyntaxTokenKind.Number or SyntaxTokenKind.UnitLiteral:
+                    rawTokens.Add((pos.Line, pos.Character, token.Text.Length, 3, 0));
+                    break;
+
+                case SyntaxTokenKind.Boolean or SyntaxTokenKind.Null:
+                    rawTokens.Add((pos.Line, pos.Character, token.Text.Length, 1, 0x02)); // keyword + defaultLibrary
+                    break;
+
+                case SyntaxTokenKind.Bareword:
+                    ClassifyBareword(token, pos, rawTokens, builtinNames, index);
+                    break;
+
+                case SyntaxTokenKind.Pipe
+                    or SyntaxTokenKind.DoublePipe or SyntaxTokenKind.DoubleAmpersand
+                    or SyntaxTokenKind.Ampersand
+                    or SyntaxTokenKind.GreaterThan or SyntaxTokenKind.GreaterThanGreaterThan
+                    or SyntaxTokenKind.LessThan or SyntaxTokenKind.LessThanLessThanLessThan
+                    or SyntaxTokenKind.GreaterThanEqual or SyntaxTokenKind.LessThanEqual
+                    or SyntaxTokenKind.BangEqual or SyntaxTokenKind.BangTilde
+                    or SyntaxTokenKind.Bang
+                    or SyntaxTokenKind.QuestionQuestion or SyntaxTokenKind.QuestionDot
+                    or SyntaxTokenKind.DotDot:
+                    rawTokens.Add((pos.Line, pos.Character, token.Text.Length, 7, 0)); // operator
+                    break;
+            }
+        }
+
+        // 3. Encode as delta-encoded LSP data
+        rawTokens.Sort((a, b) =>
+        {
+            var lineCmp = a.Line.CompareTo(b.Line);
+            return lineCmp != 0 ? lineCmp : a.Start.CompareTo(b.Start);
+        });
+
+        var data = new List<int>(rawTokens.Count * 5);
+        var prevLine = 0;
+        var prevStart = 0;
+        foreach (var (line, start, length, type, modifiers) in rawTokens)
+        {
+            var deltaLine = line - prevLine;
+            var deltaStart = deltaLine == 0 ? start - prevStart : start;
+            data.Add(deltaLine);
+            data.Add(deltaStart);
+            data.Add(length);
+            data.Add(type);
+            data.Add(modifiers);
+            prevLine = line;
+            prevStart = start;
+        }
+
+        return new LspSemanticTokens(data);
+    }
+
+    private void ClassifyBareword(
+        SyntaxToken token,
+        LspPosition pos,
+        List<(int Line, int Start, int Length, int Type, int Modifiers)> rawTokens,
+        HashSet<string> builtinNames,
+        DeclarationIndex index)
+    {
+        var word = token.Text;
+
+        // Variable reference ($name)
+        if (word.StartsWith('$'))
+        {
+            rawTokens.Add((pos.Line, pos.Character, word.Length, 4, 0)); // variable
+            return;
+        }
+
+        // Language keywords
+        if (Keywords.ContainsKey(word))
+        {
+            rawTokens.Add((pos.Line, pos.Character, word.Length, 1, 0)); // keyword
+            return;
+        }
+
+        // Built-in commands
+        if (builtinNames.Contains(word))
+        {
+            rawTokens.Add((pos.Line, pos.Character, word.Length, 5, 0x02)); // function + defaultLibrary
+            return;
+        }
+
+        // User-defined function names
+        var offset = token.Position;
+        var visibleFunctions = index.GetVisibleFunctions(offset);
+        if (visibleFunctions.Contains(word))
+        {
+            rawTokens.Add((pos.Line, pos.Character, word.Length, 5, 0)); // function
+            return;
+        }
+
+        // User-defined type names
+        var visibleTypes = index.GetVisibleTypeLikeSymbols(offset);
+        if (visibleTypes.Contains(word))
+        {
+            rawTokens.Add((pos.Line, pos.Character, word.Length, 6, 0)); // type
+            return;
+        }
+    }
+
+    private static string FormatCommandHoverMarkdown(CommandMetadata entry)
     {
         var sb = new System.Text.StringBuilder();
         sb.AppendLine(entry.Description);
@@ -560,7 +751,7 @@ public sealed class ToshLanguageFeatures
         return !commandName.StartsWith('-') && !commandName.StartsWith('$');
     }
 
-    private static LspSignatureHelp CreateBuiltInCommandSignatureHelp(CommandManifestEntry entry, int activeParameter)
+    private static LspSignatureHelp CreateBuiltInCommandSignatureHelp(CommandMetadata entry, int activeParameter)
     {
         var parameterLabels = entry.Arguments
             .Select(arg =>
@@ -860,7 +1051,103 @@ public sealed class ToshLanguageFeatures
             "\n",
             overloads.Take(6).Select(FormatTopLevelFunctionSignature));
         var overflow = overloads.Count > 6 ? $"\n... {overloads.Count - 6} more overload(s)" : string.Empty;
-        return $"{label}\n\n```tosh\n{signatures}{overflow}\n```";
+
+        var doc = overloads.Select(o => o.DocComment).FirstOrDefault(d => d is not null);
+        var parts = new List<string> { $"{label}" };
+
+        if (doc?.IsDeprecated == true)
+            parts.Add(doc.Deprecated is { Length: > 0 } depMsg
+                ? $"**@deprecated** {depMsg}"
+                : "**@deprecated**");
+
+        if (doc?.Description is { Length: > 0 } desc)
+            // Preserve newlines in description
+            parts.Add(desc.Replace("\\n", "\n"));
+
+        parts.Add($"```tosh\n{signatures}{overflow}\n```");
+
+        if (doc is not null)
+        {
+            foreach (var overload in overloads.Take(6))
+            {
+                foreach (var param in overload.Parameters)
+                {
+                    if (doc.Parameters.TryGetValue(param.Name, out var paramDesc) && paramDesc.Length > 0)
+                    {
+                        var typeAnnotation = param.TypeName is not null ? $" `{param.TypeName}`" : string.Empty;
+                        parts.Add($"**@param** `{param.Name}`{typeAnnotation} — {paramDesc}");
+                    }
+                }
+                break; // parameter docs from first overload
+            }
+
+            if (doc.Returns is { Length: > 0 } ret)
+            {
+                var returnType = overloads[0].ReturnTypeName is not null ? $" `{overloads[0].ReturnTypeName}`" : string.Empty;
+                parts.Add($"**@returns**{returnType} — {ret}");
+            }
+
+            AppendDocCommentExtras(parts, doc);
+        }
+
+        return string.Join("\n\n", parts);
+    }
+
+    private static string? GetTypeLikeDeclarationHoverDescription(DeclarationIndex index, int offset, string token)
+    {
+        if (string.IsNullOrWhiteSpace(token) ||
+            token.StartsWith("$", StringComparison.Ordinal) ||
+            token.Contains('.', StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        var kindLabel = index.GetDeclarationKindLabel(offset, token);
+        if (kindLabel is null)
+        {
+            return null;
+        }
+
+        var parts = new List<string> { kindLabel };
+
+        var doc = index.GetDeclarationDocComment(offset, token);
+
+        if (doc?.IsDeprecated == true)
+            parts.Add(doc.Deprecated is { Length: > 0 } depMsg
+                ? $"**@deprecated** {depMsg}"
+                : "**@deprecated**");
+
+        if (doc?.Description is { Length: > 0 } desc)
+            parts.Add(desc);
+
+        if (doc is not null)
+            AppendDocCommentExtras(parts, doc);
+
+        return string.Join("\n\n", parts);
+    }
+
+    private static void AppendDocCommentExtras(List<string> parts, DocComment doc)
+    {
+
+        foreach (var example in doc.Examples)
+        {
+            // Render each example as a fenced code block, preserving newlines
+            parts.Add($"**Example:**\n```tosh\n{example}\n```");
+        }
+
+        if (doc.Throws is { Count: > 0 } throws)
+        {
+            foreach (var t in throws)
+            {
+                parts.Add(t.Length > 0 ? $"**@throws** {t}" : "**@throws**");
+            }
+        }
+
+        if (doc.Since is { Length: > 0 } since)
+            parts.Add($"**@since** {since}");
+
+        if (doc.SeeAlso is { Count: > 0 } seeAlso)
+            parts.Add($"**@see** {string.Join(", ", seeAlso.Select(s => $"`{s}`"))}");
     }
 
     private static string? GetClrHoverDescription(DocumentSemanticModel semantics, int offset, string token)
@@ -1060,10 +1347,28 @@ public sealed class ToshLanguageFeatures
         return reference switch
         {
             DocumentSemanticModel.ShellReferenceSymbol.Class shellClass => $"Class\n\n```tosh\n{shellClass.Symbol.Name}\n```",
-            DocumentSemanticModel.ShellReferenceSymbol.Property property => $"Property\n\n```tosh\n{FormatShellPropertySignature(property.Symbol)}\n```",
-            DocumentSemanticModel.ShellReferenceSymbol.Method method => $"Method{(method.Overloads.Count > 1 ? "s" : string.Empty)}\n\n```tosh\n{string.Join("\n", method.Overloads.Take(6).Select(FormatShellMethodSignature))}{(method.Overloads.Count > 6 ? $"\n... {method.Overloads.Count - 6} more overload(s)" : string.Empty)}\n```",
+            DocumentSemanticModel.ShellReferenceSymbol.Property property =>
+                property.Symbol.DocDescription is { Length: > 0 } propDoc
+                    ? $"Property\n\n{propDoc}\n\n```tosh\n{FormatShellPropertySignature(property.Symbol)}\n```"
+                    : $"Property\n\n```tosh\n{FormatShellPropertySignature(property.Symbol)}\n```",
+            DocumentSemanticModel.ShellReferenceSymbol.Method method =>
+                FormatShellMethodReferenceHover(method),
             _ => null,
         };
+    }
+
+    private static string FormatShellMethodReferenceHover(DocumentSemanticModel.ShellReferenceSymbol.Method method)
+    {
+        var label = method.Overloads.Count > 1 ? "Methods" : "Method";
+        var signatures = string.Join("\n", method.Overloads.Take(6).Select(FormatShellMethodSignature));
+        var overflow = method.Overloads.Count > 6
+            ? $"\n... {method.Overloads.Count - 6} more overload(s)"
+            : string.Empty;
+        var doc = method.Overloads.Select(o => o.DocDescription).FirstOrDefault(d => d is not null);
+
+        return doc is { Length: > 0 }
+            ? $"{label}\n\n{doc}\n\n```tosh\n{signatures}{overflow}\n```"
+            : $"{label}\n\n```tosh\n{signatures}{overflow}\n```";
     }
 
     private static string FormatShellPropertySignature(DocumentSemanticModel.ShellClassPropertySymbol property)
@@ -1278,12 +1583,22 @@ public sealed class ToshLanguageFeatures
             .ToArray();
 
         var signatures = ordered
-            .Select(function => new LspSignatureInformation(
-                FormatTopLevelFunctionSignature(function),
-                Documentation: function.IsCommandWrapper ? "Command-wrapper function" : null,
-                Parameters: function.Parameters
-                    .Select(parameter => new LspParameterInformation(FormatShellParameter(parameter)))
-                    .ToArray()))
+            .Select(function =>
+            {
+                var doc = function.DocComment;
+                return new LspSignatureInformation(
+                    FormatTopLevelFunctionSignature(function),
+                    Documentation: doc?.Description is { Length: > 0 } desc
+                        ? desc
+                        : function.IsCommandWrapper ? "Command-wrapper function" : null,
+                    Parameters: function.Parameters
+                        .Select(parameter => new LspParameterInformation(
+                            FormatShellParameter(parameter),
+                            Documentation: doc?.Parameters.TryGetValue(parameter.Name, out var paramDesc) == true && paramDesc.Length > 0
+                                ? paramDesc
+                                : null))
+                        .ToArray());
+            })
             .ToArray();
 
         return CreateShellSignatureHelp(ordered.Select(function => function.Parameters.Count).ToArray(), signatures, activeParameter);
@@ -1712,6 +2027,18 @@ public sealed class ToshLanguageFeatures
                     CollectCommandCallSites(item, text, offset, matches);
                 }
                 break;
+            case TupleLiteralArgumentSyntax tuple:
+                foreach (var item in tuple.Items)
+                {
+                    CollectCommandCallSites(item, text, offset, matches);
+                }
+                break;
+            case SetLiteralArgumentSyntax set:
+                foreach (var item in set.Items)
+                {
+                    CollectCommandCallSites(item, text, offset, matches);
+                }
+                break;
             case RecordLiteralArgumentSyntax record:
                 foreach (var entry in record.Fields)
                 {
@@ -1875,6 +2202,20 @@ public sealed class ToshLanguageFeatures
 
             case ArrayLiteralArgumentSyntax list:
                 foreach (var item in list.Items)
+                {
+                    CollectCallSites(item, text, offset, matches);
+                }
+                break;
+
+            case TupleLiteralArgumentSyntax tuple:
+                foreach (var item in tuple.Items)
+                {
+                    CollectCallSites(item, text, offset, matches);
+                }
+                break;
+
+            case SetLiteralArgumentSyntax set:
+                foreach (var item in set.Items)
                 {
                     CollectCallSites(item, text, offset, matches);
                 }

@@ -1,6 +1,13 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Functional")]
+[CommandArgument("callable", "A callable value such as an anonymous `func(...)` expression or other shell callable object.")]
+[CommandArgument("arg ...", "Optional positional arguments passed to the callable.", Required = false)]
+[CommandExample("invoke (func(x) => ($x * 2)) 21", Title = "Invoke an inline anonymous function")]
+[CommandExample("var add = func(x, y) => ($x + $y); invoke $add 3 4", Title = "Store a lambda and invoke it later")]
+[CommandExample("var factor = 3; var scale = func(x) => ($x * $factor); invoke $scale 7", Title = "Invoke a closure that captures lexical state")]
+[CommandOutput("Returns whatever values the callable yields.")]
+[PipelineInput(Description = "`invoke` is explicit-argument based for now. It does not automatically feed the current pipeline into the callable.")]
 public sealed class InvokeCommand : ShellCommand
 {
     public InvokeCommand()

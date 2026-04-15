@@ -1,6 +1,8 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Prompt")]
+[CommandExample("prompt-text \"> \" --fg cyan")]
+[CommandExample("prompt-text \"::\" --fg gray --dim")]
 public sealed class PromptTextCommand : ShellCommand
 {
     public PromptTextCommand()

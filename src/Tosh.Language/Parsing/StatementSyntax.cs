@@ -34,6 +34,14 @@ public sealed record MemberAssignmentStatementSyntax(ArgumentSyntax Target, stri
 
 public sealed record ReturnStatementSyntax(PipelineSyntax? Value, TextSpan Span) : StatementSyntax(Span);
 
+/// <summary>
+/// Represents tuple unpacking assignment, e.g. ($a, $b) = ($b, $a)
+/// </summary>
+public sealed record TupleAssignmentStatementSyntax(
+    IReadOnlyList<string> LeftNames,
+    PipelineSyntax Value,
+    TextSpan Span) : StatementSyntax(Span);
+
 public sealed record BreakStatementSyntax(TextSpan Span) : StatementSyntax(Span);
 
 public sealed record ContinueStatementSyntax(TextSpan Span) : StatementSyntax(Span);
@@ -76,7 +84,8 @@ public sealed record FunctionDefinitionStatementSyntax(
     string? HandlesEvent = null,
     int? HandlerPriority = null,
     bool IsOnceHandler = false,
-    BlockSyntax? WhenGuard = null) : StatementSyntax(Span);
+    BlockSyntax? WhenGuard = null,
+    DocComment? DocComment = null) : StatementSyntax(Span);
 
 public sealed record NativeFunctionBindingSyntax(
     string Name,
@@ -101,7 +110,8 @@ public sealed record ClassPropertyMemberSyntax(
     BlockSyntax? GetterBody,
     BlockSyntax? SetterBody,
     bool IsShy,
-    TextSpan Span) : ClassMemberSyntax(IsShy, IsStatic: false, Span);
+    TextSpan Span,
+    DocComment? DocComment = null) : ClassMemberSyntax(IsShy, IsStatic: false, Span);
 
 public sealed record ClassMethodMemberSyntax(
     FunctionDefinitionStatementSyntax Method,
@@ -119,13 +129,15 @@ public sealed record ClassDefinitionStatementSyntax(
     IReadOnlyList<FunctionParameterSyntax> PrimaryConstructorParameters,
     IReadOnlyList<ClassMemberSyntax> Members,
     DeclarationModifier Modifier,
-    TextSpan Span) : StatementSyntax(Span);
+    TextSpan Span,
+    DocComment? DocComment = null) : StatementSyntax(Span);
 
 public sealed record ModuleDefinitionStatementSyntax(
     string Name,
     BlockSyntax Body,
     DeclarationModifier Modifier,
-    TextSpan Span) : StatementSyntax(Span);
+    TextSpan Span,
+    DocComment? DocComment = null) : StatementSyntax(Span);
 
 public sealed record EnumMemberSyntax(
     string Name,
@@ -137,7 +149,8 @@ public sealed record EnumDefinitionStatementSyntax(
     string? UnderlyingTypeName,
     IReadOnlyList<EnumMemberSyntax> Members,
     DeclarationModifier Modifier,
-    TextSpan Span) : StatementSyntax(Span);
+    TextSpan Span,
+    DocComment? DocComment = null) : StatementSyntax(Span);
 
 public sealed record RecordFieldDefinitionSyntax(
     string Name,
@@ -150,7 +163,8 @@ public sealed record RecordDefinitionStatementSyntax(
     string Name,
     IReadOnlyList<RecordFieldDefinitionSyntax> Fields,
     DeclarationModifier Modifier,
-    TextSpan Span) : StatementSyntax(Span);
+    TextSpan Span,
+    DocComment? DocComment = null) : StatementSyntax(Span);
 
 public sealed record EventFieldDefinitionSyntax(
     string Name,
@@ -164,7 +178,8 @@ public sealed record EventDefinitionStatementSyntax(
     bool IsRequired,
     bool IsLocal,
     DeclarationModifier Modifier,
-    TextSpan Span) : StatementSyntax(Span);
+    TextSpan Span,
+    DocComment? DocComment = null) : StatementSyntax(Span);
 
 public sealed record IfStatementSyntax(
     ArgumentSyntax Condition,

@@ -47,6 +47,12 @@ public sealed class DotNetTypeResolver : IImportingTypeResolver
         ["ushort"] = typeof(ushort),
         ["string"] = typeof(string),
         ["set"] = typeof(HashSet<object?>),
+        ["queue"] = typeof(Queue<object?>),
+        ["stack"] = typeof(Stack<object?>),
+        ["linkedlist"] = typeof(LinkedList<object?>),
+        ["sortedset"] = typeof(SortedSet<object?>),
+        ["sorteddict"] = typeof(SortedDictionary<string, object?>),
+        ["sortedmap"] = typeof(SortedDictionary<string, object?>),
         ["hashtable"] = typeof(System.Collections.Hashtable),
         ["temporalamount"] = typeof(TemporalAmount),
         ["timeonly"] = typeof(TimeOnly),
@@ -64,6 +70,12 @@ public sealed class DotNetTypeResolver : IImportingTypeResolver
         ["dict"] = 2,
         ["map"] = 2,
         ["set"] = 1,
+        ["queue"] = 1,
+        ["stack"] = 1,
+        ["linkedlist"] = 1,
+        ["sortedset"] = 1,
+        ["sorteddict"] = 2,
+        ["sortedmap"] = 2,
     };
     private static readonly Lazy<PlatformTypeIndex> PlatformTypes = new(BuildPlatformTypeIndex);
 
@@ -312,6 +324,11 @@ public sealed class DotNetTypeResolver : IImportingTypeResolver
             "array" => arguments[0].MakeArrayType(),
             "dict" or "map" => typeof(Dictionary<,>).MakeGenericType(arguments[0], arguments[1]),
             "set" => typeof(HashSet<>).MakeGenericType(arguments[0]),
+            "queue" => typeof(Queue<>).MakeGenericType(arguments[0]),
+            "stack" => typeof(Stack<>).MakeGenericType(arguments[0]),
+            "linkedlist" => typeof(LinkedList<>).MakeGenericType(arguments[0]),
+            "sortedset" => typeof(SortedSet<>).MakeGenericType(arguments[0]),
+            "sorteddict" or "sortedmap" => typeof(SortedDictionary<,>).MakeGenericType(arguments[0], arguments[1]),
             _ => null,
         };
 

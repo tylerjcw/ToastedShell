@@ -14,7 +14,11 @@ public sealed record FileSystemUsageInfo(
     bool IsLocal,
     string? MountRoot = null,
     string? RequestedPath = null,
-    bool IsTotal = false)
+    bool IsTotal = false,
+    long? InodesTotal = null,
+    long? InodesUsed = null,
+    long? InodesFree = null,
+    int? InodeUsePercent = null)
 {
     public string MountPoint => MountedOn;
 

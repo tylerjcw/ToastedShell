@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Drawing;
 using System.Globalization;
 using System.IO;
+using System.IO.Compression;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -11,6 +12,8 @@ using System.Numerics;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.Loader;
+using System.Security.Claims;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -170,7 +173,7 @@ public sealed class DisplayEngine
             return record;
         }
 
-        if (TryRenderTable(values, options, out var table))
+        if (TryRenderTable(values, options, depth, out var table))
         {
             return table;
         }
@@ -221,8 +224,12 @@ public sealed class DisplayEngine
             var groupValues = group.Values;
             string groupRendered;
             var suppressHeading = !group.IsNullGroup &&
-                                  groupValues.Count == 1 &&
-                                  ShouldRenderMixedGroupAsStandaloneBlock(groupValues[0], options, depth, visited);
+                                  ((groupValues.Count == 1 &&
+                                    ShouldRenderMixedGroupAsStandaloneBlock(groupValues[0], options, depth, visited)) ||
+                                   (groupValues.Count > 1 &&
+                                    groupValues[0] is not null &&
+                                    groupValues[0] is not System.Dynamic.ExpandoObject &&
+                                    ShouldRenderSingleRecordWithTitle(groupValues[0]!.GetType())));
 
             if (suppressHeading)
             {
@@ -1296,7 +1303,7 @@ public sealed class DisplayEngine
             return false;
         }
 
-        if (depth > 0 && ShouldRenderSingleRecordWithTitle(rowType))
+        if (depth > 0 && rowType != typeof(System.Dynamic.ExpandoObject) && ShouldRenderSingleRecordWithTitle(rowType))
         {
             return false;
         }
@@ -1313,7 +1320,7 @@ public sealed class DisplayEngine
         return true;
     }
 
-    private bool TryRenderTable(IReadOnlyList<object?> values, DisplayRenderOptions options, out string table)
+    private bool TryRenderTable(IReadOnlyList<object?> values, DisplayRenderOptions options, int depth, out string table)
     {
         table = string.Empty;
 
@@ -1336,7 +1343,21 @@ public sealed class DisplayEngine
             return false;
         }
 
-        table = RenderTable(rows, columns, options, includeIndexColumn: !allowSingle);
+        string? title = null;
+
+        if (depth == 0 && values.Count > 1)
+        {
+            var firstType = values[0]?.GetType();
+
+            if (firstType is not null &&
+                values.All(v => v is not null && v.GetType() == firstType) &&
+                ShouldRenderSingleRecordWithTitle(firstType))
+            {
+                title = GetSingleRecordTitle(firstType);
+            }
+        }
+
+        table = RenderTable(rows, columns, options, includeIndexColumn: !allowSingle, title: title);
         return true;
     }
 
@@ -1985,7 +2006,8 @@ public sealed class DisplayEngine
         IReadOnlyList<object> rows,
         IReadOnlyList<DisplayTableColumn> columns,
         DisplayRenderOptions options,
-        bool includeIndexColumn = true)
+        bool includeIndexColumn = true,
+        string? title = null)
     {
         var theme = TableTheme;
         var box = GetBoxCharacters(theme.BoxStyle);
@@ -2018,7 +2040,21 @@ public sealed class DisplayEngine
 
         var builder = new StringBuilder();
         var headerCells = visibleColumns.Select(column => ClipCell(column.Column.Header, column.Width)).ToArray();
-        builder.AppendLine(BuildTableBorder(visibleColumns, box.TopLeft, box.TopMiddle, box.TopRight, box.Horizontal, theme));
+
+        if (string.IsNullOrWhiteSpace(title))
+        {
+            builder.AppendLine(BuildTableBorder(visibleColumns, box.TopLeft, box.TopMiddle, box.TopRight, box.Horizontal, theme));
+        }
+        else
+        {
+            var totalTableWidth = visibleColumns.Sum(c => c.Width + 2) + visibleColumns.Count + 1;
+            var borderSpanWidth = Math.Max(1, totalTableWidth - 2);
+            var titleWidth = Math.Max(1, totalTableWidth - 4);
+            builder.AppendLine(BuildSpanBorder(borderSpanWidth, box.TopLeft, box.TopRight, box.Horizontal, theme));
+            builder.AppendLine(BuildSpanningRow(title, titleWidth, box, theme.Header, theme));
+            builder.AppendLine(BuildTableBorder(visibleColumns, box.MiddleLeft, box.TopMiddle, box.MiddleRight, box.Horizontal, theme));
+        }
+
         foreach (var line in BuildTableRowLines(
                      headerCells,
                      visibleColumns,
@@ -3699,6 +3735,8 @@ public sealed class DisplayEngine
                effectiveType == typeof(FileAttributes) ||
                effectiveType == typeof(FileSystemPrincipalInfo) ||
                effectiveType == typeof(IPAddress) ||
+               effectiveType == typeof(CommandTimingInfo) ||
+               effectiveType == typeof(PingReplyInfo) ||
                effectiveType == typeof(ManagedFileHandle) ||
                effectiveType == typeof(Cookie) ||
                effectiveType == typeof(CookieCollection) ||
@@ -3743,7 +3781,25 @@ public sealed class DisplayEngine
                typeof(StackTrace).IsAssignableFrom(effectiveType) ||
                typeof(CultureInfo).IsAssignableFrom(effectiveType) ||
                typeof(Encoding).IsAssignableFrom(effectiveType) ||
-               typeof(Exception).IsAssignableFrom(effectiveType);
+               typeof(Exception).IsAssignableFrom(effectiveType) ||
+               effectiveType == typeof(Dictionary<object, object?>) ||
+               typeof(System.Dynamic.ExpandoObject).IsAssignableFrom(effectiveType) ||
+               typeof(Stream).IsAssignableFrom(effectiveType) ||
+               effectiveType == typeof(ZipArchive) ||
+               effectiveType == typeof(ZipArchiveEntry) ||
+               effectiveType == typeof(OperatingSystem) ||
+               effectiveType == typeof(RuntimeInformationSnapshot) ||
+               effectiveType == typeof(X509Certificate2) ||
+               effectiveType == typeof(ClaimsIdentity) ||
+               effectiveType == typeof(ClaimsPrincipal) ||
+               effectiveType == typeof(Claim) ||
+               effectiveType == typeof(Complex) ||
+               effectiveType == typeof(Vector2) ||
+               effectiveType == typeof(Vector3) ||
+               effectiveType == typeof(Vector4) ||
+               effectiveType == typeof(Quaternion) ||
+               effectiveType == typeof(Matrix4x4) ||
+               effectiveType == typeof(WebProxy);
     }
 
     private static string GetSingleRecordTitle(Type type)
@@ -3788,6 +3844,26 @@ public sealed class DisplayEngine
         if (typeof(NetworkInterface).IsAssignableFrom(effectiveType))
         {
             return ObjectFormatter.GetTypeName(typeof(NetworkInterface));
+        }
+
+        if (effectiveType == typeof(Dictionary<object, object?>))
+        {
+            return "Dictionary";
+        }
+
+        if (typeof(System.Dynamic.ExpandoObject).IsAssignableFrom(effectiveType))
+        {
+            return "Record";
+        }
+
+        if (typeof(Stream).IsAssignableFrom(effectiveType))
+        {
+            return ObjectFormatter.GetTypeName(effectiveType);
+        }
+
+        if (effectiveType == typeof(RuntimeInformationSnapshot))
+        {
+            return "Runtime";
         }
 
         return ObjectFormatter.GetTypeName(effectiveType);

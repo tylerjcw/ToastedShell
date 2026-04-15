@@ -3,6 +3,9 @@ using System.Globalization;
 namespace Tosh.Core.Commands;
 
 [CommandCategory("System")]
+[CommandExample("guid")]
+[CommandExample("guid new v7")]
+[CommandExample("guid info 550e8400-e29b-41d4-a716-446655440000")]
 public sealed class GuidCommand : ShellCommand
 {
     public GuidCommand()

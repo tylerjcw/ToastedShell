@@ -3,6 +3,10 @@ using System.Text.RegularExpressions;
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Data")]
+[CommandExample("ping -c 3 localhost | parse \"time=(?<time_ms>[0-9.]+) ms\"")]
+[CommandExample("echo \"PID=42\" | parse \"PID=(?<Pid>[0-9]+)\"")]
+[CommandExample("echo \"first\\nsecond\" | parse -am \"^(?<Value>\\\\w+)$\" | get Value")]
+[CommandNote("Parse and match use .NET regular expressions, including named groups and inline modifiers like `(?im)`.")]
 public sealed class ParseCommand : ShellCommand
 {
     public ParseCommand()

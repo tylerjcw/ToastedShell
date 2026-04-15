@@ -7,6 +7,7 @@ namespace Tosh.Core.Commands;
 [CommandExample("as-file json $data", Title = "JSON format")]
 [CommandOutput("Returns a FileSystemEntry for the created temporary file.")]
 [PipelineInput(AcceptsScalar = true, AcceptsList = true, AcceptsTable = true, Description = "Materializes pipeline values into a temporary file.")]
+[CommandNote("As-file materializes pipeline values into a temporary file and returns a file object you can pass to external executables.")]
 public sealed class AsFileCommand : ShellCommand
 {
     private static readonly HashSet<string> SupportedFormats = new(StringComparer.OrdinalIgnoreCase)

@@ -81,13 +81,10 @@ ToSh distinguishes between:
 ## Documentation
 
 - [Docs Index](docs/INDEX.md)
-- [Getting Started](docs/reference/GETTING_STARTED.md)
-- [Language Reference](docs/reference/LANGUAGE.md)
-- [Command Map](docs/reference/COMMANDS.md)
-- [Pipeline Model](docs/reference/PIPELINES.md)
-- [Type System](docs/reference/TYPES.md)
+- [ToastScript Specification](docs/spec/toastscript-spec.pdf) — language grammar, types, operators, commands
 - [Configuration Guide](docs/CONFIGURATION.md)
-- [Project Status](docs/STATUS.md)
+- [Roadmap](docs/ROADMAP.md)
+- [Backlog](docs/BACKLOG.md)
 - [Architecture](docs/ARCHITECTURE.md)
 
 The live in-shell help system is also a primary source of truth:

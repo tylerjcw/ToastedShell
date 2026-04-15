@@ -13,11 +13,21 @@ async function activate(context) {
     const outputChannel = vscode.window.createOutputChannel("ToSh");
     context.subscriptions.push(outputChannel);
 
+    const statusItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
+    statusItem.name = "ToSh";
+    context.subscriptions.push(statusItem);
+
     const started = await tryStartLanguageClient(context, selector, outputChannel);
     if (!started) {
         outputChannel.appendLine("Using built-in editor providers because the ToSh language server is unavailable.");
         registerLocalProviders(context, selector);
+        statusItem.text = "$(terminal) ToSh (local)";
+        statusItem.tooltip = "ToSh language server unavailable — using built-in fallback providers";
+    } else {
+        statusItem.text = "$(terminal) ToSh (LSP)";
+        statusItem.tooltip = "Connected to ToSh language server";
     }
+    statusItem.show();
 }
 
 async function deactivate() {
@@ -59,6 +69,20 @@ async function tryStartLanguageClient(context, selector, outputChannel) {
             outputChannel,
             synchronize: {
                 fileEvents: vscode.workspace.createFileSystemWatcher("**/*.tosh")
+            },
+            errorHandler: {
+                error(error, message, count) {
+                    if (count < 5) {
+                        outputChannel.appendLine(`ToSh language server error (${count}): ${formatError(error)}`);
+                        return { action: 1 }; // ErrorAction.Continue
+                    }
+                    outputChannel.appendLine(`ToSh language server has crashed ${count} times; shutting down.`);
+                    return { action: 2 }; // ErrorAction.Shutdown
+                },
+                closed() {
+                    outputChannel.appendLine("ToSh language server connection closed. Restarting...");
+                    return { action: 1, message: "Restarting ToSh language server..." }; // CloseAction.Restart
+                }
             }
         }
     );
@@ -136,14 +160,35 @@ function findLanguageServerOptions(configuration, outputChannel) {
 function createServerOptions(dotnetPath, targetPath) {
     const normalizedPath = path.resolve(targetPath);
     const projectMode = normalizedPath.endsWith(".csproj");
-    const args = projectMode
-        ? ["run", "--project", normalizedPath, "--", "--stdio"]
-        : [normalizedPath, "--stdio"];
+
+    if (projectMode) {
+        const projectDir = path.dirname(normalizedPath);
+        const projectName = path.basename(projectDir);
+        const dllPath = path.join(projectDir, "bin", "Debug", "net10.0", `${projectName}.dll`);
+
+        // Build first, then use the DLL — avoids dotnet run polluting stdout with build output
+        childProcess.spawnSync(dotnetPath, ["build", normalizedPath, "-v", "q"], {
+            stdio: "ignore",
+            windowsHide: true,
+            cwd: projectDir
+        });
+
+        if (fs.existsSync(dllPath)) {
+            const commandOptions = {
+                command: dotnetPath,
+                args: [dllPath, "--stdio"],
+                options: { cwd: projectDir }
+            };
+            return { run: commandOptions, debug: commandOptions };
+        }
+    }
+
+    const args = [normalizedPath, "--stdio"];
     const commandOptions = {
         command: dotnetPath,
         args,
         options: {
-            cwd: projectMode ? path.dirname(normalizedPath) : path.dirname(normalizedPath)
+            cwd: path.dirname(normalizedPath)
         }
     };
 

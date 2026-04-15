@@ -1,6 +1,9 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("System")]
+[CommandExample("date now -d -t")]
+[CommandExample("date parse 2026-03-29T12:34:56Z -d")]
+[CommandExample("date parse 2026-03-29T12:34:56Z | cast timeonly")]
 public sealed class DateCommand : ShellCommand
 {
     public DateCommand()

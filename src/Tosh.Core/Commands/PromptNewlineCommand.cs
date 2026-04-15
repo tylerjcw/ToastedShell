@@ -1,6 +1,7 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Prompt")]
+[CommandExample("prompt-newline")]
 public sealed class PromptNewlineCommand : ShellCommand
 {
     public PromptNewlineCommand()

@@ -1,6 +1,8 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Prompt")]
+[CommandExample("styled \"hello\" --fg cyan --bold")]
+[CommandExample("styled \"warning\" --fg yellow --bg red")]
 public sealed class StyledCommand : ShellCommand
 {
     public StyledCommand()

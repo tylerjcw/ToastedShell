@@ -1,4 +1,6 @@
+using System.Net;
 using System.Net.NetworkInformation;
+using System.Net.Sockets;
 
 namespace Tosh.Core.Commands;
 
@@ -6,7 +8,7 @@ namespace Tosh.Core.Commands;
 public sealed class PingCommand : ShellCommand
 {
     public PingCommand()
-        : base("ping", "Pings a host and returns typed reply objects.", "ping [-c count] [-W timeout-ms] <host>") { }
+        : base("ping", "Pings a host and returns typed reply objects.", "ping [-c count] [-W timeout-ms] [-s size] [-i interval] [-t ttl] [-4|-6] [-D] <host>") { }
 
     public override async IAsyncEnumerable<object?> ExecuteAsync(CommandContext context)
     {
@@ -14,10 +16,30 @@ public sealed class PingCommand : ShellCommand
 
         using var ping = new Ping();
 
+        var needsRawSocket = options.PayloadSize != 32 || options.Ttl is not null || options.DontFragment;
+        byte[]? buffer = needsRawSocket ? new byte[options.PayloadSize] : null;
+        PingOptions? pingOptions = null;
+        if (needsRawSocket)
+        {
+            pingOptions = new PingOptions();
+            if (options.Ttl is { } ttl) pingOptions.Ttl = ttl;
+            if (options.DontFragment) pingOptions.DontFragment = true;
+        }
+
+        var targetAddress = await ResolveHostAsync(options.Host, options.AddressFamily);
+
         for (var sequence = 1; sequence <= options.Count; sequence++)
         {
             context.CancellationToken.ThrowIfCancellationRequested();
-            var reply = await ping.SendPingAsync(options.Host, options.TimeoutMs);
+
+            if (sequence > 1 && options.IntervalMs > 0)
+            {
+                await Task.Delay(options.IntervalMs, context.CancellationToken);
+            }
+
+            var reply = needsRawSocket
+                ? await ping.SendPingAsync(targetAddress, options.TimeoutMs, buffer!, pingOptions!)
+                : await ping.SendPingAsync(targetAddress, options.TimeoutMs);
             yield return new PingReplyInfo(
                 options.Host,
                 reply.Address,
@@ -30,11 +52,37 @@ public sealed class PingCommand : ShellCommand
         }
     }
 
+    private static async Task<IPAddress> ResolveHostAsync(string host, AddressFamily? preferredFamily)
+    {
+        if (IPAddress.TryParse(host, out var literal))
+        {
+            return literal;
+        }
+
+        var entry = await Dns.GetHostEntryAsync(host);
+
+        if (preferredFamily is { } family)
+        {
+            var match = entry.AddressList.FirstOrDefault(a => a.AddressFamily == family);
+            if (match is not null) return match;
+            throw new InvalidOperationException($"No {(family == AddressFamily.InterNetwork ? "IPv4" : "IPv6")} address found for '{host}'.");
+        }
+
+        return entry.AddressList.Length > 0
+            ? entry.AddressList[0]
+            : throw new InvalidOperationException($"Could not resolve host '{host}'.");
+    }
+
     private static PingCommandOptions ParseOptions(IReadOnlyList<object?> arguments)
     {
         string? host = null;
         var count = 4;
         var timeoutMs = 4_000;
+        var payloadSize = 32;
+        var intervalMs = 1_000;
+        int? ttl = null;
+        AddressFamily? addressFamily = null;
+        var dontFragment = false;
 
         for (var index = 0; index < arguments.Count; index++)
         {
@@ -54,6 +102,43 @@ public sealed class PingCommand : ShellCommand
             if (text is "-W" or "--timeout")
             {
                 timeoutMs = CommandArguments.RequireConverted<int>(arguments, ++index, "timeout");
+                continue;
+            }
+
+            if (text is "-s" or "--size")
+            {
+                payloadSize = CommandArguments.RequireConverted<int>(arguments, ++index, "size");
+                continue;
+            }
+
+            if (text is "-i" or "--interval")
+            {
+                var seconds = CommandArguments.RequireConverted<double>(arguments, ++index, "interval");
+                intervalMs = (int)(seconds * 1000);
+                continue;
+            }
+
+            if (text is "-t" or "--ttl")
+            {
+                ttl = CommandArguments.RequireConverted<int>(arguments, ++index, "ttl");
+                continue;
+            }
+
+            if (text is "-4")
+            {
+                addressFamily = AddressFamily.InterNetwork;
+                continue;
+            }
+
+            if (text is "-6")
+            {
+                addressFamily = AddressFamily.InterNetworkV6;
+                continue;
+            }
+
+            if (text is "-D" or "--dont-fragment")
+            {
+                dontFragment = true;
                 continue;
             }
 
@@ -85,8 +170,18 @@ public sealed class PingCommand : ShellCommand
             throw new InvalidOperationException("ping timeout must be greater than zero.");
         }
 
-        return new PingCommandOptions(host, count, timeoutMs);
+        if (payloadSize < 0 || payloadSize > 65_500)
+        {
+            throw new InvalidOperationException("ping payload size must be between 0 and 65500.");
+        }
+
+        if (ttl is <= 0 or > 255)
+        {
+            throw new InvalidOperationException("ping TTL must be between 1 and 255.");
+        }
+
+        return new PingCommandOptions(host, count, timeoutMs, payloadSize, intervalMs, ttl, addressFamily, dontFragment);
     }
 
-    private sealed record PingCommandOptions(string Host, int Count, int TimeoutMs);
+    private sealed record PingCommandOptions(string Host, int Count, int TimeoutMs, int PayloadSize, int IntervalMs, int? Ttl, AddressFamily? AddressFamily, bool DontFragment);
 }

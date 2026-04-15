@@ -133,3 +133,15 @@ fi
 echo
 ls -lh "$published_binary"
 echo "Published executable: $published_binary"
+
+# Install to ~/.local/bin if requested or by default for single-file builds.
+install_dir="${HOME}/.local/bin"
+install_path="$install_dir/$target_name"
+
+if [[ -d "$install_dir" ]]; then
+  # Remove first in case the binary is running (Text file busy).
+  rm -f "$install_path"
+  cp "$published_binary" "$install_path"
+  chmod +x "$install_path"
+  echo "Installed:  $install_path"
+fi

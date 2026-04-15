@@ -4450,7 +4450,8 @@ echo (free).Available      # 12.4 GB
 Sends ICMP echo requests to a network host.
 
 \begin{signature}
-ping [-c <count>] [-W <timeout-ms>] <host>
+ping [-c <count>] [-W <timeout-ms>] [-s <size>] [-i <interval-ms>]
+     [-t <ttl>] [-4|-6] [-D] <host>
 \end{signature}
 
 \begin{longtable}{lL{9cm}}
@@ -4459,7 +4460,13 @@ ping [-c <count>] [-W <timeout-ms>] <host>
 \midrule
 \endhead
 \code{-c <count>} & Number of pings to send.  Defaults to 4. \\
-\code{-W <timeout>} & Timeout per ping in milliseconds.  Defaults to 4000. \\
+\code{-W <timeout>} & Timeout per ping in milliseconds.  Defaults to 4\,000. \\
+\code{-s <size>} & Payload size in bytes.  Defaults to 32. \\
+\code{-i <interval>} & Interval between pings in milliseconds.  Defaults to 500. \\
+\code{-t <ttl>} & Time-to-live (hop limit) for outgoing packets. \\
+\code{-4} & Force IPv4. \\
+\code{-6} & Force IPv6. \\
+\code{-D} / \code{--dont-fragment} & Set the Don't Fragment bit (IPv4 only). \\
 \bottomrule
 \end{longtable}
 
@@ -4467,6 +4474,9 @@ ping [-c <count>] [-W <timeout-ms>] <host>
 ping google.com
 ping -c 10 192.168.1.1
 ping -W 1000 slow-host.local
+ping -s 64 -t 32 127.0.0.1  # Custom payload and TTL
+ping -6 ::1                  # Force IPv6
+ping -D -s 1472 gateway      # MTU probing
 \end{lstlisting}
 \end{cmdbox}
 
@@ -4551,7 +4561,8 @@ du -h --sort -Size | first 10  # Top 10 largest
 Lists block devices (disks, partitions, loop devices) as typed records.
 
 \begin{signature}
-lsblk [-a] [-f] [-o <cols>]
+lsblk [-aAdbfmtDzMLpSNv] [-I <majors>] [-e <majors>]
+      [-x <column>] [-o <columns>] [-O] [device\dots{}]
 \end{signature}
 
 \begin{longtable}{lL{8cm}}
@@ -4560,15 +4571,35 @@ lsblk [-a] [-f] [-o <cols>]
 \midrule
 \endhead
 \code{-a} / \code{--all} & Include empty and loop devices. \\
-\code{-f} / \code{--fs} & Show filesystem info (type, label, UUID, mount). \\
+\code{-A} & Hide empty devices. \\
+\code{-d} & Suppress dependencies and child devices. \\
+\code{-b} / \code{--bytes} & Render size columns in raw bytes. \\
+\code{-f} / \code{--fs} & Use the filesystem-oriented display preset. \\
+\code{-m} & Use the permissions-oriented display preset. \\
+\code{-t} & Use the topology-oriented display preset. \\
+\code{-D} & Use the discard-oriented display preset. \\
+\code{-z} & Use the zoned-device display preset. \\
+\code{-M} / \code{--model} & Use the model/serial/vendor display preset. \\
+\code{-L} / \code{--label} & Use the label/UUID/partition display preset. \\
+\code{-p} & Show full device paths. \\
+\code{-S} & Restrict to SCSI devices. \\
+\code{-N} & Restrict to NVMe devices. \\
+\code{-v} & Restrict to virtio devices. \\
+\code{-I <majors>} & Include only the specified major device numbers. \\
+\code{-e <majors>} & Exclude the specified major device numbers. \\
+\code{-x <column>} & Sort by an \code{lsblk} column name (e.g.\ \code{SIZE}). \\
 \code{-o <cols>} & Select output columns. \\
+\code{-O} & Expose every selectable column. \\
 \bottomrule
 \end{longtable}
 
 \begin{lstlisting}
 lsblk                      # All block devices
 lsblk -f                   # With filesystem details
+lsblk -M                   # Model/serial/vendor info
+lsblk -L                   # Label/UUID/partition info
 lsblk | where _.Type == "part"  # Partitions only
+lsblk -o NAME,PATH,SIZE    # Explicit column selection
 \end{lstlisting}
 \end{cmdbox}
 
@@ -4852,6 +4883,7 @@ ip <object> <verb> [args\dots{}]
 \code{route add <net> via <gw>} & Add a route. \\
 \code{route del <net>} & Delete a route. \\
 \code{neigh [show]} & Show the ARP / neighbour table. \\
+\code{rule [show]} & Show routing policy rules. \\
 \bottomrule
 \end{longtable}
 
@@ -4861,6 +4893,7 @@ ip addr show eth0          # eth0 only
 ip link                    # All interfaces
 ip route                   # Routing table
 ip neigh                   # ARP table
+ip rule                    # Policy routing rules
 ip addr | where _.Family == "inet"  # IPv4 only
 \end{lstlisting}
 \end{cmdbox}
@@ -8313,7 +8346,7 @@ complete truthiness table.
 % =============================================================================
 
 % Auto-generated from introspected command metadata.
-% Regenerate with: dotnet run --project src/Tosh.Cli -- --export-command-manifest --latex -o docs/spec/command-reference.tex
+% Regenerate with: dotnet run --project src/Tosh.Cli -- --export-command-metadata --latex -o docs/spec/command-reference.tex
 \InputIfFileExists{command-reference}{}{\textit{Command reference not yet generated. Run the build to create it.}}
 
 

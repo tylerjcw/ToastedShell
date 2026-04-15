@@ -6,6 +6,9 @@ artifacts/
 # Test results
 TestResults/
 
+# LaTeX intermediate output (the canonical PDF is ToastScript.pdf)
+docs/spec/toastscript-spec.pdf
+
 # IDE / editor caches
 .vs/
 *.user

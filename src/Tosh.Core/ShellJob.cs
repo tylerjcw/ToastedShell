@@ -32,6 +32,7 @@ public enum ShellJobStatus
     Completed,
     Failed,
     Cancelled,
+    Suspended,
 }
 
 public interface IShellJobDisplayRow
@@ -120,6 +121,8 @@ public sealed class ShellJob
     private Task<ShellJobCompletion>? _completionTask;
     private readonly List<Process> _processes = new();
     private int? _processId;
+    private bool _childOwnsGroup;
+    private Termios? _savedChildTermios;
     private ShellJobStatus _status = ShellJobStatus.Running;
     private DateTimeOffset? _endedAt;
     private int? _exitCode;
@@ -208,6 +211,27 @@ public sealed class ShellJob
         return job;
     }
 
+    /// <summary>
+    /// Create a job record for a foreground process that was suspended via Ctrl+Z.
+    /// The process is already stopped; the job can later be resumed with <see cref="TryResumeForeground"/>.
+    /// </summary>
+    public static ShellJob CreateSuspended(int id, string command, Process process, bool childOwnsGroup = false, Termios? childTermios = null)
+    {
+        // Cache the PID eagerly — the .NET Process handle may become
+        // invalid once the child is stopped.
+        var pid = process.Id;
+        var job = new ShellJob(id, command, DateTimeOffset.Now)
+        {
+            _status = ShellJobStatus.Suspended,
+            _processId = pid,
+            _childOwnsGroup = childOwnsGroup,
+            _savedChildTermios = childTermios,
+        };
+
+        job._processes.Add(process);
+        return job;
+    }
+
     public ShellJobInfo ToInfo()
     {
         lock (_sync)
@@ -227,16 +251,24 @@ public sealed class ShellJob
     public bool Kill()
     {
         Process[] processes;
+        var updateStateImmediately = false;
 
         lock (_sync)
         {
-            if (_status != ShellJobStatus.Running)
+            if (_status is not ShellJobStatus.Running and not ShellJobStatus.Suspended)
             {
                 return false;
             }
 
             processes = _processes.ToArray();
+            updateStateImmediately = _completionTask is null;
             _cancellation.Cancel();
+
+            if (updateStateImmediately)
+            {
+                _status = ShellJobStatus.Cancelled;
+                _endedAt = DateTimeOffset.Now;
+            }
         }
 
         TryKill(processes);
@@ -249,9 +281,9 @@ public sealed class ShellJob
 
         lock (_sync)
         {
-            if (_status != ShellJobStatus.Running)
+            if (_status is not ShellJobStatus.Running and not ShellJobStatus.Suspended)
             {
-                error = "The job is not running.";
+                error = "The job is not active.";
                 return false;
             }
 
@@ -284,8 +316,302 @@ public sealed class ShellJob
             firstError ??= sendError;
         }
 
+        if (anySent)
+        {
+            ApplySignalState(signal);
+        }
+
         error = anySent ? null : firstError ?? "No running process in this job accepted the signal.";
         return anySent;
+    }
+
+    /// <summary>
+    /// Resume a suspended job in the foreground. Sends SIGCONT to the process group,
+    /// transfers the terminal, and waits with WUNTRACED so a second Ctrl+Z re-suspends.
+    /// Returns a <see cref="ForegroundWaitResult"/> describing whether the process exited or stopped again.
+    /// </summary>
+    public ForegroundWaitResult TryResumeForeground(TerminalControl terminal, out string? error)
+    {
+        Process process;
+
+        lock (_sync)
+        {
+            if (_status != ShellJobStatus.Suspended)
+            {
+                error = $"Job [{Id}] is not suspended.";
+                return ForegroundWaitResult.FallbackToManagedWait;
+            }
+
+            if (_processes.Count == 0)
+            {
+                error = "Job has no associated process.";
+                return ForegroundWaitResult.FallbackToManagedWait;
+            }
+
+            process = _processes[0];
+            _status = ShellJobStatus.Running;
+        }
+
+        error = null;
+        var pid = _processId!.Value;
+        var ownsGroup = _childOwnsGroup;
+
+        terminal.SaveTerminalState();
+
+        // Restore the child's terminal state before sending SIGCONT.
+        // Many interactive programs (readline, ncurses) redraw their prompt
+        // on SIGCONT and need the terminal in the state they left it.
+        if (_savedChildTermios is { } childTermios)
+        {
+            PosixTerminalInterop.TrySetTerminalAttributes(ref childTermios, TermiosAction.Now, out _);
+        }
+
+        // Only transfer the terminal when the child is its own group leader;
+        // otherwise it shares the shell's group and already has the terminal.
+        if (ownsGroup)
+        {
+            terminal.TrySetForegroundGroup(pid, out _);
+        }
+
+        // Send SIGCONT — to the process group when the child owns one,
+        // or directly to the process when it shares the shell's group.
+        if (ownsGroup)
+        {
+            ProcessSignalSender.TrySendToGroup(pid, PosixTerminalInterop.SIGCONT, out _);
+        }
+        else
+        {
+            ProcessSignalSender.TrySend(pid, PosixTerminalInterop.SIGCONT, out _);
+        }
+
+        try
+        {
+            var result = terminal.WaitForForegroundChild(pid);
+
+            lock (_sync)
+            {
+                switch (result.Outcome)
+                {
+                    case ForegroundWaitOutcome.Exited:
+                        _exitCode = result.StatusOrSignal;
+                        _endedAt = DateTimeOffset.Now;
+                        _status = result.StatusOrSignal == 0 ? ShellJobStatus.Completed : ShellJobStatus.Failed;
+                        break;
+
+                    case ForegroundWaitOutcome.Stopped:
+                        _status = ShellJobStatus.Suspended;
+                        // Snapshot the child's terminal state so we can
+                        // restore it if the user foregrounds the job again.
+                        if (PosixTerminalInterop.TryGetTerminalAttributes(out var stoppedTermios, out _))
+                        {
+                            _savedChildTermios = stoppedTermios;
+                        }
+
+                        break;
+
+                    default:
+                        // Fallback — try managed wait.
+                        try
+                        {
+                            process.WaitForExit();
+                            _exitCode = process.ExitCode;
+                            _endedAt = DateTimeOffset.Now;
+                            _status = process.ExitCode == 0 ? ShellJobStatus.Completed : ShellJobStatus.Failed;
+                        }
+                        catch
+                        {
+                            _status = ShellJobStatus.Failed;
+                            _endedAt = DateTimeOffset.Now;
+                        }
+
+                        break;
+                }
+            }
+
+            return result;
+        }
+        finally
+        {
+            if (ownsGroup)
+            {
+                terminal.ReclaimForeground();
+            }
+
+            terminal.RestoreTerminalState();
+        }
+    }
+
+    /// <summary>
+    /// Resume a suspended job in the background. Sends SIGCONT without
+    /// transferring the terminal, so the process continues but can't read/write the TTY.
+    /// </summary>
+    public bool TryResumeBackground(out string? error)
+    {
+        Process[] processes;
+        int pid;
+
+        lock (_sync)
+        {
+            if (_status != ShellJobStatus.Suspended)
+            {
+                error = $"Job [{Id}] is not suspended.";
+                return false;
+            }
+
+            if (_processes.Count == 0)
+            {
+                error = "Job has no associated process.";
+                return false;
+            }
+
+            pid = _processId!.Value;
+            processes = _processes.ToArray();
+        }
+
+        if (_childOwnsGroup)
+        {
+            if (!ProcessSignalSender.TrySendToGroup(pid, PosixTerminalInterop.SIGCONT, out error))
+            {
+                return false;
+            }
+        }
+        else
+        {
+            string? firstError = null;
+            var anySent = false;
+
+            foreach (var process in processes)
+            {
+                if (ProcessSignalSender.TrySend(process.Id, PosixTerminalInterop.SIGCONT, out var sendError))
+                {
+                    anySent = true;
+                    continue;
+                }
+
+                firstError ??= sendError;
+            }
+
+            if (!anySent)
+            {
+                error = firstError ?? $"Failed to resume job [{Id}].";
+                return false;
+            }
+        }
+
+        lock (_sync)
+        {
+            _status = ShellJobStatus.Running;
+        }
+
+        EnsureDetachedMonitoring(processes);
+
+        error = null;
+        return true;
+    }
+
+    private void ApplySignalState(int signal)
+    {
+        var shouldMonitor = false;
+
+        lock (_sync)
+        {
+            if (ProcessSignalSender.IsSuspendSignal(signal))
+            {
+                _status = ShellJobStatus.Suspended;
+                return;
+            }
+
+            if (ProcessSignalSender.IsContinueSignal(signal))
+            {
+                _status = ShellJobStatus.Running;
+                shouldMonitor = _completionTask is null;
+            }
+        }
+
+        if (shouldMonitor)
+        {
+            EnsureDetachedMonitoring();
+        }
+    }
+
+    private void EnsureDetachedMonitoring()
+    {
+        Process[] processes;
+
+        lock (_sync)
+        {
+            if (_completionTask is not null || _processes.Count == 0)
+            {
+                return;
+            }
+
+            processes = _processes.ToArray();
+            _completionTask = MonitorDetachedProcessesAsync(processes);
+        }
+    }
+
+    private void EnsureDetachedMonitoring(IReadOnlyList<Process> processes)
+    {
+        lock (_sync)
+        {
+            if (_completionTask is not null)
+            {
+                return;
+            }
+
+            _completionTask = MonitorDetachedProcessesAsync(processes);
+        }
+    }
+
+    private async Task<ShellJobCompletion> MonitorDetachedProcessesAsync(IReadOnlyList<Process> processes)
+    {
+        using var cancellationRegistration = _cancellation.Token.Register(() => TryKill(processes));
+
+        foreach (var process in processes)
+        {
+            try
+            {
+                await process.WaitForExitAsync();
+            }
+            catch (InvalidOperationException)
+            {
+            }
+        }
+
+        var endedAt = DateTimeOffset.Now;
+        var cancelled = _cancellation.IsCancellationRequested;
+        var exitCodes = processes
+            .Select(TryGetExitCode)
+            .ToArray();
+        var lastExitCode = exitCodes.LastOrDefault();
+        var status = cancelled
+            ? ShellJobStatus.Cancelled
+            : exitCodes.All(code => code == 0)
+                ? ShellJobStatus.Completed
+                : ShellJobStatus.Failed;
+
+        lock (_sync)
+        {
+            _status = status;
+            _endedAt = endedAt;
+            _exitCode = lastExitCode;
+        }
+
+        foreach (var process in processes)
+        {
+            process.Dispose();
+        }
+
+        return new ShellJobCompletion(
+            Id,
+            Command,
+            status,
+            ProcessId,
+            StartedAt,
+            endedAt,
+            lastExitCode,
+            Array.Empty<object?>(),
+            Array.Empty<string>());
     }
 
     private void StartPipeline(

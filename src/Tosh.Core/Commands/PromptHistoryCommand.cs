@@ -1,6 +1,8 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Prompt")]
+[CommandExample("prompt-history")]
+[CommandExample("prompt-history 432 --fg gray --dim")]
 public sealed class PromptHistoryCommand : ShellCommand
 {
     public PromptHistoryCommand()

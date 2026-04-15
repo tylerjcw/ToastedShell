@@ -3,6 +3,8 @@ using System.Dynamic;
 namespace Tosh.Core.Commands;
 
 [CommandCategory("CLR")]
+[CommandExample("$obj | clone")]
+[CommandExample("clone $obj")]
 public sealed class CloneCommand : ShellCommand
 {
     public CloneCommand()

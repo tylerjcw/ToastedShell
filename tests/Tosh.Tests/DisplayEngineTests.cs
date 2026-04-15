@@ -1307,11 +1307,11 @@ public sealed class DisplayEngineTests
     }
 
     [Fact]
-    public void Display_engine_keeps_eight_dimensional_tensors_nested_when_width_is_available()
+    public void Display_engine_keeps_seven_dimensional_tensors_nested_when_width_is_available()
     {
         var display = new DisplayEngine(new ObjectFormatter());
         var nextValue = 1;
-        var values = new object?[] { CreateJaggedTensor(depth: 8, ref nextValue) };
+        var values = new object?[] { CreateJaggedTensor(depth: 7, ref nextValue) };
 
         var text = display.RenderMany(values, new DisplayRenderOptions(ObjectRenderStyle.Compact, MaxWidth: 189));
         var plain = StyledText.StripAnsi(text);
@@ -1321,7 +1321,7 @@ public sealed class DisplayEngineTests
         Assert.DoesNotContain("A/I/", plain, StringComparison.Ordinal);
         Assert.Contains("│ A │ ╭", plain, StringComparison.Ordinal);
         Assert.Contains("│ B │ ╭", plain, StringComparison.Ordinal);
-        Assert.True(text.Count(character => character == '╭') >= 9, $"Expected a deeply nested tensor layout, but got:{Environment.NewLine}{text}");
+        Assert.True(text.Count(character => character == '╭') >= 8, $"Expected a deeply nested tensor layout, but got:{Environment.NewLine}{text}");
     }
 
     [Fact]

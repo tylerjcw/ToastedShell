@@ -3,6 +3,8 @@ using System.Reflection;
 namespace Tosh.Core.Commands;
 
 [CommandCategory("CLR")]
+[CommandExample("$obj | get-methods")]
+[CommandExample("get-methods $obj")]
 public sealed class GetMethodsCommand : ShellCommand
 {
     public GetMethodsCommand()

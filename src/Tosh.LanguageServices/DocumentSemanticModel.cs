@@ -512,6 +512,12 @@ public sealed class DocumentSemanticModel
             case ArrayLiteralArgumentSyntax list:
                 return ResolveArrayType(list, offset);
 
+            case TupleLiteralArgumentSyntax:
+                return typeof(ToshTuple);
+
+            case SetLiteralArgumentSyntax:
+                return typeof(HashSet<object>);
+
             case RecordLiteralArgumentSyntax:
                 return typeof(ExpandoObject);
 
@@ -1230,14 +1236,16 @@ public sealed class DocumentSemanticModel
         bool IsStatic,
         bool IsWritable,
         bool IsComputed,
-        bool IsHidden);
+        bool IsHidden,
+        string? DocDescription = null);
 
     public sealed record ShellClassMethodSymbol(
         string Name,
         string? ReturnTypeName,
         IReadOnlyList<FunctionParameterSyntax> Parameters,
         bool IsStatic,
-        bool IsHidden);
+        bool IsHidden,
+        string? DocDescription = null);
 
     public sealed record ShellClassConstructorSymbol(
         IReadOnlyList<FunctionParameterSyntax> Parameters);
@@ -1495,7 +1503,8 @@ public sealed class DocumentSemanticModel
                     IsStatic: false,
                     IsWritable: property.SetterBody is not null || property.GetterBody is null,
                     IsComputed: property.GetterBody is not null,
-                    IsHidden: property.IsShy))
+                    IsHidden: property.IsShy,
+                    DocDescription: property.DocComment?.Description is { Length: > 0 } propDesc ? propDesc : null))
                 .ToArray();
 
             var methods = @class.Members
@@ -1505,7 +1514,8 @@ public sealed class DocumentSemanticModel
                     methodMember.Method.ReturnTypeName,
                     methodMember.Method.Parameters,
                     methodMember.IsStatic,
-                    methodMember.IsShy))
+                    methodMember.IsShy,
+                    DocDescription: methodMember.Method.DocComment?.Description is { Length: > 0 } methDesc ? methDesc : null))
                 .ToArray();
 
             var constructors = @class.Members
@@ -1588,6 +1598,20 @@ public sealed class DocumentSemanticModel
 
                 case ArrayLiteralArgumentSyntax list:
                     foreach (var item in list.Items)
+                    {
+                        CollectArgument(item, scopeSpan, depth);
+                    }
+                    break;
+
+                case TupleLiteralArgumentSyntax tuple:
+                    foreach (var item in tuple.Items)
+                    {
+                        CollectArgument(item, scopeSpan, depth);
+                    }
+                    break;
+
+                case SetLiteralArgumentSyntax set:
+                    foreach (var item in set.Items)
                     {
                         CollectArgument(item, scopeSpan, depth);
                     }

@@ -3,13 +3,12 @@ using Tosh.Core;
 
 namespace Tosh.Tests;
 
-public sealed class HelpBrowserScreenTests
+public sealed class HelpBrowserScreenTests(ToshRuntimeFixture fixture) : IClassFixture<ToshRuntimeFixture>
 {
     [Fact]
     public void Help_browser_filters_topics_by_query()
     {
-        var runtime = ToshRuntime.CreateDefault();
-        var screen = new HelpBrowserScreen(runtime, new HelpBrowseRequest("regex", null));
+        var screen = new HelpBrowserScreen(fixture.Runtime, new HelpBrowseRequest("regex", null));
 
         var topics = screen.FilterTopics();
 
@@ -20,8 +19,7 @@ public sealed class HelpBrowserScreenTests
     [Fact]
     public void Help_browser_builds_detail_lines_for_selected_topic()
     {
-        var runtime = ToshRuntime.CreateDefault();
-        var screen = new HelpBrowserScreen(runtime, new HelpBrowseRequest("grep", "grep"));
+        var screen = new HelpBrowserScreen(fixture.Runtime, new HelpBrowseRequest("grep", "grep"));
 
         var lines = screen.BuildDetailLines(60);
 
@@ -37,8 +35,7 @@ public sealed class HelpBrowserScreenTests
     [Fact]
     public void Help_browser_renders_boxed_titled_layout()
     {
-        var runtime = ToshRuntime.CreateDefault();
-        var screen = new HelpBrowserScreen(runtime, new HelpBrowseRequest("grep", "grep"));
+        var screen = new HelpBrowserScreen(fixture.Runtime, new HelpBrowseRequest("grep", "grep"));
 
         var frame = screen.Render(new TuiSize(80, 20));
         var rendered = StyledText.StripAnsi(frame.Content);
@@ -66,8 +63,7 @@ public sealed class HelpBrowserScreenTests
     [Fact]
     public void Help_browser_can_quit_with_q_even_when_search_has_focus()
     {
-        var runtime = ToshRuntime.CreateDefault();
-        var screen = new HelpBrowserScreen(runtime, new HelpBrowseRequest("grep", "grep"));
+        var screen = new HelpBrowserScreen(fixture.Runtime, new HelpBrowseRequest("grep", "grep"));
 
         var result = screen.HandleKey(new ConsoleKeyInfo('q', ConsoleKey.Q, shift: false, alt: false, control: false));
 
@@ -77,8 +73,7 @@ public sealed class HelpBrowserScreenTests
     [Fact]
     public void Help_browser_can_open_related_topics_and_navigate_back_and_forward()
     {
-        var runtime = ToshRuntime.CreateDefault();
-        var screen = new HelpBrowserScreen(runtime, new HelpBrowseRequest(null, "grep"));
+        var screen = new HelpBrowserScreen(fixture.Runtime, new HelpBrowseRequest(null, "grep"));
 
         screen.HandleKey(new ConsoleKeyInfo('\0', ConsoleKey.RightArrow, shift: false, alt: false, control: false));
         screen.HandleKey(new ConsoleKeyInfo('1', ConsoleKey.D1, shift: false, alt: false, control: false));
@@ -94,8 +89,7 @@ public sealed class HelpBrowserScreenTests
     [Fact]
     public void Help_browser_can_switch_top_level_groups()
     {
-        var runtime = ToshRuntime.CreateDefault();
-        var screen = new HelpBrowserScreen(runtime, new HelpBrowseRequest("func", "func"));
+        var screen = new HelpBrowserScreen(fixture.Runtime, new HelpBrowseRequest("func", "func"));
 
         screen.HandleKey(new ConsoleKeyInfo('\0', ConsoleKey.F3, shift: false, alt: false, control: false));
 
@@ -107,8 +101,7 @@ public sealed class HelpBrowserScreenTests
     [Fact]
     public void Help_browser_picks_a_sensible_initial_group_from_the_starting_query()
     {
-        var runtime = ToshRuntime.CreateDefault();
-        var screen = new HelpBrowserScreen(runtime, new HelpBrowseRequest("func", null));
+        var screen = new HelpBrowserScreen(fixture.Runtime, new HelpBrowseRequest("func", null));
 
         var rendered = StyledText.StripAnsi(screen.Render(new TuiSize(80, 20)).Content);
         Assert.Contains("ToastScript", rendered, StringComparison.Ordinal);
@@ -117,8 +110,7 @@ public sealed class HelpBrowserScreenTests
     [Fact]
     public void Help_browser_defaults_to_an_all_view_when_there_is_no_query()
     {
-        var runtime = ToshRuntime.CreateDefault();
-        var screen = new HelpBrowserScreen(runtime, new HelpBrowseRequest(null, null));
+        var screen = new HelpBrowserScreen(fixture.Runtime, new HelpBrowseRequest(null, null));
 
         var labels = screen.BuildSidebarLabels();
 
@@ -129,8 +121,7 @@ public sealed class HelpBrowserScreenTests
     [Fact]
     public void Help_browser_can_collapse_a_sidebar_subgroup()
     {
-        var runtime = ToshRuntime.CreateDefault();
-        var screen = new HelpBrowserScreen(runtime, new HelpBrowseRequest("grep", null));
+        var screen = new HelpBrowserScreen(fixture.Runtime, new HelpBrowseRequest("grep", null));
 
         var before = screen.BuildSidebarLabels();
         Assert.Contains(before, label => label.Contains("grep", StringComparison.OrdinalIgnoreCase));
@@ -223,8 +214,7 @@ public sealed class HelpBrowserScreenTests
     [Fact]
     public void Help_browser_shows_richer_clr_type_sections()
     {
-        var runtime = ToshRuntime.CreateDefault();
-        var screen = new HelpBrowserScreen(runtime, new HelpBrowseRequest("System.String", "System.String"));
+        var screen = new HelpBrowserScreen(fixture.Runtime, new HelpBrowseRequest("System.String", "System.String"));
 
         var lines = screen.BuildDetailLines(100);
 
@@ -380,8 +370,7 @@ public sealed class HelpBrowserScreenTests
     [Fact]
     public void Help_browser_shows_value_type_default_construction_and_factory_methods_for_color()
     {
-        var runtime = ToshRuntime.CreateDefault();
-        var screen = new HelpBrowserScreen(runtime, new HelpBrowseRequest("System.Drawing.Color", "System.Drawing.Color"));
+        var screen = new HelpBrowserScreen(fixture.Runtime, new HelpBrowseRequest("System.Drawing.Color", "System.Drawing.Color"));
 
         var lines = screen.BuildDetailLines(100);
 
@@ -419,10 +408,9 @@ public sealed class HelpBrowserScreenTests
         Assert.Contains(labels, label => label.Contains("[from System.Object]", StringComparison.Ordinal));
     }
 
-    private static HelpBrowserScreen OpenClrBrowser()
+    private HelpBrowserScreen OpenClrBrowser()
     {
-        var runtime = ToshRuntime.CreateDefault();
-        var screen = new HelpBrowserScreen(runtime, new HelpBrowseRequest(null, null));
+        var screen = new HelpBrowserScreen(fixture.Runtime, new HelpBrowseRequest(null, null));
         screen.HandleKey(new ConsoleKeyInfo('\0', ConsoleKey.F4, shift: false, alt: false, control: false));
         return screen;
     }

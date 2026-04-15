@@ -58,6 +58,7 @@ public sealed class ToshRuntime
         ExportedEnvironmentVariables = new HashSet<string>(StringComparer.Ordinal);
         InvocationArguments = Array.Empty<object?>();
         ExecHandler = new DefaultShellExecHandler();
+        Terminal = new TerminalControl();
         SetLastExitCode(0);
         SetLastResult(null);
     }
@@ -107,6 +108,8 @@ public sealed class ToshRuntime
     public IReadOnlyList<object?> InvocationArguments { get; set; }
 
     public IShellExecHandler ExecHandler { get; set; }
+
+    public TerminalControl Terminal { get; }
 
     public IInlinePromptProvider? InlinePrompts { get; set; }
 
@@ -176,7 +179,7 @@ public sealed class ToshRuntime
     {
         foreach (var kvp in _jobs)
         {
-            if (kvp.Value.Status is not ShellJobStatus.Running)
+            if (kvp.Value.Status is not ShellJobStatus.Running and not ShellJobStatus.Suspended)
             {
                 _jobs.TryRemove(kvp.Key, out _);
             }
@@ -278,6 +281,7 @@ public sealed class ToshRuntime
     {
         lock (_directoryStackGate)
         {
+            var startupDirectory = CurrentDirectory;
             _directoryStackFilePath = Path.Combine(ToshConfigDefaults.GetDefaultStateDirectory(), "dirstack.json");
             _directoryStackStorageInitialized = true;
 
@@ -288,8 +292,39 @@ public sealed class ToshRuntime
                 _directoryStack.Clear();
                 _directoryStack.AddRange(state.Entries);
                 _directoryStackIndex = state.Index;
-                CurrentDirectory = _directoryStack[_directoryStackIndex];
             }
+
+            if (_directoryStack.Count == 0)
+            {
+                _directoryStack.Add(startupDirectory);
+                _directoryStackIndex = 0;
+            }
+            else
+            {
+                var currentIndex = Math.Clamp(_directoryStackIndex, 0, _directoryStack.Count - 1);
+                var currentEntry = _directoryStack[currentIndex];
+                var comparison = OperatingSystem.IsWindows()
+                    ? StringComparison.OrdinalIgnoreCase
+                    : StringComparison.Ordinal;
+
+                if (!string.Equals(currentEntry, startupDirectory, comparison))
+                {
+                    if (currentIndex < _directoryStack.Count - 1)
+                    {
+                        _directoryStack.RemoveRange(currentIndex + 1, _directoryStack.Count - currentIndex - 1);
+                    }
+
+                    _directoryStack.Add(startupDirectory);
+                    _directoryStackIndex = _directoryStack.Count - 1;
+                }
+                else
+                {
+                    _directoryStackIndex = currentIndex;
+                }
+            }
+
+            CurrentDirectory = startupDirectory;
+            SaveDirectoryStackUnsafe();
         }
     }
 

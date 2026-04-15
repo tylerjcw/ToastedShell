@@ -2,7 +2,7 @@ using Tosh.Core;
 
 namespace Tosh.Language.Commands;
 
-internal sealed class OverloadedFunctionCommand : IShellCommand, ICommandResolutionMetadata, IShellCallable
+internal sealed class OverloadedFunctionCommand : IShellCommand, ICommandResolutionMetadata, IShellCallable, IDocumentedCommand
 {
     private readonly ToshEngine _engine;
     private readonly List<FunctionDefinition> _definitions;
@@ -25,7 +25,54 @@ internal sealed class OverloadedFunctionCommand : IShellCommand, ICommandResolut
 
     public string Name => _definitions[0].Name;
 
-    public string Description => $"User-defined Tosh function with {_definitions.Count} overload{(_definitions.Count == 1 ? string.Empty : "s")}.";
+    public string Description
+    {
+        get
+        {
+            var doc = _definitions.Select(d => d.DocComment?.Description).FirstOrDefault(d => d is { Length: > 0 });
+            return doc ?? $"User-defined Tosh function with {_definitions.Count} overload{(_definitions.Count == 1 ? string.Empty : "s")}.";
+        }
+    }
+
+    public IReadOnlyDictionary<string, string> ParameterDescriptions
+    {
+        get
+        {
+            var merged = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var def in _definitions)
+            {
+                if (def.DocComment?.Parameters is { } paramDescs)
+                {
+                    foreach (var (name, desc) in paramDescs)
+                    {
+                        merged.TryAdd(name, desc);
+                    }
+                }
+            }
+            return merged;
+        }
+    }
+
+    public string? ReturnsDescription =>
+        _definitions.Select(d => d.DocComment?.Returns).FirstOrDefault(r => r is not null);
+
+    public IReadOnlyList<string> DocExamples =>
+        _definitions.SelectMany(d => d.DocComment?.Examples ?? []).ToList();
+
+    public bool IsDeprecated =>
+        _definitions.Any(d => d.DocComment?.IsDeprecated ?? false);
+
+    public string? DeprecatedMessage =>
+        _definitions.Select(d => d.DocComment?.Deprecated).FirstOrDefault(m => m is not null);
+
+    public IReadOnlyList<string> SeeAlso =>
+        _definitions.SelectMany(d => d.DocComment?.SeeAlso ?? []).Distinct(StringComparer.Ordinal).ToList();
+
+    public string? Since =>
+        _definitions.Select(d => d.DocComment?.Since).FirstOrDefault(s => s is not null);
+
+    public IReadOnlyList<string> Throws =>
+        _definitions.SelectMany(d => d.DocComment?.Throws ?? []).Distinct(StringComparer.Ordinal).ToList();
 
     public string Usage => string.Join(" | ", _definitions.Select(FunctionCommand.FormatUsage));
 

@@ -56,6 +56,7 @@ public static class BuiltInCommands
         commands.Register(new BaseNameCommand());
         commands.Register(new SeqCommand());
         commands.Register(new SleepCommand());
+        commands.Register(new TimeCommand());
         commands.Register(new PingCommand());
         commands.Register(new HttpCommand(formats));
         commands.Register(new IpCommand());
@@ -74,6 +75,8 @@ public static class BuiltInCommands
         commands.Register(new WaitForCommand());
         commands.Register(new KillCommand());
         commands.Register(new SignalCommand());
+        commands.Register(new ForegroundCommand());
+        commands.Register(new BackgroundResumeCommand());
         commands.Register(new EnvironmentCommand());
         commands.Register(new VarsCommand());
         commands.Register(new WhichCommand());

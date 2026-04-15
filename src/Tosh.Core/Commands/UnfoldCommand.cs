@@ -37,7 +37,20 @@ public sealed class UnfoldCommand : ShellCommand
                 yield break;
             }
 
-            if (result is not object?[] pair || pair.Length != 2)
+            object? emitValue;
+            object? nextState;
+
+            if (result is object?[] pair && pair.Length == 2)
+            {
+                emitValue = pair[0];
+                nextState = pair[1];
+            }
+            else if (result is Array typedPair && typedPair.Length == 2)
+            {
+                emitValue = typedPair.GetValue(0);
+                nextState = typedPair.GetValue(1);
+            }
+            else
             {
                 throw context.CreateDiagnostic(
                     code: "tosh::runtime::unfold_requires_pair_or_null",
@@ -45,8 +58,8 @@ public sealed class UnfoldCommand : ShellCommand
                     label: "this result is not a two-element array or null");
             }
 
-            yield return pair[0];
-            state = pair[1];
+            yield return emitValue;
+            state = nextState;
         }
     }
 }

@@ -1,6 +1,17 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("System")]
+[CommandArgument("name ...", "With no assignments, query one or more environment variable names.", Required = false)]
+[CommandArgument("name=value ...", "Temporary environment assignments for `env` output or a nested command.", Required = false)]
+[CommandArgument("command ...", "Optional nested command to run under the temporary environment snapshot.", Required = false)]
+[CommandOption("-u <name>", "Unset a variable in the temporary environment snapshot.")]
+[CommandOption("--", "Treat the remaining arguments as the nested command even when there are no assignments.")]
+[CommandExample("env PATH", Title = "Inspect the structured PATH entry")]
+[CommandExample("echo $env.PATH", Title = "Read just the PATH value")]
+[CommandExample("echo $env.EDITOR", Title = "Read another environment variable directly")]
+[CommandNote("Env keeps its object-returning query mode, but it can also build a temporary environment snapshot with `name=value` and `-u name`, optionally running a nested command under that snapshot.")]
+[CommandOutput("Returns typed environment-variable entries, or the nested command's output when assignments/unsets are used with a command. Use `$env.NAME` for direct value-only access when you want the variable value instead of the structured `env` entry object. Missing `$env` members resolve to `null` rather than raising a missing-member error.")]
+[PipelineInput(AcceptsScalar = true, AcceptsRecord = true, Description = "With no explicit names, piped scalar values are treated as queried environment-variable names.")]
 public sealed class EnvironmentCommand : ShellCommand
 {
     public EnvironmentCommand()

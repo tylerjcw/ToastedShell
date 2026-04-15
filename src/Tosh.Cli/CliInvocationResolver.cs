@@ -11,6 +11,7 @@ internal static class CliInvocationResolver
 
         var skipStartup = false;
         var skipProfile = false;
+        var safeMode = false;
         var isLoginShell = false;
         var effectiveArgs = new List<string>(args.Length);
 
@@ -24,6 +25,9 @@ internal static class CliInvocationResolver
                 case "--no-profile":
                     skipProfile = true;
                     continue;
+                case "--safe":
+                    safeMode = true;
+                    continue;
                 case "--login" or "-l":
                     isLoginShell = true;
                     continue;
@@ -32,9 +36,14 @@ internal static class CliInvocationResolver
             effectiveArgs.Add(argument);
         }
 
+        if (safeMode)
+        {
+            skipStartup = true;
+        }
+
         if (effectiveArgs.Count == 0)
         {
-            return CliInvocationPlan.Repl(skipStartup, skipProfile, isLoginShell);
+            return CliInvocationPlan.Repl(skipStartup, skipProfile, isLoginShell, safeMode);
         }
 
         if (IsHelpSwitch(effectiveArgs[0]))
@@ -42,7 +51,7 @@ internal static class CliInvocationResolver
             return CliInvocationPlan.Help(skipStartup);
         }
 
-        if (effectiveArgs[0] is "--export-command-manifest")
+        if (effectiveArgs[0] is "--export-command-metadata")
         {
             var format = "json";
             string? outputPath = null;
@@ -57,15 +66,18 @@ internal static class CliInvocationResolver
                     case "--json":
                         format = "json";
                         break;
+                    case "--vscode":
+                        format = "vscode";
+                        break;
                     case "-o" or "--output" when i + 1 < effectiveArgs.Count:
                         outputPath = effectiveArgs[++i];
                         break;
                     default:
-                        throw new InvalidOperationException($"Unknown option '{effectiveArgs[i]}' for --export-command-manifest.");
+                        throw new InvalidOperationException($"Unknown option '{effectiveArgs[i]}' for --export-command-metadata.");
                 }
             }
 
-            return CliInvocationPlan.ExportManifest(format, outputPath);
+            return CliInvocationPlan.ExportMetadata(format, outputPath);
         }
 
         if (effectiveArgs[0] is "-c" or "--command")
@@ -173,10 +185,11 @@ internal readonly record struct CliInvocationPlan(
     string[] Arguments,
     bool LoadStartup = true,
     bool SkipProfile = false,
-    bool IsLoginShell = false)
+    bool IsLoginShell = false,
+    bool SafeMode = false)
 {
-    public static CliInvocationPlan Repl(bool skipStartup = false, bool skipProfile = false, bool isLoginShell = false) =>
-        new(CliInvocationKind.Repl, null, Array.Empty<string>(), LoadStartup: !skipStartup, SkipProfile: skipProfile, IsLoginShell: isLoginShell);
+    public static CliInvocationPlan Repl(bool skipStartup = false, bool skipProfile = false, bool isLoginShell = false, bool safeMode = false) =>
+        new(CliInvocationKind.Repl, null, Array.Empty<string>(), LoadStartup: !skipStartup, SkipProfile: skipProfile, IsLoginShell: isLoginShell, SafeMode: safeMode);
 
     public static CliInvocationPlan Help(bool skipStartup = false) => new(CliInvocationKind.Help, null, Array.Empty<string>(), LoadStartup: !skipStartup);
 
@@ -187,7 +200,7 @@ internal readonly record struct CliInvocationPlan(
 
     public static CliInvocationPlan ExternalScript(string path, string[] invocation, bool skipStartup = false) => new(CliInvocationKind.ExternalScript, path, invocation, LoadStartup: !skipStartup);
 
-    public static CliInvocationPlan ExportManifest(string format, string? outputPath) => new(CliInvocationKind.ExportManifest, format, outputPath is not null ? [outputPath] : Array.Empty<string>(), LoadStartup: false);
+    public static CliInvocationPlan ExportMetadata(string format, string? outputPath) => new(CliInvocationKind.ExportMetadata, format, outputPath is not null ? [outputPath] : Array.Empty<string>(), LoadStartup: false);
 }
 
 internal enum CliInvocationKind
@@ -197,5 +210,5 @@ internal enum CliInvocationKind
     Command,
     ToshScript,
     ExternalScript,
-    ExportManifest,
+    ExportMetadata,
 }

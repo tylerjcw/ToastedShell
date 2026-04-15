@@ -1,6 +1,9 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Pipeline")]
+[CommandExample("ls -la | get Name")]
+[CommandExample("ps | get { Name, PID, Memory }")]
+[CommandExample("echo 1 2 3 | get func(x) => ($x * 2)")]
 public sealed class GetCommand : ShellCommand
 {
     public GetCommand(string name = "get")

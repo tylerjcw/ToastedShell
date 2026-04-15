@@ -346,15 +346,13 @@ public sealed class ToshMcpServer
 
     private async Task WriteMessageAsync(string json, CancellationToken cancellationToken)
     {
-        var body = Encoding.UTF8.GetBytes(json);
-        var header = Encoding.ASCII.GetBytes($"Content-Length: {body.Length}\r\n\r\n");
+        var line = Encoding.UTF8.GetBytes(json + "\n");
 
         await _writeLock.WaitAsync(cancellationToken);
 
         try
         {
-            await _output.WriteAsync(header, cancellationToken);
-            await _output.WriteAsync(body, cancellationToken);
+            await _output.WriteAsync(line, cancellationToken);
             await _output.FlushAsync(cancellationToken);
         }
         finally
@@ -365,59 +363,6 @@ public sealed class ToshMcpServer
 
     private async Task<string?> ReadMessageAsync(CancellationToken cancellationToken)
     {
-        var headers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-
-        while (true)
-        {
-            var line = await ReadHeaderLineAsync(cancellationToken);
-
-            if (line is null)
-            {
-                return null;
-            }
-
-            if (line.Length == 0)
-            {
-                break;
-            }
-
-            var separator = line.IndexOf(':');
-
-            if (separator < 0)
-            {
-                continue;
-            }
-
-            headers[line[..separator].Trim()] = line[(separator + 1)..].Trim();
-        }
-
-        if (!headers.TryGetValue("Content-Length", out var lengthValue) ||
-            !int.TryParse(lengthValue, out var length) ||
-            length <= 0)
-        {
-            return null;
-        }
-
-        var buffer = new byte[length];
-        var totalRead = 0;
-
-        while (totalRead < length)
-        {
-            var read = await _input.ReadAsync(buffer.AsMemory(totalRead, length - totalRead), cancellationToken);
-
-            if (read == 0)
-            {
-                return null;
-            }
-
-            totalRead += read;
-        }
-
-        return Encoding.UTF8.GetString(buffer);
-    }
-
-    private async Task<string?> ReadHeaderLineAsync(CancellationToken cancellationToken)
-    {
         var sb = new StringBuilder();
 
         while (true)
@@ -427,14 +372,22 @@ public sealed class ToshMcpServer
 
             if (read == 0)
             {
-                return null;
+                return sb.Length > 0 ? sb.ToString() : null;
             }
 
             var character = (char)buffer[0];
 
             if (character == '\n')
             {
-                return sb.ToString().TrimEnd('\r');
+                var line = sb.ToString().Trim();
+
+                if (line.Length > 0)
+                {
+                    return line;
+                }
+
+                sb.Clear();
+                continue;
             }
 
             sb.Append(character);

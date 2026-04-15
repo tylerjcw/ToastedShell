@@ -1,6 +1,14 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Shell")]
+[CommandArgument("search <text>", "Searches history entries by text.", Required = false)]
+[CommandArgument("expand <spec>", "Expands a history event specification without running it.", Required = false)]
+[CommandArgument("run <spec>", "Resolves and executes a history event specification.", Required = false)]
+[CommandArgument("delete <spec>", "Deletes one or more history entries by id or spec.", Required = false)]
+[CommandArgument("path|save|reload|clear", "History maintenance subcommands.", Required = false)]
+[CommandNote("History is file-backed in normal interactive sessions and each entry now has a stable id. Use `history path`, `history search <text>`, `history delete <spec>`, `history save`, `history reload`, `history clear`, `history expand 237`, or `history run 237` to inspect or replay it. In the REPL, `Ctrl+R`, `!!`, `!237`, `!-2`, `!prefix`, `!?text?`, `!$`, `!^`, `!*`, and `^old^new^` also work as interactive history features.")]
+[CommandOutput("Produces structured history entries, file paths, expanded command text, or replay results depending on the chosen subcommand.")]
+[PipelineInput(Description = "History is producer-oriented; replay and expansion are explicit subcommands, while `!` syntax remains REPL-only sugar.")]
 public sealed class HistoryCommand : ShellCommand
 {
     public HistoryCommand()

@@ -15,7 +15,7 @@ func demo_path() -> string {
 
 Utilities.banner("ToSh / ToastScript Demo")
 writeline $"Script: {Utilities.script_name()}"
-writeline $"Library: {(demo_path)}"
+writeline $"Library: {demo_path}"
 
 var items = Inv.sample_items()
 var shelf = new Inv.Shelf("Pantry")
@@ -35,7 +35,7 @@ var breadClone = new Inv.Item("Bread", 2, "Food", "BurlyWood")
 var restocked = Inv.restock($bread, 5)
 
 writeline $"State: {Inv.state_of($bread).ToString()}"
-writeline $"Equal before restock: {($bread == $breadClone)}"
+writeline $"Equal before restock: {$bread == $breadClone}"
 writeline $"Restocked quantity: {$restocked.Quantity}"
 
 Utilities.banner("Switch Over Enum Values")

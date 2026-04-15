@@ -1,6 +1,9 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Shell")]
+[CommandExample("view dateonly scalar relative")]
+[CommandExample("view timeonly table 24h")]
+[CommandExample("view duration table seconds")]
 public sealed class ViewCommand : ShellCommand
 {
     public ViewCommand()

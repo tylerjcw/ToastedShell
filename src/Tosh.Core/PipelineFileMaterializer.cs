@@ -42,9 +42,15 @@ public static class PipelineFileMaterializer
 
     public static string SerializeText(IReadOnlyList<object?> values)
     {
+        if (values.Count == 0)
+        {
+            return string.Empty;
+        }
+
         return string.Join(
-            Environment.NewLine,
-            values.Select(value => value is ShellTextLine line ? line.Text : ExternalTextSerializer.Serialize(value)));
+                   Environment.NewLine,
+                   values.Select(value => value is ShellTextLine line ? line.Text : ExternalTextSerializer.Serialize(value)))
+               + Environment.NewLine;
     }
 
     public static string SerializeJson(IReadOnlyList<object?> values)

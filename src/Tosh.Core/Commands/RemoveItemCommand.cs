@@ -5,6 +5,7 @@ namespace Tosh.Core.Commands;
 [CommandOption("-r", "Remove directories and their contents recursively.")]
 [CommandOption("-f", "Ignore nonexistent files; never prompt.")]
 [CommandOption("-i", "Prompt before each removal.")]
+[CommandOption("-v", "Explain what is being done.")]
 [CommandExample("rm temp.txt")]
 [CommandExample("rm -rf build/", Title = "Force recursive delete")]
 [CommandOutput("Returns a RemovalResult with total size and descendant tree.")]
@@ -12,7 +13,7 @@ namespace Tosh.Core.Commands;
 public sealed class RemoveItemCommand : ShellCommand
 {
     public RemoveItemCommand()
-        : base("rm", "Removes files or directories.", "rm [-r] [-f] [-i] <path> [path...]") { }
+        : base("rm", "Removes files or directories.", "rm [-rfiv] <path> [path...]") { }
 
     public override async IAsyncEnumerable<object?> ExecuteAsync(CommandContext context)
     {
@@ -20,6 +21,7 @@ public sealed class RemoveItemCommand : ShellCommand
         var recursive = parsed.HasFlag("r", "R", "recursive");
         var force = parsed.HasFlag("f", "force");
         var interactive = parsed.HasFlag("i", "interactive");
+        var verbose = parsed.HasFlag("v", "verbose");
         var paths = await ShellPathArguments.CollectAsync(context, parsed.Positionals, context.CancellationToken);
 
         if (paths.Count == 0)
@@ -41,6 +43,12 @@ public sealed class RemoveItemCommand : ShellCommand
                 var file = new FileInfo(path);
                 var size = StorageSize.FromBytes(file.Length);
                 file.Delete();
+
+                if (verbose)
+                {
+                    Console.Error.WriteLine($"removed '{path}'");
+                }
+
                 yield return new RemovalResult(fullName: path, isDirectory: false, size: size, children: []);
                 continue;
             }
@@ -61,6 +69,12 @@ public sealed class RemoveItemCommand : ShellCommand
                 var children = BuildDescendantTree(directory);
                 var size = StorageSize.FromBytes(SumBytes(children));
                 directory.Delete(recursive: true);
+
+                if (verbose)
+                {
+                    Console.Error.WriteLine($"removed directory '{path}'");
+                }
+
                 yield return new RemovalResult(fullName: path, isDirectory: true, size: size, children: children);
                 continue;
             }

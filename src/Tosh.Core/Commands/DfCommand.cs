@@ -1,10 +1,24 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Filesystem")]
+[CommandArgument("path ...", "Optional paths used to resolve the containing mounted filesystem.", Required = false, TypeName = "path-like")]
+[CommandOption("-h", "Accepts the familiar human-readable flag; ToSh sizes are already typed and human-friendly.")]
+[CommandOption("-T", "Ensures the filesystem type column is visible.")]
+[CommandOption("-l", "Restricts the output to local filesystems.")]
+[CommandOption("-t <type[,type...]>", "Includes only matching filesystem types.")]
+[CommandOption("-x <type[,type...]>", "Excludes matching filesystem types.")]
+[CommandOption("--total", "Appends a typed aggregate total row.")]
+[CommandOption("-i", "Displays inode usage instead of block usage.")]
+[CommandOption("--output <columns>", "Selects which filesystem properties are rendered.")]
+[CommandExample("df --total")]
+[CommandExample("df -t ext4 --show FileSystem,Type,UsePercent,MountedOn")]
+[CommandExample("df . | get { FileSystem, MountedOn }")]
+[CommandOutput("Produces typed filesystem usage objects, with optional aggregate totals.")]
+[PipelineInput(AcceptsList = true, Description = "Uses piped path-like values when explicit paths are omitted. Without path input, `df` lists the full mounted filesystem set.")]
 public sealed class DfCommand : ShellCommand
 {
     public DfCommand(string name = "df")
-        : base(name, "Returns mounted file system usage information.", $"{name} [-hTl] [-t type[,type...]] [-x type[,type...]] [--total] [--output columns] [--show columns] [--hide columns] [--show-all] [path ...]") { }
+        : base(name, "Returns mounted file system usage information.", $"{name} [-hTli] [-t type[,type...]] [-x type[,type...]] [--total] [--output columns] [--show columns] [--hide columns] [--show-all] [path ...]") { }
 
     public override async IAsyncEnumerable<object?> ExecuteAsync(CommandContext context)
     {
@@ -66,12 +80,22 @@ public sealed class DfCommand : ShellCommand
 
     private static DisplayColumnSelection GetEffectiveSelection(DisplayColumnSelection selection, DfOptions options)
     {
-        if (selection.HasOverrides || !options.PrintType)
+        if (selection.HasOverrides)
         {
             return selection;
         }
 
-        return new DisplayColumnSelection(showColumns: ["FileSystem", "Type", "Size", "Used", "Available", "UsePercent", "MountedOn"]);
+        if (options.Inodes)
+        {
+            return new DisplayColumnSelection(showColumns: ["FileSystem", "InodesTotal", "InodesUsed", "InodesFree", "InodeUsePercent", "MountedOn"]);
+        }
+
+        if (options.PrintType)
+        {
+            return new DisplayColumnSelection(showColumns: ["FileSystem", "Type", "Size", "Used", "Available", "UsePercent", "MountedOn"]);
+        }
+
+        return selection;
     }
 
     private static bool MatchesFilters(FileSystemUsageInfo entry, DfOptions options)
@@ -153,6 +177,9 @@ public sealed class DfCommand : ShellCommand
             case "total":
                 options.IncludeTotal = true;
                 return;
+            case "inodes":
+                options.Inodes = true;
+                return;
             case "type":
                 AddStrings(options.IncludeTypes, inlineValue ?? RequireOptionValue(arguments, ref index, "--type"));
                 return;
@@ -179,6 +206,9 @@ public sealed class DfCommand : ShellCommand
                     break;
                 case 'l':
                     options.LocalOnly = true;
+                    break;
+                case 'i':
+                    options.Inodes = true;
                     break;
                 case 't':
                 case 'x':
@@ -253,5 +283,7 @@ public sealed class DfCommand : ShellCommand
         public bool LocalOnly { get; set; }
 
         public bool IncludeTotal { get; set; }
+
+        public bool Inodes { get; set; }
     }
 }

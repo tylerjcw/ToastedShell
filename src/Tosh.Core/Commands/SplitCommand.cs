@@ -3,6 +3,8 @@ using System.Text.RegularExpressions;
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Text")]
+[CommandExample("echo \"alpha,beta,gamma\" | split \",\"")]
+[CommandExample("echo \"alpha,beta;gamma\" | split -r \"[,;]\"")]
 public sealed class SplitCommand : ShellCommand
 {
     public SplitCommand()

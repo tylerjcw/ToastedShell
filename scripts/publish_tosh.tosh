@@ -1,36 +1,47 @@
 #!/usr/bin/env tosh
-#
 # Build a single-file ToSh executable.
-#
 
+## Configures and drives a single-file dotnet publish of the Tosh CLI.
 class PublishPlan {
+    ## Path to the published executable, set after a successful build.
     prop Binary: string? = null
+    ## Whether to enable IL trimming (experimental for ToSh).
     prop Trimmed: bool = false
+    ## Whether to bundle the .NET runtime into the output binary.
     prop SelfContained: bool = true
 
     shy prop requested_directory: string? = null
     shy prop requested_runtime_id: string? = null
 
+    ## The repository root, resolved from this script's location.
     prop RepoRoot: string {
-        get => (dirname (dirname (realpath $tosh.Script.Path)))
+        get => dirname (dirname (realpath $tosh.Script.Path))
     }
 
+    ## The .NET Runtime Identifier (e.g. linux-x64, osx-arm64).
     prop RuntimeId: string {
         get => $this.effective_runtime_id()
         set => $this.requested_runtime_id = $value
     }
 
+    ## The output directory for the published binary.
     prop Directory: string {
         get => $this.effective_directory()
         set => $this.requested_directory = $value
     }
 
+    ## The fully-resolved argument list passed to dotnet publish.
     prop PublishArgs: array => $this.build_publish_args()
 
-    shy prop mode_dir: string => ($this.Trimmed ? "single-file-trimmed" : "single-file")
+    ## The fully-resolved argument list passed to dotnet build.
+    prop BuildArgs: array => $this.build_build_args()
+
+    shy prop mode_dir: string => $this.Trimmed ? "single-file-trimmed" : "single-file"
 
     PublishPlan() { }
 
+    ## Resolves the RID, falling back to the host's current runtime identifier.
+    ## @returns The effective runtime identifier string.
     shy func effective_runtime_id() -> string {
         if ($this.requested_runtime_id != null and $this.requested_runtime_id != "") {
             return $this.requested_runtime_id
@@ -39,12 +50,26 @@ class PublishPlan {
         return System.Runtime.InteropServices.RuntimeInformation.RuntimeIdentifier
     }
 
+    ## Resolves the output directory, falling back to artifacts/publish/<rid>/<mode>.
+    ## @returns The absolute path to the publish output directory.
     shy func effective_directory() -> string {
         if ($this.requested_directory != null and $this.requested_directory != "") {
             return System.IO.Path.GetFullPath($this.requested_directory)
         }
 
         return System.IO.Path.Join($this.RepoRoot, "artifacts", "publish", $this.RuntimeId, $this.mode_dir)
+    }
+
+    ## Assembles the full argument list for the pre-publish dotnet build.
+    ## @returns An array of CLI arguments.
+    shy func build_build_args() -> array {
+        return [
+            "build",
+            $"{$this.RepoRoot}/src/Tosh.Cli/Tosh.Cli.csproj",
+            "-c", "Release",
+            "-r", $this.RuntimeId,
+            $"-p:SelfContained={$this.SelfContained}"
+        ]
     }
 
     shy func build_publish_args() -> array {
@@ -54,6 +79,7 @@ class PublishPlan {
             "-c", "Release",
             "-r", $this.RuntimeId,
             "-o", $this.Directory,
+            "--no-build",
             "-p:PublishSingleFile=true",
             "-p:DebugType=None",
             "-p:DebugSymbols=false",
@@ -73,6 +99,7 @@ class PublishPlan {
     }
 }
 
+## The result of a successful publish, returned to the caller.
 record BuildResult(
     Binary: string,
     Size: StorageSize,
@@ -83,6 +110,7 @@ record BuildResult(
     Duration: timespan
 )
 
+## Prints command-line usage information to stdout.
 func usage() {
     echo """
         Usage: scripts/publish_tosh.tosh [options]
@@ -104,17 +132,36 @@ func usage() {
 
 var publish = new PublishPlan()
 
-# Parse arguments
+
+# Argument parsing
+var no_install = false
+var exec_after = false
 var i = 0
 while ($i < ($tosh.Script.Args | count)) {
     var arg = ($tosh.Script.Args | get $i)
 
+    if ($arg starts-with "--rid=") {
+        var rid = ($arg | split "=" | skip 1 | join "=")
+        if ($rid == "") { throw "Missing value for --rid" }
+        $publish.RuntimeId = $rid
+        $i = ($i + 1)
+        continue
+    }
+    if ($arg starts-with "--output=") {
+        var output = ($arg | split "=" | skip 1 | join "=")
+        if ($output == "") { throw "Missing value for --output" }
+        $publish.Directory = $output
+        $i = ($i + 1)
+        continue
+    }
     switch ($arg) {
         case "--rid" {
+            if (($i + 1) >= ($tosh.Script.Args | count)) { throw "Missing value for --rid" }
             $i = ($i + 1)
             $publish.RuntimeId = ($tosh.Script.Args | get $i)
         }
         case "--output" {
+            if (($i + 1) >= ($tosh.Script.Args | count)) { throw "Missing value for --output" }
             $i = ($i + 1)
             $publish.Directory = ($tosh.Script.Args | get $i)
         }
@@ -123,6 +170,15 @@ while ($i < ($tosh.Script.Args | count)) {
         }
         case "--framework-dependent" {
             $publish.SelfContained = false
+        }
+        case "--test" {
+            dotnet test /home/komrad/projects/tosh/Tosh.slnx --no-build
+        }
+        case "--no-install" {
+            $no_install = true
+        }
+        case "--exec" {
+            $exec_after = true
         }
         case "--help" {
             usage
@@ -138,24 +194,35 @@ while ($i < ($tosh.Script.Args | count)) {
             throw $"Unknown option: {$arg}"
         }
     }
-
-    $i = ($i + 1)
+    $i += 1
 }
 
 mkdir -p $publish.Directory | ignore
 
-styled $"Publishing ToSh ({$publish.RuntimeId})..." --fg bright-cyan --bold | writeline
+var total_start = (date now)
 
-# Run dotnet publish (output streams through to terminal)
-var build_start = (date now)
-dotnet ...$publish.PublishArgs o> /dev/null
-var build_duration = ((date now) - $build_start)
+# Build first (triggers spec generation, VS Code extension sync, etc.)
+styled $"Building ToSh ({$publish.RuntimeId})..." --fg bright-cyan --bold | writeline
+dotnet ...$publish.BuildArgs
+
+if ($tosh.Last.ExitCode != 0) {
+    throw "dotnet build failed."
+}
+
+writeline ""
+
+# Publish the pre-built output as a single-file binary
+styled $"Publishing ToSh ({$publish.RuntimeId})..." --fg bright-cyan --bold | writeline
+dotnet ...$publish.PublishArgs
 
 if ($tosh.Last.ExitCode != 0) {
     throw "dotnet publish failed."
 }
 
+var build_duration = ((date now) - $total_start)
+
 writeline ""
+
 
 # Find the published binary
 var candidates = [
@@ -165,16 +232,28 @@ var candidates = [
     System.IO.Path.Join($publish.Directory, "tosh.exe")
 ]
 
+writeline "Searching for published binary in these candidate paths:"
+for candidate in ($candidates) {
+    writeline $"  {$candidate}"
+}
+
+var found = false
 for candidate in ($candidates) {
     var candidate_check = (is-file $candidate)
-
     if ($candidate_check.IsFile) {
         $publish.Binary = $candidate
+        writeline $"Found published binary: {$candidate}"
+        $found = true
         break
     }
 }
 
-if ($publish.Binary == null or $publish.Binary == "") {
+if (not found or $publish.Binary == null or $publish.Binary == "") {
+    writeline $"ERROR: Publish completed, but no executable was found in {$publish.Directory}"
+    writeline "Checked these candidate paths:"
+    for candidate in ($candidates) {
+        writeline "  $candidate"
+    }
     throw $"Publish completed, but no executable was found in {$publish.Directory}"
 }
 
@@ -187,10 +266,35 @@ if ($publish.Binary ends-with ".exe" or $publish.RuntimeId starts-with "win-") {
 
 var target_path = System.IO.Path.Join($publish.Directory, $target_name)
 
+
+
+# Always set $publish.Binary to the final target path, even if no move is needed
 if ($publish.Binary != $target_path) {
-    rm -f $target_path | ignore
-    mv $publish.Binary $target_path | ignore
-    $publish.Binary = $target_path
+    try {
+        rm -f $target_path
+        mv $publish.Binary $target_path
+        writeline $"Renamed published binary from {$publish.Binary} to {$target_path}"
+    } catch (err) {
+        writeline $"ERROR: Failed to rename published binary from {$publish.Binary} to {$target_path}: {$err.Message}"
+        writeline "TIP: If the binary is in use, try building to a different output directory, then copy to ~/.local/bin/tosh only when not running."
+        throw $"Failed to rename published binary from {$publish.Binary} to {$target_path}: {$err.Message}"
+    }
+}
+$publish.Binary = $target_path
+
+# Explicitly check that the target file exists after move/rename
+if (not (is-file $publish.Binary).IsFile) {
+    writeline $"ERROR: After rename, expected published binary at {$publish.Binary}, but it does not exist."
+    writeline "Check if dotnet publish output is as expected and that the move/rename step succeeded."
+    writeline "TIP: If the binary is in use, try building to a different output directory, then copy to ~/.local/bin/tosh only when not running."
+    throw $"After rename, expected published binary at {$publish.Binary}, but it does not exist."
+}
+
+
+# Double-check that the binary exists before continuing
+if (not (is-file $publish.Binary).IsFile) {
+    writeline $"ERROR: Expected published binary at {$publish.Binary}, but it does not exist."
+    throw $"Expected published binary at {$publish.Binary}, but it does not exist."
 }
 
 var binary_info = (ls $publish.Binary | first)
@@ -205,6 +309,44 @@ styled $"""
     Trimmed: {$publish.Trimmed}
 
     """ --fg gray --dim | writeline
+
+
+# Install to ~/.local/bin unless --no-install is set
+if (not $no_install) {
+    if (not (is-file $publish.Binary).IsFile) {
+        writeline $"ERROR: Cannot install because published binary at {$publish.Binary} does not exist."
+        throw $"Cannot install because published binary at {$publish.Binary} does not exist."
+    }
+    var install_dir = System.IO.Path.Join($env.HOME, ".local", "bin")
+    var install_path = System.IO.Path.Join($install_dir, $target_name)
+    var resolved_binary = System.IO.Path.GetFullPath($publish.Binary)
+    var resolved_install = System.IO.Path.GetFullPath($install_path)
+    if ($resolved_binary == $resolved_install) {
+        # Binary was published directly to the install location; nothing to copy.
+        chmod +x $publish.Binary
+        styled $"Installed:  {$install_path} (already in place)" --fg bright-green | writeline
+    } else if ((is-dir $install_dir).IsDirectory) {
+        # Remove first in case the binary is running (Text file busy).
+        rm -f $install_path | ignore
+        cp $publish.Binary $install_path
+        chmod +x $install_path
+        styled $"Installed:  {$install_path}" --fg bright-green | writeline
+    }
+
+    # Grant cap_net_raw so the built-in ping command can use raw sockets without sudo.
+    if (not ($publish.RuntimeId starts-with "win-")) {
+        try {
+            styled "Setting cap_net_raw on tosh binary (requires sudo)..." --fg gray --dim | writeline
+            sudo setcap cap_net_raw+ep $install_path
+        } catch (err) {
+            styled $"Warning: Could not set cap_net_raw ({$err.Message}). Run: sudo setcap cap_net_raw+ep {$install_path}" --fg yellow | writeline
+        }
+    }
+}
+
+
+# If --exec is set, replace the current process with the new shell
+if ($exec_after) { exec $publish.Binary }
 
 return new BuildResult(
     $publish.Binary,

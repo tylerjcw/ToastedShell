@@ -11,8 +11,17 @@ using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.Loader;
 using System.Text;
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using System.IO.Compression;
+using System.Numerics;
+using System.Runtime.InteropServices;
+using System.Security.Claims;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
+using Tosh.Core.Units;
 
 namespace Tosh.Core;
 
@@ -29,13 +38,17 @@ public static class BuiltInDisplayProfiles
         registry.Register(CreateTimeOnlyProfile(preferences));
         registry.Register(CreateTimeSpanProfile(preferences));
         registry.Register(CreateTemporalAmountProfile(preferences));
+        registry.Register(CreateDurationQuantityProfile(preferences));
         registry.Register(CreateStorageSizeProfile(preferences));
         registry.Register(CreateShellTextLineProfile());
         registry.Register(CreateManagedFileHandleProfile());
         registry.Register(CreateIpAddressProfile());
+        registry.Register(CreateCommandTimingInfoProfile());
         registry.Register(CreateIpAddressInfoProfile());
         registry.Register(CreateIpInterfaceProfile());
         registry.Register(CreateIpRouteProfile());
+        registry.Register(CreateIpNeighborProfile());
+        registry.Register(CreateIpRuleProfile());
         registry.Register(CreateSystemdUnitInfoProfile());
         registry.Register(CreateSystemdUnitFileInfoProfile());
         registry.Register(CreateSystemdUnitPropertySetProfile());
@@ -94,6 +107,18 @@ public static class BuiltInDisplayProfiles
         registry.Register(CreateWebHeaderCollectionProfile());
         registry.Register(CreateFileVersionInfoProfile());
         registry.Register(CreateNetworkInterfaceProfile());
+        registry.Register(CreateIPInterfacePropertiesProfile());
+        registry.Register(CreateUnicastIPAddressInformationProfile());
+        registry.Register(CreateGatewayIPAddressInformationProfile());
+        registry.Register(CreateTcpConnectionInformationProfile());
+        registry.Register(CreatePingOptionsProfile());
+        registry.Register(CreateHttpMethodProfile());
+        registry.Register(CreateHttpStatusCodeProfile());
+        registry.Register(CreateMediaTypeHeaderValueProfile());
+        registry.Register(CreateAuthenticationHeaderValueProfile());
+        registry.Register(CreateContentDispositionHeaderValueProfile());
+        registry.Register(CreateEntityTagHeaderValueProfile());
+        registry.Register(CreateCacheControlHeaderValueProfile());
         registry.Register(CreateAssemblyLoadContextProfile());
         registry.Register(CreateProcessStartInfoProfile());
         registry.Register(CreateProcessModuleProfile());
@@ -111,6 +136,7 @@ public static class BuiltInDisplayProfiles
         registry.Register(CreateTextStatisticsProfile());
         registry.Register(CreateDictionaryRecordProfile());
         registry.Register(CreateReadOnlyDictionaryRecordProfile());
+        registry.Register(CreateObjectKeyedDictionaryProfile());
         registry.Register(CreateFileSystemEntryTypeProfile());
         registry.Register(CreateFileSystemEntryProfile(preferences));
         registry.Register(CreateFileSystemInfoProfile(preferences));
@@ -123,6 +149,7 @@ public static class BuiltInDisplayProfiles
         registry.Register(CreatePingReplyInfoProfile());
         registry.Register(CreateProcessProfile());
         registry.Register(CreateProcessInfoProfile());
+        registry.Register(CreateProcessTreeInfoProfile());
         registry.Register(CreateShellJobStatusProfile());
         registry.Register(CreateShellJobInfoProfile());
         registry.Register(CreateShellJobCompletionProfile());
@@ -143,12 +170,51 @@ public static class BuiltInDisplayProfiles
         registry.Register(CreateFormatterStatusProfile());
         registry.Register(CreateXDocumentProfile());
         registry.Register(CreateXElementProfile());
+        registry.Register(CreateJsonDocumentProfile());
+        registry.Register(CreateJsonElementProfile());
+        registry.Register(CreateJsonPropertyProfile());
+        registry.Register(CreateJsonNodeProfile());
+        registry.Register(CreateJsonObjectProfile());
+        registry.Register(CreateJsonArrayProfile());
+        registry.Register(CreateJsonValueProfile());
         registry.Register(CreateCommandResultProfile());
         registry.Register(CreateStyledTextProfile());
         registry.Register(CreateEventRaiseResultProfile());
         registry.Register(CreateShellEventHandlerProfile());
         registry.Register(CreateEventHandlerRemovalResultProfile());
         registry.Register(CreateEventClearResultProfile());
+
+        // Streams and I/O
+        registry.Register(CreateStreamProfile());
+        registry.Register(CreateStreamReaderProfile());
+        registry.Register(CreateStreamWriterProfile());
+        registry.Register(CreateZipArchiveProfile());
+        registry.Register(CreateZipArchiveEntryProfile());
+
+        // Platform and runtime
+        registry.Register(CreateOperatingSystemProfile());
+        registry.Register(CreateArchitectureProfile());
+        registry.Register(CreateRuntimeInformationProfile());
+
+        // Security and identity
+        registry.Register(CreateX509Certificate2Profile());
+        registry.Register(CreateX500DistinguishedNameProfile());
+        registry.Register(CreateOidProfile());
+        registry.Register(CreateClaimProfile());
+        registry.Register(CreateClaimsIdentityProfile());
+        registry.Register(CreateClaimsPrincipalProfile());
+
+        // Numerics and geometry
+        registry.Register(CreateBigIntegerProfile());
+        registry.Register(CreateComplexProfile());
+        registry.Register(CreateVector2Profile());
+        registry.Register(CreateVector3Profile());
+        registry.Register(CreateVector4Profile());
+        registry.Register(CreateQuaternionProfile());
+        registry.Register(CreateMatrix4x4Profile());
+
+        // WebProxy
+        registry.Register(CreateWebProxyProfile());
     }
 
     private static DisplayProfile CreateDateTimeProfile(DisplayPreferences preferences)
@@ -272,6 +338,24 @@ public static class BuiltInDisplayProfiles
                         : preferences.TimeSpan.ScalarFormat));
     }
 
+    private static DisplayProfile CreateDurationQuantityProfile(DisplayPreferences preferences)
+    {
+        return DisplayProfile
+            .For<DurationQuantity>()
+            .AddValueCase(
+                DisplaySurface.TableCell,
+                context => FormatTimeSpan(
+                    ((DurationQuantity)context.Value).TimeSpan,
+                    preferences.TimeSpan.TableMode,
+                    preferences.TimeSpan.TableFormat))
+            .AddValueCase(
+                DisplaySurface.Root | DisplaySurface.Nested,
+                context => FormatTimeSpan(
+                    ((DurationQuantity)context.Value).TimeSpan,
+                    preferences.TimeSpan.ScalarMode,
+                    preferences.TimeSpan.ScalarFormat));
+    }
+
     private static DisplayProfile CreateShellTextLineProfile()
     {
         return DisplayProfile
@@ -291,6 +375,15 @@ public static class BuiltInDisplayProfiles
             .AddValueCase(
                 DisplaySurface.Root | DisplaySurface.Nested | DisplaySurface.TableCell,
                 context => ((IPAddress)context.Value).ToString());
+    }
+
+    private static DisplayProfile CreateCommandTimingInfoProfile()
+    {
+        return DisplayProfile
+            .For<CommandTimingInfo>()
+            .AddTableCase(
+                context => context.Rows.Count == 1,
+                _ => BuildCommandTimingInfoColumns());
     }
 
     private static DisplayProfile CreateManagedFileHandleProfile()
@@ -345,6 +438,36 @@ public static class BuiltInDisplayProfiles
                     var gateway = value.Gateway is null ? string.Empty : $" via {value.Gateway}";
                     var device = string.IsNullOrWhiteSpace(value.Device) ? string.Empty : $" dev {value.Device}";
                     return $"{value.Destination}{gateway}{device}".TrimEnd();
+                });
+    }
+
+    private static DisplayProfile CreateIpNeighborProfile()
+    {
+        return DisplayProfile
+            .For<IpNeighborInfo>()
+            .AddTableCase(_ => BuildIpNeighborColumns())
+            .AddSelectableTableColumns(_ => BuildIpNeighborColumns())
+            .AddValueCase(
+                DisplaySurface.Root | DisplaySurface.Nested | DisplaySurface.TableCell,
+                context =>
+                {
+                    var value = (IpNeighborInfo)context.Value;
+                    return $"{value.Address} ({value.StateText})";
+                });
+    }
+
+    private static DisplayProfile CreateIpRuleProfile()
+    {
+        return DisplayProfile
+            .For<IpRuleInfo>()
+            .AddTableCase(_ => BuildIpRuleColumns())
+            .AddSelectableTableColumns(_ => BuildIpRuleColumns())
+            .AddValueCase(
+                DisplaySurface.Root | DisplaySurface.Nested | DisplaySurface.TableCell,
+                context =>
+                {
+                    var value = (IpRuleInfo)context.Value;
+                    return $"{value.Priority}: from {value.SourceText} lookup {value.Table}";
                 });
     }
 
@@ -1295,6 +1418,43 @@ public static class BuiltInDisplayProfiles
             .AddTableCase(context => BuildRecordColumns(context.Rows));
     }
 
+    private static DisplayProfile CreateObjectKeyedDictionaryProfile()
+    {
+        return DisplayProfile
+            .For<Dictionary<object, object?>>()
+            .AddTableCase(
+                context => context.Rows.Count == 1,
+                context => BuildObjectKeyedDictColumns((Dictionary<object, object?>)context.Rows[0]))
+            .AddValueCase(
+                DisplaySurface.Root | DisplaySurface.Nested | DisplaySurface.TableCell,
+                context =>
+                {
+                    var dict = (Dictionary<object, object?>)context.Value;
+                    if (dict.Count == 0)
+                    {
+                        return "{} (empty)";
+                    }
+
+                    var preview = string.Join(", ", dict.Take(4).Select(kv => $"{FormatDictKey(kv.Key)} => {FormatDisplaySummaryValue(kv.Value)}"));
+                    return dict.Count > 4 ? $"{{ {preview}, ... }} ({dict.Count} entries)" : $"{{ {preview} }}";
+                });
+    }
+
+    private static IReadOnlyList<DisplayTableColumn> BuildObjectKeyedDictColumns(Dictionary<object, object?> dict)
+    {
+        return dict.Select((kv, index) => new DisplayTableColumn(
+            FormatDictKey(kv.Key),
+            _ => kv.Value,
+            Priority: index,
+            CanHide: index > 0))
+        .ToArray();
+    }
+
+    private static string FormatDictKey(object key)
+    {
+        return key is string s ? $"\"{s}\"" : key?.ToString() ?? "null";
+    }
+
     private static DisplayProfile CreateFileSystemEntryTypeProfile()
     {
         return DisplayProfile
@@ -1531,6 +1691,21 @@ public static class BuiltInDisplayProfiles
                     new DisplayTableColumn("Cpu", row => ((ProcessInfo)row).Cpu, MinWidth: 6, MaxWidth: 12, Priority: 30),
                     new DisplayTableColumn("Started", row => ((ProcessInfo)row).Started, MinWidth: 11, MaxWidth: 18, Priority: 40),
                     new DisplayTableColumn("Path", row => ((ProcessInfo)row).Path, MinWidth: 16, MaxWidth: 48, Priority: 50),
+                ]);
+    }
+
+    private static DisplayProfile CreateProcessTreeInfoProfile()
+    {
+        return DisplayProfile
+            .For<ProcessTreeInfo>()
+            .AddTableCase(
+                _ =>
+                [
+                    new DisplayTableColumn("Name", row => ((ProcessTreeInfo)row).Name, MinWidth: 10, MaxWidth: 40, Priority: 0, CanHide: false, IsTree: true),
+                    new DisplayTableColumn("Id", row => ((ProcessTreeInfo)row).Id, DisplayTableAlignment.Right, MinWidth: 3, MaxWidth: 8, Priority: 10),
+                    new DisplayTableColumn("Memory", row => ((ProcessTreeInfo)row).Memory, DisplayTableAlignment.Right, MinWidth: 4, MaxWidth: 12, Priority: 20),
+                    new DisplayTableColumn("Cpu", row => ((ProcessTreeInfo)row).Cpu, MinWidth: 6, MaxWidth: 12, Priority: 30),
+                    new DisplayTableColumn("User", row => ((ProcessTreeInfo)row).UserName, MinWidth: 4, MaxWidth: 16, Priority: 40),
                 ]);
     }
 
@@ -2055,6 +2230,490 @@ public static class BuiltInDisplayProfiles
             .AddValueCase(
                 DisplaySurface.Root | DisplaySurface.Nested | DisplaySurface.TableCell,
                 context => ((XElement)context.Value).ToString(SaveOptions.DisableFormatting));
+    }
+
+    // ── JSON (System.Text.Json) ──────────────────────────────────────────
+
+    private static DisplayProfile CreateJsonDocumentProfile()
+    {
+        return DisplayProfile
+            .For<JsonDocument>()
+            .AddTableCase(
+                context => context.Rows.Count == 1,
+                _ => BuildJsonDocumentColumns())
+            .AddValueCase(
+                DisplaySurface.Root | DisplaySurface.Nested | DisplaySurface.TableCell,
+                context =>
+                {
+                    var doc = (JsonDocument)context.Value;
+                    return FormatJsonElementPreview(doc.RootElement);
+                });
+    }
+
+    private static IReadOnlyList<DisplayTableColumn> BuildJsonDocumentColumns()
+    {
+        return
+        [
+            new DisplayTableColumn("RootKind", row => ((JsonDocument)row).RootElement.ValueKind, MinWidth: 5, MaxWidth: 12, Priority: 0, CanHide: false),
+            new DisplayTableColumn("Content", row => FormatJsonElementPreview(((JsonDocument)row).RootElement), MinWidth: 8, MaxWidth: 96, Priority: 10, CanHide: false),
+        ];
+    }
+
+    private static DisplayProfile CreateJsonElementProfile()
+    {
+        return DisplayProfile
+            .For<JsonElement>()
+            .AddTableCase(
+                context => context.Rows.Count == 1,
+                _ => BuildJsonElementColumns())
+            .AddValueCase(
+                DisplaySurface.Root | DisplaySurface.Nested | DisplaySurface.TableCell,
+                context => FormatJsonElementPreview((JsonElement)context.Value));
+    }
+
+    private static IReadOnlyList<DisplayTableColumn> BuildJsonElementColumns()
+    {
+        return
+        [
+            new DisplayTableColumn("Kind", row => ((JsonElement)row).ValueKind, MinWidth: 5, MaxWidth: 12, Priority: 0, CanHide: false),
+            new DisplayTableColumn("Value", row => FormatJsonElementValue((JsonElement)row), MinWidth: 4, MaxWidth: 96, Priority: 10, CanHide: false),
+        ];
+    }
+
+    private static DisplayProfile CreateJsonPropertyProfile()
+    {
+        return DisplayProfile
+            .For<JsonProperty>()
+            .AddTableCase(_ => BuildJsonPropertyColumns())
+            .AddValueCase(
+                DisplaySurface.Root | DisplaySurface.Nested | DisplaySurface.TableCell,
+                context =>
+                {
+                    var prop = (JsonProperty)context.Value;
+                    return $"{prop.Name}: {FormatJsonElementPreview(prop.Value)}";
+                });
+    }
+
+    private static IReadOnlyList<DisplayTableColumn> BuildJsonPropertyColumns()
+    {
+        return
+        [
+            new DisplayTableColumn("Name", row => ((JsonProperty)row).Name, MinWidth: 4, MaxWidth: 48, Priority: 0, CanHide: false),
+            new DisplayTableColumn("Kind", row => ((JsonProperty)row).Value.ValueKind, MinWidth: 5, MaxWidth: 12, Priority: 10),
+            new DisplayTableColumn("Value", row => FormatJsonElementValue(((JsonProperty)row).Value), MinWidth: 4, MaxWidth: 96, Priority: 20, CanHide: false),
+        ];
+    }
+
+    private static DisplayProfile CreateJsonNodeProfile()
+    {
+        return DisplayProfile
+            .For<JsonNode>()
+            .AddTableCase(
+                context => context.Rows.Count == 1,
+                _ => BuildJsonNodeColumns())
+            .AddValueCase(
+                DisplaySurface.Root | DisplaySurface.Nested | DisplaySurface.TableCell,
+                context => FormatJsonNodePreview((JsonNode)context.Value));
+    }
+
+    private static IReadOnlyList<DisplayTableColumn> BuildJsonNodeColumns()
+    {
+        return
+        [
+            new DisplayTableColumn("Type", row => ((JsonNode)row).GetValueKind(), MinWidth: 5, MaxWidth: 12, Priority: 0, CanHide: false),
+            new DisplayTableColumn("Value", row => FormatJsonNodePreview((JsonNode)row), MinWidth: 4, MaxWidth: 96, Priority: 10, CanHide: false),
+        ];
+    }
+
+    private static DisplayProfile CreateJsonObjectProfile()
+    {
+        return DisplayProfile
+            .For<JsonObject>()
+            .AddTableCase(
+                context => context.Rows.Count == 1,
+                _ => BuildJsonObjectColumns())
+            .AddValueCase(
+                DisplaySurface.Root | DisplaySurface.Nested | DisplaySurface.TableCell,
+                context =>
+                {
+                    var obj = (JsonObject)context.Value;
+                    return $"{{...}} ({obj.Count} properties)";
+                });
+    }
+
+    private static IReadOnlyList<DisplayTableColumn> BuildJsonObjectColumns()
+    {
+        return
+        [
+            new DisplayTableColumn("Count", row => ((JsonObject)row).Count, DisplayTableAlignment.Right, MinWidth: 3, MaxWidth: 8, Priority: 0, CanHide: false),
+            new DisplayTableColumn("Keys", row => FormatJsonObjectKeys((JsonObject)row), MinWidth: 8, MaxWidth: 96, Priority: 10, CanHide: false),
+        ];
+    }
+
+    private static DisplayProfile CreateJsonArrayProfile()
+    {
+        return DisplayProfile
+            .For<JsonArray>()
+            .AddTableCase(
+                context => context.Rows.Count == 1,
+                _ => BuildJsonArrayColumns())
+            .AddValueCase(
+                DisplaySurface.Root | DisplaySurface.Nested | DisplaySurface.TableCell,
+                context =>
+                {
+                    var arr = (JsonArray)context.Value;
+                    return $"[...] ({arr.Count} items)";
+                });
+    }
+
+    private static IReadOnlyList<DisplayTableColumn> BuildJsonArrayColumns()
+    {
+        return
+        [
+            new DisplayTableColumn("Count", row => ((JsonArray)row).Count, DisplayTableAlignment.Right, MinWidth: 3, MaxWidth: 8, Priority: 0, CanHide: false),
+            new DisplayTableColumn("Preview", row => FormatJsonArrayPreview((JsonArray)row), MinWidth: 8, MaxWidth: 96, Priority: 10, CanHide: false),
+        ];
+    }
+
+    private static DisplayProfile CreateJsonValueProfile()
+    {
+        return DisplayProfile
+            .For<JsonValue>()
+            .AddTableCase(
+                context => context.Rows.Count == 1,
+                _ => BuildJsonValueColumns())
+            .AddValueCase(
+                DisplaySurface.Root | DisplaySurface.Nested | DisplaySurface.TableCell,
+                context => ((JsonValue)context.Value).ToJsonString());
+    }
+
+    private static IReadOnlyList<DisplayTableColumn> BuildJsonValueColumns()
+    {
+        return
+        [
+            new DisplayTableColumn("Kind", row => ((JsonValue)row).GetValueKind(), MinWidth: 5, MaxWidth: 12, Priority: 0, CanHide: false),
+            new DisplayTableColumn("Value", row => ((JsonValue)row).ToJsonString(), MinWidth: 4, MaxWidth: 96, Priority: 10, CanHide: false),
+        ];
+    }
+
+    private static string FormatJsonElementPreview(JsonElement element)
+    {
+        return element.ValueKind switch
+        {
+            JsonValueKind.Object => $"{{...}} ({element.EnumerateObject().Count()} properties)",
+            JsonValueKind.Array => $"[...] ({element.GetArrayLength()} items)",
+            _ => FormatJsonElementValue(element),
+        };
+    }
+
+    private static string FormatJsonElementValue(JsonElement element)
+    {
+        return element.ValueKind switch
+        {
+            JsonValueKind.String => element.GetString() ?? "null",
+            JsonValueKind.Number => element.GetRawText(),
+            JsonValueKind.True => "true",
+            JsonValueKind.False => "false",
+            JsonValueKind.Null => "null",
+            JsonValueKind.Undefined => "<undefined>",
+            JsonValueKind.Object => $"{{...}} ({element.EnumerateObject().Count()} properties)",
+            JsonValueKind.Array => $"[...] ({element.GetArrayLength()} items)",
+            _ => element.GetRawText(),
+        };
+    }
+
+    private static string FormatJsonNodePreview(JsonNode node)
+    {
+        return node switch
+        {
+            JsonObject obj => $"{{...}} ({obj.Count} properties)",
+            JsonArray arr => $"[...] ({arr.Count} items)",
+            JsonValue val => val.ToJsonString(),
+            _ => node.ToJsonString(),
+        };
+    }
+
+    private static string FormatJsonObjectKeys(JsonObject obj, int maxKeys = 8)
+    {
+        var keys = obj.Select(kv => kv.Key).Take(maxKeys + 1).ToList();
+        var preview = string.Join(", ", keys.Take(maxKeys));
+        return keys.Count > maxKeys ? $"{preview}, ..." : preview;
+    }
+
+    private static string FormatJsonArrayPreview(JsonArray arr, int maxItems = 6)
+    {
+        var items = arr
+            .Take(maxItems + 1)
+            .Select(n => n is null ? "null" : FormatJsonNodePreview(n))
+            .ToList();
+        var preview = string.Join(", ", items.Take(maxItems));
+        return items.Count > maxItems ? $"[{preview}, ...]" : $"[{preview}]";
+    }
+
+    // ── Network information ──────────────────────────────────────────────
+
+    private static DisplayProfile CreateIPInterfacePropertiesProfile()
+    {
+        return DisplayProfile
+            .For<IPInterfaceProperties>()
+            .AddTableCase(
+                context => context.Rows.Count == 1,
+                _ => BuildIPInterfacePropertiesColumns())
+            .AddValueCase(
+                DisplaySurface.Root | DisplaySurface.Nested | DisplaySurface.TableCell,
+                context =>
+                {
+                    var props = (IPInterfaceProperties)context.Value;
+                    var dns = props.DnsAddresses;
+                    return dns.Count > 0
+                        ? $"DNS: {string.Join(", ", dns.Take(3))}{(dns.Count > 3 ? ", ..." : "")}"
+                        : "<no DNS>";
+                });
+    }
+
+    private static IReadOnlyList<DisplayTableColumn> BuildIPInterfacePropertiesColumns()
+    {
+        return
+        [
+            new DisplayTableColumn("DnsSuffix", row => NullIfEmpty(((IPInterfaceProperties)row).DnsSuffix), MinWidth: 4, MaxWidth: 48, Priority: 0, CanHide: false),
+            new DisplayTableColumn("DnsAddresses", row => FormatIpAddressCollection(((IPInterfaceProperties)row).DnsAddresses), MinWidth: 4, MaxWidth: 96, Priority: 10),
+            new DisplayTableColumn("UnicastAddresses", row => ((IPInterfaceProperties)row).UnicastAddresses.Count, DisplayTableAlignment.Right, MinWidth: 1, MaxWidth: 8, Priority: 20),
+            new DisplayTableColumn("GatewayAddresses", row => ((IPInterfaceProperties)row).GatewayAddresses.Count, DisplayTableAlignment.Right, MinWidth: 1, MaxWidth: 8, Priority: 30),
+        ];
+    }
+
+    private static DisplayProfile CreateUnicastIPAddressInformationProfile()
+    {
+        return DisplayProfile
+            .For<UnicastIPAddressInformation>()
+            .AddTableCase(_ => BuildUnicastIPAddressInformationColumns())
+            .AddValueCase(
+                DisplaySurface.Root | DisplaySurface.Nested | DisplaySurface.TableCell,
+                context => ((UnicastIPAddressInformation)context.Value).Address.ToString());
+    }
+
+    private static IReadOnlyList<DisplayTableColumn> BuildUnicastIPAddressInformationColumns()
+    {
+        return
+        [
+            new DisplayTableColumn("Address", row => ((UnicastIPAddressInformation)row).Address, MinWidth: 7, MaxWidth: 48, Priority: 0, CanHide: false),
+            new DisplayTableColumn("PrefixLength", row => ((UnicastIPAddressInformation)row).PrefixLength, DisplayTableAlignment.Right, MinWidth: 1, MaxWidth: 6, Priority: 10),
+            new DisplayTableColumn("Family", row => ((UnicastIPAddressInformation)row).Address.AddressFamily, MinWidth: 4, MaxWidth: 22, Priority: 20),
+        ];
+    }
+
+    private static DisplayProfile CreateGatewayIPAddressInformationProfile()
+    {
+        return DisplayProfile
+            .For<GatewayIPAddressInformation>()
+            .AddTableCase(_ => BuildGatewayIPAddressInformationColumns())
+            .AddValueCase(
+                DisplaySurface.Root | DisplaySurface.Nested | DisplaySurface.TableCell,
+                context => ((GatewayIPAddressInformation)context.Value).Address.ToString());
+    }
+
+    private static IReadOnlyList<DisplayTableColumn> BuildGatewayIPAddressInformationColumns()
+    {
+        return
+        [
+            new DisplayTableColumn("Address", row => ((GatewayIPAddressInformation)row).Address, MinWidth: 7, MaxWidth: 48, Priority: 0, CanHide: false),
+            new DisplayTableColumn("Family", row => ((GatewayIPAddressInformation)row).Address.AddressFamily, MinWidth: 4, MaxWidth: 22, Priority: 10),
+        ];
+    }
+
+    private static DisplayProfile CreateTcpConnectionInformationProfile()
+    {
+        return DisplayProfile
+            .For<System.Net.NetworkInformation.TcpConnectionInformation>()
+            .AddTableCase(_ => BuildTcpConnectionInformationColumns())
+            .AddValueCase(
+                DisplaySurface.Root | DisplaySurface.Nested | DisplaySurface.TableCell,
+                context =>
+                {
+                    var tcp = (System.Net.NetworkInformation.TcpConnectionInformation)context.Value;
+                    return $"{tcp.LocalEndPoint} → {tcp.RemoteEndPoint} ({tcp.State})";
+                });
+    }
+
+    private static IReadOnlyList<DisplayTableColumn> BuildTcpConnectionInformationColumns()
+    {
+        return
+        [
+            new DisplayTableColumn("Local", row => ((System.Net.NetworkInformation.TcpConnectionInformation)row).LocalEndPoint, MinWidth: 8, MaxWidth: 48, Priority: 0, CanHide: false),
+            new DisplayTableColumn("Remote", row => ((System.Net.NetworkInformation.TcpConnectionInformation)row).RemoteEndPoint, MinWidth: 8, MaxWidth: 48, Priority: 10, CanHide: false),
+            new DisplayTableColumn("State", row => ((System.Net.NetworkInformation.TcpConnectionInformation)row).State, MinWidth: 5, MaxWidth: 18, Priority: 20),
+        ];
+    }
+
+    private static DisplayProfile CreatePingOptionsProfile()
+    {
+        return DisplayProfile
+            .For<PingOptions>()
+            .AddTableCase(
+                context => context.Rows.Count == 1,
+                _ => BuildPingOptionsColumns())
+            .AddValueCase(
+                DisplaySurface.Root | DisplaySurface.Nested | DisplaySurface.TableCell,
+                context =>
+                {
+                    var opts = (PingOptions)context.Value;
+                    return $"TTL={opts.Ttl}, DontFragment={opts.DontFragment}";
+                });
+    }
+
+    private static IReadOnlyList<DisplayTableColumn> BuildPingOptionsColumns()
+    {
+        return
+        [
+            new DisplayTableColumn("Ttl", row => ((PingOptions)row).Ttl, DisplayTableAlignment.Right, MinWidth: 1, MaxWidth: 8, Priority: 0, CanHide: false),
+            new DisplayTableColumn("DontFragment", row => ((PingOptions)row).DontFragment, MinWidth: 4, MaxWidth: 5, Priority: 10),
+        ];
+    }
+
+    // ── HTTP types ───────────────────────────────────────────────────────
+
+    private static DisplayProfile CreateHttpMethodProfile()
+    {
+        return DisplayProfile
+            .For<HttpMethod>()
+            .AddValueCase(
+                DisplaySurface.Root | DisplaySurface.Nested | DisplaySurface.TableCell,
+                context => ((HttpMethod)context.Value).Method);
+    }
+
+    private static DisplayProfile CreateHttpStatusCodeProfile()
+    {
+        return DisplayProfile
+            .For<HttpStatusCode>()
+            .AddTableCase(
+                context => context.Rows.Count == 1,
+                _ => BuildHttpStatusCodeColumns())
+            .AddValueCase(
+                DisplaySurface.Root | DisplaySurface.Nested | DisplaySurface.TableCell,
+                context =>
+                {
+                    var code = (HttpStatusCode)context.Value;
+                    return $"{(int)code} {code}";
+                });
+    }
+
+    private static IReadOnlyList<DisplayTableColumn> BuildHttpStatusCodeColumns()
+    {
+        return
+        [
+            new DisplayTableColumn("Code", row => (int)(HttpStatusCode)row, DisplayTableAlignment.Right, MinWidth: 3, MaxWidth: 6, Priority: 0, CanHide: false),
+            new DisplayTableColumn("Name", row => ((HttpStatusCode)row).ToString(), MinWidth: 4, MaxWidth: 32, Priority: 10, CanHide: false),
+        ];
+    }
+
+    private static DisplayProfile CreateMediaTypeHeaderValueProfile()
+    {
+        return DisplayProfile
+            .For<MediaTypeHeaderValue>()
+            .AddTableCase(
+                context => context.Rows.Count == 1,
+                _ => BuildMediaTypeHeaderValueColumns())
+            .AddValueCase(
+                DisplaySurface.Root | DisplaySurface.Nested | DisplaySurface.TableCell,
+                context => ((MediaTypeHeaderValue)context.Value).ToString());
+    }
+
+    private static IReadOnlyList<DisplayTableColumn> BuildMediaTypeHeaderValueColumns()
+    {
+        return
+        [
+            new DisplayTableColumn("MediaType", row => ((MediaTypeHeaderValue)row).MediaType, MinWidth: 4, MaxWidth: 64, Priority: 0, CanHide: false),
+            new DisplayTableColumn("CharSet", row => NullIfEmpty(((MediaTypeHeaderValue)row).CharSet), MinWidth: 3, MaxWidth: 24, Priority: 10),
+        ];
+    }
+
+    private static DisplayProfile CreateAuthenticationHeaderValueProfile()
+    {
+        return DisplayProfile
+            .For<AuthenticationHeaderValue>()
+            .AddTableCase(
+                context => context.Rows.Count == 1,
+                _ => BuildAuthenticationHeaderValueColumns())
+            .AddValueCase(
+                DisplaySurface.Root | DisplaySurface.Nested | DisplaySurface.TableCell,
+                context => ((AuthenticationHeaderValue)context.Value).ToString());
+    }
+
+    private static IReadOnlyList<DisplayTableColumn> BuildAuthenticationHeaderValueColumns()
+    {
+        return
+        [
+            new DisplayTableColumn("Scheme", row => ((AuthenticationHeaderValue)row).Scheme, MinWidth: 3, MaxWidth: 24, Priority: 0, CanHide: false),
+            new DisplayTableColumn("Parameter", row => NullIfEmpty(((AuthenticationHeaderValue)row).Parameter), MinWidth: 4, MaxWidth: 96, Priority: 10),
+        ];
+    }
+
+    private static DisplayProfile CreateContentDispositionHeaderValueProfile()
+    {
+        return DisplayProfile
+            .For<ContentDispositionHeaderValue>()
+            .AddTableCase(
+                context => context.Rows.Count == 1,
+                _ => BuildContentDispositionHeaderValueColumns())
+            .AddValueCase(
+                DisplaySurface.Root | DisplaySurface.Nested | DisplaySurface.TableCell,
+                context => ((ContentDispositionHeaderValue)context.Value).ToString());
+    }
+
+    private static IReadOnlyList<DisplayTableColumn> BuildContentDispositionHeaderValueColumns()
+    {
+        return
+        [
+            new DisplayTableColumn("DispositionType", row => ((ContentDispositionHeaderValue)row).DispositionType, MinWidth: 4, MaxWidth: 24, Priority: 0, CanHide: false),
+            new DisplayTableColumn("FileName", row => NullIfEmpty(((ContentDispositionHeaderValue)row).FileName), MinWidth: 3, MaxWidth: 48, Priority: 10),
+            new DisplayTableColumn("Size", row => ((ContentDispositionHeaderValue)row).Size, DisplayTableAlignment.Right, MinWidth: 1, MaxWidth: 12, Priority: 20),
+        ];
+    }
+
+    private static DisplayProfile CreateEntityTagHeaderValueProfile()
+    {
+        return DisplayProfile
+            .For<EntityTagHeaderValue>()
+            .AddTableCase(
+                context => context.Rows.Count == 1,
+                _ => BuildEntityTagHeaderValueColumns())
+            .AddValueCase(
+                DisplaySurface.Root | DisplaySurface.Nested | DisplaySurface.TableCell,
+                context => ((EntityTagHeaderValue)context.Value).ToString());
+    }
+
+    private static IReadOnlyList<DisplayTableColumn> BuildEntityTagHeaderValueColumns()
+    {
+        return
+        [
+            new DisplayTableColumn("Tag", row => ((EntityTagHeaderValue)row).Tag, MinWidth: 4, MaxWidth: 64, Priority: 0, CanHide: false),
+            new DisplayTableColumn("IsWeak", row => ((EntityTagHeaderValue)row).IsWeak, MinWidth: 4, MaxWidth: 5, Priority: 10),
+        ];
+    }
+
+    private static DisplayProfile CreateCacheControlHeaderValueProfile()
+    {
+        return DisplayProfile
+            .For<CacheControlHeaderValue>()
+            .AddTableCase(
+                context => context.Rows.Count == 1,
+                _ => BuildCacheControlHeaderValueColumns())
+            .AddValueCase(
+                DisplaySurface.Root | DisplaySurface.Nested | DisplaySurface.TableCell,
+                context => ((CacheControlHeaderValue)context.Value).ToString());
+    }
+
+    private static IReadOnlyList<DisplayTableColumn> BuildCacheControlHeaderValueColumns()
+    {
+        return
+        [
+            new DisplayTableColumn("Public", row => ((CacheControlHeaderValue)row).Public, MinWidth: 4, MaxWidth: 5, Priority: 0),
+            new DisplayTableColumn("Private", row => ((CacheControlHeaderValue)row).Private, MinWidth: 4, MaxWidth: 5, Priority: 10),
+            new DisplayTableColumn("NoCache", row => ((CacheControlHeaderValue)row).NoCache, MinWidth: 4, MaxWidth: 5, Priority: 20),
+            new DisplayTableColumn("NoStore", row => ((CacheControlHeaderValue)row).NoStore, MinWidth: 4, MaxWidth: 5, Priority: 30),
+            new DisplayTableColumn("MaxAge", row => ((CacheControlHeaderValue)row).MaxAge, MinWidth: 3, MaxWidth: 12, Priority: 40),
+            new DisplayTableColumn("MustRevalidate", row => ((CacheControlHeaderValue)row).MustRevalidate, MinWidth: 4, MaxWidth: 5, Priority: 50),
+        ];
     }
 
     private static IReadOnlyList<DisplayTableColumn> BuildGuidColumns()
@@ -2732,6 +3391,22 @@ public static class BuiltInDisplayProfiles
         ];
     }
 
+    private static IReadOnlyList<DisplayTableColumn> BuildCommandTimingInfoColumns()
+    {
+        return
+        [
+            new DisplayTableColumn("Elapsed", row => ((CommandTimingInfo)row).Elapsed, MinWidth: 8, MaxWidth: 20, Priority: 0, CanHide: false),
+            new DisplayTableColumn("User CPU", row => ((CommandTimingInfo)row).UserCpuTime, MinWidth: 8, MaxWidth: 20, Priority: 10, CanHide: false),
+            new DisplayTableColumn("System CPU", row => ((CommandTimingInfo)row).SystemCpuTime, MinWidth: 8, MaxWidth: 20, Priority: 20, CanHide: false),
+            new DisplayTableColumn("CPU %", row => ((CommandTimingInfo)row).CpuPercent, DisplayTableAlignment.Right, MinWidth: 5, MaxWidth: 10, Priority: 30, CanHide: false),
+            new DisplayTableColumn("Peak Memory", row => ((CommandTimingInfo)row).PeakWorkingSet, MinWidth: 8, MaxWidth: 16, Priority: 40),
+            new DisplayTableColumn("Memory Δ", row => ((CommandTimingInfo)row).WorkingSetDelta, MinWidth: 8, MaxWidth: 16, Priority: 50),
+            new DisplayTableColumn("Allocations", row => ((CommandTimingInfo)row).ThreadAllocations, MinWidth: 8, MaxWidth: 16, Priority: 60),
+            new DisplayTableColumn("Minor Faults", row => ((CommandTimingInfo)row).MinorPageFaults, DisplayTableAlignment.Right, MinWidth: 4, MaxWidth: 12, Priority: 70),
+            new DisplayTableColumn("Major Faults", row => ((CommandTimingInfo)row).MajorPageFaults, DisplayTableAlignment.Right, MinWidth: 4, MaxWidth: 12, Priority: 80),
+        ];
+    }
+
     private static IReadOnlyList<DisplayTableColumn> BuildManagedFileHandleColumns()
     {
         return
@@ -2799,6 +3474,33 @@ public static class BuiltInDisplayProfiles
             new DisplayTableColumn("Table", row => ((IpRouteInfo)row).Table, MinWidth: 3, MaxWidth: 16, Priority: 80),
             new DisplayTableColumn("Type", row => ((IpRouteInfo)row).RouteType, MinWidth: 3, MaxWidth: 16, Priority: 90),
             new DisplayTableColumn("Flags", row => ((IpRouteInfo)row).FlagsText, MinWidth: 4, MaxWidth: 24, Priority: 100),
+        ];
+    }
+
+    private static IReadOnlyList<DisplayTableColumn> BuildIpNeighborColumns()
+    {
+        return
+        [
+            new DisplayTableColumn("Address", row => ((IpNeighborInfo)row).Address, MinWidth: 7, MaxWidth: 48, Priority: 0, CanHide: false),
+            new DisplayTableColumn("Device", row => ((IpNeighborInfo)row).Device, MinWidth: 3, MaxWidth: 24, Priority: 10),
+            new DisplayTableColumn("MAC", row => ((IpNeighborInfo)row).LinkLayerAddress, MinWidth: 8, MaxWidth: 24, Priority: 20),
+            new DisplayTableColumn("State", row => ((IpNeighborInfo)row).StateText, MinWidth: 4, MaxWidth: 16, Priority: 30),
+        ];
+    }
+
+    private static IReadOnlyList<DisplayTableColumn> BuildIpRuleColumns()
+    {
+        return
+        [
+            new DisplayTableColumn("Priority", row => ((IpRuleInfo)row).Priority, DisplayTableAlignment.Right, MinWidth: 3, MaxWidth: 10, Priority: 0, CanHide: false),
+            new DisplayTableColumn("Source", row => ((IpRuleInfo)row).SourceText, MinWidth: 3, MaxWidth: 32, Priority: 10),
+            new DisplayTableColumn("Destination", row => ((IpRuleInfo)row).DestinationText, MinWidth: 3, MaxWidth: 32, Priority: 20),
+            new DisplayTableColumn("Table", row => ((IpRuleInfo)row).Table, MinWidth: 3, MaxWidth: 16, Priority: 30),
+            new DisplayTableColumn("Action", row => ((IpRuleInfo)row).Action, MinWidth: 3, MaxWidth: 16, Priority: 40),
+            new DisplayTableColumn("Protocol", row => ((IpRuleInfo)row).Protocol, MinWidth: 3, MaxWidth: 16, Priority: 50),
+            new DisplayTableColumn("IifName", row => ((IpRuleInfo)row).IifName, MinWidth: 3, MaxWidth: 16, Priority: 60),
+            new DisplayTableColumn("OifName", row => ((IpRuleInfo)row).OifName, MinWidth: 3, MaxWidth: 16, Priority: 70),
+            new DisplayTableColumn("FwMark", row => ((IpRuleInfo)row).FirewallMark, DisplayTableAlignment.Right, MinWidth: 3, MaxWidth: 10, Priority: 80),
         ];
     }
 
@@ -3878,7 +4580,9 @@ public static class BuiltInDisplayProfiles
     {
         try
         {
+#pragma warning disable IL3000 // Assembly.Location returns empty in single-file; NullIfEmpty handles that.
             return NullIfEmpty(assembly.Location);
+#pragma warning restore IL3000
         }
         catch
         {
@@ -5030,6 +5734,478 @@ public static class BuiltInDisplayProfiles
                 {
                     var entry = (RemovedEntry)context.Value;
                     return entry.IsDirectory ? $"{entry.Name}/" : entry.Name;
+                });
+    }
+
+    // ── Streams and I/O ──────────────────────────────────────────────────
+
+    private static DisplayProfile CreateStreamProfile()
+    {
+        return DisplayProfile
+            .For<Stream>()
+            .AddTableCase(
+                context => context.Rows.Count == 1,
+                _ => BuildStreamColumns())
+            .AddValueCase(
+                DisplaySurface.Root | DisplaySurface.Nested | DisplaySurface.TableCell,
+                context =>
+                {
+                    var stream = (Stream)context.Value;
+                    var type = stream.GetType().Name;
+                    var len = stream.CanSeek ? $"{stream.Length} bytes" : "non-seekable";
+                    var flags = string.Join("/",
+                        new[] { stream.CanRead ? "R" : null, stream.CanWrite ? "W" : null, stream.CanSeek ? "S" : null }
+                        .Where(f => f is not null));
+                    return $"{type} ({len}, {flags})";
+                });
+    }
+
+    private static IReadOnlyList<DisplayTableColumn> BuildStreamColumns()
+    {
+        return
+        [
+            new DisplayTableColumn("Type", row => row.GetType().Name, MinWidth: 6, MaxWidth: 32, Priority: 0, CanHide: false),
+            new DisplayTableColumn("Length", row => ((Stream)row).CanSeek ? ((Stream)row).Length : null, DisplayTableAlignment.Right, MinWidth: 6, MaxWidth: 16, Priority: 10),
+            new DisplayTableColumn("Position", row => ((Stream)row).CanSeek ? ((Stream)row).Position : null, DisplayTableAlignment.Right, MinWidth: 4, MaxWidth: 16, Priority: 20),
+            new DisplayTableColumn("CanRead", row => ((Stream)row).CanRead, MinWidth: 5, MaxWidth: 5, Priority: 30),
+            new DisplayTableColumn("CanWrite", row => ((Stream)row).CanWrite, MinWidth: 5, MaxWidth: 5, Priority: 40),
+            new DisplayTableColumn("CanSeek", row => ((Stream)row).CanSeek, MinWidth: 5, MaxWidth: 5, Priority: 50),
+        ];
+    }
+
+    private static DisplayProfile CreateStreamReaderProfile()
+    {
+        return DisplayProfile
+            .For<StreamReader>()
+            .AddTableCase(
+                context => context.Rows.Count == 1,
+                _ =>
+                [
+                    new DisplayTableColumn("Encoding", row => ((StreamReader)row).CurrentEncoding.WebName, MinWidth: 5, MaxWidth: 20, Priority: 0, CanHide: false),
+                    new DisplayTableColumn("EndOfStream", row => ((StreamReader)row).EndOfStream, MinWidth: 5, MaxWidth: 5, Priority: 10),
+                    new DisplayTableColumn("BaseStream", row => ((StreamReader)row).BaseStream.GetType().Name, MinWidth: 6, MaxWidth: 24, Priority: 20),
+                ])
+            .AddValueCase(
+                DisplaySurface.Root | DisplaySurface.Nested | DisplaySurface.TableCell,
+                context =>
+                {
+                    var reader = (StreamReader)context.Value;
+                    return $"StreamReader ({reader.CurrentEncoding.WebName}, eof={reader.EndOfStream})";
+                });
+    }
+
+    private static DisplayProfile CreateStreamWriterProfile()
+    {
+        return DisplayProfile
+            .For<StreamWriter>()
+            .AddTableCase(
+                context => context.Rows.Count == 1,
+                _ =>
+                [
+                    new DisplayTableColumn("Encoding", row => ((StreamWriter)row).Encoding.WebName, MinWidth: 5, MaxWidth: 20, Priority: 0, CanHide: false),
+                    new DisplayTableColumn("AutoFlush", row => ((StreamWriter)row).AutoFlush, MinWidth: 5, MaxWidth: 5, Priority: 10),
+                    new DisplayTableColumn("BaseStream", row => ((StreamWriter)row).BaseStream.GetType().Name, MinWidth: 6, MaxWidth: 24, Priority: 20),
+                ])
+            .AddValueCase(
+                DisplaySurface.Root | DisplaySurface.Nested | DisplaySurface.TableCell,
+                context =>
+                {
+                    var writer = (StreamWriter)context.Value;
+                    return $"StreamWriter ({writer.Encoding.WebName}, autoflush={writer.AutoFlush})";
+                });
+    }
+
+    private static DisplayProfile CreateZipArchiveProfile()
+    {
+        return DisplayProfile
+            .For<ZipArchive>()
+            .AddTableCase(
+                context => context.Rows.Count == 1,
+                _ =>
+                [
+                    new DisplayTableColumn("Mode", row => ((ZipArchive)row).Mode.ToString(), MinWidth: 4, MaxWidth: 10, Priority: 0, CanHide: false),
+                    new DisplayTableColumn("Entries", row => ((ZipArchive)row).Entries.Count, DisplayTableAlignment.Right, MinWidth: 3, MaxWidth: 8, Priority: 10),
+                ])
+            .AddValueCase(
+                DisplaySurface.Root | DisplaySurface.Nested | DisplaySurface.TableCell,
+                context =>
+                {
+                    var zip = (ZipArchive)context.Value;
+                    return $"ZipArchive ({zip.Mode}, {zip.Entries.Count} entries)";
+                });
+    }
+
+    private static DisplayProfile CreateZipArchiveEntryProfile()
+    {
+        return DisplayProfile
+            .For<ZipArchiveEntry>()
+            .AddTableCase(_ =>
+            [
+                new DisplayTableColumn("Name", row => ((ZipArchiveEntry)row).FullName, MinWidth: 8, MaxWidth: 64, Priority: 0, CanHide: false),
+                new DisplayTableColumn("Size", row => new StorageSize(((ZipArchiveEntry)row).Length), DisplayTableAlignment.Right, MinWidth: 6, MaxWidth: 12, Priority: 10),
+                new DisplayTableColumn("Compressed", row => new StorageSize(((ZipArchiveEntry)row).CompressedLength), DisplayTableAlignment.Right, MinWidth: 6, MaxWidth: 12, Priority: 20),
+                new DisplayTableColumn("Modified", row => ((ZipArchiveEntry)row).LastWriteTime, MinWidth: 10, MaxWidth: 20, Priority: 30),
+            ])
+            .AddValueCase(
+                DisplaySurface.Root | DisplaySurface.Nested | DisplaySurface.TableCell,
+                context =>
+                {
+                    var entry = (ZipArchiveEntry)context.Value;
+                    return $"{entry.FullName} ({new StorageSize(entry.Length)})";
+                });
+    }
+
+    // ── Platform and Runtime ─────────────────────────────────────────────
+
+    private static DisplayProfile CreateOperatingSystemProfile()
+    {
+        return DisplayProfile
+            .For<OperatingSystem>()
+            .AddTableCase(
+                context => context.Rows.Count == 1,
+                _ =>
+                [
+                    new DisplayTableColumn("Platform", row => ((OperatingSystem)row).Platform.ToString(), MinWidth: 5, MaxWidth: 12, Priority: 0, CanHide: false),
+                    new DisplayTableColumn("Version", row => ((OperatingSystem)row).Version.ToString(), MinWidth: 5, MaxWidth: 24, Priority: 10),
+                    new DisplayTableColumn("ServicePack", row => NullIfEmpty(((OperatingSystem)row).ServicePack), MinWidth: 3, MaxWidth: 24, Priority: 20),
+                ])
+            .AddValueCase(
+                DisplaySurface.Root | DisplaySurface.Nested | DisplaySurface.TableCell,
+                context => ((OperatingSystem)context.Value).ToString());
+    }
+
+    private static DisplayProfile CreateArchitectureProfile()
+    {
+        return DisplayProfile
+            .For<Architecture>()
+            .AddValueCase(
+                DisplaySurface.Any,
+                context => ((Architecture)context.Value).ToString().ToLowerInvariant());
+    }
+
+    private static DisplayProfile CreateRuntimeInformationProfile()
+    {
+        // RuntimeInformation is a static class — create a snapshot record for display
+        return DisplayProfile
+            .For<RuntimeInformationSnapshot>()
+            .AddTableCase(
+                context => context.Rows.Count == 1,
+                _ =>
+                [
+                    new DisplayTableColumn("OS", row => ((RuntimeInformationSnapshot)row).OSDescription, MinWidth: 8, MaxWidth: 48, Priority: 0, CanHide: false),
+                    new DisplayTableColumn("Arch", row => ((RuntimeInformationSnapshot)row).OSArchitecture.ToString().ToLowerInvariant(), MinWidth: 4, MaxWidth: 10, Priority: 10),
+                    new DisplayTableColumn("Framework", row => ((RuntimeInformationSnapshot)row).FrameworkDescription, MinWidth: 8, MaxWidth: 32, Priority: 20),
+                    new DisplayTableColumn("Runtime", row => ((RuntimeInformationSnapshot)row).RuntimeIdentifier, MinWidth: 6, MaxWidth: 20, Priority: 30),
+                ])
+            .AddValueCase(
+                DisplaySurface.Root | DisplaySurface.Nested | DisplaySurface.TableCell,
+                context =>
+                {
+                    var info = (RuntimeInformationSnapshot)context.Value;
+                    return $"{info.FrameworkDescription} ({info.OSArchitecture.ToString().ToLowerInvariant()})";
+                });
+    }
+
+    // ── Security and Identity ────────────────────────────────────────────
+
+    private static DisplayProfile CreateX509Certificate2Profile()
+    {
+        return DisplayProfile
+            .For<X509Certificate2>()
+            .AddTableCase(
+                context => context.Rows.Count == 1,
+                _ => BuildX509Certificate2Columns())
+            .AddValueCase(
+                DisplaySurface.Root | DisplaySurface.Nested | DisplaySurface.TableCell,
+                context =>
+                {
+                    var cert = (X509Certificate2)context.Value;
+                    var cn = cert.GetNameInfo(X509NameType.SimpleName, false);
+                    return $"{cn} (expires {cert.NotAfter:yyyy-MM-dd})";
+                });
+    }
+
+    private static IReadOnlyList<DisplayTableColumn> BuildX509Certificate2Columns()
+    {
+        return
+        [
+            new DisplayTableColumn("Subject", row => ((X509Certificate2)row).GetNameInfo(X509NameType.SimpleName, false), MinWidth: 8, MaxWidth: 48, Priority: 0, CanHide: false),
+            new DisplayTableColumn("Issuer", row => ((X509Certificate2)row).GetNameInfo(X509NameType.SimpleName, true), MinWidth: 8, MaxWidth: 48, Priority: 10),
+            new DisplayTableColumn("Thumbprint", row => ((X509Certificate2)row).Thumbprint, MinWidth: 10, MaxWidth: 40, Priority: 30),
+            new DisplayTableColumn("NotBefore", row => ((X509Certificate2)row).NotBefore, MinWidth: 10, MaxWidth: 20, Priority: 40),
+            new DisplayTableColumn("NotAfter", row => ((X509Certificate2)row).NotAfter, MinWidth: 10, MaxWidth: 20, Priority: 20),
+            new DisplayTableColumn("HasPrivateKey", row => ((X509Certificate2)row).HasPrivateKey, MinWidth: 5, MaxWidth: 5, Priority: 50),
+        ];
+    }
+
+    private static DisplayProfile CreateX500DistinguishedNameProfile()
+    {
+        return DisplayProfile
+            .For<X500DistinguishedName>()
+            .AddValueCase(
+                DisplaySurface.Any,
+                context => ((X500DistinguishedName)context.Value).Name);
+    }
+
+    private static DisplayProfile CreateOidProfile()
+    {
+        return DisplayProfile
+            .For<Oid>()
+            .AddValueCase(
+                DisplaySurface.Any,
+                context =>
+                {
+                    var oid = (Oid)context.Value;
+                    return string.IsNullOrEmpty(oid.FriendlyName) ? oid.Value ?? "" : $"{oid.FriendlyName} ({oid.Value})";
+                });
+    }
+
+    private static DisplayProfile CreateClaimProfile()
+    {
+        return DisplayProfile
+            .For<Claim>()
+            .AddTableCase(_ =>
+            [
+                new DisplayTableColumn("Type", row => FormatClaimType(((Claim)row).Type), MinWidth: 6, MaxWidth: 32, Priority: 0, CanHide: false),
+                new DisplayTableColumn("Value", row => ((Claim)row).Value, MinWidth: 6, MaxWidth: 48, Priority: 10, CanHide: false),
+                new DisplayTableColumn("Issuer", row => ((Claim)row).Issuer, MinWidth: 4, MaxWidth: 24, Priority: 20),
+            ])
+            .AddValueCase(
+                DisplaySurface.Root | DisplaySurface.Nested | DisplaySurface.TableCell,
+                context =>
+                {
+                    var claim = (Claim)context.Value;
+                    return $"{FormatClaimType(claim.Type)}: {claim.Value}";
+                });
+    }
+
+    private static string FormatClaimType(string claimType)
+    {
+        // Shorten well-known claim URIs to just the final segment
+        var lastSlash = claimType.LastIndexOf('/');
+        return lastSlash >= 0 && lastSlash < claimType.Length - 1 ? claimType[(lastSlash + 1)..] : claimType;
+    }
+
+    private static DisplayProfile CreateClaimsIdentityProfile()
+    {
+        return DisplayProfile
+            .For<ClaimsIdentity>()
+            .AddTableCase(
+                context => context.Rows.Count == 1,
+                _ =>
+                [
+                    new DisplayTableColumn("Name", row => ((ClaimsIdentity)row).Name, MinWidth: 4, MaxWidth: 32, Priority: 0, CanHide: false),
+                    new DisplayTableColumn("AuthType", row => ((ClaimsIdentity)row).AuthenticationType, MinWidth: 4, MaxWidth: 24, Priority: 10),
+                    new DisplayTableColumn("Authenticated", row => ((ClaimsIdentity)row).IsAuthenticated, MinWidth: 5, MaxWidth: 5, Priority: 20),
+                    new DisplayTableColumn("Claims", row => ((ClaimsIdentity)row).Claims.Count(), DisplayTableAlignment.Right, MinWidth: 3, MaxWidth: 6, Priority: 30),
+                ])
+            .AddValueCase(
+                DisplaySurface.Root | DisplaySurface.Nested | DisplaySurface.TableCell,
+                context =>
+                {
+                    var id = (ClaimsIdentity)context.Value;
+                    var name = id.Name ?? "<anonymous>";
+                    return id.IsAuthenticated ? $"{name} ({id.AuthenticationType})" : $"{name} (unauthenticated)";
+                });
+    }
+
+    private static DisplayProfile CreateClaimsPrincipalProfile()
+    {
+        return DisplayProfile
+            .For<ClaimsPrincipal>()
+            .AddTableCase(
+                context => context.Rows.Count == 1,
+                _ =>
+                [
+                    new DisplayTableColumn("Identity", row => ((ClaimsPrincipal)row).Identity?.Name ?? "<none>", MinWidth: 4, MaxWidth: 32, Priority: 0, CanHide: false),
+                    new DisplayTableColumn("Identities", row => ((ClaimsPrincipal)row).Identities.Count(), DisplayTableAlignment.Right, MinWidth: 3, MaxWidth: 6, Priority: 10),
+                    new DisplayTableColumn("Claims", row => ((ClaimsPrincipal)row).Claims.Count(), DisplayTableAlignment.Right, MinWidth: 3, MaxWidth: 6, Priority: 20),
+                ])
+            .AddValueCase(
+                DisplaySurface.Root | DisplaySurface.Nested | DisplaySurface.TableCell,
+                context =>
+                {
+                    var principal = (ClaimsPrincipal)context.Value;
+                    var name = principal.Identity?.Name ?? "<anonymous>";
+                    var count = principal.Identities.Count();
+                    return count > 1 ? $"{name} ({count} identities)" : name;
+                });
+    }
+
+    // ── Numerics and Geometry ────────────────────────────────────────────
+
+    private static DisplayProfile CreateBigIntegerProfile()
+    {
+        return DisplayProfile
+            .For<BigInteger>()
+            .AddValueCase(
+                DisplaySurface.Any,
+                context => ((BigInteger)context.Value).ToString(CultureInfo.InvariantCulture));
+    }
+
+    private static DisplayProfile CreateComplexProfile()
+    {
+        return DisplayProfile
+            .For<Complex>()
+            .AddTableCase(
+                context => context.Rows.Count == 1,
+                _ =>
+                [
+                    new DisplayTableColumn("Real", row => ((Complex)row).Real.ToString(CultureInfo.InvariantCulture), DisplayTableAlignment.Right, MinWidth: 4, MaxWidth: 20, Priority: 0, CanHide: false),
+                    new DisplayTableColumn("Imaginary", row => ((Complex)row).Imaginary.ToString(CultureInfo.InvariantCulture), DisplayTableAlignment.Right, MinWidth: 4, MaxWidth: 20, Priority: 10),
+                    new DisplayTableColumn("Magnitude", row => ((Complex)row).Magnitude.ToString("G6", CultureInfo.InvariantCulture), DisplayTableAlignment.Right, MinWidth: 4, MaxWidth: 16, Priority: 20),
+                    new DisplayTableColumn("Phase", row => ((Complex)row).Phase.ToString("G6", CultureInfo.InvariantCulture), DisplayTableAlignment.Right, MinWidth: 4, MaxWidth: 16, Priority: 30),
+                ])
+            .AddValueCase(
+                DisplaySurface.Any,
+                context =>
+                {
+                    var c = (Complex)context.Value;
+                    var sign = c.Imaginary >= 0 ? "+" : "-";
+                    return $"{c.Real.ToString(CultureInfo.InvariantCulture)} {sign} {Math.Abs(c.Imaginary).ToString(CultureInfo.InvariantCulture)}i";
+                });
+    }
+
+    private static DisplayProfile CreateVector2Profile()
+    {
+        return DisplayProfile
+            .For<Vector2>()
+            .AddTableCase(
+                context => context.Rows.Count == 1,
+                _ =>
+                [
+                    new DisplayTableColumn("X", row => ((Vector2)row).X.ToString(CultureInfo.InvariantCulture), DisplayTableAlignment.Right, MinWidth: 4, MaxWidth: 16, Priority: 0, CanHide: false),
+                    new DisplayTableColumn("Y", row => ((Vector2)row).Y.ToString(CultureInfo.InvariantCulture), DisplayTableAlignment.Right, MinWidth: 4, MaxWidth: 16, Priority: 0, CanHide: false),
+                    new DisplayTableColumn("Length", row => ((Vector2)row).Length().ToString("G6", CultureInfo.InvariantCulture), DisplayTableAlignment.Right, MinWidth: 4, MaxWidth: 16, Priority: 10),
+                ])
+            .AddValueCase(
+                DisplaySurface.Any,
+                context =>
+                {
+                    var v = (Vector2)context.Value;
+                    return $"({v.X.ToString(CultureInfo.InvariantCulture)}, {v.Y.ToString(CultureInfo.InvariantCulture)})";
+                });
+    }
+
+    private static DisplayProfile CreateVector3Profile()
+    {
+        return DisplayProfile
+            .For<Vector3>()
+            .AddTableCase(
+                context => context.Rows.Count == 1,
+                _ =>
+                [
+                    new DisplayTableColumn("X", row => ((Vector3)row).X.ToString(CultureInfo.InvariantCulture), DisplayTableAlignment.Right, MinWidth: 4, MaxWidth: 16, Priority: 0, CanHide: false),
+                    new DisplayTableColumn("Y", row => ((Vector3)row).Y.ToString(CultureInfo.InvariantCulture), DisplayTableAlignment.Right, MinWidth: 4, MaxWidth: 16, Priority: 0, CanHide: false),
+                    new DisplayTableColumn("Z", row => ((Vector3)row).Z.ToString(CultureInfo.InvariantCulture), DisplayTableAlignment.Right, MinWidth: 4, MaxWidth: 16, Priority: 0, CanHide: false),
+                    new DisplayTableColumn("Length", row => ((Vector3)row).Length().ToString("G6", CultureInfo.InvariantCulture), DisplayTableAlignment.Right, MinWidth: 4, MaxWidth: 16, Priority: 10),
+                ])
+            .AddValueCase(
+                DisplaySurface.Any,
+                context =>
+                {
+                    var v = (Vector3)context.Value;
+                    return $"({v.X.ToString(CultureInfo.InvariantCulture)}, {v.Y.ToString(CultureInfo.InvariantCulture)}, {v.Z.ToString(CultureInfo.InvariantCulture)})";
+                });
+    }
+
+    private static DisplayProfile CreateVector4Profile()
+    {
+        return DisplayProfile
+            .For<Vector4>()
+            .AddTableCase(
+                context => context.Rows.Count == 1,
+                _ =>
+                [
+                    new DisplayTableColumn("X", row => ((Vector4)row).X.ToString(CultureInfo.InvariantCulture), DisplayTableAlignment.Right, MinWidth: 4, MaxWidth: 16, Priority: 0, CanHide: false),
+                    new DisplayTableColumn("Y", row => ((Vector4)row).Y.ToString(CultureInfo.InvariantCulture), DisplayTableAlignment.Right, MinWidth: 4, MaxWidth: 16, Priority: 0, CanHide: false),
+                    new DisplayTableColumn("Z", row => ((Vector4)row).Z.ToString(CultureInfo.InvariantCulture), DisplayTableAlignment.Right, MinWidth: 4, MaxWidth: 16, Priority: 0, CanHide: false),
+                    new DisplayTableColumn("W", row => ((Vector4)row).W.ToString(CultureInfo.InvariantCulture), DisplayTableAlignment.Right, MinWidth: 4, MaxWidth: 16, Priority: 0, CanHide: false),
+                    new DisplayTableColumn("Length", row => ((Vector4)row).Length().ToString("G6", CultureInfo.InvariantCulture), DisplayTableAlignment.Right, MinWidth: 4, MaxWidth: 16, Priority: 10),
+                ])
+            .AddValueCase(
+                DisplaySurface.Any,
+                context =>
+                {
+                    var v = (Vector4)context.Value;
+                    return $"({v.X.ToString(CultureInfo.InvariantCulture)}, {v.Y.ToString(CultureInfo.InvariantCulture)}, {v.Z.ToString(CultureInfo.InvariantCulture)}, {v.W.ToString(CultureInfo.InvariantCulture)})";
+                });
+    }
+
+    private static DisplayProfile CreateQuaternionProfile()
+    {
+        return DisplayProfile
+            .For<Quaternion>()
+            .AddTableCase(
+                context => context.Rows.Count == 1,
+                _ =>
+                [
+                    new DisplayTableColumn("W", row => ((Quaternion)row).W.ToString(CultureInfo.InvariantCulture), DisplayTableAlignment.Right, MinWidth: 4, MaxWidth: 16, Priority: 0, CanHide: false),
+                    new DisplayTableColumn("X", row => ((Quaternion)row).X.ToString(CultureInfo.InvariantCulture), DisplayTableAlignment.Right, MinWidth: 4, MaxWidth: 16, Priority: 0, CanHide: false),
+                    new DisplayTableColumn("Y", row => ((Quaternion)row).Y.ToString(CultureInfo.InvariantCulture), DisplayTableAlignment.Right, MinWidth: 4, MaxWidth: 16, Priority: 0, CanHide: false),
+                    new DisplayTableColumn("Z", row => ((Quaternion)row).Z.ToString(CultureInfo.InvariantCulture), DisplayTableAlignment.Right, MinWidth: 4, MaxWidth: 16, Priority: 0, CanHide: false),
+                    new DisplayTableColumn("IsIdentity", row => ((Quaternion)row).IsIdentity ? "Yes" : "No", DisplayTableAlignment.Left, MinWidth: 3, MaxWidth: 10, Priority: 10),
+                ])
+            .AddValueCase(
+                DisplaySurface.Any,
+                context =>
+                {
+                    var q = (Quaternion)context.Value;
+                    return $"({q.W.ToString(CultureInfo.InvariantCulture)}; {q.X.ToString(CultureInfo.InvariantCulture)}, {q.Y.ToString(CultureInfo.InvariantCulture)}, {q.Z.ToString(CultureInfo.InvariantCulture)})";
+                });
+    }
+
+    private static DisplayProfile CreateMatrix4x4Profile()
+    {
+        return DisplayProfile
+            .For<Matrix4x4>()
+            .AddTableCase(
+                context => context.Rows.Count == 1,
+                _ =>
+                [
+                    new DisplayTableColumn("M11", row => ((Matrix4x4)row).M11.ToString("G4", CultureInfo.InvariantCulture), DisplayTableAlignment.Right, MinWidth: 4, MaxWidth: 10, Priority: 0, CanHide: false),
+                    new DisplayTableColumn("M12", row => ((Matrix4x4)row).M12.ToString("G4", CultureInfo.InvariantCulture), DisplayTableAlignment.Right, MinWidth: 4, MaxWidth: 10, Priority: 1, CanHide: false),
+                    new DisplayTableColumn("M13", row => ((Matrix4x4)row).M13.ToString("G4", CultureInfo.InvariantCulture), DisplayTableAlignment.Right, MinWidth: 4, MaxWidth: 10, Priority: 2, CanHide: false),
+                    new DisplayTableColumn("M14", row => ((Matrix4x4)row).M14.ToString("G4", CultureInfo.InvariantCulture), DisplayTableAlignment.Right, MinWidth: 4, MaxWidth: 10, Priority: 3, CanHide: false),
+                    new DisplayTableColumn("M21", row => ((Matrix4x4)row).M21.ToString("G4", CultureInfo.InvariantCulture), DisplayTableAlignment.Right, MinWidth: 4, MaxWidth: 10, Priority: 4),
+                    new DisplayTableColumn("M22", row => ((Matrix4x4)row).M22.ToString("G4", CultureInfo.InvariantCulture), DisplayTableAlignment.Right, MinWidth: 4, MaxWidth: 10, Priority: 5),
+                    new DisplayTableColumn("M23", row => ((Matrix4x4)row).M23.ToString("G4", CultureInfo.InvariantCulture), DisplayTableAlignment.Right, MinWidth: 4, MaxWidth: 10, Priority: 6),
+                    new DisplayTableColumn("M24", row => ((Matrix4x4)row).M24.ToString("G4", CultureInfo.InvariantCulture), DisplayTableAlignment.Right, MinWidth: 4, MaxWidth: 10, Priority: 7),
+                    new DisplayTableColumn("M31", row => ((Matrix4x4)row).M31.ToString("G4", CultureInfo.InvariantCulture), DisplayTableAlignment.Right, MinWidth: 4, MaxWidth: 10, Priority: 8),
+                    new DisplayTableColumn("M32", row => ((Matrix4x4)row).M32.ToString("G4", CultureInfo.InvariantCulture), DisplayTableAlignment.Right, MinWidth: 4, MaxWidth: 10, Priority: 9),
+                    new DisplayTableColumn("M33", row => ((Matrix4x4)row).M33.ToString("G4", CultureInfo.InvariantCulture), DisplayTableAlignment.Right, MinWidth: 4, MaxWidth: 10, Priority: 10),
+                    new DisplayTableColumn("M34", row => ((Matrix4x4)row).M34.ToString("G4", CultureInfo.InvariantCulture), DisplayTableAlignment.Right, MinWidth: 4, MaxWidth: 10, Priority: 11),
+                    new DisplayTableColumn("M41", row => ((Matrix4x4)row).M41.ToString("G4", CultureInfo.InvariantCulture), DisplayTableAlignment.Right, MinWidth: 4, MaxWidth: 10, Priority: 12),
+                    new DisplayTableColumn("M42", row => ((Matrix4x4)row).M42.ToString("G4", CultureInfo.InvariantCulture), DisplayTableAlignment.Right, MinWidth: 4, MaxWidth: 10, Priority: 13),
+                    new DisplayTableColumn("M43", row => ((Matrix4x4)row).M43.ToString("G4", CultureInfo.InvariantCulture), DisplayTableAlignment.Right, MinWidth: 4, MaxWidth: 10, Priority: 14),
+                    new DisplayTableColumn("M44", row => ((Matrix4x4)row).M44.ToString("G4", CultureInfo.InvariantCulture), DisplayTableAlignment.Right, MinWidth: 4, MaxWidth: 10, Priority: 15),
+                ])
+            .AddValueCase(
+                DisplaySurface.Any,
+                context => "Matrix4x4");
+    }
+
+    // ── WebProxy ─────────────────────────────────────────────────────────
+
+    private static DisplayProfile CreateWebProxyProfile()
+    {
+        return DisplayProfile
+            .For<WebProxy>()
+            .AddTableCase(
+                context => context.Rows.Count == 1,
+                _ =>
+                [
+                    new DisplayTableColumn("Address", row => ((WebProxy)row).Address?.ToString() ?? "<none>", MinWidth: 8, MaxWidth: 48, Priority: 0, CanHide: false),
+                    new DisplayTableColumn("BypassLocal", row => ((WebProxy)row).BypassProxyOnLocal, MinWidth: 5, MaxWidth: 5, Priority: 10),
+                    new DisplayTableColumn("BypassList", row => ((WebProxy)row).BypassList.Length, DisplayTableAlignment.Right, MinWidth: 3, MaxWidth: 6, Priority: 20),
+                    new DisplayTableColumn("Credentials", row => ((WebProxy)row).Credentials is not null, MinWidth: 5, MaxWidth: 5, Priority: 30),
+                ])
+            .AddValueCase(
+                DisplaySurface.Root | DisplaySurface.Nested | DisplaySurface.TableCell,
+                context =>
+                {
+                    var proxy = (WebProxy)context.Value;
+                    return proxy.Address?.ToString() ?? "<no address>";
                 });
     }
 }

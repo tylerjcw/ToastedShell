@@ -1,55 +1,31 @@
 # ToSh Documentation
 
-This directory is split into three layers:
+## Language Specification
 
-- **Reference**: the user-facing language, command, pipeline, type, and configuration docs
-- **Current state**: what is implemented today and what should happen next
-- **Design notes**: focused architecture docs for subsystems that are still evolving
+The authoritative language reference is the LaTeX spec:
 
-The in-shell help system is also a live source of truth:
+- [ToastScript Specification](spec/ToastScript.pdf) — grammar, types, operators, pipelines, commands, CLR interop, modules, events
+
+The command reference is auto-generated at build time into [command-reference.tex](spec/command-reference.tex).
+
+## In-Shell Help
+
+The shell itself is a live source of truth:
 
 - `help <topic>`
 - `help search <text>`
 - `help --cli`
 - `help browse`
 
-## Start Here
+## Project Direction
 
-- [Getting Started](reference/GETTING_STARTED.md)
-- [Language Reference](reference/LANGUAGE.md)
-- [Command Map](reference/COMMANDS.md)
-- [Pipeline Model](reference/PIPELINES.md)
-- [Type System](reference/TYPES.md)
-- [CLR Interop](reference/CLR_INTEROP.md)
-- [Configuration Reference](reference/CONFIGURATION.md)
+- [Roadmap](ROADMAP.md) — vision, completed phases, and current direction
+- [Backlog](BACKLOG.md) — open work items by area
 
-## Current State
+## Design & Architecture
 
-- [Status](STATUS.md)
-- [Roadmap](ROADMAP.md)
-
-## Practical Guides
-
-- [Configuration Guide](CONFIGURATION.md)
-- [Editor Support](EDITOR_SUPPORT.md)
-- [Runtime Namespaces](RUNTIME_NAMESPACES.md)
-
-## Design Notes
-
-- [Architecture](ARCHITECTURE.md)
-- [TUI Architecture](TUI_ARCHITECTURE.md)
-- [Config Browser](CONFIG_BROWSER.md)
-- [Functional Language Design](FUNCTIONAL_LANGUAGE_DESIGN.md)
-- [Systemd Family Design](SYSTEMD_FAMILY_DESIGN.md)
-- [Stream Management](STREAM_MANAGEMENT.md)
-- [Tabular Summary](TABULAR_SUMMARY.md)
-- [Unix Command Audit](UNIX_COMMAND_AUDIT.md)
-- [CLR Display Backlog](CLR_DISPLAY_BACKLOG.md)
-
-## Historical / Audit Notes
-
-These are useful engineering notes, but they are not the best first stop for day-to-day usage docs:
-
-- [Builtin Pipeline Audit](BUILTIN_PIPELINE_AUDIT.md)
-- [Language Surface Audit](LANGUAGE_SURFACE_AUDIT.md)
-- [Type Surface Audit](TYPE_SURFACE_AUDIT.md)
+- [Architecture](ARCHITECTURE.md) — core design philosophy and invariants
+- [Configuration](CONFIGURATION.md) — startup order, config command, live settings
+- [Editor Support](EDITOR_SUPPORT.md) — VS Code extension and LSP
+- [Runtime Namespaces](RUNTIME_NAMESPACES.md) — `$tosh` namespace structure
+- [TUI Architecture](TUI_ARCHITECTURE.md) — terminal UI platform design

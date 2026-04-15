@@ -1,6 +1,7 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("CLR")]
+[CommandNote("Prefer the fluent `$obj.Method()` expression syntax for instance calls and `TypeName.Method()` for static calls. The `call` command form is a legacy fallback.")]
 public sealed class CallCommand : ShellCommand
 {
     public CallCommand()

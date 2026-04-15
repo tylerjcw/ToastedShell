@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using System.Globalization;
 
 namespace Tosh.Core;
@@ -6,6 +7,11 @@ internal static class SystemInfoServices
 {
     public static IReadOnlyList<MemoryUsageInfo> GetMemoryUsage()
     {
+        if (OperatingSystem.IsWindows())
+        {
+            return GetWindowsMemoryUsage();
+        }
+
         if (!OperatingSystem.IsLinux() || !File.Exists("/proc/meminfo"))
         {
             return Array.Empty<MemoryUsageInfo>();
@@ -39,6 +45,16 @@ internal static class SystemInfoServices
 
     public static SystemUptimeInfo? GetUptime()
     {
+        if (OperatingSystem.IsWindows())
+        {
+            return new SystemUptimeInfo(
+                TimeSpan.FromMilliseconds(Environment.TickCount64),
+                0d,
+                0d,
+                0d,
+                DateTimeOffset.Now);
+        }
+
         if (!OperatingSystem.IsLinux() ||
             !File.Exists("/proc/uptime") ||
             !File.Exists("/proc/loadavg"))
@@ -134,4 +150,108 @@ internal static class SystemInfoServices
             ? numeric * 1024L
             : numeric;
     }
+
+    private static IReadOnlyList<MemoryUsageInfo> GetWindowsMemoryUsage()
+    {
+        if (!TryGetWindowsMemoryStatus(out var status))
+        {
+            return Array.Empty<MemoryUsageInfo>();
+        }
+
+        var memTotalBytes = ClampUInt64ToInt64(status.TotalPhysical);
+        var memAvailableBytes = ClampUInt64ToInt64(status.AvailablePhysical);
+        var memUsedBytes = Math.Max(0L, memTotalBytes - memAvailableBytes);
+
+        var results = new List<MemoryUsageInfo>
+        {
+            new(
+                "Mem",
+                StorageSize.FromBytes(memTotalBytes),
+                StorageSize.FromBytes(memUsedBytes),
+                StorageSize.FromBytes(memAvailableBytes),
+                null,
+                null,
+                StorageSize.FromBytes(memAvailableBytes)),
+        };
+
+        var swapTotalBytes = ClampUInt64ToInt64(status.TotalPageFile >= status.TotalPhysical
+            ? status.TotalPageFile - status.TotalPhysical
+            : 0UL);
+        var swapFreeBytes = ClampUInt64ToInt64(status.AvailablePageFile >= status.AvailablePhysical
+            ? status.AvailablePageFile - status.AvailablePhysical
+            : 0UL);
+
+        if (swapTotalBytes > 0 || swapFreeBytes > 0)
+        {
+            results.Add(new(
+                "Swap",
+                StorageSize.FromBytes(swapTotalBytes),
+                StorageSize.FromBytes(Math.Max(0L, swapTotalBytes - swapFreeBytes)),
+                StorageSize.FromBytes(swapFreeBytes),
+                null,
+                null,
+                null));
+        }
+
+        return results;
+    }
+
+    private static bool TryGetWindowsMemoryStatus(out WindowsMemoryStatus status)
+    {
+        status = default;
+
+        try
+        {
+            var native = new MemoryStatusEx
+            {
+                Length = (uint)Marshal.SizeOf<MemoryStatusEx>(),
+            };
+
+            if (!GlobalMemoryStatusEx(ref native))
+            {
+                return false;
+            }
+
+            status = new WindowsMemoryStatus(
+                native.TotalPhysical,
+                native.AvailablePhysical,
+                native.TotalPageFile,
+                native.AvailablePageFile);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static long ClampUInt64ToInt64(ulong value)
+    {
+        return value >= long.MaxValue
+            ? long.MaxValue
+            : (long)value;
+    }
+
+    private readonly record struct WindowsMemoryStatus(
+        ulong TotalPhysical,
+        ulong AvailablePhysical,
+        ulong TotalPageFile,
+        ulong AvailablePageFile);
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
+    private struct MemoryStatusEx
+    {
+        public uint Length;
+        public uint MemoryLoad;
+        public ulong TotalPhysical;
+        public ulong AvailablePhysical;
+        public ulong TotalPageFile;
+        public ulong AvailablePageFile;
+        public ulong TotalVirtual;
+        public ulong AvailableVirtual;
+        public ulong AvailableExtendedVirtual;
+    }
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool GlobalMemoryStatusEx(ref MemoryStatusEx buffer);
 }

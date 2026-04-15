@@ -1,6 +1,9 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("CLR")]
+[CommandExample("echo [1, 2, 3] | cast list<int>")]
+[CommandExample("echo 42 | cast string")]
+[CommandNote("Cast converts to CLR target types, including constructed generic collection types like `list<int>`.")]
 public sealed class CastCommand : ShellCommand
 {
     public CastCommand()

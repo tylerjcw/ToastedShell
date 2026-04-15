@@ -1,6 +1,18 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Filesystem")]
+[CommandArgument("path ...", "One or more file paths to open.", Required = false, TypeName = "path-like")]
+[CommandOption("--read, -r", "Open for reading. This is the default.")]
+[CommandOption("--write, -w", "Open for writing and replace any previous contents.")]
+[CommandOption("--append, -a", "Open for writing at the end of the file.")]
+[CommandOption("--binary, -b", "Open a binary handle instead of a text handle.")]
+[CommandOption("--encoding <name>", "Use a specific text encoding for text writers.")]
+[CommandExample("open-file ./notes.txt")]
+[CommandExample("open-file --write ./notes.txt")]
+[CommandExample("open-file --binary --append ./data.bin")]
+[CommandNote("Open-file is the start of ToSh's managed stream system. It returns explicit text or binary handle objects instead of hiding file resources behind implicit properties. Active handles are also visible through `$tosh.Session.OpenHandles` and `$tosh.Session.OpenHandleCount`.")]
+[CommandOutput("Returns managed file-handle objects that can be passed to `read-from`, `read-line-from`, `read-to-end`, `write-to`, `write-line-to`, `flush`, `close`, `seek`, `position`, `length`, and `copy-to`.")]
+[PipelineInput(AcceptsList = true, Description = "Consumes piped path-like input when explicit file paths are omitted.")]
 public sealed class OpenFileCommand : ShellCommand
 {
     public OpenFileCommand(string name = "open-file")

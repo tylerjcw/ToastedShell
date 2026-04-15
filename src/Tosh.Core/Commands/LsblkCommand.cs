@@ -13,6 +13,8 @@ namespace Tosh.Core.Commands;
 [CommandOption("-t", "Use the topology-oriented display preset.")]
 [CommandOption("-D", "Use the discard-oriented display preset.")]
 [CommandOption("-z", "Use the zoned-device display preset.")]
+[CommandOption("-M", "Use the model/serial/vendor display preset.")]
+[CommandOption("-L", "Use the label/UUID/partition display preset.")]
 [CommandOption("-p", "Show full device paths.")]
 [CommandOption("-S", "Restrict the query to SCSI devices.")]
 [CommandOption("-N", "Restrict the query to NVMe devices.")]
@@ -196,6 +198,14 @@ public sealed class LsblkCommand : ShellCommand
                 case "--zoned":
                     AddPresetColumns(presetColumns, "NAME", "ZONED", "ZONE-SZ", "ZONE-WGRAN", "ZONE-APP", "ZONE-NR", "ZONE-OMAX", "ZONE-AMAX");
                     break;
+                case "-M":
+                case "--model":
+                    AddPresetColumns(presetColumns, "NAME", "SIZE", "MODEL", "SERIAL", "VENDOR", "TRAN", "HCTL", "STATE");
+                    break;
+                case "-L":
+                case "--label":
+                    AddPresetColumns(presetColumns, "NAME", "TYPE", "LABEL", "UUID", "PTTYPE", "PARTLABEL", "PARTUUID", "PARTTYPE");
+                    break;
                 case "-o":
                 case "--output":
                     index++;
@@ -250,7 +260,11 @@ public sealed class LsblkCommand : ShellCommand
                string.Equals(argument, "-D", StringComparison.Ordinal) ||
                string.Equals(argument, "--discard", StringComparison.Ordinal) ||
                string.Equals(argument, "-z", StringComparison.Ordinal) ||
-               string.Equals(argument, "--zoned", StringComparison.Ordinal);
+               string.Equals(argument, "--zoned", StringComparison.Ordinal) ||
+               string.Equals(argument, "-M", StringComparison.Ordinal) ||
+               string.Equals(argument, "--model", StringComparison.Ordinal) ||
+               string.Equals(argument, "-L", StringComparison.Ordinal) ||
+               string.Equals(argument, "--label", StringComparison.Ordinal);
     }
 
     private static bool IsUnsupportedStructuredOption(string argument)

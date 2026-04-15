@@ -3,11 +3,27 @@ using System.Text.RegularExpressions;
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Filesystem")]
+[CommandArgument("root ...", "One or more filesystem roots to search.", Required = false, TypeName = "path-like")]
+[CommandOption("-name <pattern>", "Filter by shell-style name pattern.")]
+[CommandOption("-iname <pattern>", "Case-insensitive name pattern.")]
+[CommandOption("-path <pattern>", "Filter by shell-style path pattern against the root-relative path.")]
+[CommandOption("-ipath <pattern>", "Case-insensitive path pattern.")]
+[CommandOption("-regex <pattern>", "Filter by .NET regex against the root-relative path.")]
+[CommandOption("-iregex <pattern>", "Case-insensitive regex filter against the root-relative path.")]
+[CommandOption("-type <file|dir|link>", "Filter by filesystem entry kind.")]
+[CommandOption("-perm <mode>", "Filter by Unix permission bits (octal). Prefix with - for 'at least' or / for 'any of'.")]
+[CommandExample("find . -name *.tosh")]
+[CommandExample("find . -path */src/*.cs", Title = "Match on relative path")]
+[CommandExample("find . -perm -755", Title = "Files with at least rwxr-xr-x")]
+[CommandExample("find . -regex \".*\\\\.tosh$\"")]
+[CommandExample("find . -iregex \".*readme.*\"")]
+[CommandOutput("Returns typed filesystem entries with rich metadata that flow naturally through the object pipeline.")]
+[PipelineInput(AcceptsList = true, Description = "Uses piped path-like roots when explicit roots are omitted. Falls back to the current directory when neither are present.")]
 public sealed class FindCommand : ShellCommand
 {
     public FindCommand()
         : base("find", "Recursively finds file system entries.",
-            "find [path ...] [-name pattern] [-iname pattern] [-regex pattern] [-iregex pattern] [-type f|d|l] [-maxdepth n] [-mindepth n] [-size +/-size] [-mtime +/-days] [-newer-than duration] [-older-than duration] [-empty]")
+            "find [path ...] [-name pattern] [-iname pattern] [-path pattern] [-ipath pattern] [-regex pattern] [-iregex pattern] [-type f|d|l] [-perm mode] [-maxdepth n] [-mindepth n] [-size +/-size] [-mtime +/-days] [-newer-than duration] [-older-than duration] [-empty]")
     { }
 
     public override async IAsyncEnumerable<object?> ExecuteAsync(CommandContext context)
@@ -128,6 +144,12 @@ public sealed class FindCommand : ShellCommand
             return false;
         }
 
+        if (options.PathPattern is not null &&
+            !GlobPatternMatcher.IsMatch(relativePath, options.PathPattern, options.PathPatternIgnoreCase))
+        {
+            return false;
+        }
+
         if (options.PathRegex is not null &&
             !options.PathRegex.IsMatch(relativePath))
         {
@@ -193,6 +215,25 @@ public sealed class FindCommand : ShellCommand
             return false;
         }
 
+        if (options.PermFilter is not null && OperatingSystem.IsLinux())
+        {
+            var mode = entry.UnixFileMode;
+            var filter = options.PermFilter.Value;
+
+            var matches = filter.Mode switch
+            {
+                PermMatchMode.Exact => ((int)mode & 0xFFF) == filter.Bits,
+                PermMatchMode.AllOf => ((int)mode & filter.Bits) == filter.Bits,
+                PermMatchMode.AnyOf => ((int)mode & filter.Bits) != 0,
+                _ => true,
+            };
+
+            if (!matches)
+            {
+                return false;
+            }
+        }
+
         return true;
     }
 
@@ -201,6 +242,8 @@ public sealed class FindCommand : ShellCommand
         var roots = new List<object?>();
         string? namePattern = null;
         var namePatternIgnoreCase = false;
+        string? pathPattern = null;
+        var pathPatternIgnoreCase = false;
         string? pathRegexPattern = null;
         var pathRegexIgnoreCase = false;
         var pathRegexArgumentIndex = -1;
@@ -212,6 +255,7 @@ public sealed class FindCommand : ShellCommand
         StorageSize? maxSize = null;
         DateTime? newerThan = null;
         DateTime? olderThan = null;
+        PermFilter? permFilter = null;
         var parsingRoots = true;
 
         for (var index = 0; index < arguments.Count; index++)
@@ -240,6 +284,14 @@ public sealed class FindCommand : ShellCommand
                 case "-iname":
                     namePattern = CommandArguments.RequireString(arguments, ++index, "pattern");
                     namePatternIgnoreCase = true;
+                    break;
+                case "-path":
+                    pathPattern = CommandArguments.RequireString(arguments, ++index, "pattern");
+                    pathPatternIgnoreCase = false;
+                    break;
+                case "-ipath":
+                    pathPattern = CommandArguments.RequireString(arguments, ++index, "pattern");
+                    pathPatternIgnoreCase = true;
                     break;
                 case "-regex":
                     pathRegexPattern = CommandArguments.RequireString(arguments, ++index, "pattern");
@@ -297,12 +349,16 @@ public sealed class FindCommand : ShellCommand
 
                     olderThan = DateTime.UtcNow - olderDuration;
                     break;
+                case "-perm":
+                    var permSpec = CommandArguments.RequireString(arguments, ++index, "mode");
+                    permFilter = ParsePermSpec(permSpec);
+                    break;
                 default:
                     throw new InvalidOperationException($"Unsupported find option '{text}'.");
             }
         }
 
-        return new FindOptions(roots, namePattern, namePatternIgnoreCase, pathRegexPattern, pathRegexIgnoreCase, pathRegexArgumentIndex, typeFilter, minDepth, maxDepth, null, empty, minSize, maxSize, newerThan, olderThan);
+        return new FindOptions(roots, namePattern, namePatternIgnoreCase, pathPattern, pathPatternIgnoreCase, pathRegexPattern, pathRegexIgnoreCase, pathRegexArgumentIndex, typeFilter, minDepth, maxDepth, null, empty, minSize, maxSize, newerThan, olderThan, permFilter);
     }
 
     private static (StorageSize? Min, StorageSize? Max) ParseSizeSpec(string spec)
@@ -372,10 +428,58 @@ public sealed class FindCommand : ShellCommand
         return path.Replace(Path.DirectorySeparatorChar, '/').Replace(Path.AltDirectorySeparatorChar, '/');
     }
 
+    private static PermFilter ParsePermSpec(string spec)
+    {
+        PermMatchMode mode;
+        string digits;
+
+        if (spec.StartsWith("-", StringComparison.Ordinal))
+        {
+            mode = PermMatchMode.AllOf;
+            digits = spec[1..];
+        }
+        else if (spec.StartsWith("/", StringComparison.Ordinal))
+        {
+            mode = PermMatchMode.AnyOf;
+            digits = spec[1..];
+        }
+        else
+        {
+            mode = PermMatchMode.Exact;
+            digits = spec;
+        }
+
+        if (!TryParseOctal(digits, out var bits))
+        {
+            throw new InvalidOperationException($"Cannot parse permission '{spec}'. Use octal like 755, -644, /222.");
+        }
+
+        return new PermFilter(mode, bits);
+    }
+
+    private static bool TryParseOctal(string text, out int value)
+    {
+        value = 0;
+
+        foreach (var ch in text)
+        {
+            if (ch is < '0' or > '7')
+            {
+                return false;
+            }
+
+            value = (value << 3) | (ch - '0');
+        }
+
+        return text.Length > 0;
+    }
+
     private sealed record FindOptions(
         IReadOnlyList<object?> RootArguments,
         string? NamePattern,
         bool NamePatternIgnoreCase,
+        string? PathPattern,
+        bool PathPatternIgnoreCase,
         string? PathRegexPattern,
         bool PathRegexIgnoreCase,
         int PathRegexArgumentIndex,
@@ -387,5 +491,15 @@ public sealed class FindCommand : ShellCommand
         StorageSize? MinSize,
         StorageSize? MaxSize,
         DateTime? NewerThan,
-        DateTime? OlderThan);
+        DateTime? OlderThan,
+        PermFilter? PermFilter);
+
+    private readonly record struct PermFilter(PermMatchMode Mode, int Bits);
+
+    private enum PermMatchMode
+    {
+        Exact,
+        AllOf,
+        AnyOf,
+    }
 }

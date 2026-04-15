@@ -109,10 +109,26 @@ public sealed class ReplLineEditor
                     continue;
                 }
 
+
+                // Handle Ctrl+D (EOF)
                 if (key.Modifiers == ConsoleModifiers.Control && key.Key == ConsoleKey.D && buffer.Text.Length == 0)
                 {
                     Console.WriteLine();
                     return null;
+                }
+
+                // Handle Ctrl+C (SIGINT)
+                if (key.Modifiers == ConsoleModifiers.Control && key.Key == ConsoleKey.C)
+                {
+                    Console.WriteLine();
+                    throw new ReplInterruptException();
+                }
+
+                // Interactive shells reserve Ctrl+Z for foreground jobs; at the prompt it is a no-op.
+                if (key.Modifiers == ConsoleModifiers.Control && key.Key == ConsoleKey.Z)
+                {
+                    cursorRow = Render(prompt, continuationPrompt, buffer, cursorRow, completionState, historySearchState, highlighter, maxVisibleSuggestions, showGhostText, theme);
+                    continue;
                 }
 
                 if (key.Key == ConsoleKey.Enter && key.Modifiers.HasFlag(ConsoleModifiers.Shift))

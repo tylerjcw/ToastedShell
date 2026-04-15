@@ -1,6 +1,7 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Process")]
+[CommandNote("Wait-for blocks until one or more background jobs finish and returns structured completion objects.")]
 public sealed class WaitForCommand : ShellCommand
 {
     public WaitForCommand()

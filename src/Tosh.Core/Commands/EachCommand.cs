@@ -1,6 +1,12 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Pipeline")]
+[CommandArgument("callable|block", "A lambda or block executed once per input item.")]
+[CommandExample("echo one two | each { _.ToUpper() }")]
+[CommandExample("DriveInfo.GetDrives() | each func(d) => ($d.Name)")]
+[CommandNote("Collections stay intact until you explicitly expand them with `each` or `flatten`.")]
+[CommandOutput("Returns whatever values the callable or block emits for each input item.")]
+[PipelineInput(AcceptsScalar = true, AcceptsRecord = true, Description = "Consumes the current pipeline and executes the callable or block once per input item.")]
 public sealed class EachCommand : ShellCommand
 {
     public EachCommand(string name = "each")

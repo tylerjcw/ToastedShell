@@ -1,7 +1,10 @@
+using System.Text;
 using Tosh.Cli;
 using Tosh.Cli.Tui;
 using Tosh.Core;
 using Tosh.Language;
+
+ConfigureConsoleEncoding();
 
 var runtime = ToshRuntime.CreateDefault(Console.Out, Console.Error);
 runtime.InlinePrompts = new ConsoleInlinePromptProvider(runtime);
@@ -26,25 +29,20 @@ if (plan.Kind == CliInvocationKind.Help)
     return;
 }
 
-if (plan.Kind == CliInvocationKind.ExportManifest)
+if (plan.Kind == CliInvocationKind.ExportMetadata)
 {
-    await ExportCommandManifestAsync(plan);
+    await ExportCommandMetadataAsync(plan);
     return;
 }
 
 if (plan.LoadStartup)
 {
-    try
-    {
-        await ToshStartupLoader.LoadAsync(engine, configDirectory: null, skipProfile: plan.SkipProfile, errorWriter: Console.Error);
-    }
-    catch (Exception exception)
-    {
-        // Config file errors are still fatal — the shell can't function without config.
-        await Console.Error.WriteLineAsync(diagnostics.Render(exception));
-        Environment.ExitCode = 1;
-        return;
-    }
+    await ToshStartupLoader.LoadAsync(engine, configDirectory: null, skipProfile: plan.SkipProfile, errorWriter: Console.Error);
+}
+
+if (plan.SafeMode)
+{
+    await Console.Error.WriteLineAsync("tosh: safe mode — config, profile, and autoload files were skipped.");
 }
 
 runtime.IsLoginShell = plan.IsLoginShell;
@@ -109,6 +107,25 @@ runtime.KillAllJobs();
 await RaiseSessionEndingAsync();
 Environment.ExitCode = runtime.LastExitCode;
 return;
+
+static void ConfigureConsoleEncoding()
+{
+    if (!OperatingSystem.IsWindows())
+    {
+        return;
+    }
+
+    try
+    {
+        var utf8 = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
+        Console.InputEncoding = utf8;
+        Console.OutputEncoding = utf8;
+    }
+    catch
+    {
+        // Keep startup resilient if the host rejects encoding changes.
+    }
+}
 
 async Task ExecuteAndPrintAsync(string source)
 {
@@ -213,6 +230,7 @@ static async Task PrintUsageAsync()
     await Console.Out.WriteLineAsync("  -l, --login      Start as a login shell");
     await Console.Out.WriteLineAsync("  --no-startup     Skip config.tosh, profile.tosh, and autoload startup files");
     await Console.Out.WriteLineAsync("  --no-profile     Skip profile.tosh (config.tosh and autoload still load)");
+    await Console.Out.WriteLineAsync("  --safe           Start in safe mode (skip all startup, guaranteed recovery)");
     await Console.Out.WriteLineAsync("  --               Stop flag parsing for the next argument");
     await Console.Out.WriteLineAsync(string.Empty);
     await Console.Out.WriteLineAsync("Examples:");
@@ -237,7 +255,7 @@ static async Task PrintUsageAsync()
     await Console.Out.WriteLineAsync("  tosh 'func recent(days: TimeSpan) { ls -la | where _.Modified > ((date now) - $days) }'");
 }
 
-static async Task ExportCommandManifestAsync(CliInvocationPlan plan)
+static async Task ExportCommandMetadataAsync(CliInvocationPlan plan)
 {
     var format = plan.ScriptOrCommand ?? "json";
     var outputPath = plan.Arguments.Length > 0 ? plan.Arguments[0] : null;
@@ -250,12 +268,17 @@ static async Task ExportCommandManifestAsync(CliInvocationPlan plan)
 
     if (string.Equals(format, "latex", StringComparison.OrdinalIgnoreCase))
     {
-        var manifest = CommandManifestExporter.BuildManifest(registry);
-        output = CommandLatexEmitter.Emit(manifest);
+        var metadata = CommandMetadataExporter.BuildMetadata(registry);
+        output = CommandLatexEmitter.Emit(metadata);
+    }
+    else if (string.Equals(format, "vscode", StringComparison.OrdinalIgnoreCase))
+    {
+        var metadata = CommandMetadataExporter.BuildMetadata(registry);
+        output = VsCodeMetadataEmitter.Emit(metadata);
     }
     else
     {
-        output = CommandManifestExporter.ExportJson(registry);
+        output = CommandMetadataExporter.ExportMetadataJson(registry);
     }
 
     if (outputPath is not null)
@@ -268,7 +291,7 @@ static async Task ExportCommandManifestAsync(CliInvocationPlan plan)
         }
 
         await File.WriteAllTextAsync(outputPath, output);
-        await Console.Error.WriteLineAsync($"Wrote {format} manifest to {outputPath}");
+        await Console.Error.WriteLineAsync($"Wrote {format} metadata to {outputPath}");
     }
     else
     {

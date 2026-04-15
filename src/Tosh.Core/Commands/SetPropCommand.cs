@@ -1,6 +1,8 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("CLR")]
+[CommandExample("$obj | set-prop Name \"value\"")]
+[CommandExample("set-prop $obj Name \"value\"")]
 public sealed class SetPropCommand : ShellCommand
 {
     public SetPropCommand()

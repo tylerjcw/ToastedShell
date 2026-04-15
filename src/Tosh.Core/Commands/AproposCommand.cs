@@ -1,6 +1,9 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Shell")]
+[CommandExample("apropos json")]
+[CommandExample("apropos loop")]
+[CommandNote("Apropos performs fuzzy help search across commands and Tosh language topics.")]
 public sealed class AproposCommand : ShellCommand
 {
     public AproposCommand()

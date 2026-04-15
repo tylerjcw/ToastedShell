@@ -24,6 +24,18 @@
 			"dotnet test": true,
 			"awk": true,
 			"printf": true
+		},
+		"mcp": {
+			"servers": {
+				"tosh": {
+					"command": "dotnet",
+					"args": [
+						"exec",
+						"/home/komrad/projects/tosh/src/Tosh.Mcp/bin/Release/net10.0/Tosh.Mcp.dll",
+						"--stdio"
+					]
+				}
+			}
 		}
 	}
 }

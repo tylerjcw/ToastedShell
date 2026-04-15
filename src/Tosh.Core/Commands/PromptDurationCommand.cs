@@ -1,6 +1,8 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Prompt")]
+[CommandExample("prompt-duration")]
+[CommandExample("prompt-duration 2.5s --threshold-ms 250")]
 public sealed class PromptDurationCommand : ShellCommand
 {
     public PromptDurationCommand()

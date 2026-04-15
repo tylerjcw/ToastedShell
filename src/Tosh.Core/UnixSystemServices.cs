@@ -1,5 +1,7 @@
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
+using System.Security.Principal;
 using System.Text.RegularExpressions;
 
 namespace Tosh.Core;
@@ -22,6 +24,11 @@ internal static class UnixSystemServices
 
     public static UserIdentityInfo GetCurrentIdentity()
     {
+        if (OperatingSystem.IsWindows())
+        {
+            return GetWindowsIdentity();
+        }
+
         if (!IsUnixLike())
         {
             var fallbackUser = new FileSystemPrincipalInfo(0, Environment.UserName);
@@ -76,6 +83,28 @@ internal static class UnixSystemServices
         OperatingSystem.IsLinux() ||
         OperatingSystem.IsMacOS() ||
         OperatingSystem.IsFreeBSD();
+
+    [SupportedOSPlatform("windows")]
+    private static UserIdentityInfo GetWindowsIdentity()
+    {
+        try
+        {
+            using var identity = WindowsIdentity.GetCurrent();
+            var user = CreateWindowsPrincipalInfo(identity.User, identity.Name);
+            var groups = GetWindowsGroups(identity);
+            var primaryGroup = groups.FirstOrDefault() ?? new FileSystemPrincipalInfo(0, "None");
+            var uid = ToPrincipalId(user.Id);
+            var gid = ToPrincipalId(primaryGroup.Id);
+
+            return new UserIdentityInfo(user, uid, uid, primaryGroup, gid, gid, groups);
+        }
+        catch
+        {
+            var fallbackUser = new FileSystemPrincipalInfo(0, Environment.UserName);
+            var fallbackGroup = new FileSystemPrincipalInfo(0, "Users");
+            return new UserIdentityInfo(fallbackUser, 0, 0, fallbackGroup, 0, 0, [fallbackGroup]);
+        }
+    }
 
     private static bool TryGetUnameFromLibc(out UnameInfo info)
     {
@@ -175,6 +204,117 @@ internal static class UnixSystemServices
     private static string? PtrToAnsiString(IntPtr pointer) =>
         pointer == IntPtr.Zero ? null : Marshal.PtrToStringAnsi(pointer);
 
+    [SupportedOSPlatform("windows")]
+    private static IReadOnlyList<FileSystemPrincipalInfo> GetWindowsGroups(WindowsIdentity identity)
+    {
+        try
+        {
+            if (identity.Groups is null || identity.Groups.Count == 0)
+            {
+                return [new FileSystemPrincipalInfo(0, "Users")];
+            }
+
+            var groups = new List<FileSystemPrincipalInfo>();
+            var seen = new HashSet<long>();
+
+            foreach (var reference in identity.Groups)
+            {
+                SecurityIdentifier? sid = null;
+
+                try
+                {
+                    sid = reference as SecurityIdentifier ??
+                          reference.Translate(typeof(SecurityIdentifier)) as SecurityIdentifier;
+                }
+                catch
+                {
+                }
+
+                var info = CreateWindowsPrincipalInfo(sid, TranslateSid(sid) ?? reference.Value);
+
+                if (seen.Add(info.Id))
+                {
+                    groups.Add(info);
+                }
+            }
+
+            return groups.Count > 0
+                ? groups
+                : [new FileSystemPrincipalInfo(0, "Users")];
+        }
+        catch
+        {
+            return [new FileSystemPrincipalInfo(0, "Users")];
+        }
+    }
+
+    [SupportedOSPlatform("windows")]
+    internal static FileSystemPrincipalInfo CreateWindowsPrincipalInfo(SecurityIdentifier? sid, string? fallbackName)
+    {
+        var name = TranslateSid(sid) ?? fallbackName;
+        var id = sid is null
+            ? 0
+            : GetWindowsPrincipalId(sid.Value);
+        return new FileSystemPrincipalInfo(id, name);
+    }
+
+    [SupportedOSPlatform("windows")]
+    internal static string? TranslateSid(SecurityIdentifier? sid)
+    {
+        if (sid is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            return (sid.Translate(typeof(NTAccount)) as NTAccount)?.Value ?? sid.Value;
+        }
+        catch
+        {
+            return sid.Value;
+        }
+    }
+
+    [SupportedOSPlatform("windows")]
+    private static long GetWindowsPrincipalId(string sid)
+    {
+        var separator = sid.LastIndexOf('-');
+
+        if (separator >= 0 &&
+            long.TryParse(sid[(separator + 1)..], out var rid))
+        {
+            return rid;
+        }
+
+        unchecked
+        {
+            const long offset = 1469598103934665603;
+            const long prime = 1099511628211;
+            long hash = offset;
+
+            foreach (var character in sid)
+            {
+                hash ^= character;
+                hash *= prime;
+            }
+
+            return hash < 0 ? -hash : hash;
+        }
+    }
+
+    private static uint ToPrincipalId(long value)
+    {
+        if (value <= 0)
+        {
+            return 0;
+        }
+
+        return value >= uint.MaxValue
+            ? uint.MaxValue
+            : (uint)value;
+    }
+
     private static IReadOnlyList<FileSystemUsageInfo> ReadLinuxMountInfo()
     {
         var entries = new List<FileSystemUsageInfo>();
@@ -200,13 +340,65 @@ internal static class UnixSystemServices
                 mountRoot: mountInfo.Root,
                 size: size,
                 used: used,
-                available: available));
+                available: available,
+                inodeInfo: TryGetInodeInfo(mountInfo.MountedOn)));
         }
 
         return entries
             .DistinctBy(entry => entry.MountedOn, StringComparer.Ordinal)
             .OrderBy(entry => entry.MountedOn, StringComparer.Ordinal)
             .ToArray();
+    }
+
+    private static (long Total, long Free, long Used)? TryGetInodeInfo(string mountPoint)
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            return null;
+        }
+
+        try
+        {
+            var buf = new Statvfs();
+
+            if (statvfs(mountPoint, ref buf) != 0)
+            {
+                return null;
+            }
+
+            var total = (long)buf.f_files;
+            var free = (long)buf.f_ffree;
+
+            if (total <= 0)
+            {
+                return null;
+            }
+
+            return (total, free, total - free);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    [DllImport("libc", SetLastError = true)]
+    private static extern int statvfs([MarshalAs(UnmanagedType.LPStr)] string path, ref Statvfs buf);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct Statvfs
+    {
+        public ulong f_bsize;
+        public ulong f_frsize;
+        public ulong f_blocks;
+        public ulong f_bfree;
+        public ulong f_bavail;
+        public ulong f_files;
+        public ulong f_ffree;
+        public ulong f_favail;
+        public ulong f_fsid;
+        public ulong f_flag;
+        public ulong f_namemax;
     }
 
     private static FileSystemUsageInfo CreateUsageInfo(
@@ -217,7 +409,8 @@ internal static class UnixSystemServices
         string? mountRoot,
         StorageSize? size,
         StorageSize? used,
-        StorageSize? available)
+        StorageSize? available,
+        (long Total, long Free, long Used)? inodeInfo = null)
     {
         int? usePercent = null;
 
@@ -231,6 +424,23 @@ internal static class UnixSystemServices
             }
         }
 
+        long? inodesTotal = null;
+        long? inodesUsed = null;
+        long? inodesFree = null;
+        int? inodeUsePercent = null;
+
+        if (inodeInfo is { } inode)
+        {
+            inodesTotal = inode.Total;
+            inodesUsed = inode.Used;
+            inodesFree = inode.Free;
+
+            if (inode.Total > 0)
+            {
+                inodeUsePercent = (int)Math.Round(100d * inode.Used / inode.Total, MidpointRounding.AwayFromZero);
+            }
+        }
+
         return new FileSystemUsageInfo(
             fileSystem,
             mountedOn,
@@ -241,7 +451,11 @@ internal static class UnixSystemServices
             usePercent,
             driveType,
             IsLocal: DetermineIsLocal(type, driveType),
-            MountRoot: mountRoot);
+            MountRoot: mountRoot,
+            InodesTotal: inodesTotal,
+            InodesUsed: inodesUsed,
+            InodesFree: inodesFree,
+            InodeUsePercent: inodeUsePercent);
     }
 
     private static bool DetermineIsLocal(string? type, DriveType? driveType)

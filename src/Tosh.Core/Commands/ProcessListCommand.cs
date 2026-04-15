@@ -13,9 +13,12 @@ namespace Tosh.Core.Commands;
 [CommandOption("-t <tty,...>", "Select by terminal.")]
 [CommandOption("-o <columns>", "Specify output columns.")]
 [CommandOption("--sort <field,...>", "Sort by the given fields.")]
+[CommandOption("--tree", "Display as a process hierarchy tree.")]
+[CommandOption("--forest", "Display as a process hierarchy tree (alias for --tree).")]
 [CommandOption("--show <columns>", "Select which properties are rendered.")]
 [CommandOption("--hide <columns>", "Hide specific properties from the output.")]
 [CommandOption("--show-all", "Display every available column.")]
+[CommandExample("ps --tree", Title = "Process tree showing parent-child hierarchy")]
 [CommandExample("ps -f --sort -Id", Title = "Full listing sorted by ID descending")]
 [CommandExample("ps -u root | get { Name, Id, User }", Title = "Filter by user")]
 [CommandExample("ps | sort Memory | reverse | first 5", Title = "Top 5 by memory")]
@@ -45,10 +48,21 @@ public sealed class ProcessListCommand : ShellCommand
 
         processes.Sort((left, right) => CompareProcesses(left, right, options.SortKeys));
 
-        foreach (var process in processes)
+        if (options.Tree)
         {
-            context.CancellationToken.ThrowIfCancellationRequested();
-            yield return CommandDisplaySelectionParser.Apply(context.Runtime, effectiveSelection, process);
+            foreach (var root in BuildProcessTree(processes, options.SortKeys))
+            {
+                context.CancellationToken.ThrowIfCancellationRequested();
+                yield return root;
+            }
+        }
+        else
+        {
+            foreach (var process in processes)
+            {
+                context.CancellationToken.ThrowIfCancellationRequested();
+                yield return CommandDisplaySelectionParser.Apply(context.Runtime, effectiveSelection, process);
+            }
         }
     }
 
@@ -337,6 +351,10 @@ public sealed class ProcessListCommand : ShellCommand
             case "sort":
                 AddSortKeys(options.SortKeys, inlineValue ?? RequireOptionValue(arguments, ref index, "--sort"));
                 return;
+            case "tree":
+            case "forest":
+                options.Tree = true;
+                return;
             default:
                 throw new InvalidOperationException($"Unknown option '{text}'.");
         }
@@ -476,6 +494,47 @@ public sealed class ProcessListCommand : ShellCommand
         };
     }
 
+    private static List<ProcessTreeInfo> BuildProcessTree(List<ProcessInfo> processes, IReadOnlyList<ProcessSortKey> sortKeys)
+    {
+        var lookup = new Dictionary<int, ProcessTreeInfo>();
+
+        foreach (var process in processes)
+        {
+            lookup[process.Id] = new ProcessTreeInfo(process);
+        }
+
+        var roots = new List<ProcessTreeInfo>();
+
+        foreach (var node in lookup.Values)
+        {
+            if (node.ParentId is { } ppid && lookup.TryGetValue(ppid, out var parent))
+            {
+                parent.Children.Add(node);
+            }
+            else
+            {
+                roots.Add(node);
+            }
+        }
+
+        SortTreeLevel(roots, sortKeys);
+
+        return roots;
+    }
+
+    private static void SortTreeLevel(List<ProcessTreeInfo> nodes, IReadOnlyList<ProcessSortKey> sortKeys)
+    {
+        nodes.Sort((left, right) => CompareProcesses(left.Process, right.Process, sortKeys));
+
+        foreach (var node in nodes)
+        {
+            if (node.Children.Count > 0)
+            {
+                SortTreeLevel(node.Children, sortKeys);
+            }
+        }
+    }
+
     private sealed class PsOptions
     {
         public List<object?> Positionals { get; } = [];
@@ -491,6 +550,8 @@ public sealed class ProcessListCommand : ShellCommand
         public List<ProcessSortKey> SortKeys { get; } = [];
 
         public bool FullPreset { get; set; }
+
+        public bool Tree { get; set; }
     }
 
     private readonly record struct ProcessSortKey(ProcessSortField Field, bool Descending);

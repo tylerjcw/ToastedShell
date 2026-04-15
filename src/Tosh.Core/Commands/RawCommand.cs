@@ -3,6 +3,11 @@ using System.Globalization;
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Text")]
+[CommandArgument("value ...", "Optional explicit values to emit as plain text instead of rich object display.", Required = false)]
+[CommandExample("echo 1317 | raw", Title = "Show a scalar without rich boxing")]
+[CommandExample("echo System.DayOfWeek.Friday | raw", Title = "Show an enum's raw CLR string form")]
+[CommandOutput("Returns ShellTextLine values so the final display stays plain text instead of tables or record views.")]
+[PipelineInput(AcceptsScalar = true, AcceptsRecord = true, AcceptsList = true, AcceptsTable = true, Description = "Consumes pipeline values and emits one plain-text line per input item.")]
 public sealed class RawCommand : ShellCommand, IImplicitGlobCommand
 {
     public RawCommand()

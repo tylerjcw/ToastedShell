@@ -1,6 +1,13 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Filesystem")]
+[CommandArgument("handle", "The managed text file handle to write into.")]
+[CommandArgument("value ...", "Optional explicit values to write as one line. When omitted, each pipeline value becomes its own line.", Required = false)]
+[CommandExample("write-line-to $handle hello world")]
+[CommandExample("echo alpha beta | write-line-to $handle")]
+[CommandOutput("Writes line-oriented text into the handle and does not emit pipeline output.")]
+[PipelineInput(AcceptsScalar = true, AcceptsRecord = true, Description = "When no explicit values are supplied, each pipeline value is written as its own line.")]
+[CommandNote("These commands work with managed file handles returned by `open-file` or by `FileSystemEntry` methods like `OpenText()` and `OpenRead()`. `seek` returns the handle so you can keep piping through the stream workflow, while `copy-to` copies from one compatible handle into another.")]
 public sealed class WriteLineToCommand : ShellCommand
 {
     public WriteLineToCommand(string name = "write-line-to")

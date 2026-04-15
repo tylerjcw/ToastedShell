@@ -1,6 +1,13 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Filesystem")]
+[CommandArgument("handle", "The managed file handle to write into.")]
+[CommandArgument("value ...", "Optional explicit values to write. When omitted, pipeline input becomes the written payload.", Required = false)]
+[CommandExample("write-to $handle hello world")]
+[CommandExample("echo alpha beta | write-to $handle")]
+[CommandOutput("Writes into the handle and does not emit pipeline output.")]
+[PipelineInput(AcceptsScalar = true, AcceptsRecord = true, Description = "When no explicit values are supplied, pipeline values are written into the handle.")]
+[CommandNote("These commands work with managed file handles returned by `open-file` or by `FileSystemEntry` methods like `OpenText()` and `OpenRead()`. `seek` returns the handle so you can keep piping through the stream workflow, while `copy-to` copies from one compatible handle into another.")]
 public sealed class WriteToCommand : ShellCommand
 {
     public WriteToCommand(string name = "write-to")

@@ -1,6 +1,8 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Prompt")]
+[CommandExample("prompt-userhost --dim")]
+[CommandExample("prompt-userhost --fg gray")]
 public sealed class PromptUserHostCommand : ShellCommand
 {
     public PromptUserHostCommand()

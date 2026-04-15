@@ -1,6 +1,8 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Prompt")]
+[CommandExample("prompt-dir --fg blue --bold")]
+[CommandExample("prompt-dir --fg yellow --depth 2")]
 public sealed class PromptDirCommand : ShellCommand
 {
     public PromptDirCommand()

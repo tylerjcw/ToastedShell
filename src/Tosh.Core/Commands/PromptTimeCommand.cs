@@ -1,6 +1,8 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Prompt")]
+[CommandExample("prompt-time --dim")]
+[CommandExample("prompt-time --format \"HH:mm:ss\" --fg gray")]
 public sealed class PromptTimeCommand : ShellCommand
 {
     public PromptTimeCommand()

@@ -1,6 +1,12 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Filesystem")]
+[CommandArgument("path ...", "One or more file paths to read as whole-text values.", Required = false, TypeName = "path-like")]
+[CommandExample("read-file ./notes.txt")]
+[CommandExample("ls *.md | first | read-file")]
+[CommandOutput("Returns one string value per file.")]
+[PipelineInput(AcceptsList = true, Description = "Consumes piped path-like input when explicit file paths are omitted.")]
+[CommandNote("These commands accept normal path-like values, including strings, FileInfo, and ToSh FileSystemEntry objects.")]
 public sealed class ReadFileCommand : ShellCommand
 {
     public ReadFileCommand()

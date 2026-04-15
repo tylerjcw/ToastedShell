@@ -2,7 +2,7 @@ using Tosh.Core;
 
 namespace Tosh.Language.Commands;
 
-public sealed class FunctionCommand : IShellCommand, ICommandResolutionMetadata, IShellCallable
+public sealed class FunctionCommand : IShellCommand, ICommandResolutionMetadata, IShellCallable, IDocumentedCommand
 {
     private readonly FunctionDefinition _definition;
     private readonly ToshEngine _engine;
@@ -15,9 +15,31 @@ public sealed class FunctionCommand : IShellCommand, ICommandResolutionMetadata,
 
     public string Name => _definition.Name;
 
-    public string Description => _definition.ReturnTypeName is null
-        ? "User-defined Tosh function."
-        : $"User-defined Tosh function returning {_definition.ReturnTypeName}.";
+    public string Description => _definition.DocComment?.Description is { Length: > 0 } desc
+        ? desc
+        : _definition.ReturnTypeName is null
+            ? "User-defined Tosh function."
+            : $"User-defined Tosh function returning {_definition.ReturnTypeName}.";
+
+    public IReadOnlyDictionary<string, string> ParameterDescriptions =>
+        _definition.DocComment?.Parameters ?? (IReadOnlyDictionary<string, string>)new Dictionary<string, string>();
+
+    public string? ReturnsDescription => _definition.DocComment?.Returns;
+
+    public IReadOnlyList<string> DocExamples =>
+        _definition.DocComment?.Examples ?? Array.Empty<string>();
+
+    public bool IsDeprecated => _definition.DocComment?.IsDeprecated ?? false;
+
+    public string? DeprecatedMessage => _definition.DocComment?.Deprecated;
+
+    public IReadOnlyList<string> SeeAlso =>
+        _definition.DocComment?.SeeAlso ?? Array.Empty<string>();
+
+    public string? Since => _definition.DocComment?.Since;
+
+    public IReadOnlyList<string> Throws =>
+        _definition.DocComment?.Throws ?? Array.Empty<string>();
 
     public string Usage => BuildUsage();
 

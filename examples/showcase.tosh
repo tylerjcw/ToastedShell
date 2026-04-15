@@ -70,7 +70,7 @@ ls -la | group-by Type
 # Familiar if/else, for/in, while -- all operating on objects.
 
 echo "--- 8. Control Flow ---"
-var names = (echo "alice" "bob" "carol")
+var names = ["alice", "bob", "carol"]
 for name in ($names) {
     echo $name
 }
@@ -78,7 +78,7 @@ for name in ($names) {
 var counter = 0
 while (($counter < 3)) {
     echo $counter
-    counter = ($counter + 1)
+    $counter = ($counter + 1)
 }
 
 # --- 9. String Interpolation -----------------------------------------------
@@ -108,8 +108,8 @@ echo "--- 11. .NET Interop ---"
 echo "GUID:" (new System.Guid "d3b07384-d113-4ec6-a5d2-5b1d0d2e8c39")
 echo "Random:" (new System.Random | call Next 1 100)
 echo "Upper:" ("hello, tosh".ToUpper())
-echo "Join:" (String.Join " + " ["objects", "pipelines", "types"])
-echo "PI:" (Math.Round Math.PI 4)
+echo "Join:" (String.Join(" + ", ["objects", "pipelines", "types"]))
+echo "PI:" (Math.Round(Math.PI, 4))
 
 # --- 12. Command Wrappers --------------------------------------------------
 # Shorthand for common pipelines using arrow functions.
@@ -137,7 +137,7 @@ echo "Type:" (ls | fileCount | type-of)
 # Mark parameters optional with ? -- they default to null if not provided.
 
 func greet(name: String, title?: String) {
-    if ($title) {
+    if ($title is not null) {
         echo $"Hello, {$title} {$name}!"
     } else {
         echo $"Hello, {$name}!"

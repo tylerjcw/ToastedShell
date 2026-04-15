@@ -1,6 +1,8 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("CLR")]
+[CommandExample("members string")]
+[CommandExample("DateTime.Now | members")]
 public sealed class MembersCommand : ShellCommand
 {
     public MembersCommand()

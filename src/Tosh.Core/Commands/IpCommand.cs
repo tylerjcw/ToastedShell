@@ -6,13 +6,15 @@ namespace Tosh.Core.Commands;
 [CommandArgument("addr|address|a [filter ...]", "Returns typed network-interface objects by invoking `ip -j addr` under the hood.", Required = false)]
 [CommandArgument("link|l [filter ...]", "Returns typed network-interface link objects by invoking `ip -j link`.", Required = false)]
 [CommandArgument("route|r [filter ...]", "Returns typed route objects by invoking `ip -j route`.", Required = false)]
+[CommandArgument("neigh|neighbour|n [filter ...]", "Returns typed ARP/neighbor table objects by invoking `ip -j neigh`.", Required = false)]
+[CommandArgument("rule|ru [filter ...]", "Returns typed routing policy rule objects by invoking `ip -j rule`.", Required = false)]
 [CommandArgument("<other-subcommand ...>", "For now, unsupported subcommands fall back to the system `ip` utility unchanged.", Required = false)]
 [CommandExample("ip addr", Title = "List interfaces as structured objects")]
 [CommandExample("ip link | where _.IsUp", Title = "Filter active interfaces in the pipeline")]
 [CommandExample("ip route | where _.IsDefault", Title = "Show the default route as a typed object")]
 [CommandExample("ip addr | each { _.Addresses } | flatten | get Address", Title = "Project nested typed IP addresses")]
-[CommandNote("ToSh now wraps `ip addr`, `ip link`, and `ip route` around the JSON-capable system utility so the result flows through the pipeline as typed interface, address, and route objects. Other subcommands still fall back to the external `ip` utility unchanged.")]
-[CommandOutput("For `ip addr` and `ip link`, returns typed interface objects with nested typed address objects where available. For `ip route`, returns typed route objects. Other subcommands currently pass through to the system `ip` utility's normal text output.")]
+[CommandNote("ToSh wraps `ip addr`, `ip link`, `ip route`, `ip neigh`, and `ip rule` around the JSON-capable system utility so the result flows through the pipeline as typed objects. Other subcommands still fall back to the external `ip` utility unchanged.")]
+[CommandOutput("For `ip addr` and `ip link`, returns typed interface objects with nested typed address objects where available. For `ip route`, returns typed route objects. For `ip neigh`, returns typed neighbor/ARP entries. For `ip rule`, returns typed routing policy rules. Other subcommands pass through to the system `ip` utility's normal text output.")]
 [PipelineInput(Description = "The structured `ip` builtin is explicit-arg-first and does not currently consume pipeline input.")]
 public sealed class IpCommand : ShellCommand
 {
@@ -40,7 +42,10 @@ public sealed class IpCommand : ShellCommand
                     NetworkInformationServices.GetWindowsInterfaces(includeAddresses: false).Cast<object?>().ToArray(),
                 StructuredIpMode.Route =>
                     NetworkInformationServices.GetWindowsRoutes().Cast<object?>().ToArray(),
-                _ => throw new InvalidOperationException($"Unsupported ip mode '{windowsRequest.Mode}'."),
+                _ => throw context.CreateDiagnostic(
+                    code: "tosh::runtime::ip_subcommand_unsupported_windows",
+                    title: $"'ip {windowsRequest.Mode.ToString().ToLowerInvariant()}' is not supported on Windows.",
+                    help: "Only 'ip addr', 'ip link', and 'ip route' are supported on Windows."),
             };
 
             foreach (var item in windowsItems)
@@ -97,6 +102,10 @@ public sealed class IpCommand : ShellCommand
                     IpJsonParser.ParseInterfaces(result.StandardOutput).Cast<object?>().ToArray(),
                 StructuredIpMode.Route =>
                     IpJsonParser.ParseRoutes(result.StandardOutput).Cast<object?>().ToArray(),
+                StructuredIpMode.Neigh =>
+                    IpJsonParser.ParseNeighbors(result.StandardOutput).Cast<object?>().ToArray(),
+                StructuredIpMode.Rule =>
+                    IpJsonParser.ParseRules(result.StandardOutput).Cast<object?>().ToArray(),
                 _ => throw new InvalidOperationException($"Unsupported structured ip mode '{structuredRequest.Mode}'."),
             };
         }
@@ -229,6 +238,24 @@ public sealed class IpCommand : ShellCommand
             return true;
         }
 
+        if (string.Equals(subcommand, "neigh", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(subcommand, "neighbour", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(subcommand, "neighbor", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(subcommand, "n", StringComparison.OrdinalIgnoreCase))
+        {
+            normalizedSubcommand = "neigh";
+            mode = StructuredIpMode.Neigh;
+            return true;
+        }
+
+        if (string.Equals(subcommand, "rule", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(subcommand, "ru", StringComparison.OrdinalIgnoreCase))
+        {
+            normalizedSubcommand = "rule";
+            mode = StructuredIpMode.Rule;
+            return true;
+        }
+
         normalizedSubcommand = string.Empty;
         mode = default;
         return false;
@@ -298,6 +325,8 @@ public sealed class IpCommand : ShellCommand
         Addr,
         Link,
         Route,
+        Neigh,
+        Rule,
     }
 
     private sealed record StructuredIpRequest(StructuredIpMode Mode, IReadOnlyList<string> Arguments);

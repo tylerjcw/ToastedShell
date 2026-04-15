@@ -3,12 +3,12 @@ using Tosh.Language;
 
 namespace Tosh.Tests;
 
-public sealed class HelpCommandTests
+public sealed class HelpCommandTests(ToshRuntimeFixture fixture) : IClassFixture<ToshRuntimeFixture>
 {
     [Fact]
     public async Task Help_can_describe_commands_language_topics_types_and_externals()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = fixture.Engine;
         var externalPath = Environment.ProcessPath ?? throw new InvalidOperationException("Unable to resolve the current process path.");
 
         var functionTopic = Assert.IsType<HelpTopic>(Assert.Single(await engine.ExecuteToListAsync("help func")));
@@ -44,7 +44,7 @@ public sealed class HelpCommandTests
         Assert.Equal("Shell Types", listTopic.Category);
         Assert.Equal(HelpSubjectKind.BuiltIn, mapTopic.Kind);
         Assert.Equal("map", mapTopic.Name);
-        Assert.Equal("Shell", mapTopic.Category);
+        Assert.Equal("Pipeline", mapTopic.Category);
         Assert.Equal(HelpSubjectKind.Type, dictTopic.Kind);
         Assert.Contains("map", dictTopic.Aliases, StringComparer.OrdinalIgnoreCase);
         Assert.Equal(HelpSubjectKind.Type, genericListTopic.Kind);
@@ -56,7 +56,7 @@ public sealed class HelpCommandTests
     [Fact]
     public async Task Help_search_related_and_categories_return_structured_results()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = fixture.Engine;
 
         var searchResults = await engine.ExecuteToListAsync("help search json");
         var aproposResults = await engine.ExecuteToListAsync("apropos loop");
@@ -75,7 +75,7 @@ public sealed class HelpCommandTests
     [Fact]
     public async Task Help_and_apropos_accept_pipeline_input()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = fixture.Engine;
 
         var helpResults = await engine.ExecuteToListAsync("echo list | help | get Name");
         var searchResults = await engine.ExecuteToListAsync("echo json | help search | get Name");
@@ -91,7 +91,7 @@ public sealed class HelpCommandTests
     [Fact]
     public async Task Help_can_request_the_interactive_browser()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var engine = fixture.Engine;
 
         var results = await engine.ExecuteToListAsync("help browse regex");
 

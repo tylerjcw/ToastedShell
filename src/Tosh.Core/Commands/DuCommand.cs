@@ -1,10 +1,26 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Filesystem")]
+[CommandArgument("path ...", "Optional roots to measure.", Required = false, TypeName = "path-like")]
+[CommandOption("-a", "Include file rows as well as directory summaries.")]
+[CommandOption("-s", "Summarize each root instead of emitting recursive rows.")]
+[CommandOption("-d <depth>", "Limit recursion depth.")]
+[CommandOption("-h", "Accepts the familiar human-readable flag; ToSh sizes are already typed and human-friendly.")]
+[CommandOption("-c", "Appends a typed grand total row.")]
+[CommandOption("-x", "Stay on the same filesystem as each requested root.")]
+[CommandOption("--time", "Include the latest modified timestamp for each emitted row.")]
+[CommandOption("-t <size>", "Exclude entries smaller than size (or with - prefix, larger than absolute size).")]
+[CommandOption("--threshold <size>", "Alias for -t.")]
+[CommandOption("--exclude <pattern>", "Exclude files matching the shell glob pattern.")]
+[CommandExample("du -s .")]
+[CommandExample("du -a -c --time")]
+[CommandExample("du -x ./projects | get { Name, Size, Modified }")]
+[CommandOutput("Produces typed path-usage objects with optional modified-time metadata and aggregate totals.")]
+[PipelineInput(AcceptsList = true, Description = "Uses piped path-like roots when explicit paths are omitted. Falls back to the current directory when neither are present.")]
 public sealed class DuCommand : ShellCommand
 {
     public DuCommand(string name = "du")
-        : base(name, "Returns disk usage information for files and directories.", $"{name} [-a] [-s] [-d depth] [-h] [-c] [-x] [--time] [--show columns] [--hide columns] [--show-all] [path ...]") { }
+        : base(name, "Returns disk usage information for files and directories.", $"{name} [-a] [-s] [-d depth] [-h] [-c] [-x] [--time] [-t size] [--exclude pattern] [--show columns] [--hide columns] [--show-all] [path ...]") { }
 
     public override async IAsyncEnumerable<object?> ExecuteAsync(CommandContext context)
     {
@@ -139,6 +155,12 @@ public sealed class DuCommand : ShellCommand
                 continue;
             }
 
+            if (options.ExcludePattern is not null &&
+                GlobPatternMatcher.IsMatch(entry.Name, options.ExcludePattern, ignoreCase: true))
+            {
+                continue;
+            }
+
             if (options.OneFileSystem &&
                 rootMountPoint is not null &&
                 FileSystemUsageUtilities.FindContainingMount(mountEntries, entry.FullName)?.MountedOn is { } entryMount &&
@@ -158,13 +180,18 @@ public sealed class DuCommand : ShellCommand
 
                 if (options.IncludeFiles && depth + 1 <= options.MaxDepth)
                 {
-                    output.Add(new PathUsageInfo(
-                        file.Name,
-                        file.FullName,
-                        depth + 1,
-                        IsDirectory: false,
-                        StorageSize.FromBytes(file.Length),
-                        options.IncludeTime ? ToInstant(file.LastWriteTime) : null));
+                    var fileSize = StorageSize.FromBytes(file.Length);
+
+                    if (!ExcludedByThreshold(fileSize, options))
+                    {
+                        output.Add(new PathUsageInfo(
+                            file.Name,
+                            file.FullName,
+                            depth + 1,
+                            IsDirectory: false,
+                            fileSize,
+                            options.IncludeTime ? ToInstant(file.LastWriteTime) : null));
+                    }
                 }
 
                 continue;
@@ -182,13 +209,18 @@ public sealed class DuCommand : ShellCommand
 
                 if (depth + 1 <= options.MaxDepth)
                 {
-                    output.Add(new PathUsageInfo(
-                        childDirectory.Name,
-                        childDirectory.FullName,
-                        depth + 1,
-                        IsDirectory: true,
-                        StorageSize.FromBytes(childSummary.TotalBytes),
-                        childSummary.Modified));
+                    var childSize = StorageSize.FromBytes(childSummary.TotalBytes);
+
+                    if (!ExcludedByThreshold(childSize, options))
+                    {
+                        output.Add(new PathUsageInfo(
+                            childDirectory.Name,
+                            childDirectory.FullName,
+                            depth + 1,
+                            IsDirectory: true,
+                            childSize,
+                            childSummary.Modified));
+                    }
                 }
             }
         }
@@ -230,6 +262,21 @@ public sealed class DuCommand : ShellCommand
             DateTimeKind.Local => new DateTimeOffset(value),
             _ => new DateTimeOffset(DateTime.SpecifyKind(value, DateTimeKind.Local)),
         };
+    }
+
+    private static bool ExcludedByThreshold(StorageSize size, DuOptions options)
+    {
+        if (options.ThresholdMin is not null && size.Bytes < options.ThresholdMin.Value.Bytes)
+        {
+            return true;
+        }
+
+        if (options.ThresholdMax is not null && size.Bytes > options.ThresholdMax.Value.Bytes)
+        {
+            return true;
+        }
+
+        return false;
     }
 
     private static DuOptions ParseOptions(IReadOnlyList<object?> arguments)
@@ -298,6 +345,12 @@ public sealed class DuCommand : ShellCommand
             case "time":
                 options.IncludeTime = true;
                 return;
+            case "threshold":
+                ParseThreshold(inlineValue ?? RequireOptionValue(arguments, ref index, "--threshold"), options);
+                return;
+            case "exclude":
+                options.ExcludePattern = inlineValue ?? RequireOptionValue(arguments, ref index, "--exclude");
+                return;
             default:
                 throw new InvalidOperationException($"Unsupported du option '{text}'.");
         }
@@ -326,6 +379,12 @@ public sealed class DuCommand : ShellCommand
                 case 'x':
                     options.OneFileSystem = true;
                     break;
+                case 't':
+                    var thresholdValue = characterIndex + 1 < text.Length
+                        ? text[(characterIndex + 1)..]
+                        : RequireOptionValue(arguments, ref index, "-t");
+                    ParseThreshold(thresholdValue, options);
+                    return;
                 case 'd':
                     var value = characterIndex + 1 < text.Length
                         ? text[(characterIndex + 1)..]
@@ -375,6 +434,28 @@ public sealed class DuCommand : ShellCommand
         return depth;
     }
 
+    private static void ParseThreshold(string spec, DuOptions options)
+    {
+        if (spec.StartsWith("-", StringComparison.Ordinal))
+        {
+            if (!StorageSize.TryParse(spec[1..], out var size))
+            {
+                throw new InvalidOperationException($"Cannot parse threshold '{spec}'. Use formats like '1M', '10K'.");
+            }
+
+            options.ThresholdMax = size;
+        }
+        else
+        {
+            if (!StorageSize.TryParse(spec, out var size))
+            {
+                throw new InvalidOperationException($"Cannot parse threshold '{spec}'. Use formats like '1M', '10K'.");
+            }
+
+            options.ThresholdMin = size;
+        }
+    }
+
     private sealed class DuOptions
     {
         public List<object?> Paths { get; } = [];
@@ -390,6 +471,12 @@ public sealed class DuCommand : ShellCommand
         public bool OneFileSystem { get; set; }
 
         public bool IncludeTime { get; set; }
+
+        public StorageSize? ThresholdMin { get; set; }
+
+        public StorageSize? ThresholdMax { get; set; }
+
+        public string? ExcludePattern { get; set; }
     }
 
     private sealed record DirectoryUsageResult(IReadOnlyList<PathUsageInfo> Entries, long TotalBytes);

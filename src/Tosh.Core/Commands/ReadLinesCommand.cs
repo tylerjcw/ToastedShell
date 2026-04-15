@@ -1,6 +1,12 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Filesystem")]
+[CommandArgument("path ...", "One or more file paths to read line-by-line.", Required = false, TypeName = "path-like")]
+[CommandExample("read-lines ./notes.txt")]
+[CommandExample("read-lines ./notes.txt | grep error")]
+[CommandOutput("Returns ShellTextLine values, one per line across the supplied files.")]
+[PipelineInput(AcceptsList = true, Description = "Consumes piped path-like input when explicit file paths are omitted.")]
+[CommandNote("These commands accept normal path-like values, including strings, FileInfo, and ToSh FileSystemEntry objects.")]
 public sealed class ReadLinesCommand : ShellCommand
 {
     public ReadLinesCommand()

@@ -2,12 +2,22 @@ namespace Tosh.Core;
 
 /// <summary>
 /// Declares the command's category for help grouping and spec generation.
-/// When absent, the category is inferred from <see cref="HelpCatalog.DetermineCommandCategory"/>.
+/// When absent, the category defaults to "Shell".
 /// </summary>
 [AttributeUsage(AttributeTargets.Class, AllowMultiple = false)]
 public sealed class CommandCategoryAttribute(string category) : Attribute
 {
     public string Category { get; } = category;
+}
+
+/// <summary>
+/// Declares that this command is an alias of another canonical command.
+/// The exporter groups aliases together under the primary command's metadata entry.
+/// </summary>
+[AttributeUsage(AttributeTargets.Class, AllowMultiple = false)]
+public sealed class CommandAliasAttribute(string canonicalName) : Attribute
+{
+    public string CanonicalName { get; } = canonicalName;
 }
 
 /// <summary>

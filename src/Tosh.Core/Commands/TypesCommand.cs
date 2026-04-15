@@ -1,6 +1,10 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("CLR")]
+[CommandExample("types System.String")]
+[CommandExample("types list")]
+[CommandExample("types map | where _.Namespace == ToSh")]
+[CommandNote("Types searches both CLR types and ToSh shell types like `list`, `array`, `dict`, `table`, and `tuple`.")]
 public sealed class TypesCommand : ShellCommand
 {
     public TypesCommand()

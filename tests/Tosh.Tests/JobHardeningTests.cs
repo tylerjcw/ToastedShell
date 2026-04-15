@@ -8,16 +8,25 @@ public sealed class JobHardeningTests
     [Fact]
     public async Task Completed_jobs_are_reaped_when_listing_jobs()
     {
-        if (OperatingSystem.IsWindows())
-        {
-            return;
-        }
+        using var tempDirectory = new TemporaryDirectory();
+        var commandName = CreateScript(
+            tempDirectory.Path,
+            "done",
+            unixBody:
+            """
+            printf 'done\n'
+            """,
+            windowsBody:
+            """
+            @echo done
+            """);
 
         var runtime = ToshRuntime.CreateDefault();
+        runtime.CurrentDirectory = tempDirectory.Path;
         var engine = new ToshEngine(runtime);
 
         // Start a fast background job
-        await engine.ExecuteToListAsync("/bin/sh -c \"printf 'done\\n'\" &");
+        await engine.ExecuteToListAsync("./" + commandName + " &");
         var startedInfo = Assert.IsType<ShellJobInfo>(runtime.LastResult);
 
         // Wait for it to finish
@@ -31,21 +40,41 @@ public sealed class JobHardeningTests
     [Fact]
     public async Task Completed_jobs_are_reaped_when_registering_new_jobs()
     {
-        if (OperatingSystem.IsWindows())
-        {
-            return;
-        }
+        using var tempDirectory = new TemporaryDirectory();
+        var firstCommand = CreateScript(
+            tempDirectory.Path,
+            "first",
+            unixBody:
+            """
+            printf 'first\n'
+            """,
+            windowsBody:
+            """
+            @echo first
+            """);
+        var secondCommand = CreateScript(
+            tempDirectory.Path,
+            "second",
+            unixBody:
+            """
+            printf 'second\n'
+            """,
+            windowsBody:
+            """
+            @echo second
+            """);
 
         var runtime = ToshRuntime.CreateDefault();
+        runtime.CurrentDirectory = tempDirectory.Path;
         var engine = new ToshEngine(runtime);
 
         // Start and wait for a job to complete
-        await engine.ExecuteToListAsync("/bin/sh -c \"printf 'first\\n'\" &");
+        await engine.ExecuteToListAsync("./" + firstCommand + " &");
         var firstInfo = Assert.IsType<ShellJobInfo>(runtime.LastResult);
         await engine.ExecuteToListAsync($"wait-for {firstInfo.Id}");
 
         // Register a new background job — the completed one should be reaped
-        await engine.ExecuteToListAsync("/bin/sh -c \"printf 'second\\n'\" &");
+        await engine.ExecuteToListAsync("./" + secondCommand + " &");
         var secondInfo = Assert.IsType<ShellJobInfo>(runtime.LastResult);
         await engine.ExecuteToListAsync($"wait-for {secondInfo.Id}");
 
@@ -57,16 +86,25 @@ public sealed class JobHardeningTests
     [Fact]
     public async Task KillAllJobs_terminates_running_background_jobs()
     {
-        if (OperatingSystem.IsWindows())
-        {
-            return;
-        }
+        using var tempDirectory = new TemporaryDirectory();
+        var commandName = CreateScript(
+            tempDirectory.Path,
+            "linger",
+            unixBody:
+            """
+            sleep 30
+            """,
+            windowsBody:
+            """
+            @ping -n 31 127.0.0.1 > nul
+            """);
 
         var runtime = ToshRuntime.CreateDefault();
+        runtime.CurrentDirectory = tempDirectory.Path;
         var engine = new ToshEngine(runtime);
 
         // Start a long-running background job
-        await engine.ExecuteToListAsync("/bin/sh -c \"sleep 30\" &");
+        await engine.ExecuteToListAsync("./" + commandName + " &");
         var startedInfo = Assert.IsType<ShellJobInfo>(runtime.LastResult);
         Assert.True(runtime.TryGetJob(startedInfo.Id, out var job));
         Assert.Equal(ShellJobStatus.Running, job.Status);
@@ -84,5 +122,43 @@ public sealed class JobHardeningTests
         var runtime = ToshRuntime.CreateDefault();
         runtime.KillAllJobs();
         Assert.Empty(runtime.GetJobs());
+    }
+
+    private static string CreateScript(string directory, string name, string unixBody, string windowsBody)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            var path = Path.Combine(directory, name + ".cmd");
+            File.WriteAllText(path, $"@echo off{Environment.NewLine}{windowsBody.Trim().Replace("\n", Environment.NewLine, StringComparison.Ordinal)}{Environment.NewLine}");
+            return Path.GetFileName(path);
+        }
+
+        var scriptPath = Path.Combine(directory, name);
+        File.WriteAllText(scriptPath, $"#!/usr/bin/env sh\n{unixBody.Trim()}\n");
+        File.SetUnixFileMode(
+            scriptPath,
+            UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute |
+            UnixFileMode.GroupRead | UnixFileMode.GroupExecute |
+            UnixFileMode.OtherRead | UnixFileMode.OtherExecute);
+        return Path.GetFileName(scriptPath);
+    }
+
+    private sealed class TemporaryDirectory : IDisposable
+    {
+        public TemporaryDirectory()
+        {
+            Path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"tosh-job-hardening-tests-{Guid.NewGuid():N}");
+            Directory.CreateDirectory(Path);
+        }
+
+        public string Path { get; }
+
+        public void Dispose()
+        {
+            if (Directory.Exists(Path))
+            {
+                Directory.Delete(Path, recursive: true);
+            }
+        }
     }
 }

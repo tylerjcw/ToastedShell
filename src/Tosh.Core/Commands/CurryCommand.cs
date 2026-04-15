@@ -1,6 +1,11 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Functional")]
+[CommandArgument("callable", "A fixed-arity callable value to curry.")]
+[CommandExample("var add3 = func(a, b, c) => ($a + $b + $c); var curried = curry $add3", Title = "Create a curried callable")]
+[CommandExample("var step1 = invoke $curried 1; var step2 = invoke $step1 2; invoke $step2 39", Title = "Invoke a curried callable one step at a time")]
+[CommandOutput("Returns a curried callable. Calling it with too few arguments returns another callable; calling it with enough arguments runs the original callable.")]
+[PipelineInput(Description = "`curry` returns a callable that accumulates arguments until the original callable is saturated.")]
 public sealed class CurryCommand : ShellCommand
 {
     public CurryCommand()

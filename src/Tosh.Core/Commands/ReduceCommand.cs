@@ -1,6 +1,12 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Pipeline")]
+[CommandArgument("seed", "The initial accumulator value.")]
+[CommandArgument("callable|block", "A lambda or block that combines the current accumulator with each input item and returns the next accumulator.")]
+[CommandExample("echo 1 2 3 4 | reduce 0 func(acc, x) => ($acc + $x)", Title = "Fold numeric values")]
+[CommandExample("echo one two three | reduce \"\" { $acc + _.Substring(0, 1) }", Title = "Fold with a block")]
+[CommandOutput("Returns the final accumulator value. On an empty input stream, `reduce` returns the seed unchanged.")]
+[PipelineInput(AcceptsScalar = true, AcceptsRecord = true, Description = "Consumes the current pipeline from left to right and folds it into one final value.")]
 public sealed class ReduceCommand : ShellCommand
 {
     public ReduceCommand()

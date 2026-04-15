@@ -56,6 +56,6 @@ public sealed class HelpTreeStateTests
         var firstTopic = state.VisibleNodes.FirstOrDefault(node => node.Kind == HelpTreeNodeKind.Topic);
         Assert.NotNull(firstTopic);
         Assert.Equal("filter", firstTopic!.Topic?.Name);
-        Assert.Equal("Shell", firstTopic.Category);
+        Assert.Equal("Pipeline", firstTopic.Category);
     }
 }

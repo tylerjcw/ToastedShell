@@ -1,6 +1,19 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Shell")]
+[CommandArgument("topic", "The command, language topic, type, or external executable to describe.", Required = false)]
+[CommandArgument("--cli [query]", "Opens the inline fuzzy tree browser, optionally seeded with an initial query or topic.", Required = false)]
+[CommandArgument("browse [query]", "Opens the full-screen help browser, optionally filtered by an initial query.", Required = false)]
+[CommandArgument("search <query>", "Searches help topics by name, alias, category, and description.", Required = false)]
+[CommandArgument("related <topic>", "Shows related topics for the given command or language feature.", Required = false)]
+[CommandArgument("categories", "Lists help categories and topic counts.", Required = false)]
+[CommandExample("help ls", Title = "Describe a command")]
+[CommandExample("help search regex", Title = "Search help")]
+[CommandExample("help --cli regex", Title = "Open the inline fuzzy help browser")]
+[CommandExample("help browse grep", Title = "Open the help browser")]
+[CommandNote("Use `help search <query>` or `apropos <query>` to find commands and language topics quickly, `help --cli` for the inline fuzzy tree browser, or `help browse` for the fullscreen split-pane browser. In the REPL, `F1` opens the inline help browser seeded from the token under the cursor, and `Alt+H` is available as a fallback on terminals that do not expose function keys cleanly.")]
+[CommandOutput("Produces help summaries, full help topics, search results, category rows, launches the inline browser with `--cli`, or returns an interactive browser request for `help browse` depending on the form.")]
+[PipelineInput(AcceptsScalar = true, Description = "With no explicit args, piped scalar values are treated as help topics. `search` and `related` also consume piped query/topic text.")]
 public sealed class HelpCommand : ShellCommand
 {
     public HelpCommand(string name = "help")

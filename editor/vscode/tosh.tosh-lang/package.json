@@ -5,18 +5,16 @@
 	"version": "0.1.0",
 	"publisher": "tosh",
 	"engines": {
-		"vscode": "^1.75.0"
+		"vscode": "^1.82.0"
 	},
 	"dependencies": {
-		"vscode-languageclient": "8.1.0"
+		"vscode-languageclient": "9.0.1"
 	},
 	"categories": [
 		"Programming Languages"
 	],
 	"main": "./extension.js",
-	"activationEvents": [
-		"onLanguage:tosh"
-	],
+	"activationEvents": [],
 	"contributes": {
 		"languages": [
 			{
@@ -28,14 +26,21 @@
 				"extensions": [
 					".tosh"
 				],
-				"configuration": "./language-configuration.json"
+				"configuration": "./language-configuration.json",
+				"icon": {
+					"light": "./icons/tosh-light.svg",
+					"dark": "./icons/tosh-dark.svg"
+				}
 			}
 		],
 		"grammars": [
 			{
 				"language": "tosh",
 				"scopeName": "source.tosh",
-				"path": "./syntaxes/tosh.tmLanguage.json"
+				"path": "./syntaxes/tosh.tmLanguage.json",
+				"embeddedLanguages": {
+					"source.tosh.embedded": "tosh"
+				}
 			}
 		],
 		"snippets": [

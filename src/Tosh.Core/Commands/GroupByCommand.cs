@@ -1,6 +1,8 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Pipeline")]
+[CommandExample("ls | group-by Extension")]
+[CommandExample("ps | group-by func(p) => ($p.Name.Substring(0, 1))")]
 public sealed class GroupByCommand : ShellCommand
 {
     public GroupByCommand()

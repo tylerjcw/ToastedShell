@@ -1,10 +1,24 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Filesystem")]
+[CommandArgument("source ...", "One or more source paths to move.", TypeName = "path-like")]
+[CommandArgument("destination", "The destination path or directory.", Required = false, TypeName = "path-like")]
+[CommandOption("-n", "Do not overwrite existing files.")]
+[CommandOption("-u", "Only move when the source is newer than the destination.")]
+[CommandOption("-f", "Force overwrite for file targets, clearing a previous `-n`.")]
+[CommandOption("-t <directory>", "Use an explicit destination directory.")]
+[CommandOption("-T", "Treat the destination as a normal path, not a target directory.")]
+[CommandOption("-v", "Explain what is being done.")]
+[CommandExample("mv old.txt new.txt")]
+[CommandExample("mv -n *.txt archive/")]
+[CommandExample("mv -t archive alpha.txt beta.txt")]
+[CommandNote("Mv now overwrites existing file targets by default, closer to Unix `mv`. `-n`, `-u`, `-t`, and `-T` are available to control that behavior explicitly.")]
+[CommandOutput("Returns FileInfo or DirectoryInfo objects for the moved targets.")]
+[PipelineInput(Description = "The current `mv` implementation is explicit-arg-first and does not consume pipeline input.")]
 public sealed class MoveItemCommand : ShellCommand
 {
     public MoveItemCommand()
-        : base("mv", "Moves or renames files and directories.", "mv [-nufTi] [-t directory] <source> [source ...] <destination>") { }
+        : base("mv", "Moves or renames files and directories.", "mv [-nufTiv] [-t directory] <source> [source ...] <destination>") { }
 
     public override async IAsyncEnumerable<object?> ExecuteAsync(CommandContext context)
     {
@@ -58,6 +72,12 @@ public sealed class MoveItemCommand : ShellCommand
 
                 Directory.CreateDirectory(Path.GetDirectoryName(targetPath) ?? context.Runtime.CurrentDirectory);
                 File.Move(source, targetPath, overwrite: true);
+
+                if (options.Verbose)
+                {
+                    Console.Error.WriteLine($"renamed '{source}' -> '{targetPath}'");
+                }
+
                 yield return new FileInfo(targetPath);
                 continue;
             }
@@ -85,6 +105,12 @@ public sealed class MoveItemCommand : ShellCommand
                 }
 
                 Directory.Move(source, targetPath);
+
+                if (options.Verbose)
+                {
+                    Console.Error.WriteLine($"renamed '{source}' -> '{targetPath}'");
+                }
+
                 yield return new DirectoryInfo(targetPath);
                 continue;
             }
@@ -101,6 +127,7 @@ public sealed class MoveItemCommand : ShellCommand
         var update = false;
         var noTargetDirectory = false;
         var interactive = false;
+        var verbose = false;
         var parseOptions = true;
 
         for (var index = 0; index < arguments.Count; index++)
@@ -149,6 +176,12 @@ public sealed class MoveItemCommand : ShellCommand
                 continue;
             }
 
+            if (text is "-v" or "--verbose")
+            {
+                verbose = true;
+                continue;
+            }
+
             if (text is "-T" or "--no-target-directory")
             {
                 noTargetDirectory = true;
@@ -174,6 +207,7 @@ public sealed class MoveItemCommand : ShellCommand
                     ref update,
                     ref noTargetDirectory,
                     ref interactive,
+                    ref verbose,
                     ref targetDirectory))
             {
                 continue;
@@ -197,7 +231,7 @@ public sealed class MoveItemCommand : ShellCommand
             }
         }
 
-        return new MoveOptions(noClobber, update, noTargetDirectory, interactive, targetDirectory, positionals);
+        return new MoveOptions(noClobber, update, noTargetDirectory, interactive, verbose, targetDirectory, positionals);
     }
 
     private static bool TryParseShortOptionCluster(
@@ -208,6 +242,7 @@ public sealed class MoveItemCommand : ShellCommand
         ref bool update,
         ref bool noTargetDirectory,
         ref bool interactive,
+        ref bool verbose,
         ref object? targetDirectory)
     {
         if (!text.StartsWith("-", StringComparison.Ordinal) ||
@@ -232,6 +267,9 @@ public sealed class MoveItemCommand : ShellCommand
                     break;
                 case 'i':
                     interactive = true;
+                    break;
+                case 'v':
+                    verbose = true;
                     break;
                 case 'T':
                     noTargetDirectory = true;
@@ -306,6 +344,7 @@ public sealed class MoveItemCommand : ShellCommand
         bool Update,
         bool NoTargetDirectory,
         bool Interactive,
+        bool Verbose,
         object? TargetDirectory,
         IReadOnlyList<object?> Positionals);
 }

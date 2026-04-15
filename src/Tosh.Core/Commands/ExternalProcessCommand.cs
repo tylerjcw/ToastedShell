@@ -47,6 +47,9 @@ public sealed class ExternalProcessCommand : IShellCommand, ICommandResolutionMe
 
     private async Task ExecuteWithTerminalPassthroughAsync(CommandContext context)
     {
+        var terminal = context.Runtime.Terminal;
+        var processOwnershipTransferred = false;
+
         var startInfo = new ProcessStartInfo
         {
             FileName = _resolvedPath,
@@ -62,17 +65,119 @@ public sealed class ExternalProcessCommand : IShellCommand, ICommandResolutionMe
             startInfo.ArgumentList.Add(ExternalTextSerializer.SerializeArgument(argument));
         }
 
-        using var process = new Process { StartInfo = startInfo, EnableRaisingEvents = true };
+        var process = new Process { StartInfo = startInfo, EnableRaisingEvents = true };
         using var cancellationRegistration = context.CancellationToken.Register(() => TryKill(process));
+
+        // Save terminal state before the child can modify it.
+        terminal.SaveTerminalState();
 
         if (!process.Start())
         {
             throw new InvalidOperationException($"Failed to start external command '{Name}'.");
         }
 
-        await process.WaitForExitAsync(context.CancellationToken);
-        context.Runtime.SetLastExitCode(process.ExitCode);
-        context.PipelineExitStatusTracker?.Record(process.ExitCode);
+        // On Unix, try to place the child in its own process group and, only
+        // if that succeeds, transfer terminal foreground to that group.
+        var childOwnsGroup = TrySetChildProcessGroup(process);
+
+        try
+        {
+            if (childOwnsGroup)
+            {
+                terminal.TrySetForegroundGroup(process.Id, out _);
+            }
+
+            // Use waitpid(WUNTRACED) to detect Ctrl+Z suspension.
+            var waitResult = terminal.WaitForForegroundChild(process.Id);
+
+            switch (waitResult.Outcome)
+            {
+                case ForegroundWaitOutcome.Exited:
+                    context.Runtime.SetLastExitCode(waitResult.StatusOrSignal);
+                    context.PipelineExitStatusTracker?.Record(waitResult.StatusOrSignal);
+                    break;
+
+                case ForegroundWaitOutcome.Stopped:
+                    // Child was suspended (Ctrl+Z). Snapshot its terminal state
+                    // so fg can restore it before sending SIGCONT.
+                    Termios? childTermios = null;
+                    if (PosixTerminalInterop.TryGetTerminalAttributes(out var t, out _))
+                    {
+                        childTermios = t;
+                    }
+
+                    var commandText = BuildCommandText(context);
+                    var job = ShellJob.CreateSuspended(
+                        context.Runtime.AllocateJobId(),
+                        commandText,
+                        process,
+                        childOwnsGroup,
+                        childTermios);
+                    processOwnershipTransferred = true;
+                    context.Runtime.RegisterJob(job);
+                    context.Runtime.SetLastExitCode(148); // 128 + SIGTSTP(20)
+                    await context.Runtime.Error.WriteLineAsync(
+                        $"\n[{job.Id}]  Stopped                 {commandText}");
+                    break;
+
+                default:
+                    // Fallback: non-interactive or error — use managed wait.
+                    await process.WaitForExitAsync(context.CancellationToken);
+                    context.Runtime.SetLastExitCode(process.ExitCode);
+                    context.PipelineExitStatusTracker?.Record(process.ExitCode);
+                    break;
+            }
+        }
+        finally
+        {
+            if (childOwnsGroup)
+            {
+                terminal.ReclaimForeground();
+            }
+
+            terminal.RestoreTerminalState();
+
+            if (!processOwnershipTransferred)
+            {
+                process.Dispose();
+            }
+        }
+    }
+
+    private string BuildCommandText(CommandContext context)
+    {
+        var parts = new List<string> { Name };
+
+        foreach (var arg in context.Arguments)
+        {
+            parts.Add(ExternalTextSerializer.SerializeArgument(arg));
+        }
+
+        return string.Join(' ', parts);
+    }
+
+    /// <summary>
+    /// On Unix, place the newly spawned child into its own process group
+    /// (using its PID as the PGID).  Returns <c>true</c> when the child
+    /// is now a group leader, <c>false</c> otherwise (e.g. the child
+    /// already exec'd, already exited, or we are on Windows).
+    /// </summary>
+    private static bool TrySetChildProcessGroup(Process process)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return false;
+        }
+
+        try
+        {
+            return PosixTerminalInterop.TrySetProcessGroupId(process.Id, process.Id, out _);
+        }
+        catch
+        {
+            // Race: child may have already exited.
+            return false;
+        }
     }
 
     private async IAsyncEnumerable<object?> ExecuteWithPipesAsync(

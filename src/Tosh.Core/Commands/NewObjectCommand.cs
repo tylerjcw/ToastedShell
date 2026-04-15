@@ -1,6 +1,10 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("CLR")]
+[CommandExample("var rng = new System.Random()")]
+[CommandExample("var items = new list<String>(\"one\", \"two\")")]
+[CommandExample("new System.Text.StringBuilder(\"hello\").Append(\" world\").ToString()")]
+[CommandNote("Tosh supports both the legacy `new <Type> ...` command form and the newer C#-style `new Type(...)` expression syntax. Shell collection types also support generic construction like `new list<String>(...)`.")]
 public sealed class NewObjectCommand : ShellCommand
 {
     public NewObjectCommand()

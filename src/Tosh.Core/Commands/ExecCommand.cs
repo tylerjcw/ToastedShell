@@ -1,6 +1,10 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Shell")]
+[CommandExample("exec tosh")]
+[CommandExample("exec zsh")]
+[CommandExample("exec /bin/sh -c \"echo hi\"")]
+[CommandNote("Exec replaces the current ToSh process with an external command. On Unix-like systems it uses native process replacement, so `exec tosh` or `exec zsh` behaves like the shell built-in you may know from zsh.")]
 public sealed class ExecCommand : ShellCommand
 {
     public ExecCommand()

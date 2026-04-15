@@ -353,8 +353,9 @@ public static class OperatorEvaluator
             throw new InvalidOperationException("The '+' operator requires non-null operands.");
         }
 
-        // Quantity arithmetic (including bridge promotion from TimeSpan/StorageSize)
-        if (TryPromoteToQuantity(left, out var leftQ) && TryPromoteToQuantity(right, out var rightQ))
+        // Quantity arithmetic (bridge promotion only when at least one operand is already a Quantity)
+        if ((left is Quantity || right is Quantity)
+            && TryPromoteToQuantity(left, out var leftQ) && TryPromoteToQuantity(right, out var rightQ))
         {
             return leftQ + rightQ;
         }
@@ -436,8 +437,9 @@ public static class OperatorEvaluator
             throw new InvalidOperationException("The '-' operator requires non-null operands.");
         }
 
-        // Quantity arithmetic (including bridge promotion from TimeSpan/StorageSize)
-        if (TryPromoteToQuantity(left, out var leftQ) && TryPromoteToQuantity(right, out var rightQ))
+        // Quantity arithmetic (bridge promotion only when at least one operand is already a Quantity)
+        if ((left is Quantity || right is Quantity)
+            && TryPromoteToQuantity(left, out var leftQ) && TryPromoteToQuantity(right, out var rightQ))
         {
             return leftQ - rightQ;
         }

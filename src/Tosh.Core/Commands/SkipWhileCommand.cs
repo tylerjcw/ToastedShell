@@ -1,6 +1,8 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Pipeline")]
+[CommandExample("echo 1 2 3 4 | skip-while { _ < 3 }")]
+[CommandExample("echo 1 2 3 4 | skip-while func(x) => ($x < 3)")]
 public sealed class SkipWhileCommand : ShellCommand
 {
     public SkipWhileCommand()

@@ -52,4 +52,7 @@ public enum SyntaxTokenKind
 
     // Unit literals (e.g. 100`m, 9.8`m/s^2)
     UnitLiteral,
+
+    // Doc comments (## lines)
+    DocComment,
 }

@@ -95,7 +95,16 @@ public sealed class ToshLanguageServer
                         },
                         hoverProvider = true,
                         definitionProvider = true,
-                        documentSymbolProvider = true
+                        documentSymbolProvider = true,
+                        semanticTokensProvider = new
+                        {
+                            legend = new
+                            {
+                                tokenTypes = ToshLanguageFeatures.SemanticTokenTypes,
+                                tokenModifiers = ToshLanguageFeatures.SemanticTokenModifiers
+                            },
+                            full = true
+                        }
                     },
                     serverInfo = new
                     {
@@ -158,6 +167,15 @@ public sealed class ToshLanguageServer
                         ? _features.GetDocumentSymbols(text ?? string.Empty, uri)
                         : _features.GetSymbolInformations(text ?? string.Empty, uri);
                     await WriteResponseAsync(id, symbols, cancellationToken);
+                    break;
+                }
+
+            case "textDocument/semanticTokens/full":
+                {
+                    var uri = parameters.GetProperty("textDocument").GetProperty("uri").GetString() ?? string.Empty;
+                    _documents.TryGetValue(uri, out var text);
+                    var semanticTokens = _features.GetSemanticTokens(text ?? string.Empty, uri);
+                    await WriteResponseAsync(id, semanticTokens, cancellationToken);
                     break;
                 }
 

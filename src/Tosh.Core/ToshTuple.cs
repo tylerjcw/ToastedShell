@@ -68,6 +68,35 @@ public sealed class ToshTuple : IReadOnlyList<object?>, IShellTypedObject, IShel
 
     IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 
+    public object ToValueTuple()
+    {
+        return _items.Length switch
+        {
+            0 => ValueTuple.Create(),
+            1 => ValueTuple.Create(_items[0]),
+            2 => (_items[0], _items[1]),
+            3 => (_items[0], _items[1], _items[2]),
+            4 => (_items[0], _items[1], _items[2], _items[3]),
+            5 => (_items[0], _items[1], _items[2], _items[3], _items[4]),
+            6 => (_items[0], _items[1], _items[2], _items[3], _items[4], _items[5]),
+            7 => (_items[0], _items[1], _items[2], _items[3], _items[4], _items[5], _items[6]),
+            _ => CreateLargeValueTuple(),
+        };
+    }
+
+    private object CreateLargeValueTuple()
+    {
+        // For 8+ items, nest into ValueTuple<..., TRest> using the standard .NET convention.
+        // The last slot holds a nested ValueTuple containing the overflow items.
+        if (_items.Length <= 7)
+        {
+            return ToValueTuple();
+        }
+
+        var rest = new ToshTuple(_items[7..]).ToValueTuple();
+        return ValueTuple.Create(_items[0], _items[1], _items[2], _items[3], _items[4], _items[5], _items[6], rest);
+    }
+
     private static bool TryParseItemIndex(string name, out int index)
     {
         index = -1;

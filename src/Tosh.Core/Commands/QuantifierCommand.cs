@@ -96,4 +96,55 @@ public sealed class QuantifierCommand : ShellCommand
         All,
         None,
     }
+
+    public override CommandMetadata GetMetadata(IReadOnlyList<string>? aliases = null)
+    {
+        return new CommandMetadata(
+            Name: Name,
+            Description: Description,
+            Usage: Usage,
+            Category: "Pipeline",
+            Aliases: aliases ?? [],
+            Arguments: [new("callable|block", "A lambda or block predicate that returns boolean values.", Required: true, TypeName: null)],
+            Options: [],
+            Examples: _kind switch
+            {
+                QuantifierKind.Any =>
+                [
+                    new("ps | any func(p) => ($p.Name == \"sshd\")", null),
+                    new("echo 1 2 3 | any func(x) => ($x == 2)", "Check whether any item matches"),
+                ],
+                QuantifierKind.All =>
+                [
+                    new("echo 2 4 6 | all func(x) => ((($x % 2) == 0))", "Check whether all items match"),
+                    new("ls | all { _.Exists }", null),
+                ],
+                QuantifierKind.None =>
+                [
+                    new("echo 1 2 3 | none func(x) => ($x > 10)", "Check whether no items match"),
+                    new("ls | none { _.Type == link }", null),
+                ],
+                _ => [],
+            },
+            Notes: [],
+            Output: _kind switch
+            {
+                QuantifierKind.Any => "Returns `true` if any item matches the predicate; otherwise `false`.",
+                QuantifierKind.All => "Returns `true` if every item matches the predicate; otherwise `false`.",
+                QuantifierKind.None => "Returns `true` if no items match the predicate; otherwise `false`.",
+                _ => null,
+            },
+            PipelineInput: new(
+                AcceptsScalar: true,
+                AcceptsRecord: true,
+                AcceptsList: false,
+                AcceptsTable: false,
+                Description: _kind switch
+                {
+                    QuantifierKind.Any => "Consumes the current pipeline and stops at the first matching item.",
+                    QuantifierKind.All => "Consumes the current pipeline and stops at the first non-matching item.",
+                    QuantifierKind.None => "Consumes the current pipeline and stops at the first matching item.",
+                    _ => null,
+                }));
+    }
 }

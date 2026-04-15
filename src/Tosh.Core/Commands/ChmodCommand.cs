@@ -11,16 +11,20 @@ namespace Tosh.Core.Commands;
 [CommandOutput("Returns FileSystemEntry objects with long display for each changed path.")]
 public sealed class ChmodCommand : ShellCommand
 {
+    private static readonly UnixFileMode WindowsReadBits =
+        UnixFileMode.UserRead | UnixFileMode.GroupRead | UnixFileMode.OtherRead;
+
+    private static readonly UnixFileMode WindowsWriteBits =
+        UnixFileMode.UserWrite | UnixFileMode.GroupWrite | UnixFileMode.OtherWrite;
+
+    private static readonly UnixFileMode WindowsExecuteBits =
+        UnixFileMode.UserExecute | UnixFileMode.GroupExecute | UnixFileMode.OtherExecute;
+
     public ChmodCommand()
         : base("chmod", "Changes file permission bits.", "chmod [-R] <mode> <path> [path...]") { }
 
     public override async IAsyncEnumerable<object?> ExecuteAsync(CommandContext context)
     {
-        if (OperatingSystem.IsWindows())
-        {
-            throw new InvalidOperationException("chmod is not supported on Windows.");
-        }
-
         var parsed = ParsedCommandArguments.Parse(context.Arguments);
         var recursive = parsed.HasFlag("R", "recursive");
 
@@ -45,12 +49,68 @@ public sealed class ChmodCommand : ShellCommand
             foreach (var target in EnumerateTargets(path, recursive))
             {
                 context.CancellationToken.ThrowIfCancellationRequested();
-                var currentMode = File.GetUnixFileMode(target);
+                var currentMode = GetCurrentMode(target);
                 var newMode = UnixFileModeParser.Parse(modeText, currentMode);
-                File.SetUnixFileMode(target, newMode);
+                ApplyMode(target, newMode);
                 yield return FileSystemEntry.From(CreateFileSystemInfo(target), preferLongDisplay: true);
             }
         }
+    }
+
+    private static UnixFileMode GetCurrentMode(string path)
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return File.GetUnixFileMode(path);
+        }
+
+        var attributes = File.GetAttributes(path);
+        var mode = WindowsReadBits;
+
+        if (!attributes.HasFlag(FileAttributes.ReadOnly))
+        {
+            mode |= WindowsWriteBits;
+        }
+
+        if (Directory.Exists(path) || IsWindowsExecutableName(path))
+        {
+            mode |= WindowsExecuteBits;
+        }
+
+        return mode;
+    }
+
+    private static void ApplyMode(string path, UnixFileMode mode)
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(path, mode);
+            return;
+        }
+
+        var attributes = File.GetAttributes(path);
+        var writable = (mode & WindowsWriteBits) != 0;
+
+        if (writable)
+        {
+            attributes &= ~FileAttributes.ReadOnly;
+        }
+        else
+        {
+            attributes |= FileAttributes.ReadOnly;
+        }
+
+        File.SetAttributes(path, attributes);
+    }
+
+    private static bool IsWindowsExecutableName(string path)
+    {
+        var extension = Path.GetExtension(path);
+
+        return extension.Equals(".exe", StringComparison.OrdinalIgnoreCase) ||
+               extension.Equals(".bat", StringComparison.OrdinalIgnoreCase) ||
+               extension.Equals(".cmd", StringComparison.OrdinalIgnoreCase) ||
+               extension.Equals(".sh", StringComparison.OrdinalIgnoreCase);
     }
 
     private static IEnumerable<string> EnumerateTargets(string path, bool recursive)

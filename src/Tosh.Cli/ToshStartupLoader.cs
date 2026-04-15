@@ -24,10 +24,19 @@ public static class ToshStartupLoader
 
         var configPath = engine.Runtime.Config.Startup.ResolvePath(engine.Runtime.Config.Startup.ConfigFilePath);
 
-        // Config file errors are fatal — they control everything else.
+        // Config errors are non-fatal — log and continue so the shell remains usable.
         if (File.Exists(configPath))
         {
-            await ExecuteStartupFileAsync(engine, configPath, cancellationToken);
+            try
+            {
+                await ExecuteStartupFileAsync(engine, configPath, cancellationToken);
+            }
+            catch (Exception exception)
+            {
+                var writer = errorWriter ?? Console.Error;
+                await writer.WriteLineAsync($"tosh: error loading config '{configPath}': {FormatStartupError(exception)}");
+                await writer.WriteLineAsync("tosh: running with default configuration. Fix the error above or run with --safe to skip startup.");
+            }
         }
 
         // Profile and autoload errors are non-fatal — log and continue.

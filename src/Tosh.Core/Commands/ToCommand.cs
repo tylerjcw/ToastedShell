@@ -3,6 +3,11 @@ using Tosh.Core.Formats;
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Data")]
+[CommandExample("ls | to json")]
+[CommandExample("ls | to csv")]
+[CommandExample("ls | to toml")]
+[CommandExample("ls | to json --compact")]
+[CommandNote("The `from` and `to` commands convert between text formats (json, csv, tsv, xml, toml) and CLR objects. Parsed values stay as CLR objects until you explicitly flatten them.")]
 public sealed class ToCommand : ShellCommand
 {
     private readonly DataFormatRegistry _formats;

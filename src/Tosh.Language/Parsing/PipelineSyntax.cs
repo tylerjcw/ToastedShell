@@ -22,9 +22,14 @@ public sealed record RedirectionSyntax(
     ArgumentSyntax Target,
     TextSpan Span);
 
+public sealed record InputRedirectionSyntax(
+    ArgumentSyntax Source,
+    TextSpan Span);
+
 public sealed record PipelineSyntax(
     IReadOnlyList<PipelineStageSyntax> Stages,
     IReadOnlyList<RedirectionSyntax>? Redirections = null,
+    InputRedirectionSyntax? InputRedirection = null,
     bool IsBackground = false)
 {
     public IReadOnlyList<CommandSyntax> Commands => Stages.OfType<CommandSyntax>().ToArray();

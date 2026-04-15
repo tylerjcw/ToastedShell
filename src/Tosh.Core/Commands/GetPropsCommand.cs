@@ -3,6 +3,8 @@ using System.Reflection;
 namespace Tosh.Core.Commands;
 
 [CommandCategory("CLR")]
+[CommandExample("$obj | get-props")]
+[CommandExample("get-props $obj")]
 public sealed class GetPropsCommand : ShellCommand
 {
     public GetPropsCommand()

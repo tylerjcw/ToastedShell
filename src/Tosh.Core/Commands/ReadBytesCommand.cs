@@ -1,6 +1,12 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Filesystem")]
+[CommandArgument("path ...", "One or more file paths to read as raw byte arrays.", Required = false, TypeName = "path-like")]
+[CommandExample("read-bytes ./image.bin")]
+[CommandExample("read-bytes ./image.bin | type-of")]
+[CommandNote("These commands accept normal path-like values, including strings, FileInfo, and ToSh FileSystemEntry objects.")]
+[CommandOutput("Returns one byte-array value per file.")]
+[PipelineInput(AcceptsList = true, Description = "Consumes piped path-like input when explicit file paths are omitted.")]
 public sealed class ReadBytesCommand : ShellCommand
 {
     public ReadBytesCommand()

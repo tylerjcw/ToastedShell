@@ -1383,6 +1383,26 @@ public sealed class UtilityCommandTests
     }
 
     [Fact]
+    public async Task Ps_u_filters_by_current_user_on_windows()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var runtime = ToshRuntime.CreateDefault();
+        var engine = new ToshEngine(runtime);
+        var currentUser = UnixSystemServices.GetCurrentIdentity().User.DisplayName;
+
+        var results = await engine.ExecuteToListAsync($"ps -u {currentUser}");
+
+        Assert.NotEmpty(results);
+        Assert.Contains(
+            results.Cast<ProcessInfo>(),
+            item => string.Equals(item.User?.DisplayName, currentUser, StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public async Task Ps_sort_descending_id_orders_highest_ids_first()
     {
         var runtime = ToshRuntime.CreateDefault();
@@ -1475,6 +1495,59 @@ public sealed class UtilityCommandTests
         Assert.Equal(
             UnixFileMode.UserRead | UnixFileMode.UserWrite,
             File.GetUnixFileMode(targetPath));
+    }
+
+    [Fact]
+    public async Task Chmod_and_chown_work_for_local_files_on_windows()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        using var temporaryDirectory = new TemporaryDirectory();
+        var targetPath = Path.Combine(temporaryDirectory.Path, "target.txt");
+        await File.WriteAllTextAsync(targetPath, "toast");
+
+        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var currentUser = UnixSystemServices.GetCurrentIdentity().User.DisplayName;
+
+        await engine.ExecuteToListAsync($"chmod 444 {Quote(targetPath)}");
+        Assert.True(File.GetAttributes(targetPath).HasFlag(FileAttributes.ReadOnly));
+
+        await engine.ExecuteToListAsync($"chmod 644 {Quote(targetPath)}");
+        Assert.False(File.GetAttributes(targetPath).HasFlag(FileAttributes.ReadOnly));
+
+        var chownResults = await engine.ExecuteToListAsync($"chown {Quote(currentUser)} {Quote(targetPath)}");
+        var changed = Assert.IsType<FileSystemEntry>(Assert.Single(chownResults));
+
+        Assert.Equal(targetPath, changed.FullName);
+        Assert.Equal(currentUser, changed.Owner?.DisplayName, ignoreCase: true);
+    }
+
+    [Fact]
+    public async Task Ln_can_create_hard_links_on_windows()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        using var temporaryDirectory = new TemporaryDirectory();
+        var targetPath = Path.Combine(temporaryDirectory.Path, "target.txt");
+        var linkPath = Path.Combine(temporaryDirectory.Path, "link.txt");
+        await File.WriteAllTextAsync(targetPath, "toast");
+
+        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+
+        var linkResults = await engine.ExecuteToListAsync($"ln {Quote(targetPath)} {Quote(linkPath)}");
+        var created = Assert.IsType<FileSystemEntry>(Assert.Single(linkResults));
+
+        Assert.Equal(linkPath, created.FullName);
+        Assert.Equal("toast", await File.ReadAllTextAsync(linkPath));
+
+        await File.WriteAllTextAsync(linkPath, "jam");
+        Assert.Equal("jam", await File.ReadAllTextAsync(targetPath));
     }
 
     [Fact]

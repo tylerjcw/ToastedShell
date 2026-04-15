@@ -1,6 +1,12 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Functional")]
+[CommandArgument("callable", "A callable value to partially apply.")]
+[CommandArgument("arg ...", "Leading positional arguments to bind ahead of time.", Required = false)]
+[CommandExample("var add = func(x, y) => ($x + $y); var inc = partial $add 1; invoke $inc 41", Title = "Bind the first argument of a callable")]
+[CommandExample("invoke (partial (func(a, b, c) => ($\"{$a}-{$b}-{$c}\")) alpha beta) gamma", Title = "Bind multiple leading arguments")]
+[CommandOutput("Returns a callable value that prepends the bound arguments before invoking the original callable.")]
+[PipelineInput(Description = "`partial` is explicit-argument based and returns a new callable value.")]
 public sealed class PartialCommand : ShellCommand
 {
     public PartialCommand()

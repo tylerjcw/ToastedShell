@@ -1,6 +1,11 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Pipeline")]
+[CommandArgument("callable|block", "A lambda or block predicate that returns boolean values.")]
+[CommandExample("echo 1 2 3 4 | filter func(x) => ((($x % 2) == 0))", Title = "Filter with a lambda")]
+[CommandExample("ls | filter { _.Type == file }", Title = "Filter with a block")]
+[CommandOutput("Returns the input items that matched the predicate.")]
+[PipelineInput(AcceptsScalar = true, AcceptsRecord = true, Description = "Consumes the current pipeline and keeps only items whose predicate evaluates to true. Tree-shaped inputs are pruned like `where`.")]
 public sealed class FilterCommand : ShellCommand
 {
     public FilterCommand()

@@ -3,6 +3,8 @@ using System.Reflection;
 namespace Tosh.Core.Commands;
 
 [CommandCategory("CLR")]
+[CommandExample("$obj | has-method ToString")]
+[CommandExample("has-method $obj ToString")]
 public sealed class HasMethodCommand : ShellCommand
 {
     public HasMethodCommand()

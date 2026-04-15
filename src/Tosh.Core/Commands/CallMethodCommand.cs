@@ -1,6 +1,8 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("CLR")]
+[CommandExample("echo hello | call-method ToUpper")]
+[CommandExample("call-method $obj MethodName arg1")]
 public sealed class CallMethodCommand : ShellCommand
 {
     public CallMethodCommand()

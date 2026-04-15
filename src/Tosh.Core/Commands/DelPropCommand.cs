@@ -1,6 +1,8 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("CLR")]
+[CommandExample("$obj | del-prop Name")]
+[CommandExample("del-prop $obj Name")]
 public sealed class DelPropCommand : ShellCommand
 {
     public DelPropCommand()

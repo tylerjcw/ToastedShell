@@ -45,8 +45,8 @@ module Inventory {
     class Shelf(label: string) {
         prop Label: string = label
         prop Items = new list()
-        prop Accent: System.Drawing.Color => (System.Drawing.Color.Green)
-        prop ItemCount: int => ($this.Items | flatten | count)
+        prop Accent: System.Drawing.Color => System.Drawing.Color.Green
+        prop ItemCount: int => $this.Items | flatten | count
 
         func Add(item: Item) -> Shelf {
             $this.Items.Add($item) | ignore

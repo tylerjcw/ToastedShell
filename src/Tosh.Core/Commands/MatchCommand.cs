@@ -3,6 +3,8 @@ using System.Text.RegularExpressions;
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Text")]
+[CommandExample("echo \"PID=42\" | match \"PID=(?<Pid>[0-9]+)\" | get Pid")]
+[CommandExample("echo \"Alpha\" | match -i \"^alpha$\"")]
 public sealed class MatchCommand : ShellCommand
 {
     public MatchCommand()

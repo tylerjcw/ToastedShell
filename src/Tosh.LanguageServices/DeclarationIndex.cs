@@ -100,6 +100,33 @@ public sealed class DeclarationIndex
             .ToArray();
     }
 
+    public DocComment? GetDeclarationDocComment(int offset, string name)
+    {
+        return GetVisibleDeclarations(
+                offset,
+                declaration => declaration.Kind is DeclarationKind.Class or DeclarationKind.Record or DeclarationKind.Enum or DeclarationKind.Module
+                    && string.Equals(declaration.Name, name, StringComparison.Ordinal))
+            .Select(declaration => declaration.DocComment)
+            .FirstOrDefault(doc => doc is not null);
+    }
+
+    public string? GetDeclarationKindLabel(int offset, string name)
+    {
+        return GetVisibleDeclarations(
+                offset,
+                declaration => declaration.Kind is DeclarationKind.Class or DeclarationKind.Record or DeclarationKind.Enum or DeclarationKind.Module
+                    && string.Equals(declaration.Name, name, StringComparison.Ordinal))
+            .Select(declaration => declaration.Kind switch
+            {
+                DeclarationKind.Class => "Class",
+                DeclarationKind.Record => "Record",
+                DeclarationKind.Enum => "Enum",
+                DeclarationKind.Module => "Module",
+                _ => null,
+            })
+            .FirstOrDefault();
+    }
+
     public IReadOnlyList<IndexedSymbol> GetSymbols()
     {
         var symbols = _declarations
@@ -308,7 +335,8 @@ public sealed class DeclarationIndex
         int ScopeDepth,
         int SelectionStart,
         LspRange Range,
-        LspRange SelectionRange);
+        LspRange SelectionRange,
+        DocComment? DocComment = null);
 
     private sealed record IndexedDeclaration(
         string Name,
@@ -318,7 +346,8 @@ public sealed class DeclarationIndex
         int ScopeDepth,
         int SelectionStart,
         LspRange Range,
-        LspRange SelectionRange);
+        LspRange SelectionRange,
+        DocComment? DocComment = null);
 
     private sealed class Collector
     {
@@ -399,16 +428,16 @@ public sealed class DeclarationIndex
                     break;
 
                 case ClassDefinitionStatementSyntax @class:
-                    AddDeclaration(@class.Name, DeclarationKind.Class, @class.Span, scopeSpan, depth);
+                    AddDeclaration(@class.Name, DeclarationKind.Class, @class.Span, scopeSpan, depth, @class.DocComment);
                     break;
 
                 case ModuleDefinitionStatementSyntax module:
-                    AddDeclaration(module.Name, DeclarationKind.Module, module.Span, scopeSpan, depth);
+                    AddDeclaration(module.Name, DeclarationKind.Module, module.Span, scopeSpan, depth, module.DocComment);
                     CollectBlock(module.Body, depth + 1);
                     break;
 
                 case EnumDefinitionStatementSyntax @enum:
-                    AddDeclaration(@enum.Name, DeclarationKind.Enum, @enum.Span, scopeSpan, depth);
+                    AddDeclaration(@enum.Name, DeclarationKind.Enum, @enum.Span, scopeSpan, depth, @enum.DocComment);
                     foreach (var member in @enum.Members)
                     {
                         if (member.Value is not null)
@@ -419,7 +448,7 @@ public sealed class DeclarationIndex
                     break;
 
                 case RecordDefinitionStatementSyntax record:
-                    AddDeclaration(record.Name, DeclarationKind.Record, record.Span, scopeSpan, depth);
+                    AddDeclaration(record.Name, DeclarationKind.Record, record.Span, scopeSpan, depth, record.DocComment);
                     foreach (var field in record.Fields)
                     {
                         if (field.DefaultValue is not null)
@@ -557,6 +586,20 @@ public sealed class DeclarationIndex
                     }
                     break;
 
+                case TupleLiteralArgumentSyntax tuple:
+                    foreach (var item in tuple.Items)
+                    {
+                        CollectArgument(item, scopeSpan, depth);
+                    }
+                    break;
+
+                case SetLiteralArgumentSyntax set:
+                    foreach (var item in set.Items)
+                    {
+                        CollectArgument(item, scopeSpan, depth);
+                    }
+                    break;
+
                 case RecordLiteralArgumentSyntax record:
                     foreach (var entry in record.Fields)
                     {
@@ -616,7 +659,7 @@ public sealed class DeclarationIndex
             }
         }
 
-        private void AddDeclaration(string name, DeclarationKind kind, TextSpan declarationSpan, TextSpan scopeSpan, int depth)
+        private void AddDeclaration(string name, DeclarationKind kind, TextSpan declarationSpan, TextSpan scopeSpan, int depth, DocComment? docComment = null)
         {
             var selectionSpan = FindIdentifierSpan(name, declarationSpan);
             _declarations.Add(new IndexedDeclaration(
@@ -627,7 +670,8 @@ public sealed class DeclarationIndex
                 depth,
                 selectionSpan.Start,
                 _map.ToRange(declarationSpan.Start, declarationSpan.End),
-                _map.ToRange(selectionSpan.Start, selectionSpan.End)));
+                _map.ToRange(selectionSpan.Start, selectionSpan.End),
+                docComment));
         }
 
         private void AddFunctionDeclaration(FunctionDefinitionStatementSyntax function, TextSpan scopeSpan, int depth)
@@ -643,7 +687,8 @@ public sealed class DeclarationIndex
                 depth,
                 selectionSpan.Start,
                 _map.ToRange(function.Span.Start, function.Span.End),
-                _map.ToRange(selectionSpan.Start, selectionSpan.End)));
+                _map.ToRange(selectionSpan.Start, selectionSpan.End),
+                function.DocComment));
         }
 
         private TextSpan FindIdentifierSpan(string name, TextSpan searchSpan)

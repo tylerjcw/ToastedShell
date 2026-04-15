@@ -48,26 +48,38 @@ public sealed class ToshRepl
                 initialCursorIndex = pendingCommandLine.CursorIndex;
             }
 
-            var source = _lineEditor.ReadLine(
-                BuildPrompt(),
-                cachedHistory ?? Array.Empty<string>(),
-                (text, cursor) => _completionEngine.GetCompletions(text, cursor),
-                initialText: initialText,
-                initialCursorIndex: initialCursorIndex,
-                highlighter: _runtime.Config.Repl.SyntaxHighlightingEnabled ? text => SyntaxHighlighter.Highlight(text, _runtime) : null,
-                continuationPrompt: _runtime.Config.Repl.ContinuationPrompt,
-                maxVisibleSuggestions: _runtime.Config.Repl.CompletionMaxVisible,
-                showGhostText: _runtime.Config.Repl.GhostTextEnabled,
-                completionTheme: _runtime.Config.Theme.Completion,
-                continuationHandler: ReplInputClassifier.GetContinuationState,
-                specialKeyHandler: TryHandleInlineToolShortcut,
-                onBufferActivated: buffer => _commandLineInsertion.ActivateBuffer(buffer),
-                onBufferDeactivated: buffer => _commandLineInsertion.DeactivateBuffer(buffer));
+
+            string? source = null;
+            try
+            {
+                source = _lineEditor.ReadLine(
+                    BuildPrompt(),
+                    cachedHistory ?? Array.Empty<string>(),
+                    (text, cursor) => _completionEngine.GetCompletions(text, cursor),
+                    initialText: initialText,
+                    initialCursorIndex: initialCursorIndex,
+                    highlighter: _runtime.Config.Repl.SyntaxHighlightingEnabled ? text => SyntaxHighlighter.Highlight(text, _runtime) : null,
+                    continuationPrompt: _runtime.Config.Repl.ContinuationPrompt,
+                    maxVisibleSuggestions: _runtime.Config.Repl.CompletionMaxVisible,
+                    showGhostText: _runtime.Config.Repl.GhostTextEnabled,
+                    completionTheme: _runtime.Config.Theme.Completion,
+                    continuationHandler: ReplInputClassifier.GetContinuationState,
+                    specialKeyHandler: TryHandleInlineToolShortcut,
+                    onBufferActivated: buffer => _commandLineInsertion.ActivateBuffer(buffer),
+                    onBufferDeactivated: buffer => _commandLineInsertion.DeactivateBuffer(buffer));
+            }
+            catch (ReplInterruptException)
+            {
+                // Simulate interrupt: print new prompt, skip execution
+                await Console.Out.WriteLineAsync("^C");
+                continue;
+            }
 
             if (source is null)
             {
                 break;
             }
+
 
             var trimmed = source.Trim();
 
@@ -189,48 +201,48 @@ public sealed class ToshRepl
         {
             case ConsoleKey.F1:
             case ConsoleKey.H when key.Modifiers.HasFlag(ConsoleModifiers.Alt):
-            {
-                var tokenSpan = ReplCompletionEngine.GetTokenSpanAtCursor(buffer.Text, buffer.CursorIndex);
-                var query = ReplCompletionEngine.GetInlineHelpQuery(buffer.Text, buffer.CursorIndex);
-                var topicName = string.IsNullOrWhiteSpace(query) ? null : HelpCatalog.ResolveTopic(_runtime, query)?.Name;
-                _commandLineInsertion.SetPendingReplacement(tokenSpan.Start, tokenSpan.Length);
-
-                try
                 {
-                    inlinePrompts.BrowseHelp(query, topicName);
-                }
-                finally
-                {
-                    _commandLineInsertion.ClearPendingReplacement();
-                }
+                    var tokenSpan = ReplCompletionEngine.GetTokenSpanAtCursor(buffer.Text, buffer.CursorIndex);
+                    var query = ReplCompletionEngine.GetInlineHelpQuery(buffer.Text, buffer.CursorIndex);
+                    var topicName = string.IsNullOrWhiteSpace(query) ? null : HelpCatalog.ResolveTopic(_runtime, query)?.Name;
+                    _commandLineInsertion.SetPendingReplacement(tokenSpan.Start, tokenSpan.Length);
 
-                return true;
-            }
+                    try
+                    {
+                        inlinePrompts.BrowseHelp(query, topicName);
+                    }
+                    finally
+                    {
+                        _commandLineInsertion.ClearPendingReplacement();
+                    }
+
+                    return true;
+                }
 
             case ConsoleKey.F2:
             case ConsoleKey.I when key.Modifiers.HasFlag(ConsoleModifiers.Alt):
-            {
-                var tokenSpan = ReplCompletionEngine.GetInspectTargetSpanAtCursor(buffer.Text, buffer.CursorIndex);
-                var token = tokenSpan.Token;
-
-                if (!_completionEngine.TryResolveInspectableReference(token, out var value))
                 {
-                    return false;
-                }
+                    var tokenSpan = ReplCompletionEngine.GetInspectTargetSpanAtCursor(buffer.Text, buffer.CursorIndex);
+                    var token = tokenSpan.Token;
 
-                _commandLineInsertion.SetPendingReplacement(tokenSpan.Start, tokenSpan.Length);
+                    if (!_completionEngine.TryResolveInspectableReference(token, out var value))
+                    {
+                        return false;
+                    }
 
-                try
-                {
-                    inlinePrompts.Inspect(value, sourceExpression: ReplCompletionEngine.BuildInspectableSourceExpression(token, value));
-                }
-                finally
-                {
-                    _commandLineInsertion.ClearPendingReplacement();
-                }
+                    _commandLineInsertion.SetPendingReplacement(tokenSpan.Start, tokenSpan.Length);
 
-                return true;
-            }
+                    try
+                    {
+                        inlinePrompts.Inspect(value, sourceExpression: ReplCompletionEngine.BuildInspectableSourceExpression(token, value));
+                    }
+                    finally
+                    {
+                        _commandLineInsertion.ClearPendingReplacement();
+                    }
+
+                    return true;
+                }
 
             default:
                 return false;
@@ -240,8 +252,8 @@ public sealed class ToshRepl
     private static async Task PrintBannerAsync()
     {
         await Console.Out.WriteLineAsync("ToSh (ToastedShell)");
-        await Console.Out.WriteLineAsync("Nu-inspired pipeline syntax with a PowerShell inspired CLR object runtime.");
-        await Console.Out.WriteLineAsync("Everything in the session is a shell command.");
+        await Console.Out.WriteLineAsync("NuShell inspired pipeline syntax with a PowerShell inspired CLR object runtime.");
+        await Console.Out.WriteLineAsync("Everything is an Object.");
         await Console.Out.WriteLineAsync(string.Empty);
     }
 }

@@ -1,6 +1,8 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Prompt")]
+[CommandExample("prompt-exit")]
+[CommandExample("prompt-exit 7 --fg red --bold")]
 public sealed class PromptExitCodeCommand : ShellCommand
 {
     public PromptExitCodeCommand()

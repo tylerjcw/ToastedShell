@@ -3,47 +3,100 @@
   "name": "ToastedShell",
   "scopeName": "source.tosh",
   "patterns": [
-    { "include": "#comment" },
-    { "include": "#interpolated-string" },
-    { "include": "#ansi-c-string" },
-    { "include": "#double-quoted-string" },
-    { "include": "#single-quoted-string" },
-    { "include": "#command-substitution" },
-    { "include": "#process-substitution" },
-    { "include": "#class-definition" },
-    { "include": "#module-definition" },
-    { "include": "#enum-definition" },
-    { "include": "#record-definition" },
-    { "include": "#function-definition" },
-    { "include": "#control-flow" },
-    { "include": "#constants" },
-    { "include": "#type-annotations" },
-    { "include": "#variable-declaration" },
-    { "include": "#variable-reference" },
-    { "include": "#pipeline-underscore" },
-    { "include": "#builtin-commands" },
-    { "include": "#command-position" },
-    { "include": "#operators" },
-    { "include": "#pipe" },
-    { "include": "#numeric" },
-    { "include": "#flags" },
-    { "include": "#punctuation" }
+    {
+      "include": "#comment"
+    },
+    {
+      "include": "#interpolated-string"
+    },
+    {
+      "include": "#ansi-c-string"
+    },
+    {
+      "include": "#double-quoted-string"
+    },
+    {
+      "include": "#single-quoted-string"
+    },
+    {
+      "include": "#command-substitution"
+    },
+    {
+      "include": "#process-substitution"
+    },
+    {
+      "include": "#class-definition"
+    },
+    {
+      "include": "#module-definition"
+    },
+    {
+      "include": "#enum-definition"
+    },
+    {
+      "include": "#record-definition"
+    },
+    {
+      "include": "#function-definition"
+    },
+    {
+      "include": "#control-flow"
+    },
+    {
+      "include": "#constants"
+    },
+    {
+      "include": "#type-annotations"
+    },
+    {
+      "include": "#variable-declaration"
+    },
+    {
+      "include": "#variable-reference"
+    },
+    {
+      "include": "#pipeline-underscore"
+    },
+    {
+      "include": "#builtin-commands"
+    },
+    {
+      "include": "#command-position"
+    },
+    {
+      "include": "#operators"
+    },
+    {
+      "include": "#pipe"
+    },
+    {
+      "include": "#numeric"
+    },
+    {
+      "include": "#flags"
+    },
+    {
+      "include": "#punctuation"
+    }
   ],
   "repository": {
     "comment": {
       "match": "#.*$",
       "name": "comment.line.number-sign.tosh"
     },
-
     "interpolated-string": {
       "name": "string.quoted.double.interpolated.tosh",
       "begin": "\\$\"",
       "end": "\"",
       "beginCaptures": {
-        "0": { "name": "punctuation.definition.string.begin.tosh" }
+        "0": {
+          "name": "punctuation.definition.string.begin.tosh"
+        }
       },
       "endCaptures": {
-        "0": { "name": "punctuation.definition.string.end.tosh" }
+        "0": {
+          "name": "punctuation.definition.string.end.tosh"
+        }
       },
       "patterns": [
         {
@@ -55,14 +108,20 @@
           "begin": "(?<!\\{)\\{(?!\\{)",
           "end": "\\}",
           "beginCaptures": {
-            "0": { "name": "punctuation.section.interpolation.begin.tosh" }
+            "0": {
+              "name": "punctuation.section.interpolation.begin.tosh"
+            }
           },
           "endCaptures": {
-            "0": { "name": "punctuation.section.interpolation.end.tosh" }
+            "0": {
+              "name": "punctuation.section.interpolation.end.tosh"
+            }
           },
           "contentName": "source.tosh.embedded",
           "patterns": [
-            { "include": "source.tosh" }
+            {
+              "include": "source.tosh"
+            }
           ]
         },
         {
@@ -71,16 +130,19 @@
         }
       ]
     },
-
     "ansi-c-string": {
       "name": "string.quoted.single.ansi-c.tosh",
       "begin": "\\$'",
       "end": "'",
       "beginCaptures": {
-        "0": { "name": "punctuation.definition.string.begin.tosh" }
+        "0": {
+          "name": "punctuation.definition.string.begin.tosh"
+        }
       },
       "endCaptures": {
-        "0": { "name": "punctuation.definition.string.end.tosh" }
+        "0": {
+          "name": "punctuation.definition.string.end.tosh"
+        }
       },
       "patterns": [
         {
@@ -89,16 +151,19 @@
         }
       ]
     },
-
     "double-quoted-string": {
       "name": "string.quoted.double.tosh",
       "begin": "\"",
       "end": "\"",
       "beginCaptures": {
-        "0": { "name": "punctuation.definition.string.begin.tosh" }
+        "0": {
+          "name": "punctuation.definition.string.begin.tosh"
+        }
       },
       "endCaptures": {
-        "0": { "name": "punctuation.definition.string.end.tosh" }
+        "0": {
+          "name": "punctuation.definition.string.end.tosh"
+        }
       },
       "patterns": [
         {
@@ -107,16 +172,19 @@
         }
       ]
     },
-
     "single-quoted-string": {
       "name": "string.quoted.single.tosh",
       "begin": "'",
       "end": "'",
       "beginCaptures": {
-        "0": { "name": "punctuation.definition.string.begin.tosh" }
+        "0": {
+          "name": "punctuation.definition.string.begin.tosh"
+        }
       },
       "endCaptures": {
-        "0": { "name": "punctuation.definition.string.end.tosh" }
+        "0": {
+          "name": "punctuation.definition.string.end.tosh"
+        }
       },
       "patterns": [
         {
@@ -125,143 +193,194 @@
         }
       ]
     },
-
     "command-substitution": {
       "name": "meta.command-substitution.tosh",
       "begin": "\\$\\(",
       "end": "\\)",
       "beginCaptures": {
-        "0": { "name": "punctuation.section.embedded.begin.tosh" }
+        "0": {
+          "name": "punctuation.section.embedded.begin.tosh"
+        }
       },
       "endCaptures": {
-        "0": { "name": "punctuation.section.embedded.end.tosh" }
+        "0": {
+          "name": "punctuation.section.embedded.end.tosh"
+        }
       },
       "patterns": [
-        { "include": "source.tosh" }
+        {
+          "include": "source.tosh"
+        }
       ]
     },
-
     "process-substitution": {
       "name": "meta.process-substitution.input.tosh",
       "begin": "<\\(",
       "end": "\\)",
       "beginCaptures": {
-        "0": { "name": "punctuation.section.embedded.begin.tosh" }
+        "0": {
+          "name": "punctuation.section.embedded.begin.tosh"
+        }
       },
       "endCaptures": {
-        "0": { "name": "punctuation.section.embedded.end.tosh" }
+        "0": {
+          "name": "punctuation.section.embedded.end.tosh"
+        }
       },
       "patterns": [
-        { "include": "source.tosh" }
+        {
+          "include": "source.tosh"
+        }
       ]
     },
-
     "class-definition": {
       "match": "\\b(?:(shy|global|export)\\s+)?(class)\\s+([a-zA-Z_][a-zA-Z0-9_-]*)\\b",
       "captures": {
-        "1": { "name": "storage.modifier.tosh" },
-        "2": { "name": "keyword.control.tosh" },
-        "3": { "name": "entity.name.type.class.tosh" }
+        "1": {
+          "name": "storage.modifier.tosh"
+        },
+        "2": {
+          "name": "keyword.control.tosh"
+        },
+        "3": {
+          "name": "entity.name.type.class.tosh"
+        }
       }
     },
-
     "module-definition": {
       "match": "\\b(?:(shy|global|export)\\s+)?(module)\\s+([a-zA-Z_][a-zA-Z0-9_-]*)\\b",
       "captures": {
-        "1": { "name": "storage.modifier.tosh" },
-        "2": { "name": "keyword.control.tosh" },
-        "3": { "name": "entity.name.namespace.tosh" }
+        "1": {
+          "name": "storage.modifier.tosh"
+        },
+        "2": {
+          "name": "keyword.control.tosh"
+        },
+        "3": {
+          "name": "entity.name.namespace.tosh"
+        }
       }
     },
-
     "enum-definition": {
       "match": "\\b(?:(shy|global|export)\\s+)?(enum)\\s+([a-zA-Z_][a-zA-Z0-9_-]*)\\b",
       "captures": {
-        "1": { "name": "storage.modifier.tosh" },
-        "2": { "name": "keyword.control.tosh" },
-        "3": { "name": "entity.name.type.enum.tosh" }
+        "1": {
+          "name": "storage.modifier.tosh"
+        },
+        "2": {
+          "name": "keyword.control.tosh"
+        },
+        "3": {
+          "name": "entity.name.type.enum.tosh"
+        }
       }
     },
-
     "record-definition": {
       "match": "\\b(?:(shy|global|export)\\s+)?(record)\\s+([a-zA-Z_][a-zA-Z0-9_-]*)\\b",
       "captures": {
-        "1": { "name": "storage.modifier.tosh" },
-        "2": { "name": "keyword.control.tosh" },
-        "3": { "name": "entity.name.type.record.tosh" }
+        "1": {
+          "name": "storage.modifier.tosh"
+        },
+        "2": {
+          "name": "keyword.control.tosh"
+        },
+        "3": {
+          "name": "entity.name.type.record.tosh"
+        }
       }
     },
-
     "function-definition": {
       "match": "\\b(?:(shy|global|export)\\s+)?(func)\\s+([a-zA-Z_][a-zA-Z0-9_-]*)\\s*(?=\\(|=>)",
       "captures": {
-        "1": { "name": "storage.modifier.tosh" },
-        "2": { "name": "keyword.control.tosh" },
-        "3": { "name": "entity.name.function.tosh" }
+        "1": {
+          "name": "storage.modifier.tosh"
+        },
+        "2": {
+          "name": "keyword.control.tosh"
+        },
+        "3": {
+          "name": "entity.name.function.tosh"
+        }
       }
     },
-
     "control-flow": {
       "match": "\\b(if|else|for|in|while|until|break|continue|return|throw|try|catch|finally|switch|case|default|match|func|var|alloc|class|module|enum|record|prop|shy|static|using|require|native|bind|from|as|out|ref|callconv|global|export|new|nameof|name-of|and|or|not|is|is-not|not-in)\\b",
       "name": "keyword.control.tosh"
     },
-
     "constants": {
       "match": "\\b(true|false|null)\\b",
       "name": "constant.language.tosh"
     },
-
     "type-annotations": {
       "patterns": [
         {
           "comment": "Parameter type annotation:  name: Type  or  name?: Type",
           "match": "(?<=[a-zA-Z0-9_?])\\s*(:)\\s*([A-Za-z_][a-zA-Z0-9_.<>?]*)",
           "captures": {
-            "1": { "name": "punctuation.separator.type.tosh" },
-            "2": { "name": "entity.name.type.tosh" }
+            "1": {
+              "name": "punctuation.separator.type.tosh"
+            },
+            "2": {
+              "name": "entity.name.type.tosh"
+            }
           }
         },
         {
           "comment": "Return type annotation:  -> Type",
           "match": "(->)\\s*([A-Za-z_][a-zA-Z0-9_.<>?]*)",
           "captures": {
-            "1": { "name": "punctuation.separator.return-type.tosh" },
-            "2": { "name": "entity.name.type.tosh" }
+            "1": {
+              "name": "punctuation.separator.return-type.tosh"
+            },
+            "2": {
+              "name": "entity.name.type.tosh"
+            }
           }
         },
         {
           "comment": "Typed variable declaration:  Type name = ...",
           "match": "^\\s*([A-Z][a-zA-Z0-9_.<>]+)\\s+([a-zA-Z_][a-zA-Z0-9_]*)\\s*(?==)",
           "captures": {
-            "1": { "name": "entity.name.type.tosh" },
-            "2": { "name": "variable.other.tosh" }
+            "1": {
+              "name": "entity.name.type.tosh"
+            },
+            "2": {
+              "name": "variable.other.tosh"
+            }
           }
         }
       ]
     },
-
     "variable-declaration": {
       "match": "\\b(?:(shy|global|export)\\s+)?(var|alloc)\\s+([a-zA-Z_][a-zA-Z0-9_]*)\\s*(?==|$)",
       "captures": {
-        "1": { "name": "storage.modifier.tosh" },
-        "2": { "name": "keyword.control.tosh" },
-        "3": { "name": "variable.other.tosh" }
+        "1": {
+          "name": "storage.modifier.tosh"
+        },
+        "2": {
+          "name": "keyword.control.tosh"
+        },
+        "3": {
+          "name": "variable.other.tosh"
+        }
       }
     },
-
     "variable-reference": {
       "match": "\\$[a-zA-Z_][a-zA-Z0-9_]*",
       "name": "variable.other.readwrite.tosh"
     },
-
     "pipeline-underscore": {
       "patterns": [
         {
           "comment": "_.Member access on current pipeline item",
           "match": "\\b(_)(\\.)[a-zA-Z_][a-zA-Z0-9_.()]*",
           "captures": {
-            "1": { "name": "variable.language.pipeline-item.tosh" },
-            "2": { "name": "punctuation.accessor.tosh" }
+            "1": {
+              "name": "variable.language.pipeline-item.tosh"
+            },
+            "2": {
+              "name": "punctuation.accessor.tosh"
+            }
           }
         },
         {
@@ -271,43 +390,53 @@
         }
       ]
     },
-
     "builtin-commands": {
       "comment": "Tosh built-in commands — highlighted in command position",
-          "match": "(?:^|(?<=\\|)\\s*|(?<=;)\\s*|(?<=\\{)\\s*)\\b(help|apropos|exit|clear|history|history-search|view|echo|write|writeline|pwd|cd|uname|hostname|whoami|id|ls|df|mounts|du|usage|disk-usage|free|uptime|stat|findmnt|find|readlink|realpath|dirname|basename|seq|sleep|ping|ip|lsblk|lscpu|lsfd|lsipc|ps|jobs|wait-for|kill|signal|env|which|whence|cat|read-file|read-lines|write-file|append-file|read-bytes|write-bytes|open-file|close|read-from|read-line-from|read-to-end|write-to|write-line-to|flush|seek|position|length|copy-to|head|tail|wc|uniq|cut|tr|grep|glob|from-json|from-csv|from-tsv|from-xml|parse|mkdir|mkdir-temp|tempfile|touch|rm|cp|mv|chmod|chown|ln|get|rename|inspect|where|each|first|last|skip|sort|sort-by|reverse|count|flatten|distinct|group-by|take-while|skip-while|tee|sum|average|avg|min|max|summarize|summary|date|timespan|to-json|to-csv|as-file|split|join-lines|replace|match|template|hash|exists|is-file|is-dir|is-link|type-of|describe-type|members|methods|constructors|types|load-assembly|read-buffer|write-buffer|size-of|offset-of|native-alloc|native-free|native-read|native-write|native-sizeof|native-offsetof|cast|new|call|export|forget|unset|xargs|source|has-prop|has-method|get-props|get-methods|get-prop|set-prop|del-prop|call-method|clone|nameof|name-of)\\b",
+      "match": "(?:^|(?<=\\|)\\s*|(?<=;)\\s*|(?<=\\{)\\s*)\\b(all|alloc|any|append-file|apropos|as-file|assert|average|avg|back|basename|call|call-method|cast|cat|cd|chmod|chown|chunk|clear|clone|close|collect|compose|config|constructors|converge|copy-to|count|cp|curry|cut|date|del-prop|describe-type|df|dirname|dirs|disk-usage|distinct|du|each|echo|env|events|exec|exists|exit|export|filter|find|find-index|findmnt|first|flat-map|flatten|flush|foreach|forget|forward|free|frequencies|from|get|get-methods|get-prop|get-props|glob|grep|group-by|group-while|guid|hash|has-method|has-prop|head|help|history|history-search|hostname|hostnamectl|http|id|ignore|inspect|interleave|invoke|ip|is-dir|is-file|is-link|iterate|jobs|join-lines|journalctl|kill|last|length|lines|ln|load-assembly|loginctl|ls|lsblk|lscpu|lsfd|lsipc|map|match|max|members|methods|min|mkdir|mkdir-temp|mounts|mv|native-alloc|native-free|native-offsetof|native-read|native-sizeof|native-write|networkctl|new|none|offset-of|open-file|parse|partial|partition|pick|ping|position|prompt-dir|prompt-duration|prompt-exit|prompt-git|prompt-history|prompt-jobs|prompt-newline|prompt-text|prompt-time|prompt-userhost|ps|pwd|raise|raw|read-buffer|read-bytes|read-file|read-from|read-line|read-line-from|read-lines|readlink|read-to-end|realpath|reduce|rename|replace|reverse|rm|scan|seek|select|seq|set-prop|signal|size-of|skip|skip-until|skip-while|sleep|sort|sort-by|split|stat|styled|sum|summarize|summary|systemctl|tail|take-until|take-while|tee|tempfile|template|timespan|to|touch|tr|transpose|tree|tui|type-of|types|uname|undef|unfold|uniq|unset|uptime|usage|vars|view|wait-for|wc|whence|where|which|whoami|window|write|write-buffer|write-bytes|write-file|writeline|write-line-to|write-to|xargs|zip)\\b",
       "captures": {
-        "1": { "name": "support.function.builtin.tosh" }
+        "1": {
+          "name": "support.function.builtin.tosh"
+        }
       }
     },
-
     "command-position": {
       "patterns": [
         {
           "comment": "Command at start of line (user functions, external commands)",
           "match": "^\\s*([a-zA-Z_][a-zA-Z0-9_-]*)(?=\\s|$|\\()",
           "captures": {
-            "1": { "name": "entity.name.function.call.tosh" }
+            "1": {
+              "name": "entity.name.function.call.tosh"
+            }
           }
         },
         {
           "comment": "Command after pipe",
           "match": "(?<=\\|)\\s*([a-zA-Z_][a-zA-Z0-9_-]*)(?=\\s|$|\\()",
           "captures": {
-            "1": { "name": "entity.name.function.call.tosh" }
+            "1": {
+              "name": "entity.name.function.call.tosh"
+            }
           }
         },
         {
           "comment": "Command after semicolon or opening brace",
           "match": "(?<=[;{])\\s*([a-zA-Z_][a-zA-Z0-9_-]*)(?=\\s|$|\\()",
           "captures": {
-            "1": { "name": "entity.name.function.call.tosh" }
+            "1": {
+              "name": "entity.name.function.call.tosh"
+            }
           }
         }
       ]
     },
-
     "operators": {
       "patterns": [
+        {
+          "comment": "Match arm arrow: pattern => result",
+          "match": "=>",
+          "name": "keyword.operator.arrow.tosh"
+        },
         {
           "match": "\\.\\.",
           "name": "keyword.operator.range.tosh"
@@ -329,27 +458,25 @@
           "name": "keyword.operator.conditional.tosh"
         },
         {
-          "match": "=(?!=)",
+          "match": "=(?!=|>)",
           "name": "keyword.operator.assignment.tosh"
         }
       ]
     },
-
     "pipe": {
       "match": "\\|(?!\\|)",
       "name": "keyword.operator.pipe.tosh"
     },
-
     "numeric": {
       "patterns": [
         {
-          "comment": "Storage sizes: 1kb, 512mb, etc.",
-          "match": "\\b[0-9]+(?:\\.[0-9]+)?(?:b|kb|mb|gb|tb|pb)\\b",
+          "comment": "Storage sizes: 1kb, 512mb, etc. (with optional _ separators)",
+          "match": "\\b[0-9][0-9_]*(?:\\.[0-9][0-9_]*)?(?:b|kb|mb|gb|tb|pb)\\b",
           "name": "constant.numeric.size.tosh"
         },
         {
-          "comment": "Temporal shorthand: 7d, 30m, 2h, 1w2d4h, 1mo, etc.",
-          "match": "\\b(?:[0-9]+(?:\\.[0-9]+)?(?:ns|us|ms|s|m|h|d|w|mo|y|da|c|ka|Ma|Ga|Ta))+\\b",
+          "comment": "Temporal shorthand: 7d, 30m, 2h, 1w2d4h, 1mo, etc. (with optional _ separators)",
+          "match": "\\b(?:[0-9][0-9_]*(?:\\.[0-9][0-9_]*)?(?:ns|us|ms|s|m|h|d|w|mo|y|da|c|ka|Ma|Ga|Ta))+\\b",
           "name": "constant.numeric.duration.tosh"
         },
         {
@@ -358,35 +485,52 @@
           "name": "constant.numeric.datetime.tosh"
         },
         {
-          "comment": "Float",
-          "match": "\\b[0-9]+\\.[0-9]+\\b",
+          "comment": "Hexadecimal integer: 0xFF, 0x1A_2B",
+          "match": "\\b0[xX][0-9a-fA-F][0-9a-fA-F_]*\\b",
+          "name": "constant.numeric.hex.tosh"
+        },
+        {
+          "comment": "Binary integer: 0b1010, 0b1111_0000",
+          "match": "\\b0[bB][01][01_]*\\b",
+          "name": "constant.numeric.binary.tosh"
+        },
+        {
+          "comment": "Octal integer: 0o77, 0o755",
+          "match": "\\b0[oO][0-7][0-7_]*\\b",
+          "name": "constant.numeric.octal.tosh"
+        },
+        {
+          "comment": "Float (with optional _ separators)",
+          "match": "\\b[0-9][0-9_]*\\.[0-9][0-9_]*\\b",
           "name": "constant.numeric.float.tosh"
         },
         {
-          "comment": "Integer",
-          "match": "\\b[0-9]+\\b",
+          "comment": "Integer (with optional _ separators)",
+          "match": "\\b[0-9][0-9_]*\\b",
           "name": "constant.numeric.integer.tosh"
         }
       ]
     },
-
     "flags": {
       "patterns": [
         {
           "match": "\\s(--[a-zA-Z][a-zA-Z0-9-]*)\\b",
           "captures": {
-            "1": { "name": "entity.other.attribute-name.flag.long.tosh" }
+            "1": {
+              "name": "entity.other.attribute-name.flag.long.tosh"
+            }
           }
         },
         {
           "match": "\\s(-[a-zA-Z][a-zA-Z0-9]*)\\b",
           "captures": {
-            "1": { "name": "entity.other.attribute-name.flag.short.tosh" }
+            "1": {
+              "name": "entity.other.attribute-name.flag.short.tosh"
+            }
           }
         }
       ]
     },
-
     "punctuation": {
       "patterns": [
         {

@@ -49,7 +49,7 @@
           Condition="'$(DesignTimeBuild)' != 'true'
                      and '$(DisableToshSpecBuild)' != 'true'
                      and '$(MSBuildProjectName)' == 'Tosh.Cli'">
-    <Exec Command="dotnet run --project &quot;$(RepoRoot)src/Tosh.Cli/Tosh.Cli.csproj&quot; --no-build -- --export-command-manifest --latex -o &quot;$(SpecCommandRef)&quot;"
+    <Exec Command="dotnet run --project &quot;$(RepoRoot)src/Tosh.Cli/Tosh.Cli.csproj&quot; --no-build -- --export-command-metadata --latex -o &quot;$(SpecCommandRef)&quot;"
           WorkingDirectory="$(RepoRoot)"
           IgnoreExitCode="true"
           ConsoleToMSBuild="true">

@@ -329,6 +329,7 @@ public sealed class ToshEngine : IShellEvaluator
             ContinueStatementSyntax @continue => EvaluateContinueStatementAsync(@continue),
             VariableAssignmentStatementSyntax assignment => EvaluateVariableAssignmentAsync(sourceName, sourceText, assignment, cancellationToken),
             MemberAssignmentStatementSyntax assignment => EvaluateMemberAssignmentAsync(sourceName, sourceText, assignment, cancellationToken),
+            TupleAssignmentStatementSyntax tupleAssign => EvaluateTupleAssignmentAsync(sourceName, sourceText, tupleAssign, cancellationToken),
             FunctionDefinitionStatementSyntax function => EvaluateFunctionDefinitionAsync(sourceName, sourceText, function, cancellationToken),
             ClassDefinitionStatementSyntax @class => EvaluateClassDefinitionAsync(sourceName, sourceText, @class, cancellationToken),
             ModuleDefinitionStatementSyntax module => EvaluateModuleDefinitionAsync(sourceName, sourceText, module, cancellationToken),
@@ -344,6 +345,42 @@ public sealed class ToshEngine : IShellEvaluator
             DeferStatementSyntax => AsyncEnumerableExtensions.Empty<object?>(),
             _ => throw new InvalidOperationException($"Unsupported statement syntax: {statement.GetType().Name}."),
         };
+    }
+
+    private async IAsyncEnumerable<object?> EvaluateTupleAssignmentAsync(
+        string sourceName,
+        string sourceText,
+        TupleAssignmentStatementSyntax tupleAssign,
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        // Evaluate the right-hand side
+        var values = await AsyncEnumerableExtensions.ToListAsync(
+            EvaluatePipelineAsync(sourceName, sourceText, tupleAssign.Value, cancellationToken),
+            cancellationToken);
+
+        IReadOnlyList<object?> unpacked;
+        if (values.Count == 1 && values[0] is Array arrayValue)
+        {
+            unpacked = new object?[arrayValue.Length];
+
+            for (var i = 0; i < arrayValue.Length; i++)
+            {
+                ((object?[])unpacked)[i] = arrayValue.GetValue(i);
+            }
+        }
+        else
+        {
+            unpacked = values;
+        }
+
+        // Assign each value to the corresponding variable
+        for (int i = 0; i < tupleAssign.LeftNames.Count; i++)
+        {
+            var name = tupleAssign.LeftNames[i];
+            var value = i < unpacked.Count ? unpacked[i] : null;
+            DeclareVariable(name, new VariableBinding(value, ReplayAsPipeline: false, IsAllocatedOnly: false), DeclarationModifier.Default);
+        }
+        yield break;
     }
 
     private async IAsyncEnumerable<object?> EvaluateScriptStatementAsync(
@@ -386,6 +423,14 @@ public sealed class ToshEngine : IShellEvaluator
         var redirections = new List<ShellJobRedirectionSpec>();
         var stages = statement.Pipeline.Stages;
         var stageIndex = 0;
+
+        // Resolve input redirection for background pipelines.
+        if (statement.Pipeline.InputRedirection is { } bgInputRedirection)
+        {
+            var inputTarget = await EvaluateArgumentAsync(sourceName, sourceText, bgInputRedirection.Source, cancellationToken);
+            var inputPath = ResolveInputRedirectionPath(sourceName, sourceText, bgInputRedirection, inputTarget);
+            initialInput = await AsyncEnumerableExtensions.ToListAsync(ReadLinesAsync(inputPath, cancellationToken), cancellationToken);
+        }
 
         if (stages.Count > 0 && stages[0] is ExpressionPipelineStageSyntax initialExpression)
         {
@@ -547,6 +592,7 @@ public sealed class ToshEngine : IShellEvaluator
                     object?[]? array = value switch
                     {
                         object?[] a => a,
+                        Array typedArray => Enumerable.Range(0, typedArray.Length).Select(i => typedArray.GetValue(i)).ToArray(),
                         IReadOnlyList<object?> list => list.ToArray(),
                         IEnumerable enumerable when value is not string => enumerable.Cast<object?>().ToArray(),
                         _ => null,
@@ -1162,7 +1208,8 @@ public sealed class ToshEngine : IShellEvaluator
             function.IsCommandWrapper,
             sourceName,
             sourceText,
-            function.Span);
+            function.Span,
+            function.DocComment);
 
         var functionCommand = new FunctionCommand(this, definition);
         DeclareCommand(functionCommand, function.Modifier);
@@ -1183,7 +1230,8 @@ public sealed class ToshEngine : IShellEvaluator
         bool isCommandWrapper,
         string sourceName,
         string sourceText,
-        TextSpan span)
+        TextSpan span,
+        DocComment? docComment = null)
     {
         var duplicateParameters = parameters
             .GroupBy(parameter => parameter.Name, StringComparer.Ordinal)
@@ -1216,7 +1264,8 @@ public sealed class ToshEngine : IShellEvaluator
             sourceName,
             sourceText,
             span,
-            CaptureVisibleScopes());
+            CaptureVisibleScopes(),
+            docComment);
     }
 
     private void RegisterEventHandler(
@@ -2020,6 +2069,14 @@ public sealed class ToshEngine : IShellEvaluator
         IAsyncEnumerable<object?>? initialInput = null,
         IReadOnlyList<object?>? firstCommandArguments = null)
     {
+        // Resolve input redirection (in< / i<) before executing the pipeline.
+        if (pipeline.InputRedirection is { } inputRedirection)
+        {
+            var inputTarget = await EvaluateArgumentAsync(sourceName, sourceText, inputRedirection.Source, cancellationToken);
+            var inputPath = ResolveInputRedirectionPath(sourceName, sourceText, inputRedirection, inputTarget);
+            initialInput = ReadLinesAsync(inputPath, cancellationToken);
+        }
+
         if (pipeline.Redirections is null or { Count: 0 })
         {
             await foreach (var value in EvaluatePipelineAsync(sourceName, sourceText, pipeline, cancellationToken, initialInput, firstCommandArguments)
@@ -2301,6 +2358,59 @@ public sealed class ToshEngine : IShellEvaluator
             Span: redirection.Span,
             Label: "this target resolved to multiple paths",
             Help: "use a single file path or quote the pattern if you meant a literal name."));
+    }
+
+    private string ResolveInputRedirectionPath(
+        string sourceName,
+        string sourceText,
+        InputRedirectionSyntax redirection,
+        object? sourcePath)
+    {
+        if (sourcePath is null)
+        {
+            throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                Code: "tosh::runtime::input_redirection_source_null",
+                Title: "Input redirection source cannot be null.",
+                SourceName: sourceName,
+                SourceText: sourceText,
+                Span: redirection.Span,
+                Label: "this input redirection source evaluated to null"));
+        }
+
+        var resolved = sourcePath switch
+        {
+            FileSystemInfo fileSystemInfo => fileSystemInfo.FullName,
+            FileSystemEntry entry => entry.FullName,
+            string text => PathUtilities.ResolvePath(Runtime.CurrentDirectory, text),
+            _ => PathUtilities.ResolvePath(Runtime.CurrentDirectory, sourcePath.ToString() ?? string.Empty),
+        };
+
+        if (!File.Exists(resolved))
+        {
+            throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                Code: "tosh::runtime::input_redirection_source_not_found",
+                Title: $"Input redirection source '{resolved}' does not exist.",
+                SourceName: sourceName,
+                SourceText: sourceText,
+                Span: redirection.Span,
+                Label: "this file does not exist"));
+        }
+
+        return resolved;
+    }
+
+    private static async IAsyncEnumerable<object?> ReadLinesAsync(
+        string path,
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        using var reader = new StreamReader(path, Encoding.UTF8);
+        string? line;
+
+        while ((line = await reader.ReadLineAsync(cancellationToken)) is not null)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            yield return line;
+        }
     }
 
     private IAsyncEnumerable<object?> EvaluatePipelineAsync(
@@ -2900,7 +3010,27 @@ public sealed class ToshEngine : IShellEvaluator
                             }
                         }
 
-                        return items.ToArray();
+                        return CreateTypedArray(items);
+                    }
+
+                case DictLiteralArgumentSyntax dictLiteral:
+                    {
+                        var dict = new Dictionary<object, object?>();
+
+                        foreach (var entry in dictLiteral.Entries)
+                        {
+                            var key = await EvaluateArgumentAsync(sourceName, sourceText, entry.Key, cancellationToken);
+                            var value = await EvaluateArgumentAsync(sourceName, sourceText, entry.Value, cancellationToken);
+                            dict[key ?? throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                                Code: "tosh::runtime::null_dict_key",
+                                Title: "Dict keys cannot be null.",
+                                SourceName: sourceName,
+                                SourceText: sourceText,
+                                Span: entry.Key.Span,
+                                Label: "this key evaluated to null"))] = value;
+                        }
+
+                        return CreateTypedDictionary(dict);
                     }
 
                 case RecordLiteralArgumentSyntax recordLiteral:
@@ -2957,6 +3087,31 @@ public sealed class ToshEngine : IShellEvaluator
                         }
 
                         return record;
+                    }
+
+                case TupleLiteralArgumentSyntax tupleLiteral:
+                    {
+                        var items = new object?[tupleLiteral.Items.Count];
+
+                        for (var i = 0; i < tupleLiteral.Items.Count; i++)
+                        {
+                            items[i] = await EvaluateArgumentAsync(sourceName, sourceText, tupleLiteral.Items[i], cancellationToken);
+                        }
+
+                        return new ToshTuple(items);
+                    }
+
+                case SetLiteralArgumentSyntax setLiteral:
+                    {
+                        var set = new HashSet<object?>();
+
+                        foreach (var element in setLiteral.Items)
+                        {
+                            var value = await EvaluateArgumentAsync(sourceName, sourceText, element, cancellationToken);
+                            set.Add(value);
+                        }
+
+                        return set;
                     }
 
                 case BlockArgumentSyntax blockArgument:
@@ -3025,6 +3180,58 @@ public sealed class ToshEngine : IShellEvaluator
                         var methodArguments = await EvaluateArgumentsAsync(sourceName, sourceText, methodCall.Arguments, cancellationToken);
                         var invocation = Runtime.Invoker.InvokeInstance(target, methodCall.MethodName, methodArguments);
                         return invocation.ReturnedVoid ? target : invocation.Value;
+                    }
+
+                case CallableInvocationArgumentSyntax callableInvocation:
+                    {
+                        var target = await EvaluateArgumentAsync(sourceName, sourceText, callableInvocation.Target, cancellationToken);
+
+                        if (target is not IShellCallable callable)
+                        {
+                            throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                                Code: "tosh::runtime::value_not_callable",
+                                Title: "The provided value is not callable.",
+                                SourceName: sourceName,
+                                SourceText: sourceText,
+                                Span: callableInvocation.Target.Span,
+                                Label: "this value cannot be invoked",
+                                Help: "pass a lambda like 'func(x) => ...' or another callable shell value."));
+                        }
+
+                        var callArguments = await EvaluateArgumentsAsync(sourceName, sourceText, callableInvocation.Arguments, cancellationToken);
+                        var invocation = new CommandInvocation(
+                            sourceName,
+                            sourceText,
+                            callable.CallableName,
+                            callableInvocation.Span,
+                            callableInvocation.Arguments.Select(argument => argument.Span).ToArray());
+                        var context = new CommandContext(
+                            Runtime,
+                            AsyncEnumerableExtensions.Empty<object?>(),
+                            callArguments,
+                            cancellationToken,
+                            invocation,
+                            IsPipelined: false,
+                            ScopedTypeResolver: CreateScopedTypeResolver());
+                        var results = await AsyncEnumerableExtensions.ToListAsync(
+                            callable.InvokeAsync(context),
+                            cancellationToken);
+
+                        if (results.Count == 1)
+                        {
+                            return results[0];
+                        }
+
+                        throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                            Code: "tosh::runtime::callable_invocation_requires_single_value",
+                            Title: "Callable invocation in expression context must produce exactly one value.",
+                            SourceName: sourceName,
+                            SourceText: sourceText,
+                            Span: callableInvocation.Span,
+                            Label: results.Count == 0
+                                ? "this invocation produced no values"
+                                : $"this invocation produced {results.Count} values",
+                            Help: "ensure the callable returns exactly one value, or use 'invoke' in pipeline context for multi-value output."));
                     }
 
                 case SubexpressionArgumentSyntax subexpression:
@@ -5979,8 +6186,17 @@ public sealed class ToshEngine : IShellEvaluator
                 throw new InvalidOperationException($"Directory '{_resolvedPath}' does not exist.");
             }
 
+            var oldDirectory = FileSystemEntry.From(new DirectoryInfo(context.Runtime.CurrentDirectory));
             context.Runtime.CurrentDirectory = directoryInfo.FullName;
-            yield return directoryInfo;
+            context.Runtime.PushDirectory(directoryInfo.FullName);
+
+            var newDirectory = FileSystemEntry.From(directoryInfo);
+            var sender = context.Runtime.EventSenderFactory?.Invoke()
+                ?? new ShellEventSender(Function: null, Script: null, Line: null);
+            var evt = new DirectoryChangedEvent(oldDirectory, newDirectory, sender);
+            await context.Runtime.Events.RaiseAsync(evt, context.CancellationToken);
+
+            yield return newDirectory;
         }
     }
 
@@ -6104,5 +6320,164 @@ public sealed class ToshEngine : IShellEvaluator
     }
 
     private sealed record VariableBinding(object? Value, bool ReplayAsPipeline, bool IsAllocatedOnly);
+
+    private static object CreateTypedArray(List<object?> items)
+    {
+        if (items.Count == 0)
+        {
+            return Array.Empty<object?>();
+        }
+
+        Type? commonType = null;
+
+        foreach (var item in items)
+        {
+            if (item is null)
+            {
+                return items.ToArray();
+            }
+
+            var itemType = item.GetType();
+
+            if (commonType is null)
+            {
+                commonType = itemType;
+            }
+            else if (commonType != itemType)
+            {
+                commonType = FindCommonNumericType(commonType, itemType);
+
+                if (commonType is null)
+                {
+                    return items.ToArray();
+                }
+            }
+        }
+
+        if (commonType is null || commonType == typeof(object))
+        {
+            return items.ToArray();
+        }
+
+        var typedArray = Array.CreateInstance(commonType, items.Count);
+
+        for (var i = 0; i < items.Count; i++)
+        {
+            typedArray.SetValue(Convert.ChangeType(items[i], commonType), i);
+        }
+
+        return typedArray;
+    }
+
+    private static object CreateTypedDictionary(Dictionary<object, object?> source)
+    {
+        if (source.Count == 0)
+        {
+            return source;
+        }
+
+        Type? keyType = null;
+        Type? valueType = null;
+        var hasNullValue = false;
+
+        foreach (var kvp in source)
+        {
+            var kt = kvp.Key.GetType();
+
+            if (keyType is null)
+            {
+                keyType = kt;
+            }
+            else if (keyType != kt)
+            {
+                return source;
+            }
+
+            if (kvp.Value is null)
+            {
+                hasNullValue = true;
+            }
+            else
+            {
+                var vt = kvp.Value.GetType();
+
+                if (valueType is null)
+                {
+                    valueType = vt;
+                }
+                else if (valueType != vt)
+                {
+                    valueType = FindCommonNumericType(valueType, vt);
+
+                    if (valueType is null)
+                    {
+                        return source;
+                    }
+                }
+            }
+        }
+
+        if (keyType is null || keyType == typeof(object))
+        {
+            return source;
+        }
+
+        if (hasNullValue || valueType is null || valueType == typeof(object))
+        {
+            // Keys are uniform but values are mixed or null — create Dict<K, object?>
+            var partialType = typeof(Dictionary<,>).MakeGenericType(keyType, typeof(object));
+            var partialDict = (System.Collections.IDictionary)Activator.CreateInstance(partialType, source.Count)!;
+
+            foreach (var kvp in source)
+            {
+                partialDict[kvp.Key] = kvp.Value;
+            }
+
+            return partialDict;
+        }
+
+        var dictType = typeof(Dictionary<,>).MakeGenericType(keyType, valueType);
+        var typedDict = (System.Collections.IDictionary)Activator.CreateInstance(dictType, source.Count)!;
+
+        foreach (var kvp in source)
+        {
+            typedDict[kvp.Key] = Convert.ChangeType(kvp.Value, valueType);
+        }
+
+        return typedDict;
+    }
+
+    private static Type? FindCommonNumericType(Type a, Type b)
+    {
+        // Widen compatible numeric types to a common type
+        if (a == b)
+        {
+            return a;
+        }
+
+        // int -> long -> double widening
+        if (IsIntegerType(a) && IsIntegerType(b))
+        {
+            return typeof(long);
+        }
+
+        if (IsNumericType(a) && IsNumericType(b))
+        {
+            return typeof(double);
+        }
+
+        return null;
+    }
+
+    private static bool IsIntegerType(Type t)
+    {
+        return t == typeof(int) || t == typeof(long) || t == typeof(short) || t == typeof(byte)
+            || t == typeof(uint) || t == typeof(ulong) || t == typeof(ushort) || t == typeof(sbyte);
+    }
+
+    private static bool IsNumericType(Type t)
+    {
+        return IsIntegerType(t) || t == typeof(double) || t == typeof(float) || t == typeof(decimal);
+    }
 
 }

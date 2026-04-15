@@ -616,8 +616,9 @@ public sealed class LanguageFeatureTests
 
         var results = await engine.ExecuteToListAsync("converge [1, 2] func(x) => ([1, 2])");
 
-        var array = Assert.IsType<object?[]>(Assert.Single(results));
-        Assert.Equal([1L, 2L], array.Select(Convert.ToInt64).ToArray());
+        var result = Assert.Single(results);
+        Assert.IsAssignableFrom<Array>(result);
+        Assert.Equal([1L, 2L], ((Array)result!).Cast<object?>().Select(Convert.ToInt64).ToArray());
     }
 
     [Fact]
@@ -638,5 +639,40 @@ public sealed class LanguageFeatureTests
         Assert.Equal("Bread", results[0]);
         Assert.Equal(2L, Convert.ToInt64(results[1]));
         Assert.Equal("Food", results[2]);
+    }
+
+    [Fact]
+    public async Task TupleAssignment_swaps_variables()
+    {
+        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        await engine.ExecuteToListAsync("var a = 1");
+        await engine.ExecuteToListAsync("var b = 2");
+        await engine.ExecuteToListAsync("($a, $b) = [$b, $a]");
+        var aResult = await engine.ExecuteToListAsync("echo $a");
+        var bResult = await engine.ExecuteToListAsync("echo $b");
+        Assert.Equal(2L, Convert.ToInt64(aResult[0]));
+        Assert.Equal(1L, Convert.ToInt64(bResult[0]));
+    }
+
+    [Fact]
+    public async Task TupleAssignment_handles_extra_and_missing()
+    {
+        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        await engine.ExecuteToListAsync("var x = 10");
+        await engine.ExecuteToListAsync("var y = 20");
+        await engine.ExecuteToListAsync("var z = 30");
+        await engine.ExecuteToListAsync("($x, $y, $z) = [1, 2]");
+        var xResult = await engine.ExecuteToListAsync("echo $x");
+        var yResult = await engine.ExecuteToListAsync("echo $y");
+        var zResult = await engine.ExecuteToListAsync("echo $z");
+        Assert.Equal(1L, Convert.ToInt64(xResult[0]));
+        Assert.Equal(2L, Convert.ToInt64(yResult[0]));
+        object? zVal = zResult.Count > 0 ? zResult[0] : null;
+        Assert.Null(zVal);
+        await engine.ExecuteToListAsync("($x, $y) = [100, 200, 300]");
+        var xResult2 = await engine.ExecuteToListAsync("echo $x");
+        var yResult2 = await engine.ExecuteToListAsync("echo $y");
+        Assert.Equal(100L, Convert.ToInt64(xResult2[0]));
+        Assert.Equal(200L, Convert.ToInt64(yResult2[0]));
     }
 }

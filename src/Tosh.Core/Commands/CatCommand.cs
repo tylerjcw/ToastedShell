@@ -3,20 +3,36 @@ using System.Dynamic;
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Filesystem")]
+[CommandArgument("path ...|-", "One or more file paths to concatenate, or `-` to read piped text input explicitly.", Required = false, TypeName = "path-like|string")]
+[CommandOption("-n", "Number every emitted line.")]
+[CommandOption("-b", "Number only non-blank lines.")]
+[CommandOption("-v", "Display non-printing characters as `^X` or `M-X`.")]
+[CommandOption("-s", "Squeeze repeated blank lines into a single blank line.")]
+[CommandOption("-e", "Equivalent to `-vE`.")]
+[CommandOption("-t", "Equivalent to `-vT`.")]
+[CommandExample("cat README.md")]
+[CommandExample("echo alpha beta | cat -")]
+[CommandExample("cat -n README.md")]
+[CommandNote("With no explicit paths, `cat` treats piped values as file paths only when every value resolves to an existing file. Otherwise it treats the pipeline as text input. Use `-` explicitly when mixing file paths with piped text.")]
+[CommandOutput("Returns plain text lines by default, or numbered record rows with `Number` and `Text` when `-n` or `-b` is used.")]
+[PipelineInput(AcceptsScalar = true, AcceptsRecord = true, AcceptsList = true, Description = "With no explicit paths, path-like pipeline values are treated as files when they all resolve to existing files; otherwise pipeline values are treated as text input. Use `-` explicitly when you want stdin-style text alongside file arguments.")]
 public sealed class CatCommand : ShellCommand
 {
     public CatCommand()
-        : base("cat", "Reads one or more files or piped text sources and emits their contents.", "cat [-n|-b] [-s] [-E] [-T] [-A] [path ...|-]") { }
+        : base("cat", "Reads one or more files or piped text sources and emits their contents.", "cat [-n|-b] [-svETAet] [path ...|-]") { }
 
     public override async IAsyncEnumerable<object?> ExecuteAsync(CommandContext context)
     {
         var parsed = ParsedCommandArguments.Parse(context.Arguments);
         var showAll = parsed.HasFlag("A", "show-all");
+        var showE = parsed.HasFlag("e");
+        var showT = parsed.HasFlag("t");
         var numberAllLines = parsed.HasFlag("n");
         var numberNonBlank = parsed.HasFlag("b");
         var squeezeBlank = parsed.HasFlag("s");
-        var showEnds = showAll || parsed.HasFlag("E", "show-ends");
-        var showTabs = showAll || parsed.HasFlag("T", "show-tabs");
+        var showEnds = showAll || showE || parsed.HasFlag("E", "show-ends");
+        var showTabs = showAll || showT || parsed.HasFlag("T", "show-tabs");
+        var showNonPrinting = showAll || showE || showT || parsed.HasFlag("v", "show-nonprinting");
         var inputValues = parsed.Positionals.Count == 0
             ? await AsyncEnumerableExtensions.ToListAsync(context.Input, context.CancellationToken)
             : [];
@@ -46,7 +62,7 @@ public sealed class CatCommand : ShellCommand
                     lines = await TextInputUtilities.ReadLinesFromFilesAsync([source], context.CancellationToken);
                 }
 
-                foreach (var line in EmitLines(lines, numberAllLines, numberNonBlank, squeezeBlank, showEnds, showTabs, ref nextLineNumber, ref previousWasBlank))
+                foreach (var line in EmitLines(lines, numberAllLines, numberNonBlank, squeezeBlank, showEnds, showTabs, showNonPrinting, ref nextLineNumber, ref previousWasBlank))
                 {
                     yield return line;
                 }
@@ -60,7 +76,7 @@ public sealed class CatCommand : ShellCommand
             throw new InvalidOperationException("cat requires at least one path or pipeline input.");
         }
 
-        foreach (var line in EmitLines(ReadLinesFromValues(inputValues), numberAllLines, numberNonBlank, squeezeBlank, showEnds, showTabs, ref nextLineNumber, ref previousWasBlank))
+        foreach (var line in EmitLines(ReadLinesFromValues(inputValues), numberAllLines, numberNonBlank, squeezeBlank, showEnds, showTabs, showNonPrinting, ref nextLineNumber, ref previousWasBlank))
         {
             yield return line;
         }
@@ -151,6 +167,7 @@ public sealed class CatCommand : ShellCommand
         bool squeezeBlank,
         bool showEnds,
         bool showTabs,
+        bool showNonPrinting,
         ref int nextLineNumber,
         ref bool previousWasBlank)
     {
@@ -168,6 +185,11 @@ public sealed class CatCommand : ShellCommand
             previousWasBlank = isBlank;
 
             var text = line.Text;
+
+            if (showNonPrinting)
+            {
+                text = RenderNonPrinting(text, excludeTab: showTabs);
+            }
 
             if (showTabs)
             {
@@ -191,6 +213,49 @@ public sealed class CatCommand : ShellCommand
         }
 
         return results;
+    }
+
+    private static string RenderNonPrinting(string text, bool excludeTab)
+    {
+        var builder = new System.Text.StringBuilder(text.Length);
+
+        foreach (var ch in text)
+        {
+            if (ch == '\t')
+            {
+                // Tab is handled separately by showTabs; pass through here.
+                builder.Append(ch);
+            }
+            else if (ch < 0x20) // Control characters 0x00–0x1F
+            {
+                builder.Append('^');
+                builder.Append((char)(ch + 0x40));
+            }
+            else if (ch == 0x7F) // DEL
+            {
+                builder.Append("^?");
+            }
+            else if (ch >= 0x80 && ch <= 0x9F) // High-bit control
+            {
+                builder.Append("M-^");
+                builder.Append((char)(ch - 0x40));
+            }
+            else if (ch >= 0xA0 && ch <= 0xFE) // High-bit printable
+            {
+                builder.Append("M-");
+                builder.Append((char)(ch - 0x80));
+            }
+            else if (ch == 0xFF)
+            {
+                builder.Append("M-^?");
+            }
+            else
+            {
+                builder.Append(ch);
+            }
+        }
+
+        return builder.ToString();
     }
 
     private static void AddLines(List<TextInputLine> lines, string text, ref int lineNumber)

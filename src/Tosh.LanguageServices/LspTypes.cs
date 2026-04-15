@@ -22,7 +22,8 @@ public sealed record LspCompletionItem(
     [property: JsonPropertyName("kind")] int Kind,
     [property: JsonPropertyName("detail")] string? Detail = null,
     [property: JsonPropertyName("documentation")] string? Documentation = null,
-    [property: JsonPropertyName("insertText")] string? InsertText = null);
+    [property: JsonPropertyName("insertText")] string? InsertText = null,
+    [property: JsonPropertyName("tags")] IReadOnlyList<int>? Tags = null);
 
 public sealed record LspParameterInformation(
     [property: JsonPropertyName("label")] string Label,
@@ -63,3 +64,14 @@ public sealed record LspSymbolInformation(
     [property: JsonPropertyName("kind")] int Kind,
     [property: JsonPropertyName("location")] LspLocation Location,
     [property: JsonPropertyName("containerName")] string? ContainerName = null);
+
+public sealed record LspSemanticTokensLegend(
+    [property: JsonPropertyName("tokenTypes")] IReadOnlyList<string> TokenTypes,
+    [property: JsonPropertyName("tokenModifiers")] IReadOnlyList<string> TokenModifiers);
+
+public sealed record LspSemanticTokensOptions(
+    [property: JsonPropertyName("legend")] LspSemanticTokensLegend Legend,
+    [property: JsonPropertyName("full")] bool Full);
+
+public sealed record LspSemanticTokens(
+    [property: JsonPropertyName("data")] IReadOnlyList<int> Data);

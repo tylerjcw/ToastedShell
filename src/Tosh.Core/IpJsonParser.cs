@@ -19,6 +19,20 @@ public static class IpJsonParser
             .ToArray();
     }
 
+    public static IReadOnlyList<IpNeighborInfo> ParseNeighbors(string json)
+    {
+        return EnumerateRootObjects(json)
+            .Select(ParseNeighbor)
+            .ToArray();
+    }
+
+    public static IReadOnlyList<IpRuleInfo> ParseRules(string json)
+    {
+        return EnumerateRootObjects(json)
+            .Select(ParseRule)
+            .ToArray();
+    }
+
     private static IpInterfaceInfo ParseInterface(JsonElement element)
     {
         return new IpInterfaceInfo(
@@ -92,6 +106,29 @@ public static class IpJsonParser
             Table: GetString(element, "table"),
             RouteType: GetString(element, "type"),
             Flags: GetStringArray(element, "flags"));
+    }
+
+    private static IpNeighborInfo ParseNeighbor(JsonElement element)
+    {
+        return new IpNeighborInfo(
+            Address: ParseOptionalIpAddress(GetString(element, "dst")),
+            Device: GetString(element, "dev"),
+            LinkLayerAddress: GetString(element, "lladdr"),
+            State: GetStringArray(element, "state"));
+    }
+
+    private static IpRuleInfo ParseRule(JsonElement element)
+    {
+        return new IpRuleInfo(
+            Priority: GetInt32(element, "priority"),
+            Source: GetString(element, "src"),
+            Table: GetString(element, "table"),
+            Action: GetString(element, "action"),
+            Destination: GetString(element, "dst"),
+            IifName: GetString(element, "iifname"),
+            OifName: GetString(element, "oifname"),
+            FirewallMark: GetInt32(element, "fwmark"),
+            Protocol: GetString(element, "protocol"));
     }
 
     private static IReadOnlyList<JsonElement> EnumerateRootObjects(string json)

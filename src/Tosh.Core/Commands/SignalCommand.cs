@@ -1,6 +1,7 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Process")]
+[CommandNote("Signal sends a named or numeric signal to a ToSh job or a native process id.")]
 public sealed class SignalCommand : ShellCommand
 {
     public SignalCommand()

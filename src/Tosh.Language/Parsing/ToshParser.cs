@@ -108,6 +108,80 @@ public static class ToshParser
             bool stopAtCloseBrace = false,
             bool stopAtSemicolon = false)
         {
+            var docTokens = ConsumeDocCommentTokens();
+
+            // Tuple unpacking assignment: ($a, $b) = ...
+            if (Current.Kind == SyntaxTokenKind.OpenParen && LooksLikeTupleAssignment())
+            {
+                var start = Current.Span.Start;
+                var names = new List<string>();
+                var openParen = NextToken();
+                while (Current.Kind != SyntaxTokenKind.EndOfFile && Current.Kind != SyntaxTokenKind.CloseParen)
+                {
+                    if (Current.Kind == SyntaxTokenKind.Comma)
+                    {
+                        NextToken();
+                        continue;
+                    }
+                    if (Current.Kind == SyntaxTokenKind.Bareword && IsValidIdentifier(Current.Text))
+                    {
+                        names.Add(NextToken().Text);
+                    }
+                    else if (IsVariableReferenceLikeToken(Current))
+                    {
+                        names.Add(ParseAssignableVariableName());
+                    }
+                    else
+                    {
+                        _diagnostics.Add(new SyntaxDiagnostic(
+                            Code: "tosh::parser::expected_tuple_assign_name",
+                            Title: "Expected a variable name in tuple assignment.",
+                            Span: Current.Span,
+                            Label: "write a variable name like 'a' or '$a'"));
+                        NextToken();
+                    }
+                    if (Current.Kind == SyntaxTokenKind.Comma)
+                    {
+                        NextToken();
+                    }
+                }
+                var closeSpan = Current.Span;
+                if (Current.Kind == SyntaxTokenKind.CloseParen)
+                {
+                    NextToken();
+                }
+                else
+                {
+                    _diagnostics.Add(new SyntaxDiagnostic(
+                        Code: "tosh::parser::missing_closing_paren_tuple_assign",
+                        Title: "A closing ')' is required for tuple assignment.",
+                        Span: closeSpan,
+                        Label: "close the tuple assignment with ')'"));
+                }
+                if (Current.Kind == SyntaxTokenKind.Bareword && Current.Text == "=")
+                {
+                    NextToken();
+                }
+                else
+                {
+                    _diagnostics.Add(new SyntaxDiagnostic(
+                        Code: "tosh::parser::expected_equals_tuple_assign",
+                        Title: "Tuple assignment requires '=' after the variable list.",
+                        Span: Current.Span,
+                        Label: "write '=' after the variable list"));
+                }
+                var value = ParsePipeline(
+                    untilCloseParen: stopAtCloseParen,
+                    untilCloseBrace: stopAtCloseBrace,
+                    untilSemicolon: stopAtSemicolon,
+                    allowExpressionStart: true);
+                var end = GetPipelineEnd(value, closeSpan.End);
+                return new TupleAssignmentStatementSyntax(
+                    names,
+                    value,
+                    TextSpan.FromBounds(start, end));
+            }
+
             if (LooksLikeForStatement())
             {
                 return ParseForStatement();
@@ -155,32 +229,32 @@ public static class ToshParser
 
             if (LooksLikeFunctionDefinition())
             {
-                return ParseFunctionDefinitionStatement();
+                return ParseFunctionDefinitionStatement(docTokens);
             }
 
             if (LooksLikeClassDefinition())
             {
-                return ParseClassDefinitionStatement();
+                return ParseClassDefinitionStatement(docTokens);
             }
 
             if (LooksLikeModuleDefinition())
             {
-                return ParseModuleDefinitionStatement();
+                return ParseModuleDefinitionStatement(docTokens);
             }
 
             if (LooksLikeEnumDefinition())
             {
-                return ParseEnumDefinitionStatement(stopAtCloseParen, stopAtCloseBrace, stopAtSemicolon);
+                return ParseEnumDefinitionStatement(docTokens, stopAtCloseParen, stopAtCloseBrace, stopAtSemicolon);
             }
 
             if (LooksLikeRecordDefinition())
             {
-                return ParseRecordDefinitionStatement(stopAtCloseParen, stopAtCloseBrace, stopAtSemicolon);
+                return ParseRecordDefinitionStatement(docTokens, stopAtCloseParen, stopAtCloseBrace, stopAtSemicolon);
             }
 
             if (LooksLikeEventDefinition())
             {
-                return ParseEventDefinitionStatement();
+                return ParseEventDefinitionStatement(docTokens);
             }
 
             if (LooksLikeBreakStatement())
@@ -1652,7 +1726,7 @@ public static class ToshParser
                 : new ContinueStatementSyntax(keyword.Span);
         }
 
-        private StatementSyntax ParseFunctionDefinitionStatement()
+        private StatementSyntax ParseFunctionDefinitionStatement(IReadOnlyList<SyntaxToken>? docTokens = null)
         {
             var declarationStart = Current.Span.Start;
             var modifier = ParseDeclarationModifier();
@@ -1771,10 +1845,11 @@ public static class ToshParser
                 handlesEvent,
                 handlerPriority,
                 isOnceHandler,
-                whenGuard);
+                whenGuard,
+                DocComment: DocComment.Parse(docTokens ?? Array.Empty<SyntaxToken>()));
         }
 
-        private StatementSyntax ParseClassDefinitionStatement()
+        private StatementSyntax ParseClassDefinitionStatement(IReadOnlyList<SyntaxToken>? docTokens = null)
         {
             var declarationStart = Current.Span.Start;
             var modifier = ParseDeclarationModifier();
@@ -1790,10 +1865,11 @@ public static class ToshParser
                 primaryConstructorParameters,
                 body,
                 modifier,
-                TextSpan.FromBounds(declarationStart, body.Count == 0 ? nameToken.Span.End : body[^1].Span.End));
+                TextSpan.FromBounds(declarationStart, body.Count == 0 ? nameToken.Span.End : body[^1].Span.End),
+                DocComment: DocComment.Parse(docTokens ?? Array.Empty<SyntaxToken>()));
         }
 
-        private StatementSyntax ParseModuleDefinitionStatement()
+        private StatementSyntax ParseModuleDefinitionStatement(IReadOnlyList<SyntaxToken>? docTokens = null)
         {
             var declarationStart = Current.Span.Start;
             var modifier = ParseDeclarationModifier();
@@ -1805,10 +1881,12 @@ public static class ToshParser
                 nameToken.Text,
                 body,
                 modifier,
-                TextSpan.FromBounds(declarationStart, body.Span.End));
+                TextSpan.FromBounds(declarationStart, body.Span.End),
+                DocComment: DocComment.Parse(docTokens ?? Array.Empty<SyntaxToken>()));
         }
 
         private StatementSyntax ParseEnumDefinitionStatement(
+            IReadOnlyList<SyntaxToken>? docTokens,
             bool stopAtCloseParen,
             bool stopAtCloseBrace,
             bool stopAtSemicolon)
@@ -1843,7 +1921,8 @@ public static class ToshParser
                     Title: "Enum definitions require a body.",
                     Span: Current.Span,
                     Label: $"write '{{ ... }}' after enum '{enumName}'"));
-                return new EnumDefinitionStatementSyntax(enumName, underlyingTypeName, Array.Empty<EnumMemberSyntax>(), modifier, TextSpan.FromBounds(declarationStart, nameToken.Span.End));
+                return new EnumDefinitionStatementSyntax(enumName, underlyingTypeName, Array.Empty<EnumMemberSyntax>(), modifier, TextSpan.FromBounds(declarationStart, nameToken.Span.End),
+                    DocComment: DocComment.Parse(docTokens ?? Array.Empty<SyntaxToken>()));
             }
 
             var openBrace = NextToken();
@@ -1907,7 +1986,8 @@ public static class ToshParser
                     Span: openBrace.Span,
                     Label: "this enum body never closes",
                     Help: "close the enum body with '}' after the last member."));
-                return new EnumDefinitionStatementSyntax(enumName, underlyingTypeName, members, modifier, TextSpan.FromBounds(declarationStart, members.Count == 0 ? nameToken.Span.End : members[^1].Span.End));
+                return new EnumDefinitionStatementSyntax(enumName, underlyingTypeName, members, modifier, TextSpan.FromBounds(declarationStart, members.Count == 0 ? nameToken.Span.End : members[^1].Span.End),
+                    DocComment: DocComment.Parse(docTokens ?? Array.Empty<SyntaxToken>()));
             }
 
             var closeBrace = NextToken();
@@ -1916,10 +1996,12 @@ public static class ToshParser
                 underlyingTypeName,
                 members,
                 modifier,
-                TextSpan.FromBounds(declarationStart, closeBrace.Span.End));
+                TextSpan.FromBounds(declarationStart, closeBrace.Span.End),
+                DocComment: DocComment.Parse(docTokens ?? Array.Empty<SyntaxToken>()));
         }
 
         private StatementSyntax ParseRecordDefinitionStatement(
+            IReadOnlyList<SyntaxToken>? docTokens,
             bool stopAtCloseParen,
             bool stopAtCloseBrace,
             bool stopAtSemicolon)
@@ -1936,7 +2018,8 @@ public static class ToshParser
                     Title: "Record definitions require a field list.",
                     Span: Current.Span,
                     Label: $"write '(...)' after record '{nameToken.Text}'"));
-                return new RecordDefinitionStatementSyntax(nameToken.Text, Array.Empty<RecordFieldDefinitionSyntax>(), modifier, TextSpan.FromBounds(declarationStart, nameToken.Span.End));
+                return new RecordDefinitionStatementSyntax(nameToken.Text, Array.Empty<RecordFieldDefinitionSyntax>(), modifier, TextSpan.FromBounds(declarationStart, nameToken.Span.End),
+                    DocComment: DocComment.Parse(docTokens ?? Array.Empty<SyntaxToken>()));
             }
 
             var fields = ParseRecordDefinitionFields(stopAtCloseParen, stopAtCloseBrace, stopAtSemicolon);
@@ -1945,10 +2028,11 @@ public static class ToshParser
                 nameToken.Text,
                 fields,
                 modifier,
-                TextSpan.FromBounds(declarationStart, end));
+                TextSpan.FromBounds(declarationStart, end),
+                DocComment: DocComment.Parse(docTokens ?? Array.Empty<SyntaxToken>()));
         }
 
-        private StatementSyntax ParseEventDefinitionStatement()
+        private StatementSyntax ParseEventDefinitionStatement(IReadOnlyList<SyntaxToken>? docTokens = null)
         {
             var declarationStart = Current.Span.Start;
             var modifier = ParseDeclarationModifier();
@@ -1979,7 +2063,8 @@ public static class ToshParser
                     isRequired,
                     isLocal,
                     modifier,
-                    TextSpan.FromBounds(declarationStart, nameToken.Span.End));
+                    TextSpan.FromBounds(declarationStart, nameToken.Span.End),
+                    DocComment: DocComment.Parse(docTokens ?? Array.Empty<SyntaxToken>()));
             }
 
             var closeBraceEnd = Current.Span.End;
@@ -1991,7 +2076,8 @@ public static class ToshParser
                 isRequired,
                 isLocal,
                 modifier,
-                TextSpan.FromBounds(declarationStart, closeBraceEnd));
+                TextSpan.FromBounds(declarationStart, closeBraceEnd),
+                DocComment: DocComment.Parse(docTokens ?? Array.Empty<SyntaxToken>()));
         }
 
         private IReadOnlyList<EventFieldDefinitionSyntax> ParseEventDefinitionFields(out int closeBraceEnd)
@@ -2224,6 +2310,7 @@ public static class ToshParser
 
         private ClassMemberSyntax ParseClassMember(string className)
         {
+            var docTokens = ConsumeDocCommentTokens();
             var memberStart = Current.Span.Start;
             var isShy = false;
             var isStatic = false;
@@ -2240,13 +2327,13 @@ public static class ToshParser
             if (Current.Kind == SyntaxTokenKind.Bareword &&
                 string.Equals(Current.Text, "prop", StringComparison.Ordinal))
             {
-                return ParseClassPropertyMember(isShy, memberStart);
+                return ParseClassPropertyMember(isShy, memberStart, docTokens);
             }
 
             if (Current.Kind == SyntaxTokenKind.Bareword &&
                 string.Equals(Current.Text, "func", StringComparison.Ordinal))
             {
-                var method = ParseFunctionDefinitionStatement() as FunctionDefinitionStatementSyntax
+                var method = ParseFunctionDefinitionStatement(docTokens) as FunctionDefinitionStatementSyntax
                              ?? throw new InvalidOperationException("Expected a function definition while parsing a class method.");
                 return new ClassMethodMemberSyntax(method, isStatic, isShy, TextSpan.FromBounds(memberStart, method.Span.End));
             }
@@ -2273,7 +2360,7 @@ public static class ToshParser
             return new ClassPropertyMemberSyntax(string.Empty, null, null, null, null, isShy, token.Span);
         }
 
-        private ClassMemberSyntax ParseClassPropertyMember(bool isShy, int memberStart)
+        private ClassMemberSyntax ParseClassPropertyMember(bool isShy, int memberStart, IReadOnlyList<SyntaxToken>? docTokens = null)
         {
             var propToken = NextToken();
             SyntaxToken nameToken;
@@ -2351,7 +2438,8 @@ public static class ToshParser
                 getter,
                 setter,
                 isShy,
-                TextSpan.FromBounds(memberStart, end));
+                TextSpan.FromBounds(memberStart, end),
+                DocComment: DocComment.Parse(docTokens ?? Array.Empty<SyntaxToken>()));
         }
 
         private (BlockSyntax? Getter, BlockSyntax? Setter, int End) ParsePropertyAccessorBlock()
@@ -2509,8 +2597,27 @@ public static class ToshParser
                         ScanForPositionalRefs(child, ref maxPositional);
                     }
                     break;
+                case CallableInvocationArgumentSyntax callableInvocation:
+                    ScanForPositionalRefs(callableInvocation.Target, ref maxPositional);
+                    foreach (var child in callableInvocation.Arguments)
+                    {
+                        ScanForPositionalRefs(child, ref maxPositional);
+                    }
+                    break;
                 case ArrayLiteralArgumentSyntax list:
                     foreach (var item in list.Items)
+                    {
+                        ScanForPositionalRefs(item, ref maxPositional);
+                    }
+                    break;
+                case TupleLiteralArgumentSyntax tuple:
+                    foreach (var item in tuple.Items)
+                    {
+                        ScanForPositionalRefs(item, ref maxPositional);
+                    }
+                    break;
+                case SetLiteralArgumentSyntax set:
+                    foreach (var item in set.Items)
                     {
                         ScanForPositionalRefs(item, ref maxPositional);
                     }
@@ -3015,7 +3122,7 @@ public static class ToshParser
         {
             if (Current.Kind == SyntaxTokenKind.Bareword)
             {
-                return ParseTypeNameSuffix(NextToken().Text);
+                return ParseTypeNameSuffix(NextToken().Text) ?? string.Empty;
             }
 
             _diagnostics.Add(new SyntaxDiagnostic(
@@ -3512,7 +3619,8 @@ public static class ToshParser
             if (!IsPipelineTerminator(Current.Kind, stopAtCloseParen, stopAtCloseBrace, stopAtSemicolon) &&
                 Current.Kind != SyntaxTokenKind.Pipe &&
                 Current.Kind != SyntaxTokenKind.Ampersand &&
-                !LooksLikeRedirectionOperator())
+                !LooksLikeRedirectionOperator() &&
+                !(predicateArgument is not null && HasImplicitStatementBoundaryAfter(predicateArgument.Span.End)))
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
                     Code: "tosh::parser::unexpected_predicate_tokens",
@@ -3956,7 +4064,7 @@ public static class ToshParser
                 return new VariableReferenceArgumentSyntax(string.Empty, token.Span);
             }
 
-            while (TryConsumePostfixToken(out var postfixToken, out var postfixText, out _))
+            while (TryConsumePostfixToken(expression.Span.End, out var postfixToken, out var postfixText, out _))
             {
                 expression = ApplyQualifiedMemberChain(expression, postfixText, postfixToken.Span, allowMethodCall: false);
             }
@@ -4244,9 +4352,239 @@ public static class ToshParser
 
         private ArgumentSyntax ParseBraceLiteralArgument(bool implicitCurrentItem = false)
         {
+            if (LooksLikeSetLiteral())
+            {
+                return ParseSetLiteralArgument(implicitCurrentItem);
+            }
+
+            if (LooksLikeDictLiteral())
+            {
+                return ParseDictLiteralArgument(implicitCurrentItem);
+            }
+
             return LooksLikeRecordLiteral()
                 ? ParseRecordLiteralArgument(implicitCurrentItem)
                 : ParseBraceCollectionLiteralArgument(implicitCurrentItem);
+        }
+
+        private bool LooksLikeSetLiteral()
+        {
+            if (Current.Kind != SyntaxTokenKind.OpenBrace)
+            {
+                return false;
+            }
+
+            var next = Peek(1);
+
+            if (next.Kind != SyntaxTokenKind.Bareword)
+            {
+                return false;
+            }
+
+            // {::} — empty set
+            if (string.Equals(next.Text, "::", StringComparison.Ordinal) && Peek(2).Kind == SyntaxTokenKind.CloseBrace)
+            {
+                return true;
+            }
+
+            // {: ... :} — set with items
+            return string.Equals(next.Text, ":", StringComparison.Ordinal);
+        }
+
+        private ArgumentSyntax ParseSetLiteralArgument(bool implicitCurrentItem)
+        {
+            var openBrace = NextToken();
+
+            // {::} — empty set
+            if (Current.Kind == SyntaxTokenKind.Bareword &&
+                string.Equals(Current.Text, "::", StringComparison.Ordinal) &&
+                Peek(1).Kind == SyntaxTokenKind.CloseBrace)
+            {
+                NextToken(); // consume ::
+                var emptyCloseBrace = NextToken(); // consume }
+                return new SetLiteralArgumentSyntax(
+                    Array.Empty<ArgumentSyntax>(),
+                    TextSpan.FromBounds(openBrace.Span.Start, emptyCloseBrace.Span.End));
+            }
+
+            // Consume opening ':'
+            NextToken();
+
+            var items = new List<ArgumentSyntax>();
+
+            while (Current.Kind != SyntaxTokenKind.EndOfFile && Current.Kind != SyntaxTokenKind.CloseBrace)
+            {
+                // Check for closing ':' delimiter
+                if (Current.Kind == SyntaxTokenKind.Bareword &&
+                    string.Equals(Current.Text, ":", StringComparison.Ordinal) &&
+                    Peek(1).Kind == SyntaxTokenKind.CloseBrace)
+                {
+                    break;
+                }
+
+                if (Current.Kind == SyntaxTokenKind.Comma)
+                {
+                    NextToken();
+                    continue;
+                }
+
+                var item = ParseArgument(implicitCurrentItem: implicitCurrentItem);
+
+                if (item is not null)
+                {
+                    items.Add(item);
+                }
+
+                if (Current.Kind == SyntaxTokenKind.Comma)
+                {
+                    NextToken();
+                    continue;
+                }
+
+                if (Current.Kind is not SyntaxTokenKind.CloseBrace and not SyntaxTokenKind.EndOfFile &&
+                    !(Current.Kind == SyntaxTokenKind.Bareword && string.Equals(Current.Text, ":", StringComparison.Ordinal)))
+                {
+                    _diagnostics.Add(new SyntaxDiagnostic(
+                        Code: "tosh::parser::missing_set_separator",
+                        Title: "Set items must be separated by ','.",
+                        Span: Current.Span,
+                        Label: "insert ',' between set items"));
+                }
+            }
+
+            // Expect closing ':' before '}'
+            if (Current.Kind == SyntaxTokenKind.Bareword &&
+                string.Equals(Current.Text, ":", StringComparison.Ordinal))
+            {
+                NextToken(); // consume closing ':'
+            }
+            else
+            {
+                _diagnostics.Add(new SyntaxDiagnostic(
+                    Code: "tosh::parser::missing_set_closing_colon",
+                    Title: "A closing ':' is required before '}'.",
+                    Span: Current.Span,
+                    Label: "set literals use '{: ... :}' syntax"));
+            }
+
+            if (Current.Kind != SyntaxTokenKind.CloseBrace)
+            {
+                _diagnostics.Add(new SyntaxDiagnostic(
+                    Code: "tosh::parser::missing_closing_brace",
+                    Title: "A closing '}' is required here.",
+                    Span: openBrace.Span,
+                    Label: "this set literal never closes",
+                    Help: "close the set literal with ':}' after the last item."));
+                return new SetLiteralArgumentSyntax(items, openBrace.Span);
+            }
+
+            var closeBrace = NextToken();
+            return new SetLiteralArgumentSyntax(
+                items,
+                TextSpan.FromBounds(openBrace.Span.Start, closeBrace.Span.End));
+        }
+
+        private bool LooksLikeDictLiteral()
+        {
+            if (Current.Kind != SyntaxTokenKind.OpenBrace)
+            {
+                return false;
+            }
+
+            var first = Peek(1);
+
+            // Empty braces are a record, not a dict.
+            if (first.Kind == SyntaxTokenKind.CloseBrace)
+            {
+                return false;
+            }
+
+            // { <expr> => ... }  —  the key can be bareword, string, number, or variable.
+            if (first.Kind is SyntaxTokenKind.Bareword or SyntaxTokenKind.String or SyntaxTokenKind.Number)
+            {
+                return IsFatArrowToken(Peek(2), Peek(3));
+            }
+
+            return false;
+        }
+
+        private ArgumentSyntax ParseDictLiteralArgument(bool implicitCurrentItem = false)
+        {
+            var openBrace = NextToken();
+            var entries = new List<DictEntrySyntax>();
+
+            while (Current.Kind != SyntaxTokenKind.EndOfFile && Current.Kind != SyntaxTokenKind.CloseBrace)
+            {
+                if (Current.Kind == SyntaxTokenKind.Comma)
+                {
+                    NextToken();
+                    continue;
+                }
+
+                var key = ParseArgument(implicitCurrentItem: implicitCurrentItem);
+
+                if (key is null)
+                {
+                    NextToken();
+                    continue;
+                }
+
+                if (!IsFatArrowToken(Current, Peek(1)))
+                {
+                    _diagnostics.Add(new SyntaxDiagnostic(
+                        Code: "tosh::parser::expected_fat_arrow",
+                        Title: "Dict entries require '=>' between key and value.",
+                        Span: Current.Span,
+                        Label: "write '=>' after the key expression"));
+                    break;
+                }
+
+                ConsumeFatArrow();
+
+                var value = ParseArgument(implicitCurrentItem: implicitCurrentItem);
+
+                if (value is not null)
+                {
+                    entries.Add(new DictEntrySyntax(
+                        key,
+                        value,
+                        TextSpan.FromBounds(key.Span.Start, value.Span.End)));
+                }
+
+                if (Current.Kind == SyntaxTokenKind.Comma)
+                {
+                    NextToken();
+                    continue;
+                }
+
+                if (value is not null && HasImplicitStatementBoundaryAfter(value.Span.End))
+                {
+                    continue;
+                }
+
+                if (Current.Kind is not SyntaxTokenKind.CloseBrace and not SyntaxTokenKind.EndOfFile)
+                {
+                    _diagnostics.Add(new SyntaxDiagnostic(
+                        Code: "tosh::parser::missing_dict_entry_separator",
+                        Title: "Dict entries must be separated by ',' or a newline.",
+                        Span: Current.Span,
+                        Label: "insert ',' or a newline between dict entries"));
+                }
+            }
+
+            if (Current.Kind != SyntaxTokenKind.CloseBrace)
+            {
+                _diagnostics.Add(new SyntaxDiagnostic(
+                    Code: "tosh::parser::missing_dict_closing_brace",
+                    Title: "A closing '}' is required here.",
+                    Span: openBrace.Span,
+                    Label: "this dict literal never closes",
+                    Help: "close the dict literal with '}' after the last entry."));
+                return new DictLiteralArgumentSyntax(entries, openBrace.Span);
+            }
+
+            var closeBrace = NextToken();
+            return new DictLiteralArgumentSyntax(entries, TextSpan.FromBounds(openBrace.Span.Start, closeBrace.Span.End));
         }
 
         private ArgumentSyntax ParseBraceCollectionLiteralArgument(bool implicitCurrentItem = false)
@@ -4466,7 +4804,7 @@ public static class ToshParser
             }
 
             var typeToken = NextToken();
-            var typeName = ParseTypeNameSuffix(typeToken.Text);
+            var typeName = ParseTypeNameSuffix(typeToken.Text) ?? string.Empty;
 
             if (Current.Kind != SyntaxTokenKind.OpenParen)
             {
@@ -4543,7 +4881,7 @@ public static class ToshParser
         {
             while (true)
             {
-                if (TryConsumePostfixToken(out var postfixToken, out var postfixText, out var nullSafe))
+                if (TryConsumePostfixToken(expression.Span.End, out var postfixToken, out var postfixText, out var nullSafe))
                 {
                     expression = ApplyQualifiedMemberChain(expression, postfixText, postfixToken.Span, implicitCurrentItem, nullSafe: nullSafe);
                     continue;
@@ -4553,6 +4891,18 @@ public static class ToshParser
                     Current.Span.Start == expression.Span.End)
                 {
                     expression = ParseIndexAccess(expression, implicitCurrentItem);
+                    continue;
+                }
+
+                if (Current.Kind == SyntaxTokenKind.OpenParen &&
+                    Current.Span.Start == expression.Span.End)
+                {
+                    var arguments = ParseInvocationArguments(implicitCurrentItem);
+                    var end = arguments.closeParenEnd ?? expression.Span.End;
+                    expression = new CallableInvocationArgumentSyntax(
+                        expression,
+                        arguments.arguments,
+                        TextSpan.FromBounds(expression.Span.Start, end));
                     continue;
                 }
 
@@ -4761,6 +5111,11 @@ public static class ToshParser
         {
             var openParen = NextToken();
 
+            if (HasTopLevelCommaBeforeCloseParen())
+            {
+                return ParseTupleLiteralArgument(openParen, implicitCurrentItem);
+            }
+
             if (HasTopLevelOperatorBeforeCloseParen())
             {
                 var expression = ParseOperatorExpression(openParen.Span.Start, implicitCurrentItem);
@@ -4820,6 +5175,60 @@ public static class ToshParser
             return new SubexpressionArgumentSyntax(
                 pipeline,
                 TextSpan.FromBounds(openParen.Span.Start, subexpressionCloseParen.Span.End));
+        }
+
+        private ArgumentSyntax ParseTupleLiteralArgument(SyntaxToken openParen, bool implicitCurrentItem)
+        {
+            var items = new List<ArgumentSyntax>();
+
+            while (Current.Kind != SyntaxTokenKind.EndOfFile && Current.Kind != SyntaxTokenKind.CloseParen)
+            {
+                if (Current.Kind == SyntaxTokenKind.Comma)
+                {
+                    NextToken();
+                    continue;
+                }
+
+                var item = HasTopLevelOperatorBeforeCommaOrCloseParen()
+                    ? ParseOperatorExpression(Current.Span.Start, implicitCurrentItem)
+                    : ParseArgument(implicitCurrentItem: implicitCurrentItem);
+
+                if (item is not null)
+                {
+                    items.Add(item);
+                }
+
+                if (Current.Kind == SyntaxTokenKind.Comma)
+                {
+                    NextToken();
+                    continue;
+                }
+
+                if (Current.Kind is not SyntaxTokenKind.CloseParen and not SyntaxTokenKind.EndOfFile)
+                {
+                    _diagnostics.Add(new SyntaxDiagnostic(
+                        Code: "tosh::parser::missing_tuple_separator",
+                        Title: "Tuple elements must be separated by ','.",
+                        Span: Current.Span,
+                        Label: "insert ',' between tuple elements"));
+                }
+            }
+
+            if (Current.Kind != SyntaxTokenKind.CloseParen)
+            {
+                _diagnostics.Add(new SyntaxDiagnostic(
+                    Code: "tosh::parser::missing_closing_parenthesis",
+                    Title: "A closing ')' is required here.",
+                    Span: openParen.Span,
+                    Label: "this tuple literal never closes",
+                    Help: "close the tuple with ')' after the last element."));
+                return new TupleLiteralArgumentSyntax(items, openParen.Span);
+            }
+
+            var closeParen = NextToken();
+            return new TupleLiteralArgumentSyntax(
+                items,
+                TextSpan.FromBounds(openParen.Span.Start, closeParen.Span.End));
         }
 
         private ArgumentSyntax ParseCommandSubstitutionArgument()
@@ -5313,6 +5722,7 @@ public static class ToshParser
         {
             var stages = new List<PipelineStageSyntax>();
             List<RedirectionSyntax>? redirections = null;
+            InputRedirectionSyntax? inputRedirection = null;
             var isBackground = false;
 
             while (!IsPipelineTerminator(Current.Kind, untilCloseParen, untilCloseBrace, untilSemicolon))
@@ -5367,8 +5777,28 @@ public static class ToshParser
                 }
 
                 // Check for redirection operators after a pipeline stage
-                while (LooksLikeRedirectionOperator())
+                while (LooksLikeRedirectionOperator() || LooksLikeInputRedirection())
                 {
+                    if (LooksLikeInputRedirection())
+                    {
+                        var input = TryParseInputRedirection();
+                        if (input is not null)
+                        {
+                            if (inputRedirection is not null)
+                            {
+                                _diagnostics.Add(new SyntaxDiagnostic(
+                                    Code: "tosh::parser::duplicate_input_redirection",
+                                    Title: "Only one input redirection is allowed per pipeline.",
+                                    Span: input.Span,
+                                    Label: "remove this input redirection"));
+                            }
+
+                            inputRedirection = input;
+                        }
+
+                        continue;
+                    }
+
                     var redirection = TryParseRedirection();
                     if (redirection is not null)
                     {
@@ -5423,7 +5853,7 @@ public static class ToshParser
                 }
             }
 
-            return new PipelineSyntax(stages, redirections, isBackground);
+            return new PipelineSyntax(stages, redirections, inputRedirection, isBackground);
         }
 
         private void SkipToStageBoundary(bool untilCloseParen, bool untilCloseBrace, bool untilSemicolon)
@@ -5486,11 +5916,124 @@ public static class ToshParser
                 SyntaxTokenKind.OpenParen or
                 SyntaxTokenKind.OpenBracket => true,
                 SyntaxTokenKind.Bareword => true,
+                SyntaxTokenKind.DocComment => true,
                 _ => false,
             };
         }
 
         private bool HasTopLevelOperatorBeforeCloseParen() => HasTopLevelOperatorBeforeCloseParen(_position);
+
+        private bool HasTopLevelCommaBeforeCloseParen()
+        {
+            var depth = 0;
+
+            for (var index = _position; index < _tokens.Count; index++)
+            {
+                var token = _tokens[index];
+
+                switch (token.Kind)
+                {
+                    case SyntaxTokenKind.OpenParen:
+                    case SyntaxTokenKind.OpenBrace:
+                    case SyntaxTokenKind.OpenBracket:
+                        depth++;
+                        break;
+
+                    case SyntaxTokenKind.CloseParen:
+                        if (depth == 0)
+                        {
+                            return false;
+                        }
+
+                        depth--;
+                        break;
+
+                    case SyntaxTokenKind.CloseBrace:
+                    case SyntaxTokenKind.CloseBracket:
+                        if (depth > 0)
+                        {
+                            depth--;
+                        }
+                        break;
+
+                    case SyntaxTokenKind.Comma:
+                        if (depth == 0)
+                        {
+                            return true;
+                        }
+                        break;
+                }
+            }
+
+            return false;
+        }
+
+        private bool HasTopLevelOperatorBeforeCommaOrCloseParen()
+        {
+            var depth = 0;
+
+            for (var index = _position; index < _tokens.Count; index++)
+            {
+                var token = _tokens[index];
+
+                switch (token.Kind)
+                {
+                    case SyntaxTokenKind.OpenParen:
+                    case SyntaxTokenKind.OpenBrace:
+                    case SyntaxTokenKind.OpenBracket:
+                        depth++;
+                        break;
+
+                    case SyntaxTokenKind.CloseParen:
+                        if (depth == 0)
+                        {
+                            return false;
+                        }
+
+                        depth--;
+                        break;
+
+                    case SyntaxTokenKind.CloseBrace:
+                    case SyntaxTokenKind.CloseBracket:
+                        if (depth > 0)
+                        {
+                            depth--;
+                        }
+                        break;
+
+                    case SyntaxTokenKind.Comma:
+                        if (depth == 0)
+                        {
+                            return false;
+                        }
+                        break;
+
+                    case SyntaxTokenKind.Pipe:
+                        if (depth == 0)
+                        {
+                            return false;
+                        }
+                        break;
+
+                    default:
+                        if (depth == 0 &&
+                            (IsTernaryQuestionToken(token) ||
+                             IsNullCoalescingOperatorToken(token) ||
+                             IsLogicalOrOperatorToken(token) ||
+                             IsLogicalAndOperatorToken(token) ||
+                             IsComparisonOperatorToken(token) ||
+                             IsAdditiveOperatorToken(token) ||
+                             IsMultiplicativeOperatorToken(token) ||
+                             IsUnaryOperatorToken(token)))
+                        {
+                            return true;
+                        }
+                        break;
+                }
+            }
+
+            return false;
+        }
 
         private bool HasTopLevelOperatorBeforeStageBoundary(
             bool stopAtCloseParen,
@@ -6448,6 +6991,48 @@ public static class ToshParser
                 TextSpan.FromBounds(start, target.Span.End));
         }
 
+        private bool LooksLikeInputRedirection()
+        {
+            // Matches: in< file, i< file (bareword "in" or "i" followed by LessThan)
+            if (Current.Kind != SyntaxTokenKind.Bareword)
+            {
+                return false;
+            }
+
+            return Current.Text is "in" or "i"
+                   && Peek(1).Kind == SyntaxTokenKind.LessThan;
+        }
+
+        private InputRedirectionSyntax? TryParseInputRedirection()
+        {
+            if (!LooksLikeInputRedirection())
+            {
+                return null;
+            }
+
+            var start = Current.Span.Start;
+            NextToken(); // consume in/i
+            NextToken(); // consume <
+
+            if (Current.Kind is SyntaxTokenKind.EndOfFile or SyntaxTokenKind.Semicolon or SyntaxTokenKind.Pipe)
+            {
+                _diagnostics.Add(new SyntaxDiagnostic(
+                    Code: "tosh::parser::expected_input_redirection_source",
+                    Title: "A file path is required after an input redirection operator.",
+                    Span: TextSpan.FromBounds(start, Current.Span.Start),
+                    Label: "expected a file path here"));
+                return null;
+            }
+
+            var source = ParsePrimaryArgument(implicitCurrentItem: false);
+            if (source is null)
+            {
+                return null;
+            }
+
+            return new InputRedirectionSyntax(source, TextSpan.FromBounds(start, source.Span.End));
+        }
+
         private static bool IsPipelineTerminator(
             SyntaxTokenKind kind,
             bool untilCloseParen,
@@ -6483,9 +7068,9 @@ public static class ToshParser
                    HasImplicitStatementBoundaryAfter(previousEnd);
         }
 
-        private bool TryConsumePostfixToken(out SyntaxToken token, out string postfixText, out bool nullSafe)
+        private bool TryConsumePostfixToken(int previousExpressionEnd, out SyntaxToken token, out string postfixText, out bool nullSafe)
         {
-            if (IsPostfixToken(Current))
+            if (!HasLineBreakBetween(previousExpressionEnd, Current.Span.Start) && IsPostfixToken(Current))
             {
                 token = NextToken();
                 postfixText = token.Text[1..];
@@ -6493,7 +7078,9 @@ public static class ToshParser
                 return true;
             }
 
-            if (Current.Kind == SyntaxTokenKind.QuestionDot && Peek(1).Kind == SyntaxTokenKind.Bareword)
+            if (!HasLineBreakBetween(previousExpressionEnd, Current.Span.Start) &&
+                Current.Kind == SyntaxTokenKind.QuestionDot &&
+                Peek(1).Kind == SyntaxTokenKind.Bareword)
             {
                 token = NextToken(); // consume ?.
                 var memberToken = NextToken(); // consume member name
@@ -6887,6 +7474,50 @@ public static class ToshParser
             return _tokens[index];
         }
 
+        /// <summary>
+        /// Lookahead: returns true when the tokens at the current position form
+        /// a tuple-assignment pattern: ( $var [, $var]* ) =
+        /// </summary>
+        private bool LooksLikeTupleAssignment()
+        {
+            if (Current.Kind != SyntaxTokenKind.OpenParen) return false;
+
+            var offset = 1; // skip past '('
+
+            while (true)
+            {
+                var token = Peek(offset);
+
+                // Expect a variable name ($x or bare identifier)
+                if (token.Kind == SyntaxTokenKind.Bareword &&
+                    (IsVariableReferenceLikeToken(token) || IsValidIdentifier(token.Text)))
+                {
+                    offset++;
+                }
+                else
+                {
+                    return false; // Not a variable name — not a tuple pattern
+                }
+
+                var next = Peek(offset);
+
+                if (next.Kind == SyntaxTokenKind.Comma)
+                {
+                    offset++; // skip comma, expect another variable
+                    continue;
+                }
+
+                if (next.Kind == SyntaxTokenKind.CloseParen)
+                {
+                    offset++; // skip ')'
+                    var afterClose = Peek(offset);
+                    return afterClose.Kind == SyntaxTokenKind.Bareword && afterClose.Text == "=";
+                }
+
+                return false; // Unexpected token
+            }
+        }
+
         private SyntaxToken Current => _tokens[_position];
 
         private SyntaxToken NextToken()
@@ -6899,6 +7530,17 @@ public static class ToshParser
             }
 
             return current;
+        }
+
+        private IReadOnlyList<SyntaxToken> ConsumeDocCommentTokens()
+        {
+            if (Current.Kind != SyntaxTokenKind.DocComment)
+                return Array.Empty<SyntaxToken>();
+
+            var tokens = new List<SyntaxToken>();
+            while (Current.Kind == SyntaxTokenKind.DocComment)
+                tokens.Add(NextToken());
+            return tokens;
         }
     }
 }

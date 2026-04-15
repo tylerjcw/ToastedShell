@@ -1,6 +1,8 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Prompt")]
+[CommandExample("prompt-jobs")]
+[CommandExample("prompt-jobs 3 --fg yellow --bold")]
 public sealed class PromptJobsCommand : ShellCommand
 {
     public PromptJobsCommand()

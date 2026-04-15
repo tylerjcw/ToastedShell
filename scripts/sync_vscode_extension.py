@@ -16,6 +16,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--source-dir", type=Path, default=None, help="Extension source directory inside the repo.")
     parser.add_argument("--extensions-dir", type=Path, default=None, help="VS Code extensions directory to sync into.")
     parser.add_argument("--quiet", action="store_true", help="Suppress normal status output.")
+    parser.add_argument("--regenerate", action="store_true", help="Regenerate language-data.json from command metadata before syncing.")
     return parser.parse_args()
 
 
@@ -83,6 +84,21 @@ def ensure_extension_dependencies(source_dir: Path, quiet: bool) -> None:
     subprocess.run(command, cwd=source_dir, check=True, stdout=stdout, stderr=stderr)
 
 
+def regenerate_language_data(repo_root: Path, source_dir: Path, quiet: bool) -> None:
+    cli_project = repo_root / "src" / "Tosh.Cli" / "Tosh.Cli.csproj"
+    output_path = source_dir / "language-data.json"
+    command = [
+        "dotnet", "run", "--project", str(cli_project),
+        "--", "--export-command-metadata", "--vscode",
+        "-o", str(output_path),
+    ]
+    stdout = subprocess.DEVNULL if quiet else None
+    stderr = subprocess.STDOUT if quiet else None
+    subprocess.run(command, cwd=repo_root, check=True, stdout=stdout, stderr=stderr)
+    if not quiet:
+        print(f"Regenerated: {output_path}")
+
+
 def main() -> int:
     args = parse_args()
     repo_root = repo_root_from_script()
@@ -90,6 +106,9 @@ def main() -> int:
 
     if not source_dir.exists():
         raise SystemExit(f"Extension source directory was not found: {source_dir}")
+
+    if args.regenerate:
+        regenerate_language_data(repo_root, source_dir, args.quiet)
 
     ensure_extension_dependencies(source_dir, args.quiet)
 

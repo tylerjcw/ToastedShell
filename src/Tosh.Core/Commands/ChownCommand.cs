@@ -1,3 +1,7 @@
+using System.Runtime.Versioning;
+using System.Security.AccessControl;
+using System.Security.Principal;
+
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Filesystem")]
@@ -14,11 +18,6 @@ public sealed class ChownCommand : ShellCommand
 
     public override async IAsyncEnumerable<object?> ExecuteAsync(CommandContext context)
     {
-        if (OperatingSystem.IsWindows())
-        {
-            throw new InvalidOperationException("chown is not supported on Windows.");
-        }
-
         var parsed = ParsedCommandArguments.Parse(context.Arguments);
         var recursive = parsed.HasFlag("R", "recursive");
 
@@ -38,6 +37,23 @@ public sealed class ChownCommand : ShellCommand
             throw new InvalidOperationException("chown requires at least one path.");
         }
 
+        if (OperatingSystem.IsWindows())
+        {
+            var (owner, group) = ParseWindowsOwnership(spec);
+
+            foreach (var path in paths)
+            {
+                foreach (var target in EnumerateTargets(path, recursive))
+                {
+                    context.CancellationToken.ThrowIfCancellationRequested();
+                    ChangeWindowsOwnership(target, owner, group);
+                    yield return FileSystemEntry.From(CreateFileSystemInfo(target), preferLongDisplay: true);
+                }
+            }
+
+            yield break;
+        }
+
         foreach (var path in paths)
         {
             foreach (var target in EnumerateTargets(path, recursive))
@@ -46,6 +62,100 @@ public sealed class ChownCommand : ShellCommand
                 UnixOwnershipUtilities.ChangeOwnership(target, uid, gid);
                 yield return FileSystemEntry.From(CreateFileSystemInfo(target), preferLongDisplay: true);
             }
+        }
+    }
+
+    [SupportedOSPlatform("windows")]
+    private static (IdentityReference? Owner, IdentityReference? Group) ParseWindowsOwnership(string spec)
+    {
+        var parts = spec.Split(':', 2);
+        var owner = ResolveWindowsPrincipal(parts[0]);
+
+        if (parts[0].Length > 0 && owner is null)
+        {
+            throw new InvalidOperationException($"Unknown user '{parts[0]}'.");
+        }
+
+        IdentityReference? group = null;
+
+        if (parts.Length == 2)
+        {
+            group = ResolveWindowsPrincipal(parts[1]);
+
+            if (parts[1].Length > 0 && group is null)
+            {
+                throw new InvalidOperationException($"Unknown group '{parts[1]}'.");
+            }
+        }
+
+        return (owner, group);
+    }
+
+    [SupportedOSPlatform("windows")]
+    private static IdentityReference? ResolveWindowsPrincipal(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return null;
+        }
+
+        try
+        {
+            if (text.StartsWith("S-", StringComparison.OrdinalIgnoreCase))
+            {
+                return new SecurityIdentifier(text);
+            }
+        }
+        catch
+        {
+        }
+
+        try
+        {
+            return (new NTAccount(text)).Translate(typeof(SecurityIdentifier));
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    [SupportedOSPlatform("windows")]
+    private static void ChangeWindowsOwnership(string path, IdentityReference? owner, IdentityReference? group)
+    {
+        if (Directory.Exists(path))
+        {
+            var directory = new DirectoryInfo(path);
+            var security = directory.GetAccessControl();
+
+            if (owner is not null)
+            {
+                security.SetOwner(owner);
+            }
+
+            if (group is not null)
+            {
+                security.SetGroup(group);
+            }
+
+            directory.SetAccessControl(security);
+        }
+        else
+        {
+            var file = new FileInfo(path);
+            var security = file.GetAccessControl();
+
+            if (owner is not null)
+            {
+                security.SetOwner(owner);
+            }
+
+            if (group is not null)
+            {
+                security.SetGroup(group);
+            }
+
+            file.SetAccessControl(security);
         }
     }
 

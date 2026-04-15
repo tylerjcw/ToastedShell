@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Runtime.InteropServices;
 
 namespace Tosh.Core.Commands;
@@ -75,7 +76,13 @@ public sealed class LinkCommand : ShellCommand
     {
         if (OperatingSystem.IsWindows())
         {
-            throw new InvalidOperationException("Hard links are not supported by the built-in 'ln' command on Windows yet.");
+            if (!Interop.CreateHardLink(linkPath, target, IntPtr.Zero))
+            {
+                throw new InvalidOperationException(
+                    $"Unable to create hard link '{linkPath}': {new Win32Exception(Marshal.GetLastWin32Error()).Message}");
+            }
+
+            return;
         }
 
         if (Interop.link(target, linkPath) != 0)
@@ -86,6 +93,10 @@ public sealed class LinkCommand : ShellCommand
 
     private static class Interop
     {
+        [DllImport("kernel32.dll", EntryPoint = "CreateHardLinkW", CharSet = CharSet.Unicode, SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool CreateHardLink(string fileName, string existingFileName, IntPtr securityAttributes);
+
         [DllImport("libc", SetLastError = true)]
         public static extern int link(string existingPath, string newPath);
     }

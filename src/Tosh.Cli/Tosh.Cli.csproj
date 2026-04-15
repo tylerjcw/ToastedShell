@@ -11,12 +11,14 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <ToshPythonCommand Condition="'$(OS)' == 'Windows_NT'">py -3</ToshPythonCommand>
+    <ToshPythonCommand Condition="'$(OS)' != 'Windows_NT'">python3</ToshPythonCommand>
   </PropertyGroup>
 
   <Target Name="SyncVsCodeExtension"
           AfterTargets="Build"
           Condition="'$(DesignTimeBuild)' != 'true' and '$(DisableToshVsCodeExtensionSync)' != 'true' and Exists('$(MSBuildProjectDirectory)/../../scripts/sync_vscode_extension.py')">
-    <Exec Command="python3 &quot;$(MSBuildProjectDirectory)/../../scripts/sync_vscode_extension.py&quot; --quiet"
+    <Exec Command="$(ToshPythonCommand) &quot;$(MSBuildProjectDirectory)/../../scripts/sync_vscode_extension.py&quot; --quiet"
           WorkingDirectory="$(MSBuildProjectDirectory)/../.." />
   </Target>
 

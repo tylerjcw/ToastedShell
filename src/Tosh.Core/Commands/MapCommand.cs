@@ -1,6 +1,11 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Pipeline")]
+[CommandArgument("callable|block", "A lambda or block that transforms each input item into exactly one output value.")]
+[CommandExample("echo 1 2 3 | map func(x) => ($x * 2)", Title = "Transform values with a lambda")]
+[CommandExample("ls | map { _.Name }", Title = "Transform values with a block")]
+[CommandOutput("Returns one transformed value for each input item.")]
+[PipelineInput(AcceptsScalar = true, AcceptsRecord = true, Description = "Consumes the current pipeline and emits one transformed value per input item.")]
 public sealed class MapCommand : ShellCommand
 {
     public MapCommand()

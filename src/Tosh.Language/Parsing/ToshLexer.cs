@@ -31,6 +31,12 @@ public sealed class ToshLexer
 
             if (Current == '#')
             {
+                if (Peek() == '#')
+                {
+                    tokens.Add(ReadDocComment());
+                    continue;
+                }
+
                 SkipComment();
                 continue;
             }
@@ -324,6 +330,23 @@ public sealed class ToshLexer
         {
             _position++;
         }
+    }
+
+    private SyntaxToken ReadDocComment()
+    {
+        var start = _position;
+        _position += 2; // skip ##
+
+        // Skip optional leading space after ##
+        if (!IsAtEnd && Current == ' ')
+            _position++;
+
+        var textStart = _position;
+        while (!IsAtEnd && Current != '\n')
+            _position++;
+
+        var text = _source[textStart.._position].TrimEnd();
+        return new SyntaxToken(SyntaxTokenKind.DocComment, start, text);
     }
 
     private SyntaxToken ReadString()

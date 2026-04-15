@@ -1,6 +1,27 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Filesystem")]
+[CommandArgument("path ...", "Optional directories or files to list.", Required = false, TypeName = "path-like")]
+[CommandOption("-a", "Include hidden entries.")]
+[CommandOption("-A", "Include hidden entries while matching standard almost-all ls behavior.")]
+[CommandOption("-l", "Use the long listing view.")]
+[CommandOption("-d", "List directory arguments themselves instead of their contents.")]
+[CommandOption("-R", "Traverse directories recursively.")]
+[CommandOption("-F", "Classify names with shell-style suffixes like `*` and `@`.")]
+[CommandOption("-i", "Include inode metadata in the compact table view.")]
+[CommandOption("-r", "Reverse the current sort order.")]
+[CommandOption("-S", "Sort by size descending.")]
+[CommandOption("-t", "Sort by the active time field descending.")]
+[CommandOption("--sort <name|size|time>", "Choose the primary listing sort field.")]
+[CommandOption("--time <modified|access|created>", "Choose which time field long listings and time sorts use.")]
+[CommandOption("--group-directories-first", "Group directories ahead of files before applying the primary sort.")]
+[CommandOption("-la", "Combine hidden and long listing output.")]
+[CommandExample("ls -la")]
+[CommandExample("ls -R --group-directories-first")]
+[CommandExample("ls -l --time access | where _.Type == file | get { Name, Accessed }")]
+[CommandNote("Filesystem metadata stays typed in the pipeline, even when Tosh renders it like a shell table.")]
+[CommandOutput("Produces typed filesystem entries that the display layer renders as shell tables by default.")]
+[PipelineInput(Description = "Ls is still explicit-arg-first; path input is not yet consumed from the pipeline.")]
 public sealed class ListDirectoryCommand : ShellCommand
 {
     public ListDirectoryCommand()
