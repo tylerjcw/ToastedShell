@@ -30,6 +30,29 @@ Invokes an instance or static CLR method.
 call <method-name> [args...] or call <type-name> <method-name> [args...]
 \end{signature}
 
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+method-name & The method to invoke (or a type name for static calls). \\
+args & Arguments to pass to the method. (optional) \\
+\bottomrule
+\end{tabular}
+
+\textbf{Pipeline input:} scalar, record
+ --- Uses the piped object as the instance for method invocation.
+
+\textbf{Output:} The return value of the invoked method.
+
+\begin{lstlisting}
+"hello" | call ToUpper  # Call an instance method on a piped string
+call System.Math Sqrt 144  # Call a static method
+\end{lstlisting}
+
+\begin{notebox}
+Prefer the fluent `\$obj.Method()` expression syntax for instance calls and `TypeName.Method()` for static calls. The `call` command form is a legacy fallback.
+\end{notebox}
+
 \end{cmdbox}
 
 \subsection{\texttt{call-method}}
@@ -61,9 +84,23 @@ Casts pipeline values to a CLR type, including constructed generic collection ty
 cast <type> [value ...]
 \end{signature}
 
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+type & The target CLR type to cast to, including generic types like list<int>. \\
+value & Optional value(s) to cast. If omitted, reads from the pipeline. (optional) \\
+\bottomrule
+\end{tabular}
+
+\textbf{Pipeline input:} scalar, list
+ --- Casts each piped value to the target type.
+
+\textbf{Output:} The cast values in the target type.
+
 \begin{lstlisting}
-echo [1, 2, 3] | cast list<int>
-echo 42 | cast string
+echo [1, 2, 3] | cast list<int>  # Cast an array to a typed list
+echo 42 | cast string  # Cast a number to a string
 \end{lstlisting}
 
 \begin{notebox}
@@ -124,10 +161,28 @@ Removes a property from a dynamic record.
 del-prop [object] <name>
 \end{signature}
 
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+object & The target dynamic record. If omitted, reads from the pipeline. (optional) \\
+name & The property name to remove. \\
+\bottomrule
+\end{tabular}
+
+\textbf{Pipeline input:} scalar, record
+ --- Uses the piped object as the target when the object argument is omitted.
+
+\textbf{Output:} The modified record with the property removed.
+
 \begin{lstlisting}
-$obj | del-prop Name
-del-prop $obj Name
+$obj | del-prop Name  # Remove a property from a piped record
+del-prop $obj Name  # Remove by passing the object directly
 \end{lstlisting}
+
+\begin{notebox}
+Only works on dictionary-backed dynamic records. CLR properties cannot be removed.
+\end{notebox}
 
 \end{cmdbox}
 
@@ -141,6 +196,25 @@ Describes CLR types, ToSh named types, or shell collection types.
 \begin{signature}
 describe-type [type ...]
 \end{signature}
+
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+type & One or more type names or piped objects to describe. (optional) \\
+\bottomrule
+\end{tabular}
+
+\textbf{Pipeline input:} scalar, record
+ --- Describes the type of each piped object.
+
+\textbf{Output:} Type projection objects with hierarchy, interfaces, properties, methods, and constructors.
+
+\begin{lstlisting}
+describe-type string  # Describe the String type
+describe-type list dict table  # Describe multiple shell types
+42 | describe-type  # Describe the type of a piped value
+\end{lstlisting}
 
 \end{cmdbox}
 
@@ -173,9 +247,23 @@ Gets a property value by dynamic name.
 get-prop [object] <name>
 \end{signature}
 
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+object & The target object. If omitted, reads from the pipeline. (optional) \\
+name & The property name to retrieve. \\
+\bottomrule
+\end{tabular}
+
+\textbf{Pipeline input:} scalar, record
+ --- Uses the piped object as the target when the object argument is omitted.
+
+\textbf{Output:} The value of the named property.
+
 \begin{lstlisting}
-$obj | get-prop $propName
-get-prop $obj Name
+$obj | get-prop $propName  # Get a dynamically-named property from a piped object
+get-prop $obj Name  # Get a property by passing the object as an argument
 \end{lstlisting}
 
 \end{cmdbox}
@@ -227,9 +315,23 @@ Checks whether an object has the named property.
 has-prop [object] <name>
 \end{signature}
 
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+object & The target object. If omitted, reads from the pipeline. (optional) \\
+name & The property name to check. \\
+\bottomrule
+\end{tabular}
+
+\textbf{Pipeline input:} scalar, record
+ --- Uses the piped object as the target when the object argument is omitted.
+
+\textbf{Output:} A boolean: true if the property exists, false otherwise.
+
 \begin{lstlisting}
-$obj | has-prop Name
-has-prop $obj Name
+$obj | has-prop Name  # Check if a piped object has a property
+has-prop $obj Name  # Check by passing the object directly
 \end{lstlisting}
 
 \end{cmdbox}
@@ -245,6 +347,21 @@ Loads a .NET assembly from disk into the current process.
 load-assembly <path> [path...]
 \end{signature}
 
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+path & One or more file paths to .NET assemblies to load. \\
+\bottomrule
+\end{tabular}
+
+\textbf{Output:} Assembly objects for each loaded assembly.
+
+\begin{lstlisting}
+load-assembly ./MyPlugin.dll  # Load a plugin assembly
+load-assembly Newtonsoft.Json.dll System.Data.dll  # Load multiple assemblies
+\end{lstlisting}
+
 \end{cmdbox}
 
 \subsection{\texttt{members}}
@@ -258,9 +375,22 @@ Lists public members for CLR types or pipeline objects.
 members [type ...]
 \end{signature}
 
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+type & One or more type names or piped objects to inspect. (optional) \\
+\bottomrule
+\end{tabular}
+
+\textbf{Pipeline input:} scalar, record
+ --- Inspects the type of each piped object.
+
+\textbf{Output:} Member descriptor objects with Name, MemberType, DeclaringType, and Signature properties.
+
 \begin{lstlisting}
-members string
-DateTime.Now | members
+members string  # List String members
+DateTime.Now | members  # List members of a piped object
 \end{lstlisting}
 
 \end{cmdbox}
@@ -275,6 +405,24 @@ Lists public methods for CLR types or pipeline objects.
 \begin{signature}
 methods [type ...]
 \end{signature}
+
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+type & One or more type names or piped objects to inspect. (optional) \\
+\bottomrule
+\end{tabular}
+
+\textbf{Pipeline input:} scalar, record
+ --- Lists public methods of each piped object's type.
+
+\textbf{Output:} Method descriptor objects with Name, ReturnType, Parameters, and Signature properties.
+
+\begin{lstlisting}
+methods string  # List String methods
+DateTime.Now | methods  # List methods of a piped object
+\end{lstlisting}
 
 \end{cmdbox}
 
@@ -332,10 +480,21 @@ Constructs a new CLR object, ToSh named type, or shell collection.
 new <type-name> [ctor-args...]
 \end{signature}
 
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+type-name & The CLR type name, ToSh named type, or shell collection type to construct. \\
+ctor-args & Arguments to pass to the constructor. (optional) \\
+\bottomrule
+\end{tabular}
+
+\textbf{Output:} The newly constructed object.
+
 \begin{lstlisting}
-var rng = new System.Random()
-var items = new list<String>("one", "two")
-new System.Text.StringBuilder("hello").Append(" world").ToString()
+var rng = new System.Random()  # Construct a Random instance
+var items = new list<String>("one", "two")  # Generic collection construction
+new System.Text.StringBuilder("hello").Append(" world").ToString()  # Method chaining on a new object
 \end{lstlisting}
 
 \begin{notebox}
@@ -370,9 +529,24 @@ Sets or adds a property on a dynamic record.
 set-prop [object] <name> <value>
 \end{signature}
 
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+object & The target object. If omitted, reads from the pipeline. (optional) \\
+name & The property name to set. \\
+value & The value to assign. \\
+\bottomrule
+\end{tabular}
+
+\textbf{Pipeline input:} scalar, record
+ --- Uses the piped object as the target when the object argument is omitted.
+
+\textbf{Output:} The modified object with the property set.
+
 \begin{lstlisting}
-$obj | set-prop Name "value"
-set-prop $obj Name "value"
+$obj | set-prop Name "value"  # Set a property on a piped object
+set-prop $obj Name "value"  # Set a property by passing the object directly
 \end{lstlisting}
 
 \end{cmdbox}
@@ -403,6 +577,25 @@ Returns the CLR type or ToSh class type for each input object.
 type-of [value...]
 \end{signature}
 
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+value & One or more values to inspect. If omitted, reads from the pipeline. (optional) \\
+\bottomrule
+\end{tabular}
+
+\textbf{Pipeline input:} scalar, record
+ --- Returns the type of each piped object.
+
+\textbf{Output:} The CLR Type or ToSh class descriptor for each input value.
+
+\begin{lstlisting}
+type-of 42  # Get the type of a number
+"hello" | type-of  # Get the type of a piped value
+ls | first | type-of  # Get the type of a file system entry
+\end{lstlisting}
+
 \end{cmdbox}
 
 \subsection{\texttt{types}}
@@ -416,10 +609,28 @@ Lists available CLR and ToSh shell types.
 types [-a] [filter]
 \end{signature}
 
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+filter & Optional name or pattern to filter types. (optional) \\
+\bottomrule
+\end{tabular}
+
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Flag / Option} & \textbf{Description} \\
+\midrule
+-a & Include all loaded assemblies, not just commonly used types. \\
+\bottomrule
+\end{tabular}
+
+\textbf{Output:} Type descriptor objects with Name, Namespace, and Assembly properties.
+
 \begin{lstlisting}
-types System.String
-types list
-types map | where _.Namespace == ToSh
+types System.String  # Search for String type
+types list  # Search for list-like types
+types map | where _.Namespace == ToSh  # Filter to ToSh namespace
 \end{lstlisting}
 
 \begin{notebox}
@@ -477,6 +688,8 @@ Parses structured text into objects.
 \begin{signature}
 from <format> [options] [text]
 \end{signature}
+
+\textbf{Output:} Parsed CLR objects from the text format.
 
 \begin{lstlisting}
 echo "{\"name\":\"toast\"}" | from json
@@ -538,6 +751,8 @@ Serializes objects into structured text.
 \begin{signature}
 to <format> [options]
 \end{signature}
+
+\textbf{Output:} Serialized text in the specified format.
 
 \begin{lstlisting}
 ls | to json
@@ -878,7 +1093,8 @@ These commands work with managed file handles returned by `open-file` or by `Fil
 Copies a file or directory.
 
 \begin{signature}
-cp [-r] [-f] [-n] [-p] [-u] <source> [source ...] <destination>
+cp [-r] [-f] [-n] [-p] [-u] [-s] [-l] [-H] [-P] <source> [source ...] \\
+\quad <destination>
 \end{signature}
 
 \begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
@@ -899,6 +1115,10 @@ destination & The target path. \textit{(path-like)} \\
 -n & Do not overwrite existing files. \\
 -p & Preserve file attributes such as timestamps. \\
 -u & Only copy when the source is newer than the destination. \\
+-s & Create symbolic links instead of copying files. \\
+-l & Create hard links instead of copying files. \\
+-H & Follow symbolic links on the command line (copy target, not link). \\
+-P & Never follow symbolic links (copy the link itself). This is the default. \\
 \bottomrule
 \end{tabular}
 
@@ -907,6 +1127,8 @@ destination & The target path. \textit{(path-like)} \\
 \begin{lstlisting}
 cp file.txt backup.txt
 cp -r src/ dst/  # Recursive directory copy
+cp -s file.txt link.txt  # Create a symbolic link
+cp -l file.txt hardlink.txt  # Create a hard link
 \end{lstlisting}
 
 \end{cmdbox}
@@ -1740,7 +1962,8 @@ pwd
 \textbf{Output:} Returns the current working directory as a DirectoryInfo object.
 
 \begin{lstlisting}
-pwd
+pwd  # Print the current working directory
+pwd | get .FullName  # Get the full path as a string
 \end{lstlisting}
 
 \end{cmdbox}
@@ -2421,6 +2644,23 @@ Composes two or more callables into a single callable that chains them left-to-r
 compose <callable1> <callable2> [callable ...]
 \end{signature}
 
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+callable1 & The first callable in the chain. \\
+callable2 & The second callable in the chain. \\
+callable & Additional callables to chain. (optional) \\
+\bottomrule
+\end{tabular}
+
+\textbf{Output:} A single callable that applies all given callables in left-to-right order.
+
+\begin{lstlisting}
+compose func(x) => ($x + 1) func(x) => ($x * 2)  # Compose increment and double
+$f = compose $parse $validate $transform; $f $input  # Build a processing pipeline
+\end{lstlisting}
+
 \end{cmdbox}
 
 \subsection{\texttt{converge}}
@@ -2433,6 +2673,21 @@ Applies a callable to the seed repeatedly until two consecutive results are equa
 \begin{signature}
 converge <seed> <callable|block>
 \end{signature}
+
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+seed & The initial value to start iterating from. \\
+callable|\allowbreak block & A function applied repeatedly until two consecutive results are equal. \\
+\bottomrule
+\end{tabular}
+
+\textbf{Output:} The first stable (fixed-point) value where consecutive applications produce equal results.
+
+\begin{lstlisting}
+converge 100 func(x) => ($x / 2 + 50 / $x)  # Newton's method for square root of 100
+\end{lstlisting}
 
 \end{cmdbox}
 
@@ -2511,6 +2766,26 @@ Generates an infinite sequence by repeatedly applying a callable to the previous
 iterate <seed> <callable|block>
 \end{signature}
 
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+seed & The initial value of the sequence. \\
+callable|\allowbreak block & A function applied to the previous value to produce the next. \\
+\bottomrule
+\end{tabular}
+
+\textbf{Output:} An infinite sequence: seed, f(seed), f(f(seed)), ...
+
+\begin{lstlisting}
+iterate 1 func(x) => ($x * 2) | first 10  # Powers of 2
+iterate 0 { _ + 1 } | take-until { _ > 5 }  # Counting sequence bounded by take-until
+\end{lstlisting}
+
+\begin{notebox}
+Produces an infinite sequence. Always pair with `first`, `take-until`, or `take-while` to bound the output.
+\end{notebox}
+
 \end{cmdbox}
 
 \subsection{\texttt{partial}}
@@ -2555,6 +2830,22 @@ Generates values from a seed by repeatedly applying a callable. The callable rec
 \begin{signature}
 unfold <seed> <callable|block>
 \end{signature}
+
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+seed & The initial state passed to the callable. \\
+callable|\allowbreak block & A function that receives state and returns [value, next-state] or null to stop. \\
+\bottomrule
+\end{tabular}
+
+\textbf{Output:} A sequence of values produced by the callable until it returns null.
+
+\begin{lstlisting}
+unfold 1 func(n) => if ($n <= 5) { [$n ($n + 1)] } else { null }  # Generate 1 through 5
+unfold [0 1] func(s) => [($s[0]) [($s[1]) ($s[0] + $s[1])]]  # Fibonacci sequence
+\end{lstlisting}
 
 \end{cmdbox}
 
@@ -2645,37 +2936,54 @@ The native `http` builtin is object-first and backed by .NET HttpClient. Use `--
 Wraps the system ip utility, returning typed objects for supported JSON-backed subcommands.
 
 \begin{signature}
-ip [addr|\allowbreak address|\allowbreak a|\allowbreak link|\allowbreak l|\allowbreak route|\allowbreak r [filter ...]] | ip <other-subcommand \\
-\quad ...>
+ip \\
+\quad [addr|\allowbreak link|\allowbreak route|\allowbreak neigh|\allowbreak rule|\allowbreak netns|\allowbreak tunnel|\allowbreak tuntap|\allowbreak vrf|\allowbreak maddr|\allowbreak mroute|\allowbreak token|\allowbreak ntable] \\
+\quad [verb] [filter ...] | ip <other-subcommand ...>
 \end{signature}
 
 \begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
 \toprule
 \textbf{Argument} & \textbf{Description} \\
 \midrule
-addr|\allowbreak address|\allowbreak a [filter ...] & Returns typed network-interface objects by invoking `ip -j addr` under the hood. (optional) \\
-link|\allowbreak l [filter ...] & Returns typed network-interface link objects by invoking `ip -j link`. (optional) \\
-route|\allowbreak r [filter ...] & Returns typed route objects by invoking `ip -j route`. (optional) \\
-neigh|\allowbreak neighbour|\allowbreak n [filter ...] & Returns typed ARP/neighbor table objects by invoking `ip -j neigh`. (optional) \\
-rule|\allowbreak ru [filter ...] & Returns typed routing policy rule objects by invoking `ip -j rule`. (optional) \\
-<other-subcommand ...> & For now, unsupported subcommands fall back to the system `ip` utility unchanged. (optional) \\
+addr|\allowbreak address|\allowbreak a [show|\allowbreak add|\allowbreak del|\allowbreak flush] [filter ...] & Query or mutate network addresses. Queries return typed objects; mutations pass through to the system `ip`. (optional) \\
+link|\allowbreak l [show|\allowbreak set] [filter ...] & Query or mutate network links. Queries return typed objects; mutations (set up/down, etc.) pass through. (optional) \\
+route|\allowbreak r [show|\allowbreak add|\allowbreak del|\allowbreak change|\allowbreak replace] [filter ...] & Query or mutate routing table entries. Queries return typed objects; mutations pass through. (optional) \\
+neigh|\allowbreak neighbour|\allowbreak n [show|\allowbreak add|\allowbreak del|\allowbreak flush] [filter ...] & Query or mutate ARP/neighbor table. Queries return typed objects; mutations pass through. (optional) \\
+rule|\allowbreak ru [show|\allowbreak add|\allowbreak del] [filter ...] & Query or mutate routing policy rules. Queries return typed objects; mutations pass through. (optional) \\
+netns [list|\allowbreak add|\allowbreak del|\allowbreak exec ...] & Query or manage network namespaces. `list` returns typed objects; other operations pass through. (optional) \\
+tunnel|\allowbreak tun [show|\allowbreak add|\allowbreak del|\allowbreak change] [filter ...] & Query or mutate IP tunnels. Queries return typed objects; mutations pass through. (optional) \\
+tuntap|\allowbreak tap [show|\allowbreak add|\allowbreak del] [filter ...] & Query or mutate TUN/TAP devices. Queries return typed objects; mutations pass through. (optional) \\
+vrf [show|\allowbreak exec ...] [filter ...] & Query VRF devices or execute commands in a VRF context. `show` returns typed objects; `exec` passes through. (optional) \\
+maddr|\allowbreak maddress [show] [filter ...] & Query multicast addresses per interface. Returns typed objects. (optional) \\
+mroute|\allowbreak mr [show] [filter ...] & Query multicast routing table entries. Returns typed objects. (optional) \\
+token [list|\allowbreak set|\allowbreak del] [filter ...] & Query or mutate tokenized interface identifiers. `list` returns typed objects; mutations pass through. (optional) \\
+ntable [show|\allowbreak change] [filter ...] & Query or mutate the neighbor table parameters. `show` returns typed objects; mutations pass through. (optional) \\
+<other-subcommand ...> & Unsupported subcommands fall back to the system `ip` utility unchanged. (optional) \\
 \bottomrule
 \end{tabular}
 
 \textbf{Pipeline input:} none
  --- The structured `ip` builtin is explicit-arg-first and does not currently consume pipeline input.
 
-\textbf{Output:} For `ip addr` and `ip link`, returns typed interface objects with nested typed address objects where available. For `ip route`, returns typed route objects. For `ip neigh`, returns typed neighbor/ARP entries. For `ip rule`, returns typed routing policy rules. Other subcommands pass through to the system `ip` utility's normal text output.
+\textbf{Output:} Query subcommands return typed objects (interfaces, routes, neighbors, rules, namespaces). Mutation subcommands (add, del, set, etc.) pass through to the system `ip` utility and return its text output.
 
 \begin{lstlisting}
 ip addr  # List interfaces as structured objects
 ip link | where _.IsUp  # Filter active interfaces in the pipeline
 ip route | where _.IsDefault  # Show the default route as a typed object
 ip addr | each { _.Addresses } | flatten | get Address  # Project nested typed IP addresses
+ip addr add 192.168.1.100/24 dev eth0  # Add an IP address to an interface
+ip link set eth0 up  # Bring an interface up
+ip route del default  # Delete the default route
+ip netns  # List network namespaces as structured objects
+ip tunnel  # List IP tunnels as structured objects
+ip tuntap  # List TUN/TAP devices as structured objects
+ip maddr  # List multicast addresses per interface
+ip ntable  # Show neighbor table parameters
 \end{lstlisting}
 
 \begin{notebox}
-ToSh wraps `ip addr`, `ip link`, `ip route`, `ip neigh`, and `ip rule` around the JSON-capable system utility so the result flows through the pipeline as typed objects. Other subcommands still fall back to the external `ip` utility unchanged.
+ToSh wraps `ip addr`, `ip link`, `ip route`, `ip neigh`, `ip rule`, `ip netns`, `ip tunnel`, `ip tuntap`, `ip vrf`, `ip maddr`, `ip mroute`, `ip token`, and `ip ntable` around the JSON-capable system utility so queries flow through the pipeline as typed objects. Mutation verbs (add, del, set, change, replace, flush) pass through to the system `ip` utility directly. Other subcommands fall back to the external `ip` utility unchanged.
 \end{notebox}
 
 \end{cmdbox}
@@ -2772,6 +3080,24 @@ Averages numeric, storage size, or timespan values.
 avg [member-path]
 \end{signature}
 
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+member-path & Optional member path to extract numeric values from each object. (optional) \\
+\bottomrule
+\end{tabular}
+
+\textbf{Pipeline input:} scalar, record
+ --- Consumes the pipeline and returns the arithmetic mean.
+
+\textbf{Output:} The arithmetic mean of the pipeline values. Supports numeric, StorageSize, and TimeSpan types.
+
+\begin{lstlisting}
+echo 10 20 30 | average  # Average a list of numbers
+ls | average .Length  # Average file sizes
+\end{lstlisting}
+
 \end{cmdbox}
 
 \subsection{\texttt{chunk}}
@@ -2784,6 +3110,24 @@ Groups pipeline items into fixed-size batches.
 \begin{signature}
 chunk <size>
 \end{signature}
+
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+size & The number of items per chunk. \\
+\bottomrule
+\end{tabular}
+
+\textbf{Pipeline input:} scalar, record
+ --- Collects pipeline items into fixed-size batches.
+
+\textbf{Output:} Arrays of up to `size` items. The last chunk may be smaller.
+
+\begin{lstlisting}
+echo 1 2 3 4 5 | chunk 2  # Group into pairs
+1..10 | chunk 3 | map { count }  # Chunk then count each group
+\end{lstlisting}
 
 \end{cmdbox}
 
@@ -2822,6 +3166,16 @@ Counts the number of objects in the current pipeline.
 count
 \end{signature}
 
+\textbf{Pipeline input:} scalar, record
+ --- Consumes the entire pipeline and returns the count.
+
+\textbf{Output:} An integer representing the total number of pipeline objects.
+
+\begin{lstlisting}
+echo a b c | count  # Count items in a pipeline
+ls | count  # Count files in the current directory
+\end{lstlisting}
+
 \end{cmdbox}
 
 \subsection{\texttt{distinct}}
@@ -2834,6 +3188,24 @@ Removes duplicate pipeline values.
 \begin{signature}
 distinct [member-path]
 \end{signature}
+
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+member-path & Optional member path to extract the comparison key from each object. (optional) \\
+\bottomrule
+\end{tabular}
+
+\textbf{Pipeline input:} scalar, record
+ --- Yields each pipeline object only the first time its value (or keyed value) is seen.
+
+\textbf{Output:} Pipeline items with duplicate values removed. Order is preserved.
+
+\begin{lstlisting}
+echo 1 2 2 3 1 | distinct  # Remove duplicate values
+ls | distinct .Extension  # Distinct by a member path
+\end{lstlisting}
 
 \end{cmdbox}
 
@@ -2864,8 +3236,8 @@ callable|\allowbreak block & A lambda or block executed once per input item. \\
 \textbf{Output:} Returns whatever values the callable or block emits for each input item.
 
 \begin{lstlisting}
-echo one two | each { _.ToUpper() }
-DriveInfo.GetDrives() | each func(d) => ($d.Name)
+echo one two | each { _.ToUpper() }  # Transform each item to uppercase
+DriveInfo.GetDrives() | each func(d) => ($d.Name)  # Extract drive names
 \end{lstlisting}
 
 \begin{notebox}
@@ -2929,6 +3301,24 @@ Returns the first object or first N objects from the pipeline.
 first [count]
 \end{signature}
 
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+count & The number of objects to return. Defaults to 1. (optional) \\
+\bottomrule
+\end{tabular}
+
+\textbf{Pipeline input:} scalar, record
+ --- Yields the first N items then stops consuming.
+
+\textbf{Output:} The first N pipeline objects.
+
+\begin{lstlisting}
+echo 1 2 3 | first  # Get the first item
+ls | first 5  # Get the first five items
+\end{lstlisting}
+
 \end{cmdbox}
 
 \subsection{\texttt{flat-map}}
@@ -2942,6 +3332,24 @@ Transforms each pipeline value with a callable or block then flattens the result
 flat-map <callable|block>
 \end{signature}
 
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+callable|\allowbreak block & A transform that returns a sequence for each input item. \\
+\bottomrule
+\end{tabular}
+
+\textbf{Pipeline input:} scalar, record
+ --- Transforms each item and flattens the resulting sequences into one stream.
+
+\textbf{Output:} The flattened results of applying the transform to each pipeline item.
+
+\begin{lstlisting}
+echo 1 2 3 | flat-map { [_ (_ * 10)] }  # Expand each item into two
+ls | flat-map { ls $_.FullName }  # List contents of each subdirectory
+\end{lstlisting}
+
 \end{cmdbox}
 
 \subsection{\texttt{flatten}}
@@ -2954,6 +3362,16 @@ Explicitly expands enumerable pipeline values by one level.
 \begin{signature}
 flatten
 \end{signature}
+
+\textbf{Pipeline input:} scalar, list
+ --- Expands each enumerable in the pipeline by one level.
+
+\textbf{Output:} Individual items from each expanded enumerable in the pipeline.
+
+\begin{lstlisting}
+echo [1 2] [3 4] | flatten  # Flatten nested arrays
+ls /tmp /var | flatten  # Flatten directory listings into one stream
+\end{lstlisting}
 
 \end{cmdbox}
 
@@ -3018,6 +3436,24 @@ Groups consecutive items while the predicate holds.
 group-while <callable|block>
 \end{signature}
 
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+callable|\allowbreak block & A predicate that receives each item. A new group starts when it returns false. \\
+\bottomrule
+\end{tabular}
+
+\textbf{Pipeline input:} scalar, record
+ --- Groups consecutive pipeline items while the predicate returns true.
+
+\textbf{Output:} Arrays of consecutive items grouped while the predicate holds.
+
+\begin{lstlisting}
+echo 1 1 2 2 3 | group-while { _ == $prev }  # Group equal consecutive values
+echo 1 2 3 10 11 12 | group-while func(x, prev) => ($x - $prev <= 1)  # Group runs of nearly consecutive numbers
+\end{lstlisting}
+
 \end{cmdbox}
 
 \subsection{\texttt{ignore}}
@@ -3044,10 +3480,24 @@ Inspects piped CLR objects inline, or returns legacy flat output with --flat.
 inspect [-a] [--flat]
 \end{signature}
 
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Flag / Option} & \textbf{Description} \\
+\midrule
+-a & Include non-public and static members in the inspection. \\
+--flat & Use flat text output instead of the interactive tree browser. \\
+\bottomrule
+\end{tabular}
+
+\textbf{Pipeline input:} scalar, record
+ --- Inspects each piped object.
+
+\textbf{Output:} An interactive tree view or flat member-value records depending on mode.
+
 \begin{lstlisting}
-ls -la | first | inspect
-new System.Random() | inspect -a
-new System.Random() | inspect --flat
+ls -la | first | inspect  # Inspect a file entry interactively
+new System.Random() | inspect -a  # Inspect all members including private
+new System.Random() | inspect --flat  # Flat output for scripting
 \end{lstlisting}
 
 \begin{notebox}
@@ -3067,6 +3517,23 @@ Alternates items from the pipeline with items from another sequence.
 interleave <other-sequence>
 \end{signature}
 
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+other-sequence & An array or list to alternate with the pipeline items. \\
+\bottomrule
+\end{tabular}
+
+\textbf{Pipeline input:} scalar, record
+ --- Alternates items from the pipeline with the other sequence.
+
+\textbf{Output:} Items from the pipeline and the other sequence in alternating order.
+
+\begin{lstlisting}
+echo 1 2 3 | interleave [a b c]  # Alternate numbers and letters
+\end{lstlisting}
+
 \end{cmdbox}
 
 \subsection{\texttt{last}}
@@ -3079,6 +3546,24 @@ Returns the last object or last N objects from the pipeline.
 \begin{signature}
 last [count]
 \end{signature}
+
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+count & The number of objects to return from the end. Defaults to 1. (optional) \\
+\bottomrule
+\end{tabular}
+
+\textbf{Pipeline input:} scalar, record
+ --- Buffers the pipeline and returns the final N items.
+
+\textbf{Output:} The last N pipeline objects.
+
+\begin{lstlisting}
+echo 1 2 3 | last  # Get the last item
+ls | last 3  # Get the last three items
+\end{lstlisting}
 
 \end{cmdbox}
 
@@ -3124,6 +3609,24 @@ Returns the maximum pipeline value.
 max [member-path]
 \end{signature}
 
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+member-path & Optional member path to extract the comparison value from each object. (optional) \\
+\bottomrule
+\end{tabular}
+
+\textbf{Pipeline input:} scalar, record
+ --- Consumes the pipeline and returns the maximum value.
+
+\textbf{Output:} The maximum value from the pipeline.
+
+\begin{lstlisting}
+echo 3 1 4 1 5 | max  # Find the maximum value
+ls | max .Length  # Find the largest file by size
+\end{lstlisting}
+
 \end{cmdbox}
 
 \subsection{\texttt{min}}
@@ -3136,6 +3639,24 @@ Returns the minimum pipeline value.
 \begin{signature}
 min [member-path]
 \end{signature}
+
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+member-path & Optional member path to extract the comparison value from each object. (optional) \\
+\bottomrule
+\end{tabular}
+
+\textbf{Pipeline input:} scalar, record
+ --- Consumes the pipeline and returns the minimum value.
+
+\textbf{Output:} The minimum value from the pipeline.
+
+\begin{lstlisting}
+echo 3 1 4 1 5 | min  # Find the minimum value
+ls | min .Length  # Find the smallest file by size
+\end{lstlisting}
 
 \end{cmdbox}
 
@@ -3180,6 +3701,24 @@ Splits pipeline values into two lists based on a predicate: [matches, non-matche
 \begin{signature}
 partition <callable|block>
 \end{signature}
+
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+callable|\allowbreak block & A predicate that returns true or false for each item. \\
+\bottomrule
+\end{tabular}
+
+\textbf{Pipeline input:} scalar, record
+ --- Consumes the pipeline and splits items into two groups by predicate.
+
+\textbf{Output:} A two-element array: [items-where-true, items-where-false].
+
+\begin{lstlisting}
+echo 1 2 3 4 5 | partition { _ > 3 }  # Partition by a condition
+ls | partition { _.Extension == ".cs" }  # Separate C# files from others
+\end{lstlisting}
 
 \end{cmdbox}
 
@@ -3258,6 +3797,16 @@ Reverses the order of the current pipeline objects.
 reverse
 \end{signature}
 
+\textbf{Pipeline input:} scalar, record
+ --- Buffers the pipeline then yields items in reverse order.
+
+\textbf{Output:} All pipeline objects in reversed order.
+
+\begin{lstlisting}
+echo 1 2 3 | reverse  # Reverse a sequence
+ls | sort .Name | reverse  # Reverse a sorted listing
+\end{lstlisting}
+
 \end{cmdbox}
 
 \subsection{\texttt{scan}}
@@ -3270,6 +3819,25 @@ Like reduce but yields every intermediate accumulator value.
 \begin{signature}
 scan <seed> <callable|block>
 \end{signature}
+
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+seed & The initial accumulator value. \\
+callable|\allowbreak block & A function that takes (accumulator, current-item) and returns the new accumulator. \\
+\bottomrule
+\end{tabular}
+
+\textbf{Pipeline input:} scalar, record
+ --- Folds the pipeline from left to right, yielding each intermediate value.
+
+\textbf{Output:} Every intermediate accumulator value (one per input item).
+
+\begin{lstlisting}
+echo 1 2 3 4 | scan 0 func(acc, x) => ($acc + $x)  # Running total
+echo a b c | scan "" { $acc + _ }  # Running string concatenation
+\end{lstlisting}
 
 \end{cmdbox}
 
@@ -3303,6 +3871,24 @@ Skips the first object or first N objects from the pipeline.
 skip [count]
 \end{signature}
 
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+count & The number of objects to skip. Defaults to 1. (optional) \\
+\bottomrule
+\end{tabular}
+
+\textbf{Pipeline input:} scalar, record
+ --- Consumes and discards the first N items, then yields the rest.
+
+\textbf{Output:} The remaining pipeline objects after skipping the first N.
+
+\begin{lstlisting}
+echo 1 2 3 4 5 | skip 2  # Skip the first two items
+echo a b c | skip  # Skip the first item
+\end{lstlisting}
+
 \end{cmdbox}
 
 \subsection{\texttt{skip-until}}
@@ -3315,6 +3901,23 @@ Skips input values until the predicate becomes true.
 \begin{signature}
 skip-until <predicate-expression|callable>
 \end{signature}
+
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+predicate & A callable or block evaluated for each item. Starts yielding when it returns true. \\
+\bottomrule
+\end{tabular}
+
+\textbf{Pipeline input:} scalar, record
+ --- Discards items until the predicate returns true, then yields the rest.
+
+\textbf{Output:} Pipeline items starting from the first that satisfies the predicate.
+
+\begin{lstlisting}
+echo 1 2 3 4 5 | skip-until { _ >= 3 }  # Skip until a condition is met
+\end{lstlisting}
 
 \end{cmdbox}
 
@@ -3393,6 +3996,24 @@ Sums numeric, storage size, or timespan values.
 sum [member-path]
 \end{signature}
 
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+member-path & Optional member path to extract numeric values from each object. (optional) \\
+\bottomrule
+\end{tabular}
+
+\textbf{Pipeline input:} scalar, record
+ --- Consumes the pipeline and returns the total.
+
+\textbf{Output:} The sum of the pipeline values. Supports numeric, StorageSize, and TimeSpan types.
+
+\begin{lstlisting}
+echo 1 2 3 4 | sum  # Sum a list of numbers
+ls | sum .Length  # Total file sizes
+\end{lstlisting}
+
 \end{cmdbox}
 
 \subsection{\texttt{summary}}
@@ -3454,6 +4075,24 @@ Yields input values until the predicate becomes true.
 take-until <predicate-expression|callable>
 \end{signature}
 
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+predicate & A callable or block evaluated for each item. Stops when it returns true. \\
+\bottomrule
+\end{tabular}
+
+\textbf{Pipeline input:} scalar, record
+ --- Yields items until the predicate returns true.
+
+\textbf{Output:} Pipeline items up to (but not including) the first that satisfies the predicate.
+
+\begin{lstlisting}
+echo 1 2 3 4 5 | take-until { _ >= 4 }  # Take until a condition is met
+1..100 | take-until func(x) => ($x > 10)  # Take until value exceeds 10
+\end{lstlisting}
+
 \end{cmdbox}
 
 \subsection{\texttt{take-while}}
@@ -3497,6 +4136,15 @@ Pivots rows into columns. Each input record's keys become column headers and val
 \begin{signature}
 transpose
 \end{signature}
+
+\textbf{Pipeline input:} record, table
+ --- Reads records from the pipeline and transposes them.
+
+\textbf{Output:} Pivoted records where original keys become headers and values become rows.
+
+\begin{lstlisting}
+echo @{a=1; b=2} @{a=3; b=4} | transpose  # Pivot rows into columns
+\end{lstlisting}
 
 \end{cmdbox}
 
@@ -3546,6 +4194,25 @@ Yields sliding windows of a given size over the pipeline.
 window <size> [callable|block]
 \end{signature}
 
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+size & The number of items in each sliding window. \\
+callable|\allowbreak block & Optional transform applied to each window. (optional) \\
+\bottomrule
+\end{tabular}
+
+\textbf{Pipeline input:} scalar, record
+ --- Yields overlapping windows of the specified size as the pipeline flows.
+
+\textbf{Output:} Arrays (or transformed results) for each sliding window position.
+
+\begin{lstlisting}
+echo 1 2 3 4 5 | window 3  # Sliding windows of size 3
+1..10 | window 2 func(a, b) => ($a + $b)  # Pairwise sums
+\end{lstlisting}
+
 \end{cmdbox}
 
 \subsection{\texttt{xargs}}
@@ -3571,6 +4238,25 @@ Merges two sequences pairwise. The second sequence is the first argument (an arr
 \begin{signature}
 zip <other-sequence> [callable|block]
 \end{signature}
+
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+other-sequence & An array or list to merge pairwise with the pipeline. \\
+callable|\allowbreak block & Optional combiner. Receives each pair as arguments. Defaults to creating two-element arrays. (optional) \\
+\bottomrule
+\end{tabular}
+
+\textbf{Pipeline input:} scalar, record
+ --- Merges the pipeline with another sequence pairwise.
+
+\textbf{Output:} One result per pair. Without a combiner, yields two-element arrays.
+
+\begin{lstlisting}
+echo a b c | zip [1 2 3]  # Pair pipeline with an array
+echo 1 2 3 | zip [10 20 30] func(a, b) => ($a + $b)  # Zip with a combiner
+\end{lstlisting}
 
 \end{cmdbox}
 
@@ -4060,9 +4746,22 @@ Searches Tosh help topics with fuzzy matching.
 apropos <query>
 \end{signature}
 
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+query & The search term to match against help topics. \\
+\bottomrule
+\end{tabular}
+
+\textbf{Pipeline input:} scalar
+ --- Reads the query from the pipeline if not given as an argument.
+
+\textbf{Output:} Matching help topic summaries with relevance scores.
+
 \begin{lstlisting}
-apropos json
-apropos loop
+apropos json  # Search help for JSON-related topics
+apropos loop  # Search help for loop constructs
 \end{lstlisting}
 
 \begin{notebox}
@@ -4128,6 +4827,25 @@ events [list|names|handlers <event>|remove <event> <handler>|clear \\
 \quad <event>]
 \end{signature}
 
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+action & The action to perform: list, names, handlers, remove, or clear. (optional) \\
+event-name & The event name (for handlers, remove, clear). (optional) \\
+handler & The handler to remove (for remove action). (optional) \\
+\bottomrule
+\end{tabular}
+
+\textbf{Output:} Event descriptors, names, or handler objects depending on the action.
+
+\begin{lstlisting}
+events  # List all registered events
+events names  # List event names only
+events handlers OnPrompt  # List handlers for an event
+events clear OnPrompt  # Remove all handlers for an event
+\end{lstlisting}
+
 \end{cmdbox}
 
 \subsection{\texttt{exec}}
@@ -4141,10 +4859,29 @@ Replace the current ToSh process with an external command.
 exec [--] <command> [arg ...]
 \end{signature}
 
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+command & The external command to execute. \\
+arg & Arguments to pass to the command. (optional) \\
+\bottomrule
+\end{tabular}
+
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Flag / Option} & \textbf{Description} \\
+\midrule
+-- & Signals the end of options; everything after is treated as the command and arguments. \\
+\bottomrule
+\end{tabular}
+
+\textbf{Output:} No output — the current process is replaced.
+
 \begin{lstlisting}
-exec tosh
-exec zsh
-exec /bin/sh -c "echo hi"
+exec tosh  # Replace the current shell with a new tosh instance
+exec zsh  # Switch to zsh
+exec /bin/sh -c "echo hi"  # Exec a shell one-liner
 \end{lstlisting}
 
 \begin{notebox}
@@ -4160,9 +4897,25 @@ Exec replaces the current ToSh process with an external command. On Unix-like sy
 \begin{cmdbox}{exit}
 Requests the current Tosh session to exit.
 
+\textit{Aliases:} \code{logout}
+
 \begin{signature}
-exit
+exit [code]
 \end{signature}
+
+\textbf{Pipeline input:} none
+ --- Not applicable.
+
+\textbf{Output:} No output. The session terminates.
+
+\begin{lstlisting}
+exit  # Exit the current session
+exit 1  # Exit with a specific exit code
+\end{lstlisting}
+
+\begin{notebox}
+In a login shell, `exit` behaves like `logout`: it warns about running background jobs (use `exit` again to force), and sources \textasciitilde{}/.config/tosh/logout.tosh before terminating.
+\end{notebox}
 
 \end{cmdbox}
 
@@ -4317,6 +5070,84 @@ tui \\
 
 \end{cmdbox}
 
+\subsection{\texttt{ulimit}}
+\label{ref:ulimit}
+\icmd{ulimit}
+
+\begin{cmdbox}{ulimit}
+Display or set resource limits.
+
+\begin{signature}
+ulimit [-H] [-a] [resource [value]]
+\end{signature}
+
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+resource & The resource limit to query or set (e.g. 'nofile', 'nproc', 'stack', 'core', 'fsize'). (optional) \\
+value & The new soft limit value to set, or 'unlimited'. (optional) \\
+\bottomrule
+\end{tabular}
+
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Flag / Option} & \textbf{Description} \\
+\midrule
+-H & Show or set the hard limit instead of the soft limit. \\
+-a & Show all resource limits. \\
+\bottomrule
+\end{tabular}
+
+\textbf{Output:} A table of resource limits when no arguments given, or a single value when querying a specific resource.
+
+\begin{lstlisting}
+ulimit  # Show all resource limits
+ulimit -a  # Show all resource limits
+ulimit nofile  # Show the soft file descriptor limit
+ulimit nofile 4096  # Set the soft file descriptor limit to 4096
+ulimit -H nofile  # Show the hard file descriptor limit
+\end{lstlisting}
+
+\begin{notebox}
+Displays or sets POSIX resource limits (via getrlimit/setrlimit). Only available on Unix-like systems. Setting a hard limit requires root privileges. Use 'unlimited' to remove a soft limit (set to hard limit).
+\end{notebox}
+
+\end{cmdbox}
+
+\subsection{\texttt{umask}}
+\label{ref:umask}
+\icmd{umask}
+
+\begin{cmdbox}{umask}
+Display or set the file creation mask.
+
+\begin{signature}
+umask [mask]
+\end{signature}
+
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+mask & The octal file creation mask to set (e.g. 022, 077). (optional) \\
+\bottomrule
+\end{tabular}
+
+\textbf{Output:} The current umask as a zero-padded octal string (e.g. '0022'), or nothing when setting.
+
+\begin{lstlisting}
+umask  # Display the current umask
+umask 022  # Set umask to 022 (owner: all, group/other: no write)
+umask 077  # Set umask to 077 (owner: all, group/other: no access)
+\end{lstlisting}
+
+\begin{notebox}
+Controls the default permission bits removed from newly created files and directories. Without arguments, displays the current mask in octal. Only available on Unix-like systems.
+\end{notebox}
+
+\end{cmdbox}
+
 \subsection{\texttt{view}}
 \label{ref:view}
 \icmd{view}
@@ -4349,6 +5180,21 @@ Resolves built-in commands and external executables.
 \begin{signature}
 which <name ...>
 \end{signature}
+
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+name & One or more command names to resolve. \\
+\bottomrule
+\end{tabular}
+
+\textbf{Output:} Command resolution objects showing Kind (Builtin/External/Alias/Function), Name, and Path.
+
+\begin{lstlisting}
+which ls  # Find the ls command
+which git python node  # Resolve multiple commands
+\end{lstlisting}
 
 \end{cmdbox}
 
@@ -4432,8 +5278,26 @@ Env keeps its object-returning query mode, but it can also build a temporary env
 Exports a Tosh value to the process environment.
 
 \begin{signature}
-export <name> [value]
+export <name> = <value>
 \end{signature}
+
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+name & The environment variable name. \\
+= & Assignment operator. (optional) \\
+value & The value to assign. If omitted, exports the current Tosh variable of that name. (optional) \\
+\bottomrule
+\end{tabular}
+
+\textbf{Output:} No output. The environment variable is set in the current process.
+
+\begin{lstlisting}
+export PATH = "/usr/local/bin:$env.PATH"  # Prepend to PATH
+export MY_VAR = "hello"  # Set a new environment variable
+export MY_VAR  # Export an existing Tosh variable
+\end{lstlisting}
 
 \end{cmdbox}
 
@@ -4447,6 +5311,13 @@ Returns system memory and swap usage.
 \begin{signature}
 free
 \end{signature}
+
+\textbf{Output:} A record with TotalMemory, UsedMemory, FreeMemory, TotalSwap, UsedSwap, and FreeSwap as StorageSize values.
+
+\begin{lstlisting}
+free  # Show memory and swap usage
+free | get .UsedMemory  # Get the used memory value
+\end{lstlisting}
 
 \end{cmdbox}
 
@@ -4535,6 +5406,24 @@ Returns current user and group identity information.
 \begin{signature}
 id [-u|-g|-G] [-n]
 \end{signature}
+
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Flag / Option} & \textbf{Description} \\
+\midrule
+-u & Print only the effective user ID. \\
+-g & Print only the effective group ID. \\
+-G & Print all group IDs. \\
+-n & Print names instead of numeric IDs (with -u, -g, or -G). \\
+\bottomrule
+\end{tabular}
+
+\textbf{Output:} An identity record with Uid, Gid, User, Group, and Groups properties, or a single value with flags.
+
+\begin{lstlisting}
+id  # Show full identity information
+id -un  # Show the current username
+\end{lstlisting}
 
 \end{cmdbox}
 
@@ -4822,6 +5711,22 @@ Pauses execution for a duration.
 \begin{signature}
 sleep <duration> [duration...]
 \end{signature}
+
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+duration & A duration: integer (seconds), decimal, TimeSpan, quantity (e.g. 500`ms`), or string like '1s', '2m'. \\
+\bottomrule
+\end{tabular}
+
+\textbf{Output:} No output. Resumes after the specified duration.
+
+\begin{lstlisting}
+sleep 2  # Sleep for 2 seconds
+sleep 500`ms`  # Sleep for 500 milliseconds using a unit literal
+sleep 1 2 3  # Sleep for a total of 6 seconds
+\end{lstlisting}
 
 \end{cmdbox}
 
@@ -5216,6 +6121,24 @@ Renders pipeline objects into text using \{\{ member.path \}\} placeholders.
 template <text>
 \end{signature}
 
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+text & A template string with \{\{ member.path \}\} placeholders. \\
+\bottomrule
+\end{tabular}
+
+\textbf{Pipeline input:} scalar, record
+ --- Applies the template to each piped object.
+
+\textbf{Output:} Rendered text with placeholders replaced by each pipeline object's member values.
+
+\begin{lstlisting}
+ls | template "{{Name}} is {{Length}} bytes"  # Format file info
+echo @{name="World"} | template "Hello, {{name}}!"  # Simple template rendering
+\end{lstlisting}
+
 \end{cmdbox}
 
 \subsection{\texttt{tr}}
@@ -5229,6 +6152,34 @@ Translates or deletes characters in text.
 tr [-d] <set1> [set2] [path ...]
 \end{signature}
 
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+set1 & Characters to translate from (or delete with -d). \\
+set2 & Characters to translate to. Required unless -d is used. (optional) \\
+path & Optional file path(s) to read instead of pipeline input. (optional) \\
+\bottomrule
+\end{tabular}
+
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Flag / Option} & \textbf{Description} \\
+\midrule
+-d & Delete characters in set1 instead of translating. \\
+\bottomrule
+\end{tabular}
+
+\textbf{Pipeline input:} scalar
+ --- Reads text lines from the pipeline when no file paths are given.
+
+\textbf{Output:} Translated or filtered text lines.
+
+\begin{lstlisting}
+echo HELLO | tr A-Z a-z  # Convert to lowercase
+echo "hello world" | tr -d ' '  # Delete spaces
+\end{lstlisting}
+
 \end{cmdbox}
 
 \subsection{\texttt{uniq}}
@@ -5241,6 +6192,33 @@ Collapses adjacent duplicate input values.
 \begin{signature}
 uniq [-c] [-i] [path ...]
 \end{signature}
+
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+path & Optional file path(s) to read instead of pipeline input. (optional) \\
+\bottomrule
+\end{tabular}
+
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Flag / Option} & \textbf{Description} \\
+\midrule
+-c & Prefix each line with its count of consecutive occurrences. \\
+-i & Compare lines case-insensitively. \\
+\bottomrule
+\end{tabular}
+
+\textbf{Pipeline input:} scalar
+ --- Reads text lines from the pipeline or from file arguments.
+
+\textbf{Output:} Unique adjacent values, optionally prefixed with counts.
+
+\begin{lstlisting}
+echo a a b b b c | uniq  # Collapse adjacent duplicates
+echo a a b b b c | uniq -c  # Count consecutive occurrences
+\end{lstlisting}
 
 \end{cmdbox}
 

@@ -1,0 +1,94 @@
+#!/usr/bin/env tosh
+# dates_and_temporal.tosh
+# Demonstrates date arithmetic, timespans, temporal amounts, date-only/time-only
+# extraction, and temporal filtering in pipelines.
+
+# --- Date literals ---------------------------------------------------------
+# Bare ISO-style dates are parsed as DateTimeOffset values.
+
+echo "=== Date Literals ==="
+var birthday = 2026-03-25
+echo $"Date: {$birthday}"
+echo $"Type: {type-of $birthday | get Name}"
+
+# --- Date command ----------------------------------------------------------
+# Use `date now` for the current time, `date parse` or bare `date <value>`.
+
+echo "=== Date Commands ==="
+echo "Now:" (date now)
+echo "Parsed:" (date parse 2026-03-23T14:05:00Z)
+echo "Direct:" (date 2026-03-25T14:05:00Z)
+
+# --- Timespan literals -----------------------------------------------------
+# Compact duration syntax: 1d, 2h30m, 1w2d4h5m23s.
+
+echo "=== Timespan Literals ==="
+var short_span = 2d
+var long_span = 1w2d4h5m23s
+echo $"2 days:  {$short_span} ({type-of $short_span | get Name})"
+echo $"Complex: {$long_span} ({type-of $long_span | get Name})"
+
+# --- Temporal amounts (calendar durations) ---------------------------------
+# Durations with months/years use TemporalAmount (calendar-aware).
+
+echo "=== Temporal Amounts ==="
+var lease = 1y2mo
+echo $"Lease: {$lease} ({type-of $lease | get Name})"
+
+# --- Date arithmetic -------------------------------------------------------
+# Add/subtract timespans and temporal amounts from dates.
+
+echo "=== Date Arithmetic ==="
+var now = (date now)
+var yesterday = (($now) - 1d)
+var next_week = (($now) + 1w)
+echo $"Now:       {$now}"
+echo $"Yesterday: {$yesterday}"
+echo $"Next week: {$next_week}"
+
+# Calendar arithmetic handles month-end clamping
+var jan31 = (date 2026-01-31)
+var feb_end = (($jan31) + 1mo)
+echo $"Jan 31 + 1 month: {$feb_end.Month}/{$feb_end.Day}"
+
+# --- DateOnly and TimeOnly ------------------------------------------------
+# Extract date-only or time-only components via commands or casting.
+
+echo "=== DateOnly and TimeOnly ==="
+var dt = (date parse 2026-03-23T14:05:00Z)
+
+var dateOnly = ($dt | cast dateonly)
+var timeOnly = ($dt | cast timeonly)
+echo $"DateOnly: {$dateOnly} ({type-of $dateOnly | get Name})"
+echo $"TimeOnly: {$timeOnly} ({type-of $timeOnly | get Name})"
+
+# Command form
+echo "Date part:" (date date-only 2026-03-23T14:05:00Z)
+echo "Time part:" (date time-only 2026-03-23T14:05:00Z)
+
+# Projection form: -d and -t flags
+echo "Projected:"
+date parse 2026-03-23T14:05:00Z -d -t | each { echo $"  {_} ({type-of _ | get Name})" }
+
+# --- Temporal filtering in pipelines ---------------------------------------
+# Combine dates with where to filter by time.
+
+echo "=== Temporal Filtering ==="
+func recentFiles(age: TimeSpan) {
+    ls -la | where _.Type == file | where _.Modified > ((date now) - $age)
+}
+
+echo "Files modified in the last 7 days:"
+recentFiles 7d | get { Name, Modified, Size }
+
+echo "Files modified in the last hour:"
+recentFiles 1h | get { Name, Modified, Size }
+
+# --- IP address literals ---------------------------------------------------
+# Bare IP addresses are parsed as System.Net.IPAddress.
+
+echo "=== IP Literals ==="
+var loopback = 127.0.0.1
+var ipv6 = ::1
+echo $"IPv4: {$loopback} ({type-of $loopback | get Name})"
+echo $"IPv6: {$ipv6} ({type-of $ipv6 | get Name})"

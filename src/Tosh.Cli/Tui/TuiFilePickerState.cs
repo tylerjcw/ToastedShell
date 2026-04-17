@@ -24,6 +24,14 @@ internal sealed class TuiFilePickerState
 
     public bool IsOpen { get; private set; }
 
+    public TuiScrollState Scroll => _entries.Scroll;
+
+    public void MovePrevious() => _entries.MovePrevious();
+
+    public void MoveNext() => _entries.MoveNext();
+
+    public void SelectIndex(int index) => _entries.SelectIndex(index);
+
     public string CurrentDirectory { get; private set; } = string.Empty;
 
     public TuiFilePickerSelectionMode SelectionMode { get; private set; }

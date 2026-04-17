@@ -1,8 +1,13 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("CLR")]
-[CommandExample("$obj | set-prop Name \"value\"")]
-[CommandExample("set-prop $obj Name \"value\"")]
+[CommandArgument("object", "The target object. If omitted, reads from the pipeline.", Required = false)]
+[CommandArgument("name", "The property name to set.")]
+[CommandArgument("value", "The value to assign.")]
+[CommandExample("$obj | set-prop Name \"value\"", Title = "Set a property on a piped object")]
+[CommandExample("set-prop $obj Name \"value\"", Title = "Set a property by passing the object directly")]
+[CommandOutput("The modified object with the property set.")]
+[PipelineInput(AcceptsScalar = true, AcceptsRecord = true, Description = "Uses the piped object as the target when the object argument is omitted.")]
 public sealed class SetPropCommand : ShellCommand
 {
     public SetPropCommand()

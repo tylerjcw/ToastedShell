@@ -1,6 +1,12 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("CLR")]
+[CommandArgument("value", "One or more values to inspect. If omitted, reads from the pipeline.", Required = false)]
+[CommandExample("type-of 42", Title = "Get the type of a number")]
+[CommandExample("\"hello\" | type-of", Title = "Get the type of a piped value")]
+[CommandExample("ls | first | type-of", Title = "Get the type of a file system entry")]
+[CommandOutput("The CLR Type or ToSh class descriptor for each input value.")]
+[PipelineInput(AcceptsScalar = true, AcceptsRecord = true, Description = "Returns the type of each piped object.")]
 public sealed class TypeOfCommand : ShellCommand
 {
     public TypeOfCommand()

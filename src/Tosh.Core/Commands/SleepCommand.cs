@@ -1,6 +1,11 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("System")]
+[CommandArgument("duration", "A duration: integer (seconds), decimal, TimeSpan, quantity (e.g. 500`ms`), or string like '1s', '2m'.")]
+[CommandExample("sleep 2", Title = "Sleep for 2 seconds")]
+[CommandExample("sleep 500`ms`", Title = "Sleep for 500 milliseconds using a unit literal")]
+[CommandExample("sleep 1 2 3", Title = "Sleep for a total of 6 seconds")]
+[CommandOutput("No output. Resumes after the specified duration.")]
 public sealed class SleepCommand : ShellCommand
 {
     public SleepCommand()

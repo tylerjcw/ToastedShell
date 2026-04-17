@@ -8,6 +8,8 @@ internal static class ConsolePager
     private const string EnterAlternateScreen = "\u001b[?1049h";
     private const string ExitAlternateScreen = "\u001b[?1049l";
     private const string ClearScreenAndHome = "\u001b[2J\u001b[H";
+    private const string EnableSgrMouse = "\u001b[?1000h\u001b[?1006h";
+    private const string DisableSgrMouse = "\u001b[?1000l\u001b[?1006l";
 
     public static bool ShouldPage(string rendered, int? availableHeight, ToshPagingConfig config, bool isOutputRedirected)
     {
@@ -32,15 +34,33 @@ internal static class ConsolePager
         var state = new PagerState(lines, pageSize);
 
         Console.Write(EnterAlternateScreen);
+        Console.Write(EnableSgrMouse);
+
+        var inputReader = new Tui.TuiInputReader();
 
         try
         {
             while (true)
             {
                 Console.Write(RenderViewport(state, promptStyle, config.ReservedLines));
-                var key = Console.ReadKey(intercept: true);
+                var input = inputReader.Read();
 
-                if (!TryApplyKey(state, key))
+                if (input.IsMouse)
+                {
+                    var mouse = input.Mouse;
+
+                    if (mouse.Action == Tui.TuiMouseAction.Scroll)
+                    {
+                        if (mouse.Button == Tui.TuiMouseButton.ScrollUp)
+                            state.PreviousLine();
+                        else if (mouse.Button == Tui.TuiMouseButton.ScrollDown)
+                            state.NextLine();
+                    }
+
+                    continue;
+                }
+
+                if (!TryApplyKey(state, input.Key))
                 {
                     break;
                 }
@@ -48,6 +68,7 @@ internal static class ConsolePager
         }
         finally
         {
+            Console.Write(DisableSgrMouse);
             Console.Write(ExitAlternateScreen);
         }
 

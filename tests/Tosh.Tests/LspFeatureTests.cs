@@ -632,6 +632,40 @@ public sealed class LspFeatureTests
         Assert.Contains("member-path|callable|block", signature.Label, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void Signature_help_includes_options_in_label()
+    {
+        var (text, position) = ExtractCursor("ls ¦path");
+
+        var help = _features.GetSignatureHelp(text, "file:///sig-options.tosh", position);
+
+        Assert.NotNull(help);
+        var signature = Assert.Single(help!.Signatures);
+        Assert.Contains("[--sort <name|size|time>]", signature.Label, StringComparison.Ordinal);
+        Assert.Contains("[-a]", signature.Label, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Completion_suggests_option_values_after_flag()
+    {
+        var items = _features.GetCompletionItems("ls --sort ", new LspPosition(0, 10), "file:///comp-optval.tosh");
+
+        Assert.NotEmpty(items);
+        Assert.Contains(items, item => item.Label == "name");
+        Assert.Contains(items, item => item.Label == "size");
+        Assert.Contains(items, item => item.Label == "time");
+    }
+
+    [Fact]
+    public void Completion_suggests_option_values_with_partial_prefix()
+    {
+        var items = _features.GetCompletionItems("ls --sort t", new LspPosition(0, 11), "file:///comp-optval2.tosh");
+
+        Assert.NotEmpty(items);
+        Assert.Contains(items, item => item.Label == "time");
+        Assert.DoesNotContain(items, item => item.Label == "name");
+    }
+
     private static (string Text, LspPosition Position) ExtractCursor(string textWithCursor)
     {
         var cursorIndex = textWithCursor.IndexOf('¦');
@@ -678,5 +712,23 @@ public sealed class LspFeatureTests
         var assemblyPath = Path.Combine(Path.GetDirectoryName(FixtureProjectPath)!, "bin", "Debug", "net10.0", "Tosh.LspFixture.dll");
         Assert.True(File.Exists(assemblyPath), $"Expected the built fixture assembly to exist at '{assemblyPath}'.");
         return assemblyPath;
+    }
+
+    [Fact]
+    public void Path_completion_returns_entries_for_path_token()
+    {
+        var items = _features.GetCompletionItems("cd ./", new LspPosition(0, 5));
+
+        Assert.NotEmpty(items);
+        Assert.All(items, item => Assert.True(item.Kind is 17 or 19)); // File or Folder
+    }
+
+    [Fact]
+    public void Path_completion_returns_entries_after_path_first_command()
+    {
+        var items = _features.GetCompletionItems("ls ", new LspPosition(0, 3));
+
+        Assert.NotEmpty(items);
+        Assert.All(items, item => Assert.True(item.Kind is 17 or 19));
     }
 }

@@ -35,6 +35,9 @@ internal sealed class HelpBrowserScreen : ITuiScreen
     private string? _detailEntriesCacheKey;
     private IReadOnlyList<HelpDetailEntry>? _detailEntriesCache;
     private ClrBrowseIndex? _clrBrowseIndex;
+    private TuiRect _lastSearchRect;
+    private TuiRect _lastListRect;
+    private TuiRect _lastDetailRect;
 
     public HelpBrowserScreen(ToshRuntime runtime, HelpBrowseRequest request)
     {
@@ -87,6 +90,10 @@ internal sealed class HelpBrowserScreen : ITuiScreen
         var listWidth = Math.Clamp(width / 3, 24, 40);
         var (listRect, detailRect) = TuiSplitLayout.SplitColumns(contentRows, listWidth, 1);
 
+        _lastSearchRect = searchRect;
+        _lastListRect = listRect;
+        _lastDetailRect = detailRect;
+
         SyncSidebar(Math.Max(1, listRect.Height - 2));
         var detailEntries = BuildDetailEntries(Math.Max(1, detailRect.Width - 2));
         _detailScroll.SetDimensions(detailEntries.Count, Math.Max(1, detailRect.Height - 2));
@@ -96,6 +103,73 @@ internal sealed class HelpBrowserScreen : ITuiScreen
         builder.Append(RenderContentRows(listRect, detailRect, detailEntries));
         builder.Append(RenderFooter(footerRow.Width));
         return new TuiFrame(builder.ToString());
+    }
+
+    public TuiScreenResult HandleInput(TuiInputEvent input)
+    {
+        if (input.IsKey)
+            return HandleKey(input.Key);
+
+        var mouse = input.Mouse;
+
+        // Scroll wheel in detail pane
+        if (mouse.Action == TuiMouseAction.Scroll && mouse.HitsRect(_lastDetailRect))
+        {
+            if (mouse.Button == TuiMouseButton.ScrollUp)
+                _detailScroll.LineUp();
+            else if (mouse.Button == TuiMouseButton.ScrollDown)
+                _detailScroll.LineDown();
+
+            return TuiScreenResult.Continue;
+        }
+
+        // Scroll wheel in list pane
+        if (mouse.Action == TuiMouseAction.Scroll && mouse.HitsRect(_lastListRect))
+        {
+            if (mouse.Button == TuiMouseButton.ScrollUp)
+                MoveSidebarPrevious();
+            else if (mouse.Button == TuiMouseButton.ScrollDown)
+                MoveSidebarNext();
+
+            return TuiScreenResult.Continue;
+        }
+
+        // Click to switch focus between panes
+        if (mouse.Action == TuiMouseAction.Press && mouse.Button == TuiMouseButton.Left)
+        {
+            if (mouse.HitsRect(_lastSearchRect))
+            {
+                _focus = HelpBrowserFocus.Search;
+                return TuiScreenResult.Continue;
+            }
+
+            if (mouse.HitsRect(_lastListRect))
+            {
+                _focus = HelpBrowserFocus.List;
+
+                // Click on a specific list item
+                var listRow = mouse.Row - _lastListRect.Top - 1; // -1 for border
+                if (listRow >= 0)
+                {
+                    var range = _sidebar.Scroll.GetVisibleRange();
+
+                    if (listRow < range.Length)
+                    {
+                        _sidebar.SelectIndex(range.Start + listRow);
+                    }
+                }
+
+                return TuiScreenResult.Continue;
+            }
+
+            if (mouse.HitsRect(_lastDetailRect))
+            {
+                _focus = HelpBrowserFocus.Detail;
+                return TuiScreenResult.Continue;
+            }
+        }
+
+        return TuiScreenResult.Continue;
     }
 
     public TuiScreenResult HandleKey(ConsoleKeyInfo key)
@@ -379,7 +453,7 @@ internal sealed class HelpBrowserScreen : ITuiScreen
         {
             lines.Add(new(string.Empty, HelpDetailEntryKind.Blank));
             lines.Add(new("Pipeline Input", HelpDetailEntryKind.SectionHeading));
-            lines.Add(new($"  object: {FormatBoolean(topic.PipelineInput.Object)}  scalar: {FormatBoolean(topic.PipelineInput.Scalar)}  path-like: {FormatBoolean(topic.PipelineInput.PathLike)}  collection: {FormatBoolean(topic.PipelineInput.Collection)}", HelpDetailEntryKind.Meta));
+            lines.Add(new($"  object: {TuiRenderHelpers.FormatBoolean(topic.PipelineInput.Object)}  scalar: {TuiRenderHelpers.FormatBoolean(topic.PipelineInput.Scalar)}  path-like: {TuiRenderHelpers.FormatBoolean(topic.PipelineInput.PathLike)}  collection: {TuiRenderHelpers.FormatBoolean(topic.PipelineInput.Collection)}", HelpDetailEntryKind.Meta));
 
             if (!string.IsNullOrWhiteSpace(topic.PipelineInput.Notes))
             {
@@ -720,7 +794,7 @@ internal sealed class HelpBrowserScreen : ITuiScreen
             new($"Assemblies Contributing: {CountClrAssembliesForNamespace(namespaceName)}", HelpDetailEntryKind.Meta),
             new($"Direct Types: {types.Length}", HelpDetailEntryKind.Meta),
             new($"Subtree Types: {CountClrSubtreeTypes(namespaceName)}", HelpDetailEntryKind.Meta),
-            new($"Child Namespaces: {CountClrChildNamespaces(namespaceName)}  Descendants: {FormatBoolean(hasDescendants)}", HelpDetailEntryKind.Meta),
+            new($"Child Namespaces: {CountClrChildNamespaces(namespaceName)}  Descendants: {TuiRenderHelpers.FormatBoolean(hasDescendants)}", HelpDetailEntryKind.Meta),
             new(string.Empty, HelpDetailEntryKind.Blank),
         };
 
@@ -2334,7 +2408,7 @@ internal sealed class HelpBrowserScreen : ITuiScreen
         var visible = StyledText.GetVisibleLength(rendered);
         if (visible > width)
         {
-            return theme.Meta.Apply(TrimOrPadPlain(GetGroupTitle(_activeGroup), width)).ToAnsi();
+            return theme.Meta.Apply(TuiRenderHelpers.TrimOrPadPlain(GetGroupTitle(_activeGroup), width)).ToAnsi();
         }
 
         return rendered + new string(' ', width - visible);
@@ -2346,7 +2420,7 @@ internal sealed class HelpBrowserScreen : ITuiScreen
         var theme = _runtime.Config.Theme.Tui;
         var box = TuiBoxDrawing.GetBoxCharacters(theme.BoxStyle);
         var builder = new StringBuilder();
-        builder.Append(RenderTopBorder(width, "Help Browser", theme, box));
+        builder.Append(TuiRenderHelpers.RenderTopBorder(width, "Help Browser", theme, box));
 
         var innerWidth = Math.Max(1, width - 2);
         var groupLine = BuildGroupLine(innerWidth, theme);
@@ -2355,92 +2429,41 @@ internal sealed class HelpBrowserScreen : ITuiScreen
         builder.Append(theme.Border.Apply(box.Vertical.ToString()).ToAnsi());
         builder.AppendLine();
 
-        var labelText = $"{label}: ";
-        var queryWidth = Math.Max(0, innerWidth - labelText.Length);
-        var clippedQuery = ClipPlain(_query, queryWidth);
-        var labelStyled = theme.SearchLabel.Apply(labelText).ToAnsi();
-        var queryStyled = theme.SearchInput.Apply(clippedQuery).ToAnsi();
-        var visibleLength = StyledText.GetVisibleLength(labelStyled) + StyledText.GetVisibleLength(queryStyled);
-        var padding = new string(' ', Math.Max(0, innerWidth - visibleLength));
-
-        builder.Append(theme.Border.Apply(box.Vertical.ToString()).ToAnsi());
-        builder.Append(labelStyled);
-        builder.Append(queryStyled);
-        builder.Append(padding);
-        builder.Append(theme.Border.Apply(box.Vertical.ToString()).ToAnsi());
-        builder.AppendLine();
-        builder.Append(RenderBottomBorder(width, theme, box));
+        builder.AppendLine(TuiRenderHelpers.RenderSearchRow(label, _query, width, theme, box));
+        builder.Append(TuiRenderHelpers.RenderBottomBorder(width, theme, box));
         return builder.ToString();
     }
 
     private string RenderContentRows(TuiRect listRect, TuiRect detailRect, IReadOnlyList<HelpDetailEntry> detailEntries)
     {
-        var builder = new StringBuilder();
-        var listRange = _sidebar.Scroll.GetVisibleRange();
-        var detailRange = _detailScroll.GetVisibleRange();
         var theme = _runtime.Config.Theme.Tui;
         var box = TuiBoxDrawing.GetBoxCharacters(theme.BoxStyle);
-        var selectedTopicTitle = GetDetailTitle();
-
-        var listInnerWidth = Math.Max(1, listRect.Width - 2);
         var detailInnerWidth = Math.Max(1, detailRect.Width - 2);
-        var listContentRows = Math.Max(1, listRect.Height - 2);
-        var detailContentRows = Math.Max(1, detailRect.Height - 2);
 
-        builder.Append(RenderTopBorder(listRect.Width, GetGroupTitle(_activeGroup), theme, box));
-        builder.Append(' ');
-        builder.Append(RenderTopBorder(detailRect.Width, selectedTopicTitle, theme, box));
-        builder.AppendLine();
-
-        for (var row = 0; row < Math.Max(listContentRows, detailContentRows); row++)
-        {
-            string listLine;
-
-            if (row < listContentRows && row < listRange.Length)
+        return TuiRenderHelpers.RenderDualPaneContent(
+            listRect,
+            detailRect,
+            GetGroupTitle(_activeGroup),
+            GetDetailTitle(),
+            _sidebar.Scroll.GetVisibleRange(),
+            _detailScroll.GetVisibleRange(),
+            _sidebar.SelectedIndex,
+            (itemIndex, isSelected) => RenderSidebarLine(_sidebar.Items[itemIndex], isSelected, listRect.Width, theme, box),
+            entryIndex =>
             {
-                var itemIndex = listRange.Start + row;
-                var item = _sidebar.Items[itemIndex];
-                var isSelected = itemIndex == _sidebar.SelectedIndex;
-                listLine = RenderSidebarLine(item, isSelected, listRect.Width, theme, box);
-            }
-            else
-            {
-                listLine = RenderBoxContentLine(string.Empty, listRect.Width, theme.ListItem, theme, box);
-            }
-
-            string detailLine;
-
-            if (row < detailContentRows && row < detailRange.Length)
-            {
-                var entry = detailEntries[detailRange.Start + row];
-                var text = TrimOrPadPlain(entry.Text, detailInnerWidth);
-                detailLine = RenderBoxContentLine(text, detailRect.Width, GetDetailStyle(entry.Kind, theme), theme, box);
-            }
-            else
-            {
-                detailLine = RenderBoxContentLine(string.Empty, detailRect.Width, theme.DetailText, theme, box);
-            }
-
-            builder.Append(listLine);
-            builder.Append(' ');
-            builder.Append(detailLine);
-            builder.AppendLine();
-        }
-
-        builder.Append(RenderBottomBorder(listRect.Width, theme, box));
-        builder.Append(' ');
-        builder.Append(RenderBottomBorder(detailRect.Width, theme, box));
-        builder.AppendLine();
-
-        return builder.ToString();
+                var entry = detailEntries[entryIndex];
+                var text = TuiRenderHelpers.TrimOrPadPlain(entry.Text, detailInnerWidth);
+                return TuiRenderHelpers.RenderBoxContentLine(text, detailRect.Width, GetDetailStyle(entry.Kind, theme), theme, box);
+            },
+            theme,
+            box);
     }
 
     private string RenderFooter(int width)
     {
         var focus = _focus.ToString().ToLowerInvariant();
         var theme = _runtime.Config.Theme.Tui;
-        var text = TrimOrPadPlain($"focus:{focus}  F1-F4 groups  / search  Enter open/toggle  i insert  [ back  ] forward  Left up  1-9 related  q quit", width);
-        return theme.Footer.Apply(text).ToAnsi();
+        return TuiRenderHelpers.RenderFooterLine($"focus:{focus}  F1-F4 groups  / search  Enter open/toggle  i insert  [ back  ] forward  Left up  1-9 related  q quit", width, theme);
     }
 
     private bool TryInsertCurrentSelection()
@@ -2857,25 +2880,12 @@ internal sealed class HelpBrowserScreen : ITuiScreen
         ToshTuiThemeConfig theme,
         TuiBoxCharacters box)
     {
-        if (width <= 1)
-        {
-            return string.Empty;
-        }
-
-        var innerWidth = Math.Max(1, width - 2);
-        var gutterSegments = new List<(string Text, ToshTextStyleConfig Style)>
+        var gutterSegments = new (string Text, ToshTextStyleConfig Style)[]
         {
             (isSelected ? "› " : "  ", isSelected ? theme.SelectedGutter : theme.Meta),
         };
         var contentSegments = BuildSidebarContentSegments(item, isSelected, theme);
-        var renderedInner = RenderStyledSegments(gutterSegments.Concat(contentSegments), innerWidth);
-
-        return StyledText.RenderSegments(
-        [
-            theme.Border.Apply(box.Vertical.ToString()),
-            renderedInner,
-            theme.Border.Apply(box.Vertical.ToString()),
-        ]);
+        return TuiRenderHelpers.RenderStyledBoxLine(gutterSegments.Concat(contentSegments), width, theme, box);
     }
 
     private IEnumerable<(string Text, ToshTextStyleConfig Style)> BuildSidebarContentSegments(
@@ -2889,7 +2899,7 @@ internal sealed class HelpBrowserScreen : ITuiScreen
                 yield return (item.Label, theme.SectionHeading);
                 yield break;
             case HelpBrowserListEntryKind.Up:
-                yield return (item.Label, MergeListStyles(theme.Meta, theme.SelectedItem, isSelected, preserveForeground: true));
+                yield return (item.Label, TuiRenderHelpers.MergeListStyles(theme.Meta, theme.SelectedItem, isSelected, preserveForeground: true));
                 yield break;
             case HelpBrowserListEntryKind.ClrNamespace:
                 foreach (var segment in BuildClrNamespaceSegments(item, isSelected, theme))
@@ -2906,13 +2916,13 @@ internal sealed class HelpBrowserScreen : ITuiScreen
 
                 yield break;
             case HelpBrowserListEntryKind.ClrConstructor:
-                yield return (item.Label, MergeListStyles(theme.Constructor, theme.SelectedItem, isSelected, preserveForeground: true));
+                yield return (item.Label, TuiRenderHelpers.MergeListStyles(theme.Constructor, theme.SelectedItem, isSelected, preserveForeground: true));
                 yield break;
             case HelpBrowserListEntryKind.ClrMember:
-                yield return (item.Label, MergeListStyles(theme.Property, theme.SelectedItem, isSelected, preserveForeground: true));
+                yield return (item.Label, TuiRenderHelpers.MergeListStyles(theme.Property, theme.SelectedItem, isSelected, preserveForeground: true));
                 yield break;
             case HelpBrowserListEntryKind.ClrMethod:
-                yield return (item.Label, MergeListStyles(theme.Method, theme.SelectedItem, isSelected, preserveForeground: true));
+                yield return (item.Label, TuiRenderHelpers.MergeListStyles(theme.Method, theme.SelectedItem, isSelected, preserveForeground: true));
                 yield break;
             default:
                 yield return (item.Label, GetPlainListStyle(item, isSelected, theme));
@@ -2930,7 +2940,7 @@ internal sealed class HelpBrowserScreen : ITuiScreen
         var leafIndex = label.LastIndexOf(leafName, StringComparison.Ordinal);
         if (leafIndex < 0)
         {
-            yield return (label, MergeListStyles(theme.Namespace, theme.SelectedItem, isSelected, preserveForeground: true));
+            yield return (label, TuiRenderHelpers.MergeListStyles(theme.Namespace, theme.SelectedItem, isSelected, preserveForeground: true));
             yield break;
         }
 
@@ -2944,7 +2954,7 @@ internal sealed class HelpBrowserScreen : ITuiScreen
             yield return (prefix, theme.TreeGuide);
         }
 
-        yield return (name, MergeListStyles(theme.Namespace, theme.SelectedItem, isSelected, preserveForeground: true));
+        yield return (name, TuiRenderHelpers.MergeListStyles(theme.Namespace, theme.SelectedItem, isSelected, preserveForeground: true));
 
         if (suffix.Length > 0)
         {
@@ -2969,36 +2979,11 @@ internal sealed class HelpBrowserScreen : ITuiScreen
                 yield return (prefix, theme.TreeGuide);
             }
 
-            yield return (name, MergeListStyles(theme.Type, theme.SelectedItem, isSelected, preserveForeground: true));
+            yield return (name, TuiRenderHelpers.MergeListStyles(theme.Type, theme.SelectedItem, isSelected, preserveForeground: true));
             yield break;
         }
 
-        yield return (label, MergeListStyles(theme.Type, theme.SelectedItem, isSelected, preserveForeground: true));
-    }
-
-    private static string RenderStyledSegments(IEnumerable<(string Text, ToshTextStyleConfig Style)> segments, int width)
-    {
-        var builder = new StringBuilder();
-        var remaining = width;
-
-        foreach (var (text, style) in segments)
-        {
-            if (remaining <= 0)
-            {
-                break;
-            }
-
-            var clipped = text.Length <= remaining ? text : text[..remaining];
-            builder.Append(style.Apply(clipped).ToAnsi());
-            remaining -= clipped.Length;
-        }
-
-        if (remaining > 0)
-        {
-            builder.Append(' ', remaining);
-        }
-
-        return builder.ToString();
+        yield return (label, TuiRenderHelpers.MergeListStyles(theme.Type, theme.SelectedItem, isSelected, preserveForeground: true));
     }
 
     private static ToshTextStyleConfig GetPlainListStyle(HelpBrowserListEntry item, bool isSelected, ToshTuiThemeConfig theme)
@@ -3006,30 +2991,8 @@ internal sealed class HelpBrowserScreen : ITuiScreen
         var baseStyle = item.Kind is HelpBrowserListEntryKind.SectionHeader or HelpBrowserListEntryKind.Up
             ? theme.SectionHeading
             : theme.ListItem;
-        return MergeListStyles(baseStyle, theme.SelectedItem, isSelected, preserveForeground: false);
+        return TuiRenderHelpers.MergeListStyles(baseStyle, theme.SelectedItem, isSelected, preserveForeground: false);
     }
-
-    private static ToshTextStyleConfig MergeListStyles(
-        ToshTextStyleConfig baseStyle,
-        ToshTextStyleConfig selectedStyle,
-        bool isSelected,
-        bool preserveForeground)
-    {
-        if (!isSelected)
-        {
-            return baseStyle;
-        }
-
-        return new ToshTextStyleConfig(
-            foreground: preserveForeground ? baseStyle.Foreground : selectedStyle.Foreground ?? baseStyle.Foreground,
-            background: selectedStyle.Background ?? baseStyle.Background,
-            bold: baseStyle.Bold || selectedStyle.Bold,
-            italic: baseStyle.Italic || selectedStyle.Italic,
-            underline: baseStyle.Underline || selectedStyle.Underline,
-            dim: selectedStyle.Dim && baseStyle.Dim);
-    }
-
-    private static string FormatBoolean(bool value) => value ? "yes" : "no";
 
     private string? BuildConstructorInsertionText(string? signature)
     {
@@ -3087,59 +3050,6 @@ internal sealed class HelpBrowserScreen : ITuiScreen
         return methodName + "(";
     }
 
-    private static string RenderTopBorder(int width, string title, ToshTuiThemeConfig theme, TuiBoxCharacters box)
-    {
-        if (width <= 1)
-        {
-            return string.Empty;
-        }
-
-        var innerWidth = Math.Max(0, width - 2);
-        var clippedTitle = ClipPlain(title, Math.Max(0, innerWidth - 2));
-        var titleText = string.IsNullOrWhiteSpace(clippedTitle) ? string.Empty : $" {clippedTitle} ";
-        var fillWidth = Math.Max(0, innerWidth - titleText.Length);
-
-        return StyledText.RenderSegments(
-        [
-            theme.Border.Apply(box.TopLeft.ToString()),
-            theme.Title.Apply(titleText),
-            theme.Border.Apply(new string(box.Horizontal, fillWidth) + box.TopRight),
-        ]);
-    }
-
-    private static string RenderBottomBorder(int width, ToshTuiThemeConfig theme, TuiBoxCharacters box)
-    {
-        if (width <= 1)
-        {
-            return string.Empty;
-        }
-
-        return theme.Border.Apply($"{box.BottomLeft}{new string(box.Horizontal, Math.Max(0, width - 2))}{box.BottomRight}").ToAnsi();
-    }
-
-    private static string RenderBoxContentLine(
-        string plainText,
-        int width,
-        ToshTextStyleConfig contentStyle,
-        ToshTuiThemeConfig theme,
-        TuiBoxCharacters box)
-    {
-        if (width <= 1)
-        {
-            return string.Empty;
-        }
-
-        var innerWidth = Math.Max(1, width - 2);
-        var padded = TrimOrPadPlain(plainText, innerWidth);
-
-        return StyledText.RenderSegments(
-        [
-            theme.Border.Apply(box.Vertical.ToString()),
-            contentStyle.Apply(padded),
-            theme.Border.Apply(box.Vertical.ToString()),
-        ]);
-    }
-
     private static ToshTextStyleConfig GetDetailStyle(HelpDetailEntryKind kind, ToshTuiThemeConfig theme)
     {
         return kind switch
@@ -3149,32 +3059,6 @@ internal sealed class HelpBrowserScreen : ITuiScreen
             HelpDetailEntryKind.Meta => theme.Meta,
             _ => theme.DetailText,
         };
-    }
-
-    private static string TrimOrPadPlain(string text, int width)
-    {
-        if (width <= 0)
-        {
-            return string.Empty;
-        }
-
-        var clipped = ClipPlain(text, width);
-        return clipped.PadRight(Math.Max(0, width - clipped.Length) + clipped.Length);
-    }
-
-    private static string ClipPlain(string text, int width)
-    {
-        if (width <= 0)
-        {
-            return string.Empty;
-        }
-
-        if (text.Length > width)
-        {
-            return text[..Math.Max(0, width - 1)] + "…";
-        }
-
-        return text;
     }
 
     private enum HelpBrowserFocus

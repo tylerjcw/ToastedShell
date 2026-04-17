@@ -277,4 +277,153 @@ public sealed class ReplCompletionEngineTests
         Assert.Equal("Hello", barewordValue);
         Assert.Equal("\"Hello\"", ReplCompletionEngine.BuildInspectableSourceExpression("Hello", barewordValue));
     }
+
+    [Fact]
+    public void Completes_command_flags_when_typing_dash()
+    {
+        var runtime = ToshRuntime.CreateDefault();
+        var engine = new ReplCompletionEngine(runtime);
+
+        var result = engine.GetCompletions("ls -", "ls -".Length);
+
+        Assert.NotNull(result);
+        Assert.True(result!.Suggestions.Count > 0);
+        Assert.All(result.Suggestions, suggestion => Assert.StartsWith("-", suggestion.Label));
+        Assert.Contains(result.Suggestions, suggestion => suggestion.Label == "-l");
+        Assert.Contains(result.Suggestions, suggestion => suggestion.Label == "-a");
+    }
+
+    [Fact]
+    public void Completes_command_flags_with_partial_prefix()
+    {
+        var runtime = ToshRuntime.CreateDefault();
+        var engine = new ReplCompletionEngine(runtime);
+
+        var result = engine.GetCompletions("ls --so", "ls --so".Length);
+
+        Assert.NotNull(result);
+        Assert.Contains(result!.Suggestions, suggestion => suggestion.Label == "--sort <name|size|time>");
+    }
+
+    [Fact]
+    public void Completes_command_flags_after_pipe()
+    {
+        var runtime = ToshRuntime.CreateDefault();
+        var engine = new ReplCompletionEngine(runtime);
+
+        var result = engine.GetCompletions("cat file.txt | grep -", "cat file.txt | grep -".Length);
+
+        Assert.NotNull(result);
+        Assert.True(result!.Suggestions.Count > 0);
+        Assert.All(result.Suggestions, suggestion => Assert.StartsWith("-", suggestion.Label));
+    }
+
+    [Fact]
+    public void Signature_hint_returns_usage_for_known_command()
+    {
+        var runtime = ToshRuntime.CreateDefault();
+        var engine = new ReplCompletionEngine(runtime);
+
+        var hint = engine.GetSignatureHint("ls ", "ls ".Length);
+
+        Assert.NotNull(hint);
+        Assert.StartsWith("ls", hint!);
+        Assert.Contains("[-a]", hint);
+        Assert.Contains("[-l]", hint);
+    }
+
+    [Fact]
+    public void Signature_hint_returns_null_for_unknown_command()
+    {
+        var runtime = ToshRuntime.CreateDefault();
+        var engine = new ReplCompletionEngine(runtime);
+
+        var hint = engine.GetSignatureHint("nonexistent-command ", "nonexistent-command ".Length);
+
+        Assert.Null(hint);
+    }
+
+    [Fact]
+    public void Signature_hint_returns_null_at_command_position()
+    {
+        var runtime = ToshRuntime.CreateDefault();
+        var engine = new ReplCompletionEngine(runtime);
+
+        var hint = engine.GetSignatureHint("ls", "ls".Length);
+
+        // When typing the command name itself (no trailing space), there's no segment prefix with tokens
+        // so it should still detect "ls" as the command
+        Assert.NotNull(hint);
+    }
+
+    [Fact]
+    public void Completes_option_values_after_flag_with_choices()
+    {
+        var runtime = ToshRuntime.CreateDefault();
+        var engine = new ReplCompletionEngine(runtime);
+
+        var result = engine.GetCompletions("ls --sort ", "ls --sort ".Length);
+
+        Assert.NotNull(result);
+        Assert.Contains(result!.Suggestions, s => s.Label == "name");
+        Assert.Contains(result!.Suggestions, s => s.Label == "size");
+        Assert.Contains(result!.Suggestions, s => s.Label == "time");
+    }
+
+    [Fact]
+    public void Completes_option_values_with_partial_prefix()
+    {
+        var runtime = ToshRuntime.CreateDefault();
+        var engine = new ReplCompletionEngine(runtime);
+
+        var result = engine.GetCompletions("ls --sort n", "ls --sort n".Length);
+
+        Assert.NotNull(result);
+        Assert.Contains(result!.Suggestions, s => s.Label == "name");
+        Assert.DoesNotContain(result.Suggestions, s => s.Label == "size");
+    }
+
+    [Fact]
+    public void Does_not_complete_option_values_for_flag_without_choices()
+    {
+        var runtime = ToshRuntime.CreateDefault();
+        var engine = new ReplCompletionEngine(runtime);
+
+        // -a is a boolean flag with no value choices
+        var result = engine.GetCompletions("ls -a ", "ls -a ".Length);
+
+        // Should not be treated as option value completion (falls through to other completions)
+        if (result is not null)
+        {
+            Assert.DoesNotContain(result.Suggestions, s => s.Label == "name" || s.Label == "size" || s.Label == "time");
+        }
+    }
+
+    [Fact]
+    public void ParseOptionValueChoices_extracts_pipe_separated_values()
+    {
+        var choices = ReplCompletionEngine.ParseOptionValueChoices("--sort <name|size|time>");
+
+        Assert.NotNull(choices);
+        Assert.Equal(3, choices!.Count);
+        Assert.Equal("name", choices[0]);
+        Assert.Equal("size", choices[1]);
+        Assert.Equal("time", choices[2]);
+    }
+
+    [Fact]
+    public void ParseOptionValueChoices_returns_null_for_single_placeholder()
+    {
+        var choices = ReplCompletionEngine.ParseOptionValueChoices("-t <directory>");
+
+        Assert.Null(choices);
+    }
+
+    [Fact]
+    public void ParseOptionValueChoices_returns_null_for_boolean_flag()
+    {
+        var choices = ReplCompletionEngine.ParseOptionValueChoices("-a");
+
+        Assert.Null(choices);
+    }
 }

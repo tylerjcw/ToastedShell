@@ -1,16 +1,16 @@
 # Configuration
 
-ToSh configuration is runtime-backed and scriptable.
+TōSh configuration is runtime-backed and scriptable.
 
 That means:
 
 - there is a live `$tosh.Config` object in every session
 - the `config` command can inspect and mutate the same object
-- persistent startup customization lives in `config.tosh`, which is just normal ToSh code
+- persistent startup customization lives in `config.tosh`, which is just normal TōSh code
 
 ## Startup Order
 
-ToSh resolves its config home in this order:
+TōSh resolves its config home in this order:
 
 1. `TOSH_CONFIG_HOME`
 2. `XDG_CONFIG_HOME/tosh`
@@ -254,10 +254,10 @@ func gs => git status --short
 - `config` and `$tosh.Config` operate on the same live runtime object.
 - Relative startup paths inside `$tosh.Config.Startup` resolve from the active config root.
 - The default history file lives under the XDG state directory: `$XDG_STATE_HOME/tosh/history.jsonl` or `~/.local/state/tosh/history.jsonl`.
-- Relative history file paths inside `$tosh.Config.History.FilePath` resolve from ToSh's state root, not the startup config directory.
+- Relative history file paths inside `$tosh.Config.History.FilePath` resolve from TōSh's state root, not the startup config directory.
 - `config init` only creates missing files; it does not overwrite existing user config.
-- `config init` does not create the history file; ToSh creates it on demand when interactive history is persisted.
-- `config reload` is the easiest way to apply edits from `config.tosh`, `profile.tosh`, or autoload files without restarting ToSh.
+- `config init` does not create the history file; TōSh creates it on demand when interactive history is persisted.
+- `config reload` is the easiest way to apply edits from `config.tosh`, `profile.tosh`, or autoload files without restarting TōSh.
 - `config browse` is the best interactive editor for the live config tree. It auto-discovers config values, stages edits safely, previews prompt/theme changes live, and saves through the managed block in `config.tosh`.
 - Use `history path`, `history save`, `history reload`, and `history clear` to inspect or manage the persisted history file.
 - `$tosh.Config.History.Deduplication` accepts `None`, `Consecutive`, or `All`.

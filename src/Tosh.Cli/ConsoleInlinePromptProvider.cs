@@ -13,11 +13,14 @@ internal sealed partial class ConsoleInlinePromptProvider : IInlinePromptProvide
     private const string ClearLine = "\x1b[2K\r";
     private const string HideCursor = "\x1b[?25l";
     private const string ShowCursor = "\x1b[?25h";
+    private const string EnableSgrMouse = "\x1b[?1000h\x1b[?1006h";
+    private const string DisableSgrMouse = "\x1b[?1000l\x1b[?1006l";
     private const int SelectorColumnWidth = 1;
 
     private readonly ToshRuntime? _runtime;
     private readonly ObjectFormatter? _formatter;
     private readonly DisplayEngine? _display;
+    private readonly Tui.TuiInputReader _inputReader = new();
 
     [GeneratedRegex(@"\x1b\[[0-9;]*[a-zA-Z]")]
     private static partial Regex AnsiEscapePattern();
@@ -52,6 +55,7 @@ internal sealed partial class ConsoleInlinePromptProvider : IInlinePromptProvide
             : "↑/↓ navigate  enter select  esc cancel";
 
         Console.Write(HideCursor);
+        Console.Write(EnableSgrMouse);
 
         try
         {
@@ -135,7 +139,45 @@ internal sealed partial class ConsoleInlinePromptProvider : IInlinePromptProvide
                 Console.Write(ClearLine);
                 Console.Write(BuildBottomSpanBorder(layout));
 
-                var key = Console.ReadKey(intercept: true);
+                // Track absolute screen position of data rows for mouse click support.
+                // After writing the bottom border (no trailing newline), the cursor sits on the last row.
+                // Layout: 5 header lines + visibleCount data + 3 footer lines = totalLines.
+                // Data starts at bottomRow - visibleCount - 2 (colToSpan + help above bottom border).
+                var (_, bottomRow) = Console.GetCursorPosition();
+                var dataStartRow = bottomRow - visibleCount - 2;
+
+                var input = _inputReader.Read();
+
+                if (input.IsMouse)
+                {
+                    var mouse = input.Mouse;
+
+                    if (mouse.Action == Tui.TuiMouseAction.Scroll)
+                    {
+                        if (mouse.Button == Tui.TuiMouseButton.ScrollUp && cursor > 0)
+                            cursor--;
+                        else if (mouse.Button == Tui.TuiMouseButton.ScrollDown && cursor < items.Count - 1)
+                            cursor++;
+                    }
+                    else if (mouse.Action == Tui.TuiMouseAction.Press && mouse.Button == Tui.TuiMouseButton.Left)
+                    {
+                        var clickedRow = mouse.Row - dataStartRow;
+
+                        if (clickedRow >= 0 && clickedRow < visibleCount)
+                        {
+                            var clickedIndex = viewOffset + clickedRow;
+
+                            if (clickedIndex < items.Count)
+                            {
+                                cursor = clickedIndex;
+                            }
+                        }
+                    }
+
+                    continue;
+                }
+
+                var key = input.Key;
 
                 switch (key.Key)
                 {
@@ -166,6 +208,7 @@ internal sealed partial class ConsoleInlinePromptProvider : IInlinePromptProvide
                         break;
                     case ConsoleKey.Enter:
                         CleanupLines(totalLines);
+                        Console.Write(DisableSgrMouse);
                         Console.Write(ShowCursor);
 
                         if (multiSelect)
@@ -178,6 +221,7 @@ internal sealed partial class ConsoleInlinePromptProvider : IInlinePromptProvide
                         return [items[cursor]];
                     case ConsoleKey.Escape:
                         CleanupLines(totalLines);
+                        Console.Write(DisableSgrMouse);
                         Console.Write(ShowCursor);
                         return null;
                 }
@@ -185,6 +229,7 @@ internal sealed partial class ConsoleInlinePromptProvider : IInlinePromptProvide
         }
         catch
         {
+            Console.Write(DisableSgrMouse);
             Console.Write(ShowCursor);
             throw;
         }
@@ -220,7 +265,9 @@ internal sealed partial class ConsoleInlinePromptProvider : IInlinePromptProvide
 
         while (true)
         {
-            var key = Console.ReadKey(intercept: true);
+            var input = _inputReader.Read();
+            if (!input.IsKey) continue;
+            var key = input.Key;
             string answer;
             int answerLen;
             bool? result;
@@ -364,7 +411,14 @@ internal sealed partial class ConsoleInlinePromptProvider : IInlinePromptProvide
                 Console.Write($"\x1b[{cursorCol}G");
                 Console.Out.Flush();
 
-                var key = Console.ReadKey(intercept: true);
+                var input = _inputReader.Read();
+                if (!input.IsKey)
+                {
+                    Console.Write("\x1b[1B");
+                    continue;
+                }
+
+                var key = input.Key;
 
                 switch (key.Key)
                 {
@@ -470,6 +524,8 @@ internal sealed partial class ConsoleInlinePromptProvider : IInlinePromptProvide
         var totalLines = visibleCount + 8;
         var firstRender = true;
 
+        Console.Write(EnableSgrMouse);
+
         try
         {
             while (true)
@@ -574,7 +630,44 @@ internal sealed partial class ConsoleInlinePromptProvider : IInlinePromptProvide
                 Console.Write(ClearLine);
                 Console.Write(BuildBottomSpanBorder(layout));
 
-                var key = Console.ReadKey(intercept: true);
+                var input = _inputReader.Read();
+
+                if (input.Mouse is { } mouse)
+                {
+                    const int filterHeaderLines = 5;
+
+                    if (mouse.Action == Tui.TuiMouseAction.Scroll)
+                    {
+                        if (mouse.Button == Tui.TuiMouseButton.ScrollUp && cursor > 0)
+                            cursor--;
+                        else if (mouse.Button == Tui.TuiMouseButton.ScrollDown && cursor < filtered.Count - 1)
+                            cursor++;
+                    }
+                    else if (mouse.Action == Tui.TuiMouseAction.Press && mouse.Button == Tui.TuiMouseButton.Left)
+                    {
+                        var (_, bottomRow) = Console.GetCursorPosition();
+                        var listStartRow = bottomRow - totalLines + 1 + filterHeaderLines;
+                        var listRow = mouse.Row - listStartRow;
+                        if (listRow >= 0 && listRow < visibleCount)
+                        {
+                            var clickedIndex = viewOffset + listRow;
+                            if (clickedIndex < filtered.Count)
+                            {
+                                cursor = clickedIndex;
+                            }
+                        }
+
+                    }
+
+                    continue;
+                }
+
+                if (!input.IsKey)
+                {
+                    continue;
+                }
+
+                var key = input.Key;
 
                 switch (key.Key)
                 {
@@ -606,6 +699,7 @@ internal sealed partial class ConsoleInlinePromptProvider : IInlinePromptProvide
 
                         break;
                     case ConsoleKey.Enter:
+                        Console.Write(DisableSgrMouse);
                         CleanupLines(totalLines);
 
                         if (filtered.Count == 0)
@@ -622,6 +716,7 @@ internal sealed partial class ConsoleInlinePromptProvider : IInlinePromptProvide
 
                         return [items[filtered[cursor]]];
                     case ConsoleKey.Escape:
+                        Console.Write(DisableSgrMouse);
                         CleanupLines(totalLines);
                         return null;
                     default:
@@ -638,6 +733,7 @@ internal sealed partial class ConsoleInlinePromptProvider : IInlinePromptProvide
         }
         catch
         {
+            Console.Write(DisableSgrMouse);
             Console.Write(ShowCursor);
             throw;
         }
@@ -1034,13 +1130,15 @@ internal sealed partial class ConsoleInlinePromptProvider : IInlinePromptProvide
         MoveUp(totalLines);
     }
 
-    private static string? ReadPassword()
+    private string? ReadPassword()
     {
         var buffer = new StringBuilder();
 
         while (true)
         {
-            var key = Console.ReadKey(intercept: true);
+            var input = _inputReader.Read();
+            if (!input.IsKey) continue;
+            var key = input.Key;
 
             switch (key.Key)
             {

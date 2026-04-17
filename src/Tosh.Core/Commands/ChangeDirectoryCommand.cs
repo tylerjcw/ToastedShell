@@ -8,7 +8,7 @@ namespace Tosh.Core.Commands;
 [CommandExample("cd ..", Title = "Parent directory")]
 [CommandExample("cd -", Title = "Previous directory")]
 [CommandExample("cd", Title = "Home directory")]
-[CommandOutput("The FileSystemEntry for the new working directory.")]
+[CommandOutput("The FileSystemEntry for the new working directory.", TypeName = "FileSystemEntry", Members = "Name, FullName, Type")]
 public sealed class ChangeDirectoryCommand : ShellCommand
 {
     public ChangeDirectoryCommand()

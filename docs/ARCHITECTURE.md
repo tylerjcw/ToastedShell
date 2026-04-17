@@ -1,4 +1,4 @@
-# Tosh Architecture
+# TōSh Architecture
 
 ## Identity
 
@@ -17,9 +17,9 @@ In short:
 
 That identity should guide both syntax and architecture.
 
-## What Tosh Is
+## What TōSh Is
 
-Tosh should feel:
+TōSh should feel:
 
 - terse enough for interactive shell work
 - dynamic by default
@@ -28,7 +28,7 @@ Tosh should feel:
 - object-first in the pipeline
 - text-friendly at shell boundaries
 
-Tosh should not feel like:
+TōSh should not feel like:
 
 - C# script with pipes
 - PowerShell with renamed keywords
@@ -46,7 +46,7 @@ Pipeline stages may transport many values, but each value is a real `.NET` objec
 That means:
 
 - `DateTimeOffset`, `TimeSpan`, `UnixFileMode`, `DriveInfo`, `FileInfo`, `DirectoryInfo`, `ExpandoObject`, `List<T>`, and other existing CLR types should flow through the shell unchanged when they are the best fit.
-- Custom Tosh types should exist only when the CLR does not already model the domain well enough.
+- Custom TōSh types should exist only when the CLR does not already model the domain well enough.
 - Display should never redefine the underlying type.
 
 The internal transport can remain stream-based, for example `IAsyncEnumerable<object?>`, as long as the values themselves stay real objects.
@@ -80,17 +80,17 @@ Text matters a lot at shell boundaries:
 - networking
 - templates
 
-But once text is parsed or adapted, Tosh should prefer typed objects over stringly-typed data.
+But once text is parsed or adapted, TōSh should prefer typed objects over stringly-typed data.
 
 ### 4. Dynamic by Default, Typed by Choice
 
-Tosh should feel lightweight like Lua:
+TōSh should feel lightweight like Lua:
 
 - fast to type
 - forgiving in the REPL
 - dynamic unless the user wants type annotations
 
-Optional typing should improve clarity and tooling, not turn Tosh into C#.
+Optional typing should improve clarity and tooling, not turn TōSh into C#.
 
 ## Language Direction
 
@@ -185,9 +185,9 @@ That distinction keeps stream semantics and collection semantics both understand
 For clarity, we should eventually split:
 
 - `using` for CLR namespaces and aliases
-- `require` for Tosh files/modules
+- `require` for TōSh files/modules
 
-Even if Tosh temporarily supports file-based `using`, those are different concepts and will be easier to reason about if they diverge.
+Even if TōSh temporarily supports file-based `using`, those are different concepts and will be easier to reason about if they diverge.
 
 ## Runtime Value Model
 
@@ -204,9 +204,9 @@ Use the CLR type directly when it already models the domain well:
 - `ExpandoObject`
 - `List<T>`, `Dictionary<TKey, TValue>`, `IReadOnlyList<T>`
 
-### Use Tosh Types Only When Needed
+### Use TōSh Types Only When Needed
 
-Custom Tosh types are justified when the shell needs a stronger domain object than the CLR offers by default.
+Custom TōSh types are justified when the shell needs a stronger domain object than the CLR offers by default.
 
 Good examples:
 
@@ -215,7 +215,7 @@ Good examples:
 - diagnostics
 - shell-specific projection/record objects if ordering or schema metadata matters
 
-Custom Tosh types should remain easy to convert to native CLR types when there is a meaningful conversion path.
+Custom TōSh types should remain easy to convert to native CLR types when there is a meaningful conversion path.
 
 ## User-Created and Parsed Objects
 
@@ -237,16 +237,16 @@ Why it is a good fit:
 - it also behaves like a dictionary
 - it works naturally with reflection-friendly tooling
 
-### When Tosh Still Needs Its Own Record Type
+### When TōSh Still Needs Its Own Record Type
 
-If Tosh needs:
+If TōSh needs:
 
 - stable field ordering
 - schema metadata
 - provenance or projection metadata
 - better table/view behavior than `ExpandoObject` alone provides
 
-then a thin Tosh record type is still reasonable.
+then a thin TōSh record type is still reasonable.
 
 If we keep one, it should round-trip cleanly to and from:
 
@@ -277,11 +277,11 @@ That means the object still exists in the pipeline, but interactive display can 
 
 Today the project is split into:
 
-- `src/Tosh.Core`
-- `src/Tosh.Language`
-- `src/Tosh.Cli`
+- `src/TōSh.Core`
+- `src/TōSh.Language`
+- `src/TōSh.Cli`
 
-This is a fine starting point, but `Tosh.Core` is already carrying too many concerns:
+This is a fine starting point, but `TōSh.Core` is already carrying too many concerns:
 
 - runtime/session state
 - display/rendering
@@ -298,7 +298,7 @@ Before splitting more assemblies, we should organize the code by responsibility 
 Recommended near-term shape:
 
 ```text
-src/Tosh.Core/
+src/TōSh.Core/
   Runtime/
   Values/
   Diagnostics/
@@ -308,7 +308,7 @@ src/Tosh.Core/
   Commands/
   Help/
 
-src/Tosh.Language/
+src/TōSh.Language/
   Lexing/
   Parsing/
   Syntax/
@@ -317,7 +317,7 @@ src/Tosh.Language/
   Modules/
   Commands/
 
-src/Tosh.Cli/
+src/TōSh.Cli/
   Host/
   Repl/
   Editing/
@@ -331,13 +331,13 @@ src/Tosh.Cli/
 Once the architecture settles, the likely destination is:
 
 ```text
-src/Tosh.Runtime
-src/Tosh.Display
-src/Tosh.Interop.DotNet
-src/Tosh.Interop.Process
-src/Tosh.Builtins
-src/Tosh.Language
-src/Tosh.Cli
+src/TōSh.Runtime
+src/TōSh.Display
+src/TōSh.Interop.DotNet
+src/TōSh.Interop.Process
+src/TōSh.Builtins
+src/TōSh.Language
+src/TōSh.Cli
 ```
 
 That split keeps the responsibilities clean:
@@ -354,7 +354,7 @@ That split keeps the responsibilities clean:
 
 These local repos are valuable reference points:
 
-- Tosh: `/home/komrad/projects/tosh`
+- TōSh: `/home/komrad/projects/tosh`
 - NuShell: `/home/komrad/projects/nushell`
 - PowerShell: `/home/komrad/projects/PowerShell`
 - ZSH: `/home/komrad/projects/zsh`
@@ -388,7 +388,7 @@ Learn from PowerShell:
 
 Do not copy:
 
-- verbose cmdlet naming as Tosh's primary surface
+- verbose cmdlet naming as TōSh's primary surface
 - Windows-first assumptions
 
 ### ZSH
@@ -427,14 +427,14 @@ These are the next decisions we should treat as architecture, not experiments:
 2. `_` becomes the primary current-object symbol.
 3. Typed functions use `func name(args) -> Type`, not return-type-prefix syntax.
 4. Stream output and collection return are distinct; collection return should be explicit.
-5. `using` is for CLR imports; `require` handles Tosh files.
-6. `ExpandoObject` should be the default ad hoc record object unless a stronger Tosh-specific record type is justified.
+5. `using` is for CLR imports; `require` handles TōSh files.
+6. `ExpandoObject` should be the default ad hoc record object unless a stronger TōSh-specific record type is justified.
 7. The display system remains a projection layer, never the runtime truth.
 
 ## Near-Term Refactor Plan
 
 1. Write down the language surface we want before adding more syntax.
-2. Reorganize `Tosh.Core` by responsibility.
+2. Reorganize `TōSh.Core` by responsibility.
 3. Separate display concerns from runtime concerns more cleanly.
 4. Formalize side-effect result objects.
 5. Add explicit collection aggregation semantics like `collect`.

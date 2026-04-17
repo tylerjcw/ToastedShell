@@ -1,12 +1,12 @@
 # Editor Support
 
-ToSh now keeps its VS Code extension source in-repo under [editor/vscode/tosh.tosh-lang](/home/komrad/projects/tosh/editor/vscode/tosh.tosh-lang).
+TōSh now keeps its VS Code extension source in-repo under [editor/vscode/tosh.tosh-lang](/home/komrad/projects/tosh/editor/vscode/tosh.tosh-lang).
 
 ## Current VS Code Support
 
 - TextMate grammar / syntax highlighting
 - language configuration for comments, brackets, and indentation
-- snippets for common ToSh constructs
+- snippets for common TōSh constructs
 - a real `.NET` language server in [src/Tosh.Lsp](/home/komrad/projects/tosh/src/Tosh.Lsp)
 - LSP-backed diagnostics, completions, hover help, document symbols, go-to-definition, and signature help when the workspace contains `Tosh.Lsp`
 - fallback editor-side completions/hover/symbols when the language server is unavailable
@@ -63,12 +63,12 @@ dotnet build -p:DisableToshVsCodeExtensionSync=true
 
 The current server covers:
 
-- parser diagnostics from the real ToSh parser
+- parser diagnostics from the real TōSh parser
 - completions for keywords, built-ins, special variables, current-document declarations, CLR imports, CLR members, user classes, and modules
 - hover help for core language items and CLR-aware symbols
 - document symbols for top-level declarations
 - go-to-definition for visible declarations
-- signature help for CLR and ToSh call sites
+- signature help for CLR and TōSh call sites
 
 The next LSP milestones should focus on:
 

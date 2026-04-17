@@ -1,6 +1,13 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("System")]
+[CommandOption("-u", "Print only the effective user ID.")]
+[CommandOption("-g", "Print only the effective group ID.")]
+[CommandOption("-G", "Print all group IDs.")]
+[CommandOption("-n", "Print names instead of numeric IDs (with -u, -g, or -G).")]
+[CommandExample("id", Title = "Show full identity information")]
+[CommandExample("id -un", Title = "Show the current username")]
+[CommandOutput("An identity record with Uid, Gid, User, Group, and Groups properties, or a single value with flags.")]
 public sealed class IdCommand : ShellCommand
 {
     public IdCommand()

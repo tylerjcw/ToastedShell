@@ -1,6 +1,11 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Pipeline")]
+[CommandArgument("member-path", "Optional member path to extract the comparison value from each object.", Required = false)]
+[CommandExample("echo 3 1 4 1 5 | max", Title = "Find the maximum value")]
+[CommandExample("ls | max .Length", Title = "Find the largest file by size")]
+[CommandOutput("The maximum value from the pipeline.")]
+[PipelineInput(AcceptsScalar = true, AcceptsRecord = true, Description = "Consumes the pipeline and returns the maximum value.")]
 public sealed class MaxCommand : ShellCommand, ICurrentItemMemberPathCommand
 {
     public MaxCommand()

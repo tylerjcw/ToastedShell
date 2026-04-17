@@ -2066,10 +2066,13 @@ public sealed class DisplayEngine
         }
         builder.AppendLine(BuildTableBorder(visibleColumns, box.MiddleLeft, box.MiddleMiddle, box.MiddleRight, box.Horizontal, theme));
 
+        var totalRenderedLines = GetRenderedRowHeight(headerCells);
         foreach (var row in rawCells)
         {
+            var rowCells = visibleColumns.Select(column => row[column.ColumnIndex]).ToArray();
+            totalRenderedLines += GetRenderedRowHeight(rowCells);
             foreach (var line in BuildTableRowLines(
-                         visibleColumns.Select(column => row[column.ColumnIndex]).ToArray(),
+                         rowCells,
                          visibleColumns,
                          box,
                          theme))
@@ -2078,7 +2081,7 @@ public sealed class DisplayEngine
             }
         }
 
-        if (ShouldRepeatHeaderAtBottom(headerCells, rawCells, options))
+        if (ShouldRepeatHeaderAtBottom(totalRenderedLines, rawCells.Length, options))
         {
             builder.AppendLine(BuildTableBorder(visibleColumns, box.MiddleLeft, box.MiddleMiddle, box.MiddleRight, box.Horizontal, theme));
             foreach (var line in BuildTableRowLines(
@@ -3157,11 +3160,12 @@ public sealed class DisplayEngine
         IReadOnlyList<string[]> rawCells,
         DisplayRenderOptions options)
     {
+        var desiredWidths = GetDesiredWidths(columns, rawCells);
         var visibleColumns = columns
             .Select((column, index) => new VisibleTableColumn(
                 index,
                 column,
-                GetDesiredWidth(column, index, rawCells)))
+                desiredWidths[index]))
             .ToList();
 
         if (options.MaxWidth is not int maxWidth || maxWidth <= 0)
@@ -3187,19 +3191,32 @@ public sealed class DisplayEngine
 
         while (CalculateTotalWidth(visibleColumns) > maxWidth)
         {
-            var shrinkCandidate = visibleColumns
+            var shrinkable = visibleColumns
                 .Where(column => column.Width > column.MinWidth)
                 .OrderByDescending(column => column.Width - column.MinWidth)
                 .ThenByDescending(column => column.Column.Priority)
                 .ThenByDescending(column => column.ColumnIndex)
-                .FirstOrDefault();
+                .ToList();
 
-            if (shrinkCandidate is null)
+            if (shrinkable.Count == 0)
             {
                 break;
             }
 
-            shrinkCandidate.Width--;
+            var excess = CalculateTotalWidth(visibleColumns) - maxWidth;
+
+            foreach (var candidate in shrinkable)
+            {
+                if (excess <= 0)
+                {
+                    break;
+                }
+
+                var available = candidate.Width - candidate.MinWidth;
+                var reduction = Math.Min(available, excess);
+                candidate.Width -= reduction;
+                excess -= reduction;
+            }
         }
 
         if (visibleColumns.Count == 1 && visibleColumns[0].Width > maxWidth)
@@ -3210,14 +3227,31 @@ public sealed class DisplayEngine
         return visibleColumns;
     }
 
-    private static int GetDesiredWidth(
-        DisplayTableColumn column,
-        int columnIndex,
+    private static int[] GetDesiredWidths(
+        IReadOnlyList<DisplayTableColumn> columns,
         IReadOnlyList<string[]> rawCells)
     {
-        var contentWidth = rawCells.Count == 0 ? 0 : rawCells.Max(row => GetCellDisplayWidth(row[columnIndex]));
-        var desiredWidth = Math.Max(column.Header.Length, contentWidth);
-        return Math.Max(1, Math.Min(desiredWidth, column.MaxWidth));
+        var maxWidths = new int[columns.Count];
+
+        foreach (var row in rawCells)
+        {
+            for (var i = 0; i < columns.Count && i < row.Length; i++)
+            {
+                var cellWidth = GetCellDisplayWidth(row[i]);
+                if (cellWidth > maxWidths[i])
+                {
+                    maxWidths[i] = cellWidth;
+                }
+            }
+        }
+
+        for (var i = 0; i < columns.Count; i++)
+        {
+            var desiredWidth = Math.Max(columns[i].Header.Length, maxWidths[i]);
+            maxWidths[i] = Math.Max(1, Math.Min(desiredWidth, columns[i].MaxWidth));
+        }
+
+        return maxWidths;
     }
 
     private static int CalculateTotalWidth(IReadOnlyList<VisibleTableColumn> columns)
@@ -3234,7 +3268,7 @@ public sealed class DisplayEngine
     {
         if (isHeader)
         {
-            var extra = column.Width - GetCellDisplayWidth(cell);
+            var extra = column.Width - StyledText.GetVisibleLength(cell);
             var leftPadding = extra / 2;
             var rightPadding = extra - leftPadding;
             return $"{new string(' ', leftPadding)}{cell}{new string(' ', rightPadding)}";
@@ -3252,7 +3286,7 @@ public sealed class DisplayEngine
             return string.Empty;
         }
 
-        if (GetCellDisplayWidth(value) <= width)
+        if (StyledText.GetVisibleLength(value) <= width)
         {
             return value;
         }
@@ -3339,8 +3373,8 @@ public sealed class DisplayEngine
     }
 
     private static bool ShouldRepeatHeaderAtBottom(
-        IReadOnlyList<string> headerCells,
-        IReadOnlyList<string[]> rows,
+        int totalRenderedLines,
+        int rowCount,
         DisplayRenderOptions options)
     {
         if (options.MaxHeight is not int maxHeight || maxHeight <= 0)
@@ -3348,9 +3382,9 @@ public sealed class DisplayEngine
             return false;
         }
 
-        var renderedLineCount = GetRenderedRowHeight(headerCells)
-                                + rows.Sum(GetRenderedRowHeight)
-                                + 3;
+        // totalRenderedLines includes header + data row heights.
+        // Add borders: top + header separator + bottom + per-row separators estimate.
+        var renderedLineCount = totalRenderedLines + 3;
         return renderedLineCount > maxHeight;
     }
 
@@ -3616,13 +3650,13 @@ public sealed class DisplayEngine
 
     private static string PadCellLeft(string value, int width)
     {
-        var padding = Math.Max(0, width - GetCellDisplayWidth(value));
+        var padding = Math.Max(0, width - StyledText.GetVisibleLength(value));
         return padding == 0 ? value : $"{new string(' ', padding)}{value}";
     }
 
     private static string PadCellRight(string value, int width)
     {
-        var padding = Math.Max(0, width - GetCellDisplayWidth(value));
+        var padding = Math.Max(0, width - StyledText.GetVisibleLength(value));
         return padding == 0 ? value : $"{value}{new string(' ', padding)}";
     }
 
@@ -3927,6 +3961,8 @@ public sealed class DisplayEngine
 
     private static TableBoxCharacters GetBoxCharacters(ToshTableBoxStyle style)
     {
+        style = TerminalGlyphs.ResolveBoxStyle(style);
+
         return style switch
         {
             ToshTableBoxStyle.Square => new('┌', '┬', '┐', '├', '┼', '┤', '└', '┴', '┘', '│', '─'),

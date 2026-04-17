@@ -1,0 +1,171 @@
+#!/usr/bin/env tosh
+# oop_and_types.tosh
+# Demonstrates modules, enums, records, classes, dynamic records, introspection,
+# typed functions, and the .NET object model that tosh exposes.
+
+require Inventory from "./toastlib.tosh" as Inv
+require { Reporting, Utilities } from "./toastlib.tosh"
+
+# --- Modules and the require system ----------------------------------------
+# toastlib.tosh defines three modules: Inventory, Reporting, Utilities.
+# `require ... as Inv` aliases the module; `require { ... }` destructures.
+
+Utilities.banner("Modules and Require")
+writeline $"Script: {Utilities.script_name()}"
+
+# --- Enums and records -----------------------------------------------------
+# Enums carry named states; records are immutable value objects.
+
+Utilities.banner("Enums, Records, and Equality")
+var bread = new Inv.Item("Bread", 2, "Food", "BurlyWood")
+var breadClone = new Inv.Item("Bread", 2, "Food", "BurlyWood")
+var restocked = Inv.restock($bread, 5)
+
+writeline $"State of bread: {Inv.state_of($bread).ToString()}"
+writeline $"Record equality: {$bread == $breadClone}"
+writeline $"Restocked quantity: {$restocked.Quantity}"
+
+# --- Classes with typed properties -----------------------------------------
+# Classes support constructors, properties (including shy/private), getters,
+# setters, and methods. Properties can be nullable with ?.
+
+class Animal {
+    prop Name: string? = null
+    prop Sound: string? = null
+    prop Tags: string? = null
+
+    Animal(name: string, sound: string) {
+        $this.Name = $name
+        $this.Sound = $sound
+    }
+
+    func AddTag(tag: string) {
+        if ($this.Tags != null) {
+            $this.Tags = ($this.Tags + "," + $tag)
+        } else {
+            $this.Tags = $tag
+        }
+    }
+
+    func Describe() -> string {
+        return $"The {$this.Name} says {$this.Sound}"
+    }
+}
+
+Utilities.banner("Classes and Methods")
+var cat = new Animal("Cat", "meow")
+$cat.AddTag("indoor") | ignore
+$cat.AddTag("fuzzy") | ignore
+writeline $cat.Describe()
+writeline $"Tags: {$cat.Tags}"
+
+# --- Properties with getters and setters -----------------------------------
+
+class HexColor {
+    prop Hex: string? {
+        get => $this.hex_value
+        set => $this.hex_value = $value
+    }
+
+    shy prop hex_value: string? = null
+
+    HexColor(hex: string) {
+        $this.hex_value = $hex
+    }
+}
+
+Utilities.banner("Property Getters and Setters")
+var color = new HexColor("#FF5733")
+writeline $"Color: {$color.Hex}"
+$color.Hex = "#00FF00"
+writeline $"Updated: {$color.Hex}"
+
+# --- Object shelves: classes building on records ---------------------------
+
+Utilities.banner("Classes Composing Records")
+var items = Inv.sample_items()
+var shelf = new Inv.Shelf("Pantry")
+
+for item in ($items) {
+    $shelf.Add($item) | ignore
+}
+
+writeline $"Shelf '{$shelf.Label}' holds {$shelf.ItemCount} items, accent: {$shelf.Accent.Name}"
+
+# --- Switch over enum values -----------------------------------------------
+
+Utilities.banner("Switch Over Enum Values")
+$items | each {
+    var state = Inv.state_of(_)
+
+    switch ($state) {
+        case Inv.StockState.Low {
+            writeline $"LOW: {_.Name} x{_.Quantity}"
+        }
+        case Inv.StockState.Out {
+            writeline $"OUT: {_.Name}"
+        }
+        default {
+            writeline $"OK: {_.Name} x{_.Quantity}"
+        }
+    }
+}
+
+# --- Dynamic records -------------------------------------------------------
+
+Utilities.banner("Dynamic Records")
+var report = new list()
+
+$items | each {
+    $report.Add({
+        Name = _.Name,
+        Category = _.Category,
+        Quantity = _.Quantity,
+        State = Inv.state_of(_)
+    }) | ignore
+}
+
+$report | sort Quantity | reverse | each {
+    writeline $"[{_.Category}] {_.Name} x{_.Quantity} => {_.State.ToString()}"
+}
+
+# --- Introspection ---------------------------------------------------------
+# Inspect any object: get-props, has-prop, has-method, type-of, name-of.
+
+Utilities.banner("Object Introspection")
+var sample = ($items | first)
+writeline $"type-of:   {$sample | type-of}"
+writeline $"name-of:   {name-of $sample}"
+writeline $"has Name?  {$sample | has-prop Name}"
+writeline $"has Color? {$sample | has-prop Color}"
+writeline $"props:     {$sample | get-props | join-lines ", "}"
+
+# --- Cloning and mutation --------------------------------------------------
+
+Utilities.banner("Cloning and Mutation")
+var original = ($items | first)
+var copy = (clone $original)
+set-prop $copy Name "Toast" | ignore
+writeline $"Original: {get-prop $original Name}"
+writeline $"Clone:    {get-prop $copy Name}"
+
+# --- Dynamic method invocation ---------------------------------------------
+
+Utilities.banner("Dynamic Method Calls")
+writeline (echo "hello world" | call-method ToUpper)
+writeline (echo "hello world" | call-method Replace "world" "tosh")
+
+# --- Try/catch and lexical using -------------------------------------------
+
+Utilities.banner("Try/Catch and Lexical Using")
+try {
+    using System.IO = IO
+    echo IO.File.ReadAllText("/definitely/not-here.txt")
+} catch (err) {
+    writeline $"Handled cleanly: {$err.Message}"
+}
+
+# --- Structured table output -----------------------------------------------
+
+Utilities.banner("Structured Table Output")
+Reporting.summary_rows($items) | flatten | sort Quantity | reverse | writeline

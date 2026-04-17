@@ -142,3 +142,9 @@ public sealed record NameOfArgumentSyntax(string Identifier, bool IsVariableRefe
 public sealed record TupleLiteralArgumentSyntax(IReadOnlyList<ArgumentSyntax> Items, TextSpan Span) : ArgumentSyntax(Span);
 
 public sealed record SetLiteralArgumentSyntax(IReadOnlyList<ArgumentSyntax> Items, TextSpan Span) : ArgumentSyntax(Span);
+
+public sealed record ComparisonPatternSyntax(
+    string Operator,
+    TextSpan OperatorSpan,
+    ArgumentSyntax Operand,
+    TextSpan Span) : ArgumentSyntax(Span);

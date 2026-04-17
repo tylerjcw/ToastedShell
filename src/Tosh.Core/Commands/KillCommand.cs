@@ -3,6 +3,7 @@ using System.Diagnostics;
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Process")]
+[CommandSideEffects(SpawnsProcess = true)]
 [CommandNote("Kill can stop either a ToSh background job or a native operating-system process by pid.")]
 public sealed class KillCommand : ShellCommand
 {

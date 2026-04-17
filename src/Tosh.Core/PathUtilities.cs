@@ -10,7 +10,13 @@ public static class PathUtilities
     public static string UserHomeDirectory =>
         Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
 
-    public static ToshDirectoryAliasConfig? DirectoryAliases { get; set; }
+    private static readonly AsyncLocal<ToshDirectoryAliasConfig?> _directoryAliases = new();
+
+    public static ToshDirectoryAliasConfig? DirectoryAliases
+    {
+        get => _directoryAliases.Value;
+        set => _directoryAliases.Value = value;
+    }
 
     public static string ResolvePath(string currentDirectory, string path)
     {

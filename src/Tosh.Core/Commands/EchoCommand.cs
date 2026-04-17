@@ -1,10 +1,10 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Text")]
-[CommandArgument("value", "One or more values to emit as pipeline objects.")]
+[CommandArgument("value", "One or more values to emit as pipeline objects.", Kind = "expression")]
 [CommandExample("echo hello world")]
 [CommandExample("echo 42 | where { $_ > 10 }")]
-[CommandOutput("Each argument as a separate pipeline object.")]
+[CommandOutput("Each argument as a separate pipeline object.", Mode = "structured")]
 public sealed class EchoCommand : ShellCommand, IImplicitGlobCommand
 {
     public EchoCommand()

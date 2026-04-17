@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using System.Text;
 using Tosh.Cli;
 using Tosh.Cli.Tui;
@@ -29,15 +30,29 @@ if (plan.Kind == CliInvocationKind.Help)
     return;
 }
 
+if (plan.Kind == CliInvocationKind.Version)
+{
+    await PrintVersionAsync();
+    return;
+}
+
 if (plan.Kind == CliInvocationKind.ExportMetadata)
 {
     await ExportCommandMetadataAsync(plan);
     return;
 }
 
+// Set login shell flag before startup so $tosh.IsLoginShell is visible in config/profile scripts.
+runtime.IsLoginShell = plan.IsLoginShell;
+
+if (plan.IsLoginShell)
+{
+    InitializeLoginShellEnvironment();
+}
+
 if (plan.LoadStartup)
 {
-    await ToshStartupLoader.LoadAsync(engine, configDirectory: null, skipProfile: plan.SkipProfile, errorWriter: Console.Error);
+    await ToshStartupLoader.LoadAsync(engine, configDirectory: null, skipProfile: plan.SkipProfile, errorWriter: Console.Error, profileStartup: plan.ProfileStartup);
 }
 
 if (plan.SafeMode)
@@ -45,8 +60,7 @@ if (plan.SafeMode)
     await Console.Error.WriteLineAsync("tosh: safe mode — config, profile, and autoload files were skipped.");
 }
 
-runtime.IsLoginShell = plan.IsLoginShell;
-
+var historyStopwatch = plan.ProfileStartup ? System.Diagnostics.Stopwatch.StartNew() : null;
 try
 {
     runtime.InitializeHistoryStorage(writeThrough: plan.Kind == CliInvocationKind.Repl);
@@ -54,6 +68,17 @@ try
 catch (Exception exception)
 {
     await Console.Error.WriteLineAsync(diagnostics.Render(exception));
+}
+finally
+{
+    if (historyStopwatch is not null)
+    {
+        historyStopwatch.Stop();
+        if (runtime.StartupProfile is { } profile)
+        {
+            profile.History = historyStopwatch.Elapsed;
+        }
+    }
 }
 
 try
@@ -66,6 +91,11 @@ catch (Exception exception)
 }
 
 await RaiseSessionStartedAsync();
+
+if (plan.ProfileStartup && runtime.StartupProfile is { } startupProfile)
+{
+    PrintStartupProfile(startupProfile);
+}
 
 if (plan.Kind != CliInvocationKind.Repl)
 {
@@ -101,8 +131,46 @@ if (plan.Kind != CliInvocationKind.Repl)
     return;
 }
 
-var repl = new ToshRepl(engine);
-await repl.RunAsync();
+PosixSignalRegistration? sighupRegistration = null;
+PosixSignalRegistration? sigtermRegistration = null;
+
+// Ensure terminal state is restored even on abnormal exit.
+AppDomain.CurrentDomain.ProcessExit += (_, _) => runtime.Terminal.RestoreTerminalState();
+
+if (!OperatingSystem.IsWindows())
+{
+    sighupRegistration = PosixSignalRegistration.Create(PosixSignal.SIGHUP, _ =>
+    {
+        runtime.Terminal.RestoreTerminalState();
+        runtime.KillAllJobs();
+        Environment.Exit(128 + 1); // SIGHUP
+    });
+
+    sigtermRegistration = PosixSignalRegistration.Create(PosixSignal.SIGTERM, _ =>
+    {
+        runtime.Terminal.RestoreTerminalState();
+        runtime.KillAllJobs();
+        Environment.Exit(128 + 15); // SIGTERM
+    });
+}
+
+try
+{
+    var repl = new ToshRepl(engine);
+    await repl.RunAsync();
+}
+finally
+{
+    sighupRegistration?.Dispose();
+    sigtermRegistration?.Dispose();
+    runtime.Terminal.RestoreTerminalState();
+}
+
+if (plan.IsLoginShell)
+{
+    await RunLogoutHookAsync();
+}
+
 runtime.KillAllJobs();
 await RaiseSessionEndingAsync();
 Environment.ExitCode = runtime.LastExitCode;
@@ -124,6 +192,65 @@ static void ConfigureConsoleEncoding()
     catch
     {
         // Keep startup resilient if the host rejects encoding changes.
+    }
+}
+
+void InitializeLoginShellEnvironment()
+{
+    // Set SHELL to the current executable so child processes inherit it.
+    var exePath = Environment.ProcessPath;
+    if (!string.IsNullOrEmpty(exePath))
+    {
+        Environment.SetEnvironmentVariable("SHELL", exePath);
+    }
+
+    // Ensure the directory containing tosh is on PATH.
+    if (!string.IsNullOrEmpty(exePath))
+    {
+        var exeDir = Path.GetDirectoryName(exePath);
+        if (!string.IsNullOrEmpty(exeDir))
+        {
+            var currentPath = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
+            var dirs = currentPath.Split(':', StringSplitOptions.RemoveEmptyEntries);
+            if (!dirs.Contains(exeDir, StringComparer.Ordinal))
+            {
+                Environment.SetEnvironmentVariable("PATH", $"{exeDir}:{currentPath}");
+            }
+        }
+    }
+
+    // Ensure standard identity env vars are set (PAM/systemd may or may not provide these).
+    SetIfMissing("USER", Environment.UserName);
+    SetIfMissing("LOGNAME", Environment.UserName);
+    SetIfMissing("HOME", Environment.GetFolderPath(Environment.SpecialFolder.UserProfile));
+
+    static void SetIfMissing(string name, string value)
+    {
+        if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable(name)) && !string.IsNullOrEmpty(value))
+        {
+            Environment.SetEnvironmentVariable(name, value);
+        }
+    }
+}
+
+async Task RunLogoutHookAsync()
+{
+    var root = runtime.Config.Startup.RootDirectory;
+    var logoutPath = Path.Combine(root, "logout.tosh");
+
+    if (!File.Exists(logoutPath))
+    {
+        return;
+    }
+
+    try
+    {
+        var source = await File.ReadAllTextAsync(logoutPath);
+        await AsyncEnumerableExtensions.ToListAsync(engine.EvaluateAsync(source, logoutPath), default);
+    }
+    catch (Exception exception)
+    {
+        await Console.Error.WriteLineAsync($"tosh: error in logout hook: {exception.Message}");
     }
 }
 
@@ -214,6 +341,30 @@ static string QuoteArgument(string argument)
     return argument;
 }
 
+static void PrintStartupProfile(Tosh.Core.StartupProfileData profile)
+{
+    Console.Error.WriteLine();
+    Console.Error.WriteLine("Startup Profile");
+    Console.Error.WriteLine("───────────────────────────────────");
+    Console.Error.WriteLine($"  Total:    {profile.Total.TotalMilliseconds,8:F1} ms");
+    Console.Error.WriteLine($"  Config:   {profile.Config.TotalMilliseconds,8:F1} ms");
+    Console.Error.WriteLine($"  Profile:  {profile.Profile.TotalMilliseconds,8:F1} ms");
+    Console.Error.WriteLine($"  Autoload: {profile.Autoload.TotalMilliseconds,8:F1} ms");
+    Console.Error.WriteLine($"  History:  {profile.History.TotalMilliseconds,8:F1} ms");
+
+    if (profile.Files.Count > 0)
+    {
+        Console.Error.WriteLine();
+        Console.Error.WriteLine("  Files:");
+        foreach (var file in profile.Files)
+        {
+            Console.Error.WriteLine($"    {file.Duration.TotalMilliseconds,8:F1} ms  {file.Path}");
+        }
+    }
+
+    Console.Error.WriteLine();
+}
+
 static async Task PrintUsageAsync()
 {
     await Console.Out.WriteLineAsync("Usage:");
@@ -225,12 +376,14 @@ static async Task PrintUsageAsync()
     await Console.Out.WriteLineAsync("  tosh -- <command-or-script-starting-with-dash> [args...]");
     await Console.Out.WriteLineAsync(string.Empty);
     await Console.Out.WriteLineAsync("Flags:");
-    await Console.Out.WriteLineAsync("  -h, --help       Show usage");
-    await Console.Out.WriteLineAsync("  -c, --command    Run one ToSh command string and exit");
-    await Console.Out.WriteLineAsync("  -l, --login      Start as a login shell");
-    await Console.Out.WriteLineAsync("  --no-startup     Skip config.tosh, profile.tosh, and autoload startup files");
-    await Console.Out.WriteLineAsync("  --no-profile     Skip profile.tosh (config.tosh and autoload still load)");
-    await Console.Out.WriteLineAsync("  --safe           Start in safe mode (skip all startup, guaranteed recovery)");
+    await Console.Out.WriteLineAsync("  -h, --help            Show usage");
+    await Console.Out.WriteLineAsync("  -V, --version         Print version and exit");
+    await Console.Out.WriteLineAsync("  -c, --command         Run one ToSh command string and exit");
+    await Console.Out.WriteLineAsync("  -l, --login           Start as a login shell");
+    await Console.Out.WriteLineAsync("  --no-startup          Skip config.tosh, profile.tosh, and autoload startup files");
+    await Console.Out.WriteLineAsync("  --no-profile          Skip profile.tosh (config.tosh and autoload still load)");
+    await Console.Out.WriteLineAsync("  --safe                Start in safe mode (skip all startup, guaranteed recovery)");
+    await Console.Out.WriteLineAsync("  --profile-startup     Show startup phase timing breakdown");
     await Console.Out.WriteLineAsync("  --               Stop flag parsing for the next argument");
     await Console.Out.WriteLineAsync(string.Empty);
     await Console.Out.WriteLineAsync("Examples:");
@@ -253,6 +406,16 @@ static async Task PrintUsageAsync()
     await Console.Out.WriteLineAsync("  tosh 'require ./common.tosh'");
     await Console.Out.WriteLineAsync("  tosh 'func llf => ls -la | where _.Type == file'");
     await Console.Out.WriteLineAsync("  tosh 'func recent(days: TimeSpan) { ls -la | where _.Modified > ((date now) - $days) }'");
+}
+
+static async Task PrintVersionAsync()
+{
+    var attr = (System.Reflection.AssemblyInformationalVersionAttribute?)
+        Attribute.GetCustomAttribute(
+            typeof(CliInvocationResolver).Assembly,
+            typeof(System.Reflection.AssemblyInformationalVersionAttribute));
+    var version = attr?.InformationalVersion ?? "unknown";
+    await Console.Out.WriteLineAsync($"tosh {version}");
 }
 
 static async Task ExportCommandMetadataAsync(CliInvocationPlan plan)

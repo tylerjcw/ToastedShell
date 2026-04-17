@@ -48,6 +48,7 @@ public sealed class ToshRuntime
         Display.Preferences = DisplayPreferences;
         Inspector = new ObjectInspector(Formatter);
         Config = new ToshConfig(Display, DisplayPreferences, ToshConfigDefaults.GetDefaultConfigDirectory());
+        TerminalGlyphs.Initialize(Config.Tty);
         PathUtilities.DirectoryAliases = Config.Shell.Dirs;
         Display.TableTheme = Config.Theme.Tables;
         History = new List<CommandHistoryEntry>();
@@ -131,11 +132,19 @@ public sealed class ToshRuntime
 
     public bool IsLoginShell { get; set; }
 
+    /// <summary>
+    /// Set to true after the first exit attempt when background jobs are running.
+    /// Reset after each command so the warning re-arms if new jobs start.
+    /// </summary>
+    public bool ExitWarningIssued { get; set; }
+
     public int LastExitCode { get; private set; }
 
     public object? LastResult { get; private set; }
 
     public TimeSpan? LastCommandDuration { get; private set; }
+
+    public StartupProfileData? StartupProfile { get; set; }
 
     public long NextHistoryId => Math.Max(1, _nextHistoryId + 1);
 

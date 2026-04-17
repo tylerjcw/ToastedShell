@@ -215,7 +215,7 @@ public sealed record TryStatementSyntax(
 
 public sealed record DeferStatementSyntax(BlockSyntax Body, TextSpan Span) : StatementSyntax(Span);
 
-public sealed record SwitchCaseSyntax(ArgumentSyntax MatchExpression, BlockSyntax Body, TextSpan Span);
+public sealed record SwitchCaseSyntax(ArgumentSyntax MatchExpression, ArgumentSyntax? Guard, BlockSyntax Body, TextSpan Span);
 
 public sealed record SwitchStatementSyntax(
     ArgumentSyntax Value,

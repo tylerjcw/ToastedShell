@@ -360,6 +360,7 @@ public sealed class CommandIntrospectionTests
         var entry = new CommandMetadata(
             Name: "esc-test",
             Description: input,
+            LongDescription: null,
             Usage: "esc-test",
             Category: "Test",
             Aliases: [],
@@ -368,7 +369,8 @@ public sealed class CommandIntrospectionTests
             Examples: [],
             Notes: [],
             Output: null,
-            PipelineInput: null);
+            PipelineInput: null,
+            OutputType: null, OutputMembers: null, OutputMode: "structured", SideEffects: null, SinceVersion: null, DeprecatedVersion: null, RemovedVersion: null, Tags: [], SeeAlso: [], Permissions: [], IsExperimental: false, ErrorConditions: [], CanonicalExamples: []);
 
         var latex = CommandLatexEmitter.Emit([entry]);
         Assert.Contains(expected, latex);
@@ -382,10 +384,11 @@ public sealed class CommandIntrospectionTests
         var entry = new CommandMetadata(
             Name: "short",
             Description: "Short.",
+            LongDescription: null,
             Usage: "short -a",
             Category: "Test",
             Aliases: [], Arguments: [], Options: [],
-            Examples: [], Notes: [], Output: null, PipelineInput: null);
+            Examples: [], Notes: [], Output: null, PipelineInput: null, OutputType: null, OutputMembers: null, OutputMode: "structured", SideEffects: null, SinceVersion: null, DeprecatedVersion: null, RemovedVersion: null, Tags: [], SeeAlso: [], Permissions: [], IsExperimental: false, ErrorConditions: [], CanonicalExamples: []);
 
         var latex = CommandLatexEmitter.Emit([entry]);
         // Should not contain continuation marker
@@ -399,10 +402,11 @@ public sealed class CommandIntrospectionTests
         var entry = new CommandMetadata(
             Name: "find",
             Description: "Find files.",
+            LongDescription: null,
             Usage: longUsage,
             Category: "Test",
             Aliases: [], Arguments: [], Options: [],
-            Examples: [], Notes: [], Output: null, PipelineInput: null);
+            Examples: [], Notes: [], Output: null, PipelineInput: null, OutputType: null, OutputMembers: null, OutputMode: "structured", SideEffects: null, SinceVersion: null, DeprecatedVersion: null, RemovedVersion: null, Tags: [], SeeAlso: [], Permissions: [], IsExperimental: false, ErrorConditions: [], CanonicalExamples: []);
 
         var latex = CommandLatexEmitter.Emit([entry]);
         Assert.Contains("\\quad", latex);
@@ -416,10 +420,11 @@ public sealed class CommandIntrospectionTests
         var entry = new CommandMetadata(
             Name: "http",
             Description: "HTTP.",
+            LongDescription: null,
             Usage: usage,
             Category: "Test",
             Aliases: [], Arguments: [], Options: [],
-            Examples: [], Notes: [], Output: null, PipelineInput: null);
+            Examples: [], Notes: [], Output: null, PipelineInput: null, OutputType: null, OutputMembers: null, OutputMode: "structured", SideEffects: null, SinceVersion: null, DeprecatedVersion: null, RemovedVersion: null, Tags: [], SeeAlso: [], Permissions: [], IsExperimental: false, ErrorConditions: [], CanonicalExamples: []);
 
         var latex = CommandLatexEmitter.Emit([entry]);
         Assert.Contains("\\allowbreak", latex);
@@ -447,12 +452,13 @@ public sealed class CommandIntrospectionTests
         var entry = new CommandMetadata(
             Name: "test",
             Description: "Test.",
+            LongDescription: null,
             Usage: "test [path]",
             Category: "Test",
             Aliases: [],
-            Arguments: [new CommandArgumentMetadata("[path-or-device ...]", "Target.", false, null)],
+            Arguments: [new CommandArgumentMetadata("[path-or-device ...]", "Target.", false, null, null)],
             Options: [],
-            Examples: [], Notes: [], Output: null, PipelineInput: null);
+            Examples: [], Notes: [], Output: null, PipelineInput: null, OutputType: null, OutputMembers: null, OutputMode: "structured", SideEffects: null, SinceVersion: null, DeprecatedVersion: null, RemovedVersion: null, Tags: [], SeeAlso: [], Permissions: [], IsExperimental: false, ErrorConditions: [], CanonicalExamples: []);
 
         var latex = CommandLatexEmitter.Emit([entry]);
         // Should have {} guard before the bracket
@@ -467,11 +473,12 @@ public sealed class CommandIntrospectionTests
         var entry = new CommandMetadata(
             Name: "test",
             Description: "Test.",
+            LongDescription: null,
             Usage: "test",
             Category: "Test",
             Aliases: ["t", "tst"],
             Arguments: [], Options: [],
-            Examples: [], Notes: [], Output: null, PipelineInput: null);
+            Examples: [], Notes: [], Output: null, PipelineInput: null, OutputType: null, OutputMembers: null, OutputMode: "structured", SideEffects: null, SinceVersion: null, DeprecatedVersion: null, RemovedVersion: null, Tags: [], SeeAlso: [], Permissions: [], IsExperimental: false, ErrorConditions: [], CanonicalExamples: []);
 
         var latex = CommandLatexEmitter.Emit([entry]);
         Assert.Contains("\\textit{Aliases:}", latex);

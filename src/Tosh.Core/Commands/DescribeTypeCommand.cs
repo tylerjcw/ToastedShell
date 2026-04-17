@@ -1,6 +1,12 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("CLR")]
+[CommandArgument("type", "One or more type names or piped objects to describe.", Required = false)]
+[CommandExample("describe-type string", Title = "Describe the String type")]
+[CommandExample("describe-type list dict table", Title = "Describe multiple shell types")]
+[CommandExample("42 | describe-type", Title = "Describe the type of a piped value")]
+[CommandOutput("Type projection objects with hierarchy, interfaces, properties, methods, and constructors.")]
+[PipelineInput(AcceptsScalar = true, AcceptsRecord = true, Description = "Describes the type of each piped object.")]
 public sealed class DescribeTypeCommand : ShellCommand
 {
     public DescribeTypeCommand()

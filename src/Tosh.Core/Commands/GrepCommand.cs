@@ -17,7 +17,8 @@ namespace Tosh.Core.Commands;
 [CommandExample("echo one two three | grep tw", Title = "Pipe text into grep")]
 [CommandExample("echo \"Alpha\" | grep -i \"^alpha$\"", Title = "Use regex flags")]
 [CommandExample("grep -F literal README.md", Title = "Search a file literally")]
-[CommandOutput("Matching text lines, or structured regex capture objects with --explicit-capture.")]
+[CommandOutput("Matching text lines, or structured regex capture objects with --explicit-capture.", TypeName = "GrepMatchInfo", Members = "Path, LineNumber, Text, Pattern, Match", Mode = "mixed")]
+[CommandSideEffects(ReadsFiles = true)]
 [PipelineInput(AcceptsScalar = true, Description = "Consumes scalar text from the pipeline. When paths are supplied explicitly, grep reads file contents instead.")]
 public sealed class GrepCommand : ShellCommand
 {

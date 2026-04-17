@@ -1,10 +1,14 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Pipeline")]
-[CommandExample("ls -la | first | inspect")]
-[CommandExample("new System.Random() | inspect -a")]
-[CommandExample("new System.Random() | inspect --flat")]
+[CommandOption("-a", "Include non-public and static members in the inspection.")]
+[CommandOption("--flat", "Use flat text output instead of the interactive tree browser.")]
+[CommandExample("ls -la | first | inspect", Title = "Inspect a file entry interactively")]
+[CommandExample("new System.Random() | inspect -a", Title = "Inspect all members including private")]
+[CommandExample("new System.Random() | inspect --flat", Title = "Flat output for scripting")]
 [CommandNote("Inspect opens an inline tree browser for CLR values in interactive sessions. Use `-a` for non-public/static members, `--flat` for the legacy static inspection object output, and `i` inside the browser to insert the selected member text into the active REPL line at the cursor (or queue it for the next prompt when no line is active). In the REPL, `F2` tries to inspect the reference under the cursor, and `Alt+I` is available as a fallback on terminals that do not expose function keys cleanly.")]
+[CommandOutput("An interactive tree view or flat member-value records depending on mode.")]
+[PipelineInput(AcceptsScalar = true, AcceptsRecord = true, Description = "Inspects each piped object.")]
 public sealed class InspectCommand : ShellCommand
 {
     public InspectCommand()

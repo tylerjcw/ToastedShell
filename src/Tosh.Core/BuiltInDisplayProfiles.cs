@@ -49,6 +49,15 @@ public static class BuiltInDisplayProfiles
         registry.Register(CreateIpRouteProfile());
         registry.Register(CreateIpNeighborProfile());
         registry.Register(CreateIpRuleProfile());
+        registry.Register(CreateIpNetnsProfile());
+        registry.Register(CreateIpTunnelProfile());
+        registry.Register(CreateIpTuntapProfile());
+        registry.Register(CreateIpVrfProfile());
+        registry.Register(CreateIpMaddrProfile());
+        registry.Register(CreateIpMaddrEntryProfile());
+        registry.Register(CreateIpMrouteProfile());
+        registry.Register(CreateIpTokenProfile());
+        registry.Register(CreateIpNtableProfile());
         registry.Register(CreateSystemdUnitInfoProfile());
         registry.Register(CreateSystemdUnitFileInfoProfile());
         registry.Register(CreateSystemdUnitPropertySetProfile());
@@ -79,6 +88,7 @@ public static class BuiltInDisplayProfiles
         registry.Register(CreateExceptionProfile());
         registry.Register(CreateKeyValuePairProfile());
         registry.Register(CreateTupleProfile());
+        registry.Register(CreateHashSetProfile());
         registry.Register(CreateIndexProfile());
         registry.Register(CreateRangeProfile());
         registry.Register(CreateEndPointProfile());
@@ -471,6 +481,136 @@ public static class BuiltInDisplayProfiles
                 });
     }
 
+    private static DisplayProfile CreateIpNetnsProfile()
+    {
+        return DisplayProfile
+            .For<IpNetnsInfo>()
+            .AddTableCase(_ => BuildIpNetnsColumns())
+            .AddSelectableTableColumns(_ => BuildIpNetnsColumns())
+            .AddValueCase(
+                DisplaySurface.Root | DisplaySurface.Nested | DisplaySurface.TableCell,
+                context => ((IpNetnsInfo)context.Value).Name);
+    }
+
+    private static DisplayProfile CreateIpTunnelProfile()
+    {
+        return DisplayProfile
+            .For<IpTunnelInfo>()
+            .AddTableCase(_ => BuildIpTunnelColumns())
+            .AddSelectableTableColumns(_ => BuildIpTunnelColumns())
+            .AddValueCase(
+                DisplaySurface.Root | DisplaySurface.Nested | DisplaySurface.TableCell,
+                context =>
+                {
+                    var value = (IpTunnelInfo)context.Value;
+                    var mode = string.IsNullOrWhiteSpace(value.Mode) ? string.Empty : $" ({value.Mode})";
+                    return $"{value.Name}{mode}";
+                });
+    }
+
+    private static DisplayProfile CreateIpTuntapProfile()
+    {
+        return DisplayProfile
+            .For<IpTuntapInfo>()
+            .AddTableCase(_ => BuildIpTuntapColumns())
+            .AddSelectableTableColumns(_ => BuildIpTuntapColumns())
+            .AddValueCase(
+                DisplaySurface.Root | DisplaySurface.Nested | DisplaySurface.TableCell,
+                context =>
+                {
+                    var value = (IpTuntapInfo)context.Value;
+                    var mode = string.IsNullOrWhiteSpace(value.Mode) ? string.Empty : $" ({value.Mode})";
+                    return $"{value.Name}{mode}";
+                });
+    }
+
+    private static DisplayProfile CreateIpVrfProfile()
+    {
+        return DisplayProfile
+            .For<IpVrfInfo>()
+            .AddTableCase(_ => BuildIpVrfColumns())
+            .AddSelectableTableColumns(_ => BuildIpVrfColumns())
+            .AddValueCase(
+                DisplaySurface.Root | DisplaySurface.Nested | DisplaySurface.TableCell,
+                context => ((IpVrfInfo)context.Value).Name);
+    }
+
+    private static DisplayProfile CreateIpMaddrProfile()
+    {
+        return DisplayProfile
+            .For<IpMaddrInfo>()
+            .AddTableCase(_ => BuildIpMaddrColumns())
+            .AddSelectableTableColumns(_ => BuildIpMaddrColumns())
+            .AddValueCase(
+                DisplaySurface.Root | DisplaySurface.Nested | DisplaySurface.TableCell,
+                context =>
+                {
+                    var value = (IpMaddrInfo)context.Value;
+                    return $"{value.Name} ({value.AddressCount} addrs)";
+                });
+    }
+
+    private static DisplayProfile CreateIpMaddrEntryProfile()
+    {
+        return DisplayProfile
+            .For<IpMaddrEntry>()
+            .AddTableCase(_ => BuildIpMaddrEntryColumns())
+            .AddValueCase(
+                DisplaySurface.Root | DisplaySurface.Nested | DisplaySurface.TableCell,
+                context =>
+                {
+                    var value = (IpMaddrEntry)context.Value;
+                    return value.Address ?? value.Link ?? string.Empty;
+                });
+    }
+
+    private static DisplayProfile CreateIpMrouteProfile()
+    {
+        return DisplayProfile
+            .For<IpMrouteInfo>()
+            .AddTableCase(_ => BuildIpMrouteColumns())
+            .AddSelectableTableColumns(_ => BuildIpMrouteColumns())
+            .AddValueCase(
+                DisplaySurface.Root | DisplaySurface.Nested | DisplaySurface.TableCell,
+                context =>
+                {
+                    var value = (IpMrouteInfo)context.Value;
+                    return $"{value.Group} from {value.Source ?? "any"}";
+                });
+    }
+
+    private static DisplayProfile CreateIpTokenProfile()
+    {
+        return DisplayProfile
+            .For<IpTokenInfo>()
+            .AddTableCase(_ => BuildIpTokenColumns())
+            .AddSelectableTableColumns(_ => BuildIpTokenColumns())
+            .AddValueCase(
+                DisplaySurface.Root | DisplaySurface.Nested | DisplaySurface.TableCell,
+                context =>
+                {
+                    var value = (IpTokenInfo)context.Value;
+                    var iface = string.IsNullOrWhiteSpace(value.InterfaceName) ? string.Empty : $" ({value.InterfaceName})";
+                    return $"{value.Token}{iface}";
+                });
+    }
+
+    private static DisplayProfile CreateIpNtableProfile()
+    {
+        return DisplayProfile
+            .For<IpNtableInfo>()
+            .AddTableCase(_ => BuildIpNtableColumns())
+            .AddSelectableTableColumns(_ => BuildIpNtableColumns())
+            .AddValueCase(
+                DisplaySurface.Root | DisplaySurface.Nested | DisplaySurface.TableCell,
+                context =>
+                {
+                    var value = (IpNtableInfo)context.Value;
+                    var dev = string.IsNullOrWhiteSpace(value.Dev) ? string.Empty : $" ({value.Dev})";
+                    return $"{value.Name}{dev}";
+                });
+    }
+
     private static DisplayProfile CreateSystemdUnitInfoProfile()
     {
         return DisplayProfile
@@ -841,6 +981,17 @@ public static class BuiltInDisplayProfiles
             .AddValueCase(
                 DisplaySurface.Root | DisplaySurface.Nested | DisplaySurface.TableCell,
                 context => FormatTuplePreview((ITuple)context.Value));
+    }
+
+    private static DisplayProfile CreateHashSetProfile()
+    {
+        return new DisplayProfile(typeof(HashSet<>))
+            .AddTableCase(
+                context => context.Rows.Count == 1,
+                _ => BuildHashSetColumns())
+            .AddValueCase(
+                DisplaySurface.Root | DisplaySurface.Nested | DisplaySurface.TableCell,
+                context => FormatHashSetPreview(context.Value));
     }
 
     private static DisplayProfile CreateIndexProfile()
@@ -2865,6 +3016,27 @@ public static class BuiltInDisplayProfiles
         return columns;
     }
 
+    private static IReadOnlyList<DisplayTableColumn> BuildHashSetColumns()
+    {
+        return
+        [
+            new DisplayTableColumn(
+                "Count",
+                row => row is ICollection collection ? collection.Count : null,
+                MinWidth: 3,
+                MaxWidth: 8,
+                Priority: 0,
+                CanHide: false),
+            new DisplayTableColumn(
+                "Preview",
+                row => FormatHashSetPreview(row),
+                MinWidth: 6,
+                MaxWidth: 96,
+                Priority: 10,
+                CanHide: true),
+        ];
+    }
+
     private static IReadOnlyList<DisplayTableColumn> BuildIndexColumns()
     {
         return
@@ -3501,6 +3673,108 @@ public static class BuiltInDisplayProfiles
             new DisplayTableColumn("IifName", row => ((IpRuleInfo)row).IifName, MinWidth: 3, MaxWidth: 16, Priority: 60),
             new DisplayTableColumn("OifName", row => ((IpRuleInfo)row).OifName, MinWidth: 3, MaxWidth: 16, Priority: 70),
             new DisplayTableColumn("FwMark", row => ((IpRuleInfo)row).FirewallMark, DisplayTableAlignment.Right, MinWidth: 3, MaxWidth: 10, Priority: 80),
+        ];
+    }
+
+    private static IReadOnlyList<DisplayTableColumn> BuildIpNetnsColumns()
+    {
+        return
+        [
+            new DisplayTableColumn("Name", row => ((IpNetnsInfo)row).Name, MinWidth: 4, MaxWidth: 32, Priority: 0, CanHide: false),
+            new DisplayTableColumn("Id", row => ((IpNetnsInfo)row).Id, DisplayTableAlignment.Right, MinWidth: 2, MaxWidth: 10, Priority: 10),
+        ];
+    }
+
+    private static IReadOnlyList<DisplayTableColumn> BuildIpTunnelColumns()
+    {
+        return
+        [
+            new DisplayTableColumn("Name", row => ((IpTunnelInfo)row).Name, MinWidth: 4, MaxWidth: 24, Priority: 0, CanHide: false),
+            new DisplayTableColumn("Mode", row => ((IpTunnelInfo)row).Mode, MinWidth: 3, MaxWidth: 12, Priority: 10),
+            new DisplayTableColumn("Remote", row => ((IpTunnelInfo)row).Remote, MinWidth: 7, MaxWidth: 48, Priority: 20),
+            new DisplayTableColumn("Local", row => ((IpTunnelInfo)row).Local, MinWidth: 7, MaxWidth: 48, Priority: 30),
+            new DisplayTableColumn("Ttl", row => ((IpTunnelInfo)row).Ttl, DisplayTableAlignment.Right, MinWidth: 2, MaxWidth: 6, Priority: 40),
+            new DisplayTableColumn("Tos", row => ((IpTunnelInfo)row).Tos, MinWidth: 3, MaxWidth: 12, Priority: 50),
+            new DisplayTableColumn("Dev", row => ((IpTunnelInfo)row).Dev, MinWidth: 3, MaxWidth: 16, Priority: 60),
+        ];
+    }
+
+    private static IReadOnlyList<DisplayTableColumn> BuildIpTuntapColumns()
+    {
+        return
+        [
+            new DisplayTableColumn("Name", row => ((IpTuntapInfo)row).Name, MinWidth: 4, MaxWidth: 24, Priority: 0, CanHide: false),
+            new DisplayTableColumn("Mode", row => ((IpTuntapInfo)row).Mode, MinWidth: 3, MaxWidth: 8, Priority: 10),
+            new DisplayTableColumn("User", row => ((IpTuntapInfo)row).User, MinWidth: 3, MaxWidth: 16, Priority: 20),
+            new DisplayTableColumn("Group", row => ((IpTuntapInfo)row).Group, MinWidth: 3, MaxWidth: 16, Priority: 30),
+            new DisplayTableColumn("MultiQueue", row => ((IpTuntapInfo)row).MultiQueue, MinWidth: 3, MaxWidth: 8, Priority: 40),
+        ];
+    }
+
+    private static IReadOnlyList<DisplayTableColumn> BuildIpVrfColumns()
+    {
+        return
+        [
+            new DisplayTableColumn("Name", row => ((IpVrfInfo)row).Name, MinWidth: 4, MaxWidth: 32, Priority: 0, CanHide: false),
+            new DisplayTableColumn("TableId", row => ((IpVrfInfo)row).TableId, DisplayTableAlignment.Right, MinWidth: 3, MaxWidth: 10, Priority: 10),
+        ];
+    }
+
+    private static IReadOnlyList<DisplayTableColumn> BuildIpMaddrColumns()
+    {
+        return
+        [
+            new DisplayTableColumn("Index", row => ((IpMaddrInfo)row).Index, DisplayTableAlignment.Right, MinWidth: 1, MaxWidth: 6, Priority: 0, CanHide: false),
+            new DisplayTableColumn("Name", row => ((IpMaddrInfo)row).Name, MinWidth: 3, MaxWidth: 24, Priority: 10, CanHide: false),
+            new DisplayTableColumn("Addrs", row => ((IpMaddrInfo)row).AddressCount, DisplayTableAlignment.Right, MinWidth: 2, MaxWidth: 6, Priority: 20),
+        ];
+    }
+
+    private static IReadOnlyList<DisplayTableColumn> BuildIpMaddrEntryColumns()
+    {
+        return
+        [
+            new DisplayTableColumn("Family", row => ((IpMaddrEntry)row).Family, MinWidth: 3, MaxWidth: 8, Priority: 0),
+            new DisplayTableColumn("Address", row => ((IpMaddrEntry)row).Address, MinWidth: 7, MaxWidth: 48, Priority: 10, CanHide: false),
+            new DisplayTableColumn("Link", row => ((IpMaddrEntry)row).Link, MinWidth: 8, MaxWidth: 24, Priority: 20),
+            new DisplayTableColumn("Users", row => ((IpMaddrEntry)row).Users, DisplayTableAlignment.Right, MinWidth: 2, MaxWidth: 6, Priority: 30),
+        ];
+    }
+
+    private static IReadOnlyList<DisplayTableColumn> BuildIpMrouteColumns()
+    {
+        return
+        [
+            new DisplayTableColumn("Group", row => ((IpMrouteInfo)row).Group, MinWidth: 7, MaxWidth: 48, Priority: 0, CanHide: false),
+            new DisplayTableColumn("Source", row => ((IpMrouteInfo)row).Source, MinWidth: 7, MaxWidth: 48, Priority: 10),
+            new DisplayTableColumn("Iif", row => ((IpMrouteInfo)row).Iif, MinWidth: 3, MaxWidth: 16, Priority: 20),
+            new DisplayTableColumn("Oifs", row => string.Join(", ", ((IpMrouteInfo)row).Oifs), MinWidth: 3, MaxWidth: 32, Priority: 30),
+            new DisplayTableColumn("Packets", row => ((IpMrouteInfo)row).Packets, DisplayTableAlignment.Right, MinWidth: 3, MaxWidth: 12, Priority: 40),
+            new DisplayTableColumn("Bytes", row => ((IpMrouteInfo)row).Bytes, DisplayTableAlignment.Right, MinWidth: 3, MaxWidth: 12, Priority: 50),
+        ];
+    }
+
+    private static IReadOnlyList<DisplayTableColumn> BuildIpTokenColumns()
+    {
+        return
+        [
+            new DisplayTableColumn("Token", row => ((IpTokenInfo)row).Token, MinWidth: 4, MaxWidth: 48, Priority: 0, CanHide: false),
+            new DisplayTableColumn("Interface", row => ((IpTokenInfo)row).InterfaceName, MinWidth: 3, MaxWidth: 24, Priority: 10),
+        ];
+    }
+
+    private static IReadOnlyList<DisplayTableColumn> BuildIpNtableColumns()
+    {
+        return
+        [
+            new DisplayTableColumn("Family", row => ((IpNtableInfo)row).Family, MinWidth: 4, MaxWidth: 8, Priority: 0, CanHide: false),
+            new DisplayTableColumn("Name", row => ((IpNtableInfo)row).Name, MinWidth: 4, MaxWidth: 16, Priority: 10, CanHide: false),
+            new DisplayTableColumn("Dev", row => ((IpNtableInfo)row).Dev, MinWidth: 3, MaxWidth: 16, Priority: 20),
+            new DisplayTableColumn("Reachable", row => ((IpNtableInfo)row).Reachable, DisplayTableAlignment.Right, MinWidth: 4, MaxWidth: 10, Priority: 30),
+            new DisplayTableColumn("BaseReach", row => ((IpNtableInfo)row).BaseReachable, DisplayTableAlignment.Right, MinWidth: 4, MaxWidth: 10, Priority: 40),
+            new DisplayTableColumn("Retrans", row => ((IpNtableInfo)row).Retrans, DisplayTableAlignment.Right, MinWidth: 4, MaxWidth: 10, Priority: 50),
+            new DisplayTableColumn("GcStale", row => ((IpNtableInfo)row).GcStale, DisplayTableAlignment.Right, MinWidth: 4, MaxWidth: 10, Priority: 60),
+            new DisplayTableColumn("RefCnt", row => ((IpNtableInfo)row).RefCount, DisplayTableAlignment.Right, MinWidth: 3, MaxWidth: 8, Priority: 70),
         ];
     }
 
@@ -4322,6 +4596,33 @@ public static class BuiltInDisplayProfiles
         var items = Enumerable.Range(0, tuple.Length)
             .Select(index => FormatDisplaySummaryValue(tuple[index]));
         return $"({string.Join(", ", items)})";
+    }
+
+    private static string FormatHashSetPreview(object value)
+    {
+        if (value is not IEnumerable enumerable)
+        {
+            return "{::}";
+        }
+
+        var items = new List<string>();
+        var count = 0;
+
+        foreach (var item in enumerable)
+        {
+            if (count >= 6)
+            {
+                items.Add("...");
+                break;
+            }
+
+            items.Add(FormatDisplaySummaryValue(item));
+            count++;
+        }
+
+        return items.Count == 0
+            ? "{::}"
+            : $"{{: {string.Join(", ", items)} :}}";
     }
 
     private static string FormatDisplaySummaryValue(object? value)

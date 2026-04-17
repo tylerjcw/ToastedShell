@@ -17,7 +17,8 @@ namespace Tosh.Core.Commands;
 [CommandExample("find . -perm -755", Title = "Files with at least rwxr-xr-x")]
 [CommandExample("find . -regex \".*\\\\.tosh$\"")]
 [CommandExample("find . -iregex \".*readme.*\"")]
-[CommandOutput("Returns typed filesystem entries with rich metadata that flow naturally through the object pipeline.")]
+[CommandOutput("Returns typed filesystem entries with rich metadata that flow naturally through the object pipeline.", TypeName = "FileSystemEntry", Members = "Name, FullName, Type, Size, Modified")]
+[CommandSideEffects(ReadsFiles = true)]
 [PipelineInput(AcceptsList = true, Description = "Uses piped path-like roots when explicit roots are omitted. Falls back to the current directory when neither are present.")]
 public sealed class FindCommand : ShellCommand
 {

@@ -1,7 +1,8 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Filesystem")]
-[CommandExample("pwd")]
+[CommandExample("pwd", Title = "Print the current working directory")]
+[CommandExample("pwd | get .FullName", Title = "Get the full path as a string")]
 [CommandOutput("Returns the current working directory as a DirectoryInfo object.")]
 public sealed class PrintWorkingDirectoryCommand : ShellCommand
 {

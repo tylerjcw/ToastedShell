@@ -43,6 +43,7 @@ internal sealed partial class ConsoleInlinePromptProvider
         string? filterSnapshot = null;
 
         Console.Write(HideCursor);
+        Console.Write(EnableSgrMouse);
 
         try
         {
@@ -182,7 +183,45 @@ internal sealed partial class ConsoleInlinePromptProvider
                 Console.Write(ClearLine);
                 Console.Write(borderStyle.Apply($"{box.BottomLeft}{new string(box.Horizontal, innerWidth)}{box.BottomRight}").ToAnsi());
 
-                var key = Console.ReadKey(intercept: true);
+                var input = _inputReader.Read();
+
+                if (input.Mouse is { } mouse)
+                {
+                    const int inspectHeaderLines = 6;
+
+                    if (mouse.Action == Tui.TuiMouseAction.Scroll)
+                    {
+                        if (mouse.Button == Tui.TuiMouseButton.ScrollUp)
+                            state.MoveUp();
+                        else if (mouse.Button == Tui.TuiMouseButton.ScrollDown)
+                            state.MoveDown();
+                    }
+                    else if (mouse.Action == Tui.TuiMouseAction.Press && mouse.Button == Tui.TuiMouseButton.Left)
+                    {
+                        var (_, bottomRow) = Console.GetCursorPosition();
+                        var listStartRow = bottomRow - totalLines + 1 + inspectHeaderLines;
+                        var listRow = mouse.Row - listStartRow;
+                        if (listRow >= 0 && listRow < pageSize)
+                        {
+                            var clickedIndex = viewOffset + listRow;
+                            if (clickedIndex < visibleNodes.Count)
+                            {
+                                state.SelectIndex(clickedIndex);
+                            }
+                        }
+
+                        break;
+                    }
+
+                    continue;
+                }
+
+                if (!input.IsKey)
+                {
+                    continue;
+                }
+
+                var key = input.Key;
 
                 if (!editingFilter && key.KeyChar == '/')
                 {
@@ -279,6 +318,7 @@ internal sealed partial class ConsoleInlinePromptProvider
         }
         finally
         {
+            Console.Write(DisableSgrMouse);
             Console.Write(ShowCursor);
         }
     }

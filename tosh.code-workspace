@@ -17,6 +17,36 @@
 		},
 		{
 			"path": "../../.config/tosh"
+		},
+		{
+			"path": "../bash"
+		},
+		{
+			"path": "../dotnet"
+		},
+		{
+			"path": "../cpython"
+		},
+		{
+			"path": "../att_software_tech"
+		},
+		{
+			"path": "../AutoHotkey"
+		},
+		{
+			"path": "../rust"
+		},
+		{
+			"path": "../ksh"
+		},
+		{
+			"path": "../perl5"
+		},
+		{
+			"path": "../php"
+		},
+		{
+			"path": "../ruby"
 		}
 	],
 	"settings": {

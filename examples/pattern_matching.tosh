@@ -1,0 +1,149 @@
+#!/usr/bin/env tosh
+# pattern_matching.tosh
+# Demonstrates match expressions and switch statements with all pattern types:
+# value, type (is), comparison (>, >=, <, <=), range (..), regex (=~), and guards.
+
+# ---- Value Matching --------------------------------------------------------
+# Plain values in match arms compare by equality.
+
+echo "=== Value Matching ==="
+var format = "json"
+var label = match ($format) {
+    "json" => "JavaScript Object Notation"
+    "csv"  => "Comma-Separated Values"
+    "xml"  => "Extensible Markup Language"
+    default => "Unknown format"
+}
+echo $"Format '{$format}' is: {$label}"
+
+# ---- Type patterns (is) ---------------------------------------------------
+# Use `_ is Type` to match on the runtime type of the value.
+
+echo "=== Type Patterns ==="
+var values = [42, "hello", true, 3.14]
+for val in ($values) {
+    var description = match ($val) {
+        _ is int    => $"integer: {$val}"
+        _ is string => $"string: \"{$val}\""
+        _ is bool   => $"boolean: {$val}"
+        _ is double => $"double: {$val}"
+        default     => "unknown"
+    }
+    echo $description
+}
+
+# ---- Comparison patterns (>, >=, <, <=) ------------------------------------
+# Use `_ >= value` to test the matched expression against a bound.
+
+echo "=== Comparison Patterns ==="
+func classify_score(score: int) -> string {
+    return match ($score) {
+        _ >= 90 => "A"
+        _ >= 80 => "B"
+        _ >= 70 => "C"
+        _ >= 60 => "D"
+        default => "F"
+    }
+}
+
+for score in ([95, 82, 71, 55]) {
+    echo $"{$score} => {classify_score $score}"
+}
+
+# ---- Range Patterns (..) --------------------------------------------------
+# Use `start..end` to match when the value falls within an inclusive range.
+
+echo "=== Range Patterns ==="
+func http_category(status: int) -> string {
+    return match ($status) {
+        100..199 => "Informational"
+        200..299 => "Success"
+        300..399 => "Redirection"
+        400..499 => "Client Error"
+        500..599 => "Server Error"
+        default  => "Unknown"
+    }
+}
+
+for code in ([200, 301, 404, 500, 100]) {
+    echo $"HTTP {$code}: {http_category $code}"
+}
+
+# ---- Regex Patterns (=~) --------------------------------------------------
+# Use `_ =~ "pattern"` to match the string representation against a regex.
+
+echo "=== Regex Patterns ==="
+var files = ["report.pdf", "data.csv", "image.png", "notes.txt", "backup.tar.gz"]
+for file in ($files) {
+    var kind = match ($file) {
+        _ =~ "\\.pdf$"     => "document"
+        _ =~ "\\.(csv|tsv)$" => "data"
+        _ =~ "\\.(png|jpg)$" => "image"
+        _ =~ "\\.tar\\."   => "archive"
+        default             => "other"
+    }
+    echo $"{$file} => {$kind}"
+}
+
+# ---- Guard Clauses (if) ---------------------------------------------------
+# Append `if (condition)` to any arm to add an extra predicate.
+
+echo "=== Guard Clauses ==="
+func describe_number(n: int) -> string {
+    return match ($n) {
+        0 => "zero"
+        _ > 0 if (($n % 2 == 0)) => "positive even"
+        _ > 0 => "positive odd"
+        _ < 0 if (($n % 2 == 0)) => "negative even"
+        default => "negative odd"
+    }
+}
+
+for n in ([0, 7, -4, 12, -3]) {
+    echo $"{$n}: {describe_number $n}"
+}
+
+# ---- Match as an expression ------------------------------------------------
+# match returns a value, so it can appear inside interpolations or assignments.
+
+echo "=== Match as Expression ==="
+var status = 404
+echo $"Status {$status} means: {match ($status) { 200 => "OK"; 404 => "Not Found"; default => "Other" }}"
+
+# ---- Switch with patterns --------------------------------------------------
+# switch uses `case` which already disambiguates, so no `_` prefix is needed.
+# Comparison operators go directly after `case`.
+
+echo "=== Switch with Patterns ==="
+var temperature = 72
+
+switch ($temperature) {
+    case < 32 {
+        echo "Freezing"
+    }
+    case 32..50 {
+        echo "Cold"
+    }
+    case 51..75 {
+        echo "Comfortable"
+    }
+    case > 75 {
+        echo "Hot"
+    }
+}
+
+# ---- Combined patterns in real use -----------------------------------------
+# A practical example: classify file system entries.
+
+echo "=== Practical: Classify Files ==="
+ls -la | first 10 | each {
+    var entry = _
+    var tag = match (_.Type.ToString()) {
+        "dir"     => "DIR "
+        "file" if ((_.Size > 1kb)) => "BIG "
+        "file"    => "file"
+        "symlink" => "link"
+        default   => "????"
+    }
+    echo $"[{$tag}] {_.Name}"
+}

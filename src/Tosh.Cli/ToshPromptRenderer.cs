@@ -83,16 +83,16 @@ internal static class ToshPromptRenderer
                     segments.Add(PromptSegmentUtilities.BuildDirectorySegment(context.CurrentDirectory, promptConfig.DirectoryDepth, theme.Directory));
                     break;
                 case "Git" when promptConfig.GitEnabled:
-                {
-                    var gitSegment = PromptSegmentUtilities.BuildGitSegment(context.CurrentDirectory, theme.Git);
-
-                    if (gitSegment is not null)
                     {
-                        segments.Add(gitSegment);
-                    }
+                        var gitSegment = PromptSegmentUtilities.BuildGitSegment(context.CurrentDirectory, theme.Git);
 
-                    break;
-                }
+                        if (gitSegment is not null)
+                        {
+                            segments.Add(gitSegment);
+                        }
+
+                        break;
+                    }
                 case "UserHost" when promptConfig.UserHostEnabled:
                     segments.Add(PromptSegmentUtilities.BuildUserHostSegment(context.UserName, context.HostName, theme.UserHost));
                     break;
@@ -103,36 +103,41 @@ internal static class ToshPromptRenderer
                     segments.Add(PromptSegmentUtilities.BuildJobsSegment(context.JobCount, theme.Jobs));
                     break;
                 case "Duration" when promptConfig.DurationEnabled:
-                {
-                    var durationSegment = PromptSegmentUtilities.BuildDurationSegment(
-                        context.LastDuration,
-                        TimeSpan.FromMilliseconds(promptConfig.DurationThresholdMilliseconds),
-                        theme.Duration);
-
-                    if (durationSegment is not null)
                     {
-                        segments.Add(durationSegment);
-                    }
+                        var durationSegment = PromptSegmentUtilities.BuildDurationSegment(
+                            context.LastDuration,
+                            TimeSpan.FromMilliseconds(promptConfig.DurationThresholdMilliseconds),
+                            theme.Duration);
 
-                    break;
-                }
+                        if (durationSegment is not null)
+                        {
+                            segments.Add(durationSegment);
+                        }
+
+                        break;
+                    }
                 case "ExitCode" when promptConfig.ExitCodeEnabled:
-                {
-                    var exitCodeSegment = PromptSegmentUtilities.BuildExitCodeSegment(context.ExitCode, theme.ExitCode);
-
-                    if (exitCodeSegment is not null)
                     {
-                        segments.Add(exitCodeSegment);
-                    }
+                        var exitCodeSegment = PromptSegmentUtilities.BuildExitCodeSegment(context.ExitCode, theme.ExitCode);
 
-                    break;
-                }
+                        if (exitCodeSegment is not null)
+                        {
+                            segments.Add(exitCodeSegment);
+                        }
+
+                        break;
+                    }
                 case "Name":
                     segments.Add(theme.Name.Apply(promptConfig.NameText));
                     break;
                 case "Indicator":
-                    segments.Add(theme.Indicator.Apply(promptConfig.IndicatorText));
-                    break;
+                    {
+                        var indicator = TerminalGlyphs.IsActive
+                            ? TerminalGlyphs.Indicator
+                            : promptConfig.IndicatorText;
+                        segments.Add(theme.Indicator.Apply(indicator));
+                        break;
+                    }
             }
         }
 

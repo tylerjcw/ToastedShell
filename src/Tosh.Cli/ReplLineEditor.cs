@@ -25,7 +25,8 @@ public sealed class ReplLineEditor
         Func<string, ReplContinuationState>? continuationHandler = null,
         Func<LineEditorBuffer, ConsoleKeyInfo, bool>? specialKeyHandler = null,
         Action<LineEditorBuffer>? onBufferActivated = null,
-        Action<LineEditorBuffer>? onBufferDeactivated = null)
+        Action<LineEditorBuffer>? onBufferDeactivated = null,
+        Func<string, int, string?>? signatureHintProvider = null)
     {
         ArgumentNullException.ThrowIfNull(prompt);
         ArgumentNullException.ThrowIfNull(history);
@@ -55,7 +56,8 @@ public sealed class ReplLineEditor
 
         try
         {
-            cursorRow = Render(prompt, continuationPrompt, buffer, cursorRow, completionState, historySearchState, highlighter, maxVisibleSuggestions, showGhostText, theme);
+            var initialHint = signatureHintProvider?.Invoke(buffer.Text, buffer.CursorIndex);
+            cursorRow = Render(prompt, continuationPrompt, buffer, cursorRow, completionState, historySearchState, highlighter, maxVisibleSuggestions, showGhostText, theme, initialHint);
 
             while (true)
             {
@@ -179,7 +181,8 @@ public sealed class ReplLineEditor
 
                 if (shouldRender)
                 {
-                    cursorRow = Render(prompt, continuationPrompt, buffer, cursorRow, completionState, historySearchState, highlighter, maxVisibleSuggestions, showGhostText, theme);
+                    var hint = signatureHintProvider?.Invoke(buffer.Text, buffer.CursorIndex);
+                    cursorRow = Render(prompt, continuationPrompt, buffer, cursorRow, completionState, historySearchState, highlighter, maxVisibleSuggestions, showGhostText, theme, hint);
                 }
             }
         }
@@ -561,7 +564,8 @@ public sealed class ReplLineEditor
         Func<string, string>? highlighter,
         int maxVisibleSuggestions,
         bool showGhostText,
-        ToshCompletionThemeConfig theme)
+        ToshCompletionThemeConfig theme,
+        string? signatureHint = null)
     {
         var renderedInput = RenderHighlightedInput(buffer, completionState, highlighter, showGhostText, theme);
         var consoleWidth = GetConsoleWidth();
@@ -569,6 +573,12 @@ public sealed class ReplLineEditor
         var overlay = historySearchState is not null
             ? BuildHistorySearchOverlay(historySearchState, theme)
             : BuildSuggestionOverlay(completionState, maxVisibleSuggestions, theme);
+
+        if (overlay.Length == 0 && signatureHint is { Length: > 0 })
+        {
+            overlay = "\n" + theme.Detail.Apply(signatureHint).ToAnsi();
+        }
+
         var renderedText = inputLayout.RenderedText + overlay;
         var totalRows = CalculateRenderedRows(renderedText, consoleWidth);
         var cursorPosition = inputLayout.CursorPositions[buffer.CursorIndex];

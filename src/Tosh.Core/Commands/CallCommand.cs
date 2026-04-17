@@ -1,7 +1,13 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("CLR")]
+[CommandArgument("method-name", "The method to invoke (or a type name for static calls).")]
+[CommandArgument("args", "Arguments to pass to the method.", Required = false)]
+[CommandExample("\"hello\" | call ToUpper", Title = "Call an instance method on a piped string")]
+[CommandExample("call System.Math Sqrt 144", Title = "Call a static method")]
 [CommandNote("Prefer the fluent `$obj.Method()` expression syntax for instance calls and `TypeName.Method()` for static calls. The `call` command form is a legacy fallback.")]
+[CommandOutput("The return value of the invoked method.")]
+[PipelineInput(AcceptsScalar = true, AcceptsRecord = true, Description = "Uses the piped object as the instance for method invocation.")]
 public sealed class CallCommand : ShellCommand
 {
     public CallCommand()

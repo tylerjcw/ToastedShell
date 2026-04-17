@@ -3,6 +3,7 @@ using Tosh.Core.Formats;
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Data")]
+[CommandOutput("Serialized text in the specified format.", Mode = "text")]
 [CommandExample("ls | to json")]
 [CommandExample("ls | to csv")]
 [CommandExample("ls | to toml")]

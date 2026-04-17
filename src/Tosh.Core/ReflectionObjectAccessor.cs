@@ -203,6 +203,13 @@ public sealed class ReflectionObjectAccessor : IObjectAccessor
             {
                 return;
             }
+
+            if (shellRecord is ShellEnvironmentNamespace)
+            {
+                throw new InvalidOperationException(
+                    $"Cannot assign to '$env.{segment}' directly. The $env namespace is read-only. "
+                    + $"Use: export {segment} = \"value\"");
+            }
         }
 
         if (ShellRecordUtilities.TrySetValue(target, segment, value))
@@ -216,37 +223,37 @@ public sealed class ReflectionObjectAccessor : IObjectAccessor
         switch (member)
         {
             case PropertyInfo property:
-            {
-                if (property.SetMethod is null || !property.SetMethod.IsPublic)
                 {
-                    if (property.GetValue(target) is IShellRecordObject recordTarget &&
-                        value is IDictionary<string, object?> dict)
+                    if (property.SetMethod is null || !property.SetMethod.IsPublic)
                     {
-                        foreach (var entry in dict)
+                        if (property.GetValue(target) is IShellRecordObject recordTarget &&
+                            value is IDictionary<string, object?> dict)
                         {
-                            recordTarget.TrySetMember(entry.Key, entry.Value);
+                            foreach (var entry in dict)
+                            {
+                                recordTarget.TrySetMember(entry.Key, entry.Value);
+                            }
+
+                            return;
                         }
 
-                        return;
+                        throw new InvalidOperationException($"Property '{segment}' on type '{targetType.FullName}' is read-only.");
                     }
 
-                    throw new InvalidOperationException($"Property '{segment}' on type '{targetType.FullName}' is read-only.");
+                    property.SetValue(target, ConvertAssignedValue(value, property.PropertyType, segment, targetType));
+                    return;
                 }
-
-                property.SetValue(target, ConvertAssignedValue(value, property.PropertyType, segment, targetType));
-                return;
-            }
 
             case FieldInfo field:
-            {
-                if (field.IsInitOnly || field.IsLiteral)
                 {
-                    throw new InvalidOperationException($"Field '{segment}' on type '{targetType.FullName}' is read-only.");
-                }
+                    if (field.IsInitOnly || field.IsLiteral)
+                    {
+                        throw new InvalidOperationException($"Field '{segment}' on type '{targetType.FullName}' is read-only.");
+                    }
 
-                field.SetValue(target, ConvertAssignedValue(value, field.FieldType, segment, targetType));
-                return;
-            }
+                    field.SetValue(target, ConvertAssignedValue(value, field.FieldType, segment, targetType));
+                    return;
+                }
         }
     }
 

@@ -42,7 +42,8 @@ namespace Tosh.Core.Commands;
 [CommandExample("http serve ./dropbox --upload --generate-token", Title = "Start a temporary upload server with a generated access token")]
 [CommandExample("http servers | get { Id, ShareUrl, Upload }", Title = "Inspect open temporary file servers")]
 [CommandNote("The native `http` builtin is object-first and backed by .NET HttpClient. Use `--as response` for a structured response object, or `--as json|text|bytes|lines` to project the body directly. `http serve <dir>` starts a temporary file server and returns a live server handle; `--browse`, `--upload`, `--token`, `--generate-token`, and `--lan` turn it into a lightweight cross-platform sharing tool. Use `http servers`, `http stop`, or `close` to manage it.")]
-[CommandOutput("Returns either a structured HttpResponseInfo object or a decoded body, depending on `--as`. `http serve` returns live HttpFileServerHandle objects.")]
+[CommandOutput("Returns either a structured HttpResponseInfo object or a decoded body, depending on `--as`. `http serve` returns live HttpFileServerHandle objects.", TypeName = "HttpResponseInfo", Members = "StatusCode, ReasonPhrase, Method, RequestUri, ContentType, Body, Duration", Mode = "mixed")]
+[CommandSideEffects(Network = true)]
 [PipelineInput(AcceptsScalar = true, Description = "`http send` accepts a single HttpRequestDefinition or HttpRequestMessage from the pipeline.")]
 public sealed class HttpCommand : ShellCommand
 {

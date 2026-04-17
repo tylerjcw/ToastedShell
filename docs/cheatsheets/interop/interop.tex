@@ -1,0 +1,372 @@
+\input{../_shared/preamble.tex}
+
+\begin{document}
+\footnotesize
+\sheettitle{Types, Modules, And Interop}{User-defined types, CLR access, reflection, and native interop basics}{README + examples + commands}
+
+\begin{multicols*}{3}
+
+\section{Using And Require}
+\begin{lstlisting}
+using System.IO
+using System.IO = IO
+\end{lstlisting}
+
+\begin{lstlisting}
+require "./utils.tosh"
+require Inventory from "./toastlib.tosh"
+require Inventory from "./toastlib.tosh" as Inv
+require { Reporting, Utilities } from "./toastlib.tosh"
+\end{lstlisting}
+
+\begin{itemize}
+\item \texttt{using} shortens CLR namespace references in the current lexical scope.
+\item \texttt{require} loads a ToSh script/module once per session and imports names lexically.
+\item Imported modules are accessed with dot notation, e.g. \texttt{Inv.sample\_items()}.
+\end{itemize}
+
+\section{Named Types}
+\begin{lstlisting}
+record Item(Name: string, Quantity: int)
+
+enum StockState {
+    Healthy, Low, Out
+}
+\end{lstlisting}
+
+\begin{lstlisting}
+class Animal {
+    prop Name: string? = null
+    prop Sound: string? = null
+
+    Animal(name: string, sound: string) {
+        $this.Name = $name
+        $this.Sound = $sound
+    }
+
+    func Describe() -> string {
+        return $"The {$this.Name} says {$this.Sound}"
+    }
+}
+\end{lstlisting}
+
+\note{Records are lightweight value objects; classes support constructors, methods, stored/computed properties, \texttt{static} members, and \texttt{shy} private members.}
+
+\section{Modules}
+\begin{lstlisting}
+module Utilities {
+    shy func hidden() { ... }
+
+    export func banner(title: string) {
+        writeline $"=== {$title} ==="
+    }
+}
+
+Utilities.banner("Report")
+\end{lstlisting}
+
+\columnbreak
+
+\section{CLR Interop}
+\begin{lstlisting}
+new System.Guid "d3b07384-d113-4ec6-a5d2-5b1d0d2e8c39"
+new System.Random | call Next 1 100
+call System.String Join ", " ["objects", "pipelines", "types"]
+\end{lstlisting}
+
+\begin{lstlisting}
+"hello".ToUpper()
+String.Join(" + ", ["a", "b"])
+Math.Round(Math.PI, 4)
+\end{lstlisting}
+
+\note{Prefer fluent calls like \texttt{\$obj.Method()} and \texttt{TypeName.Method()}; use \texttt{call} or \texttt{call-method} when the invocation has to stay dynamic or pipeline-shaped.}
+
+\tighttable{>{\ttfamily\raggedright\arraybackslash}p{0.27\linewidth}X}{
+\toprule
+Command & Use \\
+\midrule
+\texttt{new} & construct CLR or ToSh objects \\
+\texttt{call} & invoke a CLR instance/static method \\
+\texttt{call-method} & invoke a method by dynamic name \\
+\texttt{cast} & convert values to a target type \\
+\texttt{type-of} & return the runtime type \\
+\bottomrule
+}
+
+\section{Reflection And Inspection}
+\begin{lstlisting}
+type-of $obj
+describe-type list<int>
+describe-type System.String
+members System.DayOfWeek
+methods $obj
+constructors list<int>
+\end{lstlisting}
+
+\begin{lstlisting}
+get-props $obj
+get-prop $obj Name
+set-prop $obj Name "Toast"
+del-prop $obj Name
+has-prop $obj Name
+has-method $obj ToString
+\end{lstlisting}
+
+\begin{lstlisting}
+inspect $obj
+inspect --flat
+name-of $obj
+\end{lstlisting}
+
+\note{Dynamic records and many runtime objects expose a shell-record interface, so reflection commands work well across both CLR objects and ToSh-native shapes.}
+
+\section{Assembly Loading}
+\begin{lstlisting}
+load-assembly ./MyLib.dll
+describe-type MyCompany.Tools.Widget
+constructors MyCompany.Tools.Widget
+\end{lstlisting}
+
+\note{Load an assembly when a CLR type is not already visible to the session; after that, \texttt{new}, \texttt{cast}, and dot-syntax calls work normally.}
+
+\columnbreak
+
+\section{Pattern For Domain Code}
+\begin{lstlisting}
+module Inventory {
+    record Item(Name: string, Quantity: int)
+    enum StockState { Healthy, Low, Out }
+
+    func state_of(item: Item) -> StockState {
+        return match ($item.Quantity) {
+            _ <= 0 => StockState.Out
+            _ < 3 => StockState.Low
+            default => StockState.Healthy
+        }
+    }
+}
+\end{lstlisting}
+
+\begin{lstlisting}
+var bread = new Inventory.Item("Bread", 2)
+Inventory.state_of($bread)
+\end{lstlisting}
+
+\section{Native Interop Basics}
+\begin{lstlisting}
+require native "./libcrypto.so" as Crypto
+
+bind Crypto {
+    func sha256(data: byte-ptr, len: ulong) -> byte-ptr
+}
+\end{lstlisting}
+
+\begin{lstlisting}
+alloc buffer = 1024
+native-write $buffer "hello"
+native-read $buffer
+size-of int
+offset-of MyStruct FieldName
+native-free $buffer
+\end{lstlisting}
+
+\tighttable{>{\ttfamily\raggedright\arraybackslash}p{0.29\linewidth}X}{
+\toprule
+Native tool & Purpose \\
+\midrule
+\texttt{alloc} / \texttt{native-free} & manage unmanaged buffers \\
+\texttt{native-read} / \texttt{native-write} & copy values to and from native memory \\
+\texttt{size-of} / \texttt{offset-of} & inspect unmanaged layouts \\
+\bottomrule
+}
+
+\note{\textbf{Use records for compact data, classes for behavior, CLR interop for existing .NET types, and native interop only when managed APIs are not enough.} ToSh lives directly on top of the CLR, so shell pipelines, user-defined types, and .NET APIs can coexist in the same script.}
+
+\end{multicols*}
+\newpage
+
+\sheettitle{Types, Modules, And Interop}{Visibility, member forms, reflection workflow, and safer native patterns}{page 2 / front-back reference}
+
+\begin{multicols*}{3}
+
+\section{Visibility And Scope}
+\begin{lstlisting}
+module Utils {
+    shy var counter = 0
+    export func get-count() => $counter
+    global var DEBUG = false
+}
+\end{lstlisting}
+
+\tighttable{>{\ttfamily\raggedright\arraybackslash}p{0.27\linewidth}X}{
+\toprule
+Modifier & Effect \\
+\midrule
+\texttt{shy} & private to the current lexical scope or type \\
+\texttt{export} & visible when a module is imported \\
+\texttt{global} & session-wide binding outside local scope \\
+\bottomrule
+}
+
+\section{Class Member Forms}
+\begin{lstlisting}
+class HexColor {
+    prop Hex: string? {
+        get => $this.hex_value
+        set => $this.hex_value = $value
+    }
+
+    shy prop hex_value: string? = null
+    static func Green() => new HexColor("#00FF00")
+}
+\end{lstlisting}
+
+\begin{itemize}
+\item Stored property: \texttt{prop Name: Type = value}
+\item Computed property: \texttt{prop Magnitude: double => (...)}
+\item Getter/setter property: use a block with \texttt{get} and \texttt{set}
+\item Static members hang off the type: \texttt{HexColor.Green()}
+\end{itemize}
+
+\section{Reflection Workflow}
+\begin{lstlisting}
+types System.String
+describe-type list<int>
+members DateTimeOffset
+methods "toast"
+constructors System.Random
+\end{lstlisting}
+
+\section{Assembly Loading}
+\begin{lstlisting}
+load-assembly ./MyLib.dll
+types Widget
+describe-type MyCompany.Tools.Widget
+constructors MyCompany.Tools.Widget
+\end{lstlisting}
+
+\columnbreak
+
+\section{Object Mutation Tools}
+\begin{lstlisting}
+var original = { Name = "Bread", Qty = 2 }
+var copy = (clone $original)
+set-prop $copy Qty 5 | ignore
+get-prop $copy Qty
+del-prop $copy Qty
+\end{lstlisting}
+
+\begin{lstlisting}
+has-prop $copy Name
+has-method "hello" ToUpper
+get-props $copy
+get-methods "toast"
+\end{lstlisting}
+
+\note{Dynamic records are great for ad-hoc pipeline shapes; records and classes are better when you want named, reusable domain types.}
+
+\section{Module Import Patterns}
+\begin{lstlisting}
+require "./utils.tosh"
+require Inventory from "./toastlib.tosh"
+require Inventory from "./toastlib.tosh" as Inv
+require { Reporting, Utilities } from "./toastlib.tosh"
+\end{lstlisting}
+
+\begin{itemize}
+\item \texttt{require} is lexical and cached once per session.
+\item \texttt{using} only aliases CLR namespaces; it does not run scripts.
+\item Use module qualification when you want APIs to stay discoverable in larger scripts.
+\end{itemize}
+
+\section{CLR Call Patterns}
+\begin{lstlisting}
+new System.Random().Next(1, 100)
+"hello".Replace("h", "y")
+String.Join(", ", ["a", "b", "c"])
+Math.Round(Math.PI, 3)
+\end{lstlisting}
+
+\begin{lstlisting}
+call System.String Join ", " ["x", "y"]
+call-method "hello" Replace "llo" "y"
+\end{lstlisting}
+
+\section{Choose The Surface}
+\tighttable{>{\ttfamily\raggedright\arraybackslash}p{0.25\linewidth}X}{
+\toprule
+Tool & Prefer it when \\
+\midrule
+\texttt{record} & you want immutable value-shaped data \\
+\texttt{class} & you need behavior, methods, or private state \\
+\texttt{module} & you are grouping functions and types into an API \\
+CLR type & .NET already has the exact thing you need \\
+native ABI & managed APIs are not enough \\
+\bottomrule
+}
+
+\columnbreak
+
+\section{Native Signature Patterns}
+\begin{lstlisting}
+bind native "libc.so.6" as LibC {
+    func abs(int) -> int callconv cdecl
+    func strlen(string) -> nuint
+    func memcpy(nint, nint, nuint) -> nint
+}
+\end{lstlisting}
+
+\begin{lstlisting}
+require native "./libcrypto.so" as Crypto
+bind Crypto {
+    func sha256(data: byte-ptr, len: ulong) -> byte-ptr
+}
+\end{lstlisting}
+
+\tighttable{>{\ttfamily\raggedright\arraybackslash}p{0.29\linewidth}X}{
+\toprule
+Native type & Typical use \\
+\midrule
+\texttt{nint} / \texttt{nuint} & pointer-sized ints \\
+\texttt{byte-ptr} & raw buffer pointers \\
+\texttt{cstring} & C string interop surfaces \\
+\texttt{out} / \texttt{ref} & by-reference native parameters \\
+\bottomrule
+}
+
+\section{Buffer Workflow}
+\begin{lstlisting}
+var src = (native-alloc 6)
+var dst = (native-alloc 6)
+native-write $src "toast"
+LibC.memcpy($dst, $src, 6)
+native-read cstring $dst
+native-free $src $dst
+\end{lstlisting}
+
+\begin{lstlisting}
+alloc counter = long
+native-write $counter 42
+native-read long $counter
+native-free $counter
+\end{lstlisting}
+
+\section{Layout Inspection}
+\begin{lstlisting}
+size-of int
+size-of nint
+offset-of MyStruct Field1
+\end{lstlisting}
+
+\section{Native Safety Rules}
+\begin{itemize}
+\item Prefer \texttt{cstring} or pointer types for native string surfaces.
+\item Free every buffer allocated with \texttt{native-alloc} / \texttt{alloc}.
+\item Keep native signatures explicit: pointer types, by-ref mode, and calling convention.
+\end{itemize}
+
+\note{\textbf{Rule of thumb:} stay in CLR land unless you truly need a native ABI. When you do cross that boundary, spell signatures explicitly and free every buffer you allocate.}
+
+\end{multicols*}
+\end{document}

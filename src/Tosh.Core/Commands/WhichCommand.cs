@@ -1,6 +1,10 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Shell")]
+[CommandArgument("name", "One or more command names to resolve.")]
+[CommandExample("which ls", Title = "Find the ls command")]
+[CommandExample("which git python node", Title = "Resolve multiple commands")]
+[CommandOutput("Command resolution objects showing Kind (Builtin/External/Alias/Function), Name, and Path.", TypeName = "CommandResolution", Members = "Kind, Name, Path")]
 public sealed class WhichCommand : ShellCommand
 {
     public WhichCommand(string name = "which")

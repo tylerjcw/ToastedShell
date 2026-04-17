@@ -1,6 +1,11 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Pipeline")]
+[CommandArgument("count", "The number of objects to return from the end. Defaults to 1.", Required = false, Kind = "expression")]
+[CommandExample("echo 1 2 3 | last", Title = "Get the last item")]
+[CommandExample("ls | last 3", Title = "Get the last three items")]
+[CommandOutput("The last N pipeline objects.")]
+[PipelineInput(AcceptsScalar = true, AcceptsRecord = true, Description = "Buffers the pipeline and returns the final N items.")]
 public sealed class LastCommand : ShellCommand
 {
     public LastCommand()

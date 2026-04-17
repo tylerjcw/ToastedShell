@@ -76,7 +76,8 @@ publish_args=(
   -r "$rid"
   -o "$output_dir"
   -p:PublishSingleFile=true
-  -p:EnableCompressionInSingleFile=true
+  -p:PublishReadyToRun=true
+  -p:EnableCompressionInSingleFile=false
   -p:DebugType=None
   -p:DebugSymbols=false
   -p:DisableToshVsCodeExtensionSync=true

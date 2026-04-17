@@ -1,6 +1,13 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Text")]
+[CommandOption("-c", "Prefix each line with its count of consecutive occurrences.")]
+[CommandOption("-i", "Compare lines case-insensitively.")]
+[CommandArgument("path", "Optional file path(s) to read instead of pipeline input.", Required = false)]
+[CommandExample("echo a a b b b c | uniq", Title = "Collapse adjacent duplicates")]
+[CommandExample("echo a a b b b c | uniq -c", Title = "Count consecutive occurrences")]
+[CommandOutput("Unique adjacent values, optionally prefixed with counts.")]
+[PipelineInput(AcceptsScalar = true, Description = "Reads text lines from the pipeline or from file arguments.")]
 public sealed class UniqueCommand : ShellCommand
 {
     public UniqueCommand()

@@ -600,6 +600,10 @@ public sealed class DeclarationIndex
                     }
                     break;
 
+                case ComparisonPatternSyntax comparisonPattern:
+                    CollectArgument(comparisonPattern.Operand, scopeSpan, depth);
+                    break;
+
                 case RecordLiteralArgumentSyntax record:
                     foreach (var entry in record.Fields)
                     {

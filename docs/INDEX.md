@@ -1,4 +1,4 @@
-# ToSh Documentation
+# TōSh Documentation
 
 ## Language Specification
 

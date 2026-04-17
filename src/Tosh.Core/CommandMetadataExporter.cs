@@ -125,6 +125,7 @@ public static class CommandMetadataExporter
         return new CommandMetadata(
             Name: command.Name,
             Description: command.Description,
+            LongDescription: null,
             Usage: command.Usage,
             Category: category,
             Aliases: aliases,
@@ -133,7 +134,20 @@ public static class CommandMetadataExporter
             Examples: [],
             Notes: [],
             Output: null,
-            PipelineInput: null);
+            PipelineInput: null,
+            OutputType: null,
+            OutputMembers: null,
+            OutputMode: "structured",
+            SideEffects: null,
+            SinceVersion: null,
+            DeprecatedVersion: null,
+            RemovedVersion: null,
+            Tags: [],
+            SeeAlso: [],
+            Permissions: [],
+            IsExperimental: false,
+            ErrorConditions: [],
+            CanonicalExamples: []);
     }
 
     /// <summary>Pick the shortest name as the "primary" for an alias group.</summary>
@@ -149,6 +163,7 @@ public static class CommandMetadataExporter
 public sealed record CommandMetadata(
     string Name,
     string Description,
+    string? LongDescription,
     string Usage,
     string Category,
     IReadOnlyList<string> Aliases,
@@ -157,13 +172,32 @@ public sealed record CommandMetadata(
     IReadOnlyList<CommandExampleMetadata> Examples,
     IReadOnlyList<string> Notes,
     string? Output,
-    CommandPipelineInputMetadata? PipelineInput);
+    CommandPipelineInputMetadata? PipelineInput,
+    string? OutputType,
+    string? OutputMembers,
+    string OutputMode,
+    CommandSideEffectsMetadata? SideEffects,
+    string? SinceVersion,
+    string? DeprecatedVersion,
+    string? RemovedVersion,
+    IReadOnlyList<string> Tags,
+    IReadOnlyList<string> SeeAlso,
+    IReadOnlyList<string> Permissions,
+    bool IsExperimental,
+    IReadOnlyList<string> ErrorConditions,
+    IReadOnlyList<CommandCanonicalExampleMetadata> CanonicalExamples);
+
+public sealed record CommandCanonicalExampleMetadata(
+    string Input,
+    string Output,
+    string? Description);
 
 public sealed record CommandArgumentMetadata(
     string Name,
     string Description,
     bool Required,
-    string? TypeName);
+    string? TypeName,
+    string? Kind);
 
 public sealed record CommandOptionMetadata(
     string Syntax,
@@ -179,6 +213,12 @@ public sealed record CommandPipelineInputMetadata(
     bool AcceptsList,
     bool AcceptsTable,
     string? Description);
+
+public sealed record CommandSideEffectsMetadata(
+    bool ReadsFiles,
+    bool WritesFiles,
+    bool Network,
+    bool SpawnsProcess);
 
 // ── JSON serialization context (AOT-safe) ─────────────────────────────
 

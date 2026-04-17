@@ -1,9 +1,12 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Shell")]
-[CommandExample("apropos json")]
-[CommandExample("apropos loop")]
+[CommandArgument("query", "The search term to match against help topics.")]
+[CommandExample("apropos json", Title = "Search help for JSON-related topics")]
+[CommandExample("apropos loop", Title = "Search help for loop constructs")]
 [CommandNote("Apropos performs fuzzy help search across commands and Tosh language topics.")]
+[CommandOutput("Matching help topic summaries with relevance scores.")]
+[PipelineInput(AcceptsScalar = true, Description = "Reads the query from the pipeline if not given as an argument.")]
 public sealed class AproposCommand : ShellCommand
 {
     public AproposCommand()

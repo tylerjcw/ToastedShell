@@ -1,6 +1,14 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Shell")]
+[CommandArgument("action", "The action to perform: list, names, handlers, remove, or clear.", Required = false)]
+[CommandArgument("event-name", "The event name (for handlers, remove, clear).", Required = false)]
+[CommandArgument("handler", "The handler to remove (for remove action).", Required = false)]
+[CommandExample("events", Title = "List all registered events")]
+[CommandExample("events names", Title = "List event names only")]
+[CommandExample("events handlers OnPrompt", Title = "List handlers for an event")]
+[CommandExample("events clear OnPrompt", Title = "Remove all handlers for an event")]
+[CommandOutput("Event descriptors, names, or handler objects depending on the action.")]
 public sealed class EventsCommand : ShellCommand
 {
     public EventsCommand()

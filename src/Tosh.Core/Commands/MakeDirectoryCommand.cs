@@ -7,7 +7,8 @@ namespace Tosh.Core.Commands;
 [CommandOption("-m <mode>", "Set file mode (as in chmod), e.g. 755.")]
 [CommandExample("mkdir newdir")]
 [CommandExample("mkdir -p a/b/c", Title = "Create nested directories")]
-[CommandOutput("Returns DirectoryInfo objects for each created directory.")]
+[CommandOutput("Returns DirectoryInfo objects for each created directory.", TypeName = "DirectoryInfo", Members = "Name, FullName, Exists")]
+[CommandSideEffects(WritesFiles = true)]
 [PipelineInput(AcceptsList = true, Description = "Accepts piped path-like values.")]
 public sealed class MakeDirectoryCommand : ShellCommand
 {

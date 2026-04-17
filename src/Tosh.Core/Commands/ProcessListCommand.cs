@@ -23,7 +23,7 @@ namespace Tosh.Core.Commands;
 [CommandExample("ps -u root | get { Name, Id, User }", Title = "Filter by user")]
 [CommandExample("ps | sort Memory | reverse | first 5", Title = "Top 5 by memory")]
 [CommandNote("Process memory values are surfaced as Tosh StorageSize objects, not raw strings.")]
-[CommandOutput("Typed process objects with properties like Name, Id, Memory, CPU, User.")]
+[CommandOutput("Typed process objects with properties like Name, Id, Memory, CPU, User.", TypeName = "ProcessInfo", Members = "Id, Name, Cpu, WorkingSet, User, Tty, ThreadCount, Started")]
 public sealed class ProcessListCommand : ShellCommand
 {
     public ProcessListCommand()

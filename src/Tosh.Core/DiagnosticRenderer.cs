@@ -42,7 +42,8 @@ public sealed class DiagnosticRenderer
         var builder = new StringBuilder();
         builder.AppendLine(Style(_theme?.Heading, $"Error: {diagnostic.Code}"));
         builder.AppendLine();
-        builder.AppendLine(Style(_theme?.Title, $"  × {diagnostic.Title}"));
+        var errorMarker = TerminalGlyphs.ErrorMarker;
+        builder.AppendLine(Style(_theme?.Title, $"  {errorMarker} {diagnostic.Title}"));
 
         if (!string.IsNullOrWhiteSpace(diagnostic.SourceText) &&
             !string.IsNullOrWhiteSpace(diagnostic.SourceName) &&
@@ -76,16 +77,16 @@ public sealed class DiagnosticRenderer
         var pointerOffset = underlineStart + Math.Max(0, (underlineLength - 1) / 2);
         var underline = BuildUnderline(underlineLength, pointerOffset - underlineStart);
 
-        builder.AppendLine(Style(theme?.SourceLocation, $"   ╭─[{sourceName}:{location.LineNumber}:{location.ColumnNumber}]"));
+        builder.AppendLine(Style(theme?.SourceLocation, $"   {TerminalGlyphs.TopLeftCorner}─[{sourceName}:{location.LineNumber}:{location.ColumnNumber}]"));
         builder.AppendLine($" {lineNumberText.PadLeft(gutterWidth)} │ {sourceLine}");
         builder.AppendLine($" {new string(' ', gutterWidth)} · {new string(' ', underlineStart)}{Style(theme?.Underline, underline)}");
 
         if (!string.IsNullOrWhiteSpace(label))
         {
-            builder.AppendLine($" {new string(' ', gutterWidth)} · {new string(' ', pointerOffset)}{Style(theme?.Label, $"╰── {label}")}");
+            builder.AppendLine($" {new string(' ', gutterWidth)} · {new string(' ', pointerOffset)}{Style(theme?.Label, $"{TerminalGlyphs.BottomLeftCorner}── {label}")}");
         }
 
-        builder.AppendLine(Style(theme?.SourceLocation, $" {new string(' ', gutterWidth)} ╰────"));
+        builder.AppendLine(Style(theme?.SourceLocation, $" {new string(' ', gutterWidth)} {TerminalGlyphs.BottomLeftCorner}────"));
     }
 
     private static string BuildUnderline(int length, int pointerOffset)

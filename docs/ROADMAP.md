@@ -1,4 +1,4 @@
-# Tosh Roadmap
+# TōSh Roadmap
 
 For open work items by area, see [BACKLOG.md](BACKLOG.md).
 
@@ -116,16 +116,22 @@ This should eventually live in shell configuration, profiles, or modules.
 
 ## Current Direction: Phase 8 — Daily-Driver Hardening
 
-Phases 1–7 shipped the core shell, language, display system, CLR interop, TUI platform, and extensibility model. Phase 8 is about making ToSh reliable and complete enough to be a default login shell.
+Phases 1–7 shipped the core shell, language, display system, CLR interop, TUI platform, and extensibility model. Phase 8 is about making TōSh reliable and complete enough to be a default login shell.
 
 The work is tracked in [BACKLOG.md](BACKLOG.md) and falls into these areas:
 
 ### Remaining work
 
-- **Language surface**: split `using` (CLR) from `import` (ToSh files/modules)
-- **Unix command parity**: `ps --tree`/`--forest`, `cp` link behavior, deeper adapter coverage
-- **Shell hardening**: performance under volume, native/object/text boundary polish
+- **Shell hardening**: native/object/text boundary polish
+- **Unix command parity**: deeper `ip` adapter coverage
 - **TUI platform**: extract reusable widgets, form editors and structured input widgets
+
+### Completed in Phase 8
+
+- **Login shell preparation**: PKGBUILD, `/etc/shells`, `SHELL` env var, `PATH`, SIGHUP/SIGTERM handlers
+- **Performance under volume**: R2R + uncompressed publish, uid/gid caching, single-pass column widths, ANSI early-exit, display profile caching. Startup 265ms → 55ms, `ls /usr/bin` 265ms → 100ms. NativeAOT ruled out (Reflection.Emit, Activator.CreateInstance, Type.GetType dependencies).
+- **Language surface**: `using`/`import` split
+- **Unix command parity**: `ps --tree`/`--forest`, `cp` link behavior
 
 ## Non-Goals Right Now
 

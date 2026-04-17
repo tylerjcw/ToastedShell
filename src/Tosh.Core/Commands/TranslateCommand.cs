@@ -1,6 +1,14 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Text")]
+[CommandArgument("set1", "Characters to translate from (or delete with -d).")]
+[CommandArgument("set2", "Characters to translate to. Required unless -d is used.", Required = false)]
+[CommandArgument("path", "Optional file path(s) to read instead of pipeline input.", Required = false)]
+[CommandOption("-d", "Delete characters in set1 instead of translating.")]
+[CommandExample("echo HELLO | tr A-Z a-z", Title = "Convert to lowercase")]
+[CommandExample("echo \"hello world\" | tr -d ' '", Title = "Delete spaces")]
+[CommandOutput("Translated or filtered text lines.")]
+[PipelineInput(AcceptsScalar = true, Description = "Reads text lines from the pipeline when no file paths are given.")]
 public sealed class TranslateCommand : ShellCommand
 {
     public TranslateCommand()

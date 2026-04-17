@@ -20,6 +20,7 @@ public sealed class ToshConfig : IResettableShellConfig
         Shell = new ToshShellConfig();
         History = new ToshHistoryConfig(ToshConfigDefaults.GetDefaultStateDirectory());
         Startup = new ToshStartupConfig(startupRootDirectory);
+        Tty = new ToshTtyConfig();
     }
 
     public ToshThemeConfig Theme { get; }
@@ -36,6 +37,8 @@ public sealed class ToshConfig : IResettableShellConfig
 
     public ToshStartupConfig Startup { get; }
 
+    public ToshTtyConfig Tty { get; }
+
     public void Reset()
     {
         Theme.Reset();
@@ -45,6 +48,7 @@ public sealed class ToshConfig : IResettableShellConfig
         Shell.Reset();
         History.Reset();
         Startup.Reset();
+        Tty.Reset();
     }
 }
 
@@ -56,6 +60,8 @@ public sealed class ToshShellConfig : IResettableShellConfig
 
     public bool Trace { get; set; }
 
+    public bool ScriptTrace { get; set; }
+
     public bool AutoCd { get; set; }
 
     public ToshDirectoryAliasConfig Dirs { get; } = new();
@@ -65,6 +71,7 @@ public sealed class ToshShellConfig : IResettableShellConfig
         Pipefail = false;
         ExitOnError = false;
         Trace = false;
+        ScriptTrace = false;
         AutoCd = false;
         Dirs.Reset();
     }
@@ -975,7 +982,7 @@ public sealed class ToshReplConfig : IResettableShellConfig
 public sealed class ToshPromptConfig : IResettableShellConfig
 {
     private string _nameText = "tosh";
-    private string _indicatorText = " ❯ ";
+    private string _indicatorText = " \u276f ";
     private string _timeFormat = "HH:mm";
     private string _headerLeftLayout = "Directory, Git";
     private string _headerRightLayout = "UserHost, Jobs, Duration";
@@ -1151,7 +1158,7 @@ public sealed class ToshPromptConfig : IResettableShellConfig
     public string IndicatorText
     {
         get => _indicatorText;
-        set => _indicatorText = string.IsNullOrEmpty(value) ? " ❯ " : value;
+        set => _indicatorText = string.IsNullOrEmpty(value) ? " \u276f " : value;
     }
 
     public string? IndicatorColor
@@ -1176,7 +1183,7 @@ public sealed class ToshPromptConfig : IResettableShellConfig
         DurationThresholdMilliseconds = 500;
         ExitCodeEnabled = true;
         NameText = "tosh";
-        IndicatorText = " ❯ ";
+        IndicatorText = " \u276f ";
         _theme.Reset();
     }
 
@@ -1335,5 +1342,106 @@ public sealed class ToshStartupConfig : IResettableShellConfig
         }
 
         return configuredPath;
+    }
+}
+
+public sealed class ToshTtyConfig : IResettableShellConfig
+{
+    private ToshTableBoxStyle _boxStyle = ToshTableBoxStyle.Square;
+    private string _indicator = " > ";
+    private string _errorMarker = "x";
+
+    public bool Enabled { get; set; } = true;
+
+    public ToshTableBoxStyle BoxStyle
+    {
+        get => _boxStyle;
+        set => _boxStyle = value is ToshTableBoxStyle.Rounded ? ToshTableBoxStyle.Square : value;
+    }
+
+    public string Indicator
+    {
+        get => _indicator;
+        set => _indicator = string.IsNullOrEmpty(value) ? " > " : value;
+    }
+
+    public string ErrorMarker
+    {
+        get => _errorMarker;
+        set => _errorMarker = string.IsNullOrEmpty(value) ? "x" : value;
+    }
+
+    public ToshTtyGlyphConfig Glyphs { get; } = new();
+
+    public void Reset()
+    {
+        Enabled = true;
+        _boxStyle = ToshTableBoxStyle.Square;
+        _indicator = " > ";
+        _errorMarker = "x";
+        Glyphs.Reset();
+    }
+}
+
+public sealed class ToshTtyGlyphConfig : IResettableShellConfig, IShellRecordObject
+{
+    private readonly Dictionary<string, string> _glyphs = new(StringComparer.Ordinal);
+
+    public string ShellTypeName => "TtyGlyphs";
+
+    public ToshTtyGlyphConfig()
+    {
+        SetDefaults();
+    }
+
+    public string? Resolve(string glyph)
+    {
+        return _glyphs.TryGetValue(glyph, out var fallback) ? fallback : null;
+    }
+
+    public bool TryGetMember(string name, out object? value, bool includeHidden = false)
+    {
+        if (_glyphs.TryGetValue(name, out var fallback))
+        {
+            value = fallback;
+            return true;
+        }
+
+        value = null;
+        return false;
+    }
+
+    public bool TrySetMember(string name, object? value)
+    {
+        if (value is null)
+        {
+            _glyphs.Remove(name);
+            return true;
+        }
+
+        _glyphs[name] = value.ToString() ?? string.Empty;
+        return true;
+    }
+
+    public IReadOnlyList<KeyValuePair<string, object?>> GetMembers(bool includeHidden = false)
+    {
+        return _glyphs
+            .OrderBy(entry => entry.Key, StringComparer.Ordinal)
+            .Select(entry => new KeyValuePair<string, object?>(entry.Key, entry.Value))
+            .ToArray();
+    }
+
+    public void Reset()
+    {
+        _glyphs.Clear();
+        SetDefaults();
+    }
+
+    private void SetDefaults()
+    {
+        _glyphs["\u2718"] = "x";      // ✘ → x
+        _glyphs["\u276f"] = ">";      // ❯ → >
+        _glyphs["\ue0a0"] = "";       //  → (empty, Nerd Font)
+        _glyphs["\u00d7"] = "x";      // × → x
     }
 }

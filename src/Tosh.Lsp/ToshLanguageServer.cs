@@ -90,8 +90,8 @@ public sealed class ToshLanguageServer
                         },
                         signatureHelpProvider = new
                         {
-                            triggerCharacters = new[] { "(", "," },
-                            retriggerCharacters = new[] { "," }
+                            triggerCharacters = new[] { "(", ",", " " },
+                            retriggerCharacters = new[] { ",", " " }
                         },
                         hoverProvider = true,
                         definitionProvider = true,

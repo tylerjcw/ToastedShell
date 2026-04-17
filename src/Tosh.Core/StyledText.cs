@@ -182,12 +182,12 @@ public sealed record StyledText(
     public static string StripAnsi(string text)
     {
         ArgumentNullException.ThrowIfNull(text);
-        return AnsiSequenceRegex.Replace(text, string.Empty);
+        return text.Contains('\x1B') ? AnsiSequenceRegex.Replace(text, string.Empty) : text;
     }
 
     public static int GetVisibleLength(string text)
     {
         ArgumentNullException.ThrowIfNull(text);
-        return StripAnsi(text).Length;
+        return text.Contains('\x1B') ? StripAnsi(text).Length : text.Length;
     }
 }

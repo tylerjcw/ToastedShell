@@ -1,6 +1,11 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Pipeline")]
+[CommandArgument("callable|block", "A transform that returns a sequence for each input item.")]
+[CommandExample("echo 1 2 3 | flat-map { [_ (_ * 10)] }", Title = "Expand each item into two")]
+[CommandExample("ls | flat-map { ls $_.FullName }", Title = "List contents of each subdirectory")]
+[CommandOutput("The flattened results of applying the transform to each pipeline item.")]
+[PipelineInput(AcceptsScalar = true, AcceptsRecord = true, Description = "Transforms each item and flattens the resulting sequences into one stream.")]
 public sealed class FlatMapCommand : ShellCommand
 {
     public FlatMapCommand()

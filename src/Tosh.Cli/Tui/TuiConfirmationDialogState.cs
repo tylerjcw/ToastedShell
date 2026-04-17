@@ -24,7 +24,7 @@ internal sealed class TuiConfirmationDialogState
 
     public string CancelLabel { get; private set; } = "Cancel";
 
-    public bool ConfirmSelected { get; private set; } = true;
+    public bool ConfirmSelected { get; internal set; } = true;
 
     public void Open(
         string title,

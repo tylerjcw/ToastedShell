@@ -76,6 +76,11 @@ public sealed class ToshLanguageFeatures
             .ToDictionary(entry => entry.Name, StringComparer.OrdinalIgnoreCase);
     }
 
+    public IReadOnlyList<CommandMetadata> GetAllCommandMetadata()
+    {
+        return CommandMetadataExporter.BuildMetadata(_runtime.Commands);
+    }
+
     public IReadOnlyList<LspDiagnostic> GetDiagnostics(string text, string sourceName)
     {
         var parseResult = ToshParser.Parse(text, sourceName);
@@ -174,6 +179,59 @@ public sealed class ToshLanguageFeatures
             }
         }
 
+        if (TryGetOptionValueCompletionContext(text, offset, out var valuePrefix, out var flagForValue, out var cmdForValue))
+        {
+            if (GetMetadataLookup().TryGetValue(cmdForValue, out var valueMeta))
+            {
+                foreach (var option in valueMeta.Options)
+                {
+                    var flags = option.Syntax.Split(',', StringSplitOptions.TrimEntries);
+                    foreach (var flag in flags)
+                    {
+                        var flagName = flag.Split(' ', 2)[0];
+                        if (!string.Equals(flagName, flagForValue, StringComparison.Ordinal))
+                        {
+                            continue;
+                        }
+
+                        var choices = ParseOptionValueChoices(option.Syntax);
+                        if (choices is null)
+                        {
+                            break;
+                        }
+
+                        foreach (var choice in choices)
+                        {
+                            if (choice.StartsWith(valuePrefix, StringComparison.OrdinalIgnoreCase))
+                            {
+                                items[choice] = new LspCompletionItem(
+                                    choice,
+                                    Kind: 12,
+                                    Detail: $"Value for {flagName}",
+                                    Documentation: option.Description);
+                            }
+                        }
+
+                        break;
+                    }
+                }
+
+                if (items.Count > 0)
+                {
+                    return items.Values.OrderBy(item => item.Label, StringComparer.OrdinalIgnoreCase).ToArray();
+                }
+            }
+        }
+
+        if (TryGetPathCompletionContext(text, offset, out var pathPrefix))
+        {
+            var pathItems = GetPathCompletionItems(pathPrefix);
+            if (pathItems.Count > 0)
+            {
+                return pathItems;
+            }
+        }
+
         if (variableContext)
         {
             foreach (var variable in index.GetVisibleVariables(offset))
@@ -203,13 +261,27 @@ public sealed class ToshLanguageFeatures
             items[name] = new LspCompletionItem(name, Kind: 6, Detail: "Special variable", Documentation: description);
         }
 
+        var metadataLookup = GetMetadataLookup();
         foreach (var command in _runtime.Commands.All)
         {
+            var detail = "Built-in command";
+            var documentation = command.Description;
+            IReadOnlyList<int>? completionTags = null;
+
+            if (metadataLookup.TryGetValue(command.Name, out var meta))
+            {
+                detail = $"Built-in ({meta.Category})";
+                documentation = meta.LongDescription ?? meta.Description;
+                if (meta.DeprecatedVersion is not null)
+                    completionTags = [1]; // CompletionItemTag.Deprecated
+            }
+
             items[command.Name] = new LspCompletionItem(
                 command.Name,
                 Kind: 3,
-                Detail: "Built-in command",
-                Documentation: command.Description);
+                Detail: detail,
+                Documentation: documentation,
+                Tags: completionTags);
         }
 
         foreach (var symbol in index.GetVisibleFunctions(offset))
@@ -599,14 +671,39 @@ public sealed class ToshLanguageFeatures
     private static string FormatCommandHoverMarkdown(CommandMetadata entry)
     {
         var sb = new System.Text.StringBuilder();
+
+        // Badges: experimental, deprecated, version
+        var badges = new List<string>();
+        if (entry.IsExperimental) badges.Add("⚗️ Experimental");
+        if (entry.DeprecatedVersion is not null) badges.Add($"⚠️ Deprecated since {entry.DeprecatedVersion}");
+        if (entry.RemovedVersion is not null) badges.Add($"❌ Removed in {entry.RemovedVersion}");
+        if (badges.Count > 0)
+        {
+            sb.AppendLine(string.Join(" · ", badges));
+            sb.AppendLine();
+        }
+
         sb.AppendLine(entry.Description);
         sb.AppendLine();
+
+        if (entry.LongDescription is not null)
+        {
+            sb.AppendLine(entry.LongDescription);
+            sb.AppendLine();
+        }
 
         if (entry.Aliases.Count > 0)
         {
             sb.AppendLine($"*Aliases:* {string.Join(", ", entry.Aliases.Select(a => $"`{a}`"))}");
             sb.AppendLine();
         }
+
+        // Category and version info
+        var infoLine = new List<string>();
+        infoLine.Add($"Category: {entry.Category}");
+        if (entry.SinceVersion is not null) infoLine.Add($"Since: {entry.SinceVersion}");
+        sb.AppendLine($"*{string.Join(" · ", infoLine)}*");
+        sb.AppendLine();
 
         sb.AppendLine("```tosh");
         sb.AppendLine(entry.Usage);
@@ -669,6 +766,21 @@ public sealed class ToshLanguageFeatures
             sb.AppendLine("```");
         }
 
+        if (entry.CanonicalExamples.Count > 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine("**Canonical Examples**");
+            foreach (var ce in entry.CanonicalExamples)
+            {
+                if (ce.Description is not null)
+                    sb.AppendLine($"*{ce.Description}*");
+                sb.AppendLine("```tosh");
+                sb.AppendLine($"> {ce.Input}");
+                sb.AppendLine(ce.Output);
+                sb.AppendLine("```");
+            }
+        }
+
         if (entry.Notes.Count > 0)
         {
             sb.AppendLine();
@@ -676,6 +788,34 @@ public sealed class ToshLanguageFeatures
             {
                 sb.AppendLine($"> {note}");
             }
+        }
+
+        if (entry.ErrorConditions.Count > 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine("**Error Conditions**");
+            foreach (var err in entry.ErrorConditions)
+            {
+                sb.AppendLine($"- {err}");
+            }
+        }
+
+        if (entry.Permissions.Count > 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine($"**Permissions:** {string.Join(", ", entry.Permissions)}");
+        }
+
+        if (entry.Tags.Count > 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine($"*Tags:* {string.Join(", ", entry.Tags.Select(t => $"`{t}`"))}");
+        }
+
+        if (entry.SeeAlso.Count > 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine($"*See also:* {string.Join(", ", entry.SeeAlso.Select(s => $"`{s}`"))}");
         }
 
         return sb.ToString().TrimEnd();
@@ -751,6 +891,252 @@ public sealed class ToshLanguageFeatures
         return !commandName.StartsWith('-') && !commandName.StartsWith('$');
     }
 
+    private static bool TryGetOptionValueCompletionContext(string text, int offset, out string valuePrefix, out string flagName, out string commandName)
+    {
+        valuePrefix = string.Empty;
+        flagName = string.Empty;
+        commandName = string.Empty;
+
+        // Walk back to find the current token
+        var tokenEnd = offset;
+        var tokenStart = offset;
+        while (tokenStart > 0 && !char.IsWhiteSpace(text[tokenStart - 1]))
+        {
+            tokenStart--;
+        }
+
+        var currentToken = tokenStart < tokenEnd ? text[tokenStart..tokenEnd] : string.Empty;
+
+        // If current token starts with '-', it's a flag itself, not a value
+        if (currentToken.StartsWith('-'))
+        {
+            return false;
+        }
+
+        valuePrefix = currentToken;
+
+        // Find the previous token (should be a flag)
+        var prevEnd = tokenStart;
+        while (prevEnd > 0 && char.IsWhiteSpace(text[prevEnd - 1]) && text[prevEnd - 1] != '\n')
+        {
+            prevEnd--;
+        }
+
+        var prevStart = prevEnd;
+        while (prevStart > 0 && !char.IsWhiteSpace(text[prevStart - 1]))
+        {
+            prevStart--;
+        }
+
+        if (prevStart >= prevEnd)
+        {
+            return false;
+        }
+
+        var previousToken = text[prevStart..prevEnd];
+        if (!previousToken.StartsWith('-'))
+        {
+            return false;
+        }
+
+        flagName = previousToken;
+
+        // Find the command name (first word in the pipeline stage)
+        var lineStart = text.LastIndexOf('\n', Math.Max(0, prevStart - 1));
+        lineStart = lineStart < 0 ? 0 : lineStart + 1;
+
+        while (lineStart < prevStart && char.IsWhiteSpace(text[lineStart]))
+        {
+            lineStart++;
+        }
+
+        var pipePos = text.LastIndexOf('|', Math.Max(0, prevStart - 1));
+        if (pipePos >= lineStart)
+        {
+            lineStart = pipePos + 1;
+            while (lineStart < prevStart && char.IsWhiteSpace(text[lineStart]))
+            {
+                lineStart++;
+            }
+        }
+
+        var cmdEnd = lineStart;
+        while (cmdEnd < prevStart && !char.IsWhiteSpace(text[cmdEnd]))
+        {
+            cmdEnd++;
+        }
+
+        if (cmdEnd <= lineStart)
+        {
+            return false;
+        }
+
+        commandName = text[lineStart..cmdEnd];
+        return !commandName.StartsWith('-') && !commandName.StartsWith('$');
+    }
+
+    private static IReadOnlyList<string>? ParseOptionValueChoices(string syntax)
+    {
+        var openAngle = syntax.IndexOf('<');
+        if (openAngle < 0)
+        {
+            return null;
+        }
+
+        var closeAngle = syntax.IndexOf('>', openAngle + 1);
+        if (closeAngle < 0)
+        {
+            return null;
+        }
+
+        var inner = syntax.AsSpan()[(openAngle + 1)..closeAngle];
+        if (!inner.Contains('|'))
+        {
+            return null;
+        }
+
+        return inner.ToString().Split('|', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+    }
+
+    private static readonly IReadOnlySet<string> PathFirstCommands = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        "cd", "ls", "cat", "mkdir", "touch", "rm", "cp", "mv", "find", "du", "df",
+        "head", "tail", "grep", "open", "dirname", "basename", "readlink", "realpath",
+        "archive", "extract", "tree", "trash", "source",
+    };
+
+    private static bool TryGetPathCompletionContext(string text, int offset, out string pathPrefix)
+    {
+        pathPrefix = string.Empty;
+
+        var tokenEnd = offset;
+        var tokenStart = offset;
+        while (tokenStart > 0 && !char.IsWhiteSpace(text[tokenStart - 1]))
+        {
+            tokenStart--;
+        }
+
+        var currentToken = tokenStart < tokenEnd ? text[tokenStart..tokenEnd] : string.Empty;
+
+        if (currentToken.StartsWith('-') || currentToken.StartsWith('$'))
+        {
+            return false;
+        }
+
+        if (LooksLikePathToken(currentToken))
+        {
+            pathPrefix = currentToken;
+            return true;
+        }
+
+        // Check if we're after a path-first command
+        var lineStart = text.LastIndexOf('\n', Math.Max(0, tokenStart - 1));
+        lineStart = lineStart < 0 ? 0 : lineStart + 1;
+
+        var pipePos = text.LastIndexOf('|', Math.Max(0, tokenStart - 1));
+        if (pipePos >= lineStart)
+        {
+            lineStart = pipePos + 1;
+        }
+
+        while (lineStart < tokenStart && char.IsWhiteSpace(text[lineStart]))
+        {
+            lineStart++;
+        }
+
+        var cmdEnd = lineStart;
+        while (cmdEnd < tokenStart && !char.IsWhiteSpace(text[cmdEnd]))
+        {
+            cmdEnd++;
+        }
+
+        if (cmdEnd <= lineStart)
+        {
+            return false;
+        }
+
+        var cmdName = text[lineStart..cmdEnd];
+        if (PathFirstCommands.Contains(cmdName))
+        {
+            pathPrefix = currentToken;
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool LooksLikePathToken(string token)
+    {
+        return token.StartsWith("./", StringComparison.Ordinal) ||
+               token.StartsWith(".\\", StringComparison.Ordinal) ||
+               token.StartsWith("../", StringComparison.Ordinal) ||
+               token.StartsWith("..\\", StringComparison.Ordinal) ||
+               token.StartsWith("~/", StringComparison.Ordinal) ||
+               token.StartsWith("~\\", StringComparison.Ordinal) ||
+               token.StartsWith("/", StringComparison.Ordinal) ||
+               token.StartsWith("\\", StringComparison.Ordinal) ||
+               token.Contains(Path.DirectorySeparatorChar) ||
+               token.Contains(Path.AltDirectorySeparatorChar);
+    }
+
+    private IReadOnlyList<LspCompletionItem> GetPathCompletionItems(string tokenPrefix)
+    {
+        var searchBase = _runtime.CurrentDirectory;
+        var namePrefix = tokenPrefix;
+
+        if (!string.IsNullOrEmpty(tokenPrefix))
+        {
+            var separatorIndex = tokenPrefix.LastIndexOfAny([Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar]);
+
+            if (separatorIndex >= 0)
+            {
+                var directoryPart = tokenPrefix[..(separatorIndex + 1)];
+                namePrefix = tokenPrefix[(separatorIndex + 1)..];
+                searchBase = PathUtilities.ResolvePath(_runtime.CurrentDirectory, directoryPart);
+            }
+        }
+
+        if (!Directory.Exists(searchBase))
+        {
+            return [];
+        }
+
+        IEnumerable<string> entries;
+        try
+        {
+            entries = Directory.EnumerateFileSystemEntries(searchBase);
+        }
+        catch
+        {
+            return [];
+        }
+
+        var items = new List<LspCompletionItem>();
+
+        foreach (var entryPath in entries)
+        {
+            var name = Path.GetFileName(entryPath);
+
+            if (string.IsNullOrEmpty(name) || name.StartsWith('.') && !namePrefix.StartsWith('.'))
+            {
+                continue;
+            }
+
+            if (!string.IsNullOrEmpty(namePrefix) && !name.StartsWith(namePrefix, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var isDirectory = Directory.Exists(entryPath);
+            items.Add(new LspCompletionItem(
+                name,
+                Kind: isDirectory ? 19 : 17,
+                Detail: isDirectory ? "Directory" : "File"));
+        }
+
+        return items.OrderBy(item => item.Kind).ThenBy(item => item.Label, StringComparer.OrdinalIgnoreCase).ToArray();
+    }
+
     private static LspSignatureHelp CreateBuiltInCommandSignatureHelp(CommandMetadata entry, int activeParameter)
     {
         var parameterLabels = entry.Arguments
@@ -762,7 +1148,19 @@ public sealed class ToshLanguageFeatures
             })
             .ToArray();
 
-        var signatureLabel = $"{entry.Name} {string.Join(' ', parameterLabels.Select(p => $"<{p}>"))}";
+        var labelBuilder = new System.Text.StringBuilder(entry.Name);
+        foreach (var paramLabel in parameterLabels)
+        {
+            labelBuilder.Append($" <{paramLabel}>");
+        }
+
+        foreach (var option in entry.Options)
+        {
+            var primaryFlag = option.Syntax.Split(',', StringSplitOptions.TrimEntries)[0];
+            labelBuilder.Append($" [{primaryFlag}]");
+        }
+
+        var signatureLabel = labelBuilder.ToString();
 
         var parameters = entry.Arguments
             .Select(arg => new LspParameterInformation(
@@ -2039,6 +2437,9 @@ public sealed class ToshLanguageFeatures
                     CollectCommandCallSites(item, text, offset, matches);
                 }
                 break;
+            case ComparisonPatternSyntax comparisonPattern:
+                CollectCommandCallSites(comparisonPattern.Operand, text, offset, matches);
+                break;
             case RecordLiteralArgumentSyntax record:
                 foreach (var entry in record.Fields)
                 {
@@ -2219,6 +2620,10 @@ public sealed class ToshLanguageFeatures
                 {
                     CollectCallSites(item, text, offset, matches);
                 }
+                break;
+
+            case ComparisonPatternSyntax comparisonPattern:
+                CollectCallSites(comparisonPattern.Operand, text, offset, matches);
                 break;
 
             case RecordLiteralArgumentSyntax record:

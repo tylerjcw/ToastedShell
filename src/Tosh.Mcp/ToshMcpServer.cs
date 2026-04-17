@@ -1,6 +1,8 @@
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Tosh.Core;
+using Tosh.Language;
 using Tosh.LanguageServices;
 
 namespace Tosh.Mcp;
@@ -11,6 +13,7 @@ public sealed class ToshMcpServer
     private readonly Stream _output;
     private readonly ToshLanguageFeatures _features = new();
     private readonly SemaphoreSlim _writeLock = new(1, 1);
+    private static readonly TimeSpan DefaultSnippetTimeout = TimeSpan.FromSeconds(10);
 
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
     {
@@ -95,7 +98,7 @@ public sealed class ToshMcpServer
 
         try
         {
-            var result = toolName switch
+            object result = toolName switch
             {
                 "lsp_diagnostics" => ExecuteDiagnostics(arguments),
                 "lsp_completions" => ExecuteCompletions(arguments),
@@ -103,6 +106,9 @@ public sealed class ToshMcpServer
                 "lsp_signature_help" => ExecuteSignatureHelp(arguments),
                 "lsp_definitions" => ExecuteDefinitions(arguments),
                 "lsp_document_symbols" => ExecuteDocumentSymbols(arguments),
+                "command_metadata" => ExecuteCommandMetadata(arguments),
+                "run_snippet" => await ExecuteRunSnippetAsync(arguments, cancellationToken),
+                "explain_error" => ExecuteExplainError(arguments),
                 _ => throw new InvalidOperationException($"Unknown tool '{toolName}'.")
             };
 
@@ -204,6 +210,265 @@ public sealed class ToshMcpServer
         };
     }
 
+    private object ExecuteCommandMetadata(JsonElement arguments)
+    {
+        var nameFilter = arguments.ValueKind != JsonValueKind.Undefined &&
+                         arguments.TryGetProperty("name", out var nameElement)
+            ? nameElement.GetString()
+            : null;
+
+        var categoryFilter = arguments.ValueKind != JsonValueKind.Undefined &&
+                             arguments.TryGetProperty("category", out var catElement)
+            ? catElement.GetString()
+            : null;
+
+        var allMetadata = _features.GetAllCommandMetadata();
+
+        IEnumerable<CommandMetadata> filtered = allMetadata;
+
+        if (nameFilter is not null)
+        {
+            filtered = filtered.Where(m => string.Equals(m.Name, nameFilter, StringComparison.OrdinalIgnoreCase)
+                || m.Aliases.Contains(nameFilter, StringComparer.OrdinalIgnoreCase));
+        }
+
+        if (categoryFilter is not null)
+        {
+            filtered = filtered.Where(m => string.Equals(m.Category, categoryFilter, StringComparison.OrdinalIgnoreCase));
+        }
+
+        var result = filtered.ToList();
+        return new
+        {
+            content = new[] { new { type = "text", text = JsonSerializer.Serialize(result, JsonOptions) } }
+        };
+    }
+
+    private async Task<object> ExecuteRunSnippetAsync(JsonElement arguments, CancellationToken cancellationToken)
+    {
+        var code = arguments.GetProperty("code").GetString() ?? string.Empty;
+
+        var timeoutMs = arguments.ValueKind != JsonValueKind.Undefined &&
+                        arguments.TryGetProperty("timeout_ms", out var timeoutElement) &&
+                        timeoutElement.ValueKind == JsonValueKind.Number
+            ? timeoutElement.GetInt32()
+            : (int)DefaultSnippetTimeout.TotalMilliseconds;
+
+        timeoutMs = Math.Clamp(timeoutMs, 100, 30_000);
+
+        var outputWriter = new StringWriter();
+        var errorWriter = new StringWriter();
+        var runtime = ToshRuntime.CreateDefault(outputWriter, errorWriter);
+        var engine = new ToshEngine(runtime);
+
+        using var timeoutCts = new CancellationTokenSource(timeoutMs);
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
+
+        var results = new List<object?>();
+        try
+        {
+            await foreach (var value in engine.EvaluateAsync(code, "<mcp-snippet>", linkedCts.Token)
+                               .WithCancellation(linkedCts.Token))
+            {
+                results.Add(value);
+            }
+        }
+        catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested)
+        {
+            errorWriter.Write("[Execution timed out]");
+        }
+        catch (ToshDiagnosticException) when (timeoutCts.IsCancellationRequested)
+        {
+            errorWriter.Write("[Execution timed out]");
+        }
+        catch (ToshDiagnosticException ex)
+        {
+            foreach (var diag in ex.Diagnostics)
+            {
+                errorWriter.Write($"{diag.Code}: {diag.Title}");
+                if (diag.Help is not null)
+                    errorWriter.Write($" — {diag.Help}");
+                errorWriter.WriteLine();
+            }
+        }
+
+        var stdout = outputWriter.ToString();
+        var stderr = errorWriter.ToString();
+        var formatted = new List<string>();
+
+        foreach (var item in results)
+        {
+            formatted.Add(runtime.Formatter.Format(item));
+        }
+
+        var response = new
+        {
+            results = formatted,
+            stdout = stdout.Length > 0 ? stdout : null,
+            stderr = stderr.Length > 0 ? stderr : null
+        };
+
+        return new
+        {
+            content = new[] { new { type = "text", text = JsonSerializer.Serialize(response, JsonOptions) } }
+        };
+    }
+
+    private object ExecuteExplainError(JsonElement arguments)
+    {
+        var text = arguments.GetProperty("text").GetString() ?? string.Empty;
+
+        var errorFilter = arguments.ValueKind != JsonValueKind.Undefined &&
+                          arguments.TryGetProperty("error", out var errorElement)
+            ? errorElement.GetString()
+            : null;
+
+        // Phase 1: collect parse diagnostics via LSP layer
+        var parseDiagnostics = _features.GetDiagnostics(text, "<mcp-explain>");
+
+        // Phase 2: if no parse errors, try executing to catch runtime errors
+        var runtimeErrors = new List<(string Code, string Message, string? Help)>();
+        if (parseDiagnostics.Count == 0)
+        {
+            try
+            {
+                var runtime = ToshRuntime.CreateDefault();
+                var engine = new ToshEngine(runtime);
+                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                engine.ExecuteToListAsync(text, "<mcp-explain>", cts.Token).GetAwaiter().GetResult();
+            }
+            catch (ToshDiagnosticException ex)
+            {
+                foreach (var d in ex.Diagnostics)
+                    runtimeErrors.Add((d.Code, d.Title, d.Help));
+            }
+            catch (OperationCanceledException)
+            {
+                // Timed out — not an error to explain
+            }
+            catch (Exception ex)
+            {
+                runtimeErrors.Add(("tosh::runtime::exception", ex.Message, null));
+            }
+        }
+
+        var explanations = new List<object>();
+        var sourceLines = text.Split('\n');
+
+        // Explain parse diagnostics (LspDiagnostic has line/character positions)
+        foreach (var diag in parseDiagnostics)
+        {
+            var lineNum = diag.Range.Start.Line + 1; // convert 0-based to 1-based
+            string? context = lineNum >= 1 && lineNum <= sourceLines.Length
+                ? sourceLines[lineNum - 1].Trim()
+                : null;
+
+            explanations.Add(new
+            {
+                code = diag.Code,
+                message = diag.Message,
+                explanation = ClassifyDiagnosticCode(diag.Code, diag.Message),
+                line = (int?)lineNum,
+                context,
+                suggestion = (string?)null
+            });
+        }
+
+        // Explain runtime errors
+        foreach (var (code, message, help) in runtimeErrors)
+        {
+            explanations.Add(new
+            {
+                code,
+                message,
+                explanation = ClassifyDiagnosticCode(code, message),
+                line = (int?)null,
+                context = (string?)null,
+                suggestion = help
+            });
+        }
+
+        // If a specific error string was provided but we have no diagnostics, explain it generically
+        if (explanations.Count == 0 && errorFilter is not null)
+        {
+            explanations.Add(new
+            {
+                code = "user-provided",
+                message = errorFilter,
+                explanation = ClassifyErrorMessage(errorFilter),
+                line = (int?)null,
+                context = (string?)null,
+                suggestion = (string?)null
+            });
+        }
+        else if (explanations.Count == 0)
+        {
+            explanations.Add(new
+            {
+                code = "none",
+                message = "No errors found.",
+                explanation = "The provided code parses and executes without errors.",
+                line = (int?)null,
+                context = (string?)null,
+                suggestion = (string?)null
+            });
+        }
+
+        return new
+        {
+            content = new[] { new { type = "text", text = JsonSerializer.Serialize(explanations, JsonOptions) } }
+        };
+    }
+
+    private static string ClassifyDiagnosticCode(string code, string title)
+    {
+        if (code.Contains("unexpected_token"))
+            return $"The parser encountered a token it did not expect. {title} Check for missing operators, unmatched braces, or incorrect syntax near this location.";
+
+        if (code.Contains("unknown_symbol") || code.Contains("undefined"))
+            return $"An identifier was referenced that has not been declared. {title} Ensure the variable or function is defined before use, and check for typos.";
+
+        if (code.Contains("unterminated_string"))
+            return $"A string literal was not properly closed. {title} Add the matching quote character.";
+
+        if (code.Contains("expected_expression"))
+            return $"An expression was expected but not found. {title} This often means an operator is missing its right-hand operand.";
+
+        if (code.Contains("expected_identifier"))
+            return $"An identifier (variable or function name) was expected. {title} Check that you are using a valid name after 'var', 'func', etc.";
+
+        if (code.Contains("duplicate"))
+            return $"A duplicate declaration was detected. {title} Rename one of the conflicting items or remove the duplicate.";
+
+        if (code.Contains("type_mismatch") || code.Contains("invalid_cast"))
+            return $"A type error occurred. {title} Verify that the value types are compatible with the operation.";
+
+        if (code.Contains("runtime::exception"))
+            return $"A runtime exception was thrown during execution: {title}";
+
+        return title;
+    }
+
+    private static string ClassifyErrorMessage(string error)
+    {
+        if (error.Contains("not found", StringComparison.OrdinalIgnoreCase) ||
+            error.Contains("undefined", StringComparison.OrdinalIgnoreCase))
+            return $"The error indicates something was not found or is undefined: '{error}'. Check that all referenced commands, variables, and files exist.";
+
+        if (error.Contains("permission", StringComparison.OrdinalIgnoreCase) ||
+            error.Contains("access denied", StringComparison.OrdinalIgnoreCase))
+            return $"A permissions error occurred: '{error}'. Verify file/directory permissions and run with appropriate privileges.";
+
+        if (error.Contains("timeout", StringComparison.OrdinalIgnoreCase))
+            return $"An operation timed out: '{error}'. Check for infinite loops or slow network/IO operations.";
+
+        if (error.Contains("syntax", StringComparison.OrdinalIgnoreCase) ||
+            error.Contains("parse", StringComparison.OrdinalIgnoreCase))
+            return $"A syntax or parse error: '{error}'. Review the code for syntax mistakes.";
+
+        return $"Error: '{error}'. Please review the code and consult the TōSh documentation for details.";
+    }
+
     private static object[] GetToolDefinitions() =>
     [
         new
@@ -302,6 +567,51 @@ public sealed class ToshMcpServer
                     uri = new { type = "string", description = "The document URI." }
                 },
                 required = new[] { "text", "uri" }
+            }
+        },
+        new
+        {
+            name = "command_metadata",
+            description = "Get structured metadata for TōSh built-in commands. Returns name, description, longDescription, usage, category, aliases, arguments (with kind: expression/bareword/string/path/block), options, examples, canonicalExamples (input/output pairs), pipeline input/output shape, output type and member names, output mode (structured/text/mixed/none), side effects (readsFiles, writesFiles, network, spawnsProcess), tags, seeAlso, permissions, errorConditions, sinceVersion, deprecatedVersion, removedVersion, and isExperimental. Call with no arguments to get all commands, or filter by name or category.",
+            inputSchema = new
+            {
+                type = "object",
+                properties = new
+                {
+                    name = new { type = "string", description = "Filter by command name or alias. Omit to return all commands." },
+                    category = new { type = "string", description = "Filter by category (e.g. 'Filesystem', 'Data', 'System'). Omit to return all categories." }
+                },
+                required = Array.Empty<string>()
+            }
+        },
+        new
+        {
+            name = "run_snippet",
+            description = "Execute a ToSh code snippet and return the results. Runs in an isolated engine instance with a timeout. Returns collected pipeline results, stdout, and stderr.",
+            inputSchema = new
+            {
+                type = "object",
+                properties = new
+                {
+                    code = new { type = "string", description = "The ToSh code to execute." },
+                    timeout_ms = new { type = "integer", description = "Maximum execution time in milliseconds (100..30000, default 10000)." }
+                },
+                required = new[] { "code" }
+            }
+        },
+        new
+        {
+            name = "explain_error",
+            description = "Analyze ToSh code for errors and return structured explanations. Parses the code and, if no parse errors are found, executes it to catch runtime errors. Each explanation includes the error code, message, human-readable explanation, line number, source context, and fix suggestion.",
+            inputSchema = new
+            {
+                type = "object",
+                properties = new
+                {
+                    text = new { type = "string", description = "The ToSh source code to analyze for errors." },
+                    error = new { type = "string", description = "An optional error message to explain if no errors are found in the code itself." }
+                },
+                required = new[] { "text" }
             }
         }
     ];

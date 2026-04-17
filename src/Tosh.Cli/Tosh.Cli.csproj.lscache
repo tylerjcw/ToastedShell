@@ -100,13 +100,17 @@ Tui/
  TuiFormLayout.cs
  TuiFrame.cs
  TuiGroupEditorState.cs
+ TuiInputEvent.cs
+ TuiInputReader.cs
  TuiInputScreen.cs
  TuiListState.cs
+ TuiMouseEvent.cs
  TuiOptionPickerState.cs
  TuiOrderedToggleEditorState.cs
  TuiPathEditorState.cs
  TuiPickScreen.cs
  TuiRect.cs
+ TuiRenderHelpers.cs
  TuiRequestDispatcher.cs
  TuiScreenResult.cs
  TuiScrollState.cs

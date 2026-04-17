@@ -10,6 +10,25 @@
     <ArtifactsRoot>$(RepoRoot)artifacts\</ArtifactsRoot>
   </PropertyGroup>
 
+  <!--
+    CalVer versioning: YY.MM-Publish#-DotNetMajor
+    External display:  26.4-1-10    (dashes between publish# and .NET major)
+    Internal/assembly: 26.4.1.10    (all dots, four-part numeric)
+    Bump ToshPublishNumber for each release within a calendar month.
+    Update ToshDotNetMajor when upgrading the target framework.
+  -->
+  <PropertyGroup>
+    <ToshCalYear>$([System.DateTime]::UtcNow.ToString('yy'))</ToshCalYear>
+    <ToshCalMonth>$([System.DateTime]::UtcNow.Month)</ToshCalMonth>
+    <ToshPublishNumber>1</ToshPublishNumber>
+    <ToshDotNetMajor>10</ToshDotNetMajor>
+    <AssemblyVersion>$(ToshCalYear).$(ToshCalMonth).$(ToshPublishNumber).$(ToshDotNetMajor)</AssemblyVersion>
+    <FileVersion>$(ToshCalYear).$(ToshCalMonth).$(ToshPublishNumber).$(ToshDotNetMajor)</FileVersion>
+    <InformationalVersion>$(ToshCalYear).$(ToshCalMonth)-$(ToshPublishNumber)-$(ToshDotNetMajor)</InformationalVersion>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+    <Version>$(ToshCalYear).$(ToshCalMonth).$(ToshPublishNumber).$(ToshDotNetMajor)</Version>
+  </PropertyGroup>
+
   <!-- Redirect test results into artifacts/test-results/ so they don't accumulate next to test sources. -->
   <PropertyGroup Condition="'$(IsTestProject)' == 'true' or '$(IsPackable)' == 'false'">
     <VSTestResultsDirectory>$(ArtifactsRoot)test-results\</VSTestResultsDirectory>

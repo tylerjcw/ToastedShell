@@ -12,6 +12,7 @@ namespace Tosh.Core.Commands;
 [CommandExample("touch -d 2026-03-28T12:00:00 notes.txt")]
 [CommandNote("Touch now supports `-a`, `-m`, `-c`, `-d`, and `-r`, plus grouped short flags like `-am`.")]
 [CommandOutput("Returns updated FileInfo or DirectoryInfo objects for the paths it touched.")]
+[CommandSideEffects(WritesFiles = true)]
 [PipelineInput(AcceptsList = true, Description = "Consumes piped path-like input when explicit paths are omitted.")]
 public sealed class TouchCommand : ShellCommand
 {

@@ -19,7 +19,10 @@ public static class BuiltInCommands
         commands.Register(new HelpCommand());
         commands.Register(new AproposCommand());
         commands.Register(new ExitCommand());
+        commands.Register(new ExitCommand("logout"));
         commands.Register(new ExecCommand());
+        commands.Register(new UmaskCommand());
+        commands.Register(new UlimitCommand());
         commands.Register(new ClearCommand());
         commands.Register(new HistoryCommand());
         commands.Register(new ConfigCommand());

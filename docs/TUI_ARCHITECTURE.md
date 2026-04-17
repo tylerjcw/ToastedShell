@@ -1,8 +1,8 @@
-# ToSh TUI Architecture
+# TōSh TUI Architecture
 
 ## Goal
 
-Build a reusable terminal UI platform for ToSh that can support:
+Build a reusable terminal UI platform for TōSh that can support:
 
 - `help browse` as a full-screen help and API browser
 - future config, env, file, and job browsers
@@ -24,7 +24,7 @@ The platform should be generic enough that the help browser is the first app, no
 4. Grow from browsing into editing without replacing the runtime.
    The same runtime that powers `help browse` should also power a future config editor. Editing should add reusable field widgets, validation, and commit/cancel flows, not fork the TUI platform into a second system.
 
-5. Reuse ToSh styling and config.
+5. Reuse TōSh styling and config.
    TUI styling should flow from `$tosh.Config.Theme`, not invent a disconnected color system.
 
 6. Make rendering deterministic and testable.
@@ -270,7 +270,7 @@ That same model can later power:
 - hover/signature help in the editor
 - generated docs
 
-## Integration With Existing ToSh Features
+## Integration With Existing TōSh Features
 
 The new TUI layer should build on, not replace:
 

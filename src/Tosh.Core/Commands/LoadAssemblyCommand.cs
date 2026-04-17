@@ -4,6 +4,10 @@ using System.Runtime.Loader;
 namespace Tosh.Core.Commands;
 
 [CommandCategory("CLR")]
+[CommandArgument("path", "One or more file paths to .NET assemblies to load.")]
+[CommandExample("load-assembly ./MyPlugin.dll", Title = "Load a plugin assembly")]
+[CommandExample("load-assembly Newtonsoft.Json.dll System.Data.dll", Title = "Load multiple assemblies")]
+[CommandOutput("Assembly objects for each loaded assembly.")]
 public sealed class LoadAssemblyCommand : ShellCommand
 {
     public LoadAssemblyCommand()

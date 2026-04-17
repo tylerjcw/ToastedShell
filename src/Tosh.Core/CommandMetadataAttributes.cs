@@ -1,4 +1,92 @@
 namespace Tosh.Core;
+/// <summary>
+/// Adds a long description or extended help text to the command.
+/// </summary>
+[AttributeUsage(AttributeTargets.Class, AllowMultiple = false)]
+public sealed class CommandLongDescriptionAttribute(string text) : Attribute
+{
+    public string Text { get; } = text;
+}
+
+/// <summary>
+/// Declares the version in which the command was introduced.
+/// </summary>
+[AttributeUsage(AttributeTargets.Class, AllowMultiple = false)]
+public sealed class CommandSinceAttribute(string version) : Attribute
+{
+    public string Version { get; } = version;
+}
+
+/// <summary>
+/// Declares the version in which the command was deprecated.
+/// </summary>
+[AttributeUsage(AttributeTargets.Class, AllowMultiple = false)]
+public sealed class CommandDeprecatedAttribute(string version) : Attribute
+{
+    public string Version { get; } = version;
+}
+
+/// <summary>
+/// Declares the version in which the command was removed.
+/// </summary>
+[AttributeUsage(AttributeTargets.Class, AllowMultiple = false)]
+public sealed class CommandRemovedAttribute(string version) : Attribute
+{
+    public string Version { get; } = version;
+}
+
+/// <summary>
+/// Adds a tag or keyword for discoverability/search.
+/// </summary>
+[AttributeUsage(AttributeTargets.Class, AllowMultiple = true)]
+public sealed class CommandTagAttribute(string tag) : Attribute
+{
+    public string Tag { get; } = tag;
+}
+
+/// <summary>
+/// Declares a related command for see-also/help navigation.
+/// </summary>
+[AttributeUsage(AttributeTargets.Class, AllowMultiple = true)]
+public sealed class CommandSeeAlsoAttribute(string relatedCommand) : Attribute
+{
+    public string RelatedCommand { get; } = relatedCommand;
+}
+
+/// <summary>
+/// Declares a required permission or capability.
+/// </summary>
+[AttributeUsage(AttributeTargets.Class, AllowMultiple = true)]
+public sealed class CommandPermissionAttribute(string permission) : Attribute
+{
+    public string Permission { get; } = permission;
+}
+
+/// <summary>
+/// Marks a command as experimental.
+/// </summary>
+[AttributeUsage(AttributeTargets.Class, AllowMultiple = false)]
+public sealed class CommandExperimentalAttribute : Attribute { }
+
+/// <summary>
+/// Declares a possible error condition or exit code.
+/// </summary>
+[AttributeUsage(AttributeTargets.Class, AllowMultiple = true)]
+public sealed class CommandErrorConditionAttribute(string description) : Attribute
+{
+    public string Description { get; } = description;
+}
+
+/// <summary>
+/// Declares a canonical example with input and expected output.
+/// </summary>
+[AttributeUsage(AttributeTargets.Class, AllowMultiple = true)]
+public sealed class CommandCanonicalExampleAttribute(string input, string output, string? description = null) : Attribute
+{
+    public string Input { get; } = input;
+    public string Output { get; } = output;
+    public string? Description { get; } = description;
+}
 
 /// <summary>
 /// Declares the command's category for help grouping and spec generation.
@@ -31,6 +119,12 @@ public sealed class CommandArgumentAttribute(string name, string description) : 
     public string Description { get; } = description;
     public bool Required { get; init; } = true;
     public string? TypeName { get; init; }
+
+    /// <summary>
+    /// The syntactic kind: "expression", "bareword", "string", "path", "block", or "any".
+    /// When null, the exporter infers the kind from <see cref="TypeName"/>.
+    /// </summary>
+    public string? Kind { get; init; }
 }
 
 /// <summary>
@@ -69,6 +163,27 @@ public sealed class CommandNoteAttribute(string text) : Attribute
 public sealed class CommandOutputAttribute(string description) : Attribute
 {
     public string Description { get; } = description;
+
+    /// <summary>CLR type name(s) of the output objects, e.g. "FileSystemEntry" or "String".</summary>
+    public string? TypeName { get; init; }
+
+    /// <summary>Comma-separated key member names, e.g. "Name, Size, Modified".</summary>
+    public string? Members { get; init; }
+
+    /// <summary>"structured" (typed objects), "text" (plain text lines), "mixed", or "none".</summary>
+    public string Mode { get; init; } = "structured";
+}
+
+/// <summary>
+/// Declares the side effects a command may perform.
+/// </summary>
+[AttributeUsage(AttributeTargets.Class, AllowMultiple = false)]
+public sealed class CommandSideEffectsAttribute : Attribute
+{
+    public bool ReadsFiles { get; init; }
+    public bool WritesFiles { get; init; }
+    public bool Network { get; init; }
+    public bool SpawnsProcess { get; init; }
 }
 
 /// <summary>

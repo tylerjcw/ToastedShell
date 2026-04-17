@@ -3,8 +3,12 @@ using System.Reflection;
 namespace Tosh.Core.Commands;
 
 [CommandCategory("CLR")]
-[CommandExample("$obj | has-prop Name")]
-[CommandExample("has-prop $obj Name")]
+[CommandArgument("object", "The target object. If omitted, reads from the pipeline.", Required = false)]
+[CommandArgument("name", "The property name to check.")]
+[CommandExample("$obj | has-prop Name", Title = "Check if a piped object has a property")]
+[CommandExample("has-prop $obj Name", Title = "Check by passing the object directly")]
+[CommandOutput("A boolean: true if the property exists, false otherwise.")]
+[PipelineInput(AcceptsScalar = true, AcceptsRecord = true, Description = "Uses the piped object as the target when the object argument is omitted.")]
 public sealed class HasPropCommand : ShellCommand
 {
     public HasPropCommand()

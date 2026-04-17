@@ -1,8 +1,13 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("CLR")]
-[CommandExample("$obj | del-prop Name")]
-[CommandExample("del-prop $obj Name")]
+[CommandArgument("object", "The target dynamic record. If omitted, reads from the pipeline.", Required = false)]
+[CommandArgument("name", "The property name to remove.")]
+[CommandExample("$obj | del-prop Name", Title = "Remove a property from a piped record")]
+[CommandExample("del-prop $obj Name", Title = "Remove by passing the object directly")]
+[CommandNote("Only works on dictionary-backed dynamic records. CLR properties cannot be removed.")]
+[CommandOutput("The modified record with the property removed.")]
+[PipelineInput(AcceptsScalar = true, AcceptsRecord = true, Description = "Uses the piped object as the target when the object argument is omitted.")]
 public sealed class DelPropCommand : ShellCommand
 {
     public DelPropCommand()

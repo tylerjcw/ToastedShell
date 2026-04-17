@@ -93,10 +93,17 @@ internal sealed class ReplCompletionEngine
     };
 
     private readonly ToshRuntime _runtime;
+    private IReadOnlyDictionary<string, CommandMetadata>? _metadataCache;
 
     public ReplCompletionEngine(ToshRuntime runtime)
     {
         _runtime = runtime;
+    }
+
+    private IReadOnlyDictionary<string, CommandMetadata> GetMetadataLookup()
+    {
+        return _metadataCache ??= CommandMetadataExporter.BuildMetadata(_runtime.Commands)
+            .ToDictionary(entry => entry.Name, StringComparer.OrdinalIgnoreCase);
     }
 
     public ReplCompletionResult? GetCompletions(string text, int cursorIndex)
@@ -121,6 +128,16 @@ internal sealed class ReplCompletionEngine
         if (TryGetVariableOrMemberSuggestions(tokenPrefix, replacementStart, replacementLength, out var variableResult))
         {
             return variableResult;
+        }
+
+        if (TryGetFlagSuggestions(text, tokenPrefix, replacementStart, replacementLength, out var flagResult))
+        {
+            return flagResult;
+        }
+
+        if (TryGetOptionValueSuggestions(text, tokenPrefix, replacementStart, replacementLength, out var optionValueResult))
+        {
+            return optionValueResult;
         }
 
         if (TryGetPathSuggestions(text, tokenPrefix, replacementStart, replacementLength, out var pathResult))
@@ -150,6 +167,48 @@ internal sealed class ReplCompletionEngine
         return suggestions.Count == 0
             ? null
             : new ReplCompletionResult(replacementStart, replacementLength, suggestions);
+    }
+
+    public string? GetSignatureHint(string text, int cursorIndex)
+    {
+        cursorIndex = Math.Clamp(cursorIndex, 0, text.Length);
+
+        var segmentPrefix = GetCurrentSegmentPrefix(text, cursorIndex);
+        var tokens = SplitSegmentTokens(segmentPrefix);
+
+        if (tokens.Count == 0)
+        {
+            return null;
+        }
+
+        var commandName = tokens[0];
+
+        if (commandName.StartsWith('-') || commandName.StartsWith('$'))
+        {
+            return null;
+        }
+
+        if (!GetMetadataLookup().TryGetValue(commandName, out var entry))
+        {
+            return null;
+        }
+
+        var sb = new StringBuilder();
+        sb.Append(entry.Name);
+
+        foreach (var arg in entry.Arguments)
+        {
+            var typePart = arg.TypeName is not null ? $": {arg.TypeName}" : "";
+            sb.Append(arg.Required ? $" <{arg.Name}{typePart}>" : $" [{arg.Name}{typePart}]");
+        }
+
+        foreach (var opt in entry.Options)
+        {
+            var flags = opt.Syntax.Split(',', StringSplitOptions.TrimEntries);
+            sb.Append($" [{flags[0]}]");
+        }
+
+        return sb.ToString();
     }
 
     internal static string GetTokenAtCursor(string text, int cursorIndex)
@@ -392,6 +451,156 @@ internal sealed class ReplCompletionEngine
         }
 
         return builder.ToString();
+    }
+
+    private bool TryGetFlagSuggestions(string text, string tokenPrefix, int replacementStart, int replacementLength, out ReplCompletionResult? result)
+    {
+        if (!tokenPrefix.StartsWith('-'))
+        {
+            result = null;
+            return false;
+        }
+
+        var segmentPrefix = GetCurrentSegmentPrefix(text, replacementStart);
+        var tokens = SplitSegmentTokens(segmentPrefix);
+
+        if (tokens.Count == 0)
+        {
+            result = null;
+            return false;
+        }
+
+        var commandName = tokens[0];
+
+        if (commandName.StartsWith('-') || commandName.StartsWith('$'))
+        {
+            result = null;
+            return false;
+        }
+
+        if (!GetMetadataLookup().TryGetValue(commandName, out var metadataEntry) || metadataEntry.Options.Count == 0)
+        {
+            result = null;
+            return false;
+        }
+
+        var suggestions = new Dictionary<string, ReplCompletionSuggestion>(StringComparer.Ordinal);
+
+        foreach (var option in metadataEntry.Options)
+        {
+            var flags = option.Syntax.Split(',', StringSplitOptions.TrimEntries);
+
+            foreach (var flag in flags)
+            {
+                if (flag.StartsWith(tokenPrefix, StringComparison.Ordinal))
+                {
+                    suggestions[flag] = new ReplCompletionSuggestion(flag, option.Description, Priority: 5);
+                }
+            }
+        }
+
+        if (suggestions.Count == 0)
+        {
+            result = null;
+            return false;
+        }
+
+        result = new ReplCompletionResult(replacementStart, replacementLength, OrderSuggestions(suggestions.Values));
+        return true;
+    }
+
+    internal static IReadOnlyList<string>? ParseOptionValueChoices(string syntax)
+    {
+        var openAngle = syntax.IndexOf('<');
+        if (openAngle < 0)
+        {
+            return null;
+        }
+
+        var closeAngle = syntax.IndexOf('>', openAngle + 1);
+        if (closeAngle < 0)
+        {
+            return null;
+        }
+
+        var inner = syntax.AsSpan()[(openAngle + 1)..closeAngle];
+        if (!inner.Contains('|'))
+        {
+            return null;
+        }
+
+        return inner.ToString().Split('|', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+    }
+
+    private bool TryGetOptionValueSuggestions(string text, string tokenPrefix, int replacementStart, int replacementLength, out ReplCompletionResult? result)
+    {
+        result = null;
+
+        var segmentPrefix = GetCurrentSegmentPrefix(text, replacementStart);
+        var tokens = SplitSegmentTokens(segmentPrefix);
+
+        if (tokens.Count < 2)
+        {
+            return false;
+        }
+
+        var commandName = tokens[0];
+        if (commandName.StartsWith('-') || commandName.StartsWith('$'))
+        {
+            return false;
+        }
+
+        var previousToken = tokens[^1];
+        if (!previousToken.StartsWith('-'))
+        {
+            return false;
+        }
+
+        if (!GetMetadataLookup().TryGetValue(commandName, out var entry))
+        {
+            return false;
+        }
+
+        foreach (var option in entry.Options)
+        {
+            var flags = option.Syntax.Split(',', StringSplitOptions.TrimEntries);
+
+            foreach (var flag in flags)
+            {
+                var flagName = flag.Split(' ', 2)[0];
+
+                if (!string.Equals(flagName, previousToken, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                var choices = ParseOptionValueChoices(option.Syntax);
+                if (choices is null || choices.Count == 0)
+                {
+                    return false;
+                }
+
+                var suggestions = new List<ReplCompletionSuggestion>();
+
+                foreach (var choice in choices)
+                {
+                    if (choice.StartsWith(tokenPrefix, StringComparison.OrdinalIgnoreCase))
+                    {
+                        suggestions.Add(new ReplCompletionSuggestion(choice, $"Value for {flagName}", Priority: 5));
+                    }
+                }
+
+                if (suggestions.Count > 0)
+                {
+                    result = new ReplCompletionResult(replacementStart, replacementLength, OrderSuggestions(suggestions));
+                    return true;
+                }
+
+                return false;
+            }
+        }
+
+        return false;
     }
 
     private bool TryGetVariableOrMemberSuggestions(string tokenPrefix, int replacementStart, int replacementLength, out ReplCompletionResult? result)

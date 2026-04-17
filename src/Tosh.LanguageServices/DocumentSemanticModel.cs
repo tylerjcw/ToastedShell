@@ -518,6 +518,9 @@ public sealed class DocumentSemanticModel
             case SetLiteralArgumentSyntax:
                 return typeof(HashSet<object>);
 
+            case ComparisonPatternSyntax:
+                return typeof(bool);
+
             case RecordLiteralArgumentSyntax:
                 return typeof(ExpandoObject);
 
@@ -1615,6 +1618,10 @@ public sealed class DocumentSemanticModel
                     {
                         CollectArgument(item, scopeSpan, depth);
                     }
+                    break;
+
+                case ComparisonPatternSyntax comparisonPattern:
+                    CollectArgument(comparisonPattern.Operand, scopeSpan, depth);
                     break;
 
                 case RecordLiteralArgumentSyntax record:

@@ -1,6 +1,12 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Pipeline")]
+[CommandArgument("other-sequence", "An array or list to merge pairwise with the pipeline.")]
+[CommandArgument("callable|block", "Optional combiner. Receives each pair as arguments. Defaults to creating two-element arrays.", Required = false)]
+[CommandExample("echo a b c | zip [1 2 3]", Title = "Pair pipeline with an array")]
+[CommandExample("echo 1 2 3 | zip [10 20 30] func(a, b) => ($a + $b)", Title = "Zip with a combiner")]
+[CommandOutput("One result per pair. Without a combiner, yields two-element arrays.")]
+[PipelineInput(AcceptsScalar = true, AcceptsRecord = true, Description = "Merges the pipeline with another sequence pairwise.")]
 public sealed class ZipCommand : ShellCommand
 {
     public ZipCommand()

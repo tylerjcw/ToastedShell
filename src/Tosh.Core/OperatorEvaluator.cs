@@ -19,6 +19,10 @@ public static class OperatorEvaluator
 
     public static object? EvaluateBinary(object? left, string @operator, object? right)
     {
+        // Auto-unwrap ShellTextLine so operators work transparently on text content.
+        if (left is ShellTextLine leftLine) left = leftLine.Text;
+        if (right is ShellTextLine rightLine) right = rightLine.Text;
+
         return @operator switch
         {
             "+" => Add(left, right),
@@ -53,6 +57,9 @@ public static class OperatorEvaluator
 
     public static bool Matches(object? actual, string @operator, object? expected, bool nullable)
     {
+        if (actual is ShellTextLine actualLine) actual = actualLine.Text;
+        if (expected is ShellTextLine expectedLine) expected = expectedLine.Text;
+
         return @operator switch
         {
             "==" => AreEqual(actual, expected),

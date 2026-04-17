@@ -3,6 +3,7 @@ using Tosh.Core.Formats;
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Data")]
+[CommandOutput("Parsed CLR objects from the text format.", Mode = "structured")]
 [CommandNote("The `from` and `to` commands convert between text formats (json, csv, tsv, xml, toml) and CLR objects. Parsed values stay as CLR objects until you explicitly flatten them.")]
 [CommandExample("echo \"{\\\"name\\\":\\\"toast\\\"}\" | from json")]
 [CommandExample("curl https://example/api | from json | flatten")]

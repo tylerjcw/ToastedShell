@@ -1,6 +1,12 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Pipeline")]
+[CommandArgument("callable|block", "A predicate evaluated for each input item.")]
+[CommandExample("echo 1 2 3 | any { _ > 2 }", Title = "Check if any value exceeds 2")]
+[CommandExample("echo 2 4 6 | all { _ % 2 == 0 }", Title = "Check if all values are even")]
+[CommandExample("echo 1 3 5 | none { _ % 2 == 0 }", Title = "Check that no values are even")]
+[CommandOutput("A boolean: true or false.")]
+[PipelineInput(AcceptsScalar = true, AcceptsRecord = true, Description = "Tests pipeline items against the predicate.")]
 public sealed class QuantifierCommand : ShellCommand
 {
     private readonly QuantifierKind _kind;
@@ -102,10 +108,11 @@ public sealed class QuantifierCommand : ShellCommand
         return new CommandMetadata(
             Name: Name,
             Description: Description,
+            LongDescription: null,
             Usage: Usage,
             Category: "Pipeline",
             Aliases: aliases ?? [],
-            Arguments: [new("callable|block", "A lambda or block predicate that returns boolean values.", Required: true, TypeName: null)],
+            Arguments: [new("callable|block", "A lambda or block predicate that returns boolean values.", Required: true, TypeName: null, Kind: "block")],
             Options: [],
             Examples: _kind switch
             {
@@ -145,6 +152,19 @@ public sealed class QuantifierCommand : ShellCommand
                     QuantifierKind.All => "Consumes the current pipeline and stops at the first non-matching item.",
                     QuantifierKind.None => "Consumes the current pipeline and stops at the first matching item.",
                     _ => null,
-                }));
+                }),
+            OutputType: "Boolean",
+            OutputMembers: null,
+            OutputMode: "structured",
+            SideEffects: null,
+            SinceVersion: null,
+            DeprecatedVersion: null,
+            RemovedVersion: null,
+            Tags: [],
+            SeeAlso: [],
+            Permissions: [],
+            IsExperimental: false,
+            ErrorConditions: [],
+            CanonicalExamples: []);
     }
 }

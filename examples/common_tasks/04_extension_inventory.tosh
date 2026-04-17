@@ -1,0 +1,51 @@
+#!/usr/bin/env tosh
+# Count file extensions in a tree and show the largest files.
+#
+# Usage:
+#   tosh ./examples/common_tasks/04_extension_inventory.tosh [root] [limit]
+# Example:
+#   tosh ./examples/common_tasks/04_extension_inventory.tosh . 12
+
+func usage() {
+    writeline """
+        Usage: 04_extension_inventory.tosh [root] [limit]
+
+        root   Directory tree to scan. Default: .
+        limit  Number of large files to print. Default: 10
+        """
+}
+
+var argc = ($tosh.Script.Args | count)
+if ($argc > 0) {
+    var firstArg = ($tosh.Script.Args | get 0)
+    if ($firstArg == "--help" or $firstArg == "-h") {
+        usage
+        return
+    }
+}
+
+var root = ($argc > 0) ? ($tosh.Script.Args | get 0) : "."
+var limit = ($argc > 1) ? (($tosh.Script.Args | get 1) | cast int) : 10
+var files = (find $root -type f | collect)
+
+if ($files.Length == 0) {
+    writeline $"No files were found under {$root}."
+    return
+}
+
+writeline $"File extensions under {$root}:"
+$files
+| group-by Extension
+| sort Count
+| reverse
+| each {
+    var extension = (($_.Key == "") ? "<no extension>" : $_.Key)
+    writeline $"  {$extension}: {_.Count}"
+}
+
+writeline ""
+writeline $"Largest {$limit} files:"
+$files | sort Size | reverse | first $limit | each {
+    var extension = (($_.Extension == "") ? "<no extension>" : $_.Extension)
+    writeline $"  {_.Size} | {_.Modified} | {$extension} | {_.FullName}"
+}

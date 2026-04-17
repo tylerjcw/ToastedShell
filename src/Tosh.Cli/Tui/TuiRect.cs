@@ -23,4 +23,7 @@ internal readonly record struct TuiRect
     public int Bottom => Top + Height;
 
     public bool IsEmpty => Width == 0 || Height == 0;
+
+    public bool Contains(int column, int row) =>
+        column >= Left && column < Right && row >= Top && row < Bottom;
 }

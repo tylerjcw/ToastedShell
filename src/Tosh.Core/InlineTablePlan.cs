@@ -38,7 +38,7 @@ public sealed class InlineTablePlan
     public int TotalWidth => Columns.Count == 0 ? 0 : Columns.Sum(c => c.Width + 2) + Columns.Count + 1;
 
     /// <summary>Get box-drawing characters for the given style.</summary>
-    public static BoxChars GetBoxCharacters(ToshTableBoxStyle style) => style switch
+    public static BoxChars GetBoxCharacters(ToshTableBoxStyle style) => TerminalGlyphs.ResolveBoxStyle(style) switch
     {
         ToshTableBoxStyle.Square => new('┌', '┬', '┐', '├', '┼', '┤', '└', '┴', '┘', '│', '─'),
         ToshTableBoxStyle.Heavy => new('┏', '┳', '┓', '┣', '╋', '┫', '┗', '┻', '┛', '┃', '━'),

@@ -9,8 +9,8 @@ Scanning input file toastscript-spec.idx....
 
 !! Input index error (file = toastscript-spec.idx, line = 20):
    -- Extra `|' at position 2 of first argument.
-done (505 entries accepted, 3 rejected).
-Sorting entries.......done (5214 comparisons).
-Generating output file toastscript-spec.ind....done (401 lines written, 0 warnings).
+done (507 entries accepted, 3 rejected).
+Sorting entries.......done (4882 comparisons).
+Generating output file toastscript-spec.ind....done (403 lines written, 0 warnings).
 Output written in toastscript-spec.ind.
 Transcript written in toastscript-spec.ilg.

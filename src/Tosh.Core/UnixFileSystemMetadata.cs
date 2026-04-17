@@ -11,6 +11,11 @@ internal sealed record UnixFileSystemMetadata(
     long? Inode,
     long? LinkCount)
 {
+    // Cache uid→name and gid→name lookups. Most directory listings share the same owner/group,
+    // so this avoids thousands of redundant getpwuid()/getgrgid() P/Invoke calls.
+    private static readonly Dictionary<uint, FileSystemPrincipalInfo> UserCache = new();
+    private static readonly Dictionary<uint, FileSystemPrincipalInfo> GroupCache = new();
+
     public static UnixFileSystemMetadata? TryRead(FileSystemInfo entry)
     {
         ArgumentNullException.ThrowIfNull(entry);
@@ -73,28 +78,50 @@ internal sealed record UnixFileSystemMetadata(
 
     private static FileSystemPrincipalInfo ResolveUser(uint uid)
     {
-        var pointer = GetPwUid(uid);
-
-        if (pointer == IntPtr.Zero)
+        if (UserCache.TryGetValue(uid, out var cached))
         {
-            return new FileSystemPrincipalInfo(uid, null);
+            return cached;
         }
 
-        var passwd = Marshal.PtrToStructure<Passwd>(pointer);
-        return new FileSystemPrincipalInfo(uid, Marshal.PtrToStringAnsi(passwd.pw_name));
+        var pointer = GetPwUid(uid);
+
+        FileSystemPrincipalInfo result;
+        if (pointer == IntPtr.Zero)
+        {
+            result = new FileSystemPrincipalInfo(uid, null);
+        }
+        else
+        {
+            var passwd = Marshal.PtrToStructure<Passwd>(pointer);
+            result = new FileSystemPrincipalInfo(uid, Marshal.PtrToStringAnsi(passwd.pw_name));
+        }
+
+        UserCache[uid] = result;
+        return result;
     }
 
     private static FileSystemPrincipalInfo ResolveGroup(uint gid)
     {
-        var pointer = GetGrGid(gid);
-
-        if (pointer == IntPtr.Zero)
+        if (GroupCache.TryGetValue(gid, out var cached))
         {
-            return new FileSystemPrincipalInfo(gid, null);
+            return cached;
         }
 
-        var group = Marshal.PtrToStructure<PosixGroup>(pointer);
-        return new FileSystemPrincipalInfo(gid, Marshal.PtrToStringAnsi(group.gr_name));
+        var pointer = GetGrGid(gid);
+
+        FileSystemPrincipalInfo result;
+        if (pointer == IntPtr.Zero)
+        {
+            result = new FileSystemPrincipalInfo(gid, null);
+        }
+        else
+        {
+            var group = Marshal.PtrToStructure<PosixGroup>(pointer);
+            result = new FileSystemPrincipalInfo(gid, Marshal.PtrToStringAnsi(group.gr_name));
+        }
+
+        GroupCache[gid] = result;
+        return result;
     }
 
     [StructLayout(LayoutKind.Sequential)]

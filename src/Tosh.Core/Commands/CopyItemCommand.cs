@@ -19,6 +19,7 @@ namespace Tosh.Core.Commands;
 [CommandExample("cp -s file.txt link.txt", Title = "Create a symbolic link")]
 [CommandExample("cp -l file.txt hardlink.txt", Title = "Create a hard link")]
 [CommandOutput("Returns FileInfo or DirectoryInfo objects for each copied target.")]
+[CommandSideEffects(ReadsFiles = true, WritesFiles = true)]
 public sealed class CopyItemCommand : ShellCommand
 {
     public CopyItemCommand()

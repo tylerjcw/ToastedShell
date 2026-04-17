@@ -3,8 +3,12 @@ using System.Reflection;
 namespace Tosh.Core.Commands;
 
 [CommandCategory("CLR")]
-[CommandExample("$obj | get-prop $propName")]
-[CommandExample("get-prop $obj Name")]
+[CommandArgument("object", "The target object. If omitted, reads from the pipeline.", Required = false)]
+[CommandArgument("name", "The property name to retrieve.")]
+[CommandExample("$obj | get-prop $propName", Title = "Get a dynamically-named property from a piped object")]
+[CommandExample("get-prop $obj Name", Title = "Get a property by passing the object as an argument")]
+[CommandOutput("The value of the named property.")]
+[PipelineInput(AcceptsScalar = true, AcceptsRecord = true, Description = "Uses the piped object as the target when the object argument is omitted.")]
 public sealed class GetPropCommand : ShellCommand
 {
     public GetPropCommand()

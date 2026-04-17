@@ -152,7 +152,7 @@ public sealed class ExtensionCommandTests
 
         var forgetWrapperResults = await engine.ExecuteToListAsync("forget tosh_wrapper");
         var unsetFunctionResults = await engine.ExecuteToListAsync("forget tosh_func");
-        await engine.ExecuteToListAsync($"export {variableName} toast");
+        await engine.ExecuteToListAsync($"export {variableName} = toast");
         var unsetResults = await engine.ExecuteToListAsync($"forget {variableName}");
 
         runtime.RecordHistory("ls -la");

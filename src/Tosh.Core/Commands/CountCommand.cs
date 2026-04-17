@@ -1,6 +1,10 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Pipeline")]
+[CommandExample("echo a b c | count", Title = "Count items in a pipeline")]
+[CommandExample("ls | count", Title = "Count files in the current directory")]
+[CommandOutput("An integer representing the total number of pipeline objects.")]
+[PipelineInput(AcceptsScalar = true, AcceptsRecord = true, Description = "Consumes the entire pipeline and returns the count.")]
 public sealed class CountCommand : ShellCommand
 {
     public CountCommand()

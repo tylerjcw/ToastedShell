@@ -14,6 +14,7 @@ namespace Tosh.Core.Commands;
 [CommandExample("echo one two three | wc")]
 [CommandNote("Wc returns typed statistics objects instead of formatted text, so you can still `get`, `where`, or `summarize` them later. Selector flags like `-l` and `-w` only change the visible columns, not the underlying objects.")]
 [CommandOutput("Returns typed text-statistics objects, and appends a `total` row when multiple files are counted.")]
+[CommandSideEffects(ReadsFiles = true)]
 [PipelineInput(AcceptsScalar = true, AcceptsRecord = true, Description = "Consumes the current text pipeline when explicit file paths are omitted.")]
 public sealed class WordCountCommand : ShellCommand
 {

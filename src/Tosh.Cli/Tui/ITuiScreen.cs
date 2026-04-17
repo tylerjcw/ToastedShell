@@ -4,5 +4,5 @@ internal interface ITuiScreen
 {
     TuiFrame Render(TuiSize size);
 
-    TuiScreenResult HandleKey(ConsoleKeyInfo key);
+    TuiScreenResult HandleInput(TuiInputEvent input);
 }

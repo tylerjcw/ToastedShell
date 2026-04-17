@@ -1,0 +1,44 @@
+#!/usr/bin/env tosh
+# List files modified recently and summarize their total size.
+#
+# Usage:
+#   tosh ./examples/common_tasks/02_recent_files_report.tosh [root] [limit] [age]
+# Example:
+#   tosh ./examples/common_tasks/02_recent_files_report.tosh . 15 3d
+
+func usage() {
+    writeline """
+        Usage: 02_recent_files_report.tosh [root] [limit] [age]
+
+        root   Directory tree to scan. Default: .
+        limit  Number of rows to print. Default: 10
+        age    ToSh duration string. Default: 7d
+        """
+}
+
+var argc = ($tosh.Script.Args | count)
+if ($argc > 0) {
+    var firstArg = ($tosh.Script.Args | get 0)
+    if ($firstArg == "--help" or $firstArg == "-h") {
+        usage
+        return
+    }
+}
+
+var root = ($argc > 0) ? ($tosh.Script.Args | get 0) : "."
+var limit = ($argc > 1) ? (($tosh.Script.Args | get 1) | cast int) : 10
+var age = ($argc > 2) ? ($tosh.Script.Args | get 2) : "7d"
+var recent = (find $root -type f -newer-than $age | collect)
+
+if ($recent.Length == 0) {
+    writeline $"No files under {$root} were modified in the last {$age}."
+    return
+}
+
+writeline $"Recent files under {$root} from the last {$age}:"
+$recent | sort Modified | reverse | first $limit | each {
+    writeline $"  {_.Modified} | {_.Size} | {_.FullName}"
+}
+writeline ""
+writeline $"Matched files: {$recent.Length}"
+writeline $"Total size: {$recent | sum Size}"

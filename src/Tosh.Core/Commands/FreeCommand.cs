@@ -1,6 +1,9 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("System")]
+[CommandExample("free", Title = "Show memory and swap usage")]
+[CommandExample("free | get .UsedMemory", Title = "Get the used memory value")]
+[CommandOutput("A record with TotalMemory, UsedMemory, FreeMemory, TotalSwap, UsedSwap, and FreeSwap as StorageSize values.")]
 public sealed class FreeCommand : ShellCommand
 {
     public FreeCommand()

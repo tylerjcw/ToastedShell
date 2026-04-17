@@ -1,8 +1,11 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("CLR")]
-[CommandExample("members string")]
-[CommandExample("DateTime.Now | members")]
+[CommandArgument("type", "One or more type names or piped objects to inspect.", Required = false)]
+[CommandExample("members string", Title = "List String members")]
+[CommandExample("DateTime.Now | members", Title = "List members of a piped object")]
+[CommandOutput("Member descriptor objects with Name, MemberType, DeclaringType, and Signature properties.")]
+[PipelineInput(AcceptsScalar = true, AcceptsRecord = true, Description = "Inspects the type of each piped object.")]
 public sealed class MembersCommand : ShellCommand
 {
     public MembersCommand()

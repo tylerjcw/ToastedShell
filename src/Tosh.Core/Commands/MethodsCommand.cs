@@ -1,6 +1,11 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("CLR")]
+[CommandArgument("type", "One or more type names or piped objects to inspect.", Required = false)]
+[CommandExample("methods string", Title = "List String methods")]
+[CommandExample("DateTime.Now | methods", Title = "List methods of a piped object")]
+[CommandOutput("Method descriptor objects with Name, ReturnType, Parameters, and Signature properties.")]
+[PipelineInput(AcceptsScalar = true, AcceptsRecord = true, Description = "Lists public methods of each piped object's type.")]
 public sealed class MethodsCommand : ShellCommand
 {
     public MethodsCommand()

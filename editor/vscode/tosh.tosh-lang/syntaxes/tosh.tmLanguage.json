@@ -4,6 +4,12 @@
   "scopeName": "source.tosh",
   "patterns": [
     {
+      "include": "#shebang"
+    },
+    {
+      "include": "#doc-comment"
+    },
+    {
       "include": "#comment"
     },
     {
@@ -52,6 +58,12 @@
       "include": "#variable-declaration"
     },
     {
+      "include": "#spread-operator"
+    },
+    {
+      "include": "#caret-escape"
+    },
+    {
       "include": "#variable-reference"
     },
     {
@@ -80,6 +92,48 @@
     }
   ],
   "repository": {
+    "shebang": {
+      "match": "^#!.*$",
+      "name": "comment.line.shebang.tosh"
+    },
+    "doc-comment": {
+      "patterns": [
+        {
+          "comment": "Doc comment with @param=name tag",
+          "name": "comment.line.documentation.tosh",
+          "match": "(##)\\s*(@param=)([a-zA-Z_][a-zA-Z0-9_]*)(.*)",
+          "captures": {
+            "1": {
+              "name": "punctuation.definition.comment.documentation.tosh"
+            },
+            "2": {
+              "name": "storage.type.annotation.tosh"
+            },
+            "3": {
+              "name": "variable.parameter.tosh"
+            }
+          }
+        },
+        {
+          "comment": "Doc comment with @tag",
+          "name": "comment.line.documentation.tosh",
+          "match": "(##)\\s*(@(?:param|returns|example|see))\\b(.*)",
+          "captures": {
+            "1": {
+              "name": "punctuation.definition.comment.documentation.tosh"
+            },
+            "2": {
+              "name": "storage.type.annotation.tosh"
+            }
+          }
+        },
+        {
+          "comment": "Plain doc comment",
+          "name": "comment.line.documentation.tosh",
+          "match": "##.*$"
+        }
+      ]
+    },
     "comment": {
       "match": "#.*$",
       "name": "comment.line.number-sign.tosh"
@@ -104,6 +158,29 @@
           "match": "\\\\(?:[\\\\\"'nrtabefv0]|x[0-9a-fA-F]{1,2}|u[0-9a-fA-F]{1,4})"
         },
         {
+          "comment": "Dollar-brace interpolation: ${expr}",
+          "name": "meta.interpolation.tosh",
+          "begin": "\\$\\{",
+          "end": "\\}",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.section.interpolation.begin.tosh"
+            }
+          },
+          "endCaptures": {
+            "0": {
+              "name": "punctuation.section.interpolation.end.tosh"
+            }
+          },
+          "contentName": "source.tosh.embedded",
+          "patterns": [
+            {
+              "include": "source.tosh"
+            }
+          ]
+        },
+        {
+          "comment": "Bare brace interpolation: {expr}",
           "name": "meta.interpolation.tosh",
           "begin": "(?<!\\{)\\{(?!\\{)",
           "end": "\\}",
@@ -123,6 +200,11 @@
               "include": "source.tosh"
             }
           ]
+        },
+        {
+          "comment": "Bare variable interpolation: $name or $env.HOME",
+          "match": "\\$[a-zA-Z_][a-zA-Z0-9_]*(?:\\.[a-zA-Z_][a-zA-Z0-9_]*)*",
+          "name": "variable.other.readwrite.tosh"
         },
         {
           "name": "constant.character.escape.tosh",
@@ -173,6 +255,7 @@
       ]
     },
     "single-quoted-string": {
+      "comment": "Single-quoted strings are literal — no escape sequences or interpolation",
       "name": "string.quoted.single.tosh",
       "begin": "'",
       "end": "'",
@@ -185,13 +268,7 @@
         "0": {
           "name": "punctuation.definition.string.end.tosh"
         }
-      },
-      "patterns": [
-        {
-          "name": "constant.character.escape.tosh",
-          "match": "\\\\(?:[\\\\\"'nrt])"
-        }
-      ]
+      }
     },
     "command-substitution": {
       "name": "meta.command-substitution.tosh",
@@ -304,7 +381,7 @@
       }
     },
     "control-flow": {
-      "match": "\\b(if|else|for|in|while|until|break|continue|return|throw|try|catch|finally|switch|case|default|match|func|var|alloc|class|module|enum|record|prop|shy|static|using|require|native|bind|from|as|out|ref|callconv|global|export|new|nameof|name-of|and|or|not|is|is-not|not-in)\\b",
+      "match": "\\b(if|else|for|in|while|until|break|continue|return|throw|try|catch|finally|switch|case|default|match|func|var|alloc|class|module|enum|record|prop|shy|static|using|require|native|bind|from|as|out|ref|callconv|global|export|new|nameof|name-of|and|or|not|is|is-not|not-in|handles|when)\\b",
       "name": "keyword.control.tosh"
     },
     "constants": {
@@ -365,8 +442,29 @@
         }
       }
     },
+    "spread-operator": {
+      "comment": "Spread / splat operator: ...$args",
+      "match": "(\\.\\.\\.)(\\$[a-zA-Z_][a-zA-Z0-9_]*(?:\\.[a-zA-Z_][a-zA-Z0-9_]*)*)",
+      "captures": {
+        "1": {
+          "name": "keyword.operator.spread.tosh"
+        },
+        "2": {
+          "name": "variable.other.readwrite.tosh"
+        }
+      }
+    },
+    "caret-escape": {
+      "comment": "Force external command: ^command",
+      "match": "(\\^)(?=[a-zA-Z_$\\/])",
+      "captures": {
+        "1": {
+          "name": "keyword.operator.caret-escape.tosh"
+        }
+      }
+    },
     "variable-reference": {
-      "match": "\\$[a-zA-Z_][a-zA-Z0-9_]*",
+      "match": "\\$[a-zA-Z_][a-zA-Z0-9_]*(?:\\.[a-zA-Z_][a-zA-Z0-9_]*)*",
       "name": "variable.other.readwrite.tosh"
     },
     "pipeline-underscore": {
@@ -392,7 +490,7 @@
     },
     "builtin-commands": {
       "comment": "Tosh built-in commands — highlighted in command position",
-      "match": "(?:^|(?<=\\|)\\s*|(?<=;)\\s*|(?<=\\{)\\s*)\\b(all|alloc|any|append-file|apropos|as-file|assert|average|avg|back|basename|call|call-method|cast|cat|cd|chmod|chown|chunk|clear|clone|close|collect|compose|config|constructors|converge|copy-to|count|cp|curry|cut|date|del-prop|describe-type|df|dirname|dirs|disk-usage|distinct|du|each|echo|env|events|exec|exists|exit|export|filter|find|find-index|findmnt|first|flat-map|flatten|flush|foreach|forget|forward|free|frequencies|from|get|get-methods|get-prop|get-props|glob|grep|group-by|group-while|guid|hash|has-method|has-prop|head|help|history|history-search|hostname|hostnamectl|http|id|ignore|inspect|interleave|invoke|ip|is-dir|is-file|is-link|iterate|jobs|join-lines|journalctl|kill|last|length|lines|ln|load-assembly|loginctl|ls|lsblk|lscpu|lsfd|lsipc|map|match|max|members|methods|min|mkdir|mkdir-temp|mounts|mv|native-alloc|native-free|native-offsetof|native-read|native-sizeof|native-write|networkctl|new|none|offset-of|open-file|parse|partial|partition|pick|ping|position|prompt-dir|prompt-duration|prompt-exit|prompt-git|prompt-history|prompt-jobs|prompt-newline|prompt-text|prompt-time|prompt-userhost|ps|pwd|raise|raw|read-buffer|read-bytes|read-file|read-from|read-line|read-line-from|read-lines|readlink|read-to-end|realpath|reduce|rename|replace|reverse|rm|scan|seek|select|seq|set-prop|signal|size-of|skip|skip-until|skip-while|sleep|sort|sort-by|split|stat|styled|sum|summarize|summary|systemctl|tail|take-until|take-while|tee|tempfile|template|timespan|to|touch|tr|transpose|tree|tui|type-of|types|uname|undef|unfold|uniq|unset|uptime|usage|vars|view|wait-for|wc|whence|where|which|whoami|window|write|write-buffer|write-bytes|write-file|writeline|write-line-to|write-to|xargs|zip)\\b",
+      "match": "(?:^|(?<=\\|)\\s*|(?<=;)\\s*|(?<=\\{)\\s*)\\b(all|alloc|any|append-file|apropos|as-file|assert|avg|back|basename|bg|call|call-method|cast|cat|cd|chmod|chown|chunk|clear|clone|close|collect|compose|config|constructors|converge|copy-to|count|cp|curry|cut|date|del-prop|describe-type|df|dirname|dirs|distinct|du|each|echo|env|events|exec|exists|exit|export|fg|filter|find|find-index|findmnt|first|flat-map|flatten|flush|forward|free|frequencies|from|get|get-methods|get-prop|get-props|glob|grep|group-by|group-while|guid|has-method|has-prop|hash|head|help|history|history-search|hostname|hostnamectl|http|id|ignore|inspect|interleave|invoke|ip|is-dir|is-file|is-link|iterate|jobs|join-lines|journalctl|kill|last|length|lines|ln|load-assembly|loginctl|ls|lsblk|lscpu|lsfd|lsipc|map|match|max|members|methods|min|mkdir|mkdir-temp|mv|native-free|native-read|native-write|networkctl|new|none|offset-of|open-file|parse|partial|partition|pick|ping|position|prompt-dir|prompt-duration|prompt-exit|prompt-git|prompt-history|prompt-jobs|prompt-newline|prompt-text|prompt-time|prompt-userhost|ps|pwd|raise|raw|read-bytes|read-file|read-from|read-line|read-line-from|read-lines|read-to-end|readlink|realpath|reduce|rename|replace|reverse|rm|scan|seek|select|seq|set-prop|signal|size-of|skip|skip-until|skip-while|sleep|sort|split|stat|styled|sum|summary|systemctl|tail|take-until|take-while|tee|tempfile|template|time|timespan|to|touch|tr|transpose|tree|tui|type-of|types|ulimit|umask|uname|unfold|uniq|unset|uptime|vars|view|wait-for|wc|where|which|whoami|window|write|write-bytes|write-file|write-line-to|write-to|writeline|xargs|zip)\\b",
       "captures": {
         "1": {
           "name": "support.function.builtin.tosh"

@@ -1,0 +1,103 @@
+#!/usr/bin/env tosh
+# collections.tosh
+# Demonstrates the collection types available in tosh: arrays, lists, sets,
+# tuples, dicts, maps, hashtables, and tables — including literals and generics.
+
+# --- Array literals --------------------------------------------------------
+# Square brackets create typed arrays.
+
+echo "=== Arrays ==="
+var words = ["hello", "world"]
+echo $"Length: {$words.Length}"
+echo $"Type: {type-of $words | get Name}"
+echo $words[0]
+
+# --- List construction and generics ----------------------------------------
+# new list(...) creates a resizable list. Use <T> for typed lists.
+
+echo "=== Lists ==="
+var numbers = new list<int>(10, 20, 30)
+$numbers.Add(40) | ignore
+echo $"Count: {$numbers.Count}"
+echo $"Type: {type-of $numbers | get Name}"
+$numbers | each { echo _ }
+
+# --- Set literals ----------------------------------------------------------
+# {: ... :} creates a set — duplicates are discarded.
+
+echo "=== Sets ==="
+var tags = {: "alpha", "beta", "alpha", "gamma" :}
+echo $"Count: {$tags.Count}"
+echo $"Type: {type-of $tags | get Name}"
+echo $"Contains alpha? {$tags.Contains("alpha")}"
+
+# Constructed form
+var constructed = new set(one, two, two, three)
+echo $"Constructed set count: {$constructed.Count}"
+
+# --- Tuple literals --------------------------------------------------------
+# Parenthesized comma-separated values create tuples.
+
+echo "=== Tuples ==="
+var pair = (42, "hello")
+echo $"Item1: {$pair.Item1}"
+echo $"Item2: {$pair.Item2}"
+echo $"Type: {type-of $pair | get Name}"
+
+var triple = ("alpha", 1, true)
+echo $"Triple: {$triple.Item1}, {$triple.Item2}, {$triple.Item3}"
+
+# --- Dict / record literals ------------------------------------------------
+# { Key = Value, ... } creates an expando record (dict).
+
+echo "=== Dicts (Records) ==="
+var person = { Name = "Komrad", Uid = 1000, Shell = "tosh" }
+echo $"Name: {$person.Name}"
+echo $"Type: {type-of $person | get Name}"
+echo $person | get { Name, Uid, Shell }
+
+# --- Typed dicts -----------------------------------------------------------
+# new dict<K, V>(...) creates a strongly-typed dictionary.
+
+echo "=== Typed Dicts ==="
+var scores = new dict<string, int>(Alice, 95, Bob, 87, Carol, 92)
+echo $"Bob's score: {$scores.Bob}"
+echo $"Type: {type-of $scores | get Name}"
+
+# --- Maps (from record) ---------------------------------------------------
+# new map({...}) creates a dict from a record literal.
+
+echo "=== Maps ==="
+var config = new map({ Theme = "dark", TabSize = 4 })
+echo $"Theme: {$config.Theme}"
+echo $"Type: {type-of $config | get Name}"
+
+# --- Hashtables ------------------------------------------------------------
+# new hashtable(...) creates a case-insensitive hashtable.
+
+echo "=== Hashtables ==="
+var settings = new hashtable(HOME, "/home/komrad", SHELL, "/usr/bin/tosh")
+echo $"HOME: {$settings.HOME}"
+echo $"Type: {type-of $settings | get Name}"
+
+# --- Tables ----------------------------------------------------------------
+# new table(...) creates a single-row shell table.
+
+echo "=== Tables ==="
+var row = new table(Name, "Toast", Uid, 1000)
+echo $row.Name
+echo $"Type: {type-of $row | get Name}"
+
+# --- Casting between collection types --------------------------------------
+
+echo "=== Casting ==="
+var fromArray = [1, 2, 3] | cast list<int>
+echo $"Cast type: {type-of $fromArray | get Name}"
+echo $"Count: {$fromArray.Count}"
+
+# --- Collection pipelines --------------------------------------------------
+# All collection types participate in the object pipeline.
+
+echo "=== Collection Pipelines ==="
+var items = new list<string>("bread", "coffee", "soap", "notebook")
+$items | where _.Length > 4 | sort | each { echo $"  {_}" }

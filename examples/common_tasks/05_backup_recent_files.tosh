@@ -1,0 +1,90 @@
+#!/usr/bin/env tosh
+# Copy recently modified files into a timestamped backup directory and write a JSON manifest.
+#
+# Usage:
+#   tosh ./examples/common_tasks/05_backup_recent_files.tosh [source-root] [backup-root] [age]
+# Example:
+#   tosh ./examples/common_tasks/05_backup_recent_files.tosh . ./tmp/backups 12h
+
+record BackupEntry(
+    Source: string,
+    RelativePath: string,
+    Target: string,
+    Size: StorageSize,
+    Modified: DateTimeOffset,
+    Sha256: string
+)
+
+func usage() {
+    writeline """
+        Usage: 05_backup_recent_files.tosh [source-root] [backup-root] [age]
+
+        source-root  Directory tree to back up. Default: .
+        backup-root  Parent directory for timestamped backups. Default: ./tmp/backups
+        age          ToSh duration string. Default: 3d
+
+        Files inside the backup root are excluded from the scan so repeated runs do not
+        back up older backups.
+        """
+}
+
+var argc = ($tosh.Script.Args | count)
+if ($argc > 0) {
+    var firstArg = ($tosh.Script.Args | get 0)
+    if ($firstArg == "--help" or $firstArg == "-h") {
+        usage
+        return
+    }
+}
+
+var sourceRoot = ($argc > 0) ? ($tosh.Script.Args | get 0) : "."
+var backupRoot = ($argc > 1) ? ($tosh.Script.Args | get 1) : "./tmp/backups"
+var age = ($argc > 2) ? ($tosh.Script.Args | get 2) : "3d"
+
+var sourceRootAbsolute = (System.IO.Path.GetFullPath($sourceRoot))
+var backupRootAbsolute = (System.IO.Path.GetFullPath($backupRoot))
+var backupId = (guid new v7 | guid format n)
+var backupDir = (System.IO.Path.Join($backupRootAbsolute, $"backup-{$backupId}"))
+
+var changedFiles = (
+    find $sourceRootAbsolute -type f -newer-than $age
+    | where { not (_.FullName.StartsWith($backupRootAbsolute)) }
+    | collect
+)
+
+if ($changedFiles.Length == 0) {
+    writeline $"No files under {$sourceRootAbsolute} were modified in the last {$age}."
+    return
+}
+
+mkdir -p $backupDir | ignore
+
+var manifest = new list()
+for file in ($changedFiles) {
+    var relativePath = (System.IO.Path.GetRelativePath($sourceRootAbsolute, $file.FullName))
+    var targetPath = (System.IO.Path.Join($backupDir, $relativePath))
+
+    mkdir -p (dirname $targetPath) | ignore
+    cp -p $file.FullName $targetPath | ignore
+
+    var sha256 = (hash sha256 $targetPath | get Hash)
+    $manifest.Add(new BackupEntry(
+        $file.FullName,
+        $relativePath,
+        $targetPath,
+        $file.Size,
+        $file.Modified,
+        $sha256
+    )) | ignore
+}
+
+var manifestPath = (System.IO.Path.Join($backupDir, "manifest.json"))
+$manifest | to json | write-file $manifestPath | ignore
+
+writeline $"Created backup: {$backupDir}"
+writeline $"Files copied: {$manifest | count}"
+writeline $"Total size: {$manifest | sum Size}"
+writeline $"Manifest: {$manifestPath}"
+writeline ""
+writeline "Newest files included in the backup:"
+$manifest | sort Modified | reverse | first 10 | get { RelativePath, Size, Modified, Sha256 }

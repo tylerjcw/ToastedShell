@@ -1,0 +1,105 @@
+#!/usr/bin/env tosh
+# pipelines_and_data.tosh
+# Demonstrates data transformation pipelines: where, each, sort, group-by,
+# aggregation, JSON/CSV parsing, text processing, and hashing.
+
+# --- Filtering with where --------------------------------------------------
+# where takes a predicate. Use _.Property for the current item.
+
+echo "=== Where: Filter Files ==="
+ls -la | where _.Type == file | get { Name, Size }
+
+echo "=== Where: Multi-clause Predicates ==="
+ls -la | where { _.Type == file; _.Size >= 1b } | get { Name, Size }
+
+# --- Projection with get ---------------------------------------------------
+# get selects properties. Use { } for multi-property projection.
+
+echo "=== Get: Single Property ==="
+ls -la | where _.Type == file | get Name
+
+echo "=== Get: Multi-property Projection ==="
+ls -la | first 5 | get { Name, Type, Size, Modified }
+
+# --- Transforming with each ------------------------------------------------
+# each runs a block for every pipeline item. _ is the current item.
+
+echo "=== Each: Transform Items ==="
+echo "Hello" "World" "Tosh" | each { _.ToLower() }
+
+echo "=== Each: Continue and Break ==="
+echo "one" "skip" "two" "three" | each {
+    if ((_ == "skip")) { continue }
+    echo _
+}
+
+echo "first item only:" (echo "alpha" "beta" "gamma" | each { echo _; break })
+
+# --- Sorting and reversing -------------------------------------------------
+
+echo "=== Sort ==="
+ls -la | where _.Type == file | sort Size | get { Name, Size }
+
+echo "=== Sort and Reverse ==="
+ls -la | where _.Type == file | sort Size | reverse | first 3 | get { Name, Size }
+
+# --- Aggregation -----------------------------------------------------------
+# sum, count, min, max work on numeric properties.
+
+echo "=== Aggregation ==="
+echo "Total file size:"
+ls -la | where _.Type == file | sum Size
+
+echo "File count:"
+ls -la | where _.Type == file | count
+
+# --- Group by --------------------------------------------------------------
+# group-by creates named groups from a property.
+
+echo "=== Group By ==="
+ls -la | group-by Type
+
+# --- JSON parsing ----------------------------------------------------------
+# from json turns JSON text into .NET objects in the pipeline.
+
+echo "=== JSON Pipeline ==="
+echo "[{\"name\":\"alpha\",\"score\":95},{\"name\":\"beta\",\"score\":87},{\"name\":\"gamma\",\"score\":92}]" | from json | flatten | sort score | reverse | get { name, score }
+
+# --- Text processing -------------------------------------------------------
+# grep, split, replace work on text but return objects.
+
+echo "=== Text Processing ==="
+echo "the quick brown fox" "jumps over the lazy dog" | grep -n "the" | get { LineNumber, Text }
+
+# --- Hashing ---------------------------------------------------------------
+
+echo "=== Hashing ==="
+echo "toasted" | hash sha256
+
+# --- Typed functions with pipeline input -----------------------------------
+# Functions can filter pipeline input with typed parameters.
+
+func bigFiles(minSize: StorageSize) {
+    ls -la | where _.Type == file | where _.Size >= $minSize | sort Size | reverse
+}
+
+echo "=== Typed Pipeline Function ==="
+bigFiles 512b | get { Name, Size }
+
+# --- Return type conversion ------------------------------------------------
+# Declare a return type and tosh converts automatically.
+
+func fileCount() -> String {
+    count
+}
+
+echo "=== Return Type Conversion ==="
+echo "File count as string:" (ls | fileCount)
+echo "Type:" (ls | fileCount | type-of)
+
+# --- Composition -----------------------------------------------------------
+# Chain everything into expressive one-liners.
+
+echo "=== Composition ==="
+echo "Files modified in the last day, sorted by size:"
+ls -la | where _.Type == file | where _.Modified > ((date now) - (timespan 1d)) | sort Size | reverse | get { Name, Size, Modified }

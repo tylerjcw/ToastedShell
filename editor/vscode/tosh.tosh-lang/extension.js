@@ -7,6 +7,8 @@ const vscode = require("vscode");
 const languageData = require("./language-data.json");
 
 let client = null;
+let richMetadata = null;
+let richMetadataMap = null;
 
 async function activate(context) {
     const selector = { language: "tosh", scheme: "file" };
@@ -19,8 +21,19 @@ async function activate(context) {
 
     const started = await tryStartLanguageClient(context, selector, outputChannel);
     if (!started) {
-        outputChannel.appendLine("Using built-in editor providers because the ToSh language server is unavailable.");
-        registerLocalProviders(context, selector);
+        outputChannel.appendLine("Using built-in editor providers because the ToSh language server is unavailable."); richMetadata = tryLoadRichMetadata(outputChannel);
+        if (richMetadata) {
+            richMetadataMap = new Map();
+            for (const entry of richMetadata) {
+                richMetadataMap.set(entry.name, entry);
+                if (entry.aliases) {
+                    for (const alias of entry.aliases) {
+                        richMetadataMap.set(alias, entry);
+                    }
+                }
+            }
+            outputChannel.appendLine(`Loaded rich metadata for ${richMetadata.length} commands.`);
+        } registerLocalProviders(context, selector);
         statusItem.text = "$(terminal) ToSh (local)";
         statusItem.tooltip = "ToSh language server unavailable — using built-in fallback providers";
     } else {
@@ -115,6 +128,38 @@ function registerLocalProviders(context, selector) {
     context.subscriptions.push(
         vscode.languages.registerDocumentSymbolProvider(selector, new ToshDocumentSymbolProvider())
     );
+}
+
+function tryLoadRichMetadata(outputChannel) {
+    const configuration = vscode.workspace.getConfiguration("tosh");
+    const dotnetPath = configuration.get("languageServer.dotnetPath", "dotnet");
+
+    for (const workspaceFolder of vscode.workspace.workspaceFolders || []) {
+        const root = workspaceFolder.uri.fsPath;
+        const cliProject = path.join(root, "src", "Tosh.Cli", "Tosh.Cli.csproj");
+        if (!fs.existsSync(cliProject)) {
+            continue;
+        }
+
+        try {
+            const result = childProcess.spawnSync(
+                dotnetPath,
+                ["run", "--project", cliProject, "--no-build", "--", "--export-command-metadata"],
+                { stdio: ["ignore", "pipe", "ignore"], windowsHide: true, timeout: 15000, cwd: root }
+            );
+
+            if (result.status === 0 && result.stdout) {
+                const text = result.stdout.toString("utf-8").trim();
+                if (text.startsWith("[")) {
+                    return JSON.parse(text);
+                }
+            }
+        } catch (error) {
+            outputChannel.appendLine(`Failed to load rich metadata: ${formatError(error)}`);
+        }
+    }
+
+    return null;
 }
 
 function findLanguageServerOptions(configuration, outputChannel) {
@@ -269,6 +314,13 @@ class ToshHoverProvider {
         }
 
         const word = document.getText(range);
+
+        // Try rich metadata first
+        if (richMetadataMap && richMetadataMap.has(word)) {
+            const entry = richMetadataMap.get(word);
+            return new vscode.Hover(new vscode.MarkdownString(formatRichHover(entry)), range);
+        }
+
         const description =
             languageData.specialVariables[word] ||
             languageData.keywords[word] ||
@@ -280,6 +332,111 @@ class ToshHoverProvider {
 
         return new vscode.Hover(new vscode.MarkdownString(`**${word}**\n\n${description}`), range);
     }
+}
+
+function formatRichHover(entry) {
+    const parts = [];
+
+    // Badges
+    const badges = [];
+    if (entry.isExperimental) badges.push("\u2697\ufe0f Experimental");
+    if (entry.deprecatedVersion) badges.push(`\u26a0\ufe0f Deprecated since ${entry.deprecatedVersion}`);
+    if (entry.removedVersion) badges.push(`\u274c Removed in ${entry.removedVersion}`);
+    if (badges.length > 0) parts.push(badges.join(" \u00b7 "));
+
+    parts.push(`**${entry.name}**`);
+    parts.push(entry.description);
+
+    if (entry.longDescription) {
+        parts.push(entry.longDescription);
+    }
+
+    if (entry.aliases && entry.aliases.length > 0) {
+        parts.push(`*Aliases:* ${entry.aliases.map(a => "\`" + a + "\`").join(", ")}`);
+    }
+
+    // Category and version
+    const info = [`Category: ${entry.category}`];
+    if (entry.sinceVersion) info.push(`Since: ${entry.sinceVersion}`);
+    parts.push(`*${info.join(" \u00b7 ")}*`);
+
+    parts.push("```tosh\n" + entry.usage + "\n```");
+
+    if (entry.arguments && entry.arguments.length > 0) {
+        parts.push("**Arguments**");
+        for (const arg of entry.arguments) {
+            const req = arg.required ? "" : " *(optional)*";
+            const typePart = arg.typeName ? ` \`${arg.typeName}\`` : "";
+            parts.push(`- \`${arg.name}\`${typePart} \u2014 ${arg.description}${req}`);
+        }
+    }
+
+    if (entry.options && entry.options.length > 0) {
+        parts.push("**Options**");
+        for (const opt of entry.options) {
+            parts.push(`- \`${opt.syntax}\` \u2014 ${opt.description}`);
+        }
+    }
+
+    if (entry.pipelineInput) {
+        const accepts = [];
+        if (entry.pipelineInput.acceptsScalar) accepts.push("scalar");
+        if (entry.pipelineInput.acceptsRecord) accepts.push("record");
+        if (entry.pipelineInput.acceptsList) accepts.push("list");
+        if (entry.pipelineInput.acceptsTable) accepts.push("table");
+        if (accepts.length > 0) {
+            let line = `**Pipeline input:** ${accepts.join(", ")}`;
+            if (entry.pipelineInput.description) line += `\n  ${entry.pipelineInput.description}`;
+            parts.push(line);
+        }
+    }
+
+    if (entry.output) {
+        parts.push(`**Output:** ${entry.output}`);
+    }
+
+    if (entry.examples && entry.examples.length > 0) {
+        const exLines = entry.examples.map(ex => {
+            const comment = ex.title ? `  # ${ex.title}` : "";
+            return `${ex.code}${comment}`;
+        });
+        parts.push("**Examples**\n```tosh\n" + exLines.join("\n") + "\n```");
+    }
+
+    if (entry.canonicalExamples && entry.canonicalExamples.length > 0) {
+        parts.push("**Canonical Examples**");
+        for (const ce of entry.canonicalExamples) {
+            if (ce.description) parts.push(`*${ce.description}*`);
+            parts.push("```tosh\n> " + ce.input + "\n" + ce.output + "\n```");
+        }
+    }
+
+    if (entry.notes && entry.notes.length > 0) {
+        for (const note of entry.notes) {
+            parts.push(`> ${note}`);
+        }
+    }
+
+    if (entry.errorConditions && entry.errorConditions.length > 0) {
+        parts.push("**Error Conditions**");
+        for (const err of entry.errorConditions) {
+            parts.push(`- ${err}`);
+        }
+    }
+
+    if (entry.permissions && entry.permissions.length > 0) {
+        parts.push(`**Permissions:** ${entry.permissions.join(", ")}`);
+    }
+
+    if (entry.tags && entry.tags.length > 0) {
+        parts.push(`*Tags:* ${entry.tags.map(t => "\`" + t + "\`").join(", ")}`);
+    }
+
+    if (entry.seeAlso && entry.seeAlso.length > 0) {
+        parts.push(`*See also:* ${entry.seeAlso.map(s => "\`" + s + "\`").join(", ")}`);
+    }
+
+    return parts.join("\n\n");
 }
 
 class ToshDocumentSymbolProvider {
@@ -349,6 +506,21 @@ function buildKeywordCompletions() {
 }
 
 function buildBuiltinCompletions() {
+    if (richMetadata) {
+        return richMetadata.map(entry => {
+            const item = new vscode.CompletionItem(entry.name, vscode.CompletionItemKind.Function);
+            item.detail = `Built-in (${entry.category})`;
+            item.documentation = new vscode.MarkdownString(
+                (entry.longDescription || entry.description) +
+                (entry.usage ? "\n\n```tosh\n" + entry.usage + "\n```" : "")
+            );
+            if (entry.deprecatedVersion) {
+                item.tags = [vscode.CompletionItemTag.Deprecated];
+            }
+            return item;
+        });
+    }
+
     return Object.entries(languageData.builtins).map(([label, description]) => {
         const item = new vscode.CompletionItem(label, vscode.CompletionItemKind.Function);
         item.detail = "ToSh built-in";

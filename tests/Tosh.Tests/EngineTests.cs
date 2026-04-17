@@ -3317,16 +3317,15 @@ public sealed class EngineTests
     }
 
     [Fact]
-    public async Task Inventory_example_runs_successfully()
+    public async Task Collections_example_runs_successfully()
     {
         var engine = new ToshEngine();
-        var examplePath = System.IO.Path.GetFullPath(System.IO.Path.Combine(AppContext.BaseDirectory, "../../../../../examples/inventory.tosh"));
+        var examplePath = System.IO.Path.GetFullPath(System.IO.Path.Combine(AppContext.BaseDirectory, "../../../../../examples/collections.tosh"));
         var source = await File.ReadAllTextAsync(examplePath);
 
         var results = await engine.ExecuteToListAsync(source, examplePath);
 
-        Assert.Equal(5, results.Count);
-        Assert.All(results, item => Assert.IsType<ToshClassInstance>(item));
+        Assert.NotEmpty(results);
     }
 
     [Fact]

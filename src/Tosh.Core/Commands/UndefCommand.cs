@@ -1,6 +1,10 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Scripting")]
+[CommandArgument("name", "One or more function names to remove.")]
+[CommandExample("undef myfunction", Title = "Remove a user-defined function")]
+[CommandExample("undef greet parse transform", Title = "Remove multiple functions at once")]
+[CommandOutput("Records with Name and Removed properties indicating which functions were removed.")]
 public sealed class UndefCommand : ShellCommand
 {
     public UndefCommand()

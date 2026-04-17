@@ -10,6 +10,7 @@ internal sealed class TuiCustomScreen : ITuiScreen
     private readonly TuiRunRequest _request;
     private readonly TuiScreen _definition;
     private readonly List<WidgetHost> _widgetHosts = new();
+    private IReadOnlyList<TuiRect> _lastWidgetRegions = Array.Empty<TuiRect>();
     private int _focusIndex;
 
     public TuiCustomScreen(TuiRunRequest request)
@@ -48,6 +49,7 @@ internal sealed class TuiCustomScreen : ITuiScreen
 
         // Compute layout rectangles
         var regions = ComputeLayout(contentBounds);
+        _lastWidgetRegions = regions;
 
         // Build a set of rendered lines indexed by row
         var lines = new string[Math.Max(0, contentHeight)];
@@ -100,6 +102,49 @@ internal sealed class TuiCustomScreen : ITuiScreen
         sb.Append(help.Length > width ? help[..width] : help);
 
         return new TuiFrame(sb.ToString());
+    }
+
+    public TuiScreenResult HandleInput(TuiInputEvent input)
+    {
+        if (input.IsKey)
+            return HandleKey(input.Key);
+
+        var mouse = input.Mouse;
+
+        // Click to focus a widget
+        if (mouse.Action == TuiMouseAction.Press && mouse.Button == TuiMouseButton.Left)
+        {
+            for (var i = 0; i < _lastWidgetRegions.Count && i < _widgetHosts.Count; i++)
+            {
+                if (_lastWidgetRegions[i].Contains(mouse.Column, mouse.Row))
+                {
+                    _focusIndex = i;
+                    return TuiScreenResult.Continue;
+                }
+            }
+        }
+
+        // Scroll wheel on a list widget
+        if (mouse.Action == TuiMouseAction.Scroll)
+        {
+            for (var i = 0; i < _lastWidgetRegions.Count && i < _widgetHosts.Count; i++)
+            {
+                if (_lastWidgetRegions[i].Contains(mouse.Column, mouse.Row) &&
+                    _widgetHosts[i] is ListWidgetHost listHost)
+                {
+                    _focusIndex = i;
+                    if (mouse.Button == TuiMouseButton.ScrollUp)
+                        listHost.ScrollUp();
+                    else if (mouse.Button == TuiMouseButton.ScrollDown)
+                        listHost.ScrollDown();
+
+                    ResolveBindings();
+                    return TuiScreenResult.Continue;
+                }
+            }
+        }
+
+        return TuiScreenResult.Continue;
     }
 
     public TuiScreenResult HandleKey(ConsoleKeyInfo key)
@@ -373,6 +418,9 @@ internal sealed class TuiCustomScreen : ITuiScreen
 
             return WidgetKeyResult.Continue;
         }
+
+        public void ScrollUp() => _list.MovePrevious();
+        public void ScrollDown() => _list.MoveNext();
 
         public override (string Key, object? Value) GetValue()
         {

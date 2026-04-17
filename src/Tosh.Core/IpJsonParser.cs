@@ -33,6 +33,102 @@ public static class IpJsonParser
             .ToArray();
     }
 
+    public static IReadOnlyList<IpNetnsInfo> ParseNamespaces(string json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return Array.Empty<IpNetnsInfo>();
+        }
+
+        return EnumerateRootObjects(json)
+            .Select(ParseNamespace)
+            .ToArray();
+    }
+
+    public static IReadOnlyList<IpTunnelInfo> ParseTunnels(string json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return Array.Empty<IpTunnelInfo>();
+        }
+
+        return EnumerateRootObjects(json)
+            .Select(ParseTunnel)
+            .ToArray();
+    }
+
+    public static IReadOnlyList<IpTuntapInfo> ParseTuntaps(string json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return Array.Empty<IpTuntapInfo>();
+        }
+
+        return EnumerateRootObjects(json)
+            .Select(ParseTuntap)
+            .ToArray();
+    }
+
+    public static IReadOnlyList<IpVrfInfo> ParseVrfs(string json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return Array.Empty<IpVrfInfo>();
+        }
+
+        return EnumerateRootObjects(json)
+            .Select(ParseVrf)
+            .ToArray();
+    }
+
+    public static IReadOnlyList<IpMaddrInfo> ParseMaddrs(string json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return Array.Empty<IpMaddrInfo>();
+        }
+
+        return EnumerateRootObjects(json)
+            .Select(ParseMaddr)
+            .ToArray();
+    }
+
+    public static IReadOnlyList<IpMrouteInfo> ParseMroutes(string json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return Array.Empty<IpMrouteInfo>();
+        }
+
+        return EnumerateRootObjects(json)
+            .Select(ParseMroute)
+            .ToArray();
+    }
+
+    public static IReadOnlyList<IpTokenInfo> ParseTokens(string json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return Array.Empty<IpTokenInfo>();
+        }
+
+        return EnumerateRootObjects(json)
+            .Select(ParseToken)
+            .ToArray();
+    }
+
+    public static IReadOnlyList<IpNtableInfo> ParseNtables(string json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return Array.Empty<IpNtableInfo>();
+        }
+
+        return EnumerateRootObjects(json)
+            .Select(ParseNtable)
+            .ToArray();
+    }
+
     private static IpInterfaceInfo ParseInterface(JsonElement element)
     {
         return new IpInterfaceInfo(
@@ -129,6 +225,139 @@ public static class IpJsonParser
             OifName: GetString(element, "oifname"),
             FirewallMark: GetInt32(element, "fwmark"),
             Protocol: GetString(element, "protocol"));
+    }
+
+    private static IpNetnsInfo ParseNamespace(JsonElement element)
+    {
+        return new IpNetnsInfo(
+            Name: GetString(element, "name") ?? string.Empty,
+            Id: GetInt32(element, "id"));
+    }
+
+    private static IpTunnelInfo ParseTunnel(JsonElement element)
+    {
+        return new IpTunnelInfo(
+            Name: GetString(element, "ifname") ?? GetString(element, "name") ?? string.Empty,
+            Mode: GetString(element, "mode"),
+            Remote: GetString(element, "remote"),
+            Local: GetString(element, "local"),
+            Ttl: GetInt32(element, "ttl"),
+            Tos: GetString(element, "tos"),
+            Pmtudisc: GetBoolean(element, "pmtudisc"),
+            Dev: GetString(element, "dev"),
+            InputKey: GetString(element, "ikey"),
+            OutputKey: GetString(element, "okey"));
+    }
+
+    private static IpTuntapInfo ParseTuntap(JsonElement element)
+    {
+        return new IpTuntapInfo(
+            Name: GetString(element, "ifname") ?? string.Empty,
+            Mode: GetString(element, "mode"),
+            Group: GetString(element, "group"),
+            User: GetString(element, "user"),
+            MultiQueue: GetBoolean(element, "multi_queue"),
+            Flags: GetStringArray(element, "flags"));
+    }
+
+    private static IpVrfInfo ParseVrf(JsonElement element)
+    {
+        return new IpVrfInfo(
+            Name: GetString(element, "name") ?? string.Empty,
+            TableId: GetInt32(element, "table"));
+    }
+
+    private static IpMaddrInfo ParseMaddr(JsonElement element)
+    {
+        var addresses = new List<IpMaddrEntry>();
+
+        if (element.TryGetProperty("maddr", out var maddrArray) &&
+            maddrArray.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var entry in maddrArray.EnumerateArray())
+            {
+                if (entry.ValueKind != JsonValueKind.Object)
+                {
+                    continue;
+                }
+
+                addresses.Add(new IpMaddrEntry(
+                    Family: GetString(entry, "family"),
+                    Address: GetString(entry, "address"),
+                    Link: GetString(entry, "link"),
+                    Users: GetInt32(entry, "users")));
+            }
+        }
+
+        return new IpMaddrInfo(
+            Index: GetInt32(element, "ifindex") ?? 0,
+            Name: GetString(element, "ifname") ?? string.Empty,
+            Addresses: addresses);
+    }
+
+    private static IpMrouteInfo ParseMroute(JsonElement element)
+    {
+        var oifs = new List<string>();
+
+        if (element.TryGetProperty("oifs", out var oifsArray) &&
+            oifsArray.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var oifElement in oifsArray.EnumerateArray())
+            {
+                var dev = oifElement.ValueKind == JsonValueKind.Object
+                    ? GetString(oifElement, "dev")
+                    : oifElement.ValueKind == JsonValueKind.String
+                        ? oifElement.GetString()
+                        : null;
+
+                if (!string.IsNullOrWhiteSpace(dev))
+                {
+                    oifs.Add(dev);
+                }
+            }
+        }
+
+        return new IpMrouteInfo(
+            Group: GetString(element, "group") ?? GetString(element, "dst"),
+            Source: GetString(element, "src"),
+            Iif: GetString(element, "iif"),
+            Oifs: oifs,
+            Packets: GetInt32(element, "packets"),
+            Bytes: GetInt64(element, "bytes"));
+    }
+
+    private static IpTokenInfo ParseToken(JsonElement element)
+    {
+        return new IpTokenInfo(
+            Token: GetString(element, "token") ?? string.Empty,
+            InterfaceName: GetString(element, "ifname"));
+    }
+
+    private static IpNtableInfo ParseNtable(JsonElement element)
+    {
+        return new IpNtableInfo(
+            Family: GetString(element, "family"),
+            Name: GetString(element, "name"),
+            Dev: GetString(element, "dev"),
+            Thresh1: GetInt32(element, "thresh1"),
+            Thresh2: GetInt32(element, "thresh2"),
+            Thresh3: GetInt32(element, "thresh3"),
+            GcInterval: GetInt32(element, "gc_interval"),
+            RefCount: GetInt32(element, "refcnt"),
+            Reachable: GetInt32(element, "reachable"),
+            BaseReachable: GetInt32(element, "base_reachable"),
+            Retrans: GetInt32(element, "retrans"),
+            GcStale: GetInt32(element, "gc_stale"),
+            DelayProbe: GetInt32(element, "delay_probe"),
+            Queue: GetInt32(element, "queue"),
+            AppProbes: GetInt32(element, "app_probes"),
+            UnicastProbes: GetInt32(element, "ucast_probes"),
+            MulticastProbes: GetInt32(element, "mcast_probes"),
+            MulticastReprobes: GetInt32(element, "mcast_reprobes"),
+            AnycastDelay: GetInt32(element, "anycast_delay"),
+            ProxyDelay: GetInt32(element, "proxy_delay"),
+            ProxyQueue: GetInt32(element, "proxy_queue"),
+            Locktime: GetInt32(element, "locktime"));
     }
 
     private static IReadOnlyList<JsonElement> EnumerateRootObjects(string json)

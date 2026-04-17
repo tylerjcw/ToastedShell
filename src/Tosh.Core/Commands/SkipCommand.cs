@@ -1,6 +1,11 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Pipeline")]
+[CommandArgument("count", "The number of objects to skip. Defaults to 1.", Required = false)]
+[CommandExample("echo 1 2 3 4 5 | skip 2", Title = "Skip the first two items")]
+[CommandExample("echo a b c | skip", Title = "Skip the first item")]
+[CommandOutput("The remaining pipeline objects after skipping the first N.")]
+[PipelineInput(AcceptsScalar = true, AcceptsRecord = true, Description = "Consumes and discards the first N items, then yields the rest.")]
 public sealed class SkipCommand : ShellCommand
 {
     public SkipCommand()

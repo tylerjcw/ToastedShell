@@ -93,6 +93,16 @@ public sealed class HelpTreeState
         }
     }
 
+    public void SelectIndex(int index)
+    {
+        if (_visibleNodes.Count == 0)
+        {
+            return;
+        }
+
+        SelectedIndex = Math.Clamp(index, 0, _visibleNodes.Count - 1);
+    }
+
     public void MoveUp()
     {
         if (_visibleNodes.Count == 0)

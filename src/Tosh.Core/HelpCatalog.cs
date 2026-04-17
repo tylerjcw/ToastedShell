@@ -460,6 +460,42 @@ public static class HelpCatalog
                     "echo one skip two | each { if ((_ == skip)) { continue }; echo _ }",
                 ],
                 Notes: "Continue works in loops and each blocks."),
+            ["units"] = new(
+                Category: "Language",
+                Description: "First-class physical unit system with dimensional analysis, SI prefixes, and arithmetic. Write unit literals with backtick syntax: `100`m`, `9.8`m/s^2`, `1`km`.",
+                Usage: "<number>`<unit> | <number>`<unit*unit> | <number>`<unit/unit> | <number>`<unit^N>",
+                Aliases: ["unit-system", "unit-literals"],
+                Related: ["quantity"],
+                Examples:
+                [
+                    "100`m`",
+                    "9.8`m/s^2`",
+                    "1`km` + 500`m`",
+                    "100`m` / 10`s`",
+                    "5`kg` * 9.8`m/s^2`",
+                    "1`hr` + 30`min`",
+                    "1`GB` + 512`MiB`",
+                    "32`degF`",
+                    "180`deg`",
+                    "1`atm`",
+                ],
+                Notes: "ToSh supports 28 unit categories with 100+ units and 21 SI prefixes. Categories include: Length (m, ft, mi, ly, ...), Mass (kg, lb, oz, ...), Duration (s, min, hr, d, wk), Temperature (K, degC, degF, degR), Data (B, kB, MB, GB, TB, KiB, MiB, GiB, ...), Area (ha, acre), Volume (L, mL, gal, qt, ...), Speed (mph, kph, kn), Force (N, lbf, dyn), Energy (J, cal, kcal, BTU, eV, kWh), Power (W, hp), Pressure (Pa, bar, atm, psi, mmHg), Frequency (Hz), Angle (rad, deg, arcmin, arcsec), Current (A), Voltage (V), Resistance (ohm), Charge (C, Ah, mAh), Capacitance (F), Inductance (H), Torque (Nm), FlowRate (gpm), Substance (mol), Luminosity (cd), AngularVelocity (rpm), Acceleration (gforce), Density (derived). SI prefixes (k, M, G, T, P, E, m, u/μ, n, p, f, ...) are auto-resolved for base units, so `1`km` = 1000 m. Arithmetic respects dimensional analysis: addition/subtraction requires matching dimensions and auto-converts, multiplication/division produces derived quantities (e.g. m/s, kg*m/s^2). Temperature conversions handle offsets correctly. Compound units support `*`, `/`, and `^` operators: `m/s^2`, `kg*m^2`. Quantity values are pipeline-friendly: they sort, compare, and expose `.value`, `.unit`, `.category`, `.base-value`, and `.dimension` members."),
+            ["quantity"] = new(
+                Category: "Shell Types",
+                Description: "A value with magnitude and physical dimension, produced by unit literals or unit arithmetic.",
+                Usage: "<number>`<unit>",
+                Aliases: Array.Empty<string>(),
+                Related: ["units"],
+                Examples:
+                [
+                    "var speed = 100`km` / 1`hr`",
+                    "$speed.value",
+                    "$speed.unit",
+                    "$speed.category",
+                    "$speed.base-value",
+                    "100`degC`.base-value",
+                ],
+                Notes: "Quantity objects implement IComparable and flow through pipelines naturally. Named quantity subtypes include: LengthQuantity, MassQuantity, DurationQuantity, TemperatureQuantity, DataSizeQuantity, SpeedQuantity, AreaQuantity, VolumeQuantity, ForceQuantity, EnergyQuantity, PowerQuantity, PressureQuantity, FrequencyQuantity, AngleQuantity, AccelerationQuantity, DensityQuantity, VoltageQuantity, CurrentQuantity, ResistanceQuantity, ChargeQuantity, TorqueQuantity, FlowRateQuantity. TimeSpan values promote to DurationQuantity and StorageSize values promote to DataSizeQuantity automatically for seamless interop."),
         };
 
     private static readonly IReadOnlyDictionary<string, LanguageHelpDefinition> ShellTypeTopics =

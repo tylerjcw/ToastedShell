@@ -7,6 +7,8 @@ internal static class TuiApplication
     private const string HideCursor = "\u001b[?25l";
     private const string ShowCursor = "\u001b[?25h";
     private const string ClearScreenAndHome = "\u001b[2J\u001b[H";
+    private const string EnableSgrMouse = "\u001b[?1000h\u001b[?1006h";
+    private const string DisableSgrMouse = "\u001b[?1000l\u001b[?1006l";
     private const int MaxInputBurst = 512;
 
     public static void Run(ITuiHost host, ITuiScreen screen)
@@ -21,6 +23,7 @@ internal static class TuiApplication
 
         host.Write(EnterAlternateScreen);
         host.Write(HideCursor);
+        host.Write(EnableSgrMouse);
 
         try
         {
@@ -31,9 +34,9 @@ internal static class TuiApplication
                 host.Write(ClearScreenAndHome);
                 host.Write(frame.Content);
 
-                var key = host.ReadKey(intercept: true);
+                var firstInput = host.ReadInput();
 
-                if (ProcessInputBatch(host, screen, key) == TuiScreenResult.Exit)
+                if (ProcessInputBatch(host, screen, firstInput) == TuiScreenResult.Exit)
                 {
                     break;
                 }
@@ -41,6 +44,7 @@ internal static class TuiApplication
         }
         finally
         {
+            host.Write(DisableSgrMouse);
             host.Write(ShowCursor);
             host.Write(ExitAlternateScreen);
         }
@@ -49,25 +53,25 @@ internal static class TuiApplication
     internal static TuiScreenResult ProcessInputBatch(
         ITuiHost host,
         ITuiScreen screen,
-        ConsoleKeyInfo firstKey,
-        int maxAdditionalKeys = MaxInputBurst)
+        TuiInputEvent firstInput,
+        int maxAdditionalInputs = MaxInputBurst)
     {
         ArgumentNullException.ThrowIfNull(host);
         ArgumentNullException.ThrowIfNull(screen);
 
-        if (screen.HandleKey(firstKey) == TuiScreenResult.Exit)
+        if (screen.HandleInput(firstInput) == TuiScreenResult.Exit)
         {
             return TuiScreenResult.Exit;
         }
 
-        for (var index = 0; index < maxAdditionalKeys; index += 1)
+        for (var index = 0; index < maxAdditionalInputs; index += 1)
         {
-            if (!host.TryReadPendingKey(out var pendingKey, intercept: true))
+            if (!host.TryReadPendingInput(out var pendingInput))
             {
                 break;
             }
 
-            if (screen.HandleKey(pendingKey) == TuiScreenResult.Exit)
+            if (screen.HandleInput(pendingInput) == TuiScreenResult.Exit)
             {
                 return TuiScreenResult.Exit;
             }

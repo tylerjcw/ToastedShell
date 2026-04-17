@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Tosh.Core;
 using Tosh.Language;
 
@@ -15,9 +16,14 @@ public static class ToshStartupLoader
         string? configDirectory,
         bool skipProfile,
         TextWriter? errorWriter = null,
+        bool profileStartup = false,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(engine);
+
+        var profile = profileStartup ? new StartupProfileData() : null;
+        var fileProfiles = profileStartup ? new List<StartupFileProfile>() : null;
+        var totalStopwatch = profileStartup ? Stopwatch.StartNew() : null;
 
         var root = configDirectory ?? ToshConfigDefaults.GetDefaultConfigDirectory();
         engine.Runtime.Config.Startup.ApplyRootDirectory(root);
@@ -27,6 +33,7 @@ public static class ToshStartupLoader
         // Config errors are non-fatal — log and continue so the shell remains usable.
         if (File.Exists(configPath))
         {
+            var phaseStopwatch = profileStartup ? Stopwatch.StartNew() : null;
             try
             {
                 await ExecuteStartupFileAsync(engine, configPath, cancellationToken);
@@ -37,11 +44,23 @@ public static class ToshStartupLoader
                 await writer.WriteLineAsync($"tosh: error loading config '{configPath}': {FormatStartupError(exception)}");
                 await writer.WriteLineAsync("tosh: running with default configuration. Fix the error above or run with --safe to skip startup.");
             }
+            finally
+            {
+                if (phaseStopwatch is not null)
+                {
+                    phaseStopwatch.Stop();
+                    profile!.Config = phaseStopwatch.Elapsed;
+                    fileProfiles!.Add(new StartupFileProfile { Path = configPath, Duration = phaseStopwatch.Elapsed });
+                }
+            }
         }
 
         // Profile and autoload errors are non-fatal — log and continue.
         foreach (var path in EnumerateStartupFiles(engine.Runtime.Config.Startup, includeConfigFile: false, includeProfile: !skipProfile))
         {
+            var isProfile = path.EndsWith("profile.tosh", StringComparison.OrdinalIgnoreCase);
+            var fileStopwatch = profileStartup ? Stopwatch.StartNew() : null;
+
             try
             {
                 await ExecuteStartupFileAsync(engine, path, cancellationToken);
@@ -51,6 +70,31 @@ public static class ToshStartupLoader
                 var writer = errorWriter ?? Console.Error;
                 await writer.WriteLineAsync($"tosh: error loading '{path}': {FormatStartupError(exception)}");
             }
+            finally
+            {
+                if (fileStopwatch is not null)
+                {
+                    fileStopwatch.Stop();
+                    fileProfiles!.Add(new StartupFileProfile { Path = path, Duration = fileStopwatch.Elapsed });
+
+                    if (isProfile)
+                    {
+                        profile!.Profile = fileStopwatch.Elapsed;
+                    }
+                    else
+                    {
+                        profile!.Autoload += fileStopwatch.Elapsed;
+                    }
+                }
+            }
+        }
+
+        if (totalStopwatch is not null)
+        {
+            totalStopwatch.Stop();
+            profile!.Total = totalStopwatch.Elapsed;
+            profile.Files = fileProfiles!;
+            engine.Runtime.StartupProfile = profile;
         }
     }
 

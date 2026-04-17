@@ -6,6 +6,8 @@ internal static class TuiBoxDrawing
 {
     public static TuiBoxCharacters GetBoxCharacters(ToshTableBoxStyle style)
     {
+        style = TerminalGlyphs.ResolveBoxStyle(style);
+
         return style switch
         {
             ToshTableBoxStyle.Square => new('┌', '┐', '└', '┘', '│', '─'),

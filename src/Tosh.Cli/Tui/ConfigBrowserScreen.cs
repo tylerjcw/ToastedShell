@@ -36,6 +36,9 @@ internal sealed class ConfigBrowserScreen : ITuiScreen
     private string? _editingPath;
     private string? _groupEditingPath;
     private string? _statusMessage;
+    private TuiRect _lastSearchRect;
+    private TuiRect _lastTreeRect;
+    private TuiRect _lastDetailRect;
 
     public ConfigBrowserScreen(ToshRuntime runtime, ConfigBrowseRequest request)
     {
@@ -69,6 +72,10 @@ internal sealed class ConfigBrowserScreen : ITuiScreen
         var sidebarWidth = Math.Clamp(contentRows.Width / 3, 28, Math.Max(28, contentRows.Width - 24));
         var (treeRect, detailRect) = TuiSplitLayout.SplitColumns(contentRows, sidebarWidth, gap: 1);
 
+        _lastSearchRect = searchRect;
+        _lastTreeRect = treeRect;
+        _lastDetailRect = detailRect;
+
         SyncTree(Math.Max(1, treeRect.Height - 2));
         var detailLines = BuildDetailEntries(Math.Max(1, detailRect.Width - 2));
         _detailScroll.SetDimensions(detailLines.Count, Math.Max(1, detailRect.Height - 2));
@@ -79,6 +86,85 @@ internal sealed class ConfigBrowserScreen : ITuiScreen
         builder.Append(RenderContentRows(treeRect, detailRect, detailLines));
         builder.Append(RenderFooter(footerRow.Width));
         return new TuiFrame(builder.ToString());
+    }
+
+    public TuiScreenResult HandleInput(TuiInputEvent input)
+    {
+        if (input.IsKey)
+            return HandleKey(input.Key);
+
+        var mouse = input.Mouse;
+
+        // Scroll wheel in detail pane
+        if (mouse.Action == TuiMouseAction.Scroll && mouse.HitsRect(_lastDetailRect))
+        {
+            if (mouse.Button == TuiMouseButton.ScrollUp)
+                _detailScroll.LineUp();
+            else if (mouse.Button == TuiMouseButton.ScrollDown)
+                _detailScroll.LineDown();
+
+            return TuiScreenResult.Continue;
+        }
+
+        // Scroll wheel in tree pane
+        if (mouse.Action == TuiMouseAction.Scroll && mouse.HitsRect(_lastTreeRect))
+        {
+            if (mouse.Button == TuiMouseButton.ScrollUp)
+                _tree.MovePrevious();
+            else if (mouse.Button == TuiMouseButton.ScrollDown)
+                _tree.MoveNext();
+
+            if (_tree.TryGetSelected(out var scrollSelected))
+            {
+                _selectedPath = scrollSelected.Node.Path;
+                _detailScroll.Home();
+            }
+
+            return TuiScreenResult.Continue;
+        }
+
+        // Click to switch focus between panes
+        if (mouse.Action == TuiMouseAction.Press && mouse.Button == TuiMouseButton.Left)
+        {
+            if (mouse.HitsRect(_lastSearchRect))
+            {
+                _focus = ConfigBrowserFocus.Search;
+                return TuiScreenResult.Continue;
+            }
+
+            if (mouse.HitsRect(_lastTreeRect))
+            {
+                _focus = ConfigBrowserFocus.Tree;
+
+                // Click on a specific tree item
+                var treeRow = mouse.Row - _lastTreeRect.Top - 1; // -1 for border
+                if (treeRow >= 0)
+                {
+                    var range = _tree.Scroll.GetVisibleRange();
+
+                    if (treeRow < range.Length)
+                    {
+                        _tree.SelectIndex(range.Start + treeRow);
+
+                        if (_tree.TryGetSelected(out var clickSelected))
+                        {
+                            _selectedPath = clickSelected.Node.Path;
+                            _detailScroll.Home();
+                        }
+                    }
+                }
+
+                return TuiScreenResult.Continue;
+            }
+
+            if (mouse.HitsRect(_lastDetailRect))
+            {
+                _focus = ConfigBrowserFocus.Detail;
+                return TuiScreenResult.Continue;
+            }
+        }
+
+        return TuiScreenResult.Continue;
     }
 
     public TuiScreenResult HandleKey(ConsoleKeyInfo key)
@@ -481,7 +567,7 @@ internal sealed class ConfigBrowserScreen : ITuiScreen
         lines.Add(new ConfigDetailEntry($"Path: {shellPath}", ConfigDetailEntryKind.Meta));
         lines.Add(new ConfigDetailEntry($"Type: {node.TypeName}", ConfigDetailEntryKind.Meta));
         lines.Add(new ConfigDetailEntry($"Kind: {FormatEditorKind(node.EditorKind)}", ConfigDetailEntryKind.Meta));
-        lines.Add(new ConfigDetailEntry($"Nullable: {FormatBoolean(node.IsNullable)}  Editable: {FormatBoolean(node.IsEditable)}  Resettable: {FormatBoolean(node.IsResettable)}", ConfigDetailEntryKind.Meta));
+        lines.Add(new ConfigDetailEntry($"Nullable: {TuiRenderHelpers.FormatBoolean(node.IsNullable)}  Editable: {TuiRenderHelpers.FormatBoolean(node.IsEditable)}  Resettable: {TuiRenderHelpers.FormatBoolean(node.IsResettable)}", ConfigDetailEntryKind.Meta));
 
         if (stagedCount > 0)
         {
@@ -1209,7 +1295,7 @@ internal sealed class ConfigBrowserScreen : ITuiScreen
         return
         [
             new ConfigDetailEntry("Sample Command", ConfigDetailEntryKind.Body),
-            new ConfigDetailEntry(ClipPlain(highlighted, width), ConfigDetailEntryKind.Preview),
+            new ConfigDetailEntry(TuiRenderHelpers.ClipPlain(highlighted, width), ConfigDetailEntryKind.Preview),
         ];
     }
 
@@ -1223,15 +1309,15 @@ internal sealed class ConfigBrowserScreen : ITuiScreen
 
         return
         [
-            new ConfigDetailEntry(RenderTopBorder(previewWidth, "Preview Pane", theme, box), ConfigDetailEntryKind.Preview),
-            new ConfigDetailEntry(RenderBoxContentLine("Search: prompt", previewWidth, theme.SearchLabel, theme, box), ConfigDetailEntryKind.Preview),
-            new ConfigDetailEntry(RenderBoxContentLine("  Theme.Tui", previewWidth, theme.ListItem, theme, box), ConfigDetailEntryKind.Preview),
-            new ConfigDetailEntry(RenderBoxContentLine("> Prompt", previewWidth, theme.SelectedItem, theme, box), ConfigDetailEntryKind.Preview),
-            new ConfigDetailEntry(RenderBoxContentLine("Section Heading", previewWidth, theme.SectionHeading, theme, box), ConfigDetailEntryKind.Preview),
-            new ConfigDetailEntry(RenderBoxContentLine("meta: sample detail text", previewWidth, theme.Meta, theme, box), ConfigDetailEntryKind.Preview),
-            new ConfigDetailEntry(RenderBoxContentLine("example: e edit  a apply  q quit", previewWidth, theme.Example, theme, box), ConfigDetailEntryKind.Preview),
-            new ConfigDetailEntry(RenderBottomBorder(previewWidth, theme, box), ConfigDetailEntryKind.Preview),
-            new ConfigDetailEntry(theme.Footer.Apply(TrimOrPadPlain("focus:detail  dirty:2  e edit  s save", previewWidth)).ToAnsi(), ConfigDetailEntryKind.Preview),
+            new ConfigDetailEntry(TuiRenderHelpers.RenderTopBorder(previewWidth, "Preview Pane", theme, box), ConfigDetailEntryKind.Preview),
+            new ConfigDetailEntry(TuiRenderHelpers.RenderBoxContentLine("Search: prompt", previewWidth, theme.SearchLabel, theme, box), ConfigDetailEntryKind.Preview),
+            new ConfigDetailEntry(TuiRenderHelpers.RenderBoxContentLine("  Theme.Tui", previewWidth, theme.ListItem, theme, box), ConfigDetailEntryKind.Preview),
+            new ConfigDetailEntry(TuiRenderHelpers.RenderBoxContentLine("> Prompt", previewWidth, theme.SelectedItem, theme, box), ConfigDetailEntryKind.Preview),
+            new ConfigDetailEntry(TuiRenderHelpers.RenderBoxContentLine("Section Heading", previewWidth, theme.SectionHeading, theme, box), ConfigDetailEntryKind.Preview),
+            new ConfigDetailEntry(TuiRenderHelpers.RenderBoxContentLine("meta: sample detail text", previewWidth, theme.Meta, theme, box), ConfigDetailEntryKind.Preview),
+            new ConfigDetailEntry(TuiRenderHelpers.RenderBoxContentLine("example: e edit  a apply  q quit", previewWidth, theme.Example, theme, box), ConfigDetailEntryKind.Preview),
+            new ConfigDetailEntry(TuiRenderHelpers.RenderBottomBorder(previewWidth, theme, box), ConfigDetailEntryKind.Preview),
+            new ConfigDetailEntry(theme.Footer.Apply(TuiRenderHelpers.TrimOrPadPlain("focus:detail  dirty:2  e edit  s save", previewWidth)).ToAnsi(), ConfigDetailEntryKind.Preview),
             new ConfigDetailEntry($"Visible Width: {innerWidth}", ConfigDetailEntryKind.Meta),
         ];
     }
@@ -3015,32 +3101,14 @@ internal sealed class ConfigBrowserScreen : ITuiScreen
         var theme = _runtime.Config.Theme.Tui;
         var box = TuiBoxDrawing.GetBoxCharacters(theme.BoxStyle);
         var builder = new StringBuilder();
-        builder.Append(RenderTopBorder(width, "Config Browser", theme, box));
-
-        var innerWidth = Math.Max(1, width - 2);
-        var labelText = $"{label}: ";
-        var queryWidth = Math.Max(0, innerWidth - labelText.Length);
-        var clippedQuery = ClipPlain(_query, queryWidth);
-        var labelStyled = theme.SearchLabel.Apply(labelText).ToAnsi();
-        var queryStyled = theme.SearchInput.Apply(clippedQuery).ToAnsi();
-        var visibleLength = StyledText.GetVisibleLength(labelStyled) + StyledText.GetVisibleLength(queryStyled);
-        var padding = new string(' ', Math.Max(0, innerWidth - visibleLength));
-
-        builder.Append(theme.Border.Apply(box.Vertical.ToString()).ToAnsi());
-        builder.Append(labelStyled);
-        builder.Append(queryStyled);
-        builder.Append(padding);
-        builder.Append(theme.Border.Apply(box.Vertical.ToString()).ToAnsi());
-        builder.AppendLine();
-        builder.Append(RenderBottomBorder(width, theme, box));
+        builder.Append(TuiRenderHelpers.RenderTopBorder(width, "Config Browser", theme, box));
+        builder.AppendLine(TuiRenderHelpers.RenderSearchRow(label, _query, width, theme, box));
+        builder.Append(TuiRenderHelpers.RenderBottomBorder(width, theme, box));
         return builder.ToString();
     }
 
     private string RenderContentRows(TuiRect treeRect, TuiRect detailRect, IReadOnlyList<ConfigDetailEntry> detailEntries)
     {
-        var builder = new StringBuilder();
-        var treeRange = _tree.Scroll.GetVisibleRange();
-        var detailRange = _detailScroll.GetVisibleRange();
         var theme = _runtime.Config.Theme.Tui;
         var box = TuiBoxDrawing.GetBoxCharacters(theme.BoxStyle);
         var detailTitle = _confirmDialog.IsOpen
@@ -3051,54 +3119,22 @@ internal sealed class ConfigBrowserScreen : ITuiScreen
                     ? selected.Node.DisplayName
                     : "Details";
 
-        var treeContentRows = Math.Max(1, treeRect.Height - 2);
-        var detailContentRows = Math.Max(1, detailRect.Height - 2);
-
-        builder.Append(RenderTopBorder(treeRect.Width, "Configuration", theme, box));
-        builder.Append(' ');
-        builder.Append(RenderTopBorder(detailRect.Width, detailTitle, theme, box));
-        builder.AppendLine();
-
-        for (var row = 0; row < Math.Max(treeContentRows, detailContentRows); row++)
-        {
-            string treeLine;
-
-            if (row < treeContentRows && row < treeRange.Length)
+        return TuiRenderHelpers.RenderDualPaneContent(
+            treeRect,
+            detailRect,
+            "Configuration",
+            detailTitle,
+            _tree.Scroll.GetVisibleRange(),
+            _detailScroll.GetVisibleRange(),
+            _tree.SelectedIndex,
+            (itemIndex, isSelected) => RenderTreeLine(_tree.Items[itemIndex], isSelected, treeRect.Width, theme, box),
+            entryIndex =>
             {
-                var itemIndex = treeRange.Start + row;
-                var item = _tree.Items[itemIndex];
-                var isSelected = itemIndex == _tree.SelectedIndex;
-                treeLine = RenderTreeLine(item, isSelected, treeRect.Width, theme, box);
-            }
-            else
-            {
-                treeLine = RenderBoxContentLine(string.Empty, treeRect.Width, theme.ListItem, theme, box);
-            }
-
-            string detailLine;
-
-            if (row < detailContentRows && row < detailRange.Length)
-            {
-                var entry = detailEntries[detailRange.Start + row];
-                detailLine = RenderBoxContentLine(entry.Text, detailRect.Width, GetDetailStyle(entry.Kind, theme), theme, box);
-            }
-            else
-            {
-                detailLine = RenderBoxContentLine(string.Empty, detailRect.Width, theme.DetailText, theme, box);
-            }
-
-            builder.Append(treeLine);
-            builder.Append(' ');
-            builder.Append(detailLine);
-            builder.AppendLine();
-        }
-
-        builder.Append(RenderBottomBorder(treeRect.Width, theme, box));
-        builder.Append(' ');
-        builder.Append(RenderBottomBorder(detailRect.Width, theme, box));
-        builder.AppendLine();
-
-        return builder.ToString();
+                var entry = detailEntries[entryIndex];
+                return TuiRenderHelpers.RenderBoxContentLine(entry.Text, detailRect.Width, GetDetailStyle(entry.Kind, theme), theme, box);
+            },
+            theme,
+            box);
     }
 
     private string RenderTreeLine(
@@ -3110,10 +3146,10 @@ internal sealed class ConfigBrowserScreen : ITuiScreen
     {
         var label = item.Label;
         var style = item.Node.Kind == ConfigBrowserNodeKind.Group
-            ? MergeListStyles(theme.SectionHeading, theme.SelectedItem, isSelected, preserveForeground: true)
-            : MergeListStyles(theme.ListItem, theme.SelectedItem, isSelected, preserveForeground: false);
+            ? TuiRenderHelpers.MergeListStyles(theme.SectionHeading, theme.SelectedItem, isSelected, preserveForeground: true)
+            : TuiRenderHelpers.MergeListStyles(theme.ListItem, theme.SelectedItem, isSelected, preserveForeground: false);
 
-        return RenderBoxContentLine(label, width, style, theme, box);
+        return TuiRenderHelpers.RenderBoxContentLine(label, width, style, theme, box);
     }
 
     private string RenderFooter(int width)
@@ -3145,7 +3181,7 @@ internal sealed class ConfigBrowserScreen : ITuiScreen
                 ConfigBrowserEditMode.Group => $"focus:{focus}  dirty:{dirtyCount}  editing group  Up/Down select  Enter edit  Space toggle  Esc close",
                 _ => $"focus:{focus}  dirty:{dirtyCount}  {validationSummary}  / search  Enter expand/open  Tab switch panes  e edit  t raw-edit  Space toggle  a apply  s save  r revert  R reset{startupHint}  q quit"
             };
-        return theme.Footer.Apply(TrimOrPadPlain(text, width)).ToAnsi();
+        return TuiRenderHelpers.RenderFooterLine(text, width, theme);
     }
 
     private IReadOnlyList<ConfigBrowserNode> GetGroupEditableChildren(ConfigBrowserNode node)
@@ -3412,126 +3448,6 @@ internal sealed class ConfigBrowserScreen : ITuiScreen
             ConfigBrowserEditorKind.Group => "Group",
             _ => "Unsupported",
         };
-    }
-
-    private static string FormatBoolean(bool value) => value ? "yes" : "no";
-
-    private static ToshTextStyleConfig MergeListStyles(
-        ToshTextStyleConfig baseStyle,
-        ToshTextStyleConfig selectedStyle,
-        bool isSelected,
-        bool preserveForeground)
-    {
-        if (!isSelected)
-        {
-            return baseStyle;
-        }
-
-        return new ToshTextStyleConfig(
-            foreground: preserveForeground ? baseStyle.Foreground : selectedStyle.Foreground ?? baseStyle.Foreground,
-            background: selectedStyle.Background ?? baseStyle.Background,
-            bold: baseStyle.Bold || selectedStyle.Bold,
-            italic: baseStyle.Italic || selectedStyle.Italic,
-            underline: baseStyle.Underline || selectedStyle.Underline,
-            dim: selectedStyle.Dim && baseStyle.Dim);
-    }
-
-    private static string RenderTopBorder(int width, string title, ToshTuiThemeConfig theme, TuiBoxCharacters box)
-    {
-        if (width <= 1)
-        {
-            return string.Empty;
-        }
-
-        var innerWidth = Math.Max(0, width - 2);
-        var clippedTitle = ClipPlain(title, Math.Max(0, innerWidth - 2));
-        var titleText = string.IsNullOrWhiteSpace(clippedTitle) ? string.Empty : $" {clippedTitle} ";
-        var fillWidth = Math.Max(0, innerWidth - titleText.Length);
-
-        return StyledText.RenderSegments(
-        [
-            theme.Border.Apply(box.TopLeft.ToString()),
-            theme.Title.Apply(titleText),
-            theme.Border.Apply(new string(box.Horizontal, fillWidth) + box.TopRight),
-        ]);
-    }
-
-    private static string RenderBottomBorder(int width, ToshTuiThemeConfig theme, TuiBoxCharacters box)
-    {
-        if (width <= 1)
-        {
-            return string.Empty;
-        }
-
-        return theme.Border.Apply($"{box.BottomLeft}{new string(box.Horizontal, Math.Max(0, width - 2))}{box.BottomRight}").ToAnsi();
-    }
-
-    private static string RenderBoxContentLine(
-        string plainText,
-        int width,
-        ToshTextStyleConfig contentStyle,
-        ToshTuiThemeConfig theme,
-        TuiBoxCharacters box)
-    {
-        if (width <= 1)
-        {
-            return string.Empty;
-        }
-
-        var innerWidth = Math.Max(1, width - 2);
-        var padded = TrimOrPadPlain(plainText, innerWidth);
-
-        return StyledText.RenderSegments(
-        [
-            theme.Border.Apply(box.Vertical.ToString()),
-            contentStyle.Apply(padded),
-            theme.Border.Apply(box.Vertical.ToString()),
-        ]);
-    }
-
-    private static string TrimOrPadPlain(string text, int width)
-    {
-        if (width <= 0)
-        {
-            return string.Empty;
-        }
-
-        var clipped = ClipPlain(text, width);
-        var remaining = width - StyledText.GetVisibleLength(clipped);
-
-        return remaining <= 0 ? clipped : clipped + new string(' ', remaining);
-    }
-
-    private static string ClipPlain(string text, int width)
-    {
-        if (width <= 0 || string.IsNullOrEmpty(text))
-        {
-            return string.Empty;
-        }
-
-        if (StyledText.GetVisibleLength(text) <= width)
-        {
-            return text;
-        }
-
-        if (width == 1)
-        {
-            return "…";
-        }
-
-        var builder = new StringBuilder();
-
-        foreach (var character in text)
-        {
-            if (StyledText.GetVisibleLength(builder + character.ToString()) >= width)
-            {
-                break;
-            }
-
-            builder.Append(character);
-        }
-
-        return builder + "…";
     }
 
     private enum ConfigBrowserFocus

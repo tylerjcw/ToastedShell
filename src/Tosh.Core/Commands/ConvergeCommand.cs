@@ -1,6 +1,10 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Functional")]
+[CommandArgument("seed", "The initial value to start iterating from.")]
+[CommandArgument("callable|block", "A function applied repeatedly until two consecutive results are equal.")]
+[CommandExample("converge 100 func(x) => ($x / 2 + 50 / $x)", Title = "Newton's method for square root of 100")]
+[CommandOutput("The first stable (fixed-point) value where consecutive applications produce equal results.")]
 public sealed class ConvergeCommand : ShellCommand
 {
     public ConvergeCommand()

@@ -1,6 +1,6 @@
 % =============================================================================
 %  ToastScript Language Specification
-%  A Comprehensive Reference for the Tosh Shell
+%  A Comprehensive Reference for the TōSh Shell
 % =============================================================================
 \documentclass[11pt,a4paper,twoside,openany]{book}
 
@@ -86,7 +86,8 @@
            {=>}{{{\color{toshorange}=>}}}2
            {->}{{{\color{toshorange}->}}}2
            {..}{{{\color{toshorange}..}}}2
-           {\$}{{{\color{toshblue}\$}}}1,
+           {\$}{{{\color{toshblue}\$}}}1
+           {ō}{{\=o}}1,
 }
 
 \lstset{
@@ -210,7 +211,7 @@
   bookmarksnumbered=true,
   pdfstartview=FitH,
   pdftitle={ToastScript Language Specification},
-  pdfauthor={The Tosh Project},
+  pdfauthor={The TōSh Project},
   pdfsubject={Shell Language Reference},
   pdfkeywords={tosh, toastscript, shell, specification, reference}
 ]{hyperref}
@@ -288,7 +289,7 @@
   % Version
   \node[anchor=center, text=covergold, font=\sffamily\large]
     at ([yshift=8.5cm]current page.south) {
-      Version 1.0 \quad\textbullet\quad The Tosh Shell
+      Version 1.0 \quad\textbullet\quad The TōSh Shell
     };
 
   % Bottom info
@@ -309,7 +310,7 @@
 \vspace*{\fill}
 \begin{center}
 \textit{ToastScript Language Specification}\\[6pt]
-\textcopyright{} 2026 The Tosh Project. All rights reserved.\\[12pt]
+\textcopyright{} 2026 The TōSh Project. All rights reserved.\\[12pt]
 \small
 Typeset in \LaTeX{} with Computer Modern and Source Code Pro.\\
 Built on .NET 10 with the CLR runtime. Linux-first.
@@ -331,9 +332,9 @@ Built on .NET 10 with the CLR runtime. Linux-first.
 \chapter{Preface}
 
 Welcome to the \textbf{ToastScript Language Specification}---the definitive guide
-to every feature, command, operator, and idiom in the Tosh shell.
+to every feature, command, operator, and idiom in the TōSh shell.
 
-\textbf{Tosh} is a modern, object-oriented shell built on .NET 10 and the Common
+\textbf{TōSh} is a modern, object-oriented shell built on .NET 10 and the Common
 Language Runtime (CLR). It replaces traditional text-stream pipelines with
 \emph{structured object pipelines}, giving you rich types, tab completion, and
 CLR interop right at the command line.
@@ -354,7 +355,7 @@ This document covers:
 \end{itemize}
 
 \begin{tipbox}[Who Is This For?]
-Whether you are evaluating Tosh for the first time, writing your first
+Whether you are evaluating TōSh for the first time, writing your first
 \code{profile.tosh}, or building complex automation scripts, this
 specification is your single source of truth.
 \end{tipbox}
@@ -380,13 +381,13 @@ specification is your single source of truth.
 % #############################################################################
 
 % =============================================================================
-\chapter{Introduction to Tosh}
+\chapter{Introduction to TōSh}
 \label{ch:intro}
 % =============================================================================
 
-\section{What Is Tosh?}
+\section{What Is TōSh?}
 
-Tosh (short for \emph{ToastScript}) is a Linux-first interactive shell and
+TōSh (short for \emph{ToastScript}) is a Linux-first interactive shell and
 scripting language. It is built on the .NET 10 CLR, meaning every value that
 flows through a pipeline is a \textbf{real object}---not a flat string.
 
@@ -398,7 +399,7 @@ flows through a pipeline is a \textbf{real object}---not a flat string.
         assemblies, and even invoke native (unmanaged) libraries via built-in
         FFI.
   \item \textbf{Familiar surface.} If you know Bash, PowerShell, or Nushell,
-        much of Tosh will feel natural: pipes, redirection, globs,
+        much of TōSh will feel natural: pipes, redirection, globs,
         \code{\$variables}, \code{if}/\code{for}/\code{while}, and function
         definitions all look close to what you expect.
   \item \textbf{Rich features.} Pattern matching with guards, destructuring,
@@ -408,7 +409,7 @@ flows through a pipeline is a \textbf{real object}---not a flat string.
 
 \section{Quick Start}
 
-\begin{lstlisting}[title={Your first Tosh session}]
+\begin{lstlisting}[title={Your first TōSh session}]
 # List files, filter, and sort
 ls -la | where _.Type == file | sort Size | reverse | first 5
 
@@ -430,7 +431,7 @@ ps -ef | where _.Cpu > 5.0 | sort Cpu | reverse | first 10
 
 \begin{enumerate}
   \item \textbf{Objects, not text.} Parsing output into columns is a relic.
-        Every Tosh command returns typed objects.
+        Every TōSh command returns typed objects.
   \item \textbf{Progressive disclosure.} Basic usage is simple; advanced
         features (modules, FFI, TUI) are there when you need them.
   \item \textbf{Linux-native.} Built for Linux with first-class support for
@@ -448,7 +449,7 @@ ps -ef | where _.Cpu > 5.0 | sort Cpu | reverse | first 10
 \section{Comments}
 \ikw{comment}
 
-Tosh supports single-line comments only:
+TōSh supports single-line comments only:
 
 \begin{lstlisting}
 # This is a comment
@@ -538,13 +539,13 @@ names:
 \begin{notebox}
 The words \code{and}, \code{or}, and \code{not} are operators, not keywords.
 They can technically appear in identifiers (e.g.\ \code{band-name}) because
-Tosh allows hyphens in identifiers.
+TōSh allows hyphens in identifiers.
 \end{notebox}
 
 \section{Strings}
 \label{sec:strings}
 
-Tosh provides eight string forms to cover every quoting need:
+TōSh provides eight string forms to cover every quoting need:
 
 \begin{longtable}{L{3cm} C{1.8cm} C{2.2cm} C{2cm} L{4.5cm}}
 \toprule
@@ -553,14 +554,14 @@ Tosh provides eight string forms to cover every quoting need:
 \endhead
 \code{"..."} & Yes & No & No & \code{"Hello\textbackslash n"} \\
 \code{'...'} & No & No & No & \code{'raw text'} \\
-\code{"""..."""} & No & No & Yes & Triple-quoted block \\
+\code{\''\''\''\ldots\''\''\''} & No & No & Yes & Triple-quoted block \\
 \code{'''...'''} & No & No & Yes & Raw block \\
 \code{\$"..."} & Yes & Yes & No & \code{\$"Hi \{name\}"} \\
 \code{\$"""..."""} & No & Yes & Yes & Interpolated block \\
 \code{\$'...'} & ANSI C & No & No & \code{\$'\textbackslash x1b[31m'} \\
 \code{\$'''...'''} & ANSI C & No & Yes & ANSI C block \\
 \bottomrule
-\caption{String literal varieties in Tosh}
+\caption{String literal varieties in TōSh}
 \label{tab:strings}
 \end{longtable}
 
@@ -662,7 +663,7 @@ null         # Null reference
 
 \section{CLR Foundation}
 
-Every value in Tosh is a .NET CLR object. There are no ``untyped'' values.
+Every value in TōSh is a .NET CLR object. There are no ``untyped'' values.
 The type system sits on top of the Common Language Runtime, giving you access
 to the full .NET ecosystem.
 
@@ -676,7 +677,7 @@ date now | type-of        # System.DateTimeOffset
 \section{Built-in Type Aliases}
 \label{sec:type-aliases}
 
-Tosh provides over 40 short aliases for common CLR types. Use these in type
+TōSh provides over 40 short aliases for common CLR types. Use these in type
 annotations, casts, and \code{new} expressions.
 
 \begin{longtable}{llL{6cm}}
@@ -724,7 +725,7 @@ annotations, casts, and \code{new} expressions.
 
 \section{Shell-Specific Types}
 
-Beyond CLR types, Tosh introduces several shell-native types:
+Beyond CLR types, TōSh introduces several shell-native types:
 
 \subsection{StorageSize}
 
@@ -782,7 +783,7 @@ var callback = &greet           # Function reference
 \subsection{Quantity (Unit System)}
 \label{sec:quantities}
 
-Tosh includes a dimensional-analysis unit system inspired by CAS calculators.
+TōSh includes a dimensional-analysis unit system inspired by CAS calculators.
 A \emph{quantity} is a numeric value paired with a physical unit. Unit literals
 use backtick syntax: the number is immediately followed by a backtick and the
 unit expression with no intervening whitespace.
@@ -834,7 +835,7 @@ Angle             & radian (rad) & \texttt{3.14\textasciigrave rad}, \texttt{90\
 
 \subsubsection{Named Quantity Types}
 
-When a quantity's dimension matches a known physical category, Tosh wraps it
+When a quantity's dimension matches a known physical category, TōSh wraps it
 in a named type for clearer display and type checking:
 
 \begin{center}
@@ -891,7 +892,7 @@ Comparison operators also use base-value comparison with dimension checking:
 \subsubsection{Bridge Promotion}
 
 When a plain \code{TimeSpan} or \code{StorageSize} is combined with a unit
-quantity, Tosh automatically promotes it:
+quantity, TōSh automatically promotes it:
 
 \begin{lstlisting}
 5s + 10`s             # 15 s   (TimeSpan promoted to Duration)
@@ -926,7 +927,7 @@ echo $d.CategoryName  # Length
 \section{Type Conversion}
 \label{sec:conversion}
 
-Tosh performs automatic type conversion in many contexts via its
+TōSh performs automatic type conversion in many contexts via its
 \code{TypeConversion} engine. Conversion is attempted in order:
 
 \begin{enumerate}
@@ -952,7 +953,7 @@ double-it "21"             # "21" auto-converts to 21
 \section{Truthiness}
 \label{sec:truthiness}
 
-Tosh uses the following truthiness rules when a value is tested in a boolean
+TōSh uses the following truthiness rules when a value is tested in a boolean
 context (e.g.\ \code{if}, \code{while}, \code{any}, \code{all}):
 
 \begin{longtable}{lll}
@@ -1080,7 +1081,7 @@ if (not $found) { echo "Not found" }
 \end{lstlisting}
 
 \begin{notebox}
-Tosh prefers word-form logical operators (\code{and}, \code{or}, \code{not})
+TōSh prefers word-form logical operators (\code{and}, \code{or}, \code{not})
 but also supports \code{\&\&} and \code{||} as aliases for developers
 coming from C-family languages. The standalone \code{\&} symbol remains
 reserved for background jobs, and \code{!} only appears in \code{!=}
@@ -1326,7 +1327,7 @@ invoke $fn 21              # 42
 \section{Scoping}
 \label{sec:scoping}
 
-Tosh uses \textbf{lexical scoping} with a scope stack. Each block
+TōSh uses \textbf{lexical scoping} with a scope stack. Each block
 (\code{\{...\}}) creates a new scope. Variables are visible in their
 declaring scope and all nested scopes.
 
@@ -1642,7 +1643,7 @@ func add(a: int, b: int) -> int {
     return $a + $b
 }
 
-func get-name() -> string => "Tosh"
+func get-name() -> string => "TōSh"
 \end{lstlisting}
 
 \section{Function Overloading}
@@ -1973,7 +1974,7 @@ of a pipeline.
 \section{Redirection}
 \label{sec:redirection}
 
-Tosh uses named-stream redirection (since \code{<} and \code{>} are
+TōSh uses named-stream redirection (since \code{<} and \code{>} are
 comparison operators):
 
 \begin{longtable}{lL{8cm}}
@@ -2187,7 +2188,7 @@ config init                         # Scaffold missing startup files
 \label{part:commands}
 % #############################################################################
 
-Every built-in command in Tosh is documented below with its full signature,
+Every built-in command in TōSh is documented below with its full signature,
 a table explaining \emph{every} flag and option, practical examples, and notes
 on edge-case behaviour.  Commands are grouped by domain; each command has its
 own section so you can navigate via the Table of Contents or Index.
@@ -2314,7 +2315,7 @@ history clear              # Erase all entries
 \icmd{exit}
 
 \begin{cmdbox}{exit}
-Terminates the current Tosh session. If background jobs are running, the
+Terminates the current TōSh session. If background jobs are running, the
 shell will warn before exiting.
 
 \begin{signature}
@@ -2349,7 +2350,7 @@ clear
 \icmd{config}
 
 \begin{cmdbox}{config}
-Reads or updates the Tosh configuration object at runtime.
+Reads or updates the TōSh configuration object at runtime.
 
 \begin{signature}
 config [path] [value]
@@ -2408,7 +2409,7 @@ cat log.txt | view         # Scrollable log viewer
 \icmd{source}
 
 \begin{cmdbox}{source}
-Executes a Tosh script file in the \emph{current} scope, making its
+Executes a TōSh script file in the \emph{current} scope, making its
 variables, functions, and aliases available immediately.
 
 \begin{signature}
@@ -2432,7 +2433,7 @@ Unlike \code{require} (which loads a module in an isolated scope),
 \icmd{exec}
 
 \begin{cmdbox}{exec}
-Replaces the current Tosh process with an external program.
+Replaces the current TōSh process with an external program.
 \textbf{This does not return}---the shell is terminated and replaced.
 
 \begin{signature}
@@ -2444,14 +2445,14 @@ exec [--] <command> [args\dots{}]
 \textbf{Flag / Arg} & \textbf{Description} \\
 \midrule
 \endhead
-\code{--} & Prevents flags that follow from being interpreted by Tosh (use when the external command starts with \code{-}). \\
+\code{--} & Prevents flags that follow from being interpreted by TōSh (use when the external command starts with \code{-}). \\
 \code{command} & The executable to run. \\
 \code{args} & Arguments passed to the external command. \\
 \bottomrule
 \end{longtable}
 
 \begin{lstlisting}
-exec bash                  # Replace Tosh with Bash
+exec bash                  # Replace TōSh with Bash
 exec -- my-app --verbose   # Dashes in command name
 \end{lstlisting}
 \end{cmdbox}
@@ -2496,7 +2497,7 @@ history-search cd | last 5    # Last 5 history entries with "cd"
 
 \begin{cmdbox}{echo}
 Emits each argument as a separate pipeline object.  Unlike traditional
-shells, \code{echo} in Tosh preserves types---integers remain integers,
+shells, \code{echo} in TōSh preserves types---integers remain integers,
 records remain records.
 
 \begin{signature}
@@ -3822,7 +3823,7 @@ ls | as-file json              # Temp file with JSON listing
 \label{ch:cmd-handles}
 % =============================================================================
 
-Tosh provides a low-level file-handle API for scenarios where you need
+TōSh provides a low-level file-handle API for scenarios where you need
 random access, binary I/O, or precise control over read/write operations.
 
 % ── open-file ────────────────────────────────────────────────────────────────
@@ -5227,7 +5228,7 @@ ls | to-json -p
 \icmd{from-json}
 
 \begin{cmdbox}{from-json}
-Parses a JSON string into typed ToSh objects (records, lists, primitives).
+Parses a JSON string into typed TōSh objects (records, lists, primitives).
 
 \begin{signature}
 <string> | from-json
@@ -6464,7 +6465,7 @@ ls | summary --avg Size --count Name   # Explicit aggregates
 \icmd{forget}\icmd{unset}
 
 \begin{cmdbox}{forget / unset}
-Removes Tosh variables, functions, and exported environment names.
+Removes TōSh variables, functions, and exported environment names.
 \code{unset} is an alias for \code{forget}.
 
 \begin{signature}
@@ -7330,7 +7331,7 @@ ls | first | methods           # Methods on a file entry
 \icmd{constructors}
 
 \begin{cmdbox}{constructors}
-Lists constructors for CLR types, ToSh classes, and shell collection types.
+Lists constructors for CLR types, TōSh classes, and shell collection types.
 
 \begin{signature}
 constructors [type \dots{}]
@@ -7419,7 +7420,7 @@ call-method $sb Append "text"           # StringBuilder.Append
 \icmd{new}
 
 \begin{cmdbox}{new}
-Constructs a new CLR object, ToSh named type, or shell collection.
+Constructs a new CLR object, TōSh named type, or shell collection.
 Resolves built-in shell types first, then delegates to the type resolver.
 
 \begin{signature}
@@ -7431,7 +7432,7 @@ new <type-name> [ctor-args\dots{}]
 \textbf{Flag / Arg} & \textbf{Description} \\
 \midrule
 \endhead
-\code{<type-name>} & CLR type, ToSh class, or built-in shell type. \\
+\code{<type-name>} & CLR type, TōSh class, or built-in shell type. \\
 \code{[ctor-args\dots{}]} & Constructor arguments. \\
 \bottomrule
 \end{longtable}
@@ -7532,7 +7533,7 @@ load-assembly "./MyLib.dll"
 \icmd{types}
 
 \begin{cmdbox}{types}
-Lists available CLR and ToSh shell types.  Returns type projection
+Lists available CLR and TōSh shell types.  Returns type projection
 records ordered by name.
 
 \begin{signature}

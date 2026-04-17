@@ -1,6 +1,12 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Pipeline")]
+[CommandArgument("size", "The number of items in each sliding window.")]
+[CommandArgument("callable|block", "Optional transform applied to each window.", Required = false)]
+[CommandExample("echo 1 2 3 4 5 | window 3", Title = "Sliding windows of size 3")]
+[CommandExample("1..10 | window 2 func(a, b) => ($a + $b)", Title = "Pairwise sums")]
+[CommandOutput("Arrays (or transformed results) for each sliding window position.")]
+[PipelineInput(AcceptsScalar = true, AcceptsRecord = true, Description = "Yields overlapping windows of the specified size as the pipeline flows.")]
 public sealed class WindowCommand : ShellCommand
 {
     public WindowCommand()

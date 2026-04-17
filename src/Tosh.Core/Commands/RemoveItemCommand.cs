@@ -9,6 +9,7 @@ namespace Tosh.Core.Commands;
 [CommandExample("rm temp.txt")]
 [CommandExample("rm -rf build/", Title = "Force recursive delete")]
 [CommandOutput("Returns a RemovalResult with total size and descendant tree.")]
+[CommandSideEffects(WritesFiles = true)]
 [PipelineInput(AcceptsList = true, Description = "Accepts piped path-like values.")]
 public sealed class RemoveItemCommand : ShellCommand
 {

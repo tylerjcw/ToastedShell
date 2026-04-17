@@ -1,9 +1,13 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("CLR")]
-[CommandExample("echo [1, 2, 3] | cast list<int>")]
-[CommandExample("echo 42 | cast string")]
+[CommandArgument("type", "The target CLR type to cast to, including generic types like list<int>.")]
+[CommandArgument("value", "Optional value(s) to cast. If omitted, reads from the pipeline.", Required = false)]
+[CommandExample("echo [1, 2, 3] | cast list<int>", Title = "Cast an array to a typed list")]
+[CommandExample("echo 42 | cast string", Title = "Cast a number to a string")]
 [CommandNote("Cast converts to CLR target types, including constructed generic collection types like `list<int>`.")]
+[CommandOutput("The cast values in the target type.")]
+[PipelineInput(AcceptsScalar = true, AcceptsList = true, Description = "Casts each piped value to the target type.")]
 public sealed class CastCommand : ShellCommand
 {
     public CastCommand()

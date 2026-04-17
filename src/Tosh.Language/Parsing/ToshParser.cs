@@ -1389,10 +1389,23 @@ public static class ToshParser
                     string.Equals(Current.Text, "case", StringComparison.OrdinalIgnoreCase))
                 {
                     var caseToken = NextToken();
-                    var matchExpression = ParseArgument()
+                    var matchExpression = TryParsePatternExpression()
+                                          ?? ParseArgument()
                                           ?? new BarewordArgumentSyntax(string.Empty, caseToken.Span);
+
+                    ArgumentSyntax? guard = null;
+                    if (Current.Kind == SyntaxTokenKind.Bareword &&
+                        string.Equals(Current.Text, "if", StringComparison.OrdinalIgnoreCase))
+                    {
+                        NextToken();
+                        if (Current.Kind == SyntaxTokenKind.OpenParen)
+                        {
+                            guard = ParseParenthesizedArgument(implicitCurrentItem: false);
+                        }
+                    }
+
                     var caseBlock = ParseRequiredBlock("case");
-                    cases.Add(new SwitchCaseSyntax(matchExpression, caseBlock, TextSpan.FromBounds(caseToken.Span.Start, caseBlock.Span.End)));
+                    cases.Add(new SwitchCaseSyntax(matchExpression, guard, caseBlock, TextSpan.FromBounds(caseToken.Span.Start, caseBlock.Span.End)));
                     continue;
                 }
 
@@ -1432,6 +1445,68 @@ public static class ToshParser
                 cases,
                 defaultBlock,
                 TextSpan.FromBounds(switchToken.Span.Start, closeBrace.Span.End));
+        }
+
+        private bool IsPatternExpressionStart()
+        {
+            return (Current.Kind == SyntaxTokenKind.Bareword &&
+                    (string.Equals(Current.Text, "is", StringComparison.OrdinalIgnoreCase) ||
+                     Current.Text == "=~")) ||
+                   Current.Kind is SyntaxTokenKind.GreaterThan or SyntaxTokenKind.GreaterThanEqual
+                                or SyntaxTokenKind.LessThan or SyntaxTokenKind.LessThanEqual;
+        }
+
+        private ArgumentSyntax? TryParsePatternExpression()
+        {
+            // Comparison pattern operators that can appear without a left operand:
+            //   is Type, > 5, >= 0, < 100, <= 50, =~ "pattern"
+            if (Current.Kind == SyntaxTokenKind.Bareword &&
+                string.Equals(Current.Text, "is", StringComparison.OrdinalIgnoreCase))
+            {
+                var opToken = NextToken();
+                // Handle "is not" compound
+                string op = "is";
+                if (Current.Kind == SyntaxTokenKind.Bareword &&
+                    string.Equals(Current.Text, "not", StringComparison.OrdinalIgnoreCase))
+                {
+                    NextToken();
+                    op = "is-not";
+                }
+
+                var operand = ParseUnaryExpression(opToken.Span.Start, implicitCurrentItem: false)
+                              ?? new BarewordArgumentSyntax(string.Empty, opToken.Span);
+                return new ComparisonPatternSyntax(op, opToken.Span, operand,
+                    TextSpan.FromBounds(opToken.Span.Start, operand.Span.End));
+            }
+
+            if (Current.Kind is SyntaxTokenKind.GreaterThan or SyntaxTokenKind.GreaterThanEqual
+                             or SyntaxTokenKind.LessThan or SyntaxTokenKind.LessThanEqual)
+            {
+                var opToken = NextToken();
+                var op = opToken.Kind switch
+                {
+                    SyntaxTokenKind.GreaterThan => ">",
+                    SyntaxTokenKind.GreaterThanEqual => ">=",
+                    SyntaxTokenKind.LessThan => "<",
+                    SyntaxTokenKind.LessThanEqual => "<=",
+                    _ => opToken.Text,
+                };
+                var operand = ParseUnaryExpression(opToken.Span.Start, implicitCurrentItem: false)
+                              ?? new BarewordArgumentSyntax(string.Empty, opToken.Span);
+                return new ComparisonPatternSyntax(op, opToken.Span, operand,
+                    TextSpan.FromBounds(opToken.Span.Start, operand.Span.End));
+            }
+
+            if (Current.Kind == SyntaxTokenKind.Bareword && Current.Text == "=~")
+            {
+                var opToken = NextToken();
+                var operand = ParseUnaryExpression(opToken.Span.Start, implicitCurrentItem: false)
+                              ?? new BarewordArgumentSyntax(string.Empty, opToken.Span);
+                return new ComparisonPatternSyntax("=~", opToken.Span, operand,
+                    TextSpan.FromBounds(opToken.Span.Start, operand.Span.End));
+            }
+
+            return null;
         }
 
         private ArgumentSyntax ParseMatchArgument(bool implicitCurrentItem = false)
@@ -1613,17 +1688,48 @@ public static class ToshParser
             }
             else
             {
-                pattern = ParseArgument(implicitCurrentItem: implicitCurrentItem)
-                          ?? new BarewordArgumentSyntax(string.Empty, Current.Span);
-
-                if (pattern is VariableReferenceArgumentSyntax { Name: "_" })
+                // Only require _ prefix before comparison/type-check patterns
+                // (is, >, >=, <, <=, =~) to disambiguate from redirections.
+                // Plain value arms like "gz" => ... or 42 => ... do not need it.
+                if (Current.Kind == SyntaxTokenKind.Bareword && Current.Text == "_")
+                {
+                    // Check if this is `_ =>` (wildcard shorthand) — suggest `default` instead.
+                    if (IsFatArrowToken(Peek(1), Peek(2)))
+                    {
+                        _diagnostics.Add(new SyntaxDiagnostic(
+                            Code: "tosh::parser::match_default_keyword_required",
+                            Title: "Use 'default' instead of '_' for the wildcard arm.",
+                            Span: Current.Span,
+                            Label: "replace '_' with 'default'",
+                            Help: "In tosh, the wildcard match arm uses the 'default' keyword, not '_'."));
+                        NextToken(); // consume _
+                        // pattern stays null — this is a wildcard arm
+                        isWildcard = true;
+                    }
+                    else
+                    {
+                        NextToken(); // consume _ as pattern prefix
+                        pattern = TryParsePatternExpression()
+                                  ?? ParseArgument(implicitCurrentItem: implicitCurrentItem)
+                                  ?? new BarewordArgumentSyntax(string.Empty, Current.Span);
+                    }
+                }
+                else if (IsPatternExpressionStart())
                 {
                     _diagnostics.Add(new SyntaxDiagnostic(
-                        Code: "tosh::parser::match_default_keyword_required",
-                        Title: "Use `default` for the fallback match arm.",
-                        Span: pattern.Span,
-                        Label: "write `default => ...` here instead of `_ => ...`",
-                        Help: "ToSh keeps `_` for the current pipeline item. Use `default` as the match wildcard arm."));
+                        Code: "tosh::parser::expected_match_arm_underscore",
+                        Title: "Match arms must start with '_'",
+                        Span: Current.Span,
+                        Label: "write '_' before comparison or type-check patterns",
+                        Help: "To disambiguate patterns from redirections, write '_ pattern => ...' for arms using is, >, >=, <, <=, or =~."));
+                    pattern = TryParsePatternExpression()
+                              ?? ParseArgument(implicitCurrentItem: implicitCurrentItem)
+                              ?? new BarewordArgumentSyntax(string.Empty, Current.Span);
+                }
+                else
+                {
+                    pattern = ParseArgument(implicitCurrentItem: implicitCurrentItem)
+                              ?? new BarewordArgumentSyntax(string.Empty, Current.Span);
                 }
             }
 
@@ -2621,6 +2727,9 @@ public static class ToshParser
                     {
                         ScanForPositionalRefs(item, ref maxPositional);
                     }
+                    break;
+                case ComparisonPatternSyntax comparisonPattern:
+                    ScanForPositionalRefs(comparisonPattern.Operand, ref maxPositional);
                     break;
                 case RecordLiteralArgumentSyntax record:
                     foreach (var field in record.Fields)
@@ -6472,6 +6581,16 @@ public static class ToshParser
             // using, require, func, return, throw, break, continue) have already been checked,
             // so any remaining Bareword Bareword = must be a typed declaration.
             var offset = GetDeclarationModifierOffset();
+
+            // When a declaration modifier keyword (export, global, shy) was NOT consumed
+            // (because it isn't followed by a declaration keyword), don't misinterpret it
+            // as a type name.  e.g. `export FOO = "bar"` is a command, not a typed declaration.
+            if (offset == 0 && Current.Kind == SyntaxTokenKind.Bareword &&
+                Current.Text is "export" or "global" or "shy")
+            {
+                return false;
+            }
+
             return TryGetTypeNameEndOffset(offset, out var typeNameEndOffset) &&
                    Peek(typeNameEndOffset + 1).Kind == SyntaxTokenKind.Bareword &&
                    IsValidIdentifier(Peek(typeNameEndOffset + 1).Text) &&

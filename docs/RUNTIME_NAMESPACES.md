@@ -2,7 +2,7 @@
 
 ## Goal
 
-ToSh should stop growing a pile of flat magic globals like `$config`, `$result`, and `$ThisScript`.
+TōSh should stop growing a pile of flat magic globals like `$config`, `$result`, and `$ThisScript`.
 
 The shell should expose runtime state through one live root object:
 
@@ -115,7 +115,7 @@ $tosh.Script.Args
 
 This section should be live and reflect the currently executing script.
 
-When ToSh is running a `-c` command with extra arguments, `Args` should reflect that top-level invocation as well.
+When TōSh is running a `-c` command with extra arguments, `Args` should reflect that top-level invocation as well.
 
 ### `$tosh.Function`
 
@@ -167,7 +167,7 @@ Use commands like `cd` and `jobs` for mutation and workflow.
 
 ### `$tosh.Host`
 
-Information about the running ToSh host/runtime process.
+Information about the running TōSh host/runtime process.
 
 Initial properties:
 
@@ -217,7 +217,7 @@ We should not keep the old flat globals as official compatibility aliases:
 - no `$ThisFunc`
 - no `$LastExitCode`
 
-ToSh is not released yet, so this is the right time to normalize the surface.
+TōSh is not released yet, so this is the right time to normalize the surface.
 
 If users want convenience names, they can create them themselves.
 

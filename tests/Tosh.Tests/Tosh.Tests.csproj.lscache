@@ -66,6 +66,7 @@ ConfigCollectionEditorRegistryTests.cs
 ConfigCommandTests.cs
 ConsolePagerTests.cs
 DataProcessingCommandTests.cs
+DebugAndProfileTests.cs
 DiagnosticRendererTests.cs
 DisplayEngineTests.cs
 DisplayProfileTests.cs

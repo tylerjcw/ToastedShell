@@ -5,6 +5,7 @@ using System.Net.Sockets;
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Network")]
+[CommandSideEffects(Network = true)]
 public sealed class PingCommand : ShellCommand
 {
     public PingCommand()

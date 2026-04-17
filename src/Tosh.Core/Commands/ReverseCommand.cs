@@ -1,6 +1,10 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Pipeline")]
+[CommandExample("echo 1 2 3 | reverse", Title = "Reverse a sequence")]
+[CommandExample("ls | sort .Name | reverse", Title = "Reverse a sorted listing")]
+[CommandOutput("All pipeline objects in reversed order.")]
+[PipelineInput(AcceptsScalar = true, AcceptsRecord = true, Description = "Buffers the pipeline then yields items in reverse order.")]
 public sealed class ReverseCommand : ShellCommand
 {
     public ReverseCommand()

@@ -1,6 +1,11 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Functional")]
+[CommandArgument("seed", "The initial state passed to the callable.")]
+[CommandArgument("callable|block", "A function that receives state and returns [value, next-state] or null to stop.")]
+[CommandExample("unfold 1 func(n) => if ($n <= 5) { [$n ($n + 1)] } else { null }", Title = "Generate 1 through 5")]
+[CommandExample("unfold [0 1] func(s) => [($s[0]) [($s[1]) ($s[0] + $s[1])]]", Title = "Fibonacci sequence")]
+[CommandOutput("A sequence of values produced by the callable until it returns null.")]
 public sealed class UnfoldCommand : ShellCommand
 {
     public UnfoldCommand()

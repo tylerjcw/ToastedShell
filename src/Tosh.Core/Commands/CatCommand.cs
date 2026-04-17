@@ -14,7 +14,8 @@ namespace Tosh.Core.Commands;
 [CommandExample("echo alpha beta | cat -")]
 [CommandExample("cat -n README.md")]
 [CommandNote("With no explicit paths, `cat` treats piped values as file paths only when every value resolves to an existing file. Otherwise it treats the pipeline as text input. Use `-` explicitly when mixing file paths with piped text.")]
-[CommandOutput("Returns plain text lines by default, or numbered record rows with `Number` and `Text` when `-n` or `-b` is used.")]
+[CommandOutput("Returns plain text lines by default, or numbered record rows with `Number` and `Text` when `-n` or `-b` is used.", Mode = "mixed")]
+[CommandSideEffects(ReadsFiles = true)]
 [PipelineInput(AcceptsScalar = true, AcceptsRecord = true, AcceptsList = true, Description = "With no explicit paths, path-like pipeline values are treated as files when they all resolve to existing files; otherwise pipeline values are treated as text input. Use `-` explicitly when you want stdin-style text alongside file arguments.")]
 public sealed class CatCommand : ShellCommand
 {

@@ -12,7 +12,8 @@ internal static class CliInvocationResolver
         var skipStartup = false;
         var skipProfile = false;
         var safeMode = false;
-        var isLoginShell = false;
+        var profileStartup = false;
+        var isLoginShell = DetectLoginShellFromArgv0();
         var effectiveArgs = new List<string>(args.Length);
 
         foreach (var argument in args)
@@ -31,6 +32,9 @@ internal static class CliInvocationResolver
                 case "--login" or "-l":
                     isLoginShell = true;
                     continue;
+                case "--profile-startup":
+                    profileStartup = true;
+                    continue;
             }
 
             effectiveArgs.Add(argument);
@@ -43,7 +47,7 @@ internal static class CliInvocationResolver
 
         if (effectiveArgs.Count == 0)
         {
-            return CliInvocationPlan.Repl(skipStartup, skipProfile, isLoginShell, safeMode);
+            return CliInvocationPlan.Repl(skipStartup, skipProfile, isLoginShell, safeMode, profileStartup);
         }
 
         if (IsHelpSwitch(effectiveArgs[0]))
@@ -51,7 +55,12 @@ internal static class CliInvocationResolver
             return CliInvocationPlan.Help(skipStartup);
         }
 
-        if (effectiveArgs[0] is "--export-command-metadata")
+        if (effectiveArgs[0] is "--version" or "-V")
+        {
+            return CliInvocationPlan.Version();
+        }
+
+        if (effectiveArgs[0] is "--export-command-metadata" or "--dump-builtins")
         {
             var format = "json";
             string? outputPath = null;
@@ -177,6 +186,30 @@ internal static class CliInvocationResolver
 
         return argument;
     }
+
+    /// <summary>
+    /// Detects login shell invocation via the Unix argv[0] convention.
+    /// When login/sshd spawns a login shell, argv[0] is set to "-shellname" (e.g. "-tosh").
+    /// </summary>
+    private static bool DetectLoginShellFromArgv0()
+    {
+        try
+        {
+            var commandLineArgs = Environment.GetCommandLineArgs();
+
+            if (commandLineArgs.Length > 0)
+            {
+                var argv0 = Path.GetFileName(commandLineArgs[0]);
+                return argv0.StartsWith('-');
+            }
+        }
+        catch
+        {
+            // Defensive — don't let argv inspection break startup.
+        }
+
+        return false;
+    }
 }
 
 internal readonly record struct CliInvocationPlan(
@@ -186,10 +219,11 @@ internal readonly record struct CliInvocationPlan(
     bool LoadStartup = true,
     bool SkipProfile = false,
     bool IsLoginShell = false,
-    bool SafeMode = false)
+    bool SafeMode = false,
+    bool ProfileStartup = false)
 {
-    public static CliInvocationPlan Repl(bool skipStartup = false, bool skipProfile = false, bool isLoginShell = false, bool safeMode = false) =>
-        new(CliInvocationKind.Repl, null, Array.Empty<string>(), LoadStartup: !skipStartup, SkipProfile: skipProfile, IsLoginShell: isLoginShell, SafeMode: safeMode);
+    public static CliInvocationPlan Repl(bool skipStartup = false, bool skipProfile = false, bool isLoginShell = false, bool safeMode = false, bool profileStartup = false) =>
+        new(CliInvocationKind.Repl, null, Array.Empty<string>(), LoadStartup: !skipStartup, SkipProfile: skipProfile, IsLoginShell: isLoginShell, SafeMode: safeMode, ProfileStartup: profileStartup);
 
     public static CliInvocationPlan Help(bool skipStartup = false) => new(CliInvocationKind.Help, null, Array.Empty<string>(), LoadStartup: !skipStartup);
 
@@ -201,12 +235,15 @@ internal readonly record struct CliInvocationPlan(
     public static CliInvocationPlan ExternalScript(string path, string[] invocation, bool skipStartup = false) => new(CliInvocationKind.ExternalScript, path, invocation, LoadStartup: !skipStartup);
 
     public static CliInvocationPlan ExportMetadata(string format, string? outputPath) => new(CliInvocationKind.ExportMetadata, format, outputPath is not null ? [outputPath] : Array.Empty<string>(), LoadStartup: false);
+
+    public static CliInvocationPlan Version() => new(CliInvocationKind.Version, null, Array.Empty<string>(), LoadStartup: false);
 }
 
 internal enum CliInvocationKind
 {
     Repl,
     Help,
+    Version,
     Command,
     ToshScript,
     ExternalScript,

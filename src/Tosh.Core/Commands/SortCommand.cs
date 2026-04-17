@@ -1,7 +1,7 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Pipeline")]
-[CommandArgument("key", "A member path, callable, or block to extract the sort key.", Required = false, TypeName = "member-path|callable|block")]
+[CommandArgument("key", "A member path, callable, or block to extract the sort key.", Required = false, TypeName = "member-path|callable|block", Kind = "expression")]
 [CommandOption("-r", "Reverse the sort order.")]
 [CommandOption("-n", "Use numeric comparison.")]
 [CommandOption("-u", "Remove duplicate values after sorting.")]

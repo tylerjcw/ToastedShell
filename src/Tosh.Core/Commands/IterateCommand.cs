@@ -1,6 +1,12 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Functional")]
+[CommandArgument("seed", "The initial value of the sequence.")]
+[CommandArgument("callable|block", "A function applied to the previous value to produce the next.")]
+[CommandExample("iterate 1 func(x) => ($x * 2) | first 10", Title = "Powers of 2")]
+[CommandExample("iterate 0 { _ + 1 } | take-until { _ > 5 }", Title = "Counting sequence bounded by take-until")]
+[CommandNote("Produces an infinite sequence. Always pair with `first`, `take-until`, or `take-while` to bound the output.")]
+[CommandOutput("An infinite sequence: seed, f(seed), f(f(seed)), ...")]
 public sealed class IterateCommand : ShellCommand
 {
     public IterateCommand()

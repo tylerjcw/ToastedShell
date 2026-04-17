@@ -1,0 +1,20 @@
+#!/usr/bin/env tosh
+# Greet the user and summarize the current working directory.
+#
+# Usage:
+#   tosh ./examples/common_tasks/01_hello_and_context.tosh [name]
+
+var argc = ($tosh.Script.Args | count)
+var name = ($argc > 0) ? ($tosh.Script.Args | get 0) : $env.USER
+var cwd = (pwd | get FullName)
+var files = (find . -maxdepth 1 -type f | collect)
+var dirs = (find . -maxdepth 1 -type d | collect)
+
+write $"Hello, {$name}"
+writeline "."
+writeline $"Today is {(date now -d)}."
+writeline $"Working directory: {$cwd}"
+writeline $"Top-level entries: {$files.Length} files, {$dirs.Length - 1} directories."
+writeline ""
+writeline "Largest files in this directory:"
+ls -la | where _.Type == file | sort Size | reverse | first 5 | get { Name, Size, Modified }

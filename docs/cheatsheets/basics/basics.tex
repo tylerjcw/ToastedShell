@@ -1,0 +1,323 @@
+\input{../_shared/preamble.tex}
+
+\begin{document}
+\footnotesize
+\sheettitle{Shell Basics}{REPL workflow, help, capture forms, redirection, and jobs}{spec + parser/tests}
+
+\begin{multicols*}{3}
+
+\section{Start Here}
+\tighttable{>{\ttfamily\raggedright\arraybackslash}p{0.54\linewidth}X}{
+\toprule
+Command & What it does \\
+\midrule
+dotnet run --project src/Tosh.Cli & Start the ToSh REPL. \\
+help ls & Explain one command or topic. \\
+help search regex & Search the help catalog. \\
+help browse grep & Open the full-screen help browser. \\
+time \{ ls -la \} & Measure wall time, CPU, and memory. \\
+history search ls & Search command history by text. \\
+\bottomrule
+}
+
+\begin{lstlisting}
+# typed object pipeline
+ls -la | where _.Type == file | sort Size | reverse | first 5
+
+# shell-friendly discovery
+help which
+apropos json
+\end{lstlisting}
+
+\section{Mental Model}
+\begin{itemize}
+\item Pipelines carry real CLR objects, not plain text by default.
+\item The current pipeline item is \texttt{\_} inside \texttt{where}, \texttt{each}, \texttt{map}, and similar blocks.
+\item \texttt{\$tosh.Last.Result} stores the last successful statement result.
+\end{itemize}
+
+\note{\textbf{Rule of thumb:} text is something you opt into with commands like \texttt{raw}, \texttt{to}, \texttt{join-lines}, \texttt{\$(...)} or external programs.}
+
+\section{Capture Forms}
+\tighttable{>{\ttfamily\raggedright\arraybackslash}p{0.28\linewidth}X}{
+\toprule
+Form & Meaning \\
+\midrule
+(...) & Evaluate a pipeline/expression and require exactly one object value. \\
+\$(...) & Capture text output; multiple values join with newlines. \\
+<(...) & Materialize a pipeline to a temp file and pass its path-like handle. \\
+>(...) & Send output to a process-substitution sink. \\
+\bottomrule
+}
+
+\begin{lstlisting}
+var user = (whoami)
+var text = $(echo one two three)
+var names = <(ls | get Name | sort)
+/bin/cat $names
+\end{lstlisting}
+
+\note{\texttt{(...)} is strict: if the inner pipeline yields 0 or more than 1 value, ToSh raises a diagnostic.}
+
+\section{Session Commands}
+\tighttable{>{\ttfamily\raggedright\arraybackslash}p{0.34\linewidth}X}{
+\toprule
+Command & Notes \\
+\midrule
+pwd, cd, dirs & Current directory and stack navigation. \\
+back, forward & Move through the directory stack. \\
+env, export, unset & Read or change environment/session names. \\
+vars & Show visible variables in scope. \\
+which ls & Resolve a command name. \\
+clear & Clear the terminal display. \\
+\bottomrule
+}
+
+\begin{lstlisting}
+pwd
+cd src
+dirs
+back
+env USER
+\end{lstlisting}
+
+\columnbreak
+
+\section{Redirection}
+\tighttable{>{\ttfamily\raggedright\arraybackslash}p{0.27\linewidth}X}{
+\toprule
+Syntax & Meaning \\
+\midrule
+out> file & stdout to file, truncate \\
+out>> file & stdout to file, append \\
+err> file & stderr to file, truncate \\
+o+e> file & stdout and stderr together \\
+<<< text & here-string input \\
+\bottomrule
+}
+
+\begin{lstlisting}
+echo "hello" out> hello.txt
+echo "world" out>> hello.txt
+/bin/sh -c "echo boom >&2" err> errors.txt
+grep toast <<< "toast shell"
+\end{lstlisting}
+
+\note{ToSh uses named redirection because \texttt{<} and \texttt{>} are also comparison operators in expressions.}
+
+\section{Jobs And Async Work}
+\begin{lstlisting}
+/bin/sleep 5 &
+jobs
+wait-for 1
+kill 1
+\end{lstlisting}
+
+\begin{itemize}
+\item A trailing \texttt{\&} backgrounds a pipeline or external command.
+\item \texttt{jobs} returns typed job records you can filter or inspect.
+\item \texttt{wait-for} waits on job ids or piped jobs.
+\end{itemize}
+
+\note{At the \emph{start} of an expression, \texttt{\&name} means ``function reference'', not ``background job''.}
+
+\section{Useful One-Liners}
+\begin{lstlisting}
+ls -la | where _.Type == file | get { Name, Size }
+ip addr | where { _.State == up }
+df | summarize _.Used
+\end{lstlisting}
+
+\begin{lstlisting}
+guid new v7
+time { ls -la }
+\end{lstlisting}
+
+\end{multicols*}
+\newpage
+
+\sheettitle{Shell Basics}{Interactive browsers, history, prompt modules, and live config}{page 2 / front-back reference}
+
+\begin{multicols*}{3}
+
+\section{Help And Discovery}
+\begin{lstlisting}
+help --cli regex
+help related ls
+help categories
+apropos pipeline
+which ls grep tosh
+types list
+\end{lstlisting}
+
+\begin{itemize}
+\item \texttt{help --cli} opens the inline fuzzy browser.
+\item \texttt{help browse} opens the full-screen split-pane browser.
+\item \texttt{types} searches both CLR types and ToSh shell types.
+\end{itemize}
+
+\section{Config And Display}
+\begin{lstlisting}
+config browse prompt
+config get prompt.name-text
+config set prompt.name-text toast
+config reset display
+config reload
+\end{lstlisting}
+
+\begin{lstlisting}
+view detail
+view compact
+view columns
+view size bytes
+view datetime table unix
+\end{lstlisting}
+
+\note{\texttt{config} manages live shell settings and startup config; \texttt{view} is the quick way to tune rendering for the current session.}
+
+\section{History Workflow}
+\begin{lstlisting}
+history
+history path
+history search grep
+history expand 237
+history run 237
+history save
+\end{lstlisting}
+
+\begin{itemize}
+\item REPL sugar: \texttt{!!}, \texttt{!237}, \texttt{!-2}, \texttt{!?text?}, \texttt{\^{}old\^{}new\^{}}
+\item \texttt{history delete <spec>} removes entries; \texttt{reload} re-reads the file-backed store.
+\end{itemize}
+
+\section{Directory Stack}
+\begin{lstlisting}
+dirs
+dirs goto 2
+dirs remove 1
+dirs clear
+\end{lstlisting}
+
+\begin{itemize}
+\item \texttt{dirs} is handy when you bounce among a few working roots.
+\item Use \texttt{goto} for fast return without retyping long paths.
+\end{itemize}
+
+\columnbreak
+
+\section{Inspecting Objects}
+\begin{lstlisting}
+ls -la | first | inspect
+new System.Random() | inspect -a
+new System.Random() | inspect --flat
+name-of (pwd)
+type-of (date now)
+\end{lstlisting}
+
+\begin{lstlisting}
+ls -la | first | get-props
+ls -la | first | get-prop Name
+has-prop (pwd) FullName
+has-method (pwd) ToString
+\end{lstlisting}
+
+\note{In the REPL, \texttt{F1} opens help for the token under the cursor, \texttt{F2} tries inline inspect, and \texttt{Alt+H} / \texttt{Alt+I} are fallback bindings.}
+
+\section{Prompt Modules}
+\tighttable{>{\ttfamily\raggedright\arraybackslash}p{0.34\linewidth}X}{
+\toprule
+Module & What it adds \\
+\midrule
+\texttt{prompt-dir} & current directory \\
+\texttt{prompt-git} & branch and repo status \\
+\texttt{prompt-time} & current wall clock time \\
+\texttt{prompt-userhost} & user and host name \\
+\texttt{prompt-history} & next history id \\
+\texttt{prompt-jobs} & current background job count \\
+\texttt{prompt-text} & literal styled text \\
+\texttt{prompt-newline} & multi-line prompt split \\
+\bottomrule
+}
+
+\begin{lstlisting}
+prompt-userhost --dim
+prompt-dir --depth 2 --fg blue
+prompt-git --fg bright-green
+prompt-time --format "HH:mm"
+\end{lstlisting}
+
+\section{Run Files And Processes}
+\begin{lstlisting}
+source ./script.tosh
+source ./script.tosh ...$tosh.Script.Args
+env DEBUG=1 -- dotnet test
+exec zsh
+exit
+\end{lstlisting}
+
+\section{Jobs And Waiting}
+\begin{lstlisting}
+sleep 5s &
+jobs
+wait-for $tosh.Last.Result.Id
+kill 3
+\end{lstlisting}
+
+\begin{itemize}
+\item \texttt{jobs} and \texttt{wait-for} are the main background-job tools.
+\item \texttt{bg} and \texttt{fg} resume suspended jobs stopped with \texttt{Ctrl+Z}.
+\end{itemize}
+
+\columnbreak
+
+\section{Runtime State}
+\begin{lstlisting}
+vars
+env USER HOME
+$tosh.Last.Result
+$tosh.Script.Path
+$tosh.Session.OpenHandleCount
+\end{lstlisting}
+
+\begin{itemize}
+\item \texttt{\$tosh.Last.Result} tracks the last successful statement result.
+\item \texttt{\$tosh.Script.Path} is useful inside sourced or executed scripts.
+\item Open managed handles are visible through the \texttt{\$tosh.Session} namespace.
+\end{itemize}
+
+\section{Small Conveniences}
+\begin{lstlisting}
+assert ($env.HOME != null)
+styled "warning" --fg yellow --bold
+read-line "name> "
+ignore
+\end{lstlisting}
+
+\tighttable{>{\ttfamily\raggedright\arraybackslash}p{0.31\linewidth}X}{
+\toprule
+Tool & Why it matters \\
+\midrule
+\texttt{assert} & fail early in scripts with a clear message \\
+\texttt{styled} & emit colored/styled terminal text segments \\
+\texttt{read-line} & prompt for one line of interactive text \\
+\texttt{ignore} & explicitly discard pipeline output \\
+\bottomrule
+}
+
+\section{Config Object}
+\begin{lstlisting}
+$tosh.Config.Prompt.NameText = "toast"
+$tosh.Config.Repl.ContinuationPrompt = "..> "
+$tosh.Config.Display.StorageSize.Mode = "Bytes"
+config get prompt
+\end{lstlisting}
+
+\begin{itemize}
+\item Direct \texttt{\$tosh.Config} edits affect the live session immediately.
+\item Use \texttt{config reload} to replay startup config files into the session.
+\end{itemize}
+
+\note{\texttt{source} reruns a file every time in the current scope; \texttt{require} caches modules once per session; \texttt{exec} replaces the current ToSh process with another program.}
+
+\end{multicols*}
+\end{document}

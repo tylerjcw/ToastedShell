@@ -14,6 +14,8 @@ internal sealed class TuiPickScreen : ITuiScreen
     private readonly HashSet<int> _selectedIndices = new();
     private IReadOnlyList<object?> _filteredItems;
     private bool _searchActive;
+    private int _headerLines;
+    private int _listPageSize;
 
 
     public TuiPickScreen(TuiPickRequest request, ObjectFormatter? formatter = null)
@@ -54,6 +56,8 @@ internal sealed class TuiPickScreen : ITuiScreen
         var headerLines = _searchActive ? 3 : 2;
         var footerLines = 2;
         var pageSize = Math.Max(1, height - headerLines - footerLines);
+        _headerLines = headerLines;
+        _listPageSize = pageSize;
         _list.SetItems(_filteredItems, pageSize);
         var range = _list.Scroll.GetVisibleRange();
 
@@ -88,6 +92,42 @@ internal sealed class TuiPickScreen : ITuiScreen
         sb.Append(help.Length > width ? help[..width] : help);
 
         return new TuiFrame(sb.ToString());
+    }
+
+    public TuiScreenResult HandleInput(TuiInputEvent input)
+    {
+        if (input.IsKey)
+            return HandleKey(input.Key);
+
+        var mouse = input.Mouse;
+
+        // Scroll wheel navigates the list
+        if (mouse.Action == TuiMouseAction.Scroll)
+        {
+            if (mouse.Button == TuiMouseButton.ScrollUp)
+                _list.MovePrevious();
+            else if (mouse.Button == TuiMouseButton.ScrollDown)
+                _list.MoveNext();
+
+            return TuiScreenResult.Continue;
+        }
+
+        // Click on a list item to select it
+        if (mouse.Action == TuiMouseAction.Press && mouse.Button == TuiMouseButton.Left)
+        {
+            var listRow = mouse.Row - _headerLines;
+            var range = _list.Scroll.GetVisibleRange();
+
+            if (listRow >= 0 && listRow < range.Length)
+            {
+                var itemIndex = range.Start + listRow;
+                _list.SelectIndex(itemIndex);
+
+                return TuiScreenResult.Continue;
+            }
+        }
+
+        return TuiScreenResult.Continue;
     }
 
     public TuiScreenResult HandleKey(ConsoleKeyInfo key)

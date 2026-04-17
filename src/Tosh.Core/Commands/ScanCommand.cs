@@ -1,6 +1,12 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Pipeline")]
+[CommandArgument("seed", "The initial accumulator value.")]
+[CommandArgument("callable|block", "A function that takes (accumulator, current-item) and returns the new accumulator.")]
+[CommandExample("echo 1 2 3 4 | scan 0 func(acc, x) => ($acc + $x)", Title = "Running total")]
+[CommandExample("echo a b c | scan \"\" { $acc + _ }", Title = "Running string concatenation")]
+[CommandOutput("Every intermediate accumulator value (one per input item).")]
+[PipelineInput(AcceptsScalar = true, AcceptsRecord = true, Description = "Folds the pipeline from left to right, yielding each intermediate value.")]
 public sealed class ScanCommand : ShellCommand
 {
     public ScanCommand()

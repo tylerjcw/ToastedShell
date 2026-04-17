@@ -81,7 +81,7 @@ public static class PromptSegmentUtilities
             return null;
         }
 
-        return ApplyStyle(style, $"✘ {exitCode}");
+        return ApplyStyle(style, $"{TerminalGlyphs.ExitCodePrefix} {exitCode}");
     }
 
     public static StyledText? BuildExitCodeSegment(int exitCode, string? foreground, string? background, bool bold, bool italic = false, bool underline = false, bool dim = false)
@@ -91,7 +91,7 @@ public static class PromptSegmentUtilities
             return null;
         }
 
-        return new StyledText($"✘ {exitCode}", foreground, background, bold, italic, underline, dim);
+        return new StyledText($"{TerminalGlyphs.ExitCodePrefix} {exitCode}", foreground, background, bold, italic, underline, dim);
     }
 
     public static StyledText BuildHistoryIdSegment(long historyId, ToshTextStyleConfig style)
@@ -235,8 +235,14 @@ public static class PromptSegmentUtilities
             status.Append($" ↓{info.Behind}");
         }
 
-        status.Append(' ');
-        status.Append('\ue0a0');
+        var icon = TerminalGlyphs.GitBranchIcon;
+
+        if (icon.Length > 0)
+        {
+            status.Append(' ');
+            status.Append(icon);
+        }
+
         return status.ToString();
     }
 

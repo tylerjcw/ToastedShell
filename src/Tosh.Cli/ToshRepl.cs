@@ -66,7 +66,8 @@ public sealed class ToshRepl
                     continuationHandler: ReplInputClassifier.GetContinuationState,
                     specialKeyHandler: TryHandleInlineToolShortcut,
                     onBufferActivated: buffer => _commandLineInsertion.ActivateBuffer(buffer),
-                    onBufferDeactivated: buffer => _commandLineInsertion.DeactivateBuffer(buffer));
+                    onBufferDeactivated: buffer => _commandLineInsertion.DeactivateBuffer(buffer),
+                    signatureHintProvider: (text, cursor) => _completionEngine.GetSignatureHint(text, cursor));
             }
             catch (ReplInterruptException)
             {
@@ -86,6 +87,12 @@ public sealed class ToshRepl
             if (trimmed.Length == 0)
             {
                 continue;
+            }
+
+            // Re-arm background job warning if the user typed something other than exit.
+            if (!trimmed.Equals("exit", StringComparison.OrdinalIgnoreCase) && !trimmed.Equals("logout", StringComparison.OrdinalIgnoreCase))
+            {
+                _runtime.ExitWarningIssued = false;
             }
 
             try

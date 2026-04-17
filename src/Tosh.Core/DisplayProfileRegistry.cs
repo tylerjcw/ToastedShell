@@ -4,6 +4,7 @@ public sealed class DisplayProfileRegistry
 {
     private readonly Dictionary<Type, DisplayProfile> _profiles = [];
     private readonly List<DisplayProfile> _registrationOrder = [];
+    private readonly Dictionary<Type, DisplayProfile?> _resolveCache = [];
 
     public void Register(DisplayProfile profile)
     {
@@ -22,6 +23,18 @@ public sealed class DisplayProfileRegistry
     {
         ArgumentNullException.ThrowIfNull(actualType);
 
+        if (_resolveCache.TryGetValue(actualType, out var cached))
+        {
+            return cached;
+        }
+
+        var result = ResolveCore(actualType);
+        _resolveCache[actualType] = result;
+        return result;
+    }
+
+    private DisplayProfile? ResolveCore(Type actualType)
+    {
         if (_profiles.TryGetValue(actualType, out var exactMatch))
         {
             return exactMatch;

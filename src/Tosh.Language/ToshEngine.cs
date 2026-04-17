@@ -7,6 +7,7 @@ using System.Text;
 using Tosh.Core;
 using Tosh.Core.Commands;
 using Tosh.Language.Commands;
+using Tosh.Language.Debugging;
 using Tosh.Language.Parsing;
 
 namespace Tosh.Language;
@@ -40,9 +41,20 @@ public sealed class ToshEngine : IShellEvaluator
         {
             Runtime.Commands.Register(new SourceCommand(this));
         }
+
+        if (!Runtime.Commands.TryGet("debug", out _))
+        {
+            Runtime.Commands.Register(new DebugCommand(this));
+        }
     }
 
     public ToshRuntime Runtime { get; }
+
+    /// <summary>
+    /// Optional hook invoked before each statement in a block is evaluated.
+    /// Used for step-through debugging, breakpoints, and script tracing.
+    /// </summary>
+    public DebugHookDelegate? DebugHook { get; set; }
 
     internal ShellEventSender CreateEventSender()
     {
@@ -1743,6 +1755,8 @@ public sealed class ToshEngine : IShellEvaluator
         {
             foreach (var current in ShellIterationUtilities.ExpandIterationItems(item))
             {
+                cancellationToken.ThrowIfCancellationRequested();
+
                 var iterationValues = new List<object?>();
                 var shouldBreak = false;
                 var shouldContinue = false;
@@ -1799,6 +1813,8 @@ public sealed class ToshEngine : IShellEvaluator
     {
         while (await EvaluateConditionAsync(sourceName, sourceText, statement.Condition, cancellationToken))
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
             var iterationValues = new List<object?>();
             var shouldBreak = false;
             var shouldContinue = false;
@@ -1845,6 +1861,8 @@ public sealed class ToshEngine : IShellEvaluator
     {
         while (!await EvaluateConditionAsync(sourceName, sourceText, statement.Condition, cancellationToken))
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
             var iterationValues = new List<object?>();
             var shouldBreak = false;
             var shouldContinue = false;
@@ -2001,13 +2019,22 @@ public sealed class ToshEngine : IShellEvaluator
 
         foreach (var @case in statement.Cases)
         {
-            var matchValue = await EvaluateArgumentAsync(sourceName, sourceText, @case.MatchExpression, cancellationToken);
-
-            if (OperatorEvaluator.AreEqual(switchValue, matchValue))
+            if (!await MatchesPatternAsync(switchValue, sourceName, sourceText, @case.MatchExpression, cancellationToken))
             {
-                blockToExecute = @case.Body;
-                break;
+                continue;
             }
+
+            if (@case.Guard is not null)
+            {
+                var guardValue = await EvaluateArgumentAsync(sourceName, sourceText, @case.Guard, cancellationToken);
+                if (!OperatorEvaluator.ToBoolean(guardValue))
+                {
+                    continue;
+                }
+            }
+
+            blockToExecute = @case.Body;
+            break;
         }
 
         blockToExecute ??= statement.DefaultBlock;
@@ -2021,6 +2048,37 @@ public sealed class ToshEngine : IShellEvaluator
                            .WithCancellation(cancellationToken))
         {
             yield return value;
+        }
+    }
+
+    private async Task<bool> MatchesPatternAsync(
+        object? switchValue,
+        string sourceName,
+        string sourceText,
+        ArgumentSyntax pattern,
+        CancellationToken cancellationToken)
+    {
+        switch (pattern)
+        {
+            case ComparisonPatternSyntax cp:
+                {
+                    var operand = await EvaluateArgumentAsync(sourceName, sourceText, cp.Operand, cancellationToken);
+                    return OperatorEvaluator.Matches(switchValue, cp.Operator, operand, nullable: false);
+                }
+
+            case RangeArgumentSyntax range:
+                {
+                    var startValue = await EvaluateArgumentAsync(sourceName, sourceText, range.Start, cancellationToken);
+                    var endValue = await EvaluateArgumentAsync(sourceName, sourceText, range.End, cancellationToken);
+                    return OperatorEvaluator.Matches(switchValue, ">=", startValue, nullable: false)
+                        && OperatorEvaluator.Matches(switchValue, "<=", endValue, nullable: false);
+                }
+
+            default:
+                {
+                    var patternValue = await EvaluateArgumentAsync(sourceName, sourceText, pattern, cancellationToken);
+                    return OperatorEvaluator.AreEqual(switchValue, patternValue);
+                }
         }
     }
 
@@ -2886,10 +2944,78 @@ public sealed class ToshEngine : IShellEvaluator
                     SourceText: sourceText,
                     Span: commandSyntax.Span,
                     Label: $"'{commandSyntax.Name}' is not a built-in, function, executable, or $-prefixed variable reference",
-                    Help: commandSyntax.Name.Contains(Path.DirectorySeparatorChar) || commandSyntax.Name.Contains(Path.AltDirectorySeparatorChar)
-                        ? "check that the path exists and points to an executable file."
-                        : $"use 'which {commandSyntax.Name}' to inspect how Tosh resolves this command.")),
+                    Help: ResolveUnknownCommandHelp(commandSyntax.Name))),
         };
+    }
+
+    private string ResolveUnknownCommandHelp(string name)
+    {
+        // Suggest well-known corrections for common mistakes from other shells.
+        var suggestion = name switch
+        {
+            "alias" or "unalias" => "ToSh uses functions instead of aliases. Use 'func name => command' for a one-liner alias.",
+            "set" => "use 'var name = value' for variables, or 'export NAME = \"value\"' for environment variables.",
+            "local" or "declare" or "typeset" => "use '$name = value' — variables are local by default in ToSh.",
+            "readonly" => "use 'const $name = value' for constants.",
+            "test" or "[" => "use 'if condition { ... }' with expression syntax instead of test/[.",
+            "source" or "." => "use 'source path' to load a script file.",
+            _ => null
+        };
+
+        if (suggestion is not null)
+        {
+            return suggestion;
+        }
+
+        if (name.Contains(Path.DirectorySeparatorChar) || name.Contains(Path.AltDirectorySeparatorChar))
+        {
+            return "check that the path exists and points to an executable file.";
+        }
+
+        // Levenshtein nearest-match against builtins.
+        var bestMatch = (Name: (string?)null, Distance: int.MaxValue);
+
+        foreach (var command in Runtime.Commands.All)
+        {
+            var distance = LevenshteinDistance(name, command.Name);
+            if (distance < bestMatch.Distance)
+            {
+                bestMatch = (command.Name, distance);
+            }
+        }
+
+        if (bestMatch.Name is not null && bestMatch.Distance <= Math.Max(2, Math.Max(name.Length, bestMatch.Name.Length) * 2 / 5))
+        {
+            return $"did you mean '{bestMatch.Name}'?";
+        }
+
+        return $"use 'which {name}' to inspect how Tosh resolves this command.";
+    }
+
+    private static int LevenshteinDistance(string a, string b)
+    {
+        if (a.Length == 0) return b.Length;
+        if (b.Length == 0) return a.Length;
+
+        var costs = new int[b.Length + 1];
+        for (var j = 0; j <= b.Length; j++) costs[j] = j;
+
+        for (var i = 1; i <= a.Length; i++)
+        {
+            var previousDiag = costs[0];
+            costs[0] = i;
+
+            for (var j = 1; j <= b.Length; j++)
+            {
+                var temp = costs[j];
+                costs[j] = char.ToLowerInvariant(a[i - 1]) == char.ToLowerInvariant(b[j - 1])
+                    ? previousDiag
+                    : Math.Min(Math.Min(costs[j - 1], costs[j]), previousDiag) + 1;
+                previousDiag = temp;
+            }
+        }
+
+        return costs[b.Length];
     }
 
     private async Task<IReadOnlyList<object?>> EvaluateArgumentsAsync(
@@ -3511,8 +3637,7 @@ public sealed class ToshEngine : IShellEvaluator
 
             if (!matched && arm.Pattern is not null)
             {
-                var patternValue = await EvaluateArgumentAsync(sourceName, sourceText, arm.Pattern, cancellationToken);
-                matched = OperatorEvaluator.AreEqual(value, patternValue);
+                matched = await MatchesPatternAsync(value, sourceName, sourceText, arm.Pattern, cancellationToken);
             }
 
             if (!matched)
@@ -5391,6 +5516,16 @@ public sealed class ToshEngine : IShellEvaluator
                 continue;
             }
 
+            // Debug hook / script trace: fire before each statement executes.
+            if (DebugHook is not null || Runtime.Config.Shell.ScriptTrace)
+            {
+                var action = await InvokeDebugHookAsync(sourceName, sourceText, statement, cancellationToken);
+                if (action == DebugAction.Abort)
+                {
+                    throw new DebugAbortException { Span = statement.Span };
+                }
+            }
+
             if (statement is ReturnStatementSyntax returnStatement)
             {
                 IReadOnlyList<object?> returnValues;
@@ -6478,6 +6613,61 @@ public sealed class ToshEngine : IShellEvaluator
     private static bool IsNumericType(Type t)
     {
         return IsIntegerType(t) || t == typeof(double) || t == typeof(float) || t == typeof(decimal);
+    }
+
+    private async Task<DebugAction> InvokeDebugHookAsync(
+        string sourceName,
+        string sourceText,
+        StatementSyntax statement,
+        CancellationToken cancellationToken)
+    {
+        var span = statement.Span;
+        string? statementText = null;
+
+        if (span.Start >= 0 && span.Start + span.Length <= sourceText.Length)
+        {
+            statementText = sourceText.Substring(span.Start, span.Length).Trim();
+        }
+
+        // Compute 1-based line number.
+        int? line = null;
+        if (span.Start >= 0 && span.Start <= sourceText.Length)
+        {
+            var lineNumber = 1;
+            for (var i = 0; i < span.Start && i < sourceText.Length; i++)
+            {
+                if (sourceText[i] == '\n')
+                {
+                    lineNumber++;
+                }
+            }
+            line = lineNumber;
+        }
+
+        // Script trace: emit "+ <line>: <statement>" to stderr (like set -x).
+        if (Runtime.Config.Shell.ScriptTrace && statementText is not null)
+        {
+            var prefix = line.HasValue ? $"+ {sourceName}:{line}" : $"+ {sourceName}";
+            await Runtime.Error.WriteLineAsync($"{prefix}: {statementText}");
+        }
+
+        // Debug hook: invoke the delegate if present.
+        if (DebugHook is not null)
+        {
+            var context = new DebugStepContext
+            {
+                SourceName = sourceName,
+                SourceText = sourceText,
+                Statement = statement,
+                Span = span,
+                Line = line,
+                StatementText = statementText,
+            };
+
+            return await DebugHook(context);
+        }
+
+        return DebugAction.Continue;
     }
 
 }

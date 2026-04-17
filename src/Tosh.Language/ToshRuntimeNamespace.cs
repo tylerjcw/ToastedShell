@@ -126,6 +126,8 @@ internal sealed class ToshSessionNamespace
     public int OpenHandleCount => ManagedFileHandle.GetOpenHandles().Count;
 
     public ManagedFileHandle[] OpenHandles => ManagedFileHandle.GetOpenHandles().ToArray();
+
+    public StartupProfileData? StartupProfile => _runtime.StartupProfile;
 }
 
 internal sealed class ToshHostNamespace

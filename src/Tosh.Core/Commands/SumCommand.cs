@@ -1,6 +1,11 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Pipeline")]
+[CommandArgument("member-path", "Optional member path to extract numeric values from each object.", Required = false)]
+[CommandExample("echo 1 2 3 4 | sum", Title = "Sum a list of numbers")]
+[CommandExample("ls | sum .Length", Title = "Total file sizes")]
+[CommandOutput("The sum of the pipeline values. Supports numeric, StorageSize, and TimeSpan types.")]
+[PipelineInput(AcceptsScalar = true, AcceptsRecord = true, Description = "Consumes the pipeline and returns the total.")]
 public sealed class SumCommand : ShellCommand, ICurrentItemMemberPathCommand
 {
     public SumCommand()

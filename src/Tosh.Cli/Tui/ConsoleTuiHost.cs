@@ -2,6 +2,8 @@ namespace Tosh.Cli.Tui;
 
 internal sealed class ConsoleTuiHost : ITuiHost
 {
+    private readonly TuiInputReader _inputReader = new();
+
     public bool IsInteractive => !Console.IsInputRedirected && !Console.IsOutputRedirected;
 
     public TuiSize? TryGetSize()
@@ -42,6 +44,10 @@ internal sealed class ConsoleTuiHost : ITuiHost
         key = Console.ReadKey(intercept);
         return true;
     }
+
+    public TuiInputEvent ReadInput() => _inputReader.Read();
+
+    public bool TryReadPendingInput(out TuiInputEvent inputEvent) => _inputReader.TryReadPending(out inputEvent);
 
     public void Write(string text)
     {

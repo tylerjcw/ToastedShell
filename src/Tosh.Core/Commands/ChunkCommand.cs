@@ -1,6 +1,11 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Pipeline")]
+[CommandArgument("size", "The number of items per chunk.")]
+[CommandExample("echo 1 2 3 4 5 | chunk 2", Title = "Group into pairs")]
+[CommandExample("1..10 | chunk 3 | map { count }", Title = "Chunk then count each group")]
+[CommandOutput("Arrays of up to `size` items. The last chunk may be smaller.")]
+[PipelineInput(AcceptsScalar = true, AcceptsRecord = true, Description = "Collects pipeline items into fixed-size batches.")]
 public sealed class ChunkCommand : ShellCommand
 {
     public ChunkCommand()

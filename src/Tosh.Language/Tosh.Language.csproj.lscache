@@ -58,12 +58,16 @@ TemporaryDependencyNodeTargetIdentifier=net10.0
 [sourceFiles]
 CallableBindingMatch.cs
 Commands/
+ DebugCommand.cs
  FunctionCommand.cs
  NativeFunctionCommand.cs
  OverloadedFunctionCommand.cs
  RenamedCommand.cs
  SourceCommand.cs
  ToshScriptCommand.cs
+Debugging/
+ DebugAbortException.cs
+ DebugHook.cs
 FunctionDefinition.cs
 FunctionParameterDefinition.cs
 LexicalScope.cs

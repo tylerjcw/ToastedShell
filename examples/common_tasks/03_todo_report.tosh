@@ -1,0 +1,60 @@
+#!/usr/bin/env tosh
+# Scan a project tree for TODO-style markers in common text files.
+#
+# Usage:
+#   tosh ./examples/common_tasks/03_todo_report.tosh [root] [pattern]
+# Example:
+#   tosh ./examples/common_tasks/03_todo_report.tosh . "todo|fixme|hack"
+
+func usage() {
+    writeline """
+        Usage: 03_todo_report.tosh [root] [pattern]
+
+        root     Directory tree to scan. Default: .
+        pattern  Regex passed to grep -i. Default: todo|fixme|hack|xxx
+        """
+}
+
+var argc = ($tosh.Script.Args | count)
+if ($argc > 0) {
+    var firstArg = ($tosh.Script.Args | get 0)
+    if ($firstArg == "--help" or $firstArg == "-h") {
+        usage
+        return
+    }
+}
+
+var root = ($argc > 0) ? ($tosh.Script.Args | get 0) : "."
+var pattern = ($argc > 1) ? ($tosh.Script.Args | get 1) : "todo|fixme|hack|xxx"
+var files = (
+    find $root -type f -regex ".*\\.(tosh|md|cs|json|ya?ml|sh)$"
+    | get FullName
+    | collect
+)
+
+if ($files.Length == 0) {
+    writeline $"No candidate text files were found under {$root}."
+    return
+}
+
+var matches = new list()
+for path in ($files) {
+    grep -i $pattern $path | each {
+        $matches.Add(_) | ignore
+    }
+}
+
+if (($matches | count) == 0) {
+    writeline $"No matches for /{$pattern}/ were found under {$root}."
+    return
+}
+
+writeline $"Markers matching /{$pattern}/ under {$root}:"
+$matches | group-by Path | sort Count | reverse | each {
+    writeline $"  {_.Count} | {_.Key}"
+}
+writeline ""
+writeline "First 20 matches:"
+$matches | first 20 | each {
+    writeline $"  {_.Path}:{_.LineNumber} | {_.Text}"
+}

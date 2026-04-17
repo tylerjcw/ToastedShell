@@ -262,6 +262,8 @@ Commands/
  TuiCommand.cs
  TypeOfCommand.cs
  TypesCommand.cs
+ UlimitCommand.cs
+ UmaskCommand.cs
  UnameCommand.cs
  UndefCommand.cs
  UnfoldCommand.cs
@@ -380,9 +382,18 @@ IObjectAccessor.cs
 IpAddressInfo.cs
 IpInterfaceInfo.cs
 IpJsonParser.cs
+IpMaddrEntry.cs
+IpMaddrInfo.cs
+IpMrouteInfo.cs
 IpNeighborInfo.cs
+IpNetnsInfo.cs
+IpNtableInfo.cs
 IpRouteInfo.cs
 IpRuleInfo.cs
+IpTokenInfo.cs
+IpTunnelInfo.cs
+IpTuntapInfo.cs
+IpVrfInfo.cs
 IShellBlockExecutor.cs
 IShellCallable.cs
 IShellCommand.cs
@@ -474,6 +485,7 @@ ShellPathArguments.cs
 ShellRecordUtilities.cs
 ShellRegexUtilities.cs
 ShellTextLine.cs
+StartupProfileData.cs
 StorageSize.cs
 StreamCommandUtilities.cs
 StructuredTextInput.cs
@@ -496,6 +508,7 @@ SystemUptimeInfo.cs
 TemporalAmount.cs
 TemporalParser.cs
 TerminalControl.cs
+TerminalGlyphs.cs
 TextInputLine.cs
 TextInputUtilities.cs
 TextSpan.cs

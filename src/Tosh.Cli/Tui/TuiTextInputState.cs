@@ -18,6 +18,8 @@ internal sealed class TuiTextInputState
 
     public int CursorIndex => _buffer.CursorIndex;
 
+    public void SetCursorIndex(int index) => _buffer.SetCursor(index);
+
     public void SetText(string? text)
     {
         _buffer.SetText(text ?? string.Empty);

@@ -1,0 +1,331 @@
+\input{../_shared/preamble.tex}
+
+\begin{document}
+\footnotesize
+\sheettitle{Control Flow And Matching}{Branching, loops, errors, cleanup, and expression-style matching}{parser/tests first}
+
+\begin{multicols*}{3}
+
+\section{If And Conditional Style}
+\begin{lstlisting}
+if ($age >= 18) {
+    echo adult
+} else if ($age >= 13) {
+    echo teen
+} else {
+    echo child
+}
+\end{lstlisting}
+
+\begin{lstlisting}
+var label = if ($count == 1) { "item" } else { "items" }
+echo $"You have {$count} {$label}."
+\end{lstlisting}
+
+\note{\texttt{if} works both as a statement and as an expression, which makes it handy inside assignments and interpolation.}
+
+\section{Loops}
+\begin{lstlisting}
+for item in (ls | first 3) {
+    echo $item.Name
+}
+
+for i in 1..5 {
+    echo $i
+}
+\end{lstlisting}
+
+\begin{lstlisting}
+while (($count < 3)) {
+    echo $count
+    $count += 1
+}
+
+until (($ready)) {
+    sleep 1s
+}
+\end{lstlisting}
+
+\tighttable{>{\ttfamily\raggedright\arraybackslash}p{0.30\linewidth}X}{
+\toprule
+Keyword & Use \\
+\midrule
+\texttt{break} & Exit the current loop. \\
+\texttt{continue} & Skip to the next iteration. \\
+\texttt{return} & Exit the current function/script. \\
+\texttt{throw} & Raise an error value. \\
+\bottomrule
+}
+
+\columnbreak
+
+\section{Errors And Cleanup}
+\begin{lstlisting}
+try {
+    read-file config.json | from json
+} catch (err) {
+    writeline $"Error: {$err.Message}"
+} finally {
+    writeline done
+}
+\end{lstlisting}
+
+\begin{lstlisting}
+func process-file(path) {
+    var handle = (open-file --read $path)
+    defer { close $handle }
+
+    return (read-to-end $handle)
+}
+\end{lstlisting}
+
+\begin{itemize}
+\item \texttt{catch (err)} binds the thrown value or exception object.
+\item \texttt{finally} always runs.
+\item \texttt{defer} schedules cleanup when the current scope exits.
+\end{itemize}
+
+\section{Switch}
+\begin{lstlisting}
+switch ($state) {
+    case file { echo file }
+    case dir  { echo dir }
+    default   { echo other }
+}
+\end{lstlisting}
+
+\begin{lstlisting}
+switch ($temperature) {
+    case < 32   { echo Freezing }
+    case 32..50 { echo Cold }
+    case > 75   { echo Hot }
+}
+\end{lstlisting}
+
+\note{\texttt{switch} is statement-style and does not fall through. Each \texttt{case} is independent; no extra \texttt{break} is needed.}
+
+\section{Match Expressions}
+\begin{lstlisting}
+var label = match ($status) {
+    200 => "OK"
+    404 => "Not Found"
+    default => "Other"
+}
+\end{lstlisting}
+
+\begin{lstlisting}
+match ($value) {
+    _ is int => "integer"
+    100..199 => "informational"
+    _ =~ "\\.csv$" => "csv"
+    default => "fallback"
+}
+\end{lstlisting}
+
+\columnbreak
+
+\section{Guards And Ordering}
+\begin{lstlisting}
+match ($n) {
+    0 => "zero"
+    _ > 0 if (($n % 2 == 0)) => "positive even"
+    _ > 0 => "positive odd"
+    default => "other"
+}
+\end{lstlisting}
+
+\begin{itemize}
+\item Arms are tested top to bottom.
+\item The first matching arm wins.
+\item \texttt{default} is required for exhaustive behavior.
+\item Guards use \texttt{if (...)} after the pattern.
+\end{itemize}
+
+\section{Control Patterns In Scripts}
+\begin{lstlisting}
+func recent(span: TimeSpan) =>
+    ls -la | where _.Modified > ((date now) - $span)
+
+func big-files(min: StorageSize) {
+    ls -la | where _.Type == file | where _.Size >= $min
+}
+\end{lstlisting}
+
+\begin{lstlisting}
+echo $"2 + 2 = {2 + 2}"
+echo $"Files: {ls | where _.Type == file | count}"
+echo ((date now) - 2d)
+\end{lstlisting}
+
+\section{Helpful Mental Model}
+\begin{itemize}
+\item Use \texttt{if} when you want branch-oriented control flow.
+\item Use \texttt{match} when you want a value back from a compact pattern table.
+\item Use \texttt{switch} when each arm performs statements or side effects.
+\item Pair loops with pipeline commands whenever you can; fall back to loops when stateful control is clearer.
+\end{itemize}
+
+\note{ToSh scripts stay readable when most data reshaping happens in pipelines, while loops and \texttt{match} handle the control decisions around those pipelines.}
+
+\end{multicols*}
+\newpage
+
+\sheettitle{Control Flow And Matching}{Pattern catalog, defer ordering, and practical control recipes}{page 2 / reference}
+
+\begin{multicols*}{3}
+
+\section{Pattern Catalog}
+\begin{lstlisting}
+200 => "OK"                  # exact value
+_ is int => "integer"        # runtime type
+_ >= 90 => "A"               # comparison
+100..199 => "info"           # range
+_ =~ "\\.csv$" => "csv"      # regex
+_ > 0 if (($n % 2 == 0)) => "even"
+\end{lstlisting}
+
+\begin{itemize}
+\item Match arms are checked top to bottom.
+\item The first matching arm wins.
+\item Keep \texttt{default} last and obvious.
+\end{itemize}
+
+\section{Match Recipes}
+\begin{lstlisting}
+func http_category(status: int) -> string {
+    return match ($status) {
+        100..199 => "Informational"
+        200..299 => "Success"
+        300..399 => "Redirection"
+        400..499 => "Client Error"
+        500..599 => "Server Error"
+        default  => "Unknown"
+    }
+}
+\end{lstlisting}
+
+\begin{lstlisting}
+match ($file) {
+    _ =~ "\\.pdf$" => "document"
+    _ =~ "\\.(csv|tsv)$" => "data"
+    _ =~ "\\.tar\\." => "archive"
+    default => "other"
+}
+\end{lstlisting}
+
+\section{Switch Recipes}
+\begin{lstlisting}
+switch ($state) {
+    case Inv.StockState.Low { echo low }
+    case Inv.StockState.Out { echo out }
+    default { echo ok }
+}
+\end{lstlisting}
+
+\columnbreak
+
+\section{Try, Throw, Return}
+\begin{lstlisting}
+try {
+    throw "boom"
+} catch (err) {
+    echo $err
+} finally {
+    writeline done
+}
+\end{lstlisting}
+
+\begin{lstlisting}
+func find-first(items, predicate) {
+    for item in $items {
+        if (invoke $predicate $item) {
+            return $item
+        }
+    }
+    return null
+}
+\end{lstlisting}
+
+\begin{itemize}
+\item \texttt{return} can bubble out from nested loops and blocks.
+\item Unhandled \texttt{throw} becomes a top-level shell diagnostic.
+\item \texttt{catch (err)} gives you the thrown value or exception object.
+\end{itemize}
+
+\section{Defer Patterns}
+\begin{lstlisting}
+func process-file(path) {
+    var handle = (open-file --read $path)
+    defer { close $handle }
+
+    return (read-to-end $handle)
+}
+\end{lstlisting}
+
+\begin{lstlisting}
+defer { echo "third" }
+defer { echo "second" }
+defer { echo "first" }
+\end{lstlisting}
+
+\note{\texttt{defer} runs in LIFO order. It is the easiest way to clean up file handles, temp resources, or partial state when a scope exits early.}
+
+\section{Loop Recipes}
+\begin{lstlisting}
+for proc in (ps | sort Memory | reverse | first 3) {
+    writeline $proc.Name
+}
+\end{lstlisting}
+
+\begin{lstlisting}
+echo one skip two three | each {
+    if ((_ == "skip")) { continue }
+    echo _
+}
+\end{lstlisting}
+
+\columnbreak
+
+\section{Real Script Patterns}
+\begin{lstlisting}
+ls -la | first 10 | each {
+    var tag = match (_.Type.ToString()) {
+        "dir" => "DIR "
+        "file" if ((_.Size > 1kb)) => "BIG "
+        "file" => "file"
+        "symlink" => "link"
+        default => "????"
+    }
+    echo $"[{$tag}] {_.Name}"
+}
+\end{lstlisting}
+
+\begin{lstlisting}
+func classify_score(score: int) -> string {
+    return match ($score) {
+        _ >= 90 => "A"
+        _ >= 80 => "B"
+        _ >= 70 => "C"
+        _ >= 60 => "D"
+        default => "F"
+    }
+}
+\end{lstlisting}
+
+\section{Choose The Form}
+\tighttable{>{\ttfamily\raggedright\arraybackslash}p{0.24\linewidth}X}{
+\toprule
+Use & When it fits best \\
+\midrule
+\texttt{if} & one-off branching with side effects or short expressions \\
+\texttt{match} & compact value selection from ordered patterns \\
+\texttt{switch} & statement blocks keyed from one tested value \\
+\texttt{loops} & stateful iteration when pipelines are not enough \\
+\texttt{try}/\texttt{defer} & failure handling and cleanup \\
+\bottomrule
+}
+
+\note{A readable ToSh script usually keeps data reshaping in pipelines, then uses \texttt{match}, \texttt{if}, and loops only where control flow really matters.}
+
+\end{multicols*}
+\end{document}

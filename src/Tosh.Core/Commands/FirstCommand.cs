@@ -1,6 +1,11 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Pipeline")]
+[CommandArgument("count", "The number of objects to return. Defaults to 1.", Required = false, Kind = "expression")]
+[CommandExample("echo 1 2 3 | first", Title = "Get the first item")]
+[CommandExample("ls | first 5", Title = "Get the first five items")]
+[CommandOutput("The first N pipeline objects.")]
+[PipelineInput(AcceptsScalar = true, AcceptsRecord = true, Description = "Yields the first N items then stops consuming.")]
 public sealed class FirstCommand : ShellCommand
 {
     public FirstCommand()

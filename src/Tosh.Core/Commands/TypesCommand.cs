@@ -1,10 +1,13 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("CLR")]
-[CommandExample("types System.String")]
-[CommandExample("types list")]
-[CommandExample("types map | where _.Namespace == ToSh")]
+[CommandArgument("filter", "Optional name or pattern to filter types.", Required = false)]
+[CommandOption("-a", "Include all loaded assemblies, not just commonly used types.")]
+[CommandExample("types System.String", Title = "Search for String type")]
+[CommandExample("types list", Title = "Search for list-like types")]
+[CommandExample("types map | where _.Namespace == ToSh", Title = "Filter to ToSh namespace")]
 [CommandNote("Types searches both CLR types and ToSh shell types like `list`, `array`, `dict`, `table`, and `tuple`.")]
+[CommandOutput("Type descriptor objects with Name, Namespace, and Assembly properties.")]
 public sealed class TypesCommand : ShellCommand
 {
     public TypesCommand()

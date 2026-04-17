@@ -20,12 +20,12 @@ public sealed class McpServerTests
     }
 
     [Fact]
-    public async Task Tools_list_returns_six_tools()
+    public async Task Tools_list_returns_nine_tools()
     {
         var result = await SendRequestAsync(1, "tools/list");
 
         var tools = result.GetProperty("tools");
-        Assert.Equal(6, tools.GetArrayLength());
+        Assert.Equal(9, tools.GetArrayLength());
 
         var names = Enumerable.Range(0, tools.GetArrayLength())
             .Select(i => tools[i].GetProperty("name").GetString())
@@ -37,6 +37,9 @@ public sealed class McpServerTests
         Assert.Contains("lsp_signature_help", names);
         Assert.Contains("lsp_definitions", names);
         Assert.Contains("lsp_document_symbols", names);
+        Assert.Contains("command_metadata", names);
+        Assert.Contains("run_snippet", names);
+        Assert.Contains("explain_error", names);
     }
 
     [Fact]
@@ -131,6 +134,126 @@ public sealed class McpServerTests
         var content = result.GetProperty("content");
         Assert.True(result.GetProperty("isError").GetBoolean());
         Assert.Contains("Unknown tool", content[0].GetProperty("text").GetString());
+    }
+
+    // --- run_snippet tests ---
+
+    [Fact]
+    public async Task RunSnippet_returns_pipeline_results()
+    {
+        var content = await CallToolAsync("run_snippet", new { code = "1 + 2" });
+
+        using var doc = JsonDocument.Parse(content);
+        var root = doc.RootElement;
+        var results = root.GetProperty("results");
+        Assert.True(results.GetArrayLength() > 0);
+        Assert.Equal("3", results[0].GetString());
+    }
+
+    [Fact]
+    public async Task RunSnippet_captures_stdout()
+    {
+        var content = await CallToolAsync("run_snippet", new { code = "writeline \"hello mcp\"" });
+
+        using var doc = JsonDocument.Parse(content);
+        var root = doc.RootElement;
+        var stdout = root.GetProperty("stdout").GetString()!;
+        Assert.Contains("hello mcp", stdout);
+    }
+
+    [Fact]
+    public async Task RunSnippet_reports_parse_errors_in_stderr()
+    {
+        var content = await CallToolAsync("run_snippet", new { code = "var = oops" });
+
+        using var doc = JsonDocument.Parse(content);
+        var root = doc.RootElement;
+        var stderr = root.GetProperty("stderr").GetString()!;
+        Assert.Contains("tosh::parser::", stderr);
+    }
+
+    [Fact]
+    public async Task RunSnippet_respects_timeout()
+    {
+        // Use a function with an infinite loop — valid syntax that will run forever
+        var content = await CallToolAsync("run_snippet", new { code = "func loop() {\n  var i = 0\n  while ($i >= 0) {\n    $i = $i + 1\n  }\n}\nloop", timeout_ms = 500 });
+
+        using var doc = JsonDocument.Parse(content);
+        var root = doc.RootElement;
+        var stderr = root.GetProperty("stderr").GetString()!;
+        Assert.Contains("timed out", stderr, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task RunSnippet_returns_multiple_results()
+    {
+        var content = await CallToolAsync("run_snippet", new { code = "echo 1\necho 2\necho 3" });
+
+        using var doc = JsonDocument.Parse(content);
+        var root = doc.RootElement;
+        var results = root.GetProperty("results");
+        Assert.Equal(3, results.GetArrayLength());
+    }
+
+    // --- explain_error tests ---
+
+    [Fact]
+    public async Task ExplainError_returns_parse_error_explanation()
+    {
+        var content = await CallToolAsync("explain_error", new { text = "var = 1" });
+
+        using var doc = JsonDocument.Parse(content);
+        var explanations = doc.RootElement;
+        Assert.True(explanations.GetArrayLength() > 0);
+
+        var first = explanations[0];
+        Assert.StartsWith("tosh::parser::", first.GetProperty("code").GetString());
+        Assert.False(string.IsNullOrEmpty(first.GetProperty("explanation").GetString()));
+        Assert.True(first.GetProperty("line").ValueKind == JsonValueKind.Number);
+    }
+
+    [Fact]
+    public async Task ExplainError_returns_no_errors_for_valid_code()
+    {
+        var content = await CallToolAsync("explain_error", new { text = "var x = 42" });
+
+        using var doc = JsonDocument.Parse(content);
+        var explanations = doc.RootElement;
+        Assert.Equal(1, explanations.GetArrayLength());
+        Assert.Equal("none", explanations[0].GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task ExplainError_explains_user_provided_error()
+    {
+        var content = await CallToolAsync("explain_error", new { text = "echo hello", error = "command not found: foo" });
+
+        using var doc = JsonDocument.Parse(content);
+        var explanations = doc.RootElement;
+        // Valid code + user error string should explain the provided error
+        var hasUserProvided = false;
+        for (int i = 0; i < explanations.GetArrayLength(); i++)
+        {
+            if (explanations[i].GetProperty("code").GetString() == "user-provided")
+            {
+                hasUserProvided = true;
+                Assert.Contains("not found", explanations[i].GetProperty("explanation").GetString(), StringComparison.OrdinalIgnoreCase);
+            }
+        }
+        Assert.True(hasUserProvided);
+    }
+
+    [Fact]
+    public async Task ExplainError_provides_context_line_for_parse_error()
+    {
+        var content = await CallToolAsync("explain_error", new { text = "var x = 1\nvar = bad\nvar y = 2" });
+
+        using var doc = JsonDocument.Parse(content);
+        var explanations = doc.RootElement;
+        Assert.True(explanations.GetArrayLength() > 0);
+
+        var first = explanations[0];
+        Assert.True(first.GetProperty("context").ValueKind == JsonValueKind.String);
     }
 
     [Fact]

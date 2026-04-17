@@ -46,6 +46,7 @@ internal sealed partial class ConsoleInlinePromptProvider
         string? filterSnapshot = null;
 
         Console.Write(HideCursor);
+        Console.Write(EnableSgrMouse);
 
         try
         {
@@ -159,7 +160,37 @@ internal sealed partial class ConsoleInlinePromptProvider
                 frameBuffer.Append(borderStyle.Apply($"{box.BottomLeft}{new string(box.Horizontal, innerWidth)}{box.BottomRight}").ToAnsi());
                 Console.Write(frameBuffer.ToString());
 
-                var key = Console.ReadKey(intercept: true);
+                var (_, bottomRow) = Console.GetCursorPosition();
+                const int helpHeaderLines = 4; // top border, search, description, middle border
+                var listStartRow = bottomRow - totalLines + 1 + helpHeaderLines;
+
+                var input = _inputReader.Read();
+
+                if (input.IsMouse)
+                {
+                    var mouse = input.Mouse;
+
+                    if (mouse.Action == Tui.TuiMouseAction.Scroll)
+                    {
+                        if (mouse.Button == Tui.TuiMouseButton.ScrollUp)
+                            state.MoveUp();
+                        else if (mouse.Button == Tui.TuiMouseButton.ScrollDown)
+                            state.MoveDown();
+                    }
+                    else if (mouse.Action == Tui.TuiMouseAction.Press && mouse.Button == Tui.TuiMouseButton.Left)
+                    {
+                        var listRow = mouse.Row - listStartRow;
+
+                        if (listRow >= 0 && listRow < pageSize && viewOffset + listRow < visibleNodes.Count)
+                        {
+                            state.SelectIndex(viewOffset + listRow);
+                        }
+                    }
+
+                    continue;
+                }
+
+                var key = input.Key;
 
                 if (!editingFilter && key.KeyChar == '/')
                 {
@@ -237,6 +268,7 @@ internal sealed partial class ConsoleInlinePromptProvider
         }
         finally
         {
+            Console.Write(DisableSgrMouse);
             Console.Write(ShowCursor);
         }
     }
@@ -490,7 +522,7 @@ internal sealed partial class ConsoleInlinePromptProvider
         Console.WriteLine(summary);
     }
 
-    private static void DrainHelpFilterInput(
+    private void DrainHelpFilterInput(
         HelpTreeState state,
         StringBuilder filterBuffer,
         int innerWidth,
@@ -587,18 +619,12 @@ internal sealed partial class ConsoleInlinePromptProvider
         Console.Write("\x1b[1B");
     }
 
-    private static bool TryReadQueuedKey(out ConsoleKeyInfo key)
+    private bool TryReadQueuedKey(out ConsoleKeyInfo key)
     {
-        try
+        if (_inputReader.TryReadPending(out var input) && input.IsKey)
         {
-            if (Console.KeyAvailable)
-            {
-                key = Console.ReadKey(intercept: true);
-                return true;
-            }
-        }
-        catch
-        {
+            key = input.Key;
+            return true;
         }
 
         key = default;
