@@ -55,4 +55,7 @@ public enum SyntaxTokenKind
 
     // Doc comments (## lines)
     DocComment,
+
+    // Comprehension operator
+    LessThanPipe,               // <|
 }

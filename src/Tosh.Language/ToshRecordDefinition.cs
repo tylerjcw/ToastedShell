@@ -29,7 +29,13 @@ public sealed class ToshRecordDefinition : IShellNamedType
 
     public string Name { get; }
 
-    public IReadOnlyList<ToshRecordFieldDefinition> Fields { get; }
+    public IReadOnlyList<ToshRecordFieldDefinition> Fields { get; private set; }
+
+    public bool IsSealed { get; internal set; }
+
+    public bool IsStrict { get; internal set; }
+
+    public bool IsPartial { get; internal set; }
 
     public string SourceName { get; }
 
@@ -194,6 +200,20 @@ public sealed class ToshRecordDefinition : IShellNamedType
         }
 
         return values;
+    }
+
+    internal void MergePartial(IReadOnlyList<ToshRecordFieldDefinition> newFields)
+    {
+        var merged = new List<ToshRecordFieldDefinition>(Fields);
+        foreach (var field in newFields)
+        {
+            if (!_fieldsByName.ContainsKey(field.Name))
+            {
+                merged.Add(field);
+                _fieldsByName[field.Name] = field;
+            }
+        }
+        Fields = merged;
     }
 }
 

@@ -46,6 +46,14 @@ public sealed class ToshEngine : IShellEvaluator
         {
             Runtime.Commands.Register(new DebugCommand(this));
         }
+
+        // Load built-in rune definitions
+        LoadBuiltinRunesAsync().GetAwaiter().GetResult();
+    }
+
+    private async Task LoadBuiltinRunesAsync()
+    {
+        await foreach (var _ in EvaluateAsync(BuiltinRunes.Source, "<builtin-runes>", CancellationToken.None)) { }
     }
 
     public ToshRuntime Runtime { get; }
@@ -343,10 +351,15 @@ public sealed class ToshEngine : IShellEvaluator
             MemberAssignmentStatementSyntax assignment => EvaluateMemberAssignmentAsync(sourceName, sourceText, assignment, cancellationToken),
             TupleAssignmentStatementSyntax tupleAssign => EvaluateTupleAssignmentAsync(sourceName, sourceText, tupleAssign, cancellationToken),
             FunctionDefinitionStatementSyntax function => EvaluateFunctionDefinitionAsync(sourceName, sourceText, function, cancellationToken),
+            RuneDefinitionStatementSyntax rune => EvaluateRuneDefinitionAsync(sourceName, sourceText, rune, cancellationToken),
             ClassDefinitionStatementSyntax @class => EvaluateClassDefinitionAsync(sourceName, sourceText, @class, cancellationToken),
+            InterfaceDefinitionStatementSyntax @interface => EvaluateInterfaceDefinitionAsync(sourceName, sourceText, @interface, cancellationToken),
+            UnionDefinitionStatementSyntax union => EvaluateUnionDefinitionAsync(sourceName, sourceText, union, cancellationToken),
             ModuleDefinitionStatementSyntax module => EvaluateModuleDefinitionAsync(sourceName, sourceText, module, cancellationToken),
             EnumDefinitionStatementSyntax @enum => EvaluateEnumDefinitionAsync(sourceName, sourceText, @enum, cancellationToken),
             RecordDefinitionStatementSyntax record => EvaluateRecordDefinitionAsync(sourceName, sourceText, record, cancellationToken),
+            StructDefinitionStatementSyntax @struct => EvaluateStructDefinitionAsync(sourceName, sourceText, @struct, cancellationToken),
+            TraitDefinitionStatementSyntax trait => EvaluateTraitDefinitionAsync(sourceName, sourceText, trait, cancellationToken),
             EventDefinitionStatementSyntax @event => EvaluateEventDefinitionAsync(sourceName, sourceText, @event, cancellationToken),
             IfStatementSyntax @if => EvaluateIfStatementAsync(sourceName, sourceText, @if, cancellationToken),
             ForStatementSyntax @for => EvaluateForStatementAsync(sourceName, sourceText, @for, cancellationToken),
@@ -558,6 +571,12 @@ public sealed class ToshEngine : IShellEvaluator
             ? new VariableBinding(null, ReplayAsPipeline: false, IsAllocatedOnly: true)
             : await EvaluateVariableBindingAsync(sourceName, sourceText, declaration.Value, cancellationToken);
 
+        // Struct copy-on-assign: clone struct instances to enforce value-type semantics
+        if (binding.Value is ToshStructInstance structInstance)
+        {
+            binding = binding with { Value = structInstance.Clone() };
+        }
+
         if (declaration.TypeName is not null)
         {
             var value = binding.Value;
@@ -582,6 +601,11 @@ public sealed class ToshEngine : IShellEvaluator
         if (declaration.Name == "_" && TryGetVariableBinding("_", out _))
         {
             Runtime.Error.WriteLine("Warning: redeclaring '_' shadows an existing binding. Use a different name if this value matters.");
+        }
+
+        if (declaration.IsConst)
+        {
+            binding = binding with { IsConst = true };
         }
 
         DeclareVariable(declaration.Name, binding, declaration.Modifier);
@@ -1098,6 +1122,12 @@ public sealed class ToshEngine : IShellEvaluator
 
         var value = await EvaluateVariableBindingAsync(sourceName, sourceText, assignment.Value, cancellationToken);
 
+        // Struct copy-on-assign: clone struct instances to enforce value-type semantics
+        if (value.Value is ToshStructInstance structInstance)
+        {
+            value = value with { Value = structInstance.Clone() };
+        }
+
         if (!TryGetVariableBinding(assignment.Name, out var existingBinding))
         {
             throw ToshDiagnosticException.Create(new ToshDiagnostic(
@@ -1108,6 +1138,18 @@ public sealed class ToshEngine : IShellEvaluator
                 Span: assignment.Span,
                 Label: $"declare '{assignment.Name}' with 'var' before assigning to it",
                 Help: $"try 'var {assignment.Name} = ...' the first time you bind this variable."));
+        }
+
+        if (existingBinding.IsConst)
+        {
+            throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                Code: "tosh::runtime::const_reassignment",
+                Title: $"Cannot reassign constant '{assignment.Name}'.",
+                SourceName: sourceName,
+                SourceText: sourceText,
+                Span: assignment.Span,
+                Label: $"'{assignment.Name}' was declared with 'const' and cannot be modified",
+                Help: "use 'var' instead of 'const' if you need to reassign this variable."));
         }
 
         if (assignment.Operator == "??=")
@@ -1234,6 +1276,47 @@ public sealed class ToshEngine : IShellEvaluator
         yield break;
     }
 
+    private async IAsyncEnumerable<object?> EvaluateRuneDefinitionAsync(
+        string sourceName,
+        string sourceText,
+        RuneDefinitionStatementSyntax rune,
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        EnsureBindingNameIsNotReserved(sourceName, sourceText, rune.Name, rune.Span, "reserved runtime namespace");
+
+        var duplicateParameters = rune.Parameters
+            .GroupBy(p => p.Name, StringComparer.Ordinal)
+            .FirstOrDefault(g => g.Count() > 1);
+
+        if (duplicateParameters is not null)
+        {
+            throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                Code: "tosh::runtime::duplicate_rune_parameter",
+                Title: $"Rune '{rune.Name}' defines parameter '{duplicateParameters.Key}' more than once.",
+                SourceName: sourceName,
+                SourceText: sourceText,
+                Span: duplicateParameters.First().Span,
+                Label: $"'{duplicateParameters.Key}' is declared multiple times"));
+        }
+
+        var definition = new RuneDefinition(
+            rune.Name,
+            rune.Parameters.Select(p => new RuneParameterDefinition(p.Name, p.Span)).ToArray(),
+            rune.Body,
+            rune.IsSealed,
+            rune.IsFixed,
+            sourceName,
+            sourceText,
+            rune.Span,
+            CaptureVisibleScopes(),
+            rune.DocComment is not null ? DocComment.Parse(new[] { new SyntaxToken(SyntaxTokenKind.DocComment, 0, rune.DocComment.ToString() ?? "") }) : null);
+
+        var runeCommand = new RuneCommand(definition);
+        DeclareCommand(runeCommand, rune.Modifier);
+
+        yield break;
+    }
+
     private FunctionDefinition CreateFunctionDefinition(
         string name,
         IReadOnlyList<FunctionParameterSyntax> parameters,
@@ -1268,7 +1351,7 @@ public sealed class ToshEngine : IShellEvaluator
         return new FunctionDefinition(
             name,
             parameters
-                .Select(parameter => new FunctionParameterDefinition(parameter.Name, parameter.TypeName, parameter.IsOptional, parameter.IsRest, parameter.Span))
+                .Select(parameter => new FunctionParameterDefinition(parameter.Name, parameter.TypeName, parameter.IsOptional, parameter.IsRest, parameter.DefaultValue, parameter.Span))
                 .ToArray(),
             returnTypeName,
             body,
@@ -1277,7 +1360,43 @@ public sealed class ToshEngine : IShellEvaluator
             sourceText,
             span,
             CaptureVisibleScopes(),
-            docComment);
+            docComment,
+            IsGenerator: ContainsYieldStatement(body));
+    }
+
+    private static bool ContainsYieldStatement(BlockSyntax block)
+    {
+        foreach (var statement in block.Statements)
+        {
+            if (statement is YieldStatementSyntax)
+                return true;
+
+            // Check nested blocks (if, for, while, try, etc.)
+            if (ContainsYieldInStatement(statement))
+                return true;
+        }
+
+        return false;
+    }
+
+    private static bool ContainsYieldInStatement(StatementSyntax statement)
+    {
+        return statement switch
+        {
+            IfStatementSyntax ifStmt =>
+                ContainsYieldStatement(ifStmt.ThenBlock) ||
+                (ifStmt.ElseBlock is not null && ContainsYieldStatement(ifStmt.ElseBlock)),
+            ForStatementSyntax forStmt => ContainsYieldStatement(forStmt.Body),
+            WhileStatementSyntax whileStmt => ContainsYieldStatement(whileStmt.Body),
+            TryStatementSyntax tryStmt =>
+                ContainsYieldStatement(tryStmt.TryBlock) ||
+                (tryStmt.CatchClause is not null && ContainsYieldStatement(tryStmt.CatchClause.Body)) ||
+                (tryStmt.FinallyBlock is not null && ContainsYieldStatement(tryStmt.FinallyBlock)),
+            SwitchStatementSyntax switchStmt =>
+                switchStmt.Cases.Any(c => ContainsYieldStatement(c.Body)) ||
+                (switchStmt.DefaultBlock is not null && ContainsYieldStatement(switchStmt.DefaultBlock)),
+            _ => false,
+        };
     }
 
     private void RegisterEventHandler(
@@ -1454,6 +1573,14 @@ public sealed class ToshEngine : IShellEvaluator
                 property.GetterBody,
                 property.SetterBody,
                 property.IsShy,
+                property.IsStatic || @class.IsHermit,  // hermit classes make all members implicitly shared
+                property.IsFixed || @class.IsStrict,  // strict classes make all properties fixed
+                property.IsVital,
+                property.IsGuarded,
+                property.IsLazy,
+                property.IsFading,
+                property.IsLocal,
+                property.IsAbstract,
                 property.Span))
             .ToArray();
 
@@ -1462,12 +1589,18 @@ public sealed class ToshEngine : IShellEvaluator
             .Select(method => new ToshClassMethodDefinition(
                 method.Method.Name,
                 method.Method.Parameters
-                    .Select(parameter => new FunctionParameterDefinition(parameter.Name, parameter.TypeName, parameter.IsOptional, parameter.IsRest, parameter.Span))
+                    .Select(parameter => new FunctionParameterDefinition(parameter.Name, parameter.TypeName, parameter.IsOptional, parameter.IsRest, parameter.DefaultValue, parameter.Span))
                     .ToArray(),
                 method.Method.ReturnTypeName,
                 method.Method.Body,
-                method.IsStatic,
+                method.IsStatic || @class.IsHermit,  // hermit classes make all members implicitly shared
                 method.IsShy,
+                method.IsAbstract,
+                method.IsOverride,
+                method.IsGuarded,
+                method.IsFading,
+                method.IsLocal,
+                method.IsRaw,
                 sourceName,
                 sourceText,
                 method.Span,
@@ -1478,7 +1611,7 @@ public sealed class ToshEngine : IShellEvaluator
             .OfType<ClassConstructorMemberSyntax>()
             .Select(constructor => new ToshClassConstructorDefinition(
                 constructor.Parameters
-                    .Select(parameter => new FunctionParameterDefinition(parameter.Name, parameter.TypeName, parameter.IsOptional, parameter.IsRest, parameter.Span))
+                    .Select(parameter => new FunctionParameterDefinition(parameter.Name, parameter.TypeName, parameter.IsOptional, parameter.IsRest, parameter.DefaultValue, parameter.Span))
                     .ToArray(),
                 constructor.Body,
                 sourceName,
@@ -1491,7 +1624,7 @@ public sealed class ToshEngine : IShellEvaluator
             this,
             @class.Name,
             @class.PrimaryConstructorParameters
-                .Select(parameter => new FunctionParameterDefinition(parameter.Name, parameter.TypeName, parameter.IsOptional, parameter.IsRest, parameter.Span))
+                .Select(parameter => new FunctionParameterDefinition(parameter.Name, parameter.TypeName, parameter.IsOptional, parameter.IsRest, parameter.DefaultValue, parameter.Span))
                 .ToArray(),
             runtimeProperties,
             runtimeMethods,
@@ -1501,7 +1634,402 @@ public sealed class ToshEngine : IShellEvaluator
             @class.Span,
             CaptureVisibleScopes());
 
+        // Handle partial class merging: if this is a partial class and one already exists, merge members
+        if (@class.IsPartial && TryGetNamedType(@class.Name, out var existingType) && existingType is ToshClassDefinition existingDef)
+        {
+            if (!existingDef.IsPartial)
+            {
+                throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                    Code: "tosh::runtime::partial_mismatch",
+                    Title: $"Cannot extend class '{@class.Name}' as partial: the original class was not declared as partial.",
+                    SourceName: sourceName,
+                    SourceText: sourceText,
+                    Span: @class.Span,
+                    Label: "both declarations must be partial"));
+            }
+
+            existingDef.MergePartial(runtimeProperties, runtimeMethods, runtimeConstructors);
+            yield break;
+        }
+
         DeclareType(@class.Name, definition, @class.Modifier);
+
+        definition.IsSealed = @class.IsSealed;
+        definition.IsAbstract = @class.IsAbstract;
+        definition.IsHermit = @class.IsHermit;
+        definition.IsStrict = @class.IsStrict;
+        definition.IsPartial = @class.IsPartial;
+
+        // Validate hermit (static) classes: constructors not allowed (members are auto-shared)
+        if (definition.IsHermit)
+        {
+            if (runtimeConstructors.Length > 0)
+            {
+                throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                    Code: "tosh::runtime::hermit_has_constructor",
+                    Title: $"Hermit class '{@class.Name}' cannot have constructors.",
+                    SourceName: sourceName,
+                    SourceText: sourceText,
+                    Span: @class.Span,
+                    Label: "hermit classes cannot be instantiated"));
+            }
+        }
+
+        // Resolve base class
+        if (@class.BaseClassName is not null)
+        {
+            if (TryGetNamedType(@class.BaseClassName, out var baseType) && baseType is ToshClassDefinition baseClassDef)
+            {
+                if (baseClassDef.IsSealed)
+                {
+                    throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                        Code: "tosh::runtime::extend_sealed_class",
+                        Title: $"Class '{@class.Name}' cannot extend sealed class '{@class.BaseClassName}'.",
+                        SourceName: sourceName,
+                        SourceText: sourceText,
+                        Span: @class.Span,
+                        Label: $"'{@class.BaseClassName}' is marked sealed and cannot be extended"));
+                }
+
+                definition.BaseClass = baseClassDef;
+
+                // Store extends clause constructor args if present
+                if (@class.BaseConstructorArgs is { Count: > 0 })
+                {
+                    definition.BaseConstructorArgs = @class.BaseConstructorArgs;
+                }
+            }
+            else
+            {
+                // Try resolving as a CLR type
+                var clrType = ResolveTypeName(@class.BaseClassName);
+                if (clrType is not null)
+                {
+                    definition.ClrBaseType = clrType;
+                }
+                else
+                {
+                    throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                        Code: "tosh::runtime::unknown_base_class",
+                        Title: $"Class '{@class.Name}' extends unknown class '{@class.BaseClassName}'.",
+                        SourceName: sourceName,
+                        SourceText: sourceText,
+                        Span: @class.Span,
+                        Label: $"'{@class.BaseClassName}' is not a known class"));
+                }
+            }
+        }
+
+        // Validate implemented interfaces
+        if (@class.ImplementedInterfaces is { Count: > 0 })
+        {
+            foreach (var ifaceName in @class.ImplementedInterfaces)
+            {
+                if (!TryGetNamedType(ifaceName, out var namedType) || namedType is not ToshInterfaceDefinition ifaceDefinition)
+                {
+                    throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                        Code: "tosh::runtime::unknown_interface",
+                        Title: $"Class '{@class.Name}' fulfills unknown interface '{ifaceName}'.",
+                        SourceName: sourceName,
+                        SourceText: sourceText,
+                        Span: @class.Span,
+                        Label: $"'{ifaceName}' is not a known interface"));
+                }
+
+                var missing = ifaceDefinition.GetMissingMethods(definition);
+                if (missing.Count > 0)
+                {
+                    throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                        Code: "tosh::runtime::missing_interface_methods",
+                        Title: $"Class '{@class.Name}' does not implement all methods of interface '{ifaceName}'. Missing: {string.Join(", ", missing)}.",
+                        SourceName: sourceName,
+                        SourceText: sourceText,
+                        Span: @class.Span,
+                        Label: $"missing: {string.Join(", ", missing)}"));
+                }
+            }
+
+            definition.ImplementedInterfaces = @class.ImplementedInterfaces
+                .Select(name => TryGetNamedType(name, out var t) && t is ToshInterfaceDefinition iface ? iface : null)
+                .Where(i => i is not null)
+                .ToArray()!;
+        }
+
+        // Validate used traits and inject default methods/properties
+        if (@class.UsedTraits is { Count: > 0 })
+        {
+            foreach (var traitName in @class.UsedTraits)
+            {
+                if (!TryGetNamedType(traitName, out var namedType) || namedType is not ToshTraitDefinition traitDefinition)
+                {
+                    throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                        Code: "tosh::runtime::unknown_trait",
+                        Title: $"Class '{@class.Name}' uses unknown trait '{traitName}'.",
+                        SourceName: sourceName,
+                        SourceText: sourceText,
+                        Span: @class.Span,
+                        Label: $"'{traitName}' is not a known trait"));
+                }
+
+                // Check required methods (those without default bodies)
+                var missingMethods = traitDefinition.GetMissingMethods(definition);
+                if (missingMethods.Count > 0)
+                {
+                    throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                        Code: "tosh::runtime::missing_trait_methods",
+                        Title: $"Class '{@class.Name}' does not implement required methods from trait '{traitName}'. Missing: {string.Join(", ", missingMethods)}.",
+                        SourceName: sourceName,
+                        SourceText: sourceText,
+                        Span: @class.Span,
+                        Label: $"missing: {string.Join(", ", missingMethods)}"));
+                }
+
+                // Check required properties (those without default values)
+                var missingProps = traitDefinition.GetMissingProperties(definition);
+                if (missingProps.Count > 0)
+                {
+                    throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                        Code: "tosh::runtime::missing_trait_properties",
+                        Title: $"Class '{@class.Name}' does not implement required properties from trait '{traitName}'. Missing: {string.Join(", ", missingProps)}.",
+                        SourceName: sourceName,
+                        SourceText: sourceText,
+                        Span: @class.Span,
+                        Label: $"missing: {string.Join(", ", missingProps)}"));
+                }
+
+                // Inject default methods that the class doesn't already define
+                foreach (var traitMethod in traitDefinition.Methods.Where(m => m.HasDefaultBody))
+                {
+                    if (!definition.Methods.Any(m => string.Equals(m.Name, traitMethod.Name, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        definition.AddMethod(new ToshClassMethodDefinition(
+                            traitMethod.Name,
+                            traitMethod.Parameters,
+                            traitMethod.ReturnTypeName,
+                            traitMethod.DefaultBody!,
+                            IsStatic: false,
+                            IsShy: false,
+                            IsAbstract: false,
+                            IsOverride: false,
+                            IsGuarded: false,
+                            IsFading: false,
+                            IsLocal: false,
+                            IsRaw: false,
+                            sourceName,
+                            sourceText,
+                            @class.Span,
+                            CapturedScopes: CaptureVisibleScopes()));
+                    }
+                }
+
+                // Inject default property values for properties the class doesn't define
+                foreach (var traitProp in traitDefinition.Properties.Where(p => p.DefaultValue is not null))
+                {
+                    if (!definition.Properties.Any(p => string.Equals(p.Name, traitProp.Name, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        definition.AddProperty(new ToshClassPropertyDefinition(
+                            traitProp.Name,
+                            traitProp.TypeName,
+                            traitProp.DefaultValue,
+                            GetterBody: null,
+                            SetterBody: null,
+                            IsShy: false,
+                            IsStatic: false,
+                            IsFixed: false,
+                            IsVital: false,
+                            IsGuarded: false,
+                            IsLazy: false,
+                            IsFading: false,
+                            IsLocal: false,
+                            IsAbstract: false,
+                            @class.Span));
+                    }
+                }
+            }
+
+            definition.UsedTraits = @class.UsedTraits
+                .Select(name => TryGetNamedType(name, out var t) && t is ToshTraitDefinition trait ? trait : null)
+                .Where(t => t is not null)
+                .ToArray()!;
+        }
+
+        // Validate that non-abstract classes implement all hollow (abstract) methods from parent
+        if (!definition.IsAbstract && definition.BaseClass is { } parentClass)
+        {
+            var unimplemented = GetUnimplementedAbstractMethods(parentClass, definition);
+            if (unimplemented.Count > 0)
+            {
+                throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                    Code: "tosh::runtime::missing_hollow_methods",
+                    Title: $"Class '{@class.Name}' must implement hollow methods from '{parentClass.Name}': {string.Join(", ", unimplemented)}.",
+                    SourceName: sourceName,
+                    SourceText: sourceText,
+                    Span: @class.Span,
+                    Label: $"missing hollow methods: {string.Join(", ", unimplemented)}"));
+            }
+
+            var unimplementedProps = GetUnimplementedAbstractProperties(parentClass, definition);
+            if (unimplementedProps.Count > 0)
+            {
+                throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                    Code: "tosh::runtime::missing_hollow_properties",
+                    Title: $"Class '{@class.Name}' must implement hollow properties from '{parentClass.Name}': {string.Join(", ", unimplementedProps)}.",
+                    SourceName: sourceName,
+                    SourceText: sourceText,
+                    Span: @class.Span,
+                    Label: $"missing hollow properties: {string.Join(", ", unimplementedProps)}"));
+            }
+        }
+
+        // Validate overrule methods have a matching parent method
+        foreach (var method in runtimeMethods.Where(m => m.IsOverride))
+        {
+            if (definition.BaseClass is null || !HasMethodInHierarchy(definition.BaseClass, method.Name))
+            {
+                throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                    Code: "tosh::runtime::overrule_no_base_method",
+                    Title: $"Method '{method.Name}' in class '{@class.Name}' is marked 'overrule' but no parent class defines '{method.Name}'.",
+                    SourceName: sourceName,
+                    SourceText: sourceText,
+                    Span: method.Span,
+                    Label: $"no '{method.Name}' found in parent hierarchy to overrule"));
+            }
+        }
+
+        // Validate that methods shadowing a parent method are marked 'overrule'
+        if (definition.BaseClass is not null)
+        {
+            foreach (var method in runtimeMethods.Where(m => !m.IsOverride && !m.IsAbstract && !m.IsStatic))
+            {
+                if (HasMethodInHierarchy(definition.BaseClass, method.Name))
+                {
+                    throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                        Code: "tosh::runtime::missing_overrule",
+                        Title: $"Method '{method.Name}' in class '{@class.Name}' shadows a parent method but is not marked 'overrule'.",
+                        SourceName: sourceName,
+                        SourceText: sourceText,
+                        Span: method.Span,
+                        Label: $"add 'overrule' to override '{method.Name}'"));
+                }
+            }
+        }
+
+        // Initialize static property values
+        foreach (var prop in runtimeProperties.Where(p => p.IsStatic && p.Initializer is not null))
+        {
+            var values = await AsyncEnumerableExtensions.ToListAsync(
+                EvaluatePipelineAsync(sourceName, sourceText, prop.Initializer!, cancellationToken),
+                cancellationToken);
+            definition.TrySetStaticMember(prop.Name, values.Count == 1 ? values[0] : values);
+        }
+
+        yield break;
+    }
+
+    private static IReadOnlyList<string> GetUnimplementedAbstractMethods(ToshClassDefinition parent, ToshClassDefinition child)
+    {
+        var missing = new List<string>();
+        var current = parent;
+
+        while (current is not null)
+        {
+            foreach (var method in current.Methods.Where(m => m.IsAbstract))
+            {
+                if (!child.Methods.Any(m => string.Equals(m.Name, method.Name, StringComparison.OrdinalIgnoreCase) && !m.IsAbstract))
+                {
+                    missing.Add(method.Name);
+                }
+            }
+            current = current.BaseClass;
+        }
+
+        return missing;
+    }
+
+    private static IReadOnlyList<string> GetUnimplementedAbstractProperties(ToshClassDefinition parent, ToshClassDefinition child)
+    {
+        var missing = new List<string>();
+        var current = parent;
+
+        while (current is not null)
+        {
+            foreach (var prop in current.Properties.Where(p => p.IsAbstract))
+            {
+                if (!child.Properties.Any(p => string.Equals(p.Name, prop.Name, StringComparison.OrdinalIgnoreCase) && !p.IsAbstract))
+                {
+                    missing.Add(prop.Name);
+                }
+            }
+            current = current.BaseClass;
+        }
+
+        return missing;
+    }
+
+    private static bool HasMethodInHierarchy(ToshClassDefinition classDefinition, string methodName)
+    {
+        var current = classDefinition;
+        while (current is not null)
+        {
+            if (current.Methods.Any(m => string.Equals(m.Name, methodName, StringComparison.OrdinalIgnoreCase)))
+            {
+                return true;
+            }
+            current = current.BaseClass;
+        }
+        return false;
+    }
+
+    private async IAsyncEnumerable<object?> EvaluateInterfaceDefinitionAsync(
+        string sourceName,
+        string sourceText,
+        InterfaceDefinitionStatementSyntax @interface,
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        EnsureBindingNameIsNotReserved(sourceName, sourceText, @interface.Name, @interface.Span, "reserved runtime namespace");
+
+        var methods = @interface.Methods
+            .Select(m => new InterfaceMethodSignature(
+                m.Name,
+                m.Parameters
+                    .Select(p => new FunctionParameterDefinition(p.Name, p.TypeName, p.IsOptional, p.IsRest, p.DefaultValue, p.Span))
+                    .ToArray(),
+                m.ReturnTypeName))
+            .ToArray();
+
+        var definition = new ToshInterfaceDefinition(
+            @interface.Name,
+            methods,
+            sourceName,
+            sourceText,
+            @interface.Span);
+
+        DeclareType(@interface.Name, definition, @interface.Modifier);
+        yield break;
+    }
+
+    private async IAsyncEnumerable<object?> EvaluateUnionDefinitionAsync(
+        string sourceName,
+        string sourceText,
+        UnionDefinitionStatementSyntax union,
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        EnsureBindingNameIsNotReserved(sourceName, sourceText, union.Name, union.Span, "reserved runtime namespace");
+
+        var variants = union.Variants
+            .Select(v => new UnionVariantDefinition(
+                v.Name,
+                v.Fields.Select(f => f.Name).ToArray()))
+            .ToArray();
+
+        var definition = new ToshUnionDefinition(
+            union.Name,
+            variants,
+            sourceName,
+            sourceText,
+            union.Span);
+
+        DeclareType(union.Name, definition, union.Modifier);
         yield break;
     }
 
@@ -1657,6 +2185,28 @@ public sealed class ToshEngine : IShellEvaluator
     {
         EnsureBindingNameIsNotReserved(sourceName, sourceText, record.Name, record.Span, "reserved runtime namespace");
 
+        var runtimeFields = record.Fields
+            .Select(field => new ToshRecordFieldDefinition(field.Name, field.TypeName, field.DefaultValue, field.IsOptional, field.Span))
+            .ToArray();
+
+        // Handle partial record merging
+        if (record.IsPartial && TryGetNamedType(record.Name, out var existingType) && existingType is ToshRecordDefinition existingDef)
+        {
+            if (!existingDef.IsPartial)
+            {
+                throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                    Code: "tosh::runtime::partial_merge_non_partial_record",
+                    Title: $"Cannot merge partial record '{record.Name}' with existing non-partial record.",
+                    SourceName: sourceName,
+                    SourceText: sourceText,
+                    Span: record.Span,
+                    Label: "original record is not declared 'partial'"));
+            }
+
+            existingDef.MergePartial(runtimeFields);
+            yield break;
+        }
+
         var duplicateFields = record.Fields
             .GroupBy(field => field.Name, StringComparer.OrdinalIgnoreCase)
             .FirstOrDefault(group => group.Count() > 1);
@@ -1675,16 +2225,175 @@ public sealed class ToshEngine : IShellEvaluator
         var definition = new ToshRecordDefinition(
             this,
             record.Name,
-            record.Fields
-                .Select(field => new ToshRecordFieldDefinition(field.Name, field.TypeName, field.DefaultValue, field.IsOptional, field.Span))
-                .ToArray(),
+            runtimeFields,
             sourceName,
             sourceText,
             record.Span,
             CaptureVisibleScopes());
 
+        definition.IsSealed = record.IsSealed;
+        definition.IsStrict = record.IsStrict;
+        definition.IsPartial = record.IsPartial;
+
         DeclareType(record.Name, definition, record.Modifier);
         yield break;
+    }
+
+    private async IAsyncEnumerable<object?> EvaluateStructDefinitionAsync(
+        string sourceName,
+        string sourceText,
+        StructDefinitionStatementSyntax @struct,
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        EnsureBindingNameIsNotReserved(sourceName, sourceText, @struct.Name, @struct.Span, "reserved runtime namespace");
+
+        var runtimeFields = @struct.Fields
+            .Select(field => new ToshRecordFieldDefinition(field.Name, field.TypeName, field.DefaultValue, field.IsOptional, field.Span))
+            .ToArray();
+
+        // Handle partial struct merging
+        if (@struct.IsPartial && TryGetNamedType(@struct.Name, out var existingType) && existingType is ToshStructDefinition existingDef)
+        {
+            if (!existingDef.IsPartial)
+            {
+                throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                    Code: "tosh::runtime::partial_merge_non_partial_struct",
+                    Title: $"Cannot merge partial struct '{@struct.Name}' with existing non-partial struct.",
+                    SourceName: sourceName,
+                    SourceText: sourceText,
+                    Span: @struct.Span,
+                    Label: "original struct is not declared 'partial'"));
+            }
+
+            existingDef.MergePartial(runtimeFields);
+            yield break;
+        }
+
+        // Build properties and methods from body members
+        var properties = new List<ToshClassPropertyDefinition>();
+        var methods = new List<ToshClassMethodDefinition>();
+
+        foreach (var member in @struct.Members)
+        {
+            switch (member)
+            {
+                case ClassPropertyMemberSyntax property:
+                    properties.Add(new ToshClassPropertyDefinition(
+                        property.Name,
+                        property.TypeName,
+                        property.Initializer,
+                        property.GetterBody,
+                        property.SetterBody,
+                        property.IsShy,
+                        property.IsStatic,
+                        property.IsFixed || !@struct.IsFluid,
+                        property.IsVital,
+                        property.IsGuarded,
+                        property.IsLazy,
+                        property.IsFading,
+                        property.IsLocal,
+                        property.IsAbstract,
+                        property.Span));
+                    break;
+                case ClassMethodMemberSyntax method:
+                    methods.Add(new ToshClassMethodDefinition(
+                        method.Method.Name,
+                        method.Method.Parameters
+                            .Select(p => new FunctionParameterDefinition(p.Name, p.TypeName, p.IsOptional, p.IsRest, p.DefaultValue, p.Span))
+                            .ToArray(),
+                        method.Method.ReturnTypeName,
+                        method.Method.Body,
+                        method.IsStatic,
+                        method.IsShy,
+                        method.IsAbstract,
+                        method.IsOverride,
+                        method.IsGuarded,
+                        method.IsFading,
+                        method.IsLocal,
+                        method.IsRaw,
+                        sourceName,
+                        sourceText,
+                        method.Span,
+                        CapturedScopes: CaptureVisibleScopes()));
+                    break;
+            }
+        }
+
+        var definition = new ToshStructDefinition(
+            this,
+            @struct.Name,
+            runtimeFields,
+            properties,
+            methods,
+            sourceName,
+            sourceText,
+            @struct.Span,
+            CaptureVisibleScopes());
+
+        definition.IsSealed = @struct.IsSealed;
+        definition.IsFluid = @struct.IsFluid;
+        definition.IsPartial = @struct.IsPartial;
+
+        DeclareType(@struct.Name, definition, @struct.Modifier);
+        yield break;
+    }
+
+    private async IAsyncEnumerable<object?> EvaluateTraitDefinitionAsync(
+        string sourceName,
+        string sourceText,
+        TraitDefinitionStatementSyntax trait,
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        EnsureBindingNameIsNotReserved(sourceName, sourceText, trait.Name, trait.Span, "reserved runtime namespace");
+
+        var methods = trait.Methods
+            .Select(m => new TraitMethodDefinition(
+                m.Name,
+                m.Parameters
+                    .Select(p => new FunctionParameterDefinition(p.Name, p.TypeName, p.IsOptional, p.IsRest, p.DefaultValue, p.Span))
+                    .ToArray(),
+                m.ReturnTypeName,
+                m.DefaultBody,
+                HasDefaultBody: m.DefaultBody is not null))
+            .ToArray();
+
+        var properties = trait.Properties
+            .Select(p => new TraitPropertyDefinition(p.Name, p.TypeName, p.DefaultValue))
+            .ToArray();
+
+        var definition = new ToshTraitDefinition(
+            trait.Name,
+            methods,
+            properties,
+            sourceName,
+            sourceText,
+            trait.Span);
+
+        DeclareType(trait.Name, definition, trait.Modifier);
+        yield break;
+    }
+
+    internal IAsyncEnumerable<object?> InvokeStructStaticMethodAsync(
+        ToshStructDefinition structDef,
+        ToshClassMethodDefinition method,
+        IReadOnlyList<object?> arguments)
+    {
+        var locals = new Dictionary<string, object?>(StringComparer.Ordinal);
+        for (var i = 0; i < method.Parameters.Count && i < arguments.Count; i++)
+        {
+            locals[method.Parameters[i].Name] = arguments[i];
+        }
+        locals["args"] = arguments.ToArray();
+
+        var values = ExecuteClassBlockSync(
+            method.SourceName,
+            method.SourceText,
+            method.Body,
+            locals,
+            method.CapturedScopes,
+            $"{structDef.Name}.{method.Name}");
+
+        return values.ToAsyncEnumerable();
     }
 
     private async IAsyncEnumerable<object?> EvaluateEventDefinitionAsync(
@@ -2069,6 +2778,11 @@ public sealed class ToshEngine : IShellEvaluator
             case RangeArgumentSyntax range:
                 {
                     var startValue = await EvaluateArgumentAsync(sourceName, sourceText, range.Start, cancellationToken);
+                    if (range.End is null)
+                    {
+                        // Infinite range in match: only check lower bound
+                        return OperatorEvaluator.Matches(switchValue, ">=", startValue, nullable: false);
+                    }
                     var endValue = await EvaluateArgumentAsync(sourceName, sourceText, range.End, cancellationToken);
                     return OperatorEvaluator.Matches(switchValue, ">=", startValue, nullable: false)
                         && OperatorEvaluator.Matches(switchValue, "<=", endValue, nullable: false);
@@ -2504,6 +3218,13 @@ public sealed class ToshEngine : IShellEvaluator
                     isPipelined,
                     pipelineExitStatusTracker,
                     cancellationToken),
+                PipeForwardStageSyntax pipeForward => ExecutePipeForwardStageAsync(
+                    sourceName,
+                    sourceText,
+                    pipeForward,
+                    current,
+                    pipelineExitStatusTracker,
+                    cancellationToken),
                 _ => throw new InvalidOperationException($"Unsupported pipeline stage syntax: {stage.GetType().Name}."),
             };
 
@@ -2613,6 +3334,46 @@ public sealed class ToshEngine : IShellEvaluator
         yield return value;
     }
 
+    private async IAsyncEnumerable<object?> ExecutePipeForwardStageAsync(
+        string sourceName,
+        string sourceText,
+        PipeForwardStageSyntax pipeForward,
+        IAsyncEnumerable<object?> input,
+        PipelineExitStatusTracker? pipelineExitStatusTracker,
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        // Collect all items from the previous stage.
+        var items = new List<object?>();
+        await foreach (var item in input.WithCancellation(cancellationToken))
+        {
+            items.Add(item);
+        }
+
+        // Collapse: single item → unwrap, multiple → list, zero → null.
+        object? collectedValue = items.Count switch
+        {
+            0 => null,
+            1 => items[0],
+            _ => items,
+        };
+
+        // Execute the command with the collected value prepended as first argument.
+        var prependedArgs = new List<object?> { collectedValue };
+        await foreach (var result in ExecuteCommandSyntaxAsync(
+            sourceName,
+            sourceText,
+            pipeForward.Command,
+            AsyncEnumerableExtensions.Empty<object?>(),
+            additionalArguments: null,
+            isPipelined: false,
+            pipelineExitStatusTracker,
+            cancellationToken,
+            prependedArguments: prependedArgs))
+        {
+            yield return result;
+        }
+    }
+
     private async IAsyncEnumerable<object?> ExecuteCommandSyntaxAsync(
         string sourceName,
         string sourceText,
@@ -2621,9 +3382,27 @@ public sealed class ToshEngine : IShellEvaluator
         IReadOnlyList<object?>? additionalArguments,
         bool isPipelined,
         PipelineExitStatusTracker? pipelineExitStatusTracker,
-        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken,
+        IReadOnlyList<object?>? prependedArguments = null)
     {
         var command = ResolveCommand(sourceName, sourceText, commandSyntax);
+
+        // Rune (macro) expansion: intercept before argument evaluation
+        if (command is RuneCommand runeCommand)
+        {
+            await foreach (var item in ExpandRuneAsync(
+                runeCommand.Definition,
+                commandSyntax.Arguments,
+                sourceName,
+                sourceText,
+                input,
+                cancellationToken))
+            {
+                yield return item;
+            }
+
+            yield break;
+        }
 
         IReadOnlyList<object?> arguments;
 
@@ -2631,6 +3410,11 @@ public sealed class ToshEngine : IShellEvaluator
         {
             var evaluatedArguments = await EvaluateCommandArgumentsAsync(sourceName, sourceText, command, commandSyntax, cancellationToken);
             arguments = ExpandImplicitGlobArguments(command, evaluatedArguments);
+
+            if (prependedArguments is { Count: > 0 })
+            {
+                arguments = prependedArguments.Concat(arguments).ToArray();
+            }
 
             if (additionalArguments is { Count: > 0 })
             {
@@ -2814,6 +3598,35 @@ public sealed class ToshEngine : IShellEvaluator
             return;
         }
 
+        // Named argument passed directly (from function-call invocation syntax)
+        if (argument is NamedArgumentSyntax namedArgDirect)
+        {
+            var value = await EvaluateArgumentAsync(sourceName, sourceText, namedArgDirect.Value, cancellationToken);
+            arguments.Add(new EvaluatedCommandArgument(namedArgDirect, new NamedArgument(namedArgDirect.Name, value)));
+            return;
+        }
+
+        // Expand tuples with named arguments into individual call arguments
+        if (argument is TupleLiteralArgumentSyntax tupleLiteral &&
+            tupleLiteral.Items.Any(static item => item is NamedArgumentSyntax))
+        {
+            foreach (var item in tupleLiteral.Items)
+            {
+                if (item is NamedArgumentSyntax namedArg)
+                {
+                    var value = await EvaluateArgumentAsync(sourceName, sourceText, namedArg.Value, cancellationToken);
+                    arguments.Add(new EvaluatedCommandArgument(namedArg, new NamedArgument(namedArg.Name, value)));
+                }
+                else
+                {
+                    arguments.Add(new EvaluatedCommandArgument(item,
+                        await EvaluateArgumentAsync(sourceName, sourceText, item, cancellationToken)));
+                }
+            }
+
+            return;
+        }
+
         arguments.Add(new EvaluatedCommandArgument(
             argument,
             await EvaluateArgumentAsync(sourceName, sourceText, argument, cancellationToken)));
@@ -2850,6 +3663,18 @@ public sealed class ToshEngine : IShellEvaluator
 
         if (value is ToshRange range)
         {
+            if (range.IsInfinite)
+            {
+                throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                    Code: "tosh::runtime::splat_infinite_range",
+                    Title: "Cannot splat an infinite range.",
+                    SourceName: sourceName,
+                    SourceText: sourceText,
+                    Span: splat.Span,
+                    Label: "this range has no upper bound",
+                    Help: "add an end value to the range, e.g. 1..10 instead of 1.."));
+            }
+
             return range.Enumerate().Cast<object?>().ToArray();
         }
 
@@ -3066,6 +3891,12 @@ public sealed class ToshEngine : IShellEvaluator
                                     Help: $"try '${variableReference.Name} = ...' or assign a member like '${variableReference.Name}.Name = ...'."));
                             }
 
+                            // Rune thunk: transparently evaluate the deferred argument
+                            if (binding.Value is RuneThunk thunk)
+                            {
+                                return await EvaluateRuneThunkAsync(thunk, cancellationToken);
+                            }
+
                             return binding.Value;
                         }
 
@@ -3240,9 +4071,85 @@ public sealed class ToshEngine : IShellEvaluator
                         return set;
                     }
 
+                case ListComprehensionArgumentSyntax listComp:
+                    {
+                        var items = new List<object?>();
+                        await EvaluateComprehensionClauseAsync(
+                            sourceName, sourceText, listComp.Clause,
+                            async ct =>
+                            {
+                                items.Add(await EvaluateArgumentAsync(sourceName, sourceText, listComp.Body, ct));
+                            },
+                            cancellationToken);
+                        return CreateTypedArray(items);
+                    }
+
+                case SetComprehensionArgumentSyntax setComp:
+                    {
+                        var set = new HashSet<object?>();
+                        await EvaluateComprehensionClauseAsync(
+                            sourceName, sourceText, setComp.Clause,
+                            async ct =>
+                            {
+                                set.Add(await EvaluateArgumentAsync(sourceName, sourceText, setComp.Body, ct));
+                            },
+                            cancellationToken);
+                        return set;
+                    }
+
+                case DictComprehensionArgumentSyntax dictComp:
+                    {
+                        var dict = new Dictionary<object, object?>();
+                        await EvaluateComprehensionClauseAsync(
+                            sourceName, sourceText, dictComp.Clause,
+                            async ct =>
+                            {
+                                var key = await EvaluateArgumentAsync(sourceName, sourceText, dictComp.Key, ct);
+                                var value = await EvaluateArgumentAsync(sourceName, sourceText, dictComp.Value, ct);
+                                dict[key ?? throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                                    Code: "tosh::runtime::null_dict_key",
+                                    Title: "Dict keys cannot be null.",
+                                    SourceName: sourceName,
+                                    SourceText: sourceText,
+                                    Span: dictComp.Key.Span,
+                                    Label: "this key evaluated to null"))] = value;
+                            },
+                            cancellationToken);
+                        return CreateTypedDictionary(dict);
+                    }
+
+                case GeneratorComprehensionArgumentSyntax genComp:
+                    {
+                        // Evaluate the source eagerly so it captures current scope
+                        var genSourceValue = await EvaluateArgumentAsync(sourceName, sourceText, genComp.Clause.Source, cancellationToken);
+
+                        // Produce a lazy sequence that evaluates body items on demand
+                        return new LazySequence(
+                            EnumerateComprehensionLazily(sourceName, sourceText, genComp.Clause, genComp.Body, genSourceValue),
+                            label: null);
+                    }
+
                 case BlockArgumentSyntax blockArgument:
                     {
                         return new ShellBlock(blockArgument.Block, sourceName, sourceText, blockArgument.Span);
+                    }
+
+                case QuoteArgumentSyntax quoteArgument:
+                    {
+                        // If the inner expression references a rune parameter (RuneThunk),
+                        // return the thunk's AST wrapped as a QuotedSyntax.
+                        if (quoteArgument.Inner is VariableReferenceArgumentSyntax varRef &&
+                            TryGetVariableBinding(varRef.Name, out var quoteBinding) &&
+                            quoteBinding.Value is RuneThunk quotedThunk)
+                        {
+                            return new QuotedSyntax(
+                                quotedThunk.Syntax,
+                                quotedThunk.SourceName,
+                                quotedThunk.SourceText);
+                        }
+
+                        // Otherwise, capture the inner expression as-is
+                        return new QuotedSyntax(quoteArgument.Inner, sourceName, sourceText);
                     }
 
                 case AnonymousFunctionArgumentSyntax anonymousFunction:
@@ -3343,9 +4250,9 @@ public sealed class ToshEngine : IShellEvaluator
                             callable.InvokeAsync(context),
                             cancellationToken);
 
-                        if (results.Count == 1)
+                        if (results.Count <= 1)
                         {
-                            return results[0];
+                            return results.Count == 1 ? results[0] : null;
                         }
 
                         throw ToshDiagnosticException.Create(new ToshDiagnostic(
@@ -3587,10 +4494,14 @@ public sealed class ToshEngine : IShellEvaluator
                 case RangeArgumentSyntax range:
                     {
                         var startValue = await EvaluateArgumentAsync(sourceName, sourceText, range.Start, cancellationToken);
-                        var endValue = await EvaluateArgumentAsync(sourceName, sourceText, range.End, cancellationToken);
-
                         var start = ConvertToInt(startValue, "range start");
-                        var end = ConvertToInt(endValue, "range end");
+
+                        int? end = null;
+                        if (range.End is not null)
+                        {
+                            var endValue = await EvaluateArgumentAsync(sourceName, sourceText, range.End, cancellationToken);
+                            end = ConvertToInt(endValue, "range end");
+                        }
 
                         int? step = null;
                         if (range.Step is not null)
@@ -3600,6 +4511,12 @@ public sealed class ToshEngine : IShellEvaluator
                         }
 
                         return new ToshRange(start, step, end);
+                    }
+
+                case NamedArgumentSyntax namedArg:
+                    {
+                        var value = await EvaluateArgumentAsync(sourceName, sourceText, namedArg.Value, cancellationToken);
+                        return new NamedArgument(namedArg.Name, value);
                     }
 
                 default:
@@ -4293,6 +5210,7 @@ public sealed class ToshEngine : IShellEvaluator
             "+=" => "+",
             "-=" => "-",
             "*=" => "*",
+            "**=" => "**",
             "/=" => "/",
             "%=" => "%",
             _ => throw new InvalidOperationException($"Unsupported assignment operator '{assignmentOperator}'."),
@@ -4866,7 +5784,11 @@ public sealed class ToshEngine : IShellEvaluator
             var (name, modifier) = statement switch
             {
                 ClassDefinitionStatementSyntax c => (c.Name, c.Modifier),
+                InterfaceDefinitionStatementSyntax i => (i.Name, i.Modifier),
+                UnionDefinitionStatementSyntax u => (u.Name, u.Modifier),
                 RecordDefinitionStatementSyntax r => (r.Name, r.Modifier),
+                StructDefinitionStatementSyntax s => (s.Name, s.Modifier),
+                TraitDefinitionStatementSyntax t => (t.Name, t.Modifier),
                 EnumDefinitionStatementSyntax e => (e.Name, e.Modifier),
                 _ => (null, DeclarationModifier.Default),
             };
@@ -4955,6 +5877,14 @@ public sealed class ToshEngine : IShellEvaluator
         if (TryGetNamedType(path, out var directType))
         {
             definition = directType;
+            return true;
+        }
+
+        // Check Runtime.Classes for IShellStaticType instances that don't implement IShellNamedType
+        // (e.g. MathShellType which is a pure static type without type descriptor semantics).
+        if (Runtime.Classes.TryGetValue(path, out var classValue) && classValue is IShellStaticType runtimeStaticType)
+        {
+            definition = runtimeStaticType;
             return true;
         }
 
@@ -5074,6 +6004,193 @@ public sealed class ToshEngine : IShellEvaluator
             : new VariableBinding(value, ReplayAsPipeline: ShouldReplayAsPipeline(value), IsAllocatedOnly: false);
     }
 
+    // ================================================================
+    // Rune (macro) expansion
+    // ================================================================
+
+    private async IAsyncEnumerable<object?> ExpandRuneAsync(
+        RuneDefinition rune,
+        IReadOnlyList<ArgumentSyntax> arguments,
+        string callerSourceName,
+        string callerSourceText,
+        IAsyncEnumerable<object?> input,
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        // Bind arguments to parameters as thunks (unevaluated)
+        var locals = new Dictionary<string, object?>(StringComparer.Ordinal);
+
+        for (int i = 0; i < rune.Parameters.Count; i++)
+        {
+            var paramName = rune.Parameters[i].Name;
+
+            if (i < arguments.Count)
+            {
+                // Store the argument as a RuneThunk — it will be lazily evaluated
+                // when the rune body references this parameter
+                locals[paramName] = new RuneThunk(
+                    arguments[i],
+                    callerSourceName,
+                    callerSourceText,
+                    rune.IsSealed ? CaptureVisibleScopes() : null);
+            }
+        }
+
+        // Validate argument count
+        if (arguments.Count < rune.Parameters.Count)
+        {
+            throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                "RUNE001",
+                $"Rune '{rune.Name}' expects {rune.Parameters.Count} argument(s) but received {arguments.Count}.",
+                callerSourceName, callerSourceText, rune.Span));
+        }
+
+        // Provide pipeline input as $_ inside the rune body
+        locals["_input"] = input;
+
+        if (rune.IsSealed)
+        {
+            // Hygienic: push captured scopes from definition site, then a new scope
+            using var captured = PushCapturedScopes(rune.CapturedScopes);
+            await foreach (var item in ExecuteBlockAsync(
+                rune.SourceName, rune.SourceText, rune.Body, cancellationToken,
+                locals, initialInput: input))
+            {
+                yield return item;
+            }
+        }
+        else
+        {
+            // Leaky: execute in the caller's binding store without a new scope so that
+            // variables declared inside the rune become visible after invocation.
+            // We restore only temporary parameter bindings afterward.
+            if (_scopes.Count > 0)
+            {
+                var targetVariables = _scopes.Peek().Variables;
+                var previousBindings = new Dictionary<string, object?>(StringComparer.Ordinal);
+
+                foreach (var (key, value) in locals)
+                {
+                    previousBindings[key] = targetVariables.TryGetValue(key, out var existing) ? existing : null;
+                    targetVariables[key] = new VariableBinding(value, ReplayAsPipeline: false, IsAllocatedOnly: false);
+                }
+
+                try
+                {
+                    await foreach (var item in ExecuteBlockAsync(
+                        rune.SourceName, rune.SourceText, rune.Body, cancellationToken,
+                        pushNewScope: false, initialInput: input))
+                    {
+                        yield return item;
+                    }
+                }
+                finally
+                {
+                    foreach (var (key, previous) in previousBindings)
+                    {
+                        if (previous is null)
+                        {
+                            targetVariables.Remove(key);
+                        }
+                        else
+                        {
+                            targetVariables[key] = previous;
+                        }
+                    }
+                }
+            }
+            else
+            {
+                var targetVariables = Runtime.Variables;
+                var previousBindings = new Dictionary<string, object?>(StringComparer.Ordinal);
+
+                foreach (var (key, value) in locals)
+                {
+                    previousBindings[key] = targetVariables.TryGetValue(key, out var existing) ? existing : null;
+                    targetVariables[key] = value;
+                }
+
+                try
+                {
+                    await foreach (var item in ExecuteBlockAsync(
+                        rune.SourceName, rune.SourceText, rune.Body, cancellationToken,
+                        pushNewScope: false, initialInput: input))
+                    {
+                        yield return item;
+                    }
+                }
+                finally
+                {
+                    foreach (var (key, previous) in previousBindings)
+                    {
+                        if (previous is null)
+                        {
+                            targetVariables.Remove(key);
+                        }
+                        else
+                        {
+                            targetVariables[key] = previous;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Evaluates a RuneThunk — executes the captured argument expression
+    /// in the appropriate scope (caller's scope for sealed, current scope for leaky).
+    /// </summary>
+    internal async Task<object?> EvaluateRuneThunkAsync(
+        RuneThunk thunk,
+        CancellationToken cancellationToken)
+    {
+        if (thunk.Syntax is BlockArgumentSyntax blockArg)
+        {
+            // Block arguments: evaluate the block and collect results
+            var results = new List<object?>();
+            await foreach (var item in ExecuteBlockAsync(
+                thunk.SourceName, thunk.SourceText, blockArg.Block, cancellationToken,
+                pushNewScope: !IsInsideLeakyRune()))
+            {
+                results.Add(item);
+            }
+
+            return results.Count switch
+            {
+                0 => null,
+                1 => results[0],
+                _ => results.ToArray(),
+            };
+        }
+
+        // Expression arguments: evaluate and return the single value
+        if (thunk.CallerScopes is not null)
+        {
+            // Sealed: evaluate in caller's captured scope
+            using var captured = PushCapturedScopes(thunk.CallerScopes);
+            return await EvaluateArgumentAsync(
+                thunk.SourceName, thunk.SourceText, thunk.Syntax, cancellationToken);
+        }
+
+        // Leaky: evaluate in the current scope
+        return await EvaluateArgumentAsync(
+            thunk.SourceName, thunk.SourceText, thunk.Syntax, cancellationToken);
+    }
+
+    private bool IsInsideLeakyRune()
+    {
+        // Check if we're inside a leaky rune by looking for RuneThunk values in scope
+        foreach (var scope in _scopes)
+        {
+            foreach (var (_, value) in scope.Variables)
+            {
+                if (value is RuneThunk thunk && thunk.CallerScopes is null)
+                    return true;
+            }
+        }
+        return false;
+    }
+
     internal bool TryBindCallableParameters(
         IReadOnlyList<FunctionParameterDefinition> parameters,
         IReadOnlyList<object?> arguments,
@@ -5085,27 +6202,53 @@ public sealed class ToshEngine : IShellEvaluator
 
         var hasRestParameter = parameters.Count > 0 && parameters[^1].IsRest;
         var positionalCount = hasRestParameter ? parameters.Count - 1 : parameters.Count;
-        var requiredCount = parameters.Count(parameter => !parameter.IsOptional && !parameter.IsRest);
 
-        if (arguments.Count < requiredCount || (!hasRestParameter && arguments.Count > parameters.Count))
+        // Separate named and positional arguments
+        var namedArgs = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+        var positionalArgs = new List<object?>();
+
+        foreach (var arg in arguments)
+        {
+            if (arg is NamedArgument named)
+            {
+                namedArgs[named.Name] = named.Value;
+            }
+            else
+            {
+                positionalArgs.Add(arg);
+            }
+        }
+
+        var requiredCount = parameters.Count(parameter =>
+            !parameter.IsOptional && !parameter.IsRest && parameter.DefaultValue is null && !namedArgs.ContainsKey(parameter.Name));
+
+        if (positionalArgs.Count < requiredCount || (!hasRestParameter && positionalArgs.Count > positionalCount - namedArgs.Count))
         {
             return false;
         }
 
         locals["args"] = arguments.ToArray();
+        var positionalIndex = 0;
 
         for (var index = 0; index < positionalCount; index++)
         {
             var parameter = parameters[index];
 
-            if (index >= arguments.Count)
+            // Named argument takes priority
+            if (namedArgs.TryGetValue(parameter.Name, out var namedValue))
             {
-                locals[parameter.Name] = null;
-                score += 4;
+                locals[parameter.Name] = namedValue;
                 continue;
             }
 
-            var value = arguments[index];
+            if (positionalIndex >= positionalArgs.Count)
+            {
+                locals[parameter.Name] = null;
+                score += parameter.DefaultValue is not null ? 1 : 4;
+                continue;
+            }
+
+            var value = positionalArgs[positionalIndex++];
 
             if (parameter.TypeName is not null)
             {
@@ -5345,11 +6488,43 @@ public sealed class ToshEngine : IShellEvaluator
         using var capturedScopes = PushCapturedScopes(definition.CapturedScopes);
         var inputItems = await AsyncEnumerableExtensions.ToListAsync(context.Input, context.CancellationToken);
         var locals = BindFunctionParameters(definition, context, inputItems);
+
+        // Evaluate default values for parameters that were not provided
+        var namedArgNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var positionalArgCount = 0;
+        foreach (var arg in context.Arguments)
+        {
+            if (arg is NamedArgument named)
+                namedArgNames.Add(named.Name);
+            else
+                positionalArgCount++;
+        }
+
+        var posIdx = 0;
+        for (var i = 0; i < definition.Parameters.Count; i++)
+        {
+            var param = definition.Parameters[i];
+            if (param.IsRest) continue;
+
+            var wasProvidedByName = namedArgNames.Contains(param.Name);
+            var wasProvidedByPosition = !wasProvidedByName && posIdx < positionalArgCount;
+            if (!wasProvidedByName) posIdx++;
+
+            if (param.DefaultValue is not null && !wasProvidedByName && !wasProvidedByPosition)
+            {
+                var defaultResult = await EvaluatePipelineAsync(
+                    definition.SourceName,
+                    definition.SourceText,
+                    param.DefaultValue,
+                    context.CancellationToken).FirstOrDefaultAsync(context.CancellationToken);
+                locals[param.Name] = defaultResult;
+            }
+        }
+
         var initialInput = AsyncEnumerableExtensions.FromEnumerable(inputItems);
         var firstCommandArguments = definition.IsCommandWrapper && definition.Parameters.Count == 0
             ? context.Arguments
             : null;
-        var values = new List<object?>();
 
         _functionCallStack.Push(definition.Name);
         _functionArgumentsStack.Push(context.Arguments.ToArray());
@@ -5359,56 +6534,141 @@ public sealed class ToshEngine : IShellEvaluator
             1 => inputItems[0],
             _ => inputItems.ToArray(),
         });
-        try
+
+        if (definition.IsGenerator)
         {
-            await foreach (var value in ExecuteBlockAsync(
-                               definition.SourceName,
-                               definition.SourceText,
-                               definition.Body,
-                               context.CancellationToken,
-                               locals,
-                               initialInput,
-                               firstCommandArguments)
-                               .WithCancellation(context.CancellationToken))
+            // Generator functions stream values as they are produced.
+            // C# does not allow yield inside try-with-catch, so we use a manual enumerator.
+            var enumerator = ExecuteBlockAsync(
+                definition.SourceName,
+                definition.SourceText,
+                definition.Body,
+                context.CancellationToken,
+                locals,
+                initialInput,
+                firstCommandArguments)
+                .GetAsyncEnumerator(context.CancellationToken);
+
+            Exception? pendingException = null;
+            IReadOnlyList<object?>? returnValues = null;
+
+            try
             {
-                values.Add(value);
+                while (true)
+                {
+                    object? current;
+                    try
+                    {
+                        if (!await enumerator.MoveNextAsync())
+                            break;
+                        current = enumerator.Current;
+                    }
+                    catch (ReturnSignalException signal)
+                    {
+                        returnValues = signal.Values;
+                        break;
+                    }
+                    catch (BreakSignalException signal)
+                    {
+                        pendingException = CreateLoopControlDiagnostic(
+                            definition.SourceName,
+                            definition.SourceText,
+                            signal.Span,
+                            keyword: "break",
+                            code: "tosh::runtime::break_outside_loop",
+                            title: "'break' can only be used inside 'for', 'while', or 'each' blocks.");
+                        break;
+                    }
+                    catch (ContinueSignalException signal)
+                    {
+                        pendingException = CreateLoopControlDiagnostic(
+                            definition.SourceName,
+                            definition.SourceText,
+                            signal.Span,
+                            keyword: "continue",
+                            code: "tosh::runtime::continue_outside_loop",
+                            title: "'continue' can only be used inside 'for', 'while', or 'each' blocks.");
+                        break;
+                    }
+
+                    yield return ConvertFunctionReturnValue(definition, context, current);
+                }
+            }
+            finally
+            {
+                await enumerator.DisposeAsync();
+                _functionInputStack.Pop();
+                _functionArgumentsStack.Pop();
+                _functionCallStack.Pop();
+            }
+
+            if (pendingException is not null)
+                throw pendingException;
+
+            if (returnValues is not null)
+            {
+                foreach (var value in returnValues)
+                {
+                    yield return ConvertFunctionReturnValue(definition, context, value);
+                }
             }
         }
-        catch (ReturnSignalException signal)
+        else
         {
-            values.AddRange(signal.Values);
-        }
-        catch (BreakSignalException signal)
-        {
-            throw CreateLoopControlDiagnostic(
-                definition.SourceName,
-                definition.SourceText,
-                signal.Span,
-                keyword: "break",
-                code: "tosh::runtime::break_outside_loop",
-                title: "'break' can only be used inside 'for', 'while', or 'each' blocks.");
-        }
-        catch (ContinueSignalException signal)
-        {
-            throw CreateLoopControlDiagnostic(
-                definition.SourceName,
-                definition.SourceText,
-                signal.Span,
-                keyword: "continue",
-                code: "tosh::runtime::continue_outside_loop",
-                title: "'continue' can only be used inside 'for', 'while', or 'each' blocks.");
-        }
-        finally
-        {
-            _functionInputStack.Pop();
-            _functionArgumentsStack.Pop();
-            _functionCallStack.Pop();
-        }
+            // Non-generator functions buffer all output before yielding.
+            var values = new List<object?>();
 
-        foreach (var value in values)
-        {
-            context.CancellationToken.ThrowIfCancellationRequested();
-            yield return ConvertFunctionReturnValue(definition, context, value);
+            try
+            {
+                await foreach (var value in ExecuteBlockAsync(
+                                   definition.SourceName,
+                                   definition.SourceText,
+                                   definition.Body,
+                                   context.CancellationToken,
+                                   locals,
+                                   initialInput,
+                                   firstCommandArguments)
+                                   .WithCancellation(context.CancellationToken))
+                {
+                    values.Add(value);
+                }
+            }
+            catch (ReturnSignalException signal)
+            {
+                values.AddRange(signal.Values);
+            }
+            catch (BreakSignalException signal)
+            {
+                throw CreateLoopControlDiagnostic(
+                    definition.SourceName,
+                    definition.SourceText,
+                    signal.Span,
+                    keyword: "break",
+                    code: "tosh::runtime::break_outside_loop",
+                    title: "'break' can only be used inside 'for', 'while', or 'each' blocks.");
+            }
+            catch (ContinueSignalException signal)
+            {
+                throw CreateLoopControlDiagnostic(
+                    definition.SourceName,
+                    definition.SourceText,
+                    signal.Span,
+                    keyword: "continue",
+                    code: "tosh::runtime::continue_outside_loop",
+                    title: "'continue' can only be used inside 'for', 'while', or 'each' blocks.");
+            }
+            finally
+            {
+                _functionInputStack.Pop();
+                _functionArgumentsStack.Pop();
+                _functionCallStack.Pop();
+            }
+
+            foreach (var value in values)
+            {
+                context.CancellationToken.ThrowIfCancellationRequested();
+                yield return ConvertFunctionReturnValue(definition, context, value);
+            }
         }
     }
 
@@ -5550,6 +6810,22 @@ public sealed class ToshEngine : IShellEvaluator
                 throw new ReturnSignalException(returnStatement.Span, returnValues);
             }
 
+            if (statement is YieldStatementSyntax yieldStatement)
+            {
+                if (yieldStatement.Value is not null)
+                {
+                    await foreach (var yieldValue in EvaluatePipelineAsync(
+                        sourceName, sourceText, yieldStatement.Value, cancellationToken, pendingInput)
+                        .WithCancellation(cancellationToken))
+                    {
+                        yield return yieldValue;
+                    }
+                }
+
+                pendingInput = null;
+                continue;
+            }
+
             if (statement is BreakStatementSyntax breakStatement)
             {
                 throw new BreakSignalException(breakStatement.Span);
@@ -5603,18 +6879,37 @@ public sealed class ToshEngine : IShellEvaluator
     {
         var hasRestParameter = definition.Parameters.Count > 0 && definition.Parameters[^1].IsRest;
         var positionalCount = hasRestParameter ? definition.Parameters.Count - 1 : definition.Parameters.Count;
-        var requiredCount = definition.Parameters.Count(p => !p.IsOptional && !p.IsRest);
         var allowsImplicitWrapperArguments = definition.IsCommandWrapper && definition.Parameters.Count == 0;
 
-        if (context.Arguments.Count < requiredCount ||
-            (!allowsImplicitWrapperArguments && !hasRestParameter && context.Arguments.Count > definition.Parameters.Count))
+        // Separate named and positional arguments
+        var namedArgs = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+        var positionalArgs = new List<object?>();
+
+        foreach (var arg in context.Arguments)
         {
-            var expected = requiredCount == positionalCount
+            if (arg is NamedArgument named)
+            {
+                namedArgs[named.Name] = named.Value;
+            }
+            else
+            {
+                positionalArgs.Add(arg);
+            }
+        }
+
+        var requiredCount = definition.Parameters.Count(p =>
+            !p.IsOptional && !p.IsRest && p.DefaultValue is null && !namedArgs.ContainsKey(p.Name));
+
+        if (positionalArgs.Count < requiredCount ||
+            (!allowsImplicitWrapperArguments && !hasRestParameter && positionalArgs.Count > positionalCount - namedArgs.Count))
+        {
+            var totalRequired = definition.Parameters.Count(p => !p.IsOptional && !p.IsRest && p.DefaultValue is null);
+            var expected = totalRequired == positionalCount
                 ? $"{positionalCount}"
-                : $"{requiredCount}-{positionalCount}";
+                : $"{totalRequired}-{positionalCount}";
             if (hasRestParameter)
             {
-                expected = $"at least {requiredCount}";
+                expected = $"at least {totalRequired}";
             }
             throw context.CreateDiagnostic(
                 code: "tosh::runtime::function_argument_count_mismatch",
@@ -5623,19 +6918,27 @@ public sealed class ToshEngine : IShellEvaluator
         }
 
         var locals = new Dictionary<string, object?>(StringComparer.Ordinal);
+        var positionalIndex = 0;
 
         for (var index = 0; index < positionalCount; index++)
         {
             var parameter = definition.Parameters[index];
 
-            if (index >= context.Arguments.Count)
+            // Named argument takes priority
+            if (namedArgs.TryGetValue(parameter.Name, out var namedValue))
+            {
+                locals[parameter.Name] = namedValue;
+                continue;
+            }
+
+            if (positionalIndex >= positionalArgs.Count)
             {
                 // Optional parameter with no argument — bind as null
                 locals[parameter.Name] = null;
                 continue;
             }
 
-            var value = context.Arguments[index];
+            var value = positionalArgs[positionalIndex++];
 
             if (parameter.TypeName is not null)
             {
@@ -6454,7 +7757,7 @@ public sealed class ToshEngine : IShellEvaluator
         };
     }
 
-    private sealed record VariableBinding(object? Value, bool ReplayAsPipeline, bool IsAllocatedOnly);
+    private sealed record VariableBinding(object? Value, bool ReplayAsPipeline, bool IsAllocatedOnly, bool IsConst = false);
 
     private static object CreateTypedArray(List<object?> items)
     {
@@ -6506,80 +7809,7 @@ public sealed class ToshEngine : IShellEvaluator
 
     private static object CreateTypedDictionary(Dictionary<object, object?> source)
     {
-        if (source.Count == 0)
-        {
-            return source;
-        }
-
-        Type? keyType = null;
-        Type? valueType = null;
-        var hasNullValue = false;
-
-        foreach (var kvp in source)
-        {
-            var kt = kvp.Key.GetType();
-
-            if (keyType is null)
-            {
-                keyType = kt;
-            }
-            else if (keyType != kt)
-            {
-                return source;
-            }
-
-            if (kvp.Value is null)
-            {
-                hasNullValue = true;
-            }
-            else
-            {
-                var vt = kvp.Value.GetType();
-
-                if (valueType is null)
-                {
-                    valueType = vt;
-                }
-                else if (valueType != vt)
-                {
-                    valueType = FindCommonNumericType(valueType, vt);
-
-                    if (valueType is null)
-                    {
-                        return source;
-                    }
-                }
-            }
-        }
-
-        if (keyType is null || keyType == typeof(object))
-        {
-            return source;
-        }
-
-        if (hasNullValue || valueType is null || valueType == typeof(object))
-        {
-            // Keys are uniform but values are mixed or null — create Dict<K, object?>
-            var partialType = typeof(Dictionary<,>).MakeGenericType(keyType, typeof(object));
-            var partialDict = (System.Collections.IDictionary)Activator.CreateInstance(partialType, source.Count)!;
-
-            foreach (var kvp in source)
-            {
-                partialDict[kvp.Key] = kvp.Value;
-            }
-
-            return partialDict;
-        }
-
-        var dictType = typeof(Dictionary<,>).MakeGenericType(keyType, valueType);
-        var typedDict = (System.Collections.IDictionary)Activator.CreateInstance(dictType, source.Count)!;
-
-        foreach (var kvp in source)
-        {
-            typedDict[kvp.Key] = Convert.ChangeType(kvp.Value, valueType);
-        }
-
-        return typedDict;
+        return source;
     }
 
     private static Type? FindCommonNumericType(Type a, Type b)
@@ -6670,4 +7900,317 @@ public sealed class ToshEngine : IShellEvaluator
         return DebugAction.Continue;
     }
 
+    private async Task EvaluateComprehensionClauseAsync(
+        string sourceName,
+        string sourceText,
+        ComprehensionClauseSyntax clause,
+        Func<CancellationToken, Task> bodyAction,
+        CancellationToken cancellationToken)
+    {
+        var sourceValue = await EvaluateArgumentAsync(sourceName, sourceText, clause.Source, cancellationToken);
+
+        // Eager comprehensions (list/set/dict) cannot iterate infinite sources
+        if (IsInfiniteSource(sourceValue))
+        {
+            throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                Code: "tosh::runtime::infinite_eager_comprehension",
+                Title: "Cannot use an infinite source in a list, set, or dict comprehension. Use a generator comprehension (...) instead of [...] and pipe to '| first N'.",
+                SourceName: sourceName,
+                SourceText: sourceText,
+                Span: clause.Source.Span,
+                Label: "this source is infinite"));
+        }
+
+        foreach (var current in ShellIterationUtilities.ExpandIterationItems(sourceValue))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            using var _ = PushScope(new Dictionary<string, object?>(StringComparer.Ordinal)
+            {
+                [clause.VariableName] = current,
+                ["_"] = current,
+            });
+
+            // Evaluate where condition
+            if (clause.Condition is not null)
+            {
+                if (!await EvaluateConditionAsync(sourceName, sourceText, clause.Condition, cancellationToken))
+                {
+                    continue;
+                }
+            }
+
+            // Evaluate let bindings
+            foreach (var let in clause.LetBindings)
+            {
+                var letValue = await EvaluateArgumentAsync(sourceName, sourceText, let.Value, cancellationToken);
+                _scopes.Peek().Variables[let.VariableName] = ToVariableBinding(letValue);
+            }
+
+            // Recurse into inner clause or execute body
+            if (clause.InnerClause is not null)
+            {
+                await EvaluateComprehensionClauseAsync(sourceName, sourceText, clause.InnerClause, bodyAction, cancellationToken);
+            }
+            else
+            {
+                await bodyAction(cancellationToken);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Produces a lazy IEnumerable that evaluates comprehension body items on demand.
+    /// The source is already evaluated; body evaluation blocks on async via GetAwaiter().GetResult().
+    /// </summary>
+    private IEnumerable<object?> EnumerateComprehensionLazily(
+        string sourceName,
+        string sourceText,
+        ComprehensionClauseSyntax clause,
+        ArgumentSyntax body,
+        object? sourceValue)
+    {
+        // If there's an inner clause and either source is infinite, use diagonal enumeration
+        if (clause.InnerClause is not null && IsInfiniteSource(sourceValue))
+        {
+            foreach (var item in EnumerateComprehensionDiagonal(sourceName, sourceText, clause, clause.InnerClause, body, sourceValue))
+            {
+                yield return item;
+            }
+            yield break;
+        }
+
+        foreach (var current in ShellIterationUtilities.ExpandIterationItems(sourceValue))
+        {
+            using var scope = PushScope(new Dictionary<string, object?>(StringComparer.Ordinal)
+            {
+                [clause.VariableName] = current,
+                ["_"] = current,
+            });
+
+            // Evaluate where condition (blocking on async)
+            if (clause.Condition is not null)
+            {
+                if (!EvaluateConditionAsync(sourceName, sourceText, clause.Condition, CancellationToken.None)
+                    .GetAwaiter().GetResult())
+                {
+                    continue;
+                }
+            }
+
+            // Evaluate let bindings
+            foreach (var let in clause.LetBindings)
+            {
+                var letValue = EvaluateArgumentAsync(sourceName, sourceText, let.Value, CancellationToken.None)
+                    .GetAwaiter().GetResult();
+                _scopes.Peek().Variables[let.VariableName] = ToVariableBinding(letValue);
+            }
+
+            // Recurse into inner clause or yield body result
+            if (clause.InnerClause is not null)
+            {
+                // Evaluate inner source eagerly for this iteration
+                var innerSource = EvaluateArgumentAsync(sourceName, sourceText, clause.InnerClause.Source, CancellationToken.None)
+                    .GetAwaiter().GetResult();
+
+                foreach (var item in EnumerateComprehensionLazily(sourceName, sourceText, clause.InnerClause, body, innerSource))
+                {
+                    yield return item;
+                }
+            }
+            else
+            {
+                yield return EvaluateArgumentAsync(sourceName, sourceText, body, CancellationToken.None)
+                    .GetAwaiter().GetResult();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Returns true if the given value represents a known-infinite source
+    /// (e.g. an infinite ToshRange or an unevaluated LazySequence).
+    /// </summary>
+    private static bool IsInfiniteSource(object? value) =>
+        value is ToshRange { IsInfinite: true } or LazySequence { IsFiniteKnown: false };
+
+    /// <summary>
+    /// Produces lazy diagonal (Cantor) enumeration for nested comprehension clauses
+    /// where at least one source is infinite. Walks anti-diagonals so that every
+    /// (outer, inner) pair is reached in finite time.
+    /// </summary>
+    private IEnumerable<object?> EnumerateComprehensionDiagonal(
+        string sourceName,
+        string sourceText,
+        ComprehensionClauseSyntax outerClause,
+        ComprehensionClauseSyntax innerClause,
+        ArgumentSyntax body,
+        object? outerSourceValue)
+    {
+        // We cache outer/inner items as we advance through diagonals
+        var outerCache = new List<object?>();
+        using var outerEnum = ShellIterationUtilities.ExpandIterationItems(outerSourceValue).GetEnumerator();
+        var outerDone = false;
+
+        // For each outer item, we'll lazily evaluate the inner source and cache its items
+        // But the inner source depends on the outer variable, so we need to cache the
+        // (outerValue, innerCache, innerEnumerator) triple per outer index.
+        var innerCaches = new List<(object? OuterValue, List<object?> Cache, IEnumerator<object?> Enum, bool Done)>();
+
+        for (var diagonal = 0; ; diagonal++)
+        {
+            // Expand outer cache to cover this diagonal if possible
+            while (!outerDone && outerCache.Count <= diagonal)
+            {
+                if (outerEnum.MoveNext())
+                {
+                    var outerVal = outerEnum.Current;
+                    outerCache.Add(outerVal);
+
+                    // Evaluate the inner source in the scope of this outer value
+                    using var scope = PushScope(new Dictionary<string, object?>(StringComparer.Ordinal)
+                    {
+                        [outerClause.VariableName] = outerVal,
+                        ["_"] = outerVal,
+                    });
+
+                    // Apply outer where condition
+                    if (outerClause.Condition is not null)
+                    {
+                        if (!EvaluateConditionAsync(sourceName, sourceText, outerClause.Condition, CancellationToken.None)
+                                .GetAwaiter().GetResult())
+                        {
+                            // Mark as skipped with empty inner
+                            innerCaches.Add((outerVal, new List<object?>(), EmptyEnumerator(), true));
+                            continue;
+                        }
+                    }
+
+                    // Evaluate outer let bindings
+                    foreach (var let in outerClause.LetBindings)
+                    {
+                        var letValue = EvaluateArgumentAsync(sourceName, sourceText, let.Value, CancellationToken.None)
+                            .GetAwaiter().GetResult();
+                        _scopes.Peek().Variables[let.VariableName] = ToVariableBinding(letValue);
+                    }
+
+                    var innerSource = EvaluateArgumentAsync(sourceName, sourceText, innerClause.Source, CancellationToken.None)
+                        .GetAwaiter().GetResult();
+                    var innerEnum = ShellIterationUtilities.ExpandIterationItems(innerSource).GetEnumerator();
+                    innerCaches.Add((outerVal, new List<object?>(), innerEnum, false));
+                }
+                else
+                {
+                    outerDone = true;
+                }
+            }
+
+            // Expand inner caches to cover this diagonal where needed
+            for (var i = 0; i < innerCaches.Count && i <= diagonal; i++)
+            {
+                var j = diagonal - i;
+                var entry = innerCaches[i];
+                while (!entry.Done && entry.Cache.Count <= j)
+                {
+                    if (entry.Enum.MoveNext())
+                    {
+                        entry.Cache.Add(entry.Enum.Current);
+                    }
+                    else
+                    {
+                        innerCaches[i] = (entry.OuterValue, entry.Cache, entry.Enum, true);
+                        entry = innerCaches[i];
+                    }
+                }
+            }
+
+            // Check termination: both outer and all inners exhausted
+            if (outerDone)
+            {
+                var allInnersDone = true;
+                var maxReachable = -1;
+                for (var i = 0; i < innerCaches.Count; i++)
+                {
+                    if (!innerCaches[i].Done) allInnersDone = false;
+                    var reach = i + innerCaches[i].Cache.Count - 1;
+                    if (reach > maxReachable) maxReachable = reach;
+                }
+                if (allInnersDone && diagonal > maxReachable)
+                    yield break;
+            }
+
+            // Walk anti-diagonal: i + j == diagonal
+            var iMax = Math.Min(diagonal, outerCache.Count - 1);
+            for (var i = 0; i <= iMax; i++)
+            {
+                var j = diagonal - i;
+                if (i >= innerCaches.Count) continue;
+                var entry = innerCaches[i];
+                if (j >= entry.Cache.Count) continue;
+
+                var outerVal = outerCache[i];
+                var innerVal = entry.Cache[j];
+
+                // Evaluate body in scope of both variables
+                using var bodyScope = PushScope(new Dictionary<string, object?>(StringComparer.Ordinal)
+                {
+                    [outerClause.VariableName] = outerVal,
+                    ["_"] = outerVal,
+                });
+
+                // Re-apply outer let bindings
+                foreach (var let in outerClause.LetBindings)
+                {
+                    var letValue = EvaluateArgumentAsync(sourceName, sourceText, let.Value, CancellationToken.None)
+                        .GetAwaiter().GetResult();
+                    _scopes.Peek().Variables[let.VariableName] = ToVariableBinding(letValue);
+                }
+
+                // Push inner scope
+                using var innerScope = PushScope(new Dictionary<string, object?>(StringComparer.Ordinal)
+                {
+                    [innerClause.VariableName] = innerVal,
+                    ["_"] = innerVal,
+                });
+
+                // Inner where condition
+                if (innerClause.Condition is not null)
+                {
+                    if (!EvaluateConditionAsync(sourceName, sourceText, innerClause.Condition, CancellationToken.None)
+                            .GetAwaiter().GetResult())
+                    {
+                        continue;
+                    }
+                }
+
+                // Inner let bindings
+                foreach (var let in innerClause.LetBindings)
+                {
+                    var letValue = EvaluateArgumentAsync(sourceName, sourceText, let.Value, CancellationToken.None)
+                        .GetAwaiter().GetResult();
+                    _scopes.Peek().Variables[let.VariableName] = ToVariableBinding(letValue);
+                }
+
+                if (innerClause.InnerClause is not null)
+                {
+                    // Three+ levels of nesting: recurse normally for the deeper levels
+                    var deepSource = EvaluateArgumentAsync(sourceName, sourceText, innerClause.InnerClause.Source, CancellationToken.None)
+                        .GetAwaiter().GetResult();
+                    foreach (var item in EnumerateComprehensionLazily(sourceName, sourceText, innerClause.InnerClause, body, deepSource))
+                    {
+                        yield return item;
+                    }
+                }
+                else
+                {
+                    yield return EvaluateArgumentAsync(sourceName, sourceText, body, CancellationToken.None)
+                        .GetAwaiter().GetResult();
+                }
+            }
+        }
+    }
+
+    private static IEnumerator<object?> EmptyEnumerator()
+    {
+        yield break;
+    }
 }

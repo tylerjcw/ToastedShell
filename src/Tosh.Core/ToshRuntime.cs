@@ -48,6 +48,7 @@ public sealed class ToshRuntime
         Display.Preferences = DisplayPreferences;
         Inspector = new ObjectInspector(Formatter);
         Config = new ToshConfig(Display, DisplayPreferences, ToshConfigDefaults.GetDefaultConfigDirectory());
+        Config.Shell.Usings.Bind((DotNetTypeResolver)TypeResolver);
         TerminalGlyphs.Initialize(Config.Tty);
         PathUtilities.DirectoryAliases = Config.Shell.Dirs;
         Display.TableTheme = Config.Theme.Tables;

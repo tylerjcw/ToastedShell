@@ -16,7 +16,7 @@ public sealed record ScriptStatementSyntax(IReadOnlyList<StatementSyntax> Statem
 
 public sealed record PipelineStatementSyntax(PipelineSyntax Pipeline, TextSpan Span) : StatementSyntax(Span);
 
-public sealed record VariableDeclarationStatementSyntax(string Name, string? TypeName, PipelineSyntax? Value, DeclarationModifier Modifier, TextSpan Span) : StatementSyntax(Span);
+public sealed record VariableDeclarationStatementSyntax(string Name, string? TypeName, PipelineSyntax? Value, DeclarationModifier Modifier, bool IsConst, TextSpan Span) : StatementSyntax(Span);
 
 public abstract record DestructuringPatternSyntax(TextSpan Span);
 
@@ -33,6 +33,8 @@ public sealed record VariableAssignmentStatementSyntax(string Name, string Opera
 public sealed record MemberAssignmentStatementSyntax(ArgumentSyntax Target, string Operator, PipelineSyntax Value, TextSpan Span) : StatementSyntax(Span);
 
 public sealed record ReturnStatementSyntax(PipelineSyntax? Value, TextSpan Span) : StatementSyntax(Span);
+
+public sealed record YieldStatementSyntax(PipelineSyntax? Value, TextSpan Span) : StatementSyntax(Span);
 
 /// <summary>
 /// Represents tuple unpacking assignment, e.g. ($a, $b) = ($b, $a)
@@ -58,7 +60,7 @@ public sealed record RequireStatementSyntax(
     DeclarationModifier Modifier,
     TextSpan Span) : StatementSyntax(Span);
 
-public sealed record FunctionParameterSyntax(string Name, string? TypeName, bool IsOptional, bool IsRest, TextSpan Span);
+public sealed record FunctionParameterSyntax(string Name, string? TypeName, bool IsOptional, bool IsRest, PipelineSyntax? DefaultValue, TextSpan Span);
 
 public enum NativeParameterPassingMode
 {
@@ -87,6 +89,16 @@ public sealed record FunctionDefinitionStatementSyntax(
     BlockSyntax? WhenGuard = null,
     DocComment? DocComment = null) : StatementSyntax(Span);
 
+public sealed record RuneDefinitionStatementSyntax(
+    string Name,
+    IReadOnlyList<FunctionParameterSyntax> Parameters,
+    BlockSyntax Body,
+    bool IsSealed,
+    bool IsFixed,
+    DeclarationModifier Modifier,
+    TextSpan Span,
+    DocComment? DocComment = null) : StatementSyntax(Span);
+
 public sealed record NativeFunctionBindingSyntax(
     string Name,
     string SymbolName,
@@ -110,13 +122,27 @@ public sealed record ClassPropertyMemberSyntax(
     BlockSyntax? GetterBody,
     BlockSyntax? SetterBody,
     bool IsShy,
+    bool IsStatic,
+    bool IsFixed,
+    bool IsVital,
+    bool IsGuarded,
+    bool IsLazy,
+    bool IsFading,
+    bool IsLocal,
+    bool IsAbstract,
     TextSpan Span,
-    DocComment? DocComment = null) : ClassMemberSyntax(IsShy, IsStatic: false, Span);
+    DocComment? DocComment = null) : ClassMemberSyntax(IsShy, IsStatic, Span);
 
 public sealed record ClassMethodMemberSyntax(
     FunctionDefinitionStatementSyntax Method,
     bool IsStatic,
     bool IsShy,
+    bool IsAbstract,
+    bool IsOverride,
+    bool IsGuarded,
+    bool IsFading,
+    bool IsLocal,
+    bool IsRaw,
     TextSpan Span) : ClassMemberSyntax(IsShy, IsStatic, Span);
 
 public sealed record ClassConstructorMemberSyntax(
@@ -128,6 +154,40 @@ public sealed record ClassDefinitionStatementSyntax(
     string Name,
     IReadOnlyList<FunctionParameterSyntax> PrimaryConstructorParameters,
     IReadOnlyList<ClassMemberSyntax> Members,
+    DeclarationModifier Modifier,
+    TextSpan Span,
+    DocComment? DocComment = null,
+    string? BaseClassName = null,
+    IReadOnlyList<PipelineSyntax>? BaseConstructorArgs = null,
+    IReadOnlyList<string>? ImplementedInterfaces = null,
+    IReadOnlyList<string>? UsedTraits = null,
+    bool IsSealed = false,
+    bool IsAbstract = false,
+    bool IsHermit = false,
+    bool IsStrict = false,
+    bool IsPartial = false) : StatementSyntax(Span);
+
+public sealed record InterfaceMethodSignatureSyntax(
+    string Name,
+    IReadOnlyList<FunctionParameterSyntax> Parameters,
+    string? ReturnTypeName,
+    TextSpan Span);
+
+public sealed record InterfaceDefinitionStatementSyntax(
+    string Name,
+    IReadOnlyList<InterfaceMethodSignatureSyntax> Methods,
+    DeclarationModifier Modifier,
+    TextSpan Span,
+    DocComment? DocComment = null) : StatementSyntax(Span);
+
+public sealed record UnionVariantSyntax(
+    string Name,
+    IReadOnlyList<FunctionParameterSyntax> Fields,
+    TextSpan Span);
+
+public sealed record UnionDefinitionStatementSyntax(
+    string Name,
+    IReadOnlyList<UnionVariantSyntax> Variants,
     DeclarationModifier Modifier,
     TextSpan Span,
     DocComment? DocComment = null) : StatementSyntax(Span);
@@ -162,6 +222,41 @@ public sealed record RecordFieldDefinitionSyntax(
 public sealed record RecordDefinitionStatementSyntax(
     string Name,
     IReadOnlyList<RecordFieldDefinitionSyntax> Fields,
+    DeclarationModifier Modifier,
+    bool IsSealed = false,
+    bool IsStrict = false,
+    bool IsPartial = false,
+    TextSpan Span = default,
+    DocComment? DocComment = null) : StatementSyntax(Span);
+
+public sealed record StructDefinitionStatementSyntax(
+    string Name,
+    IReadOnlyList<RecordFieldDefinitionSyntax> Fields,
+    IReadOnlyList<ClassMemberSyntax> Members,
+    DeclarationModifier Modifier,
+    bool IsSealed = false,
+    bool IsFluid = false,
+    bool IsPartial = false,
+    TextSpan Span = default,
+    DocComment? DocComment = null) : StatementSyntax(Span);
+
+public sealed record TraitMethodSignatureSyntax(
+    string Name,
+    IReadOnlyList<FunctionParameterSyntax> Parameters,
+    string? ReturnTypeName,
+    BlockSyntax? DefaultBody,
+    TextSpan Span);
+
+public sealed record TraitPropertySignatureSyntax(
+    string Name,
+    string? TypeName,
+    PipelineSyntax? DefaultValue,
+    TextSpan Span);
+
+public sealed record TraitDefinitionStatementSyntax(
+    string Name,
+    IReadOnlyList<TraitMethodSignatureSyntax> Methods,
+    IReadOnlyList<TraitPropertySignatureSyntax> Properties,
     DeclarationModifier Modifier,
     TextSpan Span,
     DocComment? DocComment = null) : StatementSyntax(Span);

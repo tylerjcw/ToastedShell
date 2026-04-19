@@ -149,12 +149,251 @@ public static class HelpCatalog
                 Description: "Marks a class method as belonging to the class itself instead of an instance.",
                 Usage: "static func <name>(...) [-> Type] { ... }",
                 Aliases: Array.Empty<string>(),
-                Related: ["class", "func", "prop"],
+                Related: ["class", "func", "prop", "shared", "hermit"],
                 Examples:
                 [
                     "static func named(name: string) -> Item { return new Item($name) }",
                 ],
-                Notes: "Call static members through the class name, like `Item.named(\"bread\")`."),
+                Notes: "Call static members through the class name, like `Item.named(\"bread\")`. `shared` is an alias for `static` on members."),
+            ["shared"] = new(
+                Category: "Language",
+                Description: "Marks a class member as belonging to the class itself instead of an instance. Alias for `static`.",
+                Usage: "shared func <name>(...) [-> Type] { ... } | shared prop <Name> = <value>",
+                Aliases: ["static"],
+                Related: ["class", "func", "prop", "static", "hermit"],
+                Examples:
+                [
+                    "shared func create(name) { return new Item($name) }",
+                    "shared prop Count = 0",
+                ],
+                Notes: "Equivalent to `static`. Inside a `hermit` class, all members are implicitly shared."),
+            ["sealed"] = new(
+                Category: "Language",
+                Description: "Prevents a class from being inherited.",
+                Usage: "sealed class <Name> { ... }",
+                Aliases: Array.Empty<string>(),
+                Related: ["class", "hollow"],
+                Examples:
+                [
+                    "sealed class Config { prop Host = \"localhost\" }",
+                ],
+                Notes: "A sealed class cannot be used as a base class. Attempting to extend it raises an error."),
+            ["hollow"] = new(
+                Category: "Language",
+                Description: "Marks a class as abstract (cannot be instantiated directly) or a method as abstract (must be overridden).",
+                Usage: "hollow class <Name> { ... } | hollow func <name>(...) [-> Type]",
+                Aliases: Array.Empty<string>(),
+                Related: ["class", "overrule", "sealed"],
+                Examples:
+                [
+                    "hollow class Shape { hollow func area() -> double }",
+                ],
+                Notes: "Hollow classes serve as base types. Hollow methods have no body and must be overruled in subclasses."),
+            ["fixed"] = new(
+                Category: "Language",
+                Description: "Marks a class property as read-only after initialization.",
+                Usage: "fixed prop <Name> = <value>",
+                Aliases: Array.Empty<string>(),
+                Related: ["prop", "class", "strict", "vital"],
+                Examples:
+                [
+                    "fixed prop Name = \"default\"",
+                ],
+                Notes: "Once set during construction, a fixed property cannot be reassigned. See `strict` for making all properties in a class fixed."),
+            ["vital"] = new(
+                Category: "Language",
+                Description: "Marks a class property as required — construction fails if no value is provided.",
+                Usage: "vital prop <Name>: <Type>",
+                Aliases: Array.Empty<string>(),
+                Related: ["prop", "class", "fixed"],
+                Examples:
+                [
+                    "vital prop Name: string",
+                    "vital prop Age: int",
+                ],
+                Notes: "A vital property must be supplied as a constructor argument. Omitting it raises an error at construction time."),
+            ["guarded"] = new(
+                Category: "Language",
+                Description: "Restricts member access to the defining class and its subclasses (protected).",
+                Usage: "guarded func <name>(...) { ... } | guarded prop <Name> = <value>",
+                Aliases: Array.Empty<string>(),
+                Related: ["class", "shy", "local", "proud"],
+                Examples:
+                [
+                    "guarded func validate() { echo \"checking\" }",
+                    "guarded prop _cache = []",
+                ],
+                Notes: "Guarded members are accessible from $this and from subclass instances, but not from external code."),
+            ["overrule"] = new(
+                Category: "Language",
+                Description: "Overrides an inherited method from a parent class.",
+                Usage: "overrule func <name>(...) [-> Type] { ... }",
+                Aliases: Array.Empty<string>(),
+                Related: ["class", "hollow", "func"],
+                Examples:
+                [
+                    "overrule func area() -> double { return 3.14159 * $this.Radius * $this.Radius }",
+                ],
+                Notes: "Use overrule to provide an implementation for a hollow method or to replace a parent's method."),
+            ["hermit"] = new(
+                Category: "Language",
+                Description: "Marks a class as static-only. All members are auto-promoted to shared; no instances can be created.",
+                Usage: "hermit class <Name> { ... }",
+                Aliases: Array.Empty<string>(),
+                Related: ["class", "shared", "static"],
+                Examples:
+                [
+                    "hermit class MathHelper { func square(x) { echo ($x * $x) } }",
+                    "MathHelper.square(5)",
+                ],
+                Notes: "Members inside a hermit class do not need the `shared` keyword — they are promoted automatically. Constructors are not allowed."),
+            ["strict"] = new(
+                Category: "Language",
+                Description: "Makes all properties in a class read-only (immutable) after initialization.",
+                Usage: "strict class <Name> { ... }",
+                Aliases: Array.Empty<string>(),
+                Related: ["class", "fixed"],
+                Examples:
+                [
+                    "strict class Point { prop X = 0; prop Y = 0 }",
+                ],
+                Notes: "Equivalent to marking every property as `fixed`. Useful for value-like types that should never be mutated."),
+            ["lazy"] = new(
+                Category: "Language",
+                Description: "Defers property initialization until first access.",
+                Usage: "lazy prop <Name> = <expression>",
+                Aliases: Array.Empty<string>(),
+                Related: ["prop", "class"],
+                Examples:
+                [
+                    "lazy prop Data = load-expensive-data()",
+                ],
+                Notes: "The initializer runs once on first read. Subsequent reads return the cached value."),
+            ["fading"] = new(
+                Category: "Language",
+                Description: "Marks a property or method as deprecated. Emits a warning to stderr on use.",
+                Usage: "fading prop <Name> = <value> | fading func <name>(...) { ... }",
+                Aliases: Array.Empty<string>(),
+                Related: ["prop", "func", "class"],
+                Examples:
+                [
+                    "fading prop OldName = \"use NewName instead\"",
+                    "fading func legacy() { echo \"deprecated path\" }",
+                ],
+                Notes: "Access or invocation writes a deprecation warning to stderr. The member still functions normally."),
+            ["local"] = new(
+                Category: "Language",
+                Description: "Restricts member visibility to the defining assembly (internal access).",
+                Usage: "local func <name>(...) { ... } | local prop <Name> = <value>",
+                Aliases: Array.Empty<string>(),
+                Related: ["shy", "guarded", "class"],
+                Examples:
+                [
+                    "local func internal_helper() { echo \"assembly only\" }",
+                ],
+                Notes: "Local members are hidden from external callers but accessible from within the same assembly or module."),
+            ["raw"] = new(
+                Category: "Language",
+                Description: "Marks a method for unsafe/native interop.",
+                Usage: "raw func <name>(...) { ... }",
+                Aliases: Array.Empty<string>(),
+                Related: ["func", "class", "native", "bind"],
+                Examples:
+                [
+                    "raw func unsafe_op() { echo \"low-level\" }",
+                ],
+                Notes: "Indicates the method performs unsafe or native operations. Primarily a documentation marker."),
+            ["partial"] = new(
+                Category: "Language",
+                Description: "Allows a class definition to be split across multiple declarations that are merged at parse time.",
+                Usage: "partial class <Name> { ... }",
+                Aliases: Array.Empty<string>(),
+                Related: ["class"],
+                Examples:
+                [
+                    "partial class User { prop Name = \"\" }",
+                    "partial class User { func greet() { echo $\"Hi, {$this.Name}\" } }",
+                ],
+                Notes: "Both declarations must use `partial`. Properties and methods are merged. Duplicate property names are skipped; methods support overloading."),
+            ["proud"] = new(
+                Category: "Language",
+                Description: "Explicitly marks a member as public.",
+                Usage: "proud prop <Name> = <value> | proud func <name>(...) { ... }",
+                Aliases: ["public"],
+                Related: ["shy", "guarded", "local", "class"],
+                Examples:
+                [
+                    "proud prop Name = \"visible\"",
+                ],
+                Notes: "Members are public by default. `proud` makes the intent explicit for readability. `public` is a synonym."),
+            ["public"] = new(
+                Category: "Language",
+                Description: "Explicitly marks a member as public (no-op since members are public by default).",
+                Usage: "public prop <Name> = <value> | public func <name>(...) { ... }",
+                Aliases: ["proud"],
+                Related: ["shy", "guarded", "local", "class"],
+                Examples:
+                [
+                    "public func api_method() { echo \"accessible\" }",
+                ],
+                Notes: "Synonym for `proud`. Included for familiarity; has no effect since members default to public."),
+            ["fluid"] = new(
+                Category: "Language",
+                Description: "Marks a struct as mutable, allowing field reassignment after construction.",
+                Usage: "fluid struct <Name>(<fields>) { ... }",
+                Aliases: Array.Empty<string>(),
+                Related: ["struct", "strict", "fixed"],
+                Examples:
+                [
+                    "fluid struct Point(x, y) { }",
+                ],
+                Notes: "By default structs are immutable. `fluid` allows fields to be reassigned after creation."),
+            ["struct"] = new(
+                Category: "Language",
+                Description: "Defines a value-type with positional fields, structural equality, and copy-on-assign semantics.",
+                Usage: "[sealed] [fluid] [partial] struct <Name>(<fields>) { <members> }",
+                Aliases: Array.Empty<string>(),
+                Related: ["record", "class", "fluid", "sealed", "partial"],
+                Examples:
+                [
+                    "struct Point(x, y) { }",
+                    "fluid struct MutablePoint(x, y) { }",
+                ],
+                Notes: "Structs are value types — assigning to a new variable creates a copy. Immutable by default unless `fluid`."),
+            ["trait"] = new(
+                Category: "Language",
+                Description: "Defines a trait with required and optional default method/property signatures.",
+                Usage: "trait <Name> { func <method>(<params>) [{ <default-body> }]; prop <name> [= <default>] }",
+                Aliases: Array.Empty<string>(),
+                Related: ["class", "uses", "interface", "fulfills"],
+                Examples:
+                [
+                    "trait Printable { func to_string() }",
+                    "trait Greetable { func greet(name) { echo $\"Hello, {$name}!\" } }",
+                ],
+                Notes: "Classes adopt traits with `uses`. Methods without a body are required; methods with a body provide defaults."),
+            ["fulfills"] = new(
+                Category: "Language",
+                Description: "Declares that a class conforms to one or more interfaces.",
+                Usage: "class <Name> fulfills <Interface1>, <Interface2> { ... }",
+                Aliases: ["implements"],
+                Related: ["class", "interface", "uses"],
+                Examples:
+                [
+                    "class Dog fulfills Speakable { func speak() { echo \"woof\" } }",
+                ],
+                Notes: "Replaces `implements`. The class must provide all methods declared in the interface."),
+            ["uses"] = new(
+                Category: "Language",
+                Description: "Declares that a class adopts one or more traits.",
+                Usage: "class <Name> uses <Trait1>, <Trait2> { ... }",
+                Aliases: Array.Empty<string>(),
+                Related: ["class", "trait", "fulfills"],
+                Examples:
+                [
+                    "class Dog uses Printable { func to_string() { echo \"Dog\" } }",
+                ],
+                Notes: "Trait default methods/properties are injected if the class doesn't override them. Required trait members must be provided."),
             ["global"] = new(
                 Category: "Language",
                 Description: "Publishes a declaration to the session-wide scope instead of the current lexical scope.",

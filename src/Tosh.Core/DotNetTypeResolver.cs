@@ -79,8 +79,37 @@ public sealed class DotNetTypeResolver : IImportingTypeResolver
     };
     private static readonly Lazy<PlatformTypeIndex> PlatformTypes = new(BuildPlatformTypeIndex);
 
+    private static readonly string[] DefaultImplicitUsings =
+    [
+        "System.Collections",
+        "System.Collections.Generic",
+        "System.Drawing",
+        "System.IO",
+        "System.Linq",
+        "System.Net",
+        "System.Net.Http",
+        "System.Numerics",
+        "System.Text",
+        "System.Text.RegularExpressions",
+        "System.Threading",
+        "System.Threading.Tasks",
+    ];
+
     private readonly Dictionary<string, string> _aliases = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _imports = new(StringComparer.OrdinalIgnoreCase);
+
+    public DotNetTypeResolver(bool includeDefaultUsings = true)
+    {
+        if (includeDefaultUsings)
+        {
+            foreach (var ns in DefaultImplicitUsings)
+            {
+                _imports.Add(ns);
+            }
+        }
+    }
+
+    public static IReadOnlyList<string> GetDefaultImplicitUsings() => DefaultImplicitUsings;
 
     public static IReadOnlyDictionary<string, Type> BuiltInAliases => Aliases;
 
@@ -95,6 +124,12 @@ public sealed class DotNetTypeResolver : IImportingTypeResolver
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         _imports.Add(path);
+    }
+
+    public bool RemoveUsing(string path)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        return _imports.Remove(path);
     }
 
     public void AddAlias(string alias, string path)

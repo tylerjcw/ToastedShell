@@ -30,6 +30,7 @@ public static class OperatorEvaluator
             "*" => Multiply(left, right),
             "/" => Divide(left, right),
             "%" => Modulo(left, right),
+            "**" => Power(left, right),
             "==" => AreEqual(left, right),
             "!=" => !AreEqual(left, right),
             "=~" => RegexMatch(left, right),
@@ -253,6 +254,12 @@ public static class OperatorEvaluator
             throw new InvalidOperationException("The 'as' operator requires a type name on the right-hand side.");
         }
 
+        // If the value is a Tosh type that's already compatible, return as-is.
+        if (value is IShellTypeCheckable checkable && checkable.IsInstanceOf(typeName))
+        {
+            return value;
+        }
+
         // Resolve via built-in alias table first
         Type? targetType = null;
         if (DotNetTypeResolver.BuiltInAliases.TryGetValue(typeName, out var aliased))
@@ -300,6 +307,12 @@ public static class OperatorEvaluator
 
     private static bool IsType(object? value, object? typeSpecifier)
     {
+        // Handle "is null" / "is-not null" — when the type specifier is null, check nullity.
+        if (typeSpecifier is null)
+        {
+            return value is null;
+        }
+
         if (value is null)
         {
             return false;
@@ -310,10 +323,25 @@ public static class OperatorEvaluator
             return type.IsInstanceOfType(value);
         }
 
-        var typeName = typeSpecifier?.ToString();
+        var typeName = typeSpecifier.ToString();
         if (string.IsNullOrEmpty(typeName))
         {
             return false;
+        }
+
+        // Check Tosh custom types (classes, enums) via the IShellTypeCheckable interface,
+        // which walks the full type hierarchy including base classes and implemented interfaces.
+        if (value is IShellTypeCheckable checkable && checkable.IsInstanceOf(typeName))
+        {
+            return true;
+        }
+
+        // Fall back to IShellTypedObject for simple name matching (covers types that don't
+        // implement IShellTypeCheckable but still carry a shell type descriptor).
+        if (value is IShellTypedObject typed &&
+            string.Equals(typed.ShellTypeDescriptor.ShellTypeName, typeName, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
         }
 
         var actualType = value.GetType();
@@ -664,6 +692,26 @@ public static class OperatorEvaluator
             (lhs, rhs) => rhs == 0 ? throw new InvalidOperationException("Division by zero.") : lhs % rhs,
             (lhs, rhs) => rhs == 0.0 ? throw new InvalidOperationException("Division by zero.") : lhs % rhs,
             (lhs, rhs) => rhs == 0 ? throw new InvalidOperationException("Division by zero.") : lhs % rhs);
+    }
+
+    private static object? Power(object? left, object? right)
+    {
+        if (left is null || right is null)
+        {
+            throw new InvalidOperationException("The '**' operator requires non-null operands.");
+        }
+
+        var lhs = ToDouble(left);
+        var rhs = ToDouble(right);
+        var result = Math.Pow(lhs, rhs);
+
+        // Return int when the result is a whole number and both operands were integral
+        if (IsIntegral(left) && IsIntegral(right) && rhs >= 0 && result == Math.Floor(result) && result is >= int.MinValue and <= int.MaxValue)
+        {
+            return (int)result;
+        }
+
+        return result;
     }
 
     public static bool ToBoolean(object? value)

@@ -7,7 +7,7 @@ public static class ReplInputClassifier
     private static readonly HashSet<string> CompoundKeywords =
     [
         "func", "if", "for", "while", "until", "try", "switch",
-        "class", "module", "enum", "record", "event", "bind",
+        "class", "struct", "trait", "module", "enum", "record", "event", "bind",
     ];
 
     private static readonly HashSet<string> ContinuationDiagnosticCodes =
@@ -318,7 +318,8 @@ public static class ReplInputClassifier
             }
 
             // Skip declaration modifiers that can precede compound keywords.
-            if (word is not ("shy" or "global" or "export" or "local" or "required"))
+            if (word is not ("shy" or "global" or "export" or "local" or "required"
+                or "sealed" or "hollow" or "hermit" or "strict" or "partial" or "fluid"))
             {
                 break;
             }

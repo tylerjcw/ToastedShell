@@ -40,8 +40,9 @@ public static class SyntaxHighlighter
 
     private static readonly HashSet<string> Keywords = new(StringComparer.Ordinal)
     {
-        "var", "alloc", "func", "class", "module", "enum", "record", "prop", "shy", "static", "global", "export", "return", "throw", "if", "else", "for", "in",
+        "var", "alloc", "func", "class", "struct", "trait", "module", "enum", "record", "prop", "shy", "static", "global", "export", "return", "throw", "if", "else", "for", "in",
         "while", "until", "break", "continue", "using", "require", "native", "bind", "from", "as", "out", "ref", "callconv", "try", "catch", "finally", "switch", "case", "default", "match",
+        "shared", "sealed", "hollow", "fixed", "vital", "guarded", "overrule", "hermit", "strict", "lazy", "fading", "local", "raw", "partial", "proud", "public", "fluid", "fulfills", "uses",
     };
 
     private static readonly HashSet<string> LanguageForms = new(StringComparer.Ordinal)

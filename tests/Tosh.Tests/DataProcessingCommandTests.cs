@@ -146,7 +146,7 @@ public sealed class DataProcessingCommandTests
         await engine.ExecuteToListAsync("var other = [\"a\", \"b\", \"c\"]");
         var results = await engine.ExecuteToListAsync("[1, 2, 3] | interleave $other");
 
-        var stringified = results.Select(x => x?.ToString()).ToArray();
+        var stringified = results.Select(x => x?.ToString() ?? string.Empty).ToArray();
         Assert.Equal(["1", "a", "2", "b", "3", "c"], stringified);
     }
 

@@ -10,9 +10,17 @@ public sealed record ToshClassPropertyDefinition(
     BlockSyntax? GetterBody,
     BlockSyntax? SetterBody,
     bool IsShy,
+    bool IsStatic,
+    bool IsFixed,
+    bool IsVital,
+    bool IsGuarded,
+    bool IsLazy,
+    bool IsFading,
+    bool IsLocal,
+    bool IsAbstract,
     TextSpan Span)
 {
     public bool IsComputed => GetterBody is not null;
 
-    public bool IsWritable => SetterBody is not null || GetterBody is null;
+    public bool IsWritable => !IsFixed && (SetterBody is not null || GetterBody is null);
 }

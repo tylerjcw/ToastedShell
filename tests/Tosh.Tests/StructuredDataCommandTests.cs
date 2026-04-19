@@ -253,6 +253,6 @@ public sealed class StructuredDataCommandTests
         var results = await engine.ExecuteToListAsync("echo 1 2 3 | collect");
 
         var arr = Assert.IsType<object?[]>(Assert.Single(results));
-        Assert.Equal(["1", "2", "3"], arr.Select(x => x?.ToString()).ToArray());
+        Assert.Equal(["1", "2", "3"], arr.Select(x => x?.ToString() ?? string.Empty).ToArray());
     }
 }

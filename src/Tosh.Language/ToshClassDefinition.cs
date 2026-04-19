@@ -8,8 +8,11 @@ public sealed class ToshClassDefinition : IShellNamedType
     private readonly ToshEngine _engine;
     private readonly Dictionary<string, ToshClassPropertyDefinition> _propertiesByName;
     private readonly Dictionary<string, IReadOnlyList<ToshClassMethodDefinition>> _methodsByName;
-    private readonly IReadOnlyList<ToshClassConstructorDefinition> _constructors;
+    private readonly List<ToshClassConstructorDefinition> _constructors;
     private readonly IReadOnlyList<FunctionParameterDefinition> _primaryConstructorParameters;
+    private readonly Dictionary<string, object?> _staticValues = new(StringComparer.OrdinalIgnoreCase);
+    private readonly List<ToshClassPropertyDefinition> _properties;
+    private readonly List<ToshClassMethodDefinition> _methods;
 
     public ToshClassDefinition(
         ToshEngine engine,
@@ -26,9 +29,11 @@ public sealed class ToshClassDefinition : IShellNamedType
         _engine = engine;
         Name = name;
         _primaryConstructorParameters = primaryConstructorParameters;
-        Properties = properties;
-        Methods = methods;
-        _constructors = constructors;
+        _properties = new List<ToshClassPropertyDefinition>(properties);
+        _methods = new List<ToshClassMethodDefinition>(methods);
+        _constructors = new List<ToshClassConstructorDefinition>(constructors);
+        Properties = _properties;
+        Methods = _methods;
         SourceName = sourceName;
         SourceText = sourceText;
         Span = span;
@@ -37,6 +42,12 @@ public sealed class ToshClassDefinition : IShellNamedType
         _methodsByName = methods
             .GroupBy(method => method.Name, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(group => group.Key, group => (IReadOnlyList<ToshClassMethodDefinition>)group.ToArray(), StringComparer.OrdinalIgnoreCase);
+
+        // Initialize static property storage with defaults
+        foreach (var prop in properties.Where(p => p.IsStatic && p.Initializer is not null && !p.IsComputed))
+        {
+            _staticValues[prop.Name] = null; // Will be evaluated lazily on first access
+        }
     }
 
     public string Name { get; }
@@ -44,6 +55,8 @@ public sealed class ToshClassDefinition : IShellNamedType
     public IReadOnlyList<ToshClassPropertyDefinition> Properties { get; }
 
     public IReadOnlyList<ToshClassMethodDefinition> Methods { get; }
+
+    public bool HasPrimaryConstructor => _primaryConstructorParameters.Count > 0;
 
     public string SourceName { get; }
 
@@ -53,6 +66,98 @@ public sealed class ToshClassDefinition : IShellNamedType
 
     public IReadOnlyList<LexicalScope>? CapturedScopes { get; }
 
+    public IReadOnlyList<ToshInterfaceDefinition> ImplementedInterfaces { get; internal set; } = Array.Empty<ToshInterfaceDefinition>();
+
+    public IReadOnlyList<ToshTraitDefinition> UsedTraits { get; internal set; } = Array.Empty<ToshTraitDefinition>();
+
+    public IReadOnlyList<PipelineSyntax>? BaseConstructorArgs { get; internal set; }
+
+    public ToshClassDefinition? BaseClass { get; internal set; }
+
+    public Type? ClrBaseType { get; internal set; }
+
+    public bool IsSealed { get; internal set; }
+
+    public bool IsAbstract { get; internal set; }
+
+    public bool IsHermit { get; internal set; }
+
+    public bool IsStrict { get; internal set; }
+
+    public bool IsPartial { get; internal set; }
+
+    /// <summary>
+    /// Merges members from another partial class definition into this one.
+    /// Properties, methods, and constructors from the other definition are added.
+    /// </summary>
+    internal void MergePartial(
+        IReadOnlyList<ToshClassPropertyDefinition> properties,
+        IReadOnlyList<ToshClassMethodDefinition> methods,
+        IReadOnlyList<ToshClassConstructorDefinition> constructors)
+    {
+        foreach (var property in properties)
+        {
+            if (!_propertiesByName.ContainsKey(property.Name))
+            {
+                _properties.Add(property);
+                _propertiesByName[property.Name] = property;
+
+                if (property.IsStatic && property.Initializer is not null && !property.IsComputed)
+                {
+                    _staticValues[property.Name] = null;
+                }
+            }
+        }
+
+        foreach (var method in methods)
+        {
+            _methods.Add(method);
+            if (_methodsByName.TryGetValue(method.Name, out var existing))
+            {
+                var combined = new List<ToshClassMethodDefinition>(existing) { method };
+                _methodsByName[method.Name] = combined;
+            }
+            else
+            {
+                _methodsByName[method.Name] = new[] { method };
+            }
+        }
+
+        foreach (var constructor in constructors)
+        {
+            _constructors.Add(constructor);
+        }
+    }
+
+    /// <summary>
+    /// Adds a single method (e.g. from a trait default implementation).
+    /// </summary>
+    internal void AddMethod(ToshClassMethodDefinition method)
+    {
+        _methods.Add(method);
+        if (_methodsByName.TryGetValue(method.Name, out var existing))
+        {
+            var combined = new List<ToshClassMethodDefinition>(existing) { method };
+            _methodsByName[method.Name] = combined;
+        }
+        else
+        {
+            _methodsByName[method.Name] = new[] { method };
+        }
+    }
+
+    /// <summary>
+    /// Adds a single property (e.g. from a trait default property).
+    /// </summary>
+    internal void AddProperty(ToshClassPropertyDefinition property)
+    {
+        if (!_propertiesByName.ContainsKey(property.Name))
+        {
+            _properties.Add(property);
+            _propertiesByName[property.Name] = property;
+        }
+    }
+
     public string ShellTypeName => Name;
 
     public string ShellFullName => Name;
@@ -61,7 +166,7 @@ public sealed class ToshClassDefinition : IShellNamedType
 
     public string? ShellAssemblyName => "ToSh";
 
-    public string? ShellBaseTypeName => typeof(object).FullName;
+    public string? ShellBaseTypeName => BaseClass?.Name ?? ClrBaseType?.FullName ?? typeof(object).FullName;
 
     public bool ShellIsClass => true;
 
@@ -71,7 +176,7 @@ public sealed class ToshClassDefinition : IShellNamedType
 
     public bool ShellIsValueType => false;
 
-    public bool ShellIsAbstract => false;
+    public bool ShellIsAbstract => IsAbstract;
 
     public bool ShellIsGenericType => false;
 
@@ -81,9 +186,31 @@ public sealed class ToshClassDefinition : IShellNamedType
 
     public object CreateInstance(IReadOnlyList<object?> arguments)
     {
+        if (IsAbstract)
+        {
+            throw new InvalidOperationException($"Cannot create an instance of hollow class '{Name}'. Extend it with a concrete subclass first.");
+        }
+
+        if (IsHermit)
+        {
+            throw new InvalidOperationException($"Cannot create an instance of hermit class '{Name}'. Hermit classes contain only shared (static) members.");
+        }
+
         var constructor = SelectConstructor(arguments, out var locals);
         var instance = new ToshClassInstance(this);
         instance.Initialize(locals, constructor);
+
+        // Validate that all vital (required) properties have been set to non-null values
+        foreach (var property in Properties.Where(p => p.IsVital && !p.IsStatic && !p.IsComputed))
+        {
+            if (instance.TryGetStoredValue(property.Name, out var value) && value is null)
+            {
+                throw new InvalidOperationException(
+                    $"Vital property '{property.Name}' on class '{Name}' must be provided a value. " +
+                    $"Set it in the constructor or provide an initializer.");
+            }
+        }
+
         return instance;
     }
 
@@ -110,6 +237,17 @@ public sealed class ToshClassDefinition : IShellNamedType
     {
         value = null;
 
+        // Check static properties
+        if (_propertiesByName.TryGetValue(memberName, out var property) && property.IsStatic)
+        {
+            if (_staticValues.TryGetValue(memberName, out var stored))
+            {
+                value = stored;
+                return true;
+            }
+            return true; // null default
+        }
+
         if (_methodsByName.TryGetValue(memberName, out var candidates))
         {
             var isStatic = candidates.Any(c => c.IsStatic);
@@ -117,6 +255,17 @@ public sealed class ToshClassDefinition : IShellNamedType
                 ? $"'{memberName}' is a method on class '{Name}'. Call it with parentheses: {Name}.{memberName}(...)"
                 : $"'{memberName}' is an instance method on class '{Name}'. Create an instance first: var obj = new {Name}(); $obj.{memberName}(...)";
             throw new InvalidOperationException(hint);
+        }
+
+        return false;
+    }
+
+    public bool TrySetStaticMember(string memberName, object? value)
+    {
+        if (_propertiesByName.TryGetValue(memberName, out var property) && property.IsStatic)
+        {
+            _staticValues[memberName] = value;
+            return true;
         }
 
         return false;
@@ -153,10 +302,14 @@ public sealed class ToshClassDefinition : IShellNamedType
             new KeyValuePair<string, object?>("IsEnum", ShellIsEnum),
             new KeyValuePair<string, object?>("IsValueType", ShellIsValueType),
             new KeyValuePair<string, object?>("IsAbstract", ShellIsAbstract),
+            new KeyValuePair<string, object?>("IsSealed", IsSealed),
+            new KeyValuePair<string, object?>("IsHermit", IsHermit),
+            new KeyValuePair<string, object?>("IsStrict", IsStrict),
             new KeyValuePair<string, object?>("IsGenericType", ShellIsGenericType),
             new KeyValuePair<string, object?>("IsArray", ShellIsArray),
             new KeyValuePair<string, object?>("IsPublic", ShellIsPublic),
             new KeyValuePair<string, object?>("PropertyCount", GetShellMembers(includeHidden).Count(member => !member.IsStatic)),
+            new KeyValuePair<string, object?>("StaticPropertyCount", GetShellMembers(includeHidden).Count(member => member.IsStatic)),
             new KeyValuePair<string, object?>("MethodCount", GetShellMethods(includeHidden).Count(method => !method.IsStatic)),
             new KeyValuePair<string, object?>("StaticMethodCount", GetShellMethods(includeHidden).Count(method => method.IsStatic)),
             new KeyValuePair<string, object?>("ConstructorCount", GetShellConstructors().Count),
@@ -171,7 +324,7 @@ public sealed class ToshClassDefinition : IShellNamedType
                 property.Name,
                 Kind: "Property",
                 TypeName: GetAnnotationDisplayName(property.TypeName),
-                IsStatic: false,
+                IsStatic: property.IsStatic,
                 IsWritable: property.IsWritable,
                 IsHidden: property.IsShy))
             .ToArray();
@@ -201,27 +354,77 @@ public sealed class ToshClassDefinition : IShellNamedType
 
     internal bool TryGetInstanceMember(ToshClassInstance instance, string name, bool includeHidden, out object? value)
     {
-        if (!_propertiesByName.TryGetValue(name, out var property) ||
-            (property.IsShy && !includeHidden))
+        if (_propertiesByName.TryGetValue(name, out var property) &&
+            !property.IsStatic &&
+            (!property.IsShy || includeHidden) &&
+            (!property.IsGuarded || includeHidden) &&
+            (!property.IsLocal || includeHidden))
         {
-            value = null;
-            return false;
+            // Emit deprecation warning for fading properties
+            if (property.IsFading)
+            {
+                _engine.Runtime.Error.WriteLine($"Warning: property '{property.Name}' on class '{Name}' is fading (deprecated).");
+            }
+
+            if (property.GetterBody is not null)
+            {
+                value = EvaluatePropertyGetter(instance, property);
+                return true;
+            }
+
+            // Lazy property: evaluate initializer on first access
+            if (property.IsLazy && !instance.IsLazyInitialized(property.Name))
+            {
+                instance.MarkLazyInitialized(property.Name);
+                var lazyValue = GetInitialPropertyValue(instance, property, new Dictionary<string, object?>(StringComparer.Ordinal));
+                instance.SetStoredValue(property.Name, lazyValue);
+            }
+
+            return instance.TryGetStoredValue(property.Name, out value);
         }
 
-        if (property.GetterBody is not null)
+        if (BaseClass is not null)
         {
-            value = EvaluatePropertyGetter(instance, property);
-            return true;
+            return BaseClass.TryGetInstanceMember(instance, name, includeHidden, out value);
         }
 
-        return instance.TryGetStoredValue(property.Name, out value);
+        if (ClrBaseType is not null && instance.ClrBaseObject is not null)
+        {
+            try
+            {
+                value = _engine.Runtime.ObjectAccessor.GetValue(instance.ClrBaseObject, name);
+                return true;
+            }
+            catch { /* member not found on CLR base */ }
+        }
+
+        value = null;
+        return false;
     }
 
     internal bool TrySetInstanceMember(ToshClassInstance instance, string name, object? value, bool includeHidden)
     {
         if (!_propertiesByName.TryGetValue(name, out var property) ||
-            (property.IsShy && !includeHidden))
+            property.IsStatic ||
+            (property.IsShy && !includeHidden) ||
+            (property.IsGuarded && !includeHidden) ||
+            (property.IsLocal && !includeHidden))
         {
+            if (BaseClass is not null)
+            {
+                return BaseClass.TrySetInstanceMember(instance, name, value, includeHidden);
+            }
+
+            if (ClrBaseType is not null && instance.ClrBaseObject is not null)
+            {
+                try
+                {
+                    _engine.Runtime.ObjectAccessor.SetValue(instance.ClrBaseObject, name, value);
+                    return true;
+                }
+                catch { /* member not found or read-only on CLR base */ }
+            }
+
             return false;
         }
 
@@ -236,6 +439,11 @@ public sealed class ToshClassDefinition : IShellNamedType
             throw new InvalidOperationException($"Property '{property.Name}' on class '{Name}' is read-only.");
         }
 
+        if (property.IsFixed && !instance.IsInitializing)
+        {
+            throw new InvalidOperationException($"Property '{property.Name}' on class '{Name}' is fixed and cannot be reassigned after initialization.");
+        }
+
         instance.SetStoredValue(property.Name, ConvertPropertyValue(property, value));
         return true;
     }
@@ -244,9 +452,32 @@ public sealed class ToshClassDefinition : IShellNamedType
     {
         var members = new List<KeyValuePair<string, object?>>();
 
+        // Include base class members first
+        if (BaseClass is not null)
+        {
+            foreach (var baseMember in BaseClass.GetInstanceMembers(instance, includeHidden))
+            {
+                members.Add(baseMember);
+            }
+        }
+        else if (ClrBaseType is not null && instance.ClrBaseObject is not null)
+        {
+            foreach (var prop in ClrBaseType.GetProperties(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance))
+            {
+                try { members.Add(new KeyValuePair<string, object?>(prop.Name, prop.GetValue(instance.ClrBaseObject))); }
+                catch { members.Add(new KeyValuePair<string, object?>(prop.Name, null)); }
+            }
+        }
+
         foreach (var property in Properties)
         {
-            if (property.IsShy && !includeHidden)
+            if ((property.IsShy || property.IsGuarded) && !includeHidden)
+            {
+                continue;
+            }
+
+            // Skip if already provided by a base class (overridden)
+            if (members.Any(m => string.Equals(m.Key, property.Name, StringComparison.OrdinalIgnoreCase)))
             {
                 continue;
             }
@@ -258,17 +489,55 @@ public sealed class ToshClassDefinition : IShellNamedType
         return members;
     }
 
+    internal void InvokeConstructorOnInstance(ToshClassInstance instance, IReadOnlyList<object?> arguments)
+    {
+        var constructor = SelectConstructor(arguments, out var ctorLocals);
+        if (constructor is not null)
+        {
+            RunConstructor(instance, constructor, ctorLocals);
+        }
+    }
+
     internal InvocationResult InvokeInstanceMethod(ToshClassInstance instance, string methodName, IReadOnlyList<object?> arguments, bool includeHidden)
     {
         if (!_methodsByName.TryGetValue(methodName, out var candidates))
         {
+            // Allow calling the constructor by class name (e.g. $super.BaseClass(args))
+            if (string.Equals(methodName, Name, StringComparison.OrdinalIgnoreCase))
+            {
+                var constructor = SelectConstructor(arguments, out var ctorLocals);
+                if (constructor is not null)
+                {
+                    RunConstructor(instance, constructor, ctorLocals);
+                }
+                return new InvocationResult(null, ReturnedVoid: true);
+            }
+
+            if (BaseClass is not null)
+            {
+                return BaseClass.InvokeInstanceMethod(instance, methodName, arguments, includeHidden);
+            }
+
+            if (ClrBaseType is not null && instance.ClrBaseObject is not null)
+            {
+                var result = _engine.Runtime.Invoker.InvokeInstance(instance.ClrBaseObject, methodName, arguments);
+                return new InvocationResult(result, ReturnedVoid: false);
+            }
+
             throw new InvalidOperationException($"Method '{methodName}' was not found on class '{Name}'.");
         }
 
         var method = SelectMethod(
-            candidates.Where(candidate => !candidate.IsStatic && (includeHidden || !candidate.IsShy)).ToArray(),
+            candidates.Where(candidate => !candidate.IsStatic && (includeHidden || (!candidate.IsShy && !candidate.IsGuarded && !candidate.IsLocal))).ToArray(),
             arguments,
             out var locals);
+
+        // Emit deprecation warning for fading methods
+        if (method.IsFading)
+        {
+            _engine.Runtime.Error.WriteLine($"Warning: method '{method.Name}' on class '{Name}' is fading (deprecated).");
+        }
+
         var values = ExecuteMethodBlock(method, locals, instance);
         return new InvocationResult(FlattenCallResult(values), ReturnedVoid: false);
     }
@@ -330,6 +599,22 @@ public sealed class ToshClassDefinition : IShellNamedType
         _engine.ExecuteClassBlockSync(constructor.SourceName, constructor.SourceText, constructor.Body, locals, constructor.CapturedScopes, $"{Name}()");
     }
 
+    internal IReadOnlyList<object?> EvaluateBaseConstructorArgs(IReadOnlyDictionary<string, object?> constructorLocals)
+    {
+        if (BaseConstructorArgs is null or { Count: 0 })
+        {
+            return Array.Empty<object?>();
+        }
+
+        var args = new List<object?>();
+        foreach (var argPipeline in BaseConstructorArgs)
+        {
+            var value = _engine.EvaluateClassPipelineValueSync(SourceName, SourceText, argPipeline, constructorLocals, CapturedScopes);
+            args.Add(value);
+        }
+        return args;
+    }
+
     private object? EvaluatePropertyGetter(ToshClassInstance instance, ToshClassPropertyDefinition property)
     {
         var locals = CreateLocals(instance, new Dictionary<string, object?>(StringComparer.Ordinal));
@@ -383,6 +668,15 @@ public sealed class ToshClassDefinition : IShellNamedType
         if (instance is not null)
         {
             result["this"] = new ToshClassSelfReference(instance);
+
+            if (BaseClass is not null)
+            {
+                result["super"] = new ToshClassSuperReference(instance, BaseClass);
+            }
+            else if (ClrBaseType is not null)
+            {
+                result["super"] = new ToshClassClrSuperReference(instance, ClrBaseType, _engine);
+            }
         }
 
         return result;
@@ -458,6 +752,11 @@ public sealed class ToshClassDefinition : IShellNamedType
     {
         if (!_methodsByName.TryGetValue(methodName, out var candidates))
         {
+            if (BaseClass is not null)
+            {
+                return BaseClass.TrySelectSpecialInstanceMethod(methodName, arguments, out method, out locals);
+            }
+
             method = null!;
             locals = null!;
             return false;

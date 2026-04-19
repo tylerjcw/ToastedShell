@@ -1,12 +1,12 @@
 # Maintainer: komrad <komrad@users.noreply.github.com>
 pkgname=tosh
-pkgver=26.4.1.10
+pkgver=26.4.35.10
 pkgrel=1
 pkgdesc='ToastedShell — a modern, object-oriented shell for Linux'
 arch=('x86_64')
 url='https://github.com/komrad/tosh'
 license=('MIT')
-depends=('dotnet-runtime-10.0' 'icu')
+depends=('icu')
 makedepends=('dotnet-sdk-10.0')
 options=('!strip')  # .NET single-file bundles append assemblies after the ELF stub; strip destroys them
 install=tosh.install
@@ -24,7 +24,7 @@ build() {
     -o "$srcdir/out" \
     -p:PublishSingleFile=true \
     -p:PublishReadyToRun=true \
-    -p:SelfContained=false \
+    -p:SelfContained=true \
     -p:EnableCompressionInSingleFile=false \
     -p:DebugType=None \
     -p:DebugSymbols=false \

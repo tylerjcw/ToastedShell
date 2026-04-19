@@ -48,17 +48,31 @@ public sealed class GetCommand : ShellCommand
                 input = WrapTreeFlat(tree);
             }
 
-            if (step == 1 && start <= end)
+            if (end is null && step > 0)
             {
-                // Contiguous range — simple and fast.
+                // Open-ended range: get 2.. means "skip first 2, yield rest"
                 await foreach (var item in input.WithCancellation(context.CancellationToken))
                 {
-                    if (current >= start && current <= end)
+                    if (current >= start)
                     {
                         yield return item;
                     }
 
-                    if (current > end)
+                    current++;
+                }
+            }
+            else if (step == 1 && start <= (end ?? int.MaxValue))
+            {
+                var endValue = end ?? int.MaxValue;
+                // Contiguous range — simple and fast.
+                await foreach (var item in input.WithCancellation(context.CancellationToken))
+                {
+                    if (current >= start && current <= endValue)
+                    {
+                        yield return item;
+                    }
+
+                    if (current > endValue)
                     {
                         yield break;
                     }

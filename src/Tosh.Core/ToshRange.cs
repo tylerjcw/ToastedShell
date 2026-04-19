@@ -1,37 +1,54 @@
 namespace Tosh.Core;
 
-public sealed record ToshRange(int Start, int? Step, int End) : IShellEnumerableObject
+public sealed record ToshRange(int Start, int? Step, int? End) : IShellEnumerableObject
 {
-    public bool IsEmpty => Step > 0 ? Start > End : Step < 0 ? Start < End : true;
+    public bool IsInfinite => End is null;
+
+    public bool IsEmpty => End is not null && (Step > 0 ? Start > End : Step < 0 ? Start < End : true);
 
     public int Count
     {
         get
         {
+            if (End is null) return int.MaxValue; // infinite
             var step = Step ?? 1;
             if (step == 0) return 0;
             if (step > 0 && Start > End) return 0;
             if (step < 0 && Start < End) return 0;
-            return ((End - Start) / step) + 1;
+            return ((End.Value - Start) / step) + 1;
         }
     }
 
     public IEnumerable<int> Enumerate()
     {
-        var step = Step ?? (Start <= End ? 1 : -1);
-
-        if (step > 0)
+        if (End is null)
         {
-            for (var i = Start; i <= End; i += step)
+            var step = Step ?? 1;
+            if (step == 0) yield break;
+            for (long i = Start; ; i += step)
             {
-                yield return i;
+                if (i > int.MaxValue || i < int.MinValue) yield break;
+                yield return (int)i;
             }
         }
-        else if (step < 0)
+        else
         {
-            for (var i = Start; i >= End; i += step)
+            var end = End.Value;
+            var step = Step ?? (Start <= end ? 1 : -1);
+
+            if (step > 0)
             {
-                yield return i;
+                for (var i = Start; i <= end; i += step)
+                {
+                    yield return i;
+                }
+            }
+            else if (step < 0)
+            {
+                for (var i = Start; i >= end; i += step)
+                {
+                    yield return i;
+                }
             }
         }
     }
@@ -46,6 +63,8 @@ public sealed record ToshRange(int Start, int? Step, int End) : IShellEnumerable
 
     public override string ToString()
     {
-        return Step is int s ? $"{Start}..{s}..{End}" : $"{Start}..{End}";
+        if (End is null)
+            return Step is int s ? $"{Start}..{s}.." : $"{Start}..";
+        return Step is int s2 ? $"{Start}..{s2}..{End}" : $"{Start}..{End}";
     }
 }

@@ -79,6 +79,47 @@ func ll => ls -la
 func gs => git status
 ```
 
+### Classes and Modifiers
+
+```tosh
+class Point(x, y) {
+    prop X = x
+    prop Y = y
+    func distance(other) { echo (Math.Sqrt(($this.X - $other.X) ** 2 + ($this.Y - $other.Y) ** 2)) }
+    static func origin() { return new Point(0, 0) }
+}
+var p = new Point(3, 4)
+echo $p.X                         # 3
+echo (Point.origin())             # Point instance
+```
+
+#### Class-Level Modifiers
+
+| Modifier  | Meaning |
+|-----------|---------|
+| `sealed`  | Cannot be inherited |
+| `hollow`  | Abstract — cannot be instantiated; subclasses must override hollow methods |
+| `hermit`  | Static-only class — all members auto-promoted to shared; no constructors |
+| `strict`  | All properties are read-only (immutable) after init |
+| `partial` | Definition can be split across multiple declarations (all must say `partial`) |
+
+#### Member-Level Modifiers
+
+| Modifier            | Applies to    | Meaning |
+|---------------------|---------------|---------|
+| `shy`               | prop, func    | Private — hidden from outside the class |
+| `shared` / `static` | prop, func    | Belongs to the class, not an instance |
+| `fixed`             | prop          | Read-only after initialization |
+| `vital`             | prop          | Required — construction fails without a value |
+| `guarded`           | prop, func    | Protected — visible to class + subclasses only |
+| `overrule`          | func          | Override an inherited method |
+| `lazy`              | prop          | Defers initializer until first access (cached) |
+| `fading`            | prop, func    | Deprecated — emits warning to stderr on use |
+| `local`             | prop, func    | Internal — assembly/module visibility only |
+| `raw`               | func          | Marks method for unsafe/native interop |
+| `proud` / `public`  | prop, func    | Explicitly public (no-op, members default to public) |
+| `hollow`            | func          | Abstract method — no body, must be overruled in subclass |
+
 ### Control Flow
 
 ```tosh

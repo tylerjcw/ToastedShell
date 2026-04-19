@@ -71,6 +71,8 @@ public static class BuiltInShellTypes
         {
             classes[name] = definition;
         }
+
+        classes["Math"] = MathShellType.Instance;
     }
 
     public static bool TryResolveStaticType(string name, ITypeResolver resolver, out IShellStaticType definition)

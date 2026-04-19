@@ -1,0 +1,321 @@
+#!/usr/bin/env tosh
+# Scan a workspace and surface the signals that matter most during day-to-day work.
+#
+# Demonstrates:
+# - structs for configuration and snapshot state
+# - traits with default methods for pluggable report sections
+# - unions for typed attention signals
+# - list/set comprehensions
+# - named/default arguments
+# - typed filesystem and text pipelines
+# - time and storage-size literals
+#
+# Usage:
+#   tosh ./examples/common_tasks/06_workspace_brief.tosh [root] [top_n] [recent_window] [large_threshold]
+#
+# Examples:
+#   tosh ./examples/common_tasks/06_workspace_brief.tosh
+#   tosh ./examples/common_tasks/06_workspace_brief.tosh . 12 48h 25mb
+
+func usage() {
+    writeline """
+        Usage: 06_workspace_brief.tosh [root] [top_n] [recent_window] [large_threshold]
+
+        root             Directory to scan. Default: .
+        top_n            Rows to show per section. Default: 8
+        recent_window    Time window for "recent" edits. Default: 72h
+        large_threshold  File size threshold for "large" files. Default: 5mb
+        """
+}
+
+struct ScanOptions(root, top_n, recent_window, large_threshold, todo_pattern, ignored_segments, text_extensions) {
+    func should_skip(path) {
+        var normalized = $path.Replace("\\", "/")
+
+        return (($this.ignored_segments
+            | where {
+                ($normalized.Contains("/" + _ + "/"))
+                or $normalized.EndsWith("/" + _)
+            }
+            | count) > 0)
+    }
+
+    func is_text_file(entry) {
+        var extension = $entry.Extension.ToLowerInvariant()
+
+        if ($this.text_extensions.Contains($extension)) {
+            return true
+        }
+
+        return (
+            ($entry.Name == "Dockerfile")
+            or ($entry.Name == "Makefile")
+            or ($entry.Name == ".gitignore")
+            or ($entry.Name == ".editorconfig")
+            or ($entry.Name == "LICENSE")
+            or ($entry.Name == "README")
+        )
+    }
+}
+
+union WorkspaceSignal {
+    LargeFile(path, size)
+    RecentEdit(path, modified)
+}
+
+struct WorkspaceSnapshot(root, files, options, now) {
+    func relative_path(path) {
+        return System.IO.Path.GetRelativePath($this.root, $path)
+    }
+
+    func total_size() {
+        return ($this.files | each { $_.Size } | sum)
+    }
+
+    func code_files() {
+        return [$file <| for file in $this.files where $this.options.is_text_file($file)]
+    }
+
+    func recent_count() {
+        return ($this.files | where _.Modified > ($this.now - $this.options.recent_window) | count)
+    }
+
+    func large_count() {
+        return ($this.files | where _.Size >= $this.options.large_threshold | count)
+    }
+
+    func recent_files() {
+        return ($this.files
+            | where _.Modified > ($this.now - $this.options.recent_window)
+            | sort Modified
+            | reverse
+            | first $this.options.top_n
+            | collect)
+    }
+
+    func large_files() {
+        return ($this.files
+            | where _.Size >= $this.options.large_threshold
+            | sort Size
+            | reverse
+            | first $this.options.top_n
+            | collect)
+    }
+
+    func attention_signals() {
+        var large = [WorkspaceSignal.LargeFile($this.relative_path($file.FullName), $file.Size) <| for file in ($this.large_files())]
+        var recent = [WorkspaceSignal.RecentEdit($this.relative_path($file.FullName), $file.Modified) <| for file in ($this.recent_files())]
+
+        return ($large + $recent)
+    }
+
+    func todo_hits() {
+        var root = $this.root
+        var pattern = $this.options.todo_pattern
+        var current_script = $tosh.Script.Path
+        var candidates = ($this.code_files()
+            | where _.FullName != $current_script
+            | where _.Size <= 1mb
+            | sort Modified
+            | reverse
+            | first ($this.options.top_n * 12)
+            | collect)
+
+        return ($candidates
+            | parallel {
+                var file = _
+
+                try {
+                    read-lines $file.FullName
+                    | grep $pattern
+                    | first 2
+                    | each {
+                        {
+                            Path = System.IO.Path.GetRelativePath($root, $file.FullName),
+                            LineNumber = $_.LineNumber,
+                            Text = $_.Text.Trim()
+                        }
+                    }
+                } catch (err) {
+                }
+            }
+            | first $this.options.top_n
+            | collect)
+    }
+}
+
+trait ReportSection {
+    func title()
+    func render(snapshot)
+
+    func run(snapshot) {
+        writeline ""
+        writeline $"=== {$this.title()} ==="
+        $this.render($snapshot)
+    }
+}
+
+class SummarySection uses ReportSection {
+    func title() {
+        return "Summary"
+    }
+
+    func render(snapshot) {
+        writeline $"Root: {$snapshot.root}"
+        writeline $"Files scanned: {$snapshot.files.Length}"
+        writeline $"Code-like files: {($snapshot.code_files() | count)}"
+        writeline $"Total size: {$snapshot.total_size()}"
+        writeline $"Recent window: {$snapshot.options.recent_window}"
+        writeline $"Large-file threshold: {$snapshot.options.large_threshold}"
+        writeline $"Recent edits in window: {$snapshot.recent_count()}"
+        writeline $"Files above threshold: {$snapshot.large_count()}"
+        writeline $"Showing up to {$snapshot.options.top_n} rows per section."
+    }
+}
+
+class ExtensionSection uses ReportSection {
+    func title() {
+        return "Extension Mix"
+    }
+
+    func render(snapshot) {
+        var files = ($snapshot.code_files())
+        var total = $files.Length
+
+        $files
+        | group-by Extension
+        | sort Count
+        | reverse
+        | first $snapshot.options.top_n
+        | each {
+            var label = (($_.Key == "") ? "<no extension>" : $_.Key)
+            var percent = Math.Round((($_.Count * 100.0) / $total), 1)
+            writeline $"{$label}: {_.Count} file(s) ({$percent}%)"
+        }
+    }
+}
+
+func render_signal(signal) {
+    switch ($signal.Tag) {
+        case "LargeFile" {
+            writeline $"LARGE  {$signal.size}  {$signal.path}"
+        }
+        case "RecentEdit" {
+            writeline $"RECENT {$signal.modified}  {$signal.path}"
+        }
+    }
+}
+
+class AttentionSection uses ReportSection {
+    func title() {
+        return "Attention Feed"
+    }
+
+    func render(snapshot) {
+        var signals = ($snapshot.attention_signals())
+
+        if ($signals.Length == 0) {
+            writeline "No large files or recent edits matched the current thresholds."
+            return
+        }
+
+        $signals | each { render_signal _ }
+    }
+}
+
+class TodoSection uses ReportSection {
+    func title() {
+        return "TODO / FIXME"
+    }
+
+    func render(snapshot) {
+        var hits = ($snapshot.todo_hits())
+
+        if ($hits.Length == 0) {
+            writeline $"No {$snapshot.options.todo_pattern} matches were found in the recent text files."
+            return
+        }
+
+        $hits | each {
+            writeline $"{$_.Path}:{$_.LineNumber}  {$_.Text}"
+        }
+    }
+}
+
+func make_options(root = ".", top_n = 8, recent_window = 72h, large_threshold = 5mb) {
+    var ignored_segments = {: $segment <| for segment in [
+        ".git", "bin", "obj", "node_modules", "dist", "build", ".idea", ".vs", ".venv"
+    ] :}
+
+    var text_extensions = {: $extension <| for extension in [
+        ".cs", ".csproj", ".fs", ".fsproj", ".md", ".txt", ".json", ".toml", ".ini",
+        ".yml", ".yaml", ".xml", ".props", ".targets", ".tosh", ".sh", ".bash",
+        ".zsh", ".fish", ".py", ".js", ".ts", ".tsx", ".jsx", ".css", ".scss",
+        ".html", ".sql", ".ps1", ".editorconfig", ".gitignore"
+    ] :}
+
+    return new ScanOptions(
+        $root,
+        $top_n,
+        $recent_window,
+        $large_threshold,
+        "TODO|FIXME|HACK|BUG",
+        $ignored_segments,
+        $text_extensions
+    )
+}
+
+func build_snapshot(options) {
+    var root = (realpath $options.root)
+    var files = (find $root -type f | where { ($options.should_skip(_.FullName)) == false } | collect)
+
+    return new WorkspaceSnapshot($root, $files, $options, (date now))
+}
+
+var argc = ($tosh.Script.Args | count)
+if ($argc > 0) {
+    var first_arg = ($tosh.Script.Args | get 0)
+    if (($first_arg == "--help") or ($first_arg == "-h")) {
+        usage
+        return
+    }
+}
+
+var root = ($argc > 0) ? ($tosh.Script.Args | get 0) : "."
+var top_n = ($argc > 1) ? (($tosh.Script.Args | get 1) | cast int) : 8
+var recent_window = ($argc > 2) ? (($tosh.Script.Args | get 2) | cast TimeSpan) : 72h
+var large_threshold = ($argc > 3) ? (($tosh.Script.Args | get 3) | cast StorageSize) : 5mb
+
+if ((exists $root) == false) {
+    writeline $"Path does not exist: {$root}"
+    return
+}
+
+if ((is-dir $root | get IsDirectory) == false) {
+    writeline $"Expected a directory root, but got: {$root}"
+    return
+}
+
+var options = (make_options(
+    root = $root,
+    top_n = $top_n,
+    recent_window = $recent_window,
+    large_threshold = $large_threshold
+))
+
+var snapshot = (build_snapshot $options)
+
+if ($snapshot.files.Length == 0) {
+    writeline $"No files were found under {$snapshot.root}."
+    return
+}
+
+var sections = [
+    new SummarySection(),
+    new ExtensionSection(),
+    new AttentionSection(),
+    new TodoSection()
+]
+
+writeline "Workspace Brief"
+$sections | each { $_.run($snapshot) }

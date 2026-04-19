@@ -31,6 +31,12 @@ public sealed class ToshLexer
 
             if (Current == '#')
             {
+                if (Peek() == '#' && Peek(2) == '{')
+                {
+                    SkipBlockComment();
+                    continue;
+                }
+
                 if (Peek() == '#')
                 {
                     tokens.Add(ReadDocComment());
@@ -172,6 +178,13 @@ public sealed class ToshLexer
                 if (Peek() == '(')
                 {
                     tokens.Add(new SyntaxToken(SyntaxTokenKind.LessThanOpenParen, _position, "<("));
+                    _position += 2;
+                    continue;
+                }
+
+                if (Peek() == '|')
+                {
+                    tokens.Add(new SyntaxToken(SyntaxTokenKind.LessThanPipe, _position, "<|"));
                     _position += 2;
                     continue;
                 }
@@ -330,6 +343,24 @@ public sealed class ToshLexer
         {
             _position++;
         }
+    }
+
+    private void SkipBlockComment()
+    {
+        _position += 3; // skip ##{
+
+        while (!IsAtEnd)
+        {
+            if (Current == '}' && Peek() == '#' && Peek(2) == '#')
+            {
+                _position += 3; // skip }##
+                return;
+            }
+
+            _position++;
+        }
+
+        // Unterminated block comment — consume to end of input
     }
 
     private SyntaxToken ReadDocComment()

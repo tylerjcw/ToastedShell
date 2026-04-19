@@ -581,4 +581,84 @@ internal static class AggregationUtilities
 
         public List<object?> Values { get; } = [];
     }
+
+    // --- Statistical helpers ---
+
+    public static bool TryGetDoubles(IReadOnlyList<object?> values, out double[] result)
+    {
+        if (TryGetNumbers(values, out var numbers))
+        {
+            result = numbers.Values;
+            return true;
+        }
+
+        result = Array.Empty<double>();
+        return false;
+    }
+
+    public static object Median(IReadOnlyList<object?> values)
+    {
+        if (!TryGetDoubles(values, out var doubles))
+        {
+            throw new InvalidOperationException("median expects numeric values.");
+        }
+
+        var sorted = doubles.OrderBy(v => v).ToArray();
+        int n = sorted.Length;
+
+        if (n % 2 == 1)
+        {
+            return sorted[n / 2];
+        }
+
+        return (sorted[n / 2 - 1] + sorted[n / 2]) / 2.0;
+    }
+
+    public static object Variance(IReadOnlyList<object?> values)
+    {
+        if (!TryGetDoubles(values, out var doubles))
+        {
+            throw new InvalidOperationException("variance expects numeric values.");
+        }
+
+        var mean = doubles.Average();
+        return doubles.Select(v => (v - mean) * (v - mean)).Sum() / doubles.Length;
+    }
+
+    public static object StandardDeviation(IReadOnlyList<object?> values)
+    {
+        return Math.Sqrt((double)Variance(values));
+    }
+
+    public static object Percentile(IReadOnlyList<object?> values, double p)
+    {
+        if (p < 0 || p > 100)
+        {
+            throw new InvalidOperationException("Percentile must be between 0 and 100.");
+        }
+
+        if (!TryGetDoubles(values, out var doubles))
+        {
+            throw new InvalidOperationException("percentile expects numeric values.");
+        }
+
+        var sorted = doubles.OrderBy(v => v).ToArray();
+
+        if (sorted.Length == 1)
+        {
+            return sorted[0];
+        }
+
+        double rank = (p / 100.0) * (sorted.Length - 1);
+        int lower = (int)Math.Floor(rank);
+        int upper = (int)Math.Ceiling(rank);
+
+        if (lower == upper)
+        {
+            return sorted[lower];
+        }
+
+        double fraction = rank - lower;
+        return sorted[lower] + fraction * (sorted[upper] - sorted[lower]);
+    }
 }

@@ -25,6 +25,27 @@ public sealed class ToshLanguageFeatures
         ["prop"] = "Declare a class property, computed member, or accessor-backed property.",
         ["shy"] = "Keep a declaration in the current lexical scope, or hide a class member from public inspection and external access.",
         ["static"] = "Mark a class member as belonging to the class rather than an instance.",
+        ["shared"] = "Mark a class member as belonging to the class rather than an instance (alias for static).",
+        ["sealed"] = "Prevent a class from being inherited.",
+        ["hollow"] = "Mark a class or method as abstract, requiring subclass implementation.",
+        ["fixed"] = "Mark a class property as read-only after initialization.",
+        ["vital"] = "Mark a class property as required during construction.",
+        ["guarded"] = "Restrict member access to the defining class and its subclasses (protected).",
+        ["overrule"] = "Override an inherited method from a parent class.",
+        ["hermit"] = "Mark a class as static-only; all members are auto-promoted to shared.",
+        ["strict"] = "Make all properties in a class read-only (immutable).",
+        ["lazy"] = "Defer property initialization until first access.",
+        ["fading"] = "Mark a member as deprecated; emits a warning on use.",
+        ["local"] = "Restrict member visibility to the defining assembly (internal).",
+        ["raw"] = "Mark a method for unsafe/native interop.",
+        ["partial"] = "Allow a class definition to be split across multiple declarations.",
+        ["proud"] = "Explicitly mark a member as public.",
+        ["public"] = "Explicitly mark a member as public (no-op, members are public by default).",
+        ["fluid"] = "Mark a struct as mutable, allowing field reassignment after construction.",
+        ["struct"] = "Define a value-type with positional fields, structural equality, and copy-on-assign semantics.",
+        ["trait"] = "Define a trait with required and default method/property signatures that classes can adopt via 'uses'.",
+        ["fulfills"] = "Declare that a class conforms to one or more interfaces.",
+        ["uses"] = "Declare that a class adopts one or more traits.",
         ["global"] = "Publish a declaration to the session-wide scope.",
         ["export"] = "Publish a module declaration or export an environment value.",
         ["using"] = "Import CLR namespaces or type aliases in the current lexical scope.",
@@ -2506,7 +2527,10 @@ public sealed class ToshLanguageFeatures
                 {
                     CollectCommandCallSites(range.Step, text, offset, matches);
                 }
-                CollectCommandCallSites(range.End, text, offset, matches);
+                if (range.End is not null)
+                {
+                    CollectCommandCallSites(range.End, text, offset, matches);
+                }
                 break;
         }
     }
@@ -2700,7 +2724,10 @@ public sealed class ToshLanguageFeatures
                 {
                     CollectCallSites(range.Step, text, offset, matches);
                 }
-                CollectCallSites(range.End, text, offset, matches);
+                if (range.End is not null)
+                {
+                    CollectCallSites(range.End, text, offset, matches);
+                }
                 break;
         }
     }

@@ -1678,7 +1678,10 @@ public sealed class DocumentSemanticModel
                     {
                         CollectArgument(range.Step, scopeSpan, depth);
                     }
-                    CollectArgument(range.End, scopeSpan, depth);
+                    if (range.End is not null)
+                    {
+                        CollectArgument(range.End, scopeSpan, depth);
+                    }
                     break;
 
                 case MatchArgumentSyntax match:

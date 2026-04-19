@@ -11,17 +11,34 @@
   </PropertyGroup>
 
   <!--
-    CalVer versioning: YY.MM-Publish#-DotNetMajor
-    External display:  26.4-1-10    (dashes between publish# and .NET major)
-    Internal/assembly: 26.4.1.10    (all dots, four-part numeric)
-    Bump ToshPublishNumber for each release within a calendar month.
+    CalVer versioning: YY.MM.Publish#.DotNetMajor
+    Internal/assembly: 26.4.2.10    (four-part numeric)
+    Display:           26.4-2-10    (dashes between publish# and .NET major)
+
+    The publish number auto-increments on each `dotnet publish` of Tosh.Cli
+    via the IncrementToshPublishNumber target in Directory.Build.targets.
+    State is tracked in .tosh-publish-state at the repo root (format: "YY.MM:N").
+    When the calendar month changes, the publish number resets to 1.
     Update ToshDotNetMajor when upgrading the target framework.
   -->
   <PropertyGroup>
     <ToshCalYear>$([System.DateTime]::UtcNow.ToString('yy'))</ToshCalYear>
     <ToshCalMonth>$([System.DateTime]::UtcNow.Month)</ToshCalMonth>
-    <ToshPublishNumber>1</ToshPublishNumber>
     <ToshDotNetMajor>10</ToshDotNetMajor>
+
+    <!-- Read publish state from .tosh-publish-state ("YY.MM:N" format) -->
+    <_ToshPubStateFile>$(MSBuildThisFileDirectory).tosh-publish-state</_ToshPubStateFile>
+    <_ToshPubRaw Condition="Exists('$(_ToshPubStateFile)')">$([System.IO.File]::ReadAllText('$(_ToshPubStateFile)').Trim())</_ToshPubRaw>
+    <_ToshPubColonIdx Condition="'$(_ToshPubRaw)' != ''">$(_ToshPubRaw.IndexOf(':'))</_ToshPubColonIdx>
+    <_ToshPubStoredKey Condition="'$(_ToshPubColonIdx)' != '' and '$(_ToshPubColonIdx)' != '-1'">$(_ToshPubRaw.Remove($(_ToshPubColonIdx)))</_ToshPubStoredKey>
+    <_ToshPubAfterColon Condition="'$(_ToshPubColonIdx)' != '' and '$(_ToshPubColonIdx)' != '-1'">$([MSBuild]::Add($(_ToshPubColonIdx), 1))</_ToshPubAfterColon>
+    <_ToshPubStoredNum Condition="'$(_ToshPubAfterColon)' != ''">$(_ToshPubRaw.Substring($(_ToshPubAfterColon)))</_ToshPubStoredNum>
+    <_ToshCurrentCalKey>$(ToshCalYear).$(ToshCalMonth)</_ToshCurrentCalKey>
+
+    <!-- Use stored number if same month, otherwise reset to 1 -->
+    <ToshPublishNumber Condition="'$(_ToshPubStoredKey)' == '$(_ToshCurrentCalKey)' and '$(_ToshPubStoredNum)' != ''">$(_ToshPubStoredNum)</ToshPublishNumber>
+    <ToshPublishNumber Condition="'$(ToshPublishNumber)' == ''">1</ToshPublishNumber>
+
     <AssemblyVersion>$(ToshCalYear).$(ToshCalMonth).$(ToshPublishNumber).$(ToshDotNetMajor)</AssemblyVersion>
     <FileVersion>$(ToshCalYear).$(ToshCalMonth).$(ToshPublishNumber).$(ToshDotNetMajor)</FileVersion>
     <InformationalVersion>$(ToshCalYear).$(ToshCalMonth)-$(ToshPublishNumber)-$(ToshDotNetMajor)</InformationalVersion>

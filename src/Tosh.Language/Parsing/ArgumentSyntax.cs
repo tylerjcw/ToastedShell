@@ -6,6 +6,8 @@ public abstract record ArgumentSyntax(TextSpan Span);
 
 public sealed record BarewordArgumentSyntax(string Value, TextSpan Span) : ArgumentSyntax(Span);
 
+public sealed record NamedArgumentSyntax(string Name, ArgumentSyntax Value, TextSpan Span) : ArgumentSyntax(Span);
+
 public sealed record LiteralArgumentSyntax(object? Value, TextSpan Span) : ArgumentSyntax(Span);
 
 public sealed record VariableReferenceArgumentSyntax(string Name, TextSpan Span) : ArgumentSyntax(Span);
@@ -42,6 +44,12 @@ public sealed record DictLiteralArgumentSyntax(IReadOnlyList<DictEntrySyntax> En
 public sealed record FunctionReferenceArgumentSyntax(string Name, TextSpan Span) : ArgumentSyntax(Span);
 
 public sealed record BlockArgumentSyntax(BlockSyntax Block, TextSpan Span) : ArgumentSyntax(Span);
+
+/// <summary>
+/// Represents <c>quote { expr }</c> — captures the argument's AST as a first-class value
+/// instead of evaluating it. Used inside rune bodies for AST introspection.
+/// </summary>
+public sealed record QuoteArgumentSyntax(ArgumentSyntax Inner, TextSpan Span) : ArgumentSyntax(Span);
 
 public sealed record AnonymousFunctionArgumentSyntax(
     IReadOnlyList<FunctionParameterSyntax> Parameters,
@@ -134,7 +142,7 @@ public sealed record InterpolatedStringArgumentSyntax(
 public sealed record RangeArgumentSyntax(
     ArgumentSyntax Start,
     ArgumentSyntax? Step,
-    ArgumentSyntax End,
+    ArgumentSyntax? End,
     TextSpan Span) : ArgumentSyntax(Span);
 
 public sealed record NameOfArgumentSyntax(string Identifier, bool IsVariableReference, TextSpan Span) : ArgumentSyntax(Span);
@@ -147,4 +155,37 @@ public sealed record ComparisonPatternSyntax(
     string Operator,
     TextSpan OperatorSpan,
     ArgumentSyntax Operand,
+    TextSpan Span) : ArgumentSyntax(Span);
+
+// ── Comprehension syntax ──
+
+public sealed record ComprehensionClauseSyntax(
+    string VariableName,
+    ArgumentSyntax Source,
+    ArgumentSyntax? Condition,
+    IReadOnlyList<ComprehensionLetSyntax> LetBindings,
+    ComprehensionClauseSyntax? InnerClause,
+    TextSpan Span);
+
+public sealed record ComprehensionLetSyntax(string VariableName, ArgumentSyntax Value, TextSpan Span);
+
+public sealed record ListComprehensionArgumentSyntax(
+    ArgumentSyntax Body,
+    ComprehensionClauseSyntax Clause,
+    TextSpan Span) : ArgumentSyntax(Span);
+
+public sealed record SetComprehensionArgumentSyntax(
+    ArgumentSyntax Body,
+    ComprehensionClauseSyntax Clause,
+    TextSpan Span) : ArgumentSyntax(Span);
+
+public sealed record DictComprehensionArgumentSyntax(
+    ArgumentSyntax Key,
+    ArgumentSyntax Value,
+    ComprehensionClauseSyntax Clause,
+    TextSpan Span) : ArgumentSyntax(Span);
+
+public sealed record GeneratorComprehensionArgumentSyntax(
+    ArgumentSyntax Body,
+    ComprehensionClauseSyntax Clause,
     TextSpan Span) : ArgumentSyntax(Span);

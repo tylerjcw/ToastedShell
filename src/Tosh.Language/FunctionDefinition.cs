@@ -13,4 +13,5 @@ public sealed record FunctionDefinition(
     string SourceText,
     TextSpan Span,
     IReadOnlyList<LexicalScope>? CapturedScopes = null,
-    DocComment? DocComment = null);
+    DocComment? DocComment = null,
+    bool IsGenerator = false);

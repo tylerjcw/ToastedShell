@@ -87,8 +87,10 @@ Commands/
  BuiltInCommands.cs
  CallCommand.cs
  CallMethodCommand.cs
+ CartesianProductCommand.cs
  CastCommand.cs
  CatCommand.cs
+ ChainCommand.cs
  ChangeDirectoryCommand.cs
  ChmodCommand.cs
  ChownCommand.cs
@@ -97,6 +99,7 @@ Commands/
  CloneCommand.cs
  CloseCommand.cs
  CollectCommand.cs
+ CombinationsCommand.cs
  ComposeCommand.cs
  ConfigCommand.cs
  ConstructorsCommand.cs
@@ -106,8 +109,11 @@ Commands/
  CountCommand.cs
  CurryCommand.cs
  CutCommand.cs
+ CycleCommand.cs
  DateCommand.cs
+ DedupCommand.cs
  DelPropCommand.cs
+ DescribeCommand.cs
  DescribeTypeCommand.cs
  DfCommand.cs
  DirNameCommand.cs
@@ -116,6 +122,7 @@ Commands/
  DuCommand.cs
  EachCommand.cs
  EchoCommand.cs
+ EnumerateCommand.cs
  EnvironmentCommand.cs
  EventsCommand.cs
  ExecCommand.cs
@@ -159,6 +166,7 @@ Commands/
  IgnoreCommand.cs
  InspectCommand.cs
  InterleaveCommand.cs
+ IntersperseCommand.cs
  InvokeCommand.cs
  IpCommand.cs
  IterateCommand.cs
@@ -182,6 +190,7 @@ Commands/
  MapCommand.cs
  MatchCommand.cs
  MaxCommand.cs
+ MedianCommand.cs
  MembersCommand.cs
  MethodsCommand.cs
  MinCommand.cs
@@ -195,10 +204,13 @@ Commands/
  NetworkctlCommand.cs
  NewObjectCommand.cs
  OpenFileCommand.cs
+ ParallelCommand.cs
  ParseCommand.cs
  PartialCommand.cs
  PartitionCommand.cs
  PathPredicateCommand.cs
+ PercentileCommand.cs
+ PermutationsCommand.cs
  PingCommand.cs
  PositionCommand.cs
  PrintWorkingDirectoryCommand.cs
@@ -225,9 +237,12 @@ Commands/
  ReadLinkCommand.cs
  ReadToEndCommand.cs
  RealPathCommand.cs
+ RecurCommand.cs
  ReduceCommand.cs
  RemoveItemCommand.cs
  RenameCommand.cs
+ RepeatCommand.cs
+ RepeatedlyCommand.cs
  ReplaceCommand.cs
  ReverseCommand.cs
  ScanCommand.cs
@@ -242,6 +257,8 @@ Commands/
  SortCommand.cs
  SplitCommand.cs
  StatCommand.cs
+ StdevCommand.cs
+ StepByCommand.cs
  StyledCommand.cs
  SumCommand.cs
  SummarizeCommand.cs
@@ -269,6 +286,7 @@ Commands/
  UnfoldCommand.cs
  UniqueCommand.cs
  UptimeCommand.cs
+ VarianceCommand.cs
  VarsCommand.cs
  ViewCommand.cs
  WaitForCommand.cs
@@ -405,17 +423,20 @@ IShellInvocableObject.cs
 IShellNamedType.cs
 IShellRecordObject.cs
 IShellStaticType.cs
+IShellTypeCheckable.cs
 IShellTypeDescriptor.cs
 IShellTypedObject.cs
 ITypeResolver.cs
 JournalctlJsonParser.cs
 JsonValueConverter.cs
+LazySequence.cs
 LoginctlJsonParser.cs
 LsblkJsonParser.cs
 LscpuJsonParser.cs
 LsfdJsonParser.cs
 LsipcJsonParser.cs
 ManagedFileHandle.cs
+MathShellType.cs
 MemberPath.cs
 MemberPathSegment.cs
 MemoryUsageInfo.cs
@@ -727,6 +748,9 @@ WindowsTreeTraversal.cs
 ../../../../.dotnet/sdk/10.0.103/Sdks/Microsoft.NET.Sdk/analyzers/
  Microsoft.CodeAnalysis.CSharp.NetAnalyzers.dll
  Microsoft.CodeAnalysis.NetAnalyzers.dll
+<NUGET>/microsoft.net.illink.tasks/10.0.3/analyzers/dotnet/cs/
+ ILLink.CodeFixProvider.dll
+ ILLink.RoslynAnalyzer.dll
 
 [analyzerConfigFiles]
 ../../../../.dotnet/sdk/10.0.103/Sdks/Microsoft.NET.Sdk/analyzers/build/config/analysislevel_10_default.globalconfig

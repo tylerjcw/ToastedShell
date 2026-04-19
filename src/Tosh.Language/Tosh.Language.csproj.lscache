@@ -56,6 +56,7 @@ TemporaryDependencyNodeTargetIdentifier=net10.0
 /warnaserror+:NU1605,SYSLIB0011
 
 [sourceFiles]
+BuiltinRunes.cs
 CallableBindingMatch.cs
 Commands/
  DebugCommand.cs
@@ -63,6 +64,7 @@ Commands/
  NativeFunctionCommand.cs
  OverloadedFunctionCommand.cs
  RenamedCommand.cs
+ RuneCommand.cs
  SourceCommand.cs
  ToshScriptCommand.cs
 Debugging/
@@ -72,6 +74,7 @@ FunctionDefinition.cs
 FunctionParameterDefinition.cs
 LexicalScope.cs
 ModuleExportTable.cs
+NamedArgument.cs
 NativeLibraryBinding.cs
 obj/Debug/net10.0/
  .NETCoreApp,Version=v10.0.AssemblyAttributes.cs
@@ -91,24 +94,34 @@ Parsing/
  SyntaxTokenKind.cs
  ToshLexer.cs
  ToshParser.cs
+QuotedSyntax.cs
+RuneDefinition.cs
+RuneThunk.cs
 RuntimeNamespaceUtilities.cs
 ScopedTypeResolver.cs
+ToshClassClrSuperReference.cs
 ToshClassConstructorDefinition.cs
 ToshClassDefinition.cs
 ToshClassInstance.cs
 ToshClassMethodDefinition.cs
 ToshClassPropertyDefinition.cs
 ToshClassSelfReference.cs
+ToshClassSuperReference.cs
 ToshEngine.cs
 ToshEnumDefinition.cs
 ToshEnumValue.cs
 ToshEventDefinition.cs
+ToshInterfaceDefinition.cs
 ToshLambda.cs
 ToshModuleObject.cs
 ToshRecordDefinition.cs
 ToshRecordInstance.cs
 ToshRequiredScriptArtifact.cs
 ToshRuntimeNamespace.cs
+ToshStructDefinition.cs
+ToshStructInstance.cs
+ToshTraitDefinition.cs
+ToshUnionDefinition.cs
 
 [metadataReferences]
 ../../../../.dotnet/packs/Microsoft.NETCore.App.Ref/10.0.3/ref/net10.0/
@@ -294,6 +307,9 @@ ToshRuntimeNamespace.cs
 ../../../../.dotnet/sdk/10.0.103/Sdks/Microsoft.NET.Sdk/analyzers/
  Microsoft.CodeAnalysis.CSharp.NetAnalyzers.dll
  Microsoft.CodeAnalysis.NetAnalyzers.dll
+<NUGET>/microsoft.net.illink.tasks/10.0.3/analyzers/dotnet/cs/
+ ILLink.CodeFixProvider.dll
+ ILLink.RoslynAnalyzer.dll
 
 [analyzerConfigFiles]
 ../../../../.dotnet/sdk/10.0.103/Sdks/Microsoft.NET.Sdk/analyzers/build/config/analysislevel_10_default.globalconfig

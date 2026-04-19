@@ -66,6 +66,8 @@ public sealed class ToshShellConfig : IResettableShellConfig
 
     public ToshDirectoryAliasConfig Dirs { get; } = new();
 
+    public ToshUsingsConfig Usings { get; } = new();
+
     public void Reset()
     {
         Pipefail = false;
@@ -74,6 +76,7 @@ public sealed class ToshShellConfig : IResettableShellConfig
         ScriptTrace = false;
         AutoCd = false;
         Dirs.Reset();
+        Usings.Reset();
     }
 }
 
@@ -1443,5 +1446,71 @@ public sealed class ToshTtyGlyphConfig : IResettableShellConfig, IShellRecordObj
         _glyphs["\u276f"] = ">";      // ❯ → >
         _glyphs["\ue0a0"] = "";       //  → (empty, Nerd Font)
         _glyphs["\u00d7"] = "x";      // × → x
+    }
+}
+
+public sealed class ToshUsingsConfig : IResettableShellConfig, IShellRecordObject
+{
+    private DotNetTypeResolver? _resolver;
+
+    public string ShellTypeName => "Usings";
+
+    internal void Bind(DotNetTypeResolver resolver)
+    {
+        _resolver = resolver;
+    }
+
+    public bool TryGetMember(string name, out object? value, bool includeHidden = false)
+    {
+        value = null;
+        return false;
+    }
+
+    public bool TrySetMember(string name, object? value)
+    {
+        if (value is null or false)
+        {
+            _resolver?.RemoveUsing(name);
+            return true;
+        }
+
+        _resolver?.AddUsing(name);
+        return true;
+    }
+
+    public IReadOnlyList<KeyValuePair<string, object?>> GetMembers(bool includeHidden = false)
+    {
+        if (_resolver is null) return [];
+
+        return _resolver.GetImports()
+            .OrderBy(ns => ns, StringComparer.OrdinalIgnoreCase)
+            .Select(ns => new KeyValuePair<string, object?>(ns, true))
+            .ToArray();
+    }
+
+    public void Add(string namespacePath)
+    {
+        _resolver?.AddUsing(namespacePath);
+    }
+
+    public bool Remove(string namespacePath)
+    {
+        return _resolver?.RemoveUsing(namespacePath) ?? false;
+    }
+
+    public void Reset()
+    {
+        // Reset to defaults by clearing and re-adding
+        if (_resolver is null) return;
+
+        foreach (var ns in _resolver.GetImports().ToArray())
+        {
+            _resolver.RemoveUsing(ns);
+        }
+
+        foreach (var ns in DotNetTypeResolver.GetDefaultImplicitUsings())
+        {
+            _resolver.AddUsing(ns);
+        }
     }
 }

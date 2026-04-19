@@ -1,0 +1,30 @@
+# chktex configuration for the ToastScript Language Specification
+
+# Tell chktex that lstlisting is a verbatim environment (skip its contents)
+VerbEnvir
+{
+    lstlisting
+}
+
+# Tell chktex to ignore content inside these inline commands
+WipeArg
+{
+    \lstinline:[]:1
+    \code:1
+    \tosh:1
+    \texttt:1
+    \icmd:1
+    \ikw:1
+    \itype:1
+    \iop:1
+}
+
+# Suppress only codes that are genuinely inapplicable:
+#  8  - Wrong length of dash may fire on em-dash usage that is correct
+#  9  - `]' expected, found `}' — tcolorbox optional argument syntax
+#  15 - No match found for `{' — tcolorbox/tikz multi-line braces
+#  17 - Number of `[' doesn't match `]' — optional argument patterns
+CmdLine
+{
+    -n8 -n9 -n15 -n17
+}

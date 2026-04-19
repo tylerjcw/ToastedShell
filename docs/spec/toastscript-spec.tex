@@ -13,9 +13,9 @@
 
 % ─── Page Layout ──────────────────────────────────────────────────────────────
 \usepackage[
-  top=2.5cm, bottom=2.5cm,
+  top=2.5cm, bottom=2.3cm,
   inner=3cm, outer=2.5cm,
-  headheight=14pt
+  headheight=20pt
 ]{geometry}
 \usepackage{parskip}
 
@@ -59,6 +59,32 @@
 \usepackage{multirow}
 \newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
 \newcolumntype{C}[1]{>{\centering\arraybackslash}p{#1}}
+
+% ─── Table of Contents Formatting ─────────────────────────────────────────────
+% Widen number columns to accommodate e.g. "19.33" section numbers.
+% Using etoolbox to patch the standard \l@chapter / \l@section directly,
+% avoiding the tocloft vs hyperref conflict.
+\usepackage{etoolbox}
+\makeatletter
+\renewcommand*\l@chapter[2]{%
+  \ifnum \c@tocdepth >\m@ne
+    \addpenalty{-\@highpenalty}%
+    \vskip 1.0em \@plus\p@
+    \setlength\@tempdima{2.0em}%  chapter numwidth
+    \begingroup
+      \parindent \z@ \rightskip \@pnumwidth
+      \parfillskip -\@pnumwidth
+      \leavevmode \bfseries
+      \advance\leftskip\@tempdima
+      \hskip -\leftskip
+      #1\nobreak\hfil\nobreak\hb@xt@\@pnumwidth{\hss #2%
+                 \kern-\p@\kern\p@}\par
+      \penalty\@highpenalty
+    \endgroup
+  \fi}
+\renewcommand*\l@section{\@dottedtocline{1}{2.0em}{3.5em}}
+\renewcommand*\l@subsection{\@dottedtocline{2}{5.5em}{4.5em}}
+\makeatother
 
 % ─── Symbols ──────────────────────────────────────────────────────────────────
 \usepackage{amssymb}
@@ -241,6 +267,20 @@
 % Prevent over-wide lines
 \sloppy
 
+% ─── Warning Suppression ─────────────────────────────────────────────────────
+% Suppress underfull box warnings (cosmetic layout noise)
+\hbadness=10000
+\vbadness=10000
+
+% Allow pages to be slightly short rather than overfull
+\raggedbottom
+
+% Suppress persistent longtable and font shape warnings
+\usepackage{silence}
+\WarningFilter{longtable}{Column widths have changed}
+\WarningFilter{latexfont}{Font shape}
+\WarningFilter{latexfont}{Some font shapes}
+
 % ─── Custom signature environment ────────────────────────────────────────────
 \newenvironment{signature}{%
   \par\vspace{4pt}%
@@ -258,6 +298,7 @@
 % ─────────────────────────────────────────────────────────────────────────────
 %  COVER PAGE
 % ─────────────────────────────────────────────────────────────────────────────
+\hypersetup{pageanchor=false}
 \begin{titlepage}
 \begin{tikzpicture}[remember picture, overlay]
   % Background
@@ -299,6 +340,10 @@
     };
 \end{tikzpicture}
 \end{titlepage}
+
+% Re-enable page anchors and start roman numbering for front matter
+\hypersetup{pageanchor=true}
+\pagenumbering{roman}
 
 % ─────────────────────────────────────────────────────────────────────────────
 %  FRONT MATTER
@@ -547,7 +592,7 @@ TōSh allows hyphens in identifiers.
 
 TōSh provides eight string forms to cover every quoting need:
 
-\begin{longtable}{L{3cm} C{1.8cm} C{2.2cm} C{2cm} L{4.5cm}}
+\begin{longtable}{L{3cm} C{1.8cm} C{2.5cm} C{1.8cm} L{4cm}}
 \toprule
 \textbf{Form} & \textbf{Escapes} & \textbf{Interpolation} & \textbf{Multi-line} & \textbf{Example} \\
 \midrule
@@ -680,7 +725,8 @@ date now | type-of        # System.DateTimeOffset
 TōSh provides over 40 short aliases for common CLR types. Use these in type
 annotations, casts, and \code{new} expressions.
 
-\begin{longtable}{llL{6cm}}
+{\small
+\begin{longtable}{llL{4.5cm}}
 \toprule
 \textbf{Alias} & \textbf{CLR Type} & \textbf{Notes} \\
 \midrule
@@ -722,6 +768,7 @@ annotations, casts, and \code{new} expressions.
 \caption{Built-in type aliases}
 \label{tab:types}
 \end{longtable}
+}
 
 \section{Shell-Specific Types}
 
@@ -1192,7 +1239,7 @@ x ??= 100       # Still 30 (x isn't null)
 
 Operators are listed from highest to lowest precedence:
 
-\begin{longtable}{clL{5.5cm}}
+\begin{longtable}{C{1.2cm} L{7.5cm} L{4.8cm}}
 \toprule
 \textbf{Level} & \textbf{Operators} & \textbf{Description} \\
 \midrule
@@ -1830,11 +1877,96 @@ Class features:
   \item \textbf{Stored properties}---\code{prop Name: Type = value}.
   \item \textbf{Computed properties}---\code{prop Name: Type => (expr)}.
   \item \textbf{Methods}---\code{func Name(params) \{ ... \}}.
-  \item \textbf{Static methods}---\code{static func Name(params) \{ ... \}}.
+  \item \textbf{Static methods}---\code{static func Name(params) \{ ... \}} (or \code{shared}).
   \item \textbf{Self-reference}---\code{\$this} inside methods.
   \item \textbf{Visibility}---\code{shy} for private members.
   \item \textbf{Instantiation}---\code{new ClassName(args)}.
 \end{itemize}
+
+\subsection{Class Modifiers}
+
+Class-level modifiers appear before the \code{class} keyword and control
+the class's overall behaviour.
+
+\begin{description}
+  \item[\code{sealed}] Prevents the class from being inherited.
+    A sealed class cannot appear as a base class.
+  \item[\code{hollow}] Marks the class as \emph{abstract}.
+    It cannot be instantiated directly; subclasses must override all hollow methods.
+  \item[\code{hermit}] Marks the class as \emph{static-only}.
+    All members are auto-promoted to shared; constructors are not allowed;
+    the class cannot be instantiated.
+  \item[\code{strict}] Makes every property in the class \emph{read-only}
+    after initialisation, as if each were individually marked \code{fixed}.
+  \item[\code{partial}] Allows the class definition to be split across
+    multiple declarations.  All declarations must carry the \code{partial}
+    modifier.  Properties and methods are merged; duplicate property names
+    are silently skipped; methods support overloading.
+\end{description}
+
+\noindent Example:
+\begin{lstlisting}
+sealed class Config {
+    prop Host = "localhost"
+    prop Port = 8080
+}
+
+hollow class Shape {
+    hollow func area() -> double
+}
+
+hermit class MathHelper {
+    func square(x) { echo ($x * $x) }
+}
+MathHelper.square(5)             # 25
+
+strict class Point {
+    prop X = 0
+    prop Y = 0
+}
+
+partial class User { prop Name = "" }
+partial class User { func greet() { echo $"Hi, {$this.Name}" } }
+\end{lstlisting}
+
+\subsection{Member Modifiers}
+
+Member-level modifiers appear before \code{prop} or \code{func} inside a
+class body.
+
+\begin{description}
+  \item[\code{shy}] Hides the member from public inspection and external access (private).
+  \item[\code{shared} / \code{static}] Member belongs to the class rather than an instance.
+  \item[\code{fixed}] Makes a property read-only after initialisation.
+  \item[\code{vital}] Marks a property as required---construction fails
+    without a value.
+  \item[\code{guarded}] Restricts access to the defining class and its
+    subclasses (protected).
+  \item[\code{overrule}] Overrides an inherited method from a parent class.
+  \item[\code{lazy}] Defers the property initialiser until first access;
+    the result is cached.
+  \item[\code{fading}] Marks the member as deprecated; emits a warning to
+    stderr on use.
+  \item[\code{local}] Restricts visibility to the defining assembly
+    (internal).
+  \item[\code{raw}] Marks a method for unsafe/native interop.
+  \item[\code{proud} / \code{public}] Explicitly marks a member as public
+    (no-op, members default to public).
+  \item[\code{hollow}] (on a method) Declares an abstract method with
+    no body that subclasses must overrule.
+\end{description}
+
+\noindent Example:
+\begin{lstlisting}
+class Product {
+    vital prop Name: string
+    fixed prop Id = 0
+    lazy prop Metadata = load_metadata($this.Id)
+    shy prop _cache = []
+    guarded func validate() { echo "checking" }
+    fading prop OldName = "use NewName"
+}
+\end{lstlisting}
 
 \section{Record Definitions}
 \ikw{record}

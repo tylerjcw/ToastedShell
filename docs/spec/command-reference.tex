@@ -2722,6 +2722,33 @@ var step1 = invoke $curried 1; var step2 = invoke $step1 2; invoke $step2 39  # 
 
 \end{cmdbox}
 
+\subsection{\texttt{cycle}}
+\label{ref:cycle}
+\icmd{cycle}
+
+\begin{cmdbox}{cycle}
+Infinitely repeats the pipeline items in order.
+
+\begin{signature}
+... | cycle
+\end{signature}
+
+\textbf{Pipeline input:} scalar, record
+ --- Items to repeat cyclically.
+
+\textbf{Output:} The pipeline items repeated in order, infinitely.
+
+\begin{lstlisting}
+echo 1 2 3 | cycle | first 9  # Cycle a sequence
+[a b c] | cycle | first 7  # Cycle an array
+\end{lstlisting}
+
+\begin{notebox}
+Produces an infinite sequence. Always pair with `first`, `take-while`, or `take-until` to bound the output.
+\end{notebox}
+
+\end{cmdbox}
+
 \subsection{\texttt{invoke}}
 \label{ref:invoke}
 \icmd{invoke}
@@ -2817,6 +2844,108 @@ arg ... & Leading positional arguments to bind ahead of time. (optional) \\
 var add = func(x, y) => ($x + $y); var inc = partial $add 1; invoke $inc 41  # Bind the first argument of a callable
 invoke (partial (func(a, b, c) => ($"{$a}-{$b}-{$c}")) alpha beta) gamma  # Bind multiple leading arguments
 \end{lstlisting}
+
+\end{cmdbox}
+
+\subsection{\texttt{recur}}
+\label{ref:recur}
+\icmd{recur}
+
+\begin{cmdbox}{recur}
+Generates an infinite sequence from seed values using a recurrence relation. The callable receives the last N values (matching seed count) and returns the next value.
+
+\begin{signature}
+recur <seeds> <callable|block>
+\end{signature}
+
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+seeds & The initial values of the recurrence, e.g. (0, 1) for Fibonacci. \\
+callable|\allowbreak block & A function applied to the last N values to produce the next. N matches the seed count. \\
+\bottomrule
+\end{tabular}
+
+\textbf{Output:} An infinite sequence: seeds..., f(seeds), f(seed[1..], f(seeds)), ...
+
+\begin{lstlisting}
+recur (0, 1) func(a, b) => ($a + $b) | first 10  # Fibonacci sequence
+recur (1, 1, 1) func(a, b, c) => ($a + $b + $c) | first 10  # Tribonacci sequence
+\end{lstlisting}
+
+\begin{notebox}
+Produces an infinite sequence. Always pair with `first`, `take-while`, or `take-until` to bound the output.
+\end{notebox}
+
+\end{cmdbox}
+
+\subsection{\texttt{repeat}}
+\label{ref:repeat}
+\icmd{repeat}
+
+\begin{cmdbox}{repeat}
+Produces a sequence of the same value repeated. Without a count argument, repeats infinitely.
+
+\begin{signature}
+repeat <value> [count]
+\end{signature}
+
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+value & The value to repeat infinitely. \\
+count & Optional maximum number of repetitions. (optional) \\
+\bottomrule
+\end{tabular}
+
+\textbf{Output:} The same value repeated.
+
+\begin{lstlisting}
+repeat 0 | first 5  # Five zeros
+repeat hello 3  # Three hellos
+\end{lstlisting}
+
+\begin{notebox}
+Without a count, produces an infinite sequence. Pair with `first`, `take-while`, or `take-until` to bound.
+\end{notebox}
+
+\end{cmdbox}
+
+\subsection{\texttt{repeatedly}}
+\label{ref:repeatedly}
+\icmd{repeatedly}
+
+\begin{cmdbox}{repeatedly}
+Produces an infinite sequence by re-evaluating a block for each item. The block receives the 0-based index.
+
+\begin{signature}
+repeatedly <callable|block>
+\end{signature}
+
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+callable|\allowbreak block & A block or function to evaluate each time. Receives the current index as \$\_ and as the first argument. \\
+\bottomrule
+\end{tabular}
+
+\textbf{Output:} Infinite sequence of evaluated block results.
+
+\begin{lstlisting}
+repeatedly { random int 1 100 } | first 5  # Five random numbers
+repeatedly func(i) => ($i * $i) | first 6  # Squares via index
+\end{lstlisting}
+
+\begin{notebox}
+Produces an infinite sequence. Always pair with `first`, `take-while`, or `take-until` to bound the output.
+\end{notebox}
+
+\begin{notebox}
+Unlike `repeat`, this re-evaluates the block for each item, so side effects and randomness work.
+\end{notebox}
 
 \end{cmdbox}
 
@@ -3100,6 +3229,75 @@ ls | average .Length  # Average file sizes
 
 \end{cmdbox}
 
+\subsection{\texttt{cartesian-product}}
+\label{ref:cartesian-product}
+\icmd{cartesian-product}
+
+\begin{cmdbox}{cartesian-product}
+Produces the Cartesian product of two sequences. For infinite sources, uses diagonal enumeration.
+
+\begin{signature}
+... | cartesian-product <other-sequence> [callable|block]
+\end{signature}
+
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+other-sequence & A second sequence to form pairs with. \\
+callable|\allowbreak block & Optional combiner. Receives each pair as arguments. Defaults to [a, b] arrays. (optional) \\
+\bottomrule
+\end{tabular}
+
+\textbf{Pipeline input:} scalar, record
+ --- First sequence for the Cartesian product.
+
+\textbf{Output:} All combinations of items from the pipeline and the other sequence.
+
+\begin{lstlisting}
+[1 2] | cartesian-product [a b]  # All pairs: [1,a],[1,b],[2,a],[2,b]
+1.. | cartesian-product (1..) | first 10  # Diagonal enumeration of infinite sources
+echo 1 2 3 | cartesian-product [10 20] func(a, b) => ($a * $b)  # With combiner
+\end{lstlisting}
+
+\begin{notebox}
+For infinite sources, uses diagonal (Cantor) enumeration so every pair is reached in finite time.
+\end{notebox}
+
+\end{cmdbox}
+
+\subsection{\texttt{chain}}
+\label{ref:chain}
+\icmd{chain}
+
+\begin{cmdbox}{chain}
+Lazily concatenates the pipeline with one or more sequences.
+
+\begin{signature}
+... | chain <sequence> [sequence ...]
+\end{signature}
+
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+sequences & One or more arrays, lists, or ranges to concatenate after the pipeline. \\
+\bottomrule
+\end{tabular}
+
+\textbf{Pipeline input:} scalar, record
+ --- Pipeline items are yielded first, followed by each argument sequence.
+
+\textbf{Output:} All items from the pipeline (if any) followed by all items from each argument sequence.
+
+\begin{lstlisting}
+echo 1 2 | chain [3 4] [5 6]  # Concatenate multiple sequences
+echo a b c | chain [d e f]  # Append to pipeline
+chain [1 2] [3 4] [5 6]  # Concatenate without pipeline input
+\end{lstlisting}
+
+\end{cmdbox}
+
 \subsection{\texttt{chunk}}
 \label{ref:chunk}
 \icmd{chunk}
@@ -3155,6 +3353,37 @@ findmnt -l | where _.FsType == ext4 | collect  # Buffer filtered structured rows
 
 \end{cmdbox}
 
+\subsection{\texttt{combinations}}
+\label{ref:combinations}
+\icmd{combinations}
+
+\begin{cmdbox}{combinations}
+Yields all k-element combinations (subsets) of the pipeline items.
+
+\begin{signature}
+... | combinations <k>
+\end{signature}
+
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+k & The number of elements in each combination. \\
+\bottomrule
+\end{tabular}
+
+\textbf{Pipeline input:} scalar, record
+ --- Items to select combinations from.
+
+\textbf{Output:} Arrays of k elements from the pipeline in lexicographic order.
+
+\begin{lstlisting}
+[1 2 3] | combinations 2  # All 2-element subsets
+echo a b c d | combinations 3  # All 3-element subsets
+\end{lstlisting}
+
+\end{cmdbox}
+
 \subsection{\texttt{count}}
 \label{ref:count}
 \icmd{count}
@@ -3174,6 +3403,71 @@ count
 \begin{lstlisting}
 echo a b c | count  # Count items in a pipeline
 ls | count  # Count files in the current directory
+\end{lstlisting}
+
+\end{cmdbox}
+
+\subsection{\texttt{dedup}}
+\label{ref:dedup}
+\icmd{dedup}
+
+\begin{cmdbox}{dedup}
+Removes consecutive duplicate values from the pipeline. Unlike 'distinct', preserves non-adjacent duplicates.
+
+\begin{signature}
+... | dedup [member-path]
+\end{signature}
+
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+member-path & Optional member path to extract the comparison key from each object. (optional) \\
+\bottomrule
+\end{tabular}
+
+\textbf{Pipeline input:} scalar, record
+ --- Yields each item only if different from the previous.
+
+\textbf{Output:} Pipeline items with consecutive duplicate values removed.
+
+\begin{lstlisting}
+echo 1 1 2 2 3 1 1 | dedup  # Remove consecutive duplicates
+ls | sort-by .Extension | dedup .Extension  # Dedup by member path
+\end{lstlisting}
+
+\begin{notebox}
+Unlike `distinct`, only removes adjacent duplicates. Preserves non-consecutive repeats.
+\end{notebox}
+
+\end{cmdbox}
+
+\subsection{\texttt{describe}}
+\label{ref:describe}
+\icmd{describe}
+
+\begin{cmdbox}{describe}
+Returns descriptive statistics for numeric pipeline values.
+
+\begin{signature}
+describe [member-path]
+\end{signature}
+
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+member-path & Optional member path to extract numeric values from each object. (optional) \\
+\bottomrule
+\end{tabular}
+
+\textbf{Pipeline input:} scalar, record
+ --- Consumes the pipeline and returns descriptive statistics.
+
+\textbf{Output:} A table of summary statistics: Count, Mean, Median, StdDev, Min, Max, Q1, Q3.
+
+\begin{lstlisting}
+echo 23 45 12 67 34 89 11 55 | describe  # Summary statistics
 \end{lstlisting}
 
 \end{cmdbox}
@@ -3243,6 +3537,37 @@ DriveInfo.GetDrives() | each func(d) => ($d.Name)  # Extract drive names
 \begin{notebox}
 Collections stay intact until you explicitly expand them with `each` or `flatten`.
 \end{notebox}
+
+\end{cmdbox}
+
+\subsection{\texttt{enumerate}}
+\label{ref:enumerate}
+\icmd{enumerate}
+
+\begin{cmdbox}{enumerate}
+Pairs each pipeline item with its index, yielding [index, item] arrays.
+
+\begin{signature}
+... | enumerate [start]
+\end{signature}
+
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+start & Optional starting index (default: 0). (optional) \\
+\bottomrule
+\end{tabular}
+
+\textbf{Pipeline input:} scalar, record
+ --- Each item is paired with its index.
+
+\textbf{Output:} Two-element arrays [index, item] for each pipeline item.
+
+\begin{lstlisting}
+echo a b c | enumerate  # Default 0-based indexing
+echo a b c | enumerate 1  # 1-based indexing
+\end{lstlisting}
 
 \end{cmdbox}
 
@@ -3536,6 +3861,37 @@ echo 1 2 3 | interleave [a b c]  # Alternate numbers and letters
 
 \end{cmdbox}
 
+\subsection{\texttt{intersperse}}
+\label{ref:intersperse}
+\icmd{intersperse}
+
+\begin{cmdbox}{intersperse}
+Inserts a separator value between each pair of pipeline items.
+
+\begin{signature}
+... | intersperse <separator>
+\end{signature}
+
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+separator & The value to insert between each pipeline item. \\
+\bottomrule
+\end{tabular}
+
+\textbf{Pipeline input:} scalar, record
+ --- Items are yielded with the separator between each pair.
+
+\textbf{Output:} The original items with the separator inserted between each pair.
+
+\begin{lstlisting}
+echo 1 2 3 | intersperse 0  # Insert zeros between items
+echo a b c | intersperse "-"  # Insert dashes
+\end{lstlisting}
+
+\end{cmdbox}
+
 \subsection{\texttt{last}}
 \label{ref:last}
 \icmd{last}
@@ -3629,6 +3985,37 @@ ls | max .Length  # Find the largest file by size
 
 \end{cmdbox}
 
+\subsection{\texttt{median}}
+\label{ref:median}
+\icmd{median}
+
+\begin{cmdbox}{median}
+Returns the median of numeric pipeline values.
+
+\begin{signature}
+median [member-path]
+\end{signature}
+
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+member-path & Optional member path to extract numeric values from each object. (optional) \\
+\bottomrule
+\end{tabular}
+
+\textbf{Pipeline input:} scalar, record
+ --- Consumes the pipeline and returns the median.
+
+\textbf{Output:} The median value of the pipeline. For even-length lists, returns the average of the two middle values.
+
+\begin{lstlisting}
+echo 1 2 3 4 5 | median  # Median of a list
+ls | median .Length  # Median file size
+\end{lstlisting}
+
+\end{cmdbox}
+
 \subsection{\texttt{min}}
 \label{ref:min}
 \icmd{min}
@@ -3691,6 +4078,44 @@ ls | none { _.Type == link }
 
 \end{cmdbox}
 
+\subsection{\texttt{parallel}}
+\label{ref:parallel}
+\icmd{parallel}
+
+\begin{cmdbox}{parallel}
+Executes a block or callable concurrently for each input object.
+
+\begin{signature}
+parallel [--threads <n>] <callable|block>
+\end{signature}
+
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+callable|\allowbreak block & A lambda or block executed once per input item, concurrently. \\
+\bottomrule
+\end{tabular}
+
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Flag / Option} & \textbf{Description} \\
+\midrule
+--threads <n> & Maximum degree of parallelism (default: processor count). \\
+\bottomrule
+\end{tabular}
+
+\textbf{Pipeline input:} scalar, record
+ --- Consumes the current pipeline and executes the callable or block in parallel for each input item.
+
+\textbf{Output:} Returns whatever values the callable or block emits for each input item, in input order.
+
+\begin{lstlisting}
+echo 1 2 3 | parallel { echo (_ * 2) }  # Double each item in parallel
+\end{lstlisting}
+
+\end{cmdbox}
+
 \subsection{\texttt{partition}}
 \label{ref:partition}
 \icmd{partition}
@@ -3718,6 +4143,68 @@ callable|\allowbreak block & A predicate that returns true or false for each ite
 \begin{lstlisting}
 echo 1 2 3 4 5 | partition { _ > 3 }  # Partition by a condition
 ls | partition { _.Extension == ".cs" }  # Separate C# files from others
+\end{lstlisting}
+
+\end{cmdbox}
+
+\subsection{\texttt{percentile}}
+\label{ref:percentile}
+\icmd{percentile}
+
+\begin{cmdbox}{percentile}
+Returns the Nth percentile of numeric pipeline values.
+
+\begin{signature}
+percentile <N> [member-path]
+\end{signature}
+
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+percentile & The percentile to compute (0–100). \\
+member-path & Optional member path to extract numeric values from each object. (optional) \\
+\bottomrule
+\end{tabular}
+
+\textbf{Pipeline input:} scalar, record
+ --- Consumes the pipeline and returns the percentile value.
+
+\textbf{Output:} The value at the requested percentile using linear interpolation.
+
+\begin{lstlisting}
+echo 1 2 3 4 5 6 7 8 9 10 | percentile 95  # 95th percentile
+\end{lstlisting}
+
+\end{cmdbox}
+
+\subsection{\texttt{permutations}}
+\label{ref:permutations}
+\icmd{permutations}
+
+\begin{cmdbox}{permutations}
+Yields all k-element permutations (orderings) of the pipeline items. Defaults to full-length permutations.
+
+\begin{signature}
+... | permutations [k]
+\end{signature}
+
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+k & The number of elements in each permutation. Defaults to the full length if omitted. (optional) \\
+\bottomrule
+\end{tabular}
+
+\textbf{Pipeline input:} scalar, record
+ --- Items to permute.
+
+\textbf{Output:} Arrays of k elements representing each permutation.
+
+\begin{lstlisting}
+[1 2 3] | permutations  # All 6 permutations of 3 elements
+echo a b c | permutations 2  # All 2-element orderings
 \end{lstlisting}
 
 \end{cmdbox}
@@ -3985,6 +4472,69 @@ ps | sort func(p) => ($p.Name.Length)  # Lambda sort key
 
 \end{cmdbox}
 
+\subsection{\texttt{stdev}}
+\label{ref:stdev}
+\icmd{stdev}
+
+\begin{cmdbox}{stdev}
+Returns the population standard deviation of numeric pipeline values.
+
+\textit{Aliases:} \code{stddev}
+
+\begin{signature}
+stdev [member-path]
+\end{signature}
+
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+member-path & Optional member path to extract numeric values from each object. (optional) \\
+\bottomrule
+\end{tabular}
+
+\textbf{Pipeline input:} scalar, record
+ --- Consumes the pipeline and returns the standard deviation.
+
+\textbf{Output:} The population standard deviation of the pipeline values.
+
+\begin{lstlisting}
+echo 2 4 4 4 5 5 7 9 | stdev  # Standard deviation
+\end{lstlisting}
+
+\end{cmdbox}
+
+\subsection{\texttt{step-by}}
+\label{ref:step-by}
+\icmd{step-by}
+
+\begin{cmdbox}{step-by}
+Takes every Nth item from the pipeline.
+
+\begin{signature}
+... | step-by <n>
+\end{signature}
+
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+n & Take every Nth item (must be >= 1). \\
+\bottomrule
+\end{tabular}
+
+\textbf{Pipeline input:} scalar, record
+ --- Yields every Nth item from the pipeline.
+
+\textbf{Output:} Every Nth item from the pipeline.
+
+\begin{lstlisting}
+1.. | step-by 3 | first 5  # Every 3rd integer
+echo a b c d e f g | step-by 2  # Every other item
+\end{lstlisting}
+
+\end{cmdbox}
+
 \subsection{\texttt{sum}}
 \label{ref:sum}
 \icmd{sum}
@@ -4144,6 +4694,36 @@ transpose
 
 \begin{lstlisting}
 echo @{a=1; b=2} @{a=3; b=4} | transpose  # Pivot rows into columns
+\end{lstlisting}
+
+\end{cmdbox}
+
+\subsection{\texttt{variance}}
+\label{ref:variance}
+\icmd{variance}
+
+\begin{cmdbox}{variance}
+Returns the population variance of numeric pipeline values.
+
+\begin{signature}
+variance [member-path]
+\end{signature}
+
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+member-path & Optional member path to extract numeric values from each object. (optional) \\
+\bottomrule
+\end{tabular}
+
+\textbf{Pipeline input:} scalar, record
+ --- Consumes the pipeline and returns the variance.
+
+\textbf{Output:} The population variance of the pipeline values.
+
+\begin{lstlisting}
+echo 2 4 4 4 5 5 7 9 | variance  # Population variance
 \end{lstlisting}
 
 \end{cmdbox}
