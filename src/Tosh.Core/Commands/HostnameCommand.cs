@@ -1,6 +1,7 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("System")]
+[CommandExample("hostname", Title = "Show the current host name")]
 public sealed class HostnameCommand : ShellCommand
 {
     public HostnameCommand()

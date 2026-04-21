@@ -1,6 +1,9 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Pipeline")]
+[CommandArgument("callable|block", "Predicate callable or block evaluated for each pipeline value.")]
+[CommandExample("echo 10 20 30 | find-index { _ == 20 }", Title = "Find the first matching index")]
+[CommandExample("ls | find-index func(f) => $f.Name.EndsWith(\".slnx\")", Title = "Find an index with a lambda")]
 public sealed class FindIndexCommand : ShellCommand
 {
     public FindIndexCommand()

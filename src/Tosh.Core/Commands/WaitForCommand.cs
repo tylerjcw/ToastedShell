@@ -1,6 +1,9 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Process")]
+[CommandArgument("job-id ...", "Optional ToSh background job ids or job objects to await. With no targets, waits for all current jobs.", Required = false)]
+[CommandExample("wait-for", Title = "Wait for all background jobs")]
+[CommandExample("spawn git status | wait-for", Title = "Wait for a job supplied by the pipeline")]
 [CommandNote("Wait-for blocks until one or more background jobs finish and returns structured completion objects.")]
 public sealed class WaitForCommand : ShellCommand
 {

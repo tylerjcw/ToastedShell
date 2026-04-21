@@ -3,6 +3,14 @@ using System.Text.RegularExpressions;
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Text")]
+[CommandArgument("delimiter|regex", "Delimiter string, regex pattern, or Regex object. Defaults to whitespace splitting when omitted.", Required = false)]
+[CommandArgument("text ...", "Optional explicit text values. When omitted, reads pipeline text.", Required = false)]
+[CommandOption("-r, --regex", "Treat the delimiter as a regular expression.")]
+[CommandOption("-i, --ignore-case", "Use case-insensitive regex matching.")]
+[CommandOption("-m, --multiline", "Enable regex multiline mode.")]
+[CommandOption("-s, --singleline", "Enable regex singleline mode so . matches newlines.")]
+[CommandOption("-x, --ignore-pattern-whitespace", "Ignore unescaped whitespace and allow # comments in the regex pattern.")]
+[CommandOption("--explicit-capture", "Only capture explicitly named or numbered groups in regex mode.")]
 [CommandExample("echo \"alpha,beta,gamma\" | split \",\"")]
 [CommandExample("echo \"alpha,beta;gamma\" | split -r \"[,;]\"")]
 public sealed class SplitCommand : ShellCommand

@@ -1,10 +1,13 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("CLR")]
+[CommandArgument("buffer ...", "Native buffers to free. Buffers may also be supplied from the pipeline.", Required = false)]
+[CommandExample("$buffer | native-free", Title = "Free a piped native buffer")]
+[CommandExample("native-free $a $b", Title = "Free explicit buffers")]
 public sealed class NativeFreeCommand : ShellCommand
 {
     public NativeFreeCommand()
-        : base("native-free", "Frees one or more native buffers allocated by native-alloc.", "native-free [buffer ...]") { }
+        : base("native-free", "Frees one or more native buffers allocated by alloc/native-alloc.", "native-free [buffer ...]") { }
 
     public override async IAsyncEnumerable<object?> ExecuteAsync(CommandContext context)
     {

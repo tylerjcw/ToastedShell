@@ -1,6 +1,10 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("System")]
+[CommandArgument("mode|operation", "Creation mode (`now`, `utc-now`, `today`, `tomorrow`, `yesterday`, `parse`, `from-unix`, `from-unix-ms`, `date-only`, `time-only`, or an ISO value) or pipeline operation (`add`, `sub`, `date-only`, `time-only`).", Required = false)]
+[CommandArgument("value ...", "Values required by the chosen mode or operation, such as a parse string, Unix timestamp, or duration.", Required = false)]
+[CommandOption("-d, --date-only, --dateonly", "Project results to DateOnly values.")]
+[CommandOption("-t, --time-only, --timeonly", "Project results to TimeOnly values.")]
 [CommandExample("date now -d -t")]
 [CommandExample("date parse 2026-03-29T12:34:56Z -d")]
 [CommandExample("date parse 2026-03-29T12:34:56Z | cast timeonly")]

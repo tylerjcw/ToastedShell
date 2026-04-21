@@ -1,6 +1,9 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Text")]
+[CommandArgument("text ...", "Text values to split. When omitted, reads pipeline input.", Required = false)]
+[CommandExample("lines \"alpha\\nbeta\"", Title = "Split an explicit string")]
+[CommandExample("read-file notes.txt | lines | where _.Contains(\"TODO\")", Title = "Split file text into lines")]
 public sealed class LinesCommand : ShellCommand
 {
     public LinesCommand()

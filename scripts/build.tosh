@@ -27,17 +27,9 @@ func ok(msg: string) {
     styled $"  ✓ {$msg}" --fg bright-green | writeline
 }
 
-func info(msg: string) {
-    styled $"  {$msg}" --fg gray --dim | writeline
-}
-
-func warn(msg: string) {
-    styled $"  ⚠ {$msg}" --fg yellow | writeline
-}
-
-func fail(msg: string) {
-    styled $"  ✗ {$msg}" --fg bright-red --bold | writeline
-}
+func info(msg: string) => styled $"  {$msg}" --fg gray --dim | writeline
+func warn(msg: string) => styled $"  ⚠ {$msg}" --fg yellow | writeline
+func fail(msg: string) => styled $"  ✗ {$msg}" --fg bright-red --bold | writeline
 
 func assert_ok(label: string) {
     if ($tosh.Last.ExitCode != 0) {
@@ -52,6 +44,30 @@ func repo_root() -> string {
 func parse_eq_flag(arg: string, prefix: string) -> string {
     var eq = ($arg.IndexOf("="))
     return ($arg.Substring($eq + 1))
+}
+
+func ts_now() -> string {
+    return ((date now).ToString("yyyy-MM-ddTHH:mm:ssZ"))
+}
+
+func history_path(root: string) -> string {
+    return System.IO.Path.Join($root, "artifacts", "history.jsonl")
+}
+
+func history_append(root: string, line: string) {
+    var path = (history_path $root)
+    mkdir -p (System.IO.Path.GetDirectoryName($path)) | ignore
+    echo $line out>> $path
+}
+
+func history_read_last(root: string, kind: string) -> string? {
+    var path = (history_path $root)
+    if (not ((is-file $path).IsFile)) { return null }
+    var last = null
+    for line in (cat $path | lines) {
+        if ($line =~ $"\"kind\":\\s*\"{$kind}\"") { $last = $line }
+    }
+    return $last
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -289,6 +305,25 @@ func cmd_publish(raw_args: array) {
         dotnet ...$plan.PublishArgs
         assert_ok "dotnet publish"
 
+        sep "PUBLISH TOOLS"
+        var tool_publish_args = [
+            "-c", "Release", "-r", $plan.RuntimeId,
+            "-o", $plan.Directory,
+            "-p:PublishSingleFile=true",
+            "-p:PublishReadyToRun=true",
+            "-p:EnableCompressionInSingleFile=false",
+            "-p:DebugType=None",
+            "-p:DebugSymbols=false",
+            $"-p:SelfContained={$plan.SelfContained}",
+        ]
+        dotnet publish $"{$root}/src/Tosh.Lsp/Tosh.Lsp.csproj" ...$tool_publish_args
+        assert_ok "dotnet publish Tosh.Lsp"
+        ok "Published Tosh.Lsp"
+
+        dotnet publish $"{$root}/src/Tosh.Mcp/Tosh.Mcp.csproj" ...$tool_publish_args
+        assert_ok "dotnet publish Tosh.Mcp"
+        ok "Published Tosh.Mcp"
+
         var elapsed = (((date now) - $t0).ToString("hh\\:mm\\:ss\\.fff"))
 
         # Find the published binary
@@ -380,6 +415,8 @@ func cmd_test_help() {
           --group=<name>        Inline form
           --filter <pattern>    xUnit FullyQualifiedName~ filter (overrides --group)
           --filter=<pattern>    Inline form
+          --failed              Rerun only tests that failed in the last run
+          --list-groups         Print available test groups and exit
           --no-build            Skip 'dotnet build' before running tests
           --verbose, -v         Pass --logger 'console;verbosity=detailed'
           --blame               Enable blame data collection on crash
@@ -404,9 +441,30 @@ func cmd_test_help() {
     """
 }
 
+func trx_failed_filter(trx_path: string) -> string? {
+    if (not ((is-file $trx_path).IsFile)) { return null }
+    var content = System.IO.File.ReadAllText($trx_path)
+    var elem_rx = new System.Text.RegularExpressions.Regex("(?s)<UnitTestResult\\b[^>]+outcome=\"Failed\"[^>]*(?:/>|>.*?</UnitTestResult>)")
+    var name_rx = new System.Text.RegularExpressions.Regex("testName=\"([^\"]+)\"")
+    var ms = $elem_rx.Matches($content)
+    if ($ms.Count == 0) { return null }
+    var parts = []
+    var i = 0
+    while ($i < $ms.Count) {
+        var nm = $name_rx.Match($ms[$i].Value)
+        if ($nm.Success) {
+            $parts = (echo $parts [$"(FullyQualifiedName={$nm.Groups[1].Value})"] | flatten | collect)
+        }
+        $i += 1
+    }
+    if (($parts | count) == 0) { return null }
+    return ($parts | join "|")
+}
+
 func cmd_test(raw_args: array) {
     var group = "all"
     var filter_override = null
+    var rerun_failed = false
     var no_build = false
     var verbose = false
     var blame = false
@@ -431,6 +489,15 @@ func cmd_test(raw_args: array) {
                 $i += 1
                 $results_dir = (echo $raw_args | get $i)
             }
+            case "--failed"          { $rerun_failed = true }
+            case "--list-groups"     {
+                writeline "Available test groups:"
+                writeline "  repl        engine      tui         concurrency"
+                writeline "  lsp         display     config      data"
+                writeline "  pipeline    system      clr         syntax"
+                writeline "  all         (default — run everything)"
+                return
+            }
             case "--no-build"        { $no_build = true }
             case "--verbose"         { $verbose = true }
             case "-v"                { $verbose = true }
@@ -450,6 +517,18 @@ func cmd_test(raw_args: array) {
     var slnx = System.IO.Path.Join($root, "Tosh.slnx")
     var def_results = System.IO.Path.Join($root, "artifacts", "test-results")
     var out_dir = ($results_dir ?? $def_results)
+    var trx_path = System.IO.Path.Join($out_dir, "last.trx")
+
+    # --failed: load previous TRX and build filter
+    if ($rerun_failed) {
+        var failed_filter = (trx_failed_filter $trx_path)
+        if ($failed_filter == null) {
+            ok "No failed tests found in last run."
+            return
+        }
+        $filter_override = $failed_filter
+        info $"Rerunning {($failed_filter | match -r "FullyQualifiedName=" | count)} failed test(s)..."
+    }
 
     # Build
     if (not $no_build) {
@@ -460,17 +539,23 @@ func cmd_test(raw_args: array) {
 
     # Resolve filter
     var filter_pattern = ($filter_override ?? (group_filter_pattern $group))
-    var label = ($filter_override != null ? $"filter '{$filter_override}'" : ($group != "all" ? $"group '{$group}'" : "all tests"))
+    var label = ($rerun_failed ? "failed tests" : ($filter_override != null ? $"filter '{$filter_override}'" : ($group != "all" ? $"group '{$group}'" : "all tests")))
 
     sep $"TEST · {$label}"
 
-    var test_args = ["test", $slnx, $"--results-directory={$out_dir}"]
+    var test_args = [
+        "test", $slnx,
+        $"--results-directory={$out_dir}",
+        $"--logger=trx;LogFileName=last.trx",
+    ]
 
     if ($no_build) {
         $test_args = (echo $test_args ["--no-build"] | flatten | collect)
     }
     if ($filter_pattern != null and $filter_pattern != "") {
-        $test_args = (echo $test_args [$"--filter=FullyQualifiedName~{$filter_pattern}"] | flatten | collect)
+        $test_args = (echo $test_args [$"--filter={$filter_pattern}"] | flatten | collect)
+    } else if ($filter_override != null and $filter_override != "") {
+        $test_args = (echo $test_args [$"--filter={$filter_override}"] | flatten | collect)
     }
     if ($verbose) {
         $test_args = (echo $test_args ["--logger", "console;verbosity=detailed"] | flatten | collect)
@@ -484,9 +569,29 @@ func cmd_test(raw_args: array) {
     var exit_code = $tosh.Last.ExitCode
     var elapsed = (((date now) - $t0).ToString("hh\\:mm\\:ss\\.fff"))
 
+    # Parse totals from TRX for history
+    var total_count = 0
+    var passed_count = 0
+    var failed_count = 0
+    if ((is-file $trx_path).IsFile) {
+        var trx = System.IO.File.ReadAllText($trx_path)
+        var total_m  = (new System.Text.RegularExpressions.Regex("total=\"(\\d+)\"")).Match($trx)
+        var passed_m = (new System.Text.RegularExpressions.Regex("passed=\"(\\d+)\"")).Match($trx)
+        var failed_m = (new System.Text.RegularExpressions.Regex("failed=\"(\\d+)\"")).Match($trx)
+        if ($total_m.Success and $passed_m.Success and $failed_m.Success) {
+            $total_count  = System.Convert.ToInt32($total_m.Groups[1].Value)
+            $passed_count = System.Convert.ToInt32($passed_m.Groups[1].Value)
+            $failed_count = System.Convert.ToInt32($failed_m.Groups[1].Value)
+        }
+    }
+
     sep "RESULTS"
     if ($exit_code == 0) {
         ok $"All tests passed ({$elapsed})"
+        # Append to history
+        record TestEntry(kind: string, ts: string, group: string, total: int, passed: int, failed: int, duration: string)
+        var entry = new TestEntry("test", (ts_now), $group, $total_count, $passed_count, $failed_count, $elapsed)
+        history_append $root ($entry | to json).Replace("\n", "").Replace("  ", "")
     } else {
         fail $"Tests FAILED (exit {$exit_code}, {$elapsed})"
         throw "Test run failed"
@@ -506,6 +611,7 @@ func cmd_check_help() {
 
         Options:
           --no-test        Skip test run (build-only check)
+          --fast           Run only smoke-test groups (engine + system + pipeline)
           --group <name>   Limit tests to a group (see 'test --help')
           --filter <pat>   Limit tests by custom filter
           --help, -h       Show this help
@@ -514,6 +620,7 @@ func cmd_check_help() {
 
 func cmd_check(raw_args: array) {
     var no_test = false
+    var fast = false
     var group = "all"
     var filter_override = null
     var i = 0
@@ -524,6 +631,7 @@ func cmd_check(raw_args: array) {
         if ($arg starts-with "--filter=") { $filter_override = (parse_eq_flag $arg "--filter="); $i += 1; continue }
         switch ($arg) {
             case "--no-test"  { $no_test = true }
+            case "--fast"     { $fast = true }
             case "--group"  {
                 $i += 1
                 $group = (echo $raw_args | get $i)
@@ -552,8 +660,14 @@ func cmd_check(raw_args: array) {
 
     if (not $no_test) {
         var test_args = ["--no-build"]
-        if ($filter_override != null) { $test_args = (echo $test_args ["--filter", $filter_override] | flatten | collect) }
-        if ($group != "all") { $test_args = (echo $test_args ["--group", $group] | flatten | collect) }
+        if ($fast) {
+            # Smoke test: engine + system + pipeline — fast coverage without slow TUI/LSP/concurrency
+            $test_args = (echo $test_args ["--filter", "EngineTests|ComplexCommand|Comprehension|ExpressionEval|SystemdJson|TimeCommand|UtilityCommand|ExternalCommand|ExecCommand|StartupLoader|PipelineData|PipelineHardening|MixedPipeline"] | flatten | collect)
+        } else if ($filter_override != null) {
+            $test_args = (echo $test_args ["--filter", $filter_override] | flatten | collect)
+        } else if ($group != "all") {
+            $test_args = (echo $test_args ["--group", $group] | flatten | collect)
+        }
         cmd_test $test_args
     }
 
@@ -650,6 +764,126 @@ func cmd_clean(raw_args: array) {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Subcommand: info
+# ─────────────────────────────────────────────────────────────────────────────
+
+func cmd_info(raw_args: array) {
+    var root = (repo_root)
+    var state_path = System.IO.Path.Join($root, ".tosh-publish-state")
+
+    sep "INFO"
+
+    # Version
+    var state = (read_publish_state $state_path)
+    ok $"Version:   {$state.CalVer}.{$state.Publish}.10"
+
+    # .NET SDK
+    var sdk_job = (spawn dotnet --version | wait-for | first)
+    var sdk_ver = (echo $sdk_job.Output | first)
+    ok $".NET SDK:  {$sdk_ver}"
+
+    # Git
+    var branch_job = (spawn git -C $root rev-parse --abbrev-ref HEAD | wait-for | first)
+    var branch = (echo $branch_job.Output | first)
+    var status_job = (spawn git -C $root status --porcelain | wait-for | first)
+    var dirty = ($status_job.Output | count)
+    var git_str = ($dirty > 0 ? $"{$branch} ({$dirty} modified)" : $"{$branch} (clean)")
+    ok $"Git:       {$git_str}"
+
+    # Last test run
+    var last_test = (history_read_last $root "test")
+    if ($last_test != null) {
+        var t = ($last_test | from json)
+        ok $"Last test: {$t.ts}  group={$t.group}  {$t.passed}/{$t.total} passed  {$t.duration}"
+    } else {
+        info "Last test: (no history yet)"
+    }
+
+    # Last bench run
+    var last_bench = (history_read_last $root "bench")
+    if ($last_bench != null) {
+        var b = ($last_bench | from json)
+        ok $"Last bench: {$b.ts}  sc cold={$b.sc_cold_ms}ms warm={$b.sc_warm_ms}ms"
+    } else {
+        info "Last bench: (no history yet)"
+    }
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Subcommand: errors
+# ─────────────────────────────────────────────────────────────────────────────
+
+func cmd_errors(raw_args: array) {
+    var as_json = false
+    var i = 0
+    while ($i < ($raw_args | count)) {
+        var arg = (echo $raw_args | get $i)
+        switch ($arg) {
+            case "--json" { $as_json = true }
+            case "-j"     { $as_json = true }
+            case "--help" {
+                writeline "Usage: buildtosh errors [--json/-j]"
+                writeline "  Build the solution and report errors and warnings."
+                return
+            }
+            default { warn $"Unknown errors option: {$arg}" }
+        }
+        $i += 1
+    }
+
+    var root = (repo_root)
+    var slnx = System.IO.Path.Join($root, "Tosh.slnx")
+
+    if (not $as_json) { sep "ERRORS · BUILD" }
+
+    var job = (spawn dotnet build $slnx -c Debug -nologo | wait-for | first)
+    var all_lines = (echo $job.Output $job.ErrorLines | flatten | collect)
+
+    var diag_rx = new System.Text.RegularExpressions.Regex("^\\s*(.+?)\\((\\d+),(\\d+)\\):\\s*(error|warning)\\s+(\\w+):\\s*(.+?)(?:\\s*\\[.+?\\])?\\s*$")
+
+    record Diag(Severity: string, Code: string, File: string, Line: int, Col: int, Message: string)
+    var diags = []
+
+    for raw_line in ($all_lines) {
+        var m = $diag_rx.Match($raw_line.ToString())
+        if ($m.Success) {
+            var d = new Diag(
+                $m.Groups[4].Value,
+                $m.Groups[5].Value,
+                $m.Groups[1].Value,
+                System.Convert.ToInt32($m.Groups[2].Value),
+                System.Convert.ToInt32($m.Groups[3].Value),
+                $m.Groups[6].Value
+            )
+            $diags = (echo $diags [$d] | flatten | collect)
+        }
+    }
+
+    if ($as_json) {
+        echo $diags | to json
+        return
+    }
+
+    var errors   = ($diags | where { $_.Severity == "error"   } | collect)
+    var warnings = ($diags | where { $_.Severity == "warning" } | collect)
+
+    if (($errors | count) == 0 and ($warnings | count) == 0) {
+        ok "No errors or warnings."
+        return
+    }
+
+    for d in ($errors) {
+        fail $"[{$d.Code}] {$d.File}({$d.Line},{$d.Col}): {$d.Message}"
+    }
+    for d in ($warnings) {
+        warn $"[{$d.Code}] {$d.File}({$d.Line},{$d.Col}): {$d.Message}"
+    }
+
+    info ""
+    info $"{($errors | count)} error(s), {($warnings | count)} warning(s)"
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Subcommand: bench
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -667,6 +901,7 @@ func cmd_bench_help() {
           --runs=<n>         Inline form
           --output <dir>     Benchmark artifact directory (default: artifacts/benchmarks)
           --output=<dir>     Inline form
+          --compare          Show delta vs previous bench run from history
           --help, -h         Show this help
     """
 }
@@ -680,16 +915,15 @@ record BenchResult(
 )
 
 func measure_startup_ms(binary: string) -> string {
-    var t0 = (date now)
-    sh -c $"{$binary} --safe -c exit"
-    var ms = ((((date now) - $t0).TotalMilliseconds).ToString("F1"))
-    return $ms
+    var result = (spawn $binary --safe -c exit | wait-for | first)
+    return ($result.Duration.TotalMilliseconds.ToString("F1"))
 }
 
 func cmd_bench(raw_args: array) {
     var rid = System.Runtime.InteropServices.RuntimeInformation.RuntimeIdentifier
     var runs = 5
     var out_dir = null
+    var compare = false
     var i = 0
 
     while ($i < ($raw_args | count)) {
@@ -710,6 +944,7 @@ func cmd_bench(raw_args: array) {
                 $i += 1
                 $out_dir = (echo $raw_args | get $i)
             }
+            case "--compare" { $compare = true }
             case "--help" { cmd_bench_help; return }
             case "-h"     { cmd_bench_help; return }
             default {
@@ -726,23 +961,38 @@ func cmd_bench(raw_args: array) {
 
     mkdir -p $bench_dir | ignore
 
-    # Configurations: label, extra publish args
-    record BenchConfig(Label: string, Args: array)
+    # Load previous bench for --compare
+    var prev_bench = null
+    if ($compare) {
+        var prev_line = (history_read_last $root "bench")
+        if ($prev_line != null) {
+            $prev_bench = ($prev_line | from json)
+            info $"Comparing against previous run from {$prev_bench.ts}"
+        } else {
+            warn "No previous bench in history; --compare will show no deltas."
+        }
+    }
+
+    # Configurations: label, dir name (no spaces), extra publish args
+    record BenchConfig(Label: string, DirName: string, Args: array)
     var configs = [
-        new BenchConfig("sc", ["-p:SelfContained=true"]),
-        new BenchConfig("sc-r2r", ["-p:SelfContained=true", "-p:PublishReadyToRun=true"]),
-        new BenchConfig("fdd", ["-p:SelfContained=false"]),
-        new BenchConfig("fdd-r2r", ["-p:SelfContained=false", "-p:PublishReadyToRun=true"]),
+        new BenchConfig("Self-Contained",                     "sc",     ["-p:SelfContained=true"]),
+        new BenchConfig("Self-Contained, Ready-To-Run",       "sc-r2r", ["-p:SelfContained=true", "-p:PublishReadyToRun=true"]),
+        new BenchConfig("Framework-Dependent",                "fdd",    ["-p:SelfContained=false"]),
+        new BenchConfig("Framework-Dependent, Ready-To-Run",  "fdd-r2r",["-p:SelfContained=false", "-p:PublishReadyToRun=true"]),
     ]
 
     var results = []
+    # For history: capture sc cold/warm
+    var hist_sc_cold = "0"
+    var hist_sc_warm = "0"
 
     sep "BENCH"
     info $"RID: {$rid}  runs: {$runs}  output: {$bench_dir}"
     writeline ""
 
     for cfg in ($configs) {
-        var cfg_dir = System.IO.Path.Join($bench_dir, $cfg.Label)
+        var cfg_dir = System.IO.Path.Join($bench_dir, $cfg.DirName)
         mkdir -p $cfg_dir | ignore
 
         info $"Publishing '{$cfg.Label}'..."
@@ -777,20 +1027,20 @@ func cmd_bench(raw_args: array) {
         info $"  Published {$size_mb} MB in {$pub_sec}s, measuring startup..."
 
         # Cold start (first run, OS hasn't cached pages)
-        var cold_t0 = (date now)
-        sh -c $"{$bin_path} --safe -c exit"
-        var cold_ms = ((((date now) - $cold_t0).TotalMilliseconds).ToString("F1"))
+        var cold_result = (spawn $bin_path --safe -c exit | wait-for | first)
+        var cold_ms = ($cold_result.Duration.TotalMilliseconds.ToString("F1"))
 
         # Warm starts
         var warm_total = 0.0
         var r = 0
         while ($r < $runs) {
-            var w_t0 = (date now)
-            sh -c $"{$bin_path} --safe -c exit"
-            $warm_total += (((date now) - $w_t0).TotalMilliseconds)
+            var warm_result = (spawn $bin_path --safe -c exit | wait-for | first)
+            $warm_total += $warm_result.Duration.TotalMilliseconds
             $r += 1
         }
         var warm_avg = (($warm_total / $runs).ToString("F1"))
+
+        if ($cfg.DirName == "sc") { $hist_sc_cold = $cold_ms; $hist_sc_warm = $warm_avg }
 
         ok $"{$cfg.Label}  publish={$pub_sec}s  size={$size_mb}MB  cold={$cold_ms}ms  warm={$warm_avg}ms"
         $results = (echo $results [new BenchResult($cfg.Label, $pub_sec, $size_mb, $cold_ms, $warm_avg)] | flatten | collect)
@@ -798,6 +1048,54 @@ func cmd_bench(raw_args: array) {
 
     sep "SUMMARY"
     echo $results
+
+    # --compare: print delta table
+    if ($compare and $prev_bench != null) {
+        writeline ""
+        sep "COMPARE vs previous"
+        record DeltaRow(Label: string, ColdDelta: string, WarmDelta: string)
+        var deltas = []
+        for res in ($results) {
+            # Map label to prev field keys (sc / sc-r2r / fdd / fdd-r2r)
+            var dir_key = ($configs | where { $_.Label == $res.Label } | first).DirName
+            var prev_cold_key = $"{$dir_key}_cold_ms"
+            var prev_warm_key = $"{$dir_key}_warm_ms"
+            # Dynamic member access via CLR reflection
+            var prev_cold_prop = ($prev_bench.GetType().GetProperty($prev_cold_key))
+            var prev_warm_prop = ($prev_bench.GetType().GetProperty($prev_warm_key))
+            if ($prev_cold_prop != null) {
+                var prev_cold = (System.Convert.ToDouble($prev_cold_prop.GetValue($prev_bench)))
+                var prev_warm = (System.Convert.ToDouble($prev_warm_prop.GetValue($prev_bench)))
+                var cur_cold  = (System.Convert.ToDouble($res.ColdMs))
+                var cur_warm  = (System.Convert.ToDouble($res.WarmMs))
+                var dc = (($cur_cold - $prev_cold).ToString("+0.0;-0.0;0.0"))
+                var dw = (($cur_warm - $prev_warm).ToString("+0.0;-0.0;0.0"))
+                $deltas = (echo $deltas [new DeltaRow($res.Label, $"{$dc}ms", $"{$dw}ms")] | flatten | collect)
+            }
+        }
+        if (($deltas | count) > 0) { echo $deltas }
+    }
+
+    # Append to history
+    record BenchEntry(kind: string, ts: string, sc_cold_ms: string, sc_warm_ms: string, sc_r2r_cold_ms: string, sc_r2r_warm_ms: string, fdd_cold_ms: string, fdd_warm_ms: string, fdd_r2r_cold_ms: string, fdd_r2r_warm_ms: string)
+    func result_cold(lbl: string) -> string {
+        var m = ($results | where { $_.Label == $lbl } | first)
+        if ($m == null) { return "0" }
+        return $m.ColdMs
+    }
+    func result_warm(lbl: string) -> string {
+        var m = ($results | where { $_.Label == $lbl } | first)
+        if ($m == null) { return "0" }
+        return $m.WarmMs
+    }
+    var bench_entry = new BenchEntry(
+        "bench", (ts_now),
+        (result_cold "Self-Contained"),           (result_warm "Self-Contained"),
+        (result_cold "Self-Contained, Ready-To-Run"), (result_warm "Self-Contained, Ready-To-Run"),
+        (result_cold "Framework-Dependent"),      (result_warm "Framework-Dependent"),
+        (result_cold "Framework-Dependent, Ready-To-Run"), (result_warm "Framework-Dependent, Ready-To-Run")
+    )
+    history_append $root ($bench_entry | to json).Replace("\n", "").Replace("  ", "")
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -814,6 +1112,8 @@ func top_help() {
           check     Build + test without installing (CI gate)
           clean     Remove build artifacts and bin/obj directories
           bench     Benchmark publish configurations
+          info      Show version, git status, and last run summary
+          errors    Build and report compiler errors/warnings [--json]
 
         Options:
           --help, -h   Show this help
@@ -823,11 +1123,15 @@ func top_help() {
           tosh scripts/build.tosh publish --no-install --no-bump
           tosh scripts/build.tosh test --group repl
           tosh scripts/build.tosh test --filter SyntaxHighlighter
-          tosh scripts/build.tosh test --group all --verbose
+          tosh scripts/build.tosh test --failed
+          tosh scripts/build.tosh test --list-groups
           tosh scripts/build.tosh check
+          tosh scripts/build.tosh check --fast
           tosh scripts/build.tosh check --no-test
           tosh scripts/build.tosh clean --all
-          tosh scripts/build.tosh bench --runs 10
+          tosh scripts/build.tosh bench --runs 10 --compare
+          tosh scripts/build.tosh info
+          tosh scripts/build.tosh errors --json
     """
 }
 
@@ -841,7 +1145,7 @@ if (($all_args | count) == 0) {
 var subcmd = (echo $all_args | first)
 var rest_args = (echo $all_args | skip 1 | collect)
 
-if ($subcmd == "--help" or $subcmd == "-h") {
+if ($subcmd == "--help" or $subcmd == "-h" or $subcmd == "help") {
     top_help
     return
 }
@@ -852,6 +1156,8 @@ switch ($subcmd) {
     case "check"   { cmd_check   $rest_args }
     case "clean"   { cmd_clean   $rest_args }
     case "bench"   { cmd_bench   $rest_args }
+    case "info"    { cmd_info    $rest_args }
+    case "errors"  { cmd_errors  $rest_args }
     default {
         fail $"Unknown subcommand: '{$subcmd}'"
         writeline ""

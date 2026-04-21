@@ -1488,7 +1488,8 @@ public sealed class ReplLineEditor
     }
 
     // Finds the two text-positions of a matching bracket pair containing or adjacent to the cursor.
-    // Checks the character AT the cursor first, then the character just BEFORE it.
+    // Priority 1: the character AT the cursor or just before it is itself a bracket.
+    // Priority 2: scan backwards to find the innermost enclosing bracket pair.
     internal static (int, int)? FindMatchingBracketPositions(string text, int cursorIndex)
     {
         for (var offset = 0; offset <= 1; offset++)
@@ -1509,7 +1510,103 @@ public sealed class ReplLineEditor
                 if (match >= 0) return (match, pos);
             }
         }
-        return null;
+
+        // No bracket adjacent to cursor — find the innermost enclosing pair.
+        return FindEnclosingBracketPositions(text, cursorIndex);
+    }
+
+    // Scans backwards from cursorIndex tracking bracket depth to find the innermost
+    // opener that has no matching closer before cursorIndex, then finds its closer.
+    private static (int, int)? FindEnclosingBracketPositions(string text, int cursorIndex)
+    {
+        // Walk backwards, maintaining per-bracket-type unmatched-closer counts.
+        var depth = new Dictionary<char, int> { ['{'] = 0, ['('] = 0, ['['] = 0 };
+
+        // Track string state while walking backwards (best-effort: handles ' and ").
+        // For the enclosing-pair heuristic we skip characters inside string literals.
+        // We detect strings by a forward pre-scan to build a string-membership bitmap.
+        var inString = BuildStringMask(text);
+
+        var lastOpenerPos = -1;
+        char lastOpenerCh = '\0';
+
+        for (var i = cursorIndex - 1; i >= 0; i--)
+        {
+            if (inString[i]) continue;
+            var ch = text[i];
+            if (ch is '}' or ')' or ']')
+            {
+                var opener = ch == '}' ? '{' : ch == ')' ? '(' : '[';
+                depth[opener]++;
+            }
+            else if (ch is '{' or '(' or '[')
+            {
+                if (depth[ch] > 0)
+                {
+                    depth[ch]--;
+                }
+                else
+                {
+                    // This opener has no matching closer before cursorIndex — it encloses us.
+                    lastOpenerPos = i;
+                    lastOpenerCh = ch;
+                    break;
+                }
+            }
+        }
+
+        if (lastOpenerPos < 0) return null;
+
+        var closeChar = lastOpenerCh == '{' ? '}' : lastOpenerCh == '(' ? ')' : ']';
+        var closerPos = FindClosingBracket(text, lastOpenerPos, lastOpenerCh, closeChar);
+        if (closerPos < 0) return null;
+
+        return (lastOpenerPos, closerPos);
+    }
+
+    // Returns a boolean array where true means the character is inside a string literal.
+    // Handles single-quoted (literal) and double-quoted strings with backslash escapes.
+    private static bool[] BuildStringMask(string text)
+    {
+        var mask = new bool[text.Length];
+        var i = 0;
+        while (i < text.Length)
+        {
+            var ch = text[i];
+            if (ch is '\'' or '"')
+            {
+                var quote = ch;
+                var start = i;
+                i++;
+                while (i < text.Length)
+                {
+                    if (text[i] == '\\' && quote == '"' && i + 1 < text.Length)
+                    {
+                        mask[i] = mask[i + 1] = true;
+                        i += 2;
+                        continue;
+                    }
+                    if (text[i] == quote)
+                    {
+                        mask[i] = true;
+                        i++;
+                        break;
+                    }
+                    mask[i] = true;
+                    i++;
+                }
+                mask[start] = true;
+            }
+            else if (ch == '#')
+            {
+                while (i < text.Length && text[i] != '\n') { mask[i] = true; i++; }
+            }
+            else
+            {
+                i++;
+            }
+        }
+        return mask;
     }
 
     private static int FindClosingBracket(string text, int fromPos, char opener, char closer)

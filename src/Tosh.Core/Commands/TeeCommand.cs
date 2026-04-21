@@ -3,6 +3,11 @@ using System.Text;
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Pipeline")]
+[CommandArgument("path", "Optional file path to write a copy of the stream to.", Required = false, TypeName = "path-like")]
+[CommandOption("-a, --append", "Append to the output file instead of replacing it.")]
+[CommandOption("-v, --variable <name>", "Capture the stream into a shell variable while still passing values through.")]
+[CommandExample("ls | tee snapshot.txt | where _.IsDirectory", Title = "Write a copy to a file and keep piping")]
+[CommandExample("ps | tee -v processes | count", Title = "Capture a pipeline into a variable")]
 public sealed class TeeCommand : ShellCommand
 {
     public TeeCommand()

@@ -1,6 +1,11 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Prompt")]
+[CommandArgument("id", "History id to render instead of the next live history id.", Required = false, TypeName = "long")]
+[CommandOption("--fg <color>", "Foreground color name or ANSI-style color token.")]
+[CommandOption("--bg <color>", "Background color name or ANSI-style color token.")]
+[CommandOption("--bold", "Render the segment in bold.")]
+[CommandOption("--dim", "Render the segment dimmed.")]
 [CommandExample("prompt-history")]
 [CommandExample("prompt-history 432 --fg gray --dim")]
 public sealed class PromptHistoryCommand : ShellCommand

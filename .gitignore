@@ -9,6 +9,8 @@ tmp/
 
 # Docs
 docs/*
+docs/spec/*
+docs/cheatsheets/*
 !docs/spec/
 !docs/spec/ToastScript.pdf
 !docs/cheatsheets/basics/
@@ -50,7 +52,7 @@ editor/vscode/tosh.tosh-lang/node_modules/
 
 # Claude Code local settings
 .claude/
-
+.mcp.json
 .codex
 AGENTS.md
 

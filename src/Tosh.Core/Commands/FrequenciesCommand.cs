@@ -1,6 +1,8 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Pipeline")]
+[CommandExample("echo red blue red green blue red | frequencies", Title = "Count distinct values")]
+[CommandExample("ls | get Extension | frequencies | sort Count", Title = "Count file extensions")]
 public sealed class FrequenciesCommand : ShellCommand
 {
     public FrequenciesCommand()

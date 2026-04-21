@@ -1,6 +1,10 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Scripting")]
+[CommandArgument("predicate", "Predicate callable or block that must evaluate truthy.")]
+[CommandArgument("message", "Optional diagnostic message emitted when the assertion fails.", Required = false)]
+[CommandExample("assert { (2 + 2) == 4 }", Title = "Assert an invariant")]
+[CommandExample("assert { $env.HOME != null } \"HOME must be set\"", Title = "Assertion with a custom message")]
 public sealed class AssertCommand : ShellCommand
 {
     public AssertCommand()

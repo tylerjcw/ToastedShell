@@ -3,6 +3,13 @@ using System.Runtime.InteropServices;
 namespace Tosh.Core.Commands;
 
 [CommandCategory("CLR")]
+[CommandArgument("cstring|bytes|type-name", "Read mode: a null-terminated C string, a byte array, or a supported native scalar/struct-layout type.")]
+[CommandArgument("buffer|pointer", "NativeBuffer or pointer to read from. May be supplied from the pipeline.", Required = false)]
+[CommandArgument("length", "Required byte count when mode is `bytes`.", Required = false, TypeName = "int")]
+[CommandArgument("offset", "Optional byte offset from the buffer or pointer before reading.", Required = false, TypeName = "int")]
+[CommandExample("$buffer | native-read cstring", Title = "Read a C string from a native buffer")]
+[CommandExample("native-read bytes $buffer 16", Title = "Read a byte range")]
+[CommandExample("native-read int32 $buffer 0 4", Title = "Read an Int32 at an offset")]
 public sealed class NativeReadCommand : ShellCommand
 {
     public NativeReadCommand(string name = "native-read")

@@ -1,6 +1,9 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Text")]
+[CommandArgument("separator", "Separator inserted between values. Defaults to the platform newline.", Required = false)]
+[CommandExample("echo alpha beta gamma | join-lines \", \"", Title = "Join values with a comma")]
+[CommandExample("read-lines names.txt | join-lines", Title = "Join lines with newlines")]
 public sealed class JoinLinesCommand : ShellCommand
 {
     public JoinLinesCommand()

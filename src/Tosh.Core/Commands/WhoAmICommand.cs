@@ -1,6 +1,7 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("System")]
+[CommandExample("whoami", Title = "Show the current user")]
 public sealed class WhoAmICommand : ShellCommand
 {
     public WhoAmICommand()

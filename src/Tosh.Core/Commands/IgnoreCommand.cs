@@ -1,6 +1,8 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Pipeline")]
+[CommandExample("build-project | ignore", Title = "Run for side effects and discard output")]
+[CommandExample("http post https://example.com/hooks --json $payload | ignore", Title = "Suppress response output")]
 public sealed class IgnoreCommand : ShellCommand
 {
     public IgnoreCommand()

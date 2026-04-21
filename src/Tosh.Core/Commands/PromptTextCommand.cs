@@ -1,6 +1,11 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Prompt")]
+[CommandArgument("text", "Literal text to render as a styled prompt segment.")]
+[CommandOption("--fg <color>", "Foreground color name or ANSI-style color token.")]
+[CommandOption("--bg <color>", "Background color name or ANSI-style color token.")]
+[CommandOption("--bold", "Render the segment in bold.")]
+[CommandOption("--dim", "Render the segment dimmed.")]
 [CommandExample("prompt-text \"> \" --fg cyan")]
 [CommandExample("prompt-text \"::\" --fg gray --dim")]
 public sealed class PromptTextCommand : ShellCommand

@@ -1,0 +1,37 @@
+hollow class _Point {
+    hollow prop X: int
+    hollow prop Y: int
+    hollow prop IsEmpty: bool
+    hollow shared func Empty() -> _Point {}
+}
+ 
+class Point extends _Point {
+    overrule prop X: int = 0
+    overrule prop Y: int = 0
+    overrule prop IsEmpty: bool => ($this.X, $this.Y) == (0, 0)
+ 
+    Point(x: int, y: int) {
+        $this.X = $x
+        $this.Y = $y
+    }
+     
+    overrule shared func Empty() -> Point {
+        return new Point(0, 0)
+    }
+}
+
+sealed class Point3 extends Point {
+    overrule prop X: int = 0
+    overrule prop Y: int = 0
+    prop Z: int = 0
+    overrule prop IsEmpty: bool => ($this.X, $this.Y, $this.Z) == (0, 0, 0)
+
+    Point3(x: int, y: int, z: int) {
+        $this.Z = $z
+        $super($x, $y)
+    }
+
+    overrule shared func Empty() -> Point3 {
+        return new Point3(0, 0, 0)
+    }
+}

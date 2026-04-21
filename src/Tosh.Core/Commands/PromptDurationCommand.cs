@@ -1,6 +1,12 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Prompt")]
+[CommandArgument("duration", "Duration to render instead of the last command duration.", Required = false)]
+[CommandOption("--fg <color>", "Foreground color name or ANSI-style color token.")]
+[CommandOption("--bg <color>", "Background color name or ANSI-style color token.")]
+[CommandOption("--bold", "Render the segment in bold.")]
+[CommandOption("--dim", "Render the segment dimmed.")]
+[CommandOption("--threshold-ms <value>", "Suppress the segment unless duration is at least this many milliseconds.")]
 [CommandExample("prompt-duration")]
 [CommandExample("prompt-duration 2.5s --threshold-ms 250")]
 public sealed class PromptDurationCommand : ShellCommand

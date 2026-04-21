@@ -5,6 +5,33 @@ using Tosh.Tui.Widgets;
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Shell")]
+[CommandArgument("pick [items...]", "Pick one or more values from arguments or pipeline input.", Required = false)]
+[CommandArgument("confirm <message>", "Ask for a yes/no confirmation.", Required = false)]
+[CommandArgument("input [prompt]", "Read text input, optionally multiline or password-style.", Required = false)]
+[CommandArgument("file", "Open a file or directory picker.", Required = false)]
+[CommandArgument("filter [items...]", "Open a fuzzy filter picker.", Required = false)]
+[CommandArgument("screen|add-*|layout|run", "Build and run composed TUI screens from pipeline-carried screen definitions.", Required = false)]
+[CommandOption("--cli", "Use inline terminal prompts instead of returning fullscreen TUI request objects where supported.")]
+[CommandOption("--multi, -m", "Allow multiple selections for `pick`, `filter`, and list widgets.")]
+[CommandOption("--result", "Return a structured outcome object instead of only the selected value/result.")]
+[CommandOption("--prompt <text>", "Prompt text for picker, filter, input, and widget subcommands.")]
+[CommandOption("--display <property>", "Property name used as the display label for object items.")]
+[CommandOption("--page-size <n>", "Number of visible entries in pick/filter lists.")]
+[CommandOption("--default <value|yes|no>", "Default input value or confirmation default.")]
+[CommandOption("--multiline", "Allow multiline input for `input` and `add-input`.")]
+[CommandOption("--password", "Mask text for `input`.")]
+[CommandOption("--path <start>", "Initial path for `file`.")]
+[CommandOption("--filter <glob>", "File picker filter such as `*.tosh`.")]
+[CommandOption("--directory, -d", "Choose directories instead of files for `file`.")]
+[CommandOption("--id <id>", "Stable widget id for screen-builder subcommands.")]
+[CommandOption("--searchable, -s", "Make a list widget searchable.")]
+[CommandOption("--bind <widget.property>", "Bind a text widget to another widget property.")]
+[CommandOption("--no-wrap", "Disable text wrapping for `add-text`.")]
+[CommandOption("--ratio <a:b>", "Layout split ratio for `layout`.")]
+[CommandOption("--gap <n>", "Gap between layout regions.")]
+[CommandExample("tui confirm \"Deploy now?\" --cli", Title = "Inline confirmation")]
+[CommandExample("ls | tui pick --display Name --result", Title = "Pick from pipeline values")]
+[CommandExample("tui input \"Project name:\" --default demo --cli", Title = "Inline text input")]
 public sealed class TuiCommand : ShellCommand
 {
     public TuiCommand()

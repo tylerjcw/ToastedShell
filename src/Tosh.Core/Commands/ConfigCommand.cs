@@ -7,6 +7,10 @@ namespace Tosh.Core.Commands;
 [CommandArgument("reset [section]", "Resets a section or the whole config object.", Required = false)]
 [CommandArgument("reload", "Replays startup config files into the current session.", Required = false)]
 [CommandArgument("init [directory]", "Scaffolds a new config directory.", Required = false)]
+[CommandExample("config get Shell.Prompt", Title = "Read a config value")]
+[CommandExample("config set Shell.Prompt.NameText toast", Title = "Set a config value")]
+[CommandExample("config browse prompt", Title = "Open the interactive config browser")]
+[CommandExample("config init ~/.config/tosh", Title = "Scaffold a config directory")]
 [CommandOutput("Produces the live config object, one config value, status rows, or an interactive browser request depending on the form.")]
 [PipelineInput(AcceptsScalar = true, Description = "Only `config set` consumes piped scalar input, using it as the new value when no explicit value argument is present.")]
 public sealed class ConfigCommand : ShellCommand

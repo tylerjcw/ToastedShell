@@ -1,16 +1,16 @@
 This is makeindex, version 2.18 [TeX Live 2026] (kpathsea + Thai support).
 Scanning style file ./index-style.ist........done (8 attributes redefined, 0 ignored).
 Scanning input file toastscript-spec.idx....
-!! Input index error (file = toastscript-spec.idx, line = 10):
+!! Input index error (file = toastscript-spec.idx, line = 17):
    -- Illegal null field.
 
-!! Input index error (file = toastscript-spec.idx, line = 16):
+!! Input index error (file = toastscript-spec.idx, line = 23):
    -- Illegal null field.
 
-!! Input index error (file = toastscript-spec.idx, line = 20):
+!! Input index error (file = toastscript-spec.idx, line = 27):
    -- Extra `|' at position 2 of first argument.
-done (513 entries accepted, 3 rejected).
-Sorting entries.......done (5210 comparisons).
-Generating output file toastscript-spec.ind....done (409 lines written, 0 warnings).
+done (584 entries accepted, 3 rejected).
+Sorting entries.......done (5744 comparisons).
+Generating output file toastscript-spec.ind....done (448 lines written, 0 warnings).
 Output written in toastscript-spec.ind.
 Transcript written in toastscript-spec.ilg.

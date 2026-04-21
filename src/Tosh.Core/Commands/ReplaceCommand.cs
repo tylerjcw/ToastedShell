@@ -3,6 +3,15 @@ using System.Text.RegularExpressions;
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Text")]
+[CommandArgument("pattern|regex", "String pattern, regex pattern, or Regex object to replace.")]
+[CommandArgument("replacement", "Replacement text.")]
+[CommandArgument("text ...", "Optional explicit text values. When omitted, reads pipeline text.", Required = false)]
+[CommandOption("-r, --regex", "Treat the pattern as a regular expression.")]
+[CommandOption("-i, --ignore-case", "Use case-insensitive matching.")]
+[CommandOption("-m, --multiline", "Enable regex multiline mode.")]
+[CommandOption("-s, --singleline", "Enable regex singleline mode so . matches newlines.")]
+[CommandOption("-x, --ignore-pattern-whitespace", "Ignore unescaped whitespace and allow # comments in the regex pattern.")]
+[CommandOption("--explicit-capture", "Only capture explicitly named or numbered groups in regex mode.")]
 [CommandExample("echo alpha-beta | replace beta BETA")]
 [CommandExample("echo \"A1 B2\" | replace -r \"[0-9]\" \"#\"")]
 public sealed class ReplaceCommand : ShellCommand

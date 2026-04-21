@@ -1,6 +1,13 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Prompt")]
+[CommandArgument("text", "Text to wrap in a StyledText value.")]
+[CommandOption("--fg <color>", "Foreground color name or ANSI-style color token.")]
+[CommandOption("--bg <color>", "Background color name or ANSI-style color token.")]
+[CommandOption("--bold", "Render the segment in bold.")]
+[CommandOption("--italic", "Render the segment in italic.")]
+[CommandOption("--underline", "Render the segment underlined.")]
+[CommandOption("--dim", "Render the segment dimmed.")]
 [CommandExample("styled \"hello\" --fg cyan --bold")]
 [CommandExample("styled \"warning\" --fg yellow --bg red")]
 public sealed class StyledCommand : ShellCommand

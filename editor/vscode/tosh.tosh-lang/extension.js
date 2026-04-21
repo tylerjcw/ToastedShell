@@ -228,6 +228,16 @@ function createServerOptions(dotnetPath, targetPath) {
         }
     }
 
+    // Native executable — run directly without dotnet
+    if (!normalizedPath.endsWith(".dll")) {
+        const commandOptions = {
+            command: normalizedPath,
+            args: ["--stdio"],
+            options: { cwd: path.dirname(normalizedPath) }
+        };
+        return { run: commandOptions, debug: commandOptions };
+    }
+
     const args = [normalizedPath, "--stdio"];
     const commandOptions = {
         command: dotnetPath,

@@ -7,6 +7,7 @@ namespace Tosh.Core.Commands;
 [CommandArgument("search <query>", "Searches help topics by name, alias, category, and description.", Required = false)]
 [CommandArgument("related <topic>", "Shows related topics for the given command or language feature.", Required = false)]
 [CommandArgument("categories", "Lists help categories and topic counts.", Required = false)]
+[CommandOption("--cli", "Open the inline fuzzy help browser instead of returning help objects.")]
 [CommandExample("help ls", Title = "Describe a command")]
 [CommandExample("help search regex", Title = "Search help")]
 [CommandExample("help --cli regex", Title = "Open the inline fuzzy help browser")]

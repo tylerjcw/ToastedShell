@@ -1,6 +1,9 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Pipeline")]
+[CommandArgument("old new ...", "One or more old/new field-name pairs to apply to each record-like input value.")]
+[CommandExample("ls | get { Name, Length } | rename Length Size", Title = "Rename one field")]
+[CommandExample("ps | get { Id, Name } | rename Id Pid Name Command", Title = "Rename several fields")]
 public sealed class RenameCommand : ShellCommand
 {
     public RenameCommand()

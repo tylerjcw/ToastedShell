@@ -1,6 +1,9 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Text")]
+[CommandArgument("value ...", "Values to render. When omitted, renders pipeline input.", Required = false)]
+[CommandExample("write \"no newline\"", Title = "Write text without a trailing newline")]
+[CommandExample("echo alpha beta | write", Title = "Write piped values")]
 public sealed class WriteCommand : ShellCommand, IImplicitGlobCommand
 {
     public WriteCommand()

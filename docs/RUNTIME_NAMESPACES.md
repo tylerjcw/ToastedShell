@@ -1,259 +1,145 @@
 # Runtime Namespaces
 
-## Goal
+TōSh exposes shell and runtime state through two reserved root namespaces:
 
-TōSh should stop growing a pile of flat magic globals like `$config`, `$result`, and `$ThisScript`.
+- `$tosh` — runtime, session, script, and host state
+- `$env` — process environment variables
 
-The shell should expose runtime state through one live root object:
+These are always available and cannot be shadowed by user declarations.
 
-```tosh
-$tosh
-```
+## `$tosh`
 
-That root object should be:
+### `$tosh.Last`
 
-- always available
-- live, not snapshotted
-- mostly read-only
-- clearly separated from normal user variables
+The result of the most recently executed statement.
 
-This keeps shell state discoverable, avoids name collisions, and gives us one stable place to extend later.
-
-Environment-variable values are the one intentional exception:
+| Property    | Type   | Description                                   |
+|-------------|--------|-----------------------------------------------|
+| `Result`    | any    | The last pipeline result value                |
+| `ExitCode`  | int    | Exit code of the last external command (or 0) |
 
 ```tosh
-$env.HOME
-$env.PATH
+ls | count
+echo $tosh.Last.Result      # e.g. 42
+echo $tosh.Last.ExitCode    # 0
 ```
 
-`$env` is a value-oriented namespace for direct environment-variable lookup, while runtime/session/config state lives under `$tosh`.
+### `$tosh.Script`
 
-## Design Rules
+Execution context for the current script or module.
 
-- Runtime/session state lives under `$tosh`.
-- Configuration lives under `$tosh.Config`.
-- Live state and config must stay separate.
-- `_` and `$value` remain contextual language forms.
-- Flat runtime aliases like `$config` and `$result` should not remain as compatibility globals.
-- If a user wants a shorter name, they can create one themselves.
-
-## Root Shape
-
-The first public shape should be:
+| Property    | Type   | Description                                       |
+|-------------|--------|---------------------------------------------------|
+| `Path`      | string | Absolute path of the running script file          |
+| `Directory` | string | Directory containing the script                   |
+| `Name`      | string | Script filename without directory                 |
+| `Args`      | array  | Arguments passed to the script                    |
 
 ```tosh
-$tosh.Config
-$tosh.Last
-$tosh.Script
-$tosh.Function
-$tosh.Session
-$tosh.Host
+# In a script file:
+echo $tosh.Script.Path        # /home/user/scripts/deploy.tosh
+echo $tosh.Script.Directory   # /home/user/scripts
+echo $tosh.Script.Name        # deploy.tosh
+echo $tosh.Script.Args        # arguments passed on the command line
 ```
 
-## Namespace Sections
+When running a `-c` snippet, `Path` is `<repl>` or `<mcp-snippet>`.
+
+### `$tosh.Function`
+
+Context for the currently executing function.
+
+| Property  | Type   | Description                              |
+|-----------|--------|------------------------------------------|
+| `Name`    | string | Name of the current function (or `""`)   |
+| `Args`    | array  | Positional arguments the function received |
+| `Input`   | any    | Pipeline input value (or `null`)         |
+
+```tosh
+func describe() {
+    echo $"I am: {$tosh.Function.Name}"
+    echo $"Args: {$tosh.Function.Args}"
+}
+describe "hello" "world"
+```
+
+### `$tosh.Session`
+
+Live session state. Read-only; use commands like `cd` and `jobs` to mutate.
+
+| Property          | Type   | Description                           |
+|-------------------|--------|---------------------------------------|
+| `CurrentDirectory`| string | Working directory (same as `pwd`)     |
+| `HistoryCount`    | int    | Number of history entries             |
+| `NextHistoryId`   | int    | ID that will be assigned to the next entry |
+| `HistoryFilePath` | string | Path to the history file              |
+| `JobCount`        | int    | Number of active background jobs      |
+| `OpenHandleCount` | int    | Number of open stream handles         |
+| `StartupProfile`  | string | Active startup profile (or `null`)    |
+
+```tosh
+echo $tosh.Session.CurrentDirectory   # /home/user/projects
+echo $tosh.Session.HistoryCount       # 1042
+echo $tosh.Session.JobCount           # 0
+```
+
+### `$tosh.Host`
+
+Information about the TōSh process itself. Read-only.
+
+| Property        | Type   | Description                                      |
+|-----------------|--------|--------------------------------------------------|
+| `Version`       | string | TōSh version string (e.g. `"26.4.80.10"`)       |
+| `RuntimeId`     | string | .NET RID (e.g. `"linux-x64"`)                   |
+| `Framework`     | string | .NET framework version (e.g. `".NET 10.0.3"`)   |
+| `OSDescription` | string | OS name/version                                  |
+| `ProcessId`     | int    | Current process ID                               |
+| `ExecutablePath`| string | Absolute path to the tosh binary                 |
+| `IsInteractive` | bool   | `true` when running an interactive REPL session  |
+
+```tosh
+echo $tosh.Host.Version        # 26.4.80.10
+echo $tosh.Host.RuntimeId      # linux-x64
+echo $tosh.Host.IsInteractive  # true (in REPL), false (in scripts)
+if (not $tosh.Host.IsInteractive) {
+    # running as a script — suppress interactive prompts
+}
+```
 
 ### `$tosh.Config`
 
-Live shell configuration.
-
-This is the existing config object moved under the root namespace:
+Live shell configuration. Mutable. Same object used by the `config` command.
 
 ```tosh
 $tosh.Config.Display.Style = "Detail"
 $tosh.Config.Theme.Tables.BoxStyle = "Double"
 ```
 
-Notes:
+See [CONFIGURATION.md](CONFIGURATION.md) for the full config schema.
 
-- mutable
-- same object used by `config`
-- intended for settings, not session state
+---
 
-### `$tosh.Last`
+## `$env`
 
-Information about the most recent execution result.
-
-Initial properties:
-
-- `Result`
-- `ExitCode`
-
-Examples:
+Direct read/write access to process environment variables.
 
 ```tosh
-$tosh.Last.Result
-$tosh.Last.ExitCode
+echo $env.HOME          # /home/user
+echo $env.PATH
+
+$env.MY_VAR = "hello"   # sets the environment variable
+echo $env.MY_VAR        # hello
 ```
 
-Future candidates:
+Environment variable names are case-sensitive on Linux/macOS.
 
-- `Error`
-- `StatementText`
-- `ExternalCommand`
+---
 
-We intentionally avoid a vague single `LastCommand` property for now.
+## Contextual Forms (Not Namespaced)
 
-### `$tosh.Script`
+The following are language constructs, not namespace members:
 
-Current script/module execution context.
-
-Initial properties:
-
-- `Path`
-- `Directory`
-- `Name`
-- `Args`
-
-Examples:
-
-```tosh
-$tosh.Script.Path
-$tosh.Script.Directory
-$tosh.Script.Name
-$tosh.Script.Args
-```
-
-This section should be live and reflect the currently executing script.
-
-When TōSh is running a `-c` command with extra arguments, `Args` should reflect that top-level invocation as well.
-
-### `$tosh.Function`
-
-Current callable context.
-
-Initial properties:
-
-- `Name`
-- `Args`
-- `Input`
-
-Examples:
-
-```tosh
-$tosh.Function.Name
-$tosh.Function.Args
-$tosh.Function.Input
-```
-
-This lets us expose function-call state without relying on flat globals.
-
-### `$tosh.Session`
-
-Current shell session state.
-
-Initial properties:
-
-- `CurrentDirectory`
-- `HistoryCount`
-- `HistoryFilePath`
-- `JobCount`
-- `OpenHandleCount`
-- `OpenHandles`
-
-Examples:
-
-```tosh
-$tosh.Session.CurrentDirectory
-$tosh.Session.HistoryCount
-$tosh.Session.HistoryFilePath
-$tosh.Session.JobCount
-$tosh.Session.OpenHandleCount
-$tosh.Session.OpenHandles
-```
-
-This section should be read-only for now.
-
-Use commands like `cd` and `jobs` for mutation and workflow.
-
-### `$tosh.Host`
-
-Information about the running TōSh host/runtime process.
-
-Initial properties:
-
-- `Version`
-- `RuntimeId`
-- `Framework`
-- `OSDescription`
-- `ProcessId`
-- `ExecutablePath`
-- `IsInteractive`
-
-Examples:
-
-```tosh
-$tosh.Host.RuntimeId
-$tosh.Host.ProcessId
-$tosh.Host.Version
-```
-
-## What Stays Outside `$tosh`
-
-The following remain language/context constructs for now:
-
-- `_`
-- `$value`
-
-Reason:
-
-- they are contextual lexical forms, not session-wide runtime globals
-- they are tightly tied to pipelines, functions, and accessors
-- `_` is a true pipeline-item language form
-- `$value` is setter/accessor-local state
-
-Function and script argument state should live under:
-
-- `$tosh.Script.Args`
-- `$tosh.Function.Args`
-- `$tosh.Function.Input`
-
-## Alias Policy
-
-We should not keep the old flat globals as official compatibility aliases:
-
-- no `$config`
-- no `$result`
-- no `$ThisScript`
-- no `$ThisFunc`
-- no `$LastExitCode`
-
-TōSh is not released yet, so this is the right time to normalize the surface.
-
-If users want convenience names, they can create them themselves.
-
-## Reserved Name Policy
-
-`$tosh` and `$env` should be reserved.
-
-User declarations should not be allowed to bind:
-
-- `tosh`
-
-That prevents accidental shadowing of the root namespace.
-
-## Future Namespaces
-
-The likely next root-level namespaces are:
-
-- `$env`
-- maybe `$profile`
-
-Those should stay separate from `$tosh`.
-
-`$tosh` is for shell/runtime state.
-`$env` is for process environment variables.
-
-## Rollout
-
-### Phase 1
-
-- add `$tosh`
-- move config to `$tosh.Config`
-- expose live `Last`, `Script`, `Function`, `Session`, and `Host`
-- remove flat runtime globals
-- update docs, tests, examples, REPL help, and editor metadata
-
-### Phase 2
-
-- expand namespace-aware completions and hover
-- add more host/session metadata as needed
+- `_` — the current pipeline item inside `where`, `map`, `sort`, etc.
+- `$value` — the incoming value inside a property setter
+- `$this` — the current instance inside a class method or property
+- `$super` — the parent-class constructor reference inside a constructor

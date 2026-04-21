@@ -5,19 +5,37 @@ namespace Tosh.Core.Commands;
 [CommandCategory("Concurrency")]
 [CommandArgument("command", "External command name or path to start as a background job.")]
 [CommandArgument("args", "Arguments to pass to the external command.", Required = false)]
+[CommandOption("-f, --foreground", "Run the process in the foreground (terminal passthrough) instead of as a background job.")]
 [CommandExample("spawn dotnet --version", Title = "Start an external command in the background")]
 [CommandExample("echo hello | spawn cat", Title = "Feed pipeline input into a background process")]
-[CommandOutput("Returns a ShellJobInfo object for the started background job.")]
+[CommandExample("spawn --foreground $bin_path --safe -c exit", Title = "Run a variable-path binary in the foreground")]
+[CommandOutput("Returns a ShellJobInfo object for the started background job, or nothing when --foreground is used.")]
 [PipelineInput(AcceptsScalar = true, AcceptsList = true, Description = "Optional pipeline input forwarded to the spawned process stdin.")]
 [CommandNote("Use jobs to list active jobs and wait-for to await completion.")]
 public sealed class SpawnCommand : ShellCommand
 {
     public SpawnCommand()
-        : base("spawn", "Starts an external command as a background job.", "spawn <command> [arg ...]") { }
+        : base("spawn", "Starts an external command as a background job, or in the foreground with --foreground.", "spawn [-f] <command> [arg ...]") { }
 
     public override async IAsyncEnumerable<object?> ExecuteAsync(CommandContext context)
     {
-        if (context.Arguments.Count < 1)
+        // Strip --foreground / -f from the argument list.
+        var foreground = false;
+        var filteredArgs = new List<object?>();
+        foreach (var arg in context.Arguments)
+        {
+            var s = arg?.ToString();
+            if (s is "--foreground" or "-f")
+            {
+                foreground = true;
+            }
+            else
+            {
+                filteredArgs.Add(arg);
+            }
+        }
+
+        if (filteredArgs.Count < 1)
         {
             throw context.CreateDiagnostic(
                 code: "tosh::runtime::spawn_requires_command",
@@ -25,7 +43,7 @@ public sealed class SpawnCommand : ShellCommand
                 label: "provide an external command to start");
         }
 
-        var commandName = context.Arguments[0]?.ToString();
+        var commandName = filteredArgs[0]?.ToString();
         if (string.IsNullOrWhiteSpace(commandName))
         {
             throw context.CreateDiagnostic(
@@ -36,7 +54,19 @@ public sealed class SpawnCommand : ShellCommand
         }
 
         var resolvedPath = ResolveExternalPath(context, commandName);
-        var processArguments = context.Arguments.Skip(1).ToArray();
+        var processArguments = filteredArgs.Skip(1).ToArray();
+
+        if (foreground)
+        {
+            var external = new ExternalProcessCommand(commandName, resolvedPath);
+            var forwardContext = context with { Arguments = processArguments };
+            await foreach (var item in external.ExecuteAsync(forwardContext))
+            {
+                yield return item;
+            }
+            yield break;
+        }
+
         var initialInput = await AsyncEnumerableExtensions.ToListAsync(
             ShellIterationUtilities.ReplaySingleInputCollectionAsync(context.Input, context.CancellationToken),
             context.CancellationToken);

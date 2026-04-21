@@ -4,6 +4,11 @@ using System.Runtime.InteropServices;
 namespace Tosh.Core.Commands;
 
 [CommandCategory("CLR")]
+[CommandArgument("buffer|pointer", "NativeBuffer or pointer to write into.")]
+[CommandArgument("value", "String, byte sequence, enum, primitive, pointer-sized value, or struct-layout value to write.")]
+[CommandArgument("offset", "Optional byte offset from the buffer or pointer before writing.", Required = false, TypeName = "int")]
+[CommandExample("native-write $buffer \"hello\"", Title = "Write a C string")]
+[CommandExample("native-write $buffer [72 105 0] 0", Title = "Write explicit bytes")]
 public sealed class NativeWriteCommand : ShellCommand
 {
     public NativeWriteCommand(string name = "native-write")

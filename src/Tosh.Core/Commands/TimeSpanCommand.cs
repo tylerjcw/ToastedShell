@@ -1,6 +1,9 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("System")]
+[CommandArgument("duration", "Duration text such as 250ms, 5s, 2m, 1h, or 1d.")]
+[CommandExample("timespan 250ms", Title = "Parse milliseconds")]
+[CommandExample("timespan 1h30m", Title = "Parse a compound duration")]
 public sealed class TimeSpanCommand : ShellCommand
 {
     public TimeSpanCommand()

@@ -3,6 +3,10 @@ using System.Runtime.InteropServices;
 namespace Tosh.Core.Commands;
 
 [CommandCategory("CLR")]
+[CommandArgument("type-name[.field-name]", "Sequential or explicit-layout struct type, optionally with a field suffix.")]
+[CommandArgument("field-name", "Public struct field name when it is not embedded in the first argument.", Required = false)]
+[CommandExample("offset-of System.Runtime.InteropServices.ComTypes.FILETIME dwLowDateTime", Title = "Offset by type and field")]
+[CommandExample("offset-of System.Runtime.InteropServices.ComTypes.FILETIME.dwHighDateTime", Title = "Offset by dotted path")]
 public sealed class NativeOffsetOfCommand : ShellCommand
 {
     public NativeOffsetOfCommand(string name = "native-offsetof")

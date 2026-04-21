@@ -7,6 +7,15 @@ namespace Tosh.Core.Commands;
 [CommandOption("-v", "Kernel Version")]
 [CommandOption("-m", "Machine")]
 [CommandOption("-o", "Operating System")]
+[CommandOption("-a, --all", "Return the full structured uname object.")]
+[CommandOption("--kernel-name", "Return the system/kernel name.")]
+[CommandOption("--nodename", "Return the network node name.")]
+[CommandOption("--kernel-release", "Return the kernel release.")]
+[CommandOption("--kernel-version", "Return the kernel version.")]
+[CommandOption("--machine", "Return the machine hardware name.")]
+[CommandOption("--operating-system", "Return the operating system name.")]
+[CommandExample("uname", Title = "Return structured system information")]
+[CommandExample("uname -sr", Title = "Return selected fields")]
 public sealed class UnameCommand : ShellCommand
 {
     public UnameCommand()

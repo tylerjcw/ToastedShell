@@ -1,6 +1,9 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Shell")]
+[CommandArgument("prompt", "Optional prompt text to print before reading.", Required = false)]
+[CommandExample("read-line \"Name: \"", Title = "Prompt for one line")]
+[CommandExample("var answer = (read-line \"Continue? \")", Title = "Capture input in a variable")]
 public sealed class ReadLineCommand : ShellCommand
 {
     public ReadLineCommand()

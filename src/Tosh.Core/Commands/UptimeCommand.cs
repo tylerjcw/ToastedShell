@@ -1,6 +1,7 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("System")]
+[CommandExample("uptime", Title = "Show uptime and load averages")]
 public sealed class UptimeCommand : ShellCommand
 {
     public UptimeCommand()

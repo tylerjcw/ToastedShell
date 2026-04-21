@@ -3,6 +3,12 @@ using System.Globalization;
 namespace Tosh.Core.Commands;
 
 [CommandCategory("System")]
+[CommandArgument("stop", "Final value when one argument is provided.")]
+[CommandArgument("start", "Initial value when two or three arguments are provided.", Required = false)]
+[CommandArgument("step", "Step size when three arguments are provided. Cannot be zero.", Required = false)]
+[CommandExample("seq 5", Title = "Generate 1 through 5")]
+[CommandExample("seq 0 2 10", Title = "Generate an stepped sequence")]
+[CommandExample("seq 5 -1 1", Title = "Generate a descending sequence")]
 public sealed class SeqCommand : ShellCommand
 {
     public SeqCommand()

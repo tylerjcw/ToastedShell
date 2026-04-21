@@ -1,6 +1,10 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Prompt")]
+[CommandOption("--fg <color>", "Foreground color name or ANSI-style color token.")]
+[CommandOption("--bg <color>", "Background color name or ANSI-style color token.")]
+[CommandOption("--bold", "Render the segment in bold.")]
+[CommandOption("--dim", "Render the segment dimmed.")]
 [CommandExample("prompt-userhost --dim")]
 [CommandExample("prompt-userhost --fg gray")]
 public sealed class PromptUserHostCommand : ShellCommand

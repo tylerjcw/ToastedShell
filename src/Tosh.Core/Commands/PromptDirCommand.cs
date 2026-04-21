@@ -1,6 +1,10 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Prompt")]
+[CommandOption("--fg <color>", "Foreground color name or ANSI-style color token.")]
+[CommandOption("--bg <color>", "Background color name or ANSI-style color token.")]
+[CommandOption("--bold", "Render the segment in bold.")]
+[CommandOption("--depth <n>", "Show only the last n path components.")]
 [CommandExample("prompt-dir --fg blue --bold")]
 [CommandExample("prompt-dir --fg yellow --depth 2")]
 public sealed class PromptDirCommand : ShellCommand

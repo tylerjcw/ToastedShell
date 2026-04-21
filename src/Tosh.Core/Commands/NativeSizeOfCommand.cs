@@ -3,6 +3,9 @@ using System.Runtime.InteropServices;
 namespace Tosh.Core.Commands;
 
 [CommandCategory("CLR")]
+[CommandArgument("type-name ...", "One or more supported native interop type names.")]
+[CommandExample("size-of int32", Title = "Size of a primitive native type")]
+[CommandExample("size-of int32 double nint", Title = "Size several native types")]
 public sealed class NativeSizeOfCommand : ShellCommand
 {
     public NativeSizeOfCommand(string name = "native-sizeof")

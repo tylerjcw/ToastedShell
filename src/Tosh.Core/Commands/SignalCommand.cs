@@ -1,6 +1,10 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Process")]
+[CommandArgument("signal", "Signal name or number, such as TERM, INT, HUP, or 15.")]
+[CommandArgument("job-id|pid ...", "One or more ToSh background job ids, ShellJobInfo values, ProcessInfo values, or native process ids.")]
+[CommandExample("signal TERM 12345", Title = "Send SIGTERM to a process")]
+[CommandExample("jobs | where _.Status == \"Running\" | signal INT", Title = "Signal jobs from the pipeline")]
 [CommandNote("Signal sends a named or numeric signal to a ToSh job or a native process id.")]
 public sealed class SignalCommand : ShellCommand
 {

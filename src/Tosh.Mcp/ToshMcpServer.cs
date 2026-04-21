@@ -107,6 +107,7 @@ public sealed class ToshMcpServer
                 "lsp_definitions" => ExecuteDefinitions(arguments),
                 "lsp_document_symbols" => ExecuteDocumentSymbols(arguments),
                 "command_metadata" => ExecuteCommandMetadata(arguments),
+                "operator_metadata" => ExecuteOperatorMetadata(),
                 "run_snippet" => await ExecuteRunSnippetAsync(arguments, cancellationToken),
                 "explain_error" => ExecuteExplainError(arguments),
                 _ => throw new InvalidOperationException($"Unknown tool '{toolName}'.")
@@ -241,6 +242,60 @@ public sealed class ToshMcpServer
         return new
         {
             content = new[] { new { type = "text", text = JsonSerializer.Serialize(result, JsonOptions) } }
+        };
+    }
+
+    private static object ExecuteOperatorMetadata()
+    {
+        var operators = new object[]
+        {
+            // Unary
+            new { kind = "unary", name = "not", description = "Logical negation. Returns `true` if the operand is falsy.", example = "not true" },
+
+            // Arithmetic
+            new { kind = "binary", name = "+", description = "Addition. Also concatenates strings and appends arrays.", example = "1 + 2" },
+            new { kind = "binary", name = "-", description = "Subtraction.", example = "5 - 3" },
+            new { kind = "binary", name = "*", description = "Multiplication. Also repeats strings: `\"ha\" * 3` → `\"hahaha\"`.", example = "3 * 4" },
+            new { kind = "binary", name = "/", description = "Division.", example = "10 / 2" },
+            new { kind = "binary", name = "%", description = "Modulo (remainder).", example = "7 % 3" },
+            new { kind = "binary", name = "**", description = "Exponentiation.", example = "2 ** 8" },
+
+            // Equality / regex
+            new { kind = "binary", name = "==", description = "Equality. Case-insensitive for strings.", example = "\"Hello\" == \"hello\"" },
+            new { kind = "binary", name = "!=", description = "Inequality.", example = "1 != 2" },
+            new { kind = "binary", name = "=~", description = "Regex match. Returns `true` if the left string matches the regex pattern on the right.", example = "\"hello\" =~ \"^h\"" },
+            new { kind = "binary", name = "!~", description = "Negated regex match.", example = "\"world\" !~ \"^h\"" },
+
+            // Comparison
+            new { kind = "binary", name = ">",  description = "Greater-than comparison.", example = "5 > 3" },
+            new { kind = "binary", name = ">=", description = "Greater-than-or-equal comparison.", example = "5 >= 5" },
+            new { kind = "binary", name = "<",  description = "Less-than comparison.", example = "3 < 5" },
+            new { kind = "binary", name = "<=", description = "Less-than-or-equal comparison.", example = "3 <= 3" },
+
+            // Membership
+            new { kind = "binary", name = "in",       description = "Membership operator. Returns `true` if the value is found in the collection or substring is found in string.", example = "3 in [1,2,3]" },
+            new { kind = "binary", name = "not-in",   description = "Negated membership operator.", example = "4 not-in [1,2,3]" },
+            new { kind = "binary", name = "is in",    description = "Membership form of `is`. Write as two words. Equivalent to `in`.", example = "3 is in [1,2,3]" },
+            new { kind = "binary", name = "is not in", description = "Negated membership form of `is not`. Write as three words.", example = "4 is not in [1,2,3]" },
+
+            // String operators
+            new { kind = "binary", name = "contains",    description = "Returns `true` if the string contains the substring, or if the collection contains the value.", example = "\"hello\" contains \"ell\"" },
+            new { kind = "binary", name = "starts-with", description = "Returns `true` if the string starts with the given prefix.", example = "\"hello\" starts-with \"he\"" },
+            new { kind = "binary", name = "ends-with",   description = "Returns `true` if the string ends with the given suffix.", example = "\"hello\" ends-with \"lo\"" },
+
+            // Type operators
+            new { kind = "binary", name = "is",     description = "Type-check operator. Returns `true` if the value matches the named type. Use `is not` (two words) or `is-not` as the negated form.", example = "5 is int" },
+            new { kind = "binary", name = "is-not", description = "Negated type-check. The two-word form `is not` is also accepted.", example = "5 is-not string" },
+            new { kind = "binary", name = "as",     description = "Type-cast operator. Converts the value to the named type. Also used as an import alias keyword in `using` / `require` / `bind`.", example = "5 as float" },
+
+            // Logical
+            new { kind = "binary", name = "and", description = "Short-circuit logical AND.", example = "true and false" },
+            new { kind = "binary", name = "or",  description = "Short-circuit logical OR.",  example = "false or true" },
+        };
+
+        return new
+        {
+            content = new[] { new { type = "text", text = JsonSerializer.Serialize(operators, JsonOptions) } }
         };
     }
 
@@ -581,6 +636,17 @@ public sealed class ToshMcpServer
                     name = new { type = "string", description = "Filter by command name or alias. Omit to return all commands." },
                     category = new { type = "string", description = "Filter by category (e.g. 'Filesystem', 'Data', 'System'). Omit to return all categories." }
                 },
+                required = Array.Empty<string>()
+            }
+        },
+        new
+        {
+            name = "operator_metadata",
+            description = "Get documentation for all TōSh infix and unary operators. Returns each operator's kind (unary/binary), name, description, and a usage example. Covers arithmetic (+, -, *, /, %, **), equality (==, !=, =~, !~), comparison (>, >=, <, <=), membership (in, not-in, 'is in', 'is not in'), string operators (contains, starts-with, ends-with), type operators (is, is-not, as), and logical operators (and, or, not). Note: 'is in' and 'is not in' are multi-word forms and must be written with spaces.",
+            inputSchema = new
+            {
+                type = "object",
+                properties = new { },
                 required = Array.Empty<string>()
             }
         },

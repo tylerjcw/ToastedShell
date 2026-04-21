@@ -5,6 +5,17 @@ using System.Net.Sockets;
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Network")]
+[CommandArgument("host", "Host name or IP address to ping.")]
+[CommandOption("-c, --count <count>", "Number of echo requests to send. Defaults to 4.")]
+[CommandOption("-W, --timeout <milliseconds>", "Per-request timeout in milliseconds. Defaults to 4000.")]
+[CommandOption("-s, --size <bytes>", "Payload size in bytes. Defaults to 32.")]
+[CommandOption("-i, --interval <seconds>", "Delay between requests, in seconds. Defaults to 1.")]
+[CommandOption("-t, --ttl <hops>", "Set the IP time-to-live value for requests.")]
+[CommandOption("-4", "Resolve and use an IPv4 address.")]
+[CommandOption("-6", "Resolve and use an IPv6 address.")]
+[CommandOption("-D, --dont-fragment", "Set the don't-fragment flag where supported.")]
+[CommandExample("ping -c 3 localhost", Title = "Ping localhost three times")]
+[CommandExample("ping -4 -W 1000 example.com | get { Host, Sequence, Status, RoundtripTime }", Title = "Project typed ping replies")]
 [CommandSideEffects(Network = true)]
 public sealed class PingCommand : ShellCommand
 {

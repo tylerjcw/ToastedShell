@@ -20,12 +20,12 @@ public sealed class McpServerTests
     }
 
     [Fact]
-    public async Task Tools_list_returns_nine_tools()
+    public async Task Tools_list_returns_ten_tools()
     {
         var result = await SendRequestAsync(1, "tools/list");
 
         var tools = result.GetProperty("tools");
-        Assert.Equal(9, tools.GetArrayLength());
+        Assert.Equal(10, tools.GetArrayLength());
 
         var names = Enumerable.Range(0, tools.GetArrayLength())
             .Select(i => tools[i].GetProperty("name").GetString())
@@ -40,6 +40,7 @@ public sealed class McpServerTests
         Assert.Contains("command_metadata", names);
         Assert.Contains("run_snippet", names);
         Assert.Contains("explain_error", names);
+        Assert.Contains("operator_metadata", names);
     }
 
     [Fact]

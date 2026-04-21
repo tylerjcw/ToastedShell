@@ -1,6 +1,7 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Shell")]
+[CommandExample("clear", Title = "Clear the terminal")]
 public sealed class ClearCommand : ShellCommand
 {
     public ClearCommand()

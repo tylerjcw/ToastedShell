@@ -719,6 +719,83 @@ public sealed class ReplLineEditorTests
     }
 
     [Fact]
+    public void Bracket_enclosure_highlights_surrounding_braces_when_cursor_is_inside()
+    {
+        // "{ echo hello }" — cursor in the middle of the body, not adjacent to any bracket
+        var text = "{ echo hello }";
+        //          0             13
+        var openPos = 0;
+        var closePos = 13;
+
+        // Cursor somewhere in the middle of the body
+        var mid = 7; // on 'h' in hello
+        var match = ReplLineEditor.FindMatchingBracketPositions(text, mid);
+        Assert.NotNull(match);
+        Assert.Equal(openPos, Math.Min(match!.Value.Item1, match.Value.Item2));
+        Assert.Equal(closePos, Math.Max(match.Value.Item1, match.Value.Item2));
+    }
+
+    [Fact]
+    public void Bracket_enclosure_highlights_innermost_pair_for_nested_brackets()
+    {
+        // "{ foo (bar [baz] qux) }"
+        //  0          10    15   22
+        var text = "{ foo (bar [baz] qux) }";
+        var innerOpen = text.IndexOf('[');   // 11
+        var innerClose = text.IndexOf(']');   // 15
+
+        // Cursor inside [baz] body
+        var cursor = text.IndexOf("baz"); // 12
+        var match = ReplLineEditor.FindMatchingBracketPositions(text, cursor);
+        Assert.NotNull(match);
+        Assert.Equal(innerOpen, Math.Min(match!.Value.Item1, match.Value.Item2));
+        Assert.Equal(innerClose, Math.Max(match.Value.Item1, match.Value.Item2));
+    }
+
+    [Fact]
+    public void Bracket_enclosure_returns_null_when_cursor_is_outside_all_brackets()
+    {
+        var text = "echo hello";
+        var match = ReplLineEditor.FindMatchingBracketPositions(text, 5);
+        Assert.Null(match);
+    }
+
+    [Fact]
+    public void Bracket_enclosure_skips_brackets_inside_string_literals()
+    {
+        // "func f() { echo \"not {a} bracket\" }"
+        //  The braces inside the string should be ignored.
+        var text = "func f() { echo \"not {a} bracket\" }";
+        var outerOpen = text.IndexOf('{');         // 9  (the real one)
+        var outerClose = text.LastIndexOf('}');     // 34 (the real one)
+
+        // Cursor between the string and the closing brace
+        var cursor = text.IndexOf("bracket") + 8;  // just after the closing "
+        var match = ReplLineEditor.FindMatchingBracketPositions(text, cursor);
+        Assert.NotNull(match);
+        Assert.Equal(outerOpen, Math.Min(match!.Value.Item1, match.Value.Item2));
+        Assert.Equal(outerClose, Math.Max(match.Value.Item1, match.Value.Item2));
+    }
+
+    [Fact]
+    public void Bracket_enclosure_works_for_parentheses_and_square_brackets()
+    {
+        // Parens: "(foo bar)" cursor at 4
+        var parenText = "(foo bar)";
+        var parenMatch = ReplLineEditor.FindMatchingBracketPositions(parenText, 4);
+        Assert.NotNull(parenMatch);
+        Assert.Equal(0, Math.Min(parenMatch!.Value.Item1, parenMatch.Value.Item2));
+        Assert.Equal(8, Math.Max(parenMatch.Value.Item1, parenMatch.Value.Item2));
+
+        // Square brackets: "[1 2 3]" cursor at 3
+        var sqText = "[1 2 3]";
+        var sqMatch = ReplLineEditor.FindMatchingBracketPositions(sqText, 3);
+        Assert.NotNull(sqMatch);
+        Assert.Equal(0, Math.Min(sqMatch!.Value.Item1, sqMatch.Value.Item2));
+        Assert.Equal(6, Math.Max(sqMatch.Value.Item1, sqMatch.Value.Item2));
+    }
+
+    [Fact]
     public void Typing_closing_char_over_auto_placed_one_skips_past_it_without_duplicating()
     {
         // Simulate: buffer contains "{}" with cursor between them (auto-close placed })

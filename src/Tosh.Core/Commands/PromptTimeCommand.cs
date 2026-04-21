@@ -1,6 +1,11 @@
 namespace Tosh.Core.Commands;
 
 [CommandCategory("Prompt")]
+[CommandOption("--fg <color>", "Foreground color name or ANSI-style color token.")]
+[CommandOption("--bg <color>", "Background color name or ANSI-style color token.")]
+[CommandOption("--bold", "Render the segment in bold.")]
+[CommandOption("--dim", "Render the segment dimmed.")]
+[CommandOption("--format <pattern>", "Date/time format string used to render the current time.")]
 [CommandExample("prompt-time --dim")]
 [CommandExample("prompt-time --format \"HH:mm:ss\" --fg gray")]
 public sealed class PromptTimeCommand : ShellCommand
