@@ -59,12 +59,22 @@ public sealed class ReplLineEditor
 
         try
         {
+            Console.Write("\x1b[?2004h"); // Enable bracketed paste mode
             var initialHint = signatureHintProvider?.Invoke(buffer.Text, buffer.CursorIndex);
             cursorRow = Render(prompt, continuationPrompt, buffer, cursorRow, completionState, historySearchState, highlighter, maxVisibleSuggestions, showGhostText, theme, initialHint, continuationGutterRightBorder, continuationLineNumbers);
 
             while (true)
             {
-                var key = ReadInputKey(pendingKeys);
+                var key = ReadInputKey(pendingKeys, out var pastePayload);
+
+                if (pastePayload is not null)
+                {
+                    ApplySmartPaste(buffer, pastePayload);
+                    completionState = null;
+                    preferredColumn = null;
+                    cursorRow = Render(prompt, continuationPrompt, buffer, cursorRow, completionState, historySearchState, highlighter, maxVisibleSuggestions, showGhostText, theme, gutterRightBorder: continuationGutterRightBorder, continuationLineNumbers: continuationLineNumbers);
+                    continue;
+                }
 
                 if (specialKeyHandler is not null && specialKeyHandler(buffer, key))
                 {
@@ -152,6 +162,20 @@ public sealed class ReplLineEditor
                 {
                     if (shiftEnterExecutes)
                     {
+                        // Enter between auto-closed pair: split into indented body + closing line
+                        if (IsBetweenMatchingPair(buffer.Text, buffer.CursorIndex))
+                        {
+                            var pairIndent = GetCurrentLineIndent(buffer.Text, buffer.CursorIndex);
+                            var pairInserted = "\n" + pairIndent + "    " + "\n" + pairIndent;
+                            buffer.Insert(pairInserted);
+                            var stepsBack = pairIndent.Length + 1;
+                            for (var i = 0; i < stepsBack; i++) buffer.MoveLeft();
+                            preferredColumn = null;
+                            completionState = null;
+                            cursorRow = Render(prompt, continuationPrompt, buffer, cursorRow, completionState, historySearchState, highlighter, maxVisibleSuggestions, showGhostText, theme, gutterRightBorder: continuationGutterRightBorder, continuationLineNumbers: continuationLineNumbers);
+                            continue;
+                        }
+
                         var continuationState = continuationHandler?.Invoke(buffer.Text) ?? default;
 
                         if (ShouldInsertNewLineOnEnter(buffer.Text, continuationState))
@@ -171,6 +195,20 @@ public sealed class ReplLineEditor
                     }
 
                     var legacyContinuationState = continuationHandler?.Invoke(buffer.Text) ?? default;
+
+                    // Enter between auto-closed pair: split into indented body + closing line
+                    if (IsBetweenMatchingPair(buffer.Text, buffer.CursorIndex))
+                    {
+                        var pairIndent = GetCurrentLineIndent(buffer.Text, buffer.CursorIndex);
+                        var pairInserted = "\n" + pairIndent + "    " + "\n" + pairIndent;
+                        buffer.Insert(pairInserted);
+                        var stepsBack = pairIndent.Length + 1;
+                        for (var i = 0; i < stepsBack; i++) buffer.MoveLeft();
+                        preferredColumn = null;
+                        completionState = null;
+                        cursorRow = Render(prompt, continuationPrompt, buffer, cursorRow, completionState, historySearchState, highlighter, maxVisibleSuggestions, showGhostText, theme, gutterRightBorder: continuationGutterRightBorder, continuationLineNumbers: continuationLineNumbers);
+                        continue;
+                    }
 
                     if (legacyContinuationState.RequiresContinuation)
                     {
@@ -201,6 +239,20 @@ public sealed class ReplLineEditor
                     if (shouldRender)
                     {
                         completionState = null;
+
+                        // Auto-trigger member completions when '.' is typed
+                        if (completionProvider is not null &&
+                            buffer.CursorIndex > 0 && buffer.Text[buffer.CursorIndex - 1] == '.')
+                        {
+                            var autoResult = completionProvider(buffer.Text, buffer.CursorIndex);
+                            if (autoResult is not null && autoResult.Suggestions.Count > 0)
+                            {
+                                completionState = new LineEditorCompletionState(
+                                    buffer.Text, buffer.CursorIndex,
+                                    autoResult.ReplacementStart, autoResult.ReplacementLength,
+                                    autoResult.Suggestions, 0);
+                            }
+                        }
                     }
                 }
 
@@ -213,13 +265,16 @@ public sealed class ReplLineEditor
         }
         finally
         {
+            Console.Write("\x1b[?2004l"); // Disable bracketed paste mode
             onBufferDeactivated?.Invoke(buffer);
         }
     }
 
-    private static ConsoleKeyInfo ReadInputKey(Queue<ConsoleKeyInfo> pendingKeys)
+    private static ConsoleKeyInfo ReadInputKey(Queue<ConsoleKeyInfo> pendingKeys, out string? pastePayload)
     {
         ArgumentNullException.ThrowIfNull(pendingKeys);
+
+        pastePayload = null;
 
         if (pendingKeys.Count > 0)
         {
@@ -242,6 +297,14 @@ public sealed class ReplLineEditor
 
         var sequence = new string(trailingKeys.Select(static trailingKey => trailingKey.KeyChar).ToArray());
 
+        // Detect bracketed paste start: ESC [ 2 0 0 ~
+        if (sequence.StartsWith("[200~", StringComparison.Ordinal))
+        {
+            var alreadyRead = sequence.Length > 5 ? sequence[5..] : string.Empty;
+            pastePayload = ReadRemainingBracketedPaste(alreadyRead);
+            return key; // dummy ESC key; caller checks pastePayload
+        }
+
         if (TryTranslateEscapeSequence(sequence, out var translated))
         {
             return translated;
@@ -253,6 +316,46 @@ public sealed class ReplLineEditor
         }
 
         return key;
+    }
+
+    /// <summary>
+    /// Reads characters from stdin until the bracketed paste end marker (ESC [ 2 0 1 ~) is found.
+    /// <paramref name="alreadyRead"/> contains any paste content already consumed by the escape
+    /// sequence scanner before the bracketed-paste start was identified.
+    /// </summary>
+    private static string ReadRemainingBracketedPaste(string alreadyRead)
+    {
+        const string EndMarkerSuffix = "[201~"; // ESC is consumed separately
+        var sb = new StringBuilder(alreadyRead);
+
+        while (true)
+        {
+            // Check if we already accumulated the end marker
+            var current = sb.ToString();
+            var esc = current.IndexOf('\x1b');
+            if (esc >= 0 && current.Length - esc >= 1 + EndMarkerSuffix.Length)
+            {
+                if (current.AsSpan(esc + 1, EndMarkerSuffix.Length).SequenceEqual(EndMarkerSuffix))
+                {
+                    return current[..esc];
+                }
+            }
+
+            if (!WaitForPendingConsoleKey(maxWaitMilliseconds: 200))
+            {
+                break; // timeout — no more paste content
+            }
+
+            while (Console.KeyAvailable)
+            {
+                sb.Append(Console.ReadKey(intercept: true).KeyChar);
+            }
+        }
+
+        // Strip end marker if it arrived late
+        var result = sb.ToString();
+        var endIdx = result.IndexOf("\x1b" + EndMarkerSuffix, StringComparison.Ordinal);
+        return endIdx >= 0 ? result[..endIdx] : result;
     }
 
     private static List<ConsoleKeyInfo> ReadPendingEscapeSequenceKeys()
@@ -494,7 +597,7 @@ public sealed class ReplLineEditor
 
         return key.Key switch
         {
-            ConsoleKey.Backspace => ResetPreferredColumn(buffer.Backspace(), ref preferredColumn),
+            ConsoleKey.Backspace => ResetPreferredColumn(HandleSmartBackspace(buffer), ref preferredColumn),
             ConsoleKey.Delete => ResetPreferredColumn(buffer.Delete(), ref preferredColumn),
             ConsoleKey.LeftArrow => ResetPreferredColumn(buffer.MoveLeft(), ref preferredColumn),
             ConsoleKey.RightArrow => ResetPreferredColumn(buffer.MoveRight(), ref preferredColumn),
@@ -571,10 +674,241 @@ public sealed class ReplLineEditor
     {
         if (!char.IsControl(key.KeyChar))
         {
-            return ResetPreferredColumn(buffer.Insert(key.KeyChar), ref preferredColumn);
+            var ch = key.KeyChar;
+
+            // Skip-over: if the user types a closing char that already sits at the cursor
+            // (placed there by auto-close), just move past it instead of inserting a duplicate.
+            if (buffer.CursorIndex < buffer.Text.Length && buffer.Text[buffer.CursorIndex] == ch &&
+                ch is ')' or ']' or '}' or '"' or '\'')
+            {
+                return ResetPreferredColumn(buffer.MoveRight(), ref preferredColumn);
+            }
+
+            // Auto-align closing braces to match their opening brace indentation
+            if (ch == '}' && buffer.CursorIndex > 0)
+            {
+                var text = buffer.Text;
+                var cursorPos = buffer.CursorIndex;
+
+                // Find matching opening brace and calculate indent
+                var indent = FindMatchingBraceIndent(text, cursorPos);
+                if (indent >= 0)
+                {
+                    // Get current line start
+                    var lineStart = text.LastIndexOf('\n', cursorPos - 1) + 1;
+                    var currentLinePrefix = text[lineStart..cursorPos];
+                    var currentIndent = currentLinePrefix.TakeWhile(char.IsWhiteSpace).Count();
+
+                    // If closing brace is on a line with only whitespace, align it
+                    if (currentLinePrefix.All(char.IsWhiteSpace))
+                    {
+                        var spacesToInsert = indent - currentIndent;
+                        if (spacesToInsert > 0)
+                        {
+                            buffer.Insert(new string(' ', spacesToInsert));
+                        }
+                        else if (spacesToInsert < 0)
+                        {
+                            for (var i = 0; i < -spacesToInsert; i++)
+                            {
+                                buffer.Backspace();
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Auto-close matching pairs: { → }, ( → ), [ → ], " → ", ' → '
+            var autoCloser = GetAutoClosingChar(ch);
+            if (autoCloser != '\0')
+            {
+                var nextChar = buffer.CursorIndex < buffer.Text.Length ? buffer.Text[buffer.CursorIndex] : '\0';
+                if (IsAutoCloseContext(nextChar))
+                {
+                    buffer.Insert(ch);
+                    buffer.Insert(autoCloser);
+                    buffer.MoveLeft();
+                    preferredColumn = null;
+                    return true;
+                }
+            }
+
+            return ResetPreferredColumn(buffer.Insert(ch), ref preferredColumn);
         }
 
         return false;
+    }
+
+    private static char GetAutoClosingChar(char ch) => ch switch
+    {
+        '{' => '}',
+        '(' => ')',
+        '[' => ']',
+        '"' => '"',
+        '\'' => '\'',
+        _ => '\0',
+    };
+
+    // Auto-close when next char is end-of-input, whitespace, or a closing/separating token.
+    private static bool IsAutoCloseContext(char next) =>
+        next == '\0' || next == '\n' || char.IsWhiteSpace(next) ||
+        next is ')' or ']' or '}' or '"' or '\'' or ',' or ';';
+
+    private static bool IsBetweenMatchingPair(string text, int cursorIndex) =>
+        cursorIndex > 0 && cursorIndex < text.Length &&
+        ((text[cursorIndex - 1] == '{' && text[cursorIndex] == '}') ||
+         (text[cursorIndex - 1] == '(' && text[cursorIndex] == ')') ||
+         (text[cursorIndex - 1] == '[' && text[cursorIndex] == ']'));
+
+    /// <summary>
+    /// Inserts pasted text at the cursor, re-indenting continuation lines so that their
+    /// relative indentation is preserved and anchored to the current cursor indent level.
+    /// </summary>
+    internal static void ApplySmartPaste(LineEditorBuffer buffer, string text)
+    {
+        ArgumentNullException.ThrowIfNull(buffer);
+        ArgumentNullException.ThrowIfNull(text);
+
+        var lines = NormalizeLineEndings(text).Split('\n');
+
+        if (lines.Length == 1)
+        {
+            buffer.Insert(lines[0]);
+            return;
+        }
+
+        // Anchor indent: what the current line already has when paste begins.
+        var currentIndent = GetCurrentLineIndent(buffer.Text, buffer.CursorIndex);
+
+        // Minimum indent of all non-blank lines in the paste (the "base" to strip).
+        var minIndentLength = lines
+            .Where(static l => l.Trim().Length > 0)
+            .Select(static l => l.Length - l.TrimStart().Length)
+            .DefaultIfEmpty(0)
+            .Min();
+
+        var result = new StringBuilder();
+
+        for (var i = 0; i < lines.Length; i++)
+        {
+            var line = lines[i];
+
+            if (i == 0)
+            {
+                // First line: cursor is already positioned; strip any original leading whitespace.
+                result.Append(line.TrimStart());
+            }
+            else
+            {
+                result.Append('\n');
+
+                if (line.Trim().Length > 0)
+                {
+                    // Relative indent beyond the common minimum.
+                    var lineIndentLength = line.Length - line.TrimStart().Length;
+                    var relativeIndent = lineIndentLength > minIndentLength
+                        ? line[minIndentLength..lineIndentLength]
+                        : string.Empty;
+
+                    result.Append(currentIndent);
+                    result.Append(relativeIndent);
+                    result.Append(line.TrimStart());
+                }
+                // Blank lines remain blank (no trailing whitespace added).
+            }
+        }
+
+        buffer.Insert(result.ToString());
+    }
+
+    private static bool HandleSmartBackspace(LineEditorBuffer buffer)
+    {
+        if (buffer.CursorIndex > 0 && buffer.CursorIndex < buffer.Text.Length)
+        {
+            var before = buffer.Text[buffer.CursorIndex - 1];
+            var after = buffer.Text[buffer.CursorIndex];
+            if ((before == '{' && after == '}') ||
+                (before == '(' && after == ')') ||
+                (before == '[' && after == ']') ||
+                (before == '"' && after == '"') ||
+                (before == '\'' && after == '\''))
+            {
+                buffer.Delete();    // remove closer
+                buffer.Backspace(); // remove opener
+                return true;
+            }
+        }
+        return buffer.Backspace();
+    }
+
+    /// <summary>
+    /// Finds the indentation level of the opening brace that matches a closing brace position.
+    /// Returns -1 if no matching brace is found or if current position is not before a closing brace.
+    /// </summary>
+    private static int FindMatchingBraceIndent(string text, int closingBracePos)
+    {
+        var depth = 0;
+        var inString = false;
+        var stringChar = '\0';
+        var inComment = false;
+
+        // Scan backwards from closing brace position to find matching opening brace
+        for (var i = closingBracePos - 1; i >= 0; i--)
+        {
+            var ch = text[i];
+
+            // Handle strings (simplified: single-level string tracking)
+            if ((ch == '"' || ch == '\'') && (i == 0 || text[i - 1] != '\\'))
+            {
+                if (!inComment)
+                {
+                    if (!inString || stringChar == ch)
+                    {
+                        inString = !inString;
+                        stringChar = ch;
+                    }
+                }
+                continue;
+            }
+
+            if (inString) continue;
+
+            // Handle comments
+            if (ch == '#' && (i == 0 || text[i - 1] != '\\'))
+            {
+                // Skip to start of line
+                while (i > 0 && text[i - 1] != '\n') i--;
+                continue;
+            }
+
+            // Track braces
+            if (ch == '}')
+            {
+                depth++;
+            }
+            else if (ch == '{')
+            {
+                if (depth == 0)
+                {
+                    // Found matching opening brace - calculate its indentation
+                    var braceLineStart = text.LastIndexOf('\n', i) + 1;
+                    var indent = 0;
+                    for (var j = braceLineStart; j < i; j++)
+                    {
+                        if (text[j] == ' ')
+                            indent++;
+                        else if (text[j] == '\t')
+                            indent += 4; // Tab = 4 spaces
+                        else
+                            break; // Non-whitespace found
+                    }
+                    return indent;
+                }
+                depth--;
+            }
+        }
+
+        return -1;
     }
 
     private static bool HandleUpArrow(
@@ -701,6 +1035,13 @@ public sealed class ReplLineEditor
             var promptText = lineIndex == 0
                 ? prompt
                 : dynamicContinuationGutters[lineIndex] ?? normalizedContinuationPrompt;
+
+            // Apply dim styling to continuation gutter (ANSI code 2 = faint/dim)
+            if (lineIndex > 0 && dynamicContinuationGutters[lineIndex] is not null)
+            {
+                promptText = $"\x1b[2m{promptText}\x1b[0m";
+            }
+
             builder.Append(promptText);
             ConsumeDisplayText(AnsiEscapePattern.Replace(promptText, string.Empty), consoleWidth, ref row, ref column);
 
@@ -760,13 +1101,6 @@ public sealed class ReplLineEditor
             var line = rawLines[i] ?? string.Empty;
             var previousLine = i > 0 ? rawLines[i - 1] ?? string.Empty : string.Empty;
 
-            if (i == 1)
-            {
-                gutters[i] = BuildDepthGutter(promptWidth, GutterMarker.Vertical, depth: 1, fallback, glyphs, lineNumber: i + 1, gutterRightBorder, continuationLineNumbers);
-                depth = Math.Max(0, depth + ComputeBraceDelta(line));
-                continue;
-            }
-
             var startsWithCloser = StartsWithCloserToken(line);
             var endsWithOpener = EndsWithOpenerToken(line);
             var previousEndsWithOpener = EndsWithOpenerToken(previousLine);
@@ -778,6 +1112,12 @@ public sealed class ReplLineEditor
             }
 
             var marker = SelectGutterMarker(startsWithCloser, endsWithOpener, effectiveDepth);
+            // The first continuation line (i==1) anchors at the gutter rail even when
+            // there is no enclosing block — plain text continuations should show │, not ·.
+            if (i == 1 && marker == GutterMarker.Dot)
+            {
+                marker = GutterMarker.Vertical;
+            }
             gutters[i] = BuildDepthGutter(promptWidth, marker, effectiveDepth, fallback, glyphs, lineNumber: i + 1, gutterRightBorder, continuationLineNumbers);
 
             depth = Math.Max(0, depth + ComputeBraceDelta(line));
@@ -1124,23 +1464,123 @@ public sealed class ReplLineEditor
         ToshCompletionThemeConfig theme)
     {
         var applyHighlighting = highlighter ?? (text => text);
+        var bracketMatch = FindMatchingBracketPositions(buffer.Text, buffer.CursorIndex);
 
         if (completionState is null || !showGhostText)
         {
-            return applyHighlighting(buffer.Text);
+            return ApplyHighlightingWithBrackets(buffer.Text, 0, bracketMatch, applyHighlighting);
         }
 
         var ghostText = BuildGhostText(buffer, completionState, theme);
 
         if (ghostText.Length == 0)
         {
-            return applyHighlighting(buffer.Text);
+            return ApplyHighlightingWithBrackets(buffer.Text, 0, bracketMatch, applyHighlighting);
         }
 
+        // Apply bracket highlighting to each segment independently, passing the full-text offset
+        // so bracket positions that fall outside a segment are silently ignored.
         var beforeCursor = buffer.Text[..buffer.CursorIndex];
         var afterCursor = buffer.Text[buffer.CursorIndex..];
-        return applyHighlighting(beforeCursor) + ghostText + applyHighlighting(afterCursor);
+        return ApplyHighlightingWithBrackets(beforeCursor, 0, bracketMatch, applyHighlighting)
+             + ghostText
+             + ApplyHighlightingWithBrackets(afterCursor, buffer.CursorIndex, bracketMatch, applyHighlighting);
     }
+
+    // Finds the two text-positions of a matching bracket pair containing or adjacent to the cursor.
+    // Checks the character AT the cursor first, then the character just BEFORE it.
+    internal static (int, int)? FindMatchingBracketPositions(string text, int cursorIndex)
+    {
+        for (var offset = 0; offset <= 1; offset++)
+        {
+            var pos = cursorIndex - offset;
+            if (pos < 0 || pos >= text.Length) continue;
+            var ch = text[pos];
+            if (ch is '{' or '(' or '[')
+            {
+                var closeChar = ch == '{' ? '}' : ch == '(' ? ')' : ']';
+                var match = FindClosingBracket(text, pos, ch, closeChar);
+                if (match >= 0) return (pos, match);
+            }
+            else if (ch is '}' or ')' or ']')
+            {
+                var openChar = ch == '}' ? '{' : ch == ')' ? '(' : '[';
+                var match = FindOpeningBracket(text, pos, ch, openChar);
+                if (match >= 0) return (match, pos);
+            }
+        }
+        return null;
+    }
+
+    private static int FindClosingBracket(string text, int fromPos, char opener, char closer)
+    {
+        var depth = 0;
+        var inSingleQuote = false;
+        var inDoubleQuote = false;
+        for (var i = fromPos; i < text.Length; i++)
+        {
+            var ch = text[i];
+            if (inSingleQuote) { if (ch == '\'' && (i == 0 || text[i - 1] != '\\')) inSingleQuote = false; continue; }
+            if (inDoubleQuote) { if (ch == '"' && (i == 0 || text[i - 1] != '\\')) inDoubleQuote = false; continue; }
+            if (ch == '\'' && opener != '\'') { inSingleQuote = true; continue; }
+            if (ch == '"' && opener != '"') { inDoubleQuote = true; continue; }
+            if (ch == '#') { while (i + 1 < text.Length && text[i + 1] != '\n') i++; continue; }
+            if (ch == opener) depth++;
+            else if (ch == closer && --depth == 0) return i;
+        }
+        return -1;
+    }
+
+    private static int FindOpeningBracket(string text, int fromPos, char closer, char opener)
+    {
+        var depth = 0;
+        var inString = false;
+        var stringChar = '\0';
+        for (var i = fromPos; i >= 0; i--)
+        {
+            var ch = text[i];
+            if (inString) { if (ch == stringChar && (i == 0 || text[i - 1] != '\\')) inString = false; continue; }
+            if ((ch == '"' || ch == '\'') && closer != ch) { inString = true; stringChar = ch; continue; }
+            if (ch == closer) depth++;
+            else if (ch == opener && --depth == 0) return i;
+        }
+        return -1;
+    }
+
+    // Applies the highlighter to `segment`, injecting bracket-match ANSI codes at the two
+    // bracket positions.  `segmentOffset` is the byte offset of `segment` within the full text,
+    // used to translate full-text bracket positions into segment-local positions.
+    private static string ApplyHighlightingWithBrackets(
+        string segment, int segmentOffset, (int, int)? match, Func<string, string> applyHighlighting)
+    {
+        if (match is null) return applyHighlighting(segment);
+
+        var lo = Math.Min(match.Value.Item1, match.Value.Item2) - segmentOffset;
+        var hi = Math.Max(match.Value.Item1, match.Value.Item2) - segmentOffset;
+
+        // Collect which of the two bracket positions fall inside this segment
+        var hasLo = lo >= 0 && lo < segment.Length;
+        var hasHi = hi >= 0 && hi < segment.Length;
+
+        if (!hasLo && !hasHi) return applyHighlighting(segment);
+
+        var sb = new StringBuilder();
+        var prev = 0;
+
+        foreach (var pos in new[] { hasLo ? lo : -1, hasHi ? hi : -1 })
+        {
+            if (pos < 0) continue;
+            sb.Append(applyHighlighting(segment[prev..pos]));
+            sb.Append(WrapBracketHighlight(applyHighlighting(segment[pos..(pos + 1)])));
+            prev = pos + 1;
+        }
+
+        sb.Append(applyHighlighting(segment[prev..]));
+        return sb.ToString();
+    }
+
+    // Bold cyan: visually distinct but not distracting.
+    private static string WrapBracketHighlight(string text) => $"\x1b[1;36m{text}\x1b[0m";
 
     private static string BuildGhostText(LineEditorBuffer buffer, LineEditorCompletionState state, ToshCompletionThemeConfig theme)
     {
@@ -1455,14 +1895,18 @@ public sealed class ReplLineEditor
 
             case ConsoleKey.Tab:
             case ConsoleKey.Enter:
-                ApplyCompletionSuggestion(
-                    buffer,
-                    completionState.BaseText,
-                    completionState.ReplacementStart,
-                    completionState.ReplacementLength,
-                    completionState.Suggestions[completionState.SelectedIndex].GetInsertText());
-                completionState = null;
-                return true;
+                {
+                    var accepted = completionState.Suggestions[completionState.SelectedIndex];
+                    ApplyCompletionSuggestion(
+                        buffer,
+                        completionState.BaseText,
+                        completionState.ReplacementStart,
+                        completionState.ReplacementLength,
+                        accepted.GetInsertText(),
+                        GetCompletionSmartSuffix(accepted));
+                    completionState = null;
+                    return true;
+                }
 
             case ConsoleKey.Escape:
                 completionState = null;
@@ -1508,6 +1952,15 @@ public sealed class ReplLineEditor
                 suffix = default;
                 return false;
         }
+    }
+
+    private static string GetCompletionSmartSuffix(ReplCompletionSuggestion suggestion)
+    {
+        var detail = suggestion.Detail ?? string.Empty;
+        return detail.Equals("Method", StringComparison.OrdinalIgnoreCase) ||
+               detail.StartsWith("func ", StringComparison.OrdinalIgnoreCase)
+            ? "("
+            : string.Empty;
     }
 
     internal readonly record struct VisualPosition(int Row, int Column);

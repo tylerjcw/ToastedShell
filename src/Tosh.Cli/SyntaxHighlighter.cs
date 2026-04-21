@@ -45,6 +45,13 @@ public static class SyntaxHighlighter
         "shared", "sealed", "hollow", "fixed", "vital", "guarded", "overrule", "hermit", "strict", "lazy", "fading", "local", "raw", "partial", "proud", "public", "fluid", "fulfills", "uses",
     };
 
+    // These are a subset of Keywords that change execution flow; rendered in a distinct color.
+    private static readonly HashSet<string> ControlFlowKeywords = new(StringComparer.Ordinal)
+    {
+        "if", "else", "for", "in", "while", "until", "break", "continue",
+        "return", "throw", "try", "catch", "finally", "switch", "case", "default", "match",
+    };
+
     private static readonly HashSet<string> LanguageForms = new(StringComparer.Ordinal)
     {
         "new", "nameof", "name-of",
@@ -58,6 +65,12 @@ public static class SyntaxHighlighter
     private static readonly HashSet<string> BuiltInConstants = new(StringComparer.OrdinalIgnoreCase)
     {
         "true", "false", "null",
+    };
+
+    // Keywords that introduce a type name immediately after them (the declaration identifier).
+    private static readonly HashSet<string> TypeDeclarationKeywords = new(StringComparer.Ordinal)
+    {
+        "class", "struct", "enum", "trait", "record", "interface",
     };
 
     public static string Highlight(string input, ToshRuntime? runtime = null)
@@ -138,8 +151,10 @@ public static class SyntaxHighlighter
 
         return token.Kind switch
         {
-            SyntaxTokenKind.String or SyntaxTokenKind.InterpolatedString => theme.String,
-            SyntaxTokenKind.Number => theme.Number,
+            SyntaxTokenKind.String => GetStringStyle(input, token, runtime),
+            SyntaxTokenKind.InterpolatedString => theme.InterpolatedString,
+            SyntaxTokenKind.Number => GetNumberStyle(token, theme),
+            SyntaxTokenKind.UnitLiteral => theme.UnitLiteral,
             SyntaxTokenKind.Boolean or SyntaxTokenKind.Null => theme.Constant,
             SyntaxTokenKind.Pipe or SyntaxTokenKind.Ampersand => theme.Operator,
             SyntaxTokenKind.GreaterThan or SyntaxTokenKind.GreaterThanEqual
@@ -161,10 +176,48 @@ public static class SyntaxHighlighter
         };
     }
 
+    private static ToshTextStyleConfig GetStringStyle(string input, SyntaxToken token, ToshRuntime? runtime)
+    {
+        var theme = GetTheme(runtime);
+        var text = token.Text;
+
+        // Interpolated (all variants handled by their own token kind; this catches edge-cases)
+        // Double-quoted "…" and ANSI-C $'…' and triple-single-quoted '''…''' have processed escapes.
+        if (text.StartsWith('"') || text.StartsWith("$'", StringComparison.Ordinal) || text.StartsWith("'''", StringComparison.Ordinal))
+        {
+            return theme.EscapedString;
+        }
+
+        // Raw strings: single-quoted '…' and triple-double-quoted """…"""
+        return theme.String;
+    }
+
+    private static ToshTextStyleConfig GetNumberStyle(SyntaxToken token, ToshSyntaxThemeConfig theme)
+    {
+        var text = token.Text;
+
+        if (text.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+        {
+            return theme.HexNumber;
+        }
+
+        if (token.Value is double)
+        {
+            return theme.FloatNumber;
+        }
+
+        return theme.Number;
+    }
+
     private static ToshTextStyleConfig? GetBarewordStyle(string input, SyntaxToken token, ToshRuntime? runtime)
     {
         var text = token.Text;
         var theme = GetTheme(runtime);
+
+        if (ControlFlowKeywords.Contains(text))
+        {
+            return theme.ControlFlow;
+        }
 
         if (Keywords.Contains(text))
         {
@@ -203,7 +256,9 @@ public static class SyntaxHighlighter
 
         if (runtime is null)
         {
-            return LooksLikeTypeOrNamespace(text) ? theme.Type : theme.Argument;
+            return LooksLikeTypeContext(input, token.Span.Start) || LooksLikeTypeOrNamespace(text)
+                ? theme.Type
+                : theme.Argument;
         }
 
         if (IsExistingPath(runtime, text, input, token.Span.Start))
@@ -213,10 +268,29 @@ public static class SyntaxHighlighter
 
         if (IsCommandPosition(input, token.Span.Start))
         {
-            return IsKnownCommand(runtime, text) ? theme.ValidCommand : theme.InvalidCommand;
+            // Color as type if the token is a known type (e.g. `int x = 5`).
+            if (IsKnownTypeOrNamespace(runtime, text))
+            {
+                return theme.Type;
+            }
+
+            if (IsKnownCommand(runtime, text))
+            {
+                return theme.ValidCommand;
+            }
+
+            // Heuristic: constructor/type name being declared for the first time
+            // (e.g. `Point3(x: int, y: int, z: int) {`) — not yet in the runtime.
+            if (LooksLikeTypeOrNamespace(text))
+            {
+                return theme.Type;
+            }
+
+            return theme.InvalidCommand;
         }
 
-        if (LooksLikeTypeContext(input, token.Span.Start) && IsKnownTypeOrNamespace(runtime, text))
+        if (LooksLikeTypeContext(input, token.Span.Start) &&
+            (IsKnownTypeOrNamespace(runtime, text) || LooksLikeTypeOrNamespace(text)))
         {
             return theme.Type;
         }
@@ -320,10 +394,43 @@ public static class SyntaxHighlighter
     {
         var segmentPrefix = GetCurrentSegmentPrefix(input, tokenStart);
         var trimmed = segmentPrefix.TrimStart();
+        var trimmedEnd = trimmed.TrimEnd();
 
-        return trimmed.StartsWith("using ", StringComparison.Ordinal) ||
-               trimmed.StartsWith("new ", StringComparison.Ordinal) ||
-               trimmed.Contains(" cast ", StringComparison.Ordinal);
+        if (trimmed.StartsWith("using ", StringComparison.Ordinal) ||
+            trimmed.StartsWith("new ", StringComparison.Ordinal) ||
+            trimmed.Contains(" cast ", StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        // Return type annotation: `func foo() -> Type`
+        if (trimmedEnd.EndsWith("->", StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        // Type annotation after ':': `prop X: Type`, `func foo(x: Type)`
+        if (trimmedEnd.EndsWith(":", StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        // Inheritance / interface implementation
+        if (trimmedEnd.EndsWith(" extends", StringComparison.Ordinal) ||
+            trimmedEnd.EndsWith(" fulfills", StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        // Type declaration name: the identifier immediately after 'class', 'struct', etc.
+        var lastSpaceIndex = trimmedEnd.LastIndexOf(' ');
+        var lastWord = lastSpaceIndex >= 0 ? trimmedEnd[(lastSpaceIndex + 1)..] : trimmedEnd;
+        if (TypeDeclarationKeywords.Contains(lastWord))
+        {
+            return true;
+        }
+
+        return false;
     }
 
     private static bool IsCommandPosition(string input, int tokenStart)
@@ -465,6 +572,22 @@ public static class SyntaxHighlighter
 
         if (typeIndex < 0 || namespaceParts.Count == 0)
         {
+            // Fallback: first segment is a user-defined type with no CLR namespace prefix
+            // (e.g. `Point.X`, `_Point.Empty`, `Point3.Count`).
+            if (typeIndex < 0 && namespaceParts.Count == 0 &&
+                (IsKnownTypeOrNamespace(runtime, segments[0]) || LooksLikeTypeOrNamespace(segments[0])))
+            {
+                result.Append(theme.Type.Apply(segments[0]).ToAnsi());
+
+                for (var i = 1; i < segments.Length; i++)
+                {
+                    result.Append(theme.Punctuation.Apply(".").ToAnsi());
+                    result.Append(theme.Type.Apply(segments[i]).ToAnsi());
+                }
+
+                return true;
+            }
+
             return false;
         }
 
@@ -492,6 +615,7 @@ public static class SyntaxHighlighter
     private static bool LooksLikeTypeOrNamespace(string text)
     {
         return text.Contains('.', StringComparison.Ordinal) ||
-               (text.Length > 0 && char.IsUpper(text[0]));
+               (text.Length > 0 && char.IsUpper(text[0])) ||
+               (text.Length > 1 && text[0] == '_' && char.IsUpper(text[1]));
     }
 }

@@ -261,8 +261,8 @@ public sealed class ToshRepl
 
     private static async Task PrintBannerAsync()
     {
-        await Console.Out.WriteLineAsync("ToSh (ToastedShell)");
-        await Console.Out.WriteLineAsync("NuShell inspired pipeline syntax with a PowerShell inspired CLR object runtime.");
+        await Console.Out.WriteLineAsync("TōSh (ToastedShell)");
+        await Console.Out.WriteLineAsync("Type 'help browse' for an interactive help browser, or 'help <command>' for details on a specific command.");
         await Console.Out.WriteLineAsync("Everything is an Object.");
         await Console.Out.WriteLineAsync(string.Empty);
     }

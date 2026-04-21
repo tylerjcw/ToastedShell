@@ -37,7 +37,6 @@ docs/*
 
 # Test results
 TestResults/
-
 # LaTeX intermediate output (the canonical PDF is ToastScript.pdf)
 docs/spec/toastscript-spec.pdf
 
@@ -85,7 +84,7 @@ mono_crash.*
 x64/
 x86/
 [Ww][Ii][Nn]32/
-[Aa][Rr][Mm]/
+[A979
 [Aa][Rr][Mm]64/
 bld/
 [Bb]in/

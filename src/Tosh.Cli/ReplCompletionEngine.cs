@@ -173,9 +173,15 @@ internal sealed class ReplCompletionEngine
 
         var linePrefix = text[..cursorIndex];
         var trimmedLinePrefix = linePrefix.TrimStart();
+        var prefixBeforeToken = trimmedLinePrefix.Length >= tokenPrefix.Length
+            ? trimmedLinePrefix[..(trimmedLinePrefix.Length - tokenPrefix.Length)]
+            : string.Empty;
         var typeOnlyContext = trimmedLinePrefix.StartsWith("using ", StringComparison.Ordinal) ||
                               trimmedLinePrefix.StartsWith("new ", StringComparison.Ordinal) ||
-                              trimmedLinePrefix.Contains(" cast ", StringComparison.Ordinal);
+                              trimmedLinePrefix.Contains(" cast ", StringComparison.Ordinal) ||
+                              prefixBeforeToken.EndsWith("extends ", StringComparison.Ordinal) ||
+                              prefixBeforeToken.EndsWith("fulfills ", StringComparison.Ordinal) ||
+                              prefixBeforeToken.EndsWith("-> ", StringComparison.Ordinal);
         var suggestions = typeOnlyContext
             ? GetTypeSuggestions(tokenPrefix)
             : GetRootSuggestions(
@@ -719,7 +725,8 @@ internal sealed class ReplCompletionEngine
                 continue;
             }
 
-            suggestions[label] = new ReplCompletionSuggestion(label, "Variable", Priority: 10);
+            _runtime.Variables.TryGetValue(name, out var varValue);
+            suggestions[label] = new ReplCompletionSuggestion(label, GetShellTypeName(varValue) ?? "Variable", Priority: 10);
         }
 
         foreach (var (name, description) in SpecialVariables)
@@ -792,7 +799,8 @@ internal sealed class ReplCompletionEngine
                     continue;
                 }
 
-                suggestions[label] = new ReplCompletionSuggestion(label, "Variable", Priority: 10);
+                _runtime.Variables.TryGetValue(name, out var varValue);
+                suggestions[label] = new ReplCompletionSuggestion(label, GetShellTypeName(varValue) ?? "Variable", Priority: 10);
             }
         }
 
@@ -1646,6 +1654,19 @@ internal sealed class ReplCompletionEngine
         var tickIndex = type.Name.IndexOf('`');
         return tickIndex >= 0 ? type.Name[..tickIndex] : type.Name;
     }
+
+    private static string? GetShellTypeName(object? value) => value switch
+    {
+        null => null,
+        IShellTypedObject typed => typed.ShellTypeDescriptor.ShellFullName,
+        string => "string",
+        bool => "bool",
+        long => "int",
+        double => "float",
+        IList => "list",
+        IDictionary => "record",
+        _ => value.GetType().Name,
+    };
 
     private readonly record struct GenericTypeArgumentContext(int ReplacementStart, int ReplacementLength, string Partial);
 }

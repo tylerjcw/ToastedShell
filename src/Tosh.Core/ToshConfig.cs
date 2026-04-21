@@ -328,10 +328,16 @@ public sealed class ToshSyntaxThemeConfig : IResettableShellConfig
     public ToshSyntaxThemeConfig()
     {
         Keyword = new ToshTextStyleConfig(foreground: "cyan");
+        ControlFlow = new ToshTextStyleConfig(foreground: "blue");       // if/else/for/while/return/throw/…
         LanguageForm = new ToshTextStyleConfig(foreground: "cyan");
         Operator = new ToshTextStyleConfig(foreground: "red");
-        String = new ToshTextStyleConfig(foreground: "green");
-        Number = new ToshTextStyleConfig(foreground: "yellow");
+        String = new ToshTextStyleConfig(foreground: "green");             // 'raw', """triple"""
+        EscapedString = new ToshTextStyleConfig(foreground: "#73c991");   // "double-quoted", $'ansi-c'
+        InterpolatedString = new ToshTextStyleConfig(foreground: "bright-green"); // $"…{expr}…"
+        Number = new ToshTextStyleConfig(foreground: "yellow");            // integer
+        FloatNumber = new ToshTextStyleConfig(foreground: "bright-yellow"); // 3.14, 1e10
+        HexNumber = new ToshTextStyleConfig(foreground: "#d4a017");       // 0xFF
+        UnitLiteral = new ToshTextStyleConfig(foreground: "magenta");     // 100`m
         Constant = new ToshTextStyleConfig(foreground: "magenta");
         Variable = new ToshTextStyleConfig(foreground: "bright-cyan");
         Flag = new ToshTextStyleConfig(foreground: "gray");
@@ -348,13 +354,33 @@ public sealed class ToshSyntaxThemeConfig : IResettableShellConfig
 
     public ToshTextStyleConfig Keyword { get; }
 
+    /// <summary>Control-flow keywords: if, else, for, while, until, break, continue, return, throw, try, catch, finally, switch, case, default, match.</summary>
+    public ToshTextStyleConfig ControlFlow { get; }
+
     public ToshTextStyleConfig LanguageForm { get; }
 
     public ToshTextStyleConfig Operator { get; }
 
+    /// <summary>Raw / single-quoted strings ('…') and triple-double-quoted raw strings ("""…""").</summary>
     public ToshTextStyleConfig String { get; }
 
+    /// <summary>Double-quoted strings ("…") and ANSI-C escape strings ($'…').</summary>
+    public ToshTextStyleConfig EscapedString { get; }
+
+    /// <summary>Interpolated strings ($"…{expr}…") — all flavours.</summary>
+    public ToshTextStyleConfig InterpolatedString { get; }
+
+    /// <summary>Integer literals (decimal).</summary>
     public ToshTextStyleConfig Number { get; }
+
+    /// <summary>Floating-point literals (3.14, 1e-10).</summary>
+    public ToshTextStyleConfig FloatNumber { get; }
+
+    /// <summary>Hexadecimal literals (0xFF).</summary>
+    public ToshTextStyleConfig HexNumber { get; }
+
+    /// <summary>Unit literals (100`m, 9.8`m/s^2).</summary>
+    public ToshTextStyleConfig UnitLiteral { get; }
 
     public ToshTextStyleConfig Constant { get; }
 
@@ -383,10 +409,16 @@ public sealed class ToshSyntaxThemeConfig : IResettableShellConfig
     public void Reset()
     {
         Keyword.Reset();
+        ControlFlow.Reset();
         LanguageForm.Reset();
         Operator.Reset();
         String.Reset();
+        EscapedString.Reset();
+        InterpolatedString.Reset();
         Number.Reset();
+        FloatNumber.Reset();
+        HexNumber.Reset();
+        UnitLiteral.Reset();
         Constant.Reset();
         Variable.Reset();
         Flag.Reset();

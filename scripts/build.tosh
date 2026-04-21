@@ -1,0 +1,861 @@
+#!/usr/bin/env tosh
+# build.tosh — TōSh unified build system
+#
+# Subcommands:
+#   publish   Build, version-bump, package, and install TōSh
+#   test      Run the test suite (whole or filtered by group / pattern)
+#   check     Build all projects without installing (CI gate)
+#   clean     Remove build artifacts, bin/obj, TestResults
+#   bench     Benchmark publish configurations
+#
+# Usage:
+#   scripts/build.tosh <subcommand> [options]
+#   scripts/build.tosh --help
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Shared helpers
+# ─────────────────────────────────────────────────────────────────────────────
+
+func sep(label: string) {
+    var pad = (28 - (($label | count) / 2))
+    if ($pad < 2) { $pad = 2 }
+    var line = $"{'─' * $pad}[ {$label} ]{'─' * $pad}"
+    styled $line --fg bright-cyan --bold | writeline
+}
+
+func ok(msg: string) {
+    styled $"  ✓ {$msg}" --fg bright-green | writeline
+}
+
+func info(msg: string) {
+    styled $"  {$msg}" --fg gray --dim | writeline
+}
+
+func warn(msg: string) {
+    styled $"  ⚠ {$msg}" --fg yellow | writeline
+}
+
+func fail(msg: string) {
+    styled $"  ✗ {$msg}" --fg bright-red --bold | writeline
+}
+
+func assert_ok(label: string) {
+    if ($tosh.Last.ExitCode != 0) {
+        throw $"{$label} failed (exit {$tosh.Last.ExitCode})"
+    }
+}
+
+func repo_root() -> string {
+    return (dirname (dirname (realpath $tosh.Script.Path)))
+}
+
+func parse_eq_flag(arg: string, prefix: string) -> string {
+    var eq = ($arg.IndexOf("="))
+    return ($arg.Substring($eq + 1))
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Versioning (shared with publish subcommand)
+# ─────────────────────────────────────────────────────────────────────────────
+
+record PublishState(CalVer: string, Publish: int)
+
+func read_publish_state(path: string) -> PublishState {
+    var line = (cat $path | lines | first)
+    var colon = ($line.IndexOf(":"))
+    if ($colon < 0) { throw $".tosh-publish-state is corrupt: {$line}" }
+    var calver = ($line.Substring(0, $colon))
+    var num = System.Convert.ToInt32(($line.Substring($colon + 1)))
+    return new PublishState($calver, $num)
+}
+
+func write_publish_state(path: string, calver: string, num: int) {
+    write-file $path $"{$calver}:{$num}" | ignore
+}
+
+func update_pkgbuild_version(path: string, version: string) {
+    var content = cat $path
+    $content | replace -r "pkgver=.*" $"pkgver={$version}" | write-file $path | ignore
+}
+
+func compute_calver() -> string {
+    var now = date now
+    var yy = $now.Year - 2000
+    var mm = $now.Month
+    return $"{$yy}.{$mm}"
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Publish configuration
+# ─────────────────────────────────────────────────────────────────────────────
+
+class PublishPlan {
+    prop Trimmed: bool = false
+    prop SelfContained: bool = true
+    prop NoInstall: bool = false
+    prop ExecAfter: bool = false
+    prop NoBump: bool = false
+
+    shy prop _rid: string? = null
+    shy prop _dir: string? = null
+    shy prop _binary: string? = null
+
+    prop RepoRoot: string { get => repo_root() }
+
+    prop RuntimeId: string {
+        get => ($this._rid ?? System.Runtime.InteropServices.RuntimeInformation.RuntimeIdentifier)
+        set => $this._rid = $value
+    }
+
+    prop ModeDir: string { get => ($this.Trimmed ? "single-file-trimmed" : "single-file") }
+
+    prop Directory: string {
+        get => $this.effective_directory()
+        set => $this._dir = $value
+    }
+
+    prop Binary: string? {
+        get => $this._binary
+        set => $this._binary = $value
+    }
+
+    prop BuildArgs: array { get => $this.make_build_args() }
+    prop PublishArgs: array { get => $this.make_publish_args() }
+
+    PublishPlan() {}
+
+    shy func effective_directory() -> string {
+        if ($this._dir != null and $this._dir != "") {
+            return System.IO.Path.GetFullPath($this._dir)
+        }
+        return System.IO.Path.Join($this.RepoRoot, "artifacts", "publish", $this.RuntimeId, $this.ModeDir)
+    }
+
+    shy func make_build_args() -> array {
+        return [
+            "build", $"{$this.RepoRoot}/src/Tosh.Cli/Tosh.Cli.csproj",
+            "-c", "Release", "-r", $this.RuntimeId,
+            $"-p:SelfContained={$this.SelfContained}",
+        ]
+    }
+
+    shy func make_publish_args() -> array {
+        var args = [
+            "publish", $"{$this.RepoRoot}/src/Tosh.Cli/Tosh.Cli.csproj",
+            "-c", "Release", "-r", $this.RuntimeId,
+            "-o", $this.Directory,
+            "-p:PublishSingleFile=true",
+            "-p:PublishReadyToRun=true",
+            "-p:EnableCompressionInSingleFile=false",
+            "-p:DebugType=None",
+            "-p:DebugSymbols=false",
+            "-p:DisableToshVsCodeExtensionSync=true",
+            $"-p:SelfContained={$this.SelfContained}",
+        ]
+        if ($this.Trimmed) {
+            $args = (echo $args ["-p:PublishTrimmed=true", "-p:TrimMode=partial"] | flatten | collect)
+        }
+        return $args
+    }
+}
+
+record BuildResult(
+    Binary: string,
+    Size: StorageSize,
+    RID: string,
+    Output: string,
+    SelfContained: bool,
+    Trimmed: bool,
+    Duration: string,
+    Version: string
+)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Test group → xUnit FullyQualifiedName filter pattern
+# ─────────────────────────────────────────────────────────────────────────────
+
+func group_filter_pattern(group: string) -> string? {
+    switch ($group) {
+        case "repl"        { return "ReplLineEditor|ReplCompletion|ReplInput|ReplHistory" }
+        case "syntax"      { return "SyntaxHighlighter" }
+        case "engine"      { return "EngineTests|ComplexCommand|Comprehension|ExpressionEval" }
+        case "tui"         { return "TuiCommand|TuiCore|TuiInline|TuiScreen|ConfigBrowser|ConsolePager" }
+        case "concurrency" { return "Concurrency|ScopeAndChannel|SpawnCommand|ConcurrentRedirection" }
+        case "lsp"         { return "LspFeature|McpServer" }
+        case "display"     { return "DisplayEngine|DisplayProfile|ObjectFormatter|DiagnosticRenderer" }
+        case "config"      { return "ConfigCommand|ConfigCollection|VarsCommand" }
+        case "data"        { return "DataProcessing|StructuredData|Matrix|Vector|StreamCommand|StreamHandle" }
+        case "pipeline"    { return "PipelineData|PipelineHardening|MixedPipeline" }
+        case "system"      { return "SystemdJson|TimeCommand|UtilityCommand|ExternalCommand|ExecCommand|StartupLoader" }
+        case "clr"         { return "CliInvocation|CommandIntrospection|MemberPath|Rune|NativeInterop" }
+        case "all"         { return null }
+        default {
+            throw $"""
+                Unknown test group '{$group}'.
+                Valid groups: repl syntax engine tui concurrency lsp display config data pipeline system clr all
+            """
+        }
+    }
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Subcommand: publish
+# ─────────────────────────────────────────────────────────────────────────────
+
+func cmd_publish_help() {
+    writeline """
+        tosh build.tosh publish [options]
+
+        Build, version-bump, package, and install TōSh.
+
+        Options:
+          --rid <ID>             Runtime identifier (default: host RID)
+          --rid=<ID>             Inline form
+          --output <DIR>         Output directory
+          --output=<DIR>         Inline form
+          --trimmed              Enable trimmed single-file publish (experimental)
+          --framework-dependent  Publish framework-dependent instead of self-contained
+          --no-install           Skip makepkg install step
+          --no-bump              Skip version bump (re-publish same version)
+          --exec                 Replace current process with new shell after install
+          --help, -h             Show this help
+    """
+}
+
+func cmd_publish(raw_args: array) {
+    var plan = new PublishPlan()
+    var i = 0
+    while ($i < ($raw_args | count)) {
+        var arg = (echo $raw_args | get $i)
+        if ($arg starts-with "--rid=")    { $plan.RuntimeId = (parse_eq_flag $arg "--rid="); $i += 1; continue }
+        if ($arg starts-with "--output=") { $plan.Directory = (parse_eq_flag $arg "--output="); $i += 1; continue }
+        switch ($arg) {
+            case "--rid" {
+                $i += 1
+                $plan.RuntimeId = (echo $raw_args | get $i)
+            }
+            case "--output" {
+                $i += 1
+                $plan.Directory = (echo $raw_args | get $i)
+            }
+            case "--trimmed"              { $plan.Trimmed = true }
+            case "--framework-dependent"  { $plan.SelfContained = false }
+            case "--no-install"           { $plan.NoInstall = true }
+            case "--no-bump"              { $plan.NoBump = true }
+            case "--exec"                 { $plan.ExecAfter = true }
+            case "--help" { cmd_publish_help; return }
+            case "-h"     { cmd_publish_help; return }
+            default {
+                fail $"Unknown publish option: {$arg}"
+                cmd_publish_help
+                throw $"Unknown option: {$arg}"
+            }
+        }
+        $i += 1
+    }
+
+    var root = $plan.RepoRoot
+    var state_path = System.IO.Path.Join($root, ".tosh-publish-state")
+    var pkgbuild_path = System.IO.Path.Join($root, "packaging", "archlinux", "PKGBUILD")
+    var dotnet_major = 10
+
+    var orig_state = (read_publish_state $state_path)
+    var orig_calver = $orig_state.CalVer
+    var orig_publish = $orig_state.Publish
+    var orig_pkgbuild = cat $pkgbuild_path
+
+    var new_version = $"{$orig_calver}.{$orig_publish}.{$dotnet_major}"
+
+    if (not $plan.NoBump) {
+        var current_calver = (compute_calver)
+        var new_publish = ($current_calver == $orig_calver ? ($orig_publish + 1) : 1)
+        $new_version = $"{$current_calver}.{$new_publish}.{$dotnet_major}"
+        styled $"Version: {$orig_calver}.{$orig_publish}.{$dotnet_major} → {$new_version}" --fg bright-yellow --bold | writeline
+        write_publish_state $state_path $current_calver $new_publish
+        update_pkgbuild_version $pkgbuild_path $new_version
+    } else {
+        info $"Using existing version {$new_version} (--no-bump)"
+    }
+
+    try {
+        mkdir -p $plan.Directory | ignore
+        var t0 = (date now)
+
+        sep "BUILD"
+        dotnet ...$plan.BuildArgs
+        assert_ok "dotnet build"
+
+        sep "PUBLISH"
+        dotnet ...$plan.PublishArgs
+        assert_ok "dotnet publish"
+
+        var elapsed = (((date now) - $t0).ToString("hh\\:mm\\:ss\\.fff"))
+
+        # Find the published binary
+        var candidates = [
+            System.IO.Path.Join($plan.Directory, "tosh"),
+            System.IO.Path.Join($plan.Directory, "tosh.exe"),
+            System.IO.Path.Join($plan.Directory, "Tosh.Cli"),
+            System.IO.Path.Join($plan.Directory, "Tosh.Cli.exe"),
+        ]
+        var found_binary = null
+        for c in ($candidates) {
+            if ((is-file $c).IsFile) { $found_binary = $c; break }
+        }
+        if ($found_binary == null) { throw $"No binary found in {$plan.Directory}" }
+
+        var target_name = "tosh"
+        if ($plan.RuntimeId starts-with "win-") { $target_name = "tosh.exe" }
+        var target_path = System.IO.Path.Join($plan.Directory, $target_name)
+        if ($found_binary != $target_path) {
+            rm -f $target_path
+            mv $found_binary $target_path
+        }
+        $plan.Binary = $target_path
+
+        var binfo = (ls $plan.Binary | first)
+
+        if (not $plan.NoInstall) {
+            sep "INSTALL"
+            info "Installing via PKGBUILD (makepkg -si)..."
+            var pkgdir = System.IO.Path.GetDirectoryName($pkgbuild_path)
+            var prev_cwd = (pwd).FullName
+            cd $pkgdir
+            try {
+                makepkg -sif --noconfirm
+                assert_ok "makepkg"
+            } finally {
+                cd $prev_cwd
+            }
+
+            if (not ($plan.RuntimeId starts-with "win-")) {
+                try {
+                    info "Setting cap_net_raw on /usr/bin/tosh..."
+                    sudo setcap cap_net_raw+ep /usr/bin/tosh
+                } catch ($e) {
+                    warn $"Could not set cap_net_raw: {$e.Message}"
+                }
+            }
+        }
+
+        sep "DONE"
+        ok $"Binary: {$plan.Binary}"
+        ok $"Version: {$new_version}"
+
+        if ($plan.ExecAfter) { exec $plan.Binary }
+
+        return new BuildResult(
+            $plan.Binary,
+            $binfo.Size,
+            $plan.RuntimeId,
+            $plan.Directory,
+            $plan.SelfContained,
+            $plan.Trimmed,
+            $elapsed,
+            $new_version
+        )
+    } catch ($err) {
+        fail $"Publish failed: {$err}"
+        if (not $plan.NoBump) {
+            warn "Rolling back version state..."
+            write_publish_state $state_path $orig_calver $orig_publish
+            $orig_pkgbuild | write-file $pkgbuild_path | ignore
+        }
+        throw $err
+    }
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Subcommand: test
+# ─────────────────────────────────────────────────────────────────────────────
+
+func cmd_test_help() {
+    writeline """
+        tosh build.tosh test [options]
+
+        Run the TōSh test suite.
+
+        Options:
+          --group <name>        Run only a named test group (see below)
+          --group=<name>        Inline form
+          --filter <pattern>    xUnit FullyQualifiedName~ filter (overrides --group)
+          --filter=<pattern>    Inline form
+          --no-build            Skip 'dotnet build' before running tests
+          --verbose, -v         Pass --logger 'console;verbosity=detailed'
+          --blame               Enable blame data collection on crash
+          --results <dir>       Override TestResults output directory
+          --results=<dir>       Inline form
+          --help, -h            Show this help
+
+        Test groups:
+          repl        ReplLineEditor, ReplCompletionEngine, ReplInputClassifier
+          syntax      SyntaxHighlighter
+          engine      EngineTests, ComplexCommand, Comprehension
+          tui         TuiCommand, TuiCore, TuiInline, TuiScreen, ConfigBrowser, ConsolePager
+          concurrency ScopeAndChannel, SpawnCommand, ConcurrentRedirection
+          lsp         LspFeature, McpServer
+          display     DisplayEngine, DisplayProfile, ObjectFormatter, DiagnosticRenderer
+          config      ConfigCommand, ConfigCollection, VarsCommand
+          data        DataProcessing, StructuredData, Matrix, Vector, StreamCommand
+          pipeline    PipelineData, PipelineHardening, MixedPipeline
+          system      SystemdJson, TimeCommand, UtilityCommand, ExternalCommand, StartupLoader
+          clr         CliInvocation, CommandIntrospection, MemberPath, Rune, NativeInterop
+          all         All tests (default)
+    """
+}
+
+func cmd_test(raw_args: array) {
+    var group = "all"
+    var filter_override = null
+    var no_build = false
+    var verbose = false
+    var blame = false
+    var results_dir = null
+    var i = 0
+
+    while ($i < ($raw_args | count)) {
+        var arg = (echo $raw_args | get $i)
+        if ($arg starts-with "--group=")   { $group = (parse_eq_flag $arg "--group="); $i += 1; continue }
+        if ($arg starts-with "--filter=")  { $filter_override = (parse_eq_flag $arg "--filter="); $i += 1; continue }
+        if ($arg starts-with "--results=") { $results_dir = (parse_eq_flag $arg "--results="); $i += 1; continue }
+        switch ($arg) {
+            case "--group" {
+                $i += 1
+                $group = (echo $raw_args | get $i)
+            }
+            case "--filter" {
+                $i += 1
+                $filter_override = (echo $raw_args | get $i)
+            }
+            case "--results" {
+                $i += 1
+                $results_dir = (echo $raw_args | get $i)
+            }
+            case "--no-build"        { $no_build = true }
+            case "--verbose"         { $verbose = true }
+            case "-v"                { $verbose = true }
+            case "--blame"           { $blame = true }
+            case "--help" { cmd_test_help; return }
+            case "-h"     { cmd_test_help; return }
+            default {
+                fail $"Unknown test option: {$arg}"
+                cmd_test_help
+                throw $"Unknown option: {$arg}"
+            }
+        }
+        $i += 1
+    }
+
+    var root = (repo_root)
+    var slnx = System.IO.Path.Join($root, "Tosh.slnx")
+    var def_results = System.IO.Path.Join($root, "artifacts", "test-results")
+    var out_dir = ($results_dir ?? $def_results)
+
+    # Build
+    if (not $no_build) {
+        sep "BUILD"
+        dotnet build $slnx -c Debug --verbosity quiet
+        assert_ok "dotnet build"
+    }
+
+    # Resolve filter
+    var filter_pattern = ($filter_override ?? (group_filter_pattern $group))
+    var label = ($filter_override != null ? $"filter '{$filter_override}'" : ($group != "all" ? $"group '{$group}'" : "all tests"))
+
+    sep $"TEST · {$label}"
+
+    var test_args = ["test", $slnx, $"--results-directory={$out_dir}"]
+
+    if ($no_build) {
+        $test_args = (echo $test_args ["--no-build"] | flatten | collect)
+    }
+    if ($filter_pattern != null and $filter_pattern != "") {
+        $test_args = (echo $test_args [$"--filter=FullyQualifiedName~{$filter_pattern}"] | flatten | collect)
+    }
+    if ($verbose) {
+        $test_args = (echo $test_args ["--logger", "console;verbosity=detailed"] | flatten | collect)
+    }
+    if ($blame) {
+        $test_args = (echo $test_args ["--blame"] | flatten | collect)
+    }
+
+    var t0 = (date now)
+    dotnet ...$test_args
+    var exit_code = $tosh.Last.ExitCode
+    var elapsed = (((date now) - $t0).ToString("hh\\:mm\\:ss\\.fff"))
+
+    sep "RESULTS"
+    if ($exit_code == 0) {
+        ok $"All tests passed ({$elapsed})"
+    } else {
+        fail $"Tests FAILED (exit {$exit_code}, {$elapsed})"
+        throw "Test run failed"
+    }
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Subcommand: check (build only, no install — for CI)
+# ─────────────────────────────────────────────────────────────────────────────
+
+func cmd_check_help() {
+    writeline """
+        tosh build.tosh check [options]
+
+        Build all projects and run tests. No install. Exits non-zero on failure.
+        Suitable as a pre-commit or CI gate.
+
+        Options:
+          --no-test        Skip test run (build-only check)
+          --group <name>   Limit tests to a group (see 'test --help')
+          --filter <pat>   Limit tests by custom filter
+          --help, -h       Show this help
+    """
+}
+
+func cmd_check(raw_args: array) {
+    var no_test = false
+    var group = "all"
+    var filter_override = null
+    var i = 0
+
+    while ($i < ($raw_args | count)) {
+        var arg = (echo $raw_args | get $i)
+        if ($arg starts-with "--group=")  { $group = (parse_eq_flag $arg "--group="); $i += 1; continue }
+        if ($arg starts-with "--filter=") { $filter_override = (parse_eq_flag $arg "--filter="); $i += 1; continue }
+        switch ($arg) {
+            case "--no-test"  { $no_test = true }
+            case "--group"  {
+                $i += 1
+                $group = (echo $raw_args | get $i)
+            }
+            case "--filter" {
+                $i += 1
+                $filter_override = (echo $raw_args | get $i)
+            }
+            case "--help" { cmd_check_help; return }
+            case "-h"     { cmd_check_help; return }
+            default {
+                fail $"Unknown check option: {$arg}"
+                throw $"Unknown option: {$arg}"
+            }
+        }
+        $i += 1
+    }
+
+    var root = (repo_root)
+    var slnx = System.IO.Path.Join($root, "Tosh.slnx")
+
+    sep "CHECK · BUILD"
+    dotnet build $slnx -c Debug --verbosity minimal
+    assert_ok "dotnet build"
+    ok "Build succeeded"
+
+    if (not $no_test) {
+        var test_args = ["--no-build"]
+        if ($filter_override != null) { $test_args = (echo $test_args ["--filter", $filter_override] | flatten | collect) }
+        if ($group != "all") { $test_args = (echo $test_args ["--group", $group] | flatten | collect) }
+        cmd_test $test_args
+    }
+
+    sep "CHECK PASSED"
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Subcommand: clean
+# ─────────────────────────────────────────────────────────────────────────────
+
+func cmd_clean_help() {
+    writeline """
+        tosh build.tosh clean [options]
+
+        Remove build artifacts, bin/obj directories, and TestResults.
+
+        Options:
+          --all         Also remove artifacts/publish and editor node_modules
+          --dry-run     Print what would be removed without deleting
+          --help, -h    Show this help
+    """
+}
+
+func cmd_clean(raw_args: array) {
+    var remove_all = false
+    var dry_run = false
+    var i = 0
+
+    while ($i < ($raw_args | count)) {
+        var arg = (echo $raw_args | get $i)
+        switch ($arg) {
+            case "--all"     { $remove_all = true }
+            case "--dry-run" { $dry_run = true }
+            case "--help" { cmd_clean_help; return }
+            case "-h"     { cmd_clean_help; return }
+            default {
+                fail $"Unknown clean option: {$arg}"
+                throw $"Unknown option: {$arg}"
+            }
+        }
+        $i += 1
+    }
+
+    var root = (repo_root)
+    var removed = 0
+
+    func remove_dir(path: string) {
+        if ((is-dir $path).IsDirectory) {
+            if ($dry_run) {
+                info $"[dry-run] would remove: {$path}"
+            } else {
+                rm -rf $path
+                info $"removed: {$path}"
+            }
+            $removed += 1
+        }
+    }
+
+    sep "CLEAN"
+
+    # dotnet clean removes bin/obj; we also nuke stale ones
+    if (not $dry_run) {
+        dotnet clean $"{$root}/Tosh.slnx" --verbosity quiet
+    } else {
+        info "[dry-run] would run: dotnet clean"
+    }
+
+    # Find and remove any surviving bin/obj/TestResults directories
+    for entry in (find $"{$root}/src" $"{$root}/tests" -type d -name "bin") {
+        remove_dir $entry.FullName
+    }
+    for entry in (find $"{$root}/src" $"{$root}/tests" -type d -name "obj") {
+        remove_dir $entry.FullName
+    }
+    for entry in (find $"{$root}/src" $"{$root}/tests" -type d -name "TestResults") {
+        remove_dir $entry.FullName
+    }
+
+    remove_dir $"{$root}/artifacts/test-results"
+
+    if ($remove_all) {
+        remove_dir $"{$root}/artifacts/publish"
+        remove_dir $"{$root}/editor/vscode/tosh.tosh-lang/node_modules"
+    }
+
+    sep "DONE"
+    if ($removed == 0) {
+        ok "Already clean."
+    } else if ($removed == 1) {
+        ok "Removed 1 directory."
+    } else {
+        ok $"Removed {$removed} directories."
+    }
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Subcommand: bench
+# ─────────────────────────────────────────────────────────────────────────────
+
+func cmd_bench_help() {
+    writeline """
+        tosh build.tosh bench [options]
+
+        Benchmark different publish configurations.
+        Measures: publish time, binary size, cold startup, warm startup.
+
+        Options:
+          --rid <ID>         Runtime identifier (default: host RID)
+          --rid=<ID>         Inline form
+          --runs <n>         Warm-start measurements per config (default: 5)
+          --runs=<n>         Inline form
+          --output <dir>     Benchmark artifact directory (default: artifacts/benchmarks)
+          --output=<dir>     Inline form
+          --help, -h         Show this help
+    """
+}
+
+record BenchResult(
+    Label: string,
+    PublishSec: string,
+    SizeMB: string,
+    ColdMs: string,
+    WarmMs: string
+)
+
+func measure_startup_ms(binary: string) -> string {
+    var t0 = (date now)
+    sh -c $"{$binary} --safe -c exit"
+    var ms = ((((date now) - $t0).TotalMilliseconds).ToString("F1"))
+    return $ms
+}
+
+func cmd_bench(raw_args: array) {
+    var rid = System.Runtime.InteropServices.RuntimeInformation.RuntimeIdentifier
+    var runs = 5
+    var out_dir = null
+    var i = 0
+
+    while ($i < ($raw_args | count)) {
+        var arg = (echo $raw_args | get $i)
+        if ($arg starts-with "--rid=")    { $rid = (parse_eq_flag $arg "--rid="); $i += 1; continue }
+        if ($arg starts-with "--runs=")   { $runs = System.Convert.ToInt32((parse_eq_flag $arg "--runs=")); $i += 1; continue }
+        if ($arg starts-with "--output=") { $out_dir = (parse_eq_flag $arg "--output="); $i += 1; continue }
+        switch ($arg) {
+            case "--rid" {
+                $i += 1
+                $rid = (echo $raw_args | get $i)
+            }
+            case "--runs" {
+                $i += 1
+                $runs = System.Convert.ToInt32((echo $raw_args | get $i))
+            }
+            case "--output" {
+                $i += 1
+                $out_dir = (echo $raw_args | get $i)
+            }
+            case "--help" { cmd_bench_help; return }
+            case "-h"     { cmd_bench_help; return }
+            default {
+                fail $"Unknown bench option: {$arg}"
+                throw $"Unknown option: {$arg}"
+            }
+        }
+        $i += 1
+    }
+
+    var root = (repo_root)
+    var bench_dir = ($out_dir ?? System.IO.Path.Join($root, "artifacts", "benchmarks"))
+    var project = System.IO.Path.Join($root, "src", "Tosh.Cli", "Tosh.Cli.csproj")
+
+    mkdir -p $bench_dir | ignore
+
+    # Configurations: label, extra publish args
+    record BenchConfig(Label: string, Args: array)
+    var configs = [
+        new BenchConfig("sc", ["-p:SelfContained=true"]),
+        new BenchConfig("sc-r2r", ["-p:SelfContained=true", "-p:PublishReadyToRun=true"]),
+        new BenchConfig("fdd", ["-p:SelfContained=false"]),
+        new BenchConfig("fdd-r2r", ["-p:SelfContained=false", "-p:PublishReadyToRun=true"]),
+    ]
+
+    var results = []
+
+    sep "BENCH"
+    info $"RID: {$rid}  runs: {$runs}  output: {$bench_dir}"
+    writeline ""
+
+    for cfg in ($configs) {
+        var cfg_dir = System.IO.Path.Join($bench_dir, $cfg.Label)
+        mkdir -p $cfg_dir | ignore
+
+        info $"Publishing '{$cfg.Label}'..."
+        var pub_t0 = (date now)
+        var base_args = [
+            "publish", $project,
+            "-c", "Release", "-r", $rid,
+            "-o", $cfg_dir,
+            "-p:PublishSingleFile=true",
+            "-p:DebugType=None",
+            "-p:DebugSymbols=false",
+        ]
+        var all_args = (echo $base_args $cfg.Args | flatten | collect)
+        dotnet ...$all_args
+        assert_ok $"publish {$cfg.Label}"
+        var pub_sec = ((((date now) - $pub_t0).TotalSeconds).ToString("F2"))
+
+        # Find the binary
+        var bin_candidates = [
+            System.IO.Path.Join($cfg_dir, "tosh"),
+            System.IO.Path.Join($cfg_dir, "Tosh.Cli"),
+        ]
+        var bin_path = null
+        for c in ($bin_candidates) {
+            if ((is-file $c).IsFile) { $bin_path = $c; break }
+        }
+        if ($bin_path == null) { warn $"Binary not found for {$cfg.Label}, skipping"; continue }
+
+        var bin_info = (ls $bin_path | first)
+        var size_mb = (($bin_info.Size.Bytes / 1048576.0).ToString("F1"))
+
+        info $"  Published {$size_mb} MB in {$pub_sec}s, measuring startup..."
+
+        # Cold start (first run, OS hasn't cached pages)
+        var cold_t0 = (date now)
+        sh -c $"{$bin_path} --safe -c exit"
+        var cold_ms = ((((date now) - $cold_t0).TotalMilliseconds).ToString("F1"))
+
+        # Warm starts
+        var warm_total = 0.0
+        var r = 0
+        while ($r < $runs) {
+            var w_t0 = (date now)
+            sh -c $"{$bin_path} --safe -c exit"
+            $warm_total += (((date now) - $w_t0).TotalMilliseconds)
+            $r += 1
+        }
+        var warm_avg = (($warm_total / $runs).ToString("F1"))
+
+        ok $"{$cfg.Label}  publish={$pub_sec}s  size={$size_mb}MB  cold={$cold_ms}ms  warm={$warm_avg}ms"
+        $results = (echo $results [new BenchResult($cfg.Label, $pub_sec, $size_mb, $cold_ms, $warm_avg)] | flatten | collect)
+    }
+
+    sep "SUMMARY"
+    echo $results
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Top-level dispatch
+# ─────────────────────────────────────────────────────────────────────────────
+
+func top_help() {
+    writeline """
+        TōSh Build System — build.tosh
+
+        Subcommands:
+          publish   Build, version-bump, package, and install TōSh
+          test      Run the test suite (whole or filtered)
+          check     Build + test without installing (CI gate)
+          clean     Remove build artifacts and bin/obj directories
+          bench     Benchmark publish configurations
+
+        Options:
+          --help, -h   Show this help
+
+        Examples:
+          tosh scripts/build.tosh publish
+          tosh scripts/build.tosh publish --no-install --no-bump
+          tosh scripts/build.tosh test --group repl
+          tosh scripts/build.tosh test --filter SyntaxHighlighter
+          tosh scripts/build.tosh test --group all --verbose
+          tosh scripts/build.tosh check
+          tosh scripts/build.tosh check --no-test
+          tosh scripts/build.tosh clean --all
+          tosh scripts/build.tosh bench --runs 10
+    """
+}
+
+var all_args = $tosh.Script.Args
+
+if (($all_args | count) == 0) {
+    top_help
+    return
+}
+
+var subcmd = (echo $all_args | first)
+var rest_args = (echo $all_args | skip 1 | collect)
+
+if ($subcmd == "--help" or $subcmd == "-h") {
+    top_help
+    return
+}
+
+switch ($subcmd) {
+    case "publish" { cmd_publish $rest_args }
+    case "test"    { cmd_test    $rest_args }
+    case "check"   { cmd_check   $rest_args }
+    case "clean"   { cmd_clean   $rest_args }
+    case "bench"   { cmd_bench   $rest_args }
+    default {
+        fail $"Unknown subcommand: '{$subcmd}'"
+        writeline ""
+        top_help
+        throw $"Unknown subcommand: {$subcmd}"
+    }
+}

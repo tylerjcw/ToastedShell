@@ -120,4 +120,127 @@ public sealed class SyntaxHighlighterTests
         Assert.Contains("\x1b[95m127.0.0.1\x1b[0m", highlighted);
         Assert.Contains("\x1b[95m::1\x1b[0m", highlighted);
     }
+
+    [Fact]
+    public void Highlights_builtin_type_alias_at_command_position_as_type()
+    {
+        // `int x = 5` — 'int' is the type at command position (typed variable declaration)
+        var runtime = ToshRuntime.CreateDefault();
+        runtime.Config.Theme.Syntax.Type.Foreground = "bright-cyan";
+
+        var highlighted = SyntaxHighlighter.Highlight("int x = 5", runtime);
+
+        Assert.Contains("\x1b[96mint\x1b[0m", highlighted);
+    }
+
+    [Fact]
+    public void Highlights_type_annotation_after_colon_as_type()
+    {
+        // `prop X: int` — 'int' after ':' is a type annotation
+        var runtime = ToshRuntime.CreateDefault();
+        runtime.Config.Theme.Syntax.Type.Foreground = "bright-cyan";
+
+        var highlighted = SyntaxHighlighter.Highlight("prop X: int", runtime);
+
+        Assert.Contains("\x1b[96mint\x1b[0m", highlighted);
+    }
+
+    [Fact]
+    public void Highlights_return_type_after_arrow_as_type()
+    {
+        // `func foo() -> string` — 'string' after '->' is a return type
+        var runtime = ToshRuntime.CreateDefault();
+        runtime.Config.Theme.Syntax.Type.Foreground = "bright-cyan";
+
+        var highlighted = SyntaxHighlighter.Highlight("func foo() -> string", runtime);
+
+        Assert.Contains("\x1b[96mstring\x1b[0m", highlighted);
+    }
+
+    [Fact]
+    public void Highlights_user_type_after_extends_as_type()
+    {
+        // `class Point extends _Point` — '_Point' after 'extends' colored as type (heuristic)
+        var runtime = ToshRuntime.CreateDefault();
+        runtime.Config.Theme.Syntax.Type.Foreground = "bright-cyan";
+
+        var highlighted = SyntaxHighlighter.Highlight("class Point extends _Point", runtime);
+
+        Assert.Contains("\x1b[96m_Point\x1b[0m", highlighted);
+    }
+
+    [Fact]
+    public void Highlights_declared_class_name_as_type()
+    {
+        // `class Point` — 'Point' is the name being declared, colored as type
+        var runtime = ToshRuntime.CreateDefault();
+        runtime.Config.Theme.Syntax.Type.Foreground = "bright-cyan";
+
+        var highlighted = SyntaxHighlighter.Highlight("class Point", runtime);
+
+        Assert.Contains("\x1b[96mPoint\x1b[0m", highlighted);
+    }
+
+    [Fact]
+    public void Highlights_known_user_class_in_type_position_as_type()
+    {
+        // User-defined class registered in runtime is colored as type when used in type position
+        var runtime = ToshRuntime.CreateDefault();
+        runtime.Config.Theme.Syntax.Type.Foreground = "bright-cyan";
+
+        var highlighted = SyntaxHighlighter.Highlight("func foo() -> MyClass", runtime);
+
+        // Without runtime knowledge 'MyClass' still gets Type color via LooksLikeTypeOrNamespace (uppercase)
+        Assert.Contains("\x1b[96mMyClass\x1b[0m", highlighted);
+    }
+
+    [Fact]
+    public void Highlights_constructor_definition_name_as_type()
+    {
+        // `Point3(x: int, y: int, z: int)` — Point3 at command position gets type color
+        var runtime = ToshRuntime.CreateDefault();
+        runtime.Config.Theme.Syntax.Type.Foreground = "bright-cyan";
+
+        var highlighted = SyntaxHighlighter.Highlight("Point3(x: int, y: int, z: int)", runtime);
+
+        Assert.Contains("\x1b[96mPoint3\x1b[0m", highlighted);
+    }
+
+    [Fact]
+    public void Highlights_underscore_prefixed_constructor_name_as_type()
+    {
+        // `_Point(x: int)` — _Point at command position gets type color (heuristic: _Uppercase)
+        var runtime = ToshRuntime.CreateDefault();
+        runtime.Config.Theme.Syntax.Type.Foreground = "bright-cyan";
+
+        var highlighted = SyntaxHighlighter.Highlight("_Point(x: int)", runtime);
+
+        Assert.Contains("\x1b[96m_Point\x1b[0m", highlighted);
+    }
+
+    [Fact]
+    public void Highlights_dotted_user_type_member_access_as_type()
+    {
+        // `Point.Empty` — Point is uppercase (heuristic type), .Empty is its member
+        var runtime = ToshRuntime.CreateDefault();
+        runtime.Config.Theme.Syntax.Type.Foreground = "bright-cyan";
+
+        var highlighted = SyntaxHighlighter.Highlight("Point.Empty", runtime);
+
+        Assert.Contains("\x1b[96mPoint\x1b[0m", highlighted);
+        Assert.Contains("\x1b[96mEmpty\x1b[0m", highlighted);
+    }
+
+    [Fact]
+    public void Highlights_dotted_underscore_prefixed_user_type_member_as_type()
+    {
+        // `_Point.X` — _Point has _Uppercase heuristic pattern
+        var runtime = ToshRuntime.CreateDefault();
+        runtime.Config.Theme.Syntax.Type.Foreground = "bright-cyan";
+
+        var highlighted = SyntaxHighlighter.Highlight("_Point.X", runtime);
+
+        Assert.Contains("\x1b[96m_Point\x1b[0m", highlighted);
+        Assert.Contains("\x1b[96mX\x1b[0m", highlighted);
+    }
 }
