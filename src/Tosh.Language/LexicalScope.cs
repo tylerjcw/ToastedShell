@@ -39,4 +39,21 @@ public sealed class LexicalScope
     public bool ExportDeclarationsByDefault { get; }
 
     internal ModuleExportTable? Exports { get; }
+
+    /// <summary>
+    /// Creates an independent copy of this scope with its own variable, command, class,
+    /// module, and type dictionaries. Used when forking an engine for concurrent execution
+    /// so that writes in one fork do not affect the parent or sibling forks.
+    /// </summary>
+    public LexicalScope Clone()
+    {
+        var clone = new LexicalScope(Variables, IsModuleScope, ExportDeclarationsByDefault);
+        foreach (var (key, value) in Commands) clone.Commands[key] = value;
+        foreach (var (key, value) in Classes) clone.Classes[key] = value;
+        foreach (var (key, value) in Modules) clone.Modules[key] = value;
+        foreach (var name in TypeImports) clone.TypeImports.Add(name);
+        foreach (var (key, value) in TypeAliases) clone.TypeAliases[key] = value;
+        foreach (var name in LocalEventNames) clone.LocalEventNames.Add(name);
+        return clone;
+    }
 }

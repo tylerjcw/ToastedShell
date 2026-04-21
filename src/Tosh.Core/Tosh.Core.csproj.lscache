@@ -2,12 +2,10 @@ version=1
 
 # This file caches language service data to improve the performance of C# Dev Kit.
 # It is not intended for manual editing. It can safely be deleted and will be
-# regenerated automatically.
+# regenerated automatically. For more information, see https://aka.ms/lscache
 #
-# To exclude from version control, add *.lscache to your .gitignore file.
-#
-# To disable caching, add the following to your VS Code settings:
-#   "dotnet.projectsystem.enableLanguageServiceCache": false
+# To control where cache files are stored, use the following VS Code setting:
+#   "dotnet.projectsystem.cacheInProjectFolder": true
 
 [project]
 language=C#
@@ -80,7 +78,9 @@ Commands/
  AproposCommand.cs
  AsFileCommand.cs
  AssertCommand.cs
+ AsyncCommand.cs
  AverageCommand.cs
+ AwaitCommand.cs
  BackCommand.cs
  BackgroundResumeCommand.cs
  BaseNameCommand.cs
@@ -92,6 +92,11 @@ Commands/
  CatCommand.cs
  ChainCommand.cs
  ChangeDirectoryCommand.cs
+ ChannelCloseCommand.cs
+ ChannelCommand.cs
+ ChannelRecvCommand.cs
+ ChannelSelectCommand.cs
+ ChannelSendCommand.cs
  ChmodCommand.cs
  ChownCommand.cs
  ChunkCommand.cs
@@ -100,6 +105,7 @@ Commands/
  CloseCommand.cs
  CollectCommand.cs
  CombinationsCommand.cs
+ ComplexCommand.cs
  ComposeCommand.cs
  ConfigCommand.cs
  ConstructorsCommand.cs
@@ -189,6 +195,7 @@ Commands/
  MakeTempDirectoryCommand.cs
  MapCommand.cs
  MatchCommand.cs
+ MatrixCommand.cs
  MaxCommand.cs
  MedianCommand.cs
  MembersCommand.cs
@@ -226,6 +233,7 @@ Commands/
  PromptTimeCommand.cs
  PromptUserHostCommand.cs
  QuantifierCommand.cs
+ RaceCommand.cs
  RaiseCommand.cs
  RawCommand.cs
  ReadBytesCommand.cs
@@ -246,15 +254,18 @@ Commands/
  ReplaceCommand.cs
  ReverseCommand.cs
  ScanCommand.cs
+ ScopeCommand.cs
  SeekCommand.cs
  SeqCommand.cs
  SetPropCommand.cs
+ SettleCommand.cs
  SignalCommand.cs
  SkipCommand.cs
  SkipUntilCommand.cs
  SkipWhileCommand.cs
  SleepCommand.cs
  SortCommand.cs
+ SpawnCommand.cs
  SplitCommand.cs
  StatCommand.cs
  StdevCommand.cs
@@ -270,6 +281,7 @@ Commands/
  TemplateCommand.cs
  TemporaryFileCommand.cs
  TimeCommand.cs
+ TimeoutCommand.cs
  TimeSpanCommand.cs
  ToCommand.cs
  TouchCommand.cs
@@ -288,6 +300,7 @@ Commands/
  UptimeCommand.cs
  VarianceCommand.cs
  VarsCommand.cs
+ VectorCommand.cs
  ViewCommand.cs
  WaitForCommand.cs
  WhereCommand.cs
@@ -304,6 +317,7 @@ Commands/
  XargsCommand.cs
  ZipCommand.cs
 CommandTimingInfo.cs
+ComplexShellType.cs
 ComposedShellCallable.cs
 CompositeTextWriter.cs
 ConfigBrowserSchema.cs
@@ -437,6 +451,7 @@ LsfdJsonParser.cs
 LsipcJsonParser.cs
 ManagedFileHandle.cs
 MathShellType.cs
+MatrixShellType.cs
 MemberPath.cs
 MemberPathSegment.cs
 MemoryUsageInfo.cs
@@ -482,6 +497,7 @@ RemovalResult.cs
 RuntimeInformationSnapshot.cs
 ScriptFileDetection.cs
 ShellBlock.cs
+ShellChannel.cs
 ShellCommand.cs
 ShellCommandDescriptor.cs
 ShellCommandLineEscaper.cs
@@ -496,6 +512,7 @@ ShellEventHandler.cs
 ShellEventSender.cs
 ShellExecRequest.cs
 ShellExecResult.cs
+ShellFuture.cs
 ShellIndexingUtilities.cs
 ShellIterationUtilities.cs
 ShellJob.cs
@@ -539,9 +556,11 @@ ToshConfig.cs
 ToshConfigDefaults.cs
 ToshDiagnostic.cs
 ToshDiagnosticException.cs
+ToshMatrix.cs
 ToshRange.cs
 ToshRuntime.cs
 ToshTuple.cs
+ToshVector.cs
 TreeEntryInfo.cs
 TreeJsonParser.cs
 TypeCatalog.cs
@@ -560,6 +579,7 @@ UnixFileSystemMetadata.cs
 UnixOwnershipUtilities.cs
 UnixSystemServices.cs
 UserIdentityInfo.cs
+VectorShellType.cs
 VsCodeMetadataEmitter.cs
 WindowsBlockDeviceServices.cs
 WindowsCpuServices.cs
@@ -748,9 +768,6 @@ WindowsTreeTraversal.cs
 ../../../../.dotnet/sdk/10.0.103/Sdks/Microsoft.NET.Sdk/analyzers/
  Microsoft.CodeAnalysis.CSharp.NetAnalyzers.dll
  Microsoft.CodeAnalysis.NetAnalyzers.dll
-<NUGET>/microsoft.net.illink.tasks/10.0.3/analyzers/dotnet/cs/
- ILLink.CodeFixProvider.dll
- ILLink.RoslynAnalyzer.dll
 
 [analyzerConfigFiles]
 ../../../../.dotnet/sdk/10.0.103/Sdks/Microsoft.NET.Sdk/analyzers/build/config/analysislevel_10_default.globalconfig

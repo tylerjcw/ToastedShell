@@ -118,17 +118,27 @@ internal sealed class OverloadedFunctionCommand : IShellCommand, ICommandResolut
 
     public async IAsyncEnumerable<object?> InvokeAsync(CommandContext context)
     {
-        var definition = SelectDefinition(context.Arguments, context);
+        // When executing inside a fork (race/settle/parallel), redirect to the fork's
+        // engine so that scope mutations and call stacks stay isolated to the fork.
+        var targetEngine = context.BlockExecutor is ToshEngine.EngineBlockExecutor eb &&
+                           !ReferenceEquals(eb.Engine, _engine)
+            ? eb.Engine
+            : _engine;
 
-        await foreach (var value in _engine.ExecuteFunctionAsync(definition, context).WithCancellation(context.CancellationToken))
+        var definition = SelectDefinition(targetEngine, context.Arguments, context);
+
+        await foreach (var value in targetEngine.ExecuteFunctionAsync(definition, context).WithCancellation(context.CancellationToken))
         {
             yield return value;
         }
     }
 
     private FunctionDefinition SelectDefinition(IReadOnlyList<object?> arguments, CommandContext context)
+        => SelectDefinition(_engine, arguments, context);
+
+    private FunctionDefinition SelectDefinition(ToshEngine engine, IReadOnlyList<object?> arguments, CommandContext context)
     {
-        var matches = _engine.SelectBestCallableMatches(_definitions, static definition => definition.Parameters, arguments);
+        var matches = engine.SelectBestCallableMatches(_definitions, static definition => definition.Parameters, arguments);
 
         if (matches.Count == 1)
         {

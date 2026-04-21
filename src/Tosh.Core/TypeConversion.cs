@@ -31,6 +31,18 @@ public static class TypeConversion
             return true;
         }
 
+        if (effectiveType == typeof(Complex))
+        {
+            if (ComplexShellType.TryConvert(value, out var complex))
+            {
+                converted = complex;
+                return true;
+            }
+
+            converted = null;
+            return false;
+        }
+
         if (effectiveType == typeof(string))
         {
             converted = value.ToString();

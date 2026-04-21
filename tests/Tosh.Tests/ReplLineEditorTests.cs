@@ -205,6 +205,94 @@ public sealed class ReplLineEditorTests
     }
 
     [Fact]
+    public void Line_editor_buffer_supports_undo_and_redo_for_text_mutations()
+    {
+        var buffer = new LineEditorBuffer("hello");
+
+        Assert.True(buffer.Insert('!'));
+        Assert.Equal("hello!", buffer.Text);
+        Assert.True(buffer.CanUndo);
+
+        Assert.True(buffer.Undo());
+        Assert.Equal("hello", buffer.Text);
+        Assert.True(buffer.CanRedo);
+
+        Assert.True(buffer.Redo());
+        Assert.Equal("hello!", buffer.Text);
+    }
+
+    [Fact]
+    public void Line_editor_buffer_clears_redo_stack_after_new_edit_following_undo()
+    {
+        var buffer = new LineEditorBuffer("ab");
+
+        Assert.True(buffer.Insert('c'));
+        Assert.Equal("abc", buffer.Text);
+
+        Assert.True(buffer.Undo());
+        Assert.Equal("ab", buffer.Text);
+        Assert.True(buffer.CanRedo);
+
+        Assert.True(buffer.Insert('d'));
+        Assert.Equal("abd", buffer.Text);
+        Assert.False(buffer.CanRedo);
+    }
+
+    [Fact]
+    public void History_navigation_restores_multiline_pending_input_after_roundtrip()
+    {
+        var history = new LineEditorHistory(new[] { "echo one", "echo two" });
+        const string pending = "if true {\n    echo three";
+
+        Assert.True(history.TryPrevious(pending, out var previous));
+        Assert.Equal("echo two", previous);
+
+        Assert.True(history.TryNext(out var restored));
+        Assert.Equal(pending, restored);
+    }
+
+    [Fact]
+    public void Logical_line_boundary_helpers_detect_first_and_last_lines()
+    {
+        const string text = "line one\nline two\nline three";
+
+        Assert.True(ReplLineEditor.IsAtFirstLogicalLine(text, 3));
+        Assert.False(ReplLineEditor.IsAtLastLogicalLine(text, 3));
+
+        Assert.False(ReplLineEditor.IsAtFirstLogicalLine(text, 10));
+        Assert.False(ReplLineEditor.IsAtLastLogicalLine(text, 10));
+
+        Assert.False(ReplLineEditor.IsAtFirstLogicalLine(text, text.Length));
+        Assert.True(ReplLineEditor.IsAtLastLogicalLine(text, text.Length));
+    }
+
+    [Fact]
+    public void Home_and_end_move_within_current_logical_line_for_multiline_input()
+    {
+        var buffer = new LineEditorBuffer("alpha\nbeta\ngamma");
+        buffer.SetCursor(8); // inside "beta"
+
+        Assert.True(ReplLineEditor.MoveLogicalLineHome(buffer));
+        Assert.Equal(6, buffer.CursorIndex);
+
+        Assert.True(ReplLineEditor.MoveLogicalLineEnd(buffer));
+        Assert.Equal(10, buffer.CursorIndex);
+    }
+
+    [Fact]
+    public void Home_and_end_on_single_line_still_target_full_line_bounds()
+    {
+        var buffer = new LineEditorBuffer("single line");
+        buffer.SetCursor(4);
+
+        Assert.True(ReplLineEditor.MoveLogicalLineHome(buffer));
+        Assert.Equal(0, buffer.CursorIndex);
+
+        Assert.True(ReplLineEditor.MoveLogicalLineEnd(buffer));
+        Assert.Equal("single line".Length, buffer.CursorIndex);
+    }
+
+    [Fact]
     public void Line_editor_buffer_supports_word_wise_horizontal_movement()
     {
         var buffer = new LineEditorBuffer("hello brave new world");
@@ -252,8 +340,194 @@ public sealed class ReplLineEditorTests
         var layout = ReplLineEditor.BuildInputLayout("prompt> ", "....> ", "alpha\nbeta", "alpha\nbeta", consoleWidth: 12);
 
         Assert.Equal(new ReplLineEditor.VisualPosition(1, 8), layout.CursorPositions[0]);
-        Assert.Equal(new ReplLineEditor.VisualPosition(3, 6), layout.CursorPositions[6]);
-        Assert.Equal(new ReplLineEditor.VisualPosition(3, 10), layout.CursorPositions[10]);
+        Assert.Equal(new ReplLineEditor.VisualPosition(3, 8), layout.CursorPositions[6]);
+        Assert.Equal(new ReplLineEditor.VisualPosition(4, 0), layout.CursorPositions[10]);
+    }
+
+    [Fact]
+    public void Multiline_layout_pads_continuation_gutter_to_prompt_width()
+    {
+        var layout = ReplLineEditor.BuildInputLayout("❯ ", "│", "x\ny", "x\ny", consoleWidth: 80);
+
+        // Cursor position right after newline should be at the start of second-line input,
+        // aligned to the primary prompt width (2 chars for "❯ "), not continuation raw width.
+        Assert.Equal(new ReplLineEditor.VisualPosition(2, 2), layout.CursorPositions[2]);
+    }
+
+    [Fact]
+    public void Multiline_layout_trims_continuation_gutter_when_wider_than_prompt()
+    {
+        var layout = ReplLineEditor.BuildInputLayout("> ", "╮────", "x\ny", "x\ny", consoleWidth: 80);
+
+        Assert.Equal(new ReplLineEditor.VisualPosition(2, 2), layout.CursorPositions[2]);
+    }
+
+    [Fact]
+    public void Multiline_layout_uses_last_prompt_line_width_for_continuation_alignment()
+    {
+        var prompt = "header line\n> ";
+        var layout = ReplLineEditor.BuildInputLayout(prompt, "....> ", "a\nb", "a\nb", consoleWidth: 80);
+
+        // After newline in input, second logical line should begin at same input column
+        // as the prompt's final line ("> " => column 2), not the full prompt text width.
+        Assert.Equal(new ReplLineEditor.VisualPosition(3, 2), layout.CursorPositions[2]);
+    }
+
+    [Fact]
+    public void Dynamic_gutter_uses_brace_depth_not_parenthesis_depth()
+    {
+        var gutters = ReplLineEditor.BuildDynamicContinuationGutters(
+            ["func test(x: int)", "echo $x"],
+            "❯ ",
+            "....> ",
+            consoleWidth: 80,
+            gutterRightBorder: false);
+
+        Assert.Equal(2, gutters.Count);
+        Assert.Equal("│ ", gutters[1]);
+    }
+
+    [Fact]
+    public void Dynamic_gutter_renders_single_rail_for_depth_one_body_lines()
+    {
+        var gutters = ReplLineEditor.BuildDynamicContinuationGutters(
+            ["func test() {", "echo hi", "}"],
+            "❯ ",
+            "....> ",
+            consoleWidth: 80,
+            gutterRightBorder: false);
+
+        Assert.Equal(3, gutters.Count);
+        Assert.Equal("│ ", gutters[1]);
+        Assert.Equal("╯ ", gutters[2]);
+    }
+
+    [Fact]
+    public void Multiline_layout_uses_straight_segment_after_opener_and_corner_on_closer_line()
+    {
+        var layout = ReplLineEditor.BuildInputLayout(
+            "❯ ",
+            "....> ",
+            "func testFunc() {\necho \"x\"\n}",
+            "func testFunc() {\necho \"x\"\n}",
+            consoleWidth: 120);
+
+        var lines = layout.RenderedText.Split('\n');
+        Assert.StartsWith("││", lines[1], StringComparison.Ordinal);
+        Assert.StartsWith("╯│", lines[2], StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void First_continuation_line_always_uses_straight_vertical_marker()
+    {
+        var layout = ReplLineEditor.BuildInputLayout(
+            "❯ ",
+            "....> ",
+            "}\nbody",
+            "}\nbody",
+            consoleWidth: 120,
+            gutterRightBorder: false);
+
+        var lines = layout.RenderedText.Split('\n');
+        Assert.StartsWith("│ ", lines[1], StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Dynamic_gutter_uses_join_transitions_for_nested_open_and_close()
+    {
+        var gutters = ReplLineEditor.BuildDynamicContinuationGutters(
+            ["func nextFunc() {", "echo a", "if (true) {", "echo b", "}", "}"],
+            "❯ ",
+            "....> ",
+            consoleWidth: 120,
+            gutterRightBorder: false);
+
+        Assert.Equal("│ ", gutters[1]);
+        Assert.Equal("├╮", gutters[2]);
+        Assert.Equal("├╯", gutters[4]);
+    }
+
+    [Fact]
+    public void Dynamic_gutter_renders_close_open_transition_lines_as_join_open()
+    {
+        var gutters = ReplLineEditor.BuildDynamicContinuationGutters(
+            ["func secondFunc() {", "if (true) {", "try {", "echo \"x\"", "} catch {", "echo \"y\"", "}", "}"],
+            ">>> ",
+            "....> ",
+            consoleWidth: 120,
+            gutterRightBorder: false);
+
+        Assert.StartsWith("│├┤", gutters[4], StringComparison.Ordinal);
+        Assert.StartsWith("│││", gutters[5], StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Gutter_glyphs_match_rounded_table_style_when_no_fallback_is_active()
+    {
+        var glyphs = ReplLineEditor.ResolveGutterGlyphs();
+
+        Assert.Equal('│', glyphs.Vertical);
+        Assert.Equal('╮', glyphs.Open);
+        Assert.Equal('╯', glyphs.Close);
+        Assert.Equal('├', glyphs.Join);
+        Assert.Equal('┤', glyphs.Transition);
+    }
+
+    [Fact]
+    public void Multiline_layout_draws_right_edge_border_on_continuation_gutter()
+    {
+        var layout = ReplLineEditor.BuildInputLayout("❯ ", "....> ", "a\nb", "a\nb", consoleWidth: 80, gutterRightBorder: true);
+
+        var lines = layout.RenderedText.Split('\n');
+        Assert.StartsWith("││", lines[1], StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Multiline_layout_can_stamp_line_numbers_in_gutter()
+    {
+        var layout = ReplLineEditor.BuildInputLayout(
+            ">>> ",
+            "....> ",
+            "line1\nline2\nline3",
+            "line1\nline2\nline3",
+            consoleWidth: 120,
+            gutterRightBorder: true,
+            continuationLineNumbers: true);
+
+        var lines = layout.RenderedText.Split('\n');
+        Assert.StartsWith("│ 2│", lines[1], StringComparison.Ordinal);
+        Assert.StartsWith("· 3│", lines[2], StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Execute_enter_key_accepts_newline_fallback_when_shift_modifier_is_not_reported()
+    {
+        var key = new ConsoleKeyInfo('\n', ConsoleKey.Enter, shift: false, alt: false, control: false);
+
+        Assert.True(ReplLineEditor.IsExecuteEnterKey(key));
+    }
+
+    [Fact]
+    public void Execute_fallback_key_accepts_ctrl_j()
+    {
+        var key = new ConsoleKeyInfo('\n', ConsoleKey.J, shift: false, alt: false, control: true);
+
+        Assert.True(ReplLineEditor.IsExecuteFallbackKey(key));
+    }
+
+    [Fact]
+    public void Enter_executes_for_single_line_complete_input_when_shift_enter_mode_is_enabled()
+    {
+        var continuationState = new ReplContinuationState(false, string.Empty);
+
+        Assert.False(ReplLineEditor.ShouldInsertNewLineOnEnter("echo hi", continuationState));
+    }
+
+    [Fact]
+    public void Enter_inserts_newline_when_continuation_is_required_or_already_multiline()
+    {
+        Assert.True(ReplLineEditor.ShouldInsertNewLineOnEnter("func x() {", new ReplContinuationState(true, "    ")));
+        Assert.True(ReplLineEditor.ShouldInsertNewLineOnEnter("line one\nline two", new ReplContinuationState(false, string.Empty)));
     }
 
     [Fact]
@@ -299,6 +573,18 @@ public sealed class ReplLineEditorTests
         Assert.True(ReplLineEditor.TryTranslateEscapeSequence(sequence, out var translated));
         Assert.Equal(expectedKey, translated.Key);
         Assert.Equal(expectedModifiers, translated.Modifiers);
+    }
+
+    [Theory]
+    [InlineData("[1;3A", ConsoleKey.UpArrow)]
+    [InlineData("[1;3B", ConsoleKey.DownArrow)]
+    [InlineData("[1;3C", ConsoleKey.RightArrow)]
+    [InlineData("[1;3D", ConsoleKey.LeftArrow)]
+    public void Escape_sequence_translation_recognizes_alt_arrow_sequences(string sequence, ConsoleKey expectedKey)
+    {
+        Assert.True(ReplLineEditor.TryTranslateEscapeSequence(sequence, out var translated));
+        Assert.Equal(expectedKey, translated.Key);
+        Assert.Equal(ConsoleModifiers.Alt, translated.Modifiers);
     }
 
     [Fact]

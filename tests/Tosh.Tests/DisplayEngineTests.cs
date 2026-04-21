@@ -342,6 +342,47 @@ public sealed class DisplayEngineTests
     }
 
     [Fact]
+    public void Display_engine_renders_vectors_as_compact_scalar_tables()
+    {
+        var display = new DisplayEngine(new ObjectFormatter());
+
+        var text = display.RenderMany([new ToshVector([1d, 2d, 3d])]);
+
+        Assert.Contains("Vector", text, StringComparison.Ordinal);
+        Assert.Contains("[1, 2, 3]", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("Magnitude", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("Length", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Display_engine_renders_native_matrices_as_matrix_tables()
+    {
+        var display = new DisplayEngine(new ObjectFormatter());
+
+        var text = display.RenderMany([new ToshMatrix([[1d, 2d], [3d, 4d]])]);
+        var plain = StyledText.StripAnsi(text);
+
+        Assert.Contains("│ 0 │", plain, StringComparison.Ordinal);
+        Assert.Contains("│ 1 │", plain, StringComparison.Ordinal);
+        Assert.Contains("│            1 │", plain, StringComparison.Ordinal);
+        Assert.Contains("│            4 │", plain, StringComparison.Ordinal);
+        Assert.DoesNotContain("RowCount", plain, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Display_engine_renders_complex_numbers_as_compact_scalar_tables()
+    {
+        var display = new DisplayEngine(new ObjectFormatter());
+
+        var text = display.RenderMany([new Complex(3d, 4d)]);
+
+        Assert.Contains("Complex", text, StringComparison.Ordinal);
+        Assert.Contains("3 + 4i", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("Imaginary", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("Real", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Display_engine_renders_profile_backed_shell_scalars_as_compact_tables()
     {
         var display = new DisplayEngine(new ObjectFormatter());

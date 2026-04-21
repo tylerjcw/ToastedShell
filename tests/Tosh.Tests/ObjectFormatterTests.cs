@@ -1,5 +1,6 @@
 using Tosh.Core;
 using System.Globalization;
+using System.Numerics;
 using System.Text;
 
 namespace Tosh.Tests;
@@ -151,6 +152,36 @@ public sealed class ObjectFormatterTests
         var rootText = formatter.Format(DayOfWeek.Friday);
 
         Assert.Equal("System.DayOfWeek.Friday", rootText);
+    }
+
+    [Fact]
+    public void Formatter_renders_vectors_compactly()
+    {
+        var formatter = new ObjectFormatter();
+
+        var text = formatter.Format(new ToshVector([1d, 2d, 3d]));
+
+        Assert.Equal("[1, 2, 3]", text);
+    }
+
+    [Fact]
+    public void Formatter_renders_matrices_compactly()
+    {
+        var formatter = new ObjectFormatter();
+
+        var text = formatter.Format(new ToshMatrix([[1d, 2d], [3d, 4d]]));
+
+        Assert.Equal("[[1, 2], [3, 4]]", text);
+    }
+
+    [Fact]
+    public void Formatter_renders_complex_numbers_compactly()
+    {
+        var formatter = new ObjectFormatter();
+
+        var text = formatter.Format(new Complex(3d, 4d));
+
+        Assert.Equal("3 + 4i", text);
     }
 
     [Fact]

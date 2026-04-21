@@ -71,38 +71,38 @@ internal static class FunctionalCommandUtilities
         switch (operation)
         {
             case IShellCallable callable:
-            {
-                var invokeContext = context with
                 {
-                    Arguments = callableArguments,
-                    Input = AsyncEnumerableExtensions.Empty<object?>(),
-                    IsPipelined = false,
-                };
-
-                return await AsyncEnumerableExtensions.ToListAsync(
-                    callable.InvokeAsync(invokeContext),
-                    context.CancellationToken);
-            }
-
-            case ShellBlock block:
-            {
-                var executor = context.Runtime.BlockExecutor
-                               ?? throw new InvalidOperationException("Block execution is not available in this runtime.");
-
-                var locals = new Dictionary<string, object?>(StringComparer.Ordinal);
-
-                if (blockLocals is not null)
-                {
-                    foreach (var (name, value) in blockLocals)
+                    var invokeContext = context with
                     {
-                        locals[name] = value;
-                    }
+                        Arguments = callableArguments,
+                        Input = AsyncEnumerableExtensions.Empty<object?>(),
+                        IsPipelined = false,
+                    };
+
+                    return await AsyncEnumerableExtensions.ToListAsync(
+                        callable.InvokeAsync(invokeContext),
+                        context.CancellationToken);
                 }
 
-                return await AsyncEnumerableExtensions.ToListAsync(
-                    executor.ExecuteAsync(block, locals, context.CancellationToken),
-                    context.CancellationToken);
-            }
+            case ShellBlock block:
+                {
+                    var executor = context.BlockExecutor ?? context.Runtime.BlockExecutor
+                                   ?? throw new InvalidOperationException("Block execution is not available in this runtime.");
+
+                    var locals = new Dictionary<string, object?>(StringComparer.Ordinal);
+
+                    if (blockLocals is not null)
+                    {
+                        foreach (var (name, value) in blockLocals)
+                        {
+                            locals[name] = value;
+                        }
+                    }
+
+                    return await AsyncEnumerableExtensions.ToListAsync(
+                        executor.ExecuteAsync(block, locals, context.CancellationToken),
+                        context.CancellationToken);
+                }
 
             default:
                 throw context.CreateDiagnostic(

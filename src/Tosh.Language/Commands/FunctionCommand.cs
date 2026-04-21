@@ -57,6 +57,14 @@ public sealed class FunctionCommand : IShellCommand, ICommandResolutionMetadata,
 
     public IAsyncEnumerable<object?> ExecuteAsync(CommandContext context)
     {
+        // When executing inside a fork (race/settle/parallel), redirect to the fork's
+        // engine so that scope mutations and call stacks stay isolated to the fork.
+        if (context.BlockExecutor is ToshEngine.EngineBlockExecutor eb &&
+            !ReferenceEquals(eb.Engine, _engine))
+        {
+            return eb.Engine.ExecuteFunctionAsync(_definition, context);
+        }
+
         return _engine.ExecuteFunctionAsync(_definition, context);
     }
 

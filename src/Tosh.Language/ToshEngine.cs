@@ -20,6 +20,9 @@ public sealed class ToshEngine : IShellEvaluator
     private readonly Stack<string> _functionCallStack = new();
     private readonly Stack<string> _scriptNameStack = new();
     private readonly Stack<IReadOnlyList<object?>> _scriptArgumentsStack = new();
+    // When this engine is a fork (created via Fork()), this holds its own executor for
+    // propagation through CommandContext.  Null for the primary (root) engine.
+    private readonly IShellBlockExecutor? _ownBlockExecutor;
     private readonly Stack<IReadOnlyList<object?>> _functionArgumentsStack = new();
     private readonly Stack<object?> _functionInputStack = new();
     private readonly Dictionary<string, ToshRequiredScriptArtifact> _requiredScripts = new(StringComparer.OrdinalIgnoreCase);
@@ -36,6 +39,7 @@ public sealed class ToshEngine : IShellEvaluator
         Runtime.Evaluator = this;
         Runtime.EventSenderFactory = CreateEventSender;
         _toshNamespace = new ToshRuntimeNamespace(this);
+        Runtime.RuntimeNamespace ??= _toshNamespace;
         _environmentNamespace = new ShellEnvironmentNamespace();
         if (!Runtime.Commands.TryGet("source", out _))
         {
@@ -50,6 +54,40 @@ public sealed class ToshEngine : IShellEvaluator
         // Load built-in rune definitions
         LoadBuiltinRunesAsync().GetAwaiter().GetResult();
     }
+
+    /// <summary>
+    /// Creates a forked child engine that shares the same <see cref="ToshRuntime"/> but has
+    /// its own isolated scope stack pre-seeded with cloned copies of <paramref name="capturedScopes"/>.
+    /// The fork does NOT write back to <c>Runtime.BlockExecutor</c> / <c>Runtime.Evaluator</c> /
+    /// <c>Runtime.EventSenderFactory</c>; instead it propagates its executor via
+    /// <see cref="CommandContext.BlockExecutor"/>.
+    /// </summary>
+    private ToshEngine(ToshRuntime runtime, IReadOnlyList<LexicalScope>? capturedScopes)
+    {
+        Runtime = runtime;
+        _toshNamespace = new ToshRuntimeNamespace(this);
+        _environmentNamespace = new ShellEnvironmentNamespace();
+        // Pre-seed the scope stack with clones of the parent's visible scopes.
+        // capturedScopes is ordered outer-to-inner; pushing outer-first means
+        // the inner-most scope ends up on top of the stack — correct lookup order.
+        if (capturedScopes is not null)
+        {
+            foreach (var scope in capturedScopes)
+            {
+                _scopes.Push(scope.Clone());
+            }
+        }
+        // Own executor — propagated through CommandContext so nested commands
+        // (including race/settle/parallel) continue using this fork's engine.
+        _ownBlockExecutor = new EngineBlockExecutor(this);
+    }
+
+    /// <summary>
+    /// Creates an isolated child engine that shares the same runtime but has its own
+    /// execution state. Pass <see cref="CaptureVisibleScopes"/> as the snapshot.
+    /// </summary>
+    internal ToshEngine Fork(IReadOnlyList<LexicalScope>? capturedScopes)
+        => new(Runtime, capturedScopes);
 
     private async Task LoadBuiltinRunesAsync()
     {
@@ -729,7 +767,7 @@ public sealed class ToshEngine : IShellEvaluator
             allocationSpecification = values[0];
         }
 
-        var context = new CommandContext(Runtime, AsyncEnumerableExtensions.Empty<object?>(), [allocationSpecification], cancellationToken, ScopedTypeResolver: CreateScopedTypeResolver());
+        var context = new CommandContext(Runtime, AsyncEnumerableExtensions.Empty<object?>(), [allocationSpecification], cancellationToken, ScopedTypeResolver: CreateScopedTypeResolver(), BlockExecutor: _ownBlockExecutor);
         var size = NativeCommandUtilities.ResolveAllocationSize(context, allocationSpecification, 0);
 
         if (size < 0)
@@ -1433,7 +1471,8 @@ public sealed class ToshEngine : IShellEvaluator
                         Runtime,
                         EmptyAsyncEnumerable(),
                         new object?[] { shellEvent },
-                        cancellationToken);
+                        cancellationToken,
+                        BlockExecutor: _ownBlockExecutor);
 
                     await foreach (var value in functionCommand.ExecuteAsync(context))
                     {
@@ -3436,7 +3475,7 @@ public sealed class ToshEngine : IShellEvaluator
             commandSyntax.Name,
             commandSyntax.Span,
             commandSyntax.Arguments.Select(argument => argument.Span).ToArray());
-        var context = new CommandContext(Runtime, input, arguments, cancellationToken, invocation, isPipelined, CreateScopedTypeResolver(), pipelineExitStatusTracker);
+        var context = new CommandContext(Runtime, input, arguments, cancellationToken, invocation, isPipelined, CreateScopedTypeResolver(), pipelineExitStatusTracker, BlockExecutor: _ownBlockExecutor);
 
         if (Runtime.Config.Shell.Trace)
         {
@@ -4245,7 +4284,8 @@ public sealed class ToshEngine : IShellEvaluator
                             cancellationToken,
                             invocation,
                             IsPipelined: false,
-                            ScopedTypeResolver: CreateScopedTypeResolver());
+                            ScopedTypeResolver: CreateScopedTypeResolver(),
+                            BlockExecutor: _ownBlockExecutor);
                         var results = await AsyncEnumerableExtensions.ToListAsync(
                             callable.InvokeAsync(context),
                             cancellationToken);
@@ -7638,9 +7678,11 @@ public sealed class ToshEngine : IShellEvaluator
         }
     }
 
-    private sealed class EngineBlockExecutor : IShellBlockExecutor
+    internal sealed class EngineBlockExecutor : IShellBlockExecutor
     {
         private readonly ToshEngine _engine;
+
+        internal ToshEngine Engine => _engine;
 
         public EngineBlockExecutor(ToshEngine engine)
         {
@@ -7662,6 +7704,19 @@ public sealed class ToshEngine : IShellEvaluator
             {
                 yield return value;
             }
+        }
+
+        public IAsyncEnumerable<object?> InvokeCallableAsync(IShellCallable callable, CommandContext context)
+            // Engine-bound callables (ToshLambda, FunctionCommand, OverloadedFunctionCommand)
+            // redirect themselves to the fork engine when they see context.BlockExecutor is
+            // a different EngineBlockExecutor — so the default interface implementation
+            // (callable.InvokeAsync) is sufficient here.
+            => callable.InvokeAsync(context);
+
+        public IShellBlockExecutor Fork()
+        {
+            var snapshot = _engine.CaptureVisibleScopes();
+            return new EngineBlockExecutor(_engine.Fork(snapshot));
         }
     }
 

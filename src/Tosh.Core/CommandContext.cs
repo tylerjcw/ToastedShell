@@ -8,7 +8,8 @@ public sealed record CommandContext(
     CommandInvocation? Invocation = null,
     bool IsPipelined = false,
     ITypeResolver? ScopedTypeResolver = null,
-    PipelineExitStatusTracker? PipelineExitStatusTracker = null)
+    PipelineExitStatusTracker? PipelineExitStatusTracker = null,
+    IShellBlockExecutor? BlockExecutor = null)
 {
     public ITypeResolver TypeResolver => ScopedTypeResolver ?? Runtime.TypeResolver;
 

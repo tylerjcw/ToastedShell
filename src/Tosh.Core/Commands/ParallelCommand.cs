@@ -1,5 +1,4 @@
 using System.Collections.Concurrent;
-using System.Runtime.CompilerServices;
 
 namespace Tosh.Core.Commands;
 
@@ -20,15 +19,15 @@ public sealed class ParallelCommand : ShellCommand
     {
         var (maxThreads, operationIndex) = ParseOptions(context);
         var operation = FunctionalCommandUtilities.RequireCallableOrBlock(context, operationIndex);
-        var executor = context.Runtime.BlockExecutor;
 
         // Collect all input items so we can process them concurrently.
         var items = await AsyncEnumerableExtensions.ToListAsync(
             ShellIterationUtilities.ReplaySingleInputCollectionAsync(context.Input, context.CancellationToken),
             context.CancellationToken);
 
-        // Engine block execution is single-threaded, so we serialize access.
-        var engineLock = new SemaphoreSlim(1, 1);
+        // Fork the executor once per item so each invocation gets an isolated scope snapshot.
+        // This replaces the old engineLock serialisation, enabling true concurrent execution.
+        var baseExecutor = context.BlockExecutor ?? context.Runtime.BlockExecutor;
         var results = new ConcurrentDictionary<int, List<object?>>();
 
         await Parallel.ForEachAsync(
@@ -42,37 +41,23 @@ public sealed class ParallelCommand : ShellCommand
             {
                 var item = items[index];
                 var values = new List<object?>();
+                var forkedContext = context with
+                {
+                    BlockExecutor = baseExecutor?.Fork(),
+                    CancellationToken = token,
+                };
 
-                await engineLock.WaitAsync(token);
                 try
                 {
-                    if (operation is ShellBlock block)
-                    {
-                        if (executor is null)
-                        {
-                            throw new InvalidOperationException("Block execution is not available in this runtime.");
-                        }
+                    var callResults = await FunctionalCommandUtilities.ExecuteAsync(
+                        forkedContext,
+                        operation,
+                        [item],
+                        new Dictionary<string, object?>(StringComparer.Ordinal) { ["_"] = item });
 
-                        await foreach (var value in executor.ExecuteAsync(
-                            block,
-                            new Dictionary<string, object?>(StringComparer.Ordinal) { ["_"] = item },
-                            token))
-                        {
-                            values.Add(value);
-                        }
-                    }
-                    else
+                    foreach (var value in callResults)
                     {
-                        var callResults = await FunctionalCommandUtilities.ExecuteAsync(
-                            context,
-                            operation,
-                            [item],
-                            new Dictionary<string, object?>(StringComparer.Ordinal) { ["_"] = item });
-
-                        foreach (var value in callResults)
-                        {
-                            values.Add(value);
-                        }
+                        values.Add(value);
                     }
                 }
                 catch (BreakSignalException)
@@ -82,10 +67,6 @@ public sealed class ParallelCommand : ShellCommand
                 catch (ContinueSignalException)
                 {
                     // Continue is a no-op in parallel context.
-                }
-                finally
-                {
-                    engineLock.Release();
                 }
 
                 results[index] = values;

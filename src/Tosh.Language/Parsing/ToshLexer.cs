@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using System.Numerics;
 using Tosh.Core;
 using Tosh.Core.Units;
 
@@ -1010,6 +1011,11 @@ public sealed class ToshLexer
             }
         }
 
+        if (TryParseImaginaryLiteral(text, out var imaginaryValue))
+        {
+            return new SyntaxToken(SyntaxTokenKind.Number, start, text, imaginaryValue);
+        }
+
         if (string.Equals(text, "true", StringComparison.OrdinalIgnoreCase))
         {
             return new SyntaxToken(SyntaxTokenKind.Boolean, start, text, true);
@@ -1076,6 +1082,43 @@ public sealed class ToshLexer
         }
 
         return new SyntaxToken(SyntaxTokenKind.Bareword, start, text, text);
+    }
+
+    private static bool TryParseImaginaryLiteral(string text, out Complex value)
+    {
+        value = default;
+
+        if (text.Length < 2 || text[^1] is not ('i' or 'I'))
+        {
+            return false;
+        }
+
+        var coefficientText = text[..^1];
+        if (string.IsNullOrWhiteSpace(coefficientText))
+        {
+            return false;
+        }
+
+        if (!coefficientText.Any(char.IsDigit))
+        {
+            return false;
+        }
+
+        var coefficientForParsing = coefficientText.Contains('_')
+            ? coefficientText.Replace("_", string.Empty, StringComparison.Ordinal)
+            : coefficientText;
+
+        if (!double.TryParse(
+                coefficientForParsing,
+                NumberStyles.Float | NumberStyles.AllowLeadingSign,
+                CultureInfo.InvariantCulture,
+                out var coefficient))
+        {
+            return false;
+        }
+
+        value = new Complex(0d, coefficient);
+        return true;
     }
 
     private void ReadGlobAlternation()

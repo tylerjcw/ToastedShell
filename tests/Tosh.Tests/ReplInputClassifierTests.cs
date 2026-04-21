@@ -53,7 +53,20 @@ public sealed class ReplInputClassifierTests
         var source = "ls | each {\n    _.Name";
 
         Assert.True(ReplInputClassifier.RequiresContinuation(source));
-        Assert.Equal("        ", ReplInputClassifier.GetSuggestedContinuationText(source));
+        Assert.Equal("    ", ReplInputClassifier.GetSuggestedContinuationText(source));
+    }
+
+    [Fact]
+    public void Suggests_same_indentation_inside_open_block_without_growing_each_line()
+    {
+        Assert.Equal("    ", ReplInputClassifier.GetSuggestedContinuationText([
+            "if true {",
+            "    echo one"]));
+
+        Assert.Equal("    ", ReplInputClassifier.GetSuggestedContinuationText([
+            "if true {",
+            "    echo one",
+            "    echo two"]));
     }
 
     // --- Multi-line compound statement tests (parser-based continuation) ---

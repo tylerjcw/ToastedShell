@@ -6,6 +6,24 @@ Last updated: April 19, 2026 (evening).
 
 ---
 
+# REPL Line Editor (In Progress)
+
+Derived from [Line Editor RFC](LINE_EDITOR_RFC.md). Phase 1 is focused on safety and deterministic editing.
+
+## Phase 1 Checklist
+
+- [x] Preserve multiline draft while navigating wrapped lines
+- [x] Fix continuation indentation growth in multiline editing
+- [x] Add foundational undo/redo support in `LineEditorBuffer`
+- [ ] Add edit transaction grouping (coalesced typing, completion-accept as single transaction)
+- [ ] Add explicit draft snapshot/restore model around history traversal
+- [ ] Add multiline history traversal modifiers (`Alt+Up` / `Alt+Down`) without draft clobber
+- [ ] Add focused tests for key behavior matrix in multiline + completion contexts
+
+### Priority: P0
+
+---
+
 # Language Features & Paradigms (Planned)
 
 ## Comprehensions — Future Extensions

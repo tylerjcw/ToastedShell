@@ -20,6 +20,10 @@ public sealed class HelpCommandTests(ToshRuntimeFixture fixture) : IClassFixture
         var typeTopic = Assert.IsType<HelpTopic>(Assert.Single(await engine.ExecuteToListAsync("help System.String")));
         var regexTopic = Assert.IsType<HelpTopic>(Assert.Single(await engine.ExecuteToListAsync("help regex")));
         var listTopic = Assert.IsType<HelpTopic>(Assert.Single(await engine.ExecuteToListAsync("help list")));
+        var vectorTopic = Assert.IsType<HelpTopic>(Assert.Single(await engine.ExecuteToListAsync("help Vector")));
+        var matrixTopic = Assert.IsType<HelpTopic>(Assert.Single(await engine.ExecuteToListAsync("help Matrix")));
+        var complexTopic = Assert.IsType<HelpTopic>(Assert.Single(await engine.ExecuteToListAsync("help Complex")));
+        var complexCommandTopic = Assert.IsType<HelpTopic>(Assert.Single(await engine.ExecuteToListAsync("help complex")));
         var mapTopic = Assert.IsType<HelpTopic>(Assert.Single(await engine.ExecuteToListAsync("help map")));
         var dictTopic = Assert.IsType<HelpTopic>(Assert.Single(await engine.ExecuteToListAsync("help dict")));
         var genericListTopic = Assert.IsType<HelpTopic>(Assert.Single(await engine.ExecuteToListAsync("help list<int>")));
@@ -42,6 +46,16 @@ public sealed class HelpCommandTests(ToshRuntimeFixture fixture) : IClassFixture
         Assert.Contains("System.Text.RegularExpressions.Regex", regexTopic.Description, StringComparison.Ordinal);
         Assert.Equal(HelpSubjectKind.Type, listTopic.Kind);
         Assert.Equal("Shell Types", listTopic.Category);
+        Assert.Equal(HelpSubjectKind.Type, vectorTopic.Kind);
+        Assert.Equal("Vector", vectorTopic.Name);
+        Assert.Contains("vec", vectorTopic.Aliases, StringComparer.OrdinalIgnoreCase);
+        Assert.Equal(HelpSubjectKind.Type, matrixTopic.Kind);
+        Assert.Equal("Matrix", matrixTopic.Name);
+        Assert.Contains("mat", matrixTopic.Aliases, StringComparer.OrdinalIgnoreCase);
+        Assert.Equal(HelpSubjectKind.Type, complexTopic.Kind);
+        Assert.Equal("Complex", complexTopic.Name);
+        Assert.Equal(HelpSubjectKind.BuiltIn, complexCommandTopic.Kind);
+        Assert.Equal("complex", complexCommandTopic.Name);
         Assert.Equal(HelpSubjectKind.BuiltIn, mapTopic.Kind);
         Assert.Equal("map", mapTopic.Name);
         Assert.Equal("Pipeline", mapTopic.Category);

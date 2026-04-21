@@ -250,7 +250,7 @@ public static class ReplInputClassifier
         return new ContinuationAnalysis(
             requiresContinuation,
             lastLineIndent,
-            trailingOperator || trailingOpener || parenDepth > 0 || braceDepth > 0 || bracketDepth > 0);
+            trailingOperator || trailingOpener);
     }
 
     private static bool RequiresContinuationFromParser(IReadOnlyList<string> lines, out bool shouldIndent)

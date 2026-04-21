@@ -45,6 +45,19 @@ public sealed class ReplCompletionEngineTests
     }
 
     [Fact]
+    public void Completes_tosh_runtime_namespace_members()
+    {
+        var runtime = ToshRuntime.CreateDefault();
+        runtime.RuntimeNamespace = new { Session = new { CurrentDirectory = "/tmp" }, Host = new { Version = "1.0" } };
+        var engine = new ReplCompletionEngine(runtime);
+
+        var result = engine.GetCompletions("$tosh.Se", "$tosh.Se".Length);
+
+        Assert.NotNull(result);
+        Assert.Contains(result!.Suggestions, suggestion => suggestion.Label == "Session");
+    }
+
+    [Fact]
     public void Completes_dictionary_members_from_variable_reference()
     {
         var runtime = ToshRuntime.CreateDefault();

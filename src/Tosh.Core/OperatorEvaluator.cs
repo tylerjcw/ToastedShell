@@ -388,6 +388,24 @@ public static class OperatorEvaluator
             throw new InvalidOperationException("The '+' operator requires non-null operands.");
         }
 
+        // Vector arithmetic
+        if (left is ToshVector lv && right is ToshVector rv) return lv + rv;
+        if (left is ToshVector lvs && IsNumeric(right)) return lvs + new ToshVector(Enumerable.Repeat(ToDouble(right), lvs.Length).ToArray());
+        if (IsNumeric(left) && right is ToshVector rvs) return new ToshVector(Enumerable.Repeat(ToDouble(left), rvs.Length).ToArray()) + rvs;
+
+        // Matrix arithmetic
+        if (left is ToshMatrix lm && right is ToshMatrix rm) return lm + rm;
+        if (left is ToshMatrix lms && IsNumeric(right)) return lms + ToshMatrix.Fill(lms.RowCount, lms.ColumnCount, ToDouble(right));
+        if (IsNumeric(left) && right is ToshMatrix rms) return ToshMatrix.Fill(rms.RowCount, rms.ColumnCount, ToDouble(left)) + rms;
+
+        // Complex arithmetic (bridge promotion only when at least one operand is already Complex)
+        if ((left is Complex || right is Complex) &&
+            TryPromoteToComplex(left, out var leftComplex) &&
+            TryPromoteToComplex(right, out var rightComplex))
+        {
+            return leftComplex + rightComplex;
+        }
+
         // Quantity arithmetic (bridge promotion only when at least one operand is already a Quantity)
         if ((left is Quantity || right is Quantity)
             && TryPromoteToQuantity(left, out var leftQ) && TryPromoteToQuantity(right, out var rightQ))
@@ -470,6 +488,24 @@ public static class OperatorEvaluator
         if (left is null || right is null)
         {
             throw new InvalidOperationException("The '-' operator requires non-null operands.");
+        }
+
+        // Vector arithmetic
+        if (left is ToshVector lv && right is ToshVector rv) return lv - rv;
+        if (left is ToshVector lvs && IsNumeric(right)) return lvs - new ToshVector(Enumerable.Repeat(ToDouble(right), lvs.Length).ToArray());
+        if (IsNumeric(left) && right is ToshVector rvs) return new ToshVector(Enumerable.Repeat(ToDouble(left), rvs.Length).ToArray()) - rvs;
+
+        // Matrix arithmetic
+        if (left is ToshMatrix lm && right is ToshMatrix rm) return lm - rm;
+        if (left is ToshMatrix lms && IsNumeric(right)) return lms - ToshMatrix.Fill(lms.RowCount, lms.ColumnCount, ToDouble(right));
+        if (IsNumeric(left) && right is ToshMatrix rms) return ToshMatrix.Fill(rms.RowCount, rms.ColumnCount, ToDouble(left)) - rms;
+
+        // Complex arithmetic (bridge promotion only when at least one operand is already Complex)
+        if ((left is Complex || right is Complex) &&
+            TryPromoteToComplex(left, out var leftComplex) &&
+            TryPromoteToComplex(right, out var rightComplex))
+        {
+            return leftComplex - rightComplex;
         }
 
         // Quantity arithmetic (bridge promotion only when at least one operand is already a Quantity)
@@ -625,6 +661,26 @@ public static class OperatorEvaluator
             throw new InvalidOperationException("The '*' operator requires non-null operands.");
         }
 
+        // Matrix * Matrix (matrix multiplication), Matrix * Vector, or Matrix * scalar
+        if (left is ToshMatrix lm && right is ToshMatrix rm) return ToshMatrix.Multiply(lm, rm);
+        if (left is ToshMatrix lmv && right is ToshVector rvv) return ToshMatrix.Multiply(lmv, rvv);
+        if (left is ToshVector lvv && right is ToshMatrix rmv) return ToshMatrix.Multiply(lvv, rmv);
+        if (left is ToshMatrix lms && IsNumeric(right)) return lms * ToDouble(right);
+        if (IsNumeric(left) && right is ToshMatrix rms) return ToDouble(left) * rms;
+
+        // Complex arithmetic (bridge promotion only when at least one operand is already Complex)
+        if ((left is Complex || right is Complex) &&
+            TryPromoteToComplex(left, out var leftComplex) &&
+            TryPromoteToComplex(right, out var rightComplex))
+        {
+            return leftComplex * rightComplex;
+        }
+
+        // Vector * Vector (element-wise) or Vector * scalar
+        if (left is ToshVector lv && right is ToshVector rv) return lv * rv;
+        if (left is ToshVector lvs && IsNumeric(right)) return lvs * ToDouble(right);
+        if (IsNumeric(left) && right is ToshVector rvs) return ToDouble(left) * rvs;
+
         // Quantity * Quantity or Quantity * scalar
         if (left is Quantity lq && right is Quantity rq) return lq * rq;
         if (left is Quantity lqs && IsNumeric(right)) return lqs * ToDouble(right);
@@ -667,6 +723,27 @@ public static class OperatorEvaluator
             throw new InvalidOperationException("The '/' operator requires non-null operands.");
         }
 
+        // Matrix / Matrix (element-wise) or Matrix / scalar
+        if (left is ToshMatrix lm && right is ToshMatrix rm) return lm / rm;
+        if (left is ToshMatrix lms && IsNumeric(right)) return lms / ToDouble(right);
+
+        // Complex arithmetic (bridge promotion only when at least one operand is already Complex)
+        if ((left is Complex || right is Complex) &&
+            TryPromoteToComplex(left, out var leftComplex) &&
+            TryPromoteToComplex(right, out var rightComplex))
+        {
+            if (rightComplex == Complex.Zero)
+            {
+                throw new InvalidOperationException("Division by zero.");
+            }
+
+            return leftComplex / rightComplex;
+        }
+
+        // Vector / Vector (element-wise) or Vector / scalar
+        if (left is ToshVector lv && right is ToshVector rv) return lv / rv;
+        if (left is ToshVector lvs && IsNumeric(right)) return lvs / ToDouble(right);
+
         // Quantity / Quantity or Quantity / scalar
         if (left is Quantity lq && right is Quantity rq) return lq / rq;
         if (left is Quantity lqs && IsNumeric(right)) return lqs / ToDouble(right);
@@ -701,6 +778,13 @@ public static class OperatorEvaluator
             throw new InvalidOperationException("The '**' operator requires non-null operands.");
         }
 
+        if ((left is Complex || right is Complex) &&
+            TryPromoteToComplex(left, out var leftComplex) &&
+            TryPromoteToComplex(right, out var rightComplex))
+        {
+            return Complex.Pow(leftComplex, rightComplex);
+        }
+
         var lhs = ToDouble(left);
         var rhs = ToDouble(right);
         var result = Math.Pow(lhs, rhs);
@@ -732,6 +816,7 @@ public static class OperatorEvaluator
             case uint u: return u != 0U;
             case ulong u: return u != 0UL;
             case BigInteger integer: return integer != BigInteger.Zero;
+            case Complex complex: return complex != Complex.Zero;
             case string s: return s.Length > 0;
             case ICollection c: return c.Count > 0;
             case IEnumerable e:
@@ -790,6 +875,11 @@ public static class OperatorEvaluator
         : Convert.ToDecimal(value, CultureInfo.InvariantCulture);
 
     private static bool IsNumeric(object? value) => value is not null && (IsIntegral(value) || IsFloating(value) || IsDecimal(value));
+
+    private static bool TryPromoteToComplex(object? value, out Complex complex)
+    {
+        return ComplexShellType.TryConvert(value, out complex);
+    }
 
     /// <summary>
     /// Attempts to promote a value to a Quantity. Returns true for:

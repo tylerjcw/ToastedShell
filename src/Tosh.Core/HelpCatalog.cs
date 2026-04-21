@@ -869,6 +869,13 @@ public static class HelpCatalog
         ArgumentNullException.ThrowIfNull(runtime);
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
 
+        // Preserve canonical shell-type lookups like `help Complex` even when a
+        // lower-case command name (for example `complex`) also exists.
+        if (TryResolveCanonicalShellTopic(runtime, name, out var canonicalShellTopic))
+        {
+            return canonicalShellTopic;
+        }
+
         var topics = BuildStaticTopicIndex(runtime);
 
         if (topics.TryGetValue(name, out var topic))
@@ -906,6 +913,37 @@ public static class HelpCatalog
         return external.Status == ExternalCommandLookupStatus.Found && external.ResolvedPath is not null
             ? CreateExternalTopic(name, external.ResolvedPath)
             : null;
+    }
+
+    private static bool TryResolveCanonicalShellTopic(ToshRuntime runtime, string name, out HelpTopic topic)
+    {
+        foreach (var rawValue in runtime.Classes.Values)
+        {
+            if (rawValue is not IShellTypeDescriptor descriptor)
+            {
+                continue;
+            }
+
+            if (!string.Equals(name, descriptor.ShellTypeName, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            var aliases = runtime.Classes
+                .Where(entry => entry.Value is IShellTypeDescriptor candidate &&
+                                string.Equals(candidate.ShellFullName, descriptor.ShellFullName, StringComparison.OrdinalIgnoreCase))
+                .Select(entry => entry.Key)
+                .Where(alias => !string.Equals(alias, descriptor.ShellTypeName, StringComparison.OrdinalIgnoreCase))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(alias => alias, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+
+            topic = CreateShellTypeTopic(descriptor, aliases);
+            return true;
+        }
+
+        topic = null!;
+        return false;
     }
 
     public static IReadOnlyList<HelpSearchResult> Search(ToshRuntime runtime, string query, int maxResults = 12)

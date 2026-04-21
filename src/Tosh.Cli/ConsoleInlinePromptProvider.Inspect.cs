@@ -185,8 +185,9 @@ internal sealed partial class ConsoleInlinePromptProvider
 
                 var input = _inputReader.Read();
 
-                if (input.Mouse is { } mouse)
+                if (input.IsMouse)
                 {
+                    var mouse = input.Mouse;
                     const int inspectHeaderLines = 6;
 
                     if (mouse.Action == Tui.TuiMouseAction.Scroll)
@@ -209,8 +210,6 @@ internal sealed partial class ConsoleInlinePromptProvider
                                 state.SelectIndex(clickedIndex);
                             }
                         }
-
-                        break;
                     }
 
                     continue;

@@ -7,14 +7,6 @@ namespace Tosh.Language;
 internal static class BuiltinRunes
 {
     public const string Source = """
-        # assert: check a condition, throw with the source expression if it fails
-        rune assert(condition) {
-            if (not $condition) {
-                var __assert_src = (quote { $condition })
-                throw $"Assertion failed: {$__assert_src}"
-            }
-        }
-
         # dbg: print the source expression and its value, then pass through the value
         rune dbg(expr) {
             var __dbg_val = $expr

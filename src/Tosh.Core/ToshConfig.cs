@@ -973,12 +973,25 @@ public sealed class ToshReplConfig : IResettableShellConfig
         set => _completionMaxVisible = Math.Max(1, value);
     }
 
+    // Default behavior: Enter executes unless continuation is active/required;
+    // Shift+Enter (or Ctrl+J fallback) executes explicitly.
+    public bool ShiftEnterExecutes { get; set; } = true;
+
+    // Draw a visual right-edge separator at the gutter boundary for multiline input.
+    public bool ContinuationGutterRightBorder { get; set; } = true;
+
+    // Optionally stamp continuation line numbers into the gutter.
+    public bool ContinuationLineNumbers { get; set; } = true;
+
     public void Reset()
     {
         ContinuationPrompt = "....> ";
         SyntaxHighlightingEnabled = true;
         GhostTextEnabled = true;
         CompletionMaxVisible = DefaultCompletionMaxVisible;
+        ShiftEnterExecutes = true;
+        ContinuationGutterRightBorder = true;
+        ContinuationLineNumbers = true;
     }
 }
 

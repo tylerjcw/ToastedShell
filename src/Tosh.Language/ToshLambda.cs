@@ -15,6 +15,8 @@ internal sealed class ToshLambda : IShellCallable, IShellRecordObject
 
     public string CallableName => _definition.Name;
 
+    internal FunctionDefinition Definition => _definition;
+
     public int RequiredParameterCount => _definition.Parameters.Count(parameter => !parameter.IsOptional && !parameter.IsRest);
 
     public int? MaximumParameterCount => _definition.Parameters.Count > 0 && _definition.Parameters[^1].IsRest
@@ -25,6 +27,14 @@ internal sealed class ToshLambda : IShellCallable, IShellRecordObject
 
     public IAsyncEnumerable<object?> InvokeAsync(CommandContext context)
     {
+        // When executing inside a fork (race/settle/parallel), redirect to the fork's
+        // engine so that scope mutations and call stacks stay isolated to the fork.
+        if (context.BlockExecutor is ToshEngine.EngineBlockExecutor eb &&
+            !ReferenceEquals(eb.Engine, _engine))
+        {
+            return eb.Engine.ExecuteFunctionAsync(_definition, context);
+        }
+
         return _engine.ExecuteFunctionAsync(_definition, context);
     }
 

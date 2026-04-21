@@ -134,28 +134,6 @@ public sealed class RuneTests
         Assert.Equal(new object[] { "appeared" }, results);
     }
 
-    [Fact]
-    public async Task Builtin_assert_passes_on_true()
-    {
-        var engine = new ToshEngine();
-        var results = await engine.ExecuteToListAsync("""
-            assert true
-            echo "ok"
-            """);
-        Assert.Equal(new object[] { "ok" }, results);
-    }
-
-    [Fact]
-    public async Task Builtin_assert_throws_on_false()
-    {
-        var engine = new ToshEngine();
-        var ex = await Assert.ThrowsAnyAsync<Exception>(async () =>
-        {
-            await engine.ExecuteToListAsync("assert false");
-        });
-        Assert.Contains("Assertion failed", ex.Message);
-    }
-
     // --- Error cases ---
 
     [Fact]

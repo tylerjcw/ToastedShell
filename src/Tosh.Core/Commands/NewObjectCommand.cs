@@ -19,6 +19,13 @@ public sealed class NewObjectCommand : ShellCommand
         var typeName = parsedTypeName.TypeName;
         var arguments = CommandArguments.Slice(context.Arguments, parsedTypeName.ConsumedArgumentCount);
 
+        if (context.Runtime.Classes.TryGetValue(typeName, out var runtimeType) &&
+            runtimeType is IShellStaticType runtimeShellType)
+        {
+            yield return context.Runtime.Invoker.CreateInstance(runtimeShellType, arguments);
+            yield break;
+        }
+
         if (BuiltInShellTypes.TryResolveStaticType(typeName, context.TypeResolver, out var shellType))
         {
             yield return context.Runtime.Invoker.CreateInstance(shellType, arguments);

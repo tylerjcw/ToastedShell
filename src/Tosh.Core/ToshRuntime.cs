@@ -99,6 +99,12 @@ public sealed class ToshRuntime
 
     public IDictionary<string, object?> Variables { get; }
 
+    /// <summary>
+    /// The live runtime namespace object exposed as <c>$tosh</c> by the language engine.
+    /// Stored as <see cref="object"/> to avoid a Core -> Language assembly dependency.
+    /// </summary>
+    public object? RuntimeNamespace { get; set; }
+
     public IDictionary<string, object?> Classes { get; }
 
     public IDictionary<string, object?> Modules { get; }

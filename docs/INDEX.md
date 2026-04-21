@@ -27,5 +27,6 @@ The shell itself is a live source of truth:
 - [Architecture](ARCHITECTURE.md) — core design philosophy and invariants
 - [Configuration](CONFIGURATION.md) — startup order, config command, live settings
 - [Editor Support](EDITOR_SUPPORT.md) — VS Code extension and LSP
+- [Line Editor RFC](LINE_EDITOR_RFC.md) — REPL line editor redesign goals and phased plan
 - [Runtime Namespaces](RUNTIME_NAMESPACES.md) — `$tosh` namespace structure
 - [TUI Architecture](TUI_ARCHITECTURE.md) — terminal UI platform design

@@ -26,7 +26,10 @@ public sealed class ReplLineEditor
         Func<LineEditorBuffer, ConsoleKeyInfo, bool>? specialKeyHandler = null,
         Action<LineEditorBuffer>? onBufferActivated = null,
         Action<LineEditorBuffer>? onBufferDeactivated = null,
-        Func<string, int, string?>? signatureHintProvider = null)
+        Func<string, int, string?>? signatureHintProvider = null,
+        bool shiftEnterExecutes = true,
+        bool continuationGutterRightBorder = true,
+        bool continuationLineNumbers = false)
     {
         ArgumentNullException.ThrowIfNull(prompt);
         ArgumentNullException.ThrowIfNull(history);
@@ -57,7 +60,7 @@ public sealed class ReplLineEditor
         try
         {
             var initialHint = signatureHintProvider?.Invoke(buffer.Text, buffer.CursorIndex);
-            cursorRow = Render(prompt, continuationPrompt, buffer, cursorRow, completionState, historySearchState, highlighter, maxVisibleSuggestions, showGhostText, theme, initialHint);
+            cursorRow = Render(prompt, continuationPrompt, buffer, cursorRow, completionState, historySearchState, highlighter, maxVisibleSuggestions, showGhostText, theme, initialHint, continuationGutterRightBorder, continuationLineNumbers);
 
             while (true)
             {
@@ -68,7 +71,7 @@ public sealed class ReplLineEditor
                     completionState = null;
                     historySearchState = null;
                     preferredColumn = null;
-                    cursorRow = Render(prompt, continuationPrompt, buffer, cursorRow, completionState, historySearchState, highlighter, maxVisibleSuggestions, showGhostText, theme);
+                    cursorRow = Render(prompt, continuationPrompt, buffer, cursorRow, completionState, historySearchState, highlighter, maxVisibleSuggestions, showGhostText, theme, gutterRightBorder: continuationGutterRightBorder, continuationLineNumbers: continuationLineNumbers);
                     continue;
                 }
 
@@ -76,7 +79,7 @@ public sealed class ReplLineEditor
                 {
                     if (TryHandleCompletionPickerKey(buffer, key, ref completionState))
                     {
-                        cursorRow = Render(prompt, continuationPrompt, buffer, cursorRow, completionState, historySearchState, highlighter, maxVisibleSuggestions, showGhostText, theme);
+                        cursorRow = Render(prompt, continuationPrompt, buffer, cursorRow, completionState, historySearchState, highlighter, maxVisibleSuggestions, showGhostText, theme, gutterRightBorder: continuationGutterRightBorder, continuationLineNumbers: continuationLineNumbers);
                         continue;
                     }
                 }
@@ -87,7 +90,7 @@ public sealed class ReplLineEditor
                     {
                         completionState = null;
                         preferredColumn = null;
-                        cursorRow = Render(prompt, continuationPrompt, buffer, cursorRow, completionState, historySearchState, highlighter, maxVisibleSuggestions, showGhostText, theme);
+                        cursorRow = Render(prompt, continuationPrompt, buffer, cursorRow, completionState, historySearchState, highlighter, maxVisibleSuggestions, showGhostText, theme, gutterRightBorder: continuationGutterRightBorder, continuationLineNumbers: continuationLineNumbers);
 
                         if (shouldSubmit)
                         {
@@ -107,7 +110,7 @@ public sealed class ReplLineEditor
                     historySearchState.Activate(buffer);
                     completionState = null;
                     preferredColumn = null;
-                    cursorRow = Render(prompt, continuationPrompt, buffer, cursorRow, completionState, historySearchState, highlighter, maxVisibleSuggestions, showGhostText, theme);
+                    cursorRow = Render(prompt, continuationPrompt, buffer, cursorRow, completionState, historySearchState, highlighter, maxVisibleSuggestions, showGhostText, theme, gutterRightBorder: continuationGutterRightBorder, continuationLineNumbers: continuationLineNumbers);
                     continue;
                 }
 
@@ -126,39 +129,61 @@ public sealed class ReplLineEditor
                     throw new ReplInterruptException();
                 }
 
-                // Interactive shells reserve Ctrl+Z for foreground jobs; at the prompt it is a no-op.
-                if (key.Modifiers == ConsoleModifiers.Control && key.Key == ConsoleKey.Z)
+                if (shiftEnterExecutes && (IsExecuteEnterKey(key) || IsExecuteFallbackKey(key)))
                 {
-                    cursorRow = Render(prompt, continuationPrompt, buffer, cursorRow, completionState, historySearchState, highlighter, maxVisibleSuggestions, showGhostText, theme);
-                    continue;
+                    buffer.SetCursor(buffer.Text.Length);
+                    completionState = null;
+                    cursorRow = Render(prompt, continuationPrompt, buffer, cursorRow, completionState, historySearchState, highlighter, maxVisibleSuggestions, showGhostText, theme, gutterRightBorder: continuationGutterRightBorder, continuationLineNumbers: continuationLineNumbers);
+                    Console.WriteLine();
+                    return buffer.Text;
                 }
 
-                if (key.Key == ConsoleKey.Enter && key.Modifiers.HasFlag(ConsoleModifiers.Shift))
+                if (!shiftEnterExecutes && key.Key == ConsoleKey.Enter && key.Modifiers.HasFlag(ConsoleModifiers.Shift))
                 {
                     var continuationState = continuationHandler?.Invoke(buffer.Text) ?? default;
                     InsertRequestedNewLine(buffer, BuildInsertedNewLineText(buffer.Text, buffer.CursorIndex, continuationState));
                     preferredColumn = null;
                     completionState = null;
-                    cursorRow = Render(prompt, continuationPrompt, buffer, cursorRow, completionState, historySearchState, highlighter, maxVisibleSuggestions, showGhostText, theme);
+                    cursorRow = Render(prompt, continuationPrompt, buffer, cursorRow, completionState, historySearchState, highlighter, maxVisibleSuggestions, showGhostText, theme, gutterRightBorder: continuationGutterRightBorder, continuationLineNumbers: continuationLineNumbers);
                     continue;
                 }
 
                 if (key.Key == ConsoleKey.Enter)
                 {
-                    var continuationState = continuationHandler?.Invoke(buffer.Text) ?? default;
-
-                    if (continuationState.RequiresContinuation)
+                    if (shiftEnterExecutes)
                     {
-                        InsertRequestedNewLine(buffer, "\n" + continuationState.SuggestedIndent);
+                        var continuationState = continuationHandler?.Invoke(buffer.Text) ?? default;
+
+                        if (ShouldInsertNewLineOnEnter(buffer.Text, continuationState))
+                        {
+                            InsertRequestedNewLine(buffer, BuildInsertedNewLineText(buffer.Text, buffer.CursorIndex, continuationState));
+                            preferredColumn = null;
+                            completionState = null;
+                            cursorRow = Render(prompt, continuationPrompt, buffer, cursorRow, completionState, historySearchState, highlighter, maxVisibleSuggestions, showGhostText, theme, gutterRightBorder: continuationGutterRightBorder, continuationLineNumbers: continuationLineNumbers);
+                            continue;
+                        }
+
+                        buffer.SetCursor(buffer.Text.Length);
+                        completionState = null;
+                        cursorRow = Render(prompt, continuationPrompt, buffer, cursorRow, completionState, historySearchState, highlighter, maxVisibleSuggestions, showGhostText, theme, gutterRightBorder: continuationGutterRightBorder, continuationLineNumbers: continuationLineNumbers);
+                        Console.WriteLine();
+                        return buffer.Text;
+                    }
+
+                    var legacyContinuationState = continuationHandler?.Invoke(buffer.Text) ?? default;
+
+                    if (legacyContinuationState.RequiresContinuation)
+                    {
+                        InsertRequestedNewLine(buffer, "\n" + legacyContinuationState.SuggestedIndent);
                         preferredColumn = null;
                         completionState = null;
-                        cursorRow = Render(prompt, continuationPrompt, buffer, cursorRow, completionState, historySearchState, highlighter, maxVisibleSuggestions, showGhostText, theme);
+                        cursorRow = Render(prompt, continuationPrompt, buffer, cursorRow, completionState, historySearchState, highlighter, maxVisibleSuggestions, showGhostText, theme, gutterRightBorder: continuationGutterRightBorder, continuationLineNumbers: continuationLineNumbers);
                         continue;
                     }
 
                     buffer.SetCursor(buffer.Text.Length);
                     completionState = null;
-                    cursorRow = Render(prompt, continuationPrompt, buffer, cursorRow, completionState, historySearchState, highlighter, maxVisibleSuggestions, showGhostText, theme);
+                    cursorRow = Render(prompt, continuationPrompt, buffer, cursorRow, completionState, historySearchState, highlighter, maxVisibleSuggestions, showGhostText, theme, gutterRightBorder: continuationGutterRightBorder, continuationLineNumbers: continuationLineNumbers);
                     Console.WriteLine();
                     return buffer.Text;
                 }
@@ -182,7 +207,7 @@ public sealed class ReplLineEditor
                 if (shouldRender)
                 {
                     var hint = signatureHintProvider?.Invoke(buffer.Text, buffer.CursorIndex);
-                    cursorRow = Render(prompt, continuationPrompt, buffer, cursorRow, completionState, historySearchState, highlighter, maxVisibleSuggestions, showGhostText, theme, hint);
+                    cursorRow = Render(prompt, continuationPrompt, buffer, cursorRow, completionState, historySearchState, highlighter, maxVisibleSuggestions, showGhostText, theme, hint, continuationGutterRightBorder, continuationLineNumbers);
                 }
             }
         }
@@ -276,6 +301,18 @@ public sealed class ReplLineEditor
 
         switch (sequence)
         {
+            case "[1;3A":
+                key = new ConsoleKeyInfo('\0', ConsoleKey.UpArrow, shift: false, alt: true, control: false);
+                return true;
+            case "[1;3B":
+                key = new ConsoleKeyInfo('\0', ConsoleKey.DownArrow, shift: false, alt: true, control: false);
+                return true;
+            case "[1;3C":
+                key = new ConsoleKeyInfo('\0', ConsoleKey.RightArrow, shift: false, alt: true, control: false);
+                return true;
+            case "[1;3D":
+                key = new ConsoleKeyInfo('\0', ConsoleKey.LeftArrow, shift: false, alt: true, control: false);
+                return true;
             case "OP":
             case "[11~":
             case "[[A":
@@ -371,6 +408,33 @@ public sealed class ReplLineEditor
         return false;
     }
 
+    internal static bool ShouldInsertNewLineOnEnter(string text, ReplContinuationState continuationState)
+    {
+        if (continuationState.RequiresContinuation)
+        {
+            return true;
+        }
+
+        return text.Contains('\n');
+    }
+
+    internal static bool IsExecuteEnterKey(ConsoleKeyInfo key)
+    {
+        if (key.Key != ConsoleKey.Enter)
+        {
+            return false;
+        }
+
+        // Some terminals do not preserve Shift on Enter, but emit '\n' instead of '\r'.
+        return key.Modifiers.HasFlag(ConsoleModifiers.Shift) || key.KeyChar == '\n';
+    }
+
+    internal static bool IsExecuteFallbackKey(ConsoleKeyInfo key)
+    {
+        // Reliable fallback for terminals that collapse Shift+Enter to plain Enter.
+        return key.Modifiers == ConsoleModifiers.Control && key.Key == ConsoleKey.J;
+    }
+
     private static bool HandleKey(
         LineEditorBuffer buffer,
         LineEditorHistory historyNavigator,
@@ -379,12 +443,45 @@ public sealed class ReplLineEditor
         ConsoleKeyInfo key,
         ref int? preferredColumn)
     {
+        if (key.Modifiers.HasFlag(ConsoleModifiers.Alt))
+        {
+            switch (key.Key)
+            {
+                case ConsoleKey.UpArrow:
+                    return historyNavigator.TryPrevious(buffer.Text, out var previousAlt) && ApplyHistory(buffer, previousAlt, ref preferredColumn);
+                case ConsoleKey.DownArrow:
+                    return historyNavigator.TryNext(out var nextAlt) && ApplyHistory(buffer, nextAlt, ref preferredColumn);
+                case ConsoleKey.Z:
+                    return ResetPreferredColumn(buffer.Undo(), ref preferredColumn);
+                case ConsoleKey.Y:
+                    return ResetPreferredColumn(buffer.Redo(), ref preferredColumn);
+            }
+        }
+
         if (key.Modifiers == ConsoleModifiers.Control)
         {
+            // Ctrl+Z may be intercepted by terminal job control on POSIX before it reaches
+            // ReadKey. Support Ctrl+_ (ASCII Unit Separator) as a reliable undo fallback.
+            if (key.KeyChar == '\u001F' ||
+                key.Key == ConsoleKey.Z ||
+                key.KeyChar == '\u001A' ||
+                key.Key == ConsoleKey.Oem2 ||
+                key.Key == ConsoleKey.Divide ||
+                key.Key == ConsoleKey.OemMinus ||
+                key.Key == ConsoleKey.Subtract)
+            {
+                return ResetPreferredColumn(buffer.Undo(), ref preferredColumn);
+            }
+
+            if (key.Key == ConsoleKey.Y || key.KeyChar == '\u0019')
+            {
+                return ResetPreferredColumn(buffer.Redo(), ref preferredColumn);
+            }
+
             return key.Key switch
             {
-                ConsoleKey.A => ResetPreferredColumn(buffer.MoveHome(), ref preferredColumn),
-                ConsoleKey.E => ResetPreferredColumn(buffer.MoveEnd(), ref preferredColumn),
+                ConsoleKey.A => ResetPreferredColumn(MoveLogicalLineHome(buffer), ref preferredColumn),
+                ConsoleKey.E => ResetPreferredColumn(MoveLogicalLineEnd(buffer), ref preferredColumn),
                 ConsoleKey.U => ResetPreferredColumn(buffer.Clear(), ref preferredColumn),
                 ConsoleKey.W => ResetPreferredColumn(buffer.DeleteWordBackward(), ref preferredColumn),
                 ConsoleKey.K => ResetPreferredColumn(buffer.KillToEnd(), ref preferredColumn),
@@ -401,12 +498,66 @@ public sealed class ReplLineEditor
             ConsoleKey.Delete => ResetPreferredColumn(buffer.Delete(), ref preferredColumn),
             ConsoleKey.LeftArrow => ResetPreferredColumn(buffer.MoveLeft(), ref preferredColumn),
             ConsoleKey.RightArrow => ResetPreferredColumn(buffer.MoveRight(), ref preferredColumn),
-            ConsoleKey.Home => ResetPreferredColumn(buffer.MoveHome(), ref preferredColumn),
-            ConsoleKey.End => ResetPreferredColumn(buffer.MoveEnd(), ref preferredColumn),
+            ConsoleKey.Home => ResetPreferredColumn(MoveLogicalLineHome(buffer), ref preferredColumn),
+            ConsoleKey.End => ResetPreferredColumn(MoveLogicalLineEnd(buffer), ref preferredColumn),
             ConsoleKey.UpArrow => HandleUpArrow(buffer, historyNavigator, prompt, continuationPrompt, ref preferredColumn),
             ConsoleKey.DownArrow => HandleDownArrow(buffer, historyNavigator, prompt, continuationPrompt, ref preferredColumn),
             _ => HandleCharacterInput(buffer, key, ref preferredColumn),
         };
+    }
+
+    internal static bool MoveLogicalLineHome(LineEditorBuffer buffer)
+    {
+        var target = FindLogicalLineStart(buffer.Text, buffer.CursorIndex);
+
+        if (target == buffer.CursorIndex)
+        {
+            return false;
+        }
+
+        buffer.SetCursor(target);
+        return true;
+    }
+
+    internal static bool MoveLogicalLineEnd(LineEditorBuffer buffer)
+    {
+        var target = FindLogicalLineEnd(buffer.Text, buffer.CursorIndex);
+
+        if (target == buffer.CursorIndex)
+        {
+            return false;
+        }
+
+        buffer.SetCursor(target);
+        return true;
+    }
+
+    internal static int FindLogicalLineStart(string text, int cursorIndex)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+
+        var index = Math.Clamp(cursorIndex, 0, text.Length);
+
+        while (index > 0 && text[index - 1] != '\n')
+        {
+            index--;
+        }
+
+        return index;
+    }
+
+    internal static int FindLogicalLineEnd(string text, int cursorIndex)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+
+        var index = Math.Clamp(cursorIndex, 0, text.Length);
+
+        while (index < text.Length && text[index] != '\n')
+        {
+            index++;
+        }
+
+        return index;
     }
 
     private static bool ApplyHistory(LineEditorBuffer buffer, string text, ref int? preferredColumn)
@@ -433,6 +584,11 @@ public sealed class ReplLineEditor
         string continuationPrompt,
         ref int? preferredColumn)
     {
+        if (buffer.Text.Contains('\n') && IsAtFirstLogicalLine(buffer.Text, buffer.CursorIndex))
+        {
+            return historyNavigator.TryPrevious(buffer.Text, out var historyPrevious) && ApplyHistory(buffer, historyPrevious, ref preferredColumn);
+        }
+
         if (TryMoveWrappedVertical(buffer, prompt, continuationPrompt, GetConsoleWidth(), -1, preferredColumn, out var actualColumn))
         {
             preferredColumn = actualColumn;
@@ -449,6 +605,11 @@ public sealed class ReplLineEditor
         string continuationPrompt,
         ref int? preferredColumn)
     {
+        if (buffer.Text.Contains('\n') && IsAtLastLogicalLine(buffer.Text, buffer.CursorIndex))
+        {
+            return historyNavigator.TryNext(out var historyNext) && ApplyHistory(buffer, historyNext, ref preferredColumn);
+        }
+
         if (TryMoveWrappedVertical(buffer, prompt, continuationPrompt, GetConsoleWidth(), 1, preferredColumn, out var actualColumn))
         {
             preferredColumn = actualColumn;
@@ -511,7 +672,9 @@ public sealed class ReplLineEditor
         string continuationPrompt,
         string rawInput,
         string highlightedInput,
-        int consoleWidth)
+        int consoleWidth,
+        bool gutterRightBorder = true,
+        bool continuationLineNumbers = false)
     {
         var normalizedRaw = NormalizeLineEndings(rawInput);
         var normalizedHighlighted = NormalizeLineEndings(highlightedInput);
@@ -519,6 +682,8 @@ public sealed class ReplLineEditor
         var highlightedLines = SplitLinesPreserveEmpty(normalizedHighlighted);
         var builder = new StringBuilder();
         var cursorPositions = new VisualPosition[normalizedRaw.Length + 1];
+        var normalizedContinuationPrompt = NormalizeContinuationPromptWidth(prompt, continuationPrompt, consoleWidth);
+        var dynamicContinuationGutters = BuildDynamicContinuationGutters(rawLines, prompt, continuationPrompt, consoleWidth, gutterRightBorder, continuationLineNumbers);
         var row = 1;
         var column = 0;
         var textIndex = 0;
@@ -533,7 +698,9 @@ public sealed class ReplLineEditor
                 textIndex++;
             }
 
-            var promptText = lineIndex == 0 ? prompt : continuationPrompt;
+            var promptText = lineIndex == 0
+                ? prompt
+                : dynamicContinuationGutters[lineIndex] ?? normalizedContinuationPrompt;
             builder.Append(promptText);
             ConsumeDisplayText(AnsiEscapePattern.Replace(promptText, string.Empty), consoleWidth, ref row, ref column);
 
@@ -554,6 +721,317 @@ public sealed class ReplLineEditor
         return new RenderLayout(builder.ToString(), cursorPositions);
     }
 
+    internal static string NormalizeContinuationPromptWidth(string prompt, string continuationPrompt, int consoleWidth)
+    {
+        var promptVisibleWidth = GetPromptInputColumn(prompt, consoleWidth);
+        var continuationVisibleWidth = GetVisibleWidth(continuationPrompt);
+
+        if (continuationVisibleWidth == promptVisibleWidth)
+        {
+            return continuationPrompt;
+        }
+
+        if (continuationVisibleWidth < promptVisibleWidth)
+        {
+            return continuationPrompt + new string(' ', promptVisibleWidth - continuationVisibleWidth);
+        }
+
+        // Continuation prompt is wider than prompt: trim so multiline input keeps the
+        // same left margin as the primary prompt line.
+        return ClipToVisibleWidth(continuationPrompt, promptVisibleWidth);
+    }
+
+    internal static IReadOnlyList<string> BuildDynamicContinuationGutters(IReadOnlyList<string> rawLines, string prompt, string continuationPrompt, int consoleWidth, bool gutterRightBorder = true, bool continuationLineNumbers = false)
+    {
+        var promptWidth = GetPromptInputColumn(prompt, consoleWidth);
+        var fallback = NormalizeContinuationPromptWidth(prompt, continuationPrompt, consoleWidth);
+        var glyphs = ResolveGutterGlyphs();
+
+        if (rawLines.Count <= 1)
+        {
+            return Array.Empty<string>();
+        }
+
+        var gutters = new string[rawLines.Count];
+        var depth = 0;
+
+        for (var i = 0; i < rawLines.Count; i++)
+        {
+            var line = rawLines[i] ?? string.Empty;
+            var previousLine = i > 0 ? rawLines[i - 1] ?? string.Empty : string.Empty;
+
+            if (i == 1)
+            {
+                gutters[i] = BuildDepthGutter(promptWidth, GutterMarker.Vertical, depth: 1, fallback, glyphs, lineNumber: i + 1, gutterRightBorder, continuationLineNumbers);
+                depth = Math.Max(0, depth + ComputeBraceDelta(line));
+                continue;
+            }
+
+            var startsWithCloser = StartsWithCloserToken(line);
+            var endsWithOpener = EndsWithOpenerToken(line);
+            var previousEndsWithOpener = EndsWithOpenerToken(previousLine);
+
+            var effectiveDepth = Math.Max(0, depth - (startsWithCloser ? 1 : 0));
+            if (previousEndsWithOpener && !startsWithCloser)
+            {
+                effectiveDepth = Math.Max(1, effectiveDepth);
+            }
+
+            var marker = SelectGutterMarker(startsWithCloser, endsWithOpener, effectiveDepth);
+            gutters[i] = BuildDepthGutter(promptWidth, marker, effectiveDepth, fallback, glyphs, lineNumber: i + 1, gutterRightBorder, continuationLineNumbers);
+
+            depth = Math.Max(0, depth + ComputeBraceDelta(line));
+        }
+
+        return gutters;
+    }
+
+    private static bool StartsWithCloserToken(string line)
+    {
+        var trimmed = line.TrimStart();
+        return trimmed.Length > 0 && trimmed[0] == '}';
+    }
+
+    private static bool EndsWithOpenerToken(string line)
+    {
+        var trimmed = line.TrimEnd();
+        return trimmed.EndsWith("{", StringComparison.Ordinal);
+    }
+
+    private static int ComputeBraceDelta(string line)
+    {
+        var delta = 0;
+        var inSingleQuote = false;
+        var inDoubleQuote = false;
+        var escaping = false;
+        var inComment = false;
+
+        foreach (var ch in line)
+        {
+            if (inComment)
+            {
+                continue;
+            }
+
+            if (inSingleQuote)
+            {
+                if (escaping)
+                {
+                    escaping = false;
+                    continue;
+                }
+
+                if (ch == '\\')
+                {
+                    escaping = true;
+                    continue;
+                }
+
+                if (ch == '\'')
+                {
+                    inSingleQuote = false;
+                }
+
+                continue;
+            }
+
+            if (inDoubleQuote)
+            {
+                if (escaping)
+                {
+                    escaping = false;
+                    continue;
+                }
+
+                if (ch == '\\')
+                {
+                    escaping = true;
+                    continue;
+                }
+
+                if (ch == '"')
+                {
+                    inDoubleQuote = false;
+                }
+
+                continue;
+            }
+
+            switch (ch)
+            {
+                case '#':
+                    inComment = true;
+                    break;
+                case '\'':
+                    inSingleQuote = true;
+                    break;
+                case '"':
+                    inDoubleQuote = true;
+                    break;
+                case '{':
+                    delta++;
+                    break;
+                case '}':
+                    delta--;
+                    break;
+            }
+        }
+
+        return delta;
+    }
+
+    private static GutterMarker SelectGutterMarker(bool startsWithCloser, bool endsWithOpener, int depth)
+    {
+        // Transition lines like `} catch {` / `} else {` are easier to follow when
+        // rendered as a bridge marker at the current depth.
+        if (startsWithCloser && endsWithOpener)
+        {
+            return GutterMarker.Transition;
+        }
+
+        if (startsWithCloser)
+        {
+            return GutterMarker.Close;
+        }
+
+        if (endsWithOpener)
+        {
+            return GutterMarker.Open;
+        }
+
+        if (depth > 0)
+        {
+            return GutterMarker.Vertical;
+        }
+
+        return GutterMarker.Dot;
+    }
+
+    private static string BuildDepthGutter(int width, GutterMarker marker, int depth, string fallback, GutterGlyphs glyphs, int lineNumber, bool gutterRightBorder, bool continuationLineNumbers)
+    {
+        if (width <= 0)
+        {
+            return string.Empty;
+        }
+
+        var chars = new string(' ', width).ToCharArray();
+
+        var bars = marker == GutterMarker.Vertical
+            ? Math.Clamp(depth - 1, 0, Math.Max(0, width - 1))
+            : Math.Clamp(depth, 0, Math.Max(0, width - 1));
+
+        for (var i = 0; i < bars; i++)
+        {
+            chars[i] = glyphs.Vertical;
+        }
+
+        var markerColumn = marker == GutterMarker.Vertical
+            ? Math.Clamp(depth - 1, 0, width - 1)
+            : Math.Min(bars, width - 1);
+
+        if (marker == GutterMarker.Dot)
+        {
+            markerColumn = 0;
+        }
+
+        chars[markerColumn] = marker switch
+        {
+            GutterMarker.Open => glyphs.Open,
+            GutterMarker.Close => glyphs.Close,
+            GutterMarker.Transition => glyphs.Transition,
+            GutterMarker.Dot => glyphs.Dot,
+            _ => glyphs.Vertical,
+        };
+
+        // For nested open/close transitions, render a join to avoid abrupt vertical->corner jumps.
+        if ((marker is GutterMarker.Open or GutterMarker.Close or GutterMarker.Transition) && depth > 0)
+        {
+            var joinColumn = Math.Clamp(depth - 1, 0, width - 1);
+            chars[joinColumn] = glyphs.Join;
+        }
+
+        if (continuationLineNumbers)
+        {
+            var lineNumberText = lineNumber.ToString();
+            var rightmostNumberColumn = gutterRightBorder ? width - 2 : width - 1;
+
+            if (rightmostNumberColumn >= 0)
+            {
+                var startColumn = Math.Max(0, rightmostNumberColumn - lineNumberText.Length + 1);
+                var targetColumn = startColumn;
+
+                foreach (var digit in lineNumberText)
+                {
+                    if (targetColumn > rightmostNumberColumn)
+                    {
+                        break;
+                    }
+
+                    chars[targetColumn++] = digit;
+                }
+            }
+        }
+
+        if (gutterRightBorder && width > 0)
+        {
+            chars[width - 1] = glyphs.Vertical;
+        }
+
+        var gutter = new string(chars);
+        return gutter.Length == width ? gutter : fallback;
+    }
+
+    internal static GutterGlyphs ResolveGutterGlyphs()
+    {
+        var resolvedStyle = TerminalGlyphs.ResolveBoxStyle(ToshTableBoxStyle.Rounded);
+
+        return resolvedStyle switch
+        {
+            ToshTableBoxStyle.Ascii => new GutterGlyphs(Vertical: '|', Open: '+', Close: '+', Join: '+', Transition: '+', Dot: '.'),
+            ToshTableBoxStyle.Square => new GutterGlyphs(Vertical: '│', Open: '┐', Close: '┘', Join: '├', Transition: '┤', Dot: '.'),
+            ToshTableBoxStyle.Heavy => new GutterGlyphs(Vertical: '┃', Open: '┓', Close: '┛', Join: '┣', Transition: '┫', Dot: '·'),
+            ToshTableBoxStyle.Double => new GutterGlyphs(Vertical: '║', Open: '╗', Close: '╝', Join: '╠', Transition: '╣', Dot: '·'),
+            _ => new GutterGlyphs(Vertical: '│', Open: '╮', Close: '╯', Join: '├', Transition: '┤', Dot: '·'),
+        };
+    }
+
+    internal readonly record struct GutterGlyphs(char Vertical, char Open, char Close, char Join, char Transition, char Dot);
+
+    private enum GutterMarker
+    {
+        Dot,
+        Vertical,
+        Open,
+        Close,
+        Transition,
+    }
+
+    private static int GetVisibleWidth(string text)
+    {
+        var stripped = AnsiEscapePattern.Replace(text ?? string.Empty, string.Empty);
+        return stripped.Length;
+    }
+
+    private static int GetPromptInputColumn(string prompt, int consoleWidth)
+    {
+        var normalizedPrompt = NormalizeLineEndings(prompt ?? string.Empty);
+        var row = 1;
+        var column = 0;
+        ConsumeDisplayText(AnsiEscapePattern.Replace(normalizedPrompt, string.Empty), Math.Max(1, consoleWidth), ref row, ref column);
+        return column;
+    }
+
+    private static string ClipToVisibleWidth(string text, int width)
+    {
+        if (width <= 0)
+        {
+            return string.Empty;
+        }
+
+        var stripped = AnsiEscapePattern.Replace(text ?? string.Empty, string.Empty);
+        return stripped.Length <= width ? stripped : stripped[..width];
+    }
+
     private static int Render(
         string prompt,
         string continuationPrompt,
@@ -565,11 +1043,13 @@ public sealed class ReplLineEditor
         int maxVisibleSuggestions,
         bool showGhostText,
         ToshCompletionThemeConfig theme,
-        string? signatureHint = null)
+        string? signatureHint = null,
+        bool gutterRightBorder = true,
+        bool continuationLineNumbers = false)
     {
         var renderedInput = RenderHighlightedInput(buffer, completionState, highlighter, showGhostText, theme);
         var consoleWidth = GetConsoleWidth();
-        var inputLayout = BuildInputLayout(prompt, continuationPrompt, buffer.Text, renderedInput, consoleWidth);
+        var inputLayout = BuildInputLayout(prompt, continuationPrompt, buffer.Text, renderedInput, consoleWidth, gutterRightBorder, continuationLineNumbers);
         var overlay = historySearchState is not null
             ? BuildHistorySearchOverlay(historySearchState, theme)
             : BuildSuggestionOverlay(completionState, maxVisibleSuggestions, theme);
@@ -783,6 +1263,20 @@ public sealed class ReplLineEditor
         }
 
         return lineText[..indentLength];
+    }
+
+    internal static bool IsAtFirstLogicalLine(string text, int cursorIndex)
+    {
+        var normalized = NormalizeLineEndings(text);
+        var clampedIndex = Math.Clamp(cursorIndex, 0, normalized.Length);
+        return normalized.LastIndexOf('\n', Math.Max(0, clampedIndex - 1)) < 0;
+    }
+
+    internal static bool IsAtLastLogicalLine(string text, int cursorIndex)
+    {
+        var normalized = NormalizeLineEndings(text);
+        var clampedIndex = Math.Clamp(cursorIndex, 0, normalized.Length);
+        return normalized.IndexOf('\n', clampedIndex) < 0;
     }
 
     private static int FindClosestCursorIndex(IReadOnlyList<VisualPosition> positions, int targetRow, int desiredColumn)

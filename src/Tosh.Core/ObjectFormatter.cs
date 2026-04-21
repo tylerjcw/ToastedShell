@@ -191,7 +191,7 @@ public sealed class ObjectFormatter
         }
 
         if (value is IFormattable formattable &&
-            (value.GetType().IsPrimitive || value is decimal || value is Guid || value is TimeSpan || value is BigInteger))
+            (value.GetType().IsPrimitive || value is decimal || value is Guid || value is TimeSpan || value is BigInteger || value is ToshVector || value is ToshMatrix))
         {
             text = formattable.ToString(null, CultureInfo.InvariantCulture) ?? value.ToString() ?? value.GetType().Name;
             return true;

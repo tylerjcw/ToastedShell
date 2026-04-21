@@ -6,6 +6,7 @@ using Tosh.Core;
 namespace Tosh.Language;
 
 internal sealed class ToshRuntimeNamespace
+    : IShellRecordObject
 {
     private readonly ToshEngine _engine;
 
@@ -32,9 +33,62 @@ internal sealed class ToshRuntimeNamespace
     public ToshSessionNamespace Session { get; }
 
     public ToshHostNamespace Host { get; }
+
+    public string ShellTypeName => "ToshRuntime";
+
+    public bool TryGetMember(string name, out object? value, bool includeHidden = false)
+    {
+        switch (name)
+        {
+            case nameof(Config):
+                value = Config;
+                return true;
+            case nameof(IsLoginShell):
+                value = IsLoginShell;
+                return true;
+            case nameof(Last):
+                value = Last;
+                return true;
+            case nameof(Script):
+                value = Script;
+                return true;
+            case nameof(Function):
+                value = Function;
+                return true;
+            case nameof(Session):
+                value = Session;
+                return true;
+            case nameof(Host):
+                value = Host;
+                return true;
+            default:
+                value = null;
+                return false;
+        }
+    }
+
+    public bool TrySetMember(string name, object? value)
+    {
+        return false;
+    }
+
+    public IReadOnlyList<KeyValuePair<string, object?>> GetMembers(bool includeHidden = false)
+    {
+        return
+        [
+            new(nameof(Config), Config),
+            new(nameof(IsLoginShell), IsLoginShell),
+            new(nameof(Last), Last),
+            new(nameof(Script), Script),
+            new(nameof(Function), Function),
+            new(nameof(Session), Session),
+            new(nameof(Host), Host),
+        ];
+    }
 }
 
 internal sealed class ToshLastNamespace
+    : IShellRecordObject
 {
     private readonly ToshRuntime _runtime;
 
@@ -48,9 +102,41 @@ internal sealed class ToshLastNamespace
     public int ExitCode => _runtime.LastExitCode;
 
     public TimeSpan? Duration => _runtime.LastCommandDuration;
+
+    public string ShellTypeName => "ToshRuntime.Last";
+
+    public bool TryGetMember(string name, out object? value, bool includeHidden = false)
+    {
+        switch (name)
+        {
+            case nameof(Result):
+                value = Result;
+                return true;
+            case nameof(ExitCode):
+                value = ExitCode;
+                return true;
+            case nameof(Duration):
+                value = Duration;
+                return true;
+            default:
+                value = null;
+                return false;
+        }
+    }
+
+    public bool TrySetMember(string name, object? value) => false;
+
+    public IReadOnlyList<KeyValuePair<string, object?>> GetMembers(bool includeHidden = false)
+        =>
+        [
+            new(nameof(Result), Result),
+            new(nameof(ExitCode), ExitCode),
+            new(nameof(Duration), Duration),
+        ];
 }
 
 internal sealed class ToshScriptNamespace
+    : IShellRecordObject
 {
     private readonly ToshEngine _engine;
 
@@ -86,9 +172,45 @@ internal sealed class ToshScriptNamespace
     }
 
     public object?[] Args => _engine.GetCurrentScriptArguments().ToArray();
+
+    public string ShellTypeName => "ToshRuntime.Script";
+
+    public bool TryGetMember(string name, out object? value, bool includeHidden = false)
+    {
+        switch (name)
+        {
+            case nameof(Path):
+                value = Path;
+                return true;
+            case nameof(Name):
+                value = Name;
+                return true;
+            case nameof(Directory):
+                value = Directory;
+                return true;
+            case nameof(Args):
+                value = Args;
+                return true;
+            default:
+                value = null;
+                return false;
+        }
+    }
+
+    public bool TrySetMember(string name, object? value) => false;
+
+    public IReadOnlyList<KeyValuePair<string, object?>> GetMembers(bool includeHidden = false)
+        =>
+        [
+            new(nameof(Path), Path),
+            new(nameof(Name), Name),
+            new(nameof(Directory), Directory),
+            new(nameof(Args), Args),
+        ];
 }
 
 internal sealed class ToshFunctionNamespace
+    : IShellRecordObject
 {
     private readonly ToshEngine _engine;
 
@@ -102,9 +224,41 @@ internal sealed class ToshFunctionNamespace
     public object?[] Args => _engine.GetCurrentFunctionArguments().ToArray();
 
     public object? Input => _engine.GetCurrentFunctionInput();
+
+    public string ShellTypeName => "ToshRuntime.Function";
+
+    public bool TryGetMember(string name, out object? value, bool includeHidden = false)
+    {
+        switch (name)
+        {
+            case nameof(Name):
+                value = Name;
+                return true;
+            case nameof(Args):
+                value = Args;
+                return true;
+            case nameof(Input):
+                value = Input;
+                return true;
+            default:
+                value = null;
+                return false;
+        }
+    }
+
+    public bool TrySetMember(string name, object? value) => false;
+
+    public IReadOnlyList<KeyValuePair<string, object?>> GetMembers(bool includeHidden = false)
+        =>
+        [
+            new(nameof(Name), Name),
+            new(nameof(Args), Args),
+            new(nameof(Input), Input),
+        ];
 }
 
 internal sealed class ToshSessionNamespace
+    : IShellRecordObject
 {
     private readonly ToshRuntime _runtime;
 
@@ -128,9 +282,61 @@ internal sealed class ToshSessionNamespace
     public ManagedFileHandle[] OpenHandles => ManagedFileHandle.GetOpenHandles().ToArray();
 
     public StartupProfileData? StartupProfile => _runtime.StartupProfile;
+
+    public string ShellTypeName => "ToshRuntime.Session";
+
+    public bool TryGetMember(string name, out object? value, bool includeHidden = false)
+    {
+        switch (name)
+        {
+            case nameof(CurrentDirectory):
+                value = CurrentDirectory;
+                return true;
+            case nameof(HistoryCount):
+                value = HistoryCount;
+                return true;
+            case nameof(NextHistoryId):
+                value = NextHistoryId;
+                return true;
+            case nameof(HistoryFilePath):
+                value = HistoryFilePath;
+                return true;
+            case nameof(JobCount):
+                value = JobCount;
+                return true;
+            case nameof(OpenHandleCount):
+                value = OpenHandleCount;
+                return true;
+            case nameof(OpenHandles):
+                value = OpenHandles;
+                return true;
+            case nameof(StartupProfile):
+                value = StartupProfile;
+                return true;
+            default:
+                value = null;
+                return false;
+        }
+    }
+
+    public bool TrySetMember(string name, object? value) => false;
+
+    public IReadOnlyList<KeyValuePair<string, object?>> GetMembers(bool includeHidden = false)
+        =>
+        [
+            new(nameof(CurrentDirectory), CurrentDirectory),
+            new(nameof(HistoryCount), HistoryCount),
+            new(nameof(NextHistoryId), NextHistoryId),
+            new(nameof(HistoryFilePath), HistoryFilePath),
+            new(nameof(JobCount), JobCount),
+            new(nameof(OpenHandleCount), OpenHandleCount),
+            // OpenHandles can be large/noisy; expose count by default and keep handles addressable by name.
+            new(nameof(StartupProfile), StartupProfile),
+        ];
 }
 
 internal sealed class ToshHostNamespace
+    : IShellRecordObject
 {
     public string Version => Assembly.GetEntryAssembly()?.GetName().Version?.ToString()
                              ?? Assembly.GetExecutingAssembly().GetName().Version?.ToString()
@@ -147,4 +353,51 @@ internal sealed class ToshHostNamespace
     public string ExecutablePath => Environment.ProcessPath ?? string.Empty;
 
     public bool IsInteractive => !Console.IsInputRedirected;
+
+    public string ShellTypeName => "ToshRuntime.Host";
+
+    public bool TryGetMember(string name, out object? value, bool includeHidden = false)
+    {
+        switch (name)
+        {
+            case nameof(Version):
+                value = Version;
+                return true;
+            case nameof(RuntimeId):
+                value = RuntimeId;
+                return true;
+            case nameof(Framework):
+                value = Framework;
+                return true;
+            case nameof(OSDescription):
+                value = OSDescription;
+                return true;
+            case nameof(ProcessId):
+                value = ProcessId;
+                return true;
+            case nameof(ExecutablePath):
+                value = ExecutablePath;
+                return true;
+            case nameof(IsInteractive):
+                value = IsInteractive;
+                return true;
+            default:
+                value = null;
+                return false;
+        }
+    }
+
+    public bool TrySetMember(string name, object? value) => false;
+
+    public IReadOnlyList<KeyValuePair<string, object?>> GetMembers(bool includeHidden = false)
+        =>
+        [
+            new(nameof(Version), Version),
+            new(nameof(RuntimeId), RuntimeId),
+            new(nameof(Framework), Framework),
+            new(nameof(OSDescription), OSDescription),
+            new(nameof(ProcessId), ProcessId),
+            new(nameof(ExecutablePath), ExecutablePath),
+            new(nameof(IsInteractive), IsInteractive),
+        ];
 }

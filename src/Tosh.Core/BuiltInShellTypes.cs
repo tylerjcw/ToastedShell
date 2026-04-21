@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Collections.Concurrent;
 using System.Dynamic;
+using System.Numerics;
 using System.Reflection;
 
 namespace Tosh.Core;
@@ -73,6 +74,13 @@ public static class BuiltInShellTypes
         }
 
         classes["Math"] = MathShellType.Instance;
+        classes["Vector"] = VectorShellType.Instance;
+        classes["vec"] = VectorShellType.Instance;
+        classes["Matrix"] = MatrixShellType.Instance;
+        classes["matrix"] = MatrixShellType.Instance;
+        classes["mat"] = MatrixShellType.Instance;
+        classes["Complex"] = ComplexShellType.Instance;
+        classes["complex"] = ComplexShellType.Instance;
     }
 
     public static bool TryResolveStaticType(string name, ITypeResolver resolver, out IShellStaticType definition)
@@ -119,6 +127,18 @@ public static class BuiltInShellTypes
                 descriptor = Hashtable;
                 return true;
 
+            case ToshVector:
+                descriptor = VectorShellType.Instance;
+                return true;
+
+            case ToshMatrix:
+                descriptor = MatrixShellType.Instance;
+                return true;
+
+            case Complex:
+                descriptor = ComplexShellType.Instance;
+                return true;
+
             default:
                 return TryDescribeRuntimeType(value.GetType(), out descriptor);
         }
@@ -147,6 +167,24 @@ public static class BuiltInShellTypes
         if (runtimeType == typeof(object[]))
         {
             descriptor = Array;
+            return true;
+        }
+
+        if (runtimeType == typeof(ToshVector))
+        {
+            descriptor = VectorShellType.Instance;
+            return true;
+        }
+
+        if (runtimeType == typeof(ToshMatrix))
+        {
+            descriptor = MatrixShellType.Instance;
+            return true;
+        }
+
+        if (runtimeType == typeof(Complex))
+        {
+            descriptor = ComplexShellType.Instance;
             return true;
         }
 

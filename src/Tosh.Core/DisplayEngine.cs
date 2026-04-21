@@ -2978,6 +2978,20 @@ public sealed class DisplayEngine
             return true;
         }
 
+        if (value is ToshVector vector)
+        {
+            typeName = vector.ShellTypeName;
+            valueText = vector.ToString(null, CultureInfo.InvariantCulture);
+            return true;
+        }
+
+        if (value is Complex complex)
+        {
+            typeName = ComplexShellType.Instance.ShellTypeName;
+            valueText = ComplexShellType.FormatCompact(complex);
+            return true;
+        }
+
         if (value is Guid guid)
         {
             typeName = runtimeType.Name;
@@ -3101,6 +3115,7 @@ public sealed class DisplayEngine
                effectiveType == typeof(TimeSpan) ||
                effectiveType == typeof(StorageSize) ||
                effectiveType == typeof(TemporalAmount) ||
+               effectiveType == typeof(Complex) ||
                typeof(Units.Quantity).IsAssignableFrom(effectiveType) ||
                effectiveType == typeof(Uri) ||
                effectiveType == typeof(IPAddress) ||
@@ -3827,7 +3842,6 @@ public sealed class DisplayEngine
                effectiveType == typeof(ClaimsIdentity) ||
                effectiveType == typeof(ClaimsPrincipal) ||
                effectiveType == typeof(Claim) ||
-               effectiveType == typeof(Complex) ||
                effectiveType == typeof(Vector2) ||
                effectiveType == typeof(Vector3) ||
                effectiveType == typeof(Vector4) ||

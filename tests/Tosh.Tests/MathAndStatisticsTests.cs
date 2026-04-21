@@ -46,6 +46,18 @@ public sealed class MathAndStatisticsTests
     }
 
     [Fact]
+    public async Task Math_sqrt_of_negative_real_returns_complex()
+    {
+        var engine = new ToshEngine();
+        var results = await engine.ExecuteToListAsync("echo (Math.sqrt(-1))");
+        Assert.Single(results);
+
+        var value = Assert.IsType<Complex>(results[0]);
+        Assert.Equal(0d, value.Real, 12);
+        Assert.Equal(1d, value.Imaginary, 12);
+    }
+
+    [Fact]
     public async Task Math_abs_returns_absolute_value()
     {
         var engine = new ToshEngine();

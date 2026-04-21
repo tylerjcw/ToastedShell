@@ -67,7 +67,10 @@ public sealed class ToshRepl
                     specialKeyHandler: TryHandleInlineToolShortcut,
                     onBufferActivated: buffer => _commandLineInsertion.ActivateBuffer(buffer),
                     onBufferDeactivated: buffer => _commandLineInsertion.DeactivateBuffer(buffer),
-                    signatureHintProvider: (text, cursor) => _completionEngine.GetSignatureHint(text, cursor));
+                    signatureHintProvider: (text, cursor) => _completionEngine.GetSignatureHint(text, cursor),
+                    shiftEnterExecutes: _runtime.Config.Repl.ShiftEnterExecutes,
+                    continuationGutterRightBorder: _runtime.Config.Repl.ContinuationGutterRightBorder,
+                    continuationLineNumbers: _runtime.Config.Repl.ContinuationLineNumbers);
             }
             catch (ReplInterruptException)
             {

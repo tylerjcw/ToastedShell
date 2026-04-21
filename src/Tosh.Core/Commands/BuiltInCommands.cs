@@ -75,6 +75,8 @@ public static class BuiltInCommands
         commands.Register(new LsipcCommand());
         commands.Register(new ProcessListCommand());
         commands.Register(new JobsCommand());
+        commands.Register(new SpawnCommand());
+        commands.Register(new ScopeCommand());
         commands.Register(new WaitForCommand());
         commands.Register(new KillCommand());
         commands.Register(new SignalCommand());
@@ -152,6 +154,16 @@ public static class BuiltInCommands
         commands.Register(new EachCommand());
         commands.Register(new EachCommand("foreach"));
         commands.Register(new ParallelCommand());
+        commands.Register(new RaceCommand());
+        commands.Register(new SettleCommand());
+        commands.Register(new TimeoutCommand());
+        commands.Register(new AsyncCommand());
+        commands.Register(new AwaitCommand());
+        commands.Register(new ChannelCommand());
+        commands.Register(new ChannelSendCommand());
+        commands.Register(new ChannelRecvCommand());
+        commands.Register(new ChannelCloseCommand());
+        commands.Register(new ChannelSelectCommand());
         commands.Register(new MapCommand());
         commands.Register(new FilterCommand());
         commands.Register(new ReduceCommand());
@@ -201,6 +213,9 @@ public static class BuiltInCommands
         commands.Register(new DateCommand());
         commands.Register(new TimeSpanCommand());
         commands.Register(new GuidCommand());
+        commands.Register(new VectorCommand());
+        commands.Register(new MatrixCommand());
+        commands.Register(new ComplexCommand());
         commands.Register(new SplitCommand());
         commands.Register(new JoinLinesCommand());
         commands.Register(new ReplaceCommand());

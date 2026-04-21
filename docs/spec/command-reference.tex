@@ -640,6 +640,365 @@ Types searches both CLR types and ToSh shell types like `list`, `array`, `dict`,
 \end{cmdbox}
 
 
+\section{Concurrency}
+
+\subsection{\texttt{async}}
+\label{ref:async}
+\icmd{async}
+
+\begin{cmdbox}{async}
+Starts a callable or block and returns a future handle.
+
+\begin{signature}
+async <callable|block> [args ...]
+\end{signature}
+
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+operation & A callable or block to run in the background. \\
+args & Optional callable arguments. (optional) \\
+\bottomrule
+\end{tabular}
+
+\textbf{Output:} Returns a ShellFuture handle.
+
+\begin{lstlisting}
+var f = async { sleep 0.2; echo done }  # Start a deferred operation
+\end{lstlisting}
+
+\end{cmdbox}
+
+\subsection{\texttt{await}}
+\label{ref:await}
+\icmd{await}
+
+\begin{cmdbox}{await}
+Awaits a future created by async and replays its outputs.
+
+\begin{signature}
+await [future]
+\end{signature}
+
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+future & A ShellFuture value. If omitted, read one from pipeline input. (optional) \\
+\bottomrule
+\end{tabular}
+
+\textbf{Output:} Replays the values produced by the future operation.
+
+\begin{lstlisting}
+var f = async { sleep 0.1; echo ok }; await $f  # Await a future
+\end{lstlisting}
+
+\end{cmdbox}
+
+\subsection{\texttt{channel}}
+\label{ref:channel}
+\icmd{channel}
+
+\begin{cmdbox}{channel}
+Creates a new shell channel for sending and receiving values.
+
+\begin{signature}
+channel [capacity]
+\end{signature}
+
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+capacity & Optional maximum number of items the channel can buffer. Omit for unbounded. (optional) \\
+\bottomrule
+\end{tabular}
+
+\textbf{Output:} Returns a ShellChannel value.
+
+\begin{lstlisting}
+var ch = channel  # Create an unbounded channel
+var ch = channel 10  # Create a bounded channel that buffers up to 10 items
+\end{lstlisting}
+
+\begin{notebox}
+Send values with channel-send, receive with channel-recv, and close with channel-close.
+\end{notebox}
+
+\end{cmdbox}
+
+\subsection{\texttt{channel-close}}
+\label{ref:channel-close}
+\icmd{channel-close}
+
+\begin{cmdbox}{channel-close}
+Closes a shell channel, signalling no further values will be sent.
+
+\begin{signature}
+channel-close <channel>
+\end{signature}
+
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+channel & The channel to close. Omit to close channel(s) from pipeline input. \\
+\bottomrule
+\end{tabular}
+
+\begin{lstlisting}
+channel-close $ch  # Signal that no more values will be sent
+\end{lstlisting}
+
+\begin{notebox}
+After closing, channel-recv will drain any buffered values and then complete. Closing an already-closed channel is a no-op.
+\end{notebox}
+
+\end{cmdbox}
+
+\subsection{\texttt{channel-recv}}
+\label{ref:channel-recv}
+\icmd{channel-recv}
+
+\begin{cmdbox}{channel-recv}
+Receives all values from a shell channel.
+
+\begin{signature}
+channel-recv <channel>
+\end{signature}
+
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+channel & The channel to receive from. Omit to read from pipeline input. \\
+\bottomrule
+\end{tabular}
+
+\textbf{Output:} Streams every value from the channel until it is closed.
+
+\begin{lstlisting}
+channel-recv $ch | each { |v| echo $v }  # Stream all values from a channel
+\end{lstlisting}
+
+\begin{notebox}
+Blocks until a value is available. Returns when the channel is closed and drained.
+\end{notebox}
+
+\end{cmdbox}
+
+\subsection{\texttt{channel-select}}
+\label{ref:channel-select}
+\icmd{channel-select}
+
+\begin{cmdbox}{channel-select}
+Waits for the first available value from multiple channels.
+
+\begin{signature}
+channel-select [channel ...]
+\end{signature}
+
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+channels & One or more channels to wait on. If omitted, reads channels from pipeline input. (optional) \\
+\bottomrule
+\end{tabular}
+
+\textbf{Output:} Returns a record with Index, Channel, and Value for the first available receive.
+
+\begin{lstlisting}
+channel-select $ch1 $ch2  # Return the first channel with a value
+\end{lstlisting}
+
+\end{cmdbox}
+
+\subsection{\texttt{channel-send}}
+\label{ref:channel-send}
+\icmd{channel-send}
+
+\begin{cmdbox}{channel-send}
+Sends one or more values to a shell channel.
+
+\begin{signature}
+channel-send <channel> [values ...]
+\end{signature}
+
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+channel & The channel to send to. \\
+values & One or more values to send. Omit to send pipeline input instead. (optional) \\
+\bottomrule
+\end{tabular}
+
+\begin{lstlisting}
+channel-send $ch hello  # Send a single value to a channel
+echo hello world | channel-send $ch  # Forward pipeline items to a channel
+\end{lstlisting}
+
+\begin{notebox}
+Blocks (asynchronously) when the channel is bounded and its buffer is full.
+\end{notebox}
+
+\end{cmdbox}
+
+\subsection{\texttt{race}}
+\label{ref:race}
+\icmd{race}
+
+\begin{cmdbox}{race}
+Executes operations concurrently and returns the first completion.
+
+\begin{signature}
+race <callable|block> <callable|block> [...]
+\end{signature}
+
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+operation & A callable or block to execute. Provide two or more operations to race. \\
+\bottomrule
+\end{tabular}
+
+\textbf{Output:} Returns the first completed operation result.
+
+\begin{lstlisting}
+race { sleep 0.1; echo slow } { sleep 0.01; echo fast }  # Return the first completed operation
+\end{lstlisting}
+
+\end{cmdbox}
+
+\subsection{\texttt{scope}}
+\label{ref:scope}
+\icmd{scope}
+
+\begin{cmdbox}{scope}
+Executes a block and automatically awaits all background jobs started inside it.
+
+\begin{signature}
+scope <block>
+\end{signature}
+
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+block & A block that may start background jobs via spawn. \\
+\bottomrule
+\end{tabular}
+
+\textbf{Output:} Streams ShellJobCompletion records for every job started inside the scope.
+
+\begin{lstlisting}
+scope { var j1 = spawn dotnet --version; var j2 = spawn dotnet --list-runtimes }  # Start two background jobs and await both automatically
+\end{lstlisting}
+
+\begin{notebox}
+All jobs registered during block execution are awaited on scope exit. If the block throws, every scope-owned job is killed before the exception propagates.
+\end{notebox}
+
+\end{cmdbox}
+
+\subsection{\texttt{settle}}
+\label{ref:settle}
+\icmd{settle}
+
+\begin{cmdbox}{settle}
+Executes operations concurrently and returns settled outcomes.
+
+\begin{signature}
+settle <callable|block> [...]
+\end{signature}
+
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+operation & A callable or block to execute. Provide one or more operations to settle. \\
+\bottomrule
+\end{tabular}
+
+\textbf{Output:} Returns one outcome object per operation with Status, Value, and Error fields.
+
+\begin{lstlisting}
+settle { echo ok } { throw boom }  # Collect fulfilled and rejected outcomes
+\end{lstlisting}
+
+\end{cmdbox}
+
+\subsection{\texttt{spawn}}
+\label{ref:spawn}
+\icmd{spawn}
+
+\begin{cmdbox}{spawn}
+Starts an external command as a background job.
+
+\begin{signature}
+spawn <command> [arg ...]
+\end{signature}
+
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+command & External command name or path to start as a background job. \\
+args & Arguments to pass to the external command. (optional) \\
+\bottomrule
+\end{tabular}
+
+\textbf{Pipeline input:} scalar, list
+ --- Optional pipeline input forwarded to the spawned process stdin.
+
+\textbf{Output:} Returns a ShellJobInfo object for the started background job.
+
+\begin{lstlisting}
+spawn dotnet --version  # Start an external command in the background
+echo hello | spawn cat  # Feed pipeline input into a background process
+\end{lstlisting}
+
+\begin{notebox}
+Use jobs to list active jobs and wait-for to await completion.
+\end{notebox}
+
+\end{cmdbox}
+
+\subsection{\texttt{timeout}}
+\label{ref:timeout}
+\icmd{timeout}
+
+\begin{cmdbox}{timeout}
+Runs an operation with a timeout.
+
+\begin{signature}
+timeout <seconds> <callable|block> [args ...]
+\end{signature}
+
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+seconds & Timeout in seconds (supports fractional values). \\
+operation & A callable or block to execute. \\
+args & Optional callable arguments. (optional) \\
+\bottomrule
+\end{tabular}
+
+\textbf{Output:} Replays values from the operation when it completes in time.
+
+\begin{lstlisting}
+timeout 2 { sleep 1; echo ok }  # Complete within timeout
+timeout 0.2 { sleep 1 }  # Fail when elapsed
+\end{lstlisting}
+
+\end{cmdbox}
+
+
 \section{Data}
 
 \subsection{\texttt{as-file}}
@@ -675,6 +1034,38 @@ as-file json $data  # JSON format
 \begin{notebox}
 As-file materializes pipeline values into a temporary file and returns a file object you can pass to external executables.
 \end{notebox}
+
+\end{cmdbox}
+
+\subsection{\texttt{complex}}
+\label{ref:complex}
+\icmd{complex}
+
+\begin{cmdbox}{complex}
+Builds a Complex value from numeric arguments or pipeline input.
+
+\begin{signature}
+complex [real [imaginary]]
+\end{signature}
+
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+component & Zero, one, or two numeric components. If omitted, consumes pipeline input. (optional) \\
+\bottomrule
+\end{tabular}
+
+\textbf{Pipeline input:} scalar, list
+ --- Consumes scalar values or a single two-item collection and returns a Complex value.
+
+\textbf{Output:} A Complex value.
+
+\begin{lstlisting}
+complex 3 4  # Build a complex number from real and imaginary parts
+echo [3, 4] | complex  # Build a complex number from a single pair value
+echo 3 4 | complex  # Build a complex number from pipeline values
+\end{lstlisting}
 
 \end{cmdbox}
 
@@ -714,6 +1105,37 @@ Computes hashes for text input or files.
 \begin{signature}
 hash [algorithm] [path ...]
 \end{signature}
+
+\end{cmdbox}
+
+\subsection{\texttt{mat}}
+\label{ref:mat}
+\icmd{mat}
+
+\begin{cmdbox}{mat}
+Builds a Matrix from rows, scalars, or pipeline input.
+
+\begin{signature}
+mat [row ...]
+\end{signature}
+
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+row & Zero or more scalar values or row sequences. If omitted, consumes pipeline input. (optional) \\
+\bottomrule
+\end{tabular}
+
+\textbf{Pipeline input:} scalar, list
+ --- Consumes scalar values or row sequences and returns a Matrix.
+
+\textbf{Output:} A Matrix value.
+
+\begin{lstlisting}
+mat [1, 2, 3] [4, 5, 6]  # Build a matrix from explicit rows
+echo [[1, 2], [3, 4]] | mat  # Build a matrix from pipeline input
+\end{lstlisting}
 
 \end{cmdbox}
 
@@ -764,6 +1186,38 @@ ls | to json --compact
 \begin{notebox}
 The `from` and `to` commands convert between text formats (json, csv, tsv, xml, toml) and CLR objects. Parsed values stay as CLR objects until you explicitly flatten them.
 \end{notebox}
+
+\end{cmdbox}
+
+\subsection{\texttt{vec}}
+\label{ref:vec}
+\icmd{vec}
+
+\begin{cmdbox}{vec}
+Builds a Vector from numeric arguments or pipeline input.
+
+\begin{signature}
+vec [item ...]
+\end{signature}
+
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+item & Zero or more numeric items. If omitted, consumes pipeline input. (optional) \\
+\bottomrule
+\end{tabular}
+
+\textbf{Pipeline input:} scalar, list
+ --- Consumes numeric pipeline values or a single numeric collection and returns a Vector.
+
+\textbf{Output:} A Vector value.
+
+\begin{lstlisting}
+vec 1 2 3  # Build a vector from explicit items
+echo 1 2 3 | vec  # Build a vector from pipeline items
+echo [1, 2, 3] | vec  # Build a vector from a single list value
+\end{lstlisting}
 
 \end{cmdbox}
 
@@ -6436,10 +6890,10 @@ uptime
 \icmd{vars}
 
 \begin{cmdbox}{vars}
-Lists all visible variables in the current scope.
+Lists visible variables or opens an interactive variable browser.
 
 \begin{signature}
-vars [filter]
+vars [filter] | vars browse [filter]
 \end{signature}
 
 \end{cmdbox}

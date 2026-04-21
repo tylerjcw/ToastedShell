@@ -1053,6 +1053,10 @@ internal sealed class ReplCompletionEngine
         {
             current = new ShellEnvironmentNamespace();
         }
+        else if (string.Equals(segments[0], "tosh", StringComparison.Ordinal))
+        {
+            current = _runtime.RuntimeNamespace;
+        }
         else if (!_runtime.Variables.TryGetValue(segments[0], out current))
         {
             return null;

@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Numerics;
 
 namespace Tosh.Core.Commands;
 
@@ -43,6 +44,7 @@ public sealed class RawCommand : ShellCommand, IImplicitGlobCommand
             char character => character.ToString(),
             bool boolean => boolean.ToString().ToLowerInvariant(),
             Enum @enum => @enum.ToString(),
+            Complex complex => ComplexShellType.FormatCompact(complex),
             DateTime dateTime => dateTime.ToString("O", CultureInfo.InvariantCulture),
             DateTimeOffset dateTimeOffset => dateTimeOffset.ToString("O", CultureInfo.InvariantCulture),
             IFormattable formattable when value.GetType().IsPrimitive || value is decimal || value is Guid || value is TimeSpan

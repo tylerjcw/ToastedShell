@@ -16,6 +16,7 @@ public sealed class DotNetTypeResolver : IImportingTypeResolver
         ["byte"] = typeof(byte),
         ["sbyte"] = typeof(sbyte),
         ["char"] = typeof(char),
+        ["complex"] = typeof(Complex),
         ["cstr"] = typeof(string),
         ["cstring"] = typeof(string),
         ["datetime"] = typeof(DateTime),

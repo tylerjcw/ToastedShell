@@ -41,7 +41,7 @@ public sealed class MathShellType : IShellStaticType
             "log2" => Math.Log2(ToDouble(arguments, 0)),
             "log10" => Math.Log10(ToDouble(arguments, 0)),
             "pow" => Math.Pow(ToDouble(arguments, 0), ToDouble(arguments, 1)),
-            "sqrt" => Math.Sqrt(ToDouble(arguments, 0)),
+            "sqrt" => Sqrt(arguments, 0),
             "cbrt" => Math.Cbrt(ToDouble(arguments, 0)),
 
             // Rounding
@@ -176,6 +176,24 @@ public sealed class MathShellType : IShellStaticType
             BigInteger bi => BigInteger.Abs(bi),
             _ => Math.Abs(ToDouble(arguments, 0)),
         };
+    }
+
+    private static object Sqrt(IReadOnlyList<object?> arguments, int index)
+    {
+        if (index >= arguments.Count)
+            throw new InvalidOperationException($"Math function expected at least {index + 1} argument(s), got {arguments.Count}.");
+
+        if (ComplexShellType.TryConvert(arguments[index], out var complex))
+        {
+            if (complex.Imaginary != 0d || complex.Real < 0d)
+            {
+                return Complex.Sqrt(complex);
+            }
+
+            return Math.Sqrt(complex.Real);
+        }
+
+        return Math.Sqrt(ToDouble(arguments, index));
     }
 
     private static BigInteger Factorial(BigInteger n)
