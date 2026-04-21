@@ -81,7 +81,7 @@ ToSh distinguishes between:
 ## Documentation
 
 - [Docs Index](docs/INDEX.md)
-- [ToastScript Specification](docs/spec/toastscript-spec.pdf) — language grammar, types, operators, commands
+- [ToastScript Specification](docs/spec/ToastScript.pdf) — language grammar, types, operators, commands
 - [Configuration Guide](docs/CONFIGURATION.md)
 - [Roadmap](docs/ROADMAP.md)
 - [Backlog](docs/BACKLOG.md)
