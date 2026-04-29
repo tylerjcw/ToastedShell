@@ -18,7 +18,8 @@ public sealed record ToshClassPropertyDefinition(
     bool IsFading,
     bool IsLocal,
     bool IsAbstract,
-    TextSpan Span)
+    TextSpan Span,
+    RefinementAnnotation? Refinement = null)
 {
     public bool IsComputed => GetterBody is not null;
 

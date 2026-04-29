@@ -36,6 +36,9 @@ public static class TerminalGlyphs
     public static string ErrorMarker =>
         IsActive ? (s_config?.ErrorMarker ?? "x") : "\u00d7";
 
+    public static string WarningMarker =>
+        IsActive ? "!" : "\u26a0";
+
     // ── Diagnostic / source-snippet rounded corners ───────────────
     // The Linux console renders basic box-drawing (─│├┤┬┴┼┌┐└┘)
     // but NOT rounded corners (╭╮╯╰). Fall back to square equivalents.

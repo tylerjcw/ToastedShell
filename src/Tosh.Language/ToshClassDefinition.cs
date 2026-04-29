@@ -363,7 +363,7 @@ public sealed class ToshClassDefinition : IShellNamedType
             // Emit deprecation warning for fading properties
             if (property.IsFading)
             {
-                _engine.Runtime.Error.WriteLine($"Warning: property '{property.Name}' on class '{Name}' is fading (deprecated).");
+                _engine.WriteWarning($"Property '{property.Name}' on class '{Name}' is fading (deprecated).");
             }
 
             if (property.GetterBody is not null)
@@ -535,7 +535,7 @@ public sealed class ToshClassDefinition : IShellNamedType
         // Emit deprecation warning for fading methods
         if (method.IsFading)
         {
-            _engine.Runtime.Error.WriteLine($"Warning: method '{method.Name}' on class '{Name}' is fading (deprecated).");
+            _engine.WriteWarning($"Method '{method.Name}' on class '{Name}' is fading (deprecated).");
         }
 
         var values = ExecuteMethodBlock(method, locals, instance);
@@ -638,13 +638,14 @@ public sealed class ToshClassDefinition : IShellNamedType
             return value;
         }
 
-        if (_engine.TryConvertAnnotatedValue(property.TypeName, value, out var converted))
-        {
-            return converted;
-        }
-
-        throw new InvalidOperationException(
-            $"Property '{property.Name}' on class '{Name}' could not be converted to '{property.TypeName}'.");
+        return _engine.ConvertAnnotatedValue(
+            property.TypeName,
+            property.Refinement,
+            value,
+            property.Span,
+            SourceName,
+            SourceText,
+            $"{Name}.{property.Name}");
     }
 
     private IReadOnlyList<object?> ExecuteMethodBlock(ToshClassMethodDefinition method, IReadOnlyDictionary<string, object?> boundLocals, ToshClassInstance? instance)
@@ -684,10 +685,16 @@ public sealed class ToshClassDefinition : IShellNamedType
 
     private ToshClassConstructorDefinition? SelectConstructor(IReadOnlyList<object?> arguments, out Dictionary<string, object?> locals)
     {
-        var matches = _engine.SelectBestCallableMatches(GetConstructorDefinitions(), static candidate => candidate.Parameters, arguments);
+        var constructors = GetConstructorDefinitions();
+        var matches = _engine.SelectBestCallableMatches(constructors, static candidate => candidate.Parameters, arguments);
 
         if (matches.Count == 0)
         {
+            if (constructors.Count == 1)
+            {
+                ThrowDetailedSingleConstructorMismatch(constructors[0], arguments);
+            }
+
             throw new InvalidOperationException($"No constructor matched class '{Name}' with {arguments.Count} argument(s).");
         }
 
@@ -702,6 +709,105 @@ public sealed class ToshClassDefinition : IShellNamedType
 
         locals = matches[0].Locals;
         return matches[0].Candidate;
+    }
+
+    private void ThrowDetailedSingleConstructorMismatch(ToshClassConstructorDefinition constructor, IReadOnlyList<object?> arguments)
+    {
+        var parameters = constructor.Parameters;
+        var hasRestParameter = parameters.Count > 0 && parameters[^1].IsRest;
+        var positionalCount = hasRestParameter ? parameters.Count - 1 : parameters.Count;
+
+        var namedArgs = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+        var positionalArgs = new List<object?>();
+
+        foreach (var arg in arguments)
+        {
+            if (arg is NamedArgument named)
+            {
+                namedArgs[named.Name] = named.Value;
+            }
+            else
+            {
+                positionalArgs.Add(arg);
+            }
+        }
+
+        var requiredCount = parameters.Count(parameter =>
+            !parameter.IsOptional && !parameter.IsRest && parameter.DefaultValue is null && !namedArgs.ContainsKey(parameter.Name));
+
+        if (positionalArgs.Count < requiredCount || (!hasRestParameter && positionalArgs.Count > positionalCount - namedArgs.Count))
+        {
+            return;
+        }
+
+        var positionalIndex = 0;
+        for (var index = 0; index < positionalCount; index++)
+        {
+            var parameter = parameters[index];
+
+            if (namedArgs.TryGetValue(parameter.Name, out var namedValue))
+            {
+                ConvertConstructorParameterValue(constructor, parameter, namedValue);
+                continue;
+            }
+
+            if (positionalIndex >= positionalArgs.Count)
+            {
+                continue;
+            }
+
+            ConvertConstructorParameterValue(constructor, parameter, positionalArgs[positionalIndex++]);
+        }
+
+        if (hasRestParameter)
+        {
+            var restParam = parameters[^1];
+            for (var index = positionalCount; index < arguments.Count; index++)
+            {
+                ConvertConstructorParameterValue(constructor, restParam, arguments[index]);
+            }
+        }
+    }
+
+    private object? ConvertConstructorParameterValue(
+        ToshClassConstructorDefinition constructor,
+        FunctionParameterDefinition parameter,
+        object? value)
+    {
+        try
+        {
+            return _engine.ConvertAnnotatedValue(
+                parameter.TypeName,
+                parameter.Refinement,
+                value,
+                parameter.Span,
+                constructor.SourceName,
+                constructor.SourceText,
+                $"{Name}.{parameter.Name}");
+        }
+        catch (ToshDiagnosticException exception)
+        {
+            if (exception.Diagnostics.Any(diagnostic =>
+                string.Equals(diagnostic.Code, "tosh::runtime::annotation_unknown_type", StringComparison.Ordinal) ||
+                string.Equals(diagnostic.Code, "tosh::runtime::refinement_failed", StringComparison.Ordinal) ||
+                string.Equals(diagnostic.Code, "tosh::runtime::expression_failed", StringComparison.Ordinal)))
+            {
+                throw;
+            }
+
+            if (parameter.Refinement is not null)
+            {
+                throw;
+            }
+
+            throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                Code: "tosh::runtime::constructor_parameter_type_conversion_failed",
+                Title: $"Constructor argument '{parameter.Name}' could not be converted to '{parameter.TypeName}'.",
+                SourceName: constructor.SourceName,
+                SourceText: constructor.SourceText,
+                Span: parameter.Span,
+                Label: $"'{parameter.Name}' expects {parameter.TypeName}"));
+        }
     }
 
     private ToshClassMethodDefinition SelectMethod(IReadOnlyList<ToshClassMethodDefinition> candidates, IReadOnlyList<object?> arguments, out Dictionary<string, object?> locals)

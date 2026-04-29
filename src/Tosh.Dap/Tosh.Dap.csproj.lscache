@@ -13,18 +13,18 @@ primary
 lastDtbSucceeded
 
 [properties]
-AssemblyName=Tosh.Mcp
+AssemblyName=Tosh.Dap
 CommandLineArgsForDesignTimeEvaluation=-langversion:14.0 -define:TRACE
 CompilerGeneratedFilesOutputPath=
 MaxSupportedLangVersion=14.0
 ProjectAssetsFile=<PATH>obj/project.assets.json
-RootNamespace=Tosh.Mcp
+RootNamespace=Tosh.Dap
 RunAnalyzers=
 RunAnalyzersDuringLiveAnalysis=
 SolutionPath=<PATH>../../Tosh.slnx
 TargetFrameworkIdentifier=.NETCoreApp
-TargetPath=<PATH>bin/Debug/net10.0/Tosh.Mcp.dll
-TargetRefPath=<PATH>obj/Debug/net10.0/ref/Tosh.Mcp.dll
+TargetPath=<PATH>bin/Debug/net10.0/Tosh.Dap.dll
+TargetRefPath=<PATH>obj/Debug/net10.0/ref/Tosh.Dap.dll
 TemporaryDependencyNodeTargetIdentifier=net10.0
 
 [commandLineArguments]
@@ -44,8 +44,8 @@ TemporaryDependencyNodeTargetIdentifier=net10.0
 /debug:portable
 /filealign:512
 /optimize-
-/out:obj/Debug/net10.0/Tosh.Mcp.dll
-/refout:obj/Debug/net10.0/refint/Tosh.Mcp.dll
+/out:obj/Debug/net10.0/Tosh.Dap.dll
+/refout:obj/Debug/net10.0/refint/Tosh.Dap.dll
 /target:exe
 /warnaserror-
 /utf8output
@@ -56,16 +56,15 @@ TemporaryDependencyNodeTargetIdentifier=net10.0
 [sourceFiles]
 obj/Debug/net10.0/
  .NETCoreApp,Version=v10.0.AssemblyAttributes.cs
- Tosh.Mcp.AssemblyInfo.cs
- Tosh.Mcp.GlobalUsings.g.cs
+ Tosh.Dap.AssemblyInfo.cs
+ Tosh.Dap.GlobalUsings.g.cs
 Program.cs
-ToshMcpServer.cs
+ToshDapServer.cs
 
 [metadataReferences]
 ../
  Tosh.Core/obj/Debug/net10.0/ref/Tosh.Core.dll
  Tosh.Language/obj/Debug/net10.0/ref/Tosh.Language.dll
- Tosh.LanguageServices/obj/Debug/net10.0/ref/Tosh.LanguageServices.dll
  Tosh.Tui/obj/Debug/net10.0/ref/Tosh.Tui.dll
 <DOTNET>/packs/Microsoft.NETCore.App.Ref/10.0.3/ref/net10.0/
  Microsoft.CSharp.dll
@@ -250,4 +249,4 @@ ToshMcpServer.cs
 
 [analyzerConfigFiles]
 <DOTNET>/sdk/10.0.103/Sdks/Microsoft.NET.Sdk/analyzers/build/config/analysislevel_10_default.globalconfig
-obj/Debug/net10.0/Tosh.Mcp.GeneratedMSBuildEditorConfig.editorconfig
+obj/Debug/net10.0/Tosh.Dap.GeneratedMSBuildEditorConfig.editorconfig

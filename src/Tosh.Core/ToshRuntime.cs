@@ -659,7 +659,19 @@ public sealed class ToshRuntime
             return;
         }
 
-        while (History.Count > maxEntries)
+        var excess = History.Count - maxEntries;
+        if (excess <= 0)
+        {
+            return;
+        }
+
+        if (History is List<CommandHistoryEntry> concrete)
+        {
+            concrete.RemoveRange(0, excess);
+            return;
+        }
+
+        for (var i = 0; i < excess; i++)
         {
             History.RemoveAt(0);
         }

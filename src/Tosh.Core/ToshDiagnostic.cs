@@ -7,4 +7,5 @@ public sealed record ToshDiagnostic(
     string? SourceText = null,
     TextSpan? Span = null,
     string? Label = null,
-    string? Help = null);
+    string? Help = null,
+    string? Info = null);

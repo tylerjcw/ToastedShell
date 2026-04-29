@@ -1,7 +1,7 @@
 PWD /home/komrad/projects/tosh/docs/spec
 INPUT /usr/share/texmf-dist/web2c/texmf.cnf
 INPUT /var/lib/texmf/web2c/pdftex/pdflatex.fmt
-INPUT /home/komrad/projects/tosh/docs/spec/toastscript-spec.tex
+INPUT toastscript-spec.tex
 OUTPUT toastscript-spec.log
 INPUT /usr/share/texmf-dist/tex/latex/base/book.cls
 INPUT /usr/share/texmf-dist/tex/latex/base/book.cls
@@ -501,8 +501,8 @@ INPUT /usr/share/texmf-dist/fonts/tfm/adobe/sourcecodepro/SourceCodePro-Bold-tlf
 INPUT /usr/share/texmf-dist/fonts/tfm/public/lm/ec-lmbx10.tfm
 INPUT /usr/share/texmf-dist/fonts/tfm/jknappen/ec/ectt1095.tfm
 INPUT /usr/share/texmf-dist/fonts/tfm/jknappen/ec/tctt1095.tfm
-INPUT /usr/share/texmf-dist/fonts/tfm/public/lm/ec-lmr8.tfm
 INPUT /usr/share/texmf-dist/fonts/enc/dvips/lm/lm-mathsy.enc
+INPUT /usr/share/texmf-dist/fonts/tfm/public/lm/ec-lmr8.tfm
 INPUT /usr/share/texmf-dist/fonts/enc/dvips/cm-super/cm-super-ts1.enc
 INPUT /usr/share/texmf-dist/fonts/enc/dvips/lm/lm-rm.enc
 INPUT ./command-reference.tex

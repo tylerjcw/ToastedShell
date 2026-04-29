@@ -1,0 +1,28 @@
+## Showcases flag / arg / subcommand parsing in TōSh.
+##
+## Try:
+##   argtest.tosh --help
+##   argtest.tosh greet Tyler
+##   argtest.tosh greet --excited Tyler
+##   argtest.tosh --verbose math add 3 4
+##   argtest.tosh math fib 10
+
+flag verbose: bool = false
+
+subcommand greet {
+    flag excited: bool = false
+    arg name: string
+
+    if ($verbose) { writeline "[greet] entering" }
+
+    writeline ($excited ? $"HELLO {$name}!!!" : $"Hello, {$name}.")
+}
+
+subcmd math {
+    subcommand add {
+        args(a: int, b: int)
+        writeline ($a + $b)
+    }
+
+    subcmd fib(n: int)=>recur (0,1)func(a,b)=>($a + $b)|first $n
+}

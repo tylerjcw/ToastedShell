@@ -10,5 +10,7 @@ internal sealed class ModuleExportTable
 
     public Dictionary<string, IShellNamedType> Types { get; } = new(StringComparer.Ordinal);
 
+    internal Dictionary<string, RefinementTypeDefinition> RefinementTypes { get; } = new(StringComparer.OrdinalIgnoreCase);
+
     public Dictionary<string, object?> Modules { get; } = new(StringComparer.Ordinal);
 }

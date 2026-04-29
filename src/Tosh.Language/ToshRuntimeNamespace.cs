@@ -6,7 +6,7 @@ using Tosh.Core;
 namespace Tosh.Language;
 
 internal sealed class ToshRuntimeNamespace
-    : IShellRecordObject
+    : IShellRecordObject, IShellRuntimeNamespaceSummarySource
 {
     private readonly ToshEngine _engine;
 
@@ -84,6 +84,96 @@ internal sealed class ToshRuntimeNamespace
             new(nameof(Session), Session),
             new(nameof(Host), Host),
         ];
+    }
+
+    public RuntimeNamespaceDisplaySummary GetDisplaySummary()
+    {
+        var topLevel = new List<(string, string)>
+        {
+            ("$tosh.IsLoginShell", IsLoginShell ? "True" : "False"),
+        };
+
+        var sections = new List<RuntimeNamespaceSection>
+        {
+            new(
+                "$tosh.Host",
+                "Host Namespace",
+                [
+                    ("Version", Host.Version),
+                    ("RuntimeId", Host.RuntimeId),
+                    ("Framework", Host.Framework),
+                    ("ProcessId", Host.ProcessId.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                ]),
+            new(
+                "$tosh.Session",
+                "Session Namespace",
+                [
+                    ("CurrentDirectory", Session.CurrentDirectory),
+                    ("JobCount", Session.JobCount.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                    ("OpenHandleCount", Session.OpenHandleCount.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                    ("NextHistoryId", Session.NextHistoryId.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                ]),
+            new(
+                "$tosh.Last",
+                "Last Command Namespace",
+                [
+                    ("ExitCode", Last.ExitCode.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                    ("Duration", Last.Duration?.ToString() ?? "n/a"),
+                ]),
+            new(
+                "$tosh.Config",
+                "Configuration Namespace",
+                [
+                    ("Config Dir", Config.Startup.RootDirectory),
+                    ("Hist. File", Config.History.FilePath),
+                    ("Hist. Max", Config.History.MaxEntries?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "unlimited"),
+                    ("Hist Dedup.", Config.History.Deduplication.ToString()),
+                ]),
+        };
+
+        var hasScript = !string.IsNullOrEmpty(Script.Path);
+        if (hasScript)
+        {
+            sections.Add(new RuntimeNamespaceSection(
+                "$tosh.Script",
+                "Script Namespace",
+                [
+                    ("Path", Script.Path),
+                    ("Name", Script.Name),
+                    ("Directory", Script.Directory),
+                    ("Args", Script.Args.Length.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                ]));
+        }
+
+        var hasFunction = !string.IsNullOrEmpty(Function.Name);
+        if (hasFunction)
+        {
+            sections.Add(new RuntimeNamespaceSection(
+                "$tosh.Function",
+                "Function Namespace",
+                [
+                    ("Name", Function.Name),
+                    ("Args", Function.Args.Length.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                ]));
+        }
+
+        var footnotes = new List<string>();
+        if (!hasScript)
+        {
+            footnotes.Add("$tosh.Script — only available inside a script context.");
+        }
+        if (!hasFunction)
+        {
+            footnotes.Add("$tosh.Function — only available inside a function context.");
+        }
+        footnotes.Add("Use '$tosh.<Member>' to drill in, or '$tosh | to json' for a full snapshot.");
+
+        return new RuntimeNamespaceDisplaySummary(
+            "$tosh | TōSh Live Runtime Namespace",
+            ShellTypeName,
+            topLevel,
+            sections,
+            footnotes);
     }
 }
 

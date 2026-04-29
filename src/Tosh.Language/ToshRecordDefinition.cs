@@ -156,12 +156,14 @@ public sealed class ToshRecordDefinition : IShellNamedType
 
     internal object? ConvertFieldValue(ToshRecordFieldDefinition field, object? value)
     {
-        if (field.TypeName is null)
-        {
-            return value;
-        }
-
-        return _engine.ConvertAnnotatedValue(field.TypeName, value, field.Span, SourceName, SourceText, $"{Name}.{field.Name}");
+        return _engine.ConvertAnnotatedValue(
+            field.TypeName,
+            field.Refinement,
+            value,
+            field.Span,
+            SourceName,
+            SourceText,
+            $"{Name}.{field.Name}");
     }
 
     private Dictionary<string, object?> BindFields(IReadOnlyList<object?> arguments)
@@ -222,4 +224,5 @@ public sealed record ToshRecordFieldDefinition(
     string? TypeName,
     PipelineSyntax? DefaultValue,
     bool IsOptional,
-    TextSpan Span);
+    TextSpan Span,
+    RefinementAnnotation? Refinement = null);

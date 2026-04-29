@@ -16,7 +16,7 @@ public sealed record ScriptStatementSyntax(IReadOnlyList<StatementSyntax> Statem
 
 public sealed record PipelineStatementSyntax(PipelineSyntax Pipeline, TextSpan Span) : StatementSyntax(Span);
 
-public sealed record VariableDeclarationStatementSyntax(string Name, string? TypeName, PipelineSyntax? Value, DeclarationModifier Modifier, bool IsConst, TextSpan Span) : StatementSyntax(Span);
+public sealed record VariableDeclarationStatementSyntax(string Name, string? TypeName, PipelineSyntax? Value, DeclarationModifier Modifier, bool IsConst, TextSpan Span, ArgumentSyntax? Refinement = null) : StatementSyntax(Span);
 
 public abstract record DestructuringPatternSyntax(TextSpan Span);
 
@@ -50,6 +50,15 @@ public sealed record ContinueStatementSyntax(TextSpan Span) : StatementSyntax(Sp
 
 public sealed record UsingStatementSyntax(string Target, string? Alias, DeclarationModifier Modifier, TextSpan Span) : StatementSyntax(Span);
 
+public sealed record TypeAliasStatementSyntax(
+    string Name,
+    IReadOnlyList<string> TypeParameters,
+    string BaseTypeName,
+    ArgumentSyntax? Refinement,
+    DeclarationModifier Modifier,
+    TextSpan Span,
+    DocComment? DocComment = null) : StatementSyntax(Span);
+
 public sealed record RequireImportSyntax(string Name, string? Alias, TextSpan Span);
 
 public sealed record RequireStatementSyntax(
@@ -60,7 +69,36 @@ public sealed record RequireStatementSyntax(
     DeclarationModifier Modifier,
     TextSpan Span) : StatementSyntax(Span);
 
-public sealed record FunctionParameterSyntax(string Name, string? TypeName, bool IsOptional, bool IsRest, PipelineSyntax? DefaultValue, TextSpan Span);
+public sealed record FunctionParameterSyntax(string Name, string? TypeName, bool IsOptional, bool IsRest, PipelineSyntax? DefaultValue, TextSpan Span, ArgumentSyntax? Refinement = null, string? Description = null);
+
+public enum ScriptInputDeclarationKind
+{
+    Flag,
+    Argument,
+}
+
+public sealed record ScriptInputStatementSyntax(
+    ScriptInputDeclarationKind Kind,
+    IReadOnlyList<FunctionParameterSyntax> Parameters,
+    TextSpan Span,
+    DocComment? DocComment = null) : StatementSyntax(Span);
+
+[Flags]
+public enum SubcommandModifier
+{
+    None = 0,
+    Eager = 1 << 0,
+    Hidden = 1 << 1,
+    Hollow = 1 << 2,
+    Vital = 1 << 3,
+}
+
+public sealed record SubcommandStatementSyntax(
+    string Name,
+    SubcommandModifier Modifiers,
+    BlockSyntax Body,
+    TextSpan Span,
+    DocComment? DocComment = null) : StatementSyntax(Span);
 
 public enum NativeParameterPassingMode
 {
@@ -131,7 +169,8 @@ public sealed record ClassPropertyMemberSyntax(
     bool IsLocal,
     bool IsAbstract,
     TextSpan Span,
-    DocComment? DocComment = null) : ClassMemberSyntax(IsShy, IsStatic, Span);
+    DocComment? DocComment = null,
+    ArgumentSyntax? Refinement = null) : ClassMemberSyntax(IsShy, IsStatic, Span);
 
 public sealed record ClassMethodMemberSyntax(
     FunctionDefinitionStatementSyntax Method,
@@ -217,7 +256,8 @@ public sealed record RecordFieldDefinitionSyntax(
     string? TypeName,
     PipelineSyntax? DefaultValue,
     bool IsOptional,
-    TextSpan Span);
+    TextSpan Span,
+    ArgumentSyntax? Refinement = null);
 
 public sealed record RecordDefinitionStatementSyntax(
     string Name,

@@ -1,0 +1,254 @@
+require "./showcase-utils.tosh"
+using System
+
+# --- Basic arithmetic ---
+assert { 1 + 2 == 3 } "addition"
+assert { 10 - 3 == 7 } "subtraction"
+assert { 2 * 5 == 10 } "multiplication"
+assert { 9 / 3 == 3 } "division"
+assert { 2 ** 5 == 32 } "power"
+assert { 10 % 3 == 1 } "modulo"
+
+# --- Variables & dynamic typing ---
+var x = 10
+assert { $x == 10 } "integer binding"
+
+$x = "hello"
+assert { $x == "hello" } "string rebinding"
+
+$x = [1, 2, 3]
+assert { $x.Length == 3 } "array rebinding"
+
+# --- Refinement types & coercion ---
+var port: Port = 8080
+assert { $port == 8080 } "refinement alias"
+
+var display_name: TrimmedName = "   Tyler   "
+assert { $display_name == "Tyler" } "refinement coercion"
+
+var age: int where _ > 0 = 34
+assert { $age == 34 } "inline refinement"
+
+# --- Functions ---
+func add(a: int, b: int) -> int => ($a + $b)
+
+func classify(n: int) -> string {
+    if ($n % 2 == 0) {
+        return "even"
+    }
+
+    return "odd"
+}
+
+func ll_demo => echo "wrapper-style functions work too"
+
+assert { (add 2 3) == 5 } "typed function"
+assert { (classify 5) == "odd" } "block-body function"
+assert { (ll_demo | first) == "wrapper-style functions work too" } "wrapper function"
+
+# --- Closures & callable values ---
+func make_counter(start: int = 0) {
+    var count = $start
+
+    return func() {
+        $count = $count + 1
+        return $count
+    }
+}
+
+var counter = make_counter 10
+var c1 = invoke $counter
+var c2 = invoke $counter
+assert { $c1 == 11 and $c2 == 12 } "closure captures state"
+
+var doubler = func(n) => ($n * 2)
+assert { $doubler(21) == 42 } "callable variable invocation"
+
+var factor = 3
+var scale = func(n) => ($n * $factor)
+assert { (invoke $scale 7) == 21 } "closure over outer scope"
+
+# --- Control flow ---
+var sum = 0
+for i in [1, 2, 3, 4] {
+    $sum = $sum + $i
+}
+assert { $sum == 10 } "for loop"
+
+var y = 0
+if (true) {
+    $y = 5
+} else {
+    $y = 0
+}
+assert { $y == 5 } "if / else"
+
+# --- Dynamic objects / late binding ---
+var obj
+$obj.name = "Tyler"
+assert { $obj.name == "Tyler" } "dynamic property"
+
+$obj.say = func() => $"hi {$obj.name}"
+var spoken = invoke $obj.say
+assert { $spoken == "hi Tyler" } "callable property"
+
+# --- Error handling ---
+var caught = false
+try {
+    missing_name
+    assert { false } "should not reach"
+} catch (e) {
+    $caught = true
+} finally {
+    assert { true } "finally ran"
+}
+assert { $caught } "try/catch/finally"
+
+# --- Defer ---
+func with_cleanup() {
+    defer { echo cleanup-ran }
+    return "done"
+}
+
+var cleanup_result = with_cleanup
+assert { $cleanup_result == "done" } "defer preserves return value"
+
+# --- Collections, tuples, mutation ---
+var lst = new list(1, 2, 3)
+$lst.Add(4)
+assert { $lst[3] == 4 } "list mutation"
+
+var map = new dict(a, 1, b, 2)
+$map.c = 3
+assert { $map.c == 3 } "dict-like member mutation"
+
+var pair = new Pair("alpha", 42)
+assert { $pair.Left == "alpha" and $pair.Right == 42 } "record from module"
+
+var tuple = ("beta", 99)
+assert { $tuple.Length == 2 and $tuple.Item2 == 99 } "tuple literal"
+
+# --- Pipelines & functional commands ---
+var mapped_sum = (
+    echo 1 2 3 4 |
+    map func(n) => ($n * 2) |
+    reduce 0 func(acc, n) => ($acc + $n)
+)
+
+assert { $mapped_sum == 20 } "map + reduce"
+
+var first_positive = (
+    echo 34 |
+    tee -v captured_age |
+    where { _ > 0 } |
+    first
+)
+
+assert { $captured_age == 34 and $first_positive == 34 } "tee -v"
+
+# --- Comprehensions & lazy generators ---
+var tens = [$y <|
+    for x in [1, 2, 3, 4, 5]
+    where $x > 2
+    let y = $x * 10
+]
+
+assert { $tens.Length == 3 and $tens[0] == 30 and $tens[2] == 50 } "list comprehension"
+
+var cross = [$x + $y <| for x in [10, 20] for y in [1, 2]]
+assert { $cross.Length == 4 and $cross[0] == 11 and $cross[3] == 22 } "nested comprehension"
+
+var lazy_squares = ($x * $x <| for x in 1..)
+var lazy_first = ($lazy_squares | first)
+assert { $lazy_first == 1 } "generator comprehension"
+
+# --- Yield / generators ---
+func squares(n: int) {
+    for i in (1..$n) {
+        yield ($i * $i)
+    }
+}
+
+var square_sum = (squares 5 | sum)
+assert { $square_sum == 55 } "yield sequence"
+
+# --- Async / concurrency ---
+var future = async { sleep 0.01; echo ready }
+var awaited = (await $future | first)
+assert { $awaited == ready } "async / await"
+
+var winner = race { sleep 0.05; echo slow } { sleep 0.01; echo fast }
+assert { $winner == "fast" } "race"
+
+var parallel_total = (
+    echo 1 2 3 4 |
+    parallel { echo ($_ * 10) } |
+    reduce 0 func(acc, n) => ($acc + $n)
+)
+
+assert { $parallel_total == 100 } "parallel"
+
+# --- Records & classes ---
+record PointRecord(X: int, Y: int)
+
+class Point(x: int, y: int) {
+    fixed prop X: int = x
+    fixed prop Y: int = y
+    lazy prop Length: double => (Math.sqrt(($this.X * $this.X) + ($this.Y * $this.Y)))
+
+    shared func origin() -> Point {
+        return new Point(0, 0)
+    }
+
+    func move(dx: int, dy: int) -> Point {
+        return new Point(($this.X + $dx), ($this.Y + $dy))
+    }
+}
+
+var pr = new PointRecord(3, 4)
+assert { $pr.X == 3 and $pr.Y == 4 } "record"
+
+var p = new Point(3, 4)
+assert { $p.Length == 5 } "class + lazy property"
+
+var moved = $p.move(1, 2)
+assert { $moved.X == 4 and $moved.Y == 6 } "instance method"
+
+var origin = Point.origin()
+assert { $origin.X == 0 and $origin.Y == 0 } "shared method"
+
+# --- CLR interop ---
+assert { Math.sqrt(9) == 3 } "Math.sqrt"
+assert { (square 9) == 81 } "required helper function"
+assert { (cube 3) == 27 } "required helper function"
+assert { (banner "ToastScript") == "*** ToastScript ***" } "required helper function"
+
+# --- Native interop ---
+bind native "libc.so.6" as LibC {
+    func abs(int) -> int
+    func strlen(string) -> nuint
+    func getenv(string) -> cstring
+}
+
+assert { (LibC.abs(-11)) == 11 } "native abs"
+assert { (LibC.strlen("toast")) == 5 } "native strlen"
+
+var native_path = LibC.getenv("PATH")
+assert { $native_path is not null and $native_path.Length > 0 } "native cstring return"
+
+alloc number_buffer = long
+write-buffer $number_buffer 42
+var round_trip_number = read-buffer long $number_buffer
+assert { $round_trip_number == 42 } "native buffer scalar round-trip"
+
+alloc text_buffer = 16
+write-buffer $text_buffer "toast"
+var round_trip_text = read-buffer cstring $text_buffer
+assert { $round_trip_text == "toast" } "native buffer cstring round-trip"
+
+var long_size = size-of long
+assert { $long_size >= 8 } "native size-of"
+
+forget $number_buffer $text_buffer | ignore
+
+writeline "ALL TESTS PASSED"

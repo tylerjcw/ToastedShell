@@ -80,6 +80,9 @@ public sealed record CallableInvocationArgumentSyntax(
 
 public sealed record SubexpressionArgumentSyntax(PipelineSyntax Pipeline, TextSpan Span) : ArgumentSyntax(Span);
 
+/// <summary>A `throw <expr>` used as an expression (e.g. `cond ? throw "x" : y`). Evaluating it raises.</summary>
+public sealed record ThrowArgumentSyntax(ArgumentSyntax? Value, TextSpan Span) : ArgumentSyntax(Span);
+
 public sealed record CommandSubstitutionArgumentSyntax(PipelineSyntax Pipeline, TextSpan Span) : ArgumentSyntax(Span);
 
 public sealed record InputProcessSubstitutionArgumentSyntax(PipelineSyntax Pipeline, TextSpan Span) : ArgumentSyntax(Span);
@@ -157,17 +160,42 @@ public sealed record ComparisonPatternSyntax(
     ArgumentSyntax Operand,
     TextSpan Span) : ArgumentSyntax(Span);
 
+public abstract record RefinementDefinitionClauseSyntax(TextSpan Span);
+
+public sealed record RefinementWhereClauseSyntax(
+    ArgumentSyntax Predicate,
+    TextSpan Span) : RefinementDefinitionClauseSyntax(Span);
+
+public sealed record RefinementCoerceClauseSyntax(
+    ArgumentSyntax? Guard,
+    ArgumentSyntax Coercer,
+    TextSpan Span) : RefinementDefinitionClauseSyntax(Span);
+
+public sealed record RefinementClauseArgumentSyntax(
+    IReadOnlyList<RefinementDefinitionClauseSyntax> Clauses,
+    TextSpan Span) : ArgumentSyntax(Span);
+
 // ── Comprehension syntax ──
+
+/// Clause modifiers (`where` / `let`) are stored in declared order so evaluation
+/// respects lexical intent — e.g. `let y = $x*2 where $y > 4` filters on the let binding.
+public abstract record ComprehensionModifierSyntax(TextSpan Span);
+
+public sealed record ComprehensionWhereSyntax(
+    ArgumentSyntax Condition,
+    TextSpan Span) : ComprehensionModifierSyntax(Span);
+
+public sealed record ComprehensionLetSyntax(
+    string VariableName,
+    ArgumentSyntax Value,
+    TextSpan Span) : ComprehensionModifierSyntax(Span);
 
 public sealed record ComprehensionClauseSyntax(
     string VariableName,
     ArgumentSyntax Source,
-    ArgumentSyntax? Condition,
-    IReadOnlyList<ComprehensionLetSyntax> LetBindings,
+    IReadOnlyList<ComprehensionModifierSyntax> Modifiers,
     ComprehensionClauseSyntax? InnerClause,
     TextSpan Span);
-
-public sealed record ComprehensionLetSyntax(string VariableName, ArgumentSyntax Value, TextSpan Span);
 
 public sealed record ListComprehensionArgumentSyntax(
     ArgumentSyntax Body,

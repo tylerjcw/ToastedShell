@@ -39,11 +39,37 @@ public sealed class DiagnosticRenderer
     {
         ArgumentNullException.ThrowIfNull(diagnostic);
 
+        return RenderDiagnostic(
+            heading: $"Error: {diagnostic.Code}",
+            marker: TerminalGlyphs.ErrorMarker,
+            diagnostic);
+    }
+
+    public string RenderWarning(string title, string? help = null, string? info = null)
+    {
+        return RenderWarning(new ToshDiagnostic(
+            Code: string.Empty,
+            Title: title,
+            Help: help,
+            Info: info));
+    }
+
+    public string RenderWarning(ToshDiagnostic diagnostic)
+    {
+        ArgumentNullException.ThrowIfNull(diagnostic);
+
+        return RenderDiagnostic(
+            heading: "Warning:",
+            marker: TerminalGlyphs.WarningMarker,
+            diagnostic);
+    }
+
+    private string RenderDiagnostic(string heading, string marker, ToshDiagnostic diagnostic)
+    {
         var builder = new StringBuilder();
-        builder.AppendLine(Style(_theme?.Heading, $"Error: {diagnostic.Code}"));
+        builder.AppendLine(Style(_theme?.Heading, heading));
         builder.AppendLine();
-        var errorMarker = TerminalGlyphs.ErrorMarker;
-        builder.AppendLine(Style(_theme?.Title, $"  {errorMarker} {diagnostic.Title}"));
+        builder.AppendLine(Style(_theme?.Title, $"  {marker} {diagnostic.Title}"));
 
         if (!string.IsNullOrWhiteSpace(diagnostic.SourceText) &&
             !string.IsNullOrWhiteSpace(diagnostic.SourceName) &&
@@ -55,6 +81,11 @@ public sealed class DiagnosticRenderer
         if (!string.IsNullOrWhiteSpace(diagnostic.Help))
         {
             builder.AppendLine(Style(_theme?.Help, $"  help: {diagnostic.Help}"));
+        }
+
+        if (!string.IsNullOrWhiteSpace(diagnostic.Info))
+        {
+            builder.AppendLine(Style(_theme?.Help, $"  info: {diagnostic.Info}"));
         }
 
         return builder.ToString().TrimEnd();
@@ -123,7 +154,7 @@ public sealed class DiagnosticRenderer
                 lineStart--;
             }
 
-            var lineEnd = boundedEnd;
+            var lineEnd = boundedStart;
 
             while (lineEnd < sourceText.Length && sourceText[lineEnd] != '\n')
             {
@@ -142,7 +173,9 @@ public sealed class DiagnosticRenderer
 
             var lineText = sourceText[lineStart..lineEnd].TrimEnd('\r');
             var columnNumber = boundedStart - lineStart + 1;
-            var endColumnNumber = Math.Max(columnNumber + 1, boundedEnd - lineStart + 1);
+            var rawEndColumnNumber = Math.Max(columnNumber + 1, boundedEnd - lineStart + 1);
+            var maxEndColumnNumber = lineText.Length + 1;
+            var endColumnNumber = Math.Clamp(rawEndColumnNumber, columnNumber + 1, Math.Max(columnNumber + 1, maxEndColumnNumber));
             return new SourceLocation(lineNumber, columnNumber, endColumnNumber, lineText);
         }
     }

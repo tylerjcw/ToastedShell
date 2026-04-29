@@ -689,7 +689,7 @@ var user = "Alice"
 echo $"Hello, {$user}!"             # Variable
 echo $"2 + 2 = {2 + 2}"             # Expression
 echo $"Files: {ls | where _.Type == file | count}"  # Pipeline
-echo $"Today is {(date now).DayOfWeek}"              # Member access
+echo $"Today is {(date now).DayOfWeek.ToString()}"              # Member access
 \end{lstlisting}
 
 \begin{lstlisting}[title={Multi-line interpolated string}]
@@ -739,6 +739,7 @@ Total: {$items | sum Price}
 \end{lstlisting}
 
 \section{Special Literals}
+\ikw{null}\ikw{true}\ikw{false}
 
 \begin{lstlisting}
 true         # Boolean true
@@ -756,9 +757,9 @@ null         # Null reference
 2001:db8::1
 
 # Quantities with units (backtick syntax)
-100`m        # 100 meters (Length)
-9.8`m/s^2    # acceleration
-5`kg         # 5 kilograms (Mass)
+100\texttt{`}m        # 100 meters (Length)
+9.8\texttt{`}m/s^2    # acceleration
+5\texttt{`}kg         # 5 kilograms (Mass)
 \end{lstlisting}
 
 
@@ -815,10 +816,13 @@ annotations, casts, and \code{new} expressions.
 \code{timeonly} & \code{System.TimeOnly} & Time without date \\
 \code{timespan} & \code{System.TimeSpan} & Duration \\
 \code{regex} & \code{System.Text.RegularExpressions.Regex} & Compiled pattern \\
-\code{list} & \code{System.Collections.Generic.List<object>} & Growable list \\
+\code{list} & \code{System.Collections.Generic.List<object>} & Growable ordered list \\
+\code{array} & \code{System.Object[]} & Fixed-size array \\
 \code{dict} & \code{Dictionary<string, object>} & Key-value dictionary \\
+\code{hashtable} & \code{System.Collections.Hashtable} & Non-generic hash table \\
 \code{set} & \code{HashSet<object>} & Unique value set \\
-\code{tuple} & \code{System.Tuple} types & Immutable tuple \\
+\code{table} & \code{ToSh.DataTable} & Structured tabular data \\
+\code{tuple} & \code{System.Tuple} types & Immutable positional tuple \\
 \code{file} & \code{System.IO.FileInfo} & File reference \\
 \code{dir} / \code{directory} & \code{System.IO.DirectoryInfo} & Directory reference \\
 \code{byte-ptr} & \code{System.IntPtr} & Native pointer \\
@@ -843,10 +847,21 @@ Beyond CLR types, TōSh introduces several shell-native types:
 A value type representing byte quantities with human-friendly display:
 
 \begin{lstlisting}
-10kb                     # 10 KiB
-2.5mb                    # 2.5 MiB
-ls -la | sort Size       # Sort files by StorageSize
+var small = 10kb             # StorageSize of 10 kB (10,000 bytes)
+var large = 2.5mb            # StorageSize of 2.5 MB (2,500,000 bytes)
+echo ($large > $small)       # true
+ls | where Size > 100kb      # filter files larger than 100 kB
+ls | sort Size               # sort by StorageSize
 \end{lstlisting}
+
+\begin{notebox}
+Storage-size suffixes \code{b}, \code{kb}, \code{mb}, \code{gb}, \code{tb}, \code{pb}
+use SI decimal factors (1 kb = 1{,}000 bytes). Binary suffixes \code{kib}, \code{mib},
+\code{gib}, \code{tib}, \code{pib} use powers of 1{,}024.  These suffixes are
+\emph{expression-context literals}: they parse to \code{StorageSize} values in
+expressions (\code{var x = 10kb}, \code{(10kb > 5mb)}) but remain plain strings
+when passed as raw command arguments (\code{echo 10kb}).
+\end{notebox}
 
 \subsection{TemporalAmount / TimeSpan}
 
@@ -1160,13 +1175,114 @@ Everything else & Always truthy & --- \\
 \end{longtable}
 
 
+\section{Refinement Types}
+\label{sec:refinement}
+\ikw{coerce}
+
+A \emph{refinement type} constrains an existing type with one or more
+predicates.  Values that fail a predicate are either repaired via a
+\code{coerce} clause or rejected at runtime.
+
+\subsection*{Block Form}
+
+\begin{lstlisting}
+type PositiveInt = int {
+    where _ > 0
+}
+
+type NormalizedPath = string {
+    if (_ contains "\\") coerce (replace "\\" "/" _)
+    where _ starts-with "/"
+    coerce "/"
+}
+\end{lstlisting}
+
+The body may contain any combination of the three clause forms:
+
+\begin{description}
+  \item[\code{where <predicate>}] A constraint predicate.  The value (bound to
+    \code{\_}) must evaluate to \code{true} after all coercions have been applied.
+    Multiple \code{where} clauses are evaluated as a conjunction.
+
+  \item[\code{if <guard> coerce <expr>}] A conditional normalisation that fires
+    \emph{before} predicate evaluation.  When \code{guard} is truthy, \code{expr}
+    replaces the value.  Useful for always-on normalization such as trimming
+    whitespace or canonicalizing path separators.
+
+  \item[\code{coerce <expr>} (no guard)] A fallback that fires only when one or
+    more \code{where} predicates have already failed.  The expression receives
+    the failing value as \code{\_} and produces a replacement.  Predicates are
+    then re-evaluated against the replacement; if they still fail the refinement
+    is rejected.
+\end{description}
+
+\begin{tipbox}
+Think of the three forms as three phases: \emph{normalise} (\code{if X coerce
+Y}) then \emph{validate} (\code{where}) then \emph{repair} (\code{coerce}).
+\end{tipbox}
+
+\subsection*{Inline Form}
+
+\begin{lstlisting}
+type Port = int where (_ >= 1 and _ <= 65535)
+
+# With an inline fallback: clamp to range if out of bounds
+type Port = int where (_ >= 1 and _ <= 65535) coerce 80
+\end{lstlisting}
+
+\subsection*{Refinements on Parameters and Variables}
+
+Refinement types compose with the standard type annotation syntax:
+
+\begin{lstlisting}
+# Function parameter
+func serve(port: int where _ > 0) { ... }
+
+# Variable declaration
+var name: string where _ != ""
+
+# Inline predicate (anonymous refinement)
+var count: int where _ >= 0 = 0
+\end{lstlisting}
+
+\subsection*{Execution Order}
+
+When a value is checked against a refinement type:
+
+\begin{enumerate}
+  \item All \code{if <guard> coerce <expr>} clauses fire in declaration order;
+    when the guard is truthy, \code{expr} replaces the value.
+  \item All \code{where} predicates evaluate against the (possibly normalised) value.
+  \item If any predicate fails and an unconditional \code{coerce} clause exists,
+    its expression runs and replaces the value.
+  \item Predicates are re-evaluated against the coerced value.
+    Pass \textrightarrow{} success.  Fail \textrightarrow{} runtime error.
+\end{enumerate}
+
+\subsection*{Diagnostics}
+
+\begin{tabular}{lL{7.5cm}}
+\toprule
+\textbf{Code} & \textbf{Trigger} \\
+\midrule
+\code{tosh::runtime::refinement\_failed} & Value did not satisfy a \code{where} predicate after all coercions. \\
+\code{tosh::runtime::refinement\_requires\_boolean} & A \code{where} predicate returned a non-boolean value. \\
+\bottomrule
+\end{tabular}
+
+\begin{warnbox}[Limitation]
+Generic instantiation of refinement types (e.g.\ \code{list<PositiveInt>})
+is not supported by the annotation resolver.  For per-element validation,
+use \code{each \_ as PositiveInt} in a pipeline instead.
+\end{warnbox}
+
 % =============================================================================
 \chapter{Operators}
 \label{ch:operators}
 % =============================================================================
 
 \section{Arithmetic Operators}
-\iop{+}\iop{-}\iop{*}\iop{/}\iop{\%}
+\iop{+}\iop{-}\iop{*}\iop{/}\iop{\%}\iop{**}\iop{//}
 
 \begin{longtable}{clL{7cm}}
 \toprule
@@ -1176,8 +1292,10 @@ Everything else & Always truthy & --- \\
 Addition & \code{+} & Numeric addition; also \code{DateTimeOffset + TimeSpan}, string concatenation, list concatenation \\
 Subtraction & \code{-} & Numeric subtraction; also \code{DateTimeOffset - TimeSpan}, \code{DateTimeOffset - DateTimeOffset} \\
 Multiplication & \code{*} & Numeric multiplication; \code{string * int} repeats the string \\
-Division & \code{/} & Numeric division \\
+Division & \code{/} & Numeric division (integer when both operands are integral) \\
+Integer division & \code{//} & Floor division; result is always rounded toward negative infinity \\
 Modulo & \code{\%} & Remainder after integer division \\
+Exponentiation & \code{**} & Raises left operand to the power of the right (\code{2 ** 10} → \code{1024}) \\
 Unary negation & \code{-x} & Negates a numeric value \\
 \bottomrule
 \caption{Arithmetic operators}
@@ -1222,7 +1340,8 @@ comparison.
 \begin{lstlisting}
 echo (1 == 1)              # true
 echo ("abc" < "def")       # true (lexicographic)
-echo (10kb > 5kb)          # true (StorageSize comparison)
+echo (10kb > 5kb)          # true (StorageSize comparison, both are literals)
+echo (10kb > 5mb)          # false
 \end{lstlisting}
 
 \section{Regex Operators}
@@ -1275,14 +1394,14 @@ and \code{!\textasciitilde}.
 \end{notebox}
 
 \section{Membership Operators}
-\iop{in}\iop{not-in}\iop{is-in}\iop{is-not-in}\iop{contains}\iop{starts-with}\iop{ends-with}
+\iop{in}\iop{not in}\iop{is in}\iop{is not in}\iop{contains}\iop{starts-with}\iop{ends-with}
 
 \begin{tabular}{cl}
 \toprule
 \textbf{Operator} & \textbf{Meaning} \\
 \midrule
-\code{in} / \code{is-in} & Value exists in collection \\
-\code{not-in} / \code{is-not-in} & Value does not exist in collection \\
+\code{in} / \code{is in} & Value exists in collection \\
+\code{not in} / \code{is not in} & Value does not exist in collection \\
 \code{contains} & Collection contains value (also substring check for strings) \\
 \code{starts-with} & String starts with the given prefix \\
 \code{ends-with} & String ends with the given suffix \\
@@ -1291,30 +1410,39 @@ and \code{!\textasciitilde}.
 
 \begin{lstlisting}
 echo ("a" in ["a", "b", "c"])        # true
-echo ("a" is-in ["a", "b", "c"])     # equivalent
-echo (5 not-in [1, 2, 3])           # true
-echo (5 is-not-in [1, 2, 3])        # equivalent
+echo ("a" is in ["a", "b", "c"])     # equivalent
+echo (5 not in [1, 2, 3])           # true
+echo (5 is not in [1, 2, 3])        # equivalent
 echo ("hello" contains "ell")        # true
 echo ("hello" starts-with "hel")     # true
 echo ("hello" ends-with "llo")       # true
 \end{lstlisting}
 
+\begin{notebox}
+\code{is in} and \code{in} also perform a \emph{substring check} when the
+right-hand operand is a \code{string}: \tosh{"." is in "/foo/bar"} returns
+\code{true}.  When operating on strings, \code{contains} is equivalent
+but reads more naturally: \tosh{"hello" contains "ell"}.  Use \code{is in}
+for collection membership and \code{contains} for string containment to
+keep intent clear.
+\end{notebox}
+
 \section{Type Operators}
-\iop{is}\iop{is-not}\iop{as}
+\iop{is}\iop{is not}\iop{as}
 
 \begin{tabular}{cl}
 \toprule
 \textbf{Operator} & \textbf{Meaning} \\
 \midrule
 \code{is} & Type check (returns \code{bool}) \\
-\code{is-not} & Negated type check \\
+\code{is not} & Negated type check \\
 \code{as} & Type cast (returns converted value or \code{null} on failure) \\
 \bottomrule
 \end{tabular}
 
 \begin{lstlisting}
 echo (42 is int)            # true
-echo ("hi" is-not int)      # true
+echo ("hi" is not int)      # true
 
 # Type casting with 'as'
 var n = "42" as int          # 42
@@ -1368,9 +1496,9 @@ echo ($x > 0 ? "positive" : ($x < 0 ? "negative" : "zero"))
 
 \begin{lstlisting}
 var x = 10
-x += 5          # 15
-x *= 2          # 30
-x ??= 100       # Still 30 (x isn't null)
+$x += 5         # 15
+$x *= 2         # 30
+$x ??= 100      # Still 30 (x isn't null)
 \end{lstlisting}
 
 \section{Operator Precedence}
@@ -1383,18 +1511,19 @@ Operators are listed from highest to lowest precedence:
 \textbf{Level} & \textbf{Operators} & \textbf{Description} \\
 \midrule
 \endhead
-1 & \code{not}, \code{-} (unary) & Unary NOT, negation \\
-2 & \code{*}, \code{/}, \code{\%} & Multiplicative \\
-3 & \code{+}, \code{-} & Additive \\
-4 & \code{..} & Range \\
-5 & \code{==}, \code{!=}, \code{<}, \code{>}, \code{<=}, \code{>=}, \code{=\textasciitilde}, \code{!\textasciitilde} & Comparison \& regex \\
-6 & \code{is}, \code{is-not}, \code{as} & Type testing \& casting \\
-7 & \code{in}, \code{not-in}, \code{is-in}, \code{is-not-in}, \code{contains}, \code{starts-with}, \code{ends-with} & Membership \& string testing \\
-8 & \code{and} / \code{\&\&} & Logical AND \\
-9 & \code{or} / \code{||} & Logical OR \\
-10 & \code{?}, \code{:} & Ternary conditional \\
-11 & \code{??} & Null coalescing \\
-12 & \code{=}, \code{+=}, \code{-=}, \code{*=}, \code{/=}, \code{\%=}, \code{??=} & Assignment \\
+1 & \code{**} & Exponentiation (right-associative) \\
+2 & \code{not}, \code{-} (unary) & Unary NOT, negation \\
+3 & \code{*}, \code{/}, \code{//}, \code{\%} & Multiplicative \\
+4 & \code{+}, \code{-} & Additive \\
+5 & \code{..} & Range \\
+6 & \code{==}, \code{!=}, \code{<}, \code{>}, \code{<=}, \code{>=}, \code{=\textasciitilde}, \code{!\textasciitilde} & Comparison \& regex \\
+7 & \code{is}, \code{is not}, \code{as} & Type testing \& casting \\
+8 & \code{in}, \code{not in}, \code{is in}, \code{is not in}, \code{contains}, \code{starts-with}, \code{ends-with} & Membership \& string testing \\
+9 & \code{and} / \code{\&\&} & Logical AND \\
+10 & \code{or} / \code{||} & Logical OR \\
+11 & \code{?}, \code{:} & Ternary conditional \\
+12 & \code{??} & Null coalescing \\
+13 & \code{=}, \code{+=}, \code{-=}, \code{*=}, \code{/=}, \code{\%=}, \code{??=} & Assignment \\
 \bottomrule
 \caption{Operator precedence (highest to lowest)}
 \label{tab:precedence}
@@ -1512,7 +1641,8 @@ var record = { ($key) = "Alice", age = 30 }
 echo ($record.name)        # Alice
 
 # Dynamic key from expression
-var record2 = { ("item-" + "count") = 42 }
+var dynkey = "item-count"
+var record2 = { ($dynkey) = 42 }
 echo ($record2.item-count) # 42
 \end{lstlisting}
 
@@ -1611,7 +1741,7 @@ for i in 1..10 {
 var i = 0
 while ($i < 10) {
     echo $i
-    i += 1
+    $i += 1
 }
 \end{lstlisting}
 
@@ -1625,7 +1755,7 @@ while ($i < 10) {
 var attempts = 0
 until ($attempts >= 3) {
     echo $"Attempt {$attempts + 1}"
-    attempts += 1
+    $attempts += 1
 }
 \end{lstlisting}
 
@@ -1649,33 +1779,66 @@ No \code{break} is needed.
 \section{Match Expressions}
 \ikw{match}
 
-\code{match} is a powerful pattern-matching expression with optional guards:
+\code{match} is a powerful pattern-matching expression.  Arms use
+\code{pattern => result} syntax.
+
+\subsection*{Pattern Forms}
+
+\begin{tabular}{lL{7.5cm}}
+\toprule
+\textbf{Form} & \textbf{Matches when} \\
+\midrule
+\code{<literal>} & Value equals the literal (\code{"file"}, \code{42}, \code{true}). \\
+\code{\_ <op> <value>} & Comparison holds; \code{\_} stands for the matched value.  Supported: \code{>}, \code{>=}, \code{<}, \code{<=}, \code{==}, \code{!=}, \code{=\textasciitilde}, \code{!\textasciitilde}. \\
+\code{\_ is <type>} & Runtime type check (\code{\_ is string}, \code{\_ is int}). \\
+\code{\_} (bare) & Always matches; wildcard catch-all. \\
+\code{default} & Always matches; conventional alternative to bare \code{\_}. \\
+\bottomrule
+\end{tabular}
+
+Arm bodies may be a single pipeline expression (\code{pattern => expr}) or a
+block (\code{pattern => \{ ... \}}).  An optional guard clause
+\code{if ((<condition>))} after the pattern skips the arm when the guard
+evaluates to \code{false} even if the pattern matched.
+
+\code{match} is an expression: its value is the result of the matched arm.
+When used as a statement the result is discarded (side effects still apply).
+
+Value patterns match by equality; comparison patterns use \code{\_} as a placeholder for the matched
+value and support \code{>}, \code{>=}, \code{<}, \code{<=}, \code{=\textasciitilde}, and \code{is}:
 
 \begin{lstlisting}
-var result = match ($value) {
-    when (_.Length > 10) { "long" }
-    when (_ =~ /^\d+$/) { "numeric" }
-    when (_ == "")       { "empty" }
-    default              { "other" }
+# Value patterns (match by equality)
+var kind = "file"
+var label = match ($kind) {
+    "file" => "it is a file"
+    "dir"  => "it is a directory"
+    default => "something else"
 }
 
-# With predicate guards
+# Comparison patterns (use _ as a placeholder for the matched value)
 var category = match ($score) {
-    when (_ >= 90) { "A" }
-    when (_ >= 80) { "B" }
-    when (_ >= 70) { "C" }
-    default        { "F" }
+    _ >= 90 => "A"
+    _ >= 80 => "B"
+    _ >= 70 => "C"
+    default  => "F"
+}
+
+# Type-check patterns
+var typelabel = match ($x) {
+    _ is string => "string value"
+    _ is int    => "integer value"
+    default      => "other type"
 }
 \end{lstlisting}
 
-\begin{lstlisting}[title={Match with if guards}]
-match ($event) {
-    when ($event.Type == "click") if ($event.Target == "button") {
-        handle-button-click $event
-    }
-    when ($event.Type == "key") {
-        handle-key-press $event
-    }
+\begin{lstlisting}[title={Match with guards}]
+# Guards use `if ((<condition>))` after the pattern
+match ($n) {
+    0          => echo "zero"
+    _ > 0 if (($n is int)) => echo "positive integer"
+    _ > 0      => echo "positive"
+    default    => echo "negative"
 }
 \end{lstlisting}
 
@@ -1683,18 +1846,26 @@ match ($event) {
 \ikw{try}\ikw{catch}\ikw{finally}
 
 \begin{lstlisting}
+# Plain catch - no variable bound
 try {
     var data = read-file "config.json" | from json
     process $data
 } catch {
-    writeline $"Error: {$_.Message}"
+    writeline "An error occurred while loading config"
 } finally {
     writeline "Cleanup complete"
 }
 
-# Bind the thrown value/exception to a local name.
+# Named catch - binds the thrown value or exception object
 try {
-    var result = 10 / $divisor
+    throw "something went wrong"
+} catch (err) {
+    writeline $"Caught: {$err}"
+}
+
+# Runtime errors expose a .Message field
+try {
+    var x: int = "not a number"
 } catch (err) {
     writeline $"Unexpected: {$err.Message}"
 }
@@ -1724,10 +1895,12 @@ func process-file(path) {
 \end{lstlisting}
 
 \begin{lstlisting}[title={Defer LIFO ordering}]
-defer { echo "third" }
-defer { echo "second" }
-defer { echo "first" }
-# Output: first, second, third
+func example() {
+    defer { writeline "third" }
+    defer { writeline "second" }
+    defer { writeline "first" }
+}
+example()   # Output: first, second, third
 \end{lstlisting}
 
 \section{Break, Continue, Return, Throw}
@@ -1737,19 +1910,19 @@ defer { echo "first" }
 # break - exit a loop early
 for item in $items {
     if ($item == "stop") { break }
-    echo $item
+    writeline $item
 }
 
 # continue - skip to next iteration
 for item in $items {
     if ($item == "skip") { continue }
-    echo $item
+    writeline $item
 }
 
 # return - exit function with value
 func find-first(items, predicate) {
     for item in $items {
-        if (invoke $predicate $item) { return $item }
+        if ($predicate($item)) { return $item }
     }
     return null
 }
@@ -1759,6 +1932,25 @@ func validate(value) {
     if ($value == null) {
         throw "Value cannot be null"
     }
+}
+\end{lstlisting}
+
+\code{throw} also works as an \emph{expression} in any value position---the
+false branch of a ternary, the right side of null-coalescing, or a match arm
+body.  This lets you encode "this path must not be reached" inline:
+
+\begin{lstlisting}
+# Throw in a ternary: one branch produces a value, the other throws
+var x = ($valid ? $value : throw "validation failed")
+
+# Throw in null-coalescing: fail immediately if a required value is absent
+var conn = $connectionString ?? throw "Connection string is required"
+
+# Throw in a match arm body
+var label = match ($input) {
+    _ is int    => $"int: {$input}"
+    _ is string => $"str: {$input}"
+    default     => throw $"Unexpected type: {typeof $input}"
 }
 \end{lstlisting}
 
@@ -1839,7 +2031,7 @@ greet "Alice" "Dr."           # Hello, Dr. Alice!
 # Rest parameters (with ...)
 func print-all(items...) {
     for item in $items {
-        echo $item
+        writeline $item
     }
 }
 print-all 1 2 3 4 5
@@ -1893,6 +2085,25 @@ func add(a: int, b: int) -> int {
 
 func get-name() -> string { return "TōSh" }
 \end{lstlisting}
+
+\begin{notebox}[Implicit Pipeline Return]
+A function does not need an explicit \code{return} to produce a value.
+All pipeline output emitted by the function body is collected and yielded
+as the function's result when the function exits normally.  If a
+\code{return} is reached, its operands replace any buffered output:
+
+\begin{lstlisting}
+func doubled-items(items) {
+    $items | each { _ * 2 }   # output flows out; no 'return' needed
+}
+
+var results = (doubled-items [1, 2, 3])   # [2, 4, 6]
+\end{lstlisting}
+
+Generator functions (those containing \code{yield}) stream values
+progressively instead of buffering them---see
+Section~\ref{sec:generators}.
+\end{notebox}
 
 \section{Function Overloading}
 
@@ -1948,8 +2159,16 @@ func fibonacci() -> LazySequence {
 fibonacci | first 8             # 0, 1, 1, 2, 3, 5, 8, 13
 \end{lstlisting}
 
+\begin{warnbox}[Known Limitation]
+Generator functions with unbounded \code{while (true)} loops do not yet cooperate
+with early-termination commands such as \code{first}.  The pipeline will run
+indefinitely.  Use a finite upper bound in the loop condition, or reach for
+built-in lazy sources (\code{iterate}, \code{recur}, \code{cycle}, \code{repeat},
+infinite ranges \code{1..}) which do support early termination.
+\end{warnbox}
+
 \begin{tipbox}
-Generator functions integrate naturally with the full pipeline command set:
+Finite generator functions integrate naturally with the full pipeline command set:
 \code{first}, \code{skip}, \code{where}, \code{map}, \code{collect}, etc.
 \end{tipbox}
 
@@ -1976,6 +2195,45 @@ func onFirstStart(event) handles SessionStarted once {
 }
 \end{lstlisting}
 
+\section{Doc-Comments}
+
+Functions, classes, properties, and methods accept documentation comments
+immediately above their declaration.  A doc-comment line begins with \code{\#\#}
+(double hash).  At runtime, \code{help <name>} renders the doc-comment:
+
+\begin{lstlisting}
+## Adds two numbers together and returns the sum.
+## @param=a The first operand.
+## @param=b The second operand.
+## @returns The sum as an int.
+## @example
+##   add 3 4    # 7
+func add(a: int, b: int) -> int {
+    return ($a + $b)
+}
+\end{lstlisting}
+
+The supported tags are:
+
+\begin{tabular}{lL{8cm}}
+\toprule
+\textbf{Tag} & \textbf{Purpose} \\
+\midrule
+\code{@param=<name> <desc>} & Document a named parameter. \\
+\code{@returns <desc>} & Describe the return value. \\
+\code{@example} & Lines following this tag (still prefixed \code{\#\#}) are shown verbatim as examples in \code{help} output. \\
+\code{@deprecated <message>} & Flag the item as deprecated; \code{help} renders a visible warning. \\
+\code{@see <ref>} & Cross-reference another command or function. \\
+\code{@since <version>} & First release in which the item appeared. \\
+\code{@throws <type> <desc>} & Document an exception path the function may raise. \\
+\bottomrule
+\end{tabular}
+
+\begin{tipbox}
+All tags are optional.  A doc-comment containing only prose (no tags) is
+perfectly valid and will display as the item's description.
+\end{tipbox}
+
 \section{Visibility Modifiers}
 
 \begin{lstlisting}
@@ -1987,9 +2245,9 @@ export func public-api() { ... }        # Exported from module
 \section{Functional Composition}
 
 \begin{lstlisting}
-var inc = partial $add 1               # Partial application
-var curried = curry $add3              # Currying
-var composed = compose &double &inc    # Composition
+var inc = partial &add 1               # Partial application
+var curried = curry &add3              # Currying
+var composed = compose $inc &double    # Composition: double(inc(x))
 invoke $composed 5                     # double(inc(5)) = 12
 \end{lstlisting}
 
@@ -2012,7 +2270,7 @@ rune do-twice(body) {
     $body
 }
 
-do-twice { echo "hi" }       # hi, hi
+do-twice { writeline "hi" }  # hi, hi
 \end{lstlisting}
 
 A rune can be invoked like any command, including with block arguments:
@@ -2166,7 +2424,7 @@ module Utilities {
 }
 
 # Usage
-Utilities.banner "Report"
+Utilities.banner("Report")
 \end{lstlisting}
 
 Modules can contain nested types:
@@ -2191,17 +2449,15 @@ var state = Inventory.StockState.Healthy
 \end{lstlisting}
 
 \section{Class Definitions}
-\ikw{class}
+\ikw{class}\ikw{prop}
 
 \begin{lstlisting}
 class Point(x: double, y: double) {
-    prop X: double = x
-    prop Y: double = y
+    prop X: double = $x
+    prop Y: double = $y
 
     # Computed property (evaluated on each access)
-    prop Magnitude: double => (Math.Sqrt(
-        ($this.X * $this.X) + ($this.Y * $this.Y)
-    ))
+    prop Magnitude => (Math.Sqrt(($this.X * $this.X) + ($this.Y * $this.Y)))
 
     func Distance(other) -> double {
         var dx = $this.X - $other.X
@@ -2209,32 +2465,33 @@ class Point(x: double, y: double) {
         return (Math.Sqrt(($dx * $dx) + ($dy * $dy)))
     }
 
-    static func Origin() => new Point(0.0, 0.0)
+    shared func Origin() { return new Point(0.0, 0.0) }
 }
 \end{lstlisting}
 
 \begin{lstlisting}[title={Using classes}]
 var p = new Point(3.0, 4.0)
-echo $p.Magnitude              # 5.0
-echo (Point.Origin())          # Point(0, 0)
+echo $p.Magnitude              # 5
+echo (Point.Origin())          # Point
 
 var q = new Point(6.0, 8.0)
-echo ($p.Distance $q)          # 5.0
+echo ($p.Distance($q))         # 5
 \end{lstlisting}
 
 Class features:
 \begin{itemize}
   \item \textbf{Primary constructor}---parameters after the class name.
   \item \textbf{Stored properties}---\code{prop Name: Type = value}.
-  \item \textbf{Computed properties}---\code{prop Name: Type => (expr)}.
+  \item \textbf{Computed properties}---\code{prop Name => (expr)} (type annotation is inferred).
   \item \textbf{Methods}---\code{func Name(params) \{ ... \}}.
-  \item \textbf{Static methods}---\code{static func Name(params) \{ ... \}} (or \code{shared}).
+  \item \textbf{Static methods}---\code{shared func Name(params) \{ ... \}} (also accepts \code{static}).
   \item \textbf{Self-reference}---\code{\$this} inside methods.
   \item \textbf{Visibility}---\code{shy} for private members.
   \item \textbf{Instantiation}---\code{new ClassName(args)}.
 \end{itemize}
 
 \subsection{Class Modifiers}
+\ikw{sealed}\ikw{hollow}\ikw{hermit}\ikw{strict}\ikw{partial}
 
 Class-level modifiers appear before the \code{class} keyword and control
 the class's overall behaviour.
@@ -2263,11 +2520,11 @@ sealed class Config {
 }
 
 hollow class Shape {
-    hollow func area() -> double
+    hollow func area() -> double { }
 }
 
 hermit class MathHelper {
-    func square(x) { echo ($x * $x) }
+    func square(x) { writeline ($x * $x) }
 }
 MathHelper.square(5)             # 25
 
@@ -2277,10 +2534,11 @@ strict class Point {
 }
 
 partial class User { prop Name = "" }
-partial class User { func greet() { echo $"Hi, {$this.Name}" } }
+partial class User { func greet() { writeline $"Hi, {$this.Name}" } }
 \end{lstlisting}
 
 \subsection{Member Modifiers}
+\ikw{shy}\ikw{shared}\ikw{static}\ikw{fixed}\ikw{vital}\ikw{guarded}\ikw{overrule}\ikw{fading}\ikw{local}\ikw{raw}\ikw{proud}\ikw{public}
 
 Member-level modifiers appear before \code{prop} or \code{func} inside a
 class body.
@@ -2303,8 +2561,8 @@ class body.
   \item[\code{raw}] Marks a method for unsafe/native interop.
   \item[\code{proud} / \code{public}] Explicitly marks a member as public
     (no-op, members default to public).
-  \item[\code{hollow}] (on a method) Declares an abstract method with
-    no body that subclasses must overrule.
+  \item[\code{hollow}] (on a method) Declares an abstract method that subclasses must overrule.
+    An empty body \code{\{ \}} is required: \code{hollow func name() \{ \}}.
 \end{description}
 
 \noindent Example:
@@ -2337,8 +2595,8 @@ trait Named {
     func label() { return $this.Name }
 }
 
-class Report(title: string) uses Named fulfills Printable {
-    prop Title = title
+class Report(title: string) fulfills Printable uses Named {
+    prop Title = $title
     func print() { return $this.Title }
 }
 
@@ -2528,11 +2786,11 @@ local event ScopedNotification { Text = "" }
 \textbf{Raising events:}
 
 \begin{lstlisting}
-raise BuildCompleted {
+raise $BuildCompleted ({
     Project  = "MyApp",
     Duration = (timespan 5s),
     Success  = true
-}
+})
 \end{lstlisting}
 
 \textbf{Subscribing (in any visible scope):}
@@ -2594,11 +2852,12 @@ Parentheses group expressions and force evaluation:
 
 \begin{lstlisting}
 var result = (2 + 3)
-echo (String.Join " " ["a", "b"])
+echo (String.Join(" ", ["a", "b"]))
 echo ($items | count)
 \end{lstlisting}
 
 \section{Ranges}
+\iop{..}
 
 \begin{lstlisting}
 1..10             # 1, 2, 3, ..., 10 (inclusive)
@@ -2687,6 +2946,44 @@ not a background operator. The background \code{\&} only applies at the end
 of a pipeline.
 \end{warnbox}
 
+\section{Glob Expansion}
+\label{sec:globs}
+\ikw{glob}
+
+When a \emph{bareword} argument to an external process or one of the
+builtin commands \code{echo}, \code{write}, \code{writeline}, or
+\code{raw} contains the wildcard characters \code{*}, \code{?},
+\code{[}, or the extended glob prefix \code{@(}, TōSh expands it
+against the file system before the command is invoked.
+
+\begin{lstlisting}
+ls *.txt               # expands to all .txt files in $PWD
+echo src/**/*.cs       # ** matches any number of path segments
+rm build-?.log         # ? matches exactly one character
+\end{lstlisting}
+
+Glob expansion rules:
+
+\begin{itemize}
+  \item Only \textbf{bareword} arguments are expanded.  Quoted strings
+        (\code{"*.txt"}, \code{'*.txt'}) and interpolated strings
+        (\code{\$"*.txt"}) are \emph{never} expanded.
+  \item If the glob matches no files the literal pattern is passed to
+        the command unchanged (no error).
+  \item Only commands that implement the implicit-glob contract perform
+        expansion.  Pure shell built-ins such as \code{where}, \code{each},
+        and \code{sort} do not expand globs---use \code{glob} or
+        \code{find} to produce a file list first.
+\end{itemize}
+
+\begin{lstlisting}
+# Use 'glob' to materialise a list from a pattern in a pipeline
+glob "*.log" | where _.Size > 1mb | each { rm $_ }
+
+# Quoted string - no expansion
+echo "*.txt"           # prints the literal string *.txt
+\end{lstlisting}
+
 \section{Redirection}
 \label{sec:redirection}
 
@@ -2734,9 +3031,9 @@ command >(write-file output.txt)
 Access CLR static methods and members directly:
 
 \begin{lstlisting}
-String.Join ", " ["a", "b"]       # "a, b"
-Math.Sqrt 16                       # 4.0
-Path.GetExtension "./file.cs"      # ".cs"
+String.Join(", ", ["a", "b"])      # "a, b"
+Math.Sqrt(16)                      # 4
+Path.GetExtension("./file.cs")     # ".cs"
 System.Drawing.Color.Green         # Color object
 \end{lstlisting}
 
@@ -2755,7 +3052,6 @@ new DateTime(2024, 1, 1)          # CLR type
 
 \begin{lstlisting}
 var x = 42
-echo (nameof(x))      # "x"
 echo (nameof($x))     # "x"
 \end{lstlisting}
 
@@ -2877,28 +3173,237 @@ config init                         # Scaffold missing startup files
 
 \section{Special Variables}
 
-\begin{longtable}{lL{8cm}}
+\begin{longtable}{lL{8.2cm}}
 \toprule
 \textbf{Variable} & \textbf{Description} \\
 \midrule
 \endhead
-\code{\$tosh} & Runtime namespace (config, last result, script info) \\
-\code{\$env.NAME} & Environment variable lookup \\
-\code{\$tosh.Last.Result} & Most recent successful statement result \\
-\code{\$tosh.Last.ExitCode} & Most recent process exit code \\
-\code{\$tosh.Config} & Live configuration object \\
-\code{\$tosh.Script.Path} & Current script file path \\
-\code{\_} & Current pipeline item in predicates \\
-\code{\$this} & Self-reference in class methods \\
-\code{\$1}, \code{\$2}, \dots & Positional parameters in arrow functions \\
+\multicolumn{2}{l}{\textit{Pipeline and control}} \\
+\code{\_} & Current pipeline item inside predicates and blocks. \\
+\code{\$this} & Self-reference inside class and struct method bodies. \\
+\code{\$1}, \code{\$2}, \dots & Positional parameters in arrow functions. \\
+\midrule
+\multicolumn{2}{l}{\textit{Last result}} \\
+\code{\$tosh.Last.Result} & Pipeline output of the most recent statement. \\
+\code{\$tosh.Last.ExitCode} & Exit code of the last external process (\code{int}). \\
+\code{\$tosh.Last.Duration} & Wall time of the last command (\code{TimeSpan}). \\
+\midrule
+\multicolumn{2}{l}{\textit{Current script}} \\
+\code{\$tosh.Script.Path} & Absolute path of the running script file. \\
+\code{\$tosh.Script.Name} & Filename portion of the running script. \\
+\code{\$tosh.Script.Directory} & Directory containing the running script. \\
+\code{\$tosh.Script.Args} & Arguments passed to the script (\code{list}). \\
+\midrule
+\multicolumn{2}{l}{\textit{Current function}} \\
+\code{\$tosh.Function.Name} & Name of the currently executing function. \\
+\code{\$tosh.Function.Args} & Arguments passed to the current function (\code{list}). \\
+\code{\$tosh.Function.Input} & Pipeline input to the current function. \\
+\midrule
+\multicolumn{2}{l}{\textit{Session}} \\
+\code{\$tosh.Session.CurrentDirectory} & Shell working directory (equivalent to \code{pwd}). \\
+\code{\$tosh.Session.JobCount} & Number of running background jobs. \\
+\code{\$tosh.Session.OpenHandleCount} & Number of open file/stream handles. \\
+\code{\$tosh.Session.NextHistoryId} & ID that will be assigned to the next history entry. \\
+\code{\$tosh.IsLoginShell} & \code{true} when running as a login shell. \\
+\midrule
+\multicolumn{2}{l}{\textit{Host}} \\
+\code{\$tosh.Host.Version} & TōSh version string. \\
+\code{\$tosh.Host.RuntimeId} & .NET runtime identifier (e.g.\ \code{linux-x64}). \\
+\code{\$tosh.Host.Framework} & Target framework moniker (e.g.\ \code{net10.0}). \\
+\code{\$tosh.Host.ProcessId} & PID of the current shell process. \\
+\midrule
+\multicolumn{2}{l}{\textit{Environment and configuration}} \\
+\code{\$env.NAME} & Environment variable (case-insensitive lookup). \\
+\code{\$tosh.Config} & Live configuration object; see Chapter~\ref{ch:config}. \\
 \bottomrule
 \caption{Special variables}
 \label{tab:specialvars}
 \end{longtable}
 
 
-% #############################################################################
+% =============================================================================
+\chapter{Scripts and Subcommand Dispatch}
+\label{ch:subcommands}
+\ikw{subcommand}\ikw{flag}\ikw{arg}\ikw{eager}\ikw{hidden}
+% =============================================================================
 
+TōSh has a built-in system for turning a script into a structured CLI tool.
+The \code{subcommand} block declares named commands with typed flags and
+positional arguments; TōSh handles parsing, validation, and auto-generated
+help text automatically.
+
+\section{Subcommand Basics}
+
+A \code{subcommand} block declares one named command.  Its body runs when
+the user selects that command on the command line:
+
+\begin{lstlisting}
+subcommand greet {
+    flag name: string = "World"
+    echo $"Hello, {$name}!"
+}
+\end{lstlisting}
+
+\begin{lstlisting}[title={Usage}]
+tosh myscript.tosh greet            # Hello, World!
+tosh myscript.tosh greet --name Alice  # Hello, Alice!
+\end{lstlisting}
+
+\subsection*{Arrow form}
+
+A subcommand with parameters and a single-expression body may use the arrow
+form.  Parameters in the arrow form are passed directly, not via flags:
+
+\begin{lstlisting}
+subcommand greet(name: string) => echo $"Hello, {$name}!"
+\end{lstlisting}
+
+\begin{warnbox}
+Parameters declared with \code{()} in the arrow form require the
+\code{=>} separator.  Using a block body with \code{()} parameters is a
+parse error (\code{tosh::parser::subcommand\_params\_require\_arrow}).
+\end{warnbox}
+
+\section{Flags and Arguments}
+
+Inside a subcommand body, \code{flag} declares an optional named option and
+\code{arg} declares a required positional argument:
+
+\begin{lstlisting}
+subcommand deploy {
+    arg  host: string
+    flag port: int    = 22
+    flag user: string = "root"
+    flag dry-run: bool = false
+
+    if ($dry-run) {
+        echo $"[dry-run] ssh {$user}@{$host}:{$port}"
+    } else {
+        ssh $"-p{$port}" $"{$user}@{$host}"
+    }
+}
+\end{lstlisting}
+
+\begin{lstlisting}[title={Usage}]
+tosh deploy.tosh deploy myserver
+tosh deploy.tosh deploy myserver --port 2222 --user alice
+tosh deploy.tosh deploy myserver --dry-run
+\end{lstlisting}
+
+\begin{itemize}
+  \item \code{flag} values are set with \code{--name value} or \code{--name=value}.
+  \item Boolean flags may be set with \code{--name} (sets to \code{true}) or
+        \code{--no-name} (sets to \code{false}).
+  \item \code{arg} values are consumed from the remaining positional tokens in
+        declaration order.
+  \item \code{--} stops option parsing; all tokens after it are positional.
+\end{itemize}
+
+\section{Nested Subcommands}
+
+Subcommands nest to build command trees.  Dispatch descends into the child
+whose name matches the first positional token:
+
+\begin{lstlisting}
+subcommand git {
+    subcommand commit {
+        flag message: string = ""
+        flag all: bool = false
+        echo $"committing: {$message}"
+    }
+
+    subcommand push {
+        arg remote: string = "origin"
+        flag force: bool = false
+        echo $"pushing to {$remote}"
+    }
+}
+\end{lstlisting}
+
+\begin{lstlisting}[title={Usage}]
+tosh myscript.tosh git commit --message "initial"
+tosh myscript.tosh git push origin --force
+\end{lstlisting}
+
+Flags are looked up leaf-to-root: a flag defined on a parent is available to
+all its descendants.
+
+\section{Subcommand Modifiers}
+
+Modifiers appear between \code{subcommand} and the name:
+
+\begin{description}
+  \item[(none)] Body runs only when this is the chosen leaf of dispatch.
+  \item[\code{eager}] Body runs even when execution descends into a child.
+    Used for setup work (e.g.\ loading config before a child acts on it).
+    May not be combined with \code{hollow}.
+  \item[\code{hidden}] Excluded from auto-generated help and ``did you mean''
+    suggestions.  Still fully callable.
+  \item[\code{hollow}] Pure namespace---body must contain only nested
+    \code{subcommand} declarations.  Cannot be instantiated directly.
+  \item[\code{vital}] Throws a runtime error if children exist but the user
+    did not choose one (instead of showing auto-help).
+\end{description}
+
+\begin{lstlisting}[title={eager parent}]
+eager subcommand db {
+    flag env: string = "production"
+    writeline $"Connecting to {$env} database"   # always runs
+
+    subcommand migrate {
+        flag dry-run: bool = false
+        run-migrations --env $env --dry-run $dry-run
+    }
+
+    subcommand seed {
+        run-seed-data --env $env
+    }
+}
+\end{lstlisting}
+
+\section{Auto-Help}
+
+Every subcommand automatically supports \code{--help} at any nesting level.
+The help output is generated from the \code{flag} and \code{arg} declarations
+at the current and ancestor levels.  To opt out of automatic help, declare your
+own \code{flag help: bool = false}.
+
+\begin{warnbox}[Doc-comments not yet included in auto-help]
+Although \code{\#\#} doc-comments can be written above a \code{subcommand}
+block, the current runtime does not attach them to the auto-generated help
+output.  Only the structural information (flag names, types, and which
+subcommands exist) is shown.  If you need richer descriptions today, write
+them in the script body as \code{writeline} output guarded by
+\code{if (\$tosh.Script.Help)}.
+\end{warnbox}
+
+\begin{lstlisting}[title={Invoking auto-help}]
+tosh myscript.tosh --help
+tosh myscript.tosh git --help
+tosh myscript.tosh git commit --help
+\end{lstlisting}
+
+\section{Diagnostics}
+
+\begin{tabular}{lL{7cm}}
+\toprule
+\textbf{Code} & \textbf{Trigger} \\
+\midrule
+\code{tosh::runtime::missing\_script\_flag} & Required flag not provided. \\
+\code{tosh::runtime::missing\_script\_argument} & Required positional \code{arg} not provided. \\
+\code{tosh::runtime::unknown\_script\_flag} & Unrecognised \code{--flag} on the command line. \\
+\code{tosh::runtime::script\_option\_requires\_value} & Flag that expects a value was given without one. \\
+\code{tosh::runtime::unexpected\_script\_argument} & Extra positional token after all \code{arg}s are filled. \\
+\code{tosh::runtime::duplicate\_subcommand} & Two sibling subcommands share the same name. \\
+\code{tosh::parser::incompatible\_subcommand\_modifiers} & \code{eager} and \code{hollow} used together. \\
+\code{tosh::parser::subcommand\_params\_require\_arrow} & Block body used with \code{()} parameter form. \\
+\code{tosh::parser::hollow\_subcommand\_must\_be\_empty} & \code{hollow} subcommand contains non-subcommand statements. \\
+\code{tosh::parser::duplicate\_subcommand\_modifier} & Same modifier applied more than once. \\
+\bottomrule
+\end{tabular}
+
+
+% #############################################################################
 % #############################################################################
 \part{Command Reference}
 \label{part:commands}
@@ -3257,6 +3762,7 @@ string variety reference.
 % =============================================================================
 \chapter{Redirection Syntax}
 \label{app:redirection}
+\ikw{redirection}
 % =============================================================================
 
 See Table~\ref{tab:redirection} on page~\pageref{tab:redirection} for the

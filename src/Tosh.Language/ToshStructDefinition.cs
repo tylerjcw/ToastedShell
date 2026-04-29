@@ -224,12 +224,14 @@ public sealed class ToshStructDefinition : IShellNamedType
 
     internal object? ConvertFieldValue(ToshRecordFieldDefinition field, object? value)
     {
-        if (field.TypeName is null)
-        {
-            return value;
-        }
-
-        return _engine.ConvertAnnotatedValue(field.TypeName, value, field.Span, SourceName, SourceText, $"{Name}.{field.Name}");
+        return _engine.ConvertAnnotatedValue(
+            field.TypeName,
+            field.Refinement,
+            value,
+            field.Span,
+            SourceName,
+            SourceText,
+            $"{Name}.{field.Name}");
     }
 
     internal void MergePartial(IReadOnlyList<ToshRecordFieldDefinition> newFields)

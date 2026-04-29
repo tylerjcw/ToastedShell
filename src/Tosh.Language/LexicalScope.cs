@@ -13,6 +13,7 @@ public sealed class LexicalScope
         Commands = new Dictionary<string, IShellCommand>(StringComparer.Ordinal);
         Classes = new Dictionary<string, object?>(StringComparer.Ordinal);
         Modules = new Dictionary<string, object?>(StringComparer.Ordinal);
+        RefinementTypes = new Dictionary<string, RefinementTypeDefinition>(StringComparer.OrdinalIgnoreCase);
         TypeImports = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         TypeAliases = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         IsModuleScope = isModuleScope;
@@ -27,6 +28,8 @@ public sealed class LexicalScope
     public Dictionary<string, object?> Classes { get; }
 
     public Dictionary<string, object?> Modules { get; }
+
+    internal Dictionary<string, RefinementTypeDefinition> RefinementTypes { get; }
 
     public HashSet<string> TypeImports { get; }
 
@@ -51,6 +54,7 @@ public sealed class LexicalScope
         foreach (var (key, value) in Commands) clone.Commands[key] = value;
         foreach (var (key, value) in Classes) clone.Classes[key] = value;
         foreach (var (key, value) in Modules) clone.Modules[key] = value;
+        foreach (var (key, value) in RefinementTypes) clone.RefinementTypes[key] = value;
         foreach (var name in TypeImports) clone.TypeImports.Add(name);
         foreach (var (key, value) in TypeAliases) clone.TypeAliases[key] = value;
         foreach (var name in LocalEventNames) clone.LocalEventNames.Add(name);

@@ -1,13 +1,12 @@
 # Fdb version 4
-["makeindex toastscript-spec.idx"] 1776758976.10926 "toastscript-spec.idx" "toastscript-spec.ind" "toastscript-spec" 1776758995.2045 0
-  "toastscript-spec.idx" 1776758995.0107 31319 f34aae6ecc7bb5991bc3369f2e8de408 "pdflatex"
+["makeindex toastscript-spec.idx"] 1777446290.36465 "toastscript-spec.idx" "toastscript-spec.ind" "toastscript-spec" 1777446306.57353 0
+  "toastscript-spec.idx" 1777446306.36437 32952 6bb07e435d816ea10bb93db1d67a4c64 "pdflatex"
   (generated)
   "toastscript-spec.ilg"
   "toastscript-spec.ind"
   (rewritten before read)
-["pdflatex"] 1776758986.29373 "/home/komrad/projects/tosh/docs/spec/toastscript-spec.tex" "toastscript-spec.pdf" "toastscript-spec" 1776758995.20464 0
+["pdflatex"] 1777446298.58191 "toastscript-spec.tex" "toastscript-spec.pdf" "toastscript-spec" 1777446306.57366 0
   "/data/pic/Colby Family/Colby-Crest.png" 1767874248.58881 1491286 31b8ad8dda0721b265837ab7e983af74 ""
-  "/home/komrad/projects/tosh/docs/spec/toastscript-spec.tex" 1776755750.12102 99145 e807a79dfb60e57c5d4973bfa3ac9a38 ""
   "/usr/share/texmf-dist/fonts/enc/dvips/cm-super/cm-super-ts1.enc" 1775415801 2900 1537cc8184ad1792082cd229ecc269f4 ""
   "/usr/share/texmf-dist/fonts/enc/dvips/lm/lm-ec.enc" 1775415801 2375 baa924870cfb487815765f9094cf3728 ""
   "/usr/share/texmf-dist/fonts/enc/dvips/lm/lm-mathsy.enc" 1775415801 2840 216e6e45ad352e2456e1149f28885bee ""
@@ -288,12 +287,12 @@
   "/usr/share/texmf-dist/web2c/texmf.cnf" 1775415801 43569 fd570f2fa160877d211e859f687312ba ""
   "/var/lib/texmf/fonts/map/pdftex/updmap/pdftex.map" 1775531760 5385779 47c0c393a77fd4a098bacfd57d66b88a ""
   "/var/lib/texmf/web2c/pdftex/pdflatex.fmt" 1775531733 2328183 dfb779771aad2b6bd1f4d9f2aece24ee ""
-  "command-reference.tex" 1776758988.61358 248524 2418285a6f16616a06a73234a4f599c8 ""
-  "toastscript-spec.aux" 1776758995.0697 307008 23f88e34a54ef06999ca433bef8a3a6c "pdflatex"
-  "toastscript-spec.ind" 1776758995.03887 21231 617286fe1b47a5c45c6d8c3a23349456 "makeindex toastscript-spec.idx"
-  "toastscript-spec.lof" 1776758995.1057 440 00ead0a0c9b0338c729f1ece5dffa4f6 "pdflatex"
-  "toastscript-spec.tex" 1776755750.12102 99145 e807a79dfb60e57c5d4973bfa3ac9a38 ""
-  "toastscript-spec.toc" 1776758995.1057 60069 d70ae940bc5698332c53b6ee27a64f5c "pdflatex"
+  "command-reference.tex" 1777446282.07227 248524 2418285a6f16616a06a73234a4f599c8 ""
+  "toastscript-spec.aux" 1777446306.42137 311639 1f006fe845d6a6fe5a6626218eed778f "pdflatex"
+  "toastscript-spec.ind" 1777446306.39299 22915 cca132e3d8a2b77e438e9453264ae91a "makeindex toastscript-spec.idx"
+  "toastscript-spec.lof" 1777446306.45837 460 3d78153c2ca6d43e798c9c7d6c1a6544 "pdflatex"
+  "toastscript-spec.tex" 1777446201.45198 119288 490f13df4d558505d5b14f0da182349b ""
+  "toastscript-spec.toc" 1777446306.45837 60881 b19e813ccdb90dfcefe16f3727793ea7 "pdflatex"
   (generated)
   "toastscript-spec.aux"
   "toastscript-spec.idx"

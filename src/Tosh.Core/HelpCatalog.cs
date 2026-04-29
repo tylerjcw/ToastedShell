@@ -27,6 +27,36 @@ public static class HelpCatalog
                     "func t1 => test1 $1 \"Jim\" $2",
                 ],
                 Notes: "Use `$tosh.Function.Input` inside a function body to consume piped values. Function call arguments are available through `$tosh.Function.Args`. Command-wrapper functions also receive pipeline input automatically. Use the '=>'-form only for simple command-wrapper functions. If the wrapper body references $1, $2, and so on, Tosh detects those positional parameters automatically. Otherwise a zero-parameter wrapper forwards its call arguments to the wrapped command automatically. Parameters are dynamic by default, but can opt into CLR types. Top-level named functions support overloading by arity and parameter annotations; defining the same callable shape again replaces that overload. `func(...)` also works as an anonymous function expression, which yields a callable value that you can pass around and execute with `invoke`."),
+            ["interpolation"] = new(
+                Category: "Language",
+                Description: "String interpolation syntax. Embeds expressions inside double-quoted strings using `{...}` blocks.",
+                Usage: "$\"text {<expression>} more text\"",
+                Aliases: ["string-interpolation"],
+                Related: ["string", "var", "func"],
+                Examples:
+                [
+                    "var name = \"world\"",
+                    "echo $\"Hello, {$name}!\"",
+                    "echo $\"2 + 2 = {2 + 2}\"",
+                    "echo $\"There are {ls | count} files here.\"",
+                    "echo $\"User: {$tosh.UserInfo.UserName}, Home: {$tosh.UserInfo.HomeDirectory}\"",
+                ],
+                Notes: "Any expression that produces a value can go inside `{...}`. Pipeline expressions are evaluated eagerly. Use `{{` and `}}` to produce a literal brace. The leading `$` distinguishes interpolated strings from plain `\"...\"` literals."),
+            ["null"] = new(
+                Category: "Language",
+                Description: "The null literal. Represents the absence of a value. Assignable to any nullable type.",
+                Usage: "null",
+                Aliases: Array.Empty<string>(),
+                Related: ["??", "?.", "is", "is not", "var"],
+                Examples:
+                [
+                    "var x = null",
+                    "if ($x is null) { echo \"no value\" }",
+                    "if ($x is not null) { echo $x }",
+                    "var result = $x ?? \"default\"",
+                    "func greet(title?: String) { if ($title is null) { echo \"Hi!\" } }",
+                ],
+                Notes: "Use `is null` to test for null. The `??` operator provides a fallback value. Optional parameters declared with `?` default to null when omitted. Avoid checking `== null`; prefer `is null` for cleaner semantics."),
             ["var"] = new(
                 Category: "Language",
                 Description: "Declares a variable and stores the resulting CLR object without flattening it.",
@@ -699,6 +729,259 @@ public static class HelpCatalog
                     "echo one skip two | each { if ((_ == skip)) { continue }; echo _ }",
                 ],
                 Notes: "Continue works in loops and each blocks."),
+
+            // ── Operators ─────────────────────────────────────────────────────────────
+            ["operators"] = new(
+                Category: "Operators",
+                Description: "Overview of all TōSh expression operators.",
+                Usage: "<expr> <op> <expr>",
+                Aliases: ["operator"],
+                Related: ["is", "as", "in", "=~", "contains", "starts-with", "ends-with", "??", ".."],
+                Examples:
+                [
+                    "5 + 3",
+                    "5 is int",
+                    "5 is not string",
+                    "5 as float",
+                    "3 in [1, 2, 3]",
+                    "4 not in [1, 2, 3]",
+                    "\"hello\" starts-with \"he\"",
+                    "\"hello\" contains \"ell\"",
+                    "\"hello\" =~ \"^h\"",
+                    "null ?? \"default\"",
+                    "2 ** 10",
+                    "1..5",
+                ],
+                Notes: "Arithmetic: +, -, *, /, %, ** (power). Comparison: ==, !=, <, <=, >, >= (string equality is case-insensitive). Regex: =~, !~. Logical: and, or, not. Membership: in, not in. Type: is, is not, as. String: contains, starts-with, ends-with. Null-coalescing: ??. Safe-navigation: ?. (use `expr ?. Member`). Range: .. (use `start..end` or `start..step..end`). Ternary: `condition ? then : else`. See individual topics for details."),
+            ["is"] = new(
+                Category: "Operators",
+                Description: "Type-check operator. Returns true if the value is an instance of the named type.",
+                Usage: "<value> is <type-name>",
+                Aliases: ["type-check"],
+                Related: ["is not", "as", "typeof", "describe-type", "operators"],
+                Examples:
+                [
+                    "5 is int",
+                    "\"hello\" is string",
+                    "3.14 is float",
+                    "5 is not string",
+                    "null is null",
+                    "$items is list",
+                ],
+                Notes: "Use `is not` (two words) for the negated form. Type names are the ToSh primitive names: int, float, double, string, bool, list, array, dict, set, tuple, table, null. `is null` and `is not null` test for null values specifically."),
+            ["is not"] = new(
+                Category: "Operators",
+                Description: "Negated type-check operator. Returns true if the value is NOT an instance of the named type.",
+                Usage: "<value> is not <type-name>",
+                Aliases: Array.Empty<string>(),
+                Related: ["is", "as", "operators"],
+                Examples:
+                [
+                    "5 is not string",
+                    "\"hello\" is not int",
+                    "null is not string",
+                ],
+                Notes: "Write as two separate words. Use `is` for the affirmative form."),
+            ["as"] = new(
+                Category: "Operators",
+                Description: "Type-cast operator. Converts a value to the specified type. Also an alias keyword in `using`/`require`/`bind`.",
+                Usage: "<value> as <type-name>",
+                Aliases: ["cast-operator"],
+                Related: ["is", "is not", "cast", "operators"],
+                Examples:
+                [
+                    "5 as float",
+                    "3.14 as int",
+                    "\"42\" as int",
+                    "true as string",
+                    "using Tosh.Core as TC",
+                ],
+                Notes: "Runtime cast using ToSh type names. Throws if the cast is not possible. In import contexts (`using Name as Alias`, `require Name as Alias`), `as` renames the imported binding rather than casting."),
+            ["in"] = new(
+                Category: "Operators",
+                Description: "Membership operator. Returns true if the value is found in the collection, or a substring is found in the string.",
+                Usage: "<value> in <collection> | <substring> in <string>",
+                Aliases: ["membership"],
+                Related: ["not in", "contains", "operators"],
+                Examples:
+                [
+                    "3 in [1, 2, 3]",
+                    "\"ell\" in \"hello\"",
+                    "\"foo\" in (echo foo bar baz)",
+                ],
+                Notes: "`in` is operand-reversed relative to `contains`: `3 in $list` is the same as `$list contains 3`. Also a loop keyword in `for x in ...`; see `for`."),
+            ["not in"] = new(
+                Category: "Operators",
+                Description: "Negated membership operator. Returns true if the value is NOT found in the collection.",
+                Usage: "<value> not in <collection> | <value> is not in <collection>",
+                Aliases: ["is not in"],
+                Related: ["in", "contains", "operators"],
+                Examples:
+                [
+                    "4 not in [1, 2, 3]",
+                    "\"x\" not in \"hello\"",
+                    "(echo a b c) | where _ not in [a, b]",
+                ],
+                Notes: "Write as two words. `is not in` (three words) is also accepted as an equivalent form."),
+            ["contains"] = new(
+                Category: "Operators",
+                Description: "Returns true if the string contains the substring, or if the collection contains the value.",
+                Usage: "<string> contains <substring> | <collection> contains <value>",
+                Aliases: Array.Empty<string>(),
+                Related: ["starts-with", "ends-with", "in", "not in", "operators"],
+                Examples:
+                [
+                    "\"hello\" contains \"ell\"",
+                    "[1, 2, 3] contains 2",
+                    "(ls) | where Name contains \"lib\"",
+                ],
+                Notes: "String containment is case-insensitive. Operand-reversed alternative: `value in collection`."),
+            ["starts-with"] = new(
+                Category: "Operators",
+                Description: "Returns true if the string starts with the given prefix.",
+                Usage: "<string> starts-with <prefix>",
+                Aliases: Array.Empty<string>(),
+                Related: ["ends-with", "contains", "operators"],
+                Examples:
+                [
+                    "\"hello\" starts-with \"he\"",
+                    "(ls) | where Name starts-with \"lib\"",
+                    "(ls) | where Name starts-with \".\"",
+                ],
+                Notes: "String comparison is case-insensitive."),
+            ["ends-with"] = new(
+                Category: "Operators",
+                Description: "Returns true if the string ends with the given suffix.",
+                Usage: "<string> ends-with <suffix>",
+                Aliases: Array.Empty<string>(),
+                Related: ["starts-with", "contains", "operators"],
+                Examples:
+                [
+                    "\"hello\" ends-with \"lo\"",
+                    "(ls) | where Name ends-with \".rs\"",
+                    "(ls) | where Name ends-with \".cs\"",
+                ],
+                Notes: "String comparison is case-insensitive."),
+            ["=~"] = new(
+                Category: "Operators",
+                Description: "Regex match operator. Returns true if the left string matches the .NET regex pattern on the right.",
+                Usage: "<string> =~ <pattern>",
+                Aliases: ["regex-match"],
+                Related: ["!~", "match", "grep", "operators"],
+                Examples:
+                [
+                    "\"hello\" =~ \"^h\"",
+                    "\"hello\" =~ \"[aeiou]\"",
+                    "(echo foo123 bar baz456) | where _ =~ \"\\d+\"",
+                ],
+                Notes: "Uses .NET regex. Patterns are case-insensitive by default. Use `(?-i)` at the start of the pattern to enable case-sensitive matching. The `=~` operand always returns a bool; it does not capture groups."),
+            ["!~"] = new(
+                Category: "Operators",
+                Description: "Negated regex match operator. Returns true if the string does NOT match the pattern.",
+                Usage: "<string> !~ <pattern>",
+                Aliases: ["regex-no-match"],
+                Related: ["=~", "match", "operators"],
+                Examples:
+                [
+                    "\"hello\" !~ \"^x\"",
+                    "(ls) | where Name !~ \"\\.txt$\"",
+                ],
+                Notes: "The negated counterpart to `=~`. Uses .NET regex."),
+            ["and"] = new(
+                Category: "Operators",
+                Description: "Short-circuit logical AND. Returns true only if both operands are truthy.",
+                Usage: "<expr> and <expr>",
+                Aliases: ["&&"],
+                Related: ["or", "not", "operators"],
+                Examples:
+                [
+                    "true and true",
+                    "5 > 3 and 2 < 4",
+                    "if ($x > 0 and $x < 10) { echo in-range }",
+                ],
+                Notes: "`and` short-circuits: the right operand is not evaluated if the left is falsy. `&&` is an alias."),
+            ["or"] = new(
+                Category: "Operators",
+                Description: "Short-circuit logical OR. Returns true if at least one operand is truthy.",
+                Usage: "<expr> or <expr>",
+                Aliases: ["||"],
+                Related: ["and", "not", "operators"],
+                Examples:
+                [
+                    "false or true",
+                    "5 > 10 or 2 < 4",
+                    "if ($x == null or $x == 0) { echo empty }",
+                ],
+                Notes: "`or` short-circuits: the right operand is not evaluated if the left is truthy. `||` is an alias. Use `??` when you want value fallback instead of boolean logic."),
+            ["not"] = new(
+                Category: "Operators",
+                Description: "Unary logical negation. Returns true if the operand is falsy, false if truthy.",
+                Usage: "not <expr>",
+                Aliases: ["!"],
+                Related: ["and", "or", "operators"],
+                Examples:
+                [
+                    "not true",
+                    "not (5 > 3)",
+                    "if (not ($x is null)) { echo has-value }",
+                    "not false",
+                ],
+                Notes: "`!` is an alias for `not` in expression contexts."),
+            ["??"] = new(
+                Category: "Operators",
+                Description: "Null-coalescing operator. Returns the left-hand value if non-null, otherwise evaluates and returns the right-hand value.",
+                Usage: "<expr> ?? <default>",
+                Aliases: ["null-coalescing", "null-coalesce"],
+                Related: ["?.", "operators"],
+                Examples:
+                [
+                    "null ?? \"default\"",
+                    "var x = null; $x ?? \"fallback\"",
+                    "$env.EDITOR ?? \"vim\"",
+                ],
+                Notes: "The right-hand side is only evaluated if the left side is null."),
+            ["?."] = new(
+                Category: "Operators",
+                Description: "Null-safe member access operator. Accesses a property or field; returns null without error if the target is null.",
+                Usage: "<expr> ?. <member>",
+                Aliases: ["safe-navigation", "safe-nav"],
+                Related: ["??", "operators"],
+                Examples:
+                [
+                    "var s = \"hello\"; $s ?. Length",
+                    "var x = null; $x ?. Length",
+                    "$x ?. Name ?? \"unknown\"",
+                ],
+                Notes: "Write with a space before the member name: `$x ?. Property`. Returns null if the target is null, making it composable with `??`. Does not short-circuit method calls; use `$x ?. MethodName` for properties only."),
+            ["**"] = new(
+                Category: "Operators",
+                Description: "Exponentiation operator. Raises the left operand to the power of the right.",
+                Usage: "<base> ** <exponent>",
+                Aliases: ["power", "exponent"],
+                Related: ["operators"],
+                Examples:
+                [
+                    "2 ** 8",
+                    "2 ** 10",
+                    "9 ** 0.5",
+                ],
+                Notes: "Result type follows .NET numeric promotion rules. For fractional exponents, the result is a floating-point value."),
+            [".."] = new(
+                Category: "Operators",
+                Description: "Range operator. Creates a lazy range value from start to end (inclusive). Supports optional step.",
+                Usage: "<start>..<end> | <start>..<step>..<end>",
+                Aliases: ["range-operator"],
+                Related: ["for", "each", "first", "last", "count", "operators"],
+                Examples:
+                [
+                    "1..5",
+                    "1..5 | count",
+                    "0..2..10",
+                    "for i in (1..5) { echo $i }",
+                    "1..10 | each { $_ * 2 }",
+                ],
+                Notes: "Ranges are lazy sequences. The three-part form `start..step..end` specifies the increment. Ranges are inclusive of both endpoints. Pass a range to `for`, `each`, `map`, `first`, `last`, etc."),
+
             ["units"] = new(
                 Category: "Language",
                 Description: "First-class physical unit system with dimensional analysis, SI prefixes, and arithmetic. Write unit literals with backtick syntax: `100`m`, `9.8`m/s^2`, `1`km`.",
@@ -917,29 +1200,34 @@ public static class HelpCatalog
 
     private static bool TryResolveCanonicalShellTopic(ToshRuntime runtime, string name, out HelpTopic topic)
     {
-        foreach (var rawValue in runtime.Classes.Values)
+        foreach (var (key, rawValue) in runtime.Classes)
         {
-            if (rawValue is not IShellTypeDescriptor descriptor)
+            if (rawValue is IShellTypeDescriptor descriptor)
             {
-                continue;
+                if (!string.Equals(name, descriptor.ShellTypeName, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                var aliases = runtime.Classes
+                    .Where(entry => entry.Value is IShellTypeDescriptor candidate &&
+                                    string.Equals(candidate.ShellFullName, descriptor.ShellFullName, StringComparison.OrdinalIgnoreCase))
+                    .Select(entry => entry.Key)
+                    .Where(alias => !string.Equals(alias, descriptor.ShellTypeName, StringComparison.OrdinalIgnoreCase))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(alias => alias, StringComparer.OrdinalIgnoreCase)
+                    .ToArray();
+
+                topic = CreateShellTypeTopic(descriptor, aliases);
+                return true;
             }
 
-            if (!string.Equals(name, descriptor.ShellTypeName, StringComparison.Ordinal))
+            if (rawValue is IShellRefinementTypeDescriptor refinement &&
+                string.Equals(name, refinement.Name, StringComparison.Ordinal))
             {
-                continue;
+                topic = CreateRefinementTypeTopic(refinement);
+                return true;
             }
-
-            var aliases = runtime.Classes
-                .Where(entry => entry.Value is IShellTypeDescriptor candidate &&
-                                string.Equals(candidate.ShellFullName, descriptor.ShellFullName, StringComparison.OrdinalIgnoreCase))
-                .Select(entry => entry.Key)
-                .Where(alias => !string.Equals(alias, descriptor.ShellTypeName, StringComparison.OrdinalIgnoreCase))
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .OrderBy(alias => alias, StringComparer.OrdinalIgnoreCase)
-                .ToArray();
-
-            topic = CreateShellTypeTopic(descriptor, aliases);
-            return true;
         }
 
         topic = null!;
@@ -1341,20 +1629,28 @@ public static class HelpCatalog
 
     private static bool TryResolveShellTopic(ToshRuntime runtime, string name, out HelpTopic topic)
     {
-        if (runtime.Classes.TryGetValue(name, out var rawDescriptor) &&
-            rawDescriptor is IShellTypeDescriptor descriptor)
+        if (runtime.Classes.TryGetValue(name, out var rawDescriptor))
         {
-            var aliases = runtime.Classes
-                .Where(entry => entry.Value is IShellTypeDescriptor candidate &&
-                                string.Equals(candidate.ShellFullName, descriptor.ShellFullName, StringComparison.OrdinalIgnoreCase))
-                .Select(entry => entry.Key)
-                .Where(alias => !string.Equals(alias, descriptor.ShellTypeName, StringComparison.OrdinalIgnoreCase))
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .OrderBy(alias => alias, StringComparer.OrdinalIgnoreCase)
-                .ToArray();
+            if (rawDescriptor is IShellTypeDescriptor descriptor)
+            {
+                var aliases = runtime.Classes
+                    .Where(entry => entry.Value is IShellTypeDescriptor candidate &&
+                                    string.Equals(candidate.ShellFullName, descriptor.ShellFullName, StringComparison.OrdinalIgnoreCase))
+                    .Select(entry => entry.Key)
+                    .Where(alias => !string.Equals(alias, descriptor.ShellTypeName, StringComparison.OrdinalIgnoreCase))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(alias => alias, StringComparer.OrdinalIgnoreCase)
+                    .ToArray();
 
-            topic = CreateShellTypeTopic(descriptor, aliases);
-            return true;
+                topic = CreateShellTypeTopic(descriptor, aliases);
+                return true;
+            }
+
+            if (rawDescriptor is IShellRefinementTypeDescriptor refinement)
+            {
+                topic = CreateRefinementTypeTopic(refinement);
+                return true;
+            }
         }
 
         if (BuiltInShellTypes.TryResolveStaticType(name, runtime.TypeResolver, out var builtInType) &&
@@ -1366,6 +1662,25 @@ public static class HelpCatalog
 
         topic = null!;
         return false;
+    }
+
+    private static HelpTopic CreateRefinementTypeTopic(IShellRefinementTypeDescriptor refinement)
+    {
+        var description = !string.IsNullOrEmpty(refinement.Description)
+            ? refinement.Description
+            : $"Refinement type alias for {refinement.BaseTypeName}.";
+
+        return new HelpTopic(
+            Name: refinement.Name,
+            Kind: HelpSubjectKind.Type,
+            Category: "Types",
+            Description: description,
+            Usage: $"var x: {refinement.Name} = ...",
+            Aliases: Array.Empty<string>(),
+            Related: ["describe-type", "types"],
+            Examples: [$"describe-type {refinement.Name}"],
+            Path: null,
+            Notes: $"Base type: {refinement.BaseTypeName}");
     }
 
     private static HelpTopic CreateShellTypeTopic(IShellTypeDescriptor descriptor, IReadOnlyList<string>? aliases = null)

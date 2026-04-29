@@ -1,0 +1,11 @@
+func square(n: int) -> int => ($n * $n)
+
+func cube(n: int) -> int => ($n * $n * $n)
+
+func banner(text: string) -> string => $"*** {$text} ***"
+
+type Port = int where _ >= 1 and _ <= 65535
+
+type TrimmedName = string where (not String.IsNullOrEmpty(_)) coerce _.Trim()
+
+record Pair(Left: string, Right: int)
