@@ -2,7 +2,7 @@ using System.Globalization;
 
 namespace Tosh.Core.Commands.Sys;
 
-[Stdlib(StdlibCategory.System)]
+[Stdlib(StdlibCategory.Sys)]
 [CommandCategory("System")]
 [CommandArgument("stop", "Final value when one argument is provided.")]
 [CommandArgument("start", "Initial value when two or three arguments are provided.", Required = false)]

@@ -8,6 +8,7 @@ using System.Text.RegularExpressions;
 using Tosh.Core;
 using Tosh.Core.Commands;
 using Tosh.Language.Commands;
+using Tosh.Language.Commands.Shell;
 using Tosh.Language.Debugging;
 using Tosh.Language.Parsing;
 

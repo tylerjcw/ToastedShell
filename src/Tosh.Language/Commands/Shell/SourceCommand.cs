@@ -1,6 +1,6 @@
 using Tosh.Core;
 
-namespace Tosh.Language.Commands;
+namespace Tosh.Language.Commands.Shell;
 
 [Stdlib(StdlibCategory.Shell)]
 [CommandCategory("Shell")]

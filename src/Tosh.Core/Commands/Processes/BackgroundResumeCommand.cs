@@ -1,6 +1,6 @@
 namespace Tosh.Core.Commands.Processes;
 
-[Stdlib(StdlibCategory.Process)]
+[Stdlib(StdlibCategory.Processes)]
 [CommandCategory("Process")]
 [CommandArgument("id", "The id of the suspended job to resume in the background.", Required = false, TypeName = "int")]
 [CommandNote("Resumes a suspended job in the background. The process receives SIGCONT but does not get the terminal, so it runs without interactive I/O. If no id is given, the most recently suspended job is used.")]

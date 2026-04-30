@@ -2,7 +2,7 @@ using System.Diagnostics;
 
 namespace Tosh.Core.Commands.Processes;
 
-[Stdlib(StdlibCategory.Process)]
+[Stdlib(StdlibCategory.Processes)]
 [CommandCategory("Process")]
 [CommandArgument("name-or-id", "Optional process names or PIDs to filter.", Required = false)]
 [CommandOption("-e", "Show every process.")]

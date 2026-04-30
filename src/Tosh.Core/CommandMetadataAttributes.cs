@@ -21,9 +21,9 @@ public enum StdlibCategory
     /// <summary>File and stream I/O: <c>read-file</c>, <c>write-file</c>, <c>open-file</c>, …</summary>
     IO,
     /// <summary>Process management: <c>ps</c>, <c>kill</c>, <c>spawn</c>, <c>jobs</c>, …</summary>
-    Process,
+    Processes,
     /// <summary>System inspection: <c>uname</c>, <c>df</c>, <c>systemctl</c>, …</summary>
-    System,
+    Sys,
     /// <summary>Text manipulation: <c>grep</c>, <c>cut</c>, <c>tr</c>, <c>parse</c>, …</summary>
     Text,
     /// <summary>Data / collection helpers: <c>collect</c>, <c>distinct</c>, <c>group-by</c>, <c>summarize</c>, …</summary>
@@ -43,7 +43,7 @@ public enum StdlibCategory
     /// <summary>Output presentation: <c>styled</c>, <c>view</c> (output-tuning subset).</summary>
     Display,
     /// <summary>Math helpers: <c>abs</c>, <c>round</c>, <c>min</c>, <c>max</c>, …</summary>
-    Math,
+    Maths,
     /// <summary>CLR interop: <c>new-object</c>, <c>call</c>, <c>cast</c>, <c>members</c>, …</summary>
     Clr,
     /// <summary>Scripting / runtime meta: <c>source</c>, <c>eval</c>, <c>assert</c>, <c>echo</c>, …</summary>

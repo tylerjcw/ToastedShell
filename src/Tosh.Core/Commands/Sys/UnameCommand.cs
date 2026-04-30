@@ -1,6 +1,6 @@
 namespace Tosh.Core.Commands.Sys;
 
-[Stdlib(StdlibCategory.System)]
+[Stdlib(StdlibCategory.Sys)]
 [CommandCategory("System")]
 [CommandOption("-s", "System Name")]
 [CommandOption("-n", "Node Name")]

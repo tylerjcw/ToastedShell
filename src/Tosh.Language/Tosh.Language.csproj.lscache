@@ -57,13 +57,14 @@ TemporaryDependencyNodeTargetIdentifier=net10.0
 BuiltinRunes.cs
 CallableBindingMatch.cs
 Commands/
- DebugCommand.cs
  FunctionCommand.cs
  NativeFunctionCommand.cs
  OverloadedFunctionCommand.cs
  RenamedCommand.cs
  RuneCommand.cs
- SourceCommand.cs
+ Shell/
+  DebugCommand.cs
+  SourceCommand.cs
  ToshScriptCommand.cs
 Debugging/
  DebugAbortException.cs

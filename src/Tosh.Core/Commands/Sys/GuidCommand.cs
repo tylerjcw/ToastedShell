@@ -2,7 +2,7 @@ using System.Globalization;
 
 namespace Tosh.Core.Commands.Sys;
 
-[Stdlib(StdlibCategory.System)]
+[Stdlib(StdlibCategory.Sys)]
 [CommandCategory("System")]
 [CommandExample("guid")]
 [CommandExample("guid new v7")]

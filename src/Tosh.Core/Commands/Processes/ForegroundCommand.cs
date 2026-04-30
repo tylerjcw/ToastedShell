@@ -1,6 +1,6 @@
 namespace Tosh.Core.Commands.Processes;
 
-[Stdlib(StdlibCategory.Process)]
+[Stdlib(StdlibCategory.Processes)]
 [CommandCategory("Process")]
 [CommandArgument("id", "The id of the suspended job to bring to the foreground.", Required = false, TypeName = "int")]
 [CommandNote("Resumes a suspended job (stopped with Ctrl+Z) in the foreground. If no id is given, the most recently suspended job is used.")]

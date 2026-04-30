@@ -137,6 +137,47 @@ public sealed class DocumentationCoverageTests
     }
 
     [Fact]
+    public void Stdlib_attribute_matches_command_namespace_layout()
+    {
+        // Every ShellCommand decorated with [Stdlib(StdlibCategory.X)] must live
+        // in a `…Commands.X` namespace (and therefore folder). This guards against
+        // drift where a file gets moved without updating the attribute, or where
+        // the attribute is added without filing the source under the matching
+        // subfolder. Either side of the discrepancy fails the test.
+        //
+        // We accept any assembly root (Tosh.Core.Commands.X *or* Tosh.Language.Commands.X
+        // for language-tier built-ins like `source` / `debug`) — the bucket is the
+        // last namespace segment.
+        var (registry, _) = GetRegistryAndEntries();
+
+        var mismatches = new List<string>();
+        foreach (var command in registry.All.OfType<ShellCommand>())
+        {
+            var type = command.GetType();
+            var stdlibAttr = type.GetCustomAttribute<StdlibAttribute>();
+            if (stdlibAttr is null) continue; // covered by the previous test
+
+            var bucket = stdlibAttr.Category.ToString();
+            var actual = type.Namespace ?? string.Empty;
+            var lastSegment = actual.Split('.').LastOrDefault() ?? string.Empty;
+
+            if (!string.Equals(lastSegment, bucket, StringComparison.Ordinal))
+            {
+                mismatches.Add(
+                    $"{command.Name} ({type.Name}): [Stdlib({bucket})] but lives in `{actual}` " +
+                    $"(expected the namespace to end in `.{bucket}`).");
+            }
+        }
+
+        Assert.True(
+            mismatches.Count == 0,
+            "The following commands have a [Stdlib] attribute that disagrees with their namespace:\n  - " +
+            string.Join("\n  - ", mismatches) +
+            "\nEither move the file into a `Commands/<Bucket>/` folder (and update the namespace), " +
+            "or change the [Stdlib(StdlibCategory.X)] argument to match the current location.");
+    }
+
+    [Fact]
     public void Description_and_Usage_are_non_empty_and_not_placeholder()
     {
         var (registry, _) = GetRegistryAndEntries();

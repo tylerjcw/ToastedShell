@@ -1,6 +1,6 @@
 namespace Tosh.Core.Commands.Processes;
 
-[Stdlib(StdlibCategory.Process)]
+[Stdlib(StdlibCategory.Processes)]
 [CommandCategory("Process")]
 [CommandArgument("signal", "Signal name or number, such as TERM, INT, HUP, or 15.")]
 [CommandArgument("job-id|pid ...", "One or more ToSh background job ids, ShellJobInfo values, ProcessInfo values, or native process ids.")]

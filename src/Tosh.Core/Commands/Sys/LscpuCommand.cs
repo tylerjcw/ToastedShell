@@ -2,7 +2,7 @@ using System.Diagnostics;
 
 namespace Tosh.Core.Commands.Sys;
 
-[Stdlib(StdlibCategory.System)]
+[Stdlib(StdlibCategory.Sys)]
 [CommandCategory("System")]
 [CommandArgument("[-e|-C]", "Without a mode flag, `lscpu` returns a structured CPU summary. `-e` switches to per-CPU topology rows and `-C` switches to CPU cache rows.", Required = false)]
 [CommandOption("-B", "Render cache sizes in raw bytes for summary and cache views.")]

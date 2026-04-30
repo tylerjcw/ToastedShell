@@ -1,6 +1,6 @@
 namespace Tosh.Core.Commands.Sys;
 
-[Stdlib(StdlibCategory.System)]
+[Stdlib(StdlibCategory.Sys)]
 [CommandCategory("System")]
 [CommandArgument("name ...", "With no assignments, query one or more environment variable names.", Required = false)]
 [CommandArgument("name=value ...", "Temporary environment assignments for `env` output or a nested command.", Required = false)]

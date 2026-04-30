@@ -1,6 +1,6 @@
 namespace Tosh.Core.Commands.Processes;
 
-[Stdlib(StdlibCategory.Process)]
+[Stdlib(StdlibCategory.Processes)]
 [CommandCategory("Process")]
 [CommandArgument("job-id ...", "Optional ToSh background job ids or job objects to await. With no targets, waits for all current jobs.", Required = false)]
 [CommandExample("wait-for", Title = "Wait for all background jobs")]

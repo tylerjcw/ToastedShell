@@ -2,7 +2,7 @@ using System.Diagnostics;
 
 namespace Tosh.Core.Commands.Sys;
 
-[Stdlib(StdlibCategory.System)]
+[Stdlib(StdlibCategory.Sys)]
 [CommandCategory("System")]
 [CommandArgument("[status]", "With no subcommand, ToSh treats `hostnamectl` as a structured status query. Explicit `status` behaves the same way.", Required = false)]
 [CommandArgument("<other-command ...>", "Mutating or unsupported commands fall back to the native `hostnamectl` utility unchanged.", Required = false)]

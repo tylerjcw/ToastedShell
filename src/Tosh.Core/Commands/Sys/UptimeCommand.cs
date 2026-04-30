@@ -1,6 +1,6 @@
 namespace Tosh.Core.Commands.Sys;
 
-[Stdlib(StdlibCategory.System)]
+[Stdlib(StdlibCategory.Sys)]
 [CommandCategory("System")]
 [CommandExample("uptime", Title = "Show uptime and load averages")]
 [CommandOutput("A record describing system uptime: boot time, elapsed duration, and load averages where available.")]

@@ -3,7 +3,7 @@ using System.Dynamic;
 
 namespace Tosh.Core.Commands.Sys;
 
-[Stdlib(StdlibCategory.System)]
+[Stdlib(StdlibCategory.Sys)]
 [CommandCategory("System")]
 [CommandArgument("[-m|-M|-q|-Q|-s|-S]", "Select a specific IPC resource family. With no resource flag, `lsipc` returns the global IPC limits and usage summary.", Required = false)]
 [CommandOption("-m", "Return System V shared-memory rows.")]

@@ -2,7 +2,7 @@ using Tosh.Tui.Requests;
 
 namespace Tosh.Core.Commands.Sys;
 
-[Stdlib(StdlibCategory.System)]
+[Stdlib(StdlibCategory.Sys)]
 [CommandCategory("System")]
 [CommandArgument("filter", "Optional case-insensitive name filter.", Required = false)]
 [CommandArgument("browse [filter]", "Open the interactive variable browser, optionally filtered.", Required = false)]
