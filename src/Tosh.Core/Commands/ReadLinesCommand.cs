@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Filesystem)]
 [CommandCategory("Filesystem")]
 [CommandArgument("path ...", "One or more file paths to read line-by-line.", Required = false, TypeName = "path-like")]
 [CommandExample("read-lines ./notes.txt")]

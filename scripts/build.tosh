@@ -680,10 +680,18 @@ func read_prev_field(prev_bench: object, key: string) -> double?
     return ($prop.GetValue($prev_bench) as double)
 }
 
+## Runs Benchmarks against publish configurations
 subcommand bench {
+    ## The Runtime Identifier (RID) to publish for. Defaults to current platform RID if not specified.
     flag rid: string = ""
+
+    ## Number of times to run the warm startup measurement (average will be reported). Default: 5
     flag runs: int = 5
+
+    ## Output directory for published binaries and benchmark results. Defaults to "artifacts/benchmarks/{rid}" under the repo root.
     flag output: string = ""
+
+    ## When set, compares startup times against the previous bench run and shows deltas.
     flag compare: bool = false
 
     if ($rid == "") { $rid = System.Runtime.InteropServices.RuntimeInformation.RuntimeIdentifier }

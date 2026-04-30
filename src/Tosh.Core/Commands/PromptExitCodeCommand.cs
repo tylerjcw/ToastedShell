@@ -1,5 +1,7 @@
 namespace Tosh.Core.Commands;
 
+[ShellOnly]
+[Stdlib(StdlibCategory.Shell)]
 [CommandCategory("Prompt")]
 [CommandArgument("code", "Exit code to render instead of the shell's last exit code.", Required = false, TypeName = "int")]
 [CommandOption("--fg <color>", "Foreground color name or ANSI-style color token.")]
@@ -8,6 +10,7 @@ namespace Tosh.Core.Commands;
 [CommandOption("--dim", "Render the segment dimmed.")]
 [CommandExample("prompt-exit")]
 [CommandExample("prompt-exit 7 --fg red --bold")]
+[CommandOutput("Styled prompt segment(s) describing the previous command's exit status.")]
 public sealed class PromptExitCodeCommand : ShellCommand
 {
     public PromptExitCodeCommand()

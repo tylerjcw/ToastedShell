@@ -15,7 +15,7 @@ public sealed class LspFeatureTests
         var diagnostics = _features.GetDiagnostics("var = 1", "test.tosh");
 
         var diagnostic = Assert.Single(diagnostics);
-        Assert.StartsWith("tosh::parser::", diagnostic.Code, StringComparison.Ordinal);
+        Assert.StartsWith("tosh.parser.", diagnostic.Code, StringComparison.Ordinal);
         Assert.Equal("tosh", diagnostic.Source);
     }
 

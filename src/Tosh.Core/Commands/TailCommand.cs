@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Text)]
 [CommandCategory("Text")]
 [CommandArgument("path ...", "Optional files to read instead of pipeline input.", Required = false, TypeName = "path-like")]
 [CommandOption("-n, --lines <count>", "Return this many lines or pipeline items. Defaults to 10.")]
@@ -8,6 +9,7 @@ namespace Tosh.Core.Commands;
 [CommandExample("ls | tail -n 5", Title = "Take the last five pipeline items")]
 [CommandExample("tail -n 50 app.log", Title = "Read the last fifty lines of a file")]
 [CommandExample("tail -f app.log", Title = "Follow appended log lines")]
+[CommandOutput("The last N items of the input stream (default 10), preserving order.")]
 public sealed class TailCommand : ShellCommand
 {
     public TailCommand()

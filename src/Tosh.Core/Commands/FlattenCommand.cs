@@ -2,6 +2,7 @@ using System.Collections;
 
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Pipeline)]
 [CommandCategory("Pipeline")]
 [CommandExample("echo [1 2] [3 4] | flatten", Title = "Flatten nested arrays")]
 [CommandExample("ls /tmp /var | flatten", Title = "Flatten directory listings into one stream")]

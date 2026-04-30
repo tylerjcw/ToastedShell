@@ -79,6 +79,12 @@ public sealed class DotNetTypeResolver : IImportingTypeResolver
         ["sortedmap"] = 2,
     };
     private static readonly Lazy<PlatformTypeIndex> PlatformTypes = new(BuildPlatformTypeIndex);
+    // Number of assemblies present in AppDomain when the platform index was built.
+    // Assemblies loaded after this count are not yet in the index and must be scanned directly.
+    private static volatile int _platformIndexedAssemblyCount;
+    // Names that have been confirmed not to resolve to any type. Avoids repeated failed scans.
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, bool> _negativeResultCache =
+        new(StringComparer.OrdinalIgnoreCase);
 
     private static readonly string[] DefaultImplicitUsings =
     [
@@ -285,65 +291,80 @@ public sealed class DotNetTypeResolver : IImportingTypeResolver
 
     private static bool TryResolveDirect(string name, out Type? type)
     {
+        // Fast negative: previously confirmed as not resolvable and no new assemblies loaded since.
+        if (_negativeResultCache.ContainsKey(name) &&
+            AppDomain.CurrentDomain.GetAssemblies().Length <= _platformIndexedAssemblyCount)
+        {
+            type = null;
+            return false;
+        }
+
         type = Type.GetType(name, throwOnError: false, ignoreCase: true);
+        if (type is not null) return true;
 
-        if (type is not null)
+        // Use the platform type index (O(1) dictionary lookup).
+        // If the background warm-up task hasn't finished yet this blocks once until it does,
+        // after which all subsequent calls are instant.  The index covers all assemblies
+        // present at startup; only newly loaded ones (load-assembly) need a direct scan.
+        if (PlatformTypes.Value.TryGet(name, out type)) return true;
+
+        var allAssemblies = AppDomain.CurrentDomain.GetAssemblies();
+        var indexedCount = _platformIndexedAssemblyCount;
+        for (var i = indexedCount; i < allAssemblies.Length; i++)
         {
-            return true;
+            if (allAssemblies[i].IsDynamic) continue;
+            var newMatch = SafeGetTypes(allAssemblies[i]).FirstOrDefault(t =>
+                TypeNameMatches(t.FullName, name) || TypeNameMatches(t.Name, name));
+            if (newMatch is not null) { type = newMatch; return true; }
         }
 
-        foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies().Where(assembly => !assembly.IsDynamic))
-        {
-            var match = SafeGetTypes(assembly).FirstOrDefault(type =>
-                TypeNameMatches(type.FullName, name) ||
-                TypeNameMatches(type.Name, name));
-
-            if (match is not null)
-            {
-                type = match;
-                return true;
-            }
-        }
-
-        if (PlatformTypes.Value.TryGet(name, out type))
-        {
-            return true;
-        }
-
+        _negativeResultCache.TryAdd(name, true);
         type = null;
         return false;
     }
 
     private static bool TryResolveDirectGenericDefinition(string name, int arity, out Type? type)
     {
-        type = Type.GetType($"{name}`{arity}", throwOnError: false, ignoreCase: true);
+        var cacheKey = $"{name}`{arity}";
 
-        if (type is not null)
+        // Fast negative: previously confirmed as not resolvable and no new assemblies loaded since.
+        if (_negativeResultCache.ContainsKey(cacheKey) &&
+            AppDomain.CurrentDomain.GetAssemblies().Length <= _platformIndexedAssemblyCount)
         {
-            return true;
+            type = null;
+            return false;
         }
 
-        foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies().Where(assembly => !assembly.IsDynamic))
+        type = Type.GetType(cacheKey, throwOnError: false, ignoreCase: true);
+        if (type is not null) return true;
+
+        if (PlatformTypes.Value.TryGetGenericDefinition(name, arity, out type)) return true;
+
+        var allAssemblies = AppDomain.CurrentDomain.GetAssemblies();
+        var indexedCount = _platformIndexedAssemblyCount;
+        for (var i = indexedCount; i < allAssemblies.Length; i++)
         {
-            var match = SafeGetTypes(assembly).FirstOrDefault(candidate =>
+            if (allAssemblies[i].IsDynamic) continue;
+            var newMatch = SafeGetTypes(allAssemblies[i]).FirstOrDefault(candidate =>
                 candidate.IsGenericTypeDefinition &&
                 candidate.GetGenericArguments().Length == arity &&
                 (TypeNameMatches(candidate.FullName, name) || TypeNameMatches(candidate.Name, name)));
-
-            if (match is not null)
-            {
-                type = match;
-                return true;
-            }
+            if (newMatch is not null) { type = newMatch; return true; }
         }
 
-        if (PlatformTypes.Value.TryGetGenericDefinition(name, arity, out type))
-        {
-            return true;
-        }
-
+        _negativeResultCache.TryAdd(cacheKey, true);
         type = null;
         return false;
+    }
+
+    /// <summary>
+    /// Eagerly builds the platform type index in the calling thread.
+    /// Call this early (e.g., from a background task at startup) so that
+    /// subsequent type resolution calls are O(1) dictionary lookups.
+    /// </summary>
+    public static void WarmUpPlatformTypeIndex()
+    {
+        _ = PlatformTypes.Value;
     }
 
     private static bool TryResolveGenericAlias(string name, IReadOnlyList<Type> arguments, out Type? type)
@@ -511,13 +532,19 @@ public sealed class DotNetTypeResolver : IImportingTypeResolver
             }
         }
 
-        return new PlatformTypeIndex(
+        var index = new PlatformTypeIndex(
             fullNames,
             simpleNames,
             fullNames.Values
                 .Concat(simpleNames.Values)
                 .Distinct()
                 .ToArray());
+
+        // Record how many assemblies were present when the index was built so that
+        // TryResolveDirect can skip re-scanning them on subsequent calls.
+        _platformIndexedAssemblyCount = AppDomain.CurrentDomain.GetAssemblies().Length;
+
+        return index;
     }
 
     private static IEnumerable<Assembly> EnumerateTrustedPlatformAssemblies()

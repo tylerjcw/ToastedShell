@@ -21,6 +21,7 @@ public sealed class ToshConfig : IResettableShellConfig
         History = new ToshHistoryConfig(ToshConfigDefaults.GetDefaultStateDirectory());
         Startup = new ToshStartupConfig(startupRootDirectory);
         Tty = new ToshTtyConfig();
+        Diagnostics = new ToshDiagnosticsConfig();
     }
 
     public ToshThemeConfig Theme { get; }
@@ -39,6 +40,8 @@ public sealed class ToshConfig : IResettableShellConfig
 
     public ToshTtyConfig Tty { get; }
 
+    public ToshDiagnosticsConfig Diagnostics { get; }
+
     public void Reset()
     {
         Theme.Reset();
@@ -49,6 +52,7 @@ public sealed class ToshConfig : IResettableShellConfig
         History.Reset();
         Startup.Reset();
         Tty.Reset();
+        Diagnostics.Reset();
     }
 }
 
@@ -483,6 +487,12 @@ public sealed class ToshDiagnosticThemeConfig : IResettableShellConfig
         Underline = new ToshTextStyleConfig(foreground: "red");
         Label = new ToshTextStyleConfig(foreground: "red");
         Help = new ToshTextStyleConfig(foreground: "bright-cyan");
+        Frame = new ToshTextStyleConfig(foreground: "gray", dim: true);
+        Code = new ToshTextStyleConfig(foreground: "gray", dim: true);
+        ErrorGlyph = new ToshTextStyleConfig(foreground: "bright-red", bold: true);
+        WarningGlyph = new ToshTextStyleConfig(foreground: "bright-yellow", bold: true);
+        InfoGlyph = new ToshTextStyleConfig(foreground: "bright-blue", bold: true);
+        HintGlyph = new ToshTextStyleConfig(foreground: "gray", dim: true);
     }
 
     public ToshTextStyleConfig Heading { get; }
@@ -497,6 +507,20 @@ public sealed class ToshDiagnosticThemeConfig : IResettableShellConfig
 
     public ToshTextStyleConfig Help { get; }
 
+    /// <summary>Style applied to half-frame border characters (`│ ╰─`).</summary>
+    public ToshTextStyleConfig Frame { get; }
+
+    /// <summary>Style applied to the diagnostic code in the header (`tosh.runtime.unknown_command`).</summary>
+    public ToshTextStyleConfig Code { get; }
+
+    public ToshTextStyleConfig ErrorGlyph { get; }
+
+    public ToshTextStyleConfig WarningGlyph { get; }
+
+    public ToshTextStyleConfig InfoGlyph { get; }
+
+    public ToshTextStyleConfig HintGlyph { get; }
+
     public void Reset()
     {
         Heading.Reset();
@@ -505,6 +529,12 @@ public sealed class ToshDiagnosticThemeConfig : IResettableShellConfig
         Underline.Reset();
         Label.Reset();
         Help.Reset();
+        Frame.Reset();
+        Code.Reset();
+        ErrorGlyph.Reset();
+        WarningGlyph.Reset();
+        InfoGlyph.Reset();
+        HintGlyph.Reset();
     }
 }
 

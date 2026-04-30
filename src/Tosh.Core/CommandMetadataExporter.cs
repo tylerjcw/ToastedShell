@@ -12,10 +12,16 @@ public static class CommandMetadataExporter
 {
     public static IReadOnlyList<CommandMetadata> BuildMetadata(ShellCommandRegistry registry)
     {
-        // Build alias map: merge explicit [CommandAlias] declarations with heuristic grouping.
-        var heuristicAliasMap = HelpCatalog.BuildBuiltInAliasMap(registry.All);
+        // Build alias map: merge registry aliases (RegisterAlias) + heuristic grouping +
+        // explicit [CommandAlias] declarations. Registry takes precedence.
+        var registryAliasMap = registry.GetAliasMap();
+        var heuristicAliasMap = HelpCatalog.BuildBuiltInAliasMap(registry.All, registryAliasMap);
         var explicitAliasMap = BuildExplicitAliasMap(registry.All);
         var aliasMap = MergeAliasMaps(heuristicAliasMap, explicitAliasMap);
+
+        // Names that are canonical commands in registry aliases — these are always primary, never
+        // re-canonicalized via GetPrimaryName length heuristic.
+        var registryCanonicals = new HashSet<string>(registryAliasMap.Keys, StringComparer.OrdinalIgnoreCase);
 
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var entries = new List<CommandMetadata>();
@@ -28,8 +34,9 @@ public static class CommandMetadataExporter
                 continue;
 
             // Skip heuristic aliases that aren't the primary name.
-            // Commands with explicit aliases pointing to them are always primary.
+            // Commands with explicit aliases (attribute or RegisterAlias) pointing to them are always primary.
             if (!explicitAliasMap.ContainsKey(command.Name) &&
+                !registryCanonicals.Contains(command.Name) &&
                 aliasMap.TryGetValue(command.Name, out var aliases) && aliases.Count > 0)
             {
                 var primaryName = GetPrimaryName(command.Name, aliases);
@@ -185,7 +192,10 @@ public sealed record CommandMetadata(
     IReadOnlyList<string> Permissions,
     bool IsExperimental,
     IReadOnlyList<string> ErrorConditions,
-    IReadOnlyList<CommandCanonicalExampleMetadata> CanonicalExamples);
+    IReadOnlyList<CommandCanonicalExampleMetadata> CanonicalExamples,
+    string? Stdlib = null,
+    bool IsShellOnly = false,
+    string? ShellOnlyReason = null);
 
 public sealed record CommandCanonicalExampleMetadata(
     string Input,

@@ -11,7 +11,9 @@ public static class ToshParser
         try
         {
             var sourceText = source ?? string.Empty;
-            var parser = new InternalParser(sourceName, sourceText, new ToshLexer(sourceText).Lex());
+            var lexer = new ToshLexer(sourceText);
+            var tokens = lexer.Lex();
+            var parser = new InternalParser(sourceName, sourceText, tokens, lexer.LineHushDirectives);
             return parser.Parse();
         }
         catch (ToshLexer.LexerDiagnosticException exception)
@@ -31,21 +33,27 @@ public static class ToshParser
         private readonly string _sourceName;
         private readonly string _sourceText;
         private readonly IReadOnlyList<SyntaxToken> _tokens;
+        private readonly IReadOnlyList<LineHushDirective> _lineHushDirectives;
         private readonly List<SyntaxDiagnostic> _diagnostics = [];
         private int _position;
         private bool _stopRefinementAtEquals;
 
-        public InternalParser(string sourceName, string sourceText, IReadOnlyList<SyntaxToken> tokens)
+        public InternalParser(
+            string sourceName,
+            string sourceText,
+            IReadOnlyList<SyntaxToken> tokens,
+            IReadOnlyList<LineHushDirective> lineHushDirectives)
         {
             _sourceName = sourceName;
             _sourceText = sourceText;
             _tokens = tokens;
+            _lineHushDirectives = lineHushDirectives;
         }
 
         public ParseResult Parse()
         {
             var statement = ParseScript();
-            return new ParseResult(_sourceName, _sourceText, statement, _diagnostics);
+            return new ParseResult(_sourceName, _sourceText, statement, _diagnostics, _lineHushDirectives);
         }
 
         private StatementSyntax ParseScript()
@@ -81,7 +89,7 @@ public static class ToshParser
                 if (Current.Kind != SyntaxTokenKind.EndOfFile)
                 {
                     _diagnostics.Add(new SyntaxDiagnostic(
-                        Code: "tosh::parser::missing_statement_separator",
+                        Code: "tosh.parser.missing_statement_separator",
                         Title: "Top-level statements must be separated by a newline or ';'.",
                         Span: Current.Span,
                         Label: "insert a newline or ';' between statements"));
@@ -138,7 +146,7 @@ public static class ToshParser
                     else
                     {
                         _diagnostics.Add(new SyntaxDiagnostic(
-                            Code: "tosh::parser::expected_tuple_assign_name",
+                            Code: "tosh.parser.expected_tuple_assign_name",
                             Title: "Expected a variable name in tuple assignment.",
                             Span: Current.Span,
                             Label: "write a variable name like 'a' or '$a'"));
@@ -157,7 +165,7 @@ public static class ToshParser
                 else
                 {
                     _diagnostics.Add(new SyntaxDiagnostic(
-                        Code: "tosh::parser::missing_closing_paren_tuple_assign",
+                        Code: "tosh.parser.missing_closing_paren_tuple_assign",
                         Title: "A closing ')' is required for tuple assignment.",
                         Span: closeSpan,
                         Label: "close the tuple assignment with ')'"));
@@ -169,7 +177,7 @@ public static class ToshParser
                 else
                 {
                     _diagnostics.Add(new SyntaxDiagnostic(
-                        Code: "tosh::parser::expected_equals_tuple_assign",
+                        Code: "tosh.parser.expected_equals_tuple_assign",
                         Title: "Tuple assignment requires '=' after the variable list.",
                         Span: Current.Span,
                         Label: "write '=' after the variable list"));
@@ -373,7 +381,7 @@ public static class ToshParser
                   string.Equals(Current.Text, "in", StringComparison.OrdinalIgnoreCase)))
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::expected_for_in",
+                    Code: "tosh.parser.expected_for_in",
                     Title: "For loops require 'in' before the source pipeline.",
                     Span: Current.Span,
                     Label: "insert 'in' between the loop variable and source"));
@@ -411,7 +419,7 @@ public static class ToshParser
             if (Current.Kind != SyntaxTokenKind.OpenParen)
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: $"tosh::parser::expected_{keyword}_condition",
+                    Code: $"tosh.parser.expected_{keyword}_condition",
                     Title: $"{char.ToUpperInvariant(keyword[0])}{keyword[1..]} loops require a parenthesized condition.",
                     Span: keywordToken.Span,
                     Label: $"write a condition in parentheses after '{keyword}'",
@@ -438,7 +446,7 @@ public static class ToshParser
             if (Current.Kind != SyntaxTokenKind.OpenParen)
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::expected_if_condition",
+                    Code: "tosh.parser.expected_if_condition",
                     Title: "If statements require a parenthesized condition.",
                     Span: ifToken.Span,
                     Label: "write a condition in parentheses after 'if'",
@@ -474,7 +482,7 @@ public static class ToshParser
                 else
                 {
                     _diagnostics.Add(new SyntaxDiagnostic(
-                        Code: "tosh::parser::expected_else_block",
+                        Code: "tosh.parser.expected_else_block",
                         Title: "Else clauses require a block or nested if statement.",
                         Span: elseToken.Span,
                         Label: "write '{ ... }' or 'if (...) { ... }' after 'else'"));
@@ -513,7 +521,7 @@ public static class ToshParser
             if (!IsValidIdentifier(declaredName))
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::expected_variable_name",
+                    Code: "tosh.parser.expected_variable_name",
                     Title: "Expected a variable name.",
                     Span: nameToken.Span,
                     Label: "variables need a C#-style identifier like 'answer' or 'fileList'"));
@@ -535,7 +543,7 @@ public static class ToshParser
                 if (isConst)
                 {
                     _diagnostics.Add(new SyntaxDiagnostic(
-                        Code: "tosh::parser::const_requires_value",
+                        Code: "tosh.parser.const_requires_value",
                         Title: "A 'const' declaration requires an initializer.",
                         Span: varToken.Span,
                         Label: "use 'const x = ...' to declare a constant"));
@@ -598,7 +606,7 @@ public static class ToshParser
                     else
                     {
                         _diagnostics.Add(new SyntaxDiagnostic(
-                            Code: "tosh::parser::expected_destructuring_name",
+                            Code: "tosh.parser.expected_destructuring_name",
                             Title: "Expected a variable name in the destructuring pattern.",
                             Span: Current.Span,
                             Label: "write a variable name like 'name' or 'size'"));
@@ -639,7 +647,7 @@ public static class ToshParser
                     else
                     {
                         _diagnostics.Add(new SyntaxDiagnostic(
-                            Code: "tosh::parser::expected_destructuring_name",
+                            Code: "tosh.parser.expected_destructuring_name",
                             Title: "Expected a variable name in the destructuring pattern.",
                             Span: Current.Span,
                             Label: "write a variable name like 'a' or 'first'"));
@@ -777,7 +785,7 @@ public static class ToshParser
             if (Current.Kind is not SyntaxTokenKind.Bareword and not SyntaxTokenKind.String)
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::expected_using_target",
+                    Code: "tosh.parser.expected_using_target",
                     Title: "Using statements require a namespace or type alias target.",
                     Span: Current.Span,
                     Label: "write something like 'using System.IO' or 'using System.IO = IO'"));
@@ -791,7 +799,7 @@ public static class ToshParser
             if (IsFileImportTarget(targetToken))
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::using_requires_namespace",
+                    Code: "tosh.parser.using_requires_namespace",
                     Title: "'using' is reserved for CLR namespaces and aliases.",
                     Span: targetToken.Span,
                     Label: "use 'require' to load ToSh files and modules",
@@ -905,7 +913,7 @@ public static class ToshParser
                       string.Equals(Current.Text, "from", StringComparison.OrdinalIgnoreCase)))
                 {
                     _diagnostics.Add(new SyntaxDiagnostic(
-                        Code: "tosh::parser::expected_require_from",
+                        Code: "tosh.parser.expected_require_from",
                         Title: "Selective require statements need 'from' before the target path.",
                         Span: Current.Span,
                         Label: "write something like 'require { Inventory } from \"./inventory.tosh\"'"));
@@ -927,7 +935,7 @@ public static class ToshParser
             if (Current.Kind is not SyntaxTokenKind.Bareword and not SyntaxTokenKind.String)
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::expected_require_target",
+                    Code: "tosh.parser.expected_require_target",
                     Title: isNative ? "Native require statements need a library path or library name." : "Require statements need a ToSh file or module path.",
                     Span: Current.Span,
                     Label: isNative ? "write something like 'require native \"libc\" as LibC'" : "write something like 'require \"./common.tosh\"'"));
@@ -1013,7 +1021,7 @@ public static class ToshParser
             if (Current.Kind != SyntaxTokenKind.OpenBrace)
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::expected_bind_body",
+                    Code: "tosh.parser.expected_bind_body",
                     Title: "Bind statements require a body.",
                     Span: Current.Span,
                     Label: "write '{ ... }' after the bind target"));
@@ -1048,7 +1056,7 @@ public static class ToshParser
                 if (Current.Kind is not SyntaxTokenKind.CloseBrace and not SyntaxTokenKind.EndOfFile)
                 {
                     _diagnostics.Add(new SyntaxDiagnostic(
-                        Code: "tosh::parser::missing_bind_member_separator",
+                        Code: "tosh.parser.missing_bind_member_separator",
                         Title: "Bound functions must be separated by a newline or ';'.",
                         Span: Current.Span,
                         Label: "insert a newline or ';' between bound functions"));
@@ -1059,7 +1067,7 @@ public static class ToshParser
             if (Current.Kind != SyntaxTokenKind.CloseBrace)
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::missing_closing_brace",
+                    Code: "tosh.parser.missing_closing_brace",
                     Title: "A closing '}' is required here.",
                     Span: openBrace.Span,
                     Label: "this bind block never closes"));
@@ -1082,7 +1090,7 @@ public static class ToshParser
                   string.Equals(Current.Text, "func", StringComparison.OrdinalIgnoreCase)))
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::expected_bind_function",
+                    Code: "tosh.parser.expected_bind_function",
                     Title: "Bind blocks only support function bindings.",
                     Span: Current.Span,
                     Label: "write 'func name(...) -> type' here"));
@@ -1114,7 +1122,7 @@ public static class ToshParser
                 else
                 {
                     _diagnostics.Add(new SyntaxDiagnostic(
-                        Code: "tosh::parser::expected_native_symbol_name",
+                        Code: "tosh.parser.expected_native_symbol_name",
                         Title: "Native function bindings need a symbol name after 'as'.",
                         Span: Current.Span,
                         Label: "write a native export name here"));
@@ -1133,7 +1141,7 @@ public static class ToshParser
                 else
                 {
                     _diagnostics.Add(new SyntaxDiagnostic(
-                        Code: "tosh::parser::expected_native_calling_convention",
+                        Code: "tosh.parser.expected_native_calling_convention",
                         Title: "Native function bindings need a calling convention name after 'callconv'.",
                         Span: Current.Span,
                         Label: "write something like 'cdecl' or 'stdcall' here"));
@@ -1162,7 +1170,7 @@ public static class ToshParser
             else
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::missing_closing_parenthesis",
+                    Code: "tosh.parser.missing_closing_parenthesis",
                     Title: "A native function binding requires a parameter list.",
                     Span: Current.Span,
                     Label: "write '(...)' after the bound function name"));
@@ -1175,7 +1183,7 @@ public static class ToshParser
                 if (Current.Kind == SyntaxTokenKind.Comma)
                 {
                     _diagnostics.Add(new SyntaxDiagnostic(
-                        Code: "tosh::parser::unexpected_function_parameter_separator",
+                        Code: "tosh.parser.unexpected_function_parameter_separator",
                         Title: "A function parameter is required between commas.",
                         Span: Current.Span,
                         Label: "remove this comma or add a parameter here"));
@@ -1194,7 +1202,7 @@ public static class ToshParser
                 if (Current.Kind is not SyntaxTokenKind.CloseParen and not SyntaxTokenKind.EndOfFile)
                 {
                     _diagnostics.Add(new SyntaxDiagnostic(
-                        Code: "tosh::parser::missing_function_parameter_separator",
+                        Code: "tosh.parser.missing_function_parameter_separator",
                         Title: "Function parameters must be separated by ','.",
                         Span: Current.Span,
                         Label: "insert ',' between function parameters"));
@@ -1204,7 +1212,7 @@ public static class ToshParser
             if (Current.Kind != SyntaxTokenKind.CloseParen)
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::missing_closing_parenthesis",
+                    Code: "tosh.parser.missing_closing_parenthesis",
                     Title: "A closing ')' is required here.",
                     Span: openParen.Span,
                     Label: "this parameter list never closes",
@@ -1238,7 +1246,7 @@ public static class ToshParser
             if (token.Kind != SyntaxTokenKind.Bareword)
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::expected_type_name",
+                    Code: "tosh.parser.expected_type_name",
                     Title: "Expected a native parameter type.",
                     Span: token.Span,
                     Label: "write a CLR type name like 'int' or 'double'"));
@@ -1311,7 +1319,7 @@ public static class ToshParser
             if (Current.Kind != SyntaxTokenKind.CloseBrace)
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::missing_closing_brace",
+                    Code: "tosh.parser.missing_closing_brace",
                     Title: "A closing '}' is required here.",
                     Span: openBrace.Span,
                     Label: "this require import list never closes",
@@ -1346,7 +1354,7 @@ public static class ToshParser
             }
 
             _diagnostics.Add(new SyntaxDiagnostic(
-                Code: "tosh::parser::expected_require_target",
+                Code: "tosh.parser.expected_require_target",
                 Title: "Require statements need a ToSh file, module, assembly, or project path.",
                 Span: Current.Span,
                 Label: "write something like 'require Inventory from \"./inventory.tosh\"'"));
@@ -1432,7 +1440,7 @@ public static class ToshParser
                     {
                         var invalidToken = Current;
                         _diagnostics.Add(new SyntaxDiagnostic(
-                            Code: "tosh::parser::expected_catch_variable",
+                            Code: "tosh.parser.expected_catch_variable",
                             Title: "Catch clauses require a variable name when parentheses are used.",
                             Span: invalidToken.Span,
                             Label: "write a variable like 'err' or '$err'"));
@@ -1441,7 +1449,7 @@ public static class ToshParser
                     if (Current.Kind != SyntaxTokenKind.CloseParen)
                     {
                         _diagnostics.Add(new SyntaxDiagnostic(
-                            Code: "tosh::parser::missing_closing_parenthesis",
+                            Code: "tosh.parser.missing_closing_parenthesis",
                             Title: "A closing ')' is required here.",
                             Span: catchToken.Span,
                             Label: "this catch variable never closes"));
@@ -1473,7 +1481,7 @@ public static class ToshParser
             if (catchClause is null && finallyBlock is null)
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::try_requires_handler",
+                    Code: "tosh.parser.try_requires_handler",
                     Title: "Try statements require a catch block, a finally block, or both.",
                     Span: tryToken.Span,
                     Label: "add 'catch { ... }', 'finally { ... }', or both after this try block"));
@@ -1503,7 +1511,7 @@ public static class ToshParser
             if (Current.Kind != SyntaxTokenKind.OpenParen)
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::expected_switch_value",
+                    Code: "tosh.parser.expected_switch_value",
                     Title: "Switch statements require a parenthesized value.",
                     Span: switchToken.Span,
                     Label: "write a value in parentheses after 'switch'"));
@@ -1520,7 +1528,7 @@ public static class ToshParser
             if (Current.Kind != SyntaxTokenKind.OpenBrace)
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::expected_switch_block",
+                    Code: "tosh.parser.expected_switch_block",
                     Title: "Switch statements require a case block.",
                     Span: Current.Span,
                     Label: "write '{ case ... { ... } }' after the switch value"));
@@ -1572,7 +1580,7 @@ public static class ToshParser
                 }
 
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::expected_switch_case",
+                    Code: "tosh.parser.expected_switch_case",
                     Title: "Switch blocks may only contain 'case' and 'default' entries.",
                     Span: Current.Span,
                     Label: "write 'case <value> { ... }' or 'default { ... }' here"));
@@ -1582,7 +1590,7 @@ public static class ToshParser
             if (Current.Kind != SyntaxTokenKind.CloseBrace)
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::missing_closing_brace",
+                    Code: "tosh.parser.missing_closing_brace",
                     Title: "A closing '}' is required here.",
                     Span: openBrace.Span,
                     Label: "this switch block never closes"));
@@ -1726,7 +1734,7 @@ public static class ToshParser
             if (Current.Kind != SyntaxTokenKind.OpenParen)
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::expected_match_value",
+                    Code: "tosh.parser.expected_match_value",
                     Title: "Match expressions require a parenthesized value.",
                     Span: matchToken.Span,
                     Label: "write a value in parentheses after 'match'",
@@ -1743,7 +1751,7 @@ public static class ToshParser
             if (Current.Kind != SyntaxTokenKind.OpenBrace)
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::expected_match_block",
+                    Code: "tosh.parser.expected_match_block",
                     Title: "Match expressions require an arm block.",
                     Span: Current.Span,
                     Label: "write '{ pattern => result }' after the match value"));
@@ -1787,7 +1795,7 @@ public static class ToshParser
                 if (Current.Kind is not SyntaxTokenKind.CloseBrace and not SyntaxTokenKind.EndOfFile)
                 {
                     _diagnostics.Add(new SyntaxDiagnostic(
-                        Code: "tosh::parser::missing_match_arm_separator",
+                        Code: "tosh.parser.missing_match_arm_separator",
                         Title: "Match arms must be separated by a newline, ';', or ','.",
                         Span: Current.Span,
                         Label: "insert a separator between match arms"));
@@ -1798,7 +1806,7 @@ public static class ToshParser
             if (Current.Kind != SyntaxTokenKind.CloseBrace)
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::missing_closing_brace",
+                    Code: "tosh.parser.missing_closing_brace",
                     Title: "A closing '}' is required here.",
                     Span: openBrace.Span,
                     Label: "this match expression never closes",
@@ -1823,7 +1831,7 @@ public static class ToshParser
             if (Current.Kind != SyntaxTokenKind.OpenParen)
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::expected_if_expression_condition",
+                    Code: "tosh.parser.expected_if_expression_condition",
                     Title: "If expressions require a parenthesized condition.",
                     Span: ifToken.Span,
                     Label: "write a condition in parentheses after 'if'",
@@ -1839,7 +1847,7 @@ public static class ToshParser
                 !string.Equals(Current.Text, "else", StringComparison.OrdinalIgnoreCase))
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::if_expression_requires_else",
+                    Code: "tosh.parser.if_expression_requires_else",
                     Title: "If expressions require an else block.",
                     Span: TextSpan.FromBounds(ifToken.Span.Start, thenBlock.Span.End),
                     Label: "add 'else { ... }' after this block",
@@ -1870,7 +1878,7 @@ public static class ToshParser
             else
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::expected_else_block",
+                    Code: "tosh.parser.expected_else_block",
                     Title: "Else clauses require a block or nested if expression.",
                     Span: Current.Span,
                     Label: "write '{ ... }' or 'if (...) { ... }' after 'else'"));
@@ -1907,7 +1915,7 @@ public static class ToshParser
                     if (IsFatArrowToken(Peek(1), Peek(2)))
                     {
                         _diagnostics.Add(new SyntaxDiagnostic(
-                            Code: "tosh::parser::match_default_keyword_required",
+                            Code: "tosh.parser.match_default_keyword_required",
                             Title: "Use 'default' instead of '_' for the wildcard arm.",
                             Span: Current.Span,
                             Label: "replace '_' with 'default'",
@@ -1927,7 +1935,7 @@ public static class ToshParser
                 else if (IsPatternExpressionStart())
                 {
                     _diagnostics.Add(new SyntaxDiagnostic(
-                        Code: "tosh::parser::expected_match_arm_underscore",
+                        Code: "tosh.parser.expected_match_arm_underscore",
                         Title: "Match arms must start with '_'",
                         Span: Current.Span,
                         Label: "write '_' before comparison or type-check patterns",
@@ -1956,7 +1964,7 @@ public static class ToshParser
                 else
                 {
                     _diagnostics.Add(new SyntaxDiagnostic(
-                        Code: "tosh::parser::expected_match_guard_condition",
+                        Code: "tosh.parser.expected_match_guard_condition",
                         Title: "Match guards require a parenthesized condition.",
                         Span: ifToken.Span,
                         Label: "write `if (<condition>)` before `=>`"));
@@ -1966,7 +1974,7 @@ public static class ToshParser
             if (!IsFatArrowToken(Current, Peek(1)))
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::expected_match_arm_arrow",
+                    Code: "tosh.parser.expected_match_arm_arrow",
                     Title: "Match arms require `=>` between the pattern and result.",
                     Span: Current.Span,
                     Label: "write `=>` here"));
@@ -2082,7 +2090,7 @@ public static class ToshParser
                 if (Current.Kind != SyntaxTokenKind.OpenParen)
                 {
                     _diagnostics.Add(new SyntaxDiagnostic(
-                        Code: "tosh::parser::expected_script_input_list",
+                        Code: "tosh.parser.expected_script_input_list",
                         Title: "Script input lists require '(...)'.",
                         Span: Current.Span,
                         Label: "write inputs inside parentheses"));
@@ -2152,7 +2160,7 @@ public static class ToshParser
                 if (!seenModifiers.Add(modifierToken.Text))
                 {
                     _diagnostics.Add(new SyntaxDiagnostic(
-                        Code: "tosh::parser::duplicate_subcommand_modifier",
+                        Code: "tosh.parser.duplicate_subcommand_modifier",
                         Title: $"Subcommand modifier '{modifierToken.Text}' is repeated.",
                         Span: modifierToken.Span,
                         Label: "remove the duplicate modifier"));
@@ -2173,7 +2181,7 @@ public static class ToshParser
                 (modifiers & SubcommandModifier.Hollow) != 0)
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::incompatible_subcommand_modifiers",
+                    Code: "tosh.parser.incompatible_subcommand_modifiers",
                     Title: "'eager' and 'hollow' cannot be combined on a subcommand.",
                     Span: Current.Span,
                     Label: "remove one of these modifiers",
@@ -2184,7 +2192,7 @@ public static class ToshParser
             if (Current.Kind != SyntaxTokenKind.Bareword || !IsValidCommandName(Current.Text))
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::expected_subcommand_name",
+                    Code: "tosh.parser.expected_subcommand_name",
                     Title: $"The '{keyword.Text}' keyword requires a subcommand name.",
                     Span: Current.Span,
                     Label: "write a name after this keyword"));
@@ -2239,7 +2247,7 @@ public static class ToshParser
                 if (parameters.Count > 0)
                 {
                     _diagnostics.Add(new SyntaxDiagnostic(
-                        Code: "tosh::parser::subcommand_params_require_arrow",
+                        Code: "tosh.parser.subcommand_params_require_arrow",
                         Title: "Parameter lists on subcommands require a '=>' body.",
                         Span: parameters[0].Span,
                         Label: "write '=> <pipeline>' after the parameter list, or drop the parens and declare args inside a block body"));
@@ -2254,7 +2262,7 @@ public static class ToshParser
                     if (statement is not SubcommandStatementSyntax)
                     {
                         _diagnostics.Add(new SyntaxDiagnostic(
-                            Code: "tosh::parser::hollow_subcommand_must_be_empty",
+                            Code: "tosh.parser.hollow_subcommand_must_be_empty",
                             Title: $"Hollow subcommand '{nameToken.Text}' may only contain nested subcommands.",
                             Span: statement.Span,
                             Label: "remove this statement or drop the 'hollow' modifier",
@@ -2291,7 +2299,7 @@ public static class ToshParser
             else if (!IsFatArrowToken(Current, Peek(1)))
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::expected_function_signature",
+                    Code: "tosh.parser.expected_function_signature",
                     Title: "Function definitions require a parameter list or '=>'.",
                     Span: Current.Span,
                     Label: "write '(...)' for a normal function or '=>' for a command wrapper"));
@@ -2340,7 +2348,7 @@ public static class ToshParser
                     else
                     {
                         _diagnostics.Add(new SyntaxDiagnostic(
-                            Code: "tosh::parser::expected_priority_value",
+                            Code: "tosh.parser.expected_priority_value",
                             Title: "Expected an integer priority value.",
                             Span: priorityToken.Span,
                             Label: "expected an integer"));
@@ -2549,7 +2557,7 @@ public static class ToshParser
             if (Current.Kind != SyntaxTokenKind.OpenBrace)
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::expected_interface_body",
+                    Code: "tosh.parser.expected_interface_body",
                     Title: "Interface definitions require a body.",
                     Span: Current.Span,
                     Label: $"write '{{ ... }}' after interface '{nameToken.Text}'"));
@@ -2599,7 +2607,7 @@ public static class ToshParser
                 else
                 {
                     _diagnostics.Add(new SyntaxDiagnostic(
-                        Code: "tosh::parser::unexpected_interface_member",
+                        Code: "tosh.parser.unexpected_interface_member",
                         Title: "Interface bodies can only contain method signatures (func name(params)).",
                         Span: Current.Span,
                         Label: "expected 'func'"));
@@ -2628,7 +2636,7 @@ public static class ToshParser
             if (Current.Kind != SyntaxTokenKind.OpenBrace)
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::expected_union_body",
+                    Code: "tosh.parser.expected_union_body",
                     Title: "Union definitions require a body.",
                     Span: Current.Span,
                     Label: $"write '{{ ... }}' after union '{nameToken.Text}'"));
@@ -2722,7 +2730,7 @@ public static class ToshParser
             if (Current.Kind != SyntaxTokenKind.OpenBrace)
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::expected_enum_body",
+                    Code: "tosh.parser.expected_enum_body",
                     Title: "Enum definitions require a body.",
                     Span: Current.Span,
                     Label: $"write '{{ ... }}' after enum '{enumName}'"));
@@ -2753,7 +2761,7 @@ public static class ToshParser
                     if (expression is null)
                     {
                         _diagnostics.Add(new SyntaxDiagnostic(
-                            Code: "tosh::parser::expected_enum_member_value",
+                            Code: "tosh.parser.expected_enum_member_value",
                             Title: "Enum members require a value after '='.",
                             Span: equalsToken.Span,
                             Label: $"write a value for enum member '{memberName.Text}'"));
@@ -2786,7 +2794,7 @@ public static class ToshParser
             if (Current.Kind != SyntaxTokenKind.CloseBrace)
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::missing_closing_brace",
+                    Code: "tosh.parser.missing_closing_brace",
                     Title: "A closing '}' is required here.",
                     Span: openBrace.Span,
                     Label: "this enum body never closes",
@@ -2835,7 +2843,7 @@ public static class ToshParser
             if (Current.Kind != SyntaxTokenKind.OpenParen)
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::expected_record_fields",
+                    Code: "tosh.parser.expected_record_fields",
                     Title: "Record definitions require a field list.",
                     Span: Current.Span,
                     Label: $"write '(...)' after record '{nameToken.Text}'"));
@@ -2919,7 +2927,7 @@ public static class ToshParser
             if (Current.Kind != SyntaxTokenKind.OpenBrace)
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::expected_trait_body",
+                    Code: "tosh.parser.expected_trait_body",
                     Title: "Trait definitions require a body.",
                     Span: Current.Span,
                     Label: $"write '{{ ... }}' after trait '{nameToken.Text}'"));
@@ -3008,7 +3016,7 @@ public static class ToshParser
                 else
                 {
                     _diagnostics.Add(new SyntaxDiagnostic(
-                        Code: "tosh::parser::unexpected_trait_member",
+                        Code: "tosh.parser.unexpected_trait_member",
                         Title: "Trait bodies can contain method signatures (func) and property declarations (prop).",
                         Span: Current.Span,
                         Label: "expected 'func' or 'prop'"));
@@ -3234,7 +3242,7 @@ public static class ToshParser
                     if (expression is null)
                     {
                         _diagnostics.Add(new SyntaxDiagnostic(
-                            Code: "tosh::parser::expected_record_field_default",
+                            Code: "tosh.parser.expected_record_field_default",
                             Title: "Record fields require a value after '='.",
                             Span: equalsToken.Span,
                             Label: $"write a default value for field '{name}'"));
@@ -3264,7 +3272,7 @@ public static class ToshParser
             if (Current.Kind != SyntaxTokenKind.CloseParen)
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::missing_closing_paren",
+                    Code: "tosh.parser.missing_closing_paren",
                     Title: "A closing ')' is required here.",
                     Span: openParen.Span,
                     Label: "this record field list never closes",
@@ -3281,7 +3289,7 @@ public static class ToshParser
             if (Current.Kind != SyntaxTokenKind.OpenBrace)
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::expected_class_body",
+                    Code: "tosh.parser.expected_class_body",
                     Title: "Class definitions require a body.",
                     Span: Current.Span,
                     Label: $"write '{{ ... }}' after class '{className}'"));
@@ -3316,7 +3324,7 @@ public static class ToshParser
                 if (Current.Kind is not SyntaxTokenKind.CloseBrace and not SyntaxTokenKind.EndOfFile)
                 {
                     _diagnostics.Add(new SyntaxDiagnostic(
-                        Code: "tosh::parser::missing_class_member_separator",
+                        Code: "tosh.parser.missing_class_member_separator",
                         Title: "Class members must be separated by a newline or ';'.",
                         Span: Current.Span,
                         Label: "insert a newline or ';' between class members"));
@@ -3327,7 +3335,7 @@ public static class ToshParser
             if (Current.Kind != SyntaxTokenKind.CloseBrace)
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::missing_closing_brace",
+                    Code: "tosh.parser.missing_closing_brace",
                     Title: "A closing '}' is required here.",
                     Span: openBrace.Span,
                     Label: "this class body never closes",
@@ -3410,7 +3418,7 @@ public static class ToshParser
 
             var token = Current;
             _diagnostics.Add(new SyntaxDiagnostic(
-                Code: "tosh::parser::expected_class_member",
+                Code: "tosh.parser.expected_class_member",
                 Title: $"Expected a member inside class '{className}'.",
                 Span: token.Span,
                 Label: "write 'prop', 'func', or a constructor here"));
@@ -3442,7 +3450,7 @@ public static class ToshParser
             if (!IsValidIdentifier(name))
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::expected_property_name",
+                    Code: "tosh.parser.expected_property_name",
                     Title: "Expected a property name.",
                     Span: nameToken.Span,
                     Label: "properties need an identifier like 'Name' or 'itemCount'"));
@@ -3532,7 +3540,7 @@ public static class ToshParser
                 if (Current.Kind != SyntaxTokenKind.Bareword)
                 {
                     _diagnostics.Add(new SyntaxDiagnostic(
-                        Code: "tosh::parser::expected_property_accessor",
+                        Code: "tosh.parser.expected_property_accessor",
                         Title: "Property accessors must be 'get' or 'set'.",
                         Span: Current.Span,
                         Label: "write 'get' or 'set' here"));
@@ -3554,7 +3562,7 @@ public static class ToshParser
                 else
                 {
                     _diagnostics.Add(new SyntaxDiagnostic(
-                        Code: "tosh::parser::unknown_property_accessor",
+                        Code: "tosh.parser.unknown_property_accessor",
                         Title: $"Unknown property accessor '{accessorName}'.",
                         Span: accessorBody.Span,
                         Label: "use 'get' or 'set'"));
@@ -3569,7 +3577,7 @@ public static class ToshParser
             if (Current.Kind != SyntaxTokenKind.CloseBrace)
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::missing_closing_brace",
+                    Code: "tosh.parser.missing_closing_brace",
                     Title: "A closing '}' is required here.",
                     Span: openBrace.Span,
                     Label: "this property accessor block never closes"));
@@ -3952,7 +3960,7 @@ public static class ToshParser
             if (expression is null)
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::expected_anonymous_function_expression",
+                    Code: "tosh.parser.expected_anonymous_function_expression",
                     Title: "Anonymous `=>` functions require an expression body.",
                     Span: Current.Span,
                     Label: "write an expression after `=>`"));
@@ -3993,7 +4001,7 @@ public static class ToshParser
             }
 
             _diagnostics.Add(new SyntaxDiagnostic(
-                Code: "tosh::parser::expected_anonymous_function_body",
+                Code: "tosh.parser.expected_anonymous_function_body",
                 Title: "Anonymous functions require `=>` or a block body.",
                 Span: Current.Span,
                 Label: "write `=> <expression>` or `{ ... }` after the parameter list"));
@@ -4018,7 +4026,7 @@ public static class ToshParser
                 if (Current.Kind == SyntaxTokenKind.Comma)
                 {
                     _diagnostics.Add(new SyntaxDiagnostic(
-                        Code: "tosh::parser::unexpected_function_parameter_separator",
+                        Code: "tosh.parser.unexpected_function_parameter_separator",
                         Title: "A function parameter is required between commas.",
                         Span: Current.Span,
                         Label: "remove this comma or add a parameter here"));
@@ -4032,7 +4040,7 @@ public static class ToshParser
                 if (parameters.Count >= 2 && parameters[^2].IsRest)
                 {
                     _diagnostics.Add(new SyntaxDiagnostic(
-                        Code: "tosh::parser::rest_parameter_must_be_last",
+                        Code: "tosh.parser.rest_parameter_must_be_last",
                         Title: "A rest parameter must be the last parameter.",
                         Span: parameters[^2].Span,
                         Label: "move this rest parameter to the end of the parameter list"));
@@ -4047,7 +4055,7 @@ public static class ToshParser
                 if (Current.Kind is not SyntaxTokenKind.CloseParen and not SyntaxTokenKind.EndOfFile)
                 {
                     _diagnostics.Add(new SyntaxDiagnostic(
-                        Code: "tosh::parser::missing_function_parameter_separator",
+                        Code: "tosh.parser.missing_function_parameter_separator",
                         Title: "Function parameters must be separated by ','.",
                         Span: Current.Span,
                         Label: "insert ',' between function parameters"));
@@ -4057,7 +4065,7 @@ public static class ToshParser
             if (Current.Kind != SyntaxTokenKind.CloseParen)
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::missing_closing_parenthesis",
+                    Code: "tosh.parser.missing_closing_parenthesis",
                     Title: "A closing ')' is required here.",
                     Span: openParenSpan,
                     Label: "this parameter list never closes",
@@ -4098,7 +4106,7 @@ public static class ToshParser
             if (Current.Kind == SyntaxTokenKind.OpenBrace)
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::refinement_requires_expression",
+                    Code: "tosh.parser.refinement_requires_expression",
                     Title: "Refinement predicates use expression syntax.",
                     Span: Current.Span,
                     Label: "write the predicate directly after 'where'",
@@ -4114,7 +4122,7 @@ public static class ToshParser
                 if (expression is null)
                 {
                     _diagnostics.Add(new SyntaxDiagnostic(
-                        Code: "tosh::parser::expected_refinement_predicate",
+                        Code: "tosh.parser.expected_refinement_predicate",
                         Title: "Refinements require a predicate after 'where'.",
                         Span: whereToken.Span,
                         Label: "write a boolean expression using '_' for the value"));
@@ -4129,7 +4137,7 @@ public static class ToshParser
                     if (coercer is null)
                     {
                         _diagnostics.Add(new SyntaxDiagnostic(
-                            Code: "tosh::parser::expected_refinement_coercer",
+                            Code: "tosh.parser.expected_refinement_coercer",
                             Title: "Refinement coercers require an expression after 'coerce'.",
                             Span: coerceToken.Span,
                             Label: "write an expression that transforms '_' into a valid value"));
@@ -4205,7 +4213,7 @@ public static class ToshParser
                 if (clauses.Count == 0 && !attemptedAnyClause)
                 {
                     _diagnostics.Add(new SyntaxDiagnostic(
-                        Code: "tosh::parser::empty_type_refinement_block",
+                        Code: "tosh.parser.empty_type_refinement_block",
                         Title: "Type refinement blocks require at least one clause.",
                         Span: openBrace.Span,
                         Label: "add at least one 'where', 'coerce', or 'if ... coerce' clause"));
@@ -4217,7 +4225,7 @@ public static class ToshParser
             }
 
             _diagnostics.Add(new SyntaxDiagnostic(
-                Code: "tosh::parser::missing_closing_brace",
+                Code: "tosh.parser.missing_closing_brace",
                 Title: "A closing '}' is required here.",
                 Span: openBrace.Span,
                 Label: "this refinement block never closes",
@@ -4238,7 +4246,7 @@ public static class ToshParser
                 if (expression is null)
                 {
                     _diagnostics.Add(new SyntaxDiagnostic(
-                        Code: "tosh::parser::expected_refinement_predicate",
+                        Code: "tosh.parser.expected_refinement_predicate",
                         Title: "Refinements require a predicate after 'where'.",
                         Span: whereToken.Span,
                         Label: "write a boolean expression using '_' for the value"));
@@ -4258,7 +4266,7 @@ public static class ToshParser
                 if (coercer is null)
                 {
                     _diagnostics.Add(new SyntaxDiagnostic(
-                        Code: "tosh::parser::expected_refinement_coercer",
+                        Code: "tosh.parser.expected_refinement_coercer",
                         Title: "Refinement coercers require an expression after 'coerce'.",
                         Span: coerceToken.Span,
                         Label: "write an expression that transforms '_' into a valid value"));
@@ -4279,7 +4287,7 @@ public static class ToshParser
                 if (guard is null)
                 {
                     _diagnostics.Add(new SyntaxDiagnostic(
-                        Code: "tosh::parser::expected_refinement_guard",
+                        Code: "tosh.parser.expected_refinement_guard",
                         Title: "Refinement coercion guards require an expression after 'if'.",
                         Span: ifToken.Span,
                         Label: "write a boolean expression that decides when coercion runs"));
@@ -4292,7 +4300,7 @@ public static class ToshParser
                         ? "refinement blocks only support expression-only coercion; use 'if <expr> coerce <expr>'"
                         : "write 'coerce <expr>' after the guard";
                     _diagnostics.Add(new SyntaxDiagnostic(
-                        Code: "tosh::parser::expected_refinement_coerce_after_if",
+                        Code: "tosh.parser.expected_refinement_coerce_after_if",
                         Title: "Guarded refinement clauses require 'coerce' after the condition.",
                         Span: Current.Span,
                         Label: "write 'if <expr> coerce <expr>'",
@@ -4306,7 +4314,7 @@ public static class ToshParser
                 if (coercer is null)
                 {
                     _diagnostics.Add(new SyntaxDiagnostic(
-                        Code: "tosh::parser::expected_refinement_coercer",
+                        Code: "tosh.parser.expected_refinement_coercer",
                         Title: "Refinement coercers require an expression after 'coerce'.",
                         Span: coerceToken.Span,
                         Label: "write an expression that transforms '_' into a valid value"));
@@ -4344,7 +4352,7 @@ public static class ToshParser
             }
 
             _diagnostics.Add(new SyntaxDiagnostic(
-                Code: "tosh::parser::invalid_type_refinement_clause",
+                Code: "tosh.parser.invalid_type_refinement_clause",
                 Title: "Type refinement blocks only support 'where', 'coerce', and 'if ... coerce' clauses.",
                 Span: clauseSpan,
                 Label: "replace this with a supported refinement clause",
@@ -4366,7 +4374,7 @@ public static class ToshParser
             if (range is not RangeArgumentSyntax { Step: null, End: { } upperBound } rangeSyntax)
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::expected_range_separator",
+                    Code: "tosh.parser.expected_range_separator",
                     Title: "Type alias ranges use '..' between lower and upper bounds.",
                     Span: Current.Span,
                     Label: "write ranges like 'in 0..100'"));
@@ -4389,7 +4397,7 @@ public static class ToshParser
             if (token.Kind != SyntaxTokenKind.Bareword)
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::expected_function_parameter",
+                    Code: "tosh.parser.expected_function_parameter",
                     Title: "Expected a function parameter name.",
                     Span: token.Span,
                     Label: "parameters need an identifier like 'path' or 'days'"));
@@ -4424,7 +4432,7 @@ public static class ToshParser
                     if (!IsValidIdentifier(beforeRest))
                     {
                         _diagnostics.Add(new SyntaxDiagnostic(
-                            Code: "tosh::parser::expected_function_parameter",
+                            Code: "tosh.parser.expected_function_parameter",
                             Title: "Expected a function parameter name.",
                             Span: restToken.Span,
                             Label: "parameters need an identifier like 'path' or 'days'"));
@@ -4463,7 +4471,7 @@ public static class ToshParser
             if (!IsValidIdentifier(name))
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::expected_function_parameter",
+                    Code: "tosh.parser.expected_function_parameter",
                     Title: "Expected a function parameter name.",
                     Span: nameToken.Span,
                     Label: "parameters need an identifier like 'path' or 'days'"));
@@ -4576,7 +4584,7 @@ public static class ToshParser
                 if (Current.Kind != SyntaxTokenKind.GreaterThan)
                 {
                     _diagnostics.Add(new SyntaxDiagnostic(
-                        Code: "tosh::parser::missing_type_parameter_separator",
+                        Code: "tosh.parser.missing_type_parameter_separator",
                         Title: "Type parameters must be separated by ','.",
                         Span: Current.Span,
                         Label: "insert ',' between type parameters"));
@@ -4590,7 +4598,7 @@ public static class ToshParser
             else
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::missing_closing_angle",
+                    Code: "tosh.parser.missing_closing_angle",
                     Title: "A closing '>' is required here.",
                     Span: open.Span,
                     Label: "this type parameter list never closes",
@@ -4608,7 +4616,7 @@ public static class ToshParser
             }
 
             _diagnostics.Add(new SyntaxDiagnostic(
-                Code: "tosh::parser::expected_type_name",
+                Code: "tosh.parser.expected_type_name",
                 Title: $"Expected a {label}.",
                 Span: Current.Span,
                 Label: $"write a CLR type name for the {label}"));
@@ -4702,7 +4710,7 @@ public static class ToshParser
                     if (!expectArgument)
                     {
                         _diagnostics.Add(new SyntaxDiagnostic(
-                            Code: "tosh::parser::missing_type_argument_separator",
+                            Code: "tosh.parser.missing_type_argument_separator",
                             Title: "Generic type arguments must be separated by ','.",
                             Span: Current.Span,
                             Label: "insert ',' between generic type arguments"));
@@ -4717,7 +4725,7 @@ public static class ToshParser
             if (depth > 0)
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::missing_closing_angle",
+                    Code: "tosh.parser.missing_closing_angle",
                     Title: "A closing '>' is required here.",
                     Span: Current.Span,
                     Label: "this generic type argument list never closes",
@@ -4736,7 +4744,7 @@ public static class ToshParser
 
             var token = Current;
             _diagnostics.Add(new SyntaxDiagnostic(
-                Code: "tosh::parser::expected_variable_name",
+                Code: "tosh.parser.expected_variable_name",
                 Title: "Expected a variable name.",
                 Span: token.Span,
                 Label: "variables need a C#-style identifier like 'answer' or 'fileList'"));
@@ -4758,7 +4766,7 @@ public static class ToshParser
 
             var token = Current;
             _diagnostics.Add(new SyntaxDiagnostic(
-                Code: "tosh::parser::expected_command_name",
+                Code: "tosh.parser.expected_command_name",
                 Title: "Expected a function name.",
                 Span: token.Span,
                 Label: "function names can use letters, digits, underscores, and hyphens (e.g. 'run-game')"));
@@ -4798,7 +4806,7 @@ public static class ToshParser
 
             var token = Current;
             _diagnostics.Add(new SyntaxDiagnostic(
-                Code: "tosh::parser::expected_command_name",
+                Code: "tosh.parser.expected_command_name",
                 Title: "Expected a method name or operator.",
                 Span: token.Span,
                 Label: "use letters/hyphens for method names, or an operator symbol (+, -, *, ==, >, etc.)"));
@@ -4847,7 +4855,7 @@ public static class ToshParser
 
             var token = Current;
             _diagnostics.Add(new SyntaxDiagnostic(
-                Code: "tosh::parser::expected_assignment_operator",
+                Code: "tosh.parser.expected_assignment_operator",
                 Title: title,
                 Span: token.Span,
                 Label: "insert '=' here"));
@@ -4864,7 +4872,7 @@ public static class ToshParser
 
             var token = Current;
             _diagnostics.Add(new SyntaxDiagnostic(
-                Code: "tosh::parser::expected_assignment_operator",
+                Code: "tosh.parser.expected_assignment_operator",
                 Title: title,
                 Span: token.Span,
                 Label: "insert '=', '+=', '-=', '*=', '/=', '%=', or '??=' here"));
@@ -4903,7 +4911,7 @@ public static class ToshParser
                 if (argument is null)
                 {
                     _diagnostics.Add(new SyntaxDiagnostic(
-                        Code: "tosh::parser::expected_here_string_value",
+                        Code: "tosh.parser.expected_here_string_value",
                         Title: "A value is required after '<<<'.",
                         Span: hereStringToken.Span,
                         Label: "expected a string or expression here"));
@@ -4933,7 +4941,7 @@ public static class ToshParser
             if (Current.Kind != SyntaxTokenKind.Bareword)
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::expected_command_name",
+                    Code: "tosh.parser.expected_command_name",
                     Title: "Expected a command name.",
                     Span: Current.Span,
                     Label: "commands start with a bareword like 'ls' or 'where'"));
@@ -5152,7 +5160,7 @@ public static class ToshParser
                     !(expressionArgument is not null && HasImplicitStatementBoundaryAfter(expressionArgument.Span.End)))
                 {
                     _diagnostics.Add(new SyntaxDiagnostic(
-                        Code: "tosh::parser::unexpected_get_expression_tokens",
+                        Code: "tosh.parser.unexpected_get_expression_tokens",
                         Title: "This get expression has extra tokens after it.",
                         Span: Current.Span,
                         Label: "get expressions must be a single expression"));
@@ -5237,8 +5245,20 @@ public static class ToshParser
                     : ParseBlockArgument();
                 arguments.Add(blockArgument);
 
-                if (!IsCurrentItemExpressionCommandBoundary(stopAtCloseParen, stopAtCloseBrace, stopAtSemicolon) &&
+                // `assert <block> <message>` accepts an optional trailing message argument.
+                if (string.Equals(commandName, "assert", StringComparison.OrdinalIgnoreCase) &&
+                    !IsCurrentItemExpressionCommandBoundary(stopAtCloseParen, stopAtCloseBrace, stopAtSemicolon) &&
                     !HasImplicitStatementBoundaryAfter(blockArgument.Span.End))
+                {
+                    var messageArgument = ParseArgument(commandName);
+                    if (messageArgument is not null)
+                    {
+                        arguments.Add(messageArgument);
+                    }
+                }
+
+                if (!IsCurrentItemExpressionCommandBoundary(stopAtCloseParen, stopAtCloseBrace, stopAtSemicolon) &&
+                    !HasImplicitStatementBoundaryAfter(arguments[^1].Span.End))
                 {
                     AddUnexpectedCurrentItemExpressionTokensDiagnostic(commandName, Current.Span);
                     SkipToStageBoundary(stopAtCloseParen, stopAtCloseBrace, stopAtSemicolon);
@@ -5254,8 +5274,21 @@ public static class ToshParser
                 arguments.Add(expressionArgument);
             }
 
+            // `assert <expr> <message>` accepts an optional trailing message argument.
+            if (string.Equals(commandName, "assert", StringComparison.OrdinalIgnoreCase) &&
+                expressionArgument is not null &&
+                !IsCurrentItemExpressionCommandBoundary(stopAtCloseParen, stopAtCloseBrace, stopAtSemicolon) &&
+                !HasImplicitStatementBoundaryAfter(expressionArgument.Span.End))
+            {
+                var messageArgument = ParseArgument(commandName);
+                if (messageArgument is not null)
+                {
+                    arguments.Add(messageArgument);
+                }
+            }
+
             if (!IsCurrentItemExpressionCommandBoundary(stopAtCloseParen, stopAtCloseBrace, stopAtSemicolon) &&
-                !(expressionArgument is not null && HasImplicitStatementBoundaryAfter(expressionArgument.Span.End)))
+                !(arguments.Count > 0 && HasImplicitStatementBoundaryAfter(arguments[^1].Span.End)))
             {
                 AddUnexpectedCurrentItemExpressionTokensDiagnostic(commandName, Current.Span);
                 SkipToStageBoundary(stopAtCloseParen, stopAtCloseBrace, stopAtSemicolon);
@@ -5269,7 +5302,7 @@ public static class ToshParser
             if (string.Equals(commandName, "assert", StringComparison.OrdinalIgnoreCase))
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::assert_does_not_accept_message",
+                    Code: "tosh.parser.assert_does_not_accept_message",
                     Title: "Assert no longer accepts a trailing custom message.",
                     Span: span,
                     Label: "this extra argument is not part of the assertion",
@@ -5278,7 +5311,7 @@ public static class ToshParser
             }
 
             _diagnostics.Add(new SyntaxDiagnostic(
-                Code: "tosh::parser::unexpected_current_item_expression_tokens",
+                Code: "tosh.parser.unexpected_current_item_expression_tokens",
                 Title: "This current-item expression has extra tokens after it.",
                 Span: span,
                 Label: "current-item command expressions must be a single expression"));
@@ -5432,7 +5465,7 @@ public static class ToshParser
                     && result.Span.End == Current.Span.Start)
                 {
                     _diagnostics.Add(new SyntaxDiagnostic(
-                        Code: "tosh::parser::accidental_double_dot",
+                        Code: "tosh.parser.accidental_double_dot",
                         Title: "Did you mean '.' (member access) instead of '..' (range)?",
                         Span: Current.Span,
                         Label: "this looks like an accidental double-dot"));
@@ -5693,7 +5726,7 @@ public static class ToshParser
                     }
 
                     _diagnostics.Add(new SyntaxDiagnostic(
-                        Code: "tosh::parser::unexpected_token",
+                        Code: "tosh.parser.unexpected_token",
                         Title: $"Unexpected token '{Current.Text}'.",
                         Span: Current.Span,
                         Label: "this token does not fit here"));
@@ -5733,7 +5766,7 @@ public static class ToshParser
             }
 
             _diagnostics.Add(new SyntaxDiagnostic(
-                Code: "tosh::parser::nameof_missing_close_paren",
+                Code: "tosh.parser.nameof_missing_close_paren",
                 Title: "Expected ')' after nameof identifier.",
                 Span: Current.Span,
                 Label: "expected ')'"));
@@ -5822,7 +5855,7 @@ public static class ToshParser
             if (string.IsNullOrWhiteSpace(innerText))
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::expected_splat_target",
+                    Code: "tosh.parser.expected_splat_target",
                     Title: "Argument splatting requires a variable or collection reference.",
                     Span: splatToken.Span,
                     Label: "write something like '...$tosh.Script.Args' here"));
@@ -5834,7 +5867,7 @@ public static class ToshParser
             if (!IsVariableReferenceLikeToken(innerToken))
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::invalid_splat_target",
+                    Code: "tosh.parser.invalid_splat_target",
                     Title: "Argument splatting currently requires a variable-style reference.",
                     Span: splatToken.Span,
                     Label: "use a target like '...$tosh.Script.Args' or '..._'"));
@@ -5871,7 +5904,7 @@ public static class ToshParser
             if (!IsVariableReferenceLikeToken(innerToken))
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::invalid_spread_target",
+                    Code: "tosh.parser.invalid_spread_target",
                     Title: "Spread requires a variable reference.",
                     Span: splatToken.Span,
                     Label: "use a target like '...$myVar'"));
@@ -5905,7 +5938,7 @@ public static class ToshParser
                 var separatorIndex = text.IndexOf('.');
 
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::variable_references_require_dollar",
+                    Code: "tosh.parser.variable_references_require_dollar",
                     Title: "Variable assignments must use '$' after declaration.",
                     Span: token.Span,
                     Label: separatorIndex >= 0
@@ -5932,7 +5965,7 @@ public static class ToshParser
             {
                 var token = NextToken();
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::expected_assignment_target",
+                    Code: "tosh.parser.expected_assignment_target",
                     Title: "Assignments require a variable or member path target.",
                     Span: token.Span,
                     Label: "write something like '$name = ...' or '$person.Name = ...'"));
@@ -5947,7 +5980,7 @@ public static class ToshParser
             if (expression is not MemberAccessArgumentSyntax)
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::expected_member_assignment_target",
+                    Code: "tosh.parser.expected_member_assignment_target",
                     Title: "This assignment needs a member path like '$person.Name'.",
                     Span: expression.Span,
                     Label: "assign directly to a member path here"));
@@ -5996,7 +6029,7 @@ public static class ToshParser
                 if (Current.Kind == SyntaxTokenKind.Comma)
                 {
                     _diagnostics.Add(new SyntaxDiagnostic(
-                        Code: "tosh::parser::unexpected_projection_separator",
+                        Code: "tosh.parser.unexpected_projection_separator",
                         Title: "A projected member path is required between commas.",
                         Span: Current.Span,
                         Label: "remove this comma or add a member path here"));
@@ -6007,7 +6040,7 @@ public static class ToshParser
                 if (Current.Kind != SyntaxTokenKind.Bareword)
                 {
                     _diagnostics.Add(new SyntaxDiagnostic(
-                        Code: "tosh::parser::expected_projection_member_path",
+                        Code: "tosh.parser.expected_projection_member_path",
                         Title: "Projected fields must be member paths.",
                         Span: Current.Span,
                         Label: "write a member path like 'Name' or 'Parent.Name'"));
@@ -6026,7 +6059,7 @@ public static class ToshParser
                 if (Current.Kind is not SyntaxTokenKind.CloseBrace and not SyntaxTokenKind.EndOfFile)
                 {
                     _diagnostics.Add(new SyntaxDiagnostic(
-                        Code: "tosh::parser::missing_projection_separator",
+                        Code: "tosh.parser.missing_projection_separator",
                         Title: "Projected member paths must be separated by ','.",
                         Span: Current.Span,
                         Label: "insert ',' between projected member paths"));
@@ -6036,7 +6069,7 @@ public static class ToshParser
             if (Current.Kind != SyntaxTokenKind.CloseBrace)
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::missing_projection_closing_brace",
+                    Code: "tosh.parser.missing_projection_closing_brace",
                     Title: "A closing '}' is required here.",
                     Span: openBrace.Span,
                     Label: "this projection never closes",
@@ -6058,7 +6091,7 @@ public static class ToshParser
             }
 
             _diagnostics.Add(new SyntaxDiagnostic(
-                Code: "tosh::parser::expected_block",
+                Code: "tosh.parser.expected_block",
                 Title: $"The '{owner}' statement requires a block.",
                 Span: Current.Span,
                 Label: $"write '{{ ... }}' after '{owner}'"));
@@ -6080,7 +6113,7 @@ public static class ToshParser
                 if (Current.Kind != SyntaxTokenKind.CloseParen)
                 {
                     _diagnostics.Add(new SyntaxDiagnostic(
-                        Code: "tosh::parser::missing_closing_parenthesis",
+                        Code: "tosh.parser.missing_closing_parenthesis",
                         Title: "A closing ')' is required here.",
                         Span: openParen.Span,
                         Label: "this parenthesized source never closes",
@@ -6104,7 +6137,7 @@ public static class ToshParser
             }
 
             _diagnostics.Add(new SyntaxDiagnostic(
-                Code: "tosh::parser::expected_parenthesized_source",
+                Code: "tosh.parser.expected_parenthesized_source",
                 Title: $"The '{owner}' statement requires a source.",
                 Span: Current.Span,
                 Label: $"write a pipeline source after '{owner}'"));
@@ -6146,7 +6179,7 @@ public static class ToshParser
                 if (Current.Kind is not SyntaxTokenKind.CloseBrace and not SyntaxTokenKind.EndOfFile)
                 {
                     _diagnostics.Add(new SyntaxDiagnostic(
-                        Code: "tosh::parser::missing_block_separator",
+                        Code: "tosh.parser.missing_block_separator",
                         Title: "Block statements must be separated by a newline or ';'.",
                         Span: Current.Span,
                         Label: "insert a newline or ';' between block statements"));
@@ -6157,7 +6190,7 @@ public static class ToshParser
             if (Current.Kind != SyntaxTokenKind.CloseBrace)
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::missing_closing_brace",
+                    Code: "tosh.parser.missing_closing_brace",
                     Title: "A closing '}' is required here.",
                     Span: openBrace.Span,
                     Label: "this block never closes",
@@ -6179,7 +6212,7 @@ public static class ToshParser
                   string.Equals(forToken.Text, "for", StringComparison.OrdinalIgnoreCase)))
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::expected_comprehension_for",
+                    Code: "tosh.parser.expected_comprehension_for",
                     Title: "Comprehensions require a 'for' clause after '<|'.",
                     Span: forToken.Span,
                     Label: "expected 'for $variable in source'"));
@@ -6193,7 +6226,7 @@ public static class ToshParser
                   string.Equals(Current.Text, "in", StringComparison.OrdinalIgnoreCase)))
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::expected_comprehension_in",
+                    Code: "tosh.parser.expected_comprehension_in",
                     Title: "Comprehensions require 'in' after the variable name.",
                     Span: Current.Span,
                     Label: "expected 'in' here"));
@@ -6240,7 +6273,7 @@ public static class ToshParser
                     else
                     {
                         _diagnostics.Add(new SyntaxDiagnostic(
-                            Code: "tosh::parser::expected_let_equals",
+                            Code: "tosh.parser.expected_let_equals",
                             Title: "Let bindings require '=' between name and value.",
                             Span: Current.Span,
                             Label: "expected '=' here"));
@@ -6331,7 +6364,7 @@ public static class ToshParser
             if (!IsComprehensionOperator())
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::expected_comprehension_operator",
+                    Code: "tosh.parser.expected_comprehension_operator",
                     Title: "Expected '<|' in generator comprehension.",
                     Span: Current.Span,
                     Label: "expected '<|' here"));
@@ -6344,7 +6377,7 @@ public static class ToshParser
             if (Current.Kind != SyntaxTokenKind.CloseParen)
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::missing_closing_parenthesis",
+                    Code: "tosh.parser.missing_closing_parenthesis",
                     Title: "A closing ')' is required after generator comprehension.",
                     Span: openParen.Span,
                     Label: "this generator comprehension never closes"));
@@ -6365,7 +6398,7 @@ public static class ToshParser
             if (!IsComprehensionOperator())
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::expected_comprehension_operator",
+                    Code: "tosh.parser.expected_comprehension_operator",
                     Title: "Expected '<|' in list comprehension.",
                     Span: Current.Span,
                     Label: "expected '<|' here"));
@@ -6378,7 +6411,7 @@ public static class ToshParser
             if (Current.Kind != SyntaxTokenKind.CloseBracket)
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::missing_closing_bracket",
+                    Code: "tosh.parser.missing_closing_bracket",
                     Title: "A closing ']' is required after list comprehension.",
                     Span: openBracket.Span,
                     Label: "this list comprehension never closes"));
@@ -6412,7 +6445,7 @@ public static class ToshParser
             if (!IsComprehensionOperator())
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::expected_comprehension_operator",
+                    Code: "tosh.parser.expected_comprehension_operator",
                     Title: "Expected '<|' in set comprehension.",
                     Span: Current.Span,
                     Label: "expected '<|' here"));
@@ -6432,7 +6465,7 @@ public static class ToshParser
             if (Current.Kind != SyntaxTokenKind.CloseBrace)
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::missing_closing_brace",
+                    Code: "tosh.parser.missing_closing_brace",
                     Title: "A closing ':}' is required after set comprehension.",
                     Span: openBrace.Span,
                     Label: "this set comprehension never closes"));
@@ -6454,7 +6487,7 @@ public static class ToshParser
             if (!IsFatArrowToken(Current, Peek(1)))
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::expected_fat_arrow",
+                    Code: "tosh.parser.expected_fat_arrow",
                     Title: "Dict comprehension requires '=>' between key and value.",
                     Span: Current.Span,
                     Label: "write '=>' after the key expression"));
@@ -6468,7 +6501,7 @@ public static class ToshParser
             if (!IsComprehensionOperator())
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::expected_comprehension_operator",
+                    Code: "tosh.parser.expected_comprehension_operator",
                     Title: "Expected '<|' in dict comprehension.",
                     Span: Current.Span,
                     Label: "expected '<|' here"));
@@ -6483,7 +6516,7 @@ public static class ToshParser
             if (Current.Kind != SyntaxTokenKind.CloseBrace)
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::missing_closing_brace",
+                    Code: "tosh.parser.missing_closing_brace",
                     Title: "A closing '}' is required after dict comprehension.",
                     Span: openBrace.Span,
                     Label: "this dict comprehension never closes"));
@@ -6625,7 +6658,7 @@ public static class ToshParser
                 if (Current.Kind == SyntaxTokenKind.Comma)
                 {
                     _diagnostics.Add(new SyntaxDiagnostic(
-                        Code: "tosh::parser::unexpected_list_separator",
+                        Code: "tosh.parser.unexpected_list_separator",
                         Title: "An array item is required between commas.",
                         Span: Current.Span,
                         Label: "remove this comma or add an array item here"));
@@ -6661,7 +6694,7 @@ public static class ToshParser
                 if (Current.Kind is not SyntaxTokenKind.CloseBracket and not SyntaxTokenKind.EndOfFile)
                 {
                     _diagnostics.Add(new SyntaxDiagnostic(
-                        Code: "tosh::parser::missing_list_separator",
+                        Code: "tosh.parser.missing_list_separator",
                         Title: "Array items must be separated by ','.",
                         Span: Current.Span,
                         Label: "insert ',' between array items"));
@@ -6671,7 +6704,7 @@ public static class ToshParser
             if (Current.Kind != SyntaxTokenKind.CloseBracket)
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::missing_closing_bracket",
+                    Code: "tosh.parser.missing_closing_bracket",
                     Title: "A closing ']' is required here.",
                     Span: openBracket.Span,
                     Label: "this array literal never closes",
@@ -6784,7 +6817,7 @@ public static class ToshParser
                     !(Current.Kind == SyntaxTokenKind.Bareword && string.Equals(Current.Text, ":", StringComparison.Ordinal)))
                 {
                     _diagnostics.Add(new SyntaxDiagnostic(
-                        Code: "tosh::parser::missing_set_separator",
+                        Code: "tosh.parser.missing_set_separator",
                         Title: "Set items must be separated by ','.",
                         Span: Current.Span,
                         Label: "insert ',' between set items"));
@@ -6800,7 +6833,7 @@ public static class ToshParser
             else
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::missing_set_closing_colon",
+                    Code: "tosh.parser.missing_set_closing_colon",
                     Title: "A closing ':' is required before '}'.",
                     Span: Current.Span,
                     Label: "set literals use '{: ... :}' syntax"));
@@ -6809,7 +6842,7 @@ public static class ToshParser
             if (Current.Kind != SyntaxTokenKind.CloseBrace)
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::missing_closing_brace",
+                    Code: "tosh.parser.missing_closing_brace",
                     Title: "A closing '}' is required here.",
                     Span: openBrace.Span,
                     Label: "this set literal never closes",
@@ -6878,7 +6911,7 @@ public static class ToshParser
                 if (!IsFatArrowToken(Current, Peek(1)))
                 {
                     _diagnostics.Add(new SyntaxDiagnostic(
-                        Code: "tosh::parser::expected_fat_arrow",
+                        Code: "tosh.parser.expected_fat_arrow",
                         Title: "Dict entries require '=>' between key and value.",
                         Span: Current.Span,
                         Label: "write '=>' after the key expression"));
@@ -6911,7 +6944,7 @@ public static class ToshParser
                 if (Current.Kind is not SyntaxTokenKind.CloseBrace and not SyntaxTokenKind.EndOfFile)
                 {
                     _diagnostics.Add(new SyntaxDiagnostic(
-                        Code: "tosh::parser::missing_dict_entry_separator",
+                        Code: "tosh.parser.missing_dict_entry_separator",
                         Title: "Dict entries must be separated by ',' or a newline.",
                         Span: Current.Span,
                         Label: "insert ',' or a newline between dict entries"));
@@ -6921,7 +6954,7 @@ public static class ToshParser
             if (Current.Kind != SyntaxTokenKind.CloseBrace)
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::missing_dict_closing_brace",
+                    Code: "tosh.parser.missing_dict_closing_brace",
                     Title: "A closing '}' is required here.",
                     Span: openBrace.Span,
                     Label: "this dict literal never closes",
@@ -6943,7 +6976,7 @@ public static class ToshParser
                 if (Current.Kind == SyntaxTokenKind.Comma)
                 {
                     _diagnostics.Add(new SyntaxDiagnostic(
-                        Code: "tosh::parser::unexpected_list_separator",
+                        Code: "tosh.parser.unexpected_list_separator",
                         Title: "A collection item is required between commas.",
                         Span: Current.Span,
                         Label: "remove this comma or add a collection item here"));
@@ -6967,7 +7000,7 @@ public static class ToshParser
                 if (Current.Kind is not SyntaxTokenKind.CloseBrace and not SyntaxTokenKind.EndOfFile)
                 {
                     _diagnostics.Add(new SyntaxDiagnostic(
-                        Code: "tosh::parser::missing_list_separator",
+                        Code: "tosh.parser.missing_list_separator",
                         Title: "Collection items must be separated by ','.",
                         Span: Current.Span,
                         Label: "insert ',' between collection items"));
@@ -6977,7 +7010,7 @@ public static class ToshParser
             if (Current.Kind != SyntaxTokenKind.CloseBrace)
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::missing_closing_brace",
+                    Code: "tosh.parser.missing_closing_brace",
                     Title: "A closing '}' is required here.",
                     Span: openBrace.Span,
                     Label: "this collection literal never closes",
@@ -7033,7 +7066,7 @@ public static class ToshParser
                     else
                     {
                         _diagnostics.Add(new SyntaxDiagnostic(
-                            Code: "tosh::parser::expected_closing_paren",
+                            Code: "tosh.parser.expected_closing_paren",
                             Title: "A closing ')' is required after the computed property name.",
                             Span: Current.Span,
                             Label: "close the parenthesized expression"));
@@ -7080,7 +7113,7 @@ public static class ToshParser
                 else
                 {
                     _diagnostics.Add(new SyntaxDiagnostic(
-                        Code: "tosh::parser::expected_record_field_name",
+                        Code: "tosh.parser.expected_record_field_name",
                         Title: "Record literals require a field name before '='.",
                         Span: Current.Span,
                         Label: "write a field name like 'Name = value'"));
@@ -7113,7 +7146,7 @@ public static class ToshParser
                 if (Current.Kind is not SyntaxTokenKind.CloseBrace and not SyntaxTokenKind.EndOfFile)
                 {
                     _diagnostics.Add(new SyntaxDiagnostic(
-                        Code: "tosh::parser::missing_record_field_separator",
+                        Code: "tosh.parser.missing_record_field_separator",
                         Title: "Record fields must be separated by ',' or a newline.",
                         Span: Current.Span,
                         Label: "insert ',' or a newline between record fields"));
@@ -7123,7 +7156,7 @@ public static class ToshParser
             if (Current.Kind != SyntaxTokenKind.CloseBrace)
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::missing_record_closing_brace",
+                    Code: "tosh.parser.missing_record_closing_brace",
                     Title: "A closing '}' is required here.",
                     Span: openBrace.Span,
                     Label: "this record literal never closes",
@@ -7142,7 +7175,7 @@ public static class ToshParser
             if (Current.Kind != SyntaxTokenKind.Bareword)
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::expected_type_name",
+                    Code: "tosh.parser.expected_type_name",
                     Title: "Object construction requires a CLR type name.",
                     Span: Current.Span,
                     Label: "write a type after 'new', like 'new string(\"hello\")'"));
@@ -7155,7 +7188,7 @@ public static class ToshParser
             if (Current.Kind != SyntaxTokenKind.OpenParen)
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::expected_constructor_parenthesis",
+                    Code: "tosh.parser.expected_constructor_parenthesis",
                     Title: "Object construction uses C#-style parentheses.",
                     Span: typeToken.Span,
                     Label: "add '(' after the type name",
@@ -7171,7 +7204,7 @@ public static class ToshParser
                 if (Current.Kind == SyntaxTokenKind.Comma)
                 {
                     _diagnostics.Add(new SyntaxDiagnostic(
-                        Code: "tosh::parser::unexpected_constructor_separator",
+                        Code: "tosh.parser.unexpected_constructor_separator",
                         Title: "A constructor argument is required between commas.",
                         Span: Current.Span,
                         Label: "remove this comma or add an argument here"));
@@ -7197,7 +7230,7 @@ public static class ToshParser
                 if (Current.Kind is not SyntaxTokenKind.CloseParen and not SyntaxTokenKind.EndOfFile)
                 {
                     _diagnostics.Add(new SyntaxDiagnostic(
-                        Code: "tosh::parser::missing_constructor_separator",
+                        Code: "tosh.parser.missing_constructor_separator",
                         Title: "Constructor arguments must be separated by ','.",
                         Span: Current.Span,
                         Label: "insert ',' between constructor arguments"));
@@ -7207,7 +7240,7 @@ public static class ToshParser
             if (Current.Kind != SyntaxTokenKind.CloseParen)
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::missing_closing_parenthesis",
+                    Code: "tosh.parser.missing_closing_parenthesis",
                     Title: "A closing ')' is required here.",
                     Span: openParen.Span,
                     Label: "this constructor call never closes",
@@ -7284,7 +7317,7 @@ public static class ToshParser
                     if (Current.Kind != SyntaxTokenKind.CloseBracket)
                     {
                         _diagnostics.Add(new SyntaxDiagnostic(
-                            Code: "tosh::parser::unsupported_double_index_lookup",
+                            Code: "tosh.parser.unsupported_double_index_lookup",
                             Title: "Index access supports '[value]', '[key,]', or '[,value]'.",
                             Span: Current.Span,
                             Label: "remove this extra expression"));
@@ -7301,7 +7334,7 @@ public static class ToshParser
             if (index is null)
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::expected_index_expression",
+                    Code: "tosh.parser.expected_index_expression",
                     Title: "Index access requires an expression inside '[' and ']'.",
                     Span: openBracket.Span,
                     Label: "write an index, key, or value here"));
@@ -7312,7 +7345,7 @@ public static class ToshParser
             if (Current.Kind != SyntaxTokenKind.CloseBracket)
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::missing_closing_bracket",
+                    Code: "tosh.parser.missing_closing_bracket",
                     Title: "A closing ']' is required here.",
                     Span: openBracket.Span,
                     Label: "this index access never closes",
@@ -7376,7 +7409,7 @@ public static class ToshParser
                 if (!IsValidIdentifier(postfixText))
                 {
                     _diagnostics.Add(new SyntaxDiagnostic(
-                        Code: "tosh::parser::invalid_method_name",
+                        Code: "tosh.parser.invalid_method_name",
                         Title: "Method calls need a single method name after '.'.",
                         Span: postfixSpan,
                         Label: $"'{postfixText}' is not a valid method name"));
@@ -7409,7 +7442,7 @@ public static class ToshParser
                 if (Current.Kind == SyntaxTokenKind.Comma)
                 {
                     _diagnostics.Add(new SyntaxDiagnostic(
-                        Code: "tosh::parser::unexpected_argument_separator",
+                        Code: "tosh.parser.unexpected_argument_separator",
                         Title: "An argument is required between commas.",
                         Span: Current.Span,
                         Label: "remove this comma or add an argument here"));
@@ -7456,7 +7489,7 @@ public static class ToshParser
                 if (Current.Kind is not SyntaxTokenKind.CloseParen and not SyntaxTokenKind.EndOfFile)
                 {
                     _diagnostics.Add(new SyntaxDiagnostic(
-                        Code: "tosh::parser::missing_argument_separator",
+                        Code: "tosh.parser.missing_argument_separator",
                         Title: "Arguments must be separated by ','.",
                         Span: Current.Span,
                         Label: "insert ',' between arguments"));
@@ -7466,7 +7499,7 @@ public static class ToshParser
             if (Current.Kind != SyntaxTokenKind.CloseParen)
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::missing_closing_parenthesis",
+                    Code: "tosh.parser.missing_closing_parenthesis",
                     Title: "A closing ')' is required here.",
                     Span: openParen.Span,
                     Label: "this call never closes",
@@ -7513,7 +7546,7 @@ public static class ToshParser
                 }
 
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::missing_closing_parenthesis",
+                    Code: "tosh.parser.missing_closing_parenthesis",
                     Title: "A closing ')' is required here.",
                     Span: openParen.Span,
                     Label: "this operator expression never closes",
@@ -7534,7 +7567,7 @@ public static class ToshParser
                 }
 
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::missing_closing_parenthesis",
+                    Code: "tosh.parser.missing_closing_parenthesis",
                     Title: "A closing ')' is required here.",
                     Span: openParen.Span,
                     Label: "this subexpression never closes",
@@ -7555,7 +7588,7 @@ public static class ToshParser
                 }
 
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::missing_closing_parenthesis",
+                    Code: "tosh.parser.missing_closing_parenthesis",
                     Title: "A closing ')' is required here.",
                     Span: openParen.Span,
                     Label: "this subexpression never closes",
@@ -7572,7 +7605,7 @@ public static class ToshParser
             if (Current.Kind != SyntaxTokenKind.CloseParen)
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::missing_closing_parenthesis",
+                    Code: "tosh.parser.missing_closing_parenthesis",
                     Title: "A closing ')' is required here.",
                     Span: openParen.Span,
                     Label: "this subexpression never closes",
@@ -7691,7 +7724,7 @@ public static class ToshParser
                 if (Current.Kind is not SyntaxTokenKind.CloseParen and not SyntaxTokenKind.EndOfFile)
                 {
                     _diagnostics.Add(new SyntaxDiagnostic(
-                        Code: "tosh::parser::missing_tuple_separator",
+                        Code: "tosh.parser.missing_tuple_separator",
                         Title: "Tuple elements must be separated by ','.",
                         Span: Current.Span,
                         Label: "insert ',' between tuple elements"));
@@ -7701,7 +7734,7 @@ public static class ToshParser
             if (Current.Kind != SyntaxTokenKind.CloseParen)
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::missing_closing_parenthesis",
+                    Code: "tosh.parser.missing_closing_parenthesis",
                     Title: "A closing ')' is required here.",
                     Span: openParen.Span,
                     Label: "this tuple literal never closes",
@@ -7728,7 +7761,7 @@ public static class ToshParser
             if (Current.Kind != SyntaxTokenKind.CloseParen)
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::missing_closing_parenthesis",
+                    Code: "tosh.parser.missing_closing_parenthesis",
                     Title: "A closing ')' is required here.",
                     Span: openParen.Span,
                     Label: "this command substitution never closes",
@@ -7755,7 +7788,7 @@ public static class ToshParser
             if (Current.Kind != SyntaxTokenKind.CloseParen)
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::missing_closing_parenthesis",
+                    Code: "tosh.parser.missing_closing_parenthesis",
                     Title: "A closing ')' is required here.",
                     Span: openParen.Span,
                     Label: "this process substitution never closes",
@@ -7784,7 +7817,7 @@ public static class ToshParser
             if (Current.Kind != SyntaxTokenKind.CloseParen)
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::missing_closing_parenthesis",
+                    Code: "tosh.parser.missing_closing_parenthesis",
                     Title: "A closing ')' is required here.",
                     Span: greaterThan.Span,
                     Label: "this process substitution never closes",
@@ -7813,7 +7846,7 @@ public static class ToshParser
                 }
 
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::missing_closing_parenthesis",
+                    Code: "tosh.parser.missing_closing_parenthesis",
                     Title: "A closing ')' is required here.",
                     Span: openParen.Span,
                     Label: "this condition never closes",
@@ -7838,7 +7871,7 @@ public static class ToshParser
                 }
 
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::missing_closing_parenthesis",
+                    Code: "tosh.parser.missing_closing_parenthesis",
                     Title: "A closing ')' is required here.",
                     Span: openParen.Span,
                     Label: "this condition never closes",
@@ -7857,7 +7890,7 @@ public static class ToshParser
             }
 
             _diagnostics.Add(new SyntaxDiagnostic(
-                Code: "tosh::parser::missing_closing_parenthesis",
+                Code: "tosh.parser.missing_closing_parenthesis",
                 Title: "A closing ')' is required here.",
                 Span: openParen.Span,
                 Label: "this condition never closes",
@@ -7891,7 +7924,7 @@ public static class ToshParser
             else
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::missing_ternary_colon",
+                    Code: "tosh.parser.missing_ternary_colon",
                     Title: "A ternary expression requires ':'.",
                     Span: questionToken.Span,
                     Label: "this ternary expression is missing its ':' branch separator",
@@ -8046,7 +8079,7 @@ public static class ToshParser
                 if (normalizedOperator == "=")
                 {
                     _diagnostics.Add(new SyntaxDiagnostic(
-                        Code: "tosh::parser::assignment_in_predicate",
+                        Code: "tosh.parser.assignment_in_predicate",
                         Title: "Use '==' for equality comparisons, not '='.",
                         Span: operatorToken.Span,
                         Label: "did you mean '=='?",
@@ -8159,7 +8192,7 @@ public static class ToshParser
             if (Current.Kind is SyntaxTokenKind.CloseParen or SyntaxTokenKind.CloseBrace)
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::expected_operand",
+                    Code: "tosh.parser.expected_operand",
                     Title: "Expected an operand in this expression.",
                     Span: Current.Span,
                     Label: "operators need a value on both sides"));
@@ -8232,7 +8265,7 @@ public static class ToshParser
                 if (Current.Kind != SyntaxTokenKind.CloseBrace && Current.Kind != SyntaxTokenKind.EndOfFile)
                 {
                     _diagnostics.Add(new SyntaxDiagnostic(
-                        Code: "tosh::parser::missing_predicate_separator",
+                        Code: "tosh.parser.missing_predicate_separator",
                         Title: "Predicate expressions must be separated by ';' or a newline.",
                         Span: Current.Span,
                         Label: "insert ';' or a newline between predicate expressions"));
@@ -8249,7 +8282,7 @@ public static class ToshParser
             if (Current.Kind != SyntaxTokenKind.CloseBrace)
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::missing_closing_brace",
+                    Code: "tosh.parser.missing_closing_brace",
                     Title: "A closing '}' is required here.",
                     Span: openBrace.Span,
                     Label: "this predicate block never closes",
@@ -8288,7 +8321,7 @@ public static class ToshParser
                     else if (stages.Count == 0)
                     {
                         _diagnostics.Add(new SyntaxDiagnostic(
-                            Code: "tosh::parser::unexpected_background_operator",
+                            Code: "tosh.parser.unexpected_background_operator",
                             Title: "Unexpected background operator.",
                             Span: Current.Span,
                             Label: "remove this '&' or put a pipeline before it"));
@@ -8308,7 +8341,7 @@ public static class ToshParser
                     !(Peek(1).Kind == SyntaxTokenKind.GreaterThan && Current.Span.End == Peek(1).Span.Start))
                 {
                     _diagnostics.Add(new SyntaxDiagnostic(
-                        Code: "tosh::parser::unexpected_pipeline_separator",
+                        Code: "tosh.parser.unexpected_pipeline_separator",
                         Title: "Unexpected pipeline separator.",
                         Span: Current.Span,
                         Label: "remove this '|' or put a stage before it"));
@@ -8327,7 +8360,7 @@ public static class ToshParser
                     if (IsPipelineTerminator(Current.Kind, untilCloseParen, untilCloseBrace, untilSemicolon))
                     {
                         _diagnostics.Add(new SyntaxDiagnostic(
-                            Code: "tosh::parser::missing_command_after_pipe_forward",
+                            Code: "tosh.parser.missing_command_after_pipe_forward",
                             Title: "A command is required after '|>'.",
                             Span: pipeToken.Span,
                             Label: "a pipeline cannot end here",
@@ -8376,7 +8409,7 @@ public static class ToshParser
                             if (inputRedirection is not null)
                             {
                                 _diagnostics.Add(new SyntaxDiagnostic(
-                                    Code: "tosh::parser::duplicate_input_redirection",
+                                    Code: "tosh.parser.duplicate_input_redirection",
                                     Title: "Only one input redirection is allowed per pipeline.",
                                     Span: input.Span,
                                     Label: "remove this input redirection"));
@@ -8413,7 +8446,7 @@ public static class ToshParser
                     if (IsPipelineTerminator(Current.Kind, untilCloseParen, untilCloseBrace, untilSemicolon))
                     {
                         _diagnostics.Add(new SyntaxDiagnostic(
-                            Code: "tosh::parser::missing_command_after_pipe_forward",
+                            Code: "tosh.parser.missing_command_after_pipe_forward",
                             Title: "A command is required after '|>'.",
                             Span: pipeToken.Span,
                             Label: "a pipeline cannot end here",
@@ -8447,7 +8480,7 @@ public static class ToshParser
                     if (IsPipelineTerminator(Current.Kind, untilCloseParen, untilCloseBrace, untilSemicolon))
                     {
                         _diagnostics.Add(new SyntaxDiagnostic(
-                            Code: "tosh::parser::missing_command_after_pipe",
+                            Code: "tosh.parser.missing_command_after_pipe",
                             Title: "A command is required after '|'.",
                             Span: pipe.Span,
                             Label: "a pipeline cannot end here",
@@ -8470,7 +8503,7 @@ public static class ToshParser
                 if (stage is ExpressionPipelineStageSyntax)
                 {
                     _diagnostics.Add(new SyntaxDiagnostic(
-                        Code: "tosh::parser::missing_pipeline_separator",
+                        Code: "tosh.parser.missing_pipeline_separator",
                         Title: "Expression pipeline stages must be separated by '|'.",
                         Span: Current.Span,
                         Label: "insert '|' before the next command"));
@@ -9613,7 +9646,8 @@ public static class ToshParser
                 or SyntaxTokenKind.BangEqual or SyntaxTokenKind.BangTilde
                 || (!_stopRefinementAtEquals && IsEqualsToken(token))
                 || (token.Kind == SyntaxTokenKind.Bareword && token.Text is
-                    "==" or "=~" or "in" or "contains" or "starts-with" or "ends-with" or "is" or "not" or "as");
+                    "==" or "=~" or "in" or "contains" or "starts-with" or "ends-with" or "is" or "not" or "as"
+                    or "is-not" or "is-in" or "is-not-in" or "not-in");
         }
 
         private static bool IsAdditiveOperatorToken(SyntaxToken token)
@@ -9655,7 +9689,12 @@ public static class ToshParser
                 {
                     "=~" => "=~",
                     "in" => "in",
-
+                    "is" => "is",
+                    "is-not" => "is-not",
+                    "is-in" => "is-in",
+                    "is-not-in" => "is-not-in",
+                    "not" => "not",
+                    "not-in" => "not-in",
                     "or" => "or",
                     "and" => "and",
                     "==" => "==",
@@ -9667,6 +9706,7 @@ public static class ToshParser
                     "-" => "-",
                     "*" => "*",
                     "/" => "/",
+                    "//" => "//",
                     "%" => "%",
                     "**" => "**",
                     _ => token.Text,
@@ -9727,7 +9767,7 @@ public static class ToshParser
         private static bool IsAssignmentOperatorToken(SyntaxToken token)
         {
             return token.Kind == SyntaxTokenKind.Bareword &&
-                   token.Text is "=" or "+=" or "-=" or "*=" or "**=" or "/=" or "%=" or "??=";
+                   token.Text is "=" or "+=" or "-=" or "*=" or "**=" or "/=" or "//=" or "%=" or "??=";
         }
 
         private static string NormalizeAssignmentOperator(SyntaxToken token)
@@ -9740,6 +9780,7 @@ public static class ToshParser
                 "*=" => "*=",
                 "**=" => "**=",
                 "/=" => "/=",
+                "//=" => "//=",
                 "%=" => "%=",
                 "??=" => "??=",
                 _ => "=",
@@ -9810,7 +9851,7 @@ public static class ToshParser
             if (Current.Kind is SyntaxTokenKind.EndOfFile or SyntaxTokenKind.Semicolon or SyntaxTokenKind.Pipe)
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::expected_redirection_target",
+                    Code: "tosh.parser.expected_redirection_target",
                     Title: "A file path is required after a redirection operator.",
                     Span: modeToken.Span,
                     Label: "expected a file path here"));
@@ -9853,7 +9894,7 @@ public static class ToshParser
             if (Current.Kind is SyntaxTokenKind.EndOfFile or SyntaxTokenKind.Semicolon or SyntaxTokenKind.Pipe)
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::expected_input_redirection_source",
+                    Code: "tosh.parser.expected_input_redirection_source",
                     Title: "A file path is required after an input redirection operator.",
                     Span: TextSpan.FromBounds(start, Current.Span.Start),
                     Label: "expected a file path here"));
@@ -9995,7 +10036,7 @@ public static class ToshParser
             {
                 var token = NextToken();
                 _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh::parser::variable_references_require_dollar",
+                    Code: "tosh.parser.variable_references_require_dollar",
                     Title: "Variable assignments must use '$' after declaration.",
                     Span: token.Span,
                     Label: $"write '${token.Text} = ...' here",
@@ -10016,7 +10057,7 @@ public static class ToshParser
 
             var invalidToken = Current;
             _diagnostics.Add(new SyntaxDiagnostic(
-                Code: "tosh::parser::expected_variable_name",
+                Code: "tosh.parser.expected_variable_name",
                 Title: "Expected a variable name.",
                 Span: invalidToken.Span,
                 Label: "write a variable name like '$answer'"));

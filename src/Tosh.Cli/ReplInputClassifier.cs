@@ -12,24 +12,24 @@ public static class ReplInputClassifier
 
     private static readonly HashSet<string> ContinuationDiagnosticCodes =
     [
-        "tosh::parser::expected_block",
-        "tosh::parser::expected_class_body",
-        "tosh::parser::expected_enum_body",
-        "tosh::parser::expected_record_fields",
-        "tosh::parser::expected_match_block",
-        "tosh::parser::expected_switch_block",
-        "tosh::parser::expected_bind_body",
-        "tosh::parser::expected_function_signature",
-        "tosh::parser::expected_else_block",
-        "tosh::parser::missing_closing_brace",
-        "tosh::parser::missing_closing_paren",
-        "tosh::parser::missing_closing_parenthesis",
-        "tosh::parser::missing_closing_bracket",
-        "tosh::parser::missing_closing_angle",
-        "tosh::parser::missing_projection_closing_brace",
-        "tosh::parser::missing_record_closing_brace",
-        "tosh::parser::missing_command_after_pipe",
-        "tosh::parser::missing_ternary_colon",
+        "tosh.parser.expected_block",
+        "tosh.parser.expected_class_body",
+        "tosh.parser.expected_enum_body",
+        "tosh.parser.expected_record_fields",
+        "tosh.parser.expected_match_block",
+        "tosh.parser.expected_switch_block",
+        "tosh.parser.expected_bind_body",
+        "tosh.parser.expected_function_signature",
+        "tosh.parser.expected_else_block",
+        "tosh.parser.missing_closing_brace",
+        "tosh.parser.missing_closing_paren",
+        "tosh.parser.missing_closing_parenthesis",
+        "tosh.parser.missing_closing_bracket",
+        "tosh.parser.missing_closing_angle",
+        "tosh.parser.missing_projection_closing_brace",
+        "tosh.parser.missing_record_closing_brace",
+        "tosh.parser.missing_command_after_pipe",
+        "tosh.parser.missing_ternary_colon",
     ];
 
     public static bool RequiresContinuation(string source)
@@ -281,14 +281,14 @@ public static class ReplInputClassifier
                 if (ContinuationDiagnosticCodes.Contains(diagnostic.Code))
                 {
                     // Suggest indentation when the parser is expecting a block body.
-                    shouldIndent = diagnostic.Code is "tosh::parser::expected_block"
-                        or "tosh::parser::expected_class_body"
-                        or "tosh::parser::expected_enum_body"
-                        or "tosh::parser::expected_record_fields"
-                        or "tosh::parser::expected_match_block"
-                        or "tosh::parser::expected_switch_block"
-                        or "tosh::parser::expected_bind_body"
-                        or "tosh::parser::expected_function_signature";
+                    shouldIndent = diagnostic.Code is "tosh.parser.expected_block"
+                        or "tosh.parser.expected_class_body"
+                        or "tosh.parser.expected_enum_body"
+                        or "tosh.parser.expected_record_fields"
+                        or "tosh.parser.expected_match_block"
+                        or "tosh.parser.expected_switch_block"
+                        or "tosh.parser.expected_bind_body"
+                        or "tosh.parser.expected_function_signature";
 
                     return true;
                 }

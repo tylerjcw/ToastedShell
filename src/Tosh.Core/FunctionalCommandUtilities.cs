@@ -99,9 +99,32 @@ internal static class FunctionalCommandUtilities
                         }
                     }
 
-                    return await AsyncEnumerableExtensions.ToListAsync(
+                    var blockResults = await AsyncEnumerableExtensions.ToListAsync(
                         executor.ExecuteAsync(block, locals, context.CancellationToken),
                         context.CancellationToken);
+
+                    // If the block evaluated to a single callable value (e.g. a `func(x) => ...`
+                    // expression passed as an argument), forward the supplied callable arguments
+                    // by invoking the callable. Without this, commands like `map`, `filter`,
+                    // `reduce`, `sort`, etc. would receive the lambda value itself instead of
+                    // the result of applying it to each input item.
+                    if (blockResults.Count == 1 &&
+                        blockResults[0] is IShellCallable producedCallable &&
+                        callableArguments.Count > 0)
+                    {
+                        var invokeContext = context with
+                        {
+                            Arguments = callableArguments,
+                            Input = AsyncEnumerableExtensions.Empty<object?>(),
+                            IsPipelined = false,
+                        };
+
+                        return await AsyncEnumerableExtensions.ToListAsync(
+                            producedCallable.InvokeAsync(invokeContext),
+                            context.CancellationToken);
+                    }
+
+                    return blockResults;
                 }
 
             default:
@@ -169,5 +192,5 @@ internal static class FunctionalCommandUtilities
         => context.Invocation?.CommandName ?? "command";
 
     private static string CreateDiagnosticCode(CommandContext context, string suffix)
-        => $"tosh::runtime::{GetCommandName(context).Replace("-", "_", StringComparison.Ordinal)}_{suffix}";
+        => $"tosh.runtime.{GetCommandName(context).Replace("-", "_", StringComparison.Ordinal)}_{suffix}";
 }

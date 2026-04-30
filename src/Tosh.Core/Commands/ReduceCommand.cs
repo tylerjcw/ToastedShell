@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Pipeline)]
 [CommandCategory("Pipeline")]
 [CommandArgument("seed", "The initial accumulator value.")]
 [CommandArgument("callable|block", "A lambda or block that combines the current accumulator with each input item and returns the next accumulator.")]
@@ -17,7 +18,7 @@ public sealed class ReduceCommand : ShellCommand
         if (context.Arguments.Count != 2)
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::reduce_requires_seed_and_callable",
+                code: "tosh.runtime.reduce_requires_seed_and_callable",
                 title: "'reduce' requires a seed value and a callable value or block.",
                 label: "use 'reduce <seed> func(acc, x) => ...' or 'reduce <seed> { ... }'");
         }

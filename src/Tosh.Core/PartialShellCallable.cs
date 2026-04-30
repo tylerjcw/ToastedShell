@@ -35,7 +35,7 @@ public sealed class PartialShellCallable : IShellCallable, IShellRecordObject
         if (_inner.MaximumParameterCount is int maximum && combinedArguments.Length > maximum)
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::partial_argument_count_mismatch",
+                code: "tosh.runtime.partial_argument_count_mismatch",
                 title: $"Callable '{_inner.CallableName}' accepts at most {maximum} argument(s) but received {combinedArguments.Length}.",
                 label: "too many arguments were supplied to the partially applied callable");
         }

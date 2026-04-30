@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Filesystem)]
 [CommandCategory("Filesystem")]
 public sealed class PathPredicateCommand : ShellCommand
 {

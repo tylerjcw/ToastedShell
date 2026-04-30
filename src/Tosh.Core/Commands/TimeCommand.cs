@@ -7,6 +7,7 @@ namespace Tosh.Core.Commands;
 /// Measures wall-clock time, CPU time, memory, and page faults for a command or block,
 /// matching the metrics reported by /usr/bin/time.
 /// </summary>
+[Stdlib(StdlibCategory.Time)]
 [CommandCategory("Shell")]
 [CommandArgument("command|block [args...]", "A block like '{ expr }' or a command followed by its arguments.")]
 [CommandExample("time { seq 1000000 | reduce 0 { $acc + _ } }")]
@@ -23,14 +24,14 @@ public sealed class TimeCommand : ShellCommand
         if (context.Arguments.Count == 0)
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::time_requires_argument",
+                code: "tosh.runtime.time_requires_argument",
                 title: "'time' requires a command or block to measure.",
                 label: "pass a block like '{ ... }' or a command name");
         }
 
         var target = context.Arguments[0]
             ?? throw context.CreateDiagnostic(
-                code: "tosh::runtime::time_requires_argument",
+                code: "tosh.runtime.time_requires_argument",
                 title: "'time' requires a non-null command or block to measure.",
                 argumentIndex: 0,
                 label: "this value is null");
@@ -146,7 +147,7 @@ public sealed class TimeCommand : ShellCommand
         }
 
         throw context.CreateDiagnostic(
-            code: "tosh::runtime::time_invalid_target",
+            code: "tosh.runtime.time_invalid_target",
             title: "'time' requires a block, callable, or command as its first argument.",
             argumentIndex: 0,
             label: "this value is not executable",

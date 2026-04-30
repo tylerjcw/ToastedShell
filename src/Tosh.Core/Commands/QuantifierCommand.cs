@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Pipeline)]
 [CommandCategory("Pipeline")]
 [CommandArgument("callable|block", "A predicate evaluated for each input item.")]
 [CommandExample("echo 1 2 3 | any { _ > 2 }", Title = "Check if any value exceeds 2")]
@@ -22,7 +23,7 @@ public sealed class QuantifierCommand : ShellCommand
         if (context.Arguments.Count != 1)
         {
             throw context.CreateDiagnostic(
-                code: $"tosh::runtime::{Name}_requires_callable_or_block",
+                code: $"tosh.runtime.{Name}_requires_callable_or_block",
                 title: $"'{Name}' requires exactly one callable value or block.",
                 label: "pass a lambda like 'func(x) => ...' or a block like '{ ... }'");
         }

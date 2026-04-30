@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Pipeline)]
 [CommandCategory("Pipeline")]
 [CommandArgument("callable|block", "A lambda or block executed once per input item, concurrently.")]
 [CommandOption("--threads <n>", "Maximum degree of parallelism (default: processor count).")]
@@ -109,7 +110,7 @@ public sealed class ParallelCommand : ShellCommand
         if (operationIndex >= context.Arguments.Count)
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::parallel_requires_callable_or_block",
+                code: "tosh.runtime.parallel_requires_callable_or_block",
                 title: "'parallel' requires a callable value or block.",
                 label: "pass a lambda like 'func(x) => ...' or a block like '{ ... }'");
         }

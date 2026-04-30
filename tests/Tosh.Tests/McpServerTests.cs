@@ -51,7 +51,7 @@ public sealed class McpServerTests
         using var doc = JsonDocument.Parse(content);
         var diagnostics = doc.RootElement;
         Assert.True(diagnostics.GetArrayLength() > 0);
-        Assert.StartsWith("tosh::parser::", diagnostics[0].GetProperty("code").GetString());
+        Assert.StartsWith("tosh.parser.", diagnostics[0].GetProperty("code").GetString());
     }
 
     [Fact]
@@ -170,7 +170,7 @@ public sealed class McpServerTests
         using var doc = JsonDocument.Parse(content);
         var root = doc.RootElement;
         var stderr = root.GetProperty("stderr").GetString()!;
-        Assert.Contains("tosh::parser::", stderr);
+        Assert.Contains("tosh.parser.", stderr);
     }
 
     [Fact]
@@ -208,7 +208,7 @@ public sealed class McpServerTests
         Assert.True(explanations.GetArrayLength() > 0);
 
         var first = explanations[0];
-        Assert.StartsWith("tosh::parser::", first.GetProperty("code").GetString());
+        Assert.StartsWith("tosh.parser.", first.GetProperty("code").GetString());
         Assert.False(string.IsNullOrEmpty(first.GetProperty("explanation").GetString()));
         Assert.True(first.GetProperty("line").ValueKind == JsonValueKind.Number);
     }

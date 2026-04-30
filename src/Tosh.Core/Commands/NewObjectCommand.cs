@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Clr)]
 [CommandCategory("CLR")]
 [CommandArgument("type-name", "The CLR type name, ToSh named type, or shell collection type to construct.")]
 [CommandArgument("ctor-args", "Arguments to pass to the constructor.", Required = false)]

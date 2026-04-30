@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Pipeline)]
 [CommandCategory("Pipeline")]
 [CommandArgument("k", "The number of elements in each combination.")]
 [CommandExample("[1 2 3] | combinations 2", Title = "All 2-element subsets")]
@@ -16,7 +17,7 @@ public sealed class CombinationsCommand : ShellCommand
         if (context.Arguments.Count != 1)
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::combinations_requires_k",
+                code: "tosh.runtime.combinations_requires_k",
                 title: "'combinations' requires exactly one integer argument (k).",
                 label: "use '... | combinations <k>'");
         }
@@ -25,7 +26,7 @@ public sealed class CombinationsCommand : ShellCommand
         if (k < 0)
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::combinations_k_non_negative",
+                code: "tosh.runtime.combinations_k_non_negative",
                 title: "k must be non-negative.",
                 argumentIndex: 0,
                 label: "must be >= 0");

@@ -1,7 +1,10 @@
 namespace Tosh.Core.Commands;
 
+[ShellOnly]
+[Stdlib(StdlibCategory.Shell)]
 [CommandCategory("Prompt")]
 [CommandExample("prompt-newline")]
+[CommandOutput("A styled newline segment used to break long prompts onto multiple lines.")]
 public sealed class PromptNewlineCommand : ShellCommand
 {
     public PromptNewlineCommand()

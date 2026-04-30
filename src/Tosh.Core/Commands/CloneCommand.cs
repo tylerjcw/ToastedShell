@@ -2,9 +2,11 @@ using System.Dynamic;
 
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Clr)]
 [CommandCategory("CLR")]
 [CommandExample("$obj | clone")]
 [CommandExample("clone $obj")]
+[CommandOutput("A shallow copy of each input/object: the same record/dictionary/list shape with copied top-level entries.")]
 public sealed class CloneCommand : ShellCommand
 {
     public CloneCommand()

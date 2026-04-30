@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Pipeline)]
 [CommandCategory("Pipeline")]
 [CommandArgument("other-sequence", "A second sequence to form pairs with.")]
 [CommandArgument("callable|block", "Optional combiner. Receives each pair as arguments. Defaults to [a, b] arrays.", Required = false)]
@@ -19,7 +20,7 @@ public sealed class CartesianProductCommand : ShellCommand
         if (context.Arguments.Count < 1 || context.Arguments.Count > 2)
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::cartesian_product_args",
+                code: "tosh.runtime.cartesian_product_args",
                 title: "'cartesian-product' requires a second sequence and an optional combiner.",
                 label: "use '... | cartesian-product <sequence> [combiner]'");
         }

@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Pipeline)]
 [CommandCategory("Pipeline")]
 [CommandArgument("size", "The number of items in each sliding window.")]
 [CommandArgument("callable|block", "Optional transform applied to each window.", Required = false)]
@@ -17,7 +18,7 @@ public sealed class WindowCommand : ShellCommand
         if (context.Arguments.Count < 1 || context.Arguments.Count > 2)
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::window_requires_size",
+                code: "tosh.runtime.window_requires_size",
                 title: "'window' requires a size and an optional callable or block.",
                 label: "use 'window <size> [block]'");
         }
@@ -25,7 +26,7 @@ public sealed class WindowCommand : ShellCommand
         if (!TypeConversion.TryConvert(context.Arguments[0], typeof(int), out var converted) || converted is not int size || size <= 0)
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::window_requires_positive_integer",
+                code: "tosh.runtime.window_requires_positive_integer",
                 title: "'window' requires a positive integer size.",
                 argumentIndex: 0,
                 label: "expected a positive integer");

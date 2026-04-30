@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Clr)]
 [CommandCategory("CLR")]
 [CommandArgument("type", "One or more type names or piped objects to describe.", Required = false)]
 [CommandExample("describe-type string", Title = "Describe the String type")]

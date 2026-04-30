@@ -2,6 +2,7 @@ using System.Diagnostics;
 
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.System)]
 [CommandCategory("System")]
 [CommandArgument("[list-sessions|list-users|list-seats]", "With no subcommand, ToSh treats `loginctl` as a structured `list-sessions` query. The explicit list subcommands return typed rows.", Required = false)]
 [CommandArgument("show-session <id ...>|show-user <user ...>|show-seat <seat ...>", "Returns structured login property sets for supported `show-*` queries.", Required = false)]
@@ -47,7 +48,7 @@ public sealed class LoginctlCommand : ShellCommand
         if (OperatingSystem.IsWindows())
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::command_windows_unavailable",
+                code: "tosh.runtime.command_windows_unavailable",
                 title: $"'{Name}' is not available on Windows.",
                 help: "This command requires systemd-logind, which is a Linux-only service.");
         }
@@ -79,7 +80,7 @@ public sealed class LoginctlCommand : ShellCommand
                 : result.StandardError.Trim();
 
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::loginctl_command_failed",
+                code: "tosh.runtime.loginctl_command_failed",
                 title: message);
         }
 
@@ -101,7 +102,7 @@ public sealed class LoginctlCommand : ShellCommand
                     catch (Exception exception) when (exception is InvalidOperationException or System.Text.Json.JsonException)
                     {
                         throw context.CreateDiagnostic(
-                            code: "tosh::runtime::loginctl_json_parse_failed",
+                            code: "tosh.runtime.loginctl_json_parse_failed",
                             title: $"Could not parse structured 'loginctl list-sessions' output. {exception.Message}",
                             help: "Try running the external `loginctl` command directly if you are using an unsupported output mode.");
                     }
@@ -125,7 +126,7 @@ public sealed class LoginctlCommand : ShellCommand
                     catch (Exception exception) when (exception is InvalidOperationException or System.Text.Json.JsonException)
                     {
                         throw context.CreateDiagnostic(
-                            code: "tosh::runtime::loginctl_json_parse_failed",
+                            code: "tosh.runtime.loginctl_json_parse_failed",
                             title: $"Could not parse structured 'loginctl list-users' output. {exception.Message}",
                             help: "Try running the external `loginctl` command directly if you are using an unsupported output mode.");
                     }
@@ -149,7 +150,7 @@ public sealed class LoginctlCommand : ShellCommand
                     catch (Exception exception) when (exception is InvalidOperationException or System.Text.Json.JsonException)
                     {
                         throw context.CreateDiagnostic(
-                            code: "tosh::runtime::loginctl_json_parse_failed",
+                            code: "tosh.runtime.loginctl_json_parse_failed",
                             title: $"Could not parse structured 'loginctl list-seats' output. {exception.Message}",
                             help: "Try running the external `loginctl` command directly if you are using an unsupported output mode.");
                     }
@@ -173,7 +174,7 @@ public sealed class LoginctlCommand : ShellCommand
                     catch (Exception exception) when (exception is InvalidOperationException)
                     {
                         throw context.CreateDiagnostic(
-                            code: "tosh::runtime::loginctl_show_parse_failed",
+                            code: "tosh.runtime.loginctl_show_parse_failed",
                             title: $"Could not parse structured 'loginctl show' output. {exception.Message}",
                             help: "Try running the external `loginctl show-*` command directly if you are using an unsupported property/value mode.");
                     }
@@ -199,7 +200,7 @@ public sealed class LoginctlCommand : ShellCommand
         {
             ExternalCommandLookupStatus.Found when lookup.ResolvedPath is not null => lookup.ResolvedPath,
             _ => throw context.CreateDiagnostic(
-                code: "tosh::runtime::loginctl_command_missing",
+                code: "tosh.runtime.loginctl_command_missing",
                 title: "The system 'loginctl' command was not found.",
                 help: "Install systemd or invoke the external utility by full path once it is available."),
         };
@@ -568,7 +569,7 @@ public sealed class LoginctlCommand : ShellCommand
         if (!process.Start())
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::loginctl_command_start_failed",
+                code: "tosh.runtime.loginctl_command_start_failed",
                 title: "Failed to start the system 'loginctl' command.");
         }
 

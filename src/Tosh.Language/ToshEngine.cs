@@ -91,12 +91,29 @@ public sealed partial class ToshEngine : IShellEvaluator
     internal ToshEngine Fork(IReadOnlyList<LexicalScope>? capturedScopes)
         => new(Runtime, capturedScopes);
 
+    private static readonly ParseResult _builtinRunesParseResult =
+        ToshParser.Parse(BuiltinRunes.Source, "<builtin-runes>");
+
     private async Task LoadBuiltinRunesAsync()
     {
-        await foreach (var _ in EvaluateAsync(BuiltinRunes.Source, "<builtin-runes>", CancellationToken.None)) { }
+        await foreach (var _ in EvaluateAsync(_builtinRunesParseResult, CancellationToken.None)) { }
     }
 
     public ToshRuntime Runtime { get; }
+
+    /// <summary>
+    /// True when this engine is hosting an interactive REPL session.
+    /// Set to <c>true</c> by <c>ToshRepl</c> on construction; remains <c>false</c>
+    /// for one-shot script execution (<c>tosh script.tosh</c>, <c>tosh -c …</c>,
+    /// embedded test-host engines).
+    ///
+    /// When <c>false</c>, invoking a command marked
+    /// <see cref="Tosh.Core.ShellOnlyAttribute"/> emits a hushable warning
+    /// (<c>tosh.shell_only</c>) — those commands depend on REPL state
+    /// (history, directory stack, prompt rendering, TUI) and don't make
+    /// sense in non-interactive contexts.
+    /// </summary>
+    public bool IsInteractiveSession { get; set; }
 
     /// <summary>
     /// Optional hook invoked before each statement in a block is evaluated.
@@ -151,7 +168,84 @@ public sealed partial class ToshEngine : IShellEvaluator
         return new ScopedTypeResolver(Runtime.TypeResolver, _scopes.ToArray());
     }
 
-    public ParseResult Parse(string source, string sourceName = "<input>") => ToshParser.Parse(source, sourceName);
+    public ParseResult Parse(string source, string sourceName = "<input>")
+    {
+        var result = ToshParser.Parse(source, sourceName);
+        RegisterLineHushDirectives(sourceName, result.LineHushDirectives);
+        return result;
+    }
+
+    /// <summary>
+    /// Per-source-name line-hush index built from inline `# hush &lt;code&gt;` comment
+    /// directives. Outer key is <c>SourceName</c>, inner key is the 1-based line
+    /// number, and the value is the set of codes silenced at that line. Looked up
+    /// during warning emission so the suppression is line-local without touching
+    /// scope or global config.
+    /// </summary>
+    private readonly Dictionary<string, Dictionary<int, HashSet<string>>> _lineHushBySource =
+        new(StringComparer.Ordinal);
+
+    private void RegisterLineHushDirectives(string sourceName, IReadOnlyList<LineHushDirective>? directives)
+    {
+        if (directives is null || directives.Count == 0)
+        {
+            return;
+        }
+
+        if (!_lineHushBySource.TryGetValue(sourceName, out var byLine))
+        {
+            byLine = new Dictionary<int, HashSet<string>>();
+            _lineHushBySource[sourceName] = byLine;
+        }
+
+        foreach (var directive in directives)
+        {
+            if (!byLine.TryGetValue(directive.Line, out var codes))
+            {
+                codes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                byLine[directive.Line] = codes;
+            }
+            codes.Add(directive.Code);
+        }
+    }
+
+    private bool IsLineHushed(string code, string? sourceName, int line)
+    {
+        if (sourceName is null || line <= 0)
+        {
+            return false;
+        }
+        if (!_lineHushBySource.TryGetValue(sourceName, out var byLine))
+        {
+            return false;
+        }
+        // Honor a directive on the line itself (trailing comment) or the line
+        // immediately above (leading comment on the previous line).
+        return (byLine.TryGetValue(line, out var hereCodes) && hereCodes.Contains(code)) ||
+               (line > 1 && byLine.TryGetValue(line - 1, out var aboveCodes) && aboveCodes.Contains(code));
+    }
+
+    /// <summary>
+    /// Computes the 1-based line number containing <paramref name="offset"/> within
+    /// <paramref name="sourceText"/>. Returns <c>0</c> when the offset is out of range,
+    /// signaling "no location available" to <see cref="WriteWarning(string?, string, string?, string?, ToshDiagnosticCategory, string?, int)"/>.
+    /// </summary>
+    private static int LineFromOffset(string sourceText, int offset)
+    {
+        if (offset < 0 || offset > sourceText.Length)
+        {
+            return 0;
+        }
+        var line = 1;
+        for (var i = 0; i < offset; i++)
+        {
+            if (sourceText[i] == '\n')
+            {
+                line++;
+            }
+        }
+        return line;
+    }
 
     public IAsyncEnumerable<object?> EvaluateAsync(string source, CancellationToken cancellationToken = default)
     {
@@ -323,7 +417,7 @@ public sealed partial class ToshEngine : IShellEvaluator
                 parseResult.SourceText,
                 signal.Span,
                 keyword: "break",
-                code: "tosh::runtime::break_outside_loop",
+                code: "tosh.runtime.break_outside_loop",
                 title: "'break' can only be used inside 'for', 'while', or 'each' blocks.");
         }
         catch (ContinueSignalException signal)
@@ -333,7 +427,7 @@ public sealed partial class ToshEngine : IShellEvaluator
                 parseResult.SourceText,
                 signal.Span,
                 keyword: "continue",
-                code: "tosh::runtime::continue_outside_loop",
+                code: "tosh.runtime.continue_outside_loop",
                 title: "'continue' can only be used inside 'for', 'while', or 'each' blocks.");
         }
         catch (ThrowSignalException signal)
@@ -528,7 +622,7 @@ public sealed partial class ToshEngine : IShellEvaluator
         ScriptInputStatementSyntax statement)
     {
         throw ToshDiagnosticException.Create(new ToshDiagnostic(
-            Code: "tosh::runtime::script_inputs_must_be_top_level",
+            Code: "tosh.runtime.script_inputs_must_be_top_level",
             Title: "Script input declarations must be top-level statements.",
             SourceName: sourceName,
             SourceText: sourceText,
@@ -546,7 +640,7 @@ public sealed partial class ToshEngine : IShellEvaluator
         SubcommandStatementSyntax statement)
     {
         throw ToshDiagnosticException.Create(new ToshDiagnostic(
-            Code: "tosh::runtime::subcommand_must_be_script_scoped",
+            Code: "tosh.runtime.subcommand_must_be_script_scoped",
             Title: $"Subcommand '{statement.Name}' must be declared at script or parent-subcommand scope.",
             SourceName: sourceName,
             SourceText: sourceText,
@@ -629,7 +723,7 @@ public sealed partial class ToshEngine : IShellEvaluator
             else
             {
                 throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                    Code: "tosh::runtime::missing_script_flag",
+                    Code: "tosh.runtime.missing_script_flag",
                     Title: $"Missing required script flag '{parameter.Name}'.",
                     SourceName: sourceName,
                     SourceText: sourceText,
@@ -685,7 +779,7 @@ public sealed partial class ToshEngine : IShellEvaluator
             else
             {
                 throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                    Code: "tosh::runtime::missing_script_argument",
+                    Code: "tosh.runtime.missing_script_argument",
                     Title: $"Missing required script argument '{parameter.Name}'.",
                     SourceName: sourceName,
                     SourceText: sourceText,
@@ -701,7 +795,7 @@ public sealed partial class ToshEngine : IShellEvaluator
             var unexpected = argumentValues[positionalIndex];
             var span = argumentParameters.Count > 0 ? argumentParameters[^1].Span : new TextSpan(0, 0);
             throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                Code: "tosh::runtime::unexpected_script_argument",
+                Code: "tosh.runtime.unexpected_script_argument",
                 Title: $"Unexpected script argument '{FormatScriptArgumentForDiagnostic(unexpected.Value)}'.",
                 SourceName: sourceName,
                 SourceText: sourceText,
@@ -726,7 +820,7 @@ public sealed partial class ToshEngine : IShellEvaluator
             if (!seenNames.Add(parameter.Name))
             {
                 throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                    Code: "tosh::runtime::duplicate_script_input",
+                    Code: "tosh.runtime.duplicate_script_input",
                     Title: $"Script input '{parameter.Name}' is declared more than once.",
                     SourceName: sourceName,
                     SourceText: sourceText,
@@ -740,7 +834,7 @@ public sealed partial class ToshEngine : IShellEvaluator
             if (flag.IsRest)
             {
                 throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                    Code: "tosh::runtime::script_flag_cannot_be_rest",
+                    Code: "tosh.runtime.script_flag_cannot_be_rest",
                     Title: "Script flags cannot use rest parameters.",
                     SourceName: sourceName,
                     SourceText: sourceText,
@@ -756,7 +850,7 @@ public sealed partial class ToshEngine : IShellEvaluator
             if (argument.IsRest && index != argumentParameters.Count - 1)
             {
                 throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                    Code: "tosh::runtime::script_rest_argument_must_be_last",
+                    Code: "tosh.runtime.script_rest_argument_must_be_last",
                     Title: "A script rest argument must be the last argument.",
                     SourceName: sourceName,
                     SourceText: sourceText,
@@ -817,7 +911,7 @@ public sealed partial class ToshEngine : IShellEvaluator
             if (!optionLookup.TryGetValue(optionName, out var parameter))
             {
                 throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                    Code: "tosh::runtime::unknown_script_flag",
+                    Code: "tosh.runtime.unknown_script_flag",
                     Title: $"Unknown script flag '--{optionName}'.",
                     SourceName: sourceName,
                     SourceText: sourceText,
@@ -841,7 +935,7 @@ public sealed partial class ToshEngine : IShellEvaluator
                 if (index + 1 >= arguments.Count)
                 {
                     throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                        Code: "tosh::runtime::script_option_requires_value",
+                        Code: "tosh.runtime.script_option_requires_value",
                         Title: $"Option '--{optionName}' requires a value.",
                         SourceName: sourceName,
                         SourceText: sourceText,
@@ -909,7 +1003,7 @@ public sealed partial class ToshEngine : IShellEvaluator
             !string.Equals(existing.Name, flag.Name, StringComparison.Ordinal))
         {
             throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                Code: "tosh::runtime::duplicate_script_flag",
+                Code: "tosh.runtime.duplicate_script_flag",
                 Title: $"Script flag '--{optionName}' is inferred for more than one flag.",
                 SourceName: sourceName,
                 SourceText: sourceText,
@@ -1032,7 +1126,7 @@ public sealed partial class ToshEngine : IShellEvaluator
         if (stageIndex >= stages.Count)
         {
             throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                Code: "tosh::runtime::background_pipeline_requires_command",
+                Code: "tosh.runtime.background_pipeline_requires_command",
                 Title: "Background pipelines require at least one external command stage.",
                 SourceName: sourceName,
                 SourceText: sourceText,
@@ -1047,7 +1141,7 @@ public sealed partial class ToshEngine : IShellEvaluator
             if (stage is not CommandSyntax commandSyntax)
             {
                 throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                    Code: "tosh::runtime::background_pipeline_not_supported",
+                    Code: "tosh.runtime.background_pipeline_not_supported",
                     Title: "Background jobs currently support an optional input expression followed by external command stages only.",
                     SourceName: sourceName,
                     SourceText: sourceText,
@@ -1060,7 +1154,7 @@ public sealed partial class ToshEngine : IShellEvaluator
             if (command is not ExternalProcessCommand externalCommand)
             {
                 throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                    Code: "tosh::runtime::background_command_must_be_external",
+                    Code: "tosh.runtime.background_command_must_be_external",
                     Title: "Background jobs currently require external command stages.",
                     SourceName: sourceName,
                     SourceText: sourceText,
@@ -1149,11 +1243,12 @@ public sealed partial class ToshEngine : IShellEvaluator
         {
             if (!binding.IsAllocatedOnly)
             {
+                var valueSpan = GetPipelineSpan(declaration.Value) ?? declaration.Span;
                 var converted = ConvertAnnotatedValue(
                     declaration.TypeName,
                     declaredRefinement,
                     binding.Value,
-                    declaration.Span,
+                    valueSpan,
                     sourceName,
                     sourceText,
                     declaration.Name);
@@ -1171,8 +1266,12 @@ public sealed partial class ToshEngine : IShellEvaluator
         if (declaration.Name == "_" && TryGetVariableBinding("_", out _))
         {
             WriteWarning(
-                "Redeclaring '_' shadows an existing binding.",
-                "Use a different name if this value matters.");
+                code: "tosh.naming.shadowed_underscore",
+                title: "Redeclaring '_' shadows an existing binding.",
+                help: "Use a different name if this value matters, or hush this code: hush tosh.naming.shadowed_underscore",
+                category: ToshDiagnosticCategory.Naming,
+                sourceName: sourceName,
+                line: LineFromOffset(sourceText, declaration.Span.Start));
         }
 
         if (declaration.IsConst)
@@ -1209,7 +1308,7 @@ public sealed partial class ToshEngine : IShellEvaluator
                     if (array is null)
                     {
                         throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                            Code: "tosh::runtime::destructuring_requires_array",
+                            Code: "tosh.runtime.destructuring_requires_array",
                             Title: "Array destructuring requires an array or list value.",
                             SourceName: sourceName,
                             SourceText: sourceText,
@@ -1239,7 +1338,7 @@ public sealed partial class ToshEngine : IShellEvaluator
                     if (dict is null)
                     {
                         throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                            Code: "tosh::runtime::destructuring_requires_record",
+                            Code: "tosh.runtime.destructuring_requires_record",
                             Title: "Record destructuring requires a record or dictionary value.",
                             SourceName: sourceName,
                             SourceText: sourceText,
@@ -1287,7 +1386,7 @@ public sealed partial class ToshEngine : IShellEvaluator
             if (values.Count != 1)
             {
                 throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                    Code: "tosh::runtime::alloc_requires_single_value",
+                    Code: "tosh.runtime.alloc_requires_single_value",
                     Title: "Allocated buffer declarations require exactly one size or type value.",
                     SourceName: sourceName,
                     SourceText: sourceText,
@@ -1307,7 +1406,7 @@ public sealed partial class ToshEngine : IShellEvaluator
         if (size < 0)
         {
             throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                Code: "tosh::runtime::alloc_negative_size",
+                Code: "tosh.runtime.alloc_negative_size",
                 Title: "Allocated buffers cannot have a negative size.",
                 SourceName: sourceName,
                 SourceText: sourceText,
@@ -1347,7 +1446,7 @@ public sealed partial class ToshEngine : IShellEvaluator
         if (statement.Modifier == DeclarationModifier.Export)
         {
             throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                Code: "tosh::runtime::using_export_not_supported",
+                Code: "tosh.runtime.using_export_not_supported",
                 Title: "'using' cannot be exported.",
                 SourceName: sourceName,
                 SourceText: sourceText,
@@ -1365,7 +1464,7 @@ public sealed partial class ToshEngine : IShellEvaluator
             if (Runtime.TypeResolver is not IImportingTypeResolver importingResolver)
             {
                 throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                    Code: "tosh::runtime::using_not_supported",
+                    Code: "tosh.runtime.using_not_supported",
                     Title: "This runtime does not support 'using' statements.",
                     SourceName: sourceName,
                     SourceText: sourceText,
@@ -1388,7 +1487,7 @@ public sealed partial class ToshEngine : IShellEvaluator
         if (_scopes.Count == 0)
         {
             throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                Code: "tosh::runtime::shy_using_requires_scope",
+                Code: "tosh.runtime.shy_using_requires_scope",
                 Title: "Shy using statements require a function, block, or module scope.",
                 SourceName: sourceName,
                 SourceText: sourceText,
@@ -1522,7 +1621,7 @@ public sealed partial class ToshEngine : IShellEvaluator
         catch (Exception exception)
         {
             throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                Code: "tosh::runtime::require_failed",
+                Code: "tosh.runtime.require_failed",
                 Title: exception.Message,
                 SourceName: sourceName,
                 SourceText: sourceText,
@@ -1548,7 +1647,7 @@ public sealed partial class ToshEngine : IShellEvaluator
             module.NativeLibraryBinding is null)
         {
             throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                Code: "tosh::runtime::bind_target_not_native_module",
+                Code: "tosh.runtime.bind_target_not_native_module",
                 Title: $"'{statement.ModuleName}' is not a native library module.",
                 SourceName: sourceName,
                 SourceText: sourceText,
@@ -1707,6 +1806,16 @@ public sealed partial class ToshEngine : IShellEvaluator
         VariableAssignmentStatementSyntax assignment,
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
     {
+        await EvaluateVariableAssignmentCoreAsync(sourceName, sourceText, assignment, cancellationToken);
+        yield break;
+    }
+
+    private async Task EvaluateVariableAssignmentCoreAsync(
+        string sourceName,
+        string sourceText,
+        VariableAssignmentStatementSyntax assignment,
+        CancellationToken cancellationToken)
+    {
         EnsureBindingNameIsNotReserved(sourceName, sourceText, assignment.Name, assignment.Span, "reserved runtime namespace");
 
         var value = await EvaluateVariableBindingAsync(sourceName, sourceText, assignment.Value, cancellationToken);
@@ -1720,7 +1829,7 @@ public sealed partial class ToshEngine : IShellEvaluator
         if (!TryGetVariableBinding(assignment.Name, out var existingBinding))
         {
             throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                Code: "tosh::runtime::unknown_variable",
+                Code: "tosh.runtime.unknown_variable",
                 Title: $"Variable '{assignment.Name}' has not been declared.",
                 SourceName: sourceName,
                 SourceText: sourceText,
@@ -1732,7 +1841,7 @@ public sealed partial class ToshEngine : IShellEvaluator
         if (existingBinding.IsConst)
         {
             throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                Code: "tosh::runtime::const_reassignment",
+                Code: "tosh.runtime.const_reassignment",
                 Title: $"Cannot reassign constant '{assignment.Name}'.",
                 SourceName: sourceName,
                 SourceText: sourceText,
@@ -1745,7 +1854,7 @@ public sealed partial class ToshEngine : IShellEvaluator
         {
             if (!existingBinding.IsAllocatedOnly && existingBinding.Value is not null)
             {
-                yield break;
+                return;
             }
         }
 
@@ -1755,7 +1864,7 @@ public sealed partial class ToshEngine : IShellEvaluator
             if (existingBinding.IsAllocatedOnly)
             {
                 throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                    Code: "tosh::runtime::compound_assignment_requires_value",
+                    Code: "tosh.runtime.compound_assignment_requires_value",
                     Title: $"Variable '{assignment.Name}' does not have a value yet.",
                     SourceName: sourceName,
                     SourceText: sourceText,
@@ -1768,11 +1877,12 @@ public sealed partial class ToshEngine : IShellEvaluator
 
         if (existingBinding.DeclaredTypeName is not null)
         {
+            var valueSpan = GetPipelineSpan(assignment.Value) ?? assignment.Span;
             assignedValue = ConvertAnnotatedValue(
                 existingBinding.DeclaredTypeName,
                 existingBinding.DeclaredRefinement,
                 assignedValue,
-                assignment.Span,
+                valueSpan,
                 sourceName,
                 sourceText,
                 assignment.Name);
@@ -1788,7 +1898,7 @@ public sealed partial class ToshEngine : IShellEvaluator
         if (!TryAssignVariable(assignment.Name, value))
         {
             throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                Code: "tosh::runtime::unknown_variable",
+                Code: "tosh.runtime.unknown_variable",
                 Title: $"Variable '{assignment.Name}' has not been declared.",
                 SourceName: sourceName,
                 SourceText: sourceText,
@@ -1796,7 +1906,6 @@ public sealed partial class ToshEngine : IShellEvaluator
                 Label: $"declare '{assignment.Name}' with 'var' before assigning to it",
                     Help: $"try 'var {assignment.Name} = ...' the first time you bind this variable."));
         }
-        yield break;
     }
 
     private async IAsyncEnumerable<object?> EvaluateMemberAssignmentAsync(
@@ -1810,7 +1919,7 @@ public sealed partial class ToshEngine : IShellEvaluator
         if (!TryDecomposeMemberAssignmentTarget(assignment.Target, out var rootExpression, out var memberPath))
         {
             throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                Code: "tosh::runtime::invalid_member_assignment_target",
+                Code: "tosh.runtime.invalid_member_assignment_target",
                 Title: "Assignments to members require a member path target.",
                 SourceName: sourceName,
                 SourceText: sourceText,
@@ -1842,7 +1951,7 @@ public sealed partial class ToshEngine : IShellEvaluator
         catch (Exception exception) when (exception is not ToshDiagnosticException)
         {
             throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                Code: "tosh::runtime::member_assignment_failed",
+                Code: "tosh.runtime.member_assignment_failed",
                 Title: exception.Message,
                 SourceName: sourceName,
                 SourceText: sourceText,
@@ -1897,7 +2006,7 @@ public sealed partial class ToshEngine : IShellEvaluator
         if (duplicateParameters is not null)
         {
             throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                Code: "tosh::runtime::duplicate_rune_parameter",
+                Code: "tosh.runtime.duplicate_rune_parameter",
                 Title: $"Rune '{rune.Name}' defines parameter '{duplicateParameters.Key}' more than once.",
                 SourceName: sourceName,
                 SourceText: sourceText,
@@ -1941,7 +2050,7 @@ public sealed partial class ToshEngine : IShellEvaluator
         if (duplicateParameters is not null)
         {
             throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                Code: "tosh::runtime::duplicate_function_parameter",
+                Code: "tosh.runtime.duplicate_function_parameter",
                 Title: $"Function '{name}' defines parameter '{duplicateParameters.Key}' more than once.",
                 SourceName: sourceName,
                 SourceText: sourceText,
@@ -2209,7 +2318,7 @@ public sealed partial class ToshEngine : IShellEvaluator
         if (duplicateProperties is not null)
         {
             throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                Code: "tosh::runtime::duplicate_class_property",
+                Code: "tosh.runtime.duplicate_class_property",
                 Title: $"Class '{@class.Name}' defines property '{duplicateProperties.Key}' more than once.",
                 SourceName: sourceName,
                 SourceText: sourceText,
@@ -2313,7 +2422,7 @@ public sealed partial class ToshEngine : IShellEvaluator
             if (!existingDef.IsPartial)
             {
                 throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                    Code: "tosh::runtime::partial_mismatch",
+                    Code: "tosh.runtime.partial_mismatch",
                     Title: $"Cannot extend class '{@class.Name}' as partial: the original class was not declared as partial.",
                     SourceName: sourceName,
                     SourceText: sourceText,
@@ -2339,7 +2448,7 @@ public sealed partial class ToshEngine : IShellEvaluator
             if (runtimeConstructors.Length > 0)
             {
                 throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                    Code: "tosh::runtime::hermit_has_constructor",
+                    Code: "tosh.runtime.hermit_has_constructor",
                     Title: $"Hermit class '{@class.Name}' cannot have constructors.",
                     SourceName: sourceName,
                     SourceText: sourceText,
@@ -2356,7 +2465,7 @@ public sealed partial class ToshEngine : IShellEvaluator
                 if (baseClassDef.IsSealed)
                 {
                     throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                        Code: "tosh::runtime::extend_sealed_class",
+                        Code: "tosh.runtime.extend_sealed_class",
                         Title: $"Class '{@class.Name}' cannot extend sealed class '{@class.BaseClassName}'.",
                         SourceName: sourceName,
                         SourceText: sourceText,
@@ -2383,7 +2492,7 @@ public sealed partial class ToshEngine : IShellEvaluator
                 else
                 {
                     throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                        Code: "tosh::runtime::unknown_base_class",
+                        Code: "tosh.runtime.unknown_base_class",
                         Title: $"Class '{@class.Name}' extends unknown class '{@class.BaseClassName}'.",
                         SourceName: sourceName,
                         SourceText: sourceText,
@@ -2401,7 +2510,7 @@ public sealed partial class ToshEngine : IShellEvaluator
                 if (!TryGetNamedType(ifaceName, out var namedType) || namedType is not ToshInterfaceDefinition ifaceDefinition)
                 {
                     throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                        Code: "tosh::runtime::unknown_interface",
+                        Code: "tosh.runtime.unknown_interface",
                         Title: $"Class '{@class.Name}' fulfills unknown interface '{ifaceName}'.",
                         SourceName: sourceName,
                         SourceText: sourceText,
@@ -2413,7 +2522,7 @@ public sealed partial class ToshEngine : IShellEvaluator
                 if (missing.Count > 0)
                 {
                     throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                        Code: "tosh::runtime::missing_interface_methods",
+                        Code: "tosh.runtime.missing_interface_methods",
                         Title: $"Class '{@class.Name}' does not implement all methods of interface '{ifaceName}'. Missing: {string.Join(", ", missing)}.",
                         SourceName: sourceName,
                         SourceText: sourceText,
@@ -2436,7 +2545,7 @@ public sealed partial class ToshEngine : IShellEvaluator
                 if (!TryGetNamedType(traitName, out var namedType) || namedType is not ToshTraitDefinition traitDefinition)
                 {
                     throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                        Code: "tosh::runtime::unknown_trait",
+                        Code: "tosh.runtime.unknown_trait",
                         Title: $"Class '{@class.Name}' uses unknown trait '{traitName}'.",
                         SourceName: sourceName,
                         SourceText: sourceText,
@@ -2449,7 +2558,7 @@ public sealed partial class ToshEngine : IShellEvaluator
                 if (missingMethods.Count > 0)
                 {
                     throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                        Code: "tosh::runtime::missing_trait_methods",
+                        Code: "tosh.runtime.missing_trait_methods",
                         Title: $"Class '{@class.Name}' does not implement required methods from trait '{traitName}'. Missing: {string.Join(", ", missingMethods)}.",
                         SourceName: sourceName,
                         SourceText: sourceText,
@@ -2462,7 +2571,7 @@ public sealed partial class ToshEngine : IShellEvaluator
                 if (missingProps.Count > 0)
                 {
                     throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                        Code: "tosh::runtime::missing_trait_properties",
+                        Code: "tosh.runtime.missing_trait_properties",
                         Title: $"Class '{@class.Name}' does not implement required properties from trait '{traitName}'. Missing: {string.Join(", ", missingProps)}.",
                         SourceName: sourceName,
                         SourceText: sourceText,
@@ -2533,7 +2642,7 @@ public sealed partial class ToshEngine : IShellEvaluator
             if (unimplemented.Count > 0)
             {
                 throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                    Code: "tosh::runtime::missing_hollow_methods",
+                    Code: "tosh.runtime.missing_hollow_methods",
                     Title: $"Class '{@class.Name}' must implement hollow methods from '{parentClass.Name}': {string.Join(", ", unimplemented)}.",
                     SourceName: sourceName,
                     SourceText: sourceText,
@@ -2545,7 +2654,7 @@ public sealed partial class ToshEngine : IShellEvaluator
             if (unimplementedProps.Count > 0)
             {
                 throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                    Code: "tosh::runtime::missing_hollow_properties",
+                    Code: "tosh.runtime.missing_hollow_properties",
                     Title: $"Class '{@class.Name}' must implement hollow properties from '{parentClass.Name}': {string.Join(", ", unimplementedProps)}.",
                     SourceName: sourceName,
                     SourceText: sourceText,
@@ -2560,7 +2669,7 @@ public sealed partial class ToshEngine : IShellEvaluator
             if (definition.BaseClass is null || !HasMethodInHierarchy(definition.BaseClass, method.Name))
             {
                 throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                    Code: "tosh::runtime::overrule_no_base_method",
+                    Code: "tosh.runtime.overrule_no_base_method",
                     Title: $"Method '{method.Name}' in class '{@class.Name}' is marked 'overrule' but no parent class defines '{method.Name}'.",
                     SourceName: sourceName,
                     SourceText: sourceText,
@@ -2577,7 +2686,7 @@ public sealed partial class ToshEngine : IShellEvaluator
                 if (HasMethodInHierarchy(definition.BaseClass, method.Name))
                 {
                     throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                        Code: "tosh::runtime::missing_overrule",
+                        Code: "tosh.runtime.missing_overrule",
                         Title: $"Method '{method.Name}' in class '{@class.Name}' shadows a parent method but is not marked 'overrule'.",
                         SourceName: sourceName,
                         SourceText: sourceText,
@@ -2753,7 +2862,7 @@ public sealed partial class ToshEngine : IShellEvaluator
             ? typeof(int)
             : ResolveTypeName(@enum.UnderlyingTypeName!)
                 ?? throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                    Code: "tosh::runtime::unknown_enum_underlying_type",
+                    Code: "tosh.runtime.unknown_enum_underlying_type",
                     Title: $"Enum '{@enum.Name}' uses unknown underlying type '{@enum.UnderlyingTypeName}'.",
                     SourceName: sourceName,
                     SourceText: sourceText,
@@ -2773,7 +2882,7 @@ public sealed partial class ToshEngine : IShellEvaluator
                 if (!canAutoIncrement)
                 {
                     throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                        Code: "tosh::runtime::enum_member_value_required",
+                        Code: "tosh.runtime.enum_member_value_required",
                         Title: $"Enum member '{@enum.Name}.{member.Name}' requires an explicit value.",
                         SourceName: sourceName,
                         SourceText: sourceText,
@@ -2797,7 +2906,7 @@ public sealed partial class ToshEngine : IShellEvaluator
                     0 => null,
                     1 => values[0],
                     _ => throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                        Code: "tosh::runtime::enum_member_requires_single_value",
+                        Code: "tosh.runtime.enum_member_requires_single_value",
                         Title: $"Enum member '{@enum.Name}.{member.Name}' must resolve to exactly one value.",
                         SourceName: sourceName,
                         SourceText: sourceText,
@@ -2809,7 +2918,7 @@ public sealed partial class ToshEngine : IShellEvaluator
             if (!TypeConversion.TryConvert(rawValue, underlyingType, out var converted))
             {
                 throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                    Code: "tosh::runtime::enum_member_conversion_failed",
+                    Code: "tosh.runtime.enum_member_conversion_failed",
                     Title: $"Enum member '{@enum.Name}.{member.Name}' could not be converted to '{underlyingType.Name}'.",
                     SourceName: sourceName,
                     SourceText: sourceText,
@@ -2874,7 +2983,7 @@ public sealed partial class ToshEngine : IShellEvaluator
             if (!existingDef.IsPartial)
             {
                 throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                    Code: "tosh::runtime::partial_merge_non_partial_record",
+                    Code: "tosh.runtime.partial_merge_non_partial_record",
                     Title: $"Cannot merge partial record '{record.Name}' with existing non-partial record.",
                     SourceName: sourceName,
                     SourceText: sourceText,
@@ -2893,7 +3002,7 @@ public sealed partial class ToshEngine : IShellEvaluator
         if (duplicateFields is not null)
         {
             throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                Code: "tosh::runtime::duplicate_record_field",
+                Code: "tosh.runtime.duplicate_record_field",
                 Title: $"Record '{record.Name}' defines field '{duplicateFields.Key}' more than once.",
                 SourceName: sourceName,
                 SourceText: sourceText,
@@ -2942,7 +3051,7 @@ public sealed partial class ToshEngine : IShellEvaluator
             if (!existingDef.IsPartial)
             {
                 throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                    Code: "tosh::runtime::partial_merge_non_partial_struct",
+                    Code: "tosh.runtime.partial_merge_non_partial_struct",
                     Title: $"Cannot merge partial struct '{@struct.Name}' with existing non-partial struct.",
                     SourceName: sourceName,
                     SourceText: sourceText,
@@ -3152,7 +3261,7 @@ public sealed partial class ToshEngine : IShellEvaluator
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                var iterationValues = new List<object?>();
+                List<object?>? iterationValues = null;
                 var shouldBreak = false;
                 var shouldContinue = false;
 
@@ -3170,7 +3279,7 @@ public sealed partial class ToshEngine : IShellEvaluator
                                        })
                                        .WithCancellation(cancellationToken))
                     {
-                        iterationValues.Add(value);
+                        (iterationValues ??= []).Add(value);
                     }
                 }
                 catch (ContinueSignalException)
@@ -3182,9 +3291,12 @@ public sealed partial class ToshEngine : IShellEvaluator
                     shouldBreak = true;
                 }
 
-                foreach (var value in iterationValues)
+                if (iterationValues is not null)
                 {
-                    yield return value;
+                    foreach (var value in iterationValues)
+                    {
+                        yield return value;
+                    }
                 }
 
                 if (shouldBreak)
@@ -3210,7 +3322,7 @@ public sealed partial class ToshEngine : IShellEvaluator
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            var iterationValues = new List<object?>();
+            List<object?>? iterationValues = null;
             var shouldBreak = false;
             var shouldContinue = false;
 
@@ -3219,7 +3331,7 @@ public sealed partial class ToshEngine : IShellEvaluator
                 await foreach (var value in ExecuteBlockAsync(sourceName, sourceText, statement.Body, cancellationToken)
                                    .WithCancellation(cancellationToken))
                 {
-                    iterationValues.Add(value);
+                    (iterationValues ??= []).Add(value);
                 }
             }
             catch (ContinueSignalException)
@@ -3231,9 +3343,12 @@ public sealed partial class ToshEngine : IShellEvaluator
                 shouldBreak = true;
             }
 
-            foreach (var value in iterationValues)
+            if (iterationValues is not null)
             {
-                yield return value;
+                foreach (var value in iterationValues)
+                {
+                    yield return value;
+                }
             }
 
             if (shouldBreak)
@@ -3258,7 +3373,7 @@ public sealed partial class ToshEngine : IShellEvaluator
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            var iterationValues = new List<object?>();
+            List<object?>? iterationValues = null;
             var shouldBreak = false;
             var shouldContinue = false;
 
@@ -3267,7 +3382,7 @@ public sealed partial class ToshEngine : IShellEvaluator
                 await foreach (var value in ExecuteBlockAsync(sourceName, sourceText, statement.Body, cancellationToken)
                                    .WithCancellation(cancellationToken))
                 {
-                    iterationValues.Add(value);
+                    (iterationValues ??= []).Add(value);
                 }
             }
             catch (ContinueSignalException)
@@ -3279,9 +3394,12 @@ public sealed partial class ToshEngine : IShellEvaluator
                 shouldBreak = true;
             }
 
-            foreach (var value in iterationValues)
+            if (iterationValues is not null)
             {
-                yield return value;
+                foreach (var value in iterationValues)
+                {
+                    yield return value;
+                }
             }
 
             if (shouldBreak)
@@ -3804,7 +3922,7 @@ public sealed partial class ToshEngine : IShellEvaluator
         if (targetPath is null)
         {
             throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                Code: "tosh::runtime::redirection_target_null",
+                Code: "tosh.runtime.redirection_target_null",
                 Title: "Redirection target cannot be null.",
                 SourceName: sourceName,
                 SourceText: sourceText,
@@ -3826,7 +3944,7 @@ public sealed partial class ToshEngine : IShellEvaluator
         }
 
         throw ToshDiagnosticException.Create(new ToshDiagnostic(
-            Code: "tosh::runtime::redirection_target_not_single_path",
+            Code: "tosh.runtime.redirection_target_not_single_path",
             Title: "Redirection targets must resolve to exactly one path.",
             SourceName: sourceName,
             SourceText: sourceText,
@@ -3844,7 +3962,7 @@ public sealed partial class ToshEngine : IShellEvaluator
         if (sourcePath is null)
         {
             throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                Code: "tosh::runtime::input_redirection_source_null",
+                Code: "tosh.runtime.input_redirection_source_null",
                 Title: "Input redirection source cannot be null.",
                 SourceName: sourceName,
                 SourceText: sourceText,
@@ -3863,7 +3981,7 @@ public sealed partial class ToshEngine : IShellEvaluator
         if (!File.Exists(resolved))
         {
             throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                Code: "tosh::runtime::input_redirection_source_not_found",
+                Code: "tosh.runtime.input_redirection_source_not_found",
                 Title: $"Input redirection source '{resolved}' does not exist.",
                 SourceName: sourceName,
                 SourceText: sourceText,
@@ -3963,7 +4081,7 @@ public sealed partial class ToshEngine : IShellEvaluator
                 if (exitCode != 0 && Runtime.Config.Shell.ExitOnError)
                 {
                     throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                        Code: "tosh::runtime::nonzero_exit_code",
+                        Code: "tosh.runtime.nonzero_exit_code",
                         Title: $"Command exited with code {exitCode}.",
                         Help: "A command in the pipeline returned a non-zero exit code while Shell.ExitOnError is enabled. " +
                               "Set $tosh.Config.Shell.ExitOnError = false to disable this behavior."));
@@ -4089,6 +4207,12 @@ public sealed partial class ToshEngine : IShellEvaluator
         IReadOnlyList<object?>? prependedArguments = null)
     {
         var command = ResolveCommand(sourceName, sourceText, commandSyntax);
+
+        // Hard-error when a [ShellOnly] command runs outside an interactive
+        // session. These commands depend on REPL state (history, prompt,
+        // directory stack, TUI) and have no meaning in scripts / -c / pipelines.
+        // The diagnostic surfaces in script mode; the REPL never trips it.
+        EnforceShellOnlyOutsideInteractive(command, sourceName, sourceText, commandSyntax);
 
         // Rune (macro) expansion: intercept before argument evaluation
         if (command is RuneCommand runeCommand)
@@ -4344,7 +4468,7 @@ public sealed partial class ToshEngine : IShellEvaluator
         if (value is null)
         {
             throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                Code: "tosh::runtime::splat_requires_collection",
+                Code: "tosh.runtime.splat_requires_collection",
                 Title: "Argument splatting requires a non-null collection value.",
                 SourceName: sourceName,
                 SourceText: sourceText,
@@ -4356,7 +4480,7 @@ public sealed partial class ToshEngine : IShellEvaluator
         if (value is string || ShellRecordUtilities.IsRecordLike(value))
         {
             throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                Code: "tosh::runtime::splat_requires_collection",
+                Code: "tosh.runtime.splat_requires_collection",
                 Title: "Argument splatting requires an array, list, range, tuple, or similar collection.",
                 SourceName: sourceName,
                 SourceText: sourceText,
@@ -4369,7 +4493,7 @@ public sealed partial class ToshEngine : IShellEvaluator
             if (range.IsInfinite)
             {
                 throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                    Code: "tosh::runtime::splat_infinite_range",
+                    Code: "tosh.runtime.splat_infinite_range",
                     Title: "Cannot splat an infinite range.",
                     SourceName: sourceName,
                     SourceText: sourceText,
@@ -4387,7 +4511,7 @@ public sealed partial class ToshEngine : IShellEvaluator
         }
 
         throw ToshDiagnosticException.Create(new ToshDiagnostic(
-            Code: "tosh::runtime::splat_requires_collection",
+            Code: "tosh.runtime.splat_requires_collection",
             Title: "Argument splatting requires a collection value.",
             SourceName: sourceName,
             SourceText: sourceText,
@@ -4420,7 +4544,7 @@ public sealed partial class ToshEngine : IShellEvaluator
             TryBuildVariableReferenceHint(commandSyntax.Name, out var suggestedReference, out var variableName))
         {
             throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                Code: "tosh::runtime::variable_reference_requires_dollar",
+                Code: "tosh.runtime.variable_reference_requires_dollar",
                 Title: $"Variable '{variableName}' exists, but variable references must start with '$'.",
                 SourceName: sourceName,
                 SourceText: sourceText,
@@ -4443,7 +4567,7 @@ public sealed partial class ToshEngine : IShellEvaluator
                 new ExternalProcessCommand(commandSyntax.Name, external.ResolvedPath),
             ExternalCommandLookupStatus.NotExecutable =>
                 throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                    Code: "tosh::runtime::external_command_not_executable",
+                    Code: "tosh.runtime.external_command_not_executable",
                     Title: $"'{external.ResolvedPath ?? commandSyntax.Name}' is not executable.",
                     SourceName: sourceName,
                     SourceText: sourceText,
@@ -4456,7 +4580,7 @@ public sealed partial class ToshEngine : IShellEvaluator
                 new AutoCdCommand(external.ResolvedPath ?? commandSyntax.Name),
             ExternalCommandLookupStatus.IsDirectory =>
                 throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                    Code: "tosh::runtime::external_command_is_directory",
+                    Code: "tosh.runtime.external_command_is_directory",
                     Title: $"'{external.ResolvedPath ?? commandSyntax.Name}' is a directory, not an executable file.",
                     SourceName: sourceName,
                     SourceText: sourceText,
@@ -4466,7 +4590,7 @@ public sealed partial class ToshEngine : IShellEvaluator
                 new AutoCdCommand(autoCdPath),
             _ =>
                 throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                    Code: "tosh::runtime::unknown_command",
+                    Code: "tosh.runtime.unknown_command",
                     Title: $"Command '{commandSyntax.Name}' was not found.",
                     SourceName: sourceName,
                     SourceText: sourceText,
@@ -4585,7 +4709,7 @@ public sealed partial class ToshEngine : IShellEvaluator
                             if (binding.IsAllocatedOnly)
                             {
                                 throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                                    Code: "tosh::runtime::uninitialized_variable",
+                                    Code: "tosh.runtime.uninitialized_variable",
                                     Title: $"Variable '{variableReference.Name}' has been declared but not assigned yet.",
                                     SourceName: sourceName,
                                     SourceText: sourceText,
@@ -4604,7 +4728,7 @@ public sealed partial class ToshEngine : IShellEvaluator
                         }
 
                         throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                            Code: "tosh::runtime::unknown_variable",
+                            Code: "tosh.runtime.unknown_variable",
                             Title: $"Variable '{variableReference.Name}' was not found.",
                             SourceName: sourceName,
                             SourceText: sourceText,
@@ -4682,7 +4806,7 @@ public sealed partial class ToshEngine : IShellEvaluator
                             var key = await EvaluateArgumentAsync(sourceName, sourceText, entry.Key, cancellationToken);
                             var value = await EvaluateArgumentAsync(sourceName, sourceText, entry.Value, cancellationToken);
                             dict[key ?? throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                                Code: "tosh::runtime::null_dict_key",
+                                Code: "tosh.runtime.null_dict_key",
                                 Title: "Dict keys cannot be null.",
                                 SourceName: sourceName,
                                 SourceText: sourceText,
@@ -4734,7 +4858,7 @@ public sealed partial class ToshEngine : IShellEvaluator
                                         else
                                         {
                                             throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                                                Code: "tosh::runtime::spread_requires_record",
+                                                Code: "tosh.runtime.spread_requires_record",
                                                 Title: "Spread in a record literal requires a record or dictionary value.",
                                                 SourceName: sourceName,
                                                 SourceText: sourceText,
@@ -4810,7 +4934,7 @@ public sealed partial class ToshEngine : IShellEvaluator
                                 var key = await EvaluateArgumentAsync(sourceName, sourceText, dictComp.Key, ct);
                                 var value = await EvaluateArgumentAsync(sourceName, sourceText, dictComp.Value, ct);
                                 dict[key ?? throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                                    Code: "tosh::runtime::null_dict_key",
+                                    Code: "tosh.runtime.null_dict_key",
                                     Title: "Dict keys cannot be null.",
                                     SourceName: sourceName,
                                     SourceText: sourceText,
@@ -4925,7 +5049,7 @@ public sealed partial class ToshEngine : IShellEvaluator
                         if (target is not IShellCallable callable)
                         {
                             throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                                Code: "tosh::runtime::value_not_callable",
+                                Code: "tosh.runtime.value_not_callable",
                                 Title: "The provided value is not callable.",
                                 SourceName: sourceName,
                                 SourceText: sourceText,
@@ -4960,7 +5084,7 @@ public sealed partial class ToshEngine : IShellEvaluator
                         }
 
                         throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                            Code: "tosh::runtime::callable_invocation_requires_single_value",
+                            Code: "tosh.runtime.callable_invocation_requires_single_value",
                             Title: "Callable invocation in expression context must produce exactly one value.",
                             SourceName: sourceName,
                             SourceText: sourceText,
@@ -4988,7 +5112,7 @@ public sealed partial class ToshEngine : IShellEvaluator
                         }
 
                         throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                            Code: "tosh::runtime::subexpression_requires_single_value",
+                            Code: "tosh.runtime.subexpression_requires_single_value",
                             Title: "Subexpressions used as arguments must produce exactly one value.",
                             SourceName: sourceName,
                             SourceText: sourceText,
@@ -5184,7 +5308,7 @@ public sealed partial class ToshEngine : IShellEvaluator
                         if (!nameOf.IsVariableReference && TryGetVariableBinding(nameOf.Identifier, out _))
                         {
                             throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                                Code: "tosh::runtime::nameof_requires_dollar",
+                                Code: "tosh.runtime.nameof_requires_dollar",
                                 Title: $"Variable references in nameof require '$'. Use nameof(${nameOf.Identifier}).",
                                 SourceName: sourceName,
                                 SourceText: sourceText,
@@ -5213,7 +5337,7 @@ public sealed partial class ToshEngine : IShellEvaluator
                         }
 
                         throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                            Code: "tosh::runtime::unknown_function_reference",
+                            Code: "tosh.runtime.unknown_function_reference",
                             Title: $"Function '{funcRef.Name}' was not found.",
                             SourceName: sourceName,
                             SourceText: sourceText,
@@ -5305,7 +5429,7 @@ public sealed partial class ToshEngine : IShellEvaluator
         }
 
         throw ToshDiagnosticException.Create(new ToshDiagnostic(
-            Code: "tosh::runtime::non_exhaustive_match",
+            Code: "tosh.runtime.non_exhaustive_match",
             Title: "This match expression did not match any arm.",
             SourceName: sourceName,
             SourceText: sourceText,
@@ -5425,7 +5549,7 @@ public sealed partial class ToshEngine : IShellEvaluator
         catch (Exception exception) when (exception is not ToshDiagnosticException)
         {
             throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                Code: "tosh::runtime::list_materialization_failed",
+                Code: "tosh.runtime.list_materialization_failed",
                 Title: exception.Message,
                 SourceName: sourceName,
                 SourceText: sourceText,
@@ -5469,8 +5593,8 @@ public sealed partial class ToshEngine : IShellEvaluator
     {
         return ToshDiagnosticException.Create(new ToshDiagnostic(
             Code: exception is InvalidOperationException
-                ? "tosh::runtime::expression_failed"
-                : "tosh::runtime::unexpected_exception",
+                ? "tosh.runtime.expression_failed"
+                : "tosh.runtime.unexpected_exception",
             Title: exception.Message,
             SourceName: sourceName,
             SourceText: sourceText,
@@ -5744,7 +5868,7 @@ public sealed partial class ToshEngine : IShellEvaluator
         }
 
         throw ToshDiagnosticException.Create(new ToshDiagnostic(
-            Code: "tosh::runtime::reserved_variable_name",
+            Code: "tosh.runtime.reserved_variable_name",
             Title: $"'{name}' is a {titleSuffix}.",
             SourceName: sourceName,
             SourceText: sourceText,
@@ -5904,6 +6028,15 @@ public sealed partial class ToshEngine : IShellEvaluator
 
     private static bool TryGetCurrentItemMemberPath(ArgumentSyntax expression, out string memberPath)
     {
+        // Current-item-expression commands (sum, min, max, sort, etc.) wrap their
+        // single member-path argument in a synthetic block-with-expression-stage.
+        // Unwrap it so we can recover the original member path.
+        if (expression is BlockArgumentSyntax blockArgument &&
+            blockArgument.Block is { Statements: [PipelineStatementSyntax { Pipeline: { Stages: [ExpressionPipelineStageSyntax stage], Redirections: null or { Count: 0 } } }] })
+        {
+            expression = stage.Expression;
+        }
+
         var segments = new Stack<string>();
         var current = expression;
 
@@ -5958,6 +6091,7 @@ public sealed partial class ToshEngine : IShellEvaluator
             "*=" => "*",
             "**=" => "**",
             "/=" => "/",
+            "//=" => "//",
             "%=" => "%",
             _ => throw new InvalidOperationException($"Unsupported assignment operator '{assignmentOperator}'."),
         };
@@ -6366,15 +6500,136 @@ public sealed partial class ToshEngine : IShellEvaluator
         if (Runtime.Commands.TryGet(commandName, out var existing) &&
             existing is not ICommandResolutionMetadata)
         {
-            WriteWarning($"Function '{commandName}' shadows built-in command '{commandName}'.");
+            WriteWarning(
+                code: "tosh.naming.shadowed_builtin",
+                title: $"Function '{commandName}' shadows built-in command '{commandName}'.",
+                help: "Rename the function, or hush this code: hush tosh.naming.shadowed_builtin",
+                category: ToshDiagnosticCategory.Naming);
         }
     }
 
     internal void WriteWarning(string title, string? help = null, string? info = null)
     {
-        var renderer = new DiagnosticRenderer(Runtime.Config.Theme.Diagnostics);
-        Runtime.Error.WriteLine(renderer.RenderWarning(title, help, info));
+        WriteWarning(code: null, title, help, info, ToshDiagnosticCategory.Runtime);
     }
+
+    /// <summary>
+    /// Emits <c>tosh.shell_only</c> when a command marked
+    /// <see cref="ShellOnlyAttribute"/> is invoked outside an interactive
+    /// REPL session. Throws a <see cref="ToshDiagnosticException"/> with code
+    /// <c>tosh.shell_only</c> in script / -c / pipeline mode; no-op in the REPL.
+    /// Errors are not hushable — these commands depend on REPL state (history,
+    /// directory stack, prompt rendering, TUI) and cannot meaningfully run in
+    /// non-interactive contexts.
+    /// </summary>
+    private void EnforceShellOnlyOutsideInteractive(IShellCommand command, string sourceName, string sourceText, CommandSyntax commandSyntax)
+    {
+        if (IsInteractiveSession)
+        {
+            return;
+        }
+
+        var attribute = command.GetType().GetCustomAttribute<ShellOnlyAttribute>();
+        if (attribute is null)
+        {
+            return;
+        }
+
+        var reason = string.IsNullOrWhiteSpace(attribute.Reason)
+            ? "It depends on interactive-shell state (history, prompt, directory stack, TUI)."
+            : attribute.Reason;
+
+        throw ToshDiagnosticException.Create(new ToshDiagnostic(
+            Code: "tosh.shell_only",
+            Title: $"Command '{command.Name}' is shell-only and cannot be used outside an interactive session.",
+            SourceName: sourceName,
+            SourceText: sourceText,
+            Span: commandSyntax.Span,
+            Label: $"'{command.Name}' is REPL-only",
+            Help: reason));
+    }
+
+    /// <summary>
+    /// Emits a warning carrying a diagnostic <paramref name="code"/>. If the code
+    /// appears in any enclosing lexical scope's <c>HushedCodes</c> set, in the
+    /// global <c>$tosh.Config.Diagnostics.Hushed</c> list, or in an inline
+    /// <c># hush &lt;code&gt;</c> directive on (or just above) the emit line,
+    /// the warning is dropped.
+    /// </summary>
+    internal void WriteWarning(
+        string? code,
+        string title,
+        string? help = null,
+        string? info = null,
+        ToshDiagnosticCategory category = ToshDiagnosticCategory.Runtime,
+        string? sourceName = null,
+        int line = 0)
+    {
+        if (code is not null)
+        {
+            if (IsCodeHushed(code, ToshDiagnosticSeverity.Warning))
+            {
+                return;
+            }
+            if (IsLineHushed(code, sourceName, line))
+            {
+                return;
+            }
+        }
+
+        var renderer = new DiagnosticRenderer(Runtime.Config.Theme.Diagnostics, Runtime.Config.Diagnostics);
+        Runtime.Error.WriteLine(renderer.RenderWarning(title, help, info));
+        _ = category; // reserved for future renderer use
+    }
+
+    /// <summary>
+    /// Returns <c>true</c> when a diagnostic with the given <paramref name="code"/>
+    /// and <paramref name="severity"/> should be suppressed at the current scope.
+    /// Errors are never suppressible. Walks the lexical scope stack from innermost
+    /// out, then falls back to the global <c>$tosh.Config.Diagnostics.Hushed</c> list.
+    /// </summary>
+    internal bool IsCodeHushed(string code, ToshDiagnosticSeverity severity)
+    {
+        if (severity == ToshDiagnosticSeverity.Error)
+        {
+            return false;
+        }
+
+        ArgumentException.ThrowIfNullOrEmpty(code);
+
+        foreach (var scope in _scopes)
+        {
+            if (scope.HushedCodes.Contains(code))
+            {
+                return true;
+            }
+        }
+
+        return Runtime.Config.Diagnostics.IsHushed(code, severity);
+    }
+
+    /// <summary>
+    /// Adds <paramref name="code"/> to the innermost lexical scope's hush set.
+    /// If there is no active scope (e.g. top-level startup), promotes to the
+    /// global <c>$tosh.Config.Diagnostics.Hushed</c> list so the suppression
+    /// outlives the current call.
+    /// </summary>
+    internal void AddHushedCode(string code)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(code);
+        var trimmed = code.Trim();
+
+        if (_scopes.Count > 0)
+        {
+            _scopes.Peek().HushedCodes.Add(trimmed);
+            return;
+        }
+
+        Runtime.Config.Diagnostics.Hushed.Add(trimmed);
+    }
+
+    /// <summary>Public <see cref="IShellEvaluator"/> entry point for the <c>hush</c> builtin.</summary>
+    public void HushDiagnosticCode(string code) => AddHushedCode(code);
 
     private static string ExtractSourceSnippet(string sourceText, TextSpan span)
     {
@@ -6649,7 +6904,7 @@ public sealed partial class ToshEngine : IShellEvaluator
             sourceName,
             sourceText,
             span,
-            code: "tosh::runtime::type_name_conflict",
+            code: "tosh.runtime.type_name_conflict",
             title: $"{declaredKind} '{name}' conflicts with an existing refinement alias.",
             label: $"'{name}' is already bound as a refinement alias",
             help: "choose a different name so types and refinement aliases stay distinct.");
@@ -6670,7 +6925,7 @@ public sealed partial class ToshEngine : IShellEvaluator
             sourceName,
             sourceText,
             span,
-            code: "tosh::runtime::type_name_conflict",
+            code: "tosh.runtime.type_name_conflict",
             title: $"Refinement alias '{name}' conflicts with an existing type name.",
             label: $"'{name}' is already bound as a type",
             help: "choose a different alias name so refinements do not shadow real types.");
@@ -7398,6 +7653,23 @@ public sealed partial class ToshEngine : IShellEvaluator
         return false;
     }
 
+    /// <summary>
+    /// Returns the textual span covering a pipeline's stages, used to narrow
+    /// runtime diagnostics so the underline points at the offending value
+    /// rather than the entire <c>var</c>/assignment statement.
+    /// </summary>
+    private static TextSpan? GetPipelineSpan(PipelineSyntax? pipeline)
+    {
+        if (pipeline is null || pipeline.Stages.Count == 0)
+        {
+            return null;
+        }
+
+        var first = pipeline.Stages[0].Span;
+        var last = pipeline.Stages[^1].Span;
+        return TextSpan.FromBounds(first.Start, last.End);
+    }
+
     internal object? ConvertAnnotatedValue(
         string? typeName,
         RefinementAnnotation? refinement,
@@ -7426,7 +7698,7 @@ public sealed partial class ToshEngine : IShellEvaluator
                 }
 
                 throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                    Code: "tosh::runtime::annotation_conversion_failed",
+                    Code: "tosh.runtime.annotation_conversion_failed",
                     Title: $"'{owner}' produced a value that could not be converted to '{typeName}'.",
                     SourceName: sourceName,
                     SourceText: sourceText,
@@ -7464,7 +7736,7 @@ public sealed partial class ToshEngine : IShellEvaluator
         }
 
         throw ToshDiagnosticException.Create(new ToshDiagnostic(
-            Code: "tosh::runtime::annotation_conversion_failed",
+            Code: "tosh.runtime.annotation_conversion_failed",
             Title: $"'{owner}' produced a value that could not be converted to '{typeName}'.",
             SourceName: sourceName,
             SourceText: sourceText,
@@ -7490,7 +7762,7 @@ public sealed partial class ToshEngine : IShellEvaluator
             : $"did you mean '{suggestion}'?";
 
         throw ToshDiagnosticException.Create(new ToshDiagnostic(
-            Code: "tosh::runtime::annotation_unknown_type",
+            Code: "tosh.runtime.annotation_unknown_type",
             Title: $"'{owner}' uses unknown type annotation '{typeName}'.",
             SourceName: sourceName,
             SourceText: sourceText,
@@ -7721,7 +7993,7 @@ public sealed partial class ToshEngine : IShellEvaluator
             var help = helpLines.Count > 0 ? string.Join("\n", helpLines) : null;
 
             throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                Code: "tosh::runtime::refinement_failed",
+                Code: "tosh.runtime.refinement_failed",
                 Title: $"Value for '{owner}' does not satisfy its refinement.",
                 SourceName: sourceName,
                 SourceText: sourceText,
@@ -7742,6 +8014,15 @@ public sealed partial class ToshEngine : IShellEvaluator
         refinedValue = value;
         failure = null;
 
+        // Run every guarded `if … coerce` clause in order, threading the coerced
+        // value forward so subsequent guards see the result of earlier coercions.
+        // For example, given:
+        //
+        //   if (not (_ is int)) coerce ((round (Double.Parse(_)) 0) as int)
+        //   if (_ < 0)          coerce (Math.Abs(_))
+        //
+        // an input of "-4.25" becomes -4 (first clause), then 4 (second clause).
+        // (Stopping after the first match would skip the negativity fix-up.)
         foreach (var clause in refinement.Clauses.OfType<RefinementCoerceClause>().Where(static clause => clause.Guard is not null))
         {
             try
@@ -7765,7 +8046,6 @@ public sealed partial class ToshEngine : IShellEvaluator
             try
             {
                 refinedValue = EvaluateRefinementCoercer(refinement, clause, refinedValue);
-                return true;
             }
             catch (ToshDiagnosticException exception)
             {
@@ -7899,7 +8179,7 @@ public sealed partial class ToshEngine : IShellEvaluator
         {
             var diagnostic = parseResult.Diagnostics.FirstOrDefault();
             throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                Code: "tosh::runtime::refinement_specialization_failed",
+                Code: "tosh.runtime.refinement_specialization_failed",
                 Title: $"Refinement alias '{genericDefinition.Name}' could not be specialized for '{closedTypeName}'.",
                 SourceName: genericDefinition.SourceName,
                 SourceText: genericDefinition.SourceText,
@@ -8051,7 +8331,7 @@ public sealed partial class ToshEngine : IShellEvaluator
             converted is not bool boolean)
         {
             throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                Code: "tosh::runtime::refinement_requires_boolean",
+                Code: "tosh.runtime.refinement_requires_boolean",
                 Title: $"{title} must evaluate to boolean values.",
                 SourceName: refinement.SourceName,
                 SourceText: refinement.SourceText,
@@ -8252,7 +8532,7 @@ public sealed partial class ToshEngine : IShellEvaluator
                             definition.SourceText,
                             signal.Span,
                             keyword: "break",
-                            code: "tosh::runtime::break_outside_loop",
+                            code: "tosh.runtime.break_outside_loop",
                             title: "'break' can only be used inside 'for', 'while', or 'each' blocks.");
                         break;
                     }
@@ -8263,7 +8543,7 @@ public sealed partial class ToshEngine : IShellEvaluator
                             definition.SourceText,
                             signal.Span,
                             keyword: "continue",
-                            code: "tosh::runtime::continue_outside_loop",
+                            code: "tosh.runtime.continue_outside_loop",
                             title: "'continue' can only be used inside 'for', 'while', or 'each' blocks.");
                         break;
                     }
@@ -8321,7 +8601,7 @@ public sealed partial class ToshEngine : IShellEvaluator
                     definition.SourceText,
                     signal.Span,
                     keyword: "break",
-                    code: "tosh::runtime::break_outside_loop",
+                    code: "tosh.runtime.break_outside_loop",
                     title: "'break' can only be used inside 'for', 'while', or 'each' blocks.");
             }
             catch (ContinueSignalException signal)
@@ -8331,7 +8611,7 @@ public sealed partial class ToshEngine : IShellEvaluator
                     definition.SourceText,
                     signal.Span,
                     keyword: "continue",
-                    code: "tosh::runtime::continue_outside_loop",
+                    code: "tosh.runtime.continue_outside_loop",
                     title: "'continue' can only be used inside 'for', 'while', or 'each' blocks.");
             }
             finally
@@ -8513,6 +8793,16 @@ public sealed partial class ToshEngine : IShellEvaluator
                 throw new ContinueSignalException(continueStatement.Span);
             }
 
+            // Fast path: variable assignments never produce output. Run via a Task-returning
+            // method to avoid the IAsyncEnumerable state machine + ToListAsync overhead.
+            if (statement is VariableAssignmentStatementSyntax varAssign)
+            {
+                await EvaluateVariableAssignmentCoreAsync(sourceName, sourceText, varAssign, cancellationToken);
+                UpdateLastResultIfAny(Array.Empty<object?>());
+                pendingInput = null;
+                continue;
+            }
+
             var statementResults = statement switch
             {
                 PipelineStatementSyntax pipelineStatement => EvaluatePipelineWithRedirectionAsync(
@@ -8594,7 +8884,7 @@ public sealed partial class ToshEngine : IShellEvaluator
                 expected = $"at least {totalRequired}";
             }
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::function_argument_count_mismatch",
+                code: "tosh.runtime.function_argument_count_mismatch",
                 title: $"Function '{definition.Name}' expects {expected} argument(s) but received {context.Arguments.Count}.",
                 label: $"'{definition.Name}' requires {expected} argument(s)");
         }
@@ -8660,9 +8950,9 @@ public sealed partial class ToshEngine : IShellEvaluator
         catch (ToshDiagnosticException exception)
         {
             if (exception.Diagnostics.Any(diagnostic =>
-                string.Equals(diagnostic.Code, "tosh::runtime::annotation_unknown_type", StringComparison.Ordinal) ||
-                string.Equals(diagnostic.Code, "tosh::runtime::refinement_failed", StringComparison.Ordinal) ||
-                string.Equals(diagnostic.Code, "tosh::runtime::expression_failed", StringComparison.Ordinal)))
+                string.Equals(diagnostic.Code, "tosh.runtime.annotation_unknown_type", StringComparison.Ordinal) ||
+                string.Equals(diagnostic.Code, "tosh.runtime.refinement_failed", StringComparison.Ordinal) ||
+                string.Equals(diagnostic.Code, "tosh.runtime.expression_failed", StringComparison.Ordinal)))
             {
                 throw;
             }
@@ -8673,7 +8963,7 @@ public sealed partial class ToshEngine : IShellEvaluator
             }
 
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::parameter_type_conversion_failed",
+                code: "tosh.runtime.parameter_type_conversion_failed",
                 title: $"Argument '{parameter.Name}' could not be converted to '{parameter.TypeName}'.",
                 argumentIndex: argumentIndex,
                 label: $"'{parameter.Name}' expects {parameter.TypeName}");
@@ -8712,14 +9002,14 @@ public sealed partial class ToshEngine : IShellEvaluator
         catch (ToshDiagnosticException exception)
         {
             if (!exception.Diagnostics.Any(diagnostic =>
-                string.Equals(diagnostic.Code, "tosh::runtime::annotation_conversion_failed", StringComparison.Ordinal)))
+                string.Equals(diagnostic.Code, "tosh.runtime.annotation_conversion_failed", StringComparison.Ordinal)))
             {
                 throw;
             }
         }
 
         throw context.CreateDiagnostic(
-            code: "tosh::runtime::return_type_conversion_failed",
+            code: "tosh.runtime.return_type_conversion_failed",
             title: $"Function '{definition.Name}' returned a value that could not be converted to '{definition.ReturnTypeName}'.",
             label: $"the returned value does not match '{definition.ReturnTypeName}'",
             span: definition.Span);
@@ -8749,7 +9039,7 @@ public sealed partial class ToshEngine : IShellEvaluator
         if (!TypeConversion.TryConvert(conditionValue, typeof(bool), out var converted) || converted is not bool boolean)
         {
             throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                Code: "tosh::runtime::condition_requires_boolean",
+                Code: "tosh.runtime.condition_requires_boolean",
                 Title: "Conditions must evaluate to a boolean value.",
                 SourceName: sourceName,
                 SourceText: sourceText,
@@ -8767,15 +9057,81 @@ public sealed partial class ToshEngine : IShellEvaluator
         CommandSyntax commandSyntax,
         Exception exception)
     {
+        // Narrow the diagnostic span to the offending argument when possible,
+        // so the renderer underlines the bad flag/value rather than the whole
+        // command line. Two strategies:
+        //   1. The command threw CommandArgumentException with an explicit index.
+        //   2. The exception message contains a single-quoted token (e.g.
+        //      "Unsupported foo option '-x'.") that matches one of the
+        //      command's argument source texts verbatim.
+        var span = NarrowToArgumentSpan(sourceText, commandSyntax, exception) ?? commandSyntax.Span;
+
         return ToshDiagnosticException.Create(new ToshDiagnostic(
-            Code: exception is InvalidOperationException
-                ? "tosh::runtime::command_failed"
-                : "tosh::runtime::unexpected_exception",
+            Code: exception is InvalidOperationException or CommandArgumentException
+                ? "tosh.runtime.command_failed"
+                : "tosh.runtime.unexpected_exception",
             Title: exception.Message,
             SourceName: sourceName,
             SourceText: sourceText,
-            Span: commandSyntax.Span,
+            Span: span,
             Label: $"while executing '{commandSyntax.Name}'"));
+    }
+
+    /// <summary>
+    /// Picks the argument span the diagnostic should underline. Returns
+    /// <c>null</c> when no argument-level fix is available (caller falls back
+    /// to the full command span).
+    /// </summary>
+    private static TextSpan? NarrowToArgumentSpan(
+        string sourceText,
+        CommandSyntax commandSyntax,
+        Exception exception)
+    {
+        if (exception is CommandArgumentException argException &&
+            argException.ArgumentIndex >= 0 &&
+            argException.ArgumentIndex < commandSyntax.Arguments.Count)
+        {
+            return commandSyntax.Arguments[argException.ArgumentIndex].Span;
+        }
+
+        if (string.IsNullOrEmpty(exception.Message) || commandSyntax.Arguments.Count == 0)
+        {
+            return null;
+        }
+
+        // Pull out the FIRST single-quoted token from the message — by
+        // convention, command throws name the offending argument that way:
+        //   "Unsupported ls option '--foo'.", "Unknown user 'alice'."
+        var token = ExtractQuotedToken(exception.Message);
+        if (string.IsNullOrEmpty(token))
+        {
+            return null;
+        }
+
+        foreach (var argument in commandSyntax.Arguments)
+        {
+            var argSpan = argument.Span;
+            if (argSpan.Start < 0 || argSpan.End > sourceText.Length || argSpan.End <= argSpan.Start)
+            {
+                continue;
+            }
+            var argText = sourceText[argSpan.Start..argSpan.End];
+            if (string.Equals(argText, token, StringComparison.Ordinal))
+            {
+                return argSpan;
+            }
+        }
+
+        return null;
+    }
+
+    private static string? ExtractQuotedToken(string message)
+    {
+        var start = message.IndexOf('\'');
+        if (start < 0 || start == message.Length - 1) return null;
+        var end = message.IndexOf('\'', start + 1);
+        if (end <= start + 1) return null;
+        return message[(start + 1)..end];
     }
 
     private void ImportRequiredArtifact(
@@ -8911,7 +9267,7 @@ public sealed partial class ToshEngine : IShellEvaluator
                 parseResult.SourceText,
                 signal.Span,
                 keyword: "break",
-                code: "tosh::runtime::break_outside_loop",
+                code: "tosh.runtime.break_outside_loop",
                 title: "'break' can only be used inside 'for', 'while', or 'each' blocks.");
         }
         catch (ContinueSignalException signal)
@@ -8921,7 +9277,7 @@ public sealed partial class ToshEngine : IShellEvaluator
                 parseResult.SourceText,
                 signal.Span,
                 keyword: "continue",
-                code: "tosh::runtime::continue_outside_loop",
+                code: "tosh.runtime.continue_outside_loop",
                 title: "'continue' can only be used inside 'for', 'while', or 'each' blocks.");
         }
         finally
@@ -9021,7 +9377,7 @@ public sealed partial class ToshEngine : IShellEvaluator
         if (string.IsNullOrWhiteSpace(typeName))
         {
             throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                Code: "tosh::runtime::native_binding_requires_type",
+                Code: "tosh.runtime.native_binding_requires_type",
                 Title: $"Native {owner} requires an explicit CLR type.",
                 SourceName: sourceName,
                 SourceText: sourceText,
@@ -9037,7 +9393,7 @@ public sealed partial class ToshEngine : IShellEvaluator
             if (passingMode != NativeParameterPassingMode.In)
             {
                 throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                    Code: "tosh::runtime::unsupported_native_byref_string",
+                    Code: "tosh.runtime.unsupported_native_byref_string",
                     Title: "By-ref native string parameters need an explicit pointer type.",
                     SourceName: sourceName,
                     SourceText: sourceText,
@@ -9054,7 +9410,7 @@ public sealed partial class ToshEngine : IShellEvaluator
         if (resolved is null || !IsSupportedNativeInteropType(resolved))
         {
             throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                Code: "tosh::runtime::unsupported_native_interop_type",
+                Code: "tosh.runtime.unsupported_native_interop_type",
                 Title: $"Native interop does not currently support '{typeName}'.",
                 SourceName: sourceName,
                 SourceText: sourceText,
@@ -9066,7 +9422,7 @@ public sealed partial class ToshEngine : IShellEvaluator
         if (passingMode != NativeParameterPassingMode.In && resolved == typeof(string))
         {
             throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                Code: "tosh::runtime::unsupported_native_byref_string",
+                Code: "tosh.runtime.unsupported_native_byref_string",
                 Title: "By-ref native string parameters need an explicit pointer type.",
                 SourceName: sourceName,
                 SourceText: sourceText,
@@ -9100,7 +9456,7 @@ public sealed partial class ToshEngine : IShellEvaluator
         if (string.Equals(normalized, "string", StringComparison.OrdinalIgnoreCase))
         {
             throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                Code: "tosh::runtime::unsupported_native_string_return",
+                Code: "tosh.runtime.unsupported_native_string_return",
                 Title: "Native string returns need an explicit interop string type.",
                 SourceName: sourceName,
                 SourceText: sourceText,
@@ -9132,7 +9488,7 @@ public sealed partial class ToshEngine : IShellEvaluator
             "fastcall" => CallingConvention.FastCall,
             "winapi" => CallingConvention.Winapi,
             _ => throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                Code: "tosh::runtime::unsupported_native_calling_convention",
+                Code: "tosh.runtime.unsupported_native_calling_convention",
                 Title: $"Native interop does not support calling convention '{name}'.",
                 SourceName: sourceName,
                 SourceText: sourceText,
@@ -9287,6 +9643,22 @@ public sealed partial class ToshEngine : IShellEvaluator
         string sourceText,
         ThrowSignalException signal)
     {
+        // If the thrown value is itself a diagnostic (the common `throw $err`
+        // re-raise pattern from a catch block), preserve its original source,
+        // span, and snippet so the renderer still points at the underlying
+        // problem. The throw-site location is surfaced as an `info:` footer
+        // so the user still knows where the rethrow happened.
+        if (signal.Value is ToshDiagnosticException inner && inner.Diagnostics.Count > 0)
+        {
+            var rethrown = inner.Diagnostics[0];
+            var line = LineFromOffset(sourceText, signal.Span.Start);
+            var throwSite = line > 0 ? $"{sourceName}:{line}" : sourceName;
+            var info = string.IsNullOrWhiteSpace(rethrown.Info)
+                ? $"re-thrown at {throwSite}"
+                : $"{rethrown.Info}; re-thrown at {throwSite}";
+            return ToshDiagnosticException.Create(rethrown with { Info = info });
+        }
+
         var title = signal.Value switch
         {
             null => "An error was thrown.",
@@ -9296,7 +9668,7 @@ public sealed partial class ToshEngine : IShellEvaluator
         };
 
         return ToshDiagnosticException.Create(new ToshDiagnostic(
-            Code: "tosh::runtime::throw",
+            Code: "tosh.runtime.throw",
             Title: title,
             SourceName: sourceName,
             SourceText: sourceText,
@@ -9676,7 +10048,7 @@ public sealed partial class ToshEngine : IShellEvaluator
         if (IsInfiniteSource(sourceValue))
         {
             throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                Code: "tosh::runtime::infinite_eager_comprehension",
+                Code: "tosh.runtime.infinite_eager_comprehension",
                 Title: "Cannot use an infinite source in a list, set, or dict comprehension. Use a generator comprehension (...) instead of [...] and pipe to '| first N'.",
                 SourceName: sourceName,
                 SourceText: sourceText,

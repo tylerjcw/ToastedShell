@@ -64,12 +64,21 @@
 
   <Target Name="BuildSpec"
           AfterTargets="Build"
-          Inputs="$(SpecTex)"
+          Inputs="@(ToshSpecInputs)"
           Outputs="$(SpecPdf)"
           Condition="'$(DesignTimeBuild)' != 'true'
                      and '$(DisableToshSpecBuild)' != 'true'
                      and '$(MSBuildProjectName)' == 'Tosh.Cli'
                      and Exists('$(SpecTex)')">
+    <!--
+      Track every .tex file under docs/spec/ as an input so changes to \input'd
+      files (diagnostic-codes.tex, command-reference.tex, etc.) trigger a rebuild.
+      Without this, MSBuild's up-to-date check only saw toastscript-spec.tex and
+      silently skipped the rebuild + copy, leaving ToastScript.pdf stale.
+    -->
+    <ItemGroup>
+      <ToshSpecInputs Include="$(SpecDir)*.tex" />
+    </ItemGroup>
     <Exec Command="latexmk -pdf -interaction=nonstopmode -quiet toastscript-spec.tex"
           WorkingDirectory="$(SpecDir)"
           IgnoreExitCode="true"
@@ -85,6 +94,33 @@
              Condition="'$(_LatexMkExit)' == '0'" />
     <Warning Text="Spec PDF build failed (latexmk exit $(_LatexMkExit)) — check $(SpecDir)toastscript-spec.log"
              Condition="'$(_LatexMkExit)' != '0'" />
+  </Target>
+
+  <!--
+    Run the parity / documentation completeness advisory. Fires once during the
+    Tosh.Cli build (so it doesn't run for every project), AFTER Tosh.Cli's own
+    build completes (so the parity tool's project references resolve against
+    fresh assemblies). The tool prints MSBuild canonical warning lines on stdout;
+    `ConsoleToMSBuild="true"` surfaces them as warnings, while `IgnoreExitCode="true"`
+    guarantees the build is never failed by parity drift.
+
+    Skip while building the parity tool itself or in design-time builds.
+
+    Opt-out:  dotnet build -p:DisableToshParityCheck=true
+  -->
+  <Target Name="ToshParityCheck"
+          AfterTargets="Build"
+          Condition="'$(DesignTimeBuild)' != 'true'
+                     and '$(DisableToshParityCheck)' != 'true'
+                     and '$(MSBuildProjectName)' == 'Tosh.Cli'">
+    <Exec Command="dotnet run --project &quot;$(RepoRoot)tools/Tosh.ParityCheck/Tosh.ParityCheck.csproj&quot; -c $(Configuration) --nologo"
+          WorkingDirectory="$(RepoRoot)"
+          IgnoreExitCode="true"
+          ConsoleToMSBuild="true">
+      <Output TaskParameter="ExitCode" PropertyName="_ToshParityExit" />
+    </Exec>
+    <Message Importance="normal"
+             Text="Tosh parity check complete (exit $(_ToshParityExit))." />
   </Target>
 
 

@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.System)]
 [CommandCategory("System")]
 [CommandArgument("name", "The environment variable name.", Kind = "bareword")]
 [CommandArgument("=", "Assignment operator.", Required = false, Kind = "bareword")]

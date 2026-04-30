@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Data)]
 [CommandCategory("Data")]
 [CommandArgument("item", "Zero or more numeric items. If omitted, consumes pipeline input.", Required = false)]
 [CommandExample("vec 1 2 3", Title = "Build a vector from explicit items")]

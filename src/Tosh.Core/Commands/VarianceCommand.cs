@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Pipeline)]
 [CommandCategory("Pipeline")]
 [CommandArgument("member-path", "Optional member path to extract numeric values from each object.", Required = false)]
 [CommandExample("echo 2 4 4 4 5 5 7 9 | variance", Title = "Population variance")]

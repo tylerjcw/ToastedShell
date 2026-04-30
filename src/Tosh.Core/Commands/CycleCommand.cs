@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Functional)]
 [CommandCategory("Functional")]
 [CommandExample("echo 1 2 3 | cycle | first 9", Title = "Cycle a sequence")]
 [CommandExample("[a b c] | cycle | first 7", Title = "Cycle an array")]
@@ -16,7 +17,7 @@ public sealed class CycleCommand : ShellCommand
         if (context.Arguments.Count > 0)
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::cycle_no_arguments",
+                code: "tosh.runtime.cycle_no_arguments",
                 title: "'cycle' takes no arguments. Pipe a sequence into it.",
                 label: "use '... | cycle'");
         }

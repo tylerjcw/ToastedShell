@@ -2,6 +2,7 @@ using Tosh.Core.Formats;
 
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Data)]
 [CommandCategory("Data")]
 [CommandOutput("Serialized text in the specified format.", Mode = "text")]
 [CommandExample("ls | to json")]

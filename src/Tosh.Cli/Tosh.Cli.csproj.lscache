@@ -118,7 +118,11 @@ Tui/
  TuiValidationMessage.cs
 
 [metadataReferences]
-../../../../.dotnet/packs/Microsoft.NETCore.App.Ref/10.0.3/ref/net10.0/
+../
+ Tosh.Core/obj/Debug/net10.0/ref/Tosh.Core.dll
+ Tosh.Language/obj/Debug/net10.0/ref/Tosh.Language.dll
+ Tosh.Tui/obj/Debug/net10.0/ref/Tosh.Tui.dll
+<DOTNET>/packs/Microsoft.NETCore.App.Ref/10.0.3/ref/net10.0/
  Microsoft.CSharp.dll
  Microsoft.VisualBasic.Core.dll
  Microsoft.VisualBasic.dll
@@ -286,23 +290,19 @@ Tui/
  System.Xml.XPath.dll
  System.Xml.XPath.XDocument.dll
  WindowsBase.dll
-../
- Tosh.Core/obj/Debug/net10.0/ref/Tosh.Core.dll
- Tosh.Language/obj/Debug/net10.0/ref/Tosh.Language.dll
- Tosh.Tui/obj/Debug/net10.0/ref/Tosh.Tui.dll
 
 [analyzerReferences]
-../../../../.dotnet/packs/Microsoft.NETCore.App.Ref/10.0.3/analyzers/dotnet/cs/
+<DOTNET>/packs/Microsoft.NETCore.App.Ref/10.0.3/analyzers/dotnet/cs/
  Microsoft.Interop.ComInterfaceGenerator.dll
  Microsoft.Interop.JavaScript.JSImportGenerator.dll
  Microsoft.Interop.LibraryImportGenerator.dll
  Microsoft.Interop.SourceGeneration.dll
  System.Text.Json.SourceGeneration.dll
  System.Text.RegularExpressions.Generator.dll
-../../../../.dotnet/sdk/10.0.103/Sdks/Microsoft.NET.Sdk/analyzers/
+<DOTNET>/sdk/10.0.103/Sdks/Microsoft.NET.Sdk/analyzers/
  Microsoft.CodeAnalysis.CSharp.NetAnalyzers.dll
  Microsoft.CodeAnalysis.NetAnalyzers.dll
 
 [analyzerConfigFiles]
-../../../../.dotnet/sdk/10.0.103/Sdks/Microsoft.NET.Sdk/analyzers/build/config/analysislevel_10_default.globalconfig
+<DOTNET>/sdk/10.0.103/Sdks/Microsoft.NET.Sdk/analyzers/build/config/analysislevel_10_default.globalconfig
 obj/Debug/net10.0/Tosh.Cli.GeneratedMSBuildEditorConfig.editorconfig

@@ -2,6 +2,7 @@ using System.Diagnostics;
 
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Filesystem)]
 [CommandCategory("Filesystem")]
 [CommandArgument("path", "Directory paths to tree. Defaults to current directory.", Required = false, TypeName = "path-like")]
 [CommandOption("-a", "Include hidden files.")]
@@ -69,7 +70,7 @@ public sealed class TreeCommand : ShellCommand
                 : result.StandardError.Trim();
 
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::tree_command_failed",
+                code: "tosh.runtime.tree_command_failed",
                 title: message);
         }
 
@@ -82,7 +83,7 @@ public sealed class TreeCommand : ShellCommand
         catch (Exception exception) when (exception is InvalidOperationException or System.Text.Json.JsonException)
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::tree_json_parse_failed",
+                code: "tosh.runtime.tree_json_parse_failed",
                 title: $"Could not parse structured 'tree' output. {exception.Message}",
                 help: "Try running the external `tree` command directly if you are using an output mode that does not support JSON.");
         }
@@ -107,7 +108,7 @@ public sealed class TreeCommand : ShellCommand
         {
             ExternalCommandLookupStatus.Found when lookup.ResolvedPath is not null => lookup.ResolvedPath,
             _ => throw context.CreateDiagnostic(
-                code: "tosh::runtime::tree_command_missing",
+                code: "tosh.runtime.tree_command_missing",
                 title: "The system 'tree' command was not found.",
                 help: "Install tree (e.g. 'pacman -S tree' or 'apt install tree') or invoke the external utility by full path."),
         };
@@ -228,7 +229,7 @@ public sealed class TreeCommand : ShellCommand
         if (!process.Start())
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::tree_command_start_failed",
+                code: "tosh.runtime.tree_command_start_failed",
                 title: "Failed to start the system 'tree' command.");
         }
 

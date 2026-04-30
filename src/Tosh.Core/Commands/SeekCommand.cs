@@ -2,6 +2,7 @@ using System.IO;
 
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Filesystem)]
 [CommandCategory("Filesystem")]
 [CommandArgument("handle", "The managed file handle to reposition.", Required = false)]
 [CommandArgument("offset", "The byte offset to seek to or by.", TypeName = "long")]

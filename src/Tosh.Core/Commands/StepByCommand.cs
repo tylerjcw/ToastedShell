@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Pipeline)]
 [CommandCategory("Pipeline")]
 [CommandArgument("n", "Take every Nth item (must be >= 1).")]
 [CommandExample("1.. | step-by 3 | first 5", Title = "Every 3rd integer")]
@@ -16,7 +17,7 @@ public sealed class StepByCommand : ShellCommand
         if (context.Arguments.Count != 1)
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::step_by_requires_n",
+                code: "tosh.runtime.step_by_requires_n",
                 title: "'step-by' requires exactly one integer argument.",
                 label: "use '... | step-by <n>'");
         }
@@ -25,7 +26,7 @@ public sealed class StepByCommand : ShellCommand
         if (n < 1)
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::step_by_positive",
+                code: "tosh.runtime.step_by_positive",
                 title: "'step-by' requires n >= 1.",
                 argumentIndex: 0,
                 label: "must be at least 1");

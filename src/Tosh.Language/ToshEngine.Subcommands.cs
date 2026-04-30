@@ -79,7 +79,7 @@ public sealed partial class ToshEngine
                 if (node.Children.ContainsKey(childNode.Name!))
                 {
                     throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                        Code: "tosh::runtime::duplicate_subcommand",
+                        Code: "tosh.runtime.duplicate_subcommand",
                         Title: $"Subcommand '{childNode.Name}' is declared more than once at this level.",
                         SourceName: sourceName,
                         SourceText: sourceText,
@@ -270,7 +270,7 @@ public sealed partial class ToshEngine
             else
             {
                 throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                    Code: "tosh::runtime::missing_script_flag",
+                    Code: "tosh.runtime.missing_script_flag",
                     Title: $"Missing required script flag '{parameter.Name}'.",
                     SourceName: sourceName,
                     SourceText: sourceText,
@@ -319,7 +319,7 @@ public sealed partial class ToshEngine
             else
             {
                 throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                    Code: "tosh::runtime::missing_script_argument",
+                    Code: "tosh.runtime.missing_script_argument",
                     Title: $"Missing required script argument '{parameter.Name}'.",
                     SourceName: sourceName,
                     SourceText: sourceText,
@@ -337,7 +337,7 @@ public sealed partial class ToshEngine
         {
             var unexpected = positionals[positionalIndex];
             throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                Code: "tosh::runtime::unexpected_script_argument",
+                Code: "tosh.runtime.unexpected_script_argument",
                 Title: $"Unexpected {(node.Name is null ? "script" : node.Name + " subcommand")} argument '{FormatScriptArgumentForDiagnostic(unexpected.Value)}'.",
                 SourceName: sourceName,
                 SourceText: sourceText,
@@ -414,7 +414,7 @@ public sealed partial class ToshEngine
                     {
                         var leafNode = path[^1].Node;
                         throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                            Code: "tosh::runtime::unknown_script_flag",
+                            Code: "tosh.runtime.unknown_script_flag",
                             Title: $"Unknown script flag '--{optionName}'.",
                             SourceName: sourceName,
                             SourceText: sourceText,
@@ -437,7 +437,7 @@ public sealed partial class ToshEngine
                         if (i + 1 >= argv.Count)
                         {
                             throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                                Code: "tosh::runtime::script_option_requires_value",
+                                Code: "tosh.runtime.script_option_requires_value",
                                 Title: $"Option '--{optionName}' requires a value.",
                                 SourceName: sourceName,
                                 SourceText: sourceText,
@@ -591,7 +591,7 @@ public sealed partial class ToshEngine
             ? $"pick one of: {children}"
             : $"subcommand '{node.Name}' requires a child: {children}";
         return ToshDiagnosticException.Create(new ToshDiagnostic(
-            Code: "tosh::runtime::subcommand_required",
+            Code: "tosh.runtime.subcommand_required",
             Title: node.Name is null
                 ? "A subcommand is required."
                 : $"Subcommand '{node.Name}' requires a child subcommand.",

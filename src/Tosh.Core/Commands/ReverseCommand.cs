@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Pipeline)]
 [CommandCategory("Pipeline")]
 [CommandExample("echo 1 2 3 | reverse", Title = "Reverse a sequence")]
 [CommandExample("ls | sort .Name | reverse", Title = "Reverse a sorted listing")]

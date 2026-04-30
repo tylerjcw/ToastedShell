@@ -151,6 +151,24 @@ public sealed class ToshRuntime
 
     public TimeSpan? LastCommandDuration { get; private set; }
 
+    /// <summary>
+    /// Rendered text of the diagnostic from the most recent command that escaped to the REPL
+    /// (or any caller that captures it via <see cref="SetLastDiagnostic"/>). Cleared when a
+    /// command completes without an error.
+    /// </summary>
+    public string? LastDiagnostic { get; private set; }
+
+    /// <summary>
+    /// The raw exception associated with <see cref="LastDiagnostic"/>, if any. Cleared on success.
+    /// </summary>
+    public Exception? LastError { get; private set; }
+
+    /// <summary>
+    /// Wall-clock start time of the most recent recorded command, set by the REPL
+    /// (or other callers) just before execution.
+    /// </summary>
+    public DateTimeOffset? LastStartedAt { get; private set; }
+
     public StartupProfileData? StartupProfile { get; set; }
 
     public long NextHistoryId => Math.Max(1, _nextHistoryId + 1);
@@ -158,6 +176,18 @@ public sealed class ToshRuntime
     public IReadOnlyList<ShellJob> GetJobs()
     {
         ReapCompletedJobs();
+        return _jobs.Values
+            .OrderBy(job => job.Id)
+            .ToArray();
+    }
+
+    /// <summary>
+    /// Snapshots every currently-tracked job (including completed-but-unreaped ones) without
+    /// triggering reaping. Used by <c>scope</c> to enumerate scope-owned jobs after the block
+    /// runs without losing fast-completing children to the reaper.
+    /// </summary>
+    public IReadOnlyList<ShellJob> GetJobsSnapshot()
+    {
         return _jobs.Values
             .OrderBy(job => job.Id)
             .ToArray();
@@ -502,6 +532,26 @@ public sealed class ToshRuntime
         LastCommandDuration = duration;
     }
 
+    /// <summary>
+    /// Records the rendered diagnostic and underlying exception for the most recent
+    /// command that failed. Pass <c>null</c> for both arguments after a successful
+    /// command to clear the previous error.
+    /// </summary>
+    public void SetLastDiagnostic(string? rendered, Exception? error)
+    {
+        LastDiagnostic = string.IsNullOrEmpty(rendered) ? null : rendered;
+        LastError = error;
+    }
+
+    /// <summary>
+    /// Records the wall-clock start time of the most recent command. Typically called
+    /// by the REPL just before invoking the engine.
+    /// </summary>
+    public void SetLastStartedAt(DateTimeOffset? startedAt)
+    {
+        LastStartedAt = startedAt;
+    }
+
     public void RegisterDisplaySelection(object value, DisplayColumnSelection selection)
     {
         ArgumentNullException.ThrowIfNull(value);
@@ -565,11 +615,21 @@ public sealed class ToshRuntime
 
     public static ToshRuntime CreateDefault(TextWriter? output = null, TextWriter? error = null)
     {
+        // Kick off platform type index construction in the background so it is ready
+        // before startup files (which may declare refinement types) are loaded.
+        WarmUpTask = Task.Run(DotNetTypeResolver.WarmUpPlatformTypeIndex);
+
         var runtime = new ToshRuntime(output, error);
         BuiltInShellTypes.RegisterDefaults(runtime.Classes);
         BuiltInCommands.RegisterDefaults(runtime.Commands);
         return runtime;
     }
+
+    /// <summary>
+    /// Task that pre-warms the platform type index in the background.
+    /// Await this before processing startup files to ensure type resolution is fast.
+    /// </summary>
+    public static Task? WarmUpTask { get; private set; }
 
     private void ReloadHistoryUnsafe()
     {

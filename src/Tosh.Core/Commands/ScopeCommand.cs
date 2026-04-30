@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Concurrency)]
 [CommandCategory("Concurrency")]
 [CommandArgument("block", "A block that may start background jobs via spawn.")]
 [CommandExample(
@@ -17,7 +18,7 @@ public sealed class ScopeCommand : ShellCommand
         if (context.Arguments.Count < 1)
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::scope_requires_block",
+                code: "tosh.runtime.scope_requires_block",
                 title: "'scope' requires a block argument.",
                 label: "pass a block like '{ spawn dotnet --version }'");
         }
@@ -26,14 +27,16 @@ public sealed class ScopeCommand : ShellCommand
         if (block is not ShellBlock)
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::scope_requires_block",
+                code: "tosh.runtime.scope_requires_block",
                 title: "'scope' requires a block, not a callable.",
                 argumentIndex: 0,
                 label: "pass a block like '{ spawn dotnet --version }'");
         }
 
         // Snapshot job IDs that exist BEFORE the block runs.
-        var preExistingIds = context.Runtime.GetJobs()
+        // Use the non-reaping snapshot so we don't lose any already-completed jobs and
+        // accidentally treat their IDs as scope-owned.
+        var preExistingIds = context.Runtime.GetJobsSnapshot()
             .Select(j => j.Id)
             .ToHashSet();
 
@@ -80,7 +83,10 @@ public sealed class ScopeCommand : ShellCommand
 
     private static List<ShellJob> CollectScopedJobs(ToshRuntime runtime, HashSet<int> preExistingIds)
     {
-        return runtime.GetJobs()
+        // Use the non-reaping snapshot. Otherwise fast-completing jobs (e.g., `spawn echo`)
+        // can be reaped between the block returning and this method running, which would
+        // make scope return zero completions for them.
+        return runtime.GetJobsSnapshot()
             .Where(j => !preExistingIds.Contains(j.Id))
             .ToList();
     }

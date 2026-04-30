@@ -10,11 +10,20 @@ public sealed class ToshLexer
 {
     private readonly string _source;
     private int _position;
+    private readonly List<LineHushDirective> _lineHushDirectives = [];
 
     public ToshLexer(string source)
     {
         _source = source ?? string.Empty;
     }
+
+    /// <summary>
+    /// Inline `# hush &lt;code&gt;` directives discovered during lexing. Each directive
+    /// records the 1-based line on which the comment appeared and the diagnostic code(s)
+    /// to suppress. The engine consults this list when emitting non-error diagnostics
+    /// so users can silence a single noisy line without changing global config.
+    /// </summary>
+    public IReadOnlyList<LineHushDirective> LineHushDirectives => _lineHushDirectives;
 
     public IReadOnlyList<SyntaxToken> Lex()
     {
@@ -340,10 +349,69 @@ public sealed class ToshLexer
 
     private void SkipComment()
     {
+        // Capture the comment body so we can recognize inline directives like
+        //   echo $value  # hush tosh.naming.shadowed_underscore
+        var bodyStart = _position + 1; // skip leading '#'
         while (!IsAtEnd && Current != '\n')
         {
             _position++;
         }
+        var bodyEnd = _position;
+        if (bodyEnd > bodyStart)
+        {
+            var body = _source.Substring(bodyStart, bodyEnd - bodyStart);
+            TryRecordHushDirective(bodyStart, body);
+        }
+    }
+
+    private void TryRecordHushDirective(int bodyStart, string body)
+    {
+        // Accept `# hush <code1>[,<code2>...]` at the start of the comment body
+        // (after the leading `#` already consumed). Whitespace and a leading
+        // colon are tolerated to keep the directive unobtrusive.
+        var trimmed = body.TrimStart();
+        if (trimmed.Length < 5)
+        {
+            return;
+        }
+        if (!(trimmed.StartsWith("hush ", StringComparison.Ordinal) ||
+              trimmed.StartsWith("hush\t", StringComparison.Ordinal)))
+        {
+            return;
+        }
+        var rest = trimmed[4..].Trim();
+        if (rest.Length == 0)
+        {
+            return;
+        }
+
+        // Strip a trailing comment ender (none in tosh, but be defensive).
+        // Split on whitespace and commas; accept any token shaped like a tosh code.
+        var line = GetLineNumber(bodyStart);
+        foreach (var raw in rest.Split([',', ' ', '\t'], StringSplitOptions.RemoveEmptyEntries))
+        {
+            var token = raw.Trim();
+            if (token.Length == 0 || !token.StartsWith("tosh.", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+            _lineHushDirectives.Add(new LineHushDirective(line, token));
+        }
+    }
+
+    private int GetLineNumber(int offset)
+    {
+        // 1-based line number for an offset into _source.
+        var line = 1;
+        var bound = Math.Min(offset, _source.Length);
+        for (var i = 0; i < bound; i++)
+        {
+            if (_source[i] == '\n')
+            {
+                line++;
+            }
+        }
+        return line;
     }
 
     private void SkipBlockComment()
@@ -410,7 +478,7 @@ public sealed class ToshLexer
         }
 
         throw new LexerDiagnosticException(new SyntaxDiagnostic(
-            Code: "tosh::parser::unterminated_string",
+            Code: "tosh.parser.unterminated_string",
             Title: "String literals must be terminated.",
             Span: new TextSpan(start, Math.Max(1, _position - start)),
             Label: "this string never closes",
@@ -517,7 +585,7 @@ public sealed class ToshLexer
         }
 
         throw new LexerDiagnosticException(new SyntaxDiagnostic(
-            Code: "tosh::parser::unterminated_interpolated_string",
+            Code: "tosh.parser.unterminated_interpolated_string",
             Title: "Interpolated string literals must be terminated.",
             Span: new TextSpan(start, Math.Max(1, _position - start)),
             Label: "this $\"...\" string never closes",
@@ -553,7 +621,7 @@ public sealed class ToshLexer
         }
 
         throw new LexerDiagnosticException(new SyntaxDiagnostic(
-            Code: "tosh::parser::unterminated_ansi_c_string",
+            Code: "tosh.parser.unterminated_ansi_c_string",
             Title: "ANSI-C string literals must be terminated.",
             Span: new TextSpan(start, Math.Max(1, _position - start)),
             Label: "this $'...' string never closes",
@@ -651,7 +719,7 @@ public sealed class ToshLexer
         }
 
         throw new LexerDiagnosticException(new SyntaxDiagnostic(
-            Code: "tosh::parser::unterminated_triple_quoted_string",
+            Code: "tosh.parser.unterminated_triple_quoted_string",
             Title: "Triple-quoted string literals must be terminated.",
             Span: new TextSpan(start, Math.Max(1, _position - start)),
             Label: $"this {quote}{quote}{quote}...{quote}{quote}{quote} string never closes",
@@ -690,7 +758,7 @@ public sealed class ToshLexer
         }
 
         throw new LexerDiagnosticException(new SyntaxDiagnostic(
-            Code: "tosh::parser::unterminated_triple_quoted_string",
+            Code: "tosh.parser.unterminated_triple_quoted_string",
             Title: "Triple-quoted string literals must be terminated.",
             Span: new TextSpan(start, Math.Max(1, _position - start)),
             Label: "this '''...''' string never closes",
@@ -755,7 +823,7 @@ public sealed class ToshLexer
         }
 
         throw new LexerDiagnosticException(new SyntaxDiagnostic(
-            Code: "tosh::parser::unterminated_triple_quoted_string",
+            Code: "tosh.parser.unterminated_triple_quoted_string",
             Title: "Triple-quoted interpolated string literals must be terminated.",
             Span: new TextSpan(start, Math.Max(1, _position - start)),
             Label: "this $\"\"\"...\"\"\" string never closes",
@@ -830,7 +898,7 @@ public sealed class ToshLexer
         }
 
         throw new LexerDiagnosticException(new SyntaxDiagnostic(
-            Code: "tosh::parser::unterminated_triple_quoted_string",
+            Code: "tosh.parser.unterminated_triple_quoted_string",
             Title: "Triple-quoted interpolated ANSI-C string literals must be terminated.",
             Span: new TextSpan(start, Math.Max(1, _position - start)),
             Label: "this $'''...''' string never closes",

@@ -2,6 +2,7 @@ using System.Text.RegularExpressions;
 
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Text)]
 [CommandCategory("Text")]
 [CommandArgument("pattern|regex", "The .NET regular expression pattern or Regex object to apply.", TypeName = "string|regex")]
 [CommandArgument("text ...", "Optional explicit text values. When omitted, reads pipeline text.", Required = false)]
@@ -12,6 +13,7 @@ namespace Tosh.Core.Commands;
 [CommandOption("--explicit-capture", "Only capture explicitly named or numbered groups.")]
 [CommandExample("echo \"PID=42\" | match \"PID=(?<Pid>[0-9]+)\" | get Pid")]
 [CommandExample("echo \"Alpha\" | match -i \"^alpha$\"")]
+[CommandOutput("Match records describing each capture: full match, group values, and 0-based positions.")]
 public sealed class MatchCommand : ShellCommand
 {
     public MatchCommand()

@@ -1,12 +1,13 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Pipeline)]
 [CommandCategory("Pipeline")]
 [CommandArgument("member-path", "Optional member path to extract the comparison key from each object.", Required = false)]
 [CommandExample("echo 1 2 2 3 1 | distinct", Title = "Remove duplicate values")]
 [CommandExample("ls | distinct .Extension", Title = "Distinct by a member path")]
 [CommandOutput("Pipeline items with duplicate values removed. Order is preserved.")]
 [PipelineInput(AcceptsScalar = true, AcceptsRecord = true, Description = "Yields each pipeline object only the first time its value (or keyed value) is seen.")]
-public sealed class DistinctCommand : ShellCommand
+public sealed class DistinctCommand : ShellCommand, ICurrentItemMemberPathCommand
 {
     public DistinctCommand()
         : base("distinct", "Removes duplicate pipeline values.", "distinct [member-path]") { }

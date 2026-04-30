@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Data)]
 [CommandCategory("Data")]
 [CommandArgument("component", "Zero, one, or two numeric components. If omitted, consumes pipeline input.", Required = false)]
 [CommandExample("complex 3 4", Title = "Build a complex number from real and imaginary parts")]

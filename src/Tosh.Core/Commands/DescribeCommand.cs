@@ -2,6 +2,7 @@ using System.Dynamic;
 
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Pipeline)]
 [CommandCategory("Pipeline")]
 [CommandArgument("member-path", "Optional member path to extract numeric values from each object.", Required = false)]
 [CommandExample("echo 23 45 12 67 34 89 11 55 | describe", Title = "Summary statistics")]

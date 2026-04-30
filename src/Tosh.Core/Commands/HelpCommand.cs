@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Shell)]
 [CommandCategory("Shell")]
 [CommandArgument("topic", "The command, language topic, type, or external executable to describe.", Required = false)]
 [CommandArgument("--cli [query]", "Opens the inline fuzzy tree browser, optionally seeded with an initial query or topic.", Required = false)]
@@ -174,10 +175,53 @@ public sealed class HelpCommand : ShellCommand
 
         if (resolvedTopic is null)
         {
+            // Polymorphic fallback: `help tosh.parser.foo` looks the code up in the
+            // generated diagnostic-code manifest and returns it as a help topic.
+            if (first.StartsWith("tosh.", StringComparison.OrdinalIgnoreCase) &&
+                BuildDiagnosticCodeTopic(first) is { } codeTopic)
+            {
+                yield return codeTopic;
+                yield break;
+            }
+
             throw new InvalidOperationException($"Help topic '{first}' was not found. Try '{Name} search {first}'.");
         }
 
         yield return resolvedTopic;
+    }
+
+    private static HelpTopic? BuildDiagnosticCodeTopic(string code)
+    {
+        var info = Generated.DiagnosticCodeManifest.TryGet(code);
+        if (info is null)
+        {
+            return null;
+        }
+
+        var description = string.IsNullOrWhiteSpace(info.Title)
+            ? $"Diagnostic code in the `tosh.{info.Namespace}` namespace."
+            : info.Title;
+
+        var notes = $"First emitted at `{info.SourceFile}:{info.SourceLine}`. " +
+                    $"Suppress with `hush {info.Code}` (scope-local) or by adding it to " +
+                    "`$tosh.Config.Diagnostics.Hushed` from `profile.tosh`. Errors are never suppressible.";
+
+        return new HelpTopic(
+            Name: info.Code,
+            Kind: HelpSubjectKind.DiagnosticCode,
+            Category: $"Diagnostics — tosh.{info.Namespace}",
+            Description: description,
+            Usage: info.Code,
+            Aliases: Array.Empty<string>(),
+            Related: Array.Empty<string>(),
+            Examples: Array.Empty<string>(),
+            Path: null,
+            Notes: notes,
+            Arguments: null,
+            Options: null,
+            PipelineInput: null,
+            Output: info.Help,
+            ExampleItems: null);
     }
 
     private static async Task<(string? InitialQuery, string? InitialTopicName)> ResolveInlineBrowseSeedAsync(
@@ -242,7 +286,7 @@ public sealed class HelpCommand : ShellCommand
     {
         return context.Runtime.InlinePrompts
             ?? throw context.CreateDiagnostic(
-                code: "tosh::help::no_inline_provider",
+                code: "tosh.help.no_inline_provider",
                 title: "Inline help (--cli) is not available in this environment.",
                 help: "The --cli flag requires an interactive terminal. Remove --cli to use the fullscreen help browser or normal help output.");
     }

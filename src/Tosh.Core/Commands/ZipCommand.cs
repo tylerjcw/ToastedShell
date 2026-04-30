@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Pipeline)]
 [CommandCategory("Pipeline")]
 [CommandArgument("other-sequence", "An array or list to merge pairwise with the pipeline.")]
 [CommandArgument("callable|block", "Optional combiner. Receives each pair as arguments. Defaults to creating two-element arrays.", Required = false)]
@@ -17,7 +18,7 @@ public sealed class ZipCommand : ShellCommand
         if (context.Arguments.Count < 1 || context.Arguments.Count > 2)
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::zip_requires_sequence",
+                code: "tosh.runtime.zip_requires_sequence",
                 title: "'zip' requires a second sequence and an optional combiner block.",
                 label: "use 'zip <array> [block]'");
         }
@@ -69,13 +70,13 @@ public sealed class ZipCommand : ShellCommand
             object?[] array => array,
             IReadOnlyList<object?> list => list,
             string => throw context.CreateDiagnostic(
-                code: "tosh::runtime::zip_requires_sequence",
+                code: "tosh.runtime.zip_requires_sequence",
                 title: "'zip' requires an array or list as the second sequence.",
                 argumentIndex: 0,
                 label: "a string is not a valid sequence for zip"),
             System.Collections.IEnumerable enumerable => enumerable.Cast<object?>().ToArray(),
             _ => throw context.CreateDiagnostic(
-                code: "tosh::runtime::zip_requires_sequence",
+                code: "tosh.runtime.zip_requires_sequence",
                 title: "'zip' requires an array or list as the second sequence.",
                 argumentIndex: 0,
                 label: "this value is not a sequence"),

@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Concurrency)]
 [CommandCategory("Concurrency")]
 [CommandArgument("future", "A ShellFuture value. If omitted, read one from pipeline input.", Required = false)]
 [CommandExample("var f = async { sleep 0.1; echo ok }; await $f", Title = "Await a future")]
@@ -31,7 +32,7 @@ public sealed class AwaitCommand : ShellCommand
             }
 
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::await_requires_future",
+                code: "tosh.runtime.await_requires_future",
                 title: "'await' expects a ShellFuture value.",
                 argumentIndex: 0,
                 label: "this value is not a future");
@@ -45,13 +46,13 @@ public sealed class AwaitCommand : ShellCommand
             }
 
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::await_requires_future",
+                code: "tosh.runtime.await_requires_future",
                 title: "'await' expects a ShellFuture value.",
                 label: "piped value is not a future");
         }
 
         throw context.CreateDiagnostic(
-            code: "tosh::runtime::await_requires_future",
+            code: "tosh.runtime.await_requires_future",
             title: "'await' requires a ShellFuture argument or piped input.",
             label: "pass a future created by 'async'");
     }

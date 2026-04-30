@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Clr)]
 [CommandCategory("CLR")]
 [CommandArgument("object", "The target dynamic record. If omitted, reads from the pipeline.", Required = false)]
 [CommandArgument("name", "The property name to remove.")]

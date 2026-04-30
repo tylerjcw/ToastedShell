@@ -55,6 +55,20 @@ public static class CommandLatexEmitter
         sb.AppendLine($"\\icmd{{{EscapeLatex(safeName)}}}");
         sb.AppendLine();
 
+        // Stdlib bucket and shell-only badge — surface the library / shell-only
+        // partition called out in docs/COMPILED_TOSH.md so the appendix mirrors
+        // the eventual Tosh.Stdlib.* assembly layout.
+        if (!string.IsNullOrWhiteSpace(entry.Stdlib))
+        {
+            sb.AppendLine($"\\textit{{Library: \\code{{Tosh.Stdlib.{EscapeLatex(entry.Stdlib)}}}}}");
+            sb.AppendLine();
+        }
+        if (entry.IsShellOnly)
+        {
+            sb.AppendLine("\\textbf{[shell-only]} — only available inside an interactive TōSh session.");
+            sb.AppendLine();
+        }
+
         // Command box
         sb.AppendLine($"\\begin{{cmdbox}}{{{EscapeLatex(safeName)}}}");
 

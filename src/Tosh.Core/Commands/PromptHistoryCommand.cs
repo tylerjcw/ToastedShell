@@ -1,5 +1,7 @@
 namespace Tosh.Core.Commands;
 
+[ShellOnly]
+[Stdlib(StdlibCategory.Shell)]
 [CommandCategory("Prompt")]
 [CommandArgument("id", "History id to render instead of the next live history id.", Required = false, TypeName = "long")]
 [CommandOption("--fg <color>", "Foreground color name or ANSI-style color token.")]
@@ -8,6 +10,7 @@ namespace Tosh.Core.Commands;
 [CommandOption("--dim", "Render the segment dimmed.")]
 [CommandExample("prompt-history")]
 [CommandExample("prompt-history 432 --fg gray --dim")]
+[CommandOutput("Styled prompt segment(s) showing the current history index.")]
 public sealed class PromptHistoryCommand : ShellCommand
 {
     public PromptHistoryCommand()

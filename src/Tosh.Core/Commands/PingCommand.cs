@@ -4,6 +4,7 @@ using System.Net.Sockets;
 
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Net)]
 [CommandCategory("Network")]
 [CommandArgument("host", "Host name or IP address to ping.")]
 [CommandOption("-c, --count <count>", "Number of echo requests to send. Defaults to 4.")]
@@ -17,6 +18,7 @@ namespace Tosh.Core.Commands;
 [CommandExample("ping -c 3 localhost", Title = "Ping localhost three times")]
 [CommandExample("ping -4 -W 1000 example.com | get { Host, Sequence, Status, RoundtripTime }", Title = "Project typed ping replies")]
 [CommandSideEffects(Network = true)]
+[CommandOutput("Per-reply records: address, round-trip time, and status flag.")]
 public sealed class PingCommand : ShellCommand
 {
     public PingCommand()
@@ -156,12 +158,12 @@ public sealed class PingCommand : ShellCommand
 
             if (text.StartsWith("-", StringComparison.Ordinal))
             {
-                throw new InvalidOperationException($"Unsupported ping option '{text}'.");
+                throw new CommandArgumentException(index, $"Unsupported ping option '{text}'.");
             }
 
             if (host is not null)
             {
-                throw new InvalidOperationException("ping accepts only one host argument.");
+                throw new CommandArgumentException(index, "ping accepts only one host argument.");
             }
 
             host = text;

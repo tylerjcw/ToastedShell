@@ -119,6 +119,7 @@ internal sealed class ToshRuntimeNamespace
                 [
                     ("ExitCode", Last.ExitCode.ToString(System.Globalization.CultureInfo.InvariantCulture)),
                     ("Duration", Last.Duration?.ToString() ?? "n/a"),
+                    ("HasError", Last.HasError ? "True" : "False"),
                 ]),
             new(
                 "$tosh.Config",
@@ -193,6 +194,18 @@ internal sealed class ToshLastNamespace
 
     public TimeSpan? Duration => _runtime.LastCommandDuration;
 
+    /// <summary>Rendered diagnostic from the most recent failed command, or <c>null</c> if it succeeded.</summary>
+    public string? Diagnostic => _runtime.LastDiagnostic;
+
+    /// <summary>Underlying exception associated with <see cref="Diagnostic"/>, or <c>null</c> on success.</summary>
+    public Exception? Error => _runtime.LastError;
+
+    /// <summary><c>true</c> when the most recent command produced an uncaught diagnostic.</summary>
+    public bool HasError => _runtime.LastError is not null;
+
+    /// <summary>Wall-clock start time of the most recent command, when recorded.</summary>
+    public DateTimeOffset? StartedAt => _runtime.LastStartedAt;
+
     public string ShellTypeName => "ToshRuntime.Last";
 
     public bool TryGetMember(string name, out object? value, bool includeHidden = false)
@@ -208,6 +221,18 @@ internal sealed class ToshLastNamespace
             case nameof(Duration):
                 value = Duration;
                 return true;
+            case nameof(Diagnostic):
+                value = Diagnostic;
+                return true;
+            case nameof(Error):
+                value = Error;
+                return true;
+            case nameof(HasError):
+                value = HasError;
+                return true;
+            case nameof(StartedAt):
+                value = StartedAt;
+                return true;
             default:
                 value = null;
                 return false;
@@ -222,6 +247,10 @@ internal sealed class ToshLastNamespace
             new(nameof(Result), Result),
             new(nameof(ExitCode), ExitCode),
             new(nameof(Duration), Duration),
+            new(nameof(Diagnostic), Diagnostic),
+            new(nameof(Error), Error),
+            new(nameof(HasError), HasError),
+            new(nameof(StartedAt), StartedAt),
         ];
 }
 

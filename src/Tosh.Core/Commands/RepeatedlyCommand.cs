@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Functional)]
 [CommandCategory("Functional")]
 [CommandArgument("callable|block", "A block or function to evaluate each time. Receives the current index as $_ and as the first argument.")]
 [CommandExample("repeatedly { random int 1 100 } | first 5", Title = "Five random numbers")]
@@ -17,7 +18,7 @@ public sealed class RepeatedlyCommand : ShellCommand
         if (context.Arguments.Count != 1)
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::repeatedly_requires_callable",
+                code: "tosh.runtime.repeatedly_requires_callable",
                 title: "'repeatedly' requires a callable or block.",
                 label: "use 'repeatedly { expression }'");
         }

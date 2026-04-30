@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Filesystem)]
 [CommandCategory("Filesystem")]
 [CommandArgument("path", "One or more files or directories to remove.", TypeName = "path-like")]
 [CommandOption("-r", "Remove directories and their contents recursively.")]

@@ -2,6 +2,13 @@ using Tosh.Core;
 
 namespace Tosh.Language.Commands;
 
+[Stdlib(StdlibCategory.Shell)]
+[CommandCategory("Shell")]
+[CommandArgument("path", "Path to a .tosh script file to execute in the current session.", TypeName = "path-like", Kind = "path")]
+[CommandArgument("args", "Arguments forwarded to the script.", Required = false)]
+[CommandExample("source ~/.config/tosh/profile.tosh", Title = "Re-run your profile in the current session")]
+[CommandExample("source ./setup.tosh prod 8080", Title = "Run a script with arguments")]
+[CommandOutput("Streams whatever values the sourced script emits.")]
 public sealed class SourceCommand : ShellCommand
 {
     private readonly ToshEngine _engine;

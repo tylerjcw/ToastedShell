@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Filesystem)]
 [CommandCategory("Filesystem")]
 [CommandArgument("path ...", "Optional directories or files to list.", Required = false, TypeName = "path-like")]
 [CommandOption("-a", "Include hidden entries.")]

@@ -2,6 +2,7 @@ using System.Diagnostics;
 
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.System)]
 [CommandCategory("System")]
 [CommandArgument("[list [pattern ...]]", "With no subcommand, ToSh treats `networkctl` as a structured `list` query. Explicit `list` behaves the same way.", Required = false)]
 [CommandArgument("<other-command ...>", "Unsupported, detail, and mutating commands currently fall back to the native `networkctl` utility unchanged.", Required = false)]
@@ -44,7 +45,7 @@ public sealed class NetworkctlCommand : ShellCommand
         if (OperatingSystem.IsWindows())
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::command_windows_unavailable",
+                code: "tosh.runtime.command_windows_unavailable",
                 title: $"'{Name}' is not available on Windows.",
                 help: "This command requires systemd-networkd, which is a Linux-only service.");
         }
@@ -76,7 +77,7 @@ public sealed class NetworkctlCommand : ShellCommand
                 : result.StandardError.Trim();
 
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::networkctl_command_failed",
+                code: "tosh.runtime.networkctl_command_failed",
                 title: message);
         }
 
@@ -94,7 +95,7 @@ public sealed class NetworkctlCommand : ShellCommand
         catch (Exception exception) when (exception is InvalidOperationException or FormatException)
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::networkctl_parse_failed",
+                code: "tosh.runtime.networkctl_parse_failed",
                 title: $"Could not parse structured 'networkctl list' output. {exception.Message}",
                 help: "Try running the external `networkctl` command directly if you are using an unsupported mode.");
         }
@@ -114,7 +115,7 @@ public sealed class NetworkctlCommand : ShellCommand
         {
             ExternalCommandLookupStatus.Found when lookup.ResolvedPath is not null => lookup.ResolvedPath,
             _ => throw context.CreateDiagnostic(
-                code: "tosh::runtime::networkctl_command_missing",
+                code: "tosh.runtime.networkctl_command_missing",
                 title: "The system 'networkctl' command was not found.",
                 help: "Install systemd or invoke the external utility by full path once it is available."),
         };
@@ -257,7 +258,7 @@ public sealed class NetworkctlCommand : ShellCommand
         if (!process.Start())
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::networkctl_command_start_failed",
+                code: "tosh.runtime.networkctl_command_start_failed",
                 title: "Failed to start the system 'networkctl' command.");
         }
 

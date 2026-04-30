@@ -1265,8 +1265,8 @@ When a value is checked against a refinement type:
 \toprule
 \textbf{Code} & \textbf{Trigger} \\
 \midrule
-\code{tosh::runtime::refinement\_failed} & Value did not satisfy a \code{where} predicate after all coercions. \\
-\code{tosh::runtime::refinement\_requires\_boolean} & A \code{where} predicate returned a non-boolean value. \\
+\code{tosh.runtime.refinement\_failed} & Value did not satisfy a \code{where} predicate after all coercions. \\
+\code{tosh.runtime.refinement\_requires\_boolean} & A \code{where} predicate returned a non-boolean value. \\
 \bottomrule
 \end{tabular}
 
@@ -3261,7 +3261,7 @@ subcommand greet(name: string) => echo $"Hello, {$name}!"
 \begin{warnbox}
 Parameters declared with \code{()} in the arrow form require the
 \code{=>} separator.  Using a block body with \code{()} parameters is a
-parse error (\code{tosh::parser::subcommand\_params\_require\_arrow}).
+parse error (\code{tosh.parser.subcommand\_params\_require\_arrow}).
 \end{warnbox}
 
 \section{Flags and Arguments}
@@ -3389,16 +3389,16 @@ tosh myscript.tosh git commit --help
 \toprule
 \textbf{Code} & \textbf{Trigger} \\
 \midrule
-\code{tosh::runtime::missing\_script\_flag} & Required flag not provided. \\
-\code{tosh::runtime::missing\_script\_argument} & Required positional \code{arg} not provided. \\
-\code{tosh::runtime::unknown\_script\_flag} & Unrecognised \code{--flag} on the command line. \\
-\code{tosh::runtime::script\_option\_requires\_value} & Flag that expects a value was given without one. \\
-\code{tosh::runtime::unexpected\_script\_argument} & Extra positional token after all \code{arg}s are filled. \\
-\code{tosh::runtime::duplicate\_subcommand} & Two sibling subcommands share the same name. \\
-\code{tosh::parser::incompatible\_subcommand\_modifiers} & \code{eager} and \code{hollow} used together. \\
-\code{tosh::parser::subcommand\_params\_require\_arrow} & Block body used with \code{()} parameter form. \\
-\code{tosh::parser::hollow\_subcommand\_must\_be\_empty} & \code{hollow} subcommand contains non-subcommand statements. \\
-\code{tosh::parser::duplicate\_subcommand\_modifier} & Same modifier applied more than once. \\
+\code{tosh.runtime.missing\_script\_flag} & Required flag not provided. \\
+\code{tosh.runtime.missing\_script\_argument} & Required positional \code{arg} not provided. \\
+\code{tosh.runtime.unknown\_script\_flag} & Unrecognised \code{--flag} on the command line. \\
+\code{tosh.runtime.script\_option\_requires\_value} & Flag that expects a value was given without one. \\
+\code{tosh.runtime.unexpected\_script\_argument} & Extra positional token after all \code{arg}s are filled. \\
+\code{tosh.runtime.duplicate\_subcommand} & Two sibling subcommands share the same name. \\
+\code{tosh.parser.incompatible\_subcommand\_modifiers} & \code{eager} and \code{hollow} used together. \\
+\code{tosh.parser.subcommand\_params\_require\_arrow} & Block body used with \code{()} parameter form. \\
+\code{tosh.parser.hollow\_subcommand\_must\_be\_empty} & \code{hollow} subcommand contains non-subcommand statements. \\
+\code{tosh.parser.duplicate\_subcommand\_modifier} & Same modifier applied more than once. \\
 \bottomrule
 \end{tabular}
 
@@ -3783,6 +3783,11 @@ special variables.
 
 See Table~\ref{tab:truthiness} on page~\pageref{tab:truthiness} for the
 complete truthiness table.
+
+% =============================================================================
+% Auto-generated from `Code:` literals in the source tree.
+% Regenerate with: python3 scripts/extract_diagnostic_codes.py
+\InputIfFileExists{diagnostic-codes}{}{\textit{Diagnostic code reference not yet generated. Run \texttt{python3 scripts/extract\_diagnostic\_codes.py} to create it.}}
 
 % =============================================================================
 \chapter{Command Reference}

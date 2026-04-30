@@ -3,6 +3,7 @@ using System.Runtime.Loader;
 
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Clr)]
 [CommandCategory("CLR")]
 [CommandArgument("path", "One or more file paths to .NET assemblies to load.")]
 [CommandExample("load-assembly ./MyPlugin.dll", Title = "Load a plugin assembly")]

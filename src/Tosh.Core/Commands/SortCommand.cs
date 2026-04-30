@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Pipeline)]
 [CommandCategory("Pipeline")]
 [CommandArgument("key", "A member path, callable, or block to extract the sort key.", Required = false, TypeName = "member-path|callable|block", Kind = "expression")]
 [CommandOption("-r", "Reverse the sort order.")]
@@ -38,7 +39,7 @@ public sealed class SortCommand : ShellCommand
             selector is not ShellBlock)
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::sort_requires_selector",
+                code: "tosh.runtime.sort_requires_selector",
                 title: "'sort' selectors must be a member path, callable value, or block.",
                 argumentIndex: 0,
                 label: "this selector is not supported");

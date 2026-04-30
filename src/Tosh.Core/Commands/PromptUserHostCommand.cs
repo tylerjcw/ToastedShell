@@ -1,5 +1,7 @@
 namespace Tosh.Core.Commands;
 
+[ShellOnly]
+[Stdlib(StdlibCategory.Shell)]
 [CommandCategory("Prompt")]
 [CommandOption("--fg <color>", "Foreground color name or ANSI-style color token.")]
 [CommandOption("--bg <color>", "Background color name or ANSI-style color token.")]
@@ -7,6 +9,7 @@ namespace Tosh.Core.Commands;
 [CommandOption("--dim", "Render the segment dimmed.")]
 [CommandExample("prompt-userhost --dim")]
 [CommandExample("prompt-userhost --fg gray")]
+[CommandOutput("Styled prompt segment(s) describing the current user@host.")]
 public sealed class PromptUserHostCommand : ShellCommand
 {
     public PromptUserHostCommand()

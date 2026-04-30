@@ -403,7 +403,7 @@ public sealed class ToshMcpServer
             }
             catch (Exception ex)
             {
-                runtimeErrors.Add(("tosh::runtime::exception", ex.Message, null));
+                runtimeErrors.Add(("tosh.runtime.exception", ex.Message, null));
             }
         }
 
@@ -498,7 +498,7 @@ public sealed class ToshMcpServer
         if (code.Contains("type_mismatch") || code.Contains("invalid_cast"))
             return $"A type error occurred. {title} Verify that the value types are compatible with the operation.";
 
-        if (code.Contains("runtime::exception"))
+        if (code.Contains("runtime.exception"))
             return $"A runtime exception was thrown during execution: {title}";
 
         return title;

@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Concurrency)]
 [CommandCategory("Concurrency")]
 [CommandArgument("channels", "One or more channels to wait on. If omitted, reads channels from pipeline input.", Required = false)]
 [CommandExample("channel-select $ch1 $ch2", Title = "Return the first channel with a value")]
@@ -56,7 +57,7 @@ public sealed class ChannelSelectCommand : ShellCommand
                 if (context.Arguments[i] is not ShellChannel ch)
                 {
                     throw context.CreateDiagnostic(
-                        code: "tosh::runtime::channel_select_requires_channel",
+                        code: "tosh.runtime.channel_select_requires_channel",
                         title: "'channel-select' arguments must be ShellChannel values.",
                         argumentIndex: i,
                         label: "this value is not a ShellChannel");
@@ -73,7 +74,7 @@ public sealed class ChannelSelectCommand : ShellCommand
             if (item is not ShellChannel ch)
             {
                 throw context.CreateDiagnostic(
-                    code: "tosh::runtime::channel_select_requires_channel",
+                    code: "tosh.runtime.channel_select_requires_channel",
                     title: "'channel-select' expects ShellChannel values from pipeline input.",
                     label: "piped value is not a ShellChannel");
             }

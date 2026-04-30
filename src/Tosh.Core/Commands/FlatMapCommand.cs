@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Pipeline)]
 [CommandCategory("Pipeline")]
 [CommandArgument("callable|block", "A transform that returns a sequence for each input item.")]
 [CommandExample("echo 1 2 3 | flat-map { [_ (_ * 10)] }", Title = "Expand each item into two")]
@@ -16,7 +17,7 @@ public sealed class FlatMapCommand : ShellCommand
         if (context.Arguments.Count != 1)
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::flat_map_requires_callable_or_block",
+                code: "tosh.runtime.flat_map_requires_callable_or_block",
                 title: "'flat-map' requires exactly one callable value or block.",
                 label: "pass a lambda like 'func(x) => ...' or a block like '{ ... }'");
         }

@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Pipeline)]
 [CommandCategory("Pipeline")]
 [CommandArgument("callable|block", "A lambda or block executed once per input item.")]
 [CommandExample("echo one two | each { _.ToUpper() }", Title = "Transform each item to uppercase")]
@@ -17,12 +18,13 @@ public sealed class EachCommand : ShellCommand
         if (context.Arguments.Count != 1)
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::each_requires_callable_or_block",
+                code: "tosh.runtime.each_requires_callable_or_block",
                 title: "'each' requires exactly one callable value or block.",
                 label: "pass a lambda like 'func(x) => ...' or a block like '{ ... }'");
         }
 
         var operation = FunctionalCommandUtilities.RequireCallableOrBlock(context, 0);
+        operation = await FunctionalCommandUtilities.ResolveCallableOrBlockAsync(context, operation);
         var executor = context.Runtime.BlockExecutor;
 
         await foreach (var item in ShellIterationUtilities.ReplaySingleInputCollectionAsync(context.Input, context.CancellationToken)

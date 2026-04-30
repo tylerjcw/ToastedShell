@@ -1,10 +1,12 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Clr)]
 [CommandCategory("CLR")]
 [CommandExample("constructors System.String | first 5")]
 [CommandExample("constructors list<int>")]
 [CommandExample("constructors dict<string, int>")]
 [CommandNote("Constructors works with CLR types, ToSh named types, and shell collection types like `list<int>` and `dict<string, int>`.")]
+[CommandOutput("Records describing each constructor: declaring type, parameter list, and a callable invocation example.")]
 public sealed class ConstructorsCommand : ShellCommand
 {
     public ConstructorsCommand()

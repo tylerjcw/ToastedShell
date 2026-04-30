@@ -1,5 +1,7 @@
 namespace Tosh.Core.Commands;
 
+[ShellOnly]
+[Stdlib(StdlibCategory.Shell)]
 [CommandCategory("Prompt")]
 [CommandArgument("count", "Job count to render instead of the shell's live background-job count.", Required = false, TypeName = "int")]
 [CommandOption("--fg <color>", "Foreground color name or ANSI-style color token.")]
@@ -8,6 +10,7 @@ namespace Tosh.Core.Commands;
 [CommandOption("--dim", "Render the segment dimmed.")]
 [CommandExample("prompt-jobs")]
 [CommandExample("prompt-jobs 3 --fg yellow --bold")]
+[CommandOutput("Styled prompt segment(s) summarising background-job counts.")]
 public sealed class PromptJobsCommand : ShellCommand
 {
     public PromptJobsCommand()

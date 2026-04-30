@@ -1,9 +1,11 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Pipeline)]
 [CommandCategory("Pipeline")]
 [CommandExample("ls | group-by Extension")]
 [CommandExample("ps | group-by func(p) => ($p.Name.Substring(0, 1))")]
-public sealed class GroupByCommand : ShellCommand
+[CommandOutput("Group records of the form { Key, Items } — one per distinct key produced by the projection.")]
+public sealed class GroupByCommand : ShellCommand, ICurrentItemMemberPathCommand
 {
     public GroupByCommand()
         : base("group-by", "Groups pipeline values by a member path, block, or callable.", "group-by <member-path|callable|block>") { }
@@ -13,7 +15,7 @@ public sealed class GroupByCommand : ShellCommand
         if (context.Arguments.Count != 1)
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::group_by_requires_selector",
+                code: "tosh.runtime.group_by_requires_selector",
                 title: "'group-by' requires exactly one member path, callable, or block.",
                 label: "pass a member path like 'Name', a lambda, or a block");
         }

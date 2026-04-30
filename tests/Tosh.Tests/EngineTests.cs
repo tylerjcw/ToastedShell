@@ -1382,7 +1382,7 @@ public sealed class EngineTests
         var result = ToshParser.Parse("person.Name = \"toast\"");
 
         var diagnostic = Assert.Single(result.Diagnostics);
-        Assert.Equal("tosh::parser::variable_references_require_dollar", diagnostic.Code);
+        Assert.Equal("tosh.parser.variable_references_require_dollar", diagnostic.Code);
         Assert.Contains("$person.Name", diagnostic.Label, StringComparison.Ordinal);
     }
 
@@ -1395,7 +1395,7 @@ public sealed class EngineTests
         var exception = await Assert.ThrowsAsync<ToshDiagnosticException>(() => engine.ExecuteToListAsync("person.Name"));
         var diagnostic = Assert.Single(exception.Diagnostics);
 
-        Assert.Equal("tosh::runtime::variable_reference_requires_dollar", diagnostic.Code);
+        Assert.Equal("tosh.runtime.variable_reference_requires_dollar", diagnostic.Code);
         Assert.Contains("$person.Name", diagnostic.Label, StringComparison.Ordinal);
     }
 
@@ -2426,7 +2426,7 @@ public sealed class EngineTests
         var exception = await Assert.ThrowsAsync<ToshDiagnosticException>(() => engine.ExecuteToListAsync("echo $args"));
         var diagnostic = Assert.Single(exception.Diagnostics);
 
-        Assert.Equal("tosh::runtime::unknown_variable", diagnostic.Code);
+        Assert.Equal("tosh.runtime.unknown_variable", diagnostic.Code);
     }
 
     [Fact]
@@ -3147,7 +3147,7 @@ public sealed class EngineTests
             """));
 
         var diagnostic = Assert.Single(exception.Diagnostics);
-        Assert.Equal("tosh::runtime::unknown_variable", diagnostic.Code);
+        Assert.Equal("tosh.runtime.unknown_variable", diagnostic.Code);
     }
 
     [Fact]
@@ -3158,8 +3158,8 @@ public sealed class EngineTests
         var functionException = await Assert.ThrowsAsync<ToshDiagnosticException>(() => engine.ExecuteToListAsync("func tosh() { }"));
         var moduleException = await Assert.ThrowsAsync<ToshDiagnosticException>(() => engine.ExecuteToListAsync("module tosh { }"));
 
-        Assert.Equal("tosh::runtime::reserved_variable_name", Assert.Single(functionException.Diagnostics).Code);
-        Assert.Equal("tosh::runtime::reserved_variable_name", Assert.Single(moduleException.Diagnostics).Code);
+        Assert.Equal("tosh.runtime.reserved_variable_name", Assert.Single(functionException.Diagnostics).Code);
+        Assert.Equal("tosh.runtime.reserved_variable_name", Assert.Single(moduleException.Diagnostics).Code);
     }
 
     [Fact]
@@ -3170,8 +3170,8 @@ public sealed class EngineTests
         var parameterException = await Assert.ThrowsAsync<ToshDiagnosticException>(() => engine.ExecuteToListAsync("func demo(tosh) { echo $tosh }"));
         var loopException = await Assert.ThrowsAsync<ToshDiagnosticException>(() => engine.ExecuteToListAsync("for tosh in (echo 1) { echo $tosh }"));
 
-        Assert.Equal("tosh::runtime::reserved_variable_name", Assert.Single(parameterException.Diagnostics).Code);
-        Assert.Equal("tosh::runtime::reserved_variable_name", Assert.Single(loopException.Diagnostics).Code);
+        Assert.Equal("tosh.runtime.reserved_variable_name", Assert.Single(parameterException.Diagnostics).Code);
+        Assert.Equal("tosh.runtime.reserved_variable_name", Assert.Single(loopException.Diagnostics).Code);
     }
 
     [Fact]
@@ -3182,7 +3182,7 @@ public sealed class EngineTests
         var exception = await Assert.ThrowsAsync<ToshDiagnosticException>(
             () => engine.ExecuteToListAsync("var bad = func(env) => $env"));
 
-        Assert.Equal("tosh::runtime::reserved_variable_name", Assert.Single(exception.Diagnostics).Code);
+        Assert.Equal("tosh.runtime.reserved_variable_name", Assert.Single(exception.Diagnostics).Code);
     }
 
     [Fact]
@@ -3193,8 +3193,8 @@ public sealed class EngineTests
         var variableException = await Assert.ThrowsAsync<ToshDiagnosticException>(() => engine.ExecuteToListAsync("var env = 1"));
         var functionException = await Assert.ThrowsAsync<ToshDiagnosticException>(() => engine.ExecuteToListAsync("func env() { }"));
 
-        Assert.Equal("tosh::runtime::reserved_variable_name", Assert.Single(variableException.Diagnostics).Code);
-        Assert.Equal("tosh::runtime::reserved_variable_name", Assert.Single(functionException.Diagnostics).Code);
+        Assert.Equal("tosh.runtime.reserved_variable_name", Assert.Single(variableException.Diagnostics).Code);
+        Assert.Equal("tosh.runtime.reserved_variable_name", Assert.Single(functionException.Diagnostics).Code);
     }
 
     [Fact]
@@ -4093,7 +4093,7 @@ $output");
         var runtime = ToshRuntime.CreateDefault();
         runtime.RecordHistory("help");
         runtime.RecordHistory("ls -la");
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime) { IsInteractiveSession = true };
 
         var results = await engine.ExecuteToListAsync("history");
 
@@ -4112,7 +4112,7 @@ $output");
         var runtime = ToshRuntime.CreateDefault();
         runtime.RecordHistory("echo alpha");
         runtime.RecordHistory("echo beta gamma");
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime) { IsInteractiveSession = true };
 
         var expandedById = await engine.ExecuteToListAsync("history expand 1");
         Assert.Equal("echo alpha", Assert.IsType<string>(Assert.Single(expandedById)));
@@ -4149,7 +4149,7 @@ $output");
         runtime.RecordHistory("echo alpha");
         runtime.RecordHistory("git status");
         runtime.RecordHistory("echo beta");
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime) { IsInteractiveSession = true };
 
         var searchResults = await engine.ExecuteToListAsync("history search echo | get Text");
         Assert.Collection(
@@ -4181,7 +4181,7 @@ $output");
 
         var runtime = ToshRuntime.CreateDefault();
         runtime.Config.History.FilePath = historyPath;
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime) { IsInteractiveSession = true };
 
         var pathResults = await engine.ExecuteToListAsync("history path");
         Assert.Equal(historyPath, Assert.IsType<string>(Assert.Single(pathResults)));
@@ -4931,7 +4931,7 @@ $output");
                 $x(1)
                 """));
 
-        Assert.Equal("tosh::runtime::value_not_callable", Assert.Single(exception.Diagnostics).Code);
+        Assert.Equal("tosh.runtime.value_not_callable", Assert.Single(exception.Diagnostics).Code);
     }
 
     [Fact]
@@ -5031,7 +5031,7 @@ $output");
                 """));
 
         var diagnostic = Assert.Single(exception.Diagnostics);
-        Assert.Equal("tosh::runtime::function_overload_ambiguous", diagnostic.Code);
+        Assert.Equal("tosh.runtime.function_overload_ambiguous", diagnostic.Code);
         Assert.Contains("Multiple overloads matched function 'pick'", diagnostic.Title, StringComparison.Ordinal);
     }
 
@@ -5050,7 +5050,7 @@ $output");
                 """));
 
         var diagnostic = Assert.Single(exception.Diagnostics);
-        Assert.Equal("tosh::runtime::function_overload_ambiguous", diagnostic.Code);
+        Assert.Equal("tosh.runtime.function_overload_ambiguous", diagnostic.Code);
         Assert.Contains("Multiple overloads matched function 'widen'", diagnostic.Title, StringComparison.Ordinal);
     }
 
@@ -5140,7 +5140,7 @@ $output");
         var exception = await Assert.ThrowsAsync<ToshDiagnosticException>(
             () => engine.ExecuteToListAsync("invoke 42"));
 
-        Assert.Equal("tosh::runtime::value_not_callable", Assert.Single(exception.Diagnostics).Code);
+        Assert.Equal("tosh.runtime.value_not_callable", Assert.Single(exception.Diagnostics).Code);
     }
 
     [Fact]
@@ -5340,7 +5340,7 @@ $output");
                 curry $gather
                 """));
 
-        Assert.Equal("tosh::runtime::curry_requires_fixed_arity_callable", Assert.Single(exception.Diagnostics).Code);
+        Assert.Equal("tosh.runtime.curry_requires_fixed_arity_callable", Assert.Single(exception.Diagnostics).Code);
     }
 
     [Fact]
@@ -5377,7 +5377,7 @@ $output");
     {
         var result = ToshParser.Parse("func bad(items..., last) { echo nope }");
 
-        Assert.Contains(result.Diagnostics, d => d.Code == "tosh::parser::rest_parameter_must_be_last");
+        Assert.Contains(result.Diagnostics, d => d.Code == "tosh.parser.rest_parameter_must_be_last");
     }
 
     [Fact]

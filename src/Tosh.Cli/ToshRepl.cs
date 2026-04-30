@@ -17,8 +17,9 @@ public sealed class ToshRepl
     public ToshRepl(ToshEngine engine)
     {
         _engine = engine;
+        _engine.IsInteractiveSession = true;
         _runtime = engine.Runtime;
-        _diagnostics = new DiagnosticRenderer(_runtime.Config.Theme.Diagnostics);
+        _diagnostics = new DiagnosticRenderer(_runtime.Config.Theme.Diagnostics, _runtime.Config.Diagnostics);
         _lineEditor = new ReplLineEditor();
         _commandLineInsertion = new ReplCommandLineInsertionSink();
         _runtime.CommandLineInsertion = _commandLineInsertion;
@@ -116,11 +117,15 @@ public sealed class ToshRepl
                 var sourceName = historyEntry is not null
                     ? $"repl_entry #{historyEntry.Id}"
                     : "repl_entry transient";
+                var startedAt = DateTimeOffset.Now;
+                _runtime.SetLastStartedAt(startedAt);
                 var stopwatch = Stopwatch.StartNew();
 
                 try
                 {
                     await ExecuteAndPrintAsync(source, sourceName);
+                    // Successful command — clear any prior diagnostic so $tosh.Last.HasError reflects reality.
+                    _runtime.SetLastDiagnostic(null, null);
                 }
                 finally
                 {
@@ -130,7 +135,9 @@ public sealed class ToshRepl
             }
             catch (Exception exception)
             {
-                await Console.Error.WriteLineAsync(_diagnostics.Render(exception));
+                var rendered = _diagnostics.Render(exception);
+                _runtime.SetLastDiagnostic(rendered, exception);
+                await Console.Error.WriteLineAsync(rendered);
             }
 
             if (_runtime.ExitRequested)

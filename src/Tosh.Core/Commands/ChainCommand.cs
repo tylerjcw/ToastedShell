@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Pipeline)]
 [CommandCategory("Pipeline")]
 [CommandArgument("sequences", "One or more arrays, lists, or ranges to concatenate after the pipeline.")]
 [CommandExample("echo 1 2 | chain [3 4] [5 6]", Title = "Concatenate multiple sequences")]
@@ -17,7 +18,7 @@ public sealed class ChainCommand : ShellCommand
         if (context.Arguments.Count < 1)
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::chain_requires_sequence",
+                code: "tosh.runtime.chain_requires_sequence",
                 title: "'chain' requires at least one sequence argument.",
                 label: "use '... | chain <array> [array ...]'");
         }

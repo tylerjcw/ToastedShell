@@ -1,9 +1,12 @@
 namespace Tosh.Core.Commands;
 
+[ShellOnly]
+[Stdlib(StdlibCategory.Shell)]
 [CommandCategory("Shell")]
 [CommandArgument("text", "Case-insensitive text to search for. May also be supplied from the pipeline.")]
 [CommandExample("history-search git", Title = "Search history by argument")]
 [CommandExample("echo build | history-search", Title = "Search history from the pipeline")]
+[CommandOutput("History records matching the query: index, command line, and timestamp.")]
 public sealed class HistorySearchCommand : ShellCommand
 {
     public HistorySearchCommand()

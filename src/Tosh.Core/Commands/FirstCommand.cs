@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Pipeline)]
 [CommandCategory("Pipeline")]
 [CommandArgument("count", "The number of objects to return. Defaults to 1.", Required = false, Kind = "expression")]
 [CommandExample("echo 1 2 3 | first", Title = "Get the first item")]

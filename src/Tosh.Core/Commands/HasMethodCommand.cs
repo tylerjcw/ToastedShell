@@ -2,9 +2,11 @@ using System.Reflection;
 
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Clr)]
 [CommandCategory("CLR")]
 [CommandExample("$obj | has-method ToString")]
 [CommandExample("has-method $obj ToString")]
+[CommandOutput("A bool — true when the target type/object exposes a method with the given name.")]
 public sealed class HasMethodCommand : ShellCommand
 {
     public HasMethodCommand()

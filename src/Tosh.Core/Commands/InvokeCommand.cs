@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Functional)]
 [CommandCategory("Functional")]
 [CommandArgument("callable", "A callable value such as an anonymous `func(...)` expression or other shell callable object.")]
 [CommandArgument("arg ...", "Optional positional arguments passed to the callable.", Required = false)]
@@ -18,7 +19,7 @@ public sealed class InvokeCommand : ShellCommand
         if (context.Arguments.Count == 0)
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::invoke_requires_callable",
+                code: "tosh.runtime.invoke_requires_callable",
                 title: "The 'invoke' command requires a callable value.",
                 label: "pass a lambda or callable object as the first argument");
         }
@@ -26,7 +27,7 @@ public sealed class InvokeCommand : ShellCommand
         if (context.Arguments[0] is not IShellCallable callable)
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::value_not_callable",
+                code: "tosh.runtime.value_not_callable",
                 title: "The provided value is not callable.",
                 argumentIndex: 0,
                 label: "this value cannot be invoked",

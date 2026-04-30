@@ -2,6 +2,7 @@ using System.Runtime.InteropServices;
 
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Clr)]
 [CommandCategory("CLR")]
 [CommandArgument("cstring|bytes|type-name", "Read mode: a null-terminated C string, a byte array, or a supported native scalar/struct-layout type.")]
 [CommandArgument("buffer|pointer", "NativeBuffer or pointer to read from. May be supplied from the pipeline.", Required = false)]
@@ -10,6 +11,7 @@ namespace Tosh.Core.Commands;
 [CommandExample("$buffer | native-read cstring", Title = "Read a C string from a native buffer")]
 [CommandExample("native-read bytes $buffer 16", Title = "Read a byte range")]
 [CommandExample("native-read int32 $buffer 0 4", Title = "Read an Int32 at an offset")]
+[CommandOutput("The decoded value(s) read from the native buffer, in the requested format.")]
 public sealed class NativeReadCommand : ShellCommand
 {
     public NativeReadCommand(string name = "native-read")
@@ -20,7 +22,7 @@ public sealed class NativeReadCommand : ShellCommand
         if (context.Arguments.Count == 0)
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::native_read_requires_mode",
+                code: "tosh.runtime.native_read_requires_mode",
                 title: "native-read needs a read mode or type name.",
                 label: "write 'cstring', 'bytes', or a native type name");
         }
@@ -30,7 +32,7 @@ public sealed class NativeReadCommand : ShellCommand
         if (string.IsNullOrWhiteSpace(mode))
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::native_read_requires_mode",
+                code: "tosh.runtime.native_read_requires_mode",
                 title: "native-read needs a read mode or type name.",
                 argumentIndex: 0,
                 label: "write 'cstring', 'bytes', or a native type name");
@@ -41,7 +43,7 @@ public sealed class NativeReadCommand : ShellCommand
         if (sources.Count == 0)
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::native_read_requires_source",
+                code: "tosh.runtime.native_read_requires_source",
                 title: "native-read needs a native buffer or pointer source.",
                 label: "pipe a source in or pass one as an argument");
         }
@@ -84,7 +86,7 @@ public sealed class NativeReadCommand : ShellCommand
         if (!NativeInteropUtilities.IsSupportedInteropType(type, allowString: false))
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::native_read_requires_native_type",
+                code: "tosh.runtime.native_read_requires_native_type",
                 title: $"native-read currently supports native scalar types, struct-layout types, 'cstring', or 'bytes', not '{mode}'.",
                 argumentIndex: 0,
                 label: "use a primitive, enum, pointer-sized, or struct-layout type here");
@@ -125,7 +127,7 @@ public sealed class NativeReadCommand : ShellCommand
             converted is not int value)
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::native_read_requires_length",
+                code: "tosh.runtime.native_read_requires_length",
                 title: "native-read bytes requires a byte length.",
                 argumentIndex: index,
                 label: "write a byte length here");
@@ -148,7 +150,7 @@ public sealed class NativeReadCommand : ShellCommand
         }
 
         throw context.CreateDiagnostic(
-            code: "tosh::runtime::native_read_offset_requires_int",
+            code: "tosh.runtime.native_read_offset_requires_int",
             title: "native-read offsets must be integers.",
             argumentIndex: index,
             label: "write an integer offset here");

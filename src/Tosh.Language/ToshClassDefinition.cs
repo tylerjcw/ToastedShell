@@ -363,7 +363,11 @@ public sealed class ToshClassDefinition : IShellNamedType
             // Emit deprecation warning for fading properties
             if (property.IsFading)
             {
-                _engine.WriteWarning($"Property '{property.Name}' on class '{Name}' is fading (deprecated).");
+                _engine.WriteWarning(
+                    code: "tosh.runtime.fading_member",
+                    title: $"Property '{property.Name}' on class '{Name}' is fading (deprecated).",
+                    help: "Use a non-fading replacement, or hush this code: hush tosh.runtime.fading_member",
+                    category: Tosh.Core.ToshDiagnosticCategory.Deprecation);
             }
 
             if (property.GetterBody is not null)
@@ -535,7 +539,11 @@ public sealed class ToshClassDefinition : IShellNamedType
         // Emit deprecation warning for fading methods
         if (method.IsFading)
         {
-            _engine.WriteWarning($"Method '{method.Name}' on class '{Name}' is fading (deprecated).");
+            _engine.WriteWarning(
+                code: "tosh.runtime.fading_member",
+                title: $"Method '{method.Name}' on class '{Name}' is fading (deprecated).",
+                help: "Use a non-fading replacement, or hush this code: hush tosh.runtime.fading_member",
+                category: Tosh.Core.ToshDiagnosticCategory.Deprecation);
         }
 
         var values = ExecuteMethodBlock(method, locals, instance);
@@ -788,9 +796,9 @@ public sealed class ToshClassDefinition : IShellNamedType
         catch (ToshDiagnosticException exception)
         {
             if (exception.Diagnostics.Any(diagnostic =>
-                string.Equals(diagnostic.Code, "tosh::runtime::annotation_unknown_type", StringComparison.Ordinal) ||
-                string.Equals(diagnostic.Code, "tosh::runtime::refinement_failed", StringComparison.Ordinal) ||
-                string.Equals(diagnostic.Code, "tosh::runtime::expression_failed", StringComparison.Ordinal)))
+                string.Equals(diagnostic.Code, "tosh.runtime.annotation_unknown_type", StringComparison.Ordinal) ||
+                string.Equals(diagnostic.Code, "tosh.runtime.refinement_failed", StringComparison.Ordinal) ||
+                string.Equals(diagnostic.Code, "tosh.runtime.expression_failed", StringComparison.Ordinal)))
             {
                 throw;
             }
@@ -801,7 +809,7 @@ public sealed class ToshClassDefinition : IShellNamedType
             }
 
             throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                Code: "tosh::runtime::constructor_parameter_type_conversion_failed",
+                Code: "tosh.runtime.constructor_parameter_type_conversion_failed",
                 Title: $"Constructor argument '{parameter.Name}' could not be converted to '{parameter.TypeName}'.",
                 SourceName: constructor.SourceName,
                 SourceText: constructor.SourceText,

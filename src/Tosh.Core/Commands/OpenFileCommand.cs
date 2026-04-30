@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Filesystem)]
 [CommandCategory("Filesystem")]
 [CommandArgument("path ...", "One or more file paths to open.", Required = false, TypeName = "path-like")]
 [CommandOption("--read, -r", "Open for reading. This is the default.")]

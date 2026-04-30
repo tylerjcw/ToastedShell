@@ -36,7 +36,7 @@ public sealed class DiagnosticRendererTests
             engine.EvaluateAsync("echo \"unterminated", "repl_entry #2"));
 
         var diagnostic = Assert.Single(exception.Diagnostics);
-        Assert.Equal("tosh::parser::unterminated_string", diagnostic.Code);
+        Assert.Equal("tosh.parser.unterminated_string", diagnostic.Code);
         Assert.Equal("repl_entry #2", diagnostic.SourceName);
     }
 
@@ -44,16 +44,101 @@ public sealed class DiagnosticRendererTests
     public void Diagnostic_renderer_can_apply_runtime_theme_colors()
     {
         var theme = new ToshDiagnosticThemeConfig();
-        theme.Heading.Foreground = "bright-yellow";
+        theme.ErrorGlyph.Foreground = "bright-yellow";
         theme.Title.Foreground = "bright-magenta";
         var renderer = new DiagnosticRenderer(theme);
 
         var text = renderer.Render(ToshDiagnosticException.Create(new ToshDiagnostic(
-            Code: "tosh::test",
+            Code: "tosh.test",
             Title: "Boom")));
 
-        Assert.Contains("\x1b[1;93mError: tosh::test\x1b[0m", text);
-        Assert.Contains("\x1b[95m  × Boom\x1b[0m", text);
+        // Header carries the severity word and the diagnostic code.
+        Assert.Contains("error", text, StringComparison.Ordinal);
+        Assert.Contains("tosh.test", text, StringComparison.Ordinal);
+
+        // The error glyph is styled bright-yellow + bold (default ErrorGlyph is bold).
+        Assert.Contains("\x1b[1;93m", text);
+
+        // The title is rendered with the theme's Title color.
+        Assert.Contains("\x1b[95mBoom\x1b[0m", text);
+    }
+
+    [Fact]
+    public void Diagnostic_renderer_emits_hush_hint_for_warnings_with_codes()
+    {
+        var renderer = new DiagnosticRenderer();
+        var text = renderer.Render(new ToshDiagnostic(
+            Code: "tosh.naming.shadowed_underscore",
+            Title: "shadows builtin",
+            Severity: ToshDiagnosticSeverity.Warning));
+
+        Assert.Contains("hush:", text, StringComparison.Ordinal);
+        Assert.Contains("tosh.naming.shadowed_underscore", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Diagnostic_renderer_does_not_emit_hush_hint_for_errors()
+    {
+        var renderer = new DiagnosticRenderer();
+        var text = renderer.Render(new ToshDiagnostic(
+            Code: "tosh.runtime.error",
+            Title: "Boom",
+            Severity: ToshDiagnosticSeverity.Error));
+
+        Assert.DoesNotContain("hush:", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Diagnostic_renderer_plain_mode_uses_gcc_shape()
+    {
+        var renderer = new DiagnosticRenderer(theme: null, config: null, forcePlain: true);
+
+        var text = renderer.Render(new ToshDiagnostic(
+            Code: "tosh.test.boom",
+            Title: "kaboom",
+            Help: "try again"));
+
+        // GCC-shaped: severity[code]: title
+        Assert.Contains("error[tosh.test.boom]: kaboom", text, StringComparison.Ordinal);
+        Assert.Contains("help: try again", text, StringComparison.Ordinal);
+
+        // No ANSI escapes.
+        Assert.DoesNotContain("\x1b[", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Diagnostic_renderer_json_mode_emits_ndjson()
+    {
+        var renderer = new DiagnosticRenderer(theme: null, config: null, forceJson: true);
+
+        var text = renderer.Render(new ToshDiagnostic(
+            Code: "tosh.test.boom",
+            Title: "kaboom",
+            Severity: ToshDiagnosticSeverity.Warning));
+
+        Assert.StartsWith("{", text, StringComparison.Ordinal);
+        Assert.EndsWith("}", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("\n", text, StringComparison.Ordinal);
+        Assert.Contains("\"severity\":\"warn\"", text, StringComparison.Ordinal);
+        Assert.Contains("\"code\":\"tosh.test.boom\"", text, StringComparison.Ordinal);
+        Assert.Contains("\"title\":\"kaboom\"", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Diagnostic_renderer_emits_osc8_hyperlink_when_help_uri_base_set()
+    {
+        var diagnosticsConfig = new ToshDiagnosticsConfig
+        {
+            HelpUriBase = "https://tosh.dev/d",
+        };
+        var renderer = new DiagnosticRenderer(theme: new ToshDiagnosticThemeConfig(), config: diagnosticsConfig);
+
+        var text = renderer.Render(new ToshDiagnostic(
+            Code: "tosh.test.boom",
+            Title: "kaboom"));
+
+        Assert.Contains("\x1b]8;;https://tosh.dev/d/tosh.test.boom\x1b\\", text, StringComparison.Ordinal);
+        Assert.Contains("\x1b]8;;\x1b\\", text, StringComparison.Ordinal);
     }
 
     private sealed class TemporaryDirectory : IDisposable

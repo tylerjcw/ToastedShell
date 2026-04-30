@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Text)]
 [CommandCategory("Text")]
 [CommandArgument("set1", "Characters to translate from (or delete with -d).")]
 [CommandArgument("set2", "Characters to translate to. Required unless -d is used.", Required = false)]

@@ -1,8 +1,10 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Clr)]
 [CommandCategory("CLR")]
 [CommandExample("echo hello | call-method ToUpper")]
 [CommandExample("call-method $obj MethodName arg1")]
+[CommandOutput("Streams whatever the invoked method returns (single value, an enumeration of values, or nothing for void methods).")]
 public sealed class CallMethodCommand : ShellCommand
 {
     public CallMethodCommand()

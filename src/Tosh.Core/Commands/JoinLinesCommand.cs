@@ -1,9 +1,11 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Text)]
 [CommandCategory("Text")]
 [CommandArgument("separator", "Separator inserted between values. Defaults to the platform newline.", Required = false)]
 [CommandExample("echo alpha beta gamma | join-lines \", \"", Title = "Join values with a comma")]
 [CommandExample("read-lines names.txt | join-lines", Title = "Join lines with newlines")]
+[CommandOutput("A single string formed by concatenating input lines with the configured separator.")]
 public sealed class JoinLinesCommand : ShellCommand
 {
     public JoinLinesCommand()

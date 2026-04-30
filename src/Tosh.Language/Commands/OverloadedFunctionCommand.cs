@@ -152,14 +152,14 @@ internal sealed class OverloadedFunctionCommand : IShellCommand, ICommandResolut
                 matches.Select(match => $"- {FunctionCommand.FormatUsage(match.Candidate)}"));
 
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::function_overload_ambiguous",
+                code: "tosh.runtime.function_overload_ambiguous",
                 title: $"Multiple overloads matched function '{Name}' with {arguments.Count} argument(s).",
                 label: $"'{Name}' has ambiguous overloads for these arguments",
                 help: $"Matching overloads:{Environment.NewLine}{matchingUsages}");
         }
 
         throw context.CreateDiagnostic(
-            code: "tosh::runtime::function_overload_not_found",
+            code: "tosh.runtime.function_overload_not_found",
             title: $"No overload matched function '{Name}' with {arguments.Count} argument(s).",
             label: $"'{Name}' does not have a matching overload");
     }

@@ -1,4 +1,95 @@
 namespace Tosh.Core;
+
+/// <summary>
+/// Coarse, compile-time-relevant classification of a command for the future
+/// "compiled ToastScript" partition described in <c>docs/COMPILED_TOSH.md</c>.
+///
+/// The buckets here parallel the future <c>Tosh.Stdlib.*</c> assembly split:
+/// each value names the standard-library category a command would live in
+/// once <c>Tosh.Core</c> is broken apart. Today the values are pure metadata —
+/// they drive <see cref="StdlibAttribute"/> tagging and have no runtime effect.
+///
+/// This enum is orthogonal to the free-form <see cref="CommandCategoryAttribute"/>
+/// label used for help-system grouping. <c>CommandCategory</c> is end-user-facing
+/// ("Filesystem", "Pipeline", …) and may evolve; <see cref="StdlibCategory"/>
+/// names the future assembly boundary and is intended to be more stable.
+/// </summary>
+public enum StdlibCategory
+{
+    /// <summary>Filesystem operations: <c>ls</c>, <c>cd</c>, <c>cp</c>, <c>find</c>, …</summary>
+    Filesystem,
+    /// <summary>File and stream I/O: <c>read-file</c>, <c>write-file</c>, <c>open-file</c>, …</summary>
+    IO,
+    /// <summary>Process management: <c>ps</c>, <c>kill</c>, <c>spawn</c>, <c>jobs</c>, …</summary>
+    Process,
+    /// <summary>System inspection: <c>uname</c>, <c>df</c>, <c>systemctl</c>, …</summary>
+    System,
+    /// <summary>Text manipulation: <c>grep</c>, <c>cut</c>, <c>tr</c>, <c>parse</c>, …</summary>
+    Text,
+    /// <summary>Data / collection helpers: <c>collect</c>, <c>distinct</c>, <c>group-by</c>, <c>summarize</c>, …</summary>
+    Data,
+    /// <summary>Pipeline-stage combinators: <c>where</c>, <c>first</c>, <c>partition</c>, <c>flat-map</c>, …</summary>
+    Pipeline,
+    /// <summary>Functional / iterator generators: <c>map</c>, <c>reduce</c>, <c>scan</c>, <c>repeat</c>, <c>compose</c>, …</summary>
+    Functional,
+    /// <summary>Concurrency primitives: <c>async</c>, <c>parallel</c>, <c>channel</c>, …</summary>
+    Concurrency,
+    /// <summary>Network operations: <c>http</c>, <c>ping</c>, <c>ip</c>, …</summary>
+    Net,
+    /// <summary>Time and date: <c>date</c>, <c>time</c>, <c>sleep</c>, <c>timespan</c>.</summary>
+    Time,
+    /// <summary>Cryptography: <c>hash</c>, <c>guid</c>.</summary>
+    Crypto,
+    /// <summary>Output presentation: <c>styled</c>, <c>view</c> (output-tuning subset).</summary>
+    Display,
+    /// <summary>Math helpers: <c>abs</c>, <c>round</c>, <c>min</c>, <c>max</c>, …</summary>
+    Math,
+    /// <summary>CLR interop: <c>new-object</c>, <c>call</c>, <c>cast</c>, <c>members</c>, …</summary>
+    Clr,
+    /// <summary>Scripting / runtime meta: <c>source</c>, <c>eval</c>, <c>assert</c>, <c>echo</c>, …</summary>
+    Scripting,
+    /// <summary>Shell-host facilities (REPL state, history, prompt). See <see cref="ShellOnlyAttribute"/>.</summary>
+    Shell,
+}
+
+/// <summary>
+/// Marks a command's standard-library bucket — i.e. the future <c>Tosh.Stdlib.*</c>
+/// assembly it would live in once the language and shell are split apart
+/// (<c>docs/COMPILED_TOSH.md</c>).
+///
+/// This attribute is additive and orthogonal to <see cref="CommandCategoryAttribute"/>:
+/// <c>CommandCategory</c> remains the user-facing help-grouping label;
+/// <c>Stdlib</c> is the compile-time, binding-relevant classification.
+/// </summary>
+[AttributeUsage(AttributeTargets.Class, AllowMultiple = false)]
+public sealed class StdlibAttribute(StdlibCategory category) : Attribute
+{
+    public StdlibCategory Category { get; } = category;
+}
+
+/// <summary>
+/// Marks a command as depending on interactive-shell state (REPL history,
+/// directory stack, prompt rendering, TUI, etc.) and therefore unsuitable
+/// for use outside an interactive session.
+///
+/// At runtime, executing a <see cref="ShellOnlyAttribute"/>-marked command
+/// from a non-interactive script (<c>tosh script.tosh</c> or <c>tosh -c …</c>)
+/// emits a warning with code <c>tosh.shell_only</c>. The warning is hushable
+/// via <c># hush tosh.shell_only</c>, scope-level hush, or
+/// <c>$tosh.Config.Diagnostics.Hushed</c>.
+///
+/// In a future compiled-ToastScript build, calling a <c>[ShellOnly]</c>
+/// command will be a compile-time error (see <c>docs/COMPILED_TOSH.md</c>).
+/// </summary>
+[AttributeUsage(AttributeTargets.Class, AllowMultiple = false)]
+public sealed class ShellOnlyAttribute(string? reason = null) : Attribute
+{
+    /// <summary>Optional human-readable explanation surfaced in the warning.</summary>
+    public string? Reason { get; } = reason;
+}
+
+
+
 /// <summary>
 /// Adds a long description or extended help text to the command.
 /// </summary>

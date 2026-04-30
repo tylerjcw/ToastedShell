@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Pipeline)]
 [CommandCategory("Pipeline")]
 [CommandExample("echo 1 2 3 | collect", Title = "Collect scalar pipeline items into one array")]
 [CommandExample("ls *.cs | collect", Title = "Capture a multi-item file listing as one value")]

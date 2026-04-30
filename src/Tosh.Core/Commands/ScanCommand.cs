@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Pipeline)]
 [CommandCategory("Pipeline")]
 [CommandArgument("seed", "The initial accumulator value.")]
 [CommandArgument("callable|block", "A function that takes (accumulator, current-item) and returns the new accumulator.")]
@@ -17,7 +18,7 @@ public sealed class ScanCommand : ShellCommand
         if (context.Arguments.Count != 2)
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::scan_requires_seed_and_callable",
+                code: "tosh.runtime.scan_requires_seed_and_callable",
                 title: "'scan' requires a seed value and a callable value or block.",
                 label: "use 'scan <seed> func(acc, x) => ...' or 'scan <seed> { ... }'");
         }

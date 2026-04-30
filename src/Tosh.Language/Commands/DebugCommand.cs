@@ -3,11 +3,13 @@ using Tosh.Language.Debugging;
 
 namespace Tosh.Language.Commands;
 
+[Stdlib(StdlibCategory.Shell)]
 [CommandCategory("Shell")]
 [CommandArgument("path", "Path to the Tosh script to debug.", Required = true, TypeName = "string")]
 [CommandExample("debug ./script.tosh", Title = "Debug a script with step-through execution.")]
 [CommandExample("debug ./script.tosh arg1 arg2", Title = "Debug a script passing arguments.")]
 [CommandNote("Use 'n' or 'next' to step, 'c' or 'continue' to resume, 'q' or 'quit' to abort, 'vars' to inspect variables.")]
+[CommandOutput("Streams whatever the wrapped pipeline produces; emits diagnostic events as a side effect.")]
 public sealed class DebugCommand : ShellCommand
 {
     private readonly ToshEngine _engine;

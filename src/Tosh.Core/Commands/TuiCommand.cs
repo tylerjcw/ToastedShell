@@ -4,6 +4,8 @@ using Tosh.Tui.Widgets;
 
 namespace Tosh.Core.Commands;
 
+[ShellOnly]
+[Stdlib(StdlibCategory.Shell)]
 [CommandCategory("Shell")]
 [CommandArgument("pick [items...]", "Pick one or more values from arguments or pipeline input.", Required = false)]
 [CommandArgument("confirm <message>", "Ask for a yes/no confirmation.", Required = false)]
@@ -32,6 +34,7 @@ namespace Tosh.Core.Commands;
 [CommandExample("tui confirm \"Deploy now?\" --cli", Title = "Inline confirmation")]
 [CommandExample("ls | tui pick --display Name --result", Title = "Pick from pipeline values")]
 [CommandExample("tui input \"Project name:\" --default demo --cli", Title = "Inline text input")]
+[CommandOutput("Emits nothing; drives the interactive TUI session as a side effect.")]
 public sealed class TuiCommand : ShellCommand
 {
     public TuiCommand()
@@ -45,7 +48,7 @@ public sealed class TuiCommand : ShellCommand
         if (context.Arguments.Count == 0)
         {
             throw context.CreateDiagnostic(
-                code: "tosh::tui::missing_subcommand",
+                code: "tosh.tui.missing_subcommand",
                 title: "The 'tui' command requires a subcommand.",
                 help: "Available subcommands: pick, confirm, input, file, filter, screen, add-list, add-text, add-input, add-picker, layout, run");
         }
@@ -77,7 +80,7 @@ public sealed class TuiCommand : ShellCommand
             "layout" => ExecuteLayoutAsync(context),
             "run" => ExecuteRunAsync(context),
             _ => throw context.CreateDiagnostic(
-                code: "tosh::tui::unknown_subcommand",
+                code: "tosh.tui.unknown_subcommand",
                 title: $"Unknown tui subcommand '{subcommand}'.",
                 argumentIndex: 0,
                 help: "Available subcommands: pick, confirm, input, file, filter, screen, add-list, add-text, add-input, add-picker, layout, run"),
@@ -103,7 +106,7 @@ public sealed class TuiCommand : ShellCommand
         if (items.Count == 0)
         {
             throw context.CreateDiagnostic(
-                code: "tosh::tui::pick::no_items",
+                code: "tosh.tui.pick.no_items",
                 title: "No items provided for 'tui pick'.",
                 help: "Pipe items into 'tui pick' or provide them as arguments: tui pick item1 item2 item3");
         }
@@ -257,7 +260,7 @@ public sealed class TuiCommand : ShellCommand
         if (items.Count == 0)
         {
             throw context.CreateDiagnostic(
-                code: "tosh::tui::filter::no_items",
+                code: "tosh.tui.filter.no_items",
                 title: "No items provided for 'tui filter'.",
                 help: "Pipe items into 'tui filter' or provide them as arguments.");
         }
@@ -412,7 +415,7 @@ public sealed class TuiCommand : ShellCommand
         if (remaining.Count == 0)
         {
             throw context.CreateDiagnostic(
-                code: "tosh::tui::layout::missing_orientation",
+                code: "tosh.tui.layout.missing_orientation",
                 title: "The 'tui layout' subcommand requires an orientation.",
                 help: "Available orientations: single, split-horizontal, split-vertical, stacked");
         }
@@ -466,7 +469,7 @@ public sealed class TuiCommand : ShellCommand
         if (screen is null)
         {
             throw context.CreateDiagnostic(
-                code: "tosh::tui::run::no_screen",
+                code: "tosh.tui.run.no_screen",
                 title: "No TuiScreen provided to 'tui run'.",
                 help: "Pipe a TuiScreen into 'tui run' or provide one as an argument.");
         }
@@ -586,7 +589,7 @@ public sealed class TuiCommand : ShellCommand
         if (screen is null)
         {
             throw context.CreateDiagnostic(
-                code: "tosh::tui::no_screen",
+                code: "tosh.tui.no_screen",
                 title: "Expected a TuiScreen from pipeline input.",
                 help: "Create a screen first: tui screen | tui add-list ...");
         }
@@ -627,7 +630,7 @@ public sealed class TuiCommand : ShellCommand
     {
         return context.Runtime.InlinePrompts
             ?? throw context.CreateDiagnostic(
-                code: "tosh::tui::no_inline_provider",
+                code: "tosh.tui.no_inline_provider",
                 title: "Inline prompts (--cli) are not available in this environment.",
                 help: "The --cli flag requires an interactive terminal. Remove --cli to use fullscreen mode.");
     }

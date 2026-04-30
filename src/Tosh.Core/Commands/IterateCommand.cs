@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Functional)]
 [CommandCategory("Functional")]
 [CommandArgument("seed", "The initial value of the sequence.")]
 [CommandArgument("callable|block", "A function applied to the previous value to produce the next.")]
@@ -17,7 +18,7 @@ public sealed class IterateCommand : ShellCommand
         if (context.Arguments.Count != 2)
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::iterate_requires_seed_and_callable",
+                code: "tosh.runtime.iterate_requires_seed_and_callable",
                 title: "'iterate' requires a seed value and a callable value or block.",
                 label: "use 'iterate <seed> func(x) => (next-value)'");
         }

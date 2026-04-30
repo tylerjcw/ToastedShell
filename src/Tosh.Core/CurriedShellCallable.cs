@@ -37,7 +37,7 @@ public sealed class CurriedShellCallable : IShellCallable, IShellRecordObject
         if (combinedArguments.Length > _targetArity)
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::curry_argument_count_mismatch",
+                code: "tosh.runtime.curry_argument_count_mismatch",
                 title: $"Curried callable '{_inner.CallableName}' accepts {_targetArity} total argument(s) but received {combinedArguments.Length}.",
                 label: "too many arguments were supplied to the curried callable");
         }

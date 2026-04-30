@@ -8,4 +8,5 @@ public enum HelpSubjectKind
     External,
     Language,
     Type,
+    DiagnosticCode,
 }

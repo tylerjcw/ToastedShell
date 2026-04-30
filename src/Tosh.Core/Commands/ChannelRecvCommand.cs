@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Concurrency)]
 [CommandCategory("Concurrency")]
 [CommandArgument("channel", "The channel to receive from. Omit to read from pipeline input.")]
 [CommandExample("channel-recv $ch | each { |v| echo $v }", Title = "Stream all values from a channel")]
@@ -19,7 +20,7 @@ public sealed class ChannelRecvCommand : ShellCommand
             if (context.Arguments[0] is not ShellChannel channelArg)
             {
                 throw context.CreateDiagnostic(
-                    code: "tosh::runtime::channel_recv_requires_channel",
+                    code: "tosh.runtime.channel_recv_requires_channel",
                     title: "'channel-recv' first argument must be a ShellChannel.",
                     argumentIndex: 0,
                     label: "this value is not a ShellChannel");
@@ -43,7 +44,7 @@ public sealed class ChannelRecvCommand : ShellCommand
         if (ch is null)
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::channel_recv_requires_channel",
+                code: "tosh.runtime.channel_recv_requires_channel",
                 title: "'channel-recv' requires a ShellChannel argument or piped input.",
                 label: "pass a ShellChannel value");
         }

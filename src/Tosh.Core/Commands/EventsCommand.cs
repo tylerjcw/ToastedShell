@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Shell)]
 [CommandCategory("Shell")]
 [CommandArgument("action", "The action to perform: list, names, handlers, remove, or clear.", Required = false)]
 [CommandArgument("event-name", "The event name (for handlers, remove, clear).", Required = false)]

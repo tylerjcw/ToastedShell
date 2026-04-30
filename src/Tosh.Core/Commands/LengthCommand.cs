@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Filesystem)]
 [CommandCategory("Filesystem")]
 [CommandArgument("handle ...", "One or more managed file handles whose current stream length should be reported.", Required = false)]
 [CommandExample("length $handle")]

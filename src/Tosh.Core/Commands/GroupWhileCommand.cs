@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Pipeline)]
 [CommandCategory("Pipeline")]
 [CommandArgument("callable|block", "A predicate that receives each item. A new group starts when it returns false.")]
 [CommandExample("echo 1 1 2 2 3 | group-while { _ == $prev }", Title = "Group equal consecutive values")]
@@ -16,7 +17,7 @@ public sealed class GroupWhileCommand : ShellCommand
         if (context.Arguments.Count != 1)
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::group_while_requires_callable_or_block",
+                code: "tosh.runtime.group_while_requires_callable_or_block",
                 title: "'group-while' requires exactly one callable value or block.",
                 label: "pass a predicate block like '{ _ != \"\" }'");
         }

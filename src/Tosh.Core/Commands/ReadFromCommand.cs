@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Filesystem)]
 [CommandCategory("Filesystem")]
 [CommandArgument("handle", "The managed file handle to read from.", Required = false)]
 [CommandArgument("count", "Optional chunk size. Defaults to {StreamCommandUtilities.DefaultReadChunkSize}.", Required = false, TypeName = "int")]

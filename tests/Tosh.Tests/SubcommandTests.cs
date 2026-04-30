@@ -51,7 +51,7 @@ public sealed class SubcommandTests
     public void Parser_rejects_eager_plus_hollow()
     {
         var result = ToshParser.Parse("eager hollow subcommand x { }");
-        Assert.Contains(result.Diagnostics, d => d.Code == "tosh::parser::incompatible_subcommand_modifiers");
+        Assert.Contains(result.Diagnostics, d => d.Code == "tosh.parser.incompatible_subcommand_modifiers");
     }
 
     [Fact]
@@ -64,7 +64,7 @@ public sealed class SubcommandTests
                 subcommand ok { }
             }
             """);
-        Assert.Contains(result.Diagnostics, d => d.Code == "tosh::parser::hollow_subcommand_must_be_empty");
+        Assert.Contains(result.Diagnostics, d => d.Code == "tosh.parser.hollow_subcommand_must_be_empty");
     }
 
     [Fact]
@@ -235,7 +235,7 @@ public sealed class SubcommandTests
                 }
                 """));
 
-        Assert.Equal("tosh::runtime::unknown_script_flag", ex.Diagnostics[0].Code);
+        Assert.Equal("tosh.runtime.unknown_script_flag", ex.Diagnostics[0].Code);
         Assert.Null(ex.Diagnostics[0].Span);
         Assert.Contains("choose a subcommand first", ex.Diagnostics[0].Help, StringComparison.OrdinalIgnoreCase);
     }
@@ -255,7 +255,7 @@ public sealed class SubcommandTests
                 }
                 """));
 
-        Assert.Equal("tosh::runtime::subcommand_required", ex.Diagnostics[0].Code);
+        Assert.Equal("tosh.runtime.subcommand_required", ex.Diagnostics[0].Code);
         Assert.Null(ex.Diagnostics[0].Span);
         Assert.Contains("usage:", ex.Diagnostics[0].Help, StringComparison.OrdinalIgnoreCase);
     }
@@ -312,7 +312,7 @@ public sealed class SubcommandTests
                 subcommand foo { writeline "b" }
                 """));
 
-        Assert.Equal("tosh::runtime::duplicate_subcommand", ex.Diagnostics[0].Code);
+        Assert.Equal("tosh.runtime.duplicate_subcommand", ex.Diagnostics[0].Code);
     }
 
     [Fact]
@@ -372,7 +372,7 @@ public sealed class SubcommandTests
     public void Parser_rejects_params_without_arrow_body()
     {
         var result = ToshParser.Parse("subcmd greet(name: string) { writeline $name }");
-        Assert.Contains(result.Diagnostics, d => d.Code == "tosh::parser::subcommand_params_require_arrow");
+        Assert.Contains(result.Diagnostics, d => d.Code == "tosh.parser.subcommand_params_require_arrow");
     }
 
     [Fact]

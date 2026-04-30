@@ -4,6 +4,7 @@ using System.Security.Principal;
 
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Filesystem)]
 [CommandCategory("Filesystem")]
 [CommandArgument("owner[:group]", "Owner and optional group specification.")]
 [CommandArgument("path", "One or more files or directories.", TypeName = "path-like")]

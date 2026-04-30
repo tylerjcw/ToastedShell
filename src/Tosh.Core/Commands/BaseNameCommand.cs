@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Filesystem)]
 [CommandCategory("Filesystem")]
 [CommandArgument("path", "One or more paths to extract the filename from.", TypeName = "path-like")]
 [CommandArgument("suffix", "Optional suffix to strip from the filename.", Required = false)]

@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Concurrency)]
 [CommandCategory("Concurrency")]
 [CommandArgument("operation", "A callable or block to run in the background.")]
 [CommandArgument("args", "Optional callable arguments.", Required = false)]

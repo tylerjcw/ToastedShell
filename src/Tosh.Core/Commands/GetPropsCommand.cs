@@ -2,9 +2,11 @@ using System.Reflection;
 
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Clr)]
 [CommandCategory("CLR")]
 [CommandExample("$obj | get-props")]
 [CommandExample("get-props $obj")]
+[CommandOutput("Records describing each property/field: name, declared type, accessibility, and current value when available.")]
 public sealed class GetPropsCommand : ShellCommand
 {
     public GetPropsCommand()

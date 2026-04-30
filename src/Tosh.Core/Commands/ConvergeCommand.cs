@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Functional)]
 [CommandCategory("Functional")]
 [CommandArgument("seed", "The initial value to start iterating from.")]
 [CommandArgument("callable|block", "A function applied repeatedly until two consecutive results are equal.")]
@@ -15,7 +16,7 @@ public sealed class ConvergeCommand : ShellCommand
         if (context.Arguments.Count != 2)
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::converge_requires_seed_and_callable",
+                code: "tosh.runtime.converge_requires_seed_and_callable",
                 title: "'converge' requires a seed value and a callable value or block.",
                 label: "use 'converge <seed> func(x) => (next-value)'");
         }

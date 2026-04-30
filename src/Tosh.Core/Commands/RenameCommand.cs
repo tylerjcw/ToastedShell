@@ -1,9 +1,11 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Pipeline)]
 [CommandCategory("Pipeline")]
 [CommandArgument("old new ...", "One or more old/new field-name pairs to apply to each record-like input value.")]
 [CommandExample("ls | get { Name, Length } | rename Length Size", Title = "Rename one field")]
 [CommandExample("ps | get { Id, Name } | rename Id Pid Name Command", Title = "Rename several fields")]
+[CommandOutput("Records describing each rename operation, or nothing when used purely for its side effect.")]
 public sealed class RenameCommand : ShellCommand
 {
     public RenameCommand()

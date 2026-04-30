@@ -2,6 +2,7 @@ using System.Diagnostics;
 
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.System)]
 [CommandCategory("System")]
 [CommandArgument("[query ...]", "Structured journal queries accept common `journalctl` filters such as match expressions, unit filters, priorities, boot selectors, and time windows.", Required = false)]
 [CommandOption("-n <count>|--lines <count>", "Limit the structured result set to the most recent entries.")]
@@ -31,7 +32,7 @@ public sealed class JournalctlCommand : ShellCommand
         if (OperatingSystem.IsWindows())
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::command_windows_unavailable",
+                code: "tosh.runtime.command_windows_unavailable",
                 title: $"'{Name}' is not available on Windows.",
                 help: "This command requires the systemd journal, which is a Linux-only service.");
         }
@@ -65,7 +66,7 @@ public sealed class JournalctlCommand : ShellCommand
         {
             ExternalCommandLookupStatus.Found when lookup.ResolvedPath is not null => lookup.ResolvedPath,
             _ => throw context.CreateDiagnostic(
-                code: "tosh::runtime::journalctl_command_missing",
+                code: "tosh.runtime.journalctl_command_missing",
                 title: "The system 'journalctl' command was not found.",
                 help: "Install systemd or invoke the external utility by full path once it is available."),
         };
@@ -183,7 +184,7 @@ public sealed class JournalctlCommand : ShellCommand
         if (!process.Start())
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::journalctl_command_start_failed",
+                code: "tosh.runtime.journalctl_command_start_failed",
                 title: "Failed to start the system 'journalctl' command.");
         }
 
@@ -214,7 +215,7 @@ public sealed class JournalctlCommand : ShellCommand
                 catch (Exception exception) when (exception is InvalidOperationException or System.Text.Json.JsonException)
                 {
                     throw context.CreateDiagnostic(
-                        code: "tosh::runtime::journalctl_json_parse_failed",
+                        code: "tosh.runtime.journalctl_json_parse_failed",
                         title: $"Could not parse structured journal output. {exception.Message}",
                         help: "Try running the external `journalctl` command directly if you are using an unsupported output mode.");
                 }
@@ -234,7 +235,7 @@ public sealed class JournalctlCommand : ShellCommand
         if (process.ExitCode != 0)
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::journalctl_command_failed",
+                code: "tosh.runtime.journalctl_command_failed",
                 title: "The system 'journalctl' command failed.");
         }
     }

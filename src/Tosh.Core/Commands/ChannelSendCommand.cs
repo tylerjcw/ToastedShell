@@ -1,11 +1,13 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Concurrency)]
 [CommandCategory("Concurrency")]
 [CommandArgument("channel", "The channel to send to.")]
 [CommandArgument("values", "One or more values to send. Omit to send pipeline input instead.", Required = false)]
 [CommandExample("channel-send $ch hello", Title = "Send a single value to a channel")]
 [CommandExample("echo hello world | channel-send $ch", Title = "Forward pipeline items to a channel")]
 [CommandNote("Blocks (asynchronously) when the channel is bounded and its buffer is full.")]
+[CommandOutput("Emits nothing; sends each value to the channel as a side effect.")]
 public sealed class ChannelSendCommand : ShellCommand
 {
     public ChannelSendCommand()
@@ -16,7 +18,7 @@ public sealed class ChannelSendCommand : ShellCommand
         if (context.Arguments.Count < 1)
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::channel_send_requires_channel",
+                code: "tosh.runtime.channel_send_requires_channel",
                 title: "'channel-send' requires a channel argument.",
                 label: "pass a ShellChannel value");
         }
@@ -24,7 +26,7 @@ public sealed class ChannelSendCommand : ShellCommand
         if (context.Arguments[0] is not ShellChannel ch)
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::channel_send_requires_channel",
+                code: "tosh.runtime.channel_send_requires_channel",
                 title: "'channel-send' first argument must be a ShellChannel.",
                 argumentIndex: 0,
                 label: "this value is not a ShellChannel");

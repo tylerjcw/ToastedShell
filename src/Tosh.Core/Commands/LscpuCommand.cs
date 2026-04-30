@@ -2,6 +2,7 @@ using System.Diagnostics;
 
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.System)]
 [CommandCategory("System")]
 [CommandArgument("[-e|-C]", "Without a mode flag, `lscpu` returns a structured CPU summary. `-e` switches to per-CPU topology rows and `-C` switches to CPU cache rows.", Required = false)]
 [CommandOption("-B", "Render cache sizes in raw bytes for summary and cache views.")]
@@ -95,7 +96,7 @@ public sealed class LscpuCommand : ShellCommand
                 : result.StandardError.Trim();
 
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::lscpu_command_failed",
+                code: "tosh.runtime.lscpu_command_failed",
                 title: message);
         }
 
@@ -117,7 +118,7 @@ public sealed class LscpuCommand : ShellCommand
                     catch (Exception exception) when (exception is InvalidOperationException or System.Text.Json.JsonException)
                     {
                         throw context.CreateDiagnostic(
-                            code: "tosh::runtime::lscpu_json_parse_failed",
+                            code: "tosh.runtime.lscpu_json_parse_failed",
                             title: $"Could not parse structured 'lscpu' summary output. {exception.Message}",
                             help: "Try running the external `lscpu` command directly if you are using an output mode that does not support JSON.");
                     }
@@ -136,7 +137,7 @@ public sealed class LscpuCommand : ShellCommand
                     catch (Exception exception) when (exception is InvalidOperationException or System.Text.Json.JsonException)
                     {
                         throw context.CreateDiagnostic(
-                            code: "tosh::runtime::lscpu_json_parse_failed",
+                            code: "tosh.runtime.lscpu_json_parse_failed",
                             title: $"Could not parse structured 'lscpu --extended' output. {exception.Message}",
                             help: "Try running the external `lscpu` command directly if you are using an output mode that does not support JSON.");
                     }
@@ -160,7 +161,7 @@ public sealed class LscpuCommand : ShellCommand
                     catch (Exception exception) when (exception is InvalidOperationException or System.Text.Json.JsonException)
                     {
                         throw context.CreateDiagnostic(
-                            code: "tosh::runtime::lscpu_json_parse_failed",
+                            code: "tosh.runtime.lscpu_json_parse_failed",
                             title: $"Could not parse structured 'lscpu --caches' output. {exception.Message}",
                             help: "Try running the external `lscpu` command directly if you are using an output mode that does not support JSON.");
                     }
@@ -186,7 +187,7 @@ public sealed class LscpuCommand : ShellCommand
         {
             ExternalCommandLookupStatus.Found when lookup.ResolvedPath is not null => lookup.ResolvedPath,
             _ => throw context.CreateDiagnostic(
-                code: "tosh::runtime::lscpu_command_missing",
+                code: "tosh.runtime.lscpu_command_missing",
                 title: "The system 'lscpu' command was not found.",
                 help: "Install util-linux or invoke the external utility by full path once it is available."),
         };
@@ -438,7 +439,7 @@ public sealed class LscpuCommand : ShellCommand
         if (!process.Start())
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::lscpu_command_start_failed",
+                code: "tosh.runtime.lscpu_command_start_failed",
                 title: "Failed to start the system 'lscpu' command.");
         }
 

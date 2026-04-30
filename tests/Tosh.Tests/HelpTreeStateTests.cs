@@ -30,7 +30,7 @@ public sealed class HelpTreeStateTests
         Assert.NotEmpty(state.VisibleNodes);
         Assert.All(
             state.VisibleNodes.Where(node => node.Kind == HelpTreeNodeKind.Topic),
-            node => Assert.Contains("regex", $"{node.Topic!.Name} {node.Topic.Description} {node.Topic.Usage} {string.Join(' ', node.Topic.Aliases)}", StringComparison.OrdinalIgnoreCase));
+            node => Assert.Contains("regex", $"{node.Topic!.Name} {node.Topic.Description} {node.Topic.Usage} {node.Topic.Notes} {string.Join(' ', node.Topic.Aliases)}", StringComparison.OrdinalIgnoreCase));
         Assert.Equal(HelpTreeNodeKind.Topic, state.SelectedNode?.Kind);
     }
 

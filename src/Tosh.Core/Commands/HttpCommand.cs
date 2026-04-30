@@ -5,6 +5,7 @@ using Tosh.Core.Formats;
 
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Net)]
 [CommandCategory("Network")]
 [CommandArgument("<get|post|put|patch|delete|head|options> <url>", "Send an HTTP request immediately.", Required = false)]
 [CommandArgument("request <method> <url>", "Build an immutable HTTP request definition without sending it yet.", Required = false)]
@@ -302,7 +303,7 @@ public sealed class HttpCommand : ShellCommand
             context.Runtime.SetLastExitCode(1);
             context.PipelineExitStatusTracker?.Record(1);
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::http_request_failed",
+                code: "tosh.runtime.http_request_failed",
                 title: $"The HTTP request failed. {exception.Message}");
         }
 
@@ -330,7 +331,7 @@ public sealed class HttpCommand : ShellCommand
             if (options.Fail && !response.IsSuccessStatusCode)
             {
                 throw context.CreateDiagnostic(
-                    code: "tosh::runtime::http_status_failed",
+                    code: "tosh.runtime.http_status_failed",
                     title: $"HTTP request returned {(int)response.StatusCode} {response.ReasonPhrase ?? string.Empty}".Trim(),
                     help: "Remove --fail to receive the response object/body even for non-success status codes.");
             }

@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Display)]
 [CommandCategory("Prompt")]
 [CommandArgument("text", "Text to wrap in a StyledText value.")]
 [CommandOption("--fg <color>", "Foreground color name or ANSI-style color token.")]
@@ -10,6 +11,7 @@ namespace Tosh.Core.Commands;
 [CommandOption("--dim", "Render the segment dimmed.")]
 [CommandExample("styled \"hello\" --fg cyan --bold")]
 [CommandExample("styled \"warning\" --fg yellow --bg red")]
+[CommandOutput("Styled-text values that carry inline color/format markup for downstream prompts and renderers.")]
 public sealed class StyledCommand : ShellCommand
 {
     public StyledCommand()

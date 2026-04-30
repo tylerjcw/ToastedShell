@@ -3,6 +3,7 @@ using System.Runtime.InteropServices;
 
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Shell)]
 [CommandCategory("Shell")]
 [CommandArgument("mask", "The octal file creation mask to set (e.g. 022, 077).", Required = false)]
 [CommandExample("umask", Title = "Display the current umask")]
@@ -20,7 +21,7 @@ public sealed class UmaskCommand : ShellCommand
         if (OperatingSystem.IsWindows())
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::umask_unsupported",
+                code: "tosh.runtime.umask_unsupported",
                 title: "`umask` is not supported on Windows.",
                 label: "this command requires a Unix-like operating system");
         }
@@ -39,7 +40,7 @@ public sealed class UmaskCommand : ShellCommand
         if (!TryParseOctal(arg, out var mask))
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::umask_invalid",
+                code: "tosh.runtime.umask_invalid",
                 title: $"Invalid umask value '{arg}'.",
                 label: "expected an octal number (e.g. 022, 077)",
                 help: "The mask must be an octal value between 000 and 777.");

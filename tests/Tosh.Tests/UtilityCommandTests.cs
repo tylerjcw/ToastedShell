@@ -150,7 +150,8 @@ public sealed class UtilityCommandTests
     [Fact]
     public async Task Prompt_segment_commands_return_styled_segments()
     {
-        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        // prompt-* commands are [ShellOnly]; mark interactive to bypass the guard.
+        var engine = new ToshEngine(ToshRuntime.CreateDefault()) { IsInteractiveSession = true };
 
         var timeResults = await engine.ExecuteToListAsync("prompt-time --format HH --dim");
         var userHostResults = await engine.ExecuteToListAsync("prompt-userhost");

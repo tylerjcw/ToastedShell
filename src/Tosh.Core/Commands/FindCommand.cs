@@ -2,6 +2,7 @@ using System.Text.RegularExpressions;
 
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Filesystem)]
 [CommandCategory("Filesystem")]
 [CommandArgument("root ...", "One or more filesystem roots to search.", Required = false, TypeName = "path-like")]
 [CommandOption("-name <pattern>", "Filter by shell-style name pattern.")]

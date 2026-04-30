@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Concurrency)]
 [CommandCategory("Concurrency")]
 [CommandArgument("operation", "A callable or block to execute. Provide two or more operations to race.")]
 [CommandExample("race { sleep 0.1; echo slow } { sleep 0.01; echo fast }", Title = "Return the first completed operation")]
@@ -14,7 +15,7 @@ public sealed class RaceCommand : ShellCommand
         if (context.Arguments.Count < 2)
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::race_requires_multiple_operations",
+                code: "tosh.runtime.race_requires_multiple_operations",
                 title: "'race' requires at least two callable values or blocks.",
                 label: "pass two or more lambdas or blocks");
         }

@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Filesystem)]
 [CommandCategory("Filesystem")]
 [CommandArgument("path", "One or more paths to resolve.", TypeName = "path-like")]
 [CommandExample("realpath ./relative/path")]

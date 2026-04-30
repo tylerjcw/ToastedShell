@@ -1152,7 +1152,7 @@ public sealed class LanguageFeatureTests
             await engine.ExecuteToListAsync("class MyPoint extends System.Drawing.Point { }");
             // If it succeeds, the CLR type resolved — that's fine
         }
-        catch (ToshDiagnosticException ex) when (ex.Diagnostics[0].Code == "tosh::runtime::unknown_base_class")
+        catch (ToshDiagnosticException ex) when (ex.Diagnostics[0].Code == "tosh.runtime.unknown_base_class")
         {
             // Also acceptable — CLR type not loaded, but parser accepted it
             Assert.Contains("System.Drawing.Point", ex.Message);

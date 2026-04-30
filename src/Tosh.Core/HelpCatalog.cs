@@ -1306,7 +1306,7 @@ public static class HelpCatalog
     private static IReadOnlyList<HelpTopic> BuildStaticTopics(ToshRuntime runtime)
     {
         var commands = runtime.Commands.All.ToArray();
-        var aliasMap = BuildBuiltInAliasMap(commands);
+        var aliasMap = BuildBuiltInAliasMap(commands, runtime.Commands.GetAliasMap());
         var topics = new List<HelpTopic>(commands.Length + LanguageTopics.Count);
 
         foreach (var command in commands)
@@ -1442,6 +1442,18 @@ public static class HelpCatalog
 
     internal static IReadOnlyDictionary<string, IReadOnlyList<string>> BuildBuiltInAliasMap(IEnumerable<IShellCommand> commands)
     {
+        return BuildBuiltInAliasMap(commands, registryAliases: null);
+    }
+
+    /// <summary>
+    /// Builds the alias map combining (a) heuristic same-type/description/usage grouping for legacy
+    /// alias-style multi-instance registrations and (b) explicit registry aliases registered via
+    /// <see cref="ShellCommandRegistry.RegisterAlias"/>. Registry aliases take precedence.
+    /// </summary>
+    internal static IReadOnlyDictionary<string, IReadOnlyList<string>> BuildBuiltInAliasMap(
+        IEnumerable<IShellCommand> commands,
+        IReadOnlyDictionary<string, IReadOnlyList<string>>? registryAliases)
+    {
         var groups = commands
             .Where(command => ToHelpSubjectKind(command) == HelpSubjectKind.BuiltIn)
             .GroupBy(BuildAliasKey, StringComparer.OrdinalIgnoreCase)
@@ -1462,6 +1474,38 @@ public static class HelpCatalog
                 aliasMap[name] = names
                     .Where(candidate => !string.Equals(candidate, name, StringComparison.OrdinalIgnoreCase))
                     .ToArray();
+            }
+        }
+
+        if (registryAliases is not null)
+        {
+            foreach (var (canonical, aliases) in registryAliases)
+            {
+                if (aliases.Count == 0) continue;
+
+                // Canonical -> all aliases.
+                if (aliasMap.TryGetValue(canonical, out var existing))
+                {
+                    aliasMap[canonical] = existing.Concat(aliases)
+                        .Distinct(StringComparer.OrdinalIgnoreCase)
+                        .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
+                        .ToArray();
+                }
+                else
+                {
+                    aliasMap[canonical] = aliases.OrderBy(n => n, StringComparer.OrdinalIgnoreCase).ToArray();
+                }
+
+                // Each alias -> [canonical, ...sibling aliases].
+                foreach (var alias in aliases)
+                {
+                    var siblings = aliases
+                        .Where(a => !string.Equals(a, alias, StringComparison.OrdinalIgnoreCase))
+                        .Append(canonical)
+                        .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
+                        .ToArray();
+                    aliasMap[alias] = siblings;
+                }
             }
         }
 

@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Clr)]
 [CommandCategory("CLR")]
 [CommandArgument("type", "The target CLR type to cast to, including generic types like list<int>.")]
 [CommandArgument("value", "Optional value(s) to cast. If omitted, reads from the pipeline.", Required = false)]

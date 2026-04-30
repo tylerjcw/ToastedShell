@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Text)]
 [CommandCategory("Text")]
 [CommandArgument("value", "One or more values to emit as pipeline objects.", Kind = "expression")]
 [CommandExample("echo hello world")]

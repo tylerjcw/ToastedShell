@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Pipeline)]
 [CommandCategory("Pipeline")]
 [CommandArgument("predicate", "A predicate block or callable that returns a boolean.", TypeName = "block|callable", Kind = "block")]
 [CommandExample("ls -la | where _.Type == file", Title = "Filter by property")]
@@ -17,7 +18,7 @@ public sealed class WhereCommand : ShellCommand
         if (context.Arguments.Count != 1)
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::predicate_expression_required",
+                code: "tosh.runtime.predicate_expression_required",
                 title: "'where' requires a predicate expression.",
                 label: "write a predicate block like '{ ... }' or pass a callable value",
                 help: "predicate commands now use one expression mode everywhere.");

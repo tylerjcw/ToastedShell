@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Concurrency)]
 [CommandCategory("Concurrency")]
 [CommandArgument("operation", "A callable or block to execute. Provide one or more operations to settle.")]
 [CommandExample("settle { echo ok } { throw boom }", Title = "Collect fulfilled and rejected outcomes")]
@@ -14,7 +15,7 @@ public sealed class SettleCommand : ShellCommand
         if (context.Arguments.Count < 1)
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::settle_requires_operation",
+                code: "tosh.runtime.settle_requires_operation",
                 title: "'settle' requires at least one callable value or block.",
                 label: "pass one or more lambdas or blocks");
         }

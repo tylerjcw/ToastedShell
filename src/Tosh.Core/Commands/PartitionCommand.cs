@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Pipeline)]
 [CommandCategory("Pipeline")]
 [CommandArgument("callable|block", "A predicate that returns true or false for each item.")]
 [CommandExample("echo 1 2 3 4 5 | partition { _ > 3 }", Title = "Partition by a condition")]
@@ -16,7 +17,7 @@ public sealed class PartitionCommand : ShellCommand
         if (context.Arguments.Count != 1)
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::partition_requires_callable_or_block",
+                code: "tosh.runtime.partition_requires_callable_or_block",
                 title: "'partition' requires exactly one callable value or block.",
                 label: "pass a lambda like 'func(x) => ...' or a block like '{ ... }'");
         }

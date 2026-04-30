@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Concurrency)]
 [CommandCategory("Concurrency")]
 [CommandArgument("seconds", "Timeout in seconds (supports fractional values).")]
 [CommandArgument("operation", "A callable or block to execute.")]
@@ -17,7 +18,7 @@ public sealed class TimeoutCommand : ShellCommand
         if (context.Arguments.Count < 2)
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::timeout_requires_seconds_and_operation",
+                code: "tosh.runtime.timeout_requires_seconds_and_operation",
                 title: "'timeout' requires a duration and an operation.",
                 label: "usage: timeout <seconds> <callable|block> [args ...]");
         }
@@ -26,7 +27,7 @@ public sealed class TimeoutCommand : ShellCommand
         if (seconds <= 0)
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::timeout_invalid_duration",
+                code: "tosh.runtime.timeout_invalid_duration",
                 title: "'timeout' duration must be greater than zero.",
                 argumentIndex: 0,
                 label: "provide a positive number of seconds");
@@ -60,7 +61,7 @@ public sealed class TimeoutCommand : ShellCommand
         {
             linkedCts.Cancel();
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::timeout_elapsed",
+                code: "tosh.runtime.timeout_elapsed",
                 title: $"Operation timed out after {timeoutDuration.TotalSeconds:0.###} seconds.",
                 label: "increase the timeout or optimize the operation");
         }

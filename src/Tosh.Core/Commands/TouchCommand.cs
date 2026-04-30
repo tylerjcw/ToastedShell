@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Filesystem)]
 [CommandCategory("Filesystem")]
 [CommandArgument("path ...", "One or more filesystem paths to create or timestamp.", TypeName = "path-like")]
 [CommandOption("-a", "Update only the access time.")]

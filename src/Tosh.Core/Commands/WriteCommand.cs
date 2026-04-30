@@ -1,9 +1,11 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Text)]
 [CommandCategory("Text")]
 [CommandArgument("value ...", "Values to render. When omitted, renders pipeline input.", Required = false)]
 [CommandExample("write \"no newline\"", Title = "Write text without a trailing newline")]
 [CommandExample("echo alpha beta | write", Title = "Write piped values")]
+[CommandOutput("Emits nothing; writes its arguments to stdout (without a trailing newline) as a side effect.")]
 public sealed class WriteCommand : ShellCommand, IImplicitGlobCommand
 {
     public WriteCommand()

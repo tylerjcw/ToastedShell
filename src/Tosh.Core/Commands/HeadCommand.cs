@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Text)]
 [CommandCategory("Text")]
 [CommandArgument("path ...", "Optional files to read instead of pipeline input.", Required = false, TypeName = "path-like")]
 [CommandOption("-n, --lines <count>", "Return this many lines or pipeline items. Defaults to 10.")]
@@ -7,6 +8,7 @@ namespace Tosh.Core.Commands;
 [CommandExample("ls | head -n 5", Title = "Take the first five pipeline items")]
 [CommandExample("head -n 20 app.log", Title = "Read the first twenty lines of a file")]
 [CommandExample("head -c 128 payload.bin", Title = "Read leading bytes from a file")]
+[CommandOutput("The first N items of the input stream (default 10), preserving order.")]
 public sealed class HeadCommand : ShellCommand
 {
     public HeadCommand()

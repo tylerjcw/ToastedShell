@@ -3,11 +3,13 @@ using System.Text;
 
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Data)]
 [CommandCategory("Data")]
 [CommandArgument("algorithm", "Hash algorithm: md5, sha1, sha256, sha384, or sha512. Defaults to sha256.", Required = false)]
 [CommandArgument("path ...", "Files to hash. When omitted, hashes piped values as UTF-8 text.", Required = false, TypeName = "path-like")]
 [CommandExample("echo hello | hash", Title = "Hash piped text with SHA-256")]
 [CommandExample("hash sha512 README.md", Title = "Hash a file with SHA-512")]
+[CommandOutput("ShellTextLine values containing the hex-encoded digest of each input.")]
 public sealed class HashCommand : ShellCommand
 {
     public HashCommand()

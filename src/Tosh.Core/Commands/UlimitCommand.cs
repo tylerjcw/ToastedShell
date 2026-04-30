@@ -3,6 +3,7 @@ using System.Runtime.InteropServices;
 
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Shell)]
 [CommandCategory("Shell")]
 [CommandArgument("resource", "The resource limit to query or set (e.g. 'nofile', 'nproc', 'stack', 'core', 'fsize').", Required = false)]
 [CommandArgument("value", "The new soft limit value to set, or 'unlimited'.", Required = false)]
@@ -47,7 +48,7 @@ public sealed class UlimitCommand : ShellCommand
         if (OperatingSystem.IsWindows())
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::ulimit_unsupported",
+                code: "tosh.runtime.ulimit_unsupported",
                 title: "`ulimit` is not supported on Windows.",
                 label: "this command requires a Unix-like operating system");
         }
@@ -95,7 +96,7 @@ public sealed class UlimitCommand : ShellCommand
         if (match.Name is null)
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::ulimit_unknown_resource",
+                code: "tosh.runtime.ulimit_unknown_resource",
                 title: $"Unknown resource '{resourceName}'.",
                 label: $"expected one of: {string.Join(", ", Resources.Select(r => r.Name))}");
         }
@@ -106,7 +107,7 @@ public sealed class UlimitCommand : ShellCommand
             if (NativeRlimit.getrlimit(match.Resource, out var current) != 0)
             {
                 throw context.CreateDiagnostic(
-                    code: "tosh::runtime::ulimit_getrlimit_failed",
+                    code: "tosh.runtime.ulimit_getrlimit_failed",
                     title: $"Failed to read current limit for '{resourceName}'.",
                     label: "getrlimit failed");
             }
@@ -123,7 +124,7 @@ public sealed class UlimitCommand : ShellCommand
             else
             {
                 throw context.CreateDiagnostic(
-                    code: "tosh::runtime::ulimit_invalid_value",
+                    code: "tosh.runtime.ulimit_invalid_value",
                     title: $"Invalid limit value '{newValue}'.",
                     label: "expected a non-negative integer or 'unlimited'");
             }
@@ -141,7 +142,7 @@ public sealed class UlimitCommand : ShellCommand
             {
                 var errno = Marshal.GetLastWin32Error();
                 throw context.CreateDiagnostic(
-                    code: "tosh::runtime::ulimit_setrlimit_failed",
+                    code: "tosh.runtime.ulimit_setrlimit_failed",
                     title: $"Failed to set limit for '{resourceName}' (errno {errno}).",
                     label: hard ? "setting hard limit may require root privileges" : "value may exceed the hard limit");
             }
@@ -153,7 +154,7 @@ public sealed class UlimitCommand : ShellCommand
         if (NativeRlimit.getrlimit(match.Resource, out var rl) != 0)
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::ulimit_getrlimit_failed",
+                code: "tosh.runtime.ulimit_getrlimit_failed",
                 title: $"Failed to read limit for '{resourceName}'.",
                 label: "getrlimit failed");
         }

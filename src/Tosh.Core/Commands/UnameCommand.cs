@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.System)]
 [CommandCategory("System")]
 [CommandOption("-s", "System Name")]
 [CommandOption("-n", "Node Name")]
@@ -16,6 +17,7 @@ namespace Tosh.Core.Commands;
 [CommandOption("--operating-system", "Return the operating system name.")]
 [CommandExample("uname", Title = "Return structured system information")]
 [CommandExample("uname -sr", Title = "Return selected fields")]
+[CommandOutput("A record describing the host OS: kernel name, machine, version, and release.")]
 public sealed class UnameCommand : ShellCommand
 {
     public UnameCommand()

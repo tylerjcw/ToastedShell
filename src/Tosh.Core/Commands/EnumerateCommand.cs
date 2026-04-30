@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Pipeline)]
 [CommandCategory("Pipeline")]
 [CommandArgument("start", "Optional starting index (default: 0).", Required = false)]
 [CommandExample("echo a b c | enumerate", Title = "Default 0-based indexing")]
@@ -16,7 +17,7 @@ public sealed class EnumerateCommand : ShellCommand
         if (context.Arguments.Count > 1)
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::enumerate_too_many_args",
+                code: "tosh.runtime.enumerate_too_many_args",
                 title: "'enumerate' accepts at most one argument (the starting index).",
                 label: "use '... | enumerate [start]'");
         }

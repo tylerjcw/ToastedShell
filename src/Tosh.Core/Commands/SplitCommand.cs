@@ -2,6 +2,7 @@ using System.Text.RegularExpressions;
 
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Text)]
 [CommandCategory("Text")]
 [CommandArgument("delimiter|regex", "Delimiter string, regex pattern, or Regex object. Defaults to whitespace splitting when omitted.", Required = false)]
 [CommandArgument("text ...", "Optional explicit text values. When omitted, reads pipeline text.", Required = false)]
@@ -13,6 +14,7 @@ namespace Tosh.Core.Commands;
 [CommandOption("--explicit-capture", "Only capture explicitly named or numbered groups in regex mode.")]
 [CommandExample("echo \"alpha,beta,gamma\" | split \",\"")]
 [CommandExample("echo \"alpha,beta;gamma\" | split -r \"[,;]\"")]
+[CommandOutput("ShellTextLine values — one per substring produced by the configured split.")]
 public sealed class SplitCommand : ShellCommand
 {
     public SplitCommand()

@@ -92,7 +92,7 @@ public static class ShellRegexUtilities
             if (HasModifierFlags(parsed))
             {
                 throw context.CreateDiagnostic(
-                    code: "tosh::runtime::regex_flags_not_applicable",
+                    code: "tosh.runtime.regex_flags_not_applicable",
                     title: "Regex option flags only apply to string patterns.",
                     argumentIndex: argumentIndex,
                     label: "this is already a compiled regex",
@@ -127,7 +127,7 @@ public static class ShellRegexUtilities
         catch (ArgumentException exception)
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::invalid_regex",
+                code: "tosh.runtime.invalid_regex",
                 title: $"The regular expression is invalid. {exception.Message}",
                 argumentIndex: argumentIndex,
                 label: "this regex could not be compiled");

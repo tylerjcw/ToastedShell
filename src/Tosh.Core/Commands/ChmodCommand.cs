@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Filesystem)]
 [CommandCategory("Filesystem")]
 [CommandArgument("mode", "Permission mode string (e.g. 755, u+rw, a+x).")]
 [CommandArgument("path", "One or more files or directories.", TypeName = "path-like")]

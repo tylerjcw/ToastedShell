@@ -26,6 +26,43 @@ Derived from [Line Editor RFC](LINE_EDITOR_RFC.md). Phase 1 is focused on safety
 
 # Language Features & Paradigms (Planned)
 
+## Live / streaming command output
+
+Long-running commands like `ping -c 60 www.google.com`, `tail -f`, or `http --stream`
+emit rows progressively (`yield return` from `IAsyncEnumerable<object?>`), but the REPL
+materializes the entire result with `ExecuteToListAsync` before formatting, so the user
+only sees output once the pipeline completes. The display path needs a streaming-capable
+sink that incrementally renders each row.
+
+### Strategy
+
+1. **Streaming sink interface.** Add `IDisplaySink` with `BeginAsync(profile)`,
+   `EmitRowAsync(row)`, `EndAsync()`. Default: `BufferingDisplaySink` (current behavior).
+   New: `StreamingTableSink` for TTY append-only mode.
+2. **Direct streaming consumption.** Replace `engine.ExecuteToListAsync(...)` in
+   `src/Tosh.Cli/Program.cs#L304` and `src/Tosh.Cli/ToshRepl.cs#L151` with
+   `await foreach` over `engine.ExecuteAsync(...)` straight into the sink.
+3. **Streaming hint on `DisplayProfile`.** Add `StreamingHint` enum
+   (`Auto | FixedWidth | NeverStream`) and locked `MaxWidth` columns so widths are known
+   without seeing all rows. Set on `PingReplyInfo`, future `tail`, `watch`, `http --stream`.
+4. **Append-only renderer.** Emit `╭─ … ─╮` + header + `├─ … ─┤` immediately, then `│ … │`
+   per row as it arrives, with the closing `╰─ … ─╯` border drawn on `EndAsync()`.
+5. **Decision rule** for whether to stream:
+   - stderr/stdout not a TTY → buffered (current).
+   - profile lacks `StreamingHint` or stream is heterogeneous → buffered.
+   - first row arrives within ~250 ms (e.g. `ls`) → buffered (tight columns, no benefit).
+   - otherwise → streaming append-only.
+6. **Cancellation.** `try/finally` in the sink to draw the bottom border on Ctrl-C so the
+   user never sees a half-open table.
+
+### Out of scope (defer to follow-up)
+
+- Re-render-on-update for dynamic widths (cursor-up + redraw).
+- Alternate-screen `htop`-style live tables (belongs in `Tosh.Tui` widgets, not the shell).
+- Pagination interaction (height overflow auto-falls-back to append-only).
+
+### Priority: P1
+
 ## Comprehensions — Future Extensions
 
 Core comprehensions (list, set, dict, generator) are implemented. Remaining work:

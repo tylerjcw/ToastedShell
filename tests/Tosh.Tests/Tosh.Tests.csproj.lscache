@@ -72,6 +72,7 @@ DiagnosticRendererTests.cs
 DisplayEngineTests.cs
 DisplayProfileTests.cs
 DocCommentTests.cs
+DocumentationCoverageTests.cs
 EngineTests.cs
 ExecCommandTests.cs
 ExtensionCommandTests.cs
@@ -91,6 +92,7 @@ JobControlTests.cs
 JobHardeningTests.cs
 LanguageFeatureTests.cs
 LazySequenceTests.cs
+LineHushDirectiveTests.cs
 LsblkJsonParserTests.cs
 LscpuJsonParserTests.cs
 LsfdJsonParserTests.cs
@@ -107,18 +109,25 @@ obj/Debug/net10.0/
  Tosh.Tests.AssemblyInfo.cs
  Tosh.Tests.GlobalUsings.g.cs
 ObjectFormatterTests.cs
+OperatorParityTests.cs
+ParserNameRegistryParityTests.cs
+ParserProgressGuardTests.cs
 PipelineDataCommandTests.cs
 PipelineHardeningTests.cs
+RegistryParityTests.cs
 ReplCompletionEngineTests.cs
 ReplInputClassifierTests.cs
 ReplLineEditorTests.cs
 RuneTests.cs
+RuntimeNamespaceDisplayTests.cs
 ScopeAndChannelTests.cs
+ShellOnlyAttributeTests.cs
 SpawnCommandTests.cs
 StartupLoaderTests.cs
 StreamCommandTests.cs
 StreamHandleCommandTests.cs
 StructuredDataCommandTests.cs
+SubcommandTests.cs
 SyntaxHighlighterTests.cs
 SystemdJsonParserTests.cs
 TerminalControlTests.cs
@@ -133,7 +142,15 @@ VarsCommandTests.cs
 VectorCommandTests.cs
 
 [metadataReferences]
-../../../../.dotnet/packs/Microsoft.NETCore.App.Ref/10.0.3/ref/net10.0/
+../../src/
+ Tosh.Cli/obj/Debug/net10.0/ref/Tosh.Cli.dll
+ Tosh.Core/obj/Debug/net10.0/ref/Tosh.Core.dll
+ Tosh.Language/obj/Debug/net10.0/ref/Tosh.Language.dll
+ Tosh.LanguageServices/obj/Debug/net10.0/ref/Tosh.LanguageServices.dll
+ Tosh.Lsp/obj/Debug/net10.0/ref/Tosh.Lsp.dll
+ Tosh.Mcp/obj/Debug/net10.0/ref/Tosh.Mcp.dll
+ Tosh.Tui/obj/Debug/net10.0/ref/Tosh.Tui.dll
+<DOTNET>/packs/Microsoft.NETCore.App.Ref/10.0.3/ref/net10.0/
  Microsoft.CSharp.dll
  Microsoft.VisualBasic.Core.dll
  Microsoft.VisualBasic.dll
@@ -301,14 +318,6 @@ VectorCommandTests.cs
  System.Xml.XPath.dll
  System.Xml.XPath.XDocument.dll
  WindowsBase.dll
-../../src/
- Tosh.Cli/obj/Debug/net10.0/ref/Tosh.Cli.dll
- Tosh.Core/obj/Debug/net10.0/ref/Tosh.Core.dll
- Tosh.Language/obj/Debug/net10.0/ref/Tosh.Language.dll
- Tosh.LanguageServices/obj/Debug/net10.0/ref/Tosh.LanguageServices.dll
- Tosh.Lsp/obj/Debug/net10.0/ref/Tosh.Lsp.dll
- Tosh.Mcp/obj/Debug/net10.0/ref/Tosh.Mcp.dll
- Tosh.Tui/obj/Debug/net10.0/ref/Tosh.Tui.dll
 <NUGET>/
  microsoft.codecoverage/17.14.1/lib/net8.0/Microsoft.VisualStudio.CodeCoverage.Shim.dll
  microsoft.testplatform.testhost/17.14.1/lib/net8.0/
@@ -327,14 +336,14 @@ VectorCommandTests.cs
  xunit.extensibility.execution/2.9.3/lib/netstandard1.1/xunit.execution.dotnet.dll
 
 [analyzerReferences]
-../../../../.dotnet/packs/Microsoft.NETCore.App.Ref/10.0.3/analyzers/dotnet/cs/
+<DOTNET>/packs/Microsoft.NETCore.App.Ref/10.0.3/analyzers/dotnet/cs/
  Microsoft.Interop.ComInterfaceGenerator.dll
  Microsoft.Interop.JavaScript.JSImportGenerator.dll
  Microsoft.Interop.LibraryImportGenerator.dll
  Microsoft.Interop.SourceGeneration.dll
  System.Text.Json.SourceGeneration.dll
  System.Text.RegularExpressions.Generator.dll
-../../../../.dotnet/sdk/10.0.103/Sdks/Microsoft.NET.Sdk/analyzers/
+<DOTNET>/sdk/10.0.103/Sdks/Microsoft.NET.Sdk/analyzers/
  Microsoft.CodeAnalysis.CSharp.NetAnalyzers.dll
  Microsoft.CodeAnalysis.NetAnalyzers.dll
 <NUGET>/xunit.analyzers/1.18.0/analyzers/dotnet/cs/
@@ -342,5 +351,5 @@ VectorCommandTests.cs
  xunit.analyzers.fixes.dll
 
 [analyzerConfigFiles]
-../../../../.dotnet/sdk/10.0.103/Sdks/Microsoft.NET.Sdk/analyzers/build/config/analysislevel_10_default.globalconfig
+<DOTNET>/sdk/10.0.103/Sdks/Microsoft.NET.Sdk/analyzers/build/config/analysislevel_10_default.globalconfig
 obj/Debug/net10.0/Tosh.Tests.GeneratedMSBuildEditorConfig.editorconfig

@@ -2,9 +2,11 @@ using System.Reflection;
 
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Clr)]
 [CommandCategory("CLR")]
 [CommandExample("$obj | get-methods")]
 [CommandExample("get-methods $obj")]
+[CommandOutput("Records describing each method: name, return type, parameter list, and arity flags.")]
 public sealed class GetMethodsCommand : ShellCommand
 {
     public GetMethodsCommand()

@@ -4,34 +4,6 @@
 
 \section{CLR}
 
-\subsection{\texttt{alloc}}
-\label{ref:alloc}
-\icmd{alloc}
-
-\begin{cmdbox}{alloc}
-Allocates a native unmanaged buffer by byte size or interop type.
-
-\textit{Aliases:} \code{native-alloc}
-
-\begin{signature}
-alloc <bytes | type-name>
-\end{signature}
-
-\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
-\toprule
-\textbf{Argument} & \textbf{Description} \\
-\midrule
-bytes|\allowbreak type-name & Byte count to allocate, or a native interop type name whose unmanaged size should be allocated. \\
-\bottomrule
-\end{tabular}
-
-\begin{lstlisting}
-alloc 64  # Allocate a 64-byte native buffer
-alloc int32  # Allocate enough native memory for one Int32
-\end{lstlisting}
-
-\end{cmdbox}
-
 \subsection{\texttt{call}}
 \label{ref:call}
 \icmd{call}
@@ -78,6 +50,8 @@ Invokes a method by dynamic name.
 \begin{signature}
 call-method [object] <method-name> [args...]
 \end{signature}
+
+\textbf{Output:} Streams whatever the invoked method returns (single value, an enumeration of values, or nothing for void methods).
 
 \begin{lstlisting}
 echo hello | call-method ToUpper
@@ -133,6 +107,8 @@ Creates a shallow copy of an object.
 clone [object]
 \end{signature}
 
+\textbf{Output:} A shallow copy of each input/object: the same record/dictionary/list shape with copied top-level entries.
+
 \begin{lstlisting}
 $obj | clone
 clone $obj
@@ -150,6 +126,8 @@ Lists constructors for CLR types, ToSh classes, and shell collection types.
 \begin{signature}
 constructors [type ...]
 \end{signature}
+
+\textbf{Output:} Records describing each constructor: declaring type, parameter list, and a callable invocation example.
 
 \begin{lstlisting}
 constructors System.String | first 5
@@ -242,6 +220,8 @@ Lists method names for an object or ToSh class.
 get-methods [object]
 \end{signature}
 
+\textbf{Output:} Records describing each method: name, return type, parameter list, and arity flags.
+
 \begin{lstlisting}
 $obj | get-methods
 get-methods $obj
@@ -292,6 +272,8 @@ Lists property names for an object.
 get-props [object]
 \end{signature}
 
+\textbf{Output:} Records describing each property/field: name, declared type, accessibility, and current value when available.
+
 \begin{lstlisting}
 $obj | get-props
 get-props $obj
@@ -309,6 +291,8 @@ Checks whether an object or ToSh class has the named method.
 \begin{signature}
 has-method [object] <name>
 \end{signature}
+
+\textbf{Output:} A bool — true when the target type/object exposes a method with the given name.
 
 \begin{lstlisting}
 $obj | has-method ToString
@@ -439,6 +423,36 @@ DateTime.Now | methods  # List methods of a piped object
 
 \end{cmdbox}
 
+\subsection{\texttt{native-alloc}}
+\label{ref:native-alloc}
+\icmd{native-alloc}
+
+\begin{cmdbox}{native-alloc}
+Allocates a native unmanaged buffer by byte size or interop type.
+
+\textit{Aliases:} \code{alloc}
+
+\begin{signature}
+native-alloc <bytes | type-name>
+\end{signature}
+
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+bytes|\allowbreak type-name & Byte count to allocate, or a native interop type name whose unmanaged size should be allocated. \\
+\bottomrule
+\end{tabular}
+
+\textbf{Output:} A native pointer (IntPtr) to the freshly allocated buffer.
+
+\begin{lstlisting}
+alloc 64  # Allocate a 64-byte native buffer
+alloc int32  # Allocate enough native memory for one Int32
+\end{lstlisting}
+
+\end{cmdbox}
+
 \subsection{\texttt{native-free}}
 \label{ref:native-free}
 \icmd{native-free}
@@ -458,9 +472,42 @@ buffer ... & Native buffers to free. Buffers may also be supplied from the pipel
 \bottomrule
 \end{tabular}
 
+\textbf{Output:} Emits nothing; releases the native buffer as a side effect.
+
 \begin{lstlisting}
 $buffer | native-free  # Free a piped native buffer
 native-free $a $b  # Free explicit buffers
+\end{lstlisting}
+
+\end{cmdbox}
+
+\subsection{\texttt{native-offsetof}}
+\label{ref:native-offsetof}
+\icmd{native-offsetof}
+
+\begin{cmdbox}{native-offsetof}
+Returns the unmanaged field offset for a sequential or explicit-layout struct.
+
+\textit{Aliases:} \code{offset-of}
+
+\begin{signature}
+native-offsetof <type-name>[.<field-name>] [field-name]
+\end{signature}
+
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+type-name[.field-name] & Sequential or explicit-layout struct type, optionally with a field suffix. \\
+field-name & Public struct field name when it is not embedded in the first argument. (optional) \\
+\bottomrule
+\end{tabular}
+
+\textbf{Output:} An int — the byte offset of the named field within its containing struct.
+
+\begin{lstlisting}
+offset-of System.Runtime.InteropServices.ComTypes.FILETIME dwLowDateTime  # Offset by type and field
+offset-of System.Runtime.InteropServices.ComTypes.FILETIME.dwHighDateTime  # Offset by dotted path
 \end{lstlisting}
 
 \end{cmdbox}
@@ -489,10 +536,42 @@ offset & Optional byte offset from the buffer or pointer before reading. (option
 \bottomrule
 \end{tabular}
 
+\textbf{Output:} The decoded value(s) read from the native buffer, in the requested format.
+
 \begin{lstlisting}
 $buffer | native-read cstring  # Read a C string from a native buffer
 native-read bytes $buffer 16  # Read a byte range
 native-read int32 $buffer 0 4  # Read an Int32 at an offset
+\end{lstlisting}
+
+\end{cmdbox}
+
+\subsection{\texttt{native-sizeof}}
+\label{ref:native-sizeof}
+\icmd{native-sizeof}
+
+\begin{cmdbox}{native-sizeof}
+Returns the unmanaged size of a supported native interop type.
+
+\textit{Aliases:} \code{size-of}
+
+\begin{signature}
+native-sizeof <type-name> [type-name ...]
+\end{signature}
+
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+type-name ... & One or more supported native interop type names. \\
+\bottomrule
+\end{tabular}
+
+\textbf{Output:} An int — the size in bytes of the requested type or structure.
+
+\begin{lstlisting}
+size-of int32  # Size of a primitive native type
+size-of int32 double nint  # Size several native types
 \end{lstlisting}
 
 \end{cmdbox}
@@ -519,6 +598,8 @@ value & String, byte sequence, enum, primitive, pointer-sized value, or struct-l
 offset & Optional byte offset from the buffer or pointer before writing. (optional) \textit{(int)} \\
 \bottomrule
 \end{tabular}
+
+\textbf{Output:} Emits nothing; writes the supplied value(s) into the native buffer as a side effect.
 
 \begin{lstlisting}
 native-write $buffer "hello"  # Write a C string
@@ -561,35 +642,6 @@ Tosh supports both the legacy `new <Type> ...` command form and the newer C\#-st
 
 \end{cmdbox}
 
-\subsection{\texttt{offset-of}}
-\label{ref:offset-of}
-\icmd{offset-of}
-
-\begin{cmdbox}{offset-of}
-Returns the unmanaged field offset for a sequential or explicit-layout struct.
-
-\textit{Aliases:} \code{native-offsetof}
-
-\begin{signature}
-offset-of <type-name>[.<field-name>] [field-name]
-\end{signature}
-
-\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
-\toprule
-\textbf{Argument} & \textbf{Description} \\
-\midrule
-type-name[.field-name] & Sequential or explicit-layout struct type, optionally with a field suffix. \\
-field-name & Public struct field name when it is not embedded in the first argument. (optional) \\
-\bottomrule
-\end{tabular}
-
-\begin{lstlisting}
-offset-of System.Runtime.InteropServices.ComTypes.FILETIME dwLowDateTime  # Offset by type and field
-offset-of System.Runtime.InteropServices.ComTypes.FILETIME.dwHighDateTime  # Offset by dotted path
-\end{lstlisting}
-
-\end{cmdbox}
-
 \subsection{\texttt{set-prop}}
 \label{ref:set-prop}
 \icmd{set-prop}
@@ -619,34 +671,6 @@ value & The value to assign. \\
 \begin{lstlisting}
 $obj | set-prop Name "value"  # Set a property on a piped object
 set-prop $obj Name "value"  # Set a property by passing the object directly
-\end{lstlisting}
-
-\end{cmdbox}
-
-\subsection{\texttt{size-of}}
-\label{ref:size-of}
-\icmd{size-of}
-
-\begin{cmdbox}{size-of}
-Returns the unmanaged size of a supported native interop type.
-
-\textit{Aliases:} \code{native-sizeof}
-
-\begin{signature}
-size-of <type-name> [type-name ...]
-\end{signature}
-
-\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
-\toprule
-\textbf{Argument} & \textbf{Description} \\
-\midrule
-type-name ... & One or more supported native interop type names. \\
-\bottomrule
-\end{tabular}
-
-\begin{lstlisting}
-size-of int32  # Size of a primitive native type
-size-of int32 double nint  # Size several native types
 \end{lstlisting}
 
 \end{cmdbox}
@@ -833,6 +857,8 @@ channel & The channel to close. Omit to close channel(s) from pipeline input. \\
 \bottomrule
 \end{tabular}
 
+\textbf{Output:} Emits nothing; closes the channel(s) as a side effect.
+
 \begin{lstlisting}
 channel-close $ch  # Signal that no more values will be sent
 \end{lstlisting}
@@ -920,6 +946,8 @@ channel & The channel to send to. \\
 values & One or more values to send. Omit to send pipeline input instead. (optional) \\
 \bottomrule
 \end{tabular}
+
+\textbf{Output:} Emits nothing; sends each value to the channel as a side effect.
 
 \begin{lstlisting}
 channel-send $ch hello  # Send a single value to a channel
@@ -1209,6 +1237,8 @@ path ... & Files to hash. When omitted, hashes piped values as UTF-8 text. (opti
 \bottomrule
 \end{tabular}
 
+\textbf{Output:} ShellTextLine values containing the hex-encoded digest of each input.
+
 \begin{lstlisting}
 echo hello | hash  # Hash piped text with SHA-256
 hash sha512 README.md  # Hash a file with SHA-512
@@ -1280,6 +1310,8 @@ text ... & Optional explicit text values. When omitted, reads pipeline text. (op
 --explicit-capture & Only capture explicitly named or numbered groups. \\
 \bottomrule
 \end{tabular}
+
+\textbf{Output:} Structured records produced by the chosen parser (json/csv/yaml/etc.) — usually dictionaries, lists, or scalars.
 
 \begin{lstlisting}
 ping -c 3 localhost | parse "time=(?<time_ms>[0-9.]+) ms"
@@ -3623,6 +3655,42 @@ unfold [0 1] func(s) => [($s[0]) [($s[1]) ($s[0] + $s[1])]]  # Fibonacci sequenc
 \end{cmdbox}
 
 
+\section{Math}
+
+\subsection{\texttt{round}}
+\label{ref:round}
+\icmd{round}
+
+\begin{cmdbox}{round}
+Rounds a number to the specified number of decimal places.
+
+\begin{signature}
+round [value] [decimals]
+\end{signature}
+
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+value-or-decimals & A number to round (with optional decimals), or just the decimal count when input is piped. \\
+decimals & Number of decimal places to round to. Defaults to 0. (optional) \\
+\bottomrule
+\end{tabular}
+
+\textbf{Pipeline input:} scalar
+ --- Accepts a numeric value to round when only the decimal count is passed as an argument.
+
+\textbf{Output:} The rounded value as a double.
+
+\begin{lstlisting}
+round 3.14159 2  # Round a literal to 2 decimal places
+echo 3.14159 | round 2  # Round a piped value to 2 decimal places
+echo 3.7 | round  # Round a piped value to nearest integer
+\end{lstlisting}
+
+\end{cmdbox}
+
+
 \section{Network}
 
 \subsection{\texttt{http}}
@@ -3796,6 +3864,8 @@ host & Host name or IP address to ping. \\
 \bottomrule
 \end{tabular}
 
+\textbf{Output:} Per-reply records: address, round-trip time, and status flag.
+
 \begin{lstlisting}
 ping -c 3 localhost  # Ping localhost three times
 ping -4 -W 1000 example.com | get { Host, Sequence, Status, RoundtripTime }  # Project typed ping replies
@@ -3868,17 +3938,17 @@ echo 1 2 3 | any func(x) => ($x == 2)  # Check whether any item matches
 
 \end{cmdbox}
 
-\subsection{\texttt{avg}}
-\label{ref:avg}
-\icmd{avg}
+\subsection{\texttt{average}}
+\label{ref:average}
+\icmd{average}
 
-\begin{cmdbox}{avg}
+\begin{cmdbox}{average}
 Averages numeric, storage size, or timespan values.
 
-\textit{Aliases:} \code{average}
+\textit{Aliases:} \code{avg}
 
 \begin{signature}
-avg [member-path]
+average [member-path]
 \end{signature}
 
 \begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
@@ -4293,6 +4363,8 @@ callable|\allowbreak block & Predicate callable or block evaluated for each pipe
 \bottomrule
 \end{tabular}
 
+\textbf{Output:} An int — the zero-based index of the first matching item, or -1 if none matches.
+
 \begin{lstlisting}
 echo 10 20 30 | find-index { _ == 20 }  # Find the first matching index
 ls | find-index func(f) => $f.Name.EndsWith(".slnx")  # Find an index with a lambda
@@ -4393,12 +4465,22 @@ ls /tmp /var | flatten  # Flatten directory listings into one stream
 Counts occurrences of each distinct value in the pipeline.
 
 \begin{signature}
-frequencies
+frequencies [member-path]
 \end{signature}
+
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+member-path & Optional member path to count frequencies of, instead of the whole item. (optional) \\
+\bottomrule
+\end{tabular}
+
+\textbf{Output:} Records of the form \{ Value, Count \} describing how often each distinct input value occurred.
 
 \begin{lstlisting}
 echo red blue red green blue red | frequencies  # Count distinct values
-ls | get Extension | frequencies | sort Count  # Count file extensions
+ls | frequencies Extension  # Count file extensions
 \end{lstlisting}
 
 \end{cmdbox}
@@ -4410,9 +4492,13 @@ ls | get Extension | frequencies | sort Count  # Count file extensions
 \begin{cmdbox}{get}
 Gets a member, projects fields, or retrieves an item by index.
 
+\textit{Aliases:} \code{pick}, \code{select}
+
 \begin{signature}
 get <member-path> or get \{ <member-path>, ... \} or get <index>
 \end{signature}
+
+\textbf{Output:} The selected member value(s) — one item per requested path/index, in input order.
 
 \begin{lstlisting}
 ls -la | get Name
@@ -4432,6 +4518,8 @@ Groups pipeline values by a member path, block, or callable.
 \begin{signature}
 group-by <member-path|callable|block>
 \end{signature}
+
+\textbf{Output:} Group records of the form \{ Key, Items \} — one per distinct key produced by the projection.
 
 \begin{lstlisting}
 ls | group-by Extension
@@ -4481,6 +4569,8 @@ Consumes and discards all pipeline input.
 \begin{signature}
 ... | ignore
 \end{signature}
+
+\textbf{Output:} Emits nothing; drains the input pipeline silently.
 
 \begin{lstlisting}
 build-project | ignore  # Run for side effects and discard output
@@ -4583,6 +4673,49 @@ separator & The value to insert between each pipeline item. \\
 \begin{lstlisting}
 echo 1 2 3 | intersperse 0  # Insert zeros between items
 echo a b c | intersperse "-"  # Insert dashes
+\end{lstlisting}
+
+\end{cmdbox}
+
+\subsection{\texttt{join}}
+\label{ref:join}
+\icmd{join}
+
+\begin{cmdbox}{join}
+Joins pipeline items into a single string, or combines path segments with -p/--path.
+
+\begin{signature}
+... | join [-p|--path] [separator-or-segment ...]
+\end{signature}
+
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+separator-or-segment & In default mode: the string placed between items. In path mode (-p/--path): an additional path segment appended after any piped input. (optional) \textit{(string)} \\
+\bottomrule
+\end{tabular}
+
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Flag / Option} & \textbf{Description} \\
+\midrule
+-p & Path mode: join segments with the platform path separator using System.IO.Path.Join semantics. Piped input is prepended; positional args are additional segments. \\
+--path & Alias for -p. \\
+\bottomrule
+\end{tabular}
+
+\textbf{Pipeline input:} scalar, record, list, table
+ --- Consumes every pipeline item, converts it to a string, and joins them. In path mode, piped items become the leading path segments.
+
+\textbf{Output:} Default mode: a single string of pipeline items separated by the given separator. Path mode: a single path string.
+
+\begin{lstlisting}
+echo a b c | join "-"  # Join scalar items with '-'
+[1, 2, 3] | join ", "  # Stringify and join array elements
+cat words.txt | lines | join " "  # Collapse lines into a single space-separated string
+join -p "etc" "tosh" "config.toml"  # Build a path from arguments
+pwd | join -p "logs" "today.log"  # Build a path from piped input plus more segments
 \end{lstlisting}
 
 \end{cmdbox}
@@ -4904,25 +5037,6 @@ echo a b c | permutations 2  # All 2-element orderings
 
 \end{cmdbox}
 
-\subsection{\texttt{pick}}
-\label{ref:pick}
-\icmd{pick}
-
-\begin{cmdbox}{pick}
-Gets a member, projects fields, or retrieves an item by index.
-
-\begin{signature}
-pick <member-path> or pick \{ <member-path>, ... \} or pick <index>
-\end{signature}
-
-\begin{lstlisting}
-ls -la | get Name
-ps | get { Name, PID, Memory }
-echo 1 2 3 | get func(x) => ($x * 2)
-\end{lstlisting}
-
-\end{cmdbox}
-
 \subsection{\texttt{reduce}}
 \label{ref:reduce}
 \icmd{reduce}
@@ -4973,6 +5087,8 @@ rename <old> <new> [old2 new2 ...]
 old new ... & One or more old/new field-name pairs to apply to each record-like input value. \\
 \bottomrule
 \end{tabular}
+
+\textbf{Output:} Records describing each rename operation, or nothing when used purely for its side effect.
 
 \begin{lstlisting}
 ls | get { Name, Length } | rename Length Size  # Rename one field
@@ -5032,25 +5148,6 @@ callable|\allowbreak block & A function that takes (accumulator, current-item) a
 \begin{lstlisting}
 echo 1 2 3 4 | scan 0 func(acc, x) => ($acc + $x)  # Running total
 echo a b c | scan "" { $acc + _ }  # Running string concatenation
-\end{lstlisting}
-
-\end{cmdbox}
-
-\subsection{\texttt{select}}
-\label{ref:select}
-\icmd{select}
-
-\begin{cmdbox}{select}
-Gets a member, projects fields, or retrieves an item by index.
-
-\begin{signature}
-select <member-path> or select \{ <member-path>, ... \} or select <index>
-\end{signature}
-
-\begin{lstlisting}
-ls -la | get Name
-ps | get { Name, PID, Memory }
-echo 1 2 3 | get func(x) => ($x * 2)
 \end{lstlisting}
 
 \end{cmdbox}
@@ -5126,6 +5223,8 @@ Skips input values while the predicate remains true.
 \begin{signature}
 skip-while <predicate-expression|callable>
 \end{signature}
+
+\textbf{Output:} All input items starting from (and including) the first one for which the predicate returned false.
 
 \begin{lstlisting}
 echo 1 2 3 4 | skip-while { _ < 3 }
@@ -5274,17 +5373,17 @@ ls | sum .Length  # Total file sizes
 
 \end{cmdbox}
 
-\subsection{\texttt{summary}}
-\label{ref:summary}
-\icmd{summary}
+\subsection{\texttt{summarize}}
+\label{ref:summarize}
+\icmd{summarize}
 
-\begin{cmdbox}{summary}
+\begin{cmdbox}{summarize}
 Computes structured summary objects for requested aggregates over the pipeline.
 
-\textit{Aliases:} \code{summarize}
+\textit{Aliases:} \code{summary}
 
 \begin{signature}
-summary [--sum [columns]] [--avg [columns]] [--min [columns]] [--max \\
+summarize [--sum [columns]] [--avg [columns]] [--min [columns]] [--max \\
 \quad [columns]] [--count [columns]]
 \end{signature}
 
@@ -5364,6 +5463,8 @@ Yields input values while the predicate remains true.
 take-while <predicate-expression|callable>
 \end{signature}
 
+\textbf{Output:} Input items from the front of the stream up to (but not including) the first one for which the predicate returned false.
+
 \begin{lstlisting}
 echo 1 2 3 4 | take-while { _ < 3 }
 echo 1 2 3 4 | take-while func(x) => ($x < 3)
@@ -5398,6 +5499,8 @@ path & Optional file path to write a copy of the stream to. (optional) \textit{(
 -v, --variable <name> & Capture the stream into a shell variable while still passing values through. \\
 \bottomrule
 \end{tabular}
+
+\textbf{Output:} Re-emits each input item unchanged, while also writing it to the configured destination as a side effect.
 
 \begin{lstlisting}
 ls | tee snapshot.txt | where _.IsDirectory  # Write a copy to a file and keep piping
@@ -5553,6 +5656,8 @@ fixed-arg ... & Arguments that are always passed before piped arguments. (option
 \bottomrule
 \end{tabular}
 
+\textbf{Output:} Streams whatever the invoked sub-command produces, once per batch of input arguments.
+
 \begin{lstlisting}
 echo README.md docs/INDEX.md | xargs wc -l  # Pass piped words as command arguments
 glob "*.log" | xargs -n 1 rm  # Run one invocation per input argument
@@ -5614,6 +5719,8 @@ id & The id of the suspended job to resume in the background. (optional) \textit
 \bottomrule
 \end{tabular}
 
+\textbf{Output:} Emits nothing; resumes the targeted job in the background as a side effect.
+
 \begin{lstlisting}
 bg  # Resume the most recently suspended job in the background.
 bg 2  # Resume suspended job 2 in the background.
@@ -5644,6 +5751,8 @@ id & The id of the suspended job to bring to the foreground. (optional) \textit{
 \bottomrule
 \end{tabular}
 
+\textbf{Output:} Emits nothing; brings the targeted job into the foreground as a side effect.
+
 \begin{lstlisting}
 fg  # Resume the most recently suspended job.
 fg 2  # Resume suspended job 2.
@@ -5665,6 +5774,8 @@ Lists ToSh background jobs.
 \begin{signature}
 jobs
 \end{signature}
+
+\textbf{Output:} Job records describing each tracked background job: id, status, command line, and pid.
 
 \begin{lstlisting}
 jobs  # List active background jobs
@@ -5695,6 +5806,8 @@ kill <job-id|pid> [job-id|pid ...]
 job-id|\allowbreak pid ... & One or more ToSh background job ids, ShellJobInfo values, ProcessInfo values, or native process ids. \\
 \bottomrule
 \end{tabular}
+
+\textbf{Output:} Emits nothing; sends the requested signal to the targeted process(es) as a side effect.
 
 \begin{lstlisting}
 sleep 60 &; jobs | first | kill  # Kill a background job from the pipeline
@@ -5836,6 +5949,8 @@ job-id|\allowbreak pid ... & One or more ToSh background job ids, ShellJobInfo v
 \bottomrule
 \end{tabular}
 
+\textbf{Output:} Emits nothing; delivers the requested signal as a side effect.
+
 \begin{lstlisting}
 signal TERM 12345  # Send SIGTERM to a process
 jobs | where _.Status == "Running" | signal INT  # Signal jobs from the pipeline
@@ -5865,6 +5980,8 @@ wait-for [job-id ...]
 job-id ... & Optional ToSh background job ids or job objects to await. With no targets, waits for all current jobs. (optional) \\
 \bottomrule
 \end{tabular}
+
+\textbf{Output:} Emits nothing on success; throws when the awaited condition does not become true within the timeout.
 
 \begin{lstlisting}
 wait-for  # Wait for all background jobs
@@ -5901,6 +6018,8 @@ prompt-dir [--fg color] [--bg color] [--bold] [--depth n]
 --depth <n> & Show only the last n path components. \\
 \bottomrule
 \end{tabular}
+
+\textbf{Output:} Styled prompt segment(s) describing the current directory.
 
 \begin{lstlisting}
 prompt-dir --fg blue --bold
@@ -5941,6 +6060,8 @@ duration & Duration to render instead of the last command duration. (optional) \
 \bottomrule
 \end{tabular}
 
+\textbf{Output:} Styled prompt segment(s) describing the duration of the previous command.
+
 \begin{lstlisting}
 prompt-duration
 prompt-duration 2.5s --threshold-ms 250
@@ -5978,6 +6099,8 @@ code & Exit code to render instead of the shell's last exit code. (optional) \te
 \bottomrule
 \end{tabular}
 
+\textbf{Output:} Styled prompt segment(s) describing the previous command's exit status.
+
 \begin{lstlisting}
 prompt-exit
 prompt-exit 7 --fg red --bold
@@ -6005,6 +6128,8 @@ prompt-git [--fg color] [--bg color] [--bold]
 --bold & Render the segment in bold. \\
 \bottomrule
 \end{tabular}
+
+\textbf{Output:} Styled prompt segment(s) describing the current git branch / status.
 
 \begin{lstlisting}
 prompt-git
@@ -6043,6 +6168,8 @@ id & History id to render instead of the next live history id. (optional) \texti
 \bottomrule
 \end{tabular}
 
+\textbf{Output:} Styled prompt segment(s) showing the current history index.
+
 \begin{lstlisting}
 prompt-history
 prompt-history 432 --fg gray --dim
@@ -6080,6 +6207,8 @@ count & Job count to render instead of the shell's live background-job count. (o
 \bottomrule
 \end{tabular}
 
+\textbf{Output:} Styled prompt segment(s) summarising background-job counts.
+
 \begin{lstlisting}
 prompt-jobs
 prompt-jobs 3 --fg yellow --bold
@@ -6097,6 +6226,8 @@ Inserts a line break in the prompt.
 \begin{signature}
 prompt-newline
 \end{signature}
+
+\textbf{Output:} A styled newline segment used to break long prompts onto multiple lines.
 
 \begin{lstlisting}
 prompt-newline
@@ -6134,6 +6265,8 @@ text & Literal text to render as a styled prompt segment. \\
 \bottomrule
 \end{tabular}
 
+\textbf{Output:} A styled text segment with the supplied literal content.
+
 \begin{lstlisting}
 prompt-text "> " --fg cyan
 prompt-text "::" --fg gray --dim
@@ -6165,6 +6298,8 @@ prompt-time [--fg color] [--bg color] [--bold] [--dim] [--format \\
 \bottomrule
 \end{tabular}
 
+\textbf{Output:} Styled prompt segment(s) showing the current wall-clock time.
+
 \begin{lstlisting}
 prompt-time --dim
 prompt-time --format "HH:mm:ss" --fg gray
@@ -6193,6 +6328,8 @@ prompt-userhost [--fg color] [--bg color] [--bold] [--dim]
 --dim & Render the segment dimmed. \\
 \bottomrule
 \end{tabular}
+
+\textbf{Output:} Styled prompt segment(s) describing the current user@host.
 
 \begin{lstlisting}
 prompt-userhost --dim
@@ -6234,6 +6371,8 @@ text & Text to wrap in a StyledText value. \\
 \bottomrule
 \end{tabular}
 
+\textbf{Output:} Styled-text values that carry inline color/format markup for downstream prompts and renderers.
+
 \begin{lstlisting}
 styled "hello" --fg cyan --bold
 styled "warning" --fg yellow --bg red
@@ -6264,6 +6403,8 @@ message & Optional diagnostic message emitted when the assertion fails. (optiona
 \bottomrule
 \end{tabular}
 
+\textbf{Output:} Emits nothing on success; throws a diagnostic when the predicate is falsy.
+
 \begin{lstlisting}
 assert { (2 + 2) == 4 }  # Assert an invariant
 assert { $env.HOME != null } "HOME must be set"  # Assertion with a custom message
@@ -6291,9 +6432,39 @@ fields & Optional record of field overrides when raising from an event factory. 
 \bottomrule
 \end{tabular}
 
+\textbf{Output:} Never returns normally — throws a diagnostic / runtime error built from its arguments.
+
 \begin{lstlisting}
 $event | raise  # Raise a piped event
 raise $factory { Name: "deploy", Status: "ok" }  # Raise from an event factory with fields
+\end{lstlisting}
+
+\end{cmdbox}
+
+\subsection{\texttt{undef}}
+\label{ref:undef}
+\icmd{undef}
+
+\begin{cmdbox}{undef}
+Removes user-defined functions.
+
+\begin{signature}
+undef <name> [name...]
+\end{signature}
+
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+name & One or more function names to remove. \\
+\bottomrule
+\end{tabular}
+
+\textbf{Output:} Records with Name and Removed properties indicating which functions were removed.
+
+\begin{lstlisting}
+undef myfunction  # Remove a user-defined function
+undef greet parse transform  # Remove multiple functions at once
 \end{lstlisting}
 
 \end{cmdbox}
@@ -6336,6 +6507,19 @@ Apropos performs fuzzy help search across commands and Tosh language topics.
 
 \end{cmdbox}
 
+\subsection{\texttt{benchmark}}
+\label{ref:benchmark}
+\icmd{benchmark}
+
+\begin{cmdbox}{benchmark}
+User-defined rune (macro).
+
+\begin{signature}
+benchmark <label> <body>
+\end{signature}
+
+\end{cmdbox}
+
 \subsection{\texttt{clear}}
 \label{ref:clear}
 \icmd{clear}
@@ -6346,6 +6530,8 @@ Clears the terminal display.
 \begin{signature}
 clear
 \end{signature}
+
+\textbf{Output:} Emits nothing; clears the terminal display as a side effect.
 
 \begin{lstlisting}
 clear  # Clear the terminal
@@ -6389,6 +6575,51 @@ config set Shell.Prompt.NameText toast  # Set a config value
 config browse prompt  # Open the interactive config browser
 config init ~/.config/tosh  # Scaffold a config directory
 \end{lstlisting}
+
+\end{cmdbox}
+
+\subsection{\texttt{dbg}}
+\label{ref:dbg}
+\icmd{dbg}
+
+\begin{cmdbox}{dbg}
+User-defined rune (macro).
+
+\begin{signature}
+dbg <expr>
+\end{signature}
+
+\end{cmdbox}
+
+\subsection{\texttt{debug}}
+\label{ref:debug}
+\icmd{debug}
+
+\begin{cmdbox}{debug}
+Runs a Tosh script with interactive step-through debugging.
+
+\begin{signature}
+debug <path> [args...]
+\end{signature}
+
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+path & Path to the Tosh script to debug. \textit{(string)} \\
+\bottomrule
+\end{tabular}
+
+\textbf{Output:} Streams whatever the wrapped pipeline produces; emits diagnostic events as a side effect.
+
+\begin{lstlisting}
+debug ./script.tosh  # Debug a script with step-through execution.
+debug ./script.tosh arg1 arg2  # Debug a script passing arguments.
+\end{lstlisting}
+
+\begin{notebox}
+Use 'n' or 'next' to step, 'c' or 'continue' to resume, 'q' or 'quit' to abort, 'vars' to inspect variables.
+\end{notebox}
 
 \end{cmdbox}
 
@@ -6608,6 +6839,8 @@ text & Case-insensitive text to search for. May also be supplied from the pipeli
 \bottomrule
 \end{tabular}
 
+\textbf{Output:} History records matching the query: index, command line, and timestamp.
+
 \begin{lstlisting}
 history-search git  # Search history by argument
 echo build | history-search  # Search history from the pipeline
@@ -6634,9 +6867,40 @@ prompt & Optional prompt text to print before reading. (optional) \\
 \bottomrule
 \end{tabular}
 
+\textbf{Output:} A single string containing the line read from stdin (or null on EOF).
+
 \begin{lstlisting}
 read-line "Name: "  # Prompt for one line
 var answer = (read-line "Continue? ")  # Capture input in a variable
+\end{lstlisting}
+
+\end{cmdbox}
+
+\subsection{\texttt{source}}
+\label{ref:source}
+\icmd{source}
+
+\begin{cmdbox}{source}
+Executes a Tosh script file in the current session and lets it affect the caller scope.
+
+\begin{signature}
+source <path> [arg...]
+\end{signature}
+
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+path & Path to a .tosh script file to execute in the current session. \textit{(path-like)} \\
+args & Arguments forwarded to the script. (optional) \\
+\bottomrule
+\end{tabular}
+
+\textbf{Output:} Streams whatever values the sourced script emits.
+
+\begin{lstlisting}
+source ~/.config/tosh/profile.tosh  # Re-run your profile in the current session
+source ./setup.tosh prod 8080  # Run a script with arguments
 \end{lstlisting}
 
 \end{cmdbox}
@@ -6724,6 +6988,8 @@ screen|\allowbreak add-*|\allowbreak layout|\allowbreak run & Build and run comp
 \bottomrule
 \end{tabular}
 
+\textbf{Output:} Emits nothing; drives the interactive TUI session as a side effect.
+
 \begin{lstlisting}
 tui confirm "Deploy now?" --cli  # Inline confirmation
 ls | tui pick --display Name --result  # Pick from pipeline values
@@ -6810,6 +7076,19 @@ Controls the default permission bits removed from newly created files and direct
 
 \end{cmdbox}
 
+\subsection{\texttt{unless}}
+\label{ref:unless}
+\icmd{unless}
+
+\begin{cmdbox}{unless}
+User-defined rune (macro).
+
+\begin{signature}
+unless <condition> <body>
+\end{signature}
+
+\end{cmdbox}
+
 \subsection{\texttt{view}}
 \label{ref:view}
 \icmd{view}
@@ -6821,6 +7100,8 @@ Gets or sets shell display preferences.
 view \\
 \quad [compact|\allowbreak detail|\allowbreak datetime|\allowbreak datetimeoffset|\allowbreak dateonly|\allowbreak timeonly|\allowbreak timespan|\allowbreak size|\allowbreak permissions|\allowbreak attributes|\allowbreak columns]
 \end{signature}
+
+\textbf{Output:} Emits nothing; opens the supplied content in the configured pager/viewer as a side effect.
 
 \begin{lstlisting}
 view dateonly scalar relative
@@ -6860,6 +7141,19 @@ which git python node  # Resolve multiple commands
 
 \end{cmdbox}
 
+\subsection{\texttt{with-retry}}
+\label{ref:with-retry}
+\icmd{with-retry}
+
+\begin{cmdbox}{with-retry}
+User-defined rune (macro).
+
+\begin{signature}
+with-retry <attempts> <body>
+\end{signature}
+
+\end{cmdbox}
+
 
 \section{System}
 
@@ -6893,6 +7187,8 @@ value ... & Values required by the chosen mode or operation, such as a parse str
 -t, --time-only, --timeonly & Project results to TimeOnly values. \\
 \bottomrule
 \end{tabular}
+
+\textbf{Output:} DateTime, DateOnly, or TimeOnly values depending on the requested mode/operation and projection flags.
 
 \begin{lstlisting}
 date now -d -t
@@ -6981,6 +7277,36 @@ export MY_VAR  # Export an existing Tosh variable
 
 \end{cmdbox}
 
+\subsection{\texttt{forget}}
+\label{ref:forget}
+\icmd{forget}
+
+\begin{cmdbox}{forget}
+Removes Tosh variables, functions, and exported environment names.
+
+\textit{Aliases:} \code{unset}
+
+\begin{signature}
+forget <name> [name...]
+\end{signature}
+
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+name ... & Variables, functions, or exported environment names to remove. Values can also be piped in. \textit{(string)} \\
+\bottomrule
+\end{tabular}
+
+\textbf{Output:} Emits nothing; removes the named bindings from the current scope as a side effect.
+
+\begin{lstlisting}
+unset TEMP_VALUE  # Remove a name with the unset alias
+forget old-helper  # Remove a function or variable
+\end{lstlisting}
+
+\end{cmdbox}
+
 \subsection{\texttt{free}}
 \label{ref:free}
 \icmd{free}
@@ -7012,6 +7338,8 @@ Creates, parses, formats, and inspects GUID values.
 guid [new [v4|v7]|empty|parse|format <d|n|b|p|x>|info] [value ...]
 \end{signature}
 
+\textbf{Output:} A System.Guid value (or the requested string projection).
+
 \begin{lstlisting}
 guid
 guid new v7
@@ -7030,6 +7358,8 @@ Returns the current host name.
 \begin{signature}
 hostname
 \end{signature}
+
+\textbf{Output:} A single string containing the host name.
 
 \begin{lstlisting}
 hostname  # Show the current host name
@@ -7393,6 +7723,8 @@ step & Step size when three arguments are provided. Cannot be zero. (optional) \
 \bottomrule
 \end{tabular}
 
+\textbf{Output:} An int (or numeric) sequence — one value per element of the requested range.
+
 \begin{lstlisting}
 seq 5  # Generate 1 through 5
 seq 0 2 10  # Generate an stepped sequence
@@ -7503,6 +7835,8 @@ duration & Duration text such as 250ms, 5s, 2m, 1h, or 1d. \\
 \bottomrule
 \end{tabular}
 
+\textbf{Output:} A System.TimeSpan value parsed/constructed from the supplied components.
+
 \begin{lstlisting}
 timespan 250ms  # Parse milliseconds
 timespan 1h30m  # Parse a compound duration
@@ -7541,37 +7875,11 @@ uname [-a|-s|-n|-r|-v|-m|-o]
 \bottomrule
 \end{tabular}
 
+\textbf{Output:} A record describing the host OS: kernel name, machine, version, and release.
+
 \begin{lstlisting}
 uname  # Return structured system information
 uname -sr  # Return selected fields
-\end{lstlisting}
-
-\end{cmdbox}
-
-\subsection{\texttt{unset}}
-\label{ref:unset}
-\icmd{unset}
-
-\begin{cmdbox}{unset}
-Removes Tosh variables, functions, and exported environment names.
-
-\textit{Aliases:} \code{forget}
-
-\begin{signature}
-unset <name> [name...]
-\end{signature}
-
-\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
-\toprule
-\textbf{Argument} & \textbf{Description} \\
-\midrule
-name ... & Variables, functions, or exported environment names to remove. Values can also be piped in. \textit{(string)} \\
-\bottomrule
-\end{tabular}
-
-\begin{lstlisting}
-unset TEMP_VALUE  # Remove a name with the unset alias
-forget old-helper  # Remove a function or variable
 \end{lstlisting}
 
 \end{cmdbox}
@@ -7586,6 +7894,8 @@ Returns system uptime and load averages.
 \begin{signature}
 uptime
 \end{signature}
+
+\textbf{Output:} A record describing system uptime: boot time, elapsed duration, and load averages where available.
 
 \begin{lstlisting}
 uptime  # Show uptime and load averages
@@ -7613,6 +7923,8 @@ browse [filter] & Open the interactive variable browser, optionally filtered. (o
 \bottomrule
 \end{tabular}
 
+\textbf{Output:} Records describing each binding in scope: name, kind (var/const/import), and current value.
+
 \begin{lstlisting}
 vars  # List visible variables
 vars path  # Filter variable names
@@ -7631,6 +7943,8 @@ Returns the current user principal.
 \begin{signature}
 whoami
 \end{signature}
+
+\textbf{Output:} A single string containing the current user name.
 
 \begin{lstlisting}
 whoami  # Show the current user
@@ -7669,6 +7983,8 @@ path ... & Optional files to read instead of pipeline input. (optional) \textit{
 -c <chars> & Select 1-based character positions. Supports comma-separated values and ranges such as 1,3-5. \\
 \bottomrule
 \end{tabular}
+
+\textbf{Output:} ShellTextLine values containing the selected character ranges or delimited fields, one per input line.
 
 \begin{lstlisting}
 echo "alpha,beta,gamma" | cut -d , -f 2  # Extract a delimited field
@@ -7782,6 +8098,8 @@ path ... & Optional files to read instead of pipeline input. (optional) \textit{
 \bottomrule
 \end{tabular}
 
+\textbf{Output:} The first N items of the input stream (default 10), preserving order.
+
 \begin{lstlisting}
 ls | head -n 5  # Take the first five pipeline items
 head -n 20 app.log  # Read the first twenty lines of a file
@@ -7809,6 +8127,8 @@ separator & Separator inserted between values. Defaults to the platform newline.
 \bottomrule
 \end{tabular}
 
+\textbf{Output:} A single string formed by concatenating input lines with the configured separator.
+
 \begin{lstlisting}
 echo alpha beta gamma | join-lines ", "  # Join values with a comma
 read-lines names.txt | join-lines  # Join lines with newlines
@@ -7834,6 +8154,8 @@ lines [text ...]
 text ... & Text values to split. When omitted, reads pipeline input. (optional) \\
 \bottomrule
 \end{tabular}
+
+\textbf{Output:} ShellTextLine values — one per line of the input text.
 
 \begin{lstlisting}
 lines "alpha\nbeta"  # Split an explicit string
@@ -7874,6 +8196,8 @@ text ... & Optional explicit text values. When omitted, reads pipeline text. (op
 --explicit-capture & Only capture explicitly named or numbered groups. \\
 \bottomrule
 \end{tabular}
+
+\textbf{Output:} Match records describing each capture: full match, group values, and 0-based positions.
 
 \begin{lstlisting}
 echo "PID=42" | match "PID=(?<Pid>[0-9]+)" | get Pid
@@ -7948,6 +8272,8 @@ text ... & Optional explicit text values. When omitted, reads pipeline text. (op
 \bottomrule
 \end{tabular}
 
+\textbf{Output:} ShellTextLine values containing the input lines with the configured replacements applied.
+
 \begin{lstlisting}
 echo alpha-beta | replace beta BETA
 echo "A1 B2" | replace -r "[0-9]" "#"
@@ -7989,6 +8315,8 @@ text ... & Optional explicit text values. When omitted, reads pipeline text. (op
 \bottomrule
 \end{tabular}
 
+\textbf{Output:} ShellTextLine values — one per substring produced by the configured split.
+
 \begin{lstlisting}
 echo "alpha,beta,gamma" | split ","
 echo "alpha,beta;gamma" | split -r "[,;]"
@@ -8024,6 +8352,8 @@ path ... & Optional files to read instead of pipeline input. (optional) \textit{
 -f, --follow & Continue following a single file and emit newly appended lines. \\
 \bottomrule
 \end{tabular}
+
+\textbf{Output:} The last N items of the input stream (default 10), preserving order.
 
 \begin{lstlisting}
 ls | tail -n 5  # Take the last five pipeline items
@@ -8212,6 +8542,8 @@ value ... & Values to render. When omitted, renders pipeline input. (optional) \
 \bottomrule
 \end{tabular}
 
+\textbf{Output:} Emits nothing; writes its arguments to stdout (without a trailing newline) as a side effect.
+
 \begin{lstlisting}
 write "no newline"  # Write text without a trailing newline
 echo alpha beta | write  # Write piped values
@@ -8237,6 +8569,8 @@ writeline [value...]
 value ... & Values to render. When omitted, renders pipeline input. (optional) \\
 \bottomrule
 \end{tabular}
+
+\textbf{Output:} Emits nothing; writes its arguments to stdout (each terminated by a newline) as a side effect.
 
 \begin{lstlisting}
 writeline "hello"  # Write a line

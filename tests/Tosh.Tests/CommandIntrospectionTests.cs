@@ -857,14 +857,13 @@ public sealed class CommandIntrospectionTests
     {
         var runtime = ToshRuntime.CreateDefault();
         var metadata = CommandMetadataExporter.BuildMetadata(runtime.Commands);
-        var registeredNames = runtime.Commands.All.Select(c => c.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         foreach (var entry in metadata)
         {
             foreach (var alias in entry.Aliases)
             {
-                Assert.True(registeredNames.Contains(alias),
-                    $"Alias '{alias}' on command '{entry.Name}' is not a registered command.");
+                Assert.True(runtime.Commands.TryGet(alias, out _),
+                    $"Alias '{alias}' on command '{entry.Name}' does not resolve via the command registry.");
             }
         }
     }

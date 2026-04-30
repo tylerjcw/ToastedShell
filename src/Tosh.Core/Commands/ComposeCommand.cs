@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Functional)]
 [CommandCategory("Functional")]
 [CommandArgument("callable1", "The first callable in the chain.")]
 [CommandArgument("callable2", "The second callable in the chain.")]
@@ -19,7 +20,7 @@ public sealed class ComposeCommand : ShellCommand
         if (context.Arguments.Count < 2)
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::compose_requires_two_callables",
+                code: "tosh.runtime.compose_requires_two_callables",
                 title: "The 'compose' command requires at least two callable values.",
                 label: "pass two or more lambdas or functions to compose");
         }
@@ -31,7 +32,7 @@ public sealed class ComposeCommand : ShellCommand
             if (context.Arguments[i] is not IShellCallable callable)
             {
                 throw context.CreateDiagnostic(
-                    code: "tosh::runtime::compose_requires_callable",
+                    code: "tosh.runtime.compose_requires_callable",
                     title: $"Argument {i + 1} is not callable.",
                     argumentIndex: i,
                     label: "this value cannot be composed",

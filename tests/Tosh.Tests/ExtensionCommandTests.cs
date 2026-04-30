@@ -144,7 +144,7 @@ public sealed class ExtensionCommandTests
     public async Task Shell_state_commands_manage_functions_environment_and_history()
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime) { IsInteractiveSession = true };
         var variableName = $"TOSH_TEST_{Guid.NewGuid():N}";
 
         await engine.ExecuteToListAsync("func tosh_wrapper => echo hi");
@@ -184,7 +184,7 @@ public sealed class ExtensionCommandTests
     public async Task Discovery_commands_accept_pipeline_input()
     {
         var runtime = ToshRuntime.CreateDefault();
-        var engine = new ToshEngine(runtime);
+        var engine = new ToshEngine(runtime) { IsInteractiveSession = true };
 
         runtime.RecordHistory("echo hello world");
         runtime.RecordHistory("ls -la");

@@ -2,12 +2,14 @@ using Tosh.Tui.Requests;
 
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.System)]
 [CommandCategory("System")]
 [CommandArgument("filter", "Optional case-insensitive name filter.", Required = false)]
 [CommandArgument("browse [filter]", "Open the interactive variable browser, optionally filtered.", Required = false)]
 [CommandExample("vars", Title = "List visible variables")]
 [CommandExample("vars path", Title = "Filter variable names")]
 [CommandExample("vars browse env", Title = "Browse variables interactively")]
+[CommandOutput("Records describing each binding in scope: name, kind (var/const/import), and current value.")]
 public sealed class VarsCommand : ShellCommand
 {
     public VarsCommand()

@@ -1,11 +1,14 @@
 namespace Tosh.Core.Commands;
 
+[ShellOnly]
+[Stdlib(StdlibCategory.Shell)]
 [CommandCategory("Prompt")]
 [CommandOption("--fg <color>", "Foreground color name or ANSI-style color token.")]
 [CommandOption("--bg <color>", "Background color name or ANSI-style color token.")]
 [CommandOption("--bold", "Render the segment in bold.")]
 [CommandExample("prompt-git")]
 [CommandExample("prompt-git --fg bright-green --bold")]
+[CommandOutput("Styled prompt segment(s) describing the current git branch / status.")]
 public sealed class PromptGitCommand : ShellCommand
 {
     public PromptGitCommand()

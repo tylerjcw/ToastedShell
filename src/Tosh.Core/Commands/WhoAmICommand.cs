@@ -1,7 +1,9 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.System)]
 [CommandCategory("System")]
 [CommandExample("whoami", Title = "Show the current user")]
+[CommandOutput("A single string containing the current user name.")]
 public sealed class WhoAmICommand : ShellCommand
 {
     public WhoAmICommand()

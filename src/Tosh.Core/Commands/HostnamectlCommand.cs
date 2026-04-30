@@ -2,6 +2,7 @@ using System.Diagnostics;
 
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.System)]
 [CommandCategory("System")]
 [CommandArgument("[status]", "With no subcommand, ToSh treats `hostnamectl` as a structured status query. Explicit `status` behaves the same way.", Required = false)]
 [CommandArgument("<other-command ...>", "Mutating or unsupported commands fall back to the native `hostnamectl` utility unchanged.", Required = false)]
@@ -56,7 +57,7 @@ public sealed class HostnamectlCommand : ShellCommand
                 : result.StandardError.Trim();
 
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::hostnamectl_command_failed",
+                code: "tosh.runtime.hostnamectl_command_failed",
                 title: message);
         }
 
@@ -74,7 +75,7 @@ public sealed class HostnamectlCommand : ShellCommand
         catch (Exception exception) when (exception is InvalidOperationException or System.Text.Json.JsonException)
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::hostnamectl_json_parse_failed",
+                code: "tosh.runtime.hostnamectl_json_parse_failed",
                 title: $"Could not parse structured 'hostnamectl status' output. {exception.Message}",
                 help: "Try running the external `hostnamectl` command directly if you are using an unsupported output mode.");
         }
@@ -111,7 +112,7 @@ public sealed class HostnamectlCommand : ShellCommand
         {
             ExternalCommandLookupStatus.Found when lookup.ResolvedPath is not null => lookup.ResolvedPath,
             _ => throw context.CreateDiagnostic(
-                code: "tosh::runtime::hostnamectl_command_missing",
+                code: "tosh.runtime.hostnamectl_command_missing",
                 title: "The system 'hostnamectl' command was not found.",
                 help: "Install systemd or invoke the external utility by full path once it is available."),
         };
@@ -243,7 +244,7 @@ public sealed class HostnamectlCommand : ShellCommand
         if (!process.Start())
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::hostnamectl_command_start_failed",
+                code: "tosh.runtime.hostnamectl_command_start_failed",
                 title: "Failed to start the system 'hostnamectl' command.");
         }
 

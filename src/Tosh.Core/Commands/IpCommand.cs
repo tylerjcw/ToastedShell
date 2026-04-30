@@ -2,6 +2,7 @@ using System.Diagnostics;
 
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Net)]
 [CommandCategory("Network")]
 [CommandArgument("addr|address|a [show|add|del|flush] [filter ...]", "Query or mutate network addresses. Queries return typed objects; mutations pass through to the system `ip`.", Required = false)]
 [CommandArgument("link|l [show|set] [filter ...]", "Query or mutate network links. Queries return typed objects; mutations (set up/down, etc.) pass through.", Required = false)]
@@ -45,7 +46,7 @@ public sealed class IpCommand : ShellCommand
             if (!TryBuildStructuredArguments(context.Arguments, out var windowsRequest))
             {
                 throw context.CreateDiagnostic(
-                    code: "tosh::runtime::ip_command_missing",
+                    code: "tosh.runtime.ip_command_missing",
                     title: "The system 'ip' command is not available on Windows.",
                     help: "Only 'ip addr', 'ip link', and 'ip route' are supported on Windows.");
             }
@@ -59,7 +60,7 @@ public sealed class IpCommand : ShellCommand
                 StructuredIpMode.Route =>
                     NetworkInformationServices.GetWindowsRoutes().Cast<object?>().ToArray(),
                 _ => throw context.CreateDiagnostic(
-                    code: "tosh::runtime::ip_subcommand_unsupported_windows",
+                    code: "tosh.runtime.ip_subcommand_unsupported_windows",
                     title: $"'ip {windowsRequest.Mode.ToString().ToLowerInvariant()}' is not supported on Windows.",
                     help: "Only 'ip addr', 'ip link', and 'ip route' are supported on Windows."),
             };
@@ -99,7 +100,7 @@ public sealed class IpCommand : ShellCommand
                 : result.StandardError.Trim();
 
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::ip_command_failed",
+                code: "tosh.runtime.ip_command_failed",
                 title: message);
         }
 
@@ -144,7 +145,7 @@ public sealed class IpCommand : ShellCommand
         catch (Exception exception) when (exception is InvalidOperationException or System.Text.Json.JsonException)
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::ip_json_parse_failed",
+                code: "tosh.runtime.ip_json_parse_failed",
                 title: $"Could not parse structured 'ip {structuredRequest.Mode.ToString().ToLowerInvariant()}' output. {exception.Message}",
                 help: "Try running the external `ip` command directly if you are using an output mode that does not support JSON.");
         }
@@ -164,7 +165,7 @@ public sealed class IpCommand : ShellCommand
         {
             ExternalCommandLookupStatus.Found when lookup.ResolvedPath is not null => lookup.ResolvedPath,
             _ => throw context.CreateDiagnostic(
-                code: "tosh::runtime::ip_command_missing",
+                code: "tosh.runtime.ip_command_missing",
                 title: "The system 'ip' command was not found.",
                 help: "Install iproute2 or invoke the external utility by full path once it is available."),
         };
@@ -388,7 +389,7 @@ public sealed class IpCommand : ShellCommand
         if (!process.Start())
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::ip_command_start_failed",
+                code: "tosh.runtime.ip_command_start_failed",
                 title: "Failed to start the system 'ip' command.");
         }
 

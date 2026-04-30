@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Pipeline)]
 [CommandCategory("Pipeline")]
 [CommandArgument("callable|block", "A lambda or block predicate that returns boolean values.")]
 [CommandExample("echo 1 2 3 4 | filter func(x) => ((($x % 2) == 0))", Title = "Filter with a lambda")]
@@ -16,7 +17,7 @@ public sealed class FilterCommand : ShellCommand
         if (context.Arguments.Count != 1)
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::filter_requires_callable_or_block",
+                code: "tosh.runtime.filter_requires_callable_or_block",
                 title: "'filter' requires exactly one callable value or block.",
                 label: "pass a lambda like 'func(x) => ...' or a block like '{ ... }'");
         }

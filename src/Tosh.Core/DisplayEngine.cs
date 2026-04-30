@@ -62,6 +62,13 @@ public sealed class DisplayEngine
         ArgumentNullException.ThrowIfNull(values);
         ArgumentNullException.ThrowIfNull(options);
 
+        // Top-level: if the sole rendered value is a runtime-namespace summary source
+        // (e.g. `$tosh`), render via the dedicated multi-section summary renderer.
+        if (values.Count == 1 && values[0] is IShellRuntimeNamespaceSummarySource summarySource)
+        {
+            return RuntimeNamespaceSummaryRenderer.Render(summarySource.GetDisplaySummary());
+        }
+
         return RenderMany(values, options, depth: 0, new HashSet<object>(ReferenceEqualityComparer.Instance));
     }
 

@@ -1,9 +1,11 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Concurrency)]
 [CommandCategory("Concurrency")]
 [CommandArgument("channel", "The channel to close. Omit to close channel(s) from pipeline input.")]
 [CommandExample("channel-close $ch", Title = "Signal that no more values will be sent")]
 [CommandNote("After closing, channel-recv will drain any buffered values and then complete. Closing an already-closed channel is a no-op.")]
+[CommandOutput("Emits nothing; closes the channel(s) as a side effect.")]
 public sealed class ChannelCloseCommand : ShellCommand
 {
     public ChannelCloseCommand()

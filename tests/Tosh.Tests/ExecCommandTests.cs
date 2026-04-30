@@ -78,7 +78,7 @@ public sealed class ExecCommandTests
         var exception = await Assert.ThrowsAsync<ToshDiagnosticException>(async () => await engine.ExecuteToListAsync("echo hello | exec /bin/sh"));
         var diagnostic = Assert.Single(exception.Diagnostics);
 
-        Assert.Equal("tosh::runtime::exec_pipeline_unsupported", diagnostic.Code);
+        Assert.Equal("tosh.runtime.exec_pipeline_unsupported", diagnostic.Code);
     }
 
     [Fact]

@@ -2,6 +2,7 @@ using Tosh.Core.Commands;
 
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Concurrency)]
 [CommandCategory("Concurrency")]
 [CommandArgument("command", "External command name or path to start as a background job.")]
 [CommandArgument("args", "Arguments to pass to the external command.", Required = false)]
@@ -38,7 +39,7 @@ public sealed class SpawnCommand : ShellCommand
         if (filteredArgs.Count < 1)
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::spawn_requires_command",
+                code: "tosh.runtime.spawn_requires_command",
                 title: "'spawn' requires an external command name or path.",
                 label: "provide an external command to start");
         }
@@ -47,7 +48,7 @@ public sealed class SpawnCommand : ShellCommand
         if (string.IsNullOrWhiteSpace(commandName))
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::spawn_requires_command",
+                code: "tosh.runtime.spawn_requires_command",
                 title: "'spawn' requires an external command name or path.",
                 argumentIndex: 0,
                 label: "this argument is empty");
@@ -105,17 +106,17 @@ public sealed class SpawnCommand : ShellCommand
         {
             ExternalCommandLookupStatus.Found when lookup.ResolvedPath is not null => lookup.ResolvedPath,
             ExternalCommandLookupStatus.NotExecutable => throw context.CreateDiagnostic(
-                code: "tosh::runtime::spawn_target_not_executable",
+                code: "tosh.runtime.spawn_target_not_executable",
                 title: $"'{commandName}' exists but is not executable.",
                 argumentIndex: 0,
                 label: "make this file executable or use a different command"),
             ExternalCommandLookupStatus.IsDirectory => throw context.CreateDiagnostic(
-                code: "tosh::runtime::spawn_target_is_directory",
+                code: "tosh.runtime.spawn_target_is_directory",
                 title: $"'{commandName}' resolves to a directory, not an executable.",
                 argumentIndex: 0,
                 label: "provide an executable file path or command name"),
             _ => throw context.CreateDiagnostic(
-                code: "tosh::runtime::spawn_target_not_found",
+                code: "tosh.runtime.spawn_target_not_found",
                 title: $"External command '{commandName}' was not found.",
                 argumentIndex: 0,
                 label: "this command is not on PATH and is not an executable path"),

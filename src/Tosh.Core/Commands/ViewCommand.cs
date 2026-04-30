@@ -1,9 +1,11 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Shell)]
 [CommandCategory("Shell")]
 [CommandExample("view dateonly scalar relative")]
 [CommandExample("view timeonly table 24h")]
 [CommandExample("view duration table seconds")]
+[CommandOutput("Emits nothing; opens the supplied content in the configured pager/viewer as a side effect.")]
 public sealed class ViewCommand : ShellCommand
 {
     public ViewCommand()

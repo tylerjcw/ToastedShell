@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.System)]
 [CommandCategory("System")]
 [CommandOption("-u", "Print only the effective user ID.")]
 [CommandOption("-g", "Print only the effective group ID.")]

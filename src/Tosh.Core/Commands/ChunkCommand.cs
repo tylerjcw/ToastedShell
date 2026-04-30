@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Pipeline)]
 [CommandCategory("Pipeline")]
 [CommandArgument("size", "The number of items per chunk.")]
 [CommandExample("echo 1 2 3 4 5 | chunk 2", Title = "Group into pairs")]
@@ -16,7 +17,7 @@ public sealed class ChunkCommand : ShellCommand
         if (context.Arguments.Count != 1)
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::chunk_requires_size",
+                code: "tosh.runtime.chunk_requires_size",
                 title: "'chunk' requires exactly one integer size argument.",
                 label: "use 'chunk <size>'");
         }
@@ -24,7 +25,7 @@ public sealed class ChunkCommand : ShellCommand
         if (!TypeConversion.TryConvert(context.Arguments[0], typeof(int), out var converted) || converted is not int size || size <= 0)
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::chunk_requires_positive_integer",
+                code: "tosh.runtime.chunk_requires_positive_integer",
                 title: "'chunk' requires a positive integer size.",
                 argumentIndex: 0,
                 label: "expected a positive integer");

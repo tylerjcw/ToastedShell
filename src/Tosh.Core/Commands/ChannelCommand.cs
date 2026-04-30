@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Concurrency)]
 [CommandCategory("Concurrency")]
 [CommandArgument("capacity", "Optional maximum number of items the channel can buffer. Omit for unbounded.", Required = false)]
 [CommandExample("var ch = channel", Title = "Create an unbounded channel")]
@@ -37,7 +38,7 @@ public sealed class ChannelCommand : ShellCommand
         if (capacity <= 0)
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::channel_invalid_capacity",
+                code: "tosh.runtime.channel_invalid_capacity",
                 title: "'channel' capacity must be a positive integer.",
                 argumentIndex: 0,
                 label: "provide a positive integer");

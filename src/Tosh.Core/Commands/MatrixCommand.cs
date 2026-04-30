@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Data)]
 [CommandCategory("Data")]
 [CommandArgument("row", "Zero or more scalar values or row sequences. If omitted, consumes pipeline input.", Required = false)]
 [CommandExample("mat [1, 2, 3] [4, 5, 6]", Title = "Build a matrix from explicit rows")]

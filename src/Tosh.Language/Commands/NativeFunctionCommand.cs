@@ -71,7 +71,7 @@ internal sealed class NativeFunctionCommand : IShellCommand, ICommandResolutionM
         if (context.Arguments.Count != _parameters.Count)
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::native_argument_count_mismatch",
+                code: "tosh.runtime.native_argument_count_mismatch",
                 title: $"Native function '{ModuleName}.{Name}' expects {_parameters.Count} argument(s) but received {context.Arguments.Count}.",
                 label: $"'{ModuleName}.{Name}' requires {_parameters.Count} argument(s)");
         }
@@ -102,7 +102,7 @@ internal sealed class NativeFunctionCommand : IShellCommand, ICommandResolutionM
             if (!TypeConversion.TryConvert(value, parameter.ClrType, out var converted))
             {
                 throw context.CreateDiagnostic(
-                    code: "tosh::runtime::native_argument_type_conversion_failed",
+                    code: "tosh.runtime.native_argument_type_conversion_failed",
                     title: $"Argument {index + 1} for native function '{ModuleName}.{Name}' could not be converted to '{parameter.TypeName}'.",
                     argumentIndex: index,
                     label: $"argument {index + 1} expects {parameter.TypeName}");

@@ -2,6 +2,7 @@ using System.Diagnostics;
 
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Filesystem)]
 [CommandCategory("Filesystem")]
 [CommandArgument("[path-or-device ...]", "Optional mountpoints or source devices to match.", Required = false, TypeName = "path-like|string")]
 [CommandOption("-S <source>", "Match a source device or source specification.")]
@@ -83,7 +84,7 @@ public sealed class FindmntCommand : ShellCommand
                 : result.StandardError.Trim();
 
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::findmnt_command_failed",
+                code: "tosh.runtime.findmnt_command_failed",
                 title: message);
         }
 
@@ -98,7 +99,7 @@ public sealed class FindmntCommand : ShellCommand
         catch (Exception exception) when (exception is InvalidOperationException or System.Text.Json.JsonException)
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::findmnt_json_parse_failed",
+                code: "tosh.runtime.findmnt_json_parse_failed",
                 title: $"Could not parse structured 'findmnt' output. {exception.Message}",
                 help: "Try running the external `findmnt` command directly if you are using an output mode that does not support JSON.");
         }
@@ -132,7 +133,7 @@ public sealed class FindmntCommand : ShellCommand
         {
             ExternalCommandLookupStatus.Found when lookup.ResolvedPath is not null => lookup.ResolvedPath,
             _ => throw context.CreateDiagnostic(
-                code: "tosh::runtime::findmnt_command_missing",
+                code: "tosh.runtime.findmnt_command_missing",
                 title: "The system 'findmnt' command was not found.",
                 help: "Install util-linux or invoke the external utility by full path once it is available."),
         };
@@ -282,7 +283,7 @@ public sealed class FindmntCommand : ShellCommand
         if (!process.Start())
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::findmnt_command_start_failed",
+                code: "tosh.runtime.findmnt_command_start_failed",
                 title: "Failed to start the system 'findmnt' command.");
         }
 

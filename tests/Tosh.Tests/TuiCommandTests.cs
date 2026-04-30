@@ -7,7 +7,9 @@ namespace Tosh.Tests;
 
 public sealed class TuiCommandTests
 {
-    private static ToshEngine CreateEngine() => new(ToshRuntime.CreateDefault());
+    // tui commands are [ShellOnly]; mark the test engine as interactive so they
+    // bypass the bind-time shell-only check.
+    private static ToshEngine CreateEngine() => new(ToshRuntime.CreateDefault()) { IsInteractiveSession = true };
 
     [Fact]
     public async Task Tui_pick_yields_TuiPickRequest()

@@ -29,6 +29,7 @@ public static class OperatorEvaluator
             "-" => Subtract(left, right),
             "*" => Multiply(left, right),
             "/" => Divide(left, right),
+            "//" => FloorDivide(left, right),
             "%" => Modulo(left, right),
             "**" => Power(left, right),
             "==" => AreEqual(left, right),
@@ -769,6 +770,42 @@ public static class OperatorEvaluator
             (lhs, rhs) => rhs == 0 ? throw new InvalidOperationException("Division by zero.") : lhs % rhs,
             (lhs, rhs) => rhs == 0.0 ? throw new InvalidOperationException("Division by zero.") : lhs % rhs,
             (lhs, rhs) => rhs == 0 ? throw new InvalidOperationException("Division by zero.") : lhs % rhs);
+    }
+
+    /// <summary>
+    /// Floor (integer) division. <c>a // b</c> equals <c>floor(a / b)</c> for any
+    /// numeric operands. For two integers the result is an <c>int</c>/<c>long</c>;
+    /// for floats the result is a <c>double</c> rounded toward negative infinity
+    /// (so <c>-7 // 2 == -4</c>, matching Python's semantics).
+    /// </summary>
+    private static object? FloorDivide(object? left, object? right)
+    {
+        if (left is null || right is null)
+        {
+            throw new InvalidOperationException("The '//' operator requires non-null operands.");
+        }
+
+        return EvaluateNumeric(
+            left,
+            right,
+            (lhs, rhs) =>
+            {
+                if (rhs == 0) throw new InvalidOperationException("Division by zero.");
+                // Truncated division rounds toward zero; floor must round toward -∞.
+                var quotient = lhs / rhs;
+                if ((lhs % rhs != 0) && ((lhs < 0) ^ (rhs < 0))) quotient--;
+                return quotient;
+            },
+            (lhs, rhs) => rhs == 0.0
+                ? throw new InvalidOperationException("Division by zero.")
+                : Math.Floor(lhs / rhs),
+            (lhs, rhs) =>
+            {
+                if (rhs == 0) throw new InvalidOperationException("Division by zero.");
+                var quotient = lhs / rhs;
+                if ((lhs % rhs != 0L) && ((lhs < 0) ^ (rhs < 0))) quotient--;
+                return quotient;
+            });
     }
 
     private static object? Power(object? left, object? right)

@@ -3,6 +3,7 @@ using System.Text;
 
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Pipeline)]
 [CommandCategory("Pipeline")]
 [CommandArgument("separator-or-segment", "In default mode: the string placed between items. In path mode (-p/--path): an additional path segment appended after any piped input.", Required = false, TypeName = "string")]
 [CommandOption("-p", "Path mode: join segments with the platform path separator using System.IO.Path.Join semantics. Piped input is prepended; positional args are additional segments.")]

@@ -1,10 +1,12 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Scripting)]
 [CommandCategory("Scripting")]
 [CommandArgument("predicate", "Predicate callable or block that must evaluate truthy.")]
 [CommandArgument("message", "Optional diagnostic message emitted when the assertion fails.", Required = false)]
 [CommandExample("assert { (2 + 2) == 4 }", Title = "Assert an invariant")]
 [CommandExample("assert { $env.HOME != null } \"HOME must be set\"", Title = "Assertion with a custom message")]
+[CommandOutput("Emits nothing on success; throws a diagnostic when the predicate is falsy.")]
 public sealed class AssertCommand : ShellCommand
 {
     public AssertCommand()
@@ -15,7 +17,7 @@ public sealed class AssertCommand : ShellCommand
         if (context.Arguments.Count == 0)
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::assert_requires_predicate",
+                code: "tosh.runtime.assert_requires_predicate",
                 title: "The 'assert' command requires a predicate block or callable.",
                 label: "pass a block like '{ $x > 0 }' or a callable");
         }
@@ -35,7 +37,7 @@ public sealed class AssertCommand : ShellCommand
         if (!result)
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::assertion_failed",
+                code: "tosh.runtime.assertion_failed",
                 title: message ?? "Assertion failed.",
                 label: "this assertion evaluated to false");
         }

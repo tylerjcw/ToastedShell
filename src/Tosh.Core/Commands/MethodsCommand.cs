@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Clr)]
 [CommandCategory("CLR")]
 [CommandArgument("type", "One or more type names or piped objects to inspect.", Required = false)]
 [CommandExample("methods string", Title = "List String methods")]

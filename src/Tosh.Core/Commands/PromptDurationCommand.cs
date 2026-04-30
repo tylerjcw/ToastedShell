@@ -1,5 +1,7 @@
 namespace Tosh.Core.Commands;
 
+[ShellOnly]
+[Stdlib(StdlibCategory.Shell)]
 [CommandCategory("Prompt")]
 [CommandArgument("duration", "Duration to render instead of the last command duration.", Required = false)]
 [CommandOption("--fg <color>", "Foreground color name or ANSI-style color token.")]
@@ -9,6 +11,7 @@ namespace Tosh.Core.Commands;
 [CommandOption("--threshold-ms <value>", "Suppress the segment unless duration is at least this many milliseconds.")]
 [CommandExample("prompt-duration")]
 [CommandExample("prompt-duration 2.5s --threshold-ms 250")]
+[CommandOutput("Styled prompt segment(s) describing the duration of the previous command.")]
 public sealed class PromptDurationCommand : ShellCommand
 {
     public PromptDurationCommand()

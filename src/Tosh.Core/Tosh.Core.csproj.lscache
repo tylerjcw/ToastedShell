@@ -61,6 +61,7 @@ BuiltInDisplayProfiles.cs
 BuiltInEvents.cs
 BuiltInShellTypes.cs
 ColumnSummary.cs
+CommandArgumentException.cs
 CommandArguments.cs
 CommandContext.cs
 CommandDisplaySelectionParser.cs
@@ -168,6 +169,7 @@ Commands/
  HostnameCommand.cs
  HostnamectlCommand.cs
  HttpCommand.cs
+ HushCommand.cs
  IdCommand.cs
  IgnoreCommand.cs
  InspectCommand.cs
@@ -177,6 +179,7 @@ Commands/
  IpCommand.cs
  IterateCommand.cs
  JobsCommand.cs
+ JoinCommand.cs
  JoinLinesCommand.cs
  JournalctlCommand.cs
  KillCommand.cs
@@ -253,6 +256,7 @@ Commands/
  RepeatedlyCommand.cs
  ReplaceCommand.cs
  ReverseCommand.cs
+ RoundCommand.cs
  ScanCommand.cs
  ScopeCommand.cs
  SeekCommand.cs
@@ -365,11 +369,13 @@ Formats/
  DelimitedDataFormat.cs
  IDataFormat.cs
  JsonDataFormat.cs
+ NumberBaseFormat.cs
  TomlDataFormat.cs
  XmlDataFormat.cs
 FormatterStatus.cs
 ForwardTypeReference.cs
 FunctionalCommandUtilities.cs
+Generated/DiagnosticCodeManifest.g.cs
 GlobPatternMatcher.cs
 GrepMatchInfo.cs
 GroupingInfo.cs
@@ -408,6 +414,7 @@ InspectTreeNode.cs
 InspectTreeNodeKind.cs
 InspectTreeState.cs
 InspectVisibleNode.cs
+IntentionallyUnregisteredAttribute.cs
 IntrinsicLiteralParser.cs
 InvocationResult.cs
 IObjectAccessor.cs
@@ -436,6 +443,8 @@ IShellExecHandler.cs
 IShellInvocableObject.cs
 IShellNamedType.cs
 IShellRecordObject.cs
+IShellRefinementTypeDescriptor.cs
+IShellRuntimeNamespaceSummarySource.cs
 IShellStaticType.cs
 IShellTypeCheckable.cs
 IShellTypeDescriptor.cs
@@ -495,6 +504,7 @@ ReflectionMetadataUtilities.cs
 ReflectionObjectAccessor.cs
 RemovalResult.cs
 RuntimeInformationSnapshot.cs
+RuntimeNamespaceSummaryRenderer.cs
 ScriptFileDetection.cs
 ShellBlock.cs
 ShellChannel.cs
@@ -555,7 +565,9 @@ TomlParser.cs
 ToshConfig.cs
 ToshConfigDefaults.cs
 ToshDiagnostic.cs
+ToshDiagnosticEnums.cs
 ToshDiagnosticException.cs
+ToshDiagnosticsConfig.cs
 ToshMatrix.cs
 ToshRange.cs
 ToshRuntime.cs
@@ -566,6 +578,7 @@ TreeJsonParser.cs
 TypeCatalog.cs
 TypeConversion.cs
 UnameInfo.cs
+UndocumentedForAttribute.cs
 Units/
  NamedQuantityTypes.cs
  Quantity.cs
@@ -587,7 +600,8 @@ WindowsMountServices.cs
 WindowsTreeTraversal.cs
 
 [metadataReferences]
-../../../../.dotnet/packs/Microsoft.NETCore.App.Ref/10.0.3/ref/net10.0/
+../Tosh.Tui/obj/Debug/net10.0/ref/Tosh.Tui.dll
+<DOTNET>/packs/Microsoft.NETCore.App.Ref/10.0.3/ref/net10.0/
  Microsoft.CSharp.dll
  Microsoft.VisualBasic.Core.dll
  Microsoft.VisualBasic.dll
@@ -755,20 +769,19 @@ WindowsTreeTraversal.cs
  System.Xml.XPath.dll
  System.Xml.XPath.XDocument.dll
  WindowsBase.dll
-../Tosh.Tui/obj/Debug/net10.0/ref/Tosh.Tui.dll
 
 [analyzerReferences]
-../../../../.dotnet/packs/Microsoft.NETCore.App.Ref/10.0.3/analyzers/dotnet/cs/
+<DOTNET>/packs/Microsoft.NETCore.App.Ref/10.0.3/analyzers/dotnet/cs/
  Microsoft.Interop.ComInterfaceGenerator.dll
  Microsoft.Interop.JavaScript.JSImportGenerator.dll
  Microsoft.Interop.LibraryImportGenerator.dll
  Microsoft.Interop.SourceGeneration.dll
  System.Text.Json.SourceGeneration.dll
  System.Text.RegularExpressions.Generator.dll
-../../../../.dotnet/sdk/10.0.103/Sdks/Microsoft.NET.Sdk/analyzers/
+<DOTNET>/sdk/10.0.103/Sdks/Microsoft.NET.Sdk/analyzers/
  Microsoft.CodeAnalysis.CSharp.NetAnalyzers.dll
  Microsoft.CodeAnalysis.NetAnalyzers.dll
 
 [analyzerConfigFiles]
-../../../../.dotnet/sdk/10.0.103/Sdks/Microsoft.NET.Sdk/analyzers/build/config/analysislevel_10_default.globalconfig
+<DOTNET>/sdk/10.0.103/Sdks/Microsoft.NET.Sdk/analyzers/build/config/analysislevel_10_default.globalconfig
 obj/Debug/net10.0/Tosh.Core.GeneratedMSBuildEditorConfig.editorconfig

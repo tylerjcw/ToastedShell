@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Text)]
 [CommandCategory("Text")]
 [CommandOption("-c", "Prefix each line with its count of consecutive occurrences.")]
 [CommandOption("-i", "Compare lines case-insensitively.")]

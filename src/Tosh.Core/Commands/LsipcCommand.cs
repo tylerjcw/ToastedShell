@@ -3,6 +3,7 @@ using System.Dynamic;
 
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.System)]
 [CommandCategory("System")]
 [CommandArgument("[-m|-M|-q|-Q|-s|-S]", "Select a specific IPC resource family. With no resource flag, `lsipc` returns the global IPC limits and usage summary.", Required = false)]
 [CommandOption("-m", "Return System V shared-memory rows.")]
@@ -38,7 +39,7 @@ public sealed class LsipcCommand : ShellCommand
         if (OperatingSystem.IsWindows())
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::command_windows_unavailable",
+                code: "tosh.runtime.command_windows_unavailable",
                 title: $"'{Name}' is not available on Windows.",
                 help: "This command queries Linux IPC resources (System V / POSIX semaphores, shared memory, message queues) which have no direct Windows equivalent.");
         }
@@ -70,7 +71,7 @@ public sealed class LsipcCommand : ShellCommand
                 : result.StandardError.Trim();
 
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::lsipc_command_failed",
+                code: "tosh.runtime.lsipc_command_failed",
                 title: message);
         }
 
@@ -88,7 +89,7 @@ public sealed class LsipcCommand : ShellCommand
         catch (Exception exception) when (exception is InvalidOperationException or System.Text.Json.JsonException)
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::lsipc_json_parse_failed",
+                code: "tosh.runtime.lsipc_json_parse_failed",
                 title: $"Could not parse structured 'lsipc' output. {exception.Message}",
                 help: "Try running the external `lsipc` command directly if you are using an output mode that does not support JSON.");
         }
@@ -108,7 +109,7 @@ public sealed class LsipcCommand : ShellCommand
         {
             ExternalCommandLookupStatus.Found when lookup.ResolvedPath is not null => lookup.ResolvedPath,
             _ => throw context.CreateDiagnostic(
-                code: "tosh::runtime::lsipc_command_missing",
+                code: "tosh.runtime.lsipc_command_missing",
                 title: "The system 'lsipc' command was not found.",
                 help: "Install util-linux or invoke the external utility by full path once it is available."),
         };
@@ -269,7 +270,7 @@ public sealed class LsipcCommand : ShellCommand
         if (!process.Start())
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::lsipc_command_start_failed",
+                code: "tosh.runtime.lsipc_command_start_failed",
                 title: "Failed to start the system 'lsipc' command.");
         }
 

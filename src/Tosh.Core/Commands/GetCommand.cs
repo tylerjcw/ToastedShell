@@ -1,9 +1,11 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Pipeline)]
 [CommandCategory("Pipeline")]
 [CommandExample("ls -la | get Name")]
 [CommandExample("ps | get { Name, PID, Memory }")]
 [CommandExample("echo 1 2 3 | get func(x) => ($x * 2)")]
+[CommandOutput("The selected member value(s) — one item per requested path/index, in input order.")]
 public sealed class GetCommand : ShellCommand
 {
     public GetCommand(string name = "get")
@@ -134,7 +136,7 @@ public sealed class GetCommand : ShellCommand
             }
 
             throw context.CreateDiagnostic(
-                "tosh::get::index_out_of_range",
+                "tosh.get.index_out_of_range",
                 $"Index {index} is out of range (pipeline had {current} items).",
                 argumentIndex: 0,
                 label: "this index is past the end");

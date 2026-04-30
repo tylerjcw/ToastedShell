@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Functional)]
 [CommandCategory("Functional")]
 [CommandArgument("value", "The value to repeat infinitely.")]
 [CommandArgument("count", "Optional maximum number of repetitions.", Required = false)]
@@ -17,7 +18,7 @@ public sealed class RepeatCommand : ShellCommand
         if (context.Arguments.Count < 1 || context.Arguments.Count > 2)
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::repeat_requires_value",
+                code: "tosh.runtime.repeat_requires_value",
                 title: "'repeat' requires a value and an optional count.",
                 label: "use 'repeat <value> [count]'");
         }
@@ -31,7 +32,7 @@ public sealed class RepeatCommand : ShellCommand
             if (count < 0)
             {
                 throw context.CreateDiagnostic(
-                    code: "tosh::runtime::repeat_negative_count",
+                    code: "tosh.runtime.repeat_negative_count",
                     title: "Repeat count cannot be negative.",
                     argumentIndex: 1,
                     label: "must be >= 0");

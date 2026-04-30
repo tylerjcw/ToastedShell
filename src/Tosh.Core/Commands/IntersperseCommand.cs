@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Pipeline)]
 [CommandCategory("Pipeline")]
 [CommandArgument("separator", "The value to insert between each pipeline item.")]
 [CommandExample("echo 1 2 3 | intersperse 0", Title = "Insert zeros between items")]
@@ -16,7 +17,7 @@ public sealed class IntersperseCommand : ShellCommand
         if (context.Arguments.Count != 1)
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::intersperse_requires_separator",
+                code: "tosh.runtime.intersperse_requires_separator",
                 title: "'intersperse' requires exactly one separator argument.",
                 label: "use '... | intersperse <separator>'");
         }

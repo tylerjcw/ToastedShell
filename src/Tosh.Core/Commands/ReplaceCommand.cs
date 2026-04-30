@@ -2,6 +2,7 @@ using System.Text.RegularExpressions;
 
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Text)]
 [CommandCategory("Text")]
 [CommandArgument("pattern|regex", "String pattern, regex pattern, or Regex object to replace.")]
 [CommandArgument("replacement", "Replacement text.")]
@@ -14,6 +15,7 @@ namespace Tosh.Core.Commands;
 [CommandOption("--explicit-capture", "Only capture explicitly named or numbered groups in regex mode.")]
 [CommandExample("echo alpha-beta | replace beta BETA")]
 [CommandExample("echo \"A1 B2\" | replace -r \"[0-9]\" \"#\"")]
+[CommandOutput("ShellTextLine values containing the input lines with the configured replacements applied.")]
 public sealed class ReplaceCommand : ShellCommand
 {
     public ReplaceCommand()

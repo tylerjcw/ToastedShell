@@ -2,12 +2,14 @@ using System.Diagnostics;
 
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Process)]
 [CommandCategory("Process")]
 [CommandArgument("job-id|pid ...", "One or more ToSh background job ids, ShellJobInfo values, ProcessInfo values, or native process ids.")]
 [CommandExample("sleep 60 &; jobs | first | kill", Title = "Kill a background job from the pipeline")]
 [CommandExample("kill 12345", Title = "Kill a native process id")]
 [CommandSideEffects(SpawnsProcess = true)]
 [CommandNote("Kill can stop either a ToSh background job or a native operating-system process by pid.")]
+[CommandOutput("Emits nothing; sends the requested signal to the targeted process(es) as a side effect.")]
 public sealed class KillCommand : ShellCommand
 {
     public KillCommand()

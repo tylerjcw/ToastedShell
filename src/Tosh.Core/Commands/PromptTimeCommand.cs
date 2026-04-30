@@ -1,5 +1,7 @@
 namespace Tosh.Core.Commands;
 
+[ShellOnly]
+[Stdlib(StdlibCategory.Shell)]
 [CommandCategory("Prompt")]
 [CommandOption("--fg <color>", "Foreground color name or ANSI-style color token.")]
 [CommandOption("--bg <color>", "Background color name or ANSI-style color token.")]
@@ -8,6 +10,7 @@ namespace Tosh.Core.Commands;
 [CommandOption("--format <pattern>", "Date/time format string used to render the current time.")]
 [CommandExample("prompt-time --dim")]
 [CommandExample("prompt-time --format \"HH:mm:ss\" --fg gray")]
+[CommandOutput("Styled prompt segment(s) showing the current wall-clock time.")]
 public sealed class PromptTimeCommand : ShellCommand
 {
     public PromptTimeCommand()

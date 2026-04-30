@@ -2,6 +2,7 @@ using System.Text.RegularExpressions;
 
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Text)]
 [CommandCategory("Text")]
 [CommandArgument("text", "A template string with {{ member.path }} placeholders.")]
 [CommandExample("ls | template \"{{Name}} is {{Length}} bytes\"", Title = "Format file info")]

@@ -2,6 +2,7 @@ using System.Text.RegularExpressions;
 
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Data)]
 [CommandCategory("Data")]
 [CommandArgument("pattern|regex", "The .NET regular expression pattern or Regex object to apply.", TypeName = "string|regex")]
 [CommandArgument("text ...", "Optional explicit text values. When omitted, reads pipeline text.", Required = false)]
@@ -15,6 +16,7 @@ namespace Tosh.Core.Commands;
 [CommandExample("echo \"PID=42\" | parse \"PID=(?<Pid>[0-9]+)\"")]
 [CommandExample("echo \"first\\nsecond\" | parse -am \"^(?<Value>\\\\w+)$\" | get Value")]
 [CommandNote("Parse and match use .NET regular expressions, including named groups and inline modifiers like `(?im)`.")]
+[CommandOutput("Structured records produced by the chosen parser (json/csv/yaml/etc.) — usually dictionaries, lists, or scalars.")]
 public sealed class ParseCommand : ShellCommand
 {
     public ParseCommand()

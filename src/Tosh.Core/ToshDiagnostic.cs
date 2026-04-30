@@ -8,4 +8,7 @@ public sealed record ToshDiagnostic(
     TextSpan? Span = null,
     string? Label = null,
     string? Help = null,
-    string? Info = null);
+    string? Info = null,
+    ToshDiagnosticSeverity Severity = ToshDiagnosticSeverity.Error,
+    ToshDiagnosticCategory Category = ToshDiagnosticCategory.Runtime,
+    ToshDiagnosticLifecycle Lifecycle = ToshDiagnosticLifecycle.Stable);

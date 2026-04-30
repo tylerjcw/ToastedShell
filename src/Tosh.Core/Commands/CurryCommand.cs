@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Functional)]
 [CommandCategory("Functional")]
 [CommandArgument("callable", "A fixed-arity callable value to curry.")]
 [CommandExample("var add3 = func(a, b, c) => ($a + $b + $c); var curried = curry $add3", Title = "Create a curried callable")]
@@ -18,7 +19,7 @@ public sealed class CurryCommand : ShellCommand
         if (context.Arguments.Count != 1)
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::curry_requires_callable",
+                code: "tosh.runtime.curry_requires_callable",
                 title: "The 'curry' command requires exactly one callable value.",
                 label: "pass a lambda or function as the only argument");
         }
@@ -26,7 +27,7 @@ public sealed class CurryCommand : ShellCommand
         if (context.Arguments[0] is not IShellCallable callable)
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::value_not_callable",
+                code: "tosh.runtime.value_not_callable",
                 title: "The provided value is not callable.",
                 argumentIndex: 0,
                 label: "this value cannot be curried",
@@ -36,7 +37,7 @@ public sealed class CurryCommand : ShellCommand
         if (callable.MaximumParameterCount is not int maximum || maximum != callable.RequiredParameterCount)
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::curry_requires_fixed_arity_callable",
+                code: "tosh.runtime.curry_requires_fixed_arity_callable",
                 title: "The 'curry' command currently requires a fixed-arity callable.",
                 argumentIndex: 0,
                 label: "this callable has optional or variadic parameters",
@@ -46,7 +47,7 @@ public sealed class CurryCommand : ShellCommand
         if (maximum == 0)
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::curry_requires_nonzero_arity",
+                code: "tosh.runtime.curry_requires_nonzero_arity",
                 title: "The 'curry' command requires a callable that accepts at least one argument.",
                 argumentIndex: 0,
                 label: "this callable does not accept any arguments");

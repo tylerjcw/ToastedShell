@@ -1,5 +1,7 @@
 namespace Tosh.Core.Commands;
 
+[ShellOnly]
+[Stdlib(StdlibCategory.Shell)]
 [CommandCategory("Shell")]
 [CommandArgument("search <text>", "Searches history entries by text.", Required = false)]
 [CommandArgument("expand <spec>", "Expands a history event specification without running it.", Required = false)]
@@ -56,7 +58,7 @@ public sealed class HistoryCommand : ShellCommand
                     var spec = RequireHistorySpec(parsed);
                     var evaluator = context.Runtime.Evaluator
                         ?? throw context.CreateDiagnostic(
-                            code: "tosh::history::run_unavailable",
+                            code: "tosh.history.run_unavailable",
                             title: "History replay is not available in this session.",
                             help: "History replay requires a live evaluator. In normal ToSh sessions, `history run` should be available.");
                     var expanded = HistoryExpansionUtilities.Expand(context.Runtime.History.ToArray(), spec);

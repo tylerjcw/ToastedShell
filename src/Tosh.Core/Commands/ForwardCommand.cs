@@ -1,5 +1,7 @@
 namespace Tosh.Core.Commands;
 
+[ShellOnly]
+[Stdlib(StdlibCategory.Shell)]
 [CommandCategory("Filesystem")]
 [CommandExample("forward")]
 [CommandOutput("The FileSystemEntry for the next directory.")]

@@ -2,6 +2,7 @@ using System.Diagnostics;
 
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Process)]
 [CommandCategory("Process")]
 [CommandArgument("[-p pid[,pid...]]", "Optionally restrict the query to specific processes.", Required = false)]
 [CommandOption("-l", "Include thread-level rows with a `TID` column.")]
@@ -57,7 +58,7 @@ public sealed class LsfdCommand : ShellCommand
         if (OperatingSystem.IsWindows())
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::command_windows_unavailable",
+                code: "tosh.runtime.command_windows_unavailable",
                 title: $"'{Name}' is not available on Windows.",
                 help: "This command lists open Linux file descriptors via /proc and the kernel fd table, which have no Windows equivalent.");
         }
@@ -89,7 +90,7 @@ public sealed class LsfdCommand : ShellCommand
                 : result.StandardError.Trim();
 
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::lsfd_command_failed",
+                code: "tosh.runtime.lsfd_command_failed",
                 title: message);
         }
 
@@ -107,7 +108,7 @@ public sealed class LsfdCommand : ShellCommand
         catch (Exception exception) when (exception is InvalidOperationException or System.Text.Json.JsonException)
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::lsfd_json_parse_failed",
+                code: "tosh.runtime.lsfd_json_parse_failed",
                 title: $"Could not parse structured 'lsfd' output. {exception.Message}",
                 help: "Try running the external `lsfd` command directly if you are using an output mode that does not support JSON.");
         }
@@ -139,7 +140,7 @@ public sealed class LsfdCommand : ShellCommand
         {
             ExternalCommandLookupStatus.Found when lookup.ResolvedPath is not null => lookup.ResolvedPath,
             _ => throw context.CreateDiagnostic(
-                code: "tosh::runtime::lsfd_command_missing",
+                code: "tosh.runtime.lsfd_command_missing",
                 title: "The system 'lsfd' command was not found.",
                 help: "Install util-linux or invoke the external utility by full path once it is available."),
         };
@@ -294,7 +295,7 @@ public sealed class LsfdCommand : ShellCommand
         startInfo.ArgumentList.Add("-H");
 
         using var process = Process.Start(startInfo) ?? throw context.CreateDiagnostic(
-            code: "tosh::runtime::lsfd_command_start_failed",
+            code: "tosh.runtime.lsfd_command_start_failed",
             title: "Failed to start the system 'lsfd' command while discovering columns.");
 
         var stdout = process.StandardOutput.ReadToEnd();
@@ -308,7 +309,7 @@ public sealed class LsfdCommand : ShellCommand
                 : stderr.Trim();
 
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::lsfd_columns_failed",
+                code: "tosh.runtime.lsfd_columns_failed",
                 title: message);
         }
 
@@ -421,7 +422,7 @@ public sealed class LsfdCommand : ShellCommand
         if (!process.Start())
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::lsfd_command_start_failed",
+                code: "tosh.runtime.lsfd_command_start_failed",
                 title: "Failed to start the system 'lsfd' command.");
         }
 

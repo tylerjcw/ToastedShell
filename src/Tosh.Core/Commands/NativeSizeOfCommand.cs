@@ -2,10 +2,12 @@ using System.Runtime.InteropServices;
 
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Clr)]
 [CommandCategory("CLR")]
 [CommandArgument("type-name ...", "One or more supported native interop type names.")]
 [CommandExample("size-of int32", Title = "Size of a primitive native type")]
 [CommandExample("size-of int32 double nint", Title = "Size several native types")]
+[CommandOutput("An int — the size in bytes of the requested type or structure.")]
 public sealed class NativeSizeOfCommand : ShellCommand
 {
     public NativeSizeOfCommand(string name = "native-sizeof")
@@ -16,7 +18,7 @@ public sealed class NativeSizeOfCommand : ShellCommand
         if (context.Arguments.Count == 0)
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::native_sizeof_requires_type",
+                code: "tosh.runtime.native_sizeof_requires_type",
                 title: "native-sizeof requires at least one type name.",
                 label: "write a CLR type or imported struct type here");
         }

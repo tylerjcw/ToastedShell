@@ -2,6 +2,7 @@ using System.Diagnostics;
 
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.System)]
 [CommandCategory("System")]
 [CommandArgument("[list-units [pattern ...]]", "With no subcommand, ToSh treats `systemctl` as a structured `list-units` query. Explicit `list-units` behaves the same way.", Required = false)]
 [CommandArgument("list-unit-files [pattern ...]", "Returns typed unit-file state rows for installed unit files.", Required = false)]
@@ -93,7 +94,7 @@ public sealed class SystemctlCommand : ShellCommand
         if (OperatingSystem.IsWindows())
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::command_windows_unavailable",
+                code: "tosh.runtime.command_windows_unavailable",
                 title: $"'{Name}' is not available on Windows.",
                 help: "This command requires systemd, which is a Linux-only service manager.");
         }
@@ -125,7 +126,7 @@ public sealed class SystemctlCommand : ShellCommand
                 : result.StandardError.Trim();
 
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::systemctl_command_failed",
+                code: "tosh.runtime.systemctl_command_failed",
                 title: message);
         }
 
@@ -147,7 +148,7 @@ public sealed class SystemctlCommand : ShellCommand
                     catch (Exception exception) when (exception is InvalidOperationException or System.Text.Json.JsonException)
                     {
                         throw context.CreateDiagnostic(
-                            code: "tosh::runtime::systemctl_json_parse_failed",
+                            code: "tosh.runtime.systemctl_json_parse_failed",
                             title: $"Could not parse structured 'systemctl list-units' output. {exception.Message}",
                             help: "Try running the external `systemctl` command directly if you are using an unsupported output mode.");
                     }
@@ -171,7 +172,7 @@ public sealed class SystemctlCommand : ShellCommand
                     catch (Exception exception) when (exception is InvalidOperationException or System.Text.Json.JsonException)
                     {
                         throw context.CreateDiagnostic(
-                            code: "tosh::runtime::systemctl_json_parse_failed",
+                            code: "tosh.runtime.systemctl_json_parse_failed",
                             title: $"Could not parse structured 'systemctl list-unit-files' output. {exception.Message}",
                             help: "Try running the external `systemctl` command directly if you are using an unsupported output mode.");
                     }
@@ -196,7 +197,7 @@ public sealed class SystemctlCommand : ShellCommand
                     catch (Exception exception) when (exception is InvalidOperationException)
                     {
                         throw context.CreateDiagnostic(
-                            code: "tosh::runtime::systemctl_show_parse_failed",
+                            code: "tosh.runtime.systemctl_show_parse_failed",
                             title: $"Could not parse structured 'systemctl show' output. {exception.Message}",
                             help: "Try running the external `systemctl show` command directly if you are using an unsupported property/value mode.");
                     }
@@ -227,7 +228,7 @@ public sealed class SystemctlCommand : ShellCommand
         {
             ExternalCommandLookupStatus.Found when lookup.ResolvedPath is not null => lookup.ResolvedPath,
             _ => throw context.CreateDiagnostic(
-                code: "tosh::runtime::systemctl_command_missing",
+                code: "tosh.runtime.systemctl_command_missing",
                 title: "The system 'systemctl' command was not found.",
                 help: "Install systemd or invoke the external utility by full path once it is available."),
         };
@@ -629,7 +630,7 @@ public sealed class SystemctlCommand : ShellCommand
         if (!process.Start())
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::systemctl_command_start_failed",
+                code: "tosh.runtime.systemctl_command_start_failed",
                 title: "Failed to start the system 'systemctl' command.");
         }
 

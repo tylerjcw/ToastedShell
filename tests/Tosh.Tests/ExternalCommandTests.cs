@@ -107,7 +107,7 @@ public sealed class ExternalCommandTests
         var exception = await Assert.ThrowsAsync<ToshDiagnosticException>(async () => await engine.ExecuteToListAsync("./not-executable"));
         var diagnostic = Assert.Single(exception.Diagnostics);
 
-        Assert.Equal("tosh::runtime::external_command_not_executable", diagnostic.Code);
+        Assert.Equal("tosh.runtime.external_command_not_executable", diagnostic.Code);
     }
 
     [Fact]

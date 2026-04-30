@@ -10,7 +10,13 @@ ConfigureConsoleEncoding();
 var runtime = ToshRuntime.CreateDefault(Console.Out, Console.Error);
 runtime.InlinePrompts = new ConsoleInlinePromptProvider(runtime);
 var engine = new ToshEngine(runtime);
-var diagnostics = new DiagnosticRenderer(runtime.Config.Theme.Diagnostics);
+
+// Strip diagnostic-output overrides before resolving the invocation plan so
+// that user-facing flags (`--diagnostics=json|text|plain`) take effect for any
+// errors raised during arg parsing itself.
+args = ApplyDiagnosticFlags(args, runtime.Config.Diagnostics);
+
+var diagnostics = new DiagnosticRenderer(runtime.Config.Theme.Diagnostics, runtime.Config.Diagnostics);
 CliInvocationPlan plan;
 
 try
@@ -193,6 +199,41 @@ static void ConfigureConsoleEncoding()
     {
         // Keep startup resilient if the host rejects encoding changes.
     }
+}
+
+static string[] ApplyDiagnosticFlags(string[] arguments, ToshDiagnosticsConfig diagnostics)
+{
+    var remaining = new List<string>(arguments.Length);
+
+    foreach (var arg in arguments)
+    {
+        if (arg.StartsWith("--diagnostics=", StringComparison.Ordinal))
+        {
+            var value = arg["--diagnostics=".Length..];
+            switch (value)
+            {
+                case "json":
+                    diagnostics.Format = ToshDiagnosticFormat.Json;
+                    break;
+                case "text":
+                    diagnostics.Format = ToshDiagnosticFormat.Text;
+                    diagnostics.PlainOutput = false;
+                    break;
+                case "plain":
+                    diagnostics.Format = ToshDiagnosticFormat.Text;
+                    diagnostics.PlainOutput = true;
+                    break;
+                default:
+                    throw new InvalidOperationException(
+                        $"Unknown --diagnostics value '{value}'. Expected 'text', 'plain', or 'json'.");
+            }
+            continue;
+        }
+
+        remaining.Add(arg);
+    }
+
+    return remaining.ToArray();
 }
 
 void InitializeLoginShellEnvironment()
@@ -384,6 +425,7 @@ static async Task PrintUsageAsync()
     await Console.Out.WriteLineAsync("  --no-profile          Skip profile.tosh (config.tosh and autoload still load)");
     await Console.Out.WriteLineAsync("  --safe                Start in safe mode (skip all startup, guaranteed recovery)");
     await Console.Out.WriteLineAsync("  --profile-startup     Show startup phase timing breakdown");
+    await Console.Out.WriteLineAsync("  --diagnostics=MODE    Override diagnostic output mode (text|plain|json)");
     await Console.Out.WriteLineAsync("  --               Stop flag parsing for the next argument");
     await Console.Out.WriteLineAsync(string.Empty);
     await Console.Out.WriteLineAsync("Examples:");
@@ -424,8 +466,10 @@ static async Task ExportCommandMetadataAsync(CliInvocationPlan plan)
     var outputPath = plan.Arguments.Length > 0 ? plan.Arguments[0] : null;
 
     // Build a minimal runtime just for command registration — no startup/config needed.
-    var registry = new ShellCommandRegistry();
-    Tosh.Core.Commands.BuiltInCommands.RegisterDefaults(registry);
+    // Use a real ToshRuntime + ToshEngine so engine-supplied built-ins (source, debug) are included.
+    var runtime = ToshRuntime.CreateDefault();
+    _ = new ToshEngine(runtime);
+    var registry = runtime.Commands;
 
     string output;
 

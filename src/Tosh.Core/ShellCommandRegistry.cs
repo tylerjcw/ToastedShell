@@ -3,12 +3,30 @@ namespace Tosh.Core;
 public sealed class ShellCommandRegistry
 {
     private readonly Dictionary<string, IShellCommand> _commands = new(StringComparer.Ordinal);
+    // alias name -> canonical command name. Aliases are additional invocation names that
+    // resolve to an already-registered canonical command. Surfaced in help under the canonical entry.
+    private readonly Dictionary<string, string> _aliases = new(StringComparer.Ordinal);
 
+    /// <summary>
+    /// Enumerates only canonical commands (aliases are excluded). Use <see cref="GetAliases"/>
+    /// to discover the alias names that resolve to each canonical command.
+    /// </summary>
     public IEnumerable<IShellCommand> All => _commands.Values.OrderBy(command => command.Name, StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Enumerates every name that resolves to a command, canonical names and aliases alike.
+    /// </summary>
+    public IEnumerable<string> AllNames =>
+        _commands.Keys.Concat(_aliases.Keys).OrderBy(name => name, StringComparer.OrdinalIgnoreCase);
 
     public void Register(IShellCommand command)
     {
         ArgumentNullException.ThrowIfNull(command);
+
+        if (_aliases.ContainsKey(command.Name))
+        {
+            throw new InvalidOperationException($"The name '{command.Name}' is already registered as an alias.");
+        }
 
         if (!_commands.TryAdd(command.Name, command))
         {
@@ -19,7 +37,72 @@ public sealed class ShellCommandRegistry
     public void RegisterOrReplace(IShellCommand command)
     {
         ArgumentNullException.ThrowIfNull(command);
+        _aliases.Remove(command.Name);
         _commands[command.Name] = command;
+    }
+
+    /// <summary>
+    /// Registers <paramref name="aliasName"/> as another invocation name for an already-registered
+    /// canonical command. The alias resolves via <see cref="TryGet"/> and surfaces in help under
+    /// the canonical command's entry. The canonical command must be registered first.
+    /// </summary>
+    public void RegisterAlias(string aliasName, string canonicalName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(aliasName);
+        ArgumentException.ThrowIfNullOrWhiteSpace(canonicalName);
+
+        if (!_commands.ContainsKey(canonicalName))
+        {
+            throw new InvalidOperationException(
+                $"Cannot register alias '{aliasName}' for unknown command '{canonicalName}'. Register the canonical command first.");
+        }
+
+        if (_commands.ContainsKey(aliasName))
+        {
+            throw new InvalidOperationException($"Cannot register alias '{aliasName}': a command with that name already exists.");
+        }
+
+        if (_aliases.TryGetValue(aliasName, out var existing))
+        {
+            if (string.Equals(existing, canonicalName, StringComparison.Ordinal))
+            {
+                return; // idempotent
+            }
+            throw new InvalidOperationException(
+                $"Alias '{aliasName}' is already registered against '{existing}'.");
+        }
+
+        _aliases[aliasName] = canonicalName;
+    }
+
+    /// <summary>
+    /// Returns alias names that resolve to <paramref name="canonicalName"/>, sorted ordinal-ignore-case.
+    /// </summary>
+    public IReadOnlyList<string> GetAliases(string canonicalName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(canonicalName);
+        return _aliases
+            .Where(kvp => string.Equals(kvp.Value, canonicalName, StringComparison.Ordinal))
+            .Select(kvp => kvp.Key)
+            .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
+
+    /// <summary>
+    /// Returns a snapshot map of canonical-name -> alias names. Includes only canonicals that have
+    /// at least one alias registered against them.
+    /// </summary>
+    public IReadOnlyDictionary<string, IReadOnlyList<string>> GetAliasMap()
+    {
+        var map = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var group in _aliases.GroupBy(kvp => kvp.Value, StringComparer.Ordinal))
+        {
+            map[group.Key] = group
+                .Select(kvp => kvp.Key)
+                .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+        }
+        return map;
     }
 
     public bool TryGet(string name, out IShellCommand command)
@@ -29,6 +112,13 @@ public sealed class ShellCommandRegistry
         if (_commands.TryGetValue(name, out var resolved))
         {
             command = resolved;
+            return true;
+        }
+
+        if (_aliases.TryGetValue(name, out var canonical) &&
+            _commands.TryGetValue(canonical, out var aliasResolved))
+        {
+            command = aliasResolved;
             return true;
         }
 
@@ -110,6 +200,19 @@ public sealed class ShellCommandRegistry
     public bool Remove(string name)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
-        return _commands.Remove(name);
+        if (_aliases.Remove(name))
+        {
+            return true;
+        }
+        if (_commands.Remove(name))
+        {
+            // Drop any aliases that pointed at the removed canonical.
+            foreach (var alias in _aliases.Where(kvp => string.Equals(kvp.Value, name, StringComparison.Ordinal)).Select(kvp => kvp.Key).ToArray())
+            {
+                _aliases.Remove(alias);
+            }
+            return true;
+        }
+        return false;
     }
 }

@@ -1,9 +1,11 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.System)]
 [CommandCategory("System")]
 [CommandArgument("name ...", "Variables, functions, or exported environment names to remove. Values can also be piped in.", TypeName = "string")]
 [CommandExample("unset TEMP_VALUE", Title = "Remove a name with the unset alias")]
 [CommandExample("forget old-helper", Title = "Remove a function or variable")]
+[CommandOutput("Emits nothing; removes the named bindings from the current scope as a side effect.")]
 public sealed class ForgetCommand : ShellCommand
 {
     public ForgetCommand(string name = "forget")

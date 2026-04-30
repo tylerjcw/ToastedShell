@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Functional)]
 [CommandCategory("Functional")]
 [CommandArgument("seed", "The initial state passed to the callable.")]
 [CommandArgument("callable|block", "A function that receives state and returns [value, next-state] or null to stop.")]
@@ -16,7 +17,7 @@ public sealed class UnfoldCommand : ShellCommand
         if (context.Arguments.Count != 2)
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::unfold_requires_seed_and_callable",
+                code: "tosh.runtime.unfold_requires_seed_and_callable",
                 title: "'unfold' requires a seed value and a callable value or block.",
                 label: "use 'unfold <seed> func(state) => [value, next-state]'");
         }
@@ -58,7 +59,7 @@ public sealed class UnfoldCommand : ShellCommand
             else
             {
                 throw context.CreateDiagnostic(
-                    code: "tosh::runtime::unfold_requires_pair_or_null",
+                    code: "tosh.runtime.unfold_requires_pair_or_null",
                     title: "'unfold' callable must return a [value, next-state] pair or null to stop.",
                     label: "this result is not a two-element array or null");
             }

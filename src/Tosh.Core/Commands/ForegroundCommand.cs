@@ -1,10 +1,12 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Process)]
 [CommandCategory("Process")]
 [CommandArgument("id", "The id of the suspended job to bring to the foreground.", Required = false, TypeName = "int")]
 [CommandNote("Resumes a suspended job (stopped with Ctrl+Z) in the foreground. If no id is given, the most recently suspended job is used.")]
 [CommandExample("fg", Title = "Resume the most recently suspended job.")]
 [CommandExample("fg 2", Title = "Resume suspended job 2.")]
+[CommandOutput("Emits nothing; brings the targeted job into the foreground as a side effect.")]
 public sealed class ForegroundCommand : ShellCommand
 {
     public ForegroundCommand()

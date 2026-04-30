@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Pipeline)]
 [CommandCategory("Pipeline")]
 [CommandArgument("callable|block", "A lambda or block that transforms each input item into exactly one output value.")]
 [CommandExample("echo 1 2 3 | map func(x) => ($x * 2)", Title = "Transform values with a lambda")]
@@ -16,7 +17,7 @@ public sealed class MapCommand : ShellCommand
         if (context.Arguments.Count != 1)
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::map_requires_callable_or_block",
+                code: "tosh.runtime.map_requires_callable_or_block",
                 title: "'map' requires exactly one callable value or block.",
                 label: "pass a lambda like 'func(x) => ...' or a block like '{ ... }'");
         }

@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Pipeline)]
 [CommandCategory("Pipeline")]
 [CommandExample("echo @{a=1; b=2} @{a=3; b=4} | transpose", Title = "Pivot rows into columns")]
 [CommandOutput("Pivoted records where original keys become headers and values become rows.")]
@@ -27,7 +28,7 @@ public sealed class TransposeCommand : ShellCommand
             else
             {
                 throw context.CreateDiagnostic(
-                    code: "tosh::runtime::transpose_requires_records",
+                    code: "tosh.runtime.transpose_requires_records",
                     title: "'transpose' requires record/object pipeline items.",
                     label: "this value is not a record or object");
             }

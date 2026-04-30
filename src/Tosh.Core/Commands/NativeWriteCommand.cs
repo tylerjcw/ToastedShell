@@ -3,12 +3,14 @@ using System.Runtime.InteropServices;
 
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Clr)]
 [CommandCategory("CLR")]
 [CommandArgument("buffer|pointer", "NativeBuffer or pointer to write into.")]
 [CommandArgument("value", "String, byte sequence, enum, primitive, pointer-sized value, or struct-layout value to write.")]
 [CommandArgument("offset", "Optional byte offset from the buffer or pointer before writing.", Required = false, TypeName = "int")]
 [CommandExample("native-write $buffer \"hello\"", Title = "Write a C string")]
 [CommandExample("native-write $buffer [72 105 0] 0", Title = "Write explicit bytes")]
+[CommandOutput("Emits nothing; writes the supplied value(s) into the native buffer as a side effect.")]
 public sealed class NativeWriteCommand : ShellCommand
 {
     public NativeWriteCommand(string name = "native-write")
@@ -19,7 +21,7 @@ public sealed class NativeWriteCommand : ShellCommand
         if (context.Arguments.Count < 2 || context.Arguments.Count > 3)
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::native_write_argument_count",
+                code: "tosh.runtime.native_write_argument_count",
                 title: "native-write expects a target, a value, and an optional offset.",
                 label: "write 'native-write <buffer|pointer> <value> [offset]'");
         }
@@ -83,7 +85,7 @@ public sealed class NativeWriteCommand : ShellCommand
         if (value is null)
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::native_write_requires_value",
+                code: "tosh.runtime.native_write_requires_value",
                 title: "native-write requires a non-null value.",
                 argumentIndex: argumentIndex,
                 label: "write a string, byte sequence, enum, primitive, or struct-layout value here");
@@ -102,7 +104,7 @@ public sealed class NativeWriteCommand : ShellCommand
         }
 
         throw context.CreateDiagnostic(
-            code: "tosh::runtime::native_write_unsupported_value",
+            code: "tosh.runtime.native_write_unsupported_value",
             title: $"native-write does not know how to write values of type '{runtimeType.Name}'.",
             argumentIndex: argumentIndex,
             label: "use a string, byte sequence, enum, primitive, or struct-layout value here");
@@ -149,7 +151,7 @@ public sealed class NativeWriteCommand : ShellCommand
         }
 
         throw context.CreateDiagnostic(
-            code: "tosh::runtime::native_write_offset_requires_int",
+            code: "tosh.runtime.native_write_offset_requires_int",
             title: "native-write offsets must be integers.",
             argumentIndex: argumentIndex,
             label: "write an integer offset here");

@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Pipeline)]
 [CommandCategory("Pipeline")]
 [CommandArgument("k", "The number of elements in each permutation. Defaults to the full length if omitted.", Required = false)]
 [CommandExample("[1 2 3] | permutations", Title = "All 6 permutations of 3 elements")]
@@ -16,7 +17,7 @@ public sealed class PermutationsCommand : ShellCommand
         if (context.Arguments.Count > 1)
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::permutations_args",
+                code: "tosh.runtime.permutations_args",
                 title: "'permutations' accepts at most one integer argument (k).",
                 label: "use '... | permutations [k]'");
         }
@@ -35,7 +36,7 @@ public sealed class PermutationsCommand : ShellCommand
         if (k < 0)
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::permutations_k_non_negative",
+                code: "tosh.runtime.permutations_k_non_negative",
                 title: "k must be non-negative.",
                 argumentIndex: 0,
                 label: "must be >= 0");

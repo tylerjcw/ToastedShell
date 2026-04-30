@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Filesystem)]
 [CommandCategory("Filesystem")]
 [CommandArgument("pattern", "One or more glob patterns to expand.")]
 [CommandOption("-a", "Include hidden entries in results.")]

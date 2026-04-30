@@ -1,8 +1,10 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Pipeline)]
 [CommandCategory("Pipeline")]
 [CommandExample("echo 1 2 3 4 | take-while { _ < 3 }")]
 [CommandExample("echo 1 2 3 4 | take-while func(x) => ($x < 3)")]
+[CommandOutput("Input items from the front of the stream up to (but not including) the first one for which the predicate returned false.")]
 public sealed class TakeWhileCommand : ShellCommand
 {
     public TakeWhileCommand()
@@ -13,7 +15,7 @@ public sealed class TakeWhileCommand : ShellCommand
         if (context.Arguments.Count != 1)
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::predicate_expression_required",
+                code: "tosh.runtime.predicate_expression_required",
                 title: "'take-while' requires a predicate expression.",
                 label: "write a predicate block like '{ ... }' or pass a callable value",
                 help: "predicate commands now use one expression mode everywhere.");

@@ -1,5 +1,7 @@
 namespace Tosh.Core.Commands;
 
+[ShellOnly]
+[Stdlib(StdlibCategory.Shell)]
 [CommandCategory("Prompt")]
 [CommandOption("--fg <color>", "Foreground color name or ANSI-style color token.")]
 [CommandOption("--bg <color>", "Background color name or ANSI-style color token.")]
@@ -7,6 +9,7 @@ namespace Tosh.Core.Commands;
 [CommandOption("--depth <n>", "Show only the last n path components.")]
 [CommandExample("prompt-dir --fg blue --bold")]
 [CommandExample("prompt-dir --fg yellow --depth 2")]
+[CommandOutput("Styled prompt segment(s) describing the current directory.")]
 public sealed class PromptDirCommand : ShellCommand
 {
     public PromptDirCommand()

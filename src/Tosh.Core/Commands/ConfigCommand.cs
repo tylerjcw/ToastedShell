@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Shell)]
 [CommandCategory("Shell")]
 [CommandArgument("browse [query]", "Opens the full-screen config browser, optionally filtered by an initial query, with staged editing, subtree diffs, structured section and collection editors, reusable confirmation and validation surfaces, filesystem browsing, apply/save flows, startup reload/init actions, live prompt/style/theme previews, and raw text editing for advanced cases.", Required = false)]
 [CommandArgument("get <path>", "Reads one config value.", Required = false)]
@@ -125,7 +126,7 @@ public sealed class ConfigCommand : ShellCommand
         catch (InvalidOperationException)
         {
             throw context.CreateDiagnostic(
-                code: "tosh::config::reload_unavailable",
+                code: "tosh.config.reload_unavailable",
                 title: "Configuration reload is not available in this session.",
                 help: "Reload requires a live evaluator. In normal ToSh sessions, `config reload` should be available.");
         }
@@ -141,7 +142,7 @@ public sealed class ConfigCommand : ShellCommand
         }
 
         throw context.CreateDiagnostic(
-            code: "tosh::config::missing_value",
+            code: "tosh.config.missing_value",
             title: $"Configuration path '{path}' needs a value.",
             argumentIndex: 1,
             label: "provide a value argument or pipe one into `config set`",

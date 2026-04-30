@@ -9,7 +9,7 @@ public static class NativeCommandUtilities
             if (!NativeInteropUtilities.IsSupportedInteropType(type, allowString: false))
             {
                 throw context.CreateDiagnostic(
-                    code: "tosh::runtime::unsupported_native_allocation_type",
+                    code: "tosh.runtime.unsupported_native_allocation_type",
                     title: $"'{type.FullName ?? type.Name}' is not a supported native allocation type.",
                     argumentIndex: argumentIndex,
                     label: "use a primitive CLR type, pointer-sized type, enum, or a struct with sequential/explicit layout");
@@ -37,7 +37,7 @@ public static class NativeCommandUtilities
         }
 
         throw context.CreateDiagnostic(
-            code: "tosh::runtime::native_alloc_requires_size_or_type",
+            code: "tosh.runtime.native_alloc_requires_size_or_type",
             title: "A native allocation needs a byte count or a supported interop type name.",
             argumentIndex: argumentIndex,
             label: "write something like '256' or 'Tosh.Tests.NativePoint'");
@@ -50,7 +50,7 @@ public static class NativeCommandUtilities
         if (string.IsNullOrWhiteSpace(typeName))
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::native_type_name_required",
+                code: "tosh.runtime.native_type_name_required",
                 title: "A native interop type name is required here.",
                 argumentIndex: argumentIndex,
                 label: "write a CLR type name or imported struct type");
@@ -61,7 +61,7 @@ public static class NativeCommandUtilities
         if (resolved is null || !NativeInteropUtilities.IsSupportedInteropType(resolved, allowString))
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::unsupported_native_command_type",
+                code: "tosh.runtime.unsupported_native_command_type",
                 title: $"Native interop does not support '{typeName}'.",
                 argumentIndex: argumentIndex,
                 label: $"'{typeName}' is not supported here",
@@ -80,7 +80,7 @@ public static class NativeCommandUtilities
         catch (Exception exception)
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::native_pointer_required",
+                code: "tosh.runtime.native_pointer_required",
                 title: exception.Message,
                 argumentIndex: argumentIndex,
                 label: "pass a native buffer, nint, ptr, or other pointer-sized value");

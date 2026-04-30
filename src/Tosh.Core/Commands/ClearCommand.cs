@@ -1,7 +1,9 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Shell)]
 [CommandCategory("Shell")]
 [CommandExample("clear", Title = "Clear the terminal")]
+[CommandOutput("Emits nothing; clears the terminal display as a side effect.")]
 public sealed class ClearCommand : ShellCommand
 {
     public ClearCommand()

@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Shell)]
 [CommandCategory("Shell")]
 [CommandArgument("command", "The external command to execute.")]
 [CommandArgument("arg", "Arguments to pass to the command.", Required = false)]
@@ -19,7 +20,7 @@ public sealed class ExecCommand : ShellCommand
         if (context.IsPipelined)
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::exec_pipeline_unsupported",
+                code: "tosh.runtime.exec_pipeline_unsupported",
                 title: "`exec` only works as a standalone command.",
                 label: "this `exec` runs inside a pipeline or receives pipeline input",
                 help: "Use `exec <command>` by itself to replace the current ToSh process.");
@@ -37,7 +38,7 @@ public sealed class ExecCommand : ShellCommand
         if (startIndex >= context.Arguments.Count)
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::exec_missing_command",
+                code: "tosh.runtime.exec_missing_command",
                 title: "`exec` needs a command to run.",
                 label: "provide an external command after `exec`",
                 help: "Examples: `exec tosh`, `exec zsh`, or `exec /bin/sh -c \"echo hi\"`.");
@@ -85,7 +86,7 @@ public sealed class ExecCommand : ShellCommand
         if (string.IsNullOrWhiteSpace(text))
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::exec_invalid_command",
+                code: "tosh.runtime.exec_invalid_command",
                 title: "`exec` needs a non-empty command name.",
                 argumentIndex: argumentIndex,
                 label: "this value does not name an external command",
@@ -105,7 +106,7 @@ public sealed class ExecCommand : ShellCommand
         {
             ExternalCommandLookupStatus.Found when lookup.ResolvedPath is not null => lookup.ResolvedPath,
             ExternalCommandLookupStatus.NotExecutable => throw context.CreateDiagnostic(
-                code: "tosh::runtime::external_command_not_executable",
+                code: "tosh.runtime.external_command_not_executable",
                 title: $"'{lookup.ResolvedPath ?? target}' is not executable.",
                 argumentIndex: argumentIndex,
                 label: $"'{target}' cannot be launched as a program",
@@ -113,13 +114,13 @@ public sealed class ExecCommand : ShellCommand
                     ? $"make it executable, for example with `chmod +x {target}`, or run it with an interpreter."
                     : "check the file permissions or invoke it through an interpreter."),
             ExternalCommandLookupStatus.IsDirectory => throw context.CreateDiagnostic(
-                code: "tosh::runtime::external_command_is_directory",
+                code: "tosh.runtime.external_command_is_directory",
                 title: $"'{lookup.ResolvedPath ?? target}' is a directory, not an executable file.",
                 argumentIndex: argumentIndex,
                 label: $"'{target}' resolved to a directory",
                 help: "run an executable instead, or `cd` into the directory."),
             _ => throw context.CreateDiagnostic(
-                code: "tosh::runtime::unknown_command",
+                code: "tosh.runtime.unknown_command",
                 title: $"Command '{target}' was not found.",
                 argumentIndex: argumentIndex,
                 label: $"'{target}' is not a built-in, function, executable, or $-prefixed variable reference",

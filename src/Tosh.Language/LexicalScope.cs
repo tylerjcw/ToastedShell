@@ -37,6 +37,13 @@ public sealed class LexicalScope
 
     public HashSet<string> LocalEventNames { get; } = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// Diagnostic codes that should be hushed within this scope.
+    /// Populated by the <c>hush</c> builtin; consulted by
+    /// <c>ToshEngine.IsCodeHushed</c> when emitting warnings.
+    /// </summary>
+    public HashSet<string> HushedCodes { get; } = new(StringComparer.OrdinalIgnoreCase);
+
     public bool IsModuleScope { get; }
 
     public bool ExportDeclarationsByDefault { get; }
@@ -58,6 +65,7 @@ public sealed class LexicalScope
         foreach (var name in TypeImports) clone.TypeImports.Add(name);
         foreach (var (key, value) in TypeAliases) clone.TypeAliases[key] = value;
         foreach (var name in LocalEventNames) clone.LocalEventNames.Add(name);
+        foreach (var code in HushedCodes) clone.HushedCodes.Add(code);
         return clone;
     }
 }

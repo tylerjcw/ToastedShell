@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Functional)]
 [CommandCategory("Functional")]
 [CommandArgument("seeds", "The initial values of the recurrence, e.g. (0, 1) for Fibonacci.")]
 [CommandArgument("callable|block", "A function applied to the last N values to produce the next. N matches the seed count.")]
@@ -17,7 +18,7 @@ public sealed class RecurCommand : ShellCommand
         if (context.Arguments.Count != 2)
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::recur_requires_seeds_and_callable",
+                code: "tosh.runtime.recur_requires_seeds_and_callable",
                 title: "'recur' requires seed values and a callable.",
                 label: "use 'recur (seed1, seed2) func(a, b) => (next-value)'");
         }
@@ -29,7 +30,7 @@ public sealed class RecurCommand : ShellCommand
         if (window.Count == 0)
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::recur_empty_seeds",
+                code: "tosh.runtime.recur_empty_seeds",
                 title: "'recur' requires at least one seed value.",
                 label: "provide initial values for the recurrence");
         }

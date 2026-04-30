@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Filesystem)]
 [CommandCategory("Filesystem")]
 [CommandExample("pwd", Title = "Print the current working directory")]
 [CommandExample("pwd | get .FullName", Title = "Get the full path as a string")]

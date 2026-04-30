@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Pipeline)]
 [CommandCategory("Pipeline")]
 [CommandArgument("other-sequence", "An array or list to alternate with the pipeline items.")]
 [CommandExample("echo 1 2 3 | interleave [a b c]", Title = "Alternate numbers and letters")]
@@ -15,7 +16,7 @@ public sealed class InterleaveCommand : ShellCommand
         if (context.Arguments.Count != 1)
         {
             throw context.CreateDiagnostic(
-                code: "tosh::runtime::interleave_requires_sequence",
+                code: "tosh.runtime.interleave_requires_sequence",
                 title: "'interleave' requires exactly one array argument.",
                 label: "use 'interleave <array>'");
         }
@@ -48,13 +49,13 @@ public sealed class InterleaveCommand : ShellCommand
             object?[] array => array,
             IReadOnlyList<object?> list => list,
             string => throw context.CreateDiagnostic(
-                code: "tosh::runtime::interleave_requires_sequence",
+                code: "tosh.runtime.interleave_requires_sequence",
                 title: "'interleave' requires an array or list as the second sequence.",
                 argumentIndex: 0,
                 label: "a string is not a valid sequence for interleave"),
             System.Collections.IEnumerable enumerable => enumerable.Cast<object?>().ToArray(),
             _ => throw context.CreateDiagnostic(
-                code: "tosh::runtime::interleave_requires_sequence",
+                code: "tosh.runtime.interleave_requires_sequence",
                 title: "'interleave' requires an array or list as the second sequence.",
                 argumentIndex: 0,
                 label: "this value is not a sequence"),

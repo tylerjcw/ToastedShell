@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.System)]
 [CommandCategory("System")]
 [CommandExample("free", Title = "Show memory and swap usage")]
 [CommandExample("free | get .UsedMemory", Title = "Get the used memory value")]

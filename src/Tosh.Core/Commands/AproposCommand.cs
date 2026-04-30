@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Shell)]
 [CommandCategory("Shell")]
 [CommandArgument("query", "The search term to match against help topics.")]
 [CommandExample("apropos json", Title = "Search help for JSON-related topics")]

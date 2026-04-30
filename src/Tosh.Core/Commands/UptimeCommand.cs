@@ -1,7 +1,9 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.System)]
 [CommandCategory("System")]
 [CommandExample("uptime", Title = "Show uptime and load averages")]
+[CommandOutput("A record describing system uptime: boot time, elapsed duration, and load averages where available.")]
 public sealed class UptimeCommand : ShellCommand
 {
     public UptimeCommand()

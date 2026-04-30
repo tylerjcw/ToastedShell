@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Filesystem)]
 [CommandCategory("Filesystem")]
 [CommandArgument("handle ...", "One or more managed file handles to flush.", Required = false)]
 [CommandExample("flush $handle")]

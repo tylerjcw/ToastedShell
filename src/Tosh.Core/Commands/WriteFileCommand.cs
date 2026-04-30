@@ -1,5 +1,6 @@
 namespace Tosh.Core.Commands;
 
+[Stdlib(StdlibCategory.Filesystem)]
 [CommandCategory("Filesystem")]
 [CommandArgument("path", "The file path to create or replace.", TypeName = "path-like")]
 [CommandArgument("value ...", "Optional explicit text values to write. When omitted, pipeline input becomes the file body.", Required = false)]
