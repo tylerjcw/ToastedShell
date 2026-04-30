@@ -1,5 +1,6 @@
 using Tosh.Core;
 using Tosh.Core.Commands;
+using Tosh.Core.Commands.Shell;
 using Tosh.Language;
 
 namespace Tosh.Tests;

@@ -1,4 +1,5 @@
 using Tosh.Core;
+using Tosh.Core.Commands.Shell;
 using Tosh.Language;
 using Tosh.Language.Parsing;
 using System.Numerics;
@@ -4158,7 +4159,7 @@ $output");
             item => Assert.Equal("echo beta", item));
 
         var deleteResults = await engine.ExecuteToListAsync("history delete git");
-        var deletion = Assert.IsType<Tosh.Core.Commands.HistoryDeletionResult>(Assert.Single(deleteResults));
+        var deletion = Assert.IsType<Tosh.Core.Commands.Shell.HistoryDeletionResult>(Assert.Single(deleteResults));
         Assert.Equal("git status", deletion.Text);
 
         Assert.Collection(
@@ -4187,7 +4188,7 @@ $output");
         Assert.Equal(historyPath, Assert.IsType<string>(Assert.Single(pathResults)));
 
         var reloadResults = await engine.ExecuteToListAsync("history reload");
-        var reloadStatus = Assert.IsType<Tosh.Core.Commands.HistoryStatusResult>(Assert.Single(reloadResults));
+        var reloadStatus = Assert.IsType<Tosh.Core.Commands.Shell.HistoryStatusResult>(Assert.Single(reloadResults));
         Assert.Equal("reload", reloadStatus.Action);
         Assert.Equal(2, reloadStatus.EntryCount);
         Assert.Collection(
@@ -4196,7 +4197,7 @@ $output");
             entry => Assert.Equal("ls -la", entry.Text));
 
         var clearResults = await engine.ExecuteToListAsync("history clear");
-        var clearStatus = Assert.IsType<Tosh.Core.Commands.HistoryStatusResult>(Assert.Single(clearResults));
+        var clearStatus = Assert.IsType<Tosh.Core.Commands.Shell.HistoryStatusResult>(Assert.Single(clearResults));
         Assert.Equal("clear", clearStatus.Action);
         Assert.Empty(runtime.History);
         Assert.Equal(string.Empty, File.ReadAllText(historyPath));

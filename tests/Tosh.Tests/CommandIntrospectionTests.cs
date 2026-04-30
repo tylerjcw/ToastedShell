@@ -1,4 +1,5 @@
 using Tosh.Core;
+using Tosh.Core.Commands.Pipeline;
 
 namespace Tosh.Tests;
 
@@ -699,7 +700,7 @@ public sealed class CommandIntrospectionTests
     [Fact]
     public void GetMetadata_on_real_where_command_has_attributes()
     {
-        var cmd = new Tosh.Core.Commands.WhereCommand();
+        var cmd = new Tosh.Core.Commands.Pipeline.WhereCommand();
         var meta = cmd.GetMetadata();
 
         Assert.Equal("where", meta.Name);
@@ -714,7 +715,7 @@ public sealed class CommandIntrospectionTests
     [Fact]
     public void GetMetadata_on_real_sort_command_has_options()
     {
-        var cmd = new Tosh.Core.Commands.SortCommand();
+        var cmd = new Tosh.Core.Commands.Pipeline.SortCommand();
         var meta = cmd.GetMetadata();
 
         Assert.Equal("sort", meta.Name);

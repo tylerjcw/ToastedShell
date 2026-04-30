@@ -49,7 +49,7 @@ internal static class FileIoUtilities
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(explicitValues);
 
-        return await Commands.WriteCommand.RenderAsync(context with { Arguments = explicitValues });
+        return await Commands.Text.WriteCommand.RenderAsync(context with { Arguments = explicitValues });
     }
 
     public static async Task<byte[]> ReadBytePayloadAsync(CommandContext context, IReadOnlyList<object?> explicitValues)

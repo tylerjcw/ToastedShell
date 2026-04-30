@@ -511,6 +511,7 @@ INPUT ./command-reference.tex
 INPUT ./command-reference.tex
 INPUT command-reference.tex
 INPUT /usr/share/texmf-dist/fonts/tfm/adobe/sourcecodepro/SourceCodePro-Bold-tlf-t1.tfm
+INPUT /usr/share/texmf-dist/fonts/tfm/adobe/sourcecodepro/SourceCodePro-It-tlf-t1.tfm
 INPUT /usr/share/texmf-dist/fonts/vf/adobe/sourcecodepro/SourceCodePro-Bold-tlf-t1.vf
 INPUT /usr/share/texmf-dist/fonts/tfm/adobe/sourcecodepro/SourceCodePro-Bold-tlf-t1--base.tfm
 INPUT ./diagnostic-codes.tex

@@ -211,14 +211,27 @@ func group_filter_pattern(group: string) -> string? {
 # ─────────────────────────────────────────────────────────────────────────────
 # Subcommand: publish
 # ─────────────────────────────────────────────────────────────────────────────
-
+## Builds the solution, version-bumps, updates PKGBUILD, publishes to a directory, optionally installs via makepkg, and optionally executes the new binary.
 subcommand publish {
+    ## When set, specifies the target runtime identifier (RID) for publishing (e.g. win-x64, linux-x64, osx-arm64). Defaults to the current platform's RID.
     flag rid: string = ""
+
+    ## When set, specifies the output directory for the published binaries. Defaults to artifacts/publish/{rid}/{mode}.
     flag output: string = ""
+
+    ## When set, enables aggressive trimming for a smaller single-file binary (may cause issues with reflection or dynamic code generation).
     flag trimmed: bool = false
+
+    ## When set, specifies whether the published binary should be framework-dependent. Defaults to false (self-contained).
     flag frameworkDependent: bool = false
+
+    ## When set, skips the installation step (makepkg) after publishing, useful for manual testing or CI.
     flag noInstall: bool = false
+
+    ## When set, prevents automatic version bumping and uses the existing version from the publish state (useful for patch releases or manual control over versioning).
     flag noBump: bool = false
+
+    ## When set, executes the published binary immediately after a successful publish (use with caution, especially if the new version has breaking changes or bugs). Defaults to false.
     flag exec: bool = false
 
     var plan = new PublishPlan()
@@ -454,14 +467,30 @@ func run_tests(group: string, filter_override: string?, rerun_failed: bool, no_b
     }
 }
 
+## Runs the test suite, optionally filtered by group or xUnit filter pattern, with options for rerunning failed tests, skipping build, and outputting results to a specific directory.
 subcommand test {
+    ## When set, only runs tests from the specified group (see `test --list-groups`).
     flag group: string = "all"
+
+    ## When set, only runs tests matching the given xUnit FullyQualifiedName filter pattern (overrides --group).
     flag filter: string = ""
+
+    ## When set, reruns only the tests that failed in the previous run (requires --results to locate the TRX file).
     flag failed: bool = false
+
+    ## When set, lists available test groups and exits.
     flag listGroups: bool = false
+
+    ## When set, skips the build step and runs tests against the last build output (useful for iterative test runs without rebuilding).
     flag noBuild: bool = false
+
+    ## When set, outputs detailed test execution logs to the console.
     flag verbose: bool = false
+
+    ## When set, enables the xUnit Blame logger to capture additional diagnostics on test failures (requires --results to locate the TRX file).
     flag blame: bool = false
+
+    ## When set, specifies a custom directory for test results output (must contain the TRX file for --failed and --blame to work).
     flag results: string = ""
 
     if ($listGroups) {
@@ -481,11 +510,18 @@ subcommand test {
 # ─────────────────────────────────────────────────────────────────────────────
 # Subcommand: check (build only, no install — for CI)
 # ─────────────────────────────────────────────────────────────────────────────
-
+## Builds the entire solution without installing, used as a CI gate to ensure no build errors before running tests.
 subcommand check {
+    ## When set, skips running tests after building, only checks that the build succeeds.
     flag noTest: bool = false
+
+    ## When set, only runs a subset of tests after building, filtered by group (see `test --list-groups`).
     flag fast: bool = false
+
+    ## When set, only runs tests matching the given xUnit FullyQualifiedName filter pattern (overrides --fast).
     flag group: string = "all"
+
+    ## When set, only runs tests matching the given xUnit FullyQualifiedName filter pattern (overrides --fast).
     flag filter: string = ""
 
     var root = repo_root
@@ -508,9 +544,12 @@ subcommand check {
 # ─────────────────────────────────────────────────────────────────────────────
 # Subcommand: clean
 # ─────────────────────────────────────────────────────────────────────────────
-
+## Cleans build artifacts: bin/obj directories, test results, published outputs.
 subcommand clean {
+    ## When set, performs a dry run without actually deleting anything, printing what would be removed.
     flag dryRun: bool = false
+
+    ## When set, also removes published outputs and node_modules (full clean).
     flag all: bool = false
 
     var root = repo_root
@@ -571,7 +610,7 @@ subcommand clean {
 # ─────────────────────────────────────────────────────────────────────────────
 # Subcommand: info
 # ─────────────────────────────────────────────────────────────────────────────
-
+## Displays information about the current repository state, including version, .NET SDK version, Git branch and status, and last test/bench runs.
 subcommand info {
     var root = repo_root
     var state_path = $root | join -p ".tosh-publish-state"
@@ -622,7 +661,9 @@ subcommand info {
 
 record Diag(Severity: string, Code: string, File: string, Line: int, Col: int, Message: string)
 
+## Builds the solution and parses compiler errors/warnings from the output, optionally emitting as JSON.
 subcommand errors {
+    ## When set, outputs diagnostics as JSON instead of human-readable text.
     flag json: bool = false
 
     var root = repo_root

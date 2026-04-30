@@ -8,6 +8,8 @@
 \label{ref:call}
 \icmd{call}
 
+\textit{Library: \code{Tosh.Stdlib.Clr}}
+
 \begin{cmdbox}{call}
 Invokes an instance or static CLR method.
 
@@ -44,6 +46,8 @@ Prefer the fluent `\$obj.Method()` expression syntax for instance calls and `Typ
 \label{ref:call-method}
 \icmd{call-method}
 
+\textit{Library: \code{Tosh.Stdlib.Clr}}
+
 \begin{cmdbox}{call-method}
 Invokes a method by dynamic name.
 
@@ -63,6 +67,8 @@ call-method $obj MethodName arg1
 \subsection{\texttt{cast}}
 \label{ref:cast}
 \icmd{cast}
+
+\textit{Library: \code{Tosh.Stdlib.Clr}}
 
 \begin{cmdbox}{cast}
 Casts pipeline values to a CLR type, including constructed generic collection types.
@@ -100,6 +106,8 @@ Cast converts to CLR target types, including constructed generic collection type
 \label{ref:clone}
 \icmd{clone}
 
+\textit{Library: \code{Tosh.Stdlib.Clr}}
+
 \begin{cmdbox}{clone}
 Creates a shallow copy of an object.
 
@@ -119,6 +127,8 @@ clone $obj
 \subsection{\texttt{constructors}}
 \label{ref:constructors}
 \icmd{constructors}
+
+\textit{Library: \code{Tosh.Stdlib.Clr}}
 
 \begin{cmdbox}{constructors}
 Lists constructors for CLR types, ToSh classes, and shell collection types.
@@ -144,6 +154,8 @@ Constructors works with CLR types, ToSh named types, and shell collection types 
 \subsection{\texttt{del-prop}}
 \label{ref:del-prop}
 \icmd{del-prop}
+
+\textit{Library: \code{Tosh.Stdlib.Clr}}
 
 \begin{cmdbox}{del-prop}
 Removes a property from a dynamic record.
@@ -181,6 +193,8 @@ Only works on dictionary-backed dynamic records. CLR properties cannot be remove
 \label{ref:describe-type}
 \icmd{describe-type}
 
+\textit{Library: \code{Tosh.Stdlib.Clr}}
+
 \begin{cmdbox}{describe-type}
 Describes CLR types, ToSh named types, or shell collection types.
 
@@ -213,6 +227,8 @@ describe-type list dict table  # Describe multiple shell types
 \label{ref:get-methods}
 \icmd{get-methods}
 
+\textit{Library: \code{Tosh.Stdlib.Clr}}
+
 \begin{cmdbox}{get-methods}
 Lists method names for an object or ToSh class.
 
@@ -232,6 +248,8 @@ get-methods $obj
 \subsection{\texttt{get-prop}}
 \label{ref:get-prop}
 \icmd{get-prop}
+
+\textit{Library: \code{Tosh.Stdlib.Clr}}
 
 \begin{cmdbox}{get-prop}
 Gets a property value by dynamic name.
@@ -265,6 +283,8 @@ get-prop $obj Name  # Get a property by passing the object as an argument
 \label{ref:get-props}
 \icmd{get-props}
 
+\textit{Library: \code{Tosh.Stdlib.Clr}}
+
 \begin{cmdbox}{get-props}
 Lists property names for an object.
 
@@ -285,6 +305,8 @@ get-props $obj
 \label{ref:has-method}
 \icmd{has-method}
 
+\textit{Library: \code{Tosh.Stdlib.Clr}}
+
 \begin{cmdbox}{has-method}
 Checks whether an object or ToSh class has the named method.
 
@@ -304,6 +326,8 @@ has-method $obj ToString
 \subsection{\texttt{has-prop}}
 \label{ref:has-prop}
 \icmd{has-prop}
+
+\textit{Library: \code{Tosh.Stdlib.Clr}}
 
 \begin{cmdbox}{has-prop}
 Checks whether an object has the named property.
@@ -337,6 +361,8 @@ has-prop $obj Name  # Check by passing the object directly
 \label{ref:load-assembly}
 \icmd{load-assembly}
 
+\textit{Library: \code{Tosh.Stdlib.Clr}}
+
 \begin{cmdbox}{load-assembly}
 Loads a .NET assembly from disk into the current process.
 
@@ -364,6 +390,8 @@ load-assembly Newtonsoft.Json.dll System.Data.dll  # Load multiple assemblies
 \subsection{\texttt{members}}
 \label{ref:members}
 \icmd{members}
+
+\textit{Library: \code{Tosh.Stdlib.Clr}}
 
 \begin{cmdbox}{members}
 Lists public members for CLR types or pipeline objects.
@@ -396,6 +424,8 @@ DateTime.Now | members  # List members of a piped object
 \label{ref:methods}
 \icmd{methods}
 
+\textit{Library: \code{Tosh.Stdlib.Clr}}
+
 \begin{cmdbox}{methods}
 Lists public methods for CLR types or pipeline objects.
 
@@ -427,6 +457,8 @@ DateTime.Now | methods  # List methods of a piped object
 \label{ref:native-alloc}
 \icmd{native-alloc}
 
+\textit{Library: \code{Tosh.Stdlib.Clr}}
+
 \begin{cmdbox}{native-alloc}
 Allocates a native unmanaged buffer by byte size or interop type.
 
@@ -457,6 +489,8 @@ alloc int32  # Allocate enough native memory for one Int32
 \label{ref:native-free}
 \icmd{native-free}
 
+\textit{Library: \code{Tosh.Stdlib.Clr}}
+
 \begin{cmdbox}{native-free}
 Frees one or more native buffers allocated by alloc/native-alloc.
 
@@ -484,6 +518,8 @@ native-free $a $b  # Free explicit buffers
 \subsection{\texttt{native-offsetof}}
 \label{ref:native-offsetof}
 \icmd{native-offsetof}
+
+\textit{Library: \code{Tosh.Stdlib.Clr}}
 
 \begin{cmdbox}{native-offsetof}
 Returns the unmanaged field offset for a sequential or explicit-layout struct.
@@ -515,6 +551,8 @@ offset-of System.Runtime.InteropServices.ComTypes.FILETIME.dwHighDateTime  # Off
 \subsection{\texttt{native-read}}
 \label{ref:native-read}
 \icmd{native-read}
+
+\textit{Library: \code{Tosh.Stdlib.Clr}}
 
 \begin{cmdbox}{native-read}
 Reads a C string, byte range, or native scalar/struct-layout value from native memory.
@@ -550,6 +588,8 @@ native-read int32 $buffer 0 4  # Read an Int32 at an offset
 \label{ref:native-sizeof}
 \icmd{native-sizeof}
 
+\textit{Library: \code{Tosh.Stdlib.Clr}}
+
 \begin{cmdbox}{native-sizeof}
 Returns the unmanaged size of a supported native interop type.
 
@@ -579,6 +619,8 @@ size-of int32 double nint  # Size several native types
 \subsection{\texttt{native-write}}
 \label{ref:native-write}
 \icmd{native-write}
+
+\textit{Library: \code{Tosh.Stdlib.Clr}}
 
 \begin{cmdbox}{native-write}
 Writes a C string, byte sequence, or struct-layout value into native memory.
@@ -611,6 +653,8 @@ native-write $buffer [72 105 0] 0  # Write explicit bytes
 \subsection{\texttt{new}}
 \label{ref:new}
 \icmd{new}
+
+\textit{Library: \code{Tosh.Stdlib.Clr}}
 
 \begin{cmdbox}{new}
 Constructs a new CLR object, ToSh named type, or shell collection.
@@ -646,6 +690,8 @@ Tosh supports both the legacy `new <Type> ...` command form and the newer C\#-st
 \label{ref:set-prop}
 \icmd{set-prop}
 
+\textit{Library: \code{Tosh.Stdlib.Clr}}
+
 \begin{cmdbox}{set-prop}
 Sets or adds a property on a dynamic record.
 
@@ -679,6 +725,8 @@ set-prop $obj Name "value"  # Set a property by passing the object directly
 \label{ref:type-of}
 \icmd{type-of}
 
+\textit{Library: \code{Tosh.Stdlib.Clr}}
+
 \begin{cmdbox}{type-of}
 Returns the CLR type or ToSh class type for each input object.
 
@@ -710,6 +758,8 @@ ls | first | type-of  # Get the type of a file system entry
 \subsection{\texttt{types}}
 \label{ref:types}
 \icmd{types}
+
+\textit{Library: \code{Tosh.Stdlib.Clr}}
 
 \begin{cmdbox}{types}
 Lists available CLR and ToSh shell types.
@@ -755,6 +805,8 @@ Types searches both CLR types and ToSh shell types like `list`, `array`, `dict`,
 \label{ref:async}
 \icmd{async}
 
+\textit{Library: \code{Tosh.Stdlib.Concurrency}}
+
 \begin{cmdbox}{async}
 Starts a callable or block and returns a future handle.
 
@@ -783,6 +835,8 @@ var f = async { sleep 0.2; echo done }  # Start a deferred operation
 \label{ref:await}
 \icmd{await}
 
+\textit{Library: \code{Tosh.Stdlib.Concurrency}}
+
 \begin{cmdbox}{await}
 Awaits a future created by async and replays its outputs.
 
@@ -809,6 +863,8 @@ var f = async { sleep 0.1; echo ok }; await $f  # Await a future
 \subsection{\texttt{channel}}
 \label{ref:channel}
 \icmd{channel}
+
+\textit{Library: \code{Tosh.Stdlib.Concurrency}}
 
 \begin{cmdbox}{channel}
 Creates a new shell channel for sending and receiving values.
@@ -842,6 +898,8 @@ Send values with channel-send, receive with channel-recv, and close with channel
 \label{ref:channel-close}
 \icmd{channel-close}
 
+\textit{Library: \code{Tosh.Stdlib.Concurrency}}
+
 \begin{cmdbox}{channel-close}
 Closes a shell channel, signalling no further values will be sent.
 
@@ -872,6 +930,8 @@ After closing, channel-recv will drain any buffered values and then complete. Cl
 \subsection{\texttt{channel-recv}}
 \label{ref:channel-recv}
 \icmd{channel-recv}
+
+\textit{Library: \code{Tosh.Stdlib.Concurrency}}
 
 \begin{cmdbox}{channel-recv}
 Receives all values from a shell channel.
@@ -904,6 +964,8 @@ Blocks until a value is available. Returns when the channel is closed and draine
 \label{ref:channel-select}
 \icmd{channel-select}
 
+\textit{Library: \code{Tosh.Stdlib.Concurrency}}
+
 \begin{cmdbox}{channel-select}
 Waits for the first available value from multiple channels.
 
@@ -930,6 +992,8 @@ channel-select $ch1 $ch2  # Return the first channel with a value
 \subsection{\texttt{channel-send}}
 \label{ref:channel-send}
 \icmd{channel-send}
+
+\textit{Library: \code{Tosh.Stdlib.Concurrency}}
 
 \begin{cmdbox}{channel-send}
 Sends one or more values to a shell channel.
@@ -964,6 +1028,8 @@ Blocks (asynchronously) when the channel is bounded and its buffer is full.
 \label{ref:race}
 \icmd{race}
 
+\textit{Library: \code{Tosh.Stdlib.Concurrency}}
+
 \begin{cmdbox}{race}
 Executes operations concurrently and returns the first completion.
 
@@ -990,6 +1056,8 @@ race { sleep 0.1; echo slow } { sleep 0.01; echo fast }  # Return the first comp
 \subsection{\texttt{scope}}
 \label{ref:scope}
 \icmd{scope}
+
+\textit{Library: \code{Tosh.Stdlib.Concurrency}}
 
 \begin{cmdbox}{scope}
 Executes a block and automatically awaits all background jobs started inside it.
@@ -1022,6 +1090,8 @@ All jobs registered during block execution are awaited on scope exit. If the blo
 \label{ref:settle}
 \icmd{settle}
 
+\textit{Library: \code{Tosh.Stdlib.Concurrency}}
+
 \begin{cmdbox}{settle}
 Executes operations concurrently and returns settled outcomes.
 
@@ -1048,6 +1118,8 @@ settle { echo ok } { throw boom }  # Collect fulfilled and rejected outcomes
 \subsection{\texttt{spawn}}
 \label{ref:spawn}
 \icmd{spawn}
+
+\textit{Library: \code{Tosh.Stdlib.Concurrency}}
 
 \begin{cmdbox}{spawn}
 Starts an external command as a background job, or in the foreground with --foreground.
@@ -1094,6 +1166,8 @@ Use jobs to list active jobs and wait-for to await completion.
 \label{ref:timeout}
 \icmd{timeout}
 
+\textit{Library: \code{Tosh.Stdlib.Concurrency}}
+
 \begin{cmdbox}{timeout}
 Runs an operation with a timeout.
 
@@ -1126,6 +1200,8 @@ timeout 0.2 { sleep 1 }  # Fail when elapsed
 \subsection{\texttt{as-file}}
 \label{ref:as-file}
 \icmd{as-file}
+
+\textit{Library: \code{Tosh.Stdlib.Data}}
 
 \begin{cmdbox}{as-file}
 Materializes values into a temporary file and returns it as a file system entry.
@@ -1163,6 +1239,8 @@ As-file materializes pipeline values into a temporary file and returns a file ob
 \label{ref:complex}
 \icmd{complex}
 
+\textit{Library: \code{Tosh.Stdlib.Data}}
+
 \begin{cmdbox}{complex}
 Builds a Complex value from numeric arguments or pipeline input.
 
@@ -1195,6 +1273,8 @@ echo 3 4 | complex  # Build a complex number from pipeline values
 \label{ref:from}
 \icmd{from}
 
+\textit{Library: \code{Tosh.Stdlib.Data}}
+
 \begin{cmdbox}{from}
 Parses structured text into objects.
 
@@ -1220,6 +1300,8 @@ The `from` and `to` commands convert between text formats (json, csv, tsv, xml, 
 \subsection{\texttt{hash}}
 \label{ref:hash}
 \icmd{hash}
+
+\textit{Library: \code{Tosh.Stdlib.Data}}
 
 \begin{cmdbox}{hash}
 Computes hashes for text input or files.
@@ -1249,6 +1331,8 @@ hash sha512 README.md  # Hash a file with SHA-512
 \subsection{\texttt{mat}}
 \label{ref:mat}
 \icmd{mat}
+
+\textit{Library: \code{Tosh.Stdlib.Data}}
 
 \begin{cmdbox}{mat}
 Builds a Matrix from rows, scalars, or pipeline input.
@@ -1280,6 +1364,8 @@ echo [[1, 2], [3, 4]] | mat  # Build a matrix from pipeline input
 \subsection{\texttt{parse}}
 \label{ref:parse}
 \icmd{parse}
+
+\textit{Library: \code{Tosh.Stdlib.Data}}
 
 \begin{cmdbox}{parse}
 Parses text input with a regular expression into shell record objects.
@@ -1329,6 +1415,8 @@ Parse and match use .NET regular expressions, including named groups and inline 
 \label{ref:to}
 \icmd{to}
 
+\textit{Library: \code{Tosh.Stdlib.Data}}
+
 \begin{cmdbox}{to}
 Serializes objects into structured text.
 
@@ -1354,6 +1442,8 @@ The `from` and `to` commands convert between text formats (json, csv, tsv, xml, 
 \subsection{\texttt{vec}}
 \label{ref:vec}
 \icmd{vec}
+
+\textit{Library: \code{Tosh.Stdlib.Data}}
 
 \begin{cmdbox}{vec}
 Builds a Vector from numeric arguments or pipeline input.
@@ -1389,6 +1479,8 @@ echo [1, 2, 3] | vec  # Build a vector from a single list value
 \subsection{\texttt{append-file}}
 \label{ref:append-file}
 \icmd{append-file}
+
+\textit{Library: \code{Tosh.Stdlib.Filesystem}}
 
 \begin{cmdbox}{append-file}
 Appends plain text to a file, creating it when needed.
@@ -1426,6 +1518,10 @@ These commands use ToSh's plain-text serialization rules, not the rich table ren
 \label{ref:back}
 \icmd{back}
 
+\textit{Library: \code{Tosh.Stdlib.Shell}}
+
+\textbf{[shell-only]} — only available inside an interactive TōSh session.
+
 \begin{cmdbox}{back}
 Goes back to the previous directory in the stack.
 
@@ -1444,6 +1540,8 @@ back
 \subsection{\texttt{basename}}
 \label{ref:basename}
 \icmd{basename}
+
+\textit{Library: \code{Tosh.Stdlib.Filesystem}}
 
 \begin{cmdbox}{basename}
 Returns the file name portion of each path.
@@ -1476,6 +1574,8 @@ basename file.tar.gz .tar.gz  # Strip suffix
 \subsection{\texttt{cat}}
 \label{ref:cat}
 \icmd{cat}
+
+\textit{Library: \code{Tosh.Stdlib.Filesystem}}
 
 \begin{cmdbox}{cat}
 Reads one or more files or piped text sources and emits their contents.
@@ -1526,6 +1626,8 @@ With no explicit paths, `cat` treats piped values as file paths only when every 
 \label{ref:cd}
 \icmd{cd}
 
+\textit{Library: \code{Tosh.Stdlib.Filesystem}}
+
 \begin{cmdbox}{cd}
 Changes the current directory for the Tosh session.
 
@@ -1557,6 +1659,8 @@ cd  # Home directory
 \subsection{\texttt{chmod}}
 \label{ref:chmod}
 \icmd{chmod}
+
+\textit{Library: \code{Tosh.Stdlib.Filesystem}}
 
 \begin{cmdbox}{chmod}
 Changes file permission bits.
@@ -1597,6 +1701,8 @@ chmod -R a+r ./docs  # Recursive
 \label{ref:chown}
 \icmd{chown}
 
+\textit{Library: \code{Tosh.Stdlib.Filesystem}}
+
 \begin{cmdbox}{chown}
 Changes file owner and group.
 
@@ -1634,6 +1740,8 @@ chown -R www-data /var/www  # Recursive change
 \label{ref:close}
 \icmd{close}
 
+\textit{Library: \code{Tosh.Stdlib.Filesystem}}
+
 \begin{cmdbox}{close}
 Closes one or more managed file or server handles.
 
@@ -1668,6 +1776,8 @@ These commands work with managed file handles returned by `open-file` or by `Fil
 \subsection{\texttt{copy-to}}
 \label{ref:copy-to}
 \icmd{copy-to}
+
+\textit{Library: \code{Tosh.Stdlib.Filesystem}}
 
 \begin{cmdbox}{copy-to}
 Copies the remaining contents of one managed file handle into another compatible handle.
@@ -1704,6 +1814,8 @@ These commands work with managed file handles returned by `open-file` or by `Fil
 \subsection{\texttt{cp}}
 \label{ref:cp}
 \icmd{cp}
+
+\textit{Library: \code{Tosh.Stdlib.Filesystem}}
 
 \begin{cmdbox}{cp}
 Copies a file or directory.
@@ -1752,6 +1864,8 @@ cp -l file.txt hardlink.txt  # Create a hard link
 \subsection{\texttt{df}}
 \label{ref:df}
 \icmd{df}
+
+\textit{Library: \code{Tosh.Stdlib.Filesystem}}
 
 \begin{cmdbox}{df}
 Returns mounted file system usage information.
@@ -1803,6 +1917,8 @@ df . | get { FileSystem, MountedOn }
 \label{ref:dirname}
 \icmd{dirname}
 
+\textit{Library: \code{Tosh.Stdlib.Filesystem}}
+
 \begin{cmdbox}{dirname}
 Returns the directory portion of each path.
 
@@ -1833,6 +1949,10 @@ dirname /home/user/file.txt
 \label{ref:dirs}
 \icmd{dirs}
 
+\textit{Library: \code{Tosh.Stdlib.Shell}}
+
+\textbf{[shell-only]} — only available inside an interactive TōSh session.
+
 \begin{cmdbox}{dirs}
 Shows or manages the directory stack.
 
@@ -1861,6 +1981,8 @@ dirs clear  # Clear the directory stack
 \subsection{\texttt{du}}
 \label{ref:du}
 \icmd{du}
+
+\textit{Library: \code{Tosh.Stdlib.Filesystem}}
 
 \begin{cmdbox}{du}
 Returns disk usage information for files and directories.
@@ -1914,6 +2036,8 @@ du -x ./projects | get { Name, Size, Modified }
 \label{ref:exists}
 \icmd{exists}
 
+\textit{Library: \code{Tosh.Stdlib.Filesystem}}
+
 \begin{cmdbox}{exists}
 Checks whether each path exists.
 
@@ -1941,6 +2065,8 @@ glob "src/**/*.cs" | exists | where _.Exists  # Filter path-test results
 \subsection{\texttt{find}}
 \label{ref:find}
 \icmd{find}
+
+\textit{Library: \code{Tosh.Stdlib.Filesystem}}
 
 \begin{cmdbox}{find}
 Recursively finds file system entries.
@@ -1993,6 +2119,8 @@ find . -iregex ".*readme.*"
 \subsection{\texttt{findmnt}}
 \label{ref:findmnt}
 \icmd{findmnt}
+
+\textit{Library: \code{Tosh.Stdlib.Filesystem}}
 
 \begin{cmdbox}{findmnt}
 Wraps the system findmnt utility, returning typed mounted-filesystem objects for JSON-backed invocations.
@@ -2052,6 +2180,8 @@ ToSh wraps `findmnt --json --bytes --output-all` so mounted filesystems stay as 
 \label{ref:flush}
 \icmd{flush}
 
+\textit{Library: \code{Tosh.Stdlib.Filesystem}}
+
 \begin{cmdbox}{flush}
 Flushes one or more managed file handles.
 
@@ -2087,6 +2217,10 @@ These commands work with managed file handles returned by `open-file` or by `Fil
 \label{ref:forward}
 \icmd{forward}
 
+\textit{Library: \code{Tosh.Stdlib.Shell}}
+
+\textbf{[shell-only]} — only available inside an interactive TōSh session.
+
 \begin{cmdbox}{forward}
 Goes forward to the next directory in the stack.
 
@@ -2105,6 +2239,8 @@ forward
 \subsection{\texttt{glob}}
 \label{ref:glob}
 \icmd{glob}
+
+\textit{Library: \code{Tosh.Stdlib.Filesystem}}
 
 \begin{cmdbox}{glob}
 Expands filesystem glob patterns.
@@ -2145,6 +2281,8 @@ glob -a **/*.cs  # Recursive with hidden files
 \label{ref:is-dir}
 \icmd{is-dir}
 
+\textit{Library: \code{Tosh.Stdlib.Filesystem}}
+
 \begin{cmdbox}{is-dir}
 Checks whether each path is a directory.
 
@@ -2172,6 +2310,8 @@ glob "src/**/*.cs" | is-dir | where _.IsDirectory  # Filter path-test results
 \subsection{\texttt{is-file}}
 \label{ref:is-file}
 \icmd{is-file}
+
+\textit{Library: \code{Tosh.Stdlib.Filesystem}}
 
 \begin{cmdbox}{is-file}
 Checks whether each path is a file.
@@ -2201,6 +2341,8 @@ glob "src/**/*.cs" | is-file | where _.IsFile  # Filter path-test results
 \label{ref:is-link}
 \icmd{is-link}
 
+\textit{Library: \code{Tosh.Stdlib.Filesystem}}
+
 \begin{cmdbox}{is-link}
 Checks whether each path is a symbolic link.
 
@@ -2228,6 +2370,8 @@ glob "src/**/*.cs" | is-link | where _.IsLink  # Filter path-test results
 \subsection{\texttt{length}}
 \label{ref:length}
 \icmd{length}
+
+\textit{Library: \code{Tosh.Stdlib.Filesystem}}
 
 \begin{cmdbox}{length}
 Returns the current stream length for one or more managed file handles.
@@ -2263,6 +2407,8 @@ These commands work with managed file handles returned by `open-file` or by `Fil
 \subsection{\texttt{ln}}
 \label{ref:ln}
 \icmd{ln}
+
+\textit{Library: \code{Tosh.Stdlib.Filesystem}}
 
 \begin{cmdbox}{ln}
 Creates hard links or symbolic links.
@@ -2301,6 +2447,8 @@ ln -s /usr/bin/python3 ./python  # Create symbolic link
 \subsection{\texttt{ls}}
 \label{ref:ls}
 \icmd{ls}
+
+\textit{Library: \code{Tosh.Stdlib.Filesystem}}
 
 \begin{cmdbox}{ls}
 Lists file system entries.
@@ -2360,6 +2508,8 @@ Filesystem metadata stays typed in the pipeline, even when Tosh renders it like 
 \subsection{\texttt{lsblk}}
 \label{ref:lsblk}
 \icmd{lsblk}
+
+\textit{Library: \code{Tosh.Stdlib.Filesystem}}
 
 \begin{cmdbox}{lsblk}
 Wraps the system lsblk utility, returning typed block-device objects for JSON-backed invocations.
@@ -2425,6 +2575,8 @@ ToSh wraps `lsblk --json --bytes --output-all` so block devices stay as typed ob
 \label{ref:mkdir}
 \icmd{mkdir}
 
+\textit{Library: \code{Tosh.Stdlib.Filesystem}}
+
 \begin{cmdbox}{mkdir}
 Creates one or more directories.
 
@@ -2466,6 +2618,8 @@ mkdir -p a/b/c  # Create nested directories
 \label{ref:mkdir-temp}
 \icmd{mkdir-temp}
 
+\textit{Library: \code{Tosh.Stdlib.Filesystem}}
+
 \begin{cmdbox}{mkdir-temp}
 Creates a temporary directory and returns it as a file system entry.
 
@@ -2493,6 +2647,8 @@ mkdir-temp myapp  # Custom prefix
 \subsection{\texttt{mv}}
 \label{ref:mv}
 \icmd{mv}
+
+\textit{Library: \code{Tosh.Stdlib.Filesystem}}
 
 \begin{cmdbox}{mv}
 Moves or renames files and directories.
@@ -2544,6 +2700,8 @@ Mv now overwrites existing file targets by default, closer to Unix `mv`. `-n`, `
 \label{ref:open-file}
 \icmd{open-file}
 
+\textit{Library: \code{Tosh.Stdlib.Filesystem}}
+
 \begin{cmdbox}{open-file}
 Opens one or more files as managed text or binary handles.
 
@@ -2593,6 +2751,8 @@ Open-file is the start of ToSh's managed stream system. It returns explicit text
 \label{ref:position}
 \icmd{position}
 
+\textit{Library: \code{Tosh.Stdlib.Filesystem}}
+
 \begin{cmdbox}{position}
 Returns the current stream position for one or more managed file handles.
 
@@ -2628,6 +2788,8 @@ These commands work with managed file handles returned by `open-file` or by `Fil
 \label{ref:pwd}
 \icmd{pwd}
 
+\textit{Library: \code{Tosh.Stdlib.Filesystem}}
+
 \begin{cmdbox}{pwd}
 Returns the current directory as a DirectoryInfo object.
 
@@ -2647,6 +2809,8 @@ pwd | get .FullName  # Get the full path as a string
 \subsection{\texttt{read-bytes}}
 \label{ref:read-bytes}
 \icmd{read-bytes}
+
+\textit{Library: \code{Tosh.Stdlib.Filesystem}}
 
 \begin{cmdbox}{read-bytes}
 Reads one or more files and returns each file as a byte array.
@@ -2683,6 +2847,8 @@ These commands accept normal path-like values, including strings, FileInfo, and 
 \label{ref:read-file}
 \icmd{read-file}
 
+\textit{Library: \code{Tosh.Stdlib.Filesystem}}
+
 \begin{cmdbox}{read-file}
 Reads one or more files and returns each file as a single string value.
 
@@ -2717,6 +2883,8 @@ These commands accept normal path-like values, including strings, FileInfo, and 
 \subsection{\texttt{read-from}}
 \label{ref:read-from}
 \icmd{read-from}
+
+\textit{Library: \code{Tosh.Stdlib.Filesystem}}
 
 \begin{cmdbox}{read-from}
 Reads a text or binary chunk from an open managed file handle.
@@ -2754,6 +2922,8 @@ These commands work with managed file handles returned by `open-file` or by `Fil
 \label{ref:read-line-from}
 \icmd{read-line-from}
 
+\textit{Library: \code{Tosh.Stdlib.Filesystem}}
+
 \begin{cmdbox}{read-line-from}
 Reads the next text line from an open managed file handle.
 
@@ -2788,6 +2958,8 @@ These commands work with managed file handles returned by `open-file` or by `Fil
 \subsection{\texttt{read-lines}}
 \label{ref:read-lines}
 \icmd{read-lines}
+
+\textit{Library: \code{Tosh.Stdlib.Filesystem}}
 
 \begin{cmdbox}{read-lines}
 Reads one or more files and emits their contents line-by-line.
@@ -2824,6 +2996,8 @@ These commands accept normal path-like values, including strings, FileInfo, and 
 \label{ref:read-to-end}
 \icmd{read-to-end}
 
+\textit{Library: \code{Tosh.Stdlib.Filesystem}}
+
 \begin{cmdbox}{read-to-end}
 Reads the remainder of an open managed file handle.
 
@@ -2858,6 +3032,8 @@ These commands work with managed file handles returned by `open-file` or by `Fil
 \subsection{\texttt{readlink}}
 \label{ref:readlink}
 \icmd{readlink}
+
+\textit{Library: \code{Tosh.Stdlib.Filesystem}}
 
 \begin{cmdbox}{readlink}
 Returns symbolic link targets.
@@ -2895,6 +3071,8 @@ readlink -f ./chain  # Canonicalize
 \label{ref:realpath}
 \icmd{realpath}
 
+\textit{Library: \code{Tosh.Stdlib.Filesystem}}
+
 \begin{cmdbox}{realpath}
 Returns fully resolved absolute paths.
 
@@ -2921,6 +3099,8 @@ realpath ./relative/path
 \subsection{\texttt{rm}}
 \label{ref:rm}
 \icmd{rm}
+
+\textit{Library: \code{Tosh.Stdlib.Filesystem}}
 
 \begin{cmdbox}{rm}
 Removes files or directories.
@@ -2964,6 +3144,8 @@ rm -rf build/  # Force recursive delete
 \label{ref:seek}
 \icmd{seek}
 
+\textit{Library: \code{Tosh.Stdlib.Filesystem}}
+
 \begin{cmdbox}{seek}
 Moves an open managed file handle to a new position and returns the handle for continued piping.
 
@@ -3000,6 +3182,8 @@ These commands work with managed file handles returned by `open-file` or by `Fil
 \subsection{\texttt{stat}}
 \label{ref:stat}
 \icmd{stat}
+
+\textit{Library: \code{Tosh.Stdlib.Filesystem}}
 
 \begin{cmdbox}{stat}
 Returns detailed metadata for one or more paths.
@@ -3046,6 +3230,8 @@ stat -f . | get { RequestedPath, FileSystem, MountedOn }  # Filesystem mode
 \label{ref:tempfile}
 \icmd{tempfile}
 
+\textit{Library: \code{Tosh.Stdlib.Filesystem}}
+
 \begin{cmdbox}{tempfile}
 Creates a temporary file and returns it as a file system entry.
 
@@ -3074,6 +3260,8 @@ tempfile data .csv  # Custom prefix and extension
 \subsection{\texttt{touch}}
 \label{ref:touch}
 \icmd{touch}
+
+\textit{Library: \code{Tosh.Stdlib.Filesystem}}
 
 \begin{cmdbox}{touch}
 Creates files or updates access and modification timestamps.
@@ -3123,6 +3311,8 @@ Touch now supports `-a`, `-m`, `-c`, `-d`, and `-r`, plus grouped short flags li
 \label{ref:tree}
 \icmd{tree}
 
+\textit{Library: \code{Tosh.Stdlib.Filesystem}}
+
 \begin{cmdbox}{tree}
 Wraps the system tree utility, returning typed tree-entry objects.
 
@@ -3166,6 +3356,8 @@ tree -L 2 -d  # Directories only, 2 levels
 \label{ref:write-bytes}
 \icmd{write-bytes}
 
+\textit{Library: \code{Tosh.Stdlib.Filesystem}}
+
 \begin{cmdbox}{write-bytes}
 Writes byte-oriented content to a file, replacing any previous contents.
 
@@ -3201,6 +3393,8 @@ Write-bytes accepts raw byte arrays, byte-like collections, and byte-convertible
 \subsection{\texttt{write-file}}
 \label{ref:write-file}
 \icmd{write-file}
+
+\textit{Library: \code{Tosh.Stdlib.Filesystem}}
 
 \begin{cmdbox}{write-file}
 Writes plain text to a file, replacing any previous contents.
@@ -3238,6 +3432,8 @@ These commands use ToSh's plain-text serialization rules, not the rich table ren
 \label{ref:write-line-to}
 \icmd{write-line-to}
 
+\textit{Library: \code{Tosh.Stdlib.Filesystem}}
+
 \begin{cmdbox}{write-line-to}
 Writes one or more text lines to an open managed text file handle.
 
@@ -3273,6 +3469,8 @@ These commands work with managed file handles returned by `open-file` or by `Fil
 \subsection{\texttt{write-to}}
 \label{ref:write-to}
 \icmd{write-to}
+
+\textit{Library: \code{Tosh.Stdlib.Filesystem}}
 
 \begin{cmdbox}{write-to}
 Writes plain text or bytes to an open managed file handle.
@@ -3313,6 +3511,8 @@ These commands work with managed file handles returned by `open-file` or by `Fil
 \label{ref:compose}
 \icmd{compose}
 
+\textit{Library: \code{Tosh.Stdlib.Functional}}
+
 \begin{cmdbox}{compose}
 Composes two or more callables into a single callable that chains them left-to-right.
 
@@ -3343,6 +3543,8 @@ $f = compose $parse $validate $transform; $f $input  # Build a processing pipeli
 \label{ref:converge}
 \icmd{converge}
 
+\textit{Library: \code{Tosh.Stdlib.Functional}}
+
 \begin{cmdbox}{converge}
 Applies a callable to the seed repeatedly until two consecutive results are equal, then yields that stable value.
 
@@ -3370,6 +3572,8 @@ converge 100 func(x) => ($x / 2 + 50 / $x)  # Newton's method for square root of
 \subsection{\texttt{curry}}
 \label{ref:curry}
 \icmd{curry}
+
+\textit{Library: \code{Tosh.Stdlib.Functional}}
 
 \begin{cmdbox}{curry}
 Converts a fixed-arity callable into a curried callable value.
@@ -3402,6 +3606,8 @@ var step1 = invoke $curried 1; var step2 = invoke $step1 2; invoke $step2 39  # 
 \label{ref:cycle}
 \icmd{cycle}
 
+\textit{Library: \code{Tosh.Stdlib.Functional}}
+
 \begin{cmdbox}{cycle}
 Infinitely repeats the pipeline items in order.
 
@@ -3428,6 +3634,8 @@ Produces an infinite sequence. Always pair with `first`, `take-while`, or `take-
 \subsection{\texttt{invoke}}
 \label{ref:invoke}
 \icmd{invoke}
+
+\textit{Library: \code{Tosh.Stdlib.Functional}}
 
 \begin{cmdbox}{invoke}
 Invokes a callable value such as a lambda or function object.
@@ -3462,6 +3670,8 @@ var factor = 3; var scale = func(x) => ($x * $factor); invoke $scale 7  # Invoke
 \label{ref:iterate}
 \icmd{iterate}
 
+\textit{Library: \code{Tosh.Stdlib.Functional}}
+
 \begin{cmdbox}{iterate}
 Generates an infinite sequence by repeatedly applying a callable to the previous result, starting from a seed. Pair with 'take' or 'take-while' to bound the output.
 
@@ -3495,6 +3705,8 @@ Produces an infinite sequence. Always pair with `first`, `take-until`, or `take-
 \label{ref:partial}
 \icmd{partial}
 
+\textit{Library: \code{Tosh.Stdlib.Functional}}
+
 \begin{cmdbox}{partial}
 Binds leading arguments to a callable and returns a new callable value.
 
@@ -3526,6 +3738,8 @@ invoke (partial (func(a, b, c) => ($"{$a}-{$b}-{$c}")) alpha beta) gamma  # Bind
 \subsection{\texttt{recur}}
 \label{ref:recur}
 \icmd{recur}
+
+\textit{Library: \code{Tosh.Stdlib.Functional}}
 
 \begin{cmdbox}{recur}
 Generates an infinite sequence from seed values using a recurrence relation. The callable receives the last N values (matching seed count) and returns the next value.
@@ -3560,6 +3774,8 @@ Produces an infinite sequence. Always pair with `first`, `take-while`, or `take-
 \label{ref:repeat}
 \icmd{repeat}
 
+\textit{Library: \code{Tosh.Stdlib.Functional}}
+
 \begin{cmdbox}{repeat}
 Produces a sequence of the same value repeated. Without a count argument, repeats infinitely.
 
@@ -3592,6 +3808,8 @@ Without a count, produces an infinite sequence. Pair with `first`, `take-while`,
 \subsection{\texttt{repeatedly}}
 \label{ref:repeatedly}
 \icmd{repeatedly}
+
+\textit{Library: \code{Tosh.Stdlib.Functional}}
 
 \begin{cmdbox}{repeatedly}
 Produces an infinite sequence by re-evaluating a block for each item. The block receives the 0-based index.
@@ -3629,6 +3847,8 @@ Unlike `repeat`, this re-evaluates the block for each item, so side effects and 
 \label{ref:unfold}
 \icmd{unfold}
 
+\textit{Library: \code{Tosh.Stdlib.Functional}}
+
 \begin{cmdbox}{unfold}
 Generates values from a seed by repeatedly applying a callable. The callable receives the current state and must return a [value, next-state] pair, or null to stop.
 
@@ -3660,6 +3880,8 @@ unfold [0 1] func(s) => [($s[0]) [($s[1]) ($s[0] + $s[1])]]  # Fibonacci sequenc
 \subsection{\texttt{round}}
 \label{ref:round}
 \icmd{round}
+
+\textit{Library: \code{Tosh.Stdlib.Math}}
 
 \begin{cmdbox}{round}
 Rounds a number to the specified number of decimal places.
@@ -3696,6 +3918,8 @@ echo 3.7 | round  # Round a piped value to nearest integer
 \subsection{\texttt{http}}
 \label{ref:http}
 \icmd{http}
+
+\textit{Library: \code{Tosh.Stdlib.Net}}
 
 \begin{cmdbox}{http}
 Sends HTTP requests and returns structured response objects or decoded bodies.
@@ -3773,6 +3997,8 @@ The native `http` builtin is object-first and backed by .NET HttpClient. Use `--
 \label{ref:ip}
 \icmd{ip}
 
+\textit{Library: \code{Tosh.Stdlib.Net}}
+
 \begin{cmdbox}{ip}
 Wraps the system ip utility, returning typed objects for supported JSON-backed subcommands.
 
@@ -3832,6 +4058,8 @@ ToSh wraps `ip addr`, `ip link`, `ip route`, `ip neigh`, `ip rule`, `ip netns`, 
 \subsection{\texttt{ping}}
 \label{ref:ping}
 \icmd{ping}
+
+\textit{Library: \code{Tosh.Stdlib.Net}}
 
 \begin{cmdbox}{ping}
 Pings a host and returns typed reply objects.
@@ -3942,6 +4170,8 @@ echo 1 2 3 | any func(x) => ($x == 2)  # Check whether any item matches
 \label{ref:average}
 \icmd{average}
 
+\textit{Library: \code{Tosh.Stdlib.Pipeline}}
+
 \begin{cmdbox}{average}
 Averages numeric, storage size, or timespan values.
 
@@ -3974,6 +4204,8 @@ ls | average .Length  # Average file sizes
 \subsection{\texttt{cartesian-product}}
 \label{ref:cartesian-product}
 \icmd{cartesian-product}
+
+\textit{Library: \code{Tosh.Stdlib.Pipeline}}
 
 \begin{cmdbox}{cartesian-product}
 Produces the Cartesian product of two sequences. For infinite sources, uses diagonal enumeration.
@@ -4012,6 +4244,8 @@ For infinite sources, uses diagonal (Cantor) enumeration so every pair is reache
 \label{ref:chain}
 \icmd{chain}
 
+\textit{Library: \code{Tosh.Stdlib.Pipeline}}
+
 \begin{cmdbox}{chain}
 Lazily concatenates the pipeline with one or more sequences.
 
@@ -4044,6 +4278,8 @@ chain [1 2] [3 4] [5 6]  # Concatenate without pipeline input
 \label{ref:chunk}
 \icmd{chunk}
 
+\textit{Library: \code{Tosh.Stdlib.Pipeline}}
+
 \begin{cmdbox}{chunk}
 Groups pipeline items into fixed-size batches.
 
@@ -4075,6 +4311,8 @@ echo 1 2 3 4 5 | chunk 2  # Group into pairs
 \label{ref:collect}
 \icmd{collect}
 
+\textit{Library: \code{Tosh.Stdlib.Pipeline}}
+
 \begin{cmdbox}{collect}
 Collects all pipeline items into a single list.
 
@@ -4098,6 +4336,8 @@ findmnt -l | where _.FsType == ext4 | collect  # Buffer filtered structured rows
 \subsection{\texttt{combinations}}
 \label{ref:combinations}
 \icmd{combinations}
+
+\textit{Library: \code{Tosh.Stdlib.Pipeline}}
 
 \begin{cmdbox}{combinations}
 Yields all k-element combinations (subsets) of the pipeline items.
@@ -4130,6 +4370,8 @@ echo a b c d | combinations 3  # All 3-element subsets
 \label{ref:count}
 \icmd{count}
 
+\textit{Library: \code{Tosh.Stdlib.Pipeline}}
+
 \begin{cmdbox}{count}
 Counts the number of objects in the current pipeline.
 
@@ -4152,6 +4394,8 @@ ls | count  # Count files in the current directory
 \subsection{\texttt{dedup}}
 \label{ref:dedup}
 \icmd{dedup}
+
+\textit{Library: \code{Tosh.Stdlib.Pipeline}}
 
 \begin{cmdbox}{dedup}
 Removes consecutive duplicate values from the pipeline. Unlike 'distinct', preserves non-adjacent duplicates.
@@ -4188,6 +4432,8 @@ Unlike `distinct`, only removes adjacent duplicates. Preserves non-consecutive r
 \label{ref:describe}
 \icmd{describe}
 
+\textit{Library: \code{Tosh.Stdlib.Pipeline}}
+
 \begin{cmdbox}{describe}
 Returns descriptive statistics for numeric pipeline values.
 
@@ -4217,6 +4463,8 @@ echo 23 45 12 67 34 89 11 55 | describe  # Summary statistics
 \subsection{\texttt{distinct}}
 \label{ref:distinct}
 \icmd{distinct}
+
+\textit{Library: \code{Tosh.Stdlib.Pipeline}}
 
 \begin{cmdbox}{distinct}
 Removes duplicate pipeline values.
@@ -4248,6 +4496,8 @@ ls | distinct .Extension  # Distinct by a member path
 \subsection{\texttt{each}}
 \label{ref:each}
 \icmd{each}
+
+\textit{Library: \code{Tosh.Stdlib.Pipeline}}
 
 \begin{cmdbox}{each}
 Executes a block or callable once for each input object.
@@ -4286,6 +4536,8 @@ Collections stay intact until you explicitly expand them with `each` or `flatten
 \label{ref:enumerate}
 \icmd{enumerate}
 
+\textit{Library: \code{Tosh.Stdlib.Pipeline}}
+
 \begin{cmdbox}{enumerate}
 Pairs each pipeline item with its index, yielding [index, item] arrays.
 
@@ -4316,6 +4568,8 @@ echo a b c | enumerate 1  # 1-based indexing
 \subsection{\texttt{filter}}
 \label{ref:filter}
 \icmd{filter}
+
+\textit{Library: \code{Tosh.Stdlib.Pipeline}}
 
 \begin{cmdbox}{filter}
 Filters pipeline values with a callable value or block predicate.
@@ -4348,6 +4602,8 @@ ls | filter { _.Type == file }  # Filter with a block
 \label{ref:find-index}
 \icmd{find-index}
 
+\textit{Library: \code{Tosh.Stdlib.Pipeline}}
+
 \begin{cmdbox}{find-index}
 Returns the 0-based index of the first pipeline value matching the predicate, or -1 if none match.
 
@@ -4375,6 +4631,8 @@ ls | find-index func(f) => $f.Name.EndsWith(".slnx")  # Find an index with a lam
 \subsection{\texttt{first}}
 \label{ref:first}
 \icmd{first}
+
+\textit{Library: \code{Tosh.Stdlib.Pipeline}}
 
 \begin{cmdbox}{first}
 Returns the first object or first N objects from the pipeline.
@@ -4407,6 +4665,8 @@ ls | first 5  # Get the first five items
 \label{ref:flat-map}
 \icmd{flat-map}
 
+\textit{Library: \code{Tosh.Stdlib.Pipeline}}
+
 \begin{cmdbox}{flat-map}
 Transforms each pipeline value with a callable or block then flattens the results.
 
@@ -4438,6 +4698,8 @@ ls | flat-map { ls $_.FullName }  # List contents of each subdirectory
 \label{ref:flatten}
 \icmd{flatten}
 
+\textit{Library: \code{Tosh.Stdlib.Pipeline}}
+
 \begin{cmdbox}{flatten}
 Explicitly expands enumerable pipeline values by one level.
 
@@ -4460,6 +4722,8 @@ ls /tmp /var | flatten  # Flatten directory listings into one stream
 \subsection{\texttt{frequencies}}
 \label{ref:frequencies}
 \icmd{frequencies}
+
+\textit{Library: \code{Tosh.Stdlib.Pipeline}}
 
 \begin{cmdbox}{frequencies}
 Counts occurrences of each distinct value in the pipeline.
@@ -4489,6 +4753,8 @@ ls | frequencies Extension  # Count file extensions
 \label{ref:get}
 \icmd{get}
 
+\textit{Library: \code{Tosh.Stdlib.Pipeline}}
+
 \begin{cmdbox}{get}
 Gets a member, projects fields, or retrieves an item by index.
 
@@ -4512,6 +4778,8 @@ echo 1 2 3 | get func(x) => ($x * 2)
 \label{ref:group-by}
 \icmd{group-by}
 
+\textit{Library: \code{Tosh.Stdlib.Pipeline}}
+
 \begin{cmdbox}{group-by}
 Groups pipeline values by a member path, block, or callable.
 
@@ -4531,6 +4799,8 @@ ps | group-by func(p) => ($p.Name.Substring(0, 1))
 \subsection{\texttt{group-while}}
 \label{ref:group-while}
 \icmd{group-while}
+
+\textit{Library: \code{Tosh.Stdlib.Pipeline}}
 
 \begin{cmdbox}{group-while}
 Groups consecutive items while the predicate holds.
@@ -4563,6 +4833,8 @@ echo 1 2 3 10 11 12 | group-while func(x, prev) => ($x - $prev <= 1)  # Group ru
 \label{ref:ignore}
 \icmd{ignore}
 
+\textit{Library: \code{Tosh.Stdlib.Pipeline}}
+
 \begin{cmdbox}{ignore}
 Consumes and discards all pipeline input.
 
@@ -4582,6 +4854,8 @@ http post https://example.com/hooks --json $payload | ignore  # Suppress respons
 \subsection{\texttt{inspect}}
 \label{ref:inspect}
 \icmd{inspect}
+
+\textit{Library: \code{Tosh.Stdlib.Pipeline}}
 
 \begin{cmdbox}{inspect}
 Inspects piped CLR objects inline, or returns legacy flat output with --flat.
@@ -4620,6 +4894,8 @@ Inspect opens an inline tree browser for CLR values in interactive sessions. Use
 \label{ref:interleave}
 \icmd{interleave}
 
+\textit{Library: \code{Tosh.Stdlib.Pipeline}}
+
 \begin{cmdbox}{interleave}
 Alternates items from the pipeline with items from another sequence.
 
@@ -4649,6 +4925,8 @@ echo 1 2 3 | interleave [a b c]  # Alternate numbers and letters
 \subsection{\texttt{intersperse}}
 \label{ref:intersperse}
 \icmd{intersperse}
+
+\textit{Library: \code{Tosh.Stdlib.Pipeline}}
 
 \begin{cmdbox}{intersperse}
 Inserts a separator value between each pair of pipeline items.
@@ -4680,6 +4958,8 @@ echo a b c | intersperse "-"  # Insert dashes
 \subsection{\texttt{join}}
 \label{ref:join}
 \icmd{join}
+
+\textit{Library: \code{Tosh.Stdlib.Pipeline}}
 
 \begin{cmdbox}{join}
 Joins pipeline items into a single string, or combines path segments with -p/--path.
@@ -4724,6 +5004,8 @@ pwd | join -p "logs" "today.log"  # Build a path from piped input plus more segm
 \label{ref:last}
 \icmd{last}
 
+\textit{Library: \code{Tosh.Stdlib.Pipeline}}
+
 \begin{cmdbox}{last}
 Returns the last object or last N objects from the pipeline.
 
@@ -4754,6 +5036,8 @@ ls | last 3  # Get the last three items
 \subsection{\texttt{map}}
 \label{ref:map}
 \icmd{map}
+
+\textit{Library: \code{Tosh.Stdlib.Pipeline}}
 
 \begin{cmdbox}{map}
 Transforms each pipeline value with a callable value or block.
@@ -4786,6 +5070,8 @@ ls | map { _.Name }  # Transform values with a block
 \label{ref:max}
 \icmd{max}
 
+\textit{Library: \code{Tosh.Stdlib.Pipeline}}
+
 \begin{cmdbox}{max}
 Returns the maximum pipeline value.
 
@@ -4817,6 +5103,8 @@ ls | max .Length  # Find the largest file by size
 \label{ref:median}
 \icmd{median}
 
+\textit{Library: \code{Tosh.Stdlib.Pipeline}}
+
 \begin{cmdbox}{median}
 Returns the median of numeric pipeline values.
 
@@ -4847,6 +5135,8 @@ ls | median .Length  # Median file size
 \subsection{\texttt{min}}
 \label{ref:min}
 \icmd{min}
+
+\textit{Library: \code{Tosh.Stdlib.Pipeline}}
 
 \begin{cmdbox}{min}
 Returns the minimum pipeline value.
@@ -4910,6 +5200,8 @@ ls | none { _.Type == link }
 \label{ref:parallel}
 \icmd{parallel}
 
+\textit{Library: \code{Tosh.Stdlib.Pipeline}}
+
 \begin{cmdbox}{parallel}
 Executes a block or callable concurrently for each input object.
 
@@ -4948,6 +5240,8 @@ echo 1 2 3 | parallel { echo (_ * 2) }  # Double each item in parallel
 \label{ref:partition}
 \icmd{partition}
 
+\textit{Library: \code{Tosh.Stdlib.Pipeline}}
+
 \begin{cmdbox}{partition}
 Splits pipeline values into two lists based on a predicate: [matches, non-matches].
 
@@ -4978,6 +5272,8 @@ ls | partition { _.Extension == ".cs" }  # Separate C# files from others
 \subsection{\texttt{percentile}}
 \label{ref:percentile}
 \icmd{percentile}
+
+\textit{Library: \code{Tosh.Stdlib.Pipeline}}
 
 \begin{cmdbox}{percentile}
 Returns the Nth percentile of numeric pipeline values.
@@ -5010,6 +5306,8 @@ echo 1 2 3 4 5 6 7 8 9 10 | percentile 95  # 95th percentile
 \label{ref:permutations}
 \icmd{permutations}
 
+\textit{Library: \code{Tosh.Stdlib.Pipeline}}
+
 \begin{cmdbox}{permutations}
 Yields all k-element permutations (orderings) of the pipeline items. Defaults to full-length permutations.
 
@@ -5040,6 +5338,8 @@ echo a b c | permutations 2  # All 2-element orderings
 \subsection{\texttt{reduce}}
 \label{ref:reduce}
 \icmd{reduce}
+
+\textit{Library: \code{Tosh.Stdlib.Pipeline}}
 
 \begin{cmdbox}{reduce}
 Folds the current pipeline into one value using a seed and callable value or block.
@@ -5073,6 +5373,8 @@ echo one two three | reduce "" { $acc + _.Substring(0, 1) }  # Fold with a block
 \label{ref:rename}
 \icmd{rename}
 
+\textit{Library: \code{Tosh.Stdlib.Pipeline}}
+
 \begin{cmdbox}{rename}
 Renames fields on record-like objects.
 
@@ -5101,6 +5403,8 @@ ps | get { Id, Name } | rename Id Pid Name Command  # Rename several fields
 \label{ref:reverse}
 \icmd{reverse}
 
+\textit{Library: \code{Tosh.Stdlib.Pipeline}}
+
 \begin{cmdbox}{reverse}
 Reverses the order of the current pipeline objects.
 
@@ -5123,6 +5427,8 @@ ls | sort .Name | reverse  # Reverse a sorted listing
 \subsection{\texttt{scan}}
 \label{ref:scan}
 \icmd{scan}
+
+\textit{Library: \code{Tosh.Stdlib.Pipeline}}
 
 \begin{cmdbox}{scan}
 Like reduce but yields every intermediate accumulator value.
@@ -5156,6 +5462,8 @@ echo a b c | scan "" { $acc + _ }  # Running string concatenation
 \label{ref:skip}
 \icmd{skip}
 
+\textit{Library: \code{Tosh.Stdlib.Pipeline}}
+
 \begin{cmdbox}{skip}
 Skips the first object or first N objects from the pipeline.
 
@@ -5187,6 +5495,8 @@ echo a b c | skip  # Skip the first item
 \label{ref:skip-until}
 \icmd{skip-until}
 
+\textit{Library: \code{Tosh.Stdlib.Pipeline}}
+
 \begin{cmdbox}{skip-until}
 Skips input values until the predicate becomes true.
 
@@ -5217,6 +5527,8 @@ echo 1 2 3 4 5 | skip-until { _ >= 3 }  # Skip until a condition is met
 \label{ref:skip-while}
 \icmd{skip-while}
 
+\textit{Library: \code{Tosh.Stdlib.Pipeline}}
+
 \begin{cmdbox}{skip-while}
 Skips input values while the predicate remains true.
 
@@ -5236,6 +5548,8 @@ echo 1 2 3 4 | skip-while func(x) => ($x < 3)
 \subsection{\texttt{sort}}
 \label{ref:sort}
 \icmd{sort}
+
+\textit{Library: \code{Tosh.Stdlib.Pipeline}}
 
 \begin{cmdbox}{sort}
 Sorts the current pipeline objects.
@@ -5283,6 +5597,8 @@ ps | sort func(p) => ($p.Name.Length)  # Lambda sort key
 \label{ref:stdev}
 \icmd{stdev}
 
+\textit{Library: \code{Tosh.Stdlib.Pipeline}}
+
 \begin{cmdbox}{stdev}
 Returns the population standard deviation of numeric pipeline values.
 
@@ -5315,6 +5631,8 @@ echo 2 4 4 4 5 5 7 9 | stdev  # Standard deviation
 \label{ref:step-by}
 \icmd{step-by}
 
+\textit{Library: \code{Tosh.Stdlib.Pipeline}}
+
 \begin{cmdbox}{step-by}
 Takes every Nth item from the pipeline.
 
@@ -5346,6 +5664,8 @@ echo a b c d e f g | step-by 2  # Every other item
 \label{ref:sum}
 \icmd{sum}
 
+\textit{Library: \code{Tosh.Stdlib.Pipeline}}
+
 \begin{cmdbox}{sum}
 Sums numeric, storage size, or timespan values.
 
@@ -5376,6 +5696,8 @@ ls | sum .Length  # Total file sizes
 \subsection{\texttt{summarize}}
 \label{ref:summarize}
 \icmd{summarize}
+
+\textit{Library: \code{Tosh.Stdlib.Pipeline}}
 
 \begin{cmdbox}{summarize}
 Computes structured summary objects for requested aggregates over the pipeline.
@@ -5425,6 +5747,8 @@ ps | summarize --avg Memory --max Memory  # Compute multiple aggregates over one
 \label{ref:take-until}
 \icmd{take-until}
 
+\textit{Library: \code{Tosh.Stdlib.Pipeline}}
+
 \begin{cmdbox}{take-until}
 Yields input values until the predicate becomes true.
 
@@ -5456,6 +5780,8 @@ echo 1 2 3 4 5 | take-until { _ >= 4 }  # Take until a condition is met
 \label{ref:take-while}
 \icmd{take-while}
 
+\textit{Library: \code{Tosh.Stdlib.Pipeline}}
+
 \begin{cmdbox}{take-while}
 Yields input values while the predicate remains true.
 
@@ -5475,6 +5801,8 @@ echo 1 2 3 4 | take-while func(x) => ($x < 3)
 \subsection{\texttt{tee}}
 \label{ref:tee}
 \icmd{tee}
+
+\textit{Library: \code{Tosh.Stdlib.Pipeline}}
 
 \begin{cmdbox}{tee}
 Passes values through while also writing them out or capturing them.
@@ -5513,6 +5841,8 @@ ps | tee -v processes | count  # Capture a pipeline into a variable
 \label{ref:transpose}
 \icmd{transpose}
 
+\textit{Library: \code{Tosh.Stdlib.Pipeline}}
+
 \begin{cmdbox}{transpose}
 Pivots rows into columns. Each input record's keys become column headers and values become rows.
 
@@ -5534,6 +5864,8 @@ echo @{a=1; b=2} @{a=3; b=4} | transpose  # Pivot rows into columns
 \subsection{\texttt{variance}}
 \label{ref:variance}
 \icmd{variance}
+
+\textit{Library: \code{Tosh.Stdlib.Pipeline}}
 
 \begin{cmdbox}{variance}
 Returns the population variance of numeric pipeline values.
@@ -5564,6 +5896,8 @@ echo 2 4 4 4 5 5 7 9 | variance  # Population variance
 \subsection{\texttt{where}}
 \label{ref:where}
 \icmd{where}
+
+\textit{Library: \code{Tosh.Stdlib.Pipeline}}
 
 \begin{cmdbox}{where}
 Filters pipeline objects with a predicate block or callable.
@@ -5600,6 +5934,8 @@ Inside predicate expressions, bare member access resolves against the current pi
 \label{ref:window}
 \icmd{window}
 
+\textit{Library: \code{Tosh.Stdlib.Pipeline}}
+
 \begin{cmdbox}{window}
 Yields sliding windows of a given size over the pipeline.
 
@@ -5631,6 +5967,8 @@ echo 1 2 3 4 5 | window 3  # Sliding windows of size 3
 \subsection{\texttt{xargs}}
 \label{ref:xargs}
 \icmd{xargs}
+
+\textit{Library: \code{Tosh.Stdlib.Pipeline}}
 
 \begin{cmdbox}{xargs}
 Builds command invocations from text input.
@@ -5669,6 +6007,8 @@ glob "*.log" | xargs -n 1 rm  # Run one invocation per input argument
 \label{ref:zip}
 \icmd{zip}
 
+\textit{Library: \code{Tosh.Stdlib.Pipeline}}
+
 \begin{cmdbox}{zip}
 Merges two sequences pairwise. The second sequence is the first argument (an array).
 
@@ -5704,6 +6044,8 @@ echo 1 2 3 | zip [10 20 30] func(a, b) => ($a + $b)  # Zip with a combiner
 \label{ref:bg}
 \icmd{bg}
 
+\textit{Library: \code{Tosh.Stdlib.Process}}
+
 \begin{cmdbox}{bg}
 Resumes a suspended job in the background.
 
@@ -5735,6 +6077,8 @@ Resumes a suspended job in the background. The process receives SIGCONT but does
 \subsection{\texttt{fg}}
 \label{ref:fg}
 \icmd{fg}
+
+\textit{Library: \code{Tosh.Stdlib.Process}}
 
 \begin{cmdbox}{fg}
 Resumes a suspended job in the foreground.
@@ -5768,6 +6112,8 @@ Resumes a suspended job (stopped with Ctrl+Z) in the foreground. If no id is giv
 \label{ref:jobs}
 \icmd{jobs}
 
+\textit{Library: \code{Tosh.Stdlib.Process}}
+
 \begin{cmdbox}{jobs}
 Lists ToSh background jobs.
 
@@ -5791,6 +6137,8 @@ Jobs lists ToSh background jobs started with a trailing `\&`. A background launc
 \subsection{\texttt{kill}}
 \label{ref:kill}
 \icmd{kill}
+
+\textit{Library: \code{Tosh.Stdlib.Process}}
 
 \begin{cmdbox}{kill}
 Stops a ToSh background job or operating-system process.
@@ -5823,6 +6171,8 @@ Kill can stop either a ToSh background job or a native operating-system process 
 \subsection{\texttt{lsfd}}
 \label{ref:lsfd}
 \icmd{lsfd}
+
+\textit{Library: \code{Tosh.Stdlib.Process}}
 
 \begin{cmdbox}{lsfd}
 Wraps the system lsfd utility, returning typed open-file-descriptor objects for JSON-backed invocations.
@@ -5875,6 +6225,8 @@ ToSh wraps `lsfd --json` so open-file-descriptor rows stay typed in the pipeline
 \subsection{\texttt{ps}}
 \label{ref:ps}
 \icmd{ps}
+
+\textit{Library: \code{Tosh.Stdlib.Process}}
 
 \begin{cmdbox}{ps}
 Lists running processes as Tosh process objects.
@@ -5933,6 +6285,8 @@ Process memory values are surfaced as Tosh StorageSize objects, not raw strings.
 \label{ref:signal}
 \icmd{signal}
 
+\textit{Library: \code{Tosh.Stdlib.Process}}
+
 \begin{cmdbox}{signal}
 Sends a signal to a ToSh background job or operating-system process.
 
@@ -5965,6 +6319,8 @@ Signal sends a named or numeric signal to a ToSh job or a native process id.
 \subsection{\texttt{wait-for}}
 \label{ref:wait-for}
 \icmd{wait-for}
+
+\textit{Library: \code{Tosh.Stdlib.Process}}
 
 \begin{cmdbox}{wait-for}
 Waits for one or more ToSh background jobs to finish.
@@ -6001,6 +6357,10 @@ Wait-for blocks until one or more background jobs finish and returns structured 
 \label{ref:prompt-dir}
 \icmd{prompt-dir}
 
+\textit{Library: \code{Tosh.Stdlib.Shell}}
+
+\textbf{[shell-only]} — only available inside an interactive TōSh session.
+
 \begin{cmdbox}{prompt-dir}
 Returns the current directory as a styled prompt segment.
 
@@ -6031,6 +6391,10 @@ prompt-dir --fg yellow --depth 2
 \subsection{\texttt{prompt-duration}}
 \label{ref:prompt-duration}
 \icmd{prompt-duration}
+
+\textit{Library: \code{Tosh.Stdlib.Shell}}
+
+\textbf{[shell-only]} — only available inside an interactive TōSh session.
 
 \begin{cmdbox}{prompt-duration}
 Returns the last command duration as a styled prompt segment.
@@ -6073,6 +6437,10 @@ prompt-duration 2.5s --threshold-ms 250
 \label{ref:prompt-exit}
 \icmd{prompt-exit}
 
+\textit{Library: \code{Tosh.Stdlib.Shell}}
+
+\textbf{[shell-only]} — only available inside an interactive TōSh session.
+
 \begin{cmdbox}{prompt-exit}
 Returns the last non-zero exit code as a styled prompt segment.
 
@@ -6112,6 +6480,10 @@ prompt-exit 7 --fg red --bold
 \label{ref:prompt-git}
 \icmd{prompt-git}
 
+\textit{Library: \code{Tosh.Stdlib.Shell}}
+
+\textbf{[shell-only]} — only available inside an interactive TōSh session.
+
 \begin{cmdbox}{prompt-git}
 Returns git branch and status as styled prompt segments.
 
@@ -6141,6 +6513,10 @@ prompt-git --fg bright-green --bold
 \subsection{\texttt{prompt-history}}
 \label{ref:prompt-history}
 \icmd{prompt-history}
+
+\textit{Library: \code{Tosh.Stdlib.Shell}}
+
+\textbf{[shell-only]} — only available inside an interactive TōSh session.
 
 \begin{cmdbox}{prompt-history}
 Returns the next history id as a styled prompt segment.
@@ -6181,6 +6557,10 @@ prompt-history 432 --fg gray --dim
 \label{ref:prompt-jobs}
 \icmd{prompt-jobs}
 
+\textit{Library: \code{Tosh.Stdlib.Shell}}
+
+\textbf{[shell-only]} — only available inside an interactive TōSh session.
+
 \begin{cmdbox}{prompt-jobs}
 Returns the current background job count as a styled prompt segment.
 
@@ -6220,6 +6600,10 @@ prompt-jobs 3 --fg yellow --bold
 \label{ref:prompt-newline}
 \icmd{prompt-newline}
 
+\textit{Library: \code{Tosh.Stdlib.Shell}}
+
+\textbf{[shell-only]} — only available inside an interactive TōSh session.
+
 \begin{cmdbox}{prompt-newline}
 Inserts a line break in the prompt.
 
@@ -6238,6 +6622,10 @@ prompt-newline
 \subsection{\texttt{prompt-text}}
 \label{ref:prompt-text}
 \icmd{prompt-text}
+
+\textit{Library: \code{Tosh.Stdlib.Shell}}
+
+\textbf{[shell-only]} — only available inside an interactive TōSh session.
 
 \begin{cmdbox}{prompt-text}
 Returns literal text as a styled prompt segment.
@@ -6278,6 +6666,10 @@ prompt-text "::" --fg gray --dim
 \label{ref:prompt-time}
 \icmd{prompt-time}
 
+\textit{Library: \code{Tosh.Stdlib.Shell}}
+
+\textbf{[shell-only]} — only available inside an interactive TōSh session.
+
 \begin{cmdbox}{prompt-time}
 Returns the current time as a styled prompt segment.
 
@@ -6311,6 +6703,10 @@ prompt-time --format "HH:mm:ss" --fg gray
 \label{ref:prompt-userhost}
 \icmd{prompt-userhost}
 
+\textit{Library: \code{Tosh.Stdlib.Shell}}
+
+\textbf{[shell-only]} — only available inside an interactive TōSh session.
+
 \begin{cmdbox}{prompt-userhost}
 Returns the current user and host as a styled prompt segment.
 
@@ -6341,6 +6737,8 @@ prompt-userhost --fg gray
 \subsection{\texttt{styled}}
 \label{ref:styled}
 \icmd{styled}
+
+\textit{Library: \code{Tosh.Stdlib.Display}}
 
 \begin{cmdbox}{styled}
 Creates a styled text segment with color and formatting.
@@ -6387,6 +6785,8 @@ styled "warning" --fg yellow --bg red
 \label{ref:assert}
 \icmd{assert}
 
+\textit{Library: \code{Tosh.Stdlib.Scripting}}
+
 \begin{cmdbox}{assert}
 Asserts that a condition is true; throws a diagnostic error if it is false.
 
@@ -6416,6 +6816,8 @@ assert { $env.HOME != null } "HOME must be set"  # Assertion with a custom messa
 \label{ref:raise}
 \icmd{raise}
 
+\textit{Library: \code{Tosh.Stdlib.Scripting}}
+
 \begin{cmdbox}{raise}
 Raises an event, invoking all registered handlers.
 
@@ -6444,6 +6846,8 @@ raise $factory { Name: "deploy", Status: "ok" }  # Raise from an event factory w
 \subsection{\texttt{undef}}
 \label{ref:undef}
 \icmd{undef}
+
+\textit{Library: \code{Tosh.Stdlib.Scripting}}
 
 \begin{cmdbox}{undef}
 Removes user-defined functions.
@@ -6475,6 +6879,8 @@ undef greet parse transform  # Remove multiple functions at once
 \subsection{\texttt{apropos}}
 \label{ref:apropos}
 \icmd{apropos}
+
+\textit{Library: \code{Tosh.Stdlib.Shell}}
 
 \begin{cmdbox}{apropos}
 Searches Tosh help topics with fuzzy matching.
@@ -6524,6 +6930,8 @@ benchmark <label> <body>
 \label{ref:clear}
 \icmd{clear}
 
+\textit{Library: \code{Tosh.Stdlib.Shell}}
+
 \begin{cmdbox}{clear}
 Clears the terminal display.
 
@@ -6542,6 +6950,8 @@ clear  # Clear the terminal
 \subsection{\texttt{config}}
 \label{ref:config}
 \icmd{config}
+
+\textit{Library: \code{Tosh.Stdlib.Shell}}
 
 \begin{cmdbox}{config}
 Gets or changes shell configuration.
@@ -6595,6 +7005,8 @@ dbg <expr>
 \label{ref:debug}
 \icmd{debug}
 
+\textit{Library: \code{Tosh.Stdlib.Shell}}
+
 \begin{cmdbox}{debug}
 Runs a Tosh script with interactive step-through debugging.
 
@@ -6626,6 +7038,8 @@ Use 'n' or 'next' to step, 'c' or 'continue' to resume, 'q' or 'quit' to abort, 
 \subsection{\texttt{events}}
 \label{ref:events}
 \icmd{events}
+
+\textit{Library: \code{Tosh.Stdlib.Shell}}
 
 \begin{cmdbox}{events}
 Lists, inspects, and manages event handlers.
@@ -6659,6 +7073,8 @@ events clear OnPrompt  # Remove all handlers for an event
 \subsection{\texttt{exec}}
 \label{ref:exec}
 \icmd{exec}
+
+\textit{Library: \code{Tosh.Stdlib.Shell}}
 
 \begin{cmdbox}{exec}
 Replace the current ToSh process with an external command.
@@ -6702,6 +7118,8 @@ Exec replaces the current ToSh process with an external command. On Unix-like sy
 \label{ref:exit}
 \icmd{exit}
 
+\textit{Library: \code{Tosh.Stdlib.Shell}}
+
 \begin{cmdbox}{exit}
 Requests the current Tosh session to exit.
 
@@ -6730,6 +7148,8 @@ In a login shell, `exit` behaves like `logout`: it warns about running backgroun
 \subsection{\texttt{help}}
 \label{ref:help}
 \icmd{help}
+
+\textit{Library: \code{Tosh.Stdlib.Shell}}
 
 \begin{cmdbox}{help}
 Shows searchable Tosh help for commands, language topics, CLR types, and externals.
@@ -6782,6 +7202,10 @@ Use `help search <query>` or `apropos <query>` to find commands and language top
 \label{ref:history}
 \icmd{history}
 
+\textit{Library: \code{Tosh.Stdlib.Shell}}
+
+\textbf{[shell-only]} — only available inside an interactive TōSh session.
+
 \begin{cmdbox}{history}
 Shows, searches, expands, runs, deletes, saves, reloads, or clears shell history.
 
@@ -6824,6 +7248,10 @@ History is file-backed in normal interactive sessions and each entry now has a s
 \label{ref:history-search}
 \icmd{history-search}
 
+\textit{Library: \code{Tosh.Stdlib.Shell}}
+
+\textbf{[shell-only]} — only available inside an interactive TōSh session.
+
 \begin{cmdbox}{history-search}
 Searches shell history entries by text.
 
@@ -6848,9 +7276,41 @@ echo build | history-search  # Search history from the pipeline
 
 \end{cmdbox}
 
+\subsection{\texttt{hush}}
+\label{ref:hush}
+\icmd{hush}
+
+\textit{Library: \code{Tosh.Stdlib.Shell}}
+
+\begin{cmdbox}{hush}
+Suppresses one or more diagnostic codes within the current scope.
+
+\begin{signature}
+hush <code> [code...]
+\end{signature}
+
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+code ... & Diagnostic codes (e.g. tosh.runtime.fading\_member) to suppress. \textit{(string)} \\
+\bottomrule
+\end{tabular}
+
+\textbf{Output:} Emits nothing; mutates the current scope's hush set as a side effect.
+
+\begin{lstlisting}
+hush tosh.runtime.fading_member  # Suppress a deprecation warning in the current scope
+$tosh.Config.Diagnostics.Hushed.Add("tosh.naming.shadowed_builtin")  # Suppress globally from a profile.tosh entry
+\end{lstlisting}
+
+\end{cmdbox}
+
 \subsection{\texttt{read-line}}
 \label{ref:read-line}
 \icmd{read-line}
+
+\textit{Library: \code{Tosh.Stdlib.Shell}}
 
 \begin{cmdbox}{read-line}
 Reads a line of text from standard input.
@@ -6880,6 +7340,8 @@ var answer = (read-line "Continue? ")  # Capture input in a variable
 \label{ref:source}
 \icmd{source}
 
+\textit{Library: \code{Tosh.Stdlib.Shell}}
+
 \begin{cmdbox}{source}
 Executes a Tosh script file in the current session and lets it affect the caller scope.
 
@@ -6908,6 +7370,8 @@ source ./setup.tosh prod 8080  # Run a script with arguments
 \subsection{\texttt{time}}
 \label{ref:time}
 \icmd{time}
+
+\textit{Library: \code{Tosh.Stdlib.Time}}
 
 \begin{cmdbox}{time}
 Measures the execution time and resource usage of a command or block.
@@ -6940,6 +7404,10 @@ Metrics include wall time, user/system CPU, memory, and page faults.
 \subsection{\texttt{tui}}
 \label{ref:tui}
 \icmd{tui}
+
+\textit{Library: \code{Tosh.Stdlib.Shell}}
+
+\textbf{[shell-only]} — only available inside an interactive TōSh session.
 
 \begin{cmdbox}{tui}
 Interactive TUI components for scripts. Provides list pickers, confirmations, text input, file pickers, and custom screens. Use --cli for inline (non-fullscreen) prompts.
@@ -7002,6 +7470,8 @@ tui input "Project name:" --default demo --cli  # Inline text input
 \label{ref:ulimit}
 \icmd{ulimit}
 
+\textit{Library: \code{Tosh.Stdlib.Shell}}
+
 \begin{cmdbox}{ulimit}
 Display or set resource limits.
 
@@ -7046,6 +7516,8 @@ Displays or sets POSIX resource limits (via getrlimit/setrlimit). Only available
 \subsection{\texttt{umask}}
 \label{ref:umask}
 \icmd{umask}
+
+\textit{Library: \code{Tosh.Stdlib.Shell}}
 
 \begin{cmdbox}{umask}
 Display or set the file creation mask.
@@ -7093,6 +7565,8 @@ unless <condition> <body>
 \label{ref:view}
 \icmd{view}
 
+\textit{Library: \code{Tosh.Stdlib.Shell}}
+
 \begin{cmdbox}{view}
 Gets or sets shell display preferences.
 
@@ -7114,6 +7588,8 @@ view duration table seconds
 \subsection{\texttt{which}}
 \label{ref:which}
 \icmd{which}
+
+\textit{Library: \code{Tosh.Stdlib.Shell}}
 
 \begin{cmdbox}{which}
 Resolves built-in commands and external executables.
@@ -7161,6 +7637,8 @@ with-retry <attempts> <body>
 \label{ref:date}
 \icmd{date}
 
+\textit{Library: \code{Tosh.Stdlib.Time}}
+
 \begin{cmdbox}{date}
 Creates, parses, and adjusts date/time values.
 
@@ -7201,6 +7679,8 @@ date parse 2026-03-29T12:34:56Z | cast timeonly
 \subsection{\texttt{env}}
 \label{ref:env}
 \icmd{env}
+
+\textit{Library: \code{Tosh.Stdlib.System}}
 
 \begin{cmdbox}{env}
 Lists, queries, sets, or unsets environment variables. Runs nested commands with temporary environment changes when a command follows.
@@ -7250,6 +7730,8 @@ Env keeps its object-returning query mode, but it can also build a temporary env
 \label{ref:export}
 \icmd{export}
 
+\textit{Library: \code{Tosh.Stdlib.System}}
+
 \begin{cmdbox}{export}
 Exports a Tosh value to the process environment.
 
@@ -7281,6 +7763,8 @@ export MY_VAR  # Export an existing Tosh variable
 \label{ref:forget}
 \icmd{forget}
 
+\textit{Library: \code{Tosh.Stdlib.System}}
+
 \begin{cmdbox}{forget}
 Removes Tosh variables, functions, and exported environment names.
 
@@ -7311,6 +7795,8 @@ forget old-helper  # Remove a function or variable
 \label{ref:free}
 \icmd{free}
 
+\textit{Library: \code{Tosh.Stdlib.System}}
+
 \begin{cmdbox}{free}
 Returns system memory and swap usage.
 
@@ -7330,6 +7816,8 @@ free | get .UsedMemory  # Get the used memory value
 \subsection{\texttt{guid}}
 \label{ref:guid}
 \icmd{guid}
+
+\textit{Library: \code{Tosh.Stdlib.System}}
 
 \begin{cmdbox}{guid}
 Creates, parses, formats, and inspects GUID values.
@@ -7352,6 +7840,8 @@ guid info 550e8400-e29b-41d4-a716-446655440000
 \label{ref:hostname}
 \icmd{hostname}
 
+\textit{Library: \code{Tosh.Stdlib.System}}
+
 \begin{cmdbox}{hostname}
 Returns the current host name.
 
@@ -7370,6 +7860,8 @@ hostname  # Show the current host name
 \subsection{\texttt{hostnamectl}}
 \label{ref:hostnamectl}
 \icmd{hostnamectl}
+
+\textit{Library: \code{Tosh.Stdlib.System}}
 
 \begin{cmdbox}{hostnamectl}
 Wraps hostnamectl, returning a structured host-status object for supported JSON-backed status queries.
@@ -7414,6 +7906,8 @@ hostnamectl | get { Hostname, MachineID, BootID }  # Project host identity prope
 \label{ref:id}
 \icmd{id}
 
+\textit{Library: \code{Tosh.Stdlib.System}}
+
 \begin{cmdbox}{id}
 Returns current user and group identity information.
 
@@ -7444,6 +7938,8 @@ id -un  # Show the current username
 \subsection{\texttt{journalctl}}
 \label{ref:journalctl}
 \icmd{journalctl}
+
+\textit{Library: \code{Tosh.Stdlib.System}}
 
 \begin{cmdbox}{journalctl}
 Wraps journalctl, returning typed journal-entry objects for supported JSON-backed query invocations.
@@ -7497,6 +7993,8 @@ journalctl --since yesterday | where _.Priority <= 3  # Filter recent high-prior
 \label{ref:loginctl}
 \icmd{loginctl}
 
+\textit{Library: \code{Tosh.Stdlib.System}}
+
 \begin{cmdbox}{loginctl}
 Wraps loginctl, returning typed session/user/seat rows and structured login property sets for supported queries.
 
@@ -7544,6 +8042,8 @@ loginctl show-user 1000 | get { UID, Name, State, Sessions }  # Inspect structur
 \subsection{\texttt{lscpu}}
 \label{ref:lscpu}
 \icmd{lscpu}
+
+\textit{Library: \code{Tosh.Stdlib.System}}
 
 \begin{cmdbox}{lscpu}
 Wraps the system lscpu utility, returning typed CPU summary, topology, and cache objects for JSON-backed invocations.
@@ -7599,6 +8099,8 @@ ToSh wraps the JSON-capable `lscpu` modes instead of scraping text output. The d
 \subsection{\texttt{lsipc}}
 \label{ref:lsipc}
 \icmd{lsipc}
+
+\textit{Library: \code{Tosh.Stdlib.System}}
 
 \begin{cmdbox}{lsipc}
 Wraps the system lsipc utility, returning structured IPC resource and limit records for JSON-backed invocations.
@@ -7661,6 +8163,8 @@ ToSh wraps `lsipc -J` so IPC resources and global IPC limits flow through the pi
 \label{ref:networkctl}
 \icmd{networkctl}
 
+\textit{Library: \code{Tosh.Stdlib.System}}
+
 \begin{cmdbox}{networkctl}
 Wraps networkctl, returning typed network-link rows for supported list queries.
 
@@ -7706,6 +8210,8 @@ networkctl --show Link,Operational,Setup,Managed  # Render a focused network-lin
 \label{ref:seq}
 \icmd{seq}
 
+\textit{Library: \code{Tosh.Stdlib.System}}
+
 \begin{cmdbox}{seq}
 Generates a numeric sequence.
 
@@ -7737,6 +8243,8 @@ seq 5 -1 1  # Generate a descending sequence
 \label{ref:sleep}
 \icmd{sleep}
 
+\textit{Library: \code{Tosh.Stdlib.Time}}
+
 \begin{cmdbox}{sleep}
 Pauses execution for a duration.
 
@@ -7765,6 +8273,8 @@ sleep 1 2 3  # Sleep for a total of 6 seconds
 \subsection{\texttt{systemctl}}
 \label{ref:systemctl}
 \icmd{systemctl}
+
+\textit{Library: \code{Tosh.Stdlib.System}}
 
 \begin{cmdbox}{systemctl}
 Wraps systemctl, returning typed unit rows for supported list queries and structured unit property sets for supported show and status queries.
@@ -7820,6 +8330,8 @@ systemctl status sshd.service | get { Id, ActiveState, MainPID, RecentLogCount }
 \label{ref:timespan}
 \icmd{timespan}
 
+\textit{Library: \code{Tosh.Stdlib.Time}}
+
 \begin{cmdbox}{timespan}
 Parses a duration into a CLR duration value.
 
@@ -7847,6 +8359,8 @@ timespan 1h30m  # Parse a compound duration
 \subsection{\texttt{uname}}
 \label{ref:uname}
 \icmd{uname}
+
+\textit{Library: \code{Tosh.Stdlib.System}}
 
 \begin{cmdbox}{uname}
 Returns kernel and operating system information as a Tosh object.
@@ -7888,6 +8402,8 @@ uname -sr  # Return selected fields
 \label{ref:uptime}
 \icmd{uptime}
 
+\textit{Library: \code{Tosh.Stdlib.System}}
+
 \begin{cmdbox}{uptime}
 Returns system uptime and load averages.
 
@@ -7906,6 +8422,8 @@ uptime  # Show uptime and load averages
 \subsection{\texttt{vars}}
 \label{ref:vars}
 \icmd{vars}
+
+\textit{Library: \code{Tosh.Stdlib.System}}
 
 \begin{cmdbox}{vars}
 Lists visible variables or opens an interactive variable browser.
@@ -7937,6 +8455,8 @@ vars browse env  # Browse variables interactively
 \label{ref:whoami}
 \icmd{whoami}
 
+\textit{Library: \code{Tosh.Stdlib.System}}
+
 \begin{cmdbox}{whoami}
 Returns the current user principal.
 
@@ -7958,6 +8478,8 @@ whoami  # Show the current user
 \subsection{\texttt{cut}}
 \label{ref:cut}
 \icmd{cut}
+
+\textit{Library: \code{Tosh.Stdlib.Text}}
 
 \begin{cmdbox}{cut}
 Extracts character or delimited fields from text.
@@ -7997,6 +8519,8 @@ echo "abcdef" | cut -c 2-4  # Extract character positions
 \label{ref:echo}
 \icmd{echo}
 
+\textit{Library: \code{Tosh.Stdlib.Text}}
+
 \begin{cmdbox}{echo}
 Emits its arguments as pipeline objects.
 
@@ -8024,6 +8548,8 @@ echo 42 | where { $_ > 10 }
 \subsection{\texttt{grep}}
 \label{ref:grep}
 \icmd{grep}
+
+\textit{Library: \code{Tosh.Stdlib.Text}}
 
 \begin{cmdbox}{grep}
 Searches text input with a regular expression or literal pattern.
@@ -8074,6 +8600,8 @@ grep -F literal README.md  # Search a file literally
 \label{ref:head}
 \icmd{head}
 
+\textit{Library: \code{Tosh.Stdlib.Text}}
+
 \begin{cmdbox}{head}
 Returns the first objects or first text lines.
 
@@ -8112,6 +8640,8 @@ head -c 128 payload.bin  # Read leading bytes from a file
 \label{ref:join-lines}
 \icmd{join-lines}
 
+\textit{Library: \code{Tosh.Stdlib.Text}}
+
 \begin{cmdbox}{join-lines}
 Joins input values into a single text value.
 
@@ -8140,6 +8670,8 @@ read-lines names.txt | join-lines  # Join lines with newlines
 \label{ref:lines}
 \icmd{lines}
 
+\textit{Library: \code{Tosh.Stdlib.Text}}
+
 \begin{cmdbox}{lines}
 Splits text input into individual lines.
 
@@ -8167,6 +8699,8 @@ read-file notes.txt | lines | where _.Contains("TODO")  # Split file text into l
 \subsection{\texttt{match}}
 \label{ref:match}
 \icmd{match}
+
+\textit{Library: \code{Tosh.Stdlib.Text}}
 
 \begin{cmdbox}{match}
 Matches text with a regular expression and returns shell record objects.
@@ -8210,6 +8744,8 @@ echo "Alpha" | match -i "^alpha$"
 \label{ref:raw}
 \icmd{raw}
 
+\textit{Library: \code{Tosh.Stdlib.Text}}
+
 \begin{cmdbox}{raw}
 Emits plain text without rich table or record rendering.
 
@@ -8240,6 +8776,8 @@ echo System.DayOfWeek.Friday | raw  # Show an enum's raw CLR string form
 \subsection{\texttt{replace}}
 \label{ref:replace}
 \icmd{replace}
+
+\textit{Library: \code{Tosh.Stdlib.Text}}
 
 \begin{cmdbox}{replace}
 Replaces text in each input value.
@@ -8285,6 +8823,8 @@ echo "A1 B2" | replace -r "[0-9]" "#"
 \label{ref:split}
 \icmd{split}
 
+\textit{Library: \code{Tosh.Stdlib.Text}}
+
 \begin{cmdbox}{split}
 Splits text values into smaller text values.
 
@@ -8328,6 +8868,8 @@ echo "alpha,beta;gamma" | split -r "[,;]"
 \label{ref:tail}
 \icmd{tail}
 
+\textit{Library: \code{Tosh.Stdlib.Text}}
+
 \begin{cmdbox}{tail}
 Returns the last objects or last text lines.
 
@@ -8367,6 +8909,8 @@ tail -f app.log  # Follow appended log lines
 \label{ref:template}
 \icmd{template}
 
+\textit{Library: \code{Tosh.Stdlib.Text}}
+
 \begin{cmdbox}{template}
 Renders pipeline objects into text using \{\{ member.path \}\} placeholders.
 
@@ -8397,6 +8941,8 @@ echo @{name="World"} | template "Hello, {{name}}!"  # Simple template rendering
 \subsection{\texttt{tr}}
 \label{ref:tr}
 \icmd{tr}
+
+\textit{Library: \code{Tosh.Stdlib.Text}}
 
 \begin{cmdbox}{tr}
 Translates or deletes characters in text.
@@ -8439,6 +8985,8 @@ echo "hello world" | tr -d ' '  # Delete spaces
 \label{ref:uniq}
 \icmd{uniq}
 
+\textit{Library: \code{Tosh.Stdlib.Text}}
+
 \begin{cmdbox}{uniq}
 Collapses adjacent duplicate input values.
 
@@ -8478,6 +9026,8 @@ echo a a b b b c | uniq -c  # Count consecutive occurrences
 \subsection{\texttt{wc}}
 \label{ref:wc}
 \icmd{wc}
+
+\textit{Library: \code{Tosh.Stdlib.Text}}
 
 \begin{cmdbox}{wc}
 Counts lines, words, bytes, characters, and longest-line length.
@@ -8527,6 +9077,8 @@ Wc returns typed statistics objects instead of formatted text, so you can still 
 \label{ref:write}
 \icmd{write}
 
+\textit{Library: \code{Tosh.Stdlib.Text}}
+
 \begin{cmdbox}{write}
 Writes rendered values without a trailing newline.
 
@@ -8554,6 +9106,8 @@ echo alpha beta | write  # Write piped values
 \subsection{\texttt{writeline}}
 \label{ref:writeline}
 \icmd{writeline}
+
+\textit{Library: \code{Tosh.Stdlib.Text}}
 
 \begin{cmdbox}{writeline}
 Writes rendered values with a trailing newline.

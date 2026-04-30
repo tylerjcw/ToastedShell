@@ -1,3 +1,18 @@
+using Tosh.Core.Commands.Clr;
+using Tosh.Core.Commands.Concurrency;
+using Tosh.Core.Commands.Data;
+using Tosh.Core.Commands.Display;
+using Tosh.Core.Commands.Filesystem;
+using Tosh.Core.Commands.Functional;
+using Tosh.Core.Commands.Maths;
+using Tosh.Core.Commands.Net;
+using Tosh.Core.Commands.Pipeline;
+using Tosh.Core.Commands.Processes;
+using Tosh.Core.Commands.Scripting;
+using Tosh.Core.Commands.Shell;
+using Tosh.Core.Commands.Sys;
+using Tosh.Core.Commands.Text;
+using Tosh.Core.Commands.Time;
 using Tosh.Core.Formats;
 
 namespace Tosh.Core.Commands;

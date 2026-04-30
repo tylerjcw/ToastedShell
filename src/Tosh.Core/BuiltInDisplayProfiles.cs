@@ -21,6 +21,8 @@ using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
+using Tosh.Core.Commands.Shell;
+using Tosh.Core.Commands.Sys;
 using Tosh.Core.Units;
 
 namespace Tosh.Core;
@@ -2213,20 +2215,20 @@ public static class BuiltInDisplayProfiles
     private static DisplayProfile CreateShellVariableEntryProfile()
     {
         return DisplayProfile
-            .For<Commands.ShellVariableEntry>()
+            .For<Commands.Sys.ShellVariableEntry>()
             .AddValueCase(
                 DisplaySurface.Root | DisplaySurface.Nested,
                 context =>
                 {
-                    var entry = (Commands.ShellVariableEntry)context.Value;
+                    var entry = (Commands.Sys.ShellVariableEntry)context.Value;
                     return $"${entry.Name}: {entry.Type} = {entry.Value}";
                 })
             .AddTableCase(
                 _ =>
                 [
-                    new DisplayTableColumn("Name", row => ((Commands.ShellVariableEntry)row).Name, MinWidth: 8, MaxWidth: 32, Priority: 0, CanHide: false),
-                    new DisplayTableColumn("Type", row => ((Commands.ShellVariableEntry)row).Type, MinWidth: 6, MaxWidth: 24, Priority: 10),
-                    new DisplayTableColumn("Value", row => FormatVariableValue(((Commands.ShellVariableEntry)row).Value), MinWidth: 10, MaxWidth: 48, Priority: 20),
+                    new DisplayTableColumn("Name", row => ((Commands.Sys.ShellVariableEntry)row).Name, MinWidth: 8, MaxWidth: 32, Priority: 0, CanHide: false),
+                    new DisplayTableColumn("Type", row => ((Commands.Sys.ShellVariableEntry)row).Type, MinWidth: 6, MaxWidth: 24, Priority: 10),
+                    new DisplayTableColumn("Value", row => FormatVariableValue(((Commands.Sys.ShellVariableEntry)row).Value), MinWidth: 10, MaxWidth: 48, Priority: 20),
                 ]);
     }
 
@@ -5996,12 +5998,12 @@ public static class BuiltInDisplayProfiles
     private static DisplayProfile CreateEventHandlerRemovalResultProfile()
     {
         return DisplayProfile
-            .For<Commands.EventHandlerRemovalResult>()
+            .For<Commands.Shell.EventHandlerRemovalResult>()
             .AddValueCase(
                 DisplaySurface.Any,
                 context =>
                 {
-                    var result = (Commands.EventHandlerRemovalResult)context.Value;
+                    var result = (Commands.Shell.EventHandlerRemovalResult)context.Value;
                     return $"Removed handler '{result.HandlerName}' from event '{result.EventName}'.";
                 });
     }
@@ -6009,12 +6011,12 @@ public static class BuiltInDisplayProfiles
     private static DisplayProfile CreateEventClearResultProfile()
     {
         return DisplayProfile
-            .For<Commands.EventClearResult>()
+            .For<Commands.Shell.EventClearResult>()
             .AddValueCase(
                 DisplaySurface.Any,
                 context =>
                 {
-                    var result = (Commands.EventClearResult)context.Value;
+                    var result = (Commands.Shell.EventClearResult)context.Value;
                     return $"Cleared {result.HandlersRemoved} handler(s) from event '{result.EventName}'.";
                 });
     }
