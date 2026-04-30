@@ -3,6 +3,7 @@
 #
 # Subcommands:
 #   publish   Build, version-bump, package, and install TōSh
+#   version   Inspect or set the persisted version components
 #   test      Run the test suite (whole or filtered by group / pattern)
 #   check     Build all projects without installing (CI gate)
 #   clean     Remove build artifacts, bin/obj, TestResults
@@ -75,20 +76,41 @@ func sep(label: NonEmptyString) {
 # ─────────────────────────────────────────────────────────────────────────────
 # Versioning (shared with publish subcommand)
 # ─────────────────────────────────────────────────────────────────────────────
+#
+# Format of `.tosh-publish-state`:
+#   {calver}:{publish}[:{dotnet}]
+# where
+#   calver  is YY.M  (two-digit year, one or two-digit month, no zero pad)
+#   publish is an int counter that resets when calver rolls over
+#   dotnet  is the .NET SDK major version (defaults to 10 for legacy state files)
+#
+# Combined version string used by PKGBUILD and assembly attributes:
+#   {calver}.{publish}.{dotnet}     e.g. 26.4.14.10
 
-record PublishState(CalVer: string, Publish: int)
+const DefaultDotnetMajor = 10
+
+record PublishState(CalVer: string, Publish: int, DotnetMajor: int)
 
 func read_publish_state(path: string) -> PublishState {
     var line = (cat $path | lines | first)
-    var colon = ($line.IndexOf(":"))
-    if ($colon < 0) { throw $".tosh-publish-state is corrupt: {$line}" }
-    var calver = ($line.Substring(0, $colon))
-    var num = System.Convert.ToInt32(($line.Substring($colon + 1)))
-    return new PublishState($calver, $num)
+    var parts = ($line.Split(":"))
+    if ($parts.Length < 2) { throw $".tosh-publish-state is corrupt: {$line}" }
+    var calver = $parts[0]
+    var num = System.Convert.ToInt32($parts[1])
+    var dotnet = ($parts.Length >= 3 ? System.Convert.ToInt32($parts[2]) : $DefaultDotnetMajor)
+    return new PublishState($calver, $num, $dotnet)
 }
 
-func write_publish_state(path: string, calver: string, num: int) {
-    write-file $path $"{$calver}:{$num}" | ignore
+func write_publish_state(path: string, calver: string, num: int, dotnet: int) {
+    write-file $path $"{$calver}:{$num}:{$dotnet}" | ignore
+}
+
+func format_version(state: PublishState) -> string => $"{$state.CalVer}.{$state.Publish}.{$state.DotnetMajor}"
+
+func parse_calver(calver: string) -> array {
+    var parts = ($calver.Split("."))
+    if ($parts.Length != 2) { throw $"calver '{$calver}' is not in YY.M form" }
+    return [System.Convert.ToInt32($parts[0]), System.Convert.ToInt32($parts[1])]
 }
 
 func update_pkgbuild_version(path: string, version: string) => read-file $path | replace -r "pkgver=.*" $"pkgver={$version}" | write-file $path | ignore
@@ -209,6 +231,87 @@ func group_filter_pattern(group: string) -> string? {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Subcommand: version
+# ─────────────────────────────────────────────────────────────────────────────
+## Inspect or update the persisted version state in `.tosh-publish-state` and
+## keep `packaging/archlinux/PKGBUILD` in sync. With no flags, prints the
+## current version. Each component is individually settable.
+##
+## Examples:
+##   build.tosh version
+##   build.tosh version --year 26 --month 10
+##   build.tosh version --publish 1
+##   build.tosh version --dotnet 11
+##   build.tosh version --year 26 --month 10 --publish 13 --dotnet 11
+subcommand version {
+    ## Two-digit year component of CalVer (e.g. 26 for 2026). Optional.
+    flag year: int? = null
+
+    ## One- or two-digit month component of CalVer (1..12). Optional.
+    flag month: int? = null
+
+    ## Publish counter — resets to 1 on a CalVer rollover during `publish`. Optional.
+    flag publish: int? = null
+
+    ## .NET SDK major version stamped into the version string. Optional.
+    flag dotnet: int? = null
+
+    ## When set, only print the resulting version; do not modify any files.
+    flag dryRun: bool = false
+
+    var root = repo_root
+    var state_path = $root | join -p ".tosh-publish-state"
+    var pkgbuild_path = $root | join -p "packaging" "archlinux" "PKGBUILD"
+
+    var state = (read_publish_state $state_path)
+    var any = ($year != null or $month != null or $publish != null or $dotnet != null)
+
+    if (not $any) {
+        sep "VERSION"
+        ok $"Current: {(format_version $state)}"
+        info $"  CalVer:  {$state.CalVer}  (year={(parse_calver $state.CalVer)[0]}, month={(parse_calver $state.CalVer)[1]})"
+        info $"  Publish: {$state.Publish}"
+        info $"  Dotnet:  {$state.DotnetMajor}"
+        info $"  State:   {$state_path}"
+        return
+    }
+
+    var parts = (parse_calver $state.CalVer)
+    var new_year = ($year != null ? $year : $parts[0])
+    var new_month = ($month != null ? $month : $parts[1])
+    if ($new_year < 0 or $new_year > 99) { throw $"--year must be in 0..99 (got {$new_year})" }
+    if ($new_month < 1 or $new_month > 12) { throw $"--month must be in 1..12 (got {$new_month})" }
+    var new_calver = $"{$new_year}.{$new_month}"
+
+    var new_publish = ($publish != null ? $publish : $state.Publish)
+    if ($new_publish < 1) { throw $"--publish must be >= 1 (got {$new_publish})" }
+
+    var new_dotnet = ($dotnet != null ? $dotnet : $state.DotnetMajor)
+    if ($new_dotnet < 1) { throw $"--dotnet must be >= 1 (got {$new_dotnet})" }
+
+    var new_state = (new PublishState($new_calver, $new_publish, $new_dotnet))
+
+    sep "VERSION"
+    styled $"{(format_version $state)} → {(format_version $new_state)}" --fg bright-yellow --bold | writeline
+
+    if ($dryRun) {
+        info "(--dry-run) state and PKGBUILD unchanged."
+        return
+    }
+
+    write_publish_state $state_path $new_calver $new_publish $new_dotnet
+    ok $"Wrote {$state_path}"
+
+    if ((is-file $pkgbuild_path).IsFile) {
+        update_pkgbuild_version $pkgbuild_path (format_version $new_state)
+        ok $"Updated {$pkgbuild_path}"
+    }
+    else {
+        warn $"PKGBUILD not found at {$pkgbuild_path}; skipped."
+    }
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Subcommand: publish
 # ─────────────────────────────────────────────────────────────────────────────
 ## Builds the solution, version-bumps, updates PKGBUILD, publishes to a directory, optionally installs via makepkg, and optionally executes the new binary.
@@ -246,21 +349,22 @@ subcommand publish {
     var root = $plan.RepoRoot
     var state_path = $root | join -p ".tosh-publish-state"
     var pkgbuild_path = $root | join -p "packaging" "archlinux" "PKGBUILD"
-    var dotnet_major = 10
 
     var orig_state = (read_publish_state $state_path)
     var orig_calver = $orig_state.CalVer
     var orig_publish = $orig_state.Publish
+    var dotnet_major = $orig_state.DotnetMajor
     var orig_pkgbuild = cat $pkgbuild_path
 
-    var new_version = $"{$orig_calver}.{$orig_publish}.{$dotnet_major}"
+    var new_version = (format_version $orig_state)
 
     if (not $plan.NoBump) {
         var current_calver = (compute_calver)
         var new_publish = ($current_calver == $orig_calver ? ($orig_publish + 1) : 1)
-        $new_version = $"{$current_calver}.{$new_publish}.{$dotnet_major}"
-        styled $"Version: {$orig_calver}.{$orig_publish}.{$dotnet_major} → {$new_version}" --fg bright-yellow --bold | writeline
-        write_publish_state $state_path $current_calver $new_publish
+        var new_state = (new PublishState($current_calver, $new_publish, $dotnet_major))
+        $new_version = (format_version $new_state)
+        styled $"Version: {(format_version $orig_state)} → {$new_version}" --fg bright-yellow --bold | writeline
+        write_publish_state $state_path $current_calver $new_publish $dotnet_major
         update_pkgbuild_version $pkgbuild_path $new_version
     }
     else {
@@ -619,7 +723,7 @@ subcommand info {
 
     # Version
     var state = read_publish_state $state_path
-    ok $"Version:   {$state.CalVer}.{$state.Publish}.10"
+    ok $"Version:   {(format_version $state)}"
 
     # .NET SDK
     var sdk_job = spawn dotnet --version | wait-for | first
