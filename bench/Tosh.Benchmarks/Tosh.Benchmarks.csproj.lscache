@@ -55,10 +55,12 @@ TemporaryDependencyNodeTargetIdentifier=net10.0
 
 [sourceFiles]
 BinderBenchmarks.cs
+EvaluatorBenchmarks.cs
 obj/Debug/net10.0/
  .NETCoreApp,Version=v10.0.AssemblyAttributes.cs
  Tosh.Benchmarks.AssemblyInfo.cs
  Tosh.Benchmarks.GlobalUsings.g.cs
+ParserBenchmarks.cs
 Program.cs
 
 [metadataReferences]
