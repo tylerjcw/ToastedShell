@@ -89,6 +89,49 @@ public static class ToshHost
         return all;
     }
 
+    /// <summary>
+    /// Reads a (possibly dotted) member path from <paramref name="target"/>.
+    /// Mirrors the runtime evaluator's <c>$x.member</c> semantics by
+    /// delegating to <see cref="ToshRuntime.ObjectAccessor"/>.
+    /// </summary>
+    public static object? GetMember(object? target, string memberPath, bool nullSafe)
+    {
+        if (target is null) return nullSafe ? null : throw new NullReferenceException(
+            $"member access '{memberPath}' on null target");
+        return Runtime.ObjectAccessor.GetValue(target, memberPath);
+    }
+
+    /// <summary>
+    /// Performs an index/key lookup on <paramref name="target"/>,
+    /// matching the runtime evaluator's <c>$x[idx]</c> semantics.
+    /// </summary>
+    public static object? GetIndex(object? target, object? index)
+        => ShellIndexingUtilities.GetIndexedValue(target, index);
+
+    /// <summary>
+    /// Coerces an arbitrary value into an <see cref="IEnumerable{T}"/>
+    /// of <see cref="object"/> for <c>for x in expr</c> loops. Lists,
+    /// arrays, and any <see cref="System.Collections.IEnumerable"/>
+    /// (including strings — character at a time) are walked as-is;
+    /// scalars are wrapped as a single-element sequence; null
+    /// becomes an empty sequence.
+    /// </summary>
+    public static IEnumerable<object?> ToEnumerable(object? source)
+    {
+        if (source is null) yield break;
+        if (source is string s)
+        {
+            foreach (var ch in s) yield return ch;
+            yield break;
+        }
+        if (source is System.Collections.IEnumerable seq)
+        {
+            foreach (var item in seq) yield return item;
+            yield break;
+        }
+        yield return source;
+    }
+
     private static (object? Last, List<object?> All) InvokeAndDrain(
         string name, object?[] args, bool printItems)
     {

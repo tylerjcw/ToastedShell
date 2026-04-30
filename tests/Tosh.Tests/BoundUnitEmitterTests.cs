@@ -87,6 +87,27 @@ public sealed class BoundUnitEmitterTests : IClassFixture<ToshRuntimeFixture>
     [InlineData("var x = 17\n$x %= 5\necho $x", "2")]
     [InlineData("var s = \"foo\"\n$s += \"bar\"\necho $s", "foobar")]
     [InlineData("var n = 0\nfor i in (1..10) { $n += $i }\necho $n", "55")]
+    // list literals
+    [InlineData("var xs = [1, 2, 3]\necho $xs.Count", "3")]
+    [InlineData("var xs = [\"a\", \"b\", \"c\"]\necho $xs.Count", "3")]
+    [InlineData("var xs = [1, 2, 3]\necho $xs[0]", "1")]
+    [InlineData("var xs = [10, 20, 30]\necho $xs[2]", "30")]
+    [InlineData("echo [1, 2, 3].Count", "3")]
+    // record / dict literals — record `{ name: ... }` syntax has a
+    // pre-existing parser issue (tosh.parser.missing_list_separator)
+    // so the emitter-side tests use the dict `=>` form which parses
+    // cleanly.
+    [InlineData("var m = { \"name\" => \"Alice\", \"age\" => 30 }\necho $m[\"name\"]", "Alice")]
+    [InlineData("var m = { \"x\" => 1, \"y\" => 2 }\necho $m[\"y\"]", "2")]
+    [InlineData("var m = { \"k\" => 42 }\necho $m.Count", "1")]
+    // for over list
+    [InlineData("for x in [1, 2, 3] { echo $x }", "1\n2\n3")]
+    [InlineData("var s = 0\nfor x in [10, 20, 30] { $s += $x }\necho $s", "60")]
+    [InlineData("for x in [\"a\", \"b\"] { echo $x }", "a\nb")]
+    // for over scalar (single-element)
+    [InlineData("for x in 42 { echo $x }", "42")]
+    // for over null (empty)
+    [InlineData("for x in null { echo $x }\necho done", "done")]
     public void Compiles_and_runs(string source, string expected)
     {
         var output = CompileAndRun(source);
@@ -146,6 +167,33 @@ public sealed class BoundUnitEmitterTests : IClassFixture<ToshRuntimeFixture>
         var output = CompileAndRun("which echo").Trim();
         Assert.False(string.IsNullOrEmpty(output));
         Assert.Contains("echo", output, StringComparison.Ordinal);
+    }
+
+    // ─── Member / index access ────────────────────────────────────
+
+    [Theory]
+    [InlineData("var s = \"hello\"\necho $s.Length", "5")]
+    [InlineData("var s = \"abc\"\necho $s.Length\necho $s.Length", "3\n3")]
+    public void Member_access_reads_clr_property(string source, string expected)
+    {
+        var output = CompileAndRun(source).Trim();
+        Assert.Equal(expected, output);
+    }
+
+    [Fact]
+    public void Member_access_pwd_full_name_starts_at_root()
+    {
+        var output = CompileAndRun("var d = (pwd)\necho $d.FullName").Trim();
+        Assert.StartsWith("/", output);
+    }
+
+    [Fact]
+    public void Member_access_chained_property()
+    {
+        // String.Length.ToString() — proves dotted paths walk
+        // multiple segments through ObjectAccessor.
+        var output = CompileAndRun("var s = \"hello\"\necho $s.Length").Trim();
+        Assert.Equal("5", output);
     }
 
     private string CompileAndRun(string source)

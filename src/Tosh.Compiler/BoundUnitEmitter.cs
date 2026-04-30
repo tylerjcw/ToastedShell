@@ -85,6 +85,43 @@ internal sealed class EmitterImpl
     private static readonly MethodInfo s_hostInvokeValue =
         s_toshHost.GetMethod(nameof(global::Tosh.Compiler.Runtime.ToshHost.InvokeValue),
             new[] { typeof(string), typeof(object[]) })!;
+    private static readonly MethodInfo s_hostGetMember =
+        s_toshHost.GetMethod(nameof(global::Tosh.Compiler.Runtime.ToshHost.GetMember),
+            new[] { typeof(object), typeof(string), typeof(bool) })!;
+    private static readonly MethodInfo s_hostGetIndex =
+        s_toshHost.GetMethod(nameof(global::Tosh.Compiler.Runtime.ToshHost.GetIndex),
+            new[] { typeof(object), typeof(object) })!;
+    private static readonly MethodInfo s_hostToEnumerable =
+        s_toshHost.GetMethod(nameof(global::Tosh.Compiler.Runtime.ToshHost.ToEnumerable),
+            new[] { typeof(object) })!;
+
+    private static readonly Type s_listOfObject = typeof(List<object?>);
+    private static readonly ConstructorInfo s_listCtor =
+        s_listOfObject.GetConstructor(Type.EmptyTypes)!;
+    private static readonly MethodInfo s_listAdd =
+        s_listOfObject.GetMethod(nameof(List<object?>.Add))!;
+
+    private static readonly Type s_dictOfStringObject = typeof(Dictionary<string, object?>);
+    private static readonly ConstructorInfo s_dictCtor =
+        s_dictOfStringObject.GetConstructor(Type.EmptyTypes)!;
+    private static readonly MethodInfo s_dictSetItem =
+        s_dictOfStringObject.GetMethod("set_Item", new[] { typeof(string), typeof(object) })!;
+
+    private static readonly Type s_dictOfObjectObject = typeof(Dictionary<object, object?>);
+    private static readonly ConstructorInfo s_dictObjCtor =
+        s_dictOfObjectObject.GetConstructor(Type.EmptyTypes)!;
+    private static readonly MethodInfo s_dictObjSetItem =
+        s_dictOfObjectObject.GetMethod("set_Item", new[] { typeof(object), typeof(object) })!;
+
+    private static readonly Type s_enumerableOfObject = typeof(IEnumerable<object?>);
+    private static readonly MethodInfo s_enumerableGetEnumerator =
+        s_enumerableOfObject.GetMethod(nameof(IEnumerable<object?>.GetEnumerator), Type.EmptyTypes)!;
+    private static readonly MethodInfo s_enumeratorMoveNext =
+        typeof(System.Collections.IEnumerator).GetMethod(nameof(System.Collections.IEnumerator.MoveNext), Type.EmptyTypes)!;
+    private static readonly MethodInfo s_enumeratorOfObjectGetCurrent =
+        typeof(IEnumerator<object?>).GetProperty(nameof(IEnumerator<object?>.Current))!.GetGetMethod()!;
+    private static readonly MethodInfo s_disposableDispose =
+        typeof(IDisposable).GetMethod(nameof(IDisposable.Dispose), Type.EmptyTypes)!;
 
     public EmitterImpl(BoundUnit unit, string assemblyName)
     {
@@ -469,24 +506,24 @@ internal sealed class EmitterImpl
     /// </summary>
     private void EmitForStatement(BoundForStatement forStmt)
     {
-        if (forStmt.Source.Stages.Count != 1 ||
-            forStmt.Source.Stages[0] is not BoundExpressionStage stage ||
-            stage.Value is not BoundRange range)
+        // Range fast path: `for i in (1..10)` → int counter loop.
+        if (forStmt.Source.Stages.Count == 1 &&
+            forStmt.Source.Stages[0] is BoundExpressionStage stage &&
+            stage.Value is BoundRange range &&
+            range.Step is null &&
+            range.End is not null)
         {
-            Diagnostics.Add("for: only `start..end` ranges are supported");
-            return;
-        }
-        if (range.Step is not null)
-        {
-            Diagnostics.Add("for: ranges with explicit step are not yet supported");
-            return;
-        }
-        if (range.End is null)
-        {
-            Diagnostics.Add("for: open-ended ranges are not supported");
+            EmitForRangeStatement(forStmt, range);
             return;
         }
 
+        // Generic fallback: evaluate the source as an object,
+        // coerce via ToshHost.ToEnumerable, walk via IEnumerator.
+        EmitForEachStatement(forStmt);
+    }
+
+    private void EmitForRangeStatement(BoundForStatement forStmt, BoundRange range)
+    {
         var startType = EmitExpression(range.Start);
         if (startType is null) return;
         ConvertNumeric(startType, typeof(int));
@@ -494,7 +531,7 @@ internal sealed class EmitterImpl
         _il.Emit(OpCodes.Stloc, loopVarLocal);
         _locals[forStmt.LoopVariable] = new LocalSlot(loopVarLocal, typeof(int));
 
-        var endType = EmitExpression(range.End);
+        var endType = EmitExpression(range.End!);
         if (endType is null) return;
         ConvertNumeric(endType, typeof(int));
         var endLocal = _il.DeclareLocal(typeof(int));
@@ -519,6 +556,64 @@ internal sealed class EmitterImpl
         _il.Emit(OpCodes.Stloc, loopVarLocal);
         _il.Emit(OpCodes.Br, topLabelF);
         _il.MarkLabel(endLabelF);
+    }
+
+    /// <summary>
+    /// Generic <c>for x in expr</c>: evaluates the source as an
+    /// object, calls <see cref="global::Tosh.Compiler.Runtime.ToshHost.ToEnumerable"/>
+    /// to coerce it into <c>IEnumerable&lt;object?&gt;</c>, then
+    /// walks via <c>GetEnumerator</c>/<c>MoveNext</c>/<c>Current</c>
+    /// inside a try/finally that disposes the enumerator.
+    /// </summary>
+    private void EmitForEachStatement(BoundForStatement forStmt)
+    {
+        // Evaluate the source pipeline as a value.
+        var srcType = EmitPipelineAsValue(forStmt.Source);
+        if (srcType is null) return;
+        BoxIfValueType(srcType);
+        _il.Emit(OpCodes.Call, s_hostToEnumerable);
+
+        // Get an IEnumerator<object?> from the IEnumerable<object?>.
+        _il.Emit(OpCodes.Callvirt, s_enumerableGetEnumerator);
+        var enumeratorLocal = _il.DeclareLocal(typeof(IEnumerator<object?>));
+        _il.Emit(OpCodes.Stloc, enumeratorLocal);
+
+        // Loop variable is object-typed in the generic case.
+        var loopVarLocal = _il.DeclareLocal(typeof(object));
+        _locals[forStmt.LoopVariable] = new LocalSlot(loopVarLocal, typeof(object));
+
+        var afterLoopLabel = _il.DefineLabel();
+        _il.BeginExceptionBlock();
+        var topLabelF = _il.DefineLabel();
+        var endLabelF = _il.DefineLabel();
+        _il.MarkLabel(topLabelF);
+
+        // if (!enumerator.MoveNext()) goto end
+        _il.Emit(OpCodes.Ldloc, enumeratorLocal);
+        _il.Emit(OpCodes.Callvirt, s_enumeratorMoveNext);
+        _il.Emit(OpCodes.Brfalse, endLabelF);
+
+        // loopVar = enumerator.Current
+        _il.Emit(OpCodes.Ldloc, enumeratorLocal);
+        _il.Emit(OpCodes.Callvirt, s_enumeratorOfObjectGetCurrent);
+        _il.Emit(OpCodes.Stloc, loopVarLocal);
+
+        EmitBlock(forStmt.Body);
+        _il.Emit(OpCodes.Br, topLabelF);
+
+        _il.MarkLabel(endLabelF);
+        _il.Emit(OpCodes.Leave, afterLoopLabel);
+
+        _il.BeginFinallyBlock();
+        // enumerator?.Dispose();
+        var skipDispose = _il.DefineLabel();
+        _il.Emit(OpCodes.Ldloc, enumeratorLocal);
+        _il.Emit(OpCodes.Brfalse_S, skipDispose);
+        _il.Emit(OpCodes.Ldloc, enumeratorLocal);
+        _il.Emit(OpCodes.Callvirt, s_disposableDispose);
+        _il.MarkLabel(skipDispose);
+        _il.EndExceptionBlock();
+        _il.MarkLabel(afterLoopLabel);
     }
 
     private void EmitReturnStatement(BoundReturnStatement ret)
@@ -756,6 +851,21 @@ internal sealed class EmitterImpl
             case BoundInterpolatedString interp:
                 return EmitInterpolatedString(interp);
 
+            case BoundMemberAccess member:
+                return EmitMemberAccess(member);
+
+            case BoundIndexAccess index:
+                return EmitIndexAccess(index);
+
+            case BoundArrayLiteral arr:
+                return EmitArrayLiteral(arr);
+
+            case BoundRecordLiteral rec:
+                return EmitRecordLiteral(rec);
+
+            case BoundDictLiteral dict:
+                return EmitDictLiteral(dict);
+
             default:
                 Diagnostics.Add($"unsupported expression: {expression.GetType().Name}");
                 return null;
@@ -882,6 +992,123 @@ internal sealed class EmitterImpl
             new[] { typeof(string[]) })!;
         _il.Emit(OpCodes.Call, concatArray);
         return typeof(string);
+    }
+
+    /// <summary>
+    /// Emits IL for <c>$target.path</c> / <c>$target?.path</c>. The
+    /// dotted path is preserved verbatim; the runtime accessor
+    /// walks each segment dynamically (matching the interpreter's
+    /// behaviour). Always produces an <see cref="object"/> on the
+    /// stack — refinement via cast happens at the use site.
+    /// </summary>
+    private Type? EmitMemberAccess(BoundMemberAccess member)
+    {
+        var t = EmitExpression(member.Target);
+        if (t is null) return null;
+        BoxIfValueType(t);
+        _il.Emit(OpCodes.Ldstr, member.MemberPath);
+        _il.Emit(member.NullSafe ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
+        _il.Emit(OpCodes.Call, s_hostGetMember);
+        return typeof(object);
+    }
+
+    /// <summary>
+    /// Emits IL for <c>$target[index]</c>. The host shim uses the
+    /// runtime's <c>ShellIndexingUtilities.GetIndexedValue</c> so
+    /// behaviour matches the interpreter for lists, dicts, strings,
+    /// and CLR indexers. <see cref="IndexLookupKind"/> beyond the
+    /// default isn't yet plumbed through.
+    /// </summary>
+    private Type? EmitIndexAccess(BoundIndexAccess index)
+    {
+        if (index.LookupKind != global::Tosh.Runtime.IndexLookupKind.Default)
+        {
+            Diagnostics.Add(
+                $"index lookup kind '{index.LookupKind}' not yet supported");
+            return null;
+        }
+        var tt = EmitExpression(index.Target);
+        if (tt is null) return null;
+        BoxIfValueType(tt);
+        var ti = EmitExpression(index.Index);
+        if (ti is null) return null;
+        BoxIfValueType(ti);
+        _il.Emit(OpCodes.Call, s_hostGetIndex);
+        return typeof(object);
+    }
+
+    /// <summary>
+    /// Emits a list literal as <c>new List&lt;object?&gt;()</c>
+    /// followed by <c>Add</c> calls for each item. Spread elements
+    /// (<c>...$xs</c>) aren't yet supported and emit a diagnostic.
+    /// </summary>
+    private Type? EmitArrayLiteral(BoundArrayLiteral arr)
+    {
+        _il.Emit(OpCodes.Newobj, s_listCtor);
+        foreach (var item in arr.Items)
+        {
+            if (item.IsSpread)
+            {
+                Diagnostics.Add("array literal: spread elements not yet supported");
+                return null;
+            }
+            _il.Emit(OpCodes.Dup);
+            var t = EmitExpression(item.Value);
+            if (t is null) return null;
+            BoxIfValueType(t);
+            _il.Emit(OpCodes.Callvirt, s_listAdd);
+        }
+        return s_listOfObject;
+    }
+
+    /// <summary>
+    /// Emits a record literal (<c>{ name: "x", age: 1 }</c>) as
+    /// <c>new Dictionary&lt;string, object?&gt;()</c> with one
+    /// indexer-set per field. Computed-name and spread entries
+    /// aren't yet supported.
+    /// </summary>
+    private Type? EmitRecordLiteral(BoundRecordLiteral rec)
+    {
+        _il.Emit(OpCodes.Newobj, s_dictCtor);
+        foreach (var entry in rec.Fields)
+        {
+            if (entry is not BoundRecordField field)
+            {
+                Diagnostics.Add(
+                    $"record literal: '{entry.GetType().Name}' entries not yet supported");
+                return null;
+            }
+            _il.Emit(OpCodes.Dup);
+            _il.Emit(OpCodes.Ldstr, field.Name);
+            var vt = EmitExpression(field.Value);
+            if (vt is null) return null;
+            BoxIfValueType(vt);
+            _il.Emit(OpCodes.Callvirt, s_dictSetItem);
+        }
+        return s_dictOfStringObject;
+    }
+
+    /// <summary>
+    /// Emits a dict literal (<c>{ "k" =&gt; v, ... }</c>) as
+    /// <c>new Dictionary&lt;object, object?&gt;()</c> populated via
+    /// the indexer setter. Keys are evaluated as expressions and
+    /// boxed.
+    /// </summary>
+    private Type? EmitDictLiteral(BoundDictLiteral dict)
+    {
+        _il.Emit(OpCodes.Newobj, s_dictObjCtor);
+        foreach (var entry in dict.Entries)
+        {
+            _il.Emit(OpCodes.Dup);
+            var kt = EmitExpression(entry.Key);
+            if (kt is null) return null;
+            BoxIfValueType(kt);
+            var vt = EmitExpression(entry.Value);
+            if (vt is null) return null;
+            BoxIfValueType(vt);
+            _il.Emit(OpCodes.Callvirt, s_dictObjSetItem);
+        }
+        return s_dictOfObjectObject;
     }
 
     private Type? EmitBinaryOperator(BoundBinaryOperator binOp)
