@@ -1,0 +1,222 @@
+using System.IO;
+using Tosh.Language;
+using Tosh.Language.Binding;
+using Tosh.Language.Parsing;
+using Tosh.Runtime;
+
+namespace Tosh.Tests;
+
+/// <summary>
+/// Tests for the binder pass that runs between parse and evaluate. The
+/// binder resolves command names against the runtime registry plus
+/// same-source function declarations and surfaces a diagnostic when an
+/// unresolved name has a close Levenshtein match to a registered command.
+/// </summary>
+public sealed class BinderTests : IClassFixture<ToshRuntimeFixture>
+{
+    private readonly ToshRuntime _runtime;
+
+    public BinderTests(ToshRuntimeFixture fixture)
+    {
+        _runtime = fixture.Runtime;
+    }
+
+    private ParseResult ParseSource(string source)
+    {
+        var engine = new ToshEngine(_runtime);
+        return engine.Parse(source, "<binder-test>");
+    }
+
+    [Fact]
+    public void Bind_returns_no_diagnostics_for_registered_builtins()
+    {
+        var parse = ParseSource("ls | where _ != null | first");
+        var diagnostics = Binder.Bind(parse, _runtime.Commands);
+        Assert.Empty(diagnostics);
+    }
+
+    [Fact]
+    public void Bind_flags_likely_typo_with_did_you_mean_suggestion()
+    {
+        // 'flatmap' is a single-edit miss for 'flat-map' ... actually 2 edits
+        // ('-' insertion + length delta). Use 'flatmpa' which is distance 2
+        // from 'flat-map' is too far. The known builtin is 'flat-map';
+        // 'flatamp' is distance 2 → matches threshold for length > 4.
+        var parse = ParseSource("[1,2,3] | flatmap { _ }");
+        var diagnostics = Binder.Bind(parse, _runtime.Commands);
+
+        Assert.NotEmpty(diagnostics);
+        var diag = diagnostics[0];
+        Assert.Equal("tosh.bind.unknown_command", diag.Code);
+        Assert.Contains("flatmap", diag.Title, StringComparison.Ordinal);
+        Assert.Contains("did you mean", diag.Label!, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("flat-map", diag.Label!, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Bind_typo_for_short_command_name_uses_distance_one_threshold()
+    {
+        // 'lz' (length 2) → threshold 1 → matches 'ls' (distance 1).
+        var parse = ParseSource("lz");
+        var diagnostics = Binder.Bind(parse, _runtime.Commands);
+
+        Assert.NotEmpty(diagnostics);
+        Assert.Contains("ls", diagnostics[0].Label!, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Bind_silent_when_unresolved_name_has_no_close_match()
+    {
+        // Defer to runtime — could be an external on PATH.
+        var parse = ParseSource("totally-unique-name-with-no-similar-builtin");
+        var diagnostics = Binder.Bind(parse, _runtime.Commands);
+        Assert.Empty(diagnostics);
+    }
+
+    [Fact]
+    public void Bind_skips_explicit_paths()
+    {
+        var parse = ParseSource("./flatmap arg");
+        var diagnostics = Binder.Bind(parse, _runtime.Commands);
+        Assert.Empty(diagnostics);
+    }
+
+    [Fact]
+    public void Bind_skips_dollar_prefixed_variable_invocations()
+    {
+        var parse = ParseSource("$callable arg1 arg2");
+        var diagnostics = Binder.Bind(parse, _runtime.Commands);
+        Assert.Empty(diagnostics);
+    }
+
+    [Fact]
+    public void Bind_recognizes_same_source_function_declaration()
+    {
+        var parse = ParseSource("""
+            func myproc(x) { echo $x }
+            myproc 42
+            """);
+        var diagnostics = Binder.Bind(parse, _runtime.Commands);
+        Assert.Empty(diagnostics);
+    }
+
+    [Fact]
+    public void Bind_recognizes_forward_referenced_function()
+    {
+        var parse = ParseSource("""
+            myproc 42
+            func myproc(x) { echo $x }
+            """);
+        var diagnostics = Binder.Bind(parse, _runtime.Commands);
+        Assert.Empty(diagnostics);
+    }
+
+    [Fact]
+    public void Bind_recurses_into_function_body()
+    {
+        // 'eccho' is distance 1 from 'echo' (length > 4 → threshold 2).
+        var parse = ParseSource("""
+            func greet(n) { eccho $n }
+            """);
+        var diagnostics = Binder.Bind(parse, _runtime.Commands);
+        Assert.NotEmpty(diagnostics);
+        Assert.Contains("echo", diagnostics[0].Label!, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Bind_recurses_into_block_argument_of_pipeline_command()
+    {
+        var parse = ParseSource("[1,2,3] | each { eccho _ }");
+        var diagnostics = Binder.Bind(parse, _runtime.Commands);
+        Assert.NotEmpty(diagnostics);
+        Assert.Contains("echo", diagnostics[0].Label!, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Engine_warns_on_typo_under_default_strictness_but_does_not_throw()
+    {
+        // Default REPL-style behaviour: the binder warning hits stderr but
+        // the runtime still attempts resolution (and ultimately fails with
+        // its own diagnostic since the typo is also not on PATH). We check
+        // here that the binder did not promote to an exception under Warn.
+        var stderr = new StringWriter();
+        var runtime = ToshRuntime.CreateDefault(TextWriter.Null, stderr);
+        var engine = new ToshEngine(runtime);
+        Assert.Equal(BinderStrictness.Warn, engine.BinderStrictness);
+
+        await Assert.ThrowsAsync<ToshDiagnosticException>(async () =>
+            await engine.ExecuteToListAsync("flatmap"));
+
+        Assert.Contains("flat-map", stderr.ToString(), StringComparison.Ordinal);
+        Assert.Contains("flatmap", stderr.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Engine_throws_binder_diagnostic_under_strict_strictness()
+    {
+        var runtime = ToshRuntime.CreateDefault(TextWriter.Null, TextWriter.Null);
+        var engine = new ToshEngine(runtime);
+        engine.BinderStrictness = BinderStrictness.Strict;
+
+        var ex = await Assert.ThrowsAsync<ToshDiagnosticException>(async () =>
+            await engine.ExecuteToListAsync("flatmap"));
+
+        Assert.Equal("tosh.bind.unknown_command", ex.Diagnostics[0].Code);
+    }
+
+    [Fact]
+    public async Task Engine_emits_no_diagnostic_under_lenient_strictness()
+    {
+        var stderr = new StringWriter();
+        var runtime = ToshRuntime.CreateDefault(TextWriter.Null, stderr);
+        var engine = new ToshEngine(runtime);
+        engine.BinderStrictness = BinderStrictness.Lenient;
+
+        // Still throws at runtime because flatmap is not a registered command and
+        // not on PATH; but the binder produced no warning under Lenient.
+        await Assert.ThrowsAsync<ToshDiagnosticException>(async () =>
+            await engine.ExecuteToListAsync("flatmap"));
+
+        Assert.DoesNotContain("did you mean", stderr.ToString(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void PushBinderStrictness_restores_previous_value_on_dispose()
+    {
+        var engine = new ToshEngine(_runtime);
+        var original = engine.BinderStrictness;
+
+        using (engine.PushBinderStrictness(BinderStrictness.Strict))
+        {
+            Assert.Equal(BinderStrictness.Strict, engine.BinderStrictness);
+        }
+
+        Assert.Equal(original, engine.BinderStrictness);
+    }
+
+    [Fact]
+    public async Task TOSH_DISABLE_BINDER_env_var_short_circuits_binder()
+    {
+        var stderr = new StringWriter();
+        var runtime = ToshRuntime.CreateDefault(TextWriter.Null, stderr);
+        var engine = new ToshEngine(runtime);
+        engine.BinderStrictness = BinderStrictness.Strict;
+
+        var previous = Environment.GetEnvironmentVariable("TOSH_DISABLE_BINDER");
+        Environment.SetEnvironmentVariable("TOSH_DISABLE_BINDER", "1");
+        try
+        {
+            // Under Strict the binder would normally throw on 'flatmap'. With
+            // the bailout active, evaluation proceeds and the runtime's own
+            // command-not-found diagnostic surfaces instead.
+            var ex = await Assert.ThrowsAsync<ToshDiagnosticException>(async () =>
+                await engine.ExecuteToListAsync("flatmap"));
+
+            Assert.NotEqual("tosh.bind.unknown_command", ex.Diagnostics[0].Code);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("TOSH_DISABLE_BINDER", previous);
+        }
+    }
+}

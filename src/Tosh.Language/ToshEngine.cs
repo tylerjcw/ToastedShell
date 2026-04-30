@@ -7,6 +7,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using Tosh.Runtime;
 using Tosh.Stdlib;
+using Tosh.Language.Binding;
 using Tosh.Language.Bridge;
 using Tosh.Language.Bridge.Shell;
 using Tosh.Language.Debugging;
@@ -34,6 +35,44 @@ public sealed partial class ToshEngine : IShellEvaluator
     private int _commandEventDepth;
     private readonly ToshRuntimeNamespace _toshNamespace;
     private readonly ShellEnvironmentNamespace _environmentNamespace;
+
+    /// <summary>
+    /// Active binder strictness for evaluation calls that don't pass an explicit override.
+    /// Defaults to <see cref="BinderStrictness.Warn"/>; the CLI raises this to
+    /// <see cref="BinderStrictness.Strict"/> for <c>-c</c>, script files, and the
+    /// <c>source</c> command via <see cref="PushBinderStrictness"/>.
+    /// </summary>
+    public BinderStrictness BinderStrictness { get; set; } = BinderStrictness.Warn;
+
+    /// <summary>
+    /// Temporarily overrides <see cref="BinderStrictness"/> for the lifetime of the returned
+    /// disposable. Use within a <c>using</c> block around an evaluation that needs different
+    /// semantics from the engine default (e.g. running a script file under Strict).
+    /// </summary>
+    public IDisposable PushBinderStrictness(BinderStrictness strictness)
+    {
+        var previous = BinderStrictness;
+        BinderStrictness = strictness;
+        return new BinderStrictnessScope(this, previous);
+    }
+
+    private sealed class BinderStrictnessScope : IDisposable
+    {
+        private readonly ToshEngine _engine;
+        private readonly BinderStrictness _previous;
+        private bool _disposed;
+        public BinderStrictnessScope(ToshEngine engine, BinderStrictness previous)
+        {
+            _engine = engine;
+            _previous = previous;
+        }
+        public void Dispose()
+        {
+            if (_disposed) return;
+            _disposed = true;
+            _engine.BinderStrictness = _previous;
+        }
+    }
 
     public ToshEngine(ToshRuntime? runtime = null)
     {
@@ -271,7 +310,40 @@ public sealed partial class ToshEngine : IShellEvaluator
                 .ToArray());
         }
 
+        ApplyBinder(parseResult);
+
         return EvaluateAsync(parseResult, cancellationToken);
+    }
+
+    private void ApplyBinder(ParseResult parseResult)
+    {
+        // Bailout: an undocumented escape hatch in case the binder misbehaves on some
+        // unforeseen AST shape. Documented in AGENTS.md as a recovery mechanism only.
+        if (string.Equals(
+                Environment.GetEnvironmentVariable("TOSH_DISABLE_BINDER"),
+                "1",
+                StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        var diagnostics = Tosh.Language.Binding.Binder.Bind(parseResult, Runtime.Commands);
+        if (diagnostics.Count == 0) return;
+
+        switch (BinderStrictness)
+        {
+            case BinderStrictness.Lenient:
+                return;
+            case BinderStrictness.Warn:
+                var renderer = new DiagnosticRenderer(Runtime.Config.Theme.Diagnostics, Runtime.Config.Diagnostics);
+                foreach (var diagnostic in diagnostics)
+                {
+                    Runtime.Error.WriteLine(renderer.RenderWarning(diagnostic));
+                }
+                return;
+            case BinderStrictness.Strict:
+                throw new ToshDiagnosticException(diagnostics.ToArray());
+        }
     }
 
     public async Task<IReadOnlyList<object?>> ExecuteToListAsync(string source, CancellationToken cancellationToken = default)
@@ -338,6 +410,11 @@ public sealed partial class ToshEngine : IShellEvaluator
             scopeFrame = PushScope(new Dictionary<string, object?>(StringComparer.Ordinal));
         }
 
+        // Script files (and `source` invocations, which route through here)
+        // run under Strict binder semantics: an unrecognized command with
+        // a close suggestion aborts the script before evaluation begins.
+        var binderScope = PushBinderStrictness(BinderStrictness.Strict);
+
         try
         {
             _scriptArgumentsStack.Push(scriptArgs);
@@ -350,6 +427,7 @@ public sealed partial class ToshEngine : IShellEvaluator
         finally
         {
             _scriptArgumentsStack.Pop();
+            binderScope.Dispose();
             scopeFrame.Dispose();
         }
     }

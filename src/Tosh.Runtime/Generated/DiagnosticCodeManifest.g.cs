@@ -24,6 +24,14 @@ public static class DiagnosticCodeManifest
     private static readonly Dictionary<string, DiagnosticCodeInfo> _byCode =
         new(System.StringComparer.OrdinalIgnoreCase)
     {
+        ["tosh.bind.unknown_command"] = new DiagnosticCodeInfo(
+            Code: "tosh.bind.unknown_command",
+            Namespace: "bind",
+            Name: "unknown_command",
+            Title: "Command '{name}' is not a registered builtin or function declared in this source.",
+            Help: "the binder flags names that look like typos for known commands; set TOSH_DISABLE_BINDER=1 to suppress all binder checks.",
+            SourceFile: "src/Tosh.Language/Binding/Binder.cs",
+            SourceLine: 351),
         ["tosh.config.missing_value"] = new DiagnosticCodeInfo(
             Code: "tosh.config.missing_value",
             Namespace: "config",

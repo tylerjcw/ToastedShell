@@ -4,6 +4,7 @@ using Tosh.Cli;
 using Tosh.Cli.Tui;
 using Tosh.Runtime;
 using Tosh.Language;
+using Tosh.Language.Binding;
 
 ConfigureConsoleEncoding();
 
@@ -111,7 +112,10 @@ if (plan.Kind != CliInvocationKind.Repl)
         {
             case CliInvocationKind.Command:
                 runtime.InvocationArguments = plan.Arguments.Cast<object?>().ToArray();
-                await ExecuteAndPrintAsync(plan.ScriptOrCommand!);
+                using (engine.PushBinderStrictness(BinderStrictness.Strict))
+                {
+                    await ExecuteAndPrintAsync(plan.ScriptOrCommand!);
+                }
                 Environment.ExitCode = runtime.LastExitCode;
                 break;
             case CliInvocationKind.ToshScript:
@@ -120,7 +124,10 @@ if (plan.Kind != CliInvocationKind.Repl)
                 Environment.ExitCode = runtime.LastExitCode;
                 break;
             case CliInvocationKind.ExternalScript:
-                await ExecuteAndPrintAsync(string.Join(" ", plan.Arguments.Select(QuoteArgument)));
+                using (engine.PushBinderStrictness(BinderStrictness.Strict))
+                {
+                    await ExecuteAndPrintAsync(string.Join(" ", plan.Arguments.Select(QuoteArgument)));
+                }
                 Environment.ExitCode = runtime.LastExitCode;
                 break;
             default:
@@ -287,7 +294,10 @@ async Task RunLogoutHookAsync()
     try
     {
         var source = await File.ReadAllTextAsync(logoutPath);
-        await AsyncEnumerableExtensions.ToListAsync(engine.EvaluateAsync(source, logoutPath), default);
+        using (engine.PushBinderStrictness(BinderStrictness.Strict))
+        {
+            await AsyncEnumerableExtensions.ToListAsync(engine.EvaluateAsync(source, logoutPath), default);
+        }
     }
     catch (Exception exception)
     {

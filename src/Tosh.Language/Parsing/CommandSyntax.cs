@@ -6,4 +6,17 @@ public sealed record CommandSyntax(
     string Name,
     TextSpan NameSpan,
     IReadOnlyList<ArgumentSyntax> Arguments,
-    TextSpan Span) : PipelineStageSyntax(Span);
+    TextSpan Span) : PipelineStageSyntax(Span)
+{
+    /// <summary>
+    /// Reserved for a future binder phase that will stamp this with a
+    /// resolved command reference as a runtime fast path. Phase 1 does not
+    /// populate it: top-level user-function definitions register into the
+    /// runtime command registry, which means a parse-time capture can go
+    /// stale before evaluation. A later phase will add a freshness check
+    /// and resume populating this annotation. Body-declared record
+    /// properties are excluded from value equality, so this property does
+    /// not affect AST equality semantics.
+    /// </summary>
+    public IShellCommand? BoundCommand { get; set; }
+}
