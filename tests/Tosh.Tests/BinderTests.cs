@@ -275,4 +275,153 @@ public sealed class BinderTests : IClassFixture<ToshRuntimeFixture>
             Assert.NotEqual("tosh.shell_only", ex.Diagnostics[0].Code);
         }
     }
+
+    // ──────────────────────────────────────────────────────────────────
+    // Phase 2: variable-name binder
+    // ──────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void Variable_binder_does_not_flag_in_scope_reference()
+    {
+        var parse = ParseSource("""
+            var name = "alice"
+            echo $name
+            """);
+        var diags = Binder.Bind(parse, _runtime.Commands);
+        Assert.DoesNotContain(diags, d => d.Code == "tosh.bind.unknown_variable");
+    }
+
+    [Fact]
+    public void Variable_binder_flags_typo_with_did_you_mean()
+    {
+        // 'nme' is distance 1 from 'name' (short-name threshold 1).
+        var parse = ParseSource("""
+            var name = "alice"
+            echo $nme
+            """);
+        var diags = Binder.Bind(parse, _runtime.Commands);
+        var diag = Assert.Single(diags, d => d.Code == "tosh.bind.unknown_variable");
+        Assert.Contains("$name", diag.Label!, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Variable_binder_skips_references_with_no_near_match()
+    {
+        // No declared name remotely close to 'completely_unknown' — likely
+        // an externally-set variable; defer to runtime.
+        var parse = ParseSource("echo $completely_unknown");
+        var diags = Binder.Bind(parse, _runtime.Commands);
+        Assert.DoesNotContain(diags, d => d.Code == "tosh.bind.unknown_variable");
+    }
+
+    [Fact]
+    public void Variable_binder_allows_special_namespaces()
+    {
+        var parse = ParseSource("""
+            echo $env.HOME
+            echo $tosh.Config.Shell.Dirs
+            echo $args
+            """);
+        var diags = Binder.Bind(parse, _runtime.Commands);
+        Assert.DoesNotContain(diags, d => d.Code == "tosh.bind.unknown_variable");
+    }
+
+    [Fact]
+    public void Variable_binder_allows_function_parameters()
+    {
+        var parse = ParseSource("""
+            func greet(name) { echo $name }
+            """);
+        var diags = Binder.Bind(parse, _runtime.Commands);
+        Assert.DoesNotContain(diags, d => d.Code == "tosh.bind.unknown_variable");
+    }
+
+    [Fact]
+    public void Variable_binder_flags_param_typo_inside_function_body()
+    {
+        var parse = ParseSource("""
+            func greet(name) { echo $nme }
+            """);
+        var diags = Binder.Bind(parse, _runtime.Commands);
+        Assert.Contains(diags, d => d.Code == "tosh.bind.unknown_variable");
+    }
+
+    [Fact]
+    public void Variable_binder_allows_for_loop_variable()
+    {
+        var parse = ParseSource("""
+            for $item in [1, 2, 3] { echo $item }
+            """);
+        var diags = Binder.Bind(parse, _runtime.Commands);
+        Assert.DoesNotContain(diags, d => d.Code == "tosh.bind.unknown_variable");
+    }
+
+    [Fact]
+    public void Variable_binder_allows_catch_variable()
+    {
+        var parse = ParseSource("""
+            try { echo hi } catch $err { echo $err }
+            """);
+        var diags = Binder.Bind(parse, _runtime.Commands);
+        Assert.DoesNotContain(diags, d => d.Code == "tosh.bind.unknown_variable");
+    }
+
+    [Fact]
+    public void Variable_binder_does_not_flag_member_tail()
+    {
+        // The binder cannot know record shapes; only the root is checked.
+        var parse = ParseSource("""
+            var person = { name: "alice", age: 30 }
+            echo $person.notarealfield.namee
+            """);
+        var diags = Binder.Bind(parse, _runtime.Commands);
+        Assert.DoesNotContain(diags, d => d.Code == "tosh.bind.unknown_variable");
+    }
+
+    [Fact]
+    public void Variable_binder_does_not_flag_pipeline_underscore()
+    {
+        var parse = ParseSource("""
+            var nums = [1, 2, 3]
+            echo $nums | where $_ > 1
+            """);
+        var diags = Binder.Bind(parse, _runtime.Commands);
+        Assert.DoesNotContain(diags, d => d.Code == "tosh.bind.unknown_variable");
+    }
+
+    [Fact]
+    public void Variable_binder_flags_typo_inside_interpolated_string()
+    {
+        // Tosh interpolation form: $"...{expr}..." where expr is parsed
+        // as a tosh source fragment, so variable references take the
+        // usual $name form.
+        var parse = ParseSource("""
+            var name = "alice"
+            echo $"hello, {$nme}"
+            """);
+        var diags = Binder.Bind(parse, _runtime.Commands);
+        Assert.Contains(diags, d => d.Code == "tosh.bind.unknown_variable");
+    }
+
+    [Fact]
+    public void Variable_binder_allows_destructured_names()
+    {
+        var parse = ParseSource("""
+            var [a, b] = [1, 2]
+            echo $a $b
+            """);
+        var diags = Binder.Bind(parse, _runtime.Commands);
+        Assert.DoesNotContain(diags, d => d.Code == "tosh.bind.unknown_variable");
+    }
+
+    [Fact]
+    public void Variable_binder_allows_lambda_parameters()
+    {
+        var parse = ParseSource("""
+            [1, 2, 3] | each |x| { echo $x }
+            """);
+        var diags = Binder.Bind(parse, _runtime.Commands);
+        Assert.DoesNotContain(diags, d => d.Code == "tosh.bind.unknown_variable");
+    }
+
 }

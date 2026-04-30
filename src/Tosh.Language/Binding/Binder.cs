@@ -61,7 +61,18 @@ public static class Binder
             new List<ToshDiagnostic>());
 
         VisitStatement(parseResult.Statement, context);
-        return context.Diagnostics;
+
+        // Phase 2: variable-name scope analysis runs as a separate pass.
+        // Concatenated diagnostics come back in source order across both
+        // passes, since each pass walks the AST top-down.
+        var variableDiagnostics = VariableBinder.Bind(parseResult);
+        if (variableDiagnostics.Count == 0) return context.Diagnostics;
+        if (context.Diagnostics.Count == 0) return variableDiagnostics;
+
+        var combined = new List<ToshDiagnostic>(context.Diagnostics.Count + variableDiagnostics.Count);
+        combined.AddRange(context.Diagnostics);
+        combined.AddRange(variableDiagnostics);
+        return combined;
     }
 
     // ──────────────────────────────────────────────────────────────────
