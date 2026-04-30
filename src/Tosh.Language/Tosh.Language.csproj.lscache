@@ -54,6 +54,10 @@ TemporaryDependencyNodeTargetIdentifier=net10.0
 /warnaserror+:NU1605,SYSLIB0011
 
 [sourceFiles]
+Binding/
+ Binder.cs
+ BinderStrictness.cs
+ VariableBinder.cs
 Bridge/
  FunctionCommand.cs
  NativeFunctionCommand.cs

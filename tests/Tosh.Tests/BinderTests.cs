@@ -402,7 +402,24 @@ public sealed class BinderTests : IClassFixture<ToshRuntimeFixture>
         var diags = Binder.Bind(parse, _runtime.Commands);
         Assert.Contains(diags, d => d.Code == "tosh.bind.unknown_variable");
     }
+    [Fact]
+    public void Variable_binder_interpolated_string_diagnostic_points_at_hole()
+    {
+        // The precise span should cover the '$nme' inside the interpolation
+        // hole, not the entire string literal.
+        var source = """
+            var name = "alice"
+            echo $"hello, {$nme}"
+            """;
+        var parse = ParseSource(source);
+        var diags = Binder.Bind(parse, _runtime.Commands);
+        var diag = Assert.Single(diags, d => d.Code == "tosh.bind.unknown_variable");
 
+        Assert.NotNull(diag.Span);
+        var span = diag.Span!.Value;
+        var slice = source.Substring(span.Start, span.Length);
+        Assert.Equal("$nme", slice);
+    }
     [Fact]
     public void Variable_binder_allows_destructured_names()
     {

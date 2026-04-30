@@ -40,9 +40,10 @@ namespace Tosh.Language.Binding;
 /// String interpolation: <c>InterpolatedStringExpressionPart.Expression</c>
 /// is a tosh source fragment — running the parser on each one is too
 /// heavy for the binder. Instead we extract <c>$name</c> tokens with a
-/// regex and check the names against the active scope. Diagnostic
-/// spans for these references are the whole interpolated string, since
-/// the parser does not retain per-part offsets.
+/// regex and check the names against the active scope. Diagnostic spans
+/// point at the precise <c>$name</c> occurrence inside the source string,
+/// using <see cref="InterpolatedStringExpressionPart.ExpressionSpan"/> as
+/// the anchor.
 /// </remarks>
 public static class VariableBinder
 {
@@ -533,12 +534,13 @@ public static class VariableBinder
                 foreach (Match m in InterpolationVariableRegex.Matches(expr.Expression))
                 {
                     var name = m.Groups[1].Value;
-                    // Re-use CheckIdentifier with the whole-string span. The
-                    // parser does not retain per-part offsets, so all
-                    // diagnostics inside one interpolated string point at the
-                    // same location. Acceptable for typo detection; precise
-                    // spans are a future improvement.
-                    CheckIdentifier(name, interp.Span, ctx);
+                    // Compute the precise source span for the '$name'
+                    // occurrence within the original interpolated literal.
+                    // m.Index is relative to the trimmed expression text;
+                    // expr.ExpressionSpan points at that text in the source.
+                    var start = expr.ExpressionSpan.Start + m.Index;
+                    var length = 1 + name.Length; // '$' + identifier
+                    CheckIdentifier(name, new TextSpan(start, length), ctx);
                 }
             }
         }

@@ -136,7 +136,17 @@ public sealed record UnaryOperatorArgumentSyntax(
 
 public abstract record InterpolatedStringPart;
 public sealed record InterpolatedStringLiteralPart(string Text) : InterpolatedStringPart;
-public sealed record InterpolatedStringExpressionPart(string Expression) : InterpolatedStringPart;
+/// <summary>
+/// An interpolated <c>{expr}</c> hole inside a $"..." string.
+/// <see cref="Expression"/> is the trimmed source text of the expression;
+/// <see cref="ExpressionSpan"/> points at the expression characters in the
+/// original source (between the opening <c>{</c> and closing <c>}</c>),
+/// trimmed of surrounding whitespace so diagnostics can underline the exact
+/// hole rather than the entire string literal.
+/// </summary>
+public sealed record InterpolatedStringExpressionPart(
+    string Expression,
+    TextSpan ExpressionSpan) : InterpolatedStringPart;
 
 public sealed record InterpolatedStringArgumentSyntax(
     IReadOnlyList<InterpolatedStringPart> Parts,

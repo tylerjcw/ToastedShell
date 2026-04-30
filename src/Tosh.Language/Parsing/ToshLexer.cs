@@ -562,8 +562,12 @@ public sealed class ToshLexer
                 var exprStart = _position;
                 SkipInterpolatedExpression();
 
-                var expression = _source[exprStart.._position].Trim();
-                parts.Add(new InterpolatedStringExpressionPart(expression));
+                var rawExpression = _source[exprStart.._position];
+                var (trimmedStart, trimmedLength) = TrimSpan(rawExpression, exprStart);
+                var expression = rawExpression.Trim();
+                parts.Add(new InterpolatedStringExpressionPart(
+                    expression,
+                    new TextSpan(trimmedStart, trimmedLength)));
 
                 if (!IsAtEnd) _position++; // skip closing }
                 continue;
@@ -802,8 +806,12 @@ public sealed class ToshLexer
                 var exprStart = _position;
                 SkipInterpolatedExpression();
 
-                var expression = _source[exprStart.._position].Trim();
-                parts.Add(new InterpolatedStringExpressionPart(expression));
+                var rawExpression = _source[exprStart.._position];
+                var (trimmedStart, trimmedLength) = TrimSpan(rawExpression, exprStart);
+                var expression = rawExpression.Trim();
+                parts.Add(new InterpolatedStringExpressionPart(
+                    expression,
+                    new TextSpan(trimmedStart, trimmedLength)));
                 if (!IsAtEnd) _position++; // skip closing }
                 continue;
             }
@@ -877,8 +885,12 @@ public sealed class ToshLexer
                 var exprStart = _position;
                 SkipInterpolatedExpression();
 
-                var expression = _source[exprStart.._position].Trim();
-                parts.Add(new InterpolatedStringExpressionPart(expression));
+                var rawExpression = _source[exprStart.._position];
+                var (trimmedStart, trimmedLength) = TrimSpan(rawExpression, exprStart);
+                var expression = rawExpression.Trim();
+                parts.Add(new InterpolatedStringExpressionPart(
+                    expression,
+                    new TextSpan(trimmedStart, trimmedLength)));
                 if (!IsAtEnd) _position++; // skip closing }
                 continue;
             }
@@ -1244,6 +1256,15 @@ public sealed class ToshLexer
     /// Tracks nested braces, and skips over string literals so that <c>}</c>
     /// characters inside strings do not prematurely close the expression.
     /// </summary>
+    private static (int Start, int Length) TrimSpan(string raw, int rawStart)
+    {
+        var leading = 0;
+        while (leading < raw.Length && char.IsWhiteSpace(raw[leading])) leading++;
+        var trailing = raw.Length;
+        while (trailing > leading && char.IsWhiteSpace(raw[trailing - 1])) trailing--;
+        return (rawStart + leading, trailing - leading);
+    }
+
     private void SkipInterpolatedExpression()
     {
         var depth = 1;
