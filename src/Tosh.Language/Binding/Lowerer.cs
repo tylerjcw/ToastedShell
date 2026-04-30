@@ -423,6 +423,17 @@ public static class Lowerer
                 Span: ifExpr.Span,
                 Type: BoundType.Dynamic),
 
+        BlockArgumentSyntax block => BuildBlockExpression(block, ctx),
+
+        AnonymousFunctionArgumentSyntax lambda => BuildLambda(lambda, ctx),
+
+        CallableInvocationArgumentSyntax invoke =>
+            new BoundCallableInvocation(
+                Target: LowerExpression(invoke.Target, ctx),
+                Arguments: BuildArgumentList(invoke.Arguments, ctx),
+                Span: invoke.Span,
+                Type: BoundType.Dynamic),
+
         // Everything else stays dynamic for now.
         _ => new BoundDynamicExpression(expression, expression.Span),
     };
@@ -430,6 +441,15 @@ public static class Lowerer
     private static BoundVariableReference BuildVariableReference(VariableReferenceArgumentSyntax varRef, LowerContext ctx)
     {
         var symbol = ctx.LookupSymbol(varRef.Name);
+        // If the reference resolves to a symbol declared outside any
+        // currently-active lambda frame, mark the symbol as captured
+        // by every enclosing lambda whose entry-depth is deeper than
+        // the symbol's own scope depth. The lambda itself records the
+        // captures; this side effect is O(active-lambdas) per ref.
+        if (symbol is not null)
+        {
+            ctx.RecordPotentialCapture(symbol);
+        }
         // If we resolved the symbol, lift its declared type onto the
         // reference so callers downstream see propagated typing.
         var type = symbol?.DeclaredType ?? BoundType.Dynamic;
@@ -544,6 +564,112 @@ public static class Lowerer
         return new BoundInterpolatedString(parts, interp.Span, BoundType.FromClr(typeof(string)));
     }
 
+    /// <summary>
+    /// Lowers a bare block argument: <c>where { $_ > 5 }</c>. The
+    /// block itself has no formal parameters; <c>$_</c> is supplied by
+    /// the host command at runtime. Captures are recorded by the
+    /// lambda frame on <see cref="LowerContext"/>.
+    /// </summary>
+    private static BoundBlockExpression BuildBlockExpression(BlockArgumentSyntax block, LowerContext ctx)
+    {
+        var captures = ctx.EnterLambda();
+        try
+        {
+            var body = LowerBlock(block.Block, ctx);
+            return new BoundBlockExpression(
+                Body: body,
+                Captures: captures.ToImmutableList(),
+                Span: block.Span,
+                Type: BoundType.Dynamic);
+        }
+        finally
+        {
+            ctx.ExitLambda();
+        }
+    }
+
+    /// <summary>
+    /// Lowers <c>fn(x, y) => …</c> / <c>{|x, y| …}</c>. Defaults are
+    /// lowered in the *outer* scope (so they can capture but not
+    /// shadow), then a fresh scope is pushed and parameters are
+    /// declared inside it before the body lowers.
+    /// </summary>
+    private static BoundLambda BuildLambda(AnonymousFunctionArgumentSyntax lambda, LowerContext ctx)
+    {
+        // Lower default-value pipelines in the outer scope first.
+        var pendingDefaults = new BoundPipeline?[lambda.Parameters.Count];
+        for (var i = 0; i < lambda.Parameters.Count; i++)
+        {
+            var param = lambda.Parameters[i];
+            pendingDefaults[i] = param.DefaultValue is null
+                ? null
+                : LowerPipeline(param.DefaultValue, ctx);
+        }
+
+        var captures = ctx.EnterLambda();
+        try
+        {
+            ctx.PushScope();
+            try
+            {
+                var bound = new List<BoundParameter>(lambda.Parameters.Count);
+                for (var i = 0; i < lambda.Parameters.Count; i++)
+                {
+                    var param = lambda.Parameters[i];
+                    var symbol = ctx.DeclareLocal(
+                        param.Name,
+                        BoundSymbolKind.Parameter,
+                        BoundType.Dynamic);
+                    bound.Add(new BoundParameter(
+                        Name: param.Name,
+                        Symbol: symbol,
+                        Default: pendingDefaults[i],
+                        IsOptional: param.IsOptional,
+                        IsRest: param.IsRest,
+                        Span: param.Span));
+                }
+
+                // Lower body statements directly (we already have the
+                // outer scope pushed by EnterLambda → PushScope, so a
+                // second LowerBlock would push *another* scope and
+                // hide the parameters from immediate references).
+                var statements = new List<BoundStatement>(lambda.Body.Statements.Count);
+                foreach (var inner in lambda.Body.Statements)
+                {
+                    statements.Add(LowerStatement(inner, ctx));
+                }
+                var body = new BoundBlock(statements, lambda.Body.Span);
+
+                return new BoundLambda(
+                    Parameters: bound,
+                    Body: body,
+                    Captures: captures.ToImmutableList(),
+                    Span: lambda.Span,
+                    Type: BoundType.Dynamic);
+            }
+            finally
+            {
+                ctx.PopScope();
+            }
+        }
+        finally
+        {
+            ctx.ExitLambda();
+        }
+    }
+
+    private static IReadOnlyList<BoundArgument> BuildArgumentList(
+        IReadOnlyList<ArgumentSyntax> arguments,
+        LowerContext ctx)
+    {
+        var result = new List<BoundArgument>(arguments.Count);
+        foreach (var arg in arguments)
+        {
+            result.Add(LowerArgument(arg, ctx));
+        }
+        return result;
+    }
+
     private static BoundType InferLiteralType(object? value) => value switch
     {
         null => BoundType.Dynamic,
@@ -563,6 +689,15 @@ public static class Lowerer
         // Scope-stack of name → symbol. Top of stack is innermost.
         // Mirrors the layout used by VariableBinder.
         private readonly List<Dictionary<string, BoundSymbol>> _scopes = new();
+
+        // Each active lambda frame records the scope-depth at which
+        // it was entered plus an ordered set of captures discovered
+        // so far. Insertion order is preserved so the IL emitter sees
+        // a stable closure-field layout (HashSet on .NET preserves
+        // insertion-order semantics for enumeration in practice; we
+        // additionally keep a parallel List to make this guarantee
+        // explicit).
+        private readonly List<(int EntryDepth, HashSet<BoundSymbol> Seen, List<BoundSymbol> Order)> _lambdaFrames = new();
 
         public LowerContext(ShellCommandRegistry commands)
         {
@@ -620,6 +755,50 @@ public static class Lowerer
                 if (_scopes[i].TryGetValue(name, out var symbol)) return symbol;
             }
             return null;
+        }
+
+        /// <summary>
+        /// Begins a lambda frame. All variable references made before
+        /// the matching <see cref="ExitLambda"/> will, if they resolve
+        /// to a symbol declared at a shallower scope than the entry
+        /// depth, be recorded as captures by this frame (and any
+        /// enclosing frames whose entry-depth is also shallower).
+        /// Returns the ordered capture list so the caller can attach
+        /// it to the <see cref="BoundLambda"/> / <see cref="BoundBlockExpression"/>
+        /// once lowering of the body completes.
+        /// </summary>
+        public List<BoundSymbol> EnterLambda()
+        {
+            var order = new List<BoundSymbol>();
+            _lambdaFrames.Add((EntryDepth: _scopes.Count, Seen: new HashSet<BoundSymbol>(), Order: order));
+            return order;
+        }
+
+        public void ExitLambda()
+        {
+            if (_lambdaFrames.Count == 0) return;
+            _lambdaFrames.RemoveAt(_lambdaFrames.Count - 1);
+        }
+
+        /// <summary>
+        /// Called from <see cref="BuildVariableReference"/> for every
+        /// resolved symbol. If any active lambda frame's entry-depth
+        /// is deeper than the symbol's own scope-depth, the symbol is
+        /// captured by that frame.
+        /// </summary>
+        public void RecordPotentialCapture(BoundSymbol symbol)
+        {
+            for (var i = 0; i < _lambdaFrames.Count; i++)
+            {
+                var frame = _lambdaFrames[i];
+                if (symbol.ScopeDepth < frame.EntryDepth)
+                {
+                    if (frame.Seen.Add(symbol))
+                    {
+                        frame.Order.Add(symbol);
+                    }
+                }
+            }
         }
     }
 }

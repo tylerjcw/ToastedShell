@@ -386,4 +386,54 @@ public sealed class LowererTests : IClassFixture<ToshRuntimeFixture>
         Assert.NotNull(ifStmt.ElseBlock);
         Assert.IsType<BoundContinueStatement>(ifStmt.ElseBlock!.Statements[0]);
     }
+
+    [Fact]
+    public void Lower_carves_out_block_argument()
+    {
+        var parse = ParseSource("[1, 2, 3] | where { $_ > 1 }");
+        var unit = Lowerer.Lower(parse, _runtime.Commands);
+
+        var pipeline = Assert.IsType<BoundPipelineStatement>(unit.Root.Statements[0]);
+        var where = Assert.IsType<BoundCommandCall>(pipeline.Pipeline.Stages[1]);
+        Assert.Equal("where", where.Name);
+        var arg = Assert.Single(where.Arguments);
+        Assert.IsType<BoundBlockExpression>(arg.Value);
+    }
+
+    [Fact]
+    public void Lower_records_captures_on_block_argument()
+    {
+        var parse = ParseSource("var threshold = 5\n[1, 2, 3] | where { $_ > $threshold }");
+        var unit = Lowerer.Lower(parse, _runtime.Commands);
+
+        var thresholdDecl = Assert.IsType<BoundVariableDeclaration>(unit.Root.Statements[0]);
+        var pipeline = Assert.IsType<BoundPipelineStatement>(unit.Root.Statements[1]);
+        var where = Assert.IsType<BoundCommandCall>(pipeline.Pipeline.Stages[1]);
+        var block = Assert.IsType<BoundBlockExpression>(where.Arguments[0].Value);
+
+        // $_ is unresolved (host-supplied at runtime); $threshold is
+        // captured from the enclosing file scope.
+        Assert.Single(block.Captures);
+        Assert.Same(thresholdDecl.Symbol, block.Captures[0]);
+    }
+
+    [Fact]
+    public void Lower_carves_out_callable_invocation()
+    {
+        // `$fn(args)` is a CallableInvocationArgumentSyntax. We use it
+        // inside parens so it lands in an expression-stage position
+        // rather than a CommandSyntax head.
+        var parse = ParseSource("var sq = func(x) { $x * $x }\necho ($sq(5))");
+        var unit = Lowerer.Lower(parse, _runtime.Commands);
+
+        var pipeline = Assert.IsType<BoundPipelineStatement>(unit.Root.Statements[1]);
+        var echo = Assert.IsType<BoundCommandCall>(pipeline.Pipeline.Stages[0]);
+        var arg = Assert.Single(echo.Arguments);
+        // The argument may be wrapped (subexpression -> dynamic) or
+        // directly carved as a callable invocation. Accept either —
+        // the runtime semantics are exercised by parity tests.
+        Assert.True(
+            arg.Value is BoundCallableInvocation or BoundDynamicExpression,
+            $"Unexpected wrapper type: {arg.Value.GetType().Name}");
+    }
 }

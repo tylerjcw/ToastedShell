@@ -61,6 +61,8 @@ public sealed class BoundEvaluatorParityTests : IClassFixture<ToshRuntimeFixture
         new object[] { "control/while",           "var n = 0\nwhile ($n < 3) { $n = $n + 1 }\necho $n" },
         new object[] { "control/break",           "for i in [1, 2, 3, 4] { if ($i == 3) { break }\n echo $i }" },
         new object[] { "control/continue",        "for i in [1, 2, 3, 4] { if ($i == 2) { continue }\n echo $i }" },
+        new object[] { "closure/where_capture",   "var t = 2\n[1, 2, 3] | where { $_ > $t }" },
+        new object[] { "closure/each_lambda",     "[1, 2, 3] | each func(x) { $x * 2 }" },
     };
 
     [Theory]

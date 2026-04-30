@@ -261,6 +261,63 @@ public sealed record BoundIfExpression(
     BoundType Type)
     : BoundExpression(Span, Type);
 
+/// <summary>
+/// A bare block passed as an argument: <c>where { $_ > 5 }</c>,
+/// <c>each { ... }</c>, etc. The block has no formal parameters; the
+/// host command supplies values via <c>$_</c> at runtime.
+/// </summary>
+/// <param name="Captures">
+/// Local variables from enclosing scopes that are referenced inside
+/// the block. The IL emitter materializes these as fields on a
+/// generated closure type (or env-array, depending on strategy).
+/// </param>
+public sealed record BoundBlockExpression(
+    BoundBlock Body,
+    IReadOnlyList<BoundSymbol> Captures,
+    TextSpan Span,
+    BoundType Type)
+    : BoundExpression(Span, Type);
+
+/// <summary>
+/// One formal parameter of a lambda. <see cref="Default"/> is the
+/// optional default-value pipeline, lowered in the *outer* scope so
+/// captures inside it resolve correctly.
+/// </summary>
+public sealed record BoundParameter(
+    string Name,
+    BoundSymbol Symbol,
+    BoundPipeline? Default,
+    bool IsOptional,
+    bool IsRest,
+    TextSpan Span)
+    : BoundNode(Span);
+
+/// <summary>
+/// An anonymous function: <c>{|x, y| $x + $y}</c> or its
+/// <c>fn(x) => …</c> equivalent. Parameters are bound inside a fresh
+/// scope; <see cref="Captures"/> records non-parameter, non-local
+/// names that the body references.
+/// </summary>
+public sealed record BoundLambda(
+    IReadOnlyList<BoundParameter> Parameters,
+    BoundBlock Body,
+    IReadOnlyList<BoundSymbol> Captures,
+    TextSpan Span,
+    BoundType Type)
+    : BoundExpression(Span, Type);
+
+/// <summary>
+/// Invoking a callable expression — <c>$fn(1, 2)</c> or
+/// <c>(some-callable)(arg)</c>. v1 keeps the argument list flat;
+/// named/splat handling matches <see cref="BoundCommandCall"/>.
+/// </summary>
+public sealed record BoundCallableInvocation(
+    BoundExpression Target,
+    IReadOnlyList<BoundArgument> Arguments,
+    TextSpan Span,
+    BoundType Type)
+    : BoundExpression(Span, Type);
+
 // ─── Pipelines ────────────────────────────────────────────────────────
 
 /// <summary>
