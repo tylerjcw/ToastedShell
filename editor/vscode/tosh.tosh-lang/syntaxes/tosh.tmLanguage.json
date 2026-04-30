@@ -1,6 +1,6 @@
 {
   "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
-  "name": "ToastedShell",
+  "name": "TōSh",
   "scopeName": "source.tosh",
   "patterns": [
     {
@@ -489,7 +489,7 @@
       ]
     },
     "builtin-commands": {
-      "comment": "Tosh built-in commands — highlighted in command position",
+      "comment": "TōSh built-in commands — highlighted in command position",
       "match": "(?:^|(?<=\\|)\\s*|(?<=;)\\s*|(?<=\\{)\\s*)\\b(all|alloc|any|append-file|apropos|as-file|assert|avg|back|basename|bg|call|call-method|cast|cat|cd|chmod|chown|chunk|clear|clone|close|collect|compose|config|constructors|converge|copy-to|count|cp|curry|cut|date|del-prop|describe-type|df|dirname|dirs|distinct|du|each|echo|env|events|exec|exists|exit|export|fg|filter|find|find-index|findmnt|first|flat-map|flatten|flush|forward|free|frequencies|from|get|get-methods|get-prop|get-props|glob|grep|group-by|group-while|guid|has-method|has-prop|hash|head|help|history|history-search|hostname|hostnamectl|http|id|ignore|inspect|interleave|invoke|ip|is-dir|is-file|is-link|iterate|jobs|join-lines|journalctl|kill|last|length|lines|ln|load-assembly|loginctl|ls|lsblk|lscpu|lsfd|lsipc|map|match|max|members|methods|min|mkdir|mkdir-temp|mv|native-free|native-read|native-write|networkctl|new|none|offset-of|open-file|parse|partial|partition|pick|ping|position|prompt-dir|prompt-duration|prompt-exit|prompt-git|prompt-history|prompt-jobs|prompt-newline|prompt-text|prompt-time|prompt-userhost|ps|pwd|raise|raw|read-bytes|read-file|read-from|read-line|read-line-from|read-lines|read-to-end|readlink|realpath|reduce|rename|replace|reverse|rm|scan|seek|select|seq|set-prop|signal|size-of|skip|skip-until|skip-while|sleep|sort|split|stat|styled|sum|summary|systemctl|tail|take-until|take-while|tee|tempfile|template|time|timespan|to|touch|tr|transpose|tree|tui|type-of|types|ulimit|umask|uname|unfold|uniq|unset|uptime|vars|view|wait-for|wc|where|which|whoami|window|write|write-bytes|write-file|write-line-to|write-to|writeline|xargs|zip)\\b",
       "captures": {
         "1": {

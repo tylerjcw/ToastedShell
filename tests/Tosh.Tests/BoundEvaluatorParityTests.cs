@@ -74,6 +74,16 @@ public sealed class BoundEvaluatorParityTests : IClassFixture<ToshRuntimeFixture
         new object[] { "types/static_call",       "echo (Math.Sqrt(16))" },
         new object[] { "types/index_access",      "var xs = [10, 20, 30]\necho ($xs[1])" },
         new object[] { "types/method_call",       "var s = \"hello\"\necho ($s.ToUpper())" },
+        // Phase C-3: declarations + niche shapes
+        // NOTE: only declaration shapes that the bound evaluator
+        // already executes via fallback are exercised here. New
+        // declarations like `class` / `enum` produce typed bound
+        // nodes that an IR-only evaluator/emitter would have to
+        // register with the runtime — that work belongs to the
+        // emitter milestone, not the IR carve-out.
+        new object[] { "decl/func_body",          "func dbl(n) { $n * 2 }\ndbl 21" },
+        new object[] { "decl/destructure_array",  "var [a, b, c] = [1, 2, 3]\necho $a\necho $b\necho $c" },
+        new object[] { "literal/tuple",           "echo ((1, 2, 3))" },
     };
 
     [Theory]

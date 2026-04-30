@@ -6,7 +6,7 @@
       "\t$0",
       "}"
     ],
-    "description": "Define a ToSh function"
+    "description": "Define a TōSh function"
   },
   "Function Wrapper": {
     "prefix": "func=>",
@@ -36,28 +36,28 @@
     "body": [
       "config set ${1:prompt.name-text} ${2:toast}"
     ],
-    "description": "Set a ToSh runtime configuration value"
+    "description": "Set a TōSh runtime configuration value"
   },
   "Config Variable": {
     "prefix": "config-var",
     "body": [
       "$tosh.Config.${1:Prompt}.${2:NameText} = ${3:\"toast\"}"
     ],
-    "description": "Mutate the live ToSh configuration object"
+    "description": "Mutate the live TōSh configuration object"
   },
   "Theme Variable": {
     "prefix": "theme-var",
     "body": [
       "$tosh.Config.Theme.${1:Syntax}.${2:Keyword}.${3:Foreground} = ${4:\"bright-magenta\"}"
     ],
-    "description": "Customize the live ToSh theme object"
+    "description": "Customize the live TōSh theme object"
   },
   "Config Init": {
     "prefix": "config-init",
     "body": [
       "config init${1:}"
     ],
-    "description": "Scaffold a ToSh config directory"
+    "description": "Scaffold a TōSh config directory"
   },
   "Config Reload": {
     "prefix": "config-reload",
@@ -122,35 +122,35 @@
     "body": [
       "var ${1:name} = new list<${2:string}>(${3})"
     ],
-    "description": "Construct a typed ToSh list"
+    "description": "Construct a typed TōSh list"
   },
   "Generic Dictionary": {
     "prefix": "newdict",
     "body": [
       "var ${1:name} = new dict<${2:string}, ${3:int}>(${4:key}, ${5:value})"
     ],
-    "description": "Construct a typed ToSh dictionary"
+    "description": "Construct a typed TōSh dictionary"
   },
   "Generic Array": {
     "prefix": "newarray",
     "body": [
       "var ${1:name} = new array<${2:int}>(${3})"
     ],
-    "description": "Construct a typed ToSh array"
+    "description": "Construct a typed TōSh array"
   },
   "Require Module": {
     "prefix": "require",
     "body": [
       "require ${1:\"./module.tosh\"}"
     ],
-    "description": "Require a ToSh module, DLL, or project"
+    "description": "Require a TōSh module, DLL, or project"
   },
   "Require Native Library": {
     "prefix": "require-native",
     "body": [
       "require native ${1:\"libc.so.6\"} as ${2:LibC}"
     ],
-    "description": "Load a native shared library into a named ToSh module"
+    "description": "Load a native shared library into a named TōSh module"
   },
   "Bind Native Functions": {
     "prefix": "bind-native",

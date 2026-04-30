@@ -118,13 +118,95 @@ public static class Lowerer
                 Value: LowerPipeline(memberAssign.Value, ctx),
                 Span: memberAssign.Span),
 
+        DeferStatementSyntax deferStmt =>
+            new BoundDeferStatement(LowerBlock(deferStmt.Body, ctx), deferStmt.Span),
+
+        YieldStatementSyntax yieldStmt =>
+            new BoundYieldStatement(
+                Value: yieldStmt.Value is null ? null : LowerPipeline(yieldStmt.Value, ctx),
+                Span: yieldStmt.Span),
+
+        UsingStatementSyntax usingStmt =>
+            new BoundUsingStatement(usingStmt.Target, usingStmt.Alias, usingStmt.Modifier, usingStmt.Span),
+
+        TupleAssignmentStatementSyntax tupleAssign =>
+            new BoundTupleAssignment(
+                Names: tupleAssign.LeftNames,
+                Value: LowerPipeline(tupleAssign.Value, ctx),
+                Span: tupleAssign.Span),
+
+        DestructuringDeclarationStatementSyntax destruct =>
+            LowerDestructuringDeclaration(destruct, ctx),
+
+        AllocStatementSyntax alloc =>
+            LowerAllocStatement(alloc, ctx),
+
+        FunctionDefinitionStatementSyntax funcDef =>
+            LowerFunctionDefinition(funcDef, ctx),
+
+        RuneDefinitionStatementSyntax runeDef =>
+            LowerRuneDefinition(runeDef, ctx),
+
+        ClassDefinitionStatementSyntax classDef =>
+            LowerClassDefinition(classDef, ctx),
+
+        InterfaceDefinitionStatementSyntax ifaceDef =>
+            LowerInterfaceDefinition(ifaceDef, ctx),
+
+        UnionDefinitionStatementSyntax unionDef =>
+            LowerUnionDefinition(unionDef, ctx),
+
+        EnumDefinitionStatementSyntax enumDef =>
+            LowerEnumDefinition(enumDef, ctx),
+
+        RecordDefinitionStatementSyntax recordDef =>
+            LowerRecordDefinition(recordDef, ctx),
+
+        StructDefinitionStatementSyntax structDef =>
+            LowerStructDefinition(structDef, ctx),
+
+        TraitDefinitionStatementSyntax traitDef =>
+            LowerTraitDefinition(traitDef, ctx),
+
+        EventDefinitionStatementSyntax eventDef =>
+            LowerEventDefinition(eventDef, ctx),
+
+        ModuleDefinitionStatementSyntax moduleDef =>
+            new BoundModuleDefinition(
+                Name: moduleDef.Name,
+                Body: LowerBlock(moduleDef.Body, ctx),
+                Modifier: moduleDef.Modifier,
+                Span: moduleDef.Span),
+
+        SubcommandStatementSyntax subcmd =>
+            new BoundSubcommandStatement(
+                Name: subcmd.Name,
+                Modifiers: subcmd.Modifiers,
+                Body: LowerBlock(subcmd.Body, ctx),
+                Span: subcmd.Span),
+
+        ScriptInputStatementSyntax scriptInput =>
+            LowerScriptInputStatement(scriptInput, ctx),
+
+        TypeAliasStatementSyntax typeAlias =>
+            new BoundTypeAliasStatement(
+                Name: typeAlias.Name,
+                TypeParameters: typeAlias.TypeParameters,
+                BaseTypeName: typeAlias.BaseTypeName,
+                Refinement: typeAlias.Refinement is null ? null : LowerExpression(typeAlias.Refinement, ctx),
+                Modifier: typeAlias.Modifier,
+                Span: typeAlias.Span),
+
+        RequireStatementSyntax require =>
+            LowerRequireStatement(require),
+
+        BindStatementSyntax bind =>
+            LowerBindStatement(bind),
+
         ScriptStatementSyntax inner =>
             LowerStatementAsScript(inner, ctx),
 
-        // Anything else (destructuring, control flow, function defs)
-        // is preserved as a dynamic statement for now. The
-        // evaluator-on-IR will delegate to the existing tree-walking
-        // evaluator for these.
+        // Anything else falls back to a dynamic statement for now.
         _ => new BoundDynamicStatement(statement, statement.Span),
     };
 
@@ -574,7 +656,83 @@ public static class Lowerer
                 Span: index.Span,
                 Type: BoundType.Dynamic),
 
-        // Everything else stays dynamic for now.
+        RecordLiteralArgumentSyntax record => BuildRecordLiteral(record, ctx),
+
+        DictLiteralArgumentSyntax dict => BuildDictLiteral(dict, ctx),
+
+        SetLiteralArgumentSyntax set =>
+            new BoundSetLiteral(
+                Items: BuildExpressionList(set.Items, ctx),
+                Span: set.Span,
+                Type: BoundType.FromClr(typeof(System.Collections.IList))),
+
+        TupleLiteralArgumentSyntax tuple =>
+            new BoundTupleLiteral(
+                Items: BuildExpressionList(tuple.Items, ctx),
+                Span: tuple.Span,
+                Type: BoundType.Dynamic),
+
+        SubexpressionArgumentSyntax subexpr =>
+            new BoundSubexpression(
+                Pipeline: LowerPipeline(subexpr.Pipeline, ctx),
+                Span: subexpr.Span,
+                Type: BoundType.Dynamic),
+
+        CommandSubstitutionArgumentSyntax cmdSub =>
+            new BoundCommandSubstitution(
+                Pipeline: LowerPipeline(cmdSub.Pipeline, ctx),
+                Span: cmdSub.Span,
+                Type: BoundType.Dynamic),
+
+        InputProcessSubstitutionArgumentSyntax inProc =>
+            new BoundInputProcessSubstitution(
+                Pipeline: LowerPipeline(inProc.Pipeline, ctx),
+                Span: inProc.Span,
+                Type: BoundType.Dynamic),
+
+        OutputProcessSubstitutionArgumentSyntax outProc =>
+            new BoundOutputProcessSubstitution(
+                Pipeline: LowerPipeline(outProc.Pipeline, ctx),
+                Span: outProc.Span,
+                Type: BoundType.Dynamic),
+
+        QuoteArgumentSyntax quote =>
+            // We deliberately keep the inner AST verbatim — quote's
+            // semantics are "capture the parse tree as a value".
+            new BoundQuoteExpression(quote.Inner, quote.Span, BoundType.Dynamic),
+
+        NameOfArgumentSyntax nameOf =>
+            new BoundNameOfExpression(
+                Identifier: nameOf.Identifier,
+                IsVariableReference: nameOf.IsVariableReference,
+                Span: nameOf.Span,
+                Type: BoundType.FromClr(typeof(string))),
+
+        FunctionReferenceArgumentSyntax fnRef =>
+            new BoundFunctionReference(
+                Name: fnRef.Name,
+                Symbol: ctx.LookupSymbol(fnRef.Name),
+                Span: fnRef.Span,
+                Type: BoundType.Dynamic),
+
+        MemberProjectionArgumentSyntax projection =>
+            new BoundMemberProjection(
+                MemberPaths: projection.MemberPaths,
+                Span: projection.Span,
+                Type: BoundType.Dynamic),
+
+        ComparisonPatternSyntax cmpPat =>
+            new BoundComparisonPattern(
+                Operator: cmpPat.Operator,
+                Operand: LowerExpression(cmpPat.Operand, ctx),
+                Span: cmpPat.Span,
+                Type: BoundType.Dynamic),
+
+        // Comprehensions and refinement clauses are deeply recursive
+        // shapes whose semantics are hard to flatten into a single
+        // bound node. Keep them dynamic — the lowering coverage on
+        // them can grow when (or if) the IL emitter needs structured
+        // access.
         _ => new BoundDynamicExpression(expression, expression.Span),
     };
 
@@ -855,6 +1013,626 @@ public static class Lowerer
         }
 
         return new BoundMatchExpression(value, arms, match.Span, BoundType.Dynamic);
+    }
+
+    // ── Phase C-3 helpers ───────────────────────────────────────────
+
+    private static IReadOnlyList<BoundExpression> BuildExpressionList(
+        IReadOnlyList<ArgumentSyntax> items,
+        LowerContext ctx)
+    {
+        var result = new List<BoundExpression>(items.Count);
+        foreach (var item in items)
+        {
+            result.Add(LowerExpression(item, ctx));
+        }
+        return result;
+    }
+
+    private static BoundRecordLiteral BuildRecordLiteral(
+        RecordLiteralArgumentSyntax record,
+        LowerContext ctx)
+    {
+        var entries = new List<BoundRecordEntry>(record.Fields.Count);
+        foreach (var field in record.Fields)
+        {
+            switch (field)
+            {
+                case RecordFieldSyntax named:
+                    entries.Add(new BoundRecordField(
+                        Name: named.Name,
+                        Value: LowerExpression(named.Value, ctx),
+                        Span: named.Span));
+                    break;
+                case ComputedRecordFieldSyntax computed:
+                    entries.Add(new BoundComputedRecordField(
+                        NameExpression: LowerExpression(computed.NameExpression, ctx),
+                        Value: LowerExpression(computed.Value, ctx),
+                        Span: computed.Span));
+                    break;
+                case SpreadRecordEntrySyntax spread:
+                    entries.Add(new BoundRecordSpreadEntry(
+                        Value: LowerExpression(spread.Value, ctx),
+                        Span: spread.Span));
+                    break;
+            }
+        }
+        return new BoundRecordLiteral(entries, record.Span, BoundType.Dynamic);
+    }
+
+    private static BoundDictLiteral BuildDictLiteral(
+        DictLiteralArgumentSyntax dict,
+        LowerContext ctx)
+    {
+        var entries = new List<BoundDictEntry>(dict.Entries.Count);
+        foreach (var entry in dict.Entries)
+        {
+            entries.Add(new BoundDictEntry(
+                Key: LowerExpression(entry.Key, ctx),
+                Value: LowerExpression(entry.Value, ctx),
+                Span: entry.Span));
+        }
+        return new BoundDictLiteral(entries, dict.Span, BoundType.FromClr(typeof(System.Collections.IDictionary)));
+    }
+
+    private static BoundDestructuringDeclaration LowerDestructuringDeclaration(
+        DestructuringDeclarationStatementSyntax destruct,
+        LowerContext ctx)
+    {
+        var value = LowerPipeline(destruct.Value, ctx);
+        BoundDestructuringPattern pattern = destruct.Pattern switch
+        {
+            ArrayDestructuringPatternSyntax arrayPat =>
+                new BoundArrayDestructuringPattern(
+                    Symbols: DeclareDestructuredNames(arrayPat.Names, ctx),
+                    Span: arrayPat.Span),
+
+            RecordDestructuringPatternSyntax recordPat =>
+                new BoundRecordDestructuringPattern(
+                    Symbols: DeclareDestructuredNames(recordPat.Names, ctx),
+                    Span: recordPat.Span),
+
+            _ => new BoundArrayDestructuringPattern(Array.Empty<BoundSymbol>(), destruct.Pattern.Span),
+        };
+
+        return new BoundDestructuringDeclaration(pattern, value, destruct.Modifier, destruct.Span);
+    }
+
+    private static IReadOnlyList<BoundSymbol> DeclareDestructuredNames(
+        IReadOnlyList<string> names,
+        LowerContext ctx)
+    {
+        var symbols = new List<BoundSymbol>(names.Count);
+        foreach (var name in names)
+        {
+            symbols.Add(ctx.DeclareLocal(name, BoundSymbolKind.Destructured, BoundType.Dynamic));
+        }
+        return symbols;
+    }
+
+    private static BoundAllocStatement LowerAllocStatement(AllocStatementSyntax alloc, LowerContext ctx)
+    {
+        var value = LowerPipeline(alloc.Value, ctx);
+        // Alloc binds a name like `var` does.
+        ctx.DeclareLocal(alloc.Name, BoundType.Dynamic);
+        return new BoundAllocStatement(alloc.Name, value, alloc.Modifier, alloc.Span);
+    }
+
+    /// <summary>
+    /// Lowers a parameter list for use inside a function/lambda
+    /// declaration. Defaults are lowered in the *outer* scope before
+    /// any parameter is bound (matches lambda semantics).
+    /// </summary>
+    private static (IReadOnlyList<BoundParameter> Bound, BoundPipeline?[] Defaults) LowerParameterDefaults(
+        IReadOnlyList<FunctionParameterSyntax> parameters,
+        LowerContext ctx)
+    {
+        var defaults = new BoundPipeline?[parameters.Count];
+        for (var i = 0; i < parameters.Count; i++)
+        {
+            defaults[i] = parameters[i].DefaultValue is null
+                ? null
+                : LowerPipeline(parameters[i].DefaultValue!, ctx);
+        }
+        return (Array.Empty<BoundParameter>(), defaults);
+    }
+
+    /// <summary>
+    /// Declares the parameter symbols and produces the BoundParameter
+    /// list. Caller is responsible for having opened a scope before
+    /// calling this.
+    /// </summary>
+    private static IReadOnlyList<BoundParameter> DeclareParameters(
+        IReadOnlyList<FunctionParameterSyntax> parameters,
+        BoundPipeline?[] defaults,
+        LowerContext ctx)
+    {
+        var bound = new List<BoundParameter>(parameters.Count);
+        for (var i = 0; i < parameters.Count; i++)
+        {
+            var param = parameters[i];
+            var symbol = ctx.DeclareLocal(param.Name, BoundSymbolKind.Parameter, BoundType.Dynamic);
+            bound.Add(new BoundParameter(
+                Name: param.Name,
+                Symbol: symbol,
+                Default: defaults[i],
+                IsOptional: param.IsOptional,
+                IsRest: param.IsRest,
+                Span: param.Span));
+        }
+        return bound;
+    }
+
+    private static BoundFunctionDefinition LowerFunctionDefinition(
+        FunctionDefinitionStatementSyntax funcDef,
+        LowerContext ctx)
+    {
+        // Bind the function name in the outer scope so recursive
+        // references inside the body can resolve to this symbol.
+        var funcSymbol = ctx.DeclareLocal(funcDef.Name, BoundSymbolKind.LocalVariable, BoundType.Dynamic);
+
+        var (_, defaults) = LowerParameterDefaults(funcDef.Parameters, ctx);
+
+        var captures = ctx.EnterLambda();
+        try
+        {
+            ctx.PushScope();
+            try
+            {
+                var bound = DeclareParameters(funcDef.Parameters, defaults, ctx);
+                var statements = new List<BoundStatement>(funcDef.Body.Statements.Count);
+                foreach (var inner in funcDef.Body.Statements)
+                {
+                    statements.Add(LowerStatement(inner, ctx));
+                }
+                var body = new BoundBlock(statements, funcDef.Body.Span);
+
+                return new BoundFunctionDefinition(
+                    Name: funcDef.Name,
+                    Symbol: funcSymbol,
+                    Parameters: bound,
+                    ReturnTypeName: funcDef.ReturnTypeName,
+                    Body: body,
+                    Captures: captures.ToImmutableList(),
+                    IsCommandWrapper: funcDef.IsCommandWrapper,
+                    Modifier: funcDef.Modifier,
+                    Span: funcDef.Span);
+            }
+            finally
+            {
+                ctx.PopScope();
+            }
+        }
+        finally
+        {
+            ctx.ExitLambda();
+        }
+    }
+
+    private static BoundRuneDefinition LowerRuneDefinition(
+        RuneDefinitionStatementSyntax runeDef,
+        LowerContext ctx)
+    {
+        var runeSymbol = ctx.DeclareLocal(runeDef.Name, BoundSymbolKind.LocalVariable, BoundType.Dynamic);
+        var (_, defaults) = LowerParameterDefaults(runeDef.Parameters, ctx);
+
+        var captures = ctx.EnterLambda();
+        try
+        {
+            ctx.PushScope();
+            try
+            {
+                var bound = DeclareParameters(runeDef.Parameters, defaults, ctx);
+                var statements = new List<BoundStatement>(runeDef.Body.Statements.Count);
+                foreach (var inner in runeDef.Body.Statements)
+                {
+                    statements.Add(LowerStatement(inner, ctx));
+                }
+                var body = new BoundBlock(statements, runeDef.Body.Span);
+
+                return new BoundRuneDefinition(
+                    Name: runeDef.Name,
+                    Symbol: runeSymbol,
+                    Parameters: bound,
+                    Body: body,
+                    Captures: captures.ToImmutableList(),
+                    IsSealed: runeDef.IsSealed,
+                    IsFixed: runeDef.IsFixed,
+                    Modifier: runeDef.Modifier,
+                    Span: runeDef.Span);
+            }
+            finally
+            {
+                ctx.PopScope();
+            }
+        }
+        finally
+        {
+            ctx.ExitLambda();
+        }
+    }
+
+    /// <summary>
+    /// Lowers a class member (property / method / constructor).
+    /// Opens a scope around the member body for symbol declaration.
+    /// </summary>
+    private static BoundClassMember LowerClassMember(ClassMemberSyntax member, LowerContext ctx)
+    {
+        switch (member)
+        {
+            case ClassPropertyMemberSyntax prop:
+                {
+                    var initializer = prop.Initializer is null ? null : LowerPipeline(prop.Initializer, ctx);
+                    var getter = prop.GetterBody is null ? null : LowerBlock(prop.GetterBody, ctx);
+                    var setter = prop.SetterBody is null ? null : LowerBlock(prop.SetterBody, ctx);
+                    return new BoundClassPropertyMember(
+                        Name: prop.Name,
+                        TypeName: prop.TypeName,
+                        Initializer: initializer,
+                        GetterBody: getter,
+                        SetterBody: setter,
+                        IsShy: prop.IsShy,
+                        IsStatic: prop.IsStatic,
+                        IsFixed: prop.IsFixed,
+                        IsVital: prop.IsVital,
+                        IsGuarded: prop.IsGuarded,
+                        IsLazy: prop.IsLazy,
+                        IsFading: prop.IsFading,
+                        IsLocal: prop.IsLocal,
+                        IsAbstract: prop.IsAbstract,
+                        Span: prop.Span);
+                }
+
+            case ClassMethodMemberSyntax method:
+                return new BoundClassMethodMember(
+                    Method: LowerFunctionDefinition(method.Method, ctx),
+                    IsStatic: method.IsStatic,
+                    IsShy: method.IsShy,
+                    IsAbstract: method.IsAbstract,
+                    IsOverride: method.IsOverride,
+                    IsGuarded: method.IsGuarded,
+                    IsFading: method.IsFading,
+                    IsLocal: method.IsLocal,
+                    IsRaw: method.IsRaw,
+                    Span: method.Span);
+
+            case ClassConstructorMemberSyntax ctor:
+                {
+                    var (_, defaults) = LowerParameterDefaults(ctor.Parameters, ctx);
+                    ctx.PushScope();
+                    try
+                    {
+                        var bound = DeclareParameters(ctor.Parameters, defaults, ctx);
+                        var statements = new List<BoundStatement>(ctor.Body.Statements.Count);
+                        foreach (var inner in ctor.Body.Statements)
+                        {
+                            statements.Add(LowerStatement(inner, ctx));
+                        }
+                        var body = new BoundBlock(statements, ctor.Body.Span);
+                        return new BoundClassConstructorMember(bound, body, ctor.Span);
+                    }
+                    finally
+                    {
+                        ctx.PopScope();
+                    }
+                }
+
+            default:
+                throw new InvalidOperationException($"Unknown class member kind: {member.GetType().Name}");
+        }
+    }
+
+    private static BoundClassDefinition LowerClassDefinition(
+        ClassDefinitionStatementSyntax classDef,
+        LowerContext ctx)
+    {
+        var (_, ctorDefaults) = LowerParameterDefaults(classDef.PrimaryConstructorParameters, ctx);
+
+        BoundParameter[] primaryCtorParams;
+        IReadOnlyList<BoundClassMember> members;
+        IReadOnlyList<BoundPipeline>? baseArgs = null;
+
+        ctx.PushScope();
+        try
+        {
+            primaryCtorParams = DeclareParameters(classDef.PrimaryConstructorParameters, ctorDefaults, ctx).ToArray();
+
+            if (classDef.BaseConstructorArgs is not null)
+            {
+                var lowered = new List<BoundPipeline>(classDef.BaseConstructorArgs.Count);
+                foreach (var arg in classDef.BaseConstructorArgs)
+                {
+                    lowered.Add(LowerPipeline(arg, ctx));
+                }
+                baseArgs = lowered;
+            }
+
+            var memberList = new List<BoundClassMember>(classDef.Members.Count);
+            foreach (var raw in classDef.Members)
+            {
+                memberList.Add(LowerClassMember(raw, ctx));
+            }
+            members = memberList;
+        }
+        finally
+        {
+            ctx.PopScope();
+        }
+
+        return new BoundClassDefinition(
+            Name: classDef.Name,
+            PrimaryConstructorParameters: primaryCtorParams,
+            Members: members,
+            BaseClassName: classDef.BaseClassName,
+            BaseConstructorArgs: baseArgs,
+            ImplementedInterfaces: classDef.ImplementedInterfaces,
+            UsedTraits: classDef.UsedTraits,
+            IsSealed: classDef.IsSealed,
+            IsAbstract: classDef.IsAbstract,
+            IsHermit: classDef.IsHermit,
+            IsStrict: classDef.IsStrict,
+            IsPartial: classDef.IsPartial,
+            Modifier: classDef.Modifier,
+            Span: classDef.Span);
+    }
+
+    private static BoundInterfaceDefinition LowerInterfaceDefinition(
+        InterfaceDefinitionStatementSyntax ifaceDef,
+        LowerContext ctx)
+    {
+        var methods = new List<BoundInterfaceMethodSignature>(ifaceDef.Methods.Count);
+        foreach (var raw in ifaceDef.Methods)
+        {
+            var (_, defaults) = LowerParameterDefaults(raw.Parameters, ctx);
+            ctx.PushScope();
+            try
+            {
+                var bound = DeclareParameters(raw.Parameters, defaults, ctx);
+                methods.Add(new BoundInterfaceMethodSignature(
+                    Name: raw.Name,
+                    Parameters: bound,
+                    ReturnTypeName: raw.ReturnTypeName,
+                    Span: raw.Span));
+            }
+            finally
+            {
+                ctx.PopScope();
+            }
+        }
+
+        return new BoundInterfaceDefinition(
+            Name: ifaceDef.Name,
+            Methods: methods,
+            Modifier: ifaceDef.Modifier,
+            Span: ifaceDef.Span);
+    }
+
+    private static BoundUnionDefinition LowerUnionDefinition(
+        UnionDefinitionStatementSyntax unionDef,
+        LowerContext ctx)
+    {
+        var variants = new List<BoundUnionVariant>(unionDef.Variants.Count);
+        foreach (var variant in unionDef.Variants)
+        {
+            var (_, defaults) = LowerParameterDefaults(variant.Fields, ctx);
+            ctx.PushScope();
+            try
+            {
+                var bound = DeclareParameters(variant.Fields, defaults, ctx);
+                variants.Add(new BoundUnionVariant(variant.Name, bound, variant.Span));
+            }
+            finally
+            {
+                ctx.PopScope();
+            }
+        }
+
+        return new BoundUnionDefinition(
+            Name: unionDef.Name,
+            Variants: variants,
+            Modifier: unionDef.Modifier,
+            Span: unionDef.Span);
+    }
+
+    private static BoundEnumDefinition LowerEnumDefinition(
+        EnumDefinitionStatementSyntax enumDef,
+        LowerContext ctx)
+    {
+        var members = new List<BoundEnumMember>(enumDef.Members.Count);
+        foreach (var raw in enumDef.Members)
+        {
+            members.Add(new BoundEnumMember(
+                Name: raw.Name,
+                Value: raw.Value is null ? null : LowerPipeline(raw.Value, ctx),
+                Span: raw.Span));
+        }
+
+        return new BoundEnumDefinition(
+            Name: enumDef.Name,
+            UnderlyingTypeName: enumDef.UnderlyingTypeName,
+            Members: members,
+            Modifier: enumDef.Modifier,
+            Span: enumDef.Span);
+    }
+
+    private static IReadOnlyList<BoundRecordFieldDefinition> LowerRecordFields(
+        IReadOnlyList<RecordFieldDefinitionSyntax> fields,
+        LowerContext ctx)
+    {
+        var bound = new List<BoundRecordFieldDefinition>(fields.Count);
+        foreach (var field in fields)
+        {
+            bound.Add(new BoundRecordFieldDefinition(
+                Name: field.Name,
+                TypeName: field.TypeName,
+                DefaultValue: field.DefaultValue is null ? null : LowerPipeline(field.DefaultValue, ctx),
+                IsOptional: field.IsOptional,
+                Span: field.Span));
+        }
+        return bound;
+    }
+
+    private static BoundRecordDefinition LowerRecordDefinition(
+        RecordDefinitionStatementSyntax recordDef,
+        LowerContext ctx) =>
+        new(
+            Name: recordDef.Name,
+            Fields: LowerRecordFields(recordDef.Fields, ctx),
+            IsSealed: recordDef.IsSealed,
+            IsStrict: recordDef.IsStrict,
+            IsPartial: recordDef.IsPartial,
+            Modifier: recordDef.Modifier,
+            Span: recordDef.Span);
+
+    private static BoundStructDefinition LowerStructDefinition(
+        StructDefinitionStatementSyntax structDef,
+        LowerContext ctx)
+    {
+        var fields = LowerRecordFields(structDef.Fields, ctx);
+        var members = new List<BoundClassMember>(structDef.Members.Count);
+        ctx.PushScope();
+        try
+        {
+            foreach (var raw in structDef.Members)
+            {
+                members.Add(LowerClassMember(raw, ctx));
+            }
+        }
+        finally
+        {
+            ctx.PopScope();
+        }
+
+        return new BoundStructDefinition(
+            Name: structDef.Name,
+            Fields: fields,
+            Members: members,
+            IsSealed: structDef.IsSealed,
+            IsFluid: structDef.IsFluid,
+            IsPartial: structDef.IsPartial,
+            Modifier: structDef.Modifier,
+            Span: structDef.Span);
+    }
+
+    private static BoundTraitDefinition LowerTraitDefinition(
+        TraitDefinitionStatementSyntax traitDef,
+        LowerContext ctx)
+    {
+        var methods = new List<BoundTraitMethodSignature>(traitDef.Methods.Count);
+        foreach (var raw in traitDef.Methods)
+        {
+            var (_, defaults) = LowerParameterDefaults(raw.Parameters, ctx);
+            ctx.PushScope();
+            try
+            {
+                var bound = DeclareParameters(raw.Parameters, defaults, ctx);
+                var defaultBody = raw.DefaultBody is null ? null : LowerBlock(raw.DefaultBody, ctx);
+                methods.Add(new BoundTraitMethodSignature(
+                    Name: raw.Name,
+                    Parameters: bound,
+                    ReturnTypeName: raw.ReturnTypeName,
+                    DefaultBody: defaultBody,
+                    Span: raw.Span));
+            }
+            finally
+            {
+                ctx.PopScope();
+            }
+        }
+
+        var properties = new List<BoundTraitPropertySignature>(traitDef.Properties.Count);
+        foreach (var raw in traitDef.Properties)
+        {
+            properties.Add(new BoundTraitPropertySignature(
+                Name: raw.Name,
+                TypeName: raw.TypeName,
+                DefaultValue: raw.DefaultValue is null ? null : LowerPipeline(raw.DefaultValue, ctx),
+                Span: raw.Span));
+        }
+
+        return new BoundTraitDefinition(
+            Name: traitDef.Name,
+            Methods: methods,
+            Properties: properties,
+            Modifier: traitDef.Modifier,
+            Span: traitDef.Span);
+    }
+
+    private static BoundEventDefinition LowerEventDefinition(
+        EventDefinitionStatementSyntax eventDef,
+        LowerContext ctx)
+    {
+        var fields = new List<BoundEventFieldDefinition>(eventDef.Fields.Count);
+        foreach (var raw in eventDef.Fields)
+        {
+            fields.Add(new BoundEventFieldDefinition(
+                Name: raw.Name,
+                TypeName: raw.TypeName,
+                DefaultValue: raw.DefaultValue is null ? null : LowerPipeline(raw.DefaultValue, ctx),
+                Span: raw.Span));
+        }
+
+        return new BoundEventDefinition(
+            Name: eventDef.Name,
+            Fields: fields,
+            IsRequired: eventDef.IsRequired,
+            IsLocal: eventDef.IsLocal,
+            Modifier: eventDef.Modifier,
+            Span: eventDef.Span);
+    }
+
+    private static BoundScriptInputStatement LowerScriptInputStatement(
+        ScriptInputStatementSyntax scriptInput,
+        LowerContext ctx)
+    {
+        var (_, defaults) = LowerParameterDefaults(scriptInput.Parameters, ctx);
+        // Script inputs are visible at file scope, so we declare them
+        // there rather than in a fresh scope.
+        var bound = DeclareParameters(scriptInput.Parameters, defaults, ctx);
+        return new BoundScriptInputStatement(scriptInput.Kind, bound, scriptInput.Span);
+    }
+
+    private static BoundRequireStatement LowerRequireStatement(RequireStatementSyntax require)
+    {
+        var imports = new List<BoundRequireImport>(require.Imports.Count);
+        foreach (var imp in require.Imports)
+        {
+            imports.Add(new BoundRequireImport(imp.Name, imp.Alias, imp.Span));
+        }
+
+        return new BoundRequireStatement(
+            Target: require.Target,
+            Imports: imports,
+            IsNative: require.IsNative,
+            Alias: require.Alias,
+            Modifier: require.Modifier,
+            Span: require.Span);
+    }
+
+    private static BoundBindStatement LowerBindStatement(BindStatementSyntax bind)
+    {
+        var functions = new List<BoundNativeFunctionBinding>(bind.Functions.Count);
+        foreach (var fn in bind.Functions)
+        {
+            var parameters = new List<BoundNativeFunctionParameter>(fn.Parameters.Count);
+            foreach (var p in fn.Parameters)
+            {
+                parameters.Add(new BoundNativeFunctionParameter(p.Name, p.TypeName, p.PassingMode, p.Span));
+            }
+            functions.Add(new BoundNativeFunctionBinding(
+                Name: fn.Name,
+                SymbolName: fn.SymbolName,
+                Parameters: parameters,
+                ReturnTypeName: fn.ReturnTypeName,
+                CallingConventionName: fn.CallingConventionName,
+                Span: fn.Span));
+        }
+
+        return new BoundBindStatement(
+            ModuleName: bind.ModuleName,
+            NativeTarget: bind.NativeTarget,
+            Functions: functions,
+            Span: bind.Span);
     }
 
     private static BoundType InferLiteralType(object? value) => value switch

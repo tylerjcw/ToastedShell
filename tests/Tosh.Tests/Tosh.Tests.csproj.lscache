@@ -57,6 +57,8 @@ TemporaryDependencyNodeTargetIdentifier=net10.0
 <NUGET>/microsoft.net.test.sdk/17.14.1/build/net8.0/Microsoft.NET.Test.Sdk.Program.cs
  @folderNames=..,..,..,..,.nuget,packages,microsoft.net.test.sdk,17.14.1,build,net8.0
 BinderTests.cs
+BoundEvaluatorParityTests.cs
+BoundEvaluatorTests.cs
 CliInvocationResolverTests.cs
 CommandIntrospectionTests.cs
 ComplexCommandTests.cs
@@ -67,6 +69,7 @@ ConfigBrowserScreenTests.cs
 ConfigCollectionEditorRegistryTests.cs
 ConfigCommandTests.cs
 ConsolePagerTests.cs
+ConstantFoldingTests.cs
 DataProcessingCommandTests.cs
 DebugAndProfileTests.cs
 DiagnosticRendererTests.cs
@@ -115,6 +118,7 @@ OperatorParityTests.cs
 ParserNameRegistryParityTests.cs
 ParserProgressGuardTests.cs
 PipelineDataCommandTests.cs
+PipelineFusionTests.cs
 PipelineHardeningTests.cs
 RegistryParityTests.cs
 ReplCompletionEngineTests.cs
@@ -139,6 +143,7 @@ TuiCommandTests.cs
 TuiCoreTests.cs
 TuiInlineTests.cs
 TuiScreenTests.cs
+TypeInferenceTests.cs
 UtilityCommandTests.cs
 VarsCommandTests.cs
 VectorCommandTests.cs

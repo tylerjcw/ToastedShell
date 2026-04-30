@@ -11,17 +11,19 @@ let richMetadata = null;
 let richMetadataMap = null;
 
 async function activate(context) {
+    registerTerminalProfile(context);
+
     const selector = { language: "tosh", scheme: "file" };
-    const outputChannel = vscode.window.createOutputChannel("ToSh");
+    const outputChannel = vscode.window.createOutputChannel("TōSh");
     context.subscriptions.push(outputChannel);
 
     const statusItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
-    statusItem.name = "ToSh";
+    statusItem.name = "TōSh";
     context.subscriptions.push(statusItem);
 
     const started = await tryStartLanguageClient(context, selector, outputChannel);
     if (!started) {
-        outputChannel.appendLine("Using built-in editor providers because the ToSh language server is unavailable."); richMetadata = tryLoadRichMetadata(outputChannel);
+        outputChannel.appendLine("Using built-in editor providers because the TōSh language server is unavailable."); richMetadata = tryLoadRichMetadata(outputChannel);
         if (richMetadata) {
             richMetadataMap = new Map();
             for (const entry of richMetadata) {
@@ -34,13 +36,33 @@ async function activate(context) {
             }
             outputChannel.appendLine(`Loaded rich metadata for ${richMetadata.length} commands.`);
         } registerLocalProviders(context, selector);
-        statusItem.text = "$(terminal) ToSh (local)";
-        statusItem.tooltip = "ToSh language server unavailable — using built-in fallback providers";
+        statusItem.text = "$(terminal) TōSh (local)";
+        statusItem.tooltip = "TōSh language server unavailable — using built-in fallback providers";
     } else {
-        statusItem.text = "$(terminal) ToSh (LSP)";
-        statusItem.tooltip = "Connected to ToSh language server";
+        statusItem.text = "$(terminal) TōSh (LSP)";
+        statusItem.tooltip = "Connected to TōSh language server";
     }
     statusItem.show();
+}
+
+function registerTerminalProfile(context) {
+    context.subscriptions.push(
+        vscode.window.registerTerminalProfileProvider("tosh.terminal", {
+            provideTerminalProfile() {
+                const configuration = vscode.workspace.getConfiguration("tosh");
+                const shellPath = configuration.get("terminal.path", "tosh");
+
+                return {
+                    name: "TōSh",
+                    shellPath,
+                    iconPath: {
+                        light: vscode.Uri.joinPath(context.extensionUri, "icons", "tosh-light.svg"),
+                        dark: vscode.Uri.joinPath(context.extensionUri, "icons", "tosh-dark.svg")
+                    }
+                };
+            }
+        })
+    );
 }
 
 async function deactivate() {
@@ -54,7 +76,7 @@ async function deactivate() {
 async function tryStartLanguageClient(context, selector, outputChannel) {
     const configuration = vscode.workspace.getConfiguration("tosh");
     if (!configuration.get("languageServer.enabled", true)) {
-        outputChannel.appendLine("ToSh language server is disabled in settings.");
+        outputChannel.appendLine("TōSh language server is disabled in settings.");
         return false;
     }
 
@@ -75,7 +97,7 @@ async function tryStartLanguageClient(context, selector, outputChannel) {
     const { LanguageClient } = languageClientModule;
     const languageClient = new LanguageClient(
         "toshLanguageServer",
-        "ToSh Language Server",
+        "TōSh Language Server",
         serverOptions,
         {
             documentSelector: [selector],
@@ -86,15 +108,15 @@ async function tryStartLanguageClient(context, selector, outputChannel) {
             errorHandler: {
                 error(error, message, count) {
                     if (count < 5) {
-                        outputChannel.appendLine(`ToSh language server error (${count}): ${formatError(error)}`);
+                        outputChannel.appendLine(`TōSh language server error (${count}): ${formatError(error)}`);
                         return { action: 1 }; // ErrorAction.Continue
                     }
-                    outputChannel.appendLine(`ToSh language server has crashed ${count} times; shutting down.`);
+                    outputChannel.appendLine(`TōSh language server has crashed ${count} times; shutting down.`);
                     return { action: 2 }; // ErrorAction.Shutdown
                 },
                 closed() {
-                    outputChannel.appendLine("ToSh language server connection closed. Restarting...");
-                    return { action: 1, message: "Restarting ToSh language server..." }; // CloseAction.Restart
+                    outputChannel.appendLine("TōSh language server connection closed. Restarting...");
+                    return { action: 1, message: "Restarting TōSh language server..." }; // CloseAction.Restart
                 }
             }
         }
@@ -103,10 +125,10 @@ async function tryStartLanguageClient(context, selector, outputChannel) {
     try {
         context.subscriptions.push(languageClient.start());
         client = languageClient;
-        outputChannel.appendLine(`Started ToSh language server with: ${describeServerOptions(serverOptions.run)}`);
+        outputChannel.appendLine(`Started TōSh language server with: ${describeServerOptions(serverOptions.run)}`);
         return true;
     } catch (error) {
-        outputChannel.appendLine(`Failed to start the ToSh language server; falling back to local providers. ${formatError(error)}`);
+        outputChannel.appendLine(`Failed to start the TōSh language server; falling back to local providers. ${formatError(error)}`);
         return false;
     }
 }
@@ -173,7 +195,7 @@ function findLanguageServerOptions(configuration, outputChannel) {
     if (configuredServerPath.length > 0) {
         const explicitPath = resolveConfiguredPath(configuredServerPath);
         if (!explicitPath || !fs.existsSync(explicitPath)) {
-            outputChannel.appendLine(`Configured ToSh language server path was not found: ${configuredServerPath}`);
+            outputChannel.appendLine(`Configured TōSh language server path was not found: ${configuredServerPath}`);
             return null;
         }
 
@@ -509,7 +531,7 @@ class ToshDocumentSymbolProvider {
 function buildKeywordCompletions() {
     return Object.entries(languageData.keywords).map(([label, description]) => {
         const item = new vscode.CompletionItem(label, vscode.CompletionItemKind.Keyword);
-        item.detail = "ToSh keyword";
+        item.detail = "TōSh keyword";
         item.documentation = description;
         return item;
     });
@@ -533,7 +555,7 @@ function buildBuiltinCompletions() {
 
     return Object.entries(languageData.builtins).map(([label, description]) => {
         const item = new vscode.CompletionItem(label, vscode.CompletionItemKind.Function);
-        item.detail = "ToSh built-in";
+        item.detail = "TōSh built-in";
         item.documentation = description;
         return item;
     });
@@ -542,7 +564,7 @@ function buildBuiltinCompletions() {
 function buildSpecialVariableCompletions() {
     return Object.entries(languageData.specialVariables).map(([label, description]) => {
         const item = new vscode.CompletionItem(label, vscode.CompletionItemKind.Variable);
-        item.detail = "ToSh special variable";
+        item.detail = "TōSh special variable";
         item.documentation = description;
         return item;
     });

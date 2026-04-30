@@ -489,6 +489,483 @@ public sealed record BoundMemberAssignment(
     TextSpan Span)
     : BoundStatement(Span);
 
+// ─── Phase C-3: declarations, deferred control flow, niche literals ───
+
+/// <summary>
+/// <c>defer { … }</c>. Conceptually lowers to a try/finally where
+/// the body runs at scope exit. We keep the dedicated node so the
+/// IL emitter can choose its own desugaring strategy (single-finally
+/// at function exit, per-scope, etc.).
+/// </summary>
+public sealed record BoundDeferStatement(BoundBlock Body, TextSpan Span)
+    : BoundStatement(Span);
+
+/// <summary>
+/// <c>yield [pipeline]</c>. The IL emitter compiles this as part of
+/// an iterator state machine. A null value is a bare <c>yield</c>
+/// (whose semantics in Tosh today are the same as <c>return null</c>
+/// in iterator context).
+/// </summary>
+public sealed record BoundYieldStatement(BoundPipeline? Value, TextSpan Span)
+    : BoundStatement(Span);
+
+/// <summary>
+/// <c>using Module [as Alias]</c> — a namespace-import statement.
+/// Today the runtime registers the import into the engine's import
+/// table; the bound node carries the structured form so codegen can
+/// stamp the same effect.
+/// </summary>
+public sealed record BoundUsingStatement(
+    string Target,
+    string? Alias,
+    DeclarationModifier Modifier,
+    TextSpan Span)
+    : BoundStatement(Span);
+
+/// <summary>
+/// One side of a <c>($a, $b) = …</c> assignment.
+/// </summary>
+public sealed record BoundTupleAssignment(
+    IReadOnlyList<string> Names,
+    BoundPipeline Value,
+    TextSpan Span)
+    : BoundStatement(Span);
+
+/// <summary>Pattern shape for destructuring declarations.</summary>
+public abstract record BoundDestructuringPattern(TextSpan Span) : BoundNode(Span);
+
+/// <summary><c>var [a, b] = …</c>.</summary>
+public sealed record BoundArrayDestructuringPattern(
+    IReadOnlyList<BoundSymbol> Symbols,
+    TextSpan Span)
+    : BoundDestructuringPattern(Span);
+
+/// <summary><c>var { a, b } = …</c>.</summary>
+public sealed record BoundRecordDestructuringPattern(
+    IReadOnlyList<BoundSymbol> Symbols,
+    TextSpan Span)
+    : BoundDestructuringPattern(Span);
+
+/// <summary>A <c>var</c> with destructuring on the left.</summary>
+public sealed record BoundDestructuringDeclaration(
+    BoundDestructuringPattern Pattern,
+    BoundPipeline Value,
+    DeclarationModifier Modifier,
+    TextSpan Span)
+    : BoundStatement(Span);
+
+/// <summary>
+/// <c>alloc name = …</c>. v1 IL keeps this dynamic (native interop),
+/// but the carve-out lets later phases reason about the name binding
+/// without a syntax dependency.
+/// </summary>
+public sealed record BoundAllocStatement(
+    string Name,
+    BoundPipeline Value,
+    DeclarationModifier Modifier,
+    TextSpan Span)
+    : BoundStatement(Span);
+
+/// <summary>
+/// <c>func name(params) { … }</c> definition. Lowering treats this
+/// as a top-level lambda binding: the body is a fresh
+/// <see cref="BoundBlock"/>, parameters get
+/// <see cref="BoundSymbolKind.Parameter"/> bindings, and the
+/// <see cref="Symbol"/> produced for the function name is what
+/// later <c>$name</c> references resolve to. <see cref="Captures"/>
+/// is recorded in case a function is declared inside another scope
+/// (e.g. inside a class method body).
+/// </summary>
+public sealed record BoundFunctionDefinition(
+    string Name,
+    BoundSymbol Symbol,
+    IReadOnlyList<BoundParameter> Parameters,
+    string? ReturnTypeName,
+    BoundBlock Body,
+    IReadOnlyList<BoundSymbol> Captures,
+    bool IsCommandWrapper,
+    DeclarationModifier Modifier,
+    TextSpan Span)
+    : BoundStatement(Span);
+
+/// <summary>
+/// <c>rune name(params) { … }</c> — like a function but eagerly
+/// invoked at definition site. Same lowering shape as
+/// <see cref="BoundFunctionDefinition"/>.
+/// </summary>
+public sealed record BoundRuneDefinition(
+    string Name,
+    BoundSymbol Symbol,
+    IReadOnlyList<BoundParameter> Parameters,
+    BoundBlock Body,
+    IReadOnlyList<BoundSymbol> Captures,
+    bool IsSealed,
+    bool IsFixed,
+    DeclarationModifier Modifier,
+    TextSpan Span)
+    : BoundStatement(Span);
+
+// ─── Class-family declarations ──
+
+/// <summary>Common base for class / struct members.</summary>
+public abstract record BoundClassMember(TextSpan Span) : BoundNode(Span);
+
+/// <summary>
+/// One property/field of a class or struct: <c>prop X = init</c>.
+/// Initializer + optional getter/setter bodies are bound. Visibility
+/// flags are surfaced verbatim so the IL emitter can stamp them.
+/// </summary>
+public sealed record BoundClassPropertyMember(
+    string Name,
+    string? TypeName,
+    BoundPipeline? Initializer,
+    BoundBlock? GetterBody,
+    BoundBlock? SetterBody,
+    bool IsShy,
+    bool IsStatic,
+    bool IsFixed,
+    bool IsVital,
+    bool IsGuarded,
+    bool IsLazy,
+    bool IsFading,
+    bool IsLocal,
+    bool IsAbstract,
+    TextSpan Span)
+    : BoundClassMember(Span);
+
+/// <summary>One method of a class or struct.</summary>
+public sealed record BoundClassMethodMember(
+    BoundFunctionDefinition Method,
+    bool IsStatic,
+    bool IsShy,
+    bool IsAbstract,
+    bool IsOverride,
+    bool IsGuarded,
+    bool IsFading,
+    bool IsLocal,
+    bool IsRaw,
+    TextSpan Span)
+    : BoundClassMember(Span);
+
+/// <summary>A class constructor (separate from the primary ctor params).</summary>
+public sealed record BoundClassConstructorMember(
+    IReadOnlyList<BoundParameter> Parameters,
+    BoundBlock Body,
+    TextSpan Span)
+    : BoundClassMember(Span);
+
+/// <summary><c>class Name(primaryCtor) : Base { … }</c>.</summary>
+public sealed record BoundClassDefinition(
+    string Name,
+    IReadOnlyList<BoundParameter> PrimaryConstructorParameters,
+    IReadOnlyList<BoundClassMember> Members,
+    string? BaseClassName,
+    IReadOnlyList<BoundPipeline>? BaseConstructorArgs,
+    IReadOnlyList<string>? ImplementedInterfaces,
+    IReadOnlyList<string>? UsedTraits,
+    bool IsSealed,
+    bool IsAbstract,
+    bool IsHermit,
+    bool IsStrict,
+    bool IsPartial,
+    DeclarationModifier Modifier,
+    TextSpan Span)
+    : BoundStatement(Span);
+
+/// <summary>One method signature on an interface.</summary>
+public sealed record BoundInterfaceMethodSignature(
+    string Name,
+    IReadOnlyList<BoundParameter> Parameters,
+    string? ReturnTypeName,
+    TextSpan Span)
+    : BoundNode(Span);
+
+public sealed record BoundInterfaceDefinition(
+    string Name,
+    IReadOnlyList<BoundInterfaceMethodSignature> Methods,
+    DeclarationModifier Modifier,
+    TextSpan Span)
+    : BoundStatement(Span);
+
+public sealed record BoundUnionVariant(
+    string Name,
+    IReadOnlyList<BoundParameter> Fields,
+    TextSpan Span)
+    : BoundNode(Span);
+
+public sealed record BoundUnionDefinition(
+    string Name,
+    IReadOnlyList<BoundUnionVariant> Variants,
+    DeclarationModifier Modifier,
+    TextSpan Span)
+    : BoundStatement(Span);
+
+public sealed record BoundEnumMember(
+    string Name,
+    BoundPipeline? Value,
+    TextSpan Span)
+    : BoundNode(Span);
+
+public sealed record BoundEnumDefinition(
+    string Name,
+    string? UnderlyingTypeName,
+    IReadOnlyList<BoundEnumMember> Members,
+    DeclarationModifier Modifier,
+    TextSpan Span)
+    : BoundStatement(Span);
+
+public sealed record BoundRecordFieldDefinition(
+    string Name,
+    string? TypeName,
+    BoundPipeline? DefaultValue,
+    bool IsOptional,
+    TextSpan Span)
+    : BoundNode(Span);
+
+public sealed record BoundRecordDefinition(
+    string Name,
+    IReadOnlyList<BoundRecordFieldDefinition> Fields,
+    bool IsSealed,
+    bool IsStrict,
+    bool IsPartial,
+    DeclarationModifier Modifier,
+    TextSpan Span)
+    : BoundStatement(Span);
+
+public sealed record BoundStructDefinition(
+    string Name,
+    IReadOnlyList<BoundRecordFieldDefinition> Fields,
+    IReadOnlyList<BoundClassMember> Members,
+    bool IsSealed,
+    bool IsFluid,
+    bool IsPartial,
+    DeclarationModifier Modifier,
+    TextSpan Span)
+    : BoundStatement(Span);
+
+public sealed record BoundTraitMethodSignature(
+    string Name,
+    IReadOnlyList<BoundParameter> Parameters,
+    string? ReturnTypeName,
+    BoundBlock? DefaultBody,
+    TextSpan Span)
+    : BoundNode(Span);
+
+public sealed record BoundTraitPropertySignature(
+    string Name,
+    string? TypeName,
+    BoundPipeline? DefaultValue,
+    TextSpan Span)
+    : BoundNode(Span);
+
+public sealed record BoundTraitDefinition(
+    string Name,
+    IReadOnlyList<BoundTraitMethodSignature> Methods,
+    IReadOnlyList<BoundTraitPropertySignature> Properties,
+    DeclarationModifier Modifier,
+    TextSpan Span)
+    : BoundStatement(Span);
+
+public sealed record BoundEventFieldDefinition(
+    string Name,
+    string? TypeName,
+    BoundPipeline? DefaultValue,
+    TextSpan Span)
+    : BoundNode(Span);
+
+public sealed record BoundEventDefinition(
+    string Name,
+    IReadOnlyList<BoundEventFieldDefinition> Fields,
+    bool IsRequired,
+    bool IsLocal,
+    DeclarationModifier Modifier,
+    TextSpan Span)
+    : BoundStatement(Span);
+
+public sealed record BoundModuleDefinition(
+    string Name,
+    BoundBlock Body,
+    DeclarationModifier Modifier,
+    TextSpan Span)
+    : BoundStatement(Span);
+
+public sealed record BoundSubcommandStatement(
+    string Name,
+    SubcommandModifier Modifiers,
+    BoundBlock Body,
+    TextSpan Span)
+    : BoundStatement(Span);
+
+public sealed record BoundScriptInputStatement(
+    ScriptInputDeclarationKind Kind,
+    IReadOnlyList<BoundParameter> Parameters,
+    TextSpan Span)
+    : BoundStatement(Span);
+
+public sealed record BoundTypeAliasStatement(
+    string Name,
+    IReadOnlyList<string> TypeParameters,
+    string BaseTypeName,
+    BoundExpression? Refinement,
+    DeclarationModifier Modifier,
+    TextSpan Span)
+    : BoundStatement(Span);
+
+public sealed record BoundRequireImport(
+    string Name,
+    string? Alias,
+    TextSpan Span)
+    : BoundNode(Span);
+
+public sealed record BoundRequireStatement(
+    string Target,
+    IReadOnlyList<BoundRequireImport> Imports,
+    bool IsNative,
+    string? Alias,
+    DeclarationModifier Modifier,
+    TextSpan Span)
+    : BoundStatement(Span);
+
+public sealed record BoundNativeFunctionParameter(
+    string Name,
+    string? TypeName,
+    NativeParameterPassingMode PassingMode,
+    TextSpan Span)
+    : BoundNode(Span);
+
+public sealed record BoundNativeFunctionBinding(
+    string Name,
+    string SymbolName,
+    IReadOnlyList<BoundNativeFunctionParameter> Parameters,
+    string? ReturnTypeName,
+    string? CallingConventionName,
+    TextSpan Span)
+    : BoundNode(Span);
+
+public sealed record BoundBindStatement(
+    string ModuleName,
+    string? NativeTarget,
+    IReadOnlyList<BoundNativeFunctionBinding> Functions,
+    TextSpan Span)
+    : BoundStatement(Span);
+
+// ─── Phase C-3: niche expressions ──────────────────────────────────────
+
+/// <summary>One entry of a record literal.</summary>
+public abstract record BoundRecordEntry(TextSpan Span) : BoundNode(Span);
+
+public sealed record BoundRecordField(string Name, BoundExpression Value, TextSpan Span)
+    : BoundRecordEntry(Span);
+
+public sealed record BoundComputedRecordField(BoundExpression NameExpression, BoundExpression Value, TextSpan Span)
+    : BoundRecordEntry(Span);
+
+public sealed record BoundRecordSpreadEntry(BoundExpression Value, TextSpan Span)
+    : BoundRecordEntry(Span);
+
+/// <summary><c>{ name: "x", age: 1, ...$rest }</c>.</summary>
+public sealed record BoundRecordLiteral(
+    IReadOnlyList<BoundRecordEntry> Fields,
+    TextSpan Span,
+    BoundType Type)
+    : BoundExpression(Span, Type);
+
+public sealed record BoundDictEntry(
+    BoundExpression Key,
+    BoundExpression Value,
+    TextSpan Span)
+    : BoundNode(Span);
+
+/// <summary><c>{ "k1" => v1, "k2" => v2 }</c>.</summary>
+public sealed record BoundDictLiteral(
+    IReadOnlyList<BoundDictEntry> Entries,
+    TextSpan Span,
+    BoundType Type)
+    : BoundExpression(Span, Type);
+
+public sealed record BoundSetLiteral(
+    IReadOnlyList<BoundExpression> Items,
+    TextSpan Span,
+    BoundType Type)
+    : BoundExpression(Span, Type);
+
+public sealed record BoundTupleLiteral(
+    IReadOnlyList<BoundExpression> Items,
+    TextSpan Span,
+    BoundType Type)
+    : BoundExpression(Span, Type);
+
+/// <summary><c>(cmd args)</c> — captures stdout of the inner pipeline.</summary>
+public sealed record BoundCommandSubstitution(
+    BoundPipeline Pipeline,
+    TextSpan Span,
+    BoundType Type)
+    : BoundExpression(Span, Type);
+
+/// <summary><c>$(pipeline)</c> / <c>(pipeline)</c> — produces the
+/// pipeline's value(s) as a single materialised result.</summary>
+public sealed record BoundSubexpression(
+    BoundPipeline Pipeline,
+    TextSpan Span,
+    BoundType Type)
+    : BoundExpression(Span, Type);
+
+/// <summary><c>&lt;(pipeline)</c> — process input substitution.</summary>
+public sealed record BoundInputProcessSubstitution(
+    BoundPipeline Pipeline,
+    TextSpan Span,
+    BoundType Type)
+    : BoundExpression(Span, Type);
+
+/// <summary><c>&gt;(pipeline)</c> — process output substitution.</summary>
+public sealed record BoundOutputProcessSubstitution(
+    BoundPipeline Pipeline,
+    TextSpan Span,
+    BoundType Type)
+    : BoundExpression(Span, Type);
+
+/// <summary><c>quote { … }</c> — captures argument's AST as a value.</summary>
+public sealed record BoundQuoteExpression(
+    ArgumentSyntax Inner,
+    TextSpan Span,
+    BoundType Type)
+    : BoundExpression(Span, Type);
+
+/// <summary><c>nameof(x)</c> / <c>nameof(\$x)</c>.</summary>
+public sealed record BoundNameOfExpression(
+    string Identifier,
+    bool IsVariableReference,
+    TextSpan Span,
+    BoundType Type)
+    : BoundExpression(Span, Type);
+
+/// <summary><c>&amp;funcname</c> — first-class function reference.</summary>
+public sealed record BoundFunctionReference(
+    string Name,
+    BoundSymbol? Symbol,
+    TextSpan Span,
+    BoundType Type)
+    : BoundExpression(Span, Type);
+
+/// <summary><c>_.Name</c> projection used in pipelines.</summary>
+public sealed record BoundMemberProjection(
+    IReadOnlyList<string> MemberPaths,
+    TextSpan Span,
+    BoundType Type)
+    : BoundExpression(Span, Type);
+
+/// <summary>
+/// <c>&gt; 5</c> / <c>=~ "regex"</c> match-arm pattern. Carved as
+/// expression so it can flow through the same pattern-test path as
+/// other arms; the runtime tests it specially.
+/// </summary>
+public sealed record BoundComparisonPattern(
+    string Operator,
+    BoundExpression Operand,
+    TextSpan Span,
+    BoundType Type)
+    : BoundExpression(Span, Type);
+
 // ─── Pipelines ────────────────────────────────────────────────────────
 
 /// <summary>

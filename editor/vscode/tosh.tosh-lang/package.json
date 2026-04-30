@@ -1,7 +1,7 @@
 {
 	"name": "tosh-lang",
-	"displayName": "ToastedShell (tosh)",
-	"description": "Syntax highlighting for ToastedShell (.tosh) scripts",
+	"displayName": "TōSh (ToastedShell)",
+	"description": "Syntax highlighting for TōSh (.tosh) scripts",
 	"version": "0.1.0",
 	"publisher": "tosh",
 	"engines": {
@@ -14,12 +14,16 @@
 		"Programming Languages"
 	],
 	"main": "./extension.js",
-	"activationEvents": [],
+	"activationEvents": [
+		"onLanguage:tosh",
+		"onTerminalProfile:tosh.terminal"
+	],
 	"contributes": {
 		"languages": [
 			{
 				"id": "tosh",
 				"aliases": [
+					"TōSh",
 					"ToastedShell",
 					"tosh"
 				],
@@ -49,23 +53,36 @@
 				"path": "./snippets/tosh.code-snippets"
 			}
 		],
+		"terminal": {
+			"profiles": [
+				{
+					"id": "tosh.terminal",
+					"title": "TōSh"
+				}
+			]
+		},
 		"configuration": {
-			"title": "ToSh",
+			"title": "TōSh",
 			"properties": {
 				"tosh.languageServer.enabled": {
 					"type": "boolean",
 					"default": true,
-					"description": "Enable the ToSh language server when a workspace server or configured server path is available."
+					"description": "Enable the TōSh language server when a workspace server or configured server path is available."
 				},
 				"tosh.languageServer.dotnetPath": {
 					"type": "string",
 					"default": "dotnet",
-					"description": "Path to the dotnet executable used to start the ToSh language server."
+					"description": "Path to the dotnet executable used to start the TōSh language server."
 				},
 				"tosh.languageServer.serverPath": {
 					"type": "string",
 					"default": "",
 					"description": "Optional path to a Tosh.Lsp.dll or Tosh.Lsp.csproj. Relative paths are resolved from the first workspace folder."
+				},
+				"tosh.terminal.path": {
+					"type": "string",
+					"default": "tosh",
+					"description": "Path to the executable used by the contributed TōSh terminal profile."
 				}
 			}
 		}
