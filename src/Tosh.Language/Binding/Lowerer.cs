@@ -855,7 +855,7 @@ public static class Lowerer
                     // path takes over.
                     parts.Add(new BoundInterpolatedExpression(
                         SourceText: expr.Expression,
-                        Expression: TryLowerHole(expr.Expression, ctx),
+                        Expression: TryLowerInterpolationHole(expr.Expression, ctx),
                         Span: expr.ExpressionSpan));
                     break;
             }
@@ -873,7 +873,7 @@ public static class Lowerer
     /// supported shapes — that signals downstream consumers to fall
     /// back to a runtime re-parse.
     /// </summary>
-    private static BoundExpression? TryLowerHole(string text, LowerContext ctx)
+    private static BoundExpression? TryLowerInterpolationHole(string text, LowerContext ctx)
     {
         if (string.IsNullOrWhiteSpace(text)) return null;
 

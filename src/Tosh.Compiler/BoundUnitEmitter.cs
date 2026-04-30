@@ -126,6 +126,18 @@ internal sealed class EmitterImpl
                 EmitVariableDeclaration(decl);
                 break;
 
+            case BoundVariableAssignment assign:
+                EmitVariableAssignment(assign);
+                break;
+
+            case BoundIfStatement ifStmt:
+                EmitIfStatement(ifStmt);
+                break;
+
+            case BoundWhileStatement whileStmt:
+                EmitWhileStatement(whileStmt);
+                break;
+
             default:
                 Diagnostics.Add($"unsupported statement: {statement.GetType().Name}");
                 break;
@@ -154,6 +166,116 @@ internal sealed class EmitterImpl
         var local = _il.DeclareLocal(producedType);
         _il.Emit(OpCodes.Stloc, local);
         _locals[decl.Symbol] = new LocalSlot(local, producedType);
+    }
+
+    /// <summary>
+    /// Emits a reassignment <c>$x = ...</c>. Currently supports plain
+    /// <c>=</c> on a previously-declared local whose stored type
+    /// matches (or can be implicitly converted from) the new value.
+    /// Compound operators (<c>+=</c>, <c>-=</c>, etc.) are deferred
+    /// to a future pass.
+    /// </summary>
+    private void EmitVariableAssignment(BoundVariableAssignment assign)
+    {
+        if (assign.Operator != "=")
+        {
+            Diagnostics.Add($"unsupported assignment operator: '{assign.Operator}'");
+            return;
+        }
+        if (assign.Symbol is null || !_locals.TryGetValue(assign.Symbol, out var slot))
+        {
+            Diagnostics.Add($"unresolved assignment target: {assign.Name}");
+            return;
+        }
+
+        var producedType = EmitPipelineAsValue(assign.Value);
+        if (producedType is null) return;
+
+        // Coerce numeric widening if needed; otherwise require an
+        // exact type match (until we grow a proper conversion table).
+        if (producedType != slot.Type)
+        {
+            if (IsNumericType(producedType) && IsNumericType(slot.Type))
+            {
+                ConvertNumeric(producedType, slot.Type);
+            }
+            else
+            {
+                Diagnostics.Add(
+                    $"assignment type mismatch for '{assign.Name}': " +
+                    $"slot is {slot.Type.Name}, value is {producedType.Name}");
+                _il.Emit(OpCodes.Pop);
+                return;
+            }
+        }
+
+        _il.Emit(OpCodes.Stloc, slot.Local);
+    }
+
+    /// <summary>
+    /// Emits an <c>if cond { … } else { … }</c>. The condition must
+    /// evaluate to <see cref="bool"/>; nested non-bool conditions are
+    /// reported as a diagnostic and the block is skipped.
+    /// </summary>
+    private void EmitIfStatement(BoundIfStatement ifStmt)
+    {
+        var condType = EmitExpression(ifStmt.Condition);
+        if (condType is null) return;
+        if (condType != typeof(bool))
+        {
+            Diagnostics.Add($"if condition must be bool, got {condType.Name}");
+            _il.Emit(OpCodes.Pop);
+            return;
+        }
+
+        var elseLabel = _il.DefineLabel();
+        var endLabel = _il.DefineLabel();
+
+        _il.Emit(OpCodes.Brfalse, elseLabel);
+        EmitBlock(ifStmt.ThenBlock);
+        _il.Emit(OpCodes.Br, endLabel);
+
+        _il.MarkLabel(elseLabel);
+        if (ifStmt.ElseBlock is not null)
+        {
+            EmitBlock(ifStmt.ElseBlock);
+        }
+        _il.MarkLabel(endLabel);
+    }
+
+    /// <summary>
+    /// Emits a <c>while cond { … }</c> or <c>until cond { … }</c>
+    /// loop. The two forms differ only in which branch opcode tests
+    /// the condition (<c>brfalse</c> vs <c>brtrue</c>).
+    /// </summary>
+    private void EmitWhileStatement(BoundWhileStatement whileStmt)
+    {
+        var topLabel = _il.DefineLabel();
+        var endLabel = _il.DefineLabel();
+
+        _il.MarkLabel(topLabel);
+        var condType = EmitExpression(whileStmt.Condition);
+        if (condType is null) return;
+        if (condType != typeof(bool))
+        {
+            Diagnostics.Add($"while condition must be bool, got {condType.Name}");
+            _il.Emit(OpCodes.Pop);
+            return;
+        }
+
+        // until inverts the test: keep looping while condition is true.
+        _il.Emit(whileStmt.IsUntil ? OpCodes.Brtrue : OpCodes.Brfalse, endLabel);
+        EmitBlock(whileStmt.Body);
+        _il.Emit(OpCodes.Br, topLabel);
+        _il.MarkLabel(endLabel);
+    }
+
+    private void EmitBlock(BoundBlock block)
+    {
+        foreach (var statement in block.Statements)
+        {
+            EmitStatement(statement);
+        }
     }
 
     // ─── Pipelines ────────────────────────────────────────────────
