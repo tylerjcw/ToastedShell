@@ -4146,8 +4146,16 @@ public sealed partial class ToshEngine : IShellEvaluator
         IReadOnlyList<object?>? pendingFirstCommandArguments = firstCommandArguments;
         var isPipelined = pipeline.Stages.Count > 1 || initialInput is not null;
 
-        foreach (var stage in pipeline.Stages)
+        // If lowering recognised a fusable trailing pattern (e.g.
+        // `... | sort | first N`), execute the upstream stages normally
+        // and replace the trailing stages with a specialised iterator.
+        var fusion = pipeline.Fusion;
+        var stageCount = pipeline.Stages.Count;
+        var stagesToRun = fusion is null ? stageCount : stageCount - GetStagesConsumed(fusion);
+
+        for (int i = 0; i < stagesToRun; i++)
         {
+            var stage = pipeline.Stages[i];
             current = stage switch
             {
                 ExpressionPipelineStageSyntax expressionStage => ExecuteExpressionStageAsync(
@@ -4180,7 +4188,122 @@ public sealed partial class ToshEngine : IShellEvaluator
             }
         }
 
+        if (fusion is SortFirstFusion sortFirst)
+        {
+            current = ExecuteSortFirstFusionAsync(current, sortFirst, cancellationToken);
+        }
+
         return FinalizePipelineExitCodeAsync(current, pipelineExitStatusTracker, ownsTracker, cancellationToken);
+    }
+
+    private static int GetStagesConsumed(Tosh.Language.Binding.PipelineFusion fusion) => fusion switch
+    {
+        SortFirstFusion sortFirst => sortFirst.StagesConsumed,
+        _ => 0,
+    };
+
+    /// <summary>
+    /// Specialised executor for <c>... | sort [-r] | first N</c>. Uses a
+    /// bounded <see cref="PriorityQueue{TElement, TPriority}"/> of size N
+    /// to retain only the items we need, then emits them in sort order.
+    /// Memory: O(N) instead of O(M); time: O(M log N).
+    /// </summary>
+    private static async IAsyncEnumerable<object?> ExecuteSortFirstFusionAsync(
+        IAsyncEnumerable<object?> source,
+        SortFirstFusion fusion,
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        if (fusion.Count == 0)
+        {
+            yield break;
+        }
+
+        // Comparator mirrors SortCommand's default (no -n, no -h, no key).
+        // Forward direction: ascending; reverse: descending.
+        var ascending = SortFirstFusionComparer.Instance;
+        var comparer = fusion.Reverse ? SortFirstFusionComparer.Reversed : ascending;
+
+        // Heap orders by the OPPOSITE direction so its top is the
+        // candidate to evict. For ascending top-N (N smallest), we keep
+        // a max-heap; for reverse (N largest), a min-heap.
+        var evictionComparer = fusion.Reverse ? ascending : SortFirstFusionComparer.Reversed;
+        var heap = new PriorityQueue<object?, object?>(fusion.Count, evictionComparer);
+
+        await foreach (var item in source.WithCancellation(cancellationToken))
+        {
+            if (heap.Count < fusion.Count)
+            {
+                heap.Enqueue(item, item);
+                continue;
+            }
+
+            // EnqueueDequeue replaces the top if the new item is "better"
+            // (smaller for ascending top-N, larger for reverse).
+            heap.EnqueueDequeue(item, item);
+        }
+
+        // Drain to a buffer, then sort in the requested direction.
+        var buffer = new List<object?>(heap.Count);
+        while (heap.Count > 0)
+        {
+            buffer.Add(heap.Dequeue());
+        }
+
+        buffer.Sort(comparer);
+
+        foreach (var item in buffer)
+        {
+            yield return item;
+        }
+    }
+
+    /// <summary>
+    /// Default ascending comparer used by the fused sort+first path.
+    /// Mirrors the no-flag, no-key behaviour of <c>SortCommand</c>'s
+    /// internal comparer for the common case (uniformly-typed items).
+    /// </summary>
+    private sealed class SortFirstFusionComparer : IComparer<object?>
+    {
+        public static readonly SortFirstFusionComparer Instance = new(reverse: false);
+        public static readonly SortFirstFusionComparer Reversed = new(reverse: true);
+
+        private readonly int _direction;
+
+        private SortFirstFusionComparer(bool reverse)
+        {
+            _direction = reverse ? -1 : 1;
+        }
+
+        public int Compare(object? x, object? y)
+        {
+            int cmp = CompareCore(x, y);
+            return cmp * _direction;
+        }
+
+        private static int CompareCore(object? x, object? y)
+        {
+            if (ReferenceEquals(x, y)) return 0;
+            if (x is null) return -1;
+            if (y is null) return 1;
+
+            if (x is string xs && y is string ys)
+            {
+                return StringComparer.OrdinalIgnoreCase.Compare(xs, ys);
+            }
+
+            if (x is IComparable comparable && x.GetType() == y.GetType())
+            {
+                return comparable.CompareTo(y);
+            }
+
+            // Fallback: type-name then string comparison. Matches
+            // SortCommand's ultimate fallback for incompatible types.
+            var xTypeName = x.GetType().Name;
+            var yTypeName = y.GetType().Name;
+            var typeCmp = string.Compare(xTypeName, yTypeName, StringComparison.Ordinal);
+            if (typeCmp != 0) return typeCmp;
+            return string.Compare(x.ToString(), y.ToString(), StringComparison.Ordinal);
+        }
     }
 
     private async IAsyncEnumerable<object?> FinalizePipelineExitCodeAsync(

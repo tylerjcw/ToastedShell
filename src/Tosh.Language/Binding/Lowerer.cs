@@ -106,11 +106,110 @@ public static class Lowerer
             stages.Add(LowerPipelineStage(stage, ctx));
         }
 
+        TryAttachSortFirstFusion(pipeline);
+
         var span = pipeline.Stages.Count > 0
             ? pipeline.Stages[0].Span
             : new TextSpan(0, 0);
 
         return new BoundPipeline(stages, pipeline, span);
+    }
+
+    /// <summary>
+    /// Detects <c>... | sort [-r] | first N</c> and stamps a
+    /// <see cref="SortFirstFusion"/> on the parse-tree pipeline. Only
+    /// fires when sort has no key selector and no flags other than
+    /// reverse, and when first's count is a literal non-negative int.
+    /// </summary>
+    private static void TryAttachSortFirstFusion(PipelineSyntax pipeline)
+    {
+        if (pipeline.Stages.Count < 2)
+        {
+            return;
+        }
+
+        // Last two stages must be `sort` then `first`.
+        if (pipeline.Stages[^2] is not CommandSyntax sortCmd
+            || !string.Equals(sortCmd.Name, "sort", StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        if (pipeline.Stages[^1] is not CommandSyntax firstCmd
+            || !string.Equals(firstCmd.Name, "first", StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        // Sort must have no positionals (no key selector) and at most a
+        // single -r/--reverse flag. Flags are surfaced as barewords like
+        // "-r" or "--reverse"; anything else (a literal, a var-ref) is a
+        // positional that we refuse to fuse.
+        bool reverse = false;
+        foreach (var arg in sortCmd.Arguments)
+        {
+            if (arg is BarewordArgumentSyntax bareword && bareword.Value.StartsWith('-'))
+            {
+                var name = bareword.Value.TrimStart('-');
+                if (string.Equals(name, "r", StringComparison.Ordinal)
+                    || string.Equals(name, "reverse", StringComparison.Ordinal)
+                    || string.Equals(name, "d", StringComparison.Ordinal)
+                    || string.Equals(name, "desc", StringComparison.Ordinal)
+                    || string.Equals(name, "descending", StringComparison.Ordinal))
+                {
+                    reverse = true;
+                    continue;
+                }
+
+                // Any other flag (-n, -u, -h) changes semantics — bail.
+                return;
+            }
+
+            // Any non-flag argument (selector, var-ref, literal) — bail.
+            return;
+        }
+
+        // first's count must be a literal int (or absent → 1).
+        int count;
+        if (firstCmd.Arguments.Count == 0)
+        {
+            count = 1;
+        }
+        else if (firstCmd.Arguments.Count == 1 && TryReadLiteralInt(firstCmd.Arguments[0], out var parsed))
+        {
+            count = parsed;
+        }
+        else
+        {
+            return;
+        }
+
+        if (count < 0)
+        {
+            return;
+        }
+
+        pipeline.Fusion = new SortFirstFusion(StagesConsumed: 2, Count: count, Reverse: reverse);
+    }
+
+    private static bool TryReadLiteralInt(ArgumentSyntax arg, out int value)
+    {
+        // Honour the constant-fold annotation produced earlier in
+        // lowering so expressions like `first (1 + 2)` participate.
+        if (arg is OperatorArgumentSyntax op && op.FoldedConstant is { Value: int folded })
+        {
+            value = folded;
+            return true;
+        }
+
+        if (arg is LiteralArgumentSyntax literal && literal.Value is int direct)
+        {
+            value = direct;
+            return true;
+        }
+
+        value = 0;
+        return false;
     }
 
     private static BoundPipelineStage LowerPipelineStage(PipelineStageSyntax stage, LowerContext ctx) => stage switch

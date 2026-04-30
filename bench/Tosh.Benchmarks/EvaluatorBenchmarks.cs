@@ -56,6 +56,27 @@ public class EvaluatorBenchmarks
         return results.Count;
     }
 
+    /// <summary>
+    /// Same input as <see cref="WhereSort"/> but with the lowering
+    /// pass disabled — head-to-head measurement of the sort+first
+    /// fusion's payoff.
+    /// </summary>
+    [Benchmark]
+    public async Task<int> WhereSortNoFuse()
+    {
+        Environment.SetEnvironmentVariable("TOSH_DISABLE_LOWERER", "1");
+        try
+        {
+            var results = await _engine.ExecuteToListAsync(
+                "1..100 | where $_ > 50 | sort | first 5");
+            return results.Count;
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("TOSH_DISABLE_LOWERER", null);
+        }
+    }
+
     /// <summary>Function call dispatch overhead.</summary>
     [Benchmark]
     public async Task<int> FunctionCall()
