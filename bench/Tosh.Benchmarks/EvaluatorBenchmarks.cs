@@ -47,6 +47,22 @@ public class EvaluatorBenchmarks
         return results.Count;
     }
 
+    /// <summary>Range-only iteration (no downstream consumer).</summary>
+    [Benchmark]
+    public async Task<int> RangeMaterialize100()
+    {
+        var results = await _engine.ExecuteToListAsync("1..100 | count");
+        return results.Count;
+    }
+
+    /// <summary>Range + identity each (probes per-item dispatch overhead).</summary>
+    [Benchmark]
+    public async Task<int> RangeEachIdentity100()
+    {
+        var results = await _engine.ExecuteToListAsync("1..100 | each { $_ } | count");
+        return results.Count;
+    }
+
     /// <summary>'where' filter + 'sort' on a 100-element range.</summary>
     [Benchmark]
     public async Task<int> WhereSort()

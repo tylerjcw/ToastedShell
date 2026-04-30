@@ -1,0 +1,102 @@
+using Tosh.Language;
+using Tosh.Language.Binding;
+using Tosh.Runtime;
+
+namespace Tosh.Tests;
+
+/// <summary>
+/// Codifies the contract that <see cref="BoundEvaluator"/> is observably
+/// indistinguishable from the parse-tree evaluator (<see cref="ToshEngine.ExecuteToListAsync(string, CancellationToken)"/>).
+///
+/// Today both paths flow through the same code, so every assertion here
+/// holds trivially. The point is to fail loudly the moment any future
+/// commit replaces a bound-IR shape with a fast path that diverges —
+/// well before such a divergence reaches the IL backend.
+///
+/// Each fixture runs a snippet through both paths in fresh engines so
+/// stateful side effects (variable bindings, event handlers) cannot
+/// leak between them.
+/// </summary>
+public sealed class BoundEvaluatorParityTests : IClassFixture<ToshRuntimeFixture>
+{
+    private readonly ToshRuntime _runtime;
+
+    public BoundEvaluatorParityTests(ToshRuntimeFixture fixture)
+    {
+        _runtime = fixture.Runtime;
+    }
+
+    /// <summary>
+    /// Representative corpus. Keep entries small, hermetic (no I/O, no
+    /// processes), and exercise one shape each. Add an entry the first
+    /// time a divergence is suspected so this test grows alongside the IR.
+    /// </summary>
+    public static IEnumerable<object[]> Corpus => new[]
+    {
+        new object[] { "literals/scalar",         "echo 42" },
+        new object[] { "literals/string",         "echo hello" },
+        new object[] { "literals/quoted",         "echo \"hello, world\"" },
+        new object[] { "literals/list",           "[1, 2, 3]" },
+        new object[] { "var/decl",                "var x = 42\necho $x" },
+        new object[] { "var/reassign",            "var x = 1\n$x = 2\necho $x" },
+        new object[] { "arith/int_add",           "echo (1 + 2)" },
+        new object[] { "arith/folded_chain",      "echo (60 * 60 * 24)" },
+        new object[] { "arith/unary_neg",         "var x = -5\necho $x" },
+        new object[] { "string/concat",           "echo (\"foo\" + \"bar\")" },
+        new object[] { "string/interp",           "var n = \"world\"\necho $\"hello, {$n}!\"" },
+        new object[] { "bool/and_or",             "echo (true and false or true)" },
+        new object[] { "compare/gt",              "echo (5 > 3)" },
+        new object[] { "range/materialize",       "1..5 | sum" },
+        new object[] { "pipe/where_first",        "1..10 | where $_ > 5 | first 2" },
+        new object[] { "pipe/sort_first_fused",   "1..100 | where $_ > 50 | sort | first 5" },
+        new object[] { "pipe/sort_reverse",       "1..10 | sort -r | first 3" },
+        new object[] { "func/oneliner",           "func square(n) => $n * $n\nsquare 7" },
+        new object[] { "func/body",               "func sq(n) { $n * $n }\nsq 7" },
+        new object[] { "control/if",              "if (1 > 0) { echo yes } else { echo no }" },
+        new object[] { "control/for",             "for i in [1, 2, 3] { echo $i }" },
+    };
+
+    [Theory]
+    [MemberData(nameof(Corpus))]
+    public async Task Bound_path_matches_parse_tree_path(string label, string source)
+    {
+        // Each path gets its own engine so variable bindings, function
+        // declarations, and any other engine-level state do not leak.
+        // Both paths receive the same sourceName so that values which
+        // capture their origin (e.g. ShellBlock) compare equal.
+        var parseEngine = new ToshEngine(_runtime);
+        var boundEngine = new ToshEngine(_runtime);
+
+        var fromParse = await parseEngine.ExecuteToListAsync(source, label);
+        var fromBound = await BoundEvaluator.EvaluateToListAsync(boundEngine, source, sourceName: label);
+
+        Assert.Equal(fromParse, fromBound);
+    }
+
+    /// <summary>
+    /// The bound path with lowering bypassed should also match — this
+    /// catches the case where a future fast path becomes the only way
+    /// to get a correct answer (which would be a different kind of bug
+    /// than divergence).
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(Corpus))]
+    public async Task Both_paths_agree_with_lowerer_disabled(string label, string source)
+    {
+        Environment.SetEnvironmentVariable("TOSH_DISABLE_LOWERER", "1");
+        try
+        {
+            var parseEngine = new ToshEngine(_runtime);
+            var boundEngine = new ToshEngine(_runtime);
+
+            var fromParse = await parseEngine.ExecuteToListAsync(source, label);
+            var fromBound = await BoundEvaluator.EvaluateToListAsync(boundEngine, source, sourceName: label);
+
+            Assert.Equal(fromParse, fromBound);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("TOSH_DISABLE_LOWERER", null);
+        }
+    }
+}
