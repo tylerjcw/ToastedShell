@@ -58,14 +58,40 @@ public static class Lowerer
         PipelineStatementSyntax pipeline =>
             new BoundPipelineStatement(LowerPipeline(pipeline.Pipeline, ctx), pipeline.Span),
 
+        VariableDeclarationStatementSyntax decl =>
+            LowerVariableDeclaration(decl, ctx),
+
         ScriptStatementSyntax inner =>
             LowerStatementAsScript(inner, ctx),
 
-        // Anything else (var decls, control flow, etc.) is preserved
-        // as a dynamic statement for now. The evaluator-on-IR will
-        // delegate to the existing tree-walking evaluator for these.
+        // Anything else (destructuring, control flow, function defs)
+        // is preserved as a dynamic statement for now. The
+        // evaluator-on-IR will delegate to the existing tree-walking
+        // evaluator for these.
         _ => new BoundDynamicStatement(statement, statement.Span),
     };
+
+    private static BoundVariableDeclaration LowerVariableDeclaration(
+        VariableDeclarationStatementSyntax decl,
+        LowerContext ctx)
+    {
+        // Lower the initializer first so the variable is not yet in
+        // scope while its own RHS is being lowered (matches existing
+        // VariableBinder semantics).
+        var value = decl.Value is null ? null : LowerPipeline(decl.Value, ctx);
+
+        var declaredType = decl.TypeName is null
+            ? BoundType.Dynamic
+            : BoundType.Dynamic; // explicit type annotations are dynamic for now
+        var symbol = ctx.DeclareLocal(decl.Name, declaredType);
+
+        return new BoundVariableDeclaration(
+            Symbol: symbol,
+            Value: value,
+            IsConst: decl.IsConst,
+            Modifier: decl.Modifier,
+            Span: decl.Span);
+    }
 
     // ── pipelines ──────────────────────────────────────────────
 
@@ -162,6 +188,37 @@ public static class Lowerer
                 Span: varRef.Span,
                 Type: BoundType.Dynamic),
 
+        MemberAccessArgumentSyntax member =>
+            new BoundMemberAccess(
+                Target: LowerExpression(member.Target, ctx),
+                MemberPath: member.MemberPath,
+                NullSafe: member.NullSafe,
+                Span: member.Span,
+                Type: BoundType.Dynamic),
+
+        OperatorArgumentSyntax binary =>
+            new BoundBinaryOperator(
+                Left: LowerExpression(binary.Left, ctx),
+                Operator: binary.Operator,
+                Right: LowerExpression(binary.Right, ctx),
+                Span: binary.Span,
+                Type: BoundType.Dynamic),
+
+        UnaryOperatorArgumentSyntax unary =>
+            new BoundUnaryOperator(
+                Operator: unary.Operator,
+                Operand: LowerExpression(unary.Operand, ctx),
+                Span: unary.Span,
+                Type: BoundType.Dynamic),
+
+        RangeArgumentSyntax range =>
+            new BoundRange(
+                Start: LowerExpression(range.Start, ctx),
+                Step: range.Step is null ? null : LowerExpression(range.Step, ctx),
+                End: range.End is null ? null : LowerExpression(range.End, ctx),
+                Span: range.Span,
+                Type: BoundType.Dynamic),
+
         // Everything else stays dynamic for now.
         _ => new BoundDynamicExpression(expression, expression.Span),
     };
@@ -182,20 +239,41 @@ public static class Lowerer
 
     private sealed class LowerContext
     {
+        // Scope-stack of name → symbol. Top of stack is innermost.
+        // Mirrors the layout used by VariableBinder.
+        private readonly List<Dictionary<string, BoundSymbol>> _scopes = new();
+
         public LowerContext(ShellCommandRegistry commands)
         {
             Commands = commands;
+            _scopes.Add(new Dictionary<string, BoundSymbol>(StringComparer.Ordinal));
         }
 
         public ShellCommandRegistry Commands { get; }
 
         public List<BoundSymbol> Symbols { get; } = new();
 
-        // Symbol table is intentionally empty in v1 — the lowering pass
-        // does not yet introduce binding sites, so all variable
-        // references resolve as dynamic. The hook is here so later
-        // carve-outs can register declarations without touching the
-        // public API.
-        public BoundSymbol? LookupSymbol(string _) => null;
+        public BoundSymbol DeclareLocal(string name, BoundType declaredType)
+        {
+            var symbol = new BoundSymbol(
+                Name: name,
+                Kind: BoundSymbolKind.LocalVariable,
+                ScopeDepth: _scopes.Count - 1,
+                DeclaredType: declaredType);
+
+            // Shadowing is permitted — the innermost binding wins.
+            _scopes[^1][name] = symbol;
+            Symbols.Add(symbol);
+            return symbol;
+        }
+
+        public BoundSymbol? LookupSymbol(string name)
+        {
+            for (var i = _scopes.Count - 1; i >= 0; i--)
+            {
+                if (_scopes[i].TryGetValue(name, out var symbol)) return symbol;
+            }
+            return null;
+        }
     }
 }

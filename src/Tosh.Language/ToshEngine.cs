@@ -437,6 +437,21 @@ public sealed partial class ToshEngine : IShellEvaluator
         return EvaluateParseResultAsync(parseResult, cancellationToken);
     }
 
+    /// <summary>
+    /// Evaluate a previously-lowered <see cref="Tosh.Language.Binding.BoundNodes.BoundUnit"/>.
+    /// v1 delegates to the parse-tree evaluator using the unit's
+    /// <see cref="Tosh.Language.Binding.BoundNodes.BoundUnit.ParseResult"/>;
+    /// future commits will fast-path individual carved-out bound
+    /// shapes without changing this public seam.
+    /// </summary>
+    public IAsyncEnumerable<object?> EvaluateAsync(
+        Tosh.Language.Binding.BoundNodes.BoundUnit unit,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(unit);
+        return EvaluateParseResultAsync(unit.ParseResult, cancellationToken);
+    }
+
     private async IAsyncEnumerable<object?> EvaluateParseResultAsync(
         ParseResult parseResult,
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
