@@ -94,13 +94,58 @@ public sealed class BoundUnitEmitterTests : IClassFixture<ToshRuntimeFixture>
     }
 
     [Fact]
-    public void Reports_unsupported_command()
+    public void Reports_unsupported_pipeline()
     {
-        var (output, result) = CompileAndRunWithDiagnostics("ls");
+        // Multi-stage pipelines aren't lowered yet; the emitter
+        // surfaces a diagnostic instead of producing bogus IL.
+        var (output, result) = CompileAndRunWithDiagnostics("echo hi | echo bye");
         Assert.False(result.IsClean);
-        Assert.Contains(result.UnsupportedShapes, d => d.Contains("ls", StringComparison.Ordinal));
-        // The emitted method still ran (with no echo), so output is empty.
+        Assert.Contains(result.UnsupportedShapes, d => d.Contains("pipeline", StringComparison.Ordinal));
         Assert.Equal(string.Empty, output.Trim());
+    }
+
+    // ─── Runtime-host bridge dispatch ─────────────────────────────
+    // These tests confirm that command calls other than `echo` route
+    // through ToshHost into the live ShellCommandRegistry (populated
+    // by Tosh.Stdlib's [ModuleInitializer]) and that yielded values
+    // are surfaced via Console.WriteLine for statement context.
+
+    [Fact]
+    public void Host_bridge_dispatches_pwd_to_stdlib()
+    {
+        var output = CompileAndRun("pwd");
+        // pwd yields a DirectoryInfo; formatter renders it as a path.
+        Assert.False(string.IsNullOrWhiteSpace(output));
+        Assert.StartsWith("/", output.TrimStart());
+    }
+
+    [Fact]
+    public void Host_bridge_dispatches_whoami_to_stdlib()
+    {
+        var output = CompileAndRun("whoami").Trim();
+        Assert.False(string.IsNullOrEmpty(output));
+        Assert.DoesNotContain('\n', output);
+    }
+
+    [Fact]
+    public void Host_bridge_value_context_binds_to_var()
+    {
+        // (pwd) in value context returns a single object via
+        // ToshHost.InvokeValue; binding it to $d and echoing
+        // proves the bridge round-trips into user code.
+        var output = CompileAndRun("var d = (pwd)\necho $d").Trim();
+        Assert.False(string.IsNullOrEmpty(output));
+        Assert.StartsWith("/", output);
+    }
+
+    [Fact]
+    public void Host_bridge_passes_arguments()
+    {
+        // `which echo` should resolve through the registry and
+        // yield a value identifying the builtin command.
+        var output = CompileAndRun("which echo").Trim();
+        Assert.False(string.IsNullOrEmpty(output));
+        Assert.Contains("echo", output, StringComparison.Ordinal);
     }
 
     private string CompileAndRun(string source)

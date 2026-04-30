@@ -1,15 +1,15 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
-    <ProjectReference Include="..\Tosh.Language\Tosh.Language.csproj" />
     <ProjectReference Include="..\Tosh.Runtime\Tosh.Runtime.csproj" />
-    <ProjectReference Include="..\Tosh.Compiler.Runtime\Tosh.Compiler.Runtime.csproj" />
+    <ProjectReference Include="..\Tosh.Stdlib\Tosh.Stdlib.csproj" />
   </ItemGroup>
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <RootNamespace>Tosh.Compiler.Runtime</RootNamespace>
   </PropertyGroup>
 
 </Project>

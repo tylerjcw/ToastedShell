@@ -75,6 +75,17 @@ internal sealed class EmitterImpl
     private static readonly MethodInfo s_convertToDouble =
         typeof(Convert).GetMethod(nameof(Convert.ToDouble), new[] { typeof(object) })!;
 
+    private static readonly Type s_toshHost = typeof(global::Tosh.Compiler.Runtime.ToshHost);
+    private static readonly MethodInfo s_hostInitialize =
+        s_toshHost.GetMethod(nameof(global::Tosh.Compiler.Runtime.ToshHost.Initialize),
+            new[] { typeof(global::Tosh.Runtime.ToshRuntime) })!;
+    private static readonly MethodInfo s_hostInvokeStatement =
+        s_toshHost.GetMethod(nameof(global::Tosh.Compiler.Runtime.ToshHost.InvokeStatement),
+            new[] { typeof(string), typeof(object[]) })!;
+    private static readonly MethodInfo s_hostInvokeValue =
+        s_toshHost.GetMethod(nameof(global::Tosh.Compiler.Runtime.ToshHost.InvokeValue),
+            new[] { typeof(string), typeof(object[]) })!;
+
     public EmitterImpl(BoundUnit unit, string assemblyName)
     {
         _unit = unit;
@@ -106,6 +117,12 @@ internal sealed class EmitterImpl
                 DeclareUserFunction(func);
             }
         }
+
+        // Main prologue: wire up the ambient ToshRuntime once so any
+        // builtin command dispatched through ToshHost has a runtime
+        // available. Idempotent on the host side.
+        _il.Emit(OpCodes.Ldnull);
+        _il.Emit(OpCodes.Call, s_hostInitialize);
 
         // Main pass: top-level statements go into Main; function
         // definitions are emitted into their own MethodBuilders and
@@ -561,8 +578,7 @@ internal sealed class EmitterImpl
                 return null;
 
             case BoundCommandCall call:
-                Diagnostics.Add($"command call cannot yet be used as a value: '{call.Name}'");
-                return null;
+                return EmitHostInvokeValue(call);
 
             default:
                 Diagnostics.Add($"unsupported pipeline stage: {stage.GetType().Name}");
@@ -614,7 +630,7 @@ internal sealed class EmitterImpl
     {
         if (!string.Equals(call.Name, "echo", StringComparison.Ordinal))
         {
-            Diagnostics.Add($"unsupported command: '{call.Name}'");
+            EmitHostInvokeStatement(call);
             return;
         }
 
@@ -657,6 +673,62 @@ internal sealed class EmitterImpl
 
         _il.Emit(OpCodes.Call, s_stringJoin);
         _il.Emit(OpCodes.Call, s_writeLineString);
+    }
+
+    /// <summary>
+    /// Emits a statement-context dispatch through the runtime host
+    /// shim. Pushes <c>name</c> and an <c>object[]</c> of evaluated
+    /// arguments, calls <c>ToshHost.InvokeStatement</c>, and pops the
+    /// returned "last yielded value". Splat / named args are not yet
+    /// supported and emit a diagnostic.
+    /// </summary>
+    private void EmitHostInvokeStatement(BoundCommandCall call)
+    {
+        if (!EmitHostArgs(call)) return;
+        _il.Emit(OpCodes.Call, s_hostInvokeStatement);
+        _il.Emit(OpCodes.Pop);
+    }
+
+    /// <summary>
+    /// Emits a value-context dispatch through the runtime host shim.
+    /// Returns <see cref="object"/> (the unwrapped single value, the
+    /// list when multiple were yielded, or null).
+    /// </summary>
+    private Type? EmitHostInvokeValue(BoundCommandCall call)
+    {
+        if (!EmitHostArgs(call)) return null;
+        _il.Emit(OpCodes.Call, s_hostInvokeValue);
+        return typeof(object);
+    }
+
+    /// <summary>
+    /// Pushes <c>name</c> and an <c>object[]</c> of boxed argument
+    /// values onto the eval stack. Returns false (with a diagnostic
+    /// recorded) when an argument shape is unsupported, leaving the
+    /// stack in an undefined state — callers must abort emission.
+    /// </summary>
+    private bool EmitHostArgs(BoundCommandCall call)
+    {
+        _il.Emit(OpCodes.Ldstr, call.Name);
+        _il.Emit(OpCodes.Ldc_I4, call.Arguments.Count);
+        _il.Emit(OpCodes.Newarr, typeof(object));
+        for (var i = 0; i < call.Arguments.Count; i++)
+        {
+            var arg = call.Arguments[i];
+            if (arg.IsSplat || arg.Name is not null)
+            {
+                Diagnostics.Add(
+                    $"command '{call.Name}': splat/named arguments not yet supported");
+                return false;
+            }
+            _il.Emit(OpCodes.Dup);
+            _il.Emit(OpCodes.Ldc_I4, i);
+            var argType = EmitExpression(arg.Value);
+            if (argType is null) return false;
+            BoxIfValueType(argType);
+            _il.Emit(OpCodes.Stelem_Ref);
+        }
+        return true;
     }
 
     // ─── Expressions ──────────────────────────────────────────────
