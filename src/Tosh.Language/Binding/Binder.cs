@@ -194,10 +194,14 @@ public static class Binder
             case FunctionDefinitionStatementSyntax func:
                 foreach (var p in func.Parameters)
                     if (p.DefaultValue is not null) VisitPipeline(p.DefaultValue, context);
-                VisitBlock(func.Body, context);
+                context.DeferredDepth++;
+                try { VisitBlock(func.Body, context); }
+                finally { context.DeferredDepth--; }
                 break;
             case RuneDefinitionStatementSyntax rune:
-                VisitBlock(rune.Body, context);
+                context.DeferredDepth++;
+                try { VisitBlock(rune.Body, context); }
+                finally { context.DeferredDepth--; }
                 break;
             case ClassDefinitionStatementSyntax cls:
                 foreach (var ba in cls.BaseConstructorArgs ?? Array.Empty<PipelineSyntax>())
@@ -208,14 +212,23 @@ public static class Binder
                     {
                         case ClassPropertyMemberSyntax prop:
                             if (prop.Initializer is not null) VisitPipeline(prop.Initializer, context);
-                            if (prop.GetterBody is not null) VisitBlock(prop.GetterBody, context);
-                            if (prop.SetterBody is not null) VisitBlock(prop.SetterBody, context);
+                            context.DeferredDepth++;
+                            try
+                            {
+                                if (prop.GetterBody is not null) VisitBlock(prop.GetterBody, context);
+                                if (prop.SetterBody is not null) VisitBlock(prop.SetterBody, context);
+                            }
+                            finally { context.DeferredDepth--; }
                             break;
                         case ClassMethodMemberSyntax method:
-                            VisitBlock(method.Method.Body, context);
+                            context.DeferredDepth++;
+                            try { VisitBlock(method.Method.Body, context); }
+                            finally { context.DeferredDepth--; }
                             break;
                         case ClassConstructorMemberSyntax ctor:
-                            VisitBlock(ctor.Body, context);
+                            context.DeferredDepth++;
+                            try { VisitBlock(ctor.Body, context); }
+                            finally { context.DeferredDepth--; }
                             break;
                     }
                 }
@@ -364,7 +377,14 @@ public static class Binder
             // any path that bypasses the binder, but raising here surfaces the
             // error before any work runs and catches shell-only commands
             // behind never-taken branches.
-            if (!context.IsInteractive)
+            //
+            // Exception: inside func/method/rune/ctor bodies the call is
+            // deferred. If those bodies are eventually invoked from a
+            // REPL session the runtime ShellOnly check passes; flagging
+            // them at bind time produces noisy false positives every
+            // time profile.tosh or autoload/*.tosh defines an alias
+            // like `func h => history`.
+            if (!context.IsInteractive && context.DeferredDepth == 0)
             {
                 var shellOnly = resolved.GetType().GetCustomAttribute<ShellOnlyAttribute>();
                 if (shellOnly is not null)
@@ -554,5 +574,14 @@ public static class Binder
         HashSet<string> LocalFunctions,
         bool IsInteractive,
         Func<string, bool> IsExecutableOnPath,
-        List<ToshDiagnostic> Diagnostics);
+        List<ToshDiagnostic> Diagnostics)
+    {
+        // Tracks how many deferred-body scopes (func/method/rune/ctor)
+        // we're nested inside. When > 0, ShellOnly is not enforced at
+        // bind time because the body only runs when the caller invokes
+        // it — which may well be from an interactive REPL session,
+        // even if the file containing the declaration is loaded
+        // non-interactively (profile.tosh, autoload/*.tosh, etc.).
+        public int DeferredDepth { get; set; }
+    }
 }
