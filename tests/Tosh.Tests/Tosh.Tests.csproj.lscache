@@ -94,6 +94,7 @@ JobHardeningTests.cs
 LanguageFeatureTests.cs
 LazySequenceTests.cs
 LineHushDirectiveTests.cs
+LowererTests.cs
 LsblkJsonParserTests.cs
 LscpuJsonParserTests.cs
 LsfdJsonParserTests.cs

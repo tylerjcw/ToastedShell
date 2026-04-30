@@ -57,6 +57,10 @@ TemporaryDependencyNodeTargetIdentifier=net10.0
 Binding/
  Binder.cs
  BinderStrictness.cs
+ BoundNodes/
+  BoundNode.cs
+  BoundType.cs
+ Lowerer.cs
  VariableBinder.cs
 Bridge/
  FunctionCommand.cs

@@ -344,6 +344,39 @@ Concrete next steps, in order:
    pipeline element types) — enough to drive specialized codegen
    for numeric pipelines.
 
+### Decisions (April 2026)
+
+These were left open at the end of the previous session and are
+recorded here as the working stance for Phase A:
+
+- **Type system: dynamic by default, static where it pays.**
+  Every `BoundNode` carries a `Type` slot whose default is
+  `BoundType.Dynamic`. The binder fills it in only when it can
+  do so cheaply and unambiguously — integer literals,
+  arithmetic on known integers, `1..N` ranges, and similar.
+  Everything else stays dynamic and falls back to the runtime's
+  reflection-based dispatch (the same path the tree-walking
+  evaluator uses today). The goal is **not** a full Hindley–Milner
+  inference engine; it is to recover enough static information to
+  unbox numeric pipelines and call CLR methods directly when the
+  receiver is known. Refinement types, exhaustive type-checking
+  for unions, etc. are explicitly out of scope for v1.
+
+- **Bound IR is an immutable record tree.** Same shape as the
+  parse tree (`ArgumentSyntax` / `StatementSyntax`), one
+  `BoundNode` per syntax node, plus a `Symbol` table separate
+  from the tree. Mirrors Roslyn's split between syntax and bound
+  trees. Easier to test than a mutable graph; trivial to share
+  between the lowering pass, the evaluator-on-IR, and (later) the
+  IL emitter.
+
+- **The IR lives in `src/Tosh.Language/Binding/BoundNodes/`.**
+  The Bound IR conceptually belongs to a future `Tosh.Compiler`
+  project, but lifting it out now means a project rename for
+  every commit. Keep it inside `Tosh.Language` until Phase B
+  carves out `Tosh.Compiler`/`toshc`; at that point it moves as
+  a single mechanical refactor.
+
 ---
 
 ## Files this design would touch
