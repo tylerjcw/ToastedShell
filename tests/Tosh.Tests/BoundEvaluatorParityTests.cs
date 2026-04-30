@@ -63,6 +63,17 @@ public sealed class BoundEvaluatorParityTests : IClassFixture<ToshRuntimeFixture
         new object[] { "control/continue",        "for i in [1, 2, 3, 4] { if ($i == 2) { continue }\n echo $i }" },
         new object[] { "closure/where_capture",   "var t = 2\n[1, 2, 3] | where { $_ > $t }" },
         new object[] { "closure/each_lambda",     "[1, 2, 3] | each func(x) { $x * 2 }" },
+        // Phase C-1: try/throw/return/match/switch
+        new object[] { "control/try_catch",       "try {\n    throw \"boom\"\n} catch (e) {\n    echo \"caught\"\n}" },
+        new object[] { "control/try_finally",     "var n = 0\ntry {\n    $n = 1\n} finally {\n    $n = 2\n}\necho $n" },
+        new object[] { "control/return",          "func sq(n) { return ($n * $n) }\nsq 7" },
+        new object[] { "control/switch",          "var x = 2\nswitch ($x) {\n    case 1 { echo one }\n    case 2 { echo two }\n    default { echo other }\n}" },
+        new object[] { "control/match_expr",      "var x = 2\necho (match ($x) { 1 => \"one\"; 2 => \"two\"; default => \"other\" })" },
+        // Phase C-2: types & object access
+        new object[] { "types/static_member",     "echo (Math.PI)" },
+        new object[] { "types/static_call",       "echo (Math.Sqrt(16))" },
+        new object[] { "types/index_access",      "var xs = [10, 20, 30]\necho ($xs[1])" },
+        new object[] { "types/method_call",       "var s = \"hello\"\necho ($s.ToUpper())" },
     };
 
     [Theory]

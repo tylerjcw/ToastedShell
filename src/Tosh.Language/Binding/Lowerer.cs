@@ -95,6 +95,29 @@ public static class Lowerer
         ContinueStatementSyntax cont =>
             new BoundContinueStatement(cont.Span),
 
+        ReturnStatementSyntax ret =>
+            new BoundReturnStatement(
+                Value: ret.Value is null ? null : LowerPipeline(ret.Value, ctx),
+                Span: ret.Span),
+
+        ThrowStatementSyntax thr =>
+            new BoundThrowStatement(
+                Value: thr.Value is null ? null : LowerPipeline(thr.Value, ctx),
+                Span: thr.Span),
+
+        TryStatementSyntax tryStmt =>
+            LowerTryStatement(tryStmt, ctx),
+
+        SwitchStatementSyntax switchStmt =>
+            LowerSwitchStatement(switchStmt, ctx),
+
+        MemberAssignmentStatementSyntax memberAssign =>
+            new BoundMemberAssignment(
+                Target: LowerExpression(memberAssign.Target, ctx),
+                Operator: memberAssign.Operator,
+                Value: LowerPipeline(memberAssign.Value, ctx),
+                Span: memberAssign.Span),
+
         ScriptStatementSyntax inner =>
             LowerStatementAsScript(inner, ctx),
 
@@ -194,6 +217,78 @@ public static class Lowerer
         {
             ctx.PopScope();
         }
+    }
+
+    /// <summary>
+    /// Lowers <c>try { … } catch [(name)] { … } finally { … }</c>.
+    /// The catch variable, when present, is declared as a fresh
+    /// <see cref="BoundSymbolKind.CatchVariable"/> binding inside the
+    /// catch block's scope so the body can reference it.
+    /// </summary>
+    private static BoundTryStatement LowerTryStatement(TryStatementSyntax tryStmt, LowerContext ctx)
+    {
+        var tryBlock = LowerBlock(tryStmt.TryBlock, ctx);
+
+        BoundCatchClause? catchClause = null;
+        if (tryStmt.CatchClause is { } rawCatch)
+        {
+            ctx.PushScope();
+            try
+            {
+                BoundSymbol? catchVar = null;
+                if (!string.IsNullOrEmpty(rawCatch.VariableName))
+                {
+                    catchVar = ctx.DeclareLocal(
+                        rawCatch.VariableName,
+                        BoundSymbolKind.CatchVariable,
+                        BoundType.Dynamic);
+                }
+
+                var statements = new List<BoundStatement>(rawCatch.Body.Statements.Count);
+                foreach (var inner in rawCatch.Body.Statements)
+                {
+                    statements.Add(LowerStatement(inner, ctx));
+                }
+                var body = new BoundBlock(statements, rawCatch.Body.Span);
+
+                catchClause = new BoundCatchClause(catchVar, body, rawCatch.Span);
+            }
+            finally
+            {
+                ctx.PopScope();
+            }
+        }
+
+        var finallyBlock = tryStmt.FinallyBlock is null
+            ? null
+            : LowerBlock(tryStmt.FinallyBlock, ctx);
+
+        return new BoundTryStatement(tryBlock, catchClause, finallyBlock, tryStmt.Span);
+    }
+
+    /// <summary>
+    /// Lowers <c>switch ($v) { case … { } default { } }</c>. Each
+    /// case body opens its own scope (matches the runtime's
+    /// behavior).
+    /// </summary>
+    private static BoundSwitchStatement LowerSwitchStatement(SwitchStatementSyntax switchStmt, LowerContext ctx)
+    {
+        var value = LowerExpression(switchStmt.Value, ctx);
+        var cases = new List<BoundSwitchCase>(switchStmt.Cases.Count);
+        foreach (var rawCase in switchStmt.Cases)
+        {
+            cases.Add(new BoundSwitchCase(
+                Pattern: LowerExpression(rawCase.MatchExpression, ctx),
+                Guard: rawCase.Guard is null ? null : LowerExpression(rawCase.Guard, ctx),
+                Body: LowerBlock(rawCase.Body, ctx),
+                Span: rawCase.Span));
+        }
+
+        var defaultBlock = switchStmt.DefaultBlock is null
+            ? null
+            : LowerBlock(switchStmt.DefaultBlock, ctx);
+
+        return new BoundSwitchStatement(value, cases, defaultBlock, switchStmt.Span);
     }
 
     // ── pipelines ──────────────────────────────────────────────
@@ -434,6 +529,51 @@ public static class Lowerer
                 Span: invoke.Span,
                 Type: BoundType.Dynamic),
 
+        ThrowArgumentSyntax thr =>
+            new BoundThrowExpression(
+                Value: thr.Value is null ? null : LowerExpression(thr.Value, ctx),
+                Span: thr.Span,
+                Type: BoundType.Dynamic),
+
+        MatchArgumentSyntax match => BuildMatchExpression(match, ctx),
+
+        NewObjectArgumentSyntax newObj =>
+            new BoundNewObject(
+                TypeName: newObj.TypeName,
+                Arguments: BuildArgumentList(newObj.Arguments, ctx),
+                Span: newObj.Span,
+                Type: BoundType.Dynamic),
+
+        MethodCallArgumentSyntax method =>
+            new BoundMethodCall(
+                Target: LowerExpression(method.Target, ctx),
+                MethodName: method.MethodName,
+                Arguments: BuildArgumentList(method.Arguments, ctx),
+                NullSafe: method.NullSafe,
+                Span: method.Span,
+                Type: BoundType.Dynamic),
+
+        StaticMethodCallArgumentSyntax staticCall =>
+            new BoundStaticMethodCall(
+                Path: staticCall.Path,
+                Arguments: BuildArgumentList(staticCall.Arguments, ctx),
+                Span: staticCall.Span,
+                Type: BoundType.Dynamic),
+
+        StaticMemberAccessArgumentSyntax staticMember =>
+            new BoundStaticMemberAccess(
+                Path: staticMember.Path,
+                Span: staticMember.Span,
+                Type: BoundType.Dynamic),
+
+        IndexAccessArgumentSyntax index =>
+            new BoundIndexAccess(
+                Target: LowerExpression(index.Target, ctx),
+                Index: LowerExpression(index.Index, ctx),
+                LookupKind: index.LookupKind,
+                Span: index.Span,
+                Type: BoundType.Dynamic),
+
         // Everything else stays dynamic for now.
         _ => new BoundDynamicExpression(expression, expression.Span),
     };
@@ -668,6 +808,53 @@ public static class Lowerer
             result.Add(LowerArgument(arg, ctx));
         }
         return result;
+    }
+
+    /// <summary>
+    /// Lowers a <c>match</c> expression. Each arm's body is lowered
+    /// as a <see cref="BoundBlock"/>; pipeline arms (<c>=&gt; expr</c>)
+    /// are wrapped as a single-statement block so the IL emitter
+    /// sees one consistent shape.
+    /// </summary>
+    private static BoundMatchExpression BuildMatchExpression(MatchArgumentSyntax match, LowerContext ctx)
+    {
+        var value = LowerExpression(match.Value, ctx);
+        var arms = new List<BoundMatchArm>(match.Arms.Count);
+        foreach (var arm in match.Arms)
+        {
+            var pattern = arm.Pattern is null ? null : LowerExpression(arm.Pattern, ctx);
+            var guard = arm.Guard is null ? null : LowerExpression(arm.Guard, ctx);
+
+            BoundBlock body;
+            switch (arm.Body)
+            {
+                case MatchArmBlockBodySyntax blockBody:
+                    body = LowerBlock(blockBody.Block, ctx);
+                    break;
+
+                case MatchArmPipelineBodySyntax pipelineBody:
+                    ctx.PushScope();
+                    try
+                    {
+                        var pipe = LowerPipeline(pipelineBody.Pipeline, ctx);
+                        var stmt = new BoundPipelineStatement(pipe, pipelineBody.Span);
+                        body = new BoundBlock(new BoundStatement[] { stmt }, pipelineBody.Span);
+                    }
+                    finally
+                    {
+                        ctx.PopScope();
+                    }
+                    break;
+
+                default:
+                    body = new BoundBlock(Array.Empty<BoundStatement>(), arm.Span);
+                    break;
+            }
+
+            arms.Add(new BoundMatchArm(pattern, guard, body, arm.IsWildcard, arm.Span));
+        }
+
+        return new BoundMatchExpression(value, arms, match.Span, BoundType.Dynamic);
     }
 
     private static BoundType InferLiteralType(object? value) => value switch

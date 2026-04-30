@@ -318,6 +318,177 @@ public sealed record BoundCallableInvocation(
     BoundType Type)
     : BoundExpression(Span, Type);
 
+// ─── Phase C-1: escape hatches (try/throw/return/match/switch) ────────
+
+/// <summary>
+/// <c>return [pipeline]</c>. The optional value is lowered as a
+/// pipeline (the same shape as <c>VariableDeclaration</c>'s
+/// initializer) so the IL emitter can hand it off verbatim. A null
+/// value means a bare <c>return</c>.
+/// </summary>
+public sealed record BoundReturnStatement(BoundPipeline? Value, TextSpan Span)
+    : BoundStatement(Span);
+
+/// <summary>
+/// <c>throw [pipeline]</c> as a statement. A null value re-throws the
+/// currently-handled exception (matches the parser's permissiveness).
+/// </summary>
+public sealed record BoundThrowStatement(BoundPipeline? Value, TextSpan Span)
+    : BoundStatement(Span);
+
+/// <summary>
+/// <c>throw expr</c> in expression position (e.g. inside a ternary).
+/// Evaluating raises the exception; the IL emitter must flag this
+/// expression as never returning so basic-block dead-code analysis is
+/// correct.
+/// </summary>
+public sealed record BoundThrowExpression(BoundExpression? Value, TextSpan Span, BoundType Type)
+    : BoundExpression(Span, Type);
+
+/// <summary>
+/// One <c>catch</c> clause attached to a <see cref="BoundTryStatement"/>.
+/// <see cref="Variable"/> is the symbol the exception binds to, or
+/// null if the parser produced <c>catch { ... }</c> with no name.
+/// </summary>
+public sealed record BoundCatchClause(
+    BoundSymbol? Variable,
+    BoundBlock Body,
+    TextSpan Span)
+    : BoundNode(Span);
+
+/// <summary>
+/// <c>try { … } catch [(name)] { … } finally { … }</c>. At least one
+/// of <see cref="Catch"/> / <see cref="Finally"/> is non-null (the
+/// parser enforces this).
+/// </summary>
+public sealed record BoundTryStatement(
+    BoundBlock TryBlock,
+    BoundCatchClause? Catch,
+    BoundBlock? Finally,
+    TextSpan Span)
+    : BoundStatement(Span);
+
+/// <summary>
+/// One arm of a <see cref="BoundMatchExpression"/>. v1 keeps the
+/// pattern as a raw <see cref="BoundExpression"/> (the runtime tests
+/// it dynamically); refined pattern shapes can be carved later.
+/// <see cref="Pattern"/> is null for the wildcard arm.
+/// </summary>
+public sealed record BoundMatchArm(
+    BoundExpression? Pattern,
+    BoundExpression? Guard,
+    BoundBlock Body,
+    bool IsWildcard,
+    TextSpan Span)
+    : BoundNode(Span);
+
+/// <summary>
+/// <c>match $x { 1 =&gt; … ; default =&gt; … }</c> in expression
+/// position. The IL emitter compiles this as a chained series of
+/// equality (or pattern-test) branches.
+/// </summary>
+public sealed record BoundMatchExpression(
+    BoundExpression Value,
+    IReadOnlyList<BoundMatchArm> Arms,
+    TextSpan Span,
+    BoundType Type)
+    : BoundExpression(Span, Type);
+
+/// <summary>
+/// One <c>case</c> arm of a <see cref="BoundSwitchStatement"/>.
+/// <see cref="Pattern"/> is the value/pattern expression to test
+/// against, with an optional <see cref="Guard"/>.
+/// </summary>
+public sealed record BoundSwitchCase(
+    BoundExpression Pattern,
+    BoundExpression? Guard,
+    BoundBlock Body,
+    TextSpan Span)
+    : BoundNode(Span);
+
+/// <summary>
+/// <c>switch ($x) { case … { } default { } }</c>. Switch bodies are
+/// statements (no value); the IL emitter compiles to a chain or to
+/// the IL <c>switch</c> opcode where applicable.
+/// </summary>
+public sealed record BoundSwitchStatement(
+    BoundExpression Value,
+    IReadOnlyList<BoundSwitchCase> Cases,
+    BoundBlock? Default,
+    TextSpan Span)
+    : BoundStatement(Span);
+
+// ─── Phase C-2: types & object access ─────────────────────────────────
+
+/// <summary>
+/// <c>new TypeName(args)</c>. The runtime resolves <c>TypeName</c> at
+/// evaluation time today; the IL emitter will eventually look up a
+/// constructor by signature using the captured argument types.
+/// </summary>
+public sealed record BoundNewObject(
+    string TypeName,
+    IReadOnlyList<BoundArgument> Arguments,
+    TextSpan Span,
+    BoundType Type)
+    : BoundExpression(Span, Type);
+
+/// <summary>
+/// Instance method invocation: <c>$target.Method(args)</c>.
+/// <see cref="NullSafe"/> matches the parser's <c>?.</c> form.
+/// </summary>
+public sealed record BoundMethodCall(
+    BoundExpression Target,
+    string MethodName,
+    IReadOnlyList<BoundArgument> Arguments,
+    bool NullSafe,
+    TextSpan Span,
+    BoundType Type)
+    : BoundExpression(Span, Type);
+
+/// <summary>
+/// Static method invocation: <c>Math.Sqrt(2)</c>. <see cref="Path"/>
+/// is the dotted name (the parser does not split it).
+/// </summary>
+public sealed record BoundStaticMethodCall(
+    string Path,
+    IReadOnlyList<BoundArgument> Arguments,
+    TextSpan Span,
+    BoundType Type)
+    : BoundExpression(Span, Type);
+
+/// <summary>
+/// Static member read: <c>Math.PI</c>, <c>String.Empty</c>.
+/// <see cref="Path"/> is the dotted name.
+/// </summary>
+public sealed record BoundStaticMemberAccess(string Path, TextSpan Span, BoundType Type)
+    : BoundExpression(Span, Type);
+
+/// <summary>
+/// Indexer or key lookup: <c>$arr[0]</c>, <c>$dict["key"]</c>.
+/// <see cref="LookupKind"/> distinguishes integer indexing, string
+/// keys, slices, etc. (matches <see cref="Tosh.Language.Parsing.IndexLookupKind"/>).
+/// </summary>
+public sealed record BoundIndexAccess(
+    BoundExpression Target,
+    BoundExpression Index,
+    IndexLookupKind LookupKind,
+    TextSpan Span,
+    BoundType Type)
+    : BoundExpression(Span, Type);
+
+/// <summary>
+/// Member or indexed assignment: <c>$obj.x = …</c>, <c>$arr[0] = …</c>,
+/// <c>$obj.x += …</c>. The target is a BoundExpression; the runtime
+/// (and eventual IL emitter) inspects its shape to dispatch
+/// property/field/indexer setters appropriately.
+/// </summary>
+public sealed record BoundMemberAssignment(
+    BoundExpression Target,
+    string Operator,
+    BoundPipeline Value,
+    TextSpan Span)
+    : BoundStatement(Span);
+
 // ─── Pipelines ────────────────────────────────────────────────────────
 
 /// <summary>
