@@ -68,6 +68,12 @@ internal sealed class EmitterImpl
         typeof(object).GetMethod(nameof(object.ToString), Type.EmptyTypes)!;
     private static readonly MethodInfo s_objectEquals =
         typeof(object).GetMethod(nameof(object.Equals), new[] { typeof(object), typeof(object) })!;
+    private static readonly MethodInfo s_convertToInt32 =
+        typeof(Convert).GetMethod(nameof(Convert.ToInt32), new[] { typeof(object) })!;
+    private static readonly MethodInfo s_convertToInt64 =
+        typeof(Convert).GetMethod(nameof(Convert.ToInt64), new[] { typeof(object) })!;
+    private static readonly MethodInfo s_convertToDouble =
+        typeof(Convert).GetMethod(nameof(Convert.ToDouble), new[] { typeof(object) })!;
 
     public EmitterImpl(BoundUnit unit, string assemblyName)
     {
@@ -434,8 +440,8 @@ internal sealed class EmitterImpl
                 EmitCommandCallStatement(call);
                 return null;
 
-            case BoundCommandCall:
-                Diagnostics.Add("command calls cannot yet be used as values");
+            case BoundCommandCall call:
+                Diagnostics.Add($"command call cannot yet be used as a value: '{call.Name}'");
                 return null;
 
             default:
@@ -735,6 +741,18 @@ internal sealed class EmitterImpl
             case ">":
                 EmitComparison(l, r, OpCodes.Cgt);
                 return typeof(bool);
+            case "<=":
+                // !(l > r)
+                EmitComparison(l, r, OpCodes.Cgt);
+                _il.Emit(OpCodes.Ldc_I4_0);
+                _il.Emit(OpCodes.Ceq);
+                return typeof(bool);
+            case ">=":
+                // !(l < r)
+                EmitComparison(l, r, OpCodes.Clt);
+                _il.Emit(OpCodes.Ldc_I4_0);
+                _il.Emit(OpCodes.Ceq);
+                return typeof(bool);
 
             default:
                 Diagnostics.Add($"unsupported binary operator: '{binOp.Operator}'");
@@ -841,6 +859,13 @@ internal sealed class EmitterImpl
         switch (unOp.Operator)
         {
             case "-":
+                if (operandType == typeof(object))
+                {
+                    // Coerce to long; users wanting double semantics can
+                    // multiply by a double literal first.
+                    _il.Emit(OpCodes.Call, s_convertToInt64);
+                    operandType = typeof(long);
+                }
                 if (!IsNumericType(operandType))
                 {
                     Diagnostics.Add($"unary '-' on non-numeric: {operandType.Name}");
@@ -870,17 +895,40 @@ internal sealed class EmitterImpl
     private static bool IsNumericType(Type t) =>
         t == typeof(int) || t == typeof(long) || t == typeof(double);
 
+    /// <summary>
+    /// Like <see cref="IsNumericType"/> but also accepts
+    /// <see cref="object"/>. Object-typed slots show up whenever a
+    /// value comes from a function parameter or a function-call
+    /// result — v1 emits all of those as <c>object</c> for uniform
+    /// dispatch. We handle them in numeric contexts by coercing at
+    /// runtime via <see cref="Convert.ToInt32(object)"/> /
+    /// <see cref="Convert.ToInt64(object)"/> / <see
+    /// cref="Convert.ToDouble(object)"/>.
+    /// </summary>
+    private static bool IsNumericOrObject(Type t) =>
+        IsNumericType(t) || t == typeof(object);
+
     private static Type? CommonNumericType(Type left, Type right)
     {
-        if (!IsNumericType(left) || !IsNumericType(right)) return null;
+        if (!IsNumericOrObject(left) || !IsNumericOrObject(right)) return null;
         if (left == typeof(double) || right == typeof(double)) return typeof(double);
         if (left == typeof(long) || right == typeof(long)) return typeof(long);
-        return typeof(int);
+        if (left == typeof(int) && right == typeof(int)) return typeof(int);
+        // At least one operand is object — default to long, the
+        // widest integer type that round-trips through Convert.ToInt64.
+        return typeof(long);
     }
 
     private void ConvertNumeric(Type from, Type to)
     {
         if (from == to) return;
+        if (from == typeof(object))
+        {
+            if (to == typeof(int)) _il.Emit(OpCodes.Call, s_convertToInt32);
+            else if (to == typeof(long)) _il.Emit(OpCodes.Call, s_convertToInt64);
+            else if (to == typeof(double)) _il.Emit(OpCodes.Call, s_convertToDouble);
+            return;
+        }
         if (to == typeof(double)) _il.Emit(OpCodes.Conv_R8);
         else if (to == typeof(long)) _il.Emit(OpCodes.Conv_I8);
         else if (to == typeof(int)) _il.Emit(OpCodes.Conv_I4);

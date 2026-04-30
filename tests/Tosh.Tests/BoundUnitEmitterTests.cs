@@ -63,6 +63,17 @@ public sealed class BoundUnitEmitterTests : IClassFixture<ToshRuntimeFixture>
     [InlineData("func body() { var n = 7\necho $n }\nbody", "7")]
     [InlineData("func cond(x) { if ($x == 1) { echo one } else { echo other } }\ncond 1\ncond 2", "one\nother")]
     [InlineData("func late => helper\nfunc helper => echo ok\nlate", "ok")]
+    // arithmetic on parameters / function return values (object-typed)
+    [InlineData("func inc(n) { return $n + 1 }\necho (inc 5)", "6")]
+    [InlineData("func dbl(n) { return $n * 2 }\necho (dbl 7)", "14")]
+    [InlineData("func negate_it(n) { return (0 - $n) }\necho (negate_it 9)", "-9")]
+    [InlineData("func is_pos(n) { if ($n > 0) { return 1 } else { return 0 } }\necho (is_pos 5)\necho (is_pos -3)", "1\n0")]
+    [InlineData("func is_small(n) { if ($n <= 3) { echo small } else { echo big } }\nis_small 1\nis_small 9", "small\nbig")]
+    [InlineData("func eq5(n) { if ($n == 5) { echo yes } else { echo no } }\neq5 5\neq5 6", "yes\nno")]
+    // recursion
+    [InlineData("func fact(n) { if ($n <= 1) { return 1 } else { return $n * (fact ($n - 1)) } }\necho (fact 5)", "120")]
+    [InlineData("func fib(n) { if ($n < 2) { return $n } else { return (fib ($n - 1)) + (fib ($n - 2)) } }\necho (fib 10)", "55")]
+    [InlineData("func count_down(n) { if ($n > 0) { echo $n\ncount_down ($n - 1) } }\ncount_down 3", "3\n2\n1")]
     public void Compiles_and_runs(string source, string expected)
     {
         var output = CompileAndRun(source);
