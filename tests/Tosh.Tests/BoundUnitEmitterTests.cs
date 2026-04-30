@@ -50,6 +50,19 @@ public sealed class BoundUnitEmitterTests : IClassFixture<ToshRuntimeFixture>
     // while
     [InlineData("var i = 0\nwhile ($i < 3) { echo $i\n$i = $i + 1 }", "0\n1\n2")]
     [InlineData("var i = 3\nwhile ($i > 0) { $i = $i - 1 }\necho $i", "0")]
+    // user functions
+    [InlineData("func hello => echo hi\nhello", "hi")]
+    [InlineData("func say(msg) => echo $msg\nsay hello", "hello")]
+    [InlineData("func say(a, b) => echo $a $b\nsay one two", "one two")]
+    [InlineData("func greet(name) { echo $\"Hi {$name}!\" }\ngreet World", "Hi World!")]
+    [InlineData("func a => echo first\nfunc b => echo second\na\nb", "first\nsecond")]
+    [InlineData("func inner => echo deep\nfunc outer => inner\nouter", "deep")]
+    [InlineData("func twice(x) { echo $x\necho $x }\ntwice yo", "yo\nyo")]
+    [InlineData("func get() { return 42 }\necho (get)", "42")]
+    [InlineData("func id(x) { return $x }\necho (id hello)", "hello")]
+    [InlineData("func body() { var n = 7\necho $n }\nbody", "7")]
+    [InlineData("func cond(x) { if ($x == 1) { echo one } else { echo other } }\ncond 1\ncond 2", "one\nother")]
+    [InlineData("func late => helper\nfunc helper => echo ok\nlate", "ok")]
     public void Compiles_and_runs(string source, string expected)
     {
         var output = CompileAndRun(source);

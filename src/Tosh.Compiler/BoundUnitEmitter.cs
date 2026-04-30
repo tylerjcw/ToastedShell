@@ -52,8 +52,10 @@ internal sealed class EmitterImpl
     private readonly PersistedAssemblyBuilder _ab;
     private readonly TypeBuilder _program;
     private readonly MethodBuilder _main;
-    private readonly ILGenerator _il;
-    private readonly Dictionary<BoundSymbol, LocalSlot> _locals = new();
+    private ILGenerator _il;
+    private Dictionary<BoundSymbol, LocalSlot> _locals = new();
+    private Dictionary<BoundSymbol, int> _paramSlots = new();
+    private readonly Dictionary<string, UserFunction> _userFunctions = new(StringComparer.Ordinal);
     public List<string> Diagnostics { get; } = new();
 
     private static readonly MethodInfo s_writeLineString =
@@ -88,12 +90,102 @@ internal sealed class EmitterImpl
 
     public void Run()
     {
+        // Pre-pass: declare a MethodBuilder for every top-level
+        // function definition so call sites can resolve them even
+        // when the call appears textually before the definition.
         foreach (var statement in _unit.Root.Statements)
         {
+            if (statement is BoundFunctionDefinition func)
+            {
+                DeclareUserFunction(func);
+            }
+        }
+
+        // Main pass: top-level statements go into Main; function
+        // definitions are emitted into their own MethodBuilders and
+        // skipped here.
+        foreach (var statement in _unit.Root.Statements)
+        {
+            if (statement is BoundFunctionDefinition func)
+            {
+                EmitUserFunctionBody(func);
+                continue;
+            }
             EmitStatement(statement);
         }
         _il.Emit(OpCodes.Ret);
         _program.CreateType();
+    }
+
+    private void DeclareUserFunction(BoundFunctionDefinition func)
+    {
+        if (func.Captures.Count > 0)
+        {
+            Diagnostics.Add($"function '{func.Name}' captures outer variables (closures unsupported)");
+            return;
+        }
+        if (_userFunctions.ContainsKey(func.Name))
+        {
+            Diagnostics.Add($"duplicate function definition: '{func.Name}'");
+            return;
+        }
+        foreach (var p in func.Parameters)
+        {
+            if (p.IsRest || p.IsOptional || p.Default is not null)
+            {
+                Diagnostics.Add($"function '{func.Name}' uses unsupported parameter shape ('{p.Name}')");
+                return;
+            }
+        }
+
+        var paramTypes = new Type[func.Parameters.Count];
+        for (var i = 0; i < paramTypes.Length; i++) paramTypes[i] = typeof(object);
+        var method = _program.DefineMethod(
+            $"Func_{func.Name}",
+            MethodAttributes.Public | MethodAttributes.Static,
+            typeof(object),
+            paramTypes);
+        for (var i = 0; i < func.Parameters.Count; i++)
+        {
+            method.DefineParameter(i + 1, ParameterAttributes.None, func.Parameters[i].Name);
+        }
+        _userFunctions[func.Name] = new UserFunction(method, func);
+    }
+
+    private void EmitUserFunctionBody(BoundFunctionDefinition func)
+    {
+        if (!_userFunctions.TryGetValue(func.Name, out var entry) || entry.Definition != func)
+        {
+            // Declaration was rejected (closure / duplicate / bad params).
+            return;
+        }
+
+        var savedIl = _il;
+        var savedLocals = _locals;
+        var savedParams = _paramSlots;
+        try
+        {
+            _il = entry.Method.GetILGenerator();
+            _locals = new();
+            _paramSlots = new();
+            for (var i = 0; i < func.Parameters.Count; i++)
+            {
+                _paramSlots[func.Parameters[i].Symbol] = i;
+            }
+            foreach (var stmt in func.Body.Statements)
+            {
+                EmitStatement(stmt);
+            }
+            // Implicit `return null` for fall-through.
+            _il.Emit(OpCodes.Ldnull);
+            _il.Emit(OpCodes.Ret);
+        }
+        finally
+        {
+            _il = savedIl;
+            _locals = savedLocals;
+            _paramSlots = savedParams;
+        }
     }
 
     public void SerializeTo(Stream output)
@@ -138,6 +230,17 @@ internal sealed class EmitterImpl
                 EmitWhileStatement(whileStmt);
                 break;
 
+            case BoundReturnStatement ret:
+                EmitReturnStatement(ret);
+                break;
+
+            case BoundFunctionDefinition:
+                // Nested function definitions are not yet supported.
+                // Top-level ones are handled by Run() before reaching
+                // this switch.
+                Diagnostics.Add("nested function definitions are not supported");
+                break;
+
             default:
                 Diagnostics.Add($"unsupported statement: {statement.GetType().Name}");
                 break;
@@ -180,6 +283,11 @@ internal sealed class EmitterImpl
         if (assign.Operator != "=")
         {
             Diagnostics.Add($"unsupported assignment operator: '{assign.Operator}'");
+            return;
+        }
+        if (assign.Symbol is not null && _paramSlots.ContainsKey(assign.Symbol))
+        {
+            Diagnostics.Add($"cannot reassign parameter '{assign.Name}'");
             return;
         }
         if (assign.Symbol is null || !_locals.TryGetValue(assign.Symbol, out var slot))
@@ -270,6 +378,25 @@ internal sealed class EmitterImpl
         _il.MarkLabel(endLabel);
     }
 
+    private void EmitReturnStatement(BoundReturnStatement ret)
+    {
+        if (ret.Value is null)
+        {
+            _il.Emit(OpCodes.Ldnull);
+            _il.Emit(OpCodes.Ret);
+            return;
+        }
+        var t = EmitPipelineAsValue(ret.Value);
+        if (t is null)
+        {
+            _il.Emit(OpCodes.Ldnull);
+            _il.Emit(OpCodes.Ret);
+            return;
+        }
+        BoxIfValueType(t);
+        _il.Emit(OpCodes.Ret);
+    }
+
     private void EmitBlock(BoundBlock block)
     {
         foreach (var statement in block.Statements)
@@ -300,6 +427,9 @@ internal sealed class EmitterImpl
                 }
                 return EmitExpression(exprStage.Value);
 
+            case BoundCommandCall call when _userFunctions.ContainsKey(call.Name):
+                return EmitUserFunctionCall(call, asStatement);
+
             case BoundCommandCall call when asStatement:
                 EmitCommandCallStatement(call);
                 return null;
@@ -315,6 +445,44 @@ internal sealed class EmitterImpl
     }
 
     private Type? EmitPipelineAsValue(BoundPipeline pipeline) => EmitPipeline(pipeline, asStatement: false);
+
+    /// <summary>
+    /// Emits a call to a user-defined function. Each argument is
+    /// boxed to <see cref="object"/> (the uniform parameter type for
+    /// v1). Statement context pops the returned object; value
+    /// context returns <see cref="object"/>.
+    /// </summary>
+    private Type? EmitUserFunctionCall(BoundCommandCall call, bool asStatement)
+    {
+        var entry = _userFunctions[call.Name];
+        var expected = entry.Definition.Parameters.Count;
+        if (call.Arguments.Count != expected)
+        {
+            Diagnostics.Add(
+                $"function '{call.Name}' expects {expected} argument(s), got {call.Arguments.Count}");
+            return null;
+        }
+        for (var i = 0; i < call.Arguments.Count; i++)
+        {
+            var arg = call.Arguments[i];
+            if (arg.IsSplat || arg.Name is not null)
+            {
+                Diagnostics.Add(
+                    $"function '{call.Name}': splat/named arguments not yet supported");
+                return null;
+            }
+            var argType = EmitExpression(arg.Value);
+            if (argType is null) return null;
+            BoxIfValueType(argType);
+        }
+        _il.Emit(OpCodes.Call, entry.Method);
+        if (asStatement)
+        {
+            _il.Emit(OpCodes.Pop);
+            return null;
+        }
+        return typeof(object);
+    }
 
     private void EmitCommandCallStatement(BoundCommandCall call)
     {
@@ -432,6 +600,11 @@ internal sealed class EmitterImpl
 
     private Type? EmitVariableReference(BoundVariableReference varRef)
     {
+        if (varRef.Symbol is not null && _paramSlots.TryGetValue(varRef.Symbol, out var paramIndex))
+        {
+            _il.Emit(OpCodes.Ldarg, paramIndex);
+            return typeof(object);
+        }
         if (varRef.Symbol is null || !_locals.TryGetValue(varRef.Symbol, out var slot))
         {
             Diagnostics.Add($"unresolved variable: {varRef.Name}");
@@ -726,4 +899,6 @@ internal sealed class EmitterImpl
     }
 
     private readonly record struct LocalSlot(LocalBuilder Local, Type Type);
+
+    private readonly record struct UserFunction(MethodBuilder Method, BoundFunctionDefinition Definition);
 }
