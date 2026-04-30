@@ -44,7 +44,8 @@ public static class Binder
     public static IReadOnlyList<ToshDiagnostic> Bind(
         ParseResult parseResult,
         ShellCommandRegistry commandRegistry,
-        bool isInteractive = false)
+        bool isInteractive = false,
+        Func<string, bool>? isExecutableOnPath = null)
     {
         ArgumentNullException.ThrowIfNull(parseResult);
         ArgumentNullException.ThrowIfNull(commandRegistry);
@@ -58,6 +59,7 @@ public static class Binder
             commandRegistry,
             localFunctions,
             isInteractive,
+            isExecutableOnPath ?? IsExecutableOnPath,
             new List<ToshDiagnostic>());
 
         VisitStatement(parseResult.Statement, context);
@@ -393,6 +395,15 @@ public static class Binder
         var suggestions = FindSuggestions(name, context.CommandRegistry);
         if (suggestions.Count == 0) return; // Could be an external; defer silently.
 
+        // Before flagging as a possible typo, probe $PATH. If an
+        // executable with this exact name exists, the user clearly
+        // intends to invoke it as an external program — suppressing
+        // the diagnostic prevents false positives for things like
+        // `dotnet`, `git`, `tar`, `wget` that aren't builtins but are
+        // perfectly valid commands on $PATH. Probing is cached so the
+        // cost is paid at most once per name per process.
+        if (context.IsExecutableOnPath(name)) return;
+
         context.Diagnostics.Add(new ToshDiagnostic(
             Code: "tosh.bind.unknown_command",
             Title: $"Command '{name}' is not a registered builtin or function declared in this source.",
@@ -412,6 +423,67 @@ public static class Binder
         if (name.Contains('/')) return true;
         if (OperatingSystem.IsWindows() && (name.Contains('\\') || (name.Length >= 2 && name[1] == ':')))
             return true;
+        return false;
+    }
+
+    // Cache of name → "is on PATH?" results. Bounded only by the
+    // distinct command names seen across a process lifetime, which
+    // is small in practice. The lookup is read-mostly so a plain
+    // dictionary with a lock is more than fast enough.
+    private static readonly Dictionary<string, bool> s_pathProbeCache = new(StringComparer.Ordinal);
+    private static readonly object s_pathProbeLock = new();
+
+    /// <summary>
+    /// Returns true if an executable with the given name exists on
+    /// <c>$PATH</c>. The result is cached per process; we do not
+    /// invalidate the cache when <c>$PATH</c> changes — startup
+    /// invocations dominate, and a tosh restart is cheap.
+    /// </summary>
+    private static bool IsExecutableOnPath(string name)
+    {
+        if (string.IsNullOrEmpty(name)) return false;
+
+        lock (s_pathProbeLock)
+        {
+            if (s_pathProbeCache.TryGetValue(name, out var cached)) return cached;
+        }
+
+        var found = ProbePath(name);
+
+        lock (s_pathProbeLock)
+        {
+            s_pathProbeCache[name] = found;
+        }
+        return found;
+    }
+
+    private static bool ProbePath(string name)
+    {
+        var path = Environment.GetEnvironmentVariable("PATH");
+        if (string.IsNullOrEmpty(path)) return false;
+
+        var separator = OperatingSystem.IsWindows() ? ';' : ':';
+        var extensions = OperatingSystem.IsWindows()
+            ? (Environment.GetEnvironmentVariable("PATHEXT") ?? ".COM;.EXE;.BAT;.CMD")
+                .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            : new[] { string.Empty };
+
+        foreach (var dir in path.Split(separator, StringSplitOptions.RemoveEmptyEntries))
+        {
+            foreach (var ext in extensions)
+            {
+                string candidate;
+                try
+                {
+                    candidate = Path.Combine(dir, name + ext);
+                }
+                catch
+                {
+                    continue;
+                }
+                if (File.Exists(candidate)) return true;
+            }
+        }
         return false;
     }
 
@@ -481,5 +553,6 @@ public static class Binder
         ShellCommandRegistry CommandRegistry,
         HashSet<string> LocalFunctions,
         bool IsInteractive,
+        Func<string, bool> IsExecutableOnPath,
         List<ToshDiagnostic> Diagnostics);
 }

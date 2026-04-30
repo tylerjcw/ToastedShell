@@ -31,7 +31,7 @@ public sealed class BinderTests : IClassFixture<ToshRuntimeFixture>
     public void Bind_returns_no_diagnostics_for_registered_builtins()
     {
         var parse = ParseSource("ls | where _ != null | first");
-        var diagnostics = Binder.Bind(parse, _runtime.Commands);
+        var diagnostics = Binder.Bind(parse, _runtime.Commands, isExecutableOnPath: _ => false);
         Assert.Empty(diagnostics);
     }
 
@@ -43,7 +43,7 @@ public sealed class BinderTests : IClassFixture<ToshRuntimeFixture>
         // from 'flat-map' is too far. The known builtin is 'flat-map';
         // 'flatamp' is distance 2 → matches threshold for length > 4.
         var parse = ParseSource("[1,2,3] | flatmap { _ }");
-        var diagnostics = Binder.Bind(parse, _runtime.Commands);
+        var diagnostics = Binder.Bind(parse, _runtime.Commands, isExecutableOnPath: _ => false);
 
         Assert.NotEmpty(diagnostics);
         var diag = diagnostics[0];
@@ -58,7 +58,7 @@ public sealed class BinderTests : IClassFixture<ToshRuntimeFixture>
     {
         // 'lz' (length 2) → threshold 1 → matches 'ls' (distance 1).
         var parse = ParseSource("lz");
-        var diagnostics = Binder.Bind(parse, _runtime.Commands);
+        var diagnostics = Binder.Bind(parse, _runtime.Commands, isExecutableOnPath: _ => false);
 
         Assert.NotEmpty(diagnostics);
         Assert.Contains("ls", diagnostics[0].Label!, StringComparison.Ordinal);
@@ -69,7 +69,7 @@ public sealed class BinderTests : IClassFixture<ToshRuntimeFixture>
     {
         // Defer to runtime — could be an external on PATH.
         var parse = ParseSource("totally-unique-name-with-no-similar-builtin");
-        var diagnostics = Binder.Bind(parse, _runtime.Commands);
+        var diagnostics = Binder.Bind(parse, _runtime.Commands, isExecutableOnPath: _ => false);
         Assert.Empty(diagnostics);
     }
 
@@ -77,7 +77,7 @@ public sealed class BinderTests : IClassFixture<ToshRuntimeFixture>
     public void Bind_skips_explicit_paths()
     {
         var parse = ParseSource("./flatmap arg");
-        var diagnostics = Binder.Bind(parse, _runtime.Commands);
+        var diagnostics = Binder.Bind(parse, _runtime.Commands, isExecutableOnPath: _ => false);
         Assert.Empty(diagnostics);
     }
 
@@ -85,7 +85,7 @@ public sealed class BinderTests : IClassFixture<ToshRuntimeFixture>
     public void Bind_skips_dollar_prefixed_variable_invocations()
     {
         var parse = ParseSource("$callable arg1 arg2");
-        var diagnostics = Binder.Bind(parse, _runtime.Commands);
+        var diagnostics = Binder.Bind(parse, _runtime.Commands, isExecutableOnPath: _ => false);
         Assert.Empty(diagnostics);
     }
 
@@ -96,7 +96,7 @@ public sealed class BinderTests : IClassFixture<ToshRuntimeFixture>
             func myproc(x) { echo $x }
             myproc 42
             """);
-        var diagnostics = Binder.Bind(parse, _runtime.Commands);
+        var diagnostics = Binder.Bind(parse, _runtime.Commands, isExecutableOnPath: _ => false);
         Assert.Empty(diagnostics);
     }
 
@@ -107,7 +107,7 @@ public sealed class BinderTests : IClassFixture<ToshRuntimeFixture>
             myproc 42
             func myproc(x) { echo $x }
             """);
-        var diagnostics = Binder.Bind(parse, _runtime.Commands);
+        var diagnostics = Binder.Bind(parse, _runtime.Commands, isExecutableOnPath: _ => false);
         Assert.Empty(diagnostics);
     }
 
@@ -118,7 +118,7 @@ public sealed class BinderTests : IClassFixture<ToshRuntimeFixture>
         var parse = ParseSource("""
             func greet(n) { eccho $n }
             """);
-        var diagnostics = Binder.Bind(parse, _runtime.Commands);
+        var diagnostics = Binder.Bind(parse, _runtime.Commands, isExecutableOnPath: _ => false);
         Assert.NotEmpty(diagnostics);
         Assert.Contains("echo", diagnostics[0].Label!, StringComparison.Ordinal);
     }
@@ -127,7 +127,7 @@ public sealed class BinderTests : IClassFixture<ToshRuntimeFixture>
     public void Bind_recurses_into_block_argument_of_pipeline_command()
     {
         var parse = ParseSource("[1,2,3] | each { eccho _ }");
-        var diagnostics = Binder.Bind(parse, _runtime.Commands);
+        var diagnostics = Binder.Bind(parse, _runtime.Commands, isExecutableOnPath: _ => false);
         Assert.NotEmpty(diagnostics);
         Assert.Contains("echo", diagnostics[0].Label!, StringComparison.Ordinal);
     }
@@ -287,7 +287,7 @@ public sealed class BinderTests : IClassFixture<ToshRuntimeFixture>
             var name = "alice"
             echo $name
             """);
-        var diags = Binder.Bind(parse, _runtime.Commands);
+        var diags = Binder.Bind(parse, _runtime.Commands, isExecutableOnPath: _ => false);
         Assert.DoesNotContain(diags, d => d.Code == "tosh.bind.unknown_variable");
     }
 
@@ -299,7 +299,7 @@ public sealed class BinderTests : IClassFixture<ToshRuntimeFixture>
             var name = "alice"
             echo $nme
             """);
-        var diags = Binder.Bind(parse, _runtime.Commands);
+        var diags = Binder.Bind(parse, _runtime.Commands, isExecutableOnPath: _ => false);
         var diag = Assert.Single(diags, d => d.Code == "tosh.bind.unknown_variable");
         Assert.Contains("$name", diag.Label!, StringComparison.Ordinal);
     }
@@ -310,7 +310,7 @@ public sealed class BinderTests : IClassFixture<ToshRuntimeFixture>
         // No declared name remotely close to 'completely_unknown' — likely
         // an externally-set variable; defer to runtime.
         var parse = ParseSource("echo $completely_unknown");
-        var diags = Binder.Bind(parse, _runtime.Commands);
+        var diags = Binder.Bind(parse, _runtime.Commands, isExecutableOnPath: _ => false);
         Assert.DoesNotContain(diags, d => d.Code == "tosh.bind.unknown_variable");
     }
 
@@ -322,7 +322,7 @@ public sealed class BinderTests : IClassFixture<ToshRuntimeFixture>
             echo $tosh.Config.Shell.Dirs
             echo $args
             """);
-        var diags = Binder.Bind(parse, _runtime.Commands);
+        var diags = Binder.Bind(parse, _runtime.Commands, isExecutableOnPath: _ => false);
         Assert.DoesNotContain(diags, d => d.Code == "tosh.bind.unknown_variable");
     }
 
@@ -332,7 +332,7 @@ public sealed class BinderTests : IClassFixture<ToshRuntimeFixture>
         var parse = ParseSource("""
             func greet(name) { echo $name }
             """);
-        var diags = Binder.Bind(parse, _runtime.Commands);
+        var diags = Binder.Bind(parse, _runtime.Commands, isExecutableOnPath: _ => false);
         Assert.DoesNotContain(diags, d => d.Code == "tosh.bind.unknown_variable");
     }
 
@@ -342,7 +342,7 @@ public sealed class BinderTests : IClassFixture<ToshRuntimeFixture>
         var parse = ParseSource("""
             func greet(name) { echo $nme }
             """);
-        var diags = Binder.Bind(parse, _runtime.Commands);
+        var diags = Binder.Bind(parse, _runtime.Commands, isExecutableOnPath: _ => false);
         Assert.Contains(diags, d => d.Code == "tosh.bind.unknown_variable");
     }
 
@@ -352,7 +352,7 @@ public sealed class BinderTests : IClassFixture<ToshRuntimeFixture>
         var parse = ParseSource("""
             for $item in [1, 2, 3] { echo $item }
             """);
-        var diags = Binder.Bind(parse, _runtime.Commands);
+        var diags = Binder.Bind(parse, _runtime.Commands, isExecutableOnPath: _ => false);
         Assert.DoesNotContain(diags, d => d.Code == "tosh.bind.unknown_variable");
     }
 
@@ -362,7 +362,7 @@ public sealed class BinderTests : IClassFixture<ToshRuntimeFixture>
         var parse = ParseSource("""
             try { echo hi } catch $err { echo $err }
             """);
-        var diags = Binder.Bind(parse, _runtime.Commands);
+        var diags = Binder.Bind(parse, _runtime.Commands, isExecutableOnPath: _ => false);
         Assert.DoesNotContain(diags, d => d.Code == "tosh.bind.unknown_variable");
     }
 
@@ -374,7 +374,7 @@ public sealed class BinderTests : IClassFixture<ToshRuntimeFixture>
             var person = { name: "alice", age: 30 }
             echo $person.notarealfield.namee
             """);
-        var diags = Binder.Bind(parse, _runtime.Commands);
+        var diags = Binder.Bind(parse, _runtime.Commands, isExecutableOnPath: _ => false);
         Assert.DoesNotContain(diags, d => d.Code == "tosh.bind.unknown_variable");
     }
 
@@ -385,7 +385,7 @@ public sealed class BinderTests : IClassFixture<ToshRuntimeFixture>
             var nums = [1, 2, 3]
             echo $nums | where $_ > 1
             """);
-        var diags = Binder.Bind(parse, _runtime.Commands);
+        var diags = Binder.Bind(parse, _runtime.Commands, isExecutableOnPath: _ => false);
         Assert.DoesNotContain(diags, d => d.Code == "tosh.bind.unknown_variable");
     }
 
@@ -399,7 +399,7 @@ public sealed class BinderTests : IClassFixture<ToshRuntimeFixture>
             var name = "alice"
             echo $"hello, {$nme}"
             """);
-        var diags = Binder.Bind(parse, _runtime.Commands);
+        var diags = Binder.Bind(parse, _runtime.Commands, isExecutableOnPath: _ => false);
         Assert.Contains(diags, d => d.Code == "tosh.bind.unknown_variable");
     }
     [Fact]
@@ -412,7 +412,7 @@ public sealed class BinderTests : IClassFixture<ToshRuntimeFixture>
             echo $"hello, {$nme}"
             """;
         var parse = ParseSource(source);
-        var diags = Binder.Bind(parse, _runtime.Commands);
+        var diags = Binder.Bind(parse, _runtime.Commands, isExecutableOnPath: _ => false);
         var diag = Assert.Single(diags, d => d.Code == "tosh.bind.unknown_variable");
 
         Assert.NotNull(diag.Span);
@@ -427,7 +427,7 @@ public sealed class BinderTests : IClassFixture<ToshRuntimeFixture>
             var [a, b] = [1, 2]
             echo $a $b
             """);
-        var diags = Binder.Bind(parse, _runtime.Commands);
+        var diags = Binder.Bind(parse, _runtime.Commands, isExecutableOnPath: _ => false);
         Assert.DoesNotContain(diags, d => d.Code == "tosh.bind.unknown_variable");
     }
 
@@ -437,7 +437,7 @@ public sealed class BinderTests : IClassFixture<ToshRuntimeFixture>
         var parse = ParseSource("""
             [1, 2, 3] | each |x| { echo $x }
             """);
-        var diags = Binder.Bind(parse, _runtime.Commands);
+        var diags = Binder.Bind(parse, _runtime.Commands, isExecutableOnPath: _ => false);
         Assert.DoesNotContain(diags, d => d.Code == "tosh.bind.unknown_variable");
     }
 
