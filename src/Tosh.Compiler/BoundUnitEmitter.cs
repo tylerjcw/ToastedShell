@@ -94,6 +94,25 @@ internal sealed class EmitterImpl
     private static readonly MethodInfo s_hostToEnumerable =
         s_toshHost.GetMethod(nameof(global::Tosh.Compiler.Runtime.ToshHost.ToEnumerable),
             new[] { typeof(object) })!;
+    private static readonly MethodInfo s_hostResolveCommand =
+        s_toshHost.GetMethod(nameof(global::Tosh.Compiler.Runtime.ToshHost.ResolveCommand),
+            new[] { typeof(string) })!;
+    private static readonly MethodInfo s_hostEmptyInput =
+        s_toshHost.GetMethod(nameof(global::Tosh.Compiler.Runtime.ToshHost.EmptyInput),
+            Type.EmptyTypes)!;
+    private static readonly MethodInfo s_hostRunStage =
+        s_toshHost.GetMethod(nameof(global::Tosh.Compiler.Runtime.ToshHost.RunStage),
+            new[] {
+                typeof(global::Tosh.Runtime.IShellCommand),
+                typeof(IAsyncEnumerable<object?>),
+                typeof(object[]),
+            })!;
+    private static readonly MethodInfo s_hostDrainStatement =
+        s_toshHost.GetMethod(nameof(global::Tosh.Compiler.Runtime.ToshHost.DrainStatement),
+            new[] { typeof(IAsyncEnumerable<object?>) })!;
+    private static readonly MethodInfo s_hostDrainValue =
+        s_toshHost.GetMethod(nameof(global::Tosh.Compiler.Runtime.ToshHost.DrainValue),
+            new[] { typeof(IAsyncEnumerable<object?>) })!;
 
     private static readonly Type s_listOfObject = typeof(List<object?>);
     private static readonly ConstructorInfo s_listCtor =
@@ -373,7 +392,7 @@ internal sealed class EmitterImpl
             "*=" => "*",
             "/=" => "/",
             "%=" => "%",
-            _    => null,
+            _ => null,
         };
         if (binaryOp is null)
         {
@@ -647,10 +666,14 @@ internal sealed class EmitterImpl
 
     private Type? EmitPipeline(BoundPipeline pipeline, bool asStatement)
     {
-        if (pipeline.Stages.Count != 1)
+        if (pipeline.Stages.Count == 0)
         {
-            Diagnostics.Add($"unsupported pipeline (stages={pipeline.Stages.Count})");
+            Diagnostics.Add("empty pipeline");
             return null;
+        }
+        if (pipeline.Stages.Count >= 2)
+        {
+            return EmitMultiStagePipeline(pipeline, asStatement);
         }
 
         var stage = pipeline.Stages[0];
@@ -682,6 +705,121 @@ internal sealed class EmitterImpl
     }
 
     private Type? EmitPipelineAsValue(BoundPipeline pipeline) => EmitPipeline(pipeline, asStatement: false);
+
+    /// <summary>
+    /// Emits IL for a 2+ stage pipeline. Each stage is dispatched
+    /// through <see cref="global::Tosh.Compiler.Runtime.ToshHost.RunStage"/>
+    /// which receives the previous stage's
+    /// <see cref="IAsyncEnumerable{T}"/> as input. The accumulator
+    /// is held in a single local of type <c>IAsyncEnumerable&lt;object?&gt;</c>
+    /// so each stage's IL is short and uniform. The terminal call
+    /// is either <c>DrainStatement</c> (statement context) or
+    /// <c>DrainValue</c> (value context, returns
+    /// <see cref="List{T}"/>).
+    ///
+    /// v1 limitations:
+    ///   • First stage must be a command call (expression-first
+    ///     pipelines like <c>[1,2,3] | first 2</c> are deferred).
+    ///   • User-defined functions cannot be pipeline stages.
+    ///   • Block / splat / named arguments still surface as
+    ///     diagnostics (block support arrives in phase 2).
+    /// </summary>
+    private Type? EmitMultiStagePipeline(BoundPipeline pipeline, bool asStatement)
+    {
+        // Validate first stage shape (Phase 1 restriction).
+        if (pipeline.Stages[0] is not BoundCommandCall first)
+        {
+            Diagnostics.Add(
+                "expression-first pipelines (e.g. `[1,2,3] | first 2`) not yet supported");
+            return null;
+        }
+        if (_userFunctions.ContainsKey(first.Name))
+        {
+            Diagnostics.Add(
+                $"user function '{first.Name}' cannot start a pipeline yet");
+            return null;
+        }
+
+        // Reusable accumulator local: each stage replaces it.
+        var accLocal = _il.DeclareLocal(typeof(IAsyncEnumerable<object?>));
+
+        // Stage 0: ResolveCommand(name) → RunStage(cmd, EmptyInput(), args0)
+        _il.Emit(OpCodes.Ldstr, first.Name);
+        _il.Emit(OpCodes.Call, s_hostResolveCommand);
+        _il.Emit(OpCodes.Call, s_hostEmptyInput);
+        if (!EmitStageArgsArray(first)) return null;
+        _il.Emit(OpCodes.Call, s_hostRunStage);
+        _il.Emit(OpCodes.Stloc, accLocal);
+
+        // Stages 1..N-1: chain through RunStage(cmd, acc, args).
+        for (var i = 1; i < pipeline.Stages.Count; i++)
+        {
+            if (pipeline.Stages[i] is not BoundCommandCall stage)
+            {
+                Diagnostics.Add(
+                    $"non-command pipeline stage at position {i}: {pipeline.Stages[i].GetType().Name}");
+                return null;
+            }
+            if (_userFunctions.ContainsKey(stage.Name))
+            {
+                Diagnostics.Add(
+                    $"user function '{stage.Name}' cannot be a pipeline stage yet");
+                return null;
+            }
+
+            _il.Emit(OpCodes.Ldstr, stage.Name);
+            _il.Emit(OpCodes.Call, s_hostResolveCommand);
+            _il.Emit(OpCodes.Ldloc, accLocal);
+            if (!EmitStageArgsArray(stage)) return null;
+            _il.Emit(OpCodes.Call, s_hostRunStage);
+            _il.Emit(OpCodes.Stloc, accLocal);
+        }
+
+        // Drain.
+        _il.Emit(OpCodes.Ldloc, accLocal);
+        if (asStatement)
+        {
+            _il.Emit(OpCodes.Call, s_hostDrainStatement);
+            return null;
+        }
+        _il.Emit(OpCodes.Call, s_hostDrainValue);
+        return s_listOfObject;
+    }
+
+    /// <summary>
+    /// Pushes an <c>object[]</c> of evaluated, boxed arguments for
+    /// a single pipeline stage. Splat / named / block arguments are
+    /// not yet supported and surface as a diagnostic. Returns false
+    /// to signal the caller should abort emission.
+    /// </summary>
+    private bool EmitStageArgsArray(BoundCommandCall call)
+    {
+        _il.Emit(OpCodes.Ldc_I4, call.Arguments.Count);
+        _il.Emit(OpCodes.Newarr, typeof(object));
+        for (var i = 0; i < call.Arguments.Count; i++)
+        {
+            var arg = call.Arguments[i];
+            if (arg.IsSplat || arg.Name is not null)
+            {
+                Diagnostics.Add(
+                    $"command '{call.Name}': splat/named arguments not yet supported");
+                return false;
+            }
+            if (arg.Value is BoundBlockExpression)
+            {
+                Diagnostics.Add(
+                    $"command '{call.Name}': block arguments not yet supported in pipelines");
+                return false;
+            }
+            _il.Emit(OpCodes.Dup);
+            _il.Emit(OpCodes.Ldc_I4, i);
+            var argType = EmitExpression(arg.Value);
+            if (argType is null) return false;
+            BoxIfValueType(argType);
+            _il.Emit(OpCodes.Stelem_Ref);
+        }
+        return true;
+    }
 
     /// <summary>
     /// Emits a call to a user-defined function. Each argument is

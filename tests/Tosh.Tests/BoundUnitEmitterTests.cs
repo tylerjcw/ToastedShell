@@ -115,14 +115,32 @@ public sealed class BoundUnitEmitterTests : IClassFixture<ToshRuntimeFixture>
     }
 
     [Fact]
-    public void Reports_unsupported_pipeline()
+    public void Reports_pipeline_with_block_argument()
     {
-        // Multi-stage pipelines aren't lowered yet; the emitter
-        // surfaces a diagnostic instead of producing bogus IL.
-        var (output, result) = CompileAndRunWithDiagnostics("echo hi | echo bye");
+        // Block arguments to pipeline stages aren't lowered yet
+        // (Phase 2 of the multi-stage pipeline rollout).
+        var (output, result) = CompileAndRunWithDiagnostics(
+            "[1, 2, 3] | where { _ > 1 }");
         Assert.False(result.IsClean);
-        Assert.Contains(result.UnsupportedShapes, d => d.Contains("pipeline", StringComparison.Ordinal));
         Assert.Equal(string.Empty, output.Trim());
+    }
+
+    [Fact]
+    public void Multi_stage_pipeline_command_to_command()
+    {
+        // ls /etc | first 1 — exercises stage chaining: first stage
+        // produces multiple FileSystemInfo items, second narrows to
+        // one. We don't pin the exact name; we just assert one line.
+        var output = CompileAndRun("ls /etc | first 1");
+        var lines = output.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        Assert.Single(lines);
+    }
+
+    [Fact]
+    public void Multi_stage_pipeline_three_stages()
+    {
+        var output = CompileAndRun("ls /etc | first 5 | count");
+        Assert.Equal("5", output.Trim());
     }
 
     // ─── Runtime-host bridge dispatch ─────────────────────────────

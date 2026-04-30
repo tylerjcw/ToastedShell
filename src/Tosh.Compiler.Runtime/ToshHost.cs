@@ -135,16 +135,87 @@ public static class ToshHost
     private static (object? Last, List<object?> All) InvokeAndDrain(
         string name, object?[] args, bool printItems)
     {
-        var rt = Runtime;
-        if (!rt.Commands.TryGet(name, out var command))
+        var command = ResolveCommand(name);
+        var ctx = new CommandContext(Runtime, EmptyAsync(), args, default);
+        return DrainEnumerator(command.ExecuteAsync(ctx), printItems);
+    }
+
+    // ─── Multi-stage pipeline plumbing (Phase 1) ──────────────────
+
+    /// <summary>
+    /// Resolves a builtin command by name, throwing a clear error
+    /// when it isn't registered. Used by both the single-command
+    /// dispatch path and the per-stage pipeline path.
+    /// </summary>
+    public static IShellCommand ResolveCommand(string name)
+    {
+        if (!Runtime.Commands.TryGet(name, out var command))
         {
             throw new InvalidOperationException($"unknown command: '{name}'");
         }
+        return command;
+    }
 
-        var ctx = new CommandContext(rt, EmptyAsync(), args, default);
+    /// <summary>
+    /// Returns an empty <see cref="IAsyncEnumerable{T}"/> suitable
+    /// for seeding the first stage of a pipeline.
+    /// </summary>
+    public static IAsyncEnumerable<object?> EmptyInput() => EmptyAsync();
+
+    /// <summary>
+    /// Invokes <paramref name="command"/> as a pipeline stage with
+    /// <paramref name="input"/> piped in. Returns the lazy
+    /// <see cref="IAsyncEnumerable{T}"/> the command produces — the
+    /// emitter chains these stage by stage and only drains at the
+    /// pipeline's end.
+    /// </summary>
+    public static IAsyncEnumerable<object?> RunStage(
+        IShellCommand command,
+        IAsyncEnumerable<object?> input,
+        object?[] args)
+    {
+        var ctx = new CommandContext(
+            Runtime,
+            input,
+            args,
+            default,
+            Invocation: null,
+            IsPipelined: true,
+            ScopedTypeResolver: null,
+            PipelineExitStatusTracker: null,
+            BlockExecutor: Runtime.BlockExecutor);
+        return command.ExecuteAsync(ctx);
+    }
+
+    /// <summary>
+    /// Statement-context drain for a (potentially multi-stage)
+    /// pipeline. Walks <paramref name="input"/> synchronously and
+    /// formats each yielded item via the runtime's formatter to
+    /// <see cref="Console.Out"/>.
+    /// </summary>
+    public static void DrainStatement(IAsyncEnumerable<object?> input)
+    {
+        DrainEnumerator(input, printItems: true);
+    }
+
+    /// <summary>
+    /// Value-context drain. Always materializes to a
+    /// <see cref="List{T}"/>, even when nothing was yielded or when
+    /// only one item was produced — the emitter relies on the list
+    /// shape so call sites can treat <c>(cmd | first 3)</c> uniformly.
+    /// </summary>
+    public static List<object?> DrainValue(IAsyncEnumerable<object?> input)
+    {
+        var (_, all) = DrainEnumerator(input, printItems: false);
+        return all;
+    }
+
+    private static (object? Last, List<object?> All) DrainEnumerator(
+        IAsyncEnumerable<object?> source, bool printItems)
+    {
         var collected = new List<object?>();
         object? last = null;
-        var enumerator = command.ExecuteAsync(ctx).GetAsyncEnumerator();
+        var enumerator = source.GetAsyncEnumerator();
         try
         {
             while (enumerator.MoveNextAsync().AsTask().GetAwaiter().GetResult())
@@ -154,7 +225,7 @@ public static class ToshHost
                 collected.Add(current);
                 if (printItems)
                 {
-                    Console.WriteLine(rt.Formatter.Format(current));
+                    Console.WriteLine(Runtime.Formatter.Format(current));
                 }
             }
         }
