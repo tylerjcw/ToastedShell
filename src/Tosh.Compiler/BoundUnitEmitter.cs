@@ -236,6 +236,10 @@ internal sealed class EmitterImpl
                 EmitWhileStatement(whileStmt);
                 break;
 
+            case BoundForStatement forStmt:
+                EmitForStatement(forStmt);
+                break;
+
             case BoundReturnStatement ret:
                 EmitReturnStatement(ret);
                 break;
@@ -280,17 +284,14 @@ internal sealed class EmitterImpl
     /// <summary>
     /// Emits a reassignment <c>$x = ...</c>. Currently supports plain
     /// <c>=</c> on a previously-declared local whose stored type
-    /// matches (or can be implicitly converted from) the new value.
-    /// Compound operators (<c>+=</c>, <c>-=</c>, etc.) are deferred
-    /// to a future pass.
+    /// matches (or can be implicitly converted from) the new value,
+    /// plus the compound forms <c>+= -= *= /= %=</c>. The compound
+    /// forms are lowered to <c>$x = $x op rhs</c> at IL time, sharing
+    /// the numeric-coercion path with <see cref="EmitNumericArith"/>.
+    /// String <c>+=</c> falls into the string-concat branch.
     /// </summary>
     private void EmitVariableAssignment(BoundVariableAssignment assign)
     {
-        if (assign.Operator != "=")
-        {
-            Diagnostics.Add($"unsupported assignment operator: '{assign.Operator}'");
-            return;
-        }
         if (assign.Symbol is not null && _paramSlots.ContainsKey(assign.Symbol))
         {
             Diagnostics.Add($"cannot reassign parameter '{assign.Name}'");
@@ -302,16 +303,70 @@ internal sealed class EmitterImpl
             return;
         }
 
+        var op = assign.Operator;
+        if (op == "=")
+        {
+            EmitPlainAssignmentInto(slot, assign);
+            return;
+        }
+
+        // Compound assignment: load current value, emit RHS, combine,
+        // store. Mirrors EmitBinaryOperator's coercion rules.
+        var binaryOp = op switch
+        {
+            "+=" => "+",
+            "-=" => "-",
+            "*=" => "*",
+            "/=" => "/",
+            "%=" => "%",
+            _    => null,
+        };
+        if (binaryOp is null)
+        {
+            Diagnostics.Add($"unsupported assignment operator: '{op}'");
+            return;
+        }
+
+        _il.Emit(OpCodes.Ldloc, slot.Local);
+        var leftType = slot.Type;
+
+        // String += rhs → string.Concat(left, rhs.ToString()).
+        if (binaryOp == "+" && leftType == typeof(string))
+        {
+            var rhsStrType = EmitPipelineAsValue(assign.Value);
+            if (rhsStrType is null) { _il.Emit(OpCodes.Pop); return; }
+            ConvertToString(rhsStrType);
+            _il.Emit(OpCodes.Call, typeof(string).GetMethod(
+                nameof(string.Concat), new[] { typeof(string), typeof(string) })!);
+            _il.Emit(OpCodes.Stloc, slot.Local);
+            return;
+        }
+
+        var rhsType = EmitPipelineAsValue(assign.Value);
+        if (rhsType is null) { _il.Emit(OpCodes.Pop); return; }
+        var resultType = EmitNumericArith(binaryOp, leftType, rhsType);
+        if (resultType is null) return;
+        if (resultType != slot.Type)
+        {
+            ConvertNumeric(resultType, slot.Type);
+        }
+        _il.Emit(OpCodes.Stloc, slot.Local);
+    }
+
+    private void EmitPlainAssignmentInto(LocalSlot slot, BoundVariableAssignment assign)
+    {
         var producedType = EmitPipelineAsValue(assign.Value);
         if (producedType is null) return;
 
-        // Coerce numeric widening if needed; otherwise require an
-        // exact type match (until we grow a proper conversion table).
         if (producedType != slot.Type)
         {
             if (IsNumericType(producedType) && IsNumericType(slot.Type))
             {
                 ConvertNumeric(producedType, slot.Type);
+            }
+            else if (slot.Type == typeof(object))
+            {
+                BoxIfValueType(producedType);
             }
             else
             {
@@ -382,6 +437,71 @@ internal sealed class EmitterImpl
         EmitBlock(whileStmt.Body);
         _il.Emit(OpCodes.Br, topLabel);
         _il.MarkLabel(endLabel);
+    }
+
+    /// <summary>
+    /// Emits a <c>for var in source { … }</c> loop. v1 only handles
+    /// integer ranges with no explicit step:
+    ///   for $i in start..end { … }
+    /// where Start and End are evaluable to integers (or object that
+    /// can be coerced via <see cref="Convert.ToInt32(object)"/>).
+    /// Ranges are inclusive on both ends, matching
+    /// <c>ToshRange.Enumerate</c>. Other source shapes (array
+    /// literals, command pipelines, lazy sequences) record an
+    /// unsupported diagnostic so the caller can fall back.
+    /// </summary>
+    private void EmitForStatement(BoundForStatement forStmt)
+    {
+        if (forStmt.Source.Stages.Count != 1 ||
+            forStmt.Source.Stages[0] is not BoundExpressionStage stage ||
+            stage.Value is not BoundRange range)
+        {
+            Diagnostics.Add("for: only `start..end` ranges are supported");
+            return;
+        }
+        if (range.Step is not null)
+        {
+            Diagnostics.Add("for: ranges with explicit step are not yet supported");
+            return;
+        }
+        if (range.End is null)
+        {
+            Diagnostics.Add("for: open-ended ranges are not supported");
+            return;
+        }
+
+        var startType = EmitExpression(range.Start);
+        if (startType is null) return;
+        ConvertNumeric(startType, typeof(int));
+        var loopVarLocal = _il.DeclareLocal(typeof(int));
+        _il.Emit(OpCodes.Stloc, loopVarLocal);
+        _locals[forStmt.LoopVariable] = new LocalSlot(loopVarLocal, typeof(int));
+
+        var endType = EmitExpression(range.End);
+        if (endType is null) return;
+        ConvertNumeric(endType, typeof(int));
+        var endLocal = _il.DeclareLocal(typeof(int));
+        _il.Emit(OpCodes.Stloc, endLocal);
+
+        var topLabelF = _il.DefineLabel();
+        var endLabelF = _il.DefineLabel();
+        _il.MarkLabel(topLabelF);
+
+        // Exit when loopVar > end (inclusive upper bound).
+        _il.Emit(OpCodes.Ldloc, loopVarLocal);
+        _il.Emit(OpCodes.Ldloc, endLocal);
+        _il.Emit(OpCodes.Cgt);
+        _il.Emit(OpCodes.Brtrue, endLabelF);
+
+        EmitBlock(forStmt.Body);
+
+        // loopVar++
+        _il.Emit(OpCodes.Ldloc, loopVarLocal);
+        _il.Emit(OpCodes.Ldc_I4_1);
+        _il.Emit(OpCodes.Add);
+        _il.Emit(OpCodes.Stloc, loopVarLocal);
+        _il.Emit(OpCodes.Br, topLabelF);
+        _il.MarkLabel(endLabelF);
     }
 
     private void EmitReturnStatement(BoundReturnStatement ret)

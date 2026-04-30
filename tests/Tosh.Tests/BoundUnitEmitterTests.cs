@@ -74,6 +74,19 @@ public sealed class BoundUnitEmitterTests : IClassFixture<ToshRuntimeFixture>
     [InlineData("func fact(n) { if ($n <= 1) { return 1 } else { return $n * (fact ($n - 1)) } }\necho (fact 5)", "120")]
     [InlineData("func fib(n) { if ($n < 2) { return $n } else { return (fib ($n - 1)) + (fib ($n - 2)) } }\necho (fib 10)", "55")]
     [InlineData("func count_down(n) { if ($n > 0) { echo $n\ncount_down ($n - 1) } }\ncount_down 3", "3\n2\n1")]
+    // for loops over ranges
+    [InlineData("for i in (1..3) { echo $i }", "1\n2\n3")]
+    [InlineData("for i in (0..2) { echo $i }", "0\n1\n2")]
+    [InlineData("var sum = 0\nfor i in (1..5) { $sum = $sum + $i }\necho $sum", "15")]
+    [InlineData("for i in (1..3) { for j in (1..2) { echo $i $j } }", "1 1\n1 2\n2 1\n2 2\n3 1\n3 2")]
+    // compound assignment
+    [InlineData("var x = 10\n$x += 5\necho $x", "15")]
+    [InlineData("var x = 10\n$x -= 3\necho $x", "7")]
+    [InlineData("var x = 4\n$x *= 3\necho $x", "12")]
+    [InlineData("var x = 20\n$x /= 4\necho $x", "5")]
+    [InlineData("var x = 17\n$x %= 5\necho $x", "2")]
+    [InlineData("var s = \"foo\"\n$s += \"bar\"\necho $s", "foobar")]
+    [InlineData("var n = 0\nfor i in (1..10) { $n += $i }\necho $n", "55")]
     public void Compiles_and_runs(string source, string expected)
     {
         var output = CompileAndRun(source);
