@@ -59,6 +59,7 @@ TemporaryDependencyNodeTargetIdentifier=net10.0
 BinderTests.cs
 BoundEvaluatorParityTests.cs
 BoundEvaluatorTests.cs
+BoundUnitEmitterTests.cs
 CliInvocationResolverTests.cs
 CommandIntrospectionTests.cs
 ComplexCommandTests.cs
