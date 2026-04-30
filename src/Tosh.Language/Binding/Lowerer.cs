@@ -80,9 +80,12 @@ public static class Lowerer
         // VariableBinder semantics).
         var value = decl.Value is null ? null : LowerPipeline(decl.Value, ctx);
 
-        var declaredType = decl.TypeName is null
+        // Explicit `: T` annotations would override inference, but the
+        // parser doesn't carry resolved CLR types yet — leave them
+        // dynamic for now and fall through to value inference.
+        var declaredType = value is null
             ? BoundType.Dynamic
-            : BoundType.Dynamic; // explicit type annotations are dynamic for now
+            : TypeInferrer.InferPipelineValue(value);
         var symbol = ctx.DeclareLocal(decl.Name, declaredType);
 
         return new BoundVariableDeclaration(
@@ -113,6 +116,9 @@ public static class Lowerer
     private static BoundPipelineStage LowerPipelineStage(PipelineStageSyntax stage, LowerContext ctx) => stage switch
     {
         CommandSyntax command => LowerCommand(command, ctx),
+
+        ExpressionPipelineStageSyntax expr =>
+            new BoundExpressionStage(LowerExpression(expr.Expression, ctx), expr.Span),
 
         // Other stage shapes (subexpression stages, etc.) fall back
         // to a dynamic command so the evaluator-on-IR still has
@@ -182,11 +188,7 @@ public static class Lowerer
             new BoundLiteral(bareword.Value, bareword.Span, BoundType.FromClr(typeof(string))),
 
         VariableReferenceArgumentSyntax varRef =>
-            new BoundVariableReference(
-                Name: varRef.Name,
-                Symbol: ctx.LookupSymbol(varRef.Name),
-                Span: varRef.Span,
-                Type: BoundType.Dynamic),
+            BuildVariableReference(varRef, ctx),
 
         MemberAccessArgumentSyntax member =>
             new BoundMemberAccess(
@@ -196,32 +198,50 @@ public static class Lowerer
                 Span: member.Span,
                 Type: BoundType.Dynamic),
 
-        OperatorArgumentSyntax binary =>
-            new BoundBinaryOperator(
-                Left: LowerExpression(binary.Left, ctx),
-                Operator: binary.Operator,
-                Right: LowerExpression(binary.Right, ctx),
-                Span: binary.Span,
-                Type: BoundType.Dynamic),
+        OperatorArgumentSyntax binary => BuildBinary(binary, ctx),
 
-        UnaryOperatorArgumentSyntax unary =>
-            new BoundUnaryOperator(
-                Operator: unary.Operator,
-                Operand: LowerExpression(unary.Operand, ctx),
-                Span: unary.Span,
-                Type: BoundType.Dynamic),
+        UnaryOperatorArgumentSyntax unary => BuildUnary(unary, ctx),
 
-        RangeArgumentSyntax range =>
-            new BoundRange(
-                Start: LowerExpression(range.Start, ctx),
-                Step: range.Step is null ? null : LowerExpression(range.Step, ctx),
-                End: range.End is null ? null : LowerExpression(range.End, ctx),
-                Span: range.Span,
-                Type: BoundType.Dynamic),
+        RangeArgumentSyntax range => BuildRange(range, ctx),
 
         // Everything else stays dynamic for now.
         _ => new BoundDynamicExpression(expression, expression.Span),
     };
+
+    private static BoundVariableReference BuildVariableReference(VariableReferenceArgumentSyntax varRef, LowerContext ctx)
+    {
+        var symbol = ctx.LookupSymbol(varRef.Name);
+        // If we resolved the symbol, lift its declared type onto the
+        // reference so callers downstream see propagated typing.
+        var type = symbol?.DeclaredType ?? BoundType.Dynamic;
+        return new BoundVariableReference(varRef.Name, symbol, varRef.Span, type);
+    }
+
+    private static BoundBinaryOperator BuildBinary(OperatorArgumentSyntax binary, LowerContext ctx)
+    {
+        var left = LowerExpression(binary.Left, ctx);
+        var right = LowerExpression(binary.Right, ctx);
+        var type = TypeInferrer.InferBinary(left.Type, binary.Operator, right.Type);
+        return new BoundBinaryOperator(left, binary.Operator, right, binary.Span, type);
+    }
+
+    private static BoundUnaryOperator BuildUnary(UnaryOperatorArgumentSyntax unary, LowerContext ctx)
+    {
+        var operand = LowerExpression(unary.Operand, ctx);
+        var type = TypeInferrer.InferUnary(unary.Operator, operand.Type);
+        return new BoundUnaryOperator(unary.Operator, operand, unary.Span, type);
+    }
+
+    private static BoundRange BuildRange(RangeArgumentSyntax range, LowerContext ctx)
+    {
+        var start = LowerExpression(range.Start, ctx);
+        var step = range.Step is null ? null : LowerExpression(range.Step, ctx);
+        var end = range.End is null ? null : LowerExpression(range.End, ctx);
+        var type = end is null
+            ? BoundType.Dynamic
+            : TypeInferrer.InferRange(start.Type, step?.Type, end.Type);
+        return new BoundRange(start, step, end, range.Span, type);
+    }
 
     private static BoundType InferLiteralType(object? value) => value switch
     {

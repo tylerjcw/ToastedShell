@@ -166,6 +166,15 @@ public sealed record BoundCommandCall(
     : BoundPipelineStage(Span);
 
 /// <summary>
+/// A pipeline stage that's just an expression (e.g. <c>42</c> or
+/// <c>1..10</c> on its own line). Carrying a typed expression here
+/// lets <see cref="TypeInferrer"/> propagate types through value
+/// pipelines without modeling a synthetic command-call wrapper.
+/// </summary>
+public sealed record BoundExpressionStage(BoundExpression Value, TextSpan Span)
+    : BoundPipelineStage(Span);
+
+/// <summary>
 /// An argument passed to a command. Named arguments preserve their
 /// label; positional arguments leave <see cref="Name"/> null.
 /// </summary>
