@@ -1,5 +1,5 @@
 using Tosh.Cli;
-using Tosh.Core;
+using Tosh.Runtime;
 
 namespace Tosh.Tests;
 

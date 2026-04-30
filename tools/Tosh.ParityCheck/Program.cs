@@ -15,7 +15,7 @@
 
 using System.Reflection;
 using System.Text.RegularExpressions;
-using Tosh.Core;
+using Tosh.Runtime;
 using Tosh.Language;
 
 var repoRoot = LocateRepoRoot();
@@ -28,13 +28,13 @@ if (repoRoot is null)
 var warnings = new List<string>();
 
 try { CheckDocumentationCompleteness(repoRoot, warnings); }
-catch (Exception ex) { warnings.Add(FormatWarning(repoRoot, "src/Tosh.Core/Tosh.Core.csproj", "TOSH900", $"doc-completeness check threw: {ex.Message}")); }
+catch (Exception ex) { warnings.Add(FormatWarning(repoRoot, "src/Tosh.Runtime/Tosh.Runtime.csproj", "TOSH900", $"doc-completeness check threw: {ex.Message}")); }
 
 try { CheckParserNameRegistryParity(repoRoot, warnings); }
 catch (Exception ex) { warnings.Add(FormatWarning(repoRoot, "src/Tosh.Language/Parsing/ToshParser.cs", "TOSH901", $"parser-name parity check threw: {ex.Message}")); }
 
 try { CheckOperatorParity(repoRoot, warnings); }
-catch (Exception ex) { warnings.Add(FormatWarning(repoRoot, "src/Tosh.Core/OperatorEvaluator.cs", "TOSH902", $"operator parity check threw: {ex.Message}")); }
+catch (Exception ex) { warnings.Add(FormatWarning(repoRoot, "src/Tosh.Runtime/OperatorEvaluator.cs", "TOSH902", $"operator parity check threw: {ex.Message}")); }
 
 foreach (var w in warnings) Console.WriteLine(w);
 
@@ -62,7 +62,7 @@ static string FormatWarning(string repoRoot, string relativePath, string code, s
 
 static string ResolveSourceHint(string repoRoot, Type type)
 {
-    var asm = type.Assembly.GetName().Name ?? "Tosh.Core";
+    var asm = type.Assembly.GetName().Name ?? "Tosh.Runtime";
     foreach (var sub in new[] { "Commands", "" })
     {
         var rel = string.IsNullOrEmpty(sub)
@@ -137,7 +137,7 @@ static void CheckParserNameRegistryParity(string repoRoot, List<string> warnings
 
 static void CheckOperatorParity(string repoRoot, List<string> warnings)
 {
-    var evaluatorPath = Path.Combine(repoRoot, "src/Tosh.Core/OperatorEvaluator.cs");
+    var evaluatorPath = Path.Combine(repoRoot, "src/Tosh.Runtime/OperatorEvaluator.cs");
     if (!File.Exists(evaluatorPath)) return;
 
     var source = File.ReadAllText(evaluatorPath);
@@ -149,7 +149,7 @@ static void CheckOperatorParity(string repoRoot, List<string> warnings)
     {
         if (!binarySet.Contains(m))
         {
-            warnings.Add(FormatWarning(repoRoot, "src/Tosh.Core/OperatorEvaluator.cs", "TOSH005",
+            warnings.Add(FormatWarning(repoRoot, "src/Tosh.Runtime/OperatorEvaluator.cs", "TOSH005",
                 $"Match-only operator '{m}' is not present in EvaluateBinary."));
         }
     }

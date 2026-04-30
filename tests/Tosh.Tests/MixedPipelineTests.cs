@@ -1,4 +1,4 @@
-using Tosh.Core;
+using Tosh.Runtime;
 using Tosh.Language;
 
 namespace Tosh.Tests;
@@ -92,7 +92,7 @@ public sealed class MixedPipelineTests
         var results = await engine.ExecuteToListAsync("./" + commandName + " | type-of");
         var typeNames = results.Select(r => r?.ToString()!).ToArray();
 
-        Assert.All(typeNames, name => Assert.Equal("Tosh.Core.ShellTextLine", name));
+        Assert.All(typeNames, name => Assert.Equal("Tosh.Runtime.ShellTextLine", name));
     }
 
     [Fact]
@@ -119,7 +119,7 @@ public sealed class MixedPipelineTests
         var typeNames = results.Select(r => r?.ToString()!).ToArray();
 
         Assert.Equal(2, typeNames.Length);
-        Assert.All(typeNames, name => Assert.Equal("Tosh.Core.ShellTextLine", name));
+        Assert.All(typeNames, name => Assert.Equal("Tosh.Runtime.ShellTextLine", name));
     }
 
     [Fact]

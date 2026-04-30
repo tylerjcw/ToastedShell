@@ -1,5 +1,5 @@
 using System.Text.RegularExpressions;
-using Tosh.Core;
+using Tosh.Runtime;
 using Tosh.Language;
 
 namespace Tosh.Tests;

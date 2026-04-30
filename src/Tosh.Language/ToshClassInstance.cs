@@ -1,4 +1,4 @@
-using Tosh.Core;
+using Tosh.Runtime;
 using System.Runtime.CompilerServices;
 
 namespace Tosh.Language;

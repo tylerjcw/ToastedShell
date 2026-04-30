@@ -1,6 +1,6 @@
 using System.Globalization;
 using System.Numerics;
-using Tosh.Core;
+using Tosh.Runtime;
 using Tosh.Language;
 
 namespace Tosh.Tests;

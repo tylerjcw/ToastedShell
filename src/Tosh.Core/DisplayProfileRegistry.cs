@@ -54,10 +54,20 @@ public sealed class DisplayProfileRegistry
 
     public static DisplayProfileRegistry CreateDefault(DisplayPreferences? preferences = null)
     {
+        ToshRuntime.EnsureStdlibLoaded();
         var registry = new DisplayProfileRegistry();
-        BuiltInDisplayProfiles.RegisterDefaults(registry, preferences ?? new DisplayPreferences());
+        var prefs = preferences ?? new DisplayPreferences();
+        DefaultProfileRegistrar?.Invoke(registry, prefs);
         return registry;
     }
+
+    /// <summary>
+    /// Pluggable hook used by Tosh.Stdlib to register the built-in display
+    /// profiles. Tosh.Core defines no profiles of its own, so this is null when
+    /// only the runtime contract is loaded; Tosh.Stdlib wires it from a
+    /// [ModuleInitializer].
+    /// </summary>
+    public static Action<DisplayProfileRegistry, DisplayPreferences>? DefaultProfileRegistrar { get; set; }
 
     private static int GetSpecificity(Type actualType, Type candidateType)
     {

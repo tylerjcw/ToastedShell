@@ -2,7 +2,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using Tosh.Cli;
 using Tosh.Cli.Tui;
-using Tosh.Core;
+using Tosh.Runtime;
 using Tosh.Language;
 
 ConfigureConsoleEncoding();
@@ -382,7 +382,7 @@ static string QuoteArgument(string argument)
     return argument;
 }
 
-static void PrintStartupProfile(Tosh.Core.StartupProfileData profile)
+static void PrintStartupProfile(Tosh.Runtime.StartupProfileData profile)
 {
     Console.Error.WriteLine();
     Console.Error.WriteLine("Startup Profile");

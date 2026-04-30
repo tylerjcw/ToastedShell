@@ -137,8 +137,8 @@ public sealed class ReplLineEditorTests
     {
         var history = new[]
         {
-            new Tosh.Core.CommandHistoryEntry(12, "echo alpha", DateTimeOffset.Parse("2026-03-27T00:00:00Z")),
-            new Tosh.Core.CommandHistoryEntry(13, "echo beta gamma", DateTimeOffset.Parse("2026-03-27T00:01:00Z")),
+            new Tosh.Runtime.CommandHistoryEntry(12, "echo alpha", DateTimeOffset.Parse("2026-03-27T00:00:00Z")),
+            new Tosh.Runtime.CommandHistoryEntry(13, "echo beta gamma", DateTimeOffset.Parse("2026-03-27T00:01:00Z")),
         };
 
         Assert.Equal("echo beta gamma", ReplHistoryExpander.Expand("!!", history).Text);
@@ -159,7 +159,7 @@ public sealed class ReplLineEditorTests
     {
         var history = new[]
         {
-            new Tosh.Core.CommandHistoryEntry(12, "echo beta", DateTimeOffset.Parse("2026-03-27T00:01:00Z")),
+            new Tosh.Runtime.CommandHistoryEntry(12, "echo beta", DateTimeOffset.Parse("2026-03-27T00:01:00Z")),
         };
 
         Assert.Equal("echo gamma", ReplHistoryExpander.Expand("^beta^gamma^", history).Text);
@@ -615,7 +615,7 @@ public sealed class ReplLineEditorTests
     [Fact]
     public void Prompt_renderer_uses_header_right_layout_when_width_allows_it()
     {
-        var runtime = Tosh.Core.ToshRuntime.CreateDefault();
+        var runtime = Tosh.Runtime.ToshRuntime.CreateDefault();
         runtime.Config.Prompt.TimeEnabled = true;
         runtime.Config.Prompt.GitEnabled = false;
         runtime.Config.Prompt.HeaderLeftLayout = "Time, Directory";
@@ -623,7 +623,7 @@ public sealed class ReplLineEditorTests
         runtime.Config.Prompt.PromptLeftLayout = "HistoryId, ExitCode, Name, Indicator";
 
         var lines = ToshPromptRenderer.BuildPreviewLines(runtime, 7, width: 120)
-            .Select(Tosh.Core.StyledText.StripAnsi)
+            .Select(Tosh.Runtime.StyledText.StripAnsi)
             .ToArray();
 
         Assert.Equal(2, lines.Length);
@@ -633,7 +633,7 @@ public sealed class ReplLineEditorTests
         Assert.Contains("!432", lines[1], StringComparison.Ordinal);
         Assert.Contains("✘ 7", lines[1], StringComparison.Ordinal);
         Assert.Contains("tosh", lines[1], StringComparison.Ordinal);
-        Assert.True(Tosh.Core.StyledText.GetVisibleLength(lines[0]) < 120);
+        Assert.True(Tosh.Runtime.StyledText.GetVisibleLength(lines[0]) < 120);
     }
 
     [Fact]

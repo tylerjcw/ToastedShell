@@ -1,5 +1,5 @@
 using System.Net;
-using Tosh.Core;
+using Tosh.Runtime;
 
 namespace Tosh.Tests;
 

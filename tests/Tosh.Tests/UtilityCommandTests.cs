@@ -3,7 +3,7 @@ using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
-using Tosh.Core;
+using Tosh.Runtime;
 using Tosh.Language;
 
 namespace Tosh.Tests;

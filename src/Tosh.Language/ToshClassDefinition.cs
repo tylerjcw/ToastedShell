@@ -1,4 +1,4 @@
-using Tosh.Core;
+using Tosh.Runtime;
 using Tosh.Language.Parsing;
 
 namespace Tosh.Language;
@@ -367,7 +367,7 @@ public sealed class ToshClassDefinition : IShellNamedType
                     code: "tosh.runtime.fading_member",
                     title: $"Property '{property.Name}' on class '{Name}' is fading (deprecated).",
                     help: "Use a non-fading replacement, or hush this code: hush tosh.runtime.fading_member",
-                    category: Tosh.Core.ToshDiagnosticCategory.Deprecation);
+                    category: Tosh.Runtime.ToshDiagnosticCategory.Deprecation);
             }
 
             if (property.GetterBody is not null)
@@ -543,7 +543,7 @@ public sealed class ToshClassDefinition : IShellNamedType
                 code: "tosh.runtime.fading_member",
                 title: $"Method '{method.Name}' on class '{Name}' is fading (deprecated).",
                 help: "Use a non-fading replacement, or hush this code: hush tosh.runtime.fading_member",
-                category: Tosh.Core.ToshDiagnosticCategory.Deprecation);
+                category: Tosh.Runtime.ToshDiagnosticCategory.Deprecation);
         }
 
         var values = ExecuteMethodBlock(method, locals, instance);

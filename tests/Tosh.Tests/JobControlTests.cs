@@ -1,6 +1,6 @@
 using System.Diagnostics;
-using Tosh.Core.Commands.Processes;
-using Tosh.Core;
+using Tosh.Stdlib.Processes;
+using Tosh.Runtime;
 
 namespace Tosh.Tests;
 
@@ -401,7 +401,7 @@ public sealed class JobControlTests
     [Fact]
     public void ForegroundCommand_has_correct_metadata()
     {
-        var cmd = new Tosh.Core.Commands.Processes.ForegroundCommand();
+        var cmd = new Tosh.Stdlib.Processes.ForegroundCommand();
         var meta = cmd.GetMetadata();
 
         Assert.Equal("fg", meta.Name);
@@ -413,7 +413,7 @@ public sealed class JobControlTests
     [Fact]
     public void BackgroundResumeCommand_has_correct_metadata()
     {
-        var cmd = new Tosh.Core.Commands.Processes.BackgroundResumeCommand();
+        var cmd = new Tosh.Stdlib.Processes.BackgroundResumeCommand();
         var meta = cmd.GetMetadata();
 
         Assert.Equal("bg", meta.Name);

@@ -1,5 +1,5 @@
 using System.Diagnostics;
-using Tosh.Core;
+using Tosh.Runtime;
 using Tosh.Language;
 
 namespace Tosh.Cli;

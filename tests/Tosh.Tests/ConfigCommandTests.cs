@@ -1,6 +1,6 @@
-using Tosh.Core;
-using Tosh.Core.Commands;
-using Tosh.Core.Commands.Shell;
+using Tosh.Runtime;
+using Tosh.Stdlib;
+using Tosh.Stdlib.Shell;
 using Tosh.Language;
 
 namespace Tosh.Tests;

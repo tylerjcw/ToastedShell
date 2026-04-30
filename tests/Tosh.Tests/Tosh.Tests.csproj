@@ -21,7 +21,8 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Tosh.Cli\Tosh.Cli.csproj" />
     <ProjectReference Include="..\..\src\Tosh.Language\Tosh.Language.csproj" />
-    <ProjectReference Include="..\..\src\Tosh.Core\Tosh.Core.csproj" />
+    <ProjectReference Include="..\..\src\Tosh.Runtime\Tosh.Runtime.csproj" />
+    <ProjectReference Include="..\..\src\Tosh.Stdlib\Tosh.Stdlib.csproj" />
     <ProjectReference Include="..\..\src\Tosh.Tui\Tosh.Tui.csproj" />
     <ProjectReference Include="..\..\src\Tosh.LanguageServices\Tosh.LanguageServices.csproj" />
     <ProjectReference Include="..\..\src\Tosh.Lsp\Tosh.Lsp.csproj" />

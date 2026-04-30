@@ -1,5 +1,5 @@
 using System.Reflection;
-using Tosh.Core;
+using Tosh.Runtime;
 
 namespace Tosh.LanguageServices;
 

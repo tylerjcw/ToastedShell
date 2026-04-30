@@ -68,8 +68,9 @@ ToshLanguageFeatures.cs
 
 [metadataReferences]
 ../
- Tosh.Core/obj/Debug/net10.0/ref/Tosh.Core.dll
  Tosh.Language/obj/Debug/net10.0/ref/Tosh.Language.dll
+ Tosh.Runtime/obj/Debug/net10.0/ref/Tosh.Runtime.dll
+ Tosh.Stdlib/obj/Debug/net10.0/ref/Tosh.Stdlib.dll
  Tosh.Tui/obj/Debug/net10.0/ref/Tosh.Tui.dll
 <DOTNET>/packs/Microsoft.NETCore.App.Ref/10.0.3/ref/net10.0/
  Microsoft.CSharp.dll

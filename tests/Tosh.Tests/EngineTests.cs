@@ -1,5 +1,5 @@
-using Tosh.Core;
-using Tosh.Core.Commands.Shell;
+using Tosh.Runtime;
+using Tosh.Stdlib.Shell;
 using Tosh.Language;
 using Tosh.Language.Parsing;
 using System.Numerics;
@@ -1126,9 +1126,9 @@ public sealed class EngineTests
         var engine = new ToshEngine();
 
         var projectedResults = await engine.ExecuteToListAsync(
-            "echo new Tosh.Core.ProcessInfo(2, \"large\", false, null, null, 4096, null, null) new Tosh.Core.ProcessInfo(1, \"small\", false, null, null, 1024, null, null) | get { Name, PID, Memory }");
+            "echo new Tosh.Runtime.ProcessInfo(2, \"large\", false, null, null, 4096, null, null) new Tosh.Runtime.ProcessInfo(1, \"small\", false, null, null, 1024, null, null) | get { Name, PID, Memory }");
         var sortedNameResults = await engine.ExecuteToListAsync(
-            "echo new Tosh.Core.ProcessInfo(2, \"large\", false, null, null, 4096, null, null) new Tosh.Core.ProcessInfo(1, \"small\", false, null, null, 1024, null, null) | get { Name, PID, Memory } | sort PID | get Name");
+            "echo new Tosh.Runtime.ProcessInfo(2, \"large\", false, null, null, 4096, null, null) new Tosh.Runtime.ProcessInfo(1, \"small\", false, null, null, 1024, null, null) | get { Name, PID, Memory } | sort PID | get Name");
 
         var firstProjection = Assert.IsAssignableFrom<IDictionary<string, object?>>(projectedResults[0]);
         Assert.True(firstProjection.TryGetValue("Name", out var projectedName));
@@ -2163,7 +2163,7 @@ public sealed class EngineTests
     {
         var engine = new ToshEngine();
 
-        var results = await engine.ExecuteToListAsync("echo new Tosh.Core.ProcessInfo(1, \"proc\", false, null, null, 2048, null, null) | get Memory");
+        var results = await engine.ExecuteToListAsync("echo new Tosh.Runtime.ProcessInfo(1, \"proc\", false, null, null, 2048, null, null) | get Memory");
 
         Assert.Collection(results, item => Assert.Equal(StorageSize.FromBytes(2048), Assert.IsType<StorageSize>(item)));
     }
@@ -2484,7 +2484,7 @@ public sealed class EngineTests
         var engine = new ToshEngine();
 
         var results = await engine.ExecuteToListAsync(
-            "echo new Tosh.Core.ProcessInfo(1, \"large\", false, null, null, 4096, null, null) new Tosh.Core.ProcessInfo(2, \"small\", false, null, null, 1024, null, null) | sort-by Memory | get Name");
+            "echo new Tosh.Runtime.ProcessInfo(1, \"large\", false, null, null, 4096, null, null) new Tosh.Runtime.ProcessInfo(2, \"small\", false, null, null, 1024, null, null) | sort-by Memory | get Name");
 
         Assert.Equal(new[] { "small", "large" }, results.Cast<string>().ToArray());
     }
@@ -4159,7 +4159,7 @@ $output");
             item => Assert.Equal("echo beta", item));
 
         var deleteResults = await engine.ExecuteToListAsync("history delete git");
-        var deletion = Assert.IsType<Tosh.Core.Commands.Shell.HistoryDeletionResult>(Assert.Single(deleteResults));
+        var deletion = Assert.IsType<Tosh.Stdlib.Shell.HistoryDeletionResult>(Assert.Single(deleteResults));
         Assert.Equal("git status", deletion.Text);
 
         Assert.Collection(
@@ -4188,7 +4188,7 @@ $output");
         Assert.Equal(historyPath, Assert.IsType<string>(Assert.Single(pathResults)));
 
         var reloadResults = await engine.ExecuteToListAsync("history reload");
-        var reloadStatus = Assert.IsType<Tosh.Core.Commands.Shell.HistoryStatusResult>(Assert.Single(reloadResults));
+        var reloadStatus = Assert.IsType<Tosh.Stdlib.Shell.HistoryStatusResult>(Assert.Single(reloadResults));
         Assert.Equal("reload", reloadStatus.Action);
         Assert.Equal(2, reloadStatus.EntryCount);
         Assert.Collection(
@@ -4197,7 +4197,7 @@ $output");
             entry => Assert.Equal("ls -la", entry.Text));
 
         var clearResults = await engine.ExecuteToListAsync("history clear");
-        var clearStatus = Assert.IsType<Tosh.Core.Commands.Shell.HistoryStatusResult>(Assert.Single(clearResults));
+        var clearStatus = Assert.IsType<Tosh.Stdlib.Shell.HistoryStatusResult>(Assert.Single(clearResults));
         Assert.Equal("clear", clearStatus.Action);
         Assert.Empty(runtime.History);
         Assert.Equal(string.Empty, File.ReadAllText(historyPath));

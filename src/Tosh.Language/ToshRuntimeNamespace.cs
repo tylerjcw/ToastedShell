@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using System.Reflection;
 using System.Runtime.InteropServices;
-using Tosh.Core;
+using Tosh.Runtime;
 
 namespace Tosh.Language;
 

@@ -12,8 +12,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\Tosh.Core\Tosh.Core.csproj" />
+    <ProjectReference Include="..\..\src\Tosh.Runtime\Tosh.Runtime.csproj" />
     <ProjectReference Include="..\..\src\Tosh.Language\Tosh.Language.csproj" />
+    <ProjectReference Include="..\..\src\Tosh.Stdlib\Tosh.Stdlib.csproj" />
   </ItemGroup>
 
 </Project>

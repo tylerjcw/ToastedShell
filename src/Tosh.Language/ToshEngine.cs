@@ -5,10 +5,10 @@ using System.Runtime.InteropServices;
 using System.Runtime.Loader;
 using System.Text;
 using System.Text.RegularExpressions;
-using Tosh.Core;
-using Tosh.Core.Commands;
-using Tosh.Language.Commands;
-using Tosh.Language.Commands.Shell;
+using Tosh.Runtime;
+using Tosh.Stdlib;
+using Tosh.Language.Bridge;
+using Tosh.Language.Bridge.Shell;
 using Tosh.Language.Debugging;
 using Tosh.Language.Parsing;
 
@@ -109,7 +109,7 @@ public sealed partial class ToshEngine : IShellEvaluator
     /// embedded test-host engines).
     ///
     /// When <c>false</c>, invoking a command marked
-    /// <see cref="Tosh.Core.ShellOnlyAttribute"/> emits a hushable warning
+    /// <see cref="Tosh.Runtime.ShellOnlyAttribute"/> emits a hushable warning
     /// (<c>tosh.shell_only</c>) — those commands depend on REPL state
     /// (history, directory stack, prompt rendering, TUI) and don't make
     /// sense in non-interactive contexts.

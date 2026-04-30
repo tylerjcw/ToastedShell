@@ -1,6 +1,6 @@
 using System.Reflection;
-using Tosh.Core;
-using Tosh.Core.Commands;
+using Tosh.Runtime;
+using Tosh.Stdlib;
 using Tosh.Language;
 
 namespace Tosh.Tests;
@@ -145,7 +145,7 @@ public sealed class DocumentationCoverageTests
         // the attribute is added without filing the source under the matching
         // subfolder. Either side of the discrepancy fails the test.
         //
-        // We accept any assembly root (Tosh.Core.Commands.X *or* Tosh.Language.Commands.X
+        // We accept any assembly root (Tosh.Stdlib.X *or* Tosh.Language.Bridge.X
         // for language-tier built-ins like `source` / `debug`) — the bucket is the
         // last namespace segment.
         var (registry, _) = GetRegistryAndEntries();

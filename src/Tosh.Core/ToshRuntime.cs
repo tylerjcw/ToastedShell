@@ -1,5 +1,4 @@
 using System.Collections.Concurrent;
-using Tosh.Core.Commands;
 
 namespace Tosh.Core;
 
@@ -619,11 +618,48 @@ public sealed class ToshRuntime
         // before startup files (which may declare refinement types) are loaded.
         WarmUpTask = Task.Run(DotNetTypeResolver.WarmUpPlatformTypeIndex);
 
+        EnsureStdlibLoaded();
         var runtime = new ToshRuntime(output, error);
         BuiltInShellTypes.RegisterDefaults(runtime.Classes);
-        BuiltInCommands.RegisterDefaults(runtime.Commands);
+        DefaultCommandRegistrar?.Invoke(runtime);
         return runtime;
     }
+
+    private static int _stdlibLoadAttempted;
+
+    /// <summary>
+    /// Forces the Tosh.Stdlib assembly to load so its [ModuleInitializer] runs and
+    /// installs the default command/profile registrars. Project references alone
+    /// don't guarantee load — the runtime only resolves an assembly when IL
+    /// references a type from it, and Tosh.Core deliberately doesn't reference any
+    /// stdlib types. Tries once per process; safe if Tosh.Stdlib isn't deployed
+    /// (embedding scenarios that bring their own command set).
+    /// </summary>
+    internal static void EnsureStdlibLoaded()
+    {
+        if (System.Threading.Interlocked.Exchange(ref _stdlibLoadAttempted, 1) != 0)
+        {
+            return;
+        }
+
+        try
+        {
+            System.Reflection.Assembly.Load(new System.Reflection.AssemblyName("Tosh.Stdlib"));
+        }
+        catch (System.IO.FileNotFoundException)
+        {
+            // Tosh.Stdlib not deployed — caller registers via DefaultCommandRegistrar.
+        }
+    }
+
+    /// <summary>
+    /// Pluggable hook used by Tosh.Stdlib (or other layered command packages) to
+    /// register the built-in command set when a runtime is created via
+    /// <see cref="CreateDefault"/>. Tosh.Core does not own any commands, so this
+    /// stays null when only the runtime contract is loaded; Tosh.Stdlib wires it
+    /// from a [ModuleInitializer].
+    /// </summary>
+    public static Action<ToshRuntime>? DefaultCommandRegistrar { get; set; }
 
     /// <summary>
     /// Task that pre-warms the platform type index in the background.

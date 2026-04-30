@@ -324,7 +324,7 @@ public class IteratorCommandTests
     public async Task List_comprehension_with_infinite_source_errors()
     {
         var engine = new ToshEngine();
-        var ex = await Assert.ThrowsAsync<Tosh.Core.ToshDiagnosticException>(
+        var ex = await Assert.ThrowsAsync<Tosh.Runtime.ToshDiagnosticException>(
             () => engine.ExecuteToListAsync("[$x <| for x in 1..]"));
         Assert.Contains("infinite", ex.Message, StringComparison.OrdinalIgnoreCase);
     }

@@ -1,7 +1,7 @@
 using System.Dynamic;
 using System.Reflection;
 using System.Runtime.Loader;
-using Tosh.Core;
+using Tosh.Runtime;
 using Tosh.Language.Parsing;
 
 namespace Tosh.LanguageServices;

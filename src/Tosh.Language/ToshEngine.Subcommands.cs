@@ -1,6 +1,6 @@
 using System.Runtime.CompilerServices;
 using System.Text;
-using Tosh.Core;
+using Tosh.Runtime;
 using Tosh.Language.Parsing;
 
 namespace Tosh.Language;

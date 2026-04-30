@@ -1,6 +1,6 @@
 using System.Text;
 using Tosh.Cli;
-using Tosh.Core;
+using Tosh.Runtime;
 namespace Tosh.Tests;
 
 public sealed class ReplCompletionEngineTests

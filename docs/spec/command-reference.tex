@@ -3881,7 +3881,7 @@ unfold [0 1] func(s) => [($s[0]) [($s[1]) ($s[0] + $s[1])]]  # Fibonacci sequenc
 \label{ref:round}
 \icmd{round}
 
-\textit{Library: \code{Tosh.Stdlib.Math}}
+\textit{Library: \code{Tosh.Stdlib.Maths}}
 
 \begin{cmdbox}{round}
 Rounds a number to the specified number of decimal places.
@@ -6044,7 +6044,7 @@ echo 1 2 3 | zip [10 20 30] func(a, b) => ($a + $b)  # Zip with a combiner
 \label{ref:bg}
 \icmd{bg}
 
-\textit{Library: \code{Tosh.Stdlib.Process}}
+\textit{Library: \code{Tosh.Stdlib.Processes}}
 
 \begin{cmdbox}{bg}
 Resumes a suspended job in the background.
@@ -6078,7 +6078,7 @@ Resumes a suspended job in the background. The process receives SIGCONT but does
 \label{ref:fg}
 \icmd{fg}
 
-\textit{Library: \code{Tosh.Stdlib.Process}}
+\textit{Library: \code{Tosh.Stdlib.Processes}}
 
 \begin{cmdbox}{fg}
 Resumes a suspended job in the foreground.
@@ -6112,7 +6112,7 @@ Resumes a suspended job (stopped with Ctrl+Z) in the foreground. If no id is giv
 \label{ref:jobs}
 \icmd{jobs}
 
-\textit{Library: \code{Tosh.Stdlib.Process}}
+\textit{Library: \code{Tosh.Stdlib.Processes}}
 
 \begin{cmdbox}{jobs}
 Lists ToSh background jobs.
@@ -6138,7 +6138,7 @@ Jobs lists ToSh background jobs started with a trailing `\&`. A background launc
 \label{ref:kill}
 \icmd{kill}
 
-\textit{Library: \code{Tosh.Stdlib.Process}}
+\textit{Library: \code{Tosh.Stdlib.Processes}}
 
 \begin{cmdbox}{kill}
 Stops a ToSh background job or operating-system process.
@@ -6172,7 +6172,7 @@ Kill can stop either a ToSh background job or a native operating-system process 
 \label{ref:lsfd}
 \icmd{lsfd}
 
-\textit{Library: \code{Tosh.Stdlib.Process}}
+\textit{Library: \code{Tosh.Stdlib.Processes}}
 
 \begin{cmdbox}{lsfd}
 Wraps the system lsfd utility, returning typed open-file-descriptor objects for JSON-backed invocations.
@@ -6226,7 +6226,7 @@ ToSh wraps `lsfd --json` so open-file-descriptor rows stay typed in the pipeline
 \label{ref:ps}
 \icmd{ps}
 
-\textit{Library: \code{Tosh.Stdlib.Process}}
+\textit{Library: \code{Tosh.Stdlib.Processes}}
 
 \begin{cmdbox}{ps}
 Lists running processes as Tosh process objects.
@@ -6285,7 +6285,7 @@ Process memory values are surfaced as Tosh StorageSize objects, not raw strings.
 \label{ref:signal}
 \icmd{signal}
 
-\textit{Library: \code{Tosh.Stdlib.Process}}
+\textit{Library: \code{Tosh.Stdlib.Processes}}
 
 \begin{cmdbox}{signal}
 Sends a signal to a ToSh background job or operating-system process.
@@ -6320,7 +6320,7 @@ Signal sends a named or numeric signal to a ToSh job or a native process id.
 \label{ref:wait-for}
 \icmd{wait-for}
 
-\textit{Library: \code{Tosh.Stdlib.Process}}
+\textit{Library: \code{Tosh.Stdlib.Processes}}
 
 \begin{cmdbox}{wait-for}
 Waits for one or more ToSh background jobs to finish.
@@ -7680,7 +7680,7 @@ date parse 2026-03-29T12:34:56Z | cast timeonly
 \label{ref:env}
 \icmd{env}
 
-\textit{Library: \code{Tosh.Stdlib.System}}
+\textit{Library: \code{Tosh.Stdlib.Sys}}
 
 \begin{cmdbox}{env}
 Lists, queries, sets, or unsets environment variables. Runs nested commands with temporary environment changes when a command follows.
@@ -7730,7 +7730,7 @@ Env keeps its object-returning query mode, but it can also build a temporary env
 \label{ref:export}
 \icmd{export}
 
-\textit{Library: \code{Tosh.Stdlib.System}}
+\textit{Library: \code{Tosh.Stdlib.Sys}}
 
 \begin{cmdbox}{export}
 Exports a Tosh value to the process environment.
@@ -7763,7 +7763,7 @@ export MY_VAR  # Export an existing Tosh variable
 \label{ref:forget}
 \icmd{forget}
 
-\textit{Library: \code{Tosh.Stdlib.System}}
+\textit{Library: \code{Tosh.Stdlib.Sys}}
 
 \begin{cmdbox}{forget}
 Removes Tosh variables, functions, and exported environment names.
@@ -7795,7 +7795,7 @@ forget old-helper  # Remove a function or variable
 \label{ref:free}
 \icmd{free}
 
-\textit{Library: \code{Tosh.Stdlib.System}}
+\textit{Library: \code{Tosh.Stdlib.Sys}}
 
 \begin{cmdbox}{free}
 Returns system memory and swap usage.
@@ -7817,7 +7817,7 @@ free | get .UsedMemory  # Get the used memory value
 \label{ref:guid}
 \icmd{guid}
 
-\textit{Library: \code{Tosh.Stdlib.System}}
+\textit{Library: \code{Tosh.Stdlib.Sys}}
 
 \begin{cmdbox}{guid}
 Creates, parses, formats, and inspects GUID values.
@@ -7840,7 +7840,7 @@ guid info 550e8400-e29b-41d4-a716-446655440000
 \label{ref:hostname}
 \icmd{hostname}
 
-\textit{Library: \code{Tosh.Stdlib.System}}
+\textit{Library: \code{Tosh.Stdlib.Sys}}
 
 \begin{cmdbox}{hostname}
 Returns the current host name.
@@ -7861,7 +7861,7 @@ hostname  # Show the current host name
 \label{ref:hostnamectl}
 \icmd{hostnamectl}
 
-\textit{Library: \code{Tosh.Stdlib.System}}
+\textit{Library: \code{Tosh.Stdlib.Sys}}
 
 \begin{cmdbox}{hostnamectl}
 Wraps hostnamectl, returning a structured host-status object for supported JSON-backed status queries.
@@ -7906,7 +7906,7 @@ hostnamectl | get { Hostname, MachineID, BootID }  # Project host identity prope
 \label{ref:id}
 \icmd{id}
 
-\textit{Library: \code{Tosh.Stdlib.System}}
+\textit{Library: \code{Tosh.Stdlib.Sys}}
 
 \begin{cmdbox}{id}
 Returns current user and group identity information.
@@ -7939,7 +7939,7 @@ id -un  # Show the current username
 \label{ref:journalctl}
 \icmd{journalctl}
 
-\textit{Library: \code{Tosh.Stdlib.System}}
+\textit{Library: \code{Tosh.Stdlib.Sys}}
 
 \begin{cmdbox}{journalctl}
 Wraps journalctl, returning typed journal-entry objects for supported JSON-backed query invocations.
@@ -7993,7 +7993,7 @@ journalctl --since yesterday | where _.Priority <= 3  # Filter recent high-prior
 \label{ref:loginctl}
 \icmd{loginctl}
 
-\textit{Library: \code{Tosh.Stdlib.System}}
+\textit{Library: \code{Tosh.Stdlib.Sys}}
 
 \begin{cmdbox}{loginctl}
 Wraps loginctl, returning typed session/user/seat rows and structured login property sets for supported queries.
@@ -8043,7 +8043,7 @@ loginctl show-user 1000 | get { UID, Name, State, Sessions }  # Inspect structur
 \label{ref:lscpu}
 \icmd{lscpu}
 
-\textit{Library: \code{Tosh.Stdlib.System}}
+\textit{Library: \code{Tosh.Stdlib.Sys}}
 
 \begin{cmdbox}{lscpu}
 Wraps the system lscpu utility, returning typed CPU summary, topology, and cache objects for JSON-backed invocations.
@@ -8100,7 +8100,7 @@ ToSh wraps the JSON-capable `lscpu` modes instead of scraping text output. The d
 \label{ref:lsipc}
 \icmd{lsipc}
 
-\textit{Library: \code{Tosh.Stdlib.System}}
+\textit{Library: \code{Tosh.Stdlib.Sys}}
 
 \begin{cmdbox}{lsipc}
 Wraps the system lsipc utility, returning structured IPC resource and limit records for JSON-backed invocations.
@@ -8163,7 +8163,7 @@ ToSh wraps `lsipc -J` so IPC resources and global IPC limits flow through the pi
 \label{ref:networkctl}
 \icmd{networkctl}
 
-\textit{Library: \code{Tosh.Stdlib.System}}
+\textit{Library: \code{Tosh.Stdlib.Sys}}
 
 \begin{cmdbox}{networkctl}
 Wraps networkctl, returning typed network-link rows for supported list queries.
@@ -8210,7 +8210,7 @@ networkctl --show Link,Operational,Setup,Managed  # Render a focused network-lin
 \label{ref:seq}
 \icmd{seq}
 
-\textit{Library: \code{Tosh.Stdlib.System}}
+\textit{Library: \code{Tosh.Stdlib.Sys}}
 
 \begin{cmdbox}{seq}
 Generates a numeric sequence.
@@ -8274,7 +8274,7 @@ sleep 1 2 3  # Sleep for a total of 6 seconds
 \label{ref:systemctl}
 \icmd{systemctl}
 
-\textit{Library: \code{Tosh.Stdlib.System}}
+\textit{Library: \code{Tosh.Stdlib.Sys}}
 
 \begin{cmdbox}{systemctl}
 Wraps systemctl, returning typed unit rows for supported list queries and structured unit property sets for supported show and status queries.
@@ -8360,7 +8360,7 @@ timespan 1h30m  # Parse a compound duration
 \label{ref:uname}
 \icmd{uname}
 
-\textit{Library: \code{Tosh.Stdlib.System}}
+\textit{Library: \code{Tosh.Stdlib.Sys}}
 
 \begin{cmdbox}{uname}
 Returns kernel and operating system information as a Tosh object.
@@ -8402,7 +8402,7 @@ uname -sr  # Return selected fields
 \label{ref:uptime}
 \icmd{uptime}
 
-\textit{Library: \code{Tosh.Stdlib.System}}
+\textit{Library: \code{Tosh.Stdlib.Sys}}
 
 \begin{cmdbox}{uptime}
 Returns system uptime and load averages.
@@ -8423,7 +8423,7 @@ uptime  # Show uptime and load averages
 \label{ref:vars}
 \icmd{vars}
 
-\textit{Library: \code{Tosh.Stdlib.System}}
+\textit{Library: \code{Tosh.Stdlib.Sys}}
 
 \begin{cmdbox}{vars}
 Lists visible variables or opens an interactive variable browser.
@@ -8455,7 +8455,7 @@ vars browse env  # Browse variables interactively
 \label{ref:whoami}
 \icmd{whoami}
 
-\textit{Library: \code{Tosh.Stdlib.System}}
+\textit{Library: \code{Tosh.Stdlib.Sys}}
 
 \begin{cmdbox}{whoami}
 Returns the current user principal.

@@ -1,6 +1,6 @@
 using System.Text;
 using Tosh.Cli;
-using Tosh.Core;
+using Tosh.Runtime;
 using Tosh.Language;
 using Tosh.Language.Debugging;
 

@@ -1,0 +1,13 @@
+namespace Tosh.Runtime;
+
+public readonly record struct TextSpan(int Start, int Length)
+{
+    public int End => Start + Length;
+
+    public bool IsEmpty => Length <= 0;
+
+    public static TextSpan FromBounds(int start, int end)
+    {
+        return new TextSpan(start, Math.Max(0, end - start));
+    }
+}

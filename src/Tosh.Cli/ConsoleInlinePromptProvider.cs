@@ -1,6 +1,6 @@
 using System.Text;
 using System.Text.RegularExpressions;
-using Tosh.Core;
+using Tosh.Runtime;
 
 namespace Tosh.Cli;
 

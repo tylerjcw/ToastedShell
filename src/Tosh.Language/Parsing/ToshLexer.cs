@@ -1,8 +1,8 @@
 using System.Globalization;
 using System.Text;
 using System.Numerics;
-using Tosh.Core;
-using Tosh.Core.Units;
+using Tosh.Runtime;
+using Tosh.Runtime.Units;
 
 namespace Tosh.Language.Parsing;
 

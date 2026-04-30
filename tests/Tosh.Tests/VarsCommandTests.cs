@@ -1,6 +1,6 @@
-using Tosh.Core;
-using Tosh.Core.Commands;
-using Tosh.Core.Commands.Sys;
+using Tosh.Runtime;
+using Tosh.Stdlib;
+using Tosh.Stdlib.Sys;
 using Tosh.Language;
 using Tosh.Tui.Requests;
 

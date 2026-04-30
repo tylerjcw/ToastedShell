@@ -1,0 +1,25 @@
+namespace Tosh.Runtime;
+
+public sealed record IpNtableInfo(
+    string? Family,
+    string? Name,
+    string? Dev,
+    int? Thresh1,
+    int? Thresh2,
+    int? Thresh3,
+    int? GcInterval,
+    int? RefCount,
+    int? Reachable,
+    int? BaseReachable,
+    int? Retrans,
+    int? GcStale,
+    int? DelayProbe,
+    int? Queue,
+    int? AppProbes,
+    int? UnicastProbes,
+    int? MulticastProbes,
+    int? MulticastReprobes,
+    int? AnycastDelay,
+    int? ProxyDelay,
+    int? ProxyQueue,
+    int? Locktime);

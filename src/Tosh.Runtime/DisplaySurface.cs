@@ -1,0 +1,11 @@
+namespace Tosh.Runtime;
+
+[Flags]
+public enum DisplaySurface
+{
+    Root = 1,
+    Nested = 2,
+    TableCell = 4,
+    RecordValue = 8,
+    Any = Root | Nested | TableCell | RecordValue,
+}

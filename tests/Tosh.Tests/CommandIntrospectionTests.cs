@@ -1,5 +1,5 @@
-using Tosh.Core;
-using Tosh.Core.Commands.Pipeline;
+using Tosh.Runtime;
+using Tosh.Stdlib.Pipeline;
 
 namespace Tosh.Tests;
 
@@ -700,7 +700,7 @@ public sealed class CommandIntrospectionTests
     [Fact]
     public void GetMetadata_on_real_where_command_has_attributes()
     {
-        var cmd = new Tosh.Core.Commands.Pipeline.WhereCommand();
+        var cmd = new Tosh.Stdlib.Pipeline.WhereCommand();
         var meta = cmd.GetMetadata();
 
         Assert.Equal("where", meta.Name);
@@ -715,7 +715,7 @@ public sealed class CommandIntrospectionTests
     [Fact]
     public void GetMetadata_on_real_sort_command_has_options()
     {
-        var cmd = new Tosh.Core.Commands.Pipeline.SortCommand();
+        var cmd = new Tosh.Stdlib.Pipeline.SortCommand();
         var meta = cmd.GetMetadata();
 
         Assert.Equal("sort", meta.Name);
@@ -795,7 +795,7 @@ public sealed class CommandIntrospectionTests
 
         foreach (var command in runtime.Commands.All)
         {
-            if (command is Tosh.Core.Commands.ExternalProcessCommand) continue;
+            if (command is Tosh.Stdlib.ExternalProcessCommand) continue;
 
             Assert.True(builtinNames.Contains(command.Name),
                 $"Registered builtin '{command.Name}' is missing from generated VS Code metadata.");
@@ -899,7 +899,7 @@ public sealed class CommandIntrospectionTests
 
         foreach (var command in runtime.Commands.All)
         {
-            if (command is Tosh.Core.Commands.ExternalProcessCommand) continue;
+            if (command is Tosh.Stdlib.ExternalProcessCommand) continue;
             if (command is not ShellCommand shellCommand) continue;
 
             // Skip aliases — they share topics with their canonical command.

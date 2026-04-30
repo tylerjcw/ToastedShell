@@ -1,4 +1,4 @@
-using Tosh.Core;
+using Tosh.Runtime;
 using Tosh.Cli;
 
 namespace Tosh.Tests;

@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using System.Text;
 using System.Threading;
-using Tosh.Core;
+using Tosh.Runtime;
 
 namespace Tosh.Cli;
 

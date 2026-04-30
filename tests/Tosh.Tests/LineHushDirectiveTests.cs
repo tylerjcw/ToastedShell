@@ -1,6 +1,6 @@
 using System.IO;
 using System.Threading.Tasks;
-using Tosh.Core;
+using Tosh.Runtime;
 using Tosh.Language;
 using Xunit;
 

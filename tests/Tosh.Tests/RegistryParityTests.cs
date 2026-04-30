@@ -1,8 +1,8 @@
 using System.Reflection;
-using Tosh.Core;
-using Tosh.Core.Commands;
+using Tosh.Runtime;
+using Tosh.Stdlib;
 using Tosh.Language;
-using Tosh.Language.Commands;
+using Tosh.Language.Bridge;
 
 namespace Tosh.Tests;
 
