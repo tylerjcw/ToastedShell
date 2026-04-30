@@ -17,22 +17,32 @@
 
     The publish number auto-increments on each `dotnet publish` of Tosh.Cli
     via the IncrementToshPublishNumber target in Directory.Build.targets.
-    State is tracked in .tosh-publish-state at the repo root (format: "YY.MM:N").
+    State is tracked in .tosh-publish-state at the repo root. The format is
+        YY.M:N[:D]
+    where YY.M is the calendar key (year.month), N is the publish counter
+    that resets when the calendar key rolls over, and D is the optional
+    .NET SDK major (defaults to ToshDotNetMajor below if absent).
     When the calendar month changes, the publish number resets to 1.
-    Update ToshDotNetMajor when upgrading the target framework.
+    `scripts/build.tosh version` (with the dotnet flag) writes the third field.
   -->
   <PropertyGroup>
     <ToshCalYear>$([System.DateTime]::UtcNow.ToString('yy'))</ToshCalYear>
     <ToshCalMonth>$([System.DateTime]::UtcNow.Month)</ToshCalMonth>
     <ToshDotNetMajor>10</ToshDotNetMajor>
 
-    <!-- Read publish state from .tosh-publish-state ("YY.MM:N" format) -->
+    <!-- Read publish state from .tosh-publish-state ("YY.M:N[:D]" format) -->
     <_ToshPubStateFile>$(MSBuildThisFileDirectory).tosh-publish-state</_ToshPubStateFile>
     <_ToshPubRaw Condition="Exists('$(_ToshPubStateFile)')">$([System.IO.File]::ReadAllText('$(_ToshPubStateFile)').Trim())</_ToshPubRaw>
     <_ToshPubColonIdx Condition="'$(_ToshPubRaw)' != ''">$(_ToshPubRaw.IndexOf(':'))</_ToshPubColonIdx>
     <_ToshPubStoredKey Condition="'$(_ToshPubColonIdx)' != '' and '$(_ToshPubColonIdx)' != '-1'">$(_ToshPubRaw.Remove($(_ToshPubColonIdx)))</_ToshPubStoredKey>
     <_ToshPubAfterColon Condition="'$(_ToshPubColonIdx)' != '' and '$(_ToshPubColonIdx)' != '-1'">$([MSBuild]::Add($(_ToshPubColonIdx), 1))</_ToshPubAfterColon>
-    <_ToshPubStoredNum Condition="'$(_ToshPubAfterColon)' != ''">$(_ToshPubRaw.Substring($(_ToshPubAfterColon)))</_ToshPubStoredNum>
+    <_ToshPubTail Condition="'$(_ToshPubAfterColon)' != ''">$(_ToshPubRaw.Substring($(_ToshPubAfterColon)))</_ToshPubTail>
+    <!-- Tail may be either "N" (legacy) or "N:D" (current). -->
+    <_ToshPubTailColonIdx Condition="'$(_ToshPubTail)' != ''">$(_ToshPubTail.IndexOf(':'))</_ToshPubTailColonIdx>
+    <_ToshPubStoredNum Condition="'$(_ToshPubTailColonIdx)' == '-1'">$(_ToshPubTail)</_ToshPubStoredNum>
+    <_ToshPubStoredNum Condition="'$(_ToshPubTailColonIdx)' != '' and '$(_ToshPubTailColonIdx)' != '-1'">$(_ToshPubTail.Remove($(_ToshPubTailColonIdx)))</_ToshPubStoredNum>
+    <_ToshPubStoredDotnet Condition="'$(_ToshPubTailColonIdx)' != '' and '$(_ToshPubTailColonIdx)' != '-1'">$(_ToshPubTail.Substring($([MSBuild]::Add($(_ToshPubTailColonIdx), 1))))</_ToshPubStoredDotnet>
+    <ToshDotNetMajor Condition="'$(_ToshPubStoredDotnet)' != ''">$(_ToshPubStoredDotnet)</ToshDotNetMajor>
     <_ToshCurrentCalKey>$(ToshCalYear).$(ToshCalMonth)</_ToshCurrentCalKey>
 
     <!-- Use stored number if same month, otherwise reset to 1 -->

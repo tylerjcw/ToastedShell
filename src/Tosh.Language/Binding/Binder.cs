@@ -238,9 +238,9 @@ public static class Binder
             case SubcommandStatementSyntax sub:
                 VisitBlock(sub.Body, context);
                 break;
-            // The remaining statement variants (RequireStatementSyntax, BindStatementSyntax,
-            // EnumDefinitionStatementSyntax, RecordDefinitionStatementSyntax, …) don't carry
-            // CommandSyntax we need to bind. Their bodies, when present, are non-pipeline.
+                // The remaining statement variants (RequireStatementSyntax, BindStatementSyntax,
+                // EnumDefinitionStatementSyntax, RecordDefinitionStatementSyntax, …) don't carry
+                // CommandSyntax we need to bind. Their bodies, when present, are non-pipeline.
         }
     }
 
