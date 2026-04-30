@@ -60,6 +60,20 @@ public sealed record BoundPipelineStatement(BoundPipeline Pipeline, TextSpan Spa
     : BoundStatement(Span);
 
 /// <summary>
+/// A reassignment to an existing variable: <c>$x = ...</c>,
+/// <c>$x += 1</c>, etc. <see cref="Symbol"/> resolves the target if
+/// the binder could find it locally; otherwise the runtime resolves
+/// at execution time (e.g. globals introduced by <c>profile.tosh</c>).
+/// </summary>
+public sealed record BoundVariableAssignment(
+    string Name,
+    BoundSymbol? Symbol,
+    string Operator,
+    BoundPipeline Value,
+    TextSpan Span)
+    : BoundStatement(Span);
+
+/// <summary>
 /// A <c>var</c> declaration. <see cref="Value"/> is the initializer
 /// pipeline (lowered); <see cref="Symbol"/> is the binding produced
 /// for this declaration so subsequent references can resolve to it.
@@ -130,6 +144,50 @@ public sealed record BoundRange(
     BoundExpression Start,
     BoundExpression? Step,
     BoundExpression? End,
+    TextSpan Span,
+    BoundType Type)
+    : BoundExpression(Span, Type);
+
+/// <summary>
+/// One element in an array literal. <see cref="IsSpread"/> indicates
+/// the parse-tree wrapped this with <c>...$xs</c> spread syntax — the
+/// emitter will splice the inner enumerable in place rather than
+/// adding it as a single element.
+/// </summary>
+public sealed record BoundArrayLiteralItem(BoundExpression Value, bool IsSpread, TextSpan Span)
+    : BoundNode(Span);
+
+/// <summary>An array literal: <c>[1, 2, ...$xs, 4]</c>.</summary>
+public sealed record BoundArrayLiteral(
+    IReadOnlyList<BoundArrayLiteralItem> Items,
+    TextSpan Span,
+    BoundType Type)
+    : BoundExpression(Span, Type);
+
+/// <summary>One segment of an interpolated string.</summary>
+public abstract record BoundInterpolatedPart(TextSpan Span) : BoundNode(Span);
+
+/// <summary>Literal text between <c>${…}</c> holes.</summary>
+public sealed record BoundInterpolatedLiteral(string Text, TextSpan Span)
+    : BoundInterpolatedPart(Span);
+
+/// <summary>
+/// An expression hole inside <c>$"…${expr}…"</c>. The original parser
+/// captures the source text and re-parses it on demand; we keep the
+/// raw source plus a lazily-lowered expression so the IL emitter can
+/// either stamp a string conversion or fall back to runtime
+/// re-parsing if the embedded expression isn't yet representable in
+/// the bound IR.
+/// </summary>
+public sealed record BoundInterpolatedExpression(
+    string SourceText,
+    BoundExpression? Expression,
+    TextSpan Span)
+    : BoundInterpolatedPart(Span);
+
+/// <summary>An interpolated string literal: <c>$"hello, $name!"</c>.</summary>
+public sealed record BoundInterpolatedString(
+    IReadOnlyList<BoundInterpolatedPart> Parts,
     TextSpan Span,
     BoundType Type)
     : BoundExpression(Span, Type);

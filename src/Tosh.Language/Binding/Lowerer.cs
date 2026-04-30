@@ -61,6 +61,14 @@ public static class Lowerer
         VariableDeclarationStatementSyntax decl =>
             LowerVariableDeclaration(decl, ctx),
 
+        VariableAssignmentStatementSyntax assign =>
+            new BoundVariableAssignment(
+                Name: assign.Name,
+                Symbol: ctx.LookupSymbol(assign.Name),
+                Operator: assign.Operator,
+                Value: LowerPipeline(assign.Value, ctx),
+                Span: assign.Span),
+
         ScriptStatementSyntax inner =>
             LowerStatementAsScript(inner, ctx),
 
@@ -303,6 +311,10 @@ public static class Lowerer
 
         RangeArgumentSyntax range => BuildRange(range, ctx),
 
+        ArrayLiteralArgumentSyntax array => BuildArrayLiteral(array, ctx),
+
+        InterpolatedStringArgumentSyntax interp => BuildInterpolatedString(interp, ctx),
+
         // Everything else stays dynamic for now.
         _ => new BoundDynamicExpression(expression, expression.Span),
     };
@@ -364,6 +376,64 @@ public static class Lowerer
             ? BoundType.Dynamic
             : TypeInferrer.InferRange(start.Type, step?.Type, end.Type);
         return new BoundRange(start, step, end, range.Span, type);
+    }
+
+    private static BoundArrayLiteral BuildArrayLiteral(ArrayLiteralArgumentSyntax array, LowerContext ctx)
+    {
+        var items = new List<BoundArrayLiteralItem>(array.Items.Count);
+        foreach (var raw in array.Items)
+        {
+            // ...$xs spreads splice into the array; everything else
+            // is a single element. Track the flag so the IL emitter
+            // can pick the right opcode shape later.
+            if (raw is SpreadElementArgumentSyntax spread)
+            {
+                items.Add(new BoundArrayLiteralItem(
+                    Value: LowerExpression(spread.Value, ctx),
+                    IsSpread: true,
+                    Span: spread.Span));
+            }
+            else
+            {
+                items.Add(new BoundArrayLiteralItem(
+                    Value: LowerExpression(raw, ctx),
+                    IsSpread: false,
+                    Span: raw.Span));
+            }
+        }
+
+        return new BoundArrayLiteral(items, array.Span, BoundType.FromClr(typeof(System.Collections.IList)));
+    }
+
+    private static BoundInterpolatedString BuildInterpolatedString(
+        InterpolatedStringArgumentSyntax interp,
+        LowerContext ctx)
+    {
+        var parts = new List<BoundInterpolatedPart>(interp.Parts.Count);
+        foreach (var part in interp.Parts)
+        {
+            switch (part)
+            {
+                case InterpolatedStringLiteralPart literal:
+                    parts.Add(new BoundInterpolatedLiteral(literal.Text, interp.Span));
+                    break;
+
+                case InterpolatedStringExpressionPart expr:
+                    // The parser stores the hole as raw source text
+                    // (re-parsed at runtime today). We don't yet
+                    // re-lex+parse here; the IL emitter can fall back
+                    // to runtime re-parse via SourceText. Once
+                    // expressions inside holes are first-class in the
+                    // parse tree, this becomes a recursive lower.
+                    parts.Add(new BoundInterpolatedExpression(
+                        SourceText: expr.Expression,
+                        Expression: null,
+                        Span: expr.ExpressionSpan));
+                    break;
+            }
+        }
+
+        return new BoundInterpolatedString(parts, interp.Span, BoundType.FromClr(typeof(string)));
     }
 
     private static BoundType InferLiteralType(object? value) => value switch

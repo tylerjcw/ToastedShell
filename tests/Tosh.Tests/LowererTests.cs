@@ -247,4 +247,76 @@ public sealed class LowererTests : IClassFixture<ToshRuntimeFixture>
         var argSlice = source.Substring(arg.Span.Start, arg.Span.Length);
         Assert.Equal("hello", argSlice);
     }
+
+    [Fact]
+    public void Lower_carves_out_variable_assignment()
+    {
+        var parse = ParseSource("var x = 1\n$x = 2");
+        var unit = Lowerer.Lower(parse, _runtime.Commands);
+
+        var decl = Assert.IsType<BoundVariableDeclaration>(unit.Root.Statements[0]);
+        var assign = Assert.IsType<BoundVariableAssignment>(unit.Root.Statements[1]);
+
+        Assert.Equal("x", assign.Name);
+        Assert.Equal("=", assign.Operator);
+        Assert.Same(decl.Symbol, assign.Symbol);
+        Assert.NotNull(assign.Value);
+    }
+
+    [Fact]
+    public void Lower_carves_out_compound_assignment()
+    {
+        var parse = ParseSource("var x = 1\n$x += 5");
+        var unit = Lowerer.Lower(parse, _runtime.Commands);
+
+        var assign = Assert.IsType<BoundVariableAssignment>(unit.Root.Statements[1]);
+        Assert.Equal("+=", assign.Operator);
+    }
+
+    [Fact]
+    public void Lower_carves_out_array_literals()
+    {
+        var parse = ParseSource("echo [1, 2, 3]");
+        var unit = Lowerer.Lower(parse, _runtime.Commands);
+
+        var call = (BoundCommandCall)((BoundPipelineStatement)unit.Root.Statements[0]).Pipeline.Stages[0];
+        var array = Assert.IsType<BoundArrayLiteral>(call.Arguments[0].Value);
+        Assert.Equal(3, array.Items.Count);
+        Assert.All(array.Items, item =>
+        {
+            Assert.False(item.IsSpread);
+            Assert.IsType<BoundLiteral>(item.Value);
+        });
+    }
+
+    [Fact]
+    public void Lower_carves_out_array_literal_with_spread()
+    {
+        var parse = ParseSource("var xs = [2, 3]\necho [1, ...$xs, 4]");
+        var unit = Lowerer.Lower(parse, _runtime.Commands);
+
+        var call = (BoundCommandCall)((BoundPipelineStatement)unit.Root.Statements[1]).Pipeline.Stages[0];
+        var array = Assert.IsType<BoundArrayLiteral>(call.Arguments[0].Value);
+        Assert.Equal(3, array.Items.Count);
+        Assert.False(array.Items[0].IsSpread);
+        Assert.True(array.Items[1].IsSpread);
+        Assert.False(array.Items[2].IsSpread);
+        Assert.IsType<BoundVariableReference>(array.Items[1].Value);
+    }
+
+    [Fact]
+    public void Lower_carves_out_interpolated_strings()
+    {
+        var parse = ParseSource("var name = \"alice\"\necho $\"hello, ${name}!\"");
+        var unit = Lowerer.Lower(parse, _runtime.Commands);
+
+        var call = (BoundCommandCall)((BoundPipelineStatement)unit.Root.Statements[1]).Pipeline.Stages[0];
+        var interp = Assert.IsType<BoundInterpolatedString>(call.Arguments[0].Value);
+
+        // Expect at least one literal segment ("hello, ") and one
+        // expression hole ($name). The exact count depends on parser
+        // segmentation; we don't pin it here.
+        Assert.Contains(interp.Parts, p => p is BoundInterpolatedLiteral);
+        Assert.Contains(interp.Parts, p => p is BoundInterpolatedExpression);
+    }
 }
