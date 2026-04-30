@@ -4,7 +4,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Sys;
 
-[Stdlib(StdlibCategory.Sys)]
 [CommandCategory("System")]
 [CommandArgument("[query ...]", "Structured journal queries accept common `journalctl` filters such as match expressions, unit filters, priorities, boot selectors, and time windows.", Required = false)]
 [CommandOption("-n <count>|--lines <count>", "Limit the structured result set to the most recent entries.")]

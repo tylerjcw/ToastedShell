@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Pipeline;
 
-[Stdlib(StdlibCategory.Pipeline)]
 [CommandCategory("Pipeline")]
 [CommandExample("ls | group-by Extension")]
 [CommandExample("ps | group-by func(p) => ($p.Name.Substring(0, 1))")]

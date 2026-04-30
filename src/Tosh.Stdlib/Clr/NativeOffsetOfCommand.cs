@@ -4,7 +4,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Clr;
 
-[Stdlib(StdlibCategory.Clr)]
 [CommandCategory("CLR")]
 [CommandArgument("type-name[.field-name]", "Sequential or explicit-layout struct type, optionally with a field suffix.")]
 [CommandArgument("field-name", "Public struct field name when it is not embedded in the first argument.", Required = false)]

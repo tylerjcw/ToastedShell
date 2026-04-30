@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Clr;
 
-[Stdlib(StdlibCategory.Clr)]
 [CommandCategory("CLR")]
 [CommandArgument("filter", "Optional name or pattern to filter types.", Required = false)]
 [CommandOption("-a", "Include all loaded assemblies, not just commonly used types.")]

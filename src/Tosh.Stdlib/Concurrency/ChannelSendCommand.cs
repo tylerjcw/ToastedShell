@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Concurrency;
 
-[Stdlib(StdlibCategory.Concurrency)]
 [CommandCategory("Concurrency")]
 [CommandArgument("channel", "The channel to send to.")]
 [CommandArgument("values", "One or more values to send. Omit to send pipeline input instead.", Required = false)]

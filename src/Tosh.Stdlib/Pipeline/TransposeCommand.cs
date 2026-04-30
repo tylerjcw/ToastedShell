@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Pipeline;
 
-[Stdlib(StdlibCategory.Pipeline)]
 [CommandCategory("Pipeline")]
 [CommandExample("echo @{a=1; b=2} @{a=3; b=4} | transpose", Title = "Pivot rows into columns")]
 [CommandOutput("Pivoted records where original keys become headers and values become rows.")]

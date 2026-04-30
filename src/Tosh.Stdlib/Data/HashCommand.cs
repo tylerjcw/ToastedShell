@@ -5,7 +5,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Data;
 
-[Stdlib(StdlibCategory.Data)]
 [CommandCategory("Data")]
 [CommandArgument("algorithm", "Hash algorithm: md5, sha1, sha256, sha384, or sha512. Defaults to sha256.", Required = false)]
 [CommandArgument("path ...", "Files to hash. When omitted, hashes piped values as UTF-8 text.", Required = false, TypeName = "path-like")]

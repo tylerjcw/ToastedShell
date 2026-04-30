@@ -4,7 +4,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Pipeline;
 
-[Stdlib(StdlibCategory.Pipeline)]
 [CommandCategory("Pipeline")]
 [CommandArgument("path", "Optional file path to write a copy of the stream to.", Required = false, TypeName = "path-like")]
 [CommandOption("-a, --append", "Append to the output file instead of replacing it.")]

@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Concurrency;
 
-[Stdlib(StdlibCategory.Concurrency)]
 [CommandCategory("Concurrency")]
 [CommandArgument("channels", "One or more channels to wait on. If omitted, reads channels from pipeline input.", Required = false)]
 [CommandExample("channel-select $ch1 $ch2", Title = "Return the first channel with a value")]

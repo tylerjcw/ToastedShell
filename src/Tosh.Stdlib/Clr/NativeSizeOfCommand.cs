@@ -4,7 +4,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Clr;
 
-[Stdlib(StdlibCategory.Clr)]
 [CommandCategory("CLR")]
 [CommandArgument("type-name ...", "One or more supported native interop type names.")]
 [CommandExample("size-of int32", Title = "Size of a primitive native type")]

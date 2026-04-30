@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Functional;
 
-[Stdlib(StdlibCategory.Functional)]
 [CommandCategory("Functional")]
 [CommandArgument("callable", "A callable value to partially apply.")]
 [CommandArgument("arg ...", "Leading positional arguments to bind ahead of time.", Required = false)]

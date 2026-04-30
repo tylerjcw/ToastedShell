@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Filesystem;
 
-[Stdlib(StdlibCategory.Filesystem)]
 [CommandCategory("Filesystem")]
 [CommandArgument("prefix", "Optional prefix for the directory name. Defaults to 'tosh'.", Required = false)]
 [CommandExample("mkdir-temp")]

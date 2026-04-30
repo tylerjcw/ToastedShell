@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Pipeline;
 
-[Stdlib(StdlibCategory.Pipeline)]
 [CommandCategory("Pipeline")]
 [CommandArgument("callable|block", "A transform that returns a sequence for each input item.")]
 [CommandExample("echo 1 2 3 | flat-map { [_ (_ * 10)] }", Title = "Expand each item into two")]

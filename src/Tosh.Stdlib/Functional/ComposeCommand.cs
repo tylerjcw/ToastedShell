@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Functional;
 
-[Stdlib(StdlibCategory.Functional)]
 [CommandCategory("Functional")]
 [CommandArgument("callable1", "The first callable in the chain.")]
 [CommandArgument("callable2", "The second callable in the chain.")]

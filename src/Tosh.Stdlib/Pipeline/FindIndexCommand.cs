@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Pipeline;
 
-[Stdlib(StdlibCategory.Pipeline)]
 [CommandCategory("Pipeline")]
 [CommandArgument("callable|block", "Predicate callable or block evaluated for each pipeline value.")]
 [CommandExample("echo 10 20 30 | find-index { _ == 20 }", Title = "Find the first matching index")]

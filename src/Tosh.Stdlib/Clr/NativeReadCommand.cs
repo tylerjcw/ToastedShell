@@ -4,7 +4,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Clr;
 
-[Stdlib(StdlibCategory.Clr)]
 [CommandCategory("CLR")]
 [CommandArgument("cstring|bytes|type-name", "Read mode: a null-terminated C string, a byte array, or a supported native scalar/struct-layout type.")]
 [CommandArgument("buffer|pointer", "NativeBuffer or pointer to read from. May be supplied from the pipeline.", Required = false)]

@@ -4,7 +4,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Concurrency;
 
-[Stdlib(StdlibCategory.Concurrency)]
 [CommandCategory("Concurrency")]
 [CommandArgument("command", "External command name or path to start as a background job.")]
 [CommandArgument("args", "Arguments to pass to the external command.", Required = false)]

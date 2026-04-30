@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Concurrency;
 
-[Stdlib(StdlibCategory.Concurrency)]
 [CommandCategory("Concurrency")]
 [CommandArgument("future", "A ShellFuture value. If omitted, read one from pipeline input.", Required = false)]
 [CommandExample("var f = async { sleep 0.1; echo ok }; await $f", Title = "Await a future")]

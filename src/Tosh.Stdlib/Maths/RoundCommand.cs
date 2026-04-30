@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Maths;
 
-[Stdlib(StdlibCategory.Maths)]
 [CommandCategory("Math")]
 [CommandArgument("value-or-decimals", "A number to round (with optional decimals), or just the decimal count when input is piped.")]
 [CommandArgument("decimals", "Number of decimal places to round to. Defaults to 0.", Required = false)]

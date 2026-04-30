@@ -4,7 +4,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Filesystem;
 
-[Stdlib(StdlibCategory.Filesystem)]
 [CommandCategory("Filesystem")]
 [CommandArgument("[device ...]", "Optional device paths or names to scope the query to.", Required = false, TypeName = "path-like|string")]
 [CommandOption("-a", "Include empty devices.")]

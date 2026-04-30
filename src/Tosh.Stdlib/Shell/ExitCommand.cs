@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Shell;
 
-[Stdlib(StdlibCategory.Shell)]
 [CommandCategory("Shell")]
 [CommandExample("exit", Title = "Exit the current session")]
 [CommandExample("exit 1", Title = "Exit with a specific exit code")]

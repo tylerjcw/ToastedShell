@@ -4,7 +4,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Processes;
 
-[Stdlib(StdlibCategory.Processes)]
 [CommandCategory("Process")]
 [CommandArgument("[-p pid[,pid...]]", "Optionally restrict the query to specific processes.", Required = false)]
 [CommandOption("-l", "Include thread-level rows with a `TID` column.")]

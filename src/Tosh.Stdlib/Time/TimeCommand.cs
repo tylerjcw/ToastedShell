@@ -9,7 +9,6 @@ namespace Tosh.Stdlib.Time;
 /// Measures wall-clock time, CPU time, memory, and page faults for a command or block,
 /// matching the metrics reported by /usr/bin/time.
 /// </summary>
-[Stdlib(StdlibCategory.Time)]
 [CommandCategory("Shell")]
 [CommandArgument("command|block [args...]", "A block like '{ expr }' or a command followed by its arguments.")]
 [CommandExample("time { seq 1000000 | reduce 0 { $acc + _ } }")]

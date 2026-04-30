@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Sys;
 
-[Stdlib(StdlibCategory.Sys)]
 [CommandCategory("System")]
 [CommandArgument("name ...", "With no assignments, query one or more environment variable names.", Required = false)]
 [CommandArgument("name=value ...", "Temporary environment assignments for `env` output or a nested command.", Required = false)]

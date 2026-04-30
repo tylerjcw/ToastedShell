@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Time;
 
-[Stdlib(StdlibCategory.Time)]
 [CommandCategory("System")]
 [CommandArgument("duration", "Duration text such as 250ms, 5s, 2m, 1h, or 1d.")]
 [CommandExample("timespan 250ms", Title = "Parse milliseconds")]

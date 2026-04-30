@@ -4,7 +4,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Sys;
 
-[Stdlib(StdlibCategory.Sys)]
 [CommandCategory("System")]
 [CommandExample("guid")]
 [CommandExample("guid new v7")]

@@ -4,7 +4,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Filesystem;
 
-[Stdlib(StdlibCategory.Filesystem)]
 [CommandCategory("Filesystem")]
 [CommandArgument("path ...|-", "One or more file paths to concatenate, or `-` to read piped text input explicitly.", Required = false, TypeName = "path-like|string")]
 [CommandOption("-n", "Number every emitted line.")]

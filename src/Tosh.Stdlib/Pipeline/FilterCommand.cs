@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Pipeline;
 
-[Stdlib(StdlibCategory.Pipeline)]
 [CommandCategory("Pipeline")]
 [CommandArgument("callable|block", "A lambda or block predicate that returns boolean values.")]
 [CommandExample("echo 1 2 3 4 | filter func(x) => ((($x % 2) == 0))", Title = "Filter with a lambda")]

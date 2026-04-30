@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Pipeline;
 
-[Stdlib(StdlibCategory.Pipeline)]
 [CommandCategory("Pipeline")]
 [CommandOption("-a", "Include non-public and static members in the inspection.")]
 [CommandOption("--flat", "Use flat text output instead of the interactive tree browser.")]

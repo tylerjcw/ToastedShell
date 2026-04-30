@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Pipeline;
 
-[Stdlib(StdlibCategory.Pipeline)]
 [CommandCategory("Pipeline")]
 [CommandExample("echo 1 2 3 | reverse", Title = "Reverse a sequence")]
 [CommandExample("ls | sort .Name | reverse", Title = "Reverse a sorted listing")]

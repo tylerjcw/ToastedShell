@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Pipeline;
 
-[Stdlib(StdlibCategory.Pipeline)]
 [CommandCategory("Pipeline")]
 [CommandArgument("size", "The number of items per chunk.")]
 [CommandExample("echo 1 2 3 4 5 | chunk 2", Title = "Group into pairs")]

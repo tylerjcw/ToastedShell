@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Shell;
 
-[Stdlib(StdlibCategory.Shell)]
 [CommandCategory("Shell")]
 [CommandArgument("action", "The action to perform: list, names, handlers, remove, or clear.", Required = false)]
 [CommandArgument("event-name", "The event name (for handlers, remove, clear).", Required = false)]

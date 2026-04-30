@@ -4,7 +4,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Sys;
 
-[Stdlib(StdlibCategory.Sys)]
 [CommandCategory("System")]
 [CommandArgument("[list-sessions|list-users|list-seats]", "With no subcommand, ToSh treats `loginctl` as a structured `list-sessions` query. The explicit list subcommands return typed rows.", Required = false)]
 [CommandArgument("show-session <id ...>|show-user <user ...>|show-seat <seat ...>", "Returns structured login property sets for supported `show-*` queries.", Required = false)]

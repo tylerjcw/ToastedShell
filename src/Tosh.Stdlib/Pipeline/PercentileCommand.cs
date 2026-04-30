@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Pipeline;
 
-[Stdlib(StdlibCategory.Pipeline)]
 [CommandCategory("Pipeline")]
 [CommandArgument("percentile", "The percentile to compute (0–100).", Required = true)]
 [CommandArgument("member-path", "Optional member path to extract numeric values from each object.", Required = false)]

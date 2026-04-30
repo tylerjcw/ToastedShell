@@ -4,7 +4,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Filesystem;
 
-[Stdlib(StdlibCategory.Filesystem)]
 [CommandCategory("Filesystem")]
 [CommandArgument("[path-or-device ...]", "Optional mountpoints or source devices to match.", Required = false, TypeName = "path-like|string")]
 [CommandOption("-S <source>", "Match a source device or source specification.")]

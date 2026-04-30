@@ -4,7 +4,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Text;
 
-[Stdlib(StdlibCategory.Text)]
 [CommandCategory("Text")]
 [CommandArgument("text", "A template string with {{ member.path }} placeholders.")]
 [CommandExample("ls | template \"{{Name}} is {{Length}} bytes\"", Title = "Format file info")]

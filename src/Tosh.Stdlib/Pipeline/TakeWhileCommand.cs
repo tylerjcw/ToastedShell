@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Pipeline;
 
-[Stdlib(StdlibCategory.Pipeline)]
 [CommandCategory("Pipeline")]
 [CommandExample("echo 1 2 3 4 | take-while { _ < 3 }")]
 [CommandExample("echo 1 2 3 4 | take-while func(x) => ($x < 3)")]

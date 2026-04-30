@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Pipeline;
 
-[Stdlib(StdlibCategory.Pipeline)]
 [CommandCategory("Pipeline")]
 [CommandArgument("callable|block", "A lambda or block executed once per input item.")]
 [CommandExample("echo one two | each { _.ToUpper() }", Title = "Transform each item to uppercase")]

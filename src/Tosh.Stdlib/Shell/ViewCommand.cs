@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Shell;
 
-[Stdlib(StdlibCategory.Shell)]
 [CommandCategory("Shell")]
 [CommandExample("view dateonly scalar relative")]
 [CommandExample("view timeonly table 24h")]

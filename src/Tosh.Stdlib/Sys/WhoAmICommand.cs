@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Sys;
 
-[Stdlib(StdlibCategory.Sys)]
 [CommandCategory("System")]
 [CommandExample("whoami", Title = "Show the current user")]
 [CommandOutput("A single string containing the current user name.")]

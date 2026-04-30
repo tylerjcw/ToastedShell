@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Clr;
 
-[Stdlib(StdlibCategory.Clr)]
 [CommandCategory("CLR")]
 [CommandArgument("bytes|type-name", "Byte count to allocate, or a native interop type name whose unmanaged size should be allocated.")]
 [CommandExample("alloc 64", Title = "Allocate a 64-byte native buffer")]

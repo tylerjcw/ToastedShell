@@ -4,7 +4,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Filesystem;
 
-[Stdlib(StdlibCategory.Filesystem)]
 [CommandCategory("Filesystem")]
 [CommandArgument("handle", "The managed file handle to reposition.", Required = false)]
 [CommandArgument("offset", "The byte offset to seek to or by.", TypeName = "long")]

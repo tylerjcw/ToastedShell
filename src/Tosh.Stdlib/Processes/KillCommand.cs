@@ -4,7 +4,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Processes;
 
-[Stdlib(StdlibCategory.Processes)]
 [CommandCategory("Process")]
 [CommandArgument("job-id|pid ...", "One or more ToSh background job ids, ShellJobInfo values, ProcessInfo values, or native process ids.")]
 [CommandExample("sleep 60 &; jobs | first | kill", Title = "Kill a background job from the pipeline")]

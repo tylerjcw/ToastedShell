@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Filesystem;
 
-[Stdlib(StdlibCategory.Filesystem)]
 [CommandCategory("Filesystem")]
 [CommandExample("pwd", Title = "Print the current working directory")]
 [CommandExample("pwd | get .FullName", Title = "Get the full path as a string")]

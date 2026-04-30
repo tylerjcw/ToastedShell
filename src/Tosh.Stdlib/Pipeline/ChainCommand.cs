@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Pipeline;
 
-[Stdlib(StdlibCategory.Pipeline)]
 [CommandCategory("Pipeline")]
 [CommandArgument("sequences", "One or more arrays, lists, or ranges to concatenate after the pipeline.")]
 [CommandExample("echo 1 2 | chain [3 4] [5 6]", Title = "Concatenate multiple sequences")]

@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Concurrency;
 
-[Stdlib(StdlibCategory.Concurrency)]
 [CommandCategory("Concurrency")]
 [CommandArgument("channel", "The channel to receive from. Omit to read from pipeline input.")]
 [CommandExample("channel-recv $ch | each { |v| echo $v }", Title = "Stream all values from a channel")]

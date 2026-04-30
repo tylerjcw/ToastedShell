@@ -4,7 +4,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Data;
 
-[Stdlib(StdlibCategory.Data)]
 [CommandCategory("Data")]
 [CommandOutput("Serialized text in the specified format.", Mode = "text")]
 [CommandExample("ls | to json")]

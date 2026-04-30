@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Shell;
 
-[Stdlib(StdlibCategory.Shell)]
 [CommandCategory("Shell")]
 [CommandArgument("prompt", "Optional prompt text to print before reading.", Required = false)]
 [CommandExample("read-line \"Name: \"", Title = "Prompt for one line")]

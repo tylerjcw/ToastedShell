@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Pipeline;
 
-[Stdlib(StdlibCategory.Pipeline)]
 [CommandCategory("Pipeline")]
 [CommandArgument("predicate", "A predicate block or callable that returns a boolean.", TypeName = "block|callable", Kind = "block")]
 [CommandExample("ls -la | where _.Type == file", Title = "Filter by property")]

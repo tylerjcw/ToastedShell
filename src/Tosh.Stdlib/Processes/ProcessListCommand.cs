@@ -4,7 +4,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Processes;
 
-[Stdlib(StdlibCategory.Processes)]
 [CommandCategory("Process")]
 [CommandArgument("name-or-id", "Optional process names or PIDs to filter.", Required = false)]
 [CommandOption("-e", "Show every process.")]

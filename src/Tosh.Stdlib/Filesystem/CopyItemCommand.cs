@@ -4,7 +4,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Filesystem;
 
-[Stdlib(StdlibCategory.Filesystem)]
 [CommandCategory("Filesystem")]
 [CommandArgument("source", "One or more source files or directories.", TypeName = "path-like")]
 [CommandArgument("destination", "The target path.", TypeName = "path-like")]

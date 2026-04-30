@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Clr;
 
-[Stdlib(StdlibCategory.Clr)]
 [CommandCategory("CLR")]
 [CommandArgument("method-name", "The method to invoke (or a type name for static calls).")]
 [CommandArgument("args", "Arguments to pass to the method.", Required = false)]

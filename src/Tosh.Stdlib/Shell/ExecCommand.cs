@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Shell;
 
-[Stdlib(StdlibCategory.Shell)]
 [CommandCategory("Shell")]
 [CommandArgument("command", "The external command to execute.")]
 [CommandArgument("arg", "Arguments to pass to the command.", Required = false)]

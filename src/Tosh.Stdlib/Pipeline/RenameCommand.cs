@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Pipeline;
 
-[Stdlib(StdlibCategory.Pipeline)]
 [CommandCategory("Pipeline")]
 [CommandArgument("old new ...", "One or more old/new field-name pairs to apply to each record-like input value.")]
 [CommandExample("ls | get { Name, Length } | rename Length Size", Title = "Rename one field")]

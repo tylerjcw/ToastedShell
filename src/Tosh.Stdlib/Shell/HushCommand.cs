@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Shell;
 
-[Stdlib(StdlibCategory.Shell)]
 [CommandCategory("Shell")]
 [CommandArgument("code ...", "Diagnostic codes (e.g. tosh.runtime.fading_member) to suppress.", TypeName = "string")]
 [CommandExample("hush tosh.runtime.fading_member", Title = "Suppress a deprecation warning in the current scope")]

@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Clr;
 
-[Stdlib(StdlibCategory.Clr)]
 [CommandCategory("CLR")]
 [CommandArgument("value", "One or more values to inspect. If omitted, reads from the pipeline.", Required = false)]
 [CommandExample("type-of 42", Title = "Get the type of a number")]

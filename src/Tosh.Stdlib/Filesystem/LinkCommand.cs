@@ -5,7 +5,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Filesystem;
 
-[Stdlib(StdlibCategory.Filesystem)]
 [CommandCategory("Filesystem")]
 [CommandArgument("target", "The target path that the link will point to.", TypeName = "path-like")]
 [CommandArgument("link-path", "The path where the link will be created.", TypeName = "path-like")]

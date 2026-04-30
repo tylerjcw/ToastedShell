@@ -4,7 +4,6 @@ using Tosh.Tui.Requests;
 
 namespace Tosh.Stdlib.Shell;
 
-[Stdlib(StdlibCategory.Shell)]
 [CommandCategory("Shell")]
 [CommandArgument("topic", "The command, language topic, type, or external executable to describe.", Required = false)]
 [CommandArgument("--cli [query]", "Opens the inline fuzzy tree browser, optionally seeded with an initial query or topic.", Required = false)]

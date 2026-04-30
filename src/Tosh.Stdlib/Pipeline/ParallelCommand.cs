@@ -4,7 +4,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Pipeline;
 
-[Stdlib(StdlibCategory.Pipeline)]
 [CommandCategory("Pipeline")]
 [CommandArgument("callable|block", "A lambda or block executed once per input item, concurrently.")]
 [CommandOption("--threads <n>", "Maximum degree of parallelism (default: processor count).")]

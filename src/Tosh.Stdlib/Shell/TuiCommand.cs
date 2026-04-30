@@ -7,7 +7,6 @@ using Tosh.Runtime;
 namespace Tosh.Stdlib.Shell;
 
 [ShellOnly]
-[Stdlib(StdlibCategory.Shell)]
 [CommandCategory("Shell")]
 [CommandArgument("pick [items...]", "Pick one or more values from arguments or pipeline input.", Required = false)]
 [CommandArgument("confirm <message>", "Ask for a yes/no confirmation.", Required = false)]

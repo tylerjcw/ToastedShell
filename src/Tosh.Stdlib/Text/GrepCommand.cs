@@ -5,7 +5,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Text;
 
-[Stdlib(StdlibCategory.Text)]
 [CommandCategory("Text")]
 [CommandArgument("pattern|regex", "The text pattern or .NET regular expression to search for.", TypeName = "string|regex")]
 [CommandArgument("path", "Optional file paths to search instead of consuming piped text.", Required = false, TypeName = "path-like")]

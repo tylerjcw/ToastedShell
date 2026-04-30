@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Filesystem;
 
-[Stdlib(StdlibCategory.Filesystem)]
 [CommandCategory("Filesystem")]
 [CommandArgument("path ...", "Optional roots to measure.", Required = false, TypeName = "path-like")]
 [CommandOption("-a", "Include file rows as well as directory summaries.")]

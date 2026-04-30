@@ -5,7 +5,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Shell;
 
-[Stdlib(StdlibCategory.Shell)]
 [CommandCategory("Shell")]
 [CommandArgument("mask", "The octal file creation mask to set (e.g. 022, 077).", Required = false)]
 [CommandExample("umask", Title = "Display the current umask")]

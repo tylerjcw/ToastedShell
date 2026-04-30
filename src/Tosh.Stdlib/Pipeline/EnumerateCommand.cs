@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Pipeline;
 
-[Stdlib(StdlibCategory.Pipeline)]
 [CommandCategory("Pipeline")]
 [CommandArgument("start", "Optional starting index (default: 0).", Required = false)]
 [CommandExample("echo a b c | enumerate", Title = "Default 0-based indexing")]

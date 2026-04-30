@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Processes;
 
-[Stdlib(StdlibCategory.Processes)]
 [CommandCategory("Process")]
 [CommandExample("jobs", Title = "List active background jobs")]
 [CommandExample("jobs | get { Id, Status, CommandLine }", Title = "Project job fields")]

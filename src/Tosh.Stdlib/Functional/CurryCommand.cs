@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Functional;
 
-[Stdlib(StdlibCategory.Functional)]
 [CommandCategory("Functional")]
 [CommandArgument("callable", "A fixed-arity callable value to curry.")]
 [CommandExample("var add3 = func(a, b, c) => ($a + $b + $c); var curried = curry $add3", Title = "Create a curried callable")]

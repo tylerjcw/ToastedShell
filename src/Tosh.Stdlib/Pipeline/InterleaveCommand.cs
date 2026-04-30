@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Pipeline;
 
-[Stdlib(StdlibCategory.Pipeline)]
 [CommandCategory("Pipeline")]
 [CommandArgument("other-sequence", "An array or list to alternate with the pipeline items.")]
 [CommandExample("echo 1 2 3 | interleave [a b c]", Title = "Alternate numbers and letters")]

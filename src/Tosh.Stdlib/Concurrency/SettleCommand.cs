@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Concurrency;
 
-[Stdlib(StdlibCategory.Concurrency)]
 [CommandCategory("Concurrency")]
 [CommandArgument("operation", "A callable or block to execute. Provide one or more operations to settle.")]
 [CommandExample("settle { echo ok } { throw boom }", Title = "Collect fulfilled and rejected outcomes")]

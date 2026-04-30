@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Pipeline;
 
-[Stdlib(StdlibCategory.Pipeline)]
 [CommandCategory("Pipeline")]
 [CommandArgument("k", "The number of elements in each permutation. Defaults to the full length if omitted.", Required = false)]
 [CommandExample("[1 2 3] | permutations", Title = "All 6 permutations of 3 elements")]

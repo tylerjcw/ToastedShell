@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Pipeline;
 
-[Stdlib(StdlibCategory.Pipeline)]
 [CommandCategory("Pipeline")]
 [CommandArgument("callable|block", "A predicate that receives each item. A new group starts when it returns false.")]
 [CommandExample("echo 1 1 2 2 3 | group-while { _ == $prev }", Title = "Group equal consecutive values")]

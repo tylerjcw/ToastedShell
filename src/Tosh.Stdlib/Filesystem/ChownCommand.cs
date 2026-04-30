@@ -6,7 +6,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Filesystem;
 
-[Stdlib(StdlibCategory.Filesystem)]
 [CommandCategory("Filesystem")]
 [CommandArgument("owner[:group]", "Owner and optional group specification.")]
 [CommandArgument("path", "One or more files or directories.", TypeName = "path-like")]

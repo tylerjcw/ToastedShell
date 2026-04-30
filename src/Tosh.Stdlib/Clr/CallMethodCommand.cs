@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Clr;
 
-[Stdlib(StdlibCategory.Clr)]
 [CommandCategory("CLR")]
 [CommandExample("echo hello | call-method ToUpper")]
 [CommandExample("call-method $obj MethodName arg1")]

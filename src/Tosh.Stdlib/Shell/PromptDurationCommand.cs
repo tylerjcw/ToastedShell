@@ -3,7 +3,6 @@ using Tosh.Runtime;
 namespace Tosh.Stdlib.Shell;
 
 [ShellOnly]
-[Stdlib(StdlibCategory.Shell)]
 [CommandCategory("Prompt")]
 [CommandArgument("duration", "Duration to render instead of the last command duration.", Required = false)]
 [CommandOption("--fg <color>", "Foreground color name or ANSI-style color token.")]

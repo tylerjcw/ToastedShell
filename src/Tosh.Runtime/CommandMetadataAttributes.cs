@@ -1,3 +1,5 @@
+using System.Reflection;
+
 namespace Tosh.Runtime;
 
 /// <summary>
@@ -65,6 +67,47 @@ public enum StdlibCategory
 public sealed class StdlibAttribute(StdlibCategory category) : Attribute
 {
     public StdlibCategory Category { get; } = category;
+}
+
+/// <summary>
+/// Resolves a command type's <see cref="StdlibCategory"/> by checking, in order:
+///   1. an explicit <see cref="StdlibAttribute"/> on the type (override);
+///   2. the type's namespace — if it starts with <c>Tosh.Stdlib.</c> followed
+///      by an <see cref="StdlibCategory"/> name, that name is returned.
+///
+/// Returns <c>null</c> when neither rule applies. The namespace fallback lets
+/// commands placed under <c>src/Tosh.Stdlib/Filesystem/</c>, <c>…/Text/</c>,
+/// etc. omit the attribute — the folder is already the source of truth.
+/// </summary>
+public static class StdlibCategoryResolver
+{
+    private const string StdlibNamespacePrefix = "Tosh.Stdlib.";
+
+    public static StdlibCategory? Resolve(Type type)
+    {
+        var explicitAttr = type.GetCustomAttribute<StdlibAttribute>();
+        if (explicitAttr is not null)
+        {
+            return explicitAttr.Category;
+        }
+
+        var ns = type.Namespace;
+        if (ns is null || !ns.StartsWith(StdlibNamespacePrefix, StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        var leaf = ns.AsSpan(StdlibNamespacePrefix.Length);
+        var nextDot = leaf.IndexOf('.');
+        if (nextDot >= 0)
+        {
+            leaf = leaf[..nextDot];
+        }
+
+        return Enum.TryParse<StdlibCategory>(leaf.ToString(), ignoreCase: false, out var parsed)
+            ? parsed
+            : null;
+    }
 }
 
 /// <summary>

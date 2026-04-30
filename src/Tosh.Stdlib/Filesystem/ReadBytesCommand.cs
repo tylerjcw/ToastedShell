@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Filesystem;
 
-[Stdlib(StdlibCategory.Filesystem)]
 [CommandCategory("Filesystem")]
 [CommandArgument("path ...", "One or more file paths to read as raw byte arrays.", Required = false, TypeName = "path-like")]
 [CommandExample("read-bytes ./image.bin")]

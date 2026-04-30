@@ -3,7 +3,6 @@ using Tosh.Runtime;
 namespace Tosh.Stdlib.Shell;
 
 [ShellOnly]
-[Stdlib(StdlibCategory.Shell)]
 [CommandCategory("Prompt")]
 [CommandOption("--fg <color>", "Foreground color name or ANSI-style color token.")]
 [CommandOption("--bg <color>", "Background color name or ANSI-style color token.")]

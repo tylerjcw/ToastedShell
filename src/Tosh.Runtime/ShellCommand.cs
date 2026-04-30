@@ -72,7 +72,7 @@ public abstract class ShellCommand : IShellCommand
         var canonicalExamples = type.GetCustomAttributes<CommandCanonicalExampleAttribute>()
             .Select(c => new CommandCanonicalExampleMetadata(c.Input, c.Output, c.Description)).ToList();
 
-        var stdlibAttr = type.GetCustomAttribute<StdlibAttribute>();
+        var stdlibCategory = StdlibCategoryResolver.Resolve(type);
         var shellOnlyAttr = type.GetCustomAttribute<ShellOnlyAttribute>();
 
         return new CommandMetadata(
@@ -101,7 +101,7 @@ public abstract class ShellCommand : IShellCommand
             IsExperimental: isExperimental,
             ErrorConditions: errorConditions,
             CanonicalExamples: canonicalExamples,
-            Stdlib: stdlibAttr?.Category.ToString(),
+            Stdlib: stdlibCategory?.ToString(),
             IsShellOnly: shellOnlyAttr is not null,
             ShellOnlyReason: shellOnlyAttr?.Reason
         );

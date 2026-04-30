@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Concurrency;
 
-[Stdlib(StdlibCategory.Concurrency)]
 [CommandCategory("Concurrency")]
 [CommandArgument("channel", "The channel to close. Omit to close channel(s) from pipeline input.")]
 [CommandExample("channel-close $ch", Title = "Signal that no more values will be sent")]

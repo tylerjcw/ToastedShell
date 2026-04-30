@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Text;
 
-[Stdlib(StdlibCategory.Text)]
 [CommandCategory("Text")]
 [CommandArgument("path ...", "Optional files to read instead of pipeline input.", Required = false, TypeName = "path-like")]
 [CommandOption("-f <fields>", "Select 1-based delimited fields. Supports comma-separated values and ranges such as 1,3-5.")]

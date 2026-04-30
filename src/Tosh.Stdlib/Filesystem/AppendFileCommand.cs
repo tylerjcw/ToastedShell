@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Filesystem;
 
-[Stdlib(StdlibCategory.Filesystem)]
 [CommandCategory("Filesystem")]
 [CommandArgument("path", "The file path to append to.", TypeName = "path-like")]
 [CommandArgument("value ...", "Optional explicit text values to append. When omitted, pipeline input becomes the appended text.", Required = false)]

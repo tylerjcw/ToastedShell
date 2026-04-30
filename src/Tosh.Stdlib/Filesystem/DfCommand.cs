@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Filesystem;
 
-[Stdlib(StdlibCategory.Filesystem)]
 [CommandCategory("Filesystem")]
 [CommandArgument("path ...", "Optional paths used to resolve the containing mounted filesystem.", Required = false, TypeName = "path-like")]
 [CommandOption("-h", "Accepts the familiar human-readable flag; ToSh sizes are already typed and human-friendly.")]

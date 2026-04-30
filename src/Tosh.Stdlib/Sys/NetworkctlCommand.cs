@@ -4,7 +4,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Sys;
 
-[Stdlib(StdlibCategory.Sys)]
 [CommandCategory("System")]
 [CommandArgument("[list [pattern ...]]", "With no subcommand, ToSh treats `networkctl` as a structured `list` query. Explicit `list` behaves the same way.", Required = false)]
 [CommandArgument("<other-command ...>", "Unsupported, detail, and mutating commands currently fall back to the native `networkctl` utility unchanged.", Required = false)]

@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Pipeline;
 
-[Stdlib(StdlibCategory.Pipeline)]
 [CommandCategory("Pipeline")]
 [CommandArgument("[column|member-path] [--sum [columns]] [--avg [columns]] [--min [columns]] [--max [columns]] [--count [columns]]", "With no arguments, infer every sensible aggregate for every summarizable column. A single bare column or member path such as `Size` or `_.Used` narrows auto mode to that one target. Flags request explicit operations.", Required = false)]
 [CommandOption("--sum [columns]", "Compute sums for scalar input or the named columns.")]

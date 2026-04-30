@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Pipeline;
 
-[Stdlib(StdlibCategory.Pipeline)]
 [CommandCategory("Pipeline")]
 [CommandArgument("other-sequence", "An array or list to merge pairwise with the pipeline.")]
 [CommandArgument("callable|block", "Optional combiner. Receives each pair as arguments. Defaults to creating two-element arrays.", Required = false)]

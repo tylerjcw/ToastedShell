@@ -5,7 +5,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Shell;
 
-[Stdlib(StdlibCategory.Shell)]
 [CommandCategory("Shell")]
 [CommandArgument("resource", "The resource limit to query or set (e.g. 'nofile', 'nproc', 'stack', 'core', 'fsize').", Required = false)]
 [CommandArgument("value", "The new soft limit value to set, or 'unlimited'.", Required = false)]

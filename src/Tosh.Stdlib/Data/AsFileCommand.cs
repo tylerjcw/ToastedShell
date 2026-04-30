@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Data;
 
-[Stdlib(StdlibCategory.Data)]
 [CommandCategory("Data")]
 [CommandArgument("format", "Output format: text, json, or csv. Defaults to text.", Required = false)]
 [CommandArgument("value", "Values to materialize. Can also come from pipeline.", Required = false)]

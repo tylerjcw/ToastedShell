@@ -4,7 +4,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Filesystem;
 
-[Stdlib(StdlibCategory.Filesystem)]
 [CommandCategory("Filesystem")]
 [CommandArgument("path", "Directory paths to tree. Defaults to current directory.", Required = false, TypeName = "path-like")]
 [CommandOption("-a", "Include hidden files.")]

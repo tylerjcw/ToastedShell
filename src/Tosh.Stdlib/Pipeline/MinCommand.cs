@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Pipeline;
 
-[Stdlib(StdlibCategory.Pipeline)]
 [CommandCategory("Pipeline")]
 [CommandArgument("member-path", "Optional member path to extract the comparison value from each object.", Required = false)]
 [CommandExample("echo 3 1 4 1 5 | min", Title = "Find the minimum value")]

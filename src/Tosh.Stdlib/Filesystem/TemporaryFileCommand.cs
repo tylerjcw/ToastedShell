@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Filesystem;
 
-[Stdlib(StdlibCategory.Filesystem)]
 [CommandCategory("Filesystem")]
 [CommandArgument("prefix", "Optional prefix for the file name. Defaults to 'tosh'.", Required = false)]
 [CommandArgument("extension", "Optional file extension.", Required = false)]

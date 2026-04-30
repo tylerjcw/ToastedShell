@@ -6,7 +6,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Net;
 
-[Stdlib(StdlibCategory.Net)]
 [CommandCategory("Network")]
 [CommandArgument("host", "Host name or IP address to ping.")]
 [CommandOption("-c, --count <count>", "Number of echo requests to send. Defaults to 4.")]

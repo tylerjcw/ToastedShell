@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Pipeline;
 
-[Stdlib(StdlibCategory.Pipeline)]
 [CommandCategory("Pipeline")]
 [CommandArgument("member-path", "Optional member path to count frequencies of, instead of the whole item.", Required = false)]
 [CommandExample("echo red blue red green blue red | frequencies", Title = "Count distinct values")]

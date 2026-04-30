@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Pipeline;
 
-[Stdlib(StdlibCategory.Pipeline)]
 [CommandCategory("Pipeline")]
 [CommandArgument("n", "Take every Nth item (must be >= 1).")]
 [CommandExample("1.. | step-by 3 | first 5", Title = "Every 3rd integer")]

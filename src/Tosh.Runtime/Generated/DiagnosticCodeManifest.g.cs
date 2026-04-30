@@ -39,7 +39,7 @@ public static class DiagnosticCodeManifest
             Title: "Configuration path '{path}' needs a value.",
             Help: "Examples: `config set prompt.name-text toast` or `echo toast | config set prompt.name-text`.",
             SourceFile: "src/Tosh.Stdlib/Shell/ConfigCommand.cs",
-            SourceLine: 148),
+            SourceLine: 147),
         ["tosh.config.reload_unavailable"] = new DiagnosticCodeInfo(
             Code: "tosh.config.reload_unavailable",
             Namespace: "config",
@@ -47,7 +47,7 @@ public static class DiagnosticCodeManifest
             Title: "Configuration reload is not available in this session.",
             Help: "Reload requires a live evaluator. In normal ToSh sessions, `config reload` should be available.",
             SourceFile: "src/Tosh.Stdlib/Shell/ConfigCommand.cs",
-            SourceLine: 132),
+            SourceLine: 131),
         ["tosh.get.index_out_of_range"] = new DiagnosticCodeInfo(
             Code: "tosh.get.index_out_of_range",
             Namespace: "get",
@@ -55,7 +55,7 @@ public static class DiagnosticCodeManifest
             Title: "",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Pipeline/GetCommand.cs",
-            SourceLine: 141),
+            SourceLine: 140),
         ["tosh.help.no_inline_provider"] = new DiagnosticCodeInfo(
             Code: "tosh.help.no_inline_provider",
             Namespace: "help",
@@ -63,7 +63,7 @@ public static class DiagnosticCodeManifest
             Title: "Inline help (--cli) is not available in this environment.",
             Help: "The --cli flag requires an interactive terminal. Remove --cli to use the fullscreen help browser or normal help output.",
             SourceFile: "src/Tosh.Stdlib/Shell/HelpCommand.cs",
-            SourceLine: 293),
+            SourceLine: 292),
         ["tosh.history.run_unavailable"] = new DiagnosticCodeInfo(
             Code: "tosh.history.run_unavailable",
             Namespace: "history",
@@ -71,7 +71,7 @@ public static class DiagnosticCodeManifest
             Title: "History replay is not available in this session.",
             Help: "History replay requires a live evaluator. In normal ToSh sessions, `history run` should be available.",
             SourceFile: "src/Tosh.Stdlib/Shell/HistoryCommand.cs",
-            SourceLine: 63),
+            SourceLine: 62),
         ["tosh.naming.shadowed_builtin"] = new DiagnosticCodeInfo(
             Code: "tosh.naming.shadowed_builtin",
             Namespace: "naming",
@@ -1247,7 +1247,7 @@ public static class DiagnosticCodeManifest
             Title: "The 'assert' command requires a predicate block or callable.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Scripting/AssertCommand.cs",
-            SourceLine: 22),
+            SourceLine: 21),
         ["tosh.runtime.assertion_failed"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.assertion_failed",
             Namespace: "runtime",
@@ -1255,7 +1255,7 @@ public static class DiagnosticCodeManifest
             Title: "",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Scripting/AssertCommand.cs",
-            SourceLine: 42),
+            SourceLine: 41),
         ["tosh.runtime.await_requires_future"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.await_requires_future",
             Namespace: "runtime",
@@ -1263,7 +1263,7 @@ public static class DiagnosticCodeManifest
             Title: "'await' expects a ShellFuture value.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Concurrency/AwaitCommand.cs",
-            SourceLine: 37),
+            SourceLine: 36),
         ["tosh.runtime.background_command_must_be_external"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.background_command_must_be_external",
             Namespace: "runtime",
@@ -1319,7 +1319,7 @@ public static class DiagnosticCodeManifest
             Title: "'cartesian-product' requires a second sequence and an optional combiner.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Pipeline/CartesianProductCommand.cs",
-            SourceLine: 25),
+            SourceLine: 24),
         ["tosh.runtime.chain_requires_sequence"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.chain_requires_sequence",
             Namespace: "runtime",
@@ -1327,7 +1327,7 @@ public static class DiagnosticCodeManifest
             Title: "'chain' requires at least one sequence argument.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Pipeline/ChainCommand.cs",
-            SourceLine: 23),
+            SourceLine: 22),
         ["tosh.runtime.channel_invalid_capacity"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.channel_invalid_capacity",
             Namespace: "runtime",
@@ -1335,7 +1335,7 @@ public static class DiagnosticCodeManifest
             Title: "'channel' capacity must be a positive integer.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Concurrency/ChannelCommand.cs",
-            SourceLine: 43),
+            SourceLine: 42),
         ["tosh.runtime.channel_recv_requires_channel"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.channel_recv_requires_channel",
             Namespace: "runtime",
@@ -1343,7 +1343,7 @@ public static class DiagnosticCodeManifest
             Title: "'channel-recv' first argument must be a ShellChannel.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Concurrency/ChannelRecvCommand.cs",
-            SourceLine: 25),
+            SourceLine: 24),
         ["tosh.runtime.channel_select_requires_channel"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.channel_select_requires_channel",
             Namespace: "runtime",
@@ -1351,7 +1351,7 @@ public static class DiagnosticCodeManifest
             Title: "'channel-select' arguments must be ShellChannel values.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Concurrency/ChannelSelectCommand.cs",
-            SourceLine: 62),
+            SourceLine: 61),
         ["tosh.runtime.channel_send_requires_channel"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.channel_send_requires_channel",
             Namespace: "runtime",
@@ -1359,7 +1359,7 @@ public static class DiagnosticCodeManifest
             Title: "'channel-send' requires a channel argument.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Concurrency/ChannelSendCommand.cs",
-            SourceLine: 23),
+            SourceLine: 22),
         ["tosh.runtime.chunk_requires_positive_integer"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.chunk_requires_positive_integer",
             Namespace: "runtime",
@@ -1367,7 +1367,7 @@ public static class DiagnosticCodeManifest
             Title: "'chunk' requires a positive integer size.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Pipeline/ChunkCommand.cs",
-            SourceLine: 30),
+            SourceLine: 29),
         ["tosh.runtime.chunk_requires_size"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.chunk_requires_size",
             Namespace: "runtime",
@@ -1375,7 +1375,7 @@ public static class DiagnosticCodeManifest
             Title: "'chunk' requires exactly one integer size argument.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Pipeline/ChunkCommand.cs",
-            SourceLine: 22),
+            SourceLine: 21),
         ["tosh.runtime.combinations_k_non_negative"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.combinations_k_non_negative",
             Namespace: "runtime",
@@ -1383,7 +1383,7 @@ public static class DiagnosticCodeManifest
             Title: "k must be non-negative.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Pipeline/CombinationsCommand.cs",
-            SourceLine: 31),
+            SourceLine: 30),
         ["tosh.runtime.combinations_requires_k"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.combinations_requires_k",
             Namespace: "runtime",
@@ -1391,7 +1391,7 @@ public static class DiagnosticCodeManifest
             Title: "'combinations' requires exactly one integer argument (k).",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Pipeline/CombinationsCommand.cs",
-            SourceLine: 22),
+            SourceLine: 21),
         ["tosh.runtime.command_failed"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.command_failed",
             Namespace: "runtime",
@@ -1407,7 +1407,7 @@ public static class DiagnosticCodeManifest
             Title: "'{Name}' is not available on Windows.",
             Help: "This command lists open Linux file descriptors via /proc and the kernel fd table, which have no Windows equivalent.",
             SourceFile: "src/Tosh.Stdlib/Processes/LsfdCommand.cs",
-            SourceLine: 63),
+            SourceLine: 62),
         ["tosh.runtime.compose_requires_callable"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.compose_requires_callable",
             Namespace: "runtime",
@@ -1415,7 +1415,7 @@ public static class DiagnosticCodeManifest
             Title: "Argument {i + 1} is not callable.",
             Help: "pass a lambda like 'func(x) => ...' or a function reference like '&name'.",
             SourceFile: "src/Tosh.Stdlib/Functional/ComposeCommand.cs",
-            SourceLine: 37),
+            SourceLine: 36),
         ["tosh.runtime.compose_requires_two_callables"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.compose_requires_two_callables",
             Namespace: "runtime",
@@ -1423,7 +1423,7 @@ public static class DiagnosticCodeManifest
             Title: "The 'compose' command requires at least two callable values.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Functional/ComposeCommand.cs",
-            SourceLine: 25),
+            SourceLine: 24),
         ["tosh.runtime.compound_assignment_requires_value"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.compound_assignment_requires_value",
             Namespace: "runtime",
@@ -1471,7 +1471,7 @@ public static class DiagnosticCodeManifest
             Title: "'converge' requires a seed value and a callable value or block.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Functional/ConvergeCommand.cs",
-            SourceLine: 21),
+            SourceLine: 20),
         ["tosh.runtime.curry_argument_count_mismatch"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.curry_argument_count_mismatch",
             Namespace: "runtime",
@@ -1487,7 +1487,7 @@ public static class DiagnosticCodeManifest
             Title: "The 'curry' command requires exactly one callable value.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Functional/CurryCommand.cs",
-            SourceLine: 24),
+            SourceLine: 23),
         ["tosh.runtime.curry_requires_fixed_arity_callable"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.curry_requires_fixed_arity_callable",
             Namespace: "runtime",
@@ -1495,7 +1495,7 @@ public static class DiagnosticCodeManifest
             Title: "The 'curry' command currently requires a fixed-arity callable.",
             Help: "use 'partial' for optional/rest-parameter callables, or curry a lambda/function with a fixed parameter count.",
             SourceFile: "src/Tosh.Stdlib/Functional/CurryCommand.cs",
-            SourceLine: 42),
+            SourceLine: 41),
         ["tosh.runtime.curry_requires_nonzero_arity"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.curry_requires_nonzero_arity",
             Namespace: "runtime",
@@ -1503,7 +1503,7 @@ public static class DiagnosticCodeManifest
             Title: "The 'curry' command requires a callable that accepts at least one argument.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Functional/CurryCommand.cs",
-            SourceLine: 52),
+            SourceLine: 51),
         ["tosh.runtime.cycle_no_arguments"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.cycle_no_arguments",
             Namespace: "runtime",
@@ -1511,7 +1511,7 @@ public static class DiagnosticCodeManifest
             Title: "'cycle' takes no arguments. Pipe a sequence into it.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Functional/CycleCommand.cs",
-            SourceLine: 22),
+            SourceLine: 21),
         ["tosh.runtime.dedup_too_many_args"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.dedup_too_many_args",
             Namespace: "runtime",
@@ -1519,7 +1519,7 @@ public static class DiagnosticCodeManifest
             Title: "'dedup' accepts at most one member path argument.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Pipeline/DedupCommand.cs",
-            SourceLine: 23),
+            SourceLine: 22),
         ["tosh.runtime.destructuring_requires_array"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.destructuring_requires_array",
             Namespace: "runtime",
@@ -1599,7 +1599,7 @@ public static class DiagnosticCodeManifest
             Title: "'each' requires exactly one callable value or block.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Pipeline/EachCommand.cs",
-            SourceLine: 23),
+            SourceLine: 22),
         ["tosh.runtime.enum_member_conversion_failed"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.enum_member_conversion_failed",
             Namespace: "runtime",
@@ -1631,7 +1631,7 @@ public static class DiagnosticCodeManifest
             Title: "'enumerate' accepts at most one argument (the starting index).",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Pipeline/EnumerateCommand.cs",
-            SourceLine: 22),
+            SourceLine: 21),
         ["tosh.runtime.error"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.error",
             Namespace: "runtime",
@@ -1655,7 +1655,7 @@ public static class DiagnosticCodeManifest
             Title: "`exec` needs a non-empty command name.",
             Help: "Pass a command name, executable path, or path-like object.",
             SourceFile: "src/Tosh.Stdlib/Shell/ExecCommand.cs",
-            SourceLine: 91),
+            SourceLine: 90),
         ["tosh.runtime.exec_missing_command"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.exec_missing_command",
             Namespace: "runtime",
@@ -1663,7 +1663,7 @@ public static class DiagnosticCodeManifest
             Title: "`exec` needs a command to run.",
             Help: "Examples: `exec tosh`, `exec zsh`, or `exec /bin/sh -c \"echo hi\"`.",
             SourceFile: "src/Tosh.Stdlib/Shell/ExecCommand.cs",
-            SourceLine: 43),
+            SourceLine: 42),
         ["tosh.runtime.exec_pipeline_unsupported"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.exec_pipeline_unsupported",
             Namespace: "runtime",
@@ -1671,7 +1671,7 @@ public static class DiagnosticCodeManifest
             Title: "`exec` only works as a standalone command.",
             Help: "Use `exec <command>` by itself to replace the current ToSh process.",
             SourceFile: "src/Tosh.Stdlib/Shell/ExecCommand.cs",
-            SourceLine: 25),
+            SourceLine: 24),
         ["tosh.runtime.expression_failed"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.expression_failed",
             Namespace: "runtime",
@@ -1719,7 +1719,7 @@ public static class DiagnosticCodeManifest
             Title: "'filter' requires exactly one callable value or block.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Pipeline/FilterCommand.cs",
-            SourceLine: 22),
+            SourceLine: 21),
         ["tosh.runtime.find_index_requires_callable_or_block"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.find_index_requires_callable_or_block",
             Namespace: "runtime",
@@ -1727,7 +1727,7 @@ public static class DiagnosticCodeManifest
             Title: "'find-index' requires exactly one callable value or block.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Pipeline/FindIndexCommand.cs",
-            SourceLine: 21),
+            SourceLine: 20),
         ["tosh.runtime.findmnt_command_failed"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.findmnt_command_failed",
             Namespace: "runtime",
@@ -1735,7 +1735,7 @@ public static class DiagnosticCodeManifest
             Title: "",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Filesystem/FindmntCommand.cs",
-            SourceLine: 89),
+            SourceLine: 88),
         ["tosh.runtime.findmnt_command_missing"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.findmnt_command_missing",
             Namespace: "runtime",
@@ -1743,7 +1743,7 @@ public static class DiagnosticCodeManifest
             Title: "The system 'findmnt' command was not found.",
             Help: "Install util-linux or invoke the external utility by full path once it is available.",
             SourceFile: "src/Tosh.Stdlib/Filesystem/FindmntCommand.cs",
-            SourceLine: 138),
+            SourceLine: 137),
         ["tosh.runtime.findmnt_command_start_failed"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.findmnt_command_start_failed",
             Namespace: "runtime",
@@ -1751,7 +1751,7 @@ public static class DiagnosticCodeManifest
             Title: "Failed to start the system 'findmnt' command.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Filesystem/FindmntCommand.cs",
-            SourceLine: 288),
+            SourceLine: 287),
         ["tosh.runtime.findmnt_json_parse_failed"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.findmnt_json_parse_failed",
             Namespace: "runtime",
@@ -1759,7 +1759,7 @@ public static class DiagnosticCodeManifest
             Title: "Could not parse structured 'findmnt' output. {exception.Message}",
             Help: "Try running the external `findmnt` command directly if you are using an output mode that does not support JSON.",
             SourceFile: "src/Tosh.Stdlib/Filesystem/FindmntCommand.cs",
-            SourceLine: 104),
+            SourceLine: 103),
         ["tosh.runtime.flat_map_requires_callable_or_block"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.flat_map_requires_callable_or_block",
             Namespace: "runtime",
@@ -1767,7 +1767,7 @@ public static class DiagnosticCodeManifest
             Title: "'flat-map' requires exactly one callable value or block.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Pipeline/FlatMapCommand.cs",
-            SourceLine: 22),
+            SourceLine: 21),
         ["tosh.runtime.frequencies_too_many_args"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.frequencies_too_many_args",
             Namespace: "runtime",
@@ -1775,7 +1775,7 @@ public static class DiagnosticCodeManifest
             Title: "'frequencies' accepts at most one member path argument.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Pipeline/FrequenciesCommand.cs",
-            SourceLine: 21),
+            SourceLine: 20),
         ["tosh.runtime.function_argument_count_mismatch"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.function_argument_count_mismatch",
             Namespace: "runtime",
@@ -1807,7 +1807,7 @@ public static class DiagnosticCodeManifest
             Title: "'group-by' requires exactly one member path, callable, or block.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Pipeline/GroupByCommand.cs",
-            SourceLine: 20),
+            SourceLine: 19),
         ["tosh.runtime.group_while_requires_callable_or_block"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.group_while_requires_callable_or_block",
             Namespace: "runtime",
@@ -1815,7 +1815,7 @@ public static class DiagnosticCodeManifest
             Title: "'group-while' requires exactly one callable value or block.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Pipeline/GroupWhileCommand.cs",
-            SourceLine: 22),
+            SourceLine: 21),
         ["tosh.runtime.hermit_has_constructor"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.hermit_has_constructor",
             Namespace: "runtime",
@@ -1831,7 +1831,7 @@ public static class DiagnosticCodeManifest
             Title: "",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Sys/HostnamectlCommand.cs",
-            SourceLine: 62),
+            SourceLine: 61),
         ["tosh.runtime.hostnamectl_command_missing"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.hostnamectl_command_missing",
             Namespace: "runtime",
@@ -1839,7 +1839,7 @@ public static class DiagnosticCodeManifest
             Title: "The system 'hostnamectl' command was not found.",
             Help: "Install systemd or invoke the external utility by full path once it is available.",
             SourceFile: "src/Tosh.Stdlib/Sys/HostnamectlCommand.cs",
-            SourceLine: 117),
+            SourceLine: 116),
         ["tosh.runtime.hostnamectl_command_start_failed"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.hostnamectl_command_start_failed",
             Namespace: "runtime",
@@ -1847,7 +1847,7 @@ public static class DiagnosticCodeManifest
             Title: "Failed to start the system 'hostnamectl' command.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Sys/HostnamectlCommand.cs",
-            SourceLine: 249),
+            SourceLine: 248),
         ["tosh.runtime.hostnamectl_json_parse_failed"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.hostnamectl_json_parse_failed",
             Namespace: "runtime",
@@ -1855,7 +1855,7 @@ public static class DiagnosticCodeManifest
             Title: "Could not parse structured 'hostnamectl status' output. {exception.Message}",
             Help: "Try running the external `hostnamectl` command directly if you are using an unsupported output mode.",
             SourceFile: "src/Tosh.Stdlib/Sys/HostnamectlCommand.cs",
-            SourceLine: 80),
+            SourceLine: 79),
         ["tosh.runtime.http_request_failed"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.http_request_failed",
             Namespace: "runtime",
@@ -1863,7 +1863,7 @@ public static class DiagnosticCodeManifest
             Title: "The HTTP request failed. {exception.Message}",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Net/HttpCommand.cs",
-            SourceLine: 308),
+            SourceLine: 307),
         ["tosh.runtime.http_status_failed"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.http_status_failed",
             Namespace: "runtime",
@@ -1871,7 +1871,7 @@ public static class DiagnosticCodeManifest
             Title: "HTTP request returned {(int)response.StatusCode} {response.ReasonPhrase ?? string.Empty}",
             Help: "Remove --fail to receive the response object/body even for non-success status codes.",
             SourceFile: "src/Tosh.Stdlib/Net/HttpCommand.cs",
-            SourceLine: 336),
+            SourceLine: 335),
         ["tosh.runtime.infinite_eager_comprehension"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.infinite_eager_comprehension",
             Namespace: "runtime",
@@ -1903,7 +1903,7 @@ public static class DiagnosticCodeManifest
             Title: "'interleave' requires exactly one array argument.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Pipeline/InterleaveCommand.cs",
-            SourceLine: 21),
+            SourceLine: 20),
         ["tosh.runtime.intersperse_requires_separator"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.intersperse_requires_separator",
             Namespace: "runtime",
@@ -1911,7 +1911,7 @@ public static class DiagnosticCodeManifest
             Title: "'intersperse' requires exactly one separator argument.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Pipeline/IntersperseCommand.cs",
-            SourceLine: 22),
+            SourceLine: 21),
         ["tosh.runtime.invalid_member_assignment_target"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.invalid_member_assignment_target",
             Namespace: "runtime",
@@ -1935,7 +1935,7 @@ public static class DiagnosticCodeManifest
             Title: "The 'invoke' command requires a callable value.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Functional/InvokeCommand.cs",
-            SourceLine: 24),
+            SourceLine: 23),
         ["tosh.runtime.ip_command_failed"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.ip_command_failed",
             Namespace: "runtime",
@@ -1943,7 +1943,7 @@ public static class DiagnosticCodeManifest
             Title: "",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Net/IpCommand.cs",
-            SourceLine: 105),
+            SourceLine: 104),
         ["tosh.runtime.ip_command_missing"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.ip_command_missing",
             Namespace: "runtime",
@@ -1951,7 +1951,7 @@ public static class DiagnosticCodeManifest
             Title: "The system 'ip' command is not available on Windows.",
             Help: "Only 'ip addr', 'ip link', and 'ip route' are supported on Windows.",
             SourceFile: "src/Tosh.Stdlib/Net/IpCommand.cs",
-            SourceLine: 51),
+            SourceLine: 50),
         ["tosh.runtime.ip_command_start_failed"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.ip_command_start_failed",
             Namespace: "runtime",
@@ -1959,7 +1959,7 @@ public static class DiagnosticCodeManifest
             Title: "Failed to start the system 'ip' command.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Net/IpCommand.cs",
-            SourceLine: 394),
+            SourceLine: 393),
         ["tosh.runtime.ip_json_parse_failed"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.ip_json_parse_failed",
             Namespace: "runtime",
@@ -1967,7 +1967,7 @@ public static class DiagnosticCodeManifest
             Title: "Could not parse structured 'ip {structuredRequest.Mode.ToString().ToLowerInvariant()}' output. {exception.Message}",
             Help: "Try running the external `ip` command directly if you are using an output mode that does not support JSON.",
             SourceFile: "src/Tosh.Stdlib/Net/IpCommand.cs",
-            SourceLine: 150),
+            SourceLine: 149),
         ["tosh.runtime.ip_subcommand_unsupported_windows"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.ip_subcommand_unsupported_windows",
             Namespace: "runtime",
@@ -1975,7 +1975,7 @@ public static class DiagnosticCodeManifest
             Title: "'ip {windowsRequest.Mode.ToString().ToLowerInvariant()}' is not supported on Windows.",
             Help: "Only 'ip addr', 'ip link', and 'ip route' are supported on Windows.",
             SourceFile: "src/Tosh.Stdlib/Net/IpCommand.cs",
-            SourceLine: 65),
+            SourceLine: 64),
         ["tosh.runtime.iterate_requires_seed_and_callable"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.iterate_requires_seed_and_callable",
             Namespace: "runtime",
@@ -1983,7 +1983,7 @@ public static class DiagnosticCodeManifest
             Title: "'iterate' requires a seed value and a callable value or block.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Functional/IterateCommand.cs",
-            SourceLine: 23),
+            SourceLine: 22),
         ["tosh.runtime.journalctl_command_failed"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.journalctl_command_failed",
             Namespace: "runtime",
@@ -1991,7 +1991,7 @@ public static class DiagnosticCodeManifest
             Title: "The system 'journalctl' command failed.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Sys/JournalctlCommand.cs",
-            SourceLine: 240),
+            SourceLine: 239),
         ["tosh.runtime.journalctl_command_missing"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.journalctl_command_missing",
             Namespace: "runtime",
@@ -1999,7 +1999,7 @@ public static class DiagnosticCodeManifest
             Title: "The system 'journalctl' command was not found.",
             Help: "Install systemd or invoke the external utility by full path once it is available.",
             SourceFile: "src/Tosh.Stdlib/Sys/JournalctlCommand.cs",
-            SourceLine: 71),
+            SourceLine: 70),
         ["tosh.runtime.journalctl_command_start_failed"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.journalctl_command_start_failed",
             Namespace: "runtime",
@@ -2007,7 +2007,7 @@ public static class DiagnosticCodeManifest
             Title: "Failed to start the system 'journalctl' command.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Sys/JournalctlCommand.cs",
-            SourceLine: 189),
+            SourceLine: 188),
         ["tosh.runtime.journalctl_json_parse_failed"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.journalctl_json_parse_failed",
             Namespace: "runtime",
@@ -2015,7 +2015,7 @@ public static class DiagnosticCodeManifest
             Title: "Could not parse structured journal output. {exception.Message}",
             Help: "Try running the external `journalctl` command directly if you are using an unsupported output mode.",
             SourceFile: "src/Tosh.Stdlib/Sys/JournalctlCommand.cs",
-            SourceLine: 220),
+            SourceLine: 219),
         ["tosh.runtime.list_materialization_failed"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.list_materialization_failed",
             Namespace: "runtime",
@@ -2031,7 +2031,7 @@ public static class DiagnosticCodeManifest
             Title: "",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Sys/LoginctlCommand.cs",
-            SourceLine: 85),
+            SourceLine: 84),
         ["tosh.runtime.loginctl_command_missing"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.loginctl_command_missing",
             Namespace: "runtime",
@@ -2039,7 +2039,7 @@ public static class DiagnosticCodeManifest
             Title: "The system 'loginctl' command was not found.",
             Help: "Install systemd or invoke the external utility by full path once it is available.",
             SourceFile: "src/Tosh.Stdlib/Sys/LoginctlCommand.cs",
-            SourceLine: 205),
+            SourceLine: 204),
         ["tosh.runtime.loginctl_command_start_failed"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.loginctl_command_start_failed",
             Namespace: "runtime",
@@ -2047,7 +2047,7 @@ public static class DiagnosticCodeManifest
             Title: "Failed to start the system 'loginctl' command.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Sys/LoginctlCommand.cs",
-            SourceLine: 574),
+            SourceLine: 573),
         ["tosh.runtime.loginctl_json_parse_failed"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.loginctl_json_parse_failed",
             Namespace: "runtime",
@@ -2055,7 +2055,7 @@ public static class DiagnosticCodeManifest
             Title: "Could not parse structured 'loginctl list-sessions' output. {exception.Message}",
             Help: "Try running the external `loginctl` command directly if you are using an unsupported output mode.",
             SourceFile: "src/Tosh.Stdlib/Sys/LoginctlCommand.cs",
-            SourceLine: 107),
+            SourceLine: 106),
         ["tosh.runtime.loginctl_show_parse_failed"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.loginctl_show_parse_failed",
             Namespace: "runtime",
@@ -2063,7 +2063,7 @@ public static class DiagnosticCodeManifest
             Title: "Could not parse structured 'loginctl show' output. {exception.Message}",
             Help: "Try running the external `loginctl show-*` command directly if you are using an unsupported property/value mode.",
             SourceFile: "src/Tosh.Stdlib/Sys/LoginctlCommand.cs",
-            SourceLine: 179),
+            SourceLine: 178),
         ["tosh.runtime.lsblk_command_failed"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.lsblk_command_failed",
             Namespace: "runtime",
@@ -2071,7 +2071,7 @@ public static class DiagnosticCodeManifest
             Title: "",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Filesystem/LsblkCommand.cs",
-            SourceLine: 95),
+            SourceLine: 94),
         ["tosh.runtime.lsblk_command_missing"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.lsblk_command_missing",
             Namespace: "runtime",
@@ -2079,7 +2079,7 @@ public static class DiagnosticCodeManifest
             Title: "The system 'lsblk' command was not found.",
             Help: "Install util-linux or invoke the external utility by full path once it is available.",
             SourceFile: "src/Tosh.Stdlib/Filesystem/LsblkCommand.cs",
-            SourceLine: 144),
+            SourceLine: 143),
         ["tosh.runtime.lsblk_command_start_failed"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.lsblk_command_start_failed",
             Namespace: "runtime",
@@ -2087,7 +2087,7 @@ public static class DiagnosticCodeManifest
             Title: "Failed to start the system 'lsblk' command.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Filesystem/LsblkCommand.cs",
-            SourceLine: 341),
+            SourceLine: 340),
         ["tosh.runtime.lsblk_json_parse_failed"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.lsblk_json_parse_failed",
             Namespace: "runtime",
@@ -2095,7 +2095,7 @@ public static class DiagnosticCodeManifest
             Title: "Could not parse structured 'lsblk' output. {exception.Message}",
             Help: "Try running the external `lsblk` command directly if you are using an output mode that does not support JSON.",
             SourceFile: "src/Tosh.Stdlib/Filesystem/LsblkCommand.cs",
-            SourceLine: 110),
+            SourceLine: 109),
         ["tosh.runtime.lscpu_command_failed"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.lscpu_command_failed",
             Namespace: "runtime",
@@ -2103,7 +2103,7 @@ public static class DiagnosticCodeManifest
             Title: "",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Sys/LscpuCommand.cs",
-            SourceLine: 101),
+            SourceLine: 100),
         ["tosh.runtime.lscpu_command_missing"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.lscpu_command_missing",
             Namespace: "runtime",
@@ -2111,7 +2111,7 @@ public static class DiagnosticCodeManifest
             Title: "The system 'lscpu' command was not found.",
             Help: "Install util-linux or invoke the external utility by full path once it is available.",
             SourceFile: "src/Tosh.Stdlib/Sys/LscpuCommand.cs",
-            SourceLine: 192),
+            SourceLine: 191),
         ["tosh.runtime.lscpu_command_start_failed"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.lscpu_command_start_failed",
             Namespace: "runtime",
@@ -2119,7 +2119,7 @@ public static class DiagnosticCodeManifest
             Title: "Failed to start the system 'lscpu' command.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Sys/LscpuCommand.cs",
-            SourceLine: 444),
+            SourceLine: 443),
         ["tosh.runtime.lscpu_json_parse_failed"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.lscpu_json_parse_failed",
             Namespace: "runtime",
@@ -2127,7 +2127,7 @@ public static class DiagnosticCodeManifest
             Title: "Could not parse structured 'lscpu' summary output. {exception.Message}",
             Help: "Try running the external `lscpu` command directly if you are using an output mode that does not support JSON.",
             SourceFile: "src/Tosh.Stdlib/Sys/LscpuCommand.cs",
-            SourceLine: 123),
+            SourceLine: 122),
         ["tosh.runtime.lsfd_columns_failed"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.lsfd_columns_failed",
             Namespace: "runtime",
@@ -2135,7 +2135,7 @@ public static class DiagnosticCodeManifest
             Title: "",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Processes/LsfdCommand.cs",
-            SourceLine: 314),
+            SourceLine: 313),
         ["tosh.runtime.lsfd_command_failed"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.lsfd_command_failed",
             Namespace: "runtime",
@@ -2143,7 +2143,7 @@ public static class DiagnosticCodeManifest
             Title: "",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Processes/LsfdCommand.cs",
-            SourceLine: 95),
+            SourceLine: 94),
         ["tosh.runtime.lsfd_command_missing"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.lsfd_command_missing",
             Namespace: "runtime",
@@ -2151,7 +2151,7 @@ public static class DiagnosticCodeManifest
             Title: "The system 'lsfd' command was not found.",
             Help: "Install util-linux or invoke the external utility by full path once it is available.",
             SourceFile: "src/Tosh.Stdlib/Processes/LsfdCommand.cs",
-            SourceLine: 145),
+            SourceLine: 144),
         ["tosh.runtime.lsfd_command_start_failed"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.lsfd_command_start_failed",
             Namespace: "runtime",
@@ -2159,7 +2159,7 @@ public static class DiagnosticCodeManifest
             Title: "Failed to start the system 'lsfd' command while discovering columns.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Processes/LsfdCommand.cs",
-            SourceLine: 300),
+            SourceLine: 299),
         ["tosh.runtime.lsfd_json_parse_failed"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.lsfd_json_parse_failed",
             Namespace: "runtime",
@@ -2167,7 +2167,7 @@ public static class DiagnosticCodeManifest
             Title: "Could not parse structured 'lsfd' output. {exception.Message}",
             Help: "Try running the external `lsfd` command directly if you are using an output mode that does not support JSON.",
             SourceFile: "src/Tosh.Stdlib/Processes/LsfdCommand.cs",
-            SourceLine: 113),
+            SourceLine: 112),
         ["tosh.runtime.lsipc_command_failed"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.lsipc_command_failed",
             Namespace: "runtime",
@@ -2175,7 +2175,7 @@ public static class DiagnosticCodeManifest
             Title: "",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Sys/LsipcCommand.cs",
-            SourceLine: 76),
+            SourceLine: 75),
         ["tosh.runtime.lsipc_command_missing"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.lsipc_command_missing",
             Namespace: "runtime",
@@ -2183,7 +2183,7 @@ public static class DiagnosticCodeManifest
             Title: "The system 'lsipc' command was not found.",
             Help: "Install util-linux or invoke the external utility by full path once it is available.",
             SourceFile: "src/Tosh.Stdlib/Sys/LsipcCommand.cs",
-            SourceLine: 114),
+            SourceLine: 113),
         ["tosh.runtime.lsipc_command_start_failed"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.lsipc_command_start_failed",
             Namespace: "runtime",
@@ -2191,7 +2191,7 @@ public static class DiagnosticCodeManifest
             Title: "Failed to start the system 'lsipc' command.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Sys/LsipcCommand.cs",
-            SourceLine: 275),
+            SourceLine: 274),
         ["tosh.runtime.lsipc_json_parse_failed"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.lsipc_json_parse_failed",
             Namespace: "runtime",
@@ -2199,7 +2199,7 @@ public static class DiagnosticCodeManifest
             Title: "Could not parse structured 'lsipc' output. {exception.Message}",
             Help: "Try running the external `lsipc` command directly if you are using an output mode that does not support JSON.",
             SourceFile: "src/Tosh.Stdlib/Sys/LsipcCommand.cs",
-            SourceLine: 94),
+            SourceLine: 93),
         ["tosh.runtime.map_requires_callable_or_block"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.map_requires_callable_or_block",
             Namespace: "runtime",
@@ -2207,7 +2207,7 @@ public static class DiagnosticCodeManifest
             Title: "'map' requires exactly one callable value or block.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Pipeline/MapCommand.cs",
-            SourceLine: 22),
+            SourceLine: 21),
         ["tosh.runtime.member_assignment_failed"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.member_assignment_failed",
             Namespace: "runtime",
@@ -2295,7 +2295,7 @@ public static class DiagnosticCodeManifest
             Title: "native-alloc expects exactly one argument.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Clr/NativeAllocCommand.cs",
-            SourceLine: 21),
+            SourceLine: 20),
         ["tosh.runtime.native_alloc_negative_size"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.native_alloc_negative_size",
             Namespace: "runtime",
@@ -2303,7 +2303,7 @@ public static class DiagnosticCodeManifest
             Title: "native-alloc cannot allocate a negative number of bytes.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Clr/NativeAllocCommand.cs",
-            SourceLine: 31),
+            SourceLine: 30),
         ["tosh.runtime.native_alloc_requires_size_or_type"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.native_alloc_requires_size_or_type",
             Namespace: "runtime",
@@ -2343,7 +2343,7 @@ public static class DiagnosticCodeManifest
             Title: "native-free needs at least one native buffer.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Clr/NativeFreeCommand.cs",
-            SourceLine: 43),
+            SourceLine: 42),
         ["tosh.runtime.native_free_requires_native_buffer"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.native_free_requires_native_buffer",
             Namespace: "runtime",
@@ -2351,7 +2351,7 @@ public static class DiagnosticCodeManifest
             Title: "native-free only accepts buffers created by native-alloc.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Clr/NativeFreeCommand.cs",
-            SourceLine: 56),
+            SourceLine: 55),
         ["tosh.runtime.native_offsetof_argument_count"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.native_offsetof_argument_count",
             Namespace: "runtime",
@@ -2359,7 +2359,7 @@ public static class DiagnosticCodeManifest
             Title: "{Name} expects a type name and a field name.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Clr/NativeOffsetOfCommand.cs",
-            SourceLine: 24),
+            SourceLine: 23),
         ["tosh.runtime.native_offsetof_requires_field_name"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.native_offsetof_requires_field_name",
             Namespace: "runtime",
@@ -2367,7 +2367,7 @@ public static class DiagnosticCodeManifest
             Title: "{Name} requires a field name.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Clr/NativeOffsetOfCommand.cs",
-            SourceLine: 38),
+            SourceLine: 37),
         ["tosh.runtime.native_offsetof_requires_struct_layout_type"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.native_offsetof_requires_struct_layout_type",
             Namespace: "runtime",
@@ -2375,7 +2375,7 @@ public static class DiagnosticCodeManifest
             Title: "'{type.FullName ?? type.Name}' is not a sequential or explicit-layout struct.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Clr/NativeOffsetOfCommand.cs",
-            SourceLine: 55),
+            SourceLine: 54),
         ["tosh.runtime.native_pointer_required"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.native_pointer_required",
             Namespace: "runtime",
@@ -2391,7 +2391,7 @@ public static class DiagnosticCodeManifest
             Title: "native-read offsets must be integers.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Clr/NativeReadCommand.cs",
-            SourceLine: 155),
+            SourceLine: 154),
         ["tosh.runtime.native_read_requires_length"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.native_read_requires_length",
             Namespace: "runtime",
@@ -2399,7 +2399,7 @@ public static class DiagnosticCodeManifest
             Title: "native-read bytes requires a byte length.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Clr/NativeReadCommand.cs",
-            SourceLine: 132),
+            SourceLine: 131),
         ["tosh.runtime.native_read_requires_mode"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.native_read_requires_mode",
             Namespace: "runtime",
@@ -2407,7 +2407,7 @@ public static class DiagnosticCodeManifest
             Title: "native-read needs a read mode or type name.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Clr/NativeReadCommand.cs",
-            SourceLine: 27),
+            SourceLine: 26),
         ["tosh.runtime.native_read_requires_native_type"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.native_read_requires_native_type",
             Namespace: "runtime",
@@ -2415,7 +2415,7 @@ public static class DiagnosticCodeManifest
             Title: "native-read currently supports native scalar types, struct-layout types, 'cstring', or 'bytes', not '{mode}'.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Clr/NativeReadCommand.cs",
-            SourceLine: 91),
+            SourceLine: 90),
         ["tosh.runtime.native_read_requires_source"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.native_read_requires_source",
             Namespace: "runtime",
@@ -2423,7 +2423,7 @@ public static class DiagnosticCodeManifest
             Title: "native-read needs a native buffer or pointer source.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Clr/NativeReadCommand.cs",
-            SourceLine: 48),
+            SourceLine: 47),
         ["tosh.runtime.native_sizeof_requires_type"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.native_sizeof_requires_type",
             Namespace: "runtime",
@@ -2431,7 +2431,7 @@ public static class DiagnosticCodeManifest
             Title: "native-sizeof requires at least one type name.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Clr/NativeSizeOfCommand.cs",
-            SourceLine: 23),
+            SourceLine: 22),
         ["tosh.runtime.native_type_name_required"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.native_type_name_required",
             Namespace: "runtime",
@@ -2447,7 +2447,7 @@ public static class DiagnosticCodeManifest
             Title: "native-write expects a target, a value, and an optional offset.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Clr/NativeWriteCommand.cs",
-            SourceLine: 26),
+            SourceLine: 25),
         ["tosh.runtime.native_write_offset_requires_int"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.native_write_offset_requires_int",
             Namespace: "runtime",
@@ -2455,7 +2455,7 @@ public static class DiagnosticCodeManifest
             Title: "native-write offsets must be integers.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Clr/NativeWriteCommand.cs",
-            SourceLine: 156),
+            SourceLine: 155),
         ["tosh.runtime.native_write_requires_value"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.native_write_requires_value",
             Namespace: "runtime",
@@ -2463,7 +2463,7 @@ public static class DiagnosticCodeManifest
             Title: "native-write requires a non-null value.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Clr/NativeWriteCommand.cs",
-            SourceLine: 90),
+            SourceLine: 89),
         ["tosh.runtime.native_write_unsupported_value"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.native_write_unsupported_value",
             Namespace: "runtime",
@@ -2471,7 +2471,7 @@ public static class DiagnosticCodeManifest
             Title: "native-write does not know how to write values of type '{runtimeType.Name}'.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Clr/NativeWriteCommand.cs",
-            SourceLine: 109),
+            SourceLine: 108),
         ["tosh.runtime.networkctl_command_failed"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.networkctl_command_failed",
             Namespace: "runtime",
@@ -2479,7 +2479,7 @@ public static class DiagnosticCodeManifest
             Title: "",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Sys/NetworkctlCommand.cs",
-            SourceLine: 82),
+            SourceLine: 81),
         ["tosh.runtime.networkctl_command_missing"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.networkctl_command_missing",
             Namespace: "runtime",
@@ -2487,7 +2487,7 @@ public static class DiagnosticCodeManifest
             Title: "The system 'networkctl' command was not found.",
             Help: "Install systemd or invoke the external utility by full path once it is available.",
             SourceFile: "src/Tosh.Stdlib/Sys/NetworkctlCommand.cs",
-            SourceLine: 120),
+            SourceLine: 119),
         ["tosh.runtime.networkctl_command_start_failed"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.networkctl_command_start_failed",
             Namespace: "runtime",
@@ -2495,7 +2495,7 @@ public static class DiagnosticCodeManifest
             Title: "Failed to start the system 'networkctl' command.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Sys/NetworkctlCommand.cs",
-            SourceLine: 263),
+            SourceLine: 262),
         ["tosh.runtime.networkctl_parse_failed"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.networkctl_parse_failed",
             Namespace: "runtime",
@@ -2503,7 +2503,7 @@ public static class DiagnosticCodeManifest
             Title: "Could not parse structured 'networkctl list' output. {exception.Message}",
             Help: "Try running the external `networkctl` command directly if you are using an unsupported mode.",
             SourceFile: "src/Tosh.Stdlib/Sys/NetworkctlCommand.cs",
-            SourceLine: 100),
+            SourceLine: 99),
         ["tosh.runtime.non_exhaustive_match"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.non_exhaustive_match",
             Namespace: "runtime",
@@ -2543,7 +2543,7 @@ public static class DiagnosticCodeManifest
             Title: "'parallel' requires a callable value or block.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Pipeline/ParallelCommand.cs",
-            SourceLine: 115),
+            SourceLine: 114),
         ["tosh.runtime.parameter_type_conversion_failed"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.parameter_type_conversion_failed",
             Namespace: "runtime",
@@ -2591,7 +2591,7 @@ public static class DiagnosticCodeManifest
             Title: "The 'partial' command requires a callable value.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Functional/PartialCommand.cs",
-            SourceLine: 25),
+            SourceLine: 24),
         ["tosh.runtime.partition_requires_callable_or_block"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.partition_requires_callable_or_block",
             Namespace: "runtime",
@@ -2599,7 +2599,7 @@ public static class DiagnosticCodeManifest
             Title: "'partition' requires exactly one callable value or block.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Pipeline/PartitionCommand.cs",
-            SourceLine: 22),
+            SourceLine: 21),
         ["tosh.runtime.permutations_args"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.permutations_args",
             Namespace: "runtime",
@@ -2607,7 +2607,7 @@ public static class DiagnosticCodeManifest
             Title: "'permutations' accepts at most one integer argument (k).",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Pipeline/PermutationsCommand.cs",
-            SourceLine: 22),
+            SourceLine: 21),
         ["tosh.runtime.permutations_k_non_negative"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.permutations_k_non_negative",
             Namespace: "runtime",
@@ -2615,7 +2615,7 @@ public static class DiagnosticCodeManifest
             Title: "k must be non-negative.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Pipeline/PermutationsCommand.cs",
-            SourceLine: 41),
+            SourceLine: 40),
         ["tosh.runtime.predicate_expression_required"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.predicate_expression_required",
             Namespace: "runtime",
@@ -2623,7 +2623,7 @@ public static class DiagnosticCodeManifest
             Title: "'skip-until' requires a predicate expression.",
             Help: "predicate commands now use one expression mode everywhere.",
             SourceFile: "src/Tosh.Stdlib/Pipeline/SkipUntilCommand.cs",
-            SourceLine: 21),
+            SourceLine: 20),
         ["tosh.runtime.predicate_requires_boolean"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.predicate_requires_boolean",
             Namespace: "runtime",
@@ -2639,7 +2639,7 @@ public static class DiagnosticCodeManifest
             Title: "'race' requires at least two callable values or blocks.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Concurrency/RaceCommand.cs",
-            SourceLine: 20),
+            SourceLine: 19),
         ["tosh.runtime.recur_empty_seeds"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.recur_empty_seeds",
             Namespace: "runtime",
@@ -2647,7 +2647,7 @@ public static class DiagnosticCodeManifest
             Title: "'recur' requires at least one seed value.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Functional/RecurCommand.cs",
-            SourceLine: 35),
+            SourceLine: 34),
         ["tosh.runtime.recur_requires_seeds_and_callable"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.recur_requires_seeds_and_callable",
             Namespace: "runtime",
@@ -2655,7 +2655,7 @@ public static class DiagnosticCodeManifest
             Title: "'recur' requires seed values and a callable.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Functional/RecurCommand.cs",
-            SourceLine: 23),
+            SourceLine: 22),
         ["tosh.runtime.redirection_target_not_single_path"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.redirection_target_not_single_path",
             Namespace: "runtime",
@@ -2679,7 +2679,7 @@ public static class DiagnosticCodeManifest
             Title: "'reduce' requires a seed value and a callable value or block.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Pipeline/ReduceCommand.cs",
-            SourceLine: 23),
+            SourceLine: 22),
         ["tosh.runtime.refinement_failed"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.refinement_failed",
             Namespace: "runtime",
@@ -2719,7 +2719,7 @@ public static class DiagnosticCodeManifest
             Title: "Repeat count cannot be negative.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Functional/RepeatCommand.cs",
-            SourceLine: 37),
+            SourceLine: 36),
         ["tosh.runtime.repeat_requires_value"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.repeat_requires_value",
             Namespace: "runtime",
@@ -2727,7 +2727,7 @@ public static class DiagnosticCodeManifest
             Title: "'repeat' requires a value and an optional count.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Functional/RepeatCommand.cs",
-            SourceLine: 23),
+            SourceLine: 22),
         ["tosh.runtime.repeatedly_requires_callable"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.repeatedly_requires_callable",
             Namespace: "runtime",
@@ -2735,7 +2735,7 @@ public static class DiagnosticCodeManifest
             Title: "'repeatedly' requires a callable or block.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Functional/RepeatedlyCommand.cs",
-            SourceLine: 23),
+            SourceLine: 22),
         ["tosh.runtime.require_failed"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.require_failed",
             Namespace: "runtime",
@@ -2767,7 +2767,7 @@ public static class DiagnosticCodeManifest
             Title: "'scan' requires a seed value and a callable value or block.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Pipeline/ScanCommand.cs",
-            SourceLine: 23),
+            SourceLine: 22),
         ["tosh.runtime.scope_requires_block"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.scope_requires_block",
             Namespace: "runtime",
@@ -2775,7 +2775,7 @@ public static class DiagnosticCodeManifest
             Title: "'scope' requires a block argument.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Concurrency/ScopeCommand.cs",
-            SourceLine: 23),
+            SourceLine: 22),
         ["tosh.runtime.script_flag_cannot_be_rest"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.script_flag_cannot_be_rest",
             Namespace: "runtime",
@@ -2815,7 +2815,7 @@ public static class DiagnosticCodeManifest
             Title: "'settle' requires at least one callable value or block.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Concurrency/SettleCommand.cs",
-            SourceLine: 20),
+            SourceLine: 19),
         ["tosh.runtime.shy_using_requires_scope"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.shy_using_requires_scope",
             Namespace: "runtime",
@@ -2831,7 +2831,7 @@ public static class DiagnosticCodeManifest
             Title: "'sort' selectors must be a member path, callable value, or block.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Pipeline/SortCommand.cs",
-            SourceLine: 44),
+            SourceLine: 43),
         ["tosh.runtime.spawn_requires_command"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.spawn_requires_command",
             Namespace: "runtime",
@@ -2839,7 +2839,7 @@ public static class DiagnosticCodeManifest
             Title: "'spawn' requires an external command name or path.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Concurrency/SpawnCommand.cs",
-            SourceLine: 44),
+            SourceLine: 43),
         ["tosh.runtime.spawn_target_is_directory"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.spawn_target_is_directory",
             Namespace: "runtime",
@@ -2847,7 +2847,7 @@ public static class DiagnosticCodeManifest
             Title: "'{commandName}' resolves to a directory, not an executable.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Concurrency/SpawnCommand.cs",
-            SourceLine: 116),
+            SourceLine: 115),
         ["tosh.runtime.spawn_target_not_executable"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.spawn_target_not_executable",
             Namespace: "runtime",
@@ -2855,7 +2855,7 @@ public static class DiagnosticCodeManifest
             Title: "'{commandName}' exists but is not executable.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Concurrency/SpawnCommand.cs",
-            SourceLine: 111),
+            SourceLine: 110),
         ["tosh.runtime.spawn_target_not_found"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.spawn_target_not_found",
             Namespace: "runtime",
@@ -2863,7 +2863,7 @@ public static class DiagnosticCodeManifest
             Title: "External command '{commandName}' was not found.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Concurrency/SpawnCommand.cs",
-            SourceLine: 121),
+            SourceLine: 120),
         ["tosh.runtime.splat_infinite_range"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.splat_infinite_range",
             Namespace: "runtime",
@@ -2895,7 +2895,7 @@ public static class DiagnosticCodeManifest
             Title: "'step-by' requires n >= 1.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Pipeline/StepByCommand.cs",
-            SourceLine: 31),
+            SourceLine: 30),
         ["tosh.runtime.step_by_requires_n"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.step_by_requires_n",
             Namespace: "runtime",
@@ -2903,7 +2903,7 @@ public static class DiagnosticCodeManifest
             Title: "'step-by' requires exactly one integer argument.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Pipeline/StepByCommand.cs",
-            SourceLine: 22),
+            SourceLine: 21),
         ["tosh.runtime.subcommand_must_be_script_scoped"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.subcommand_must_be_script_scoped",
             Namespace: "runtime",
@@ -2935,7 +2935,7 @@ public static class DiagnosticCodeManifest
             Title: "",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Sys/SystemctlCommand.cs",
-            SourceLine: 131),
+            SourceLine: 130),
         ["tosh.runtime.systemctl_command_missing"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.systemctl_command_missing",
             Namespace: "runtime",
@@ -2943,7 +2943,7 @@ public static class DiagnosticCodeManifest
             Title: "The system 'systemctl' command was not found.",
             Help: "Install systemd or invoke the external utility by full path once it is available.",
             SourceFile: "src/Tosh.Stdlib/Sys/SystemctlCommand.cs",
-            SourceLine: 233),
+            SourceLine: 232),
         ["tosh.runtime.systemctl_command_start_failed"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.systemctl_command_start_failed",
             Namespace: "runtime",
@@ -2951,7 +2951,7 @@ public static class DiagnosticCodeManifest
             Title: "Failed to start the system 'systemctl' command.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Sys/SystemctlCommand.cs",
-            SourceLine: 635),
+            SourceLine: 634),
         ["tosh.runtime.systemctl_json_parse_failed"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.systemctl_json_parse_failed",
             Namespace: "runtime",
@@ -2959,7 +2959,7 @@ public static class DiagnosticCodeManifest
             Title: "Could not parse structured 'systemctl list-units' output. {exception.Message}",
             Help: "Try running the external `systemctl` command directly if you are using an unsupported output mode.",
             SourceFile: "src/Tosh.Stdlib/Sys/SystemctlCommand.cs",
-            SourceLine: 153),
+            SourceLine: 152),
         ["tosh.runtime.systemctl_show_parse_failed"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.systemctl_show_parse_failed",
             Namespace: "runtime",
@@ -2967,7 +2967,7 @@ public static class DiagnosticCodeManifest
             Title: "Could not parse structured 'systemctl show' output. {exception.Message}",
             Help: "Try running the external `systemctl show` command directly if you are using an unsupported property/value mode.",
             SourceFile: "src/Tosh.Stdlib/Sys/SystemctlCommand.cs",
-            SourceLine: 202),
+            SourceLine: 201),
         ["tosh.runtime.throw"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.throw",
             Namespace: "runtime",
@@ -2983,7 +2983,7 @@ public static class DiagnosticCodeManifest
             Title: "'time' requires a block, callable, or command as its first argument.",
             Help: "pass a block like '{ ... }' or a command name.",
             SourceFile: "src/Tosh.Stdlib/Time/TimeCommand.cs",
-            SourceLine: 152),
+            SourceLine: 151),
         ["tosh.runtime.time_requires_argument"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.time_requires_argument",
             Namespace: "runtime",
@@ -2991,7 +2991,7 @@ public static class DiagnosticCodeManifest
             Title: "'time' requires a command or block to measure.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Time/TimeCommand.cs",
-            SourceLine: 29),
+            SourceLine: 28),
         ["tosh.runtime.timeout_elapsed"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.timeout_elapsed",
             Namespace: "runtime",
@@ -2999,7 +2999,7 @@ public static class DiagnosticCodeManifest
             Title: "Operation timed out after {timeoutDuration.TotalSeconds:0.###} seconds.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Concurrency/TimeoutCommand.cs",
-            SourceLine: 66),
+            SourceLine: 65),
         ["tosh.runtime.timeout_invalid_duration"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.timeout_invalid_duration",
             Namespace: "runtime",
@@ -3007,7 +3007,7 @@ public static class DiagnosticCodeManifest
             Title: "'timeout' duration must be greater than zero.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Concurrency/TimeoutCommand.cs",
-            SourceLine: 32),
+            SourceLine: 31),
         ["tosh.runtime.timeout_requires_seconds_and_operation"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.timeout_requires_seconds_and_operation",
             Namespace: "runtime",
@@ -3015,7 +3015,7 @@ public static class DiagnosticCodeManifest
             Title: "'timeout' requires a duration and an operation.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Concurrency/TimeoutCommand.cs",
-            SourceLine: 23),
+            SourceLine: 22),
         ["tosh.runtime.transpose_requires_records"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.transpose_requires_records",
             Namespace: "runtime",
@@ -3023,7 +3023,7 @@ public static class DiagnosticCodeManifest
             Title: "'transpose' requires record/object pipeline items.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Pipeline/TransposeCommand.cs",
-            SourceLine: 33),
+            SourceLine: 32),
         ["tosh.runtime.tree_command_failed"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.tree_command_failed",
             Namespace: "runtime",
@@ -3031,7 +3031,7 @@ public static class DiagnosticCodeManifest
             Title: "",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Filesystem/TreeCommand.cs",
-            SourceLine: 75),
+            SourceLine: 74),
         ["tosh.runtime.tree_command_missing"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.tree_command_missing",
             Namespace: "runtime",
@@ -3039,7 +3039,7 @@ public static class DiagnosticCodeManifest
             Title: "The system 'tree' command was not found.",
             Help: "Install tree (e.g. 'pacman -S tree' or 'apt install tree') or invoke the external utility by full path.",
             SourceFile: "src/Tosh.Stdlib/Filesystem/TreeCommand.cs",
-            SourceLine: 113),
+            SourceLine: 112),
         ["tosh.runtime.tree_command_start_failed"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.tree_command_start_failed",
             Namespace: "runtime",
@@ -3047,7 +3047,7 @@ public static class DiagnosticCodeManifest
             Title: "Failed to start the system 'tree' command.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Filesystem/TreeCommand.cs",
-            SourceLine: 234),
+            SourceLine: 233),
         ["tosh.runtime.tree_json_parse_failed"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.tree_json_parse_failed",
             Namespace: "runtime",
@@ -3055,7 +3055,7 @@ public static class DiagnosticCodeManifest
             Title: "Could not parse structured 'tree' output. {exception.Message}",
             Help: "Try running the external `tree` command directly if you are using an output mode that does not support JSON.",
             SourceFile: "src/Tosh.Stdlib/Filesystem/TreeCommand.cs",
-            SourceLine: 88),
+            SourceLine: 87),
         ["tosh.runtime.type_name_conflict"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.type_name_conflict",
             Namespace: "runtime",
@@ -3071,7 +3071,7 @@ public static class DiagnosticCodeManifest
             Title: "Failed to read current limit for '{resourceName}'.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Shell/UlimitCommand.cs",
-            SourceLine: 112),
+            SourceLine: 111),
         ["tosh.runtime.ulimit_invalid_value"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.ulimit_invalid_value",
             Namespace: "runtime",
@@ -3079,7 +3079,7 @@ public static class DiagnosticCodeManifest
             Title: "Invalid limit value '{newValue}'.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Shell/UlimitCommand.cs",
-            SourceLine: 129),
+            SourceLine: 128),
         ["tosh.runtime.ulimit_setrlimit_failed"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.ulimit_setrlimit_failed",
             Namespace: "runtime",
@@ -3087,7 +3087,7 @@ public static class DiagnosticCodeManifest
             Title: "Failed to set limit for '{resourceName}' (errno {errno}).",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Shell/UlimitCommand.cs",
-            SourceLine: 147),
+            SourceLine: 146),
         ["tosh.runtime.ulimit_unknown_resource"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.ulimit_unknown_resource",
             Namespace: "runtime",
@@ -3095,7 +3095,7 @@ public static class DiagnosticCodeManifest
             Title: "Unknown resource '{resourceName}'.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Shell/UlimitCommand.cs",
-            SourceLine: 101),
+            SourceLine: 100),
         ["tosh.runtime.ulimit_unsupported"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.ulimit_unsupported",
             Namespace: "runtime",
@@ -3103,7 +3103,7 @@ public static class DiagnosticCodeManifest
             Title: "`ulimit` is not supported on Windows.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Shell/UlimitCommand.cs",
-            SourceLine: 53),
+            SourceLine: 52),
         ["tosh.runtime.umask_invalid"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.umask_invalid",
             Namespace: "runtime",
@@ -3111,7 +3111,7 @@ public static class DiagnosticCodeManifest
             Title: "Invalid umask value '{arg}'.",
             Help: "The mask must be an octal value between 000 and 777.",
             SourceFile: "src/Tosh.Stdlib/Shell/UmaskCommand.cs",
-            SourceLine: 45),
+            SourceLine: 44),
         ["tosh.runtime.umask_unsupported"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.umask_unsupported",
             Namespace: "runtime",
@@ -3119,7 +3119,7 @@ public static class DiagnosticCodeManifest
             Title: "`umask` is not supported on Windows.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Shell/UmaskCommand.cs",
-            SourceLine: 26),
+            SourceLine: 25),
         ["tosh.runtime.unexpected_exception"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.unexpected_exception",
             Namespace: "runtime",
@@ -3143,7 +3143,7 @@ public static class DiagnosticCodeManifest
             Title: "'unfold' callable must return a [value, next-state] pair or null to stop.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Functional/UnfoldCommand.cs",
-            SourceLine: 64),
+            SourceLine: 63),
         ["tosh.runtime.unfold_requires_seed_and_callable"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.unfold_requires_seed_and_callable",
             Namespace: "runtime",
@@ -3151,7 +3151,7 @@ public static class DiagnosticCodeManifest
             Title: "'unfold' requires a seed value and a callable value or block.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Functional/UnfoldCommand.cs",
-            SourceLine: 22),
+            SourceLine: 21),
         ["tosh.runtime.uninitialized_variable"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.uninitialized_variable",
             Namespace: "runtime",
@@ -3311,7 +3311,7 @@ public static class DiagnosticCodeManifest
             Title: "'window' requires a positive integer size.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Pipeline/WindowCommand.cs",
-            SourceLine: 31),
+            SourceLine: 30),
         ["tosh.runtime.window_requires_size"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.window_requires_size",
             Namespace: "runtime",
@@ -3319,7 +3319,7 @@ public static class DiagnosticCodeManifest
             Title: "'window' requires a size and an optional callable or block.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Pipeline/WindowCommand.cs",
-            SourceLine: 23),
+            SourceLine: 22),
         ["tosh.runtime.zip_requires_sequence"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.zip_requires_sequence",
             Namespace: "runtime",
@@ -3327,7 +3327,7 @@ public static class DiagnosticCodeManifest
             Title: "'zip' requires a second sequence and an optional combiner block.",
             Help: null,
             SourceFile: "src/Tosh.Stdlib/Pipeline/ZipCommand.cs",
-            SourceLine: 23),
+            SourceLine: 22),
         ["tosh.tui.filter.no_items"] = new DiagnosticCodeInfo(
             Code: "tosh.tui.filter.no_items",
             Namespace: "tui",
@@ -3335,7 +3335,7 @@ public static class DiagnosticCodeManifest
             Title: "No items provided for 'tui filter'.",
             Help: "Pipe items into 'tui filter' or provide them as arguments.",
             SourceFile: "src/Tosh.Stdlib/Shell/TuiCommand.cs",
-            SourceLine: 265),
+            SourceLine: 264),
         ["tosh.tui.layout.missing_orientation"] = new DiagnosticCodeInfo(
             Code: "tosh.tui.layout.missing_orientation",
             Namespace: "tui",
@@ -3343,7 +3343,7 @@ public static class DiagnosticCodeManifest
             Title: "The 'tui layout' subcommand requires an orientation.",
             Help: "Available orientations: single, split-horizontal, split-vertical, stacked",
             SourceFile: "src/Tosh.Stdlib/Shell/TuiCommand.cs",
-            SourceLine: 420),
+            SourceLine: 419),
         ["tosh.tui.missing_subcommand"] = new DiagnosticCodeInfo(
             Code: "tosh.tui.missing_subcommand",
             Namespace: "tui",
@@ -3351,7 +3351,7 @@ public static class DiagnosticCodeManifest
             Title: "The 'tui' command requires a subcommand.",
             Help: "Available subcommands: pick, confirm, input, file, filter, screen, add-list, add-text, add-input, add-picker, layout, run",
             SourceFile: "src/Tosh.Stdlib/Shell/TuiCommand.cs",
-            SourceLine: 53),
+            SourceLine: 52),
         ["tosh.tui.no_inline_provider"] = new DiagnosticCodeInfo(
             Code: "tosh.tui.no_inline_provider",
             Namespace: "tui",
@@ -3359,7 +3359,7 @@ public static class DiagnosticCodeManifest
             Title: "Inline prompts (--cli) are not available in this environment.",
             Help: "The --cli flag requires an interactive terminal. Remove --cli to use fullscreen mode.",
             SourceFile: "src/Tosh.Stdlib/Shell/TuiCommand.cs",
-            SourceLine: 635),
+            SourceLine: 634),
         ["tosh.tui.no_screen"] = new DiagnosticCodeInfo(
             Code: "tosh.tui.no_screen",
             Namespace: "tui",
@@ -3367,7 +3367,7 @@ public static class DiagnosticCodeManifest
             Title: "Expected a TuiScreen from pipeline input.",
             Help: "Create a screen first: tui screen | tui add-list ...",
             SourceFile: "src/Tosh.Stdlib/Shell/TuiCommand.cs",
-            SourceLine: 594),
+            SourceLine: 593),
         ["tosh.tui.pick.no_items"] = new DiagnosticCodeInfo(
             Code: "tosh.tui.pick.no_items",
             Namespace: "tui",
@@ -3375,7 +3375,7 @@ public static class DiagnosticCodeManifest
             Title: "No items provided for 'tui pick'.",
             Help: "Pipe items into 'tui pick' or provide them as arguments: tui pick item1 item2 item3",
             SourceFile: "src/Tosh.Stdlib/Shell/TuiCommand.cs",
-            SourceLine: 111),
+            SourceLine: 110),
         ["tosh.tui.run.no_screen"] = new DiagnosticCodeInfo(
             Code: "tosh.tui.run.no_screen",
             Namespace: "tui",
@@ -3383,7 +3383,7 @@ public static class DiagnosticCodeManifest
             Title: "No TuiScreen provided to 'tui run'.",
             Help: "Pipe a TuiScreen into 'tui run' or provide one as an argument.",
             SourceFile: "src/Tosh.Stdlib/Shell/TuiCommand.cs",
-            SourceLine: 474),
+            SourceLine: 473),
         ["tosh.tui.unknown_subcommand"] = new DiagnosticCodeInfo(
             Code: "tosh.tui.unknown_subcommand",
             Namespace: "tui",
@@ -3391,7 +3391,7 @@ public static class DiagnosticCodeManifest
             Title: "Unknown tui subcommand '{subcommand}'.",
             Help: "Available subcommands: pick, confirm, input, file, filter, screen, add-list, add-text, add-input, add-picker, layout, run",
             SourceFile: "src/Tosh.Stdlib/Shell/TuiCommand.cs",
-            SourceLine: 85),
+            SourceLine: 84),
     };
 
     /// <summary>Total number of diagnostic codes in the manifest.</summary>

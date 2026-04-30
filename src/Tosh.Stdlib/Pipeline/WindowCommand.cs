@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Pipeline;
 
-[Stdlib(StdlibCategory.Pipeline)]
 [CommandCategory("Pipeline")]
 [CommandArgument("size", "The number of items in each sliding window.")]
 [CommandArgument("callable|block", "Optional transform applied to each window.", Required = false)]

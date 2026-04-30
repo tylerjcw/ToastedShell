@@ -4,7 +4,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Text;
 
-[Stdlib(StdlibCategory.Text)]
 [CommandCategory("Text")]
 [CommandArgument("pattern|regex", "String pattern, regex pattern, or Regex object to replace.")]
 [CommandArgument("replacement", "Replacement text.")]

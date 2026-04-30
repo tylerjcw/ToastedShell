@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Filesystem;
 
-[Stdlib(StdlibCategory.Filesystem)]
 [CommandCategory("Filesystem")]
 [CommandArgument("handle", "The managed file handle to read from.", Required = false)]
 [CommandArgument("count", "Optional chunk size. Defaults to {StreamCommandUtilities.DefaultReadChunkSize}.", Required = false, TypeName = "int")]

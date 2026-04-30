@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Pipeline;
 
-[Stdlib(StdlibCategory.Pipeline)]
 [CommandCategory("Pipeline")]
 [CommandArgument("callable|block", "A lambda or block that transforms each input item into exactly one output value.")]
 [CommandExample("echo 1 2 3 | map func(x) => ($x * 2)", Title = "Transform values with a lambda")]

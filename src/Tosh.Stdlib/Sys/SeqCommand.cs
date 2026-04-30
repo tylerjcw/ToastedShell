@@ -4,7 +4,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Sys;
 
-[Stdlib(StdlibCategory.Sys)]
 [CommandCategory("System")]
 [CommandArgument("stop", "Final value when one argument is provided.")]
 [CommandArgument("start", "Initial value when two or three arguments are provided.", Required = false)]

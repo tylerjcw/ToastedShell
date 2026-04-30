@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Functional;
 
-[Stdlib(StdlibCategory.Functional)]
 [CommandCategory("Functional")]
 [CommandArgument("callable|block", "A block or function to evaluate each time. Receives the current index as $_ and as the first argument.")]
 [CommandExample("repeatedly { random int 1 100 } | first 5", Title = "Five random numbers")]

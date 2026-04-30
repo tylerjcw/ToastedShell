@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Time;
 
-[Stdlib(StdlibCategory.Time)]
 [CommandCategory("System")]
 [CommandArgument("duration", "A duration: integer (seconds), decimal, TimeSpan, quantity (e.g. 500`ms`), or string like '1s', '2m'.")]
 [CommandExample("sleep 2", Title = "Sleep for 2 seconds")]

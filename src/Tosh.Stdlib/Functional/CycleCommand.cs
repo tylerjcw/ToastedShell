@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Functional;
 
-[Stdlib(StdlibCategory.Functional)]
 [CommandCategory("Functional")]
 [CommandExample("echo 1 2 3 | cycle | first 9", Title = "Cycle a sequence")]
 [CommandExample("[a b c] | cycle | first 7", Title = "Cycle an array")]

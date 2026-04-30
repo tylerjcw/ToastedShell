@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Text;
 
-[Stdlib(StdlibCategory.Text)]
 [CommandCategory("Text")]
 [CommandArgument("text ...", "Text values to split. When omitted, reads pipeline input.", Required = false)]
 [CommandExample("lines \"alpha\\nbeta\"", Title = "Split an explicit string")]

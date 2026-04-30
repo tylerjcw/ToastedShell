@@ -4,7 +4,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Clr;
 
-[Stdlib(StdlibCategory.Clr)]
 [CommandCategory("CLR")]
 [CommandArgument("object", "The target object. If omitted, reads from the pipeline.", Required = false)]
 [CommandArgument("name", "The property name to check.")]

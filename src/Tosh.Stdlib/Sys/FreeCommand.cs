@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Sys;
 
-[Stdlib(StdlibCategory.Sys)]
 [CommandCategory("System")]
 [CommandExample("free", Title = "Show memory and swap usage")]
 [CommandExample("free | get .UsedMemory", Title = "Get the used memory value")]

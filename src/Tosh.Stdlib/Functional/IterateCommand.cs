@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Functional;
 
-[Stdlib(StdlibCategory.Functional)]
 [CommandCategory("Functional")]
 [CommandArgument("seed", "The initial value of the sequence.")]
 [CommandArgument("callable|block", "A function applied to the previous value to produce the next.")]

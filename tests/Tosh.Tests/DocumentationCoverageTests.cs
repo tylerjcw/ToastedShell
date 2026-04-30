@@ -119,7 +119,7 @@ public sealed class DocumentationCoverageTests
         {
             if (HasOptOut(command, "stdlib")) continue;
             var type = command.GetType();
-            var hasStdlib = type.GetCustomAttribute<StdlibAttribute>() is not null;
+            var hasStdlib = StdlibCategoryResolver.Resolve(type) is not null;
             var hasShellOnly = type.GetCustomAttribute<ShellOnlyAttribute>() is not null;
             if (!hasStdlib && !hasShellOnly)
             {
@@ -129,10 +129,11 @@ public sealed class DocumentationCoverageTests
 
         Assert.True(
             missing.Count == 0,
-            $"The following registered commands have neither [Stdlib(StdlibCategory.X)] nor [ShellOnly]:\n  - " +
+            $"The following registered commands have neither a [Stdlib(StdlibCategory.X)] (or Tosh.Stdlib.<Bucket> namespace) nor [ShellOnly]:\n  - " +
             string.Join("\n  - ", missing) +
-            "\nAdd `[Stdlib(StdlibCategory.<bucket>)]` to mark the future Tosh.Stdlib.* assembly bucket, " +
-            "or `[ShellOnly]` for REPL-only commands. See docs/COMPILED_TOSH.md for the bucket layout. " +
+            "\nPlace the source under `src/Tosh.Stdlib/<Bucket>/` (the namespace then implies the category), " +
+            "or add `[Stdlib(StdlibCategory.<bucket>)]` explicitly. " +
+            "For REPL-only commands, use `[ShellOnly]`. See docs/COMPILED_TOSH.md for the bucket layout. " +
             "Use `[UndocumentedFor(\"stdlib\", \"reason\")]` only for legitimate cases.");
     }
 
@@ -154,17 +155,17 @@ public sealed class DocumentationCoverageTests
         foreach (var command in registry.All.OfType<ShellCommand>())
         {
             var type = command.GetType();
-            var stdlibAttr = type.GetCustomAttribute<StdlibAttribute>();
-            if (stdlibAttr is null) continue; // covered by the previous test
+            var resolved = StdlibCategoryResolver.Resolve(type);
+            if (resolved is null) continue; // covered by the previous test
 
-            var bucket = stdlibAttr.Category.ToString();
+            var bucket = resolved.Value.ToString();
             var actual = type.Namespace ?? string.Empty;
             var lastSegment = actual.Split('.').LastOrDefault() ?? string.Empty;
 
             if (!string.Equals(lastSegment, bucket, StringComparison.Ordinal))
             {
                 mismatches.Add(
-                    $"{command.Name} ({type.Name}): [Stdlib({bucket})] but lives in `{actual}` " +
+                    $"{command.Name} ({type.Name}): resolved as `{bucket}` but lives in `{actual}` " +
                     $"(expected the namespace to end in `.{bucket}`).");
             }
         }

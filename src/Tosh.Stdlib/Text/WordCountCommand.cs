@@ -4,7 +4,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Text;
 
-[Stdlib(StdlibCategory.Text)]
 [CommandCategory("Text")]
 [CommandArgument("path ...", "Optional file paths to measure. When omitted, `wc` measures the current text pipeline.", Required = false, TypeName = "path-like")]
 [CommandOption("-l", "Show line counts.")]

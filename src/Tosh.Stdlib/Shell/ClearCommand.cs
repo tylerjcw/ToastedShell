@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Shell;
 
-[Stdlib(StdlibCategory.Shell)]
 [CommandCategory("Shell")]
 [CommandExample("clear", Title = "Clear the terminal")]
 [CommandOutput("Emits nothing; clears the terminal display as a side effect.")]

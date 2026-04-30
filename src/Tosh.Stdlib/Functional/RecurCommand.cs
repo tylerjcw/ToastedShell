@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Functional;
 
-[Stdlib(StdlibCategory.Functional)]
 [CommandCategory("Functional")]
 [CommandArgument("seeds", "The initial values of the recurrence, e.g. (0, 1) for Fibonacci.")]
 [CommandArgument("callable|block", "A function applied to the last N values to produce the next. N matches the seed count.")]

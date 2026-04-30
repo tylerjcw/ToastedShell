@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Pipeline;
 
-[Stdlib(StdlibCategory.Pipeline)]
 [CommandCategory("Pipeline")]
 [CommandArgument("member-path", "Optional member path to extract the comparison key from each object.", Required = false)]
 [CommandExample("echo 1 1 2 2 3 1 1 | dedup", Title = "Remove consecutive duplicates")]

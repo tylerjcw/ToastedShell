@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Filesystem;
 
-[Stdlib(StdlibCategory.Filesystem)]
 [CommandCategory("Filesystem")]
 [CommandArgument("path", "One or more symbolic link paths.", TypeName = "path-like")]
 [CommandOption("-f", "Resolve the final target, following chains of symbolic links.")]

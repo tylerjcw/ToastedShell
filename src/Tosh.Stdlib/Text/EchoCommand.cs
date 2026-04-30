@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Text;
 
-[Stdlib(StdlibCategory.Text)]
 [CommandCategory("Text")]
 [CommandArgument("value", "One or more values to emit as pipeline objects.", Kind = "expression")]
 [CommandExample("echo hello world")]

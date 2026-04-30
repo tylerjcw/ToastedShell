@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Filesystem;
 
-[Stdlib(StdlibCategory.Filesystem)]
 [CommandCategory("Filesystem")]
 [CommandArgument("pattern", "One or more glob patterns to expand.")]
 [CommandOption("-a", "Include hidden entries in results.")]

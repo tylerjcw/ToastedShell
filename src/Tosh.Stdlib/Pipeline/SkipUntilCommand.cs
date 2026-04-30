@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Pipeline;
 
-[Stdlib(StdlibCategory.Pipeline)]
 [CommandCategory("Pipeline")]
 [CommandArgument("predicate", "A callable or block evaluated for each item. Starts yielding when it returns true.")]
 [CommandExample("echo 1 2 3 4 5 | skip-until { _ >= 3 }", Title = "Skip until a condition is met")]

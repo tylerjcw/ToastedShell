@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Pipeline;
 
-[Stdlib(StdlibCategory.Pipeline)]
 [CommandCategory("Pipeline")]
 [CommandArgument("k", "The number of elements in each combination.")]
 [CommandExample("[1 2 3] | combinations 2", Title = "All 2-element subsets")]

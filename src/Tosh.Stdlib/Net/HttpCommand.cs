@@ -7,7 +7,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Net;
 
-[Stdlib(StdlibCategory.Net)]
 [CommandCategory("Network")]
 [CommandArgument("<get|post|put|patch|delete|head|options> <url>", "Send an HTTP request immediately.", Required = false)]
 [CommandArgument("request <method> <url>", "Build an immutable HTTP request definition without sending it yet.", Required = false)]

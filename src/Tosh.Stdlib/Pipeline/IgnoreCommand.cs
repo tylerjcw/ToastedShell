@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Pipeline;
 
-[Stdlib(StdlibCategory.Pipeline)]
 [CommandCategory("Pipeline")]
 [CommandExample("build-project | ignore", Title = "Run for side effects and discard output")]
 [CommandExample("http post https://example.com/hooks --json $payload | ignore", Title = "Suppress response output")]

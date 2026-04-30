@@ -3,7 +3,6 @@ using Tosh.Runtime;
 namespace Tosh.Stdlib.Shell;
 
 [ShellOnly]
-[Stdlib(StdlibCategory.Shell)]
 [CommandCategory("Shell")]
 [CommandArgument("text", "Case-insensitive text to search for. May also be supplied from the pipeline.")]
 [CommandExample("history-search git", Title = "Search history by argument")]

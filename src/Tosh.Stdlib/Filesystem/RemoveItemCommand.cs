@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Filesystem;
 
-[Stdlib(StdlibCategory.Filesystem)]
 [CommandCategory("Filesystem")]
 [CommandArgument("path", "One or more files or directories to remove.", TypeName = "path-like")]
 [CommandOption("-r", "Remove directories and their contents recursively.")]

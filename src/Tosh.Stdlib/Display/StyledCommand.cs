@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Display;
 
-[Stdlib(StdlibCategory.Display)]
 [CommandCategory("Prompt")]
 [CommandArgument("text", "Text to wrap in a StyledText value.")]
 [CommandOption("--fg <color>", "Foreground color name or ANSI-style color token.")]

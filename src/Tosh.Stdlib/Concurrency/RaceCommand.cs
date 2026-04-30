@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Concurrency;
 
-[Stdlib(StdlibCategory.Concurrency)]
 [CommandCategory("Concurrency")]
 [CommandArgument("operation", "A callable or block to execute. Provide two or more operations to race.")]
 [CommandExample("race { sleep 0.1; echo slow } { sleep 0.01; echo fast }", Title = "Return the first completed operation")]

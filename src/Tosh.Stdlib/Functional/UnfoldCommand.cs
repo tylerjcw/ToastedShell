@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Functional;
 
-[Stdlib(StdlibCategory.Functional)]
 [CommandCategory("Functional")]
 [CommandArgument("seed", "The initial state passed to the callable.")]
 [CommandArgument("callable|block", "A function that receives state and returns [value, next-state] or null to stop.")]

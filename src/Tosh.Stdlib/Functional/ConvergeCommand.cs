@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Functional;
 
-[Stdlib(StdlibCategory.Functional)]
 [CommandCategory("Functional")]
 [CommandArgument("seed", "The initial value to start iterating from.")]
 [CommandArgument("callable|block", "A function applied repeatedly until two consecutive results are equal.")]

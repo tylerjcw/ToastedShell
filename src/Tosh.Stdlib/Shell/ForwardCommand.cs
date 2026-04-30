@@ -3,7 +3,6 @@ using Tosh.Runtime;
 namespace Tosh.Stdlib.Shell;
 
 [ShellOnly]
-[Stdlib(StdlibCategory.Shell)]
 [CommandCategory("Filesystem")]
 [CommandExample("forward")]
 [CommandOutput("The FileSystemEntry for the next directory.")]

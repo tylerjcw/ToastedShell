@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Scripting;
 
-[Stdlib(StdlibCategory.Scripting)]
 [CommandCategory("Scripting")]
 [CommandArgument("name", "One or more function names to remove.")]
 [CommandExample("undef myfunction", Title = "Remove a user-defined function")]

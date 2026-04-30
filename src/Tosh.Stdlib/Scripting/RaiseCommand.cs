@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Scripting;
 
-[Stdlib(StdlibCategory.Scripting)]
 [CommandCategory("Scripting")]
 [CommandArgument("event", "Event object, event factory, or event type to raise. May also be supplied from the pipeline.", Required = false)]
 [CommandArgument("fields", "Optional record of field overrides when raising from an event factory.", Required = false)]

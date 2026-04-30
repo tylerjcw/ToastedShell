@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Sys;
 
-[Stdlib(StdlibCategory.Sys)]
 [CommandCategory("System")]
 [CommandArgument("name ...", "Variables, functions, or exported environment names to remove. Values can also be piped in.", TypeName = "string")]
 [CommandExample("unset TEMP_VALUE", Title = "Remove a name with the unset alias")]

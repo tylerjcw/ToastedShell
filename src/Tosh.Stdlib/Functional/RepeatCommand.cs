@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Functional;
 
-[Stdlib(StdlibCategory.Functional)]
 [CommandCategory("Functional")]
 [CommandArgument("value", "The value to repeat infinitely.")]
 [CommandArgument("count", "Optional maximum number of repetitions.", Required = false)]

@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Functional;
 
-[Stdlib(StdlibCategory.Functional)]
 [CommandCategory("Functional")]
 [CommandArgument("callable", "A callable value such as an anonymous `func(...)` expression or other shell callable object.")]
 [CommandArgument("arg ...", "Optional positional arguments passed to the callable.", Required = false)]

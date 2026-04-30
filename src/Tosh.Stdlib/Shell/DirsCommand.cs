@@ -3,7 +3,6 @@ using Tosh.Runtime;
 namespace Tosh.Stdlib.Shell;
 
 [ShellOnly]
-[Stdlib(StdlibCategory.Shell)]
 [CommandCategory("Filesystem")]
 [CommandArgument("subcommand", "goto <index>, remove <index>, or clear.", Required = false)]
 [CommandExample("dirs")]

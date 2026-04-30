@@ -3,7 +3,6 @@ using Tosh.Runtime;
 namespace Tosh.Stdlib.Shell;
 
 [ShellOnly]
-[Stdlib(StdlibCategory.Shell)]
 [CommandCategory("Prompt")]
 [CommandArgument("text", "Literal text to render as a styled prompt segment.")]
 [CommandOption("--fg <color>", "Foreground color name or ANSI-style color token.")]

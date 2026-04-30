@@ -3,7 +3,6 @@ using Tosh.Runtime;
 namespace Tosh.Stdlib.Shell;
 
 [ShellOnly]
-[Stdlib(StdlibCategory.Shell)]
 [CommandCategory("Shell")]
 [CommandArgument("search <text>", "Searches history entries by text.", Required = false)]
 [CommandArgument("expand <spec>", "Expands a history event specification without running it.", Required = false)]

@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Filesystem;
 
-[Stdlib(StdlibCategory.Filesystem)]
 [CommandCategory("Filesystem")]
 [CommandArgument("path", "Absolute or relative directory path. Tilde expands to the home directory.", Required = false, TypeName = "path-like")]
 [CommandArgument("-", "Go back to the previous directory (pop from stack).", Required = false)]

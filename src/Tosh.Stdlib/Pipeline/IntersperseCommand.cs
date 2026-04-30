@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Pipeline;
 
-[Stdlib(StdlibCategory.Pipeline)]
 [CommandCategory("Pipeline")]
 [CommandArgument("separator", "The value to insert between each pipeline item.")]
 [CommandExample("echo 1 2 3 | intersperse 0", Title = "Insert zeros between items")]

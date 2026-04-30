@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Text;
 
-[Stdlib(StdlibCategory.Text)]
 [CommandCategory("Text")]
 [CommandArgument("value ...", "Values to render. When omitted, renders pipeline input.", Required = false)]
 [CommandExample("write \"no newline\"", Title = "Write text without a trailing newline")]

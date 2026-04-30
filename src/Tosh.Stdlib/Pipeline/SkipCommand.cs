@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Pipeline;
 
-[Stdlib(StdlibCategory.Pipeline)]
 [CommandCategory("Pipeline")]
 [CommandArgument("count", "The number of objects to skip. Defaults to 1.", Required = false)]
 [CommandExample("echo 1 2 3 4 5 | skip 2", Title = "Skip the first two items")]

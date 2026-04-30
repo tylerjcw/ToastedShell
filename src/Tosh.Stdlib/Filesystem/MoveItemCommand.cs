@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Filesystem;
 
-[Stdlib(StdlibCategory.Filesystem)]
 [CommandCategory("Filesystem")]
 [CommandArgument("source ...", "One or more source paths to move.", TypeName = "path-like")]
 [CommandArgument("destination", "The destination path or directory.", Required = false, TypeName = "path-like")]

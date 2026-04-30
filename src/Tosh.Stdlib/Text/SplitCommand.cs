@@ -4,7 +4,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Text;
 
-[Stdlib(StdlibCategory.Text)]
 [CommandCategory("Text")]
 [CommandArgument("delimiter|regex", "Delimiter string, regex pattern, or Regex object. Defaults to whitespace splitting when omitted.", Required = false)]
 [CommandArgument("text ...", "Optional explicit text values. When omitted, reads pipeline text.", Required = false)]

@@ -5,7 +5,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Text;
 
-[Stdlib(StdlibCategory.Text)]
 [CommandCategory("Text")]
 [CommandArgument("value ...", "Optional explicit values to emit as plain text instead of rich object display.", Required = false)]
 [CommandExample("echo 1317 | raw", Title = "Show a scalar without rich boxing")]

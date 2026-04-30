@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Filesystem;
 
-[Stdlib(StdlibCategory.Filesystem)]
 [CommandCategory("Filesystem")]
 [CommandArgument("path", "One or more paths to extract the directory from.", TypeName = "path-like")]
 [CommandExample("dirname /home/user/file.txt")]

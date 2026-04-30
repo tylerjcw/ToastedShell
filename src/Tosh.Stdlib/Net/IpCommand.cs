@@ -4,7 +4,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Net;
 
-[Stdlib(StdlibCategory.Net)]
 [CommandCategory("Network")]
 [CommandArgument("addr|address|a [show|add|del|flush] [filter ...]", "Query or mutate network addresses. Queries return typed objects; mutations pass through to the system `ip`.", Required = false)]
 [CommandArgument("link|l [show|set] [filter ...]", "Query or mutate network links. Queries return typed objects; mutations (set up/down, etc.) pass through.", Required = false)]

@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Pipeline;
 
-[Stdlib(StdlibCategory.Pipeline)]
 [CommandCategory("Pipeline")]
 [CommandArgument("member-path", "Optional member path to extract numeric values from each object.", Required = false)]
 [CommandExample("echo 1 2 3 4 | sum", Title = "Sum a list of numbers")]

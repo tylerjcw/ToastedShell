@@ -4,7 +4,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Sys;
 
-[Stdlib(StdlibCategory.Sys)]
 [CommandCategory("System")]
 [CommandArgument("[list-units [pattern ...]]", "With no subcommand, ToSh treats `systemctl` as a structured `list-units` query. Explicit `list-units` behaves the same way.", Required = false)]
 [CommandArgument("list-unit-files [pattern ...]", "Returns typed unit-file state rows for installed unit files.", Required = false)]

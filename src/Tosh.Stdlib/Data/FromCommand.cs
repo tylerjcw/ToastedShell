@@ -4,7 +4,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Data;
 
-[Stdlib(StdlibCategory.Data)]
 [CommandCategory("Data")]
 [CommandOutput("Parsed CLR objects from the text format.", Mode = "structured")]
 [CommandNote("The `from` and `to` commands convert between text formats (json, csv, tsv, xml, toml) and CLR objects. Parsed values stay as CLR objects until you explicitly flatten them.")]

@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Concurrency;
 
-[Stdlib(StdlibCategory.Concurrency)]
 [CommandCategory("Concurrency")]
 [CommandArgument("capacity", "Optional maximum number of items the channel can buffer. Omit for unbounded.", Required = false)]
 [CommandExample("var ch = channel", Title = "Create an unbounded channel")]

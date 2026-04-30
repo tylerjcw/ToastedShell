@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Pipeline;
 
-[Stdlib(StdlibCategory.Pipeline)]
 [CommandCategory("Pipeline")]
 [CommandArgument("command", "Command to invoke for the generated arguments.")]
 [CommandArgument("fixed-arg ...", "Arguments that are always passed before piped arguments.", Required = false)]

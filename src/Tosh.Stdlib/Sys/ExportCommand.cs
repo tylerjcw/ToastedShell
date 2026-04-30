@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Sys;
 
-[Stdlib(StdlibCategory.Sys)]
 [CommandCategory("System")]
 [CommandArgument("name", "The environment variable name.", Kind = "bareword")]
 [CommandArgument("=", "Assignment operator.", Required = false, Kind = "bareword")]

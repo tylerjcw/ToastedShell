@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Clr;
 
-[Stdlib(StdlibCategory.Clr)]
 [CommandCategory("CLR")]
 [CommandArgument("buffer ...", "Native buffers to free. Buffers may also be supplied from the pipeline.", Required = false)]
 [CommandExample("$buffer | native-free", Title = "Free a piped native buffer")]

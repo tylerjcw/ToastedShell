@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Pipeline;
 
-[Stdlib(StdlibCategory.Pipeline)]
 [CommandCategory("Pipeline")]
 [CommandArgument("count", "The number of objects to return from the end. Defaults to 1.", Required = false, Kind = "expression")]
 [CommandExample("echo 1 2 3 | last", Title = "Get the last item")]

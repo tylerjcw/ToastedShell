@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Pipeline;
 
-[Stdlib(StdlibCategory.Pipeline)]
 [CommandCategory("Pipeline")]
 [CommandExample("echo a b c | count", Title = "Count items in a pipeline")]
 [CommandExample("ls | count", Title = "Count files in the current directory")]

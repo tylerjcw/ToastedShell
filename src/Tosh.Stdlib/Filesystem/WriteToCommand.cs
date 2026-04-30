@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Filesystem;
 
-[Stdlib(StdlibCategory.Filesystem)]
 [CommandCategory("Filesystem")]
 [CommandArgument("handle", "The managed file handle to write into.")]
 [CommandArgument("value ...", "Optional explicit values to write. When omitted, pipeline input becomes the written payload.", Required = false)]

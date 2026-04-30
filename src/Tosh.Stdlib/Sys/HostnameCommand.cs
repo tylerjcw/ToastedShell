@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Sys;
 
-[Stdlib(StdlibCategory.Sys)]
 [CommandCategory("System")]
 [CommandExample("hostname", Title = "Show the current host name")]
 [CommandOutput("A single string containing the host name.")]

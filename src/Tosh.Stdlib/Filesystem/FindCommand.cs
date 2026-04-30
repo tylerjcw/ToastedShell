@@ -4,7 +4,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Filesystem;
 
-[Stdlib(StdlibCategory.Filesystem)]
 [CommandCategory("Filesystem")]
 [CommandArgument("root ...", "One or more filesystem roots to search.", Required = false, TypeName = "path-like")]
 [CommandOption("-name <pattern>", "Filter by shell-style name pattern.")]

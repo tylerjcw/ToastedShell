@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Filesystem;
 
-[Stdlib(StdlibCategory.Filesystem)]
 [CommandCategory("Filesystem")]
 [CommandArgument("path", "One or more paths to inspect.", TypeName = "path-like")]
 [CommandOption("-L", "Dereference symlinks before reading metadata.")]

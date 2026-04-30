@@ -4,7 +4,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Data;
 
-[Stdlib(StdlibCategory.Data)]
 [CommandCategory("Data")]
 [CommandArgument("pattern|regex", "The .NET regular expression pattern or Regex object to apply.", TypeName = "string|regex")]
 [CommandArgument("text ...", "Optional explicit text values. When omitted, reads pipeline text.", Required = false)]

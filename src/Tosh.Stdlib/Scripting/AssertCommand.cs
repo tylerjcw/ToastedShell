@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Scripting;
 
-[Stdlib(StdlibCategory.Scripting)]
 [CommandCategory("Scripting")]
 [CommandArgument("predicate", "Predicate callable or block that must evaluate truthy.")]
 [CommandArgument("message", "Optional diagnostic message emitted when the assertion fails.", Required = false)]

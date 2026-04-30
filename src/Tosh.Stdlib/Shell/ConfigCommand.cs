@@ -3,7 +3,6 @@ using Tosh.Tui.Requests;
 
 namespace Tosh.Stdlib.Shell;
 
-[Stdlib(StdlibCategory.Shell)]
 [CommandCategory("Shell")]
 [CommandArgument("browse [query]", "Opens the full-screen config browser, optionally filtered by an initial query, with staged editing, subtree diffs, structured section and collection editors, reusable confirmation and validation surfaces, filesystem browsing, apply/save flows, startup reload/init actions, live prompt/style/theme previews, and raw text editing for advanced cases.", Required = false)]
 [CommandArgument("get <path>", "Reads one config value.", Required = false)]

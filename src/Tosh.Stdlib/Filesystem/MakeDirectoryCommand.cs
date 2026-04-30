@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Filesystem;
 
-[Stdlib(StdlibCategory.Filesystem)]
 [CommandCategory("Filesystem")]
 [CommandArgument("path", "One or more directory paths to create.", TypeName = "path-like")]
 [CommandOption("-p", "Create parent directories as needed; no error if existing.")]

@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Pipeline;
 
-[Stdlib(StdlibCategory.Pipeline)]
 [CommandCategory("Pipeline")]
 [CommandArgument("callable|block", "A predicate evaluated for each input item.")]
 [CommandExample("echo 1 2 3 | any { _ > 2 }", Title = "Check if any value exceeds 2")]

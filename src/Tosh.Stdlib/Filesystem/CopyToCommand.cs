@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Filesystem;
 
-[Stdlib(StdlibCategory.Filesystem)]
 [CommandCategory("Filesystem")]
 [CommandArgument("source", "The readable managed file handle to copy from.", Required = false)]
 [CommandArgument("target", "The writable managed file handle to copy into.")]

@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Concurrency;
 
-[Stdlib(StdlibCategory.Concurrency)]
 [CommandCategory("Concurrency")]
 [CommandArgument("seconds", "Timeout in seconds (supports fractional values).")]
 [CommandArgument("operation", "A callable or block to execute.")]

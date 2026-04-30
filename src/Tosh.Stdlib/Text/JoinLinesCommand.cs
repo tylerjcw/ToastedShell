@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Text;
 
-[Stdlib(StdlibCategory.Text)]
 [CommandCategory("Text")]
 [CommandArgument("separator", "Separator inserted between values. Defaults to the platform newline.", Required = false)]
 [CommandExample("echo alpha beta gamma | join-lines \", \"", Title = "Join values with a comma")]

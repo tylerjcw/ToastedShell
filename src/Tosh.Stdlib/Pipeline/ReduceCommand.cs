@@ -2,7 +2,6 @@ using Tosh.Runtime;
 
 namespace Tosh.Stdlib.Pipeline;
 
-[Stdlib(StdlibCategory.Pipeline)]
 [CommandCategory("Pipeline")]
 [CommandArgument("seed", "The initial accumulator value.")]
 [CommandArgument("callable|block", "A lambda or block that combines the current accumulator with each input item and returns the next accumulator.")]
