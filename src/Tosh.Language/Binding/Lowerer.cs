@@ -845,21 +845,67 @@ public static class Lowerer
                     break;
 
                 case InterpolatedStringExpressionPart expr:
-                    // The parser stores the hole as raw source text
-                    // (re-parsed at runtime today). We don't yet
-                    // re-lex+parse here; the IL emitter can fall back
-                    // to runtime re-parse via SourceText. Once
-                    // expressions inside holes are first-class in the
-                    // parse tree, this becomes a recursive lower.
+                    // Holes are stored by the parser as raw source
+                    // text; we re-parse the snippet and lower the
+                    // resulting expression so consumers like the IL
+                    // emitter can avoid a runtime re-parse for the
+                    // common cases (variable references, arithmetic,
+                    // string concat, etc.). If anything fails, we
+                    // leave Expression null and the runtime fallback
+                    // path takes over.
                     parts.Add(new BoundInterpolatedExpression(
                         SourceText: expr.Expression,
-                        Expression: null,
+                        Expression: TryLowerHole(expr.Expression, ctx),
                         Span: expr.ExpressionSpan));
                     break;
             }
         }
 
         return new BoundInterpolatedString(parts, interp.Span, BoundType.FromClr(typeof(string)));
+    }
+
+    /// <summary>
+    /// Best-effort carve-out for a single interpolation hole. Re-parses
+    /// the hole's source text and lowers the resulting expression
+    /// using the surrounding <paramref name="ctx"/>, so variable
+    /// references inside the hole resolve against the outer scope.
+    /// Returns <c>null</c> when the snippet doesn't fit one of the
+    /// supported shapes — that signals downstream consumers to fall
+    /// back to a runtime re-parse.
+    /// </summary>
+    private static BoundExpression? TryLowerHole(string text, LowerContext ctx)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return null;
+
+        ParseResult parsed;
+        try
+        {
+            parsed = ToshParser.Parse(text, "<interp-hole>");
+        }
+        catch
+        {
+            return null;
+        }
+
+        if (parsed.Diagnostics.Count > 0) return null;
+        if (parsed.Statement is not PipelineStatementSyntax pipelineStmt) return null;
+
+        var pipeline = pipelineStmt.Pipeline;
+        if (pipeline.Stages.Count != 1) return null;
+
+        // Direct expression stage: lower as-is.
+        if (pipeline.Stages[0] is ExpressionPipelineStageSyntax exprStage)
+        {
+            return LowerExpression(exprStage.Expression, ctx);
+        }
+
+        // Otherwise (command stage, etc.) wrap the lowered pipeline in
+        // a subexpression; the IL emitter already unwraps single-stage
+        // subexpressions back into the inner expression.
+        return new BoundSubexpression(
+            Pipeline: LowerPipeline(pipeline, ctx),
+            Span: pipelineStmt.Span,
+            Type: BoundType.Dynamic);
     }
 
     /// <summary>

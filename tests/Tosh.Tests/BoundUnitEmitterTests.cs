@@ -39,6 +39,9 @@ public sealed class BoundUnitEmitterTests : IClassFixture<ToshRuntimeFixture>
     [InlineData("echo (1 < 2)",           "True")]
     [InlineData("echo (\"a\" + \"b\")",   "ab")]
     [InlineData("echo $\"plain text\"",   "plain text")]
+    [InlineData("var n = 7\necho $\"value={$n}\"",            "value=7")]
+    [InlineData("var n = 7\necho $\"x={$n + 1}\"",            "x=8")]
+    [InlineData("var a = 3\nvar b = 4\necho $\"sum={$a + $b}\"", "sum=7")]
     public void Compiles_and_runs(string source, string expected)
     {
         var output = CompileAndRun(source);
