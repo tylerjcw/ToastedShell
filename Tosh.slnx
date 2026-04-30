@@ -13,4 +13,7 @@
     <Project Path="tests/Tosh.LspFixture/Tosh.LspFixture.csproj" />
     <Project Path="tests/Tosh.Tests/Tosh.Tests.csproj" />
   </Folder>
+  <Folder Name="/bench/">
+    <Project Path="bench/Tosh.Benchmarks/Tosh.Benchmarks.csproj" />
+  </Folder>
 </Solution>
