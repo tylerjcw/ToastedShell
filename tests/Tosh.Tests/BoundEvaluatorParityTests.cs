@@ -57,6 +57,10 @@ public sealed class BoundEvaluatorParityTests : IClassFixture<ToshRuntimeFixture
         new object[] { "var/compound_assign",     "var x = 1\n$x += 5\necho $x" },
         new object[] { "array/literal",           "echo [1, 2, 3]" },
         new object[] { "array/spread",            "var xs = [2, 3]\necho [1, ...$xs, 4]" },
+        new object[] { "control/if_no_else",      "if (1 > 0) { echo yes }" },
+        new object[] { "control/while",           "var n = 0\nwhile ($n < 3) { $n = $n + 1 }\necho $n" },
+        new object[] { "control/break",           "for i in [1, 2, 3, 4] { if ($i == 3) { break }\n echo $i }" },
+        new object[] { "control/continue",        "for i in [1, 2, 3, 4] { if ($i == 2) { continue }\n echo $i }" },
     };
 
     [Theory]

@@ -319,4 +319,71 @@ public sealed class LowererTests : IClassFixture<ToshRuntimeFixture>
         Assert.Contains(interp.Parts, p => p is BoundInterpolatedLiteral);
         Assert.Contains(interp.Parts, p => p is BoundInterpolatedExpression);
     }
+
+    [Fact]
+    public void Lower_carves_out_if_statement()
+    {
+        var parse = ParseSource("if (1 > 0) { echo yes } else { echo no }");
+        var unit = Lowerer.Lower(parse, _runtime.Commands);
+
+        var ifStmt = Assert.IsType<BoundIfStatement>(unit.Root.Statements[0]);
+        Assert.NotNull(ifStmt.ElseBlock);
+        Assert.Single(ifStmt.ThenBlock.Statements);
+        Assert.Single(ifStmt.ElseBlock!.Statements);
+    }
+
+    [Fact]
+    public void Lower_carves_out_if_without_else()
+    {
+        var parse = ParseSource("if (1 > 0) { echo yes }");
+        var unit = Lowerer.Lower(parse, _runtime.Commands);
+
+        var ifStmt = Assert.IsType<BoundIfStatement>(unit.Root.Statements[0]);
+        Assert.Null(ifStmt.ElseBlock);
+    }
+
+    [Fact]
+    public void Lower_carves_out_for_statement_and_binds_loop_variable()
+    {
+        var parse = ParseSource("for i in [1, 2, 3] { echo $i }");
+        var unit = Lowerer.Lower(parse, _runtime.Commands);
+
+        var forStmt = Assert.IsType<BoundForStatement>(unit.Root.Statements[0]);
+        Assert.Equal("i", forStmt.LoopVariable.Name);
+        Assert.Equal(BoundSymbolKind.LoopVariable, forStmt.LoopVariable.Kind);
+
+        // The reference inside the body should resolve to the loop variable.
+        var pipelineStmt = Assert.IsType<BoundPipelineStatement>(forStmt.Body.Statements[0]);
+        var call = (BoundCommandCall)pipelineStmt.Pipeline.Stages[0];
+        var varRef = Assert.IsType<BoundVariableReference>(call.Arguments[0].Value);
+        Assert.Same(forStmt.LoopVariable, varRef.Symbol);
+    }
+
+    [Fact]
+    public void Lower_does_not_leak_loop_variable_out_of_scope()
+    {
+        var parse = ParseSource("for i in [1, 2, 3] { echo $i }\necho $i");
+        var unit = Lowerer.Lower(parse, _runtime.Commands);
+
+        // Outside the loop, $i must be unresolved (runtime fallback).
+        var afterLoop = Assert.IsType<BoundPipelineStatement>(unit.Root.Statements[1]);
+        var call = (BoundCommandCall)afterLoop.Pipeline.Stages[0];
+        var varRef = Assert.IsType<BoundVariableReference>(call.Arguments[0].Value);
+        Assert.Null(varRef.Symbol);
+    }
+
+    [Fact]
+    public void Lower_carves_out_while_and_break_continue()
+    {
+        var parse = ParseSource("var n = 0\nwhile ($n < 5) { $n = $n + 1\n    if ($n == 3) { break } else { continue } }");
+        var unit = Lowerer.Lower(parse, _runtime.Commands);
+
+        var whileStmt = Assert.IsType<BoundWhileStatement>(unit.Root.Statements[1]);
+        Assert.False(whileStmt.IsUntil);
+
+        var ifStmt = Assert.IsType<BoundIfStatement>(whileStmt.Body.Statements[1]);
+        Assert.IsType<BoundBreakStatement>(ifStmt.ThenBlock.Statements[0]);
+        Assert.NotNull(ifStmt.ElseBlock);
+        Assert.IsType<BoundContinueStatement>(ifStmt.ElseBlock!.Statements[0]);
+    }
 }

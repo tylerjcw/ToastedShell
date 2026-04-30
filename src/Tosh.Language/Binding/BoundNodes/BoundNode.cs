@@ -74,6 +74,49 @@ public sealed record BoundVariableAssignment(
     : BoundStatement(Span);
 
 /// <summary>
+/// A lexical block: a sequence of bound statements that share a
+/// single scope frame. Used as the body of <c>if</c>, <c>for</c>,
+/// <c>while</c>, blocks passed to higher-order commands, function
+/// bodies, etc.
+/// </summary>
+public sealed record BoundBlock(IReadOnlyList<BoundStatement> Statements, TextSpan Span)
+    : BoundNode(Span);
+
+/// <summary>An <c>if … else …</c> statement.</summary>
+public sealed record BoundIfStatement(
+    BoundExpression Condition,
+    BoundBlock ThenBlock,
+    BoundBlock? ElseBlock,
+    TextSpan Span)
+    : BoundStatement(Span);
+
+/// <summary>A <c>for var in source { … }</c> loop.</summary>
+public sealed record BoundForStatement(
+    BoundSymbol LoopVariable,
+    BoundPipeline Source,
+    BoundBlock Body,
+    TextSpan Span)
+    : BoundStatement(Span);
+
+/// <summary>
+/// A <c>while cond { … }</c> or <c>until cond { … }</c> loop. Until
+/// loops invert the condition test; the IL emitter chooses the right
+/// branch opcode.
+/// </summary>
+public sealed record BoundWhileStatement(
+    BoundExpression Condition,
+    BoundBlock Body,
+    bool IsUntil,
+    TextSpan Span)
+    : BoundStatement(Span);
+
+/// <summary><c>break</c> out of the enclosing loop.</summary>
+public sealed record BoundBreakStatement(TextSpan Span) : BoundStatement(Span);
+
+/// <summary><c>continue</c> to the next iteration of the enclosing loop.</summary>
+public sealed record BoundContinueStatement(TextSpan Span) : BoundStatement(Span);
+
+/// <summary>
 /// A <c>var</c> declaration. <see cref="Value"/> is the initializer
 /// pipeline (lowered); <see cref="Symbol"/> is the binding produced
 /// for this declaration so subsequent references can resolve to it.
@@ -188,6 +231,32 @@ public sealed record BoundInterpolatedExpression(
 /// <summary>An interpolated string literal: <c>$"hello, $name!"</c>.</summary>
 public sealed record BoundInterpolatedString(
     IReadOnlyList<BoundInterpolatedPart> Parts,
+    TextSpan Span,
+    BoundType Type)
+    : BoundExpression(Span, Type);
+
+/// <summary>
+/// A ternary <c>cond ? a : b</c> expression. Both branches are
+/// expressions, so the result type is the join of their two types
+/// (left dynamic for now).
+/// </summary>
+public sealed record BoundConditional(
+    BoundExpression Condition,
+    BoundExpression WhenTrue,
+    BoundExpression WhenFalse,
+    TextSpan Span,
+    BoundType Type)
+    : BoundExpression(Span, Type);
+
+/// <summary>
+/// An <c>if cond { … } else { … }</c> used in expression position
+/// (e.g. as a command argument). Both branches are required because
+/// the value of an expressional <c>if</c> must be defined.
+/// </summary>
+public sealed record BoundIfExpression(
+    BoundExpression Condition,
+    BoundBlock ThenBlock,
+    BoundBlock ElseBlock,
     TextSpan Span,
     BoundType Type)
     : BoundExpression(Span, Type);

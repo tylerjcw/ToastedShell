@@ -69,6 +69,32 @@ public static class Lowerer
                 Value: LowerPipeline(assign.Value, ctx),
                 Span: assign.Span),
 
+        IfStatementSyntax ifStmt =>
+            LowerIfStatement(ifStmt, ctx),
+
+        ForStatementSyntax forStmt =>
+            LowerForStatement(forStmt, ctx),
+
+        WhileStatementSyntax whileStmt =>
+            new BoundWhileStatement(
+                Condition: LowerExpression(whileStmt.Condition, ctx),
+                Body: LowerBlock(whileStmt.Body, ctx),
+                IsUntil: false,
+                Span: whileStmt.Span),
+
+        UntilStatementSyntax untilStmt =>
+            new BoundWhileStatement(
+                Condition: LowerExpression(untilStmt.Condition, ctx),
+                Body: LowerBlock(untilStmt.Body, ctx),
+                IsUntil: true,
+                Span: untilStmt.Span),
+
+        BreakStatementSyntax brk =>
+            new BoundBreakStatement(brk.Span),
+
+        ContinueStatementSyntax cont =>
+            new BoundContinueStatement(cont.Span),
+
         ScriptStatementSyntax inner =>
             LowerStatementAsScript(inner, ctx),
 
@@ -102,6 +128,72 @@ public static class Lowerer
             IsConst: decl.IsConst,
             Modifier: decl.Modifier,
             Span: decl.Span);
+    }
+
+    /// <summary>
+    /// Lowers a <see cref="BlockSyntax"/>, opening a fresh scope frame
+    /// so locals declared inside the block don't leak out. The body of
+    /// every control-flow construct routes through here.
+    /// </summary>
+    private static BoundBlock LowerBlock(BlockSyntax block, LowerContext ctx)
+    {
+        ctx.PushScope();
+        try
+        {
+            var statements = new List<BoundStatement>(block.Statements.Count);
+            foreach (var inner in block.Statements)
+            {
+                statements.Add(LowerStatement(inner, ctx));
+            }
+            return new BoundBlock(statements, block.Span);
+        }
+        finally
+        {
+            ctx.PopScope();
+        }
+    }
+
+    private static BoundIfStatement LowerIfStatement(IfStatementSyntax ifStmt, LowerContext ctx)
+    {
+        var condition = LowerExpression(ifStmt.Condition, ctx);
+        var thenBlock = LowerBlock(ifStmt.ThenBlock, ctx);
+        var elseBlock = ifStmt.ElseBlock is null ? null : LowerBlock(ifStmt.ElseBlock, ctx);
+        return new BoundIfStatement(condition, thenBlock, elseBlock, ifStmt.Span);
+    }
+
+    private static BoundForStatement LowerForStatement(ForStatementSyntax forStmt, LowerContext ctx)
+    {
+        // Source pipeline runs in the *outer* scope (otherwise it could
+        // not reference the loop variable retroactively, which would
+        // be nonsensical, but more importantly so its bindings stay
+        // visible after the loop ends).
+        var source = LowerPipeline(forStmt.Source, ctx);
+
+        // The loop variable lives in a fresh scope shared with the
+        // body. We push the scope manually here (rather than using
+        // LowerBlock) so the loop variable is in scope while the
+        // body's statements are lowered.
+        ctx.PushScope();
+        try
+        {
+            var loopVar = ctx.DeclareLocal(
+                forStmt.VariableName,
+                BoundSymbolKind.LoopVariable,
+                BoundType.Dynamic);
+
+            var statements = new List<BoundStatement>(forStmt.Body.Statements.Count);
+            foreach (var inner in forStmt.Body.Statements)
+            {
+                statements.Add(LowerStatement(inner, ctx));
+            }
+            var body = new BoundBlock(statements, forStmt.Body.Span);
+
+            return new BoundForStatement(loopVar, source, body, forStmt.Span);
+        }
+        finally
+        {
+            ctx.PopScope();
+        }
     }
 
     // ── pipelines ──────────────────────────────────────────────
@@ -315,6 +407,22 @@ public static class Lowerer
 
         InterpolatedStringArgumentSyntax interp => BuildInterpolatedString(interp, ctx),
 
+        ConditionalArgumentSyntax cond =>
+            new BoundConditional(
+                Condition: LowerExpression(cond.Condition, ctx),
+                WhenTrue: LowerExpression(cond.WhenTrue, ctx),
+                WhenFalse: LowerExpression(cond.WhenFalse, ctx),
+                Span: cond.Span,
+                Type: BoundType.Dynamic),
+
+        IfExpressionArgumentSyntax ifExpr =>
+            new BoundIfExpression(
+                Condition: LowerExpression(ifExpr.Condition, ctx),
+                ThenBlock: LowerBlock(ifExpr.ThenBlock, ctx),
+                ElseBlock: LowerBlock(ifExpr.ElseBlock, ctx),
+                Span: ifExpr.Span,
+                Type: BoundType.Dynamic),
+
         // Everything else stays dynamic for now.
         _ => new BoundDynamicExpression(expression, expression.Span),
     };
@@ -466,6 +574,18 @@ public static class Lowerer
 
         public List<BoundSymbol> Symbols { get; } = new();
 
+        public void PushScope()
+        {
+            _scopes.Add(new Dictionary<string, BoundSymbol>(StringComparer.Ordinal));
+        }
+
+        public void PopScope()
+        {
+            // Outermost scope is the file-level frame and is never popped.
+            if (_scopes.Count <= 1) return;
+            _scopes.RemoveAt(_scopes.Count - 1);
+        }
+
         public BoundSymbol DeclareLocal(string name, BoundType declaredType)
         {
             var symbol = new BoundSymbol(
@@ -475,6 +595,19 @@ public static class Lowerer
                 DeclaredType: declaredType);
 
             // Shadowing is permitted — the innermost binding wins.
+            _scopes[^1][name] = symbol;
+            Symbols.Add(symbol);
+            return symbol;
+        }
+
+        public BoundSymbol DeclareLocal(string name, BoundSymbolKind kind, BoundType declaredType)
+        {
+            var symbol = new BoundSymbol(
+                Name: name,
+                Kind: kind,
+                ScopeDepth: _scopes.Count - 1,
+                DeclaredType: declaredType);
+
             _scopes[^1][name] = symbol;
             Symbols.Add(symbol);
             return symbol;
