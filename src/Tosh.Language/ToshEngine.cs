@@ -327,7 +327,7 @@ public sealed partial class ToshEngine : IShellEvaluator
             return;
         }
 
-        var diagnostics = Tosh.Language.Binding.Binder.Bind(parseResult, Runtime.Commands);
+        var diagnostics = Tosh.Language.Binding.Binder.Bind(parseResult, Runtime.Commands, IsInteractiveSession);
         if (diagnostics.Count == 0) return;
 
         switch (BinderStrictness)

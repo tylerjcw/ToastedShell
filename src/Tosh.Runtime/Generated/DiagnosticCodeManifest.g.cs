@@ -31,7 +31,7 @@ public static class DiagnosticCodeManifest
             Title: "Command '{name}' is not a registered builtin or function declared in this source.",
             Help: "the binder flags names that look like typos for known commands. ",
             SourceFile: "src/Tosh.Language/Binding/Binder.cs",
-            SourceLine: 351),
+            SourceLine: 386),
         ["tosh.config.missing_value"] = new DiagnosticCodeInfo(
             Code: "tosh.config.missing_value",
             Namespace: "config",

@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using Tosh.Language.Parsing;
 using Tosh.Runtime;
 
@@ -33,9 +34,17 @@ public static class Binder
     /// Returns the diagnostics the binder would surface; the caller decides
     /// whether to raise them based on the active <see cref="BinderStrictness"/>.
     /// </summary>
+    /// <param name="isInteractive">
+    /// When <c>false</c>, commands marked
+    /// <see cref="ShellOnlyAttribute"/> are flagged at bind time with
+    /// <c>tosh.shell_only</c> rather than waiting for the runtime to reach
+    /// them. The REPL passes <c>true</c>; <c>-c</c> and script invocations
+    /// pass <c>false</c>.
+    /// </param>
     public static IReadOnlyList<ToshDiagnostic> Bind(
         ParseResult parseResult,
-        ShellCommandRegistry commandRegistry)
+        ShellCommandRegistry commandRegistry,
+        bool isInteractive = false)
     {
         ArgumentNullException.ThrowIfNull(parseResult);
         ArgumentNullException.ThrowIfNull(commandRegistry);
@@ -48,6 +57,7 @@ public static class Binder
             parseResult.SourceText,
             commandRegistry,
             localFunctions,
+            isInteractive,
             new List<ToshDiagnostic>());
 
         VisitStatement(parseResult.Statement, context);
@@ -325,7 +335,7 @@ public static class Binder
         // Explicit path: ./foo, /bin/foo, ../foo. Defer entirely to runtime.
         if (LooksLikeExplicitPath(name)) return;
 
-        if (context.CommandRegistry.TryGet(name, out _))
+        if (context.CommandRegistry.TryGet(name, out var resolved))
         {
             // Phase 1 doesn't stamp BoundCommand: top-level user functions are
             // registered into the same Runtime.Commands registry the binder
@@ -334,6 +344,31 @@ public static class Binder
             // Phase 1 value is the diagnostic below; runtime resolution stays
             // authoritative. A future phase can re-introduce the fast path
             // with a freshness check.
+
+            // Bind-time [ShellOnly] check: in non-interactive contexts (script
+            // files, `-c`, `source`) a command marked ShellOnly cannot be used.
+            // The runtime check in ToshEngine still fires as a safety net for
+            // any path that bypasses the binder, but raising here surfaces the
+            // error before any work runs and catches shell-only commands
+            // behind never-taken branches.
+            if (!context.IsInteractive)
+            {
+                var shellOnly = resolved.GetType().GetCustomAttribute<ShellOnlyAttribute>();
+                if (shellOnly is not null)
+                {
+                    var reason = string.IsNullOrWhiteSpace(shellOnly.Reason)
+                        ? "It depends on interactive-shell state (history, prompt, directory stack, TUI)."
+                        : shellOnly.Reason;
+                    context.Diagnostics.Add(new ToshDiagnostic(
+                        Code: "tosh.shell_only",
+                        Title: $"Command '{resolved.Name}' is shell-only and cannot be used outside an interactive session.",
+                        SourceName: context.SourceName,
+                        SourceText: context.SourceText,
+                        Span: command.NameSpan,
+                        Label: $"'{resolved.Name}' is REPL-only",
+                        Help: reason));
+                }
+            }
             return;
         }
 
@@ -434,5 +469,6 @@ public static class Binder
         string SourceText,
         ShellCommandRegistry CommandRegistry,
         HashSet<string> LocalFunctions,
+        bool IsInteractive,
         List<ToshDiagnostic> Diagnostics);
 }

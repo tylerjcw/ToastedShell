@@ -219,4 +219,60 @@ public sealed class BinderTests : IClassFixture<ToshRuntimeFixture>
             Environment.SetEnvironmentVariable("TOSH_DISABLE_BINDER", previous);
         }
     }
+
+    [Fact]
+    public void Bind_does_not_flag_shell_only_command_in_interactive_context()
+    {
+        // 'back' is a [ShellOnly] command (directory-stack pop).
+        var parse = ParseSource("back");
+        var diagnostics = Binder.Bind(parse, _runtime.Commands, isInteractive: true);
+        Assert.Empty(diagnostics);
+    }
+
+    [Fact]
+    public void Bind_flags_shell_only_command_in_non_interactive_context()
+    {
+        var parse = ParseSource("back");
+        var diagnostics = Binder.Bind(parse, _runtime.Commands, isInteractive: false);
+        Assert.NotEmpty(diagnostics);
+        Assert.Equal("tosh.shell_only", diagnostics[0].Code);
+        Assert.Contains("back", diagnostics[0].Label!, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Engine_throws_at_bind_time_for_shell_only_command_in_script_mode()
+    {
+        var runtime = ToshRuntime.CreateDefault(TextWriter.Null, TextWriter.Null);
+        var engine = new ToshEngine(runtime);
+        // Default IsInteractiveSession=false; default Strictness=Warn.
+        // Binder emits tosh.shell_only as a Warn under Warn, but under Strict
+        // (which scripts use) it throws before any evaluation runs.
+        engine.BinderStrictness = BinderStrictness.Strict;
+
+        var ex = await Assert.ThrowsAsync<ToshDiagnosticException>(async () =>
+            await engine.ExecuteToListAsync("if (false) { back } else { echo hi }"));
+
+        // The diagnostic is bind-time even though the command is unreachable.
+        Assert.Equal("tosh.shell_only", ex.Diagnostics[0].Code);
+    }
+
+    [Fact]
+    public async Task Engine_does_not_flag_shell_only_command_in_interactive_session()
+    {
+        var runtime = ToshRuntime.CreateDefault(TextWriter.Null, TextWriter.Null);
+        var engine = new ToshEngine(runtime) { IsInteractiveSession = true };
+        engine.BinderStrictness = BinderStrictness.Strict;
+
+        // Even under Strict, an interactive session must let shell-only
+        // commands through the binder. (The command itself may still fail
+        // for runtime reasons in a unit-test context, but not at bind time.)
+        try
+        {
+            await engine.ExecuteToListAsync("dirs");
+        }
+        catch (ToshDiagnosticException ex)
+        {
+            Assert.NotEqual("tosh.shell_only", ex.Diagnostics[0].Code);
+        }
+    }
 }
