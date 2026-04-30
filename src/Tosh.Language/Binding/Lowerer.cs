@@ -217,18 +217,42 @@ public static class Lowerer
         return new BoundVariableReference(varRef.Name, symbol, varRef.Span, type);
     }
 
-    private static BoundBinaryOperator BuildBinary(OperatorArgumentSyntax binary, LowerContext ctx)
+    private static BoundExpression BuildBinary(OperatorArgumentSyntax binary, LowerContext ctx)
     {
         var left = LowerExpression(binary.Left, ctx);
         var right = LowerExpression(binary.Right, ctx);
         var type = TypeInferrer.InferBinary(left.Type, binary.Operator, right.Type);
+
+        // Try to fold to a constant. On success, stamp the parse
+        // tree's side-table (so the existing evaluator's
+        // expression-evaluation path can short-circuit without any
+        // structural changes) AND replace this node with a literal
+        // in the bound IR so future bound-IR consumers see the
+        // simpler shape.
+        var folded = ConstantFolder.TryFoldBinary(left, binary.Operator, right);
+        if (!ReferenceEquals(folded, ConstantFolder.Sentinel.NoFold))
+        {
+            binary.FoldedConstant = new ConstantFold(folded);
+            var foldedType = folded is null ? BoundType.Dynamic : BoundType.FromClr(folded.GetType());
+            return new BoundLiteral(folded, binary.Span, foldedType);
+        }
+
         return new BoundBinaryOperator(left, binary.Operator, right, binary.Span, type);
     }
 
-    private static BoundUnaryOperator BuildUnary(UnaryOperatorArgumentSyntax unary, LowerContext ctx)
+    private static BoundExpression BuildUnary(UnaryOperatorArgumentSyntax unary, LowerContext ctx)
     {
         var operand = LowerExpression(unary.Operand, ctx);
         var type = TypeInferrer.InferUnary(unary.Operator, operand.Type);
+
+        var folded = ConstantFolder.TryFoldUnary(unary.Operator, operand);
+        if (!ReferenceEquals(folded, ConstantFolder.Sentinel.NoFold))
+        {
+            unary.FoldedConstant = new ConstantFold(folded);
+            var foldedType = folded is null ? BoundType.Dynamic : BoundType.FromClr(folded.GetType());
+            return new BoundLiteral(folded, unary.Span, foldedType);
+        }
+
         return new BoundUnaryOperator(unary.Operator, operand, unary.Span, type);
     }
 

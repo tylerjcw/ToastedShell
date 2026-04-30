@@ -311,8 +311,39 @@ public sealed partial class ToshEngine : IShellEvaluator
         }
 
         ApplyBinder(parseResult);
+        ApplyLowering(parseResult);
 
         return EvaluateAsync(parseResult, cancellationToken);
+    }
+
+    /// <summary>
+    /// Run the lowering pass for its side effects on the parse tree
+    /// (constant folding stamps <c>FoldedConstant</c> annotations on
+    /// operator nodes the evaluator then short-circuits on). The
+    /// resulting <see cref="Tosh.Language.Binding.BoundUnit"/> is
+    /// discarded for now; future commits will route evaluation through
+    /// it directly. Disabled by <c>TOSH_DISABLE_LOWERER=1</c>.
+    /// </summary>
+    private void ApplyLowering(ParseResult parseResult)
+    {
+        if (string.Equals(
+                Environment.GetEnvironmentVariable("TOSH_DISABLE_LOWERER"),
+                "1",
+                StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        try
+        {
+            _ = Tosh.Language.Binding.Lowerer.Lower(parseResult, Runtime.Commands);
+        }
+        catch
+        {
+            // Lowering must never break evaluation. If anything goes
+            // wrong we fall back to the parse-tree path with no
+            // annotations — exactly the pre-Phase-A behavior.
+        }
     }
 
     private void ApplyBinder(ParseResult parseResult)
@@ -5271,6 +5302,13 @@ public sealed partial class ToshEngine : IShellEvaluator
 
                 case OperatorArgumentSyntax operation:
                     {
+                        // Constant-folded by the lowering pass: skip both
+                        // sub-evaluations and return the precomputed value.
+                        if (operation.FoldedConstant is { } cachedBinary)
+                        {
+                            return cachedBinary.Value;
+                        }
+
                         var left = await EvaluateArgumentAsync(sourceName, sourceText, operation.Left, cancellationToken);
 
                         // Short-circuit: do not evaluate the right side if unnecessary.
@@ -5351,6 +5389,12 @@ public sealed partial class ToshEngine : IShellEvaluator
 
                 case UnaryOperatorArgumentSyntax unaryOperation:
                     {
+                        // Constant-folded by the lowering pass.
+                        if (unaryOperation.FoldedConstant is { } cachedUnary)
+                        {
+                            return cachedUnary.Value;
+                        }
+
                         var operand = await EvaluateArgumentAsync(sourceName, sourceText, unaryOperation.Operand, cancellationToken);
 
                         if (operand is ToshClassInstance unaryInst &&

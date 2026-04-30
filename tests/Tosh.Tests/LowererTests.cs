@@ -199,7 +199,7 @@ public sealed class LowererTests : IClassFixture<ToshRuntimeFixture>
         // Either accept dynamic OR a BoundBinaryOperator — both are valid
         // outcomes of the same source string given the parser shape.
         var arg = call.Arguments[0].Value;
-        Assert.True(arg is BoundBinaryOperator or BoundDynamicExpression);
+        Assert.True(arg is BoundBinaryOperator or BoundDynamicExpression or BoundLiteral);
     }
 
     [Fact]

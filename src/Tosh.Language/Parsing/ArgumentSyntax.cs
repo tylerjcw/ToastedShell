@@ -94,7 +94,23 @@ public sealed record OperatorArgumentSyntax(
     string Operator,
     TextSpan OperatorSpan,
     ArgumentSyntax Right,
-    TextSpan Span) : ArgumentSyntax(Span);
+    TextSpan Span) : ArgumentSyntax(Span)
+{
+    /// <summary>
+    /// Set by the lowering pass when both operands are constants and
+    /// the operator is purely numeric/boolean/string. The evaluator
+    /// short-circuits to this value instead of recursively evaluating
+    /// <see cref="Left"/> and <see cref="Right"/>. Body-declared so it
+    /// does not participate in record equality.
+    /// </summary>
+    public ConstantFold? FoldedConstant { get; set; }
+}
+
+/// <summary>
+/// Cached folded value for a constant expression. The presence of
+/// this object indicates the lowerer proved the operator's result.
+/// </summary>
+public sealed record ConstantFold(object? Value);
 
 public sealed record ConditionalArgumentSyntax(
     ArgumentSyntax Condition,
@@ -132,7 +148,15 @@ public sealed record UnaryOperatorArgumentSyntax(
     string Operator,
     TextSpan OperatorSpan,
     ArgumentSyntax Operand,
-    TextSpan Span) : ArgumentSyntax(Span);
+    TextSpan Span) : ArgumentSyntax(Span)
+{
+    /// <summary>
+    /// Set by the lowering pass when the operand is a constant and the
+    /// operator is purely numeric/boolean. See
+    /// <see cref="OperatorArgumentSyntax.FoldedConstant"/>.
+    /// </summary>
+    public ConstantFold? FoldedConstant { get; set; }
+}
 
 public abstract record InterpolatedStringPart;
 public sealed record InterpolatedStringLiteralPart(string Text) : InterpolatedStringPart;

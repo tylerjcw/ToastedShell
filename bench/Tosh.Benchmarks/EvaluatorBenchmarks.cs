@@ -82,4 +82,37 @@ public class EvaluatorBenchmarks
             "var name = \"world\"\necho $\"hello, {$name}!\"");
         return results.Count;
     }
+
+    /// <summary>
+    /// Arithmetic-heavy expression with no runtime variables. With
+    /// constant folding this should shrink to a single-literal echo;
+    /// without it, the evaluator walks every node.
+    /// </summary>
+    [Benchmark]
+    public async Task<int> ArithmeticConstants()
+    {
+        var results = await _engine.ExecuteToListAsync(
+            "echo (60 * 60 * 24 + 12 * 60 - 7)");
+        return results.Count;
+    }
+
+    /// <summary>
+    /// Same arithmetic expression with the lowering pass disabled —
+    /// gives us a head-to-head measurement of the fold's payoff.
+    /// </summary>
+    [Benchmark]
+    public async Task<int> ArithmeticConstantsNoFold()
+    {
+        Environment.SetEnvironmentVariable("TOSH_DISABLE_LOWERER", "1");
+        try
+        {
+            var results = await _engine.ExecuteToListAsync(
+                "echo (60 * 60 * 24 + 12 * 60 - 7)");
+            return results.Count;
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("TOSH_DISABLE_LOWERER", null);
+        }
+    }
 }
