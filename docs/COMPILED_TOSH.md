@@ -259,12 +259,12 @@ Snapshot of how far each layer has actually moved. Commits are on `master`.
 
 | Step                                                     | Status      | Notes |
 |----------------------------------------------------------|-------------|-------|
-| Carve `Tosh.Core` into `Tosh.Runtime` + `Tosh.Stdlib`    | done        | shipped earlier |
+| Carve `Tosh.Core` into `Tosh.Runtime` + `Tosh.Stdlib`    | done        | `469e9f9` |
 | `[ShellOnly]` attribute (in `Tosh.Runtime`)               | done        | `c0f2085` |
 | `[Stdlib(StdlibCategory.X)]` attribute + enum              | done        | `c0f2085` |
 | ~16 commands marked `[ShellOnly]`                         | done        | `c0f2085` |
 | ~243 stdlib commands tagged into buckets                  | done        | `c0f2085` |
-| Folder layout `src/Tosh.Stdlib/<Bucket>/*.cs`             | done        | shipped earlier |
+| Folder layout `src/Tosh.Stdlib/<Bucket>/*.cs`             | done        | `d211127` |
 | Namespace-based category inference (drop redundant attrs) | done        | `0dea4a3` |
 | Real assembly split into `Tosh.Stdlib.<Bucket>.dll`       | deferred    | stays as a single assembly with namespace partitions until Layer 3 demands separate compile units |
 
@@ -274,22 +274,75 @@ Snapshot of how far each layer has actually moved. Commits are on `master`.
 |----------------------------------------------------------|-------------|-------|
 | Phase 1 binder: command-name resolution + typo detection | done        | `3cae6b9` |
 | Bind-time `[ShellOnly]` enforcement                      | done        | `e7df0bd` |
-| Binder microbenchmark (BenchmarkDotNet)                  | done        | `acf773b` — see [BENCHMARKS.md](BENCHMARKS.md) |
-| Phase 2 binder: variable-name scope analysis             | next        | flag `$nme` typo for `$name`; needs scope tables for `var`, function params, for-loop bindings, lambdas, class fields |
-| Bound IR data structures                                  | not started | the binder still emits diagnostics over the parse tree; no separate IR yet |
+| Phase 2 binder: variable-name scope analysis             | done        | `516d18f` — flags `$nme` for `$name`; covers `var`, destructuring, function/lambda params, for/catch vars, class properties, modules |
+| Precise spans for typos inside interpolated strings      | done        | `a1fa021` — lexer now records each `{expr}` hole's source span |
+| Bound IR data structures                                  | not started | binder still emits diagnostics over the parse tree; no separate IR yet — see [Next milestone](#next-milestone-bound-ir) |
 | Type / refinement checks in the binder                    | not started | depends on Bound IR |
 
 ### Layer 3 — Compiler
 
-Not started.
+Not started. See [Next milestone](#next-milestone-bound-ir) — the Bound
+IR is the natural bridge from the existing tree-walking interpreter to
+an IL backend.
 
 ### Adjacent infrastructure
 
 | Step                                                     | Status      | Notes |
 |----------------------------------------------------------|-------------|-------|
 | Diagnostic-code manifest extraction                       | done        | `scripts/extract_diagnostic_codes.py` + `Tosh.Runtime.Generated.DiagnosticCodeManifest` |
-| BenchmarkDotNet harness (`bench/Tosh.Benchmarks/`)        | done        | `acf773b` — first input is the binder; future targets are the parser and evaluator |
+| BenchmarkDotNet harness (`bench/Tosh.Benchmarks/`)        | done        | `acf773b` |
+| Binder benchmarks                                         | done        | `acf773b` — see [BENCHMARKS.md](BENCHMARKS.md) |
+| Parser + evaluator benchmarks                             | done        | `f2264c1` — `WhereSort` is the standout: 150 µs / 466 KB on a 100-element `where|sort|first` due to boxed pipeline elements |
 | `BoundCommand` parse-time fast-path                       | deferred    | the binder runs in 1–30 µs on realistic inputs; perf does not justify a fast-path today |
+
+---
+
+## Next milestone: Bound IR
+
+The existing binder is a *visitor* over the parse tree that emits
+diagnostics in-place. To compile, we need to *materialize* the result
+of binding — every name resolved (or marked dynamic), every type
+inferred (or marked dynamic), every closure capture identified.
+
+That's what a Bound IR is. It's the same shape as the parse tree but
+each node carries the resolved meaning. Concretely, for the existing
+binders:
+
+- **Phase 1 (commands):** every command call site gets a
+  `BoundCommandReference` pointing at the registered metadata, or a
+  `BoundDynamicCommand` if the name is dynamic at compile time.
+- **Phase 2 (variables):** every variable reference gets a
+  `BoundVariableReference` pointing at its declaring scope frame and
+  slot, or a `BoundDynamicVariable` if it came from `$env`, `$tosh`,
+  or an external `source`.
+- **New (types):** every expression carries a static type — possibly
+  `dynamic` for now — that the compiler later uses to pick concrete
+  IL operations and avoid boxing.
+
+The benchmark numbers point at why this matters: `1..100 | where >50 |
+sort | first 5` allocates 466 KB and runs in 150 µs because every
+integer is boxed to `object`. A Bound IR with `int` element types
+makes that pipeline a sequence of `IEnumerable<int>` operations on
+unboxed values; an order-of-magnitude improvement is realistic.
+
+The Bound IR is also what unblocks Layer 3 (the IL backend). Codegen
+walks the *bound* tree, not the parse tree — by then every choice has
+already been made.
+
+Concrete next steps, in order:
+
+1. Define `BoundNode` hierarchy mirroring `ArgumentSyntax` /
+   `StatementSyntax`. Each node has a `Type` slot (dynamic-default).
+2. Add a `Lower` pass that converts `ParseResult` → `BoundUnit`,
+   running the existing binder logic but emitting bound nodes
+   instead of in-place diagnostics.
+3. Re-implement the evaluator on top of the Bound IR. This is a
+   refactor with no user-visible change; it validates the IR is
+   sufficient and gives us a baseline to measure compiled IL
+   against.
+4. Type inference for the trivial cases (literals, arithmetic,
+   pipeline element types) — enough to drive specialized codegen
+   for numeric pipelines.
 
 ---
 
