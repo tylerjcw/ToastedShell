@@ -13,18 +13,18 @@ primary
 lastDtbSucceeded
 
 [properties]
-AssemblyName=Tosh.Tests
+AssemblyName=Tosh.Emit
 CommandLineArgsForDesignTimeEvaluation=-langversion:14.0 -define:TRACE
 CompilerGeneratedFilesOutputPath=
 MaxSupportedLangVersion=14.0
 ProjectAssetsFile=<PATH>obj/project.assets.json
-RootNamespace=Tosh.Tests
+RootNamespace=Tosh.Emit
 RunAnalyzers=
 RunAnalyzersDuringLiveAnalysis=
 SolutionPath=<PATH>../../Tosh.slnx
 TargetFrameworkIdentifier=.NETCoreApp
-TargetPath=<PATH>bin/Debug/net10.0/Tosh.Tests.dll
-TargetRefPath=<PATH>obj/Debug/net10.0/ref/Tosh.Tests.dll
+TargetPath=<PATH>bin/Debug/net10.0/Tosh.Emit.dll
+TargetRefPath=<PATH>obj/Debug/net10.0/ref/Tosh.Emit.dll
 TemporaryDependencyNodeTargetIdentifier=net10.0
 
 [commandLineArguments]
@@ -44,9 +44,9 @@ TemporaryDependencyNodeTargetIdentifier=net10.0
 /debug:portable
 /filealign:512
 /optimize-
-/out:obj/Debug/net10.0/Tosh.Tests.dll
-/refout:obj/Debug/net10.0/refint/Tosh.Tests.dll
-/target:exe
+/out:obj/Debug/net10.0/Tosh.Emit.dll
+/refout:obj/Debug/net10.0/refint/Tosh.Emit.dll
+/target:library
 /warnaserror-
 /utf8output
 /deterministic+
@@ -54,108 +54,15 @@ TemporaryDependencyNodeTargetIdentifier=net10.0
 /warnaserror+:NU1605,SYSLIB0011
 
 [sourceFiles]
-<NUGET>/microsoft.net.test.sdk/17.14.1/build/net8.0/Microsoft.NET.Test.Sdk.Program.cs
- @folderNames=..,..,..,..,.nuget,packages,microsoft.net.test.sdk,17.14.1,build,net8.0
-BinderTests.cs
-BoundEvaluatorParityTests.cs
-BoundEvaluatorTests.cs
-CliInvocationResolverTests.cs
-CommandIntrospectionTests.cs
-ComplexCommandTests.cs
-ComprehensionTests.cs
-ConcurrencyCommandTests.cs
-ConcurrentRedirectionTests.cs
-ConfigBrowserScreenTests.cs
-ConfigCollectionEditorRegistryTests.cs
-ConfigCommandTests.cs
-ConsolePagerTests.cs
-ConstantFoldingTests.cs
-DataProcessingCommandTests.cs
-DebugAndProfileTests.cs
-DiagnosticRendererTests.cs
-DisplayEngineTests.cs
-DisplayProfileTests.cs
-DocCommentTests.cs
-DocumentationCoverageTests.cs
-EngineTests.cs
-ExecCommandTests.cs
-ExtensionCommandTests.cs
-ExternalCommandCacheTests.cs
-ExternalCommandTests.cs
-FindmntJsonParserTests.cs
-FunctionalPipelineCommandTests.cs
-GlobalUsings.cs
-GlobEdgeCaseTests.cs
-HelpBrowserScreenTests.cs
-HelpCommandTests.cs
-HelpTreeStateTests.cs
-InspectTreeTests.cs
-IpJsonParserTests.cs
-IteratorCommandTests.cs
-JobControlTests.cs
-JobHardeningTests.cs
-LanguageFeatureTests.cs
-LazySequenceTests.cs
-LineHushDirectiveTests.cs
-LowererTests.cs
-LsblkJsonParserTests.cs
-LscpuJsonParserTests.cs
-LsfdJsonParserTests.cs
-LsipcJsonParserTests.cs
-LspFeatureTests.cs
-MathAndStatisticsTests.cs
-MatrixCommandTests.cs
-McpServerTests.cs
-MemberPathTests.cs
-MixedPipelineTests.cs
-NativeInteropFixtures.cs
+BoundUnitEmitter.cs
 obj/Debug/net10.0/
  .NETCoreApp,Version=v10.0.AssemblyAttributes.cs
- Tosh.Tests.AssemblyInfo.cs
- Tosh.Tests.GlobalUsings.g.cs
-ObjectFormatterTests.cs
-OperatorParityTests.cs
-ParserNameRegistryParityTests.cs
-ParserProgressGuardTests.cs
-PipelineDataCommandTests.cs
-PipelineFusionTests.cs
-PipelineHardeningTests.cs
-RegistryParityTests.cs
-ReplCompletionEngineTests.cs
-ReplInputClassifierTests.cs
-ReplLineEditorTests.cs
-RuneTests.cs
-RuntimeNamespaceDisplayTests.cs
-ScopeAndChannelTests.cs
-ShellOnlyAttributeTests.cs
-SpawnCommandTests.cs
-StartupLoaderTests.cs
-StreamCommandTests.cs
-StreamHandleCommandTests.cs
-StructuredDataCommandTests.cs
-SubcommandTests.cs
-SyntaxHighlighterTests.cs
-SystemdJsonParserTests.cs
-TerminalControlTests.cs
-TimeCommandTests.cs
-ToshRuntimeFixture.cs
-TuiCommandTests.cs
-TuiCoreTests.cs
-TuiInlineTests.cs
-TuiScreenTests.cs
-TypeInferenceTests.cs
-UtilityCommandTests.cs
-VarsCommandTests.cs
-VectorCommandTests.cs
+ Tosh.Emit.AssemblyInfo.cs
+ Tosh.Emit.GlobalUsings.g.cs
 
 [metadataReferences]
-../../src/
- Tosh.Cli/obj/Debug/net10.0/ref/Tosh.Cli.dll
- Tosh.Compiler/obj/Debug/net10.0/ref/Tosh.Compiler.dll
+../
  Tosh.Language/obj/Debug/net10.0/ref/Tosh.Language.dll
- Tosh.LanguageServices/obj/Debug/net10.0/ref/Tosh.LanguageServices.dll
- Tosh.Lsp/obj/Debug/net10.0/ref/Tosh.Lsp.dll
- Tosh.Mcp/obj/Debug/net10.0/ref/Tosh.Mcp.dll
  Tosh.Runtime/obj/Debug/net10.0/ref/Tosh.Runtime.dll
  Tosh.Stdlib/obj/Debug/net10.0/ref/Tosh.Stdlib.dll
  Tosh.Tui/obj/Debug/net10.0/ref/Tosh.Tui.dll
@@ -327,22 +234,6 @@ VectorCommandTests.cs
  System.Xml.XPath.dll
  System.Xml.XPath.XDocument.dll
  WindowsBase.dll
-<NUGET>/
- microsoft.codecoverage/17.14.1/lib/net8.0/Microsoft.VisualStudio.CodeCoverage.Shim.dll
- microsoft.testplatform.testhost/17.14.1/lib/net8.0/
-  Microsoft.TestPlatform.CommunicationUtilities.dll
-  Microsoft.TestPlatform.CoreUtilities.dll
-  Microsoft.TestPlatform.CrossPlatEngine.dll
-  Microsoft.TestPlatform.PlatformAbstractions.dll
-  Microsoft.TestPlatform.Utilities.dll
-  Microsoft.VisualStudio.TestPlatform.Common.dll
-  Microsoft.VisualStudio.TestPlatform.ObjectModel.dll
-  testhost.dll
- newtonsoft.json/13.0.3/lib/net6.0/Newtonsoft.Json.dll
- xunit.abstractions/2.0.3/lib/netstandard2.0/xunit.abstractions.dll
- xunit.assert/2.9.3/lib/net6.0/xunit.assert.dll
- xunit.extensibility.core/2.9.3/lib/netstandard1.1/xunit.core.dll
- xunit.extensibility.execution/2.9.3/lib/netstandard1.1/xunit.execution.dotnet.dll
 
 [analyzerReferences]
 <DOTNET>/packs/Microsoft.NETCore.App.Ref/10.0.3/analyzers/dotnet/cs/
@@ -355,10 +246,7 @@ VectorCommandTests.cs
 <DOTNET>/sdk/10.0.103/Sdks/Microsoft.NET.Sdk/analyzers/
  Microsoft.CodeAnalysis.CSharp.NetAnalyzers.dll
  Microsoft.CodeAnalysis.NetAnalyzers.dll
-<NUGET>/xunit.analyzers/1.18.0/analyzers/dotnet/cs/
- xunit.analyzers.dll
- xunit.analyzers.fixes.dll
 
 [analyzerConfigFiles]
 <DOTNET>/sdk/10.0.103/Sdks/Microsoft.NET.Sdk/analyzers/build/config/analysislevel_10_default.globalconfig
-obj/Debug/net10.0/Tosh.Tests.GeneratedMSBuildEditorConfig.editorconfig
+obj/Debug/net10.0/Tosh.Emit.GeneratedMSBuildEditorConfig.editorconfig

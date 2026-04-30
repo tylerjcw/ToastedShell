@@ -60,6 +60,31 @@ internal static class CliInvocationResolver
             return CliInvocationPlan.Version();
         }
 
+        if (effectiveArgs[0] is "--compile" or "-C")
+        {
+            if (effectiveArgs.Count < 2)
+            {
+                throw new InvalidOperationException("The '--compile'/'-C' flag requires a script path.");
+            }
+
+            var inputPath = PathUtilities.ResolvePath(currentDirectory, effectiveArgs[1]);
+            string? outputPath = null;
+
+            for (var i = 2; i < effectiveArgs.Count; i++)
+            {
+                switch (effectiveArgs[i])
+                {
+                    case "-o" or "--output" when i + 1 < effectiveArgs.Count:
+                        outputPath = PathUtilities.ResolvePath(currentDirectory, effectiveArgs[++i]);
+                        break;
+                    default:
+                        throw new InvalidOperationException($"Unknown option '{effectiveArgs[i]}' for --compile.");
+                }
+            }
+
+            return CliInvocationPlan.Compile(inputPath, outputPath);
+        }
+
         if (effectiveArgs[0] is "--export-command-metadata" or "--dump-builtins")
         {
             var format = "json";
@@ -236,6 +261,8 @@ internal readonly record struct CliInvocationPlan(
 
     public static CliInvocationPlan ExportMetadata(string format, string? outputPath) => new(CliInvocationKind.ExportMetadata, format, outputPath is not null ? [outputPath] : Array.Empty<string>(), LoadStartup: false);
 
+    public static CliInvocationPlan Compile(string inputPath, string? outputPath) => new(CliInvocationKind.Compile, inputPath, outputPath is not null ? [outputPath] : Array.Empty<string>(), LoadStartup: false);
+
     public static CliInvocationPlan Version() => new(CliInvocationKind.Version, null, Array.Empty<string>(), LoadStartup: false);
 }
 
@@ -248,4 +275,5 @@ internal enum CliInvocationKind
     ToshScript,
     ExternalScript,
     ExportMetadata,
+    Compile,
 }

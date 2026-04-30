@@ -8,6 +8,7 @@
     <Project Path="src/Tosh.Mcp/Tosh.Mcp.csproj" />
     <Project Path="src/Tosh.Stdlib/Tosh.Stdlib.csproj" />
     <Project Path="src/Tosh.Tui/Tosh.Tui.csproj" />
+    <Project Path="src/Tosh.Compiler/Tosh.Compiler.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Tosh.LspFixture/Tosh.LspFixture.csproj" />

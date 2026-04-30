@@ -49,6 +49,12 @@ if (plan.Kind == CliInvocationKind.ExportMetadata)
     return;
 }
 
+if (plan.Kind == CliInvocationKind.Compile)
+{
+    Environment.ExitCode = await CompileScriptAsync(plan, runtime);
+    return;
+}
+
 // Set login shell flag before startup so $tosh.IsLoginShell is visible in config/profile scripts.
 runtime.IsLoginShell = plan.IsLoginShell;
 
@@ -514,4 +520,74 @@ static async Task ExportCommandMetadataAsync(CliInvocationPlan plan)
     {
         await Console.Out.WriteAsync(output);
     }
+}
+
+static async Task<int> CompileScriptAsync(CliInvocationPlan plan, ToshRuntime runtime)
+{
+    var inputPath = plan.ScriptOrCommand!;
+    if (!File.Exists(inputPath))
+    {
+        await Console.Error.WriteLineAsync($"toshc: input not found: {inputPath}");
+        return 1;
+    }
+
+    var outputPath = plan.Arguments.Length > 0
+        ? plan.Arguments[0]
+        : Path.ChangeExtension(inputPath, ".dll");
+
+    var assemblyName = Path.GetFileNameWithoutExtension(outputPath);
+    var source = await File.ReadAllTextAsync(inputPath);
+
+    var compileEngine = new ToshEngine(runtime);
+    var parseResult = compileEngine.Parse(source, inputPath);
+    if (parseResult.Diagnostics.Count > 0)
+    {
+        foreach (var diag in parseResult.Diagnostics)
+        {
+            await Console.Error.WriteLineAsync($"toshc: {diag}");
+        }
+        return 1;
+    }
+
+    var unit = Lowerer.Lower(parseResult, runtime.Commands);
+
+    var dir = Path.GetDirectoryName(outputPath);
+    if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+    {
+        Directory.CreateDirectory(dir);
+    }
+
+    Tosh.Compiler.EmitResult result;
+    using (var fs = File.Create(outputPath))
+    {
+        result = Tosh.Compiler.BoundUnitEmitter.Emit(unit, assemblyName, fs);
+    }
+
+    // Emit a minimal runtimeconfig.json so `dotnet <out>.dll` runs.
+    var runtimeConfigPath = Path.ChangeExtension(outputPath, ".runtimeconfig.json");
+    var runtimeMajor = Environment.Version.Major;
+    var runtimeConfig = $$"""
+        {
+          "runtimeOptions": {
+            "tfm": "net{{runtimeMajor}}.0",
+            "framework": {
+              "name": "Microsoft.NETCore.App",
+              "version": "{{Environment.Version}}"
+            }
+          }
+        }
+        """;
+    await File.WriteAllTextAsync(runtimeConfigPath, runtimeConfig);
+
+    if (!result.IsClean)
+    {
+        await Console.Error.WriteLineAsync($"toshc: {result.UnsupportedShapes.Count} unsupported shape(s):");
+        foreach (var shape in result.UnsupportedShapes)
+        {
+            await Console.Error.WriteLineAsync($"  - {shape}");
+        }
+    }
+
+    await Console.Error.WriteLineAsync($"toshc: wrote {outputPath}");
+    return 0;
 }

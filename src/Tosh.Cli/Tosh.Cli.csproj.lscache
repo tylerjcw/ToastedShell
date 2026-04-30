@@ -119,6 +119,7 @@ Tui/
 
 [metadataReferences]
 ../
+ Tosh.Compiler/obj/Debug/net10.0/ref/Tosh.Compiler.dll
  Tosh.Language/obj/Debug/net10.0/ref/Tosh.Language.dll
  Tosh.Runtime/obj/Debug/net10.0/ref/Tosh.Runtime.dll
  Tosh.Stdlib/obj/Debug/net10.0/ref/Tosh.Stdlib.dll
