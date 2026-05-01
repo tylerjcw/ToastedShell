@@ -113,6 +113,12 @@ internal sealed class EmitterImpl
     private static readonly MethodInfo s_hostDrainValue =
         s_toshHost.GetMethod(nameof(global::Tosh.Compiler.Runtime.ToshHost.DrainValue),
             new[] { typeof(IAsyncEnumerable<object?>) })!;
+    private static readonly MethodInfo s_hostRegisterSource =
+        s_toshHost.GetMethod(nameof(global::Tosh.Compiler.Runtime.ToshHost.RegisterSource),
+            new[] { typeof(string), typeof(string) })!;
+    private static readonly MethodInfo s_hostMakeBlock =
+        s_toshHost.GetMethod(nameof(global::Tosh.Compiler.Runtime.ToshHost.MakeBlock),
+            new[] { typeof(int), typeof(int), typeof(Dictionary<string, object?>) })!;
 
     private static readonly Type s_listOfObject = typeof(List<object?>);
     private static readonly ConstructorInfo s_listCtor =
@@ -180,6 +186,18 @@ internal sealed class EmitterImpl
         _il.Emit(OpCodes.Ldnull);
         _il.Emit(OpCodes.Call, s_hostInitialize);
 
+        // Phase 2: register the source text + name so that block
+        // arguments embedded in pipeline stages can be re-bound to
+        // the original BlockSyntax by span at runtime. Skipped when
+        // the program contains no block expressions — leaves the
+        // emitted IL byte-for-byte identical to Phase 1 in that case.
+        if (ProgramUsesBlockExpressions())
+        {
+            _il.Emit(OpCodes.Ldstr, _unit.ParseResult.SourceText);
+            _il.Emit(OpCodes.Ldstr, _unit.ParseResult.SourceName);
+            _il.Emit(OpCodes.Call, s_hostRegisterSource);
+        }
+
         // Main pass: top-level statements go into Main; function
         // definitions are emitted into their own MethodBuilders and
         // skipped here.
@@ -194,6 +212,43 @@ internal sealed class EmitterImpl
         }
         _il.Emit(OpCodes.Ret);
         _program.CreateType();
+    }
+
+    /// <summary>
+    /// Walks the bound tree once looking for any
+    /// <see cref="BoundBlockExpression"/>. Used to decide whether to
+    /// emit the source-registration prologue.
+    /// </summary>
+    private bool ProgramUsesBlockExpressions()
+    {
+        return ContainsBlockExpression(_unit.Root);
+
+        static bool ContainsBlockExpression(BoundNode? node)
+        {
+            if (node is null) return false;
+            if (node is BoundBlockExpression) return true;
+            var type = node.GetType();
+            foreach (var prop in type.GetProperties(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance))
+            {
+                if (prop.GetIndexParameters().Length != 0) continue;
+                object? value;
+                try { value = prop.GetValue(node); }
+                catch { continue; }
+                if (value is null) continue;
+                if (value is BoundNode child)
+                {
+                    if (ContainsBlockExpression(child)) return true;
+                }
+                else if (value is System.Collections.IEnumerable seq && value is not string)
+                {
+                    foreach (var item in seq)
+                    {
+                        if (item is BoundNode bn && ContainsBlockExpression(bn)) return true;
+                    }
+                }
+            }
+            return false;
+        }
     }
 
     private void DeclareUserFunction(BoundFunctionDefinition func)
@@ -805,11 +860,13 @@ internal sealed class EmitterImpl
                     $"command '{call.Name}': splat/named arguments not yet supported");
                 return false;
             }
-            if (arg.Value is BoundBlockExpression)
+            if (arg.Value is BoundBlockExpression block)
             {
-                Diagnostics.Add(
-                    $"command '{call.Name}': block arguments not yet supported in pipelines");
-                return false;
+                _il.Emit(OpCodes.Dup);
+                _il.Emit(OpCodes.Ldc_I4, i);
+                EmitMakeBlock(block);
+                _il.Emit(OpCodes.Stelem_Ref);
+                continue;
             }
             _il.Emit(OpCodes.Dup);
             _il.Emit(OpCodes.Ldc_I4, i);
@@ -819,6 +876,50 @@ internal sealed class EmitterImpl
             _il.Emit(OpCodes.Stelem_Ref);
         }
         return true;
+    }
+
+    /// <summary>
+    /// Pushes a freshly-built <see cref="ShellBlock"/> onto the eval
+    /// stack: <c>ToshHost.MakeBlock(span.Start, span.Length, captures)</c>.
+    /// Captures are materialized as a <c>Dictionary&lt;string,object?&gt;</c>
+    /// snapshot of the named locals/params the binder identified.
+    /// </summary>
+    private void EmitMakeBlock(BoundBlockExpression block)
+    {
+        _il.Emit(OpCodes.Ldc_I4, block.Body.Span.Start);
+        _il.Emit(OpCodes.Ldc_I4, block.Body.Span.Length);
+
+        if (block.Captures.Count == 0)
+        {
+            _il.Emit(OpCodes.Ldnull);
+        }
+        else
+        {
+            _il.Emit(OpCodes.Newobj, s_dictCtor);
+            foreach (var capture in block.Captures)
+            {
+                _il.Emit(OpCodes.Dup);
+                _il.Emit(OpCodes.Ldstr, capture.Name);
+                if (_paramSlots.TryGetValue(capture, out var paramIndex))
+                {
+                    _il.Emit(OpCodes.Ldarg, paramIndex);
+                    // Params are object-typed; no boxing needed.
+                }
+                else if (_locals.TryGetValue(capture, out var slot))
+                {
+                    _il.Emit(OpCodes.Ldloc, slot.Local);
+                    BoxIfValueType(slot.Type);
+                }
+                else
+                {
+                    Diagnostics.Add($"block capture '{capture.Name}' has no IL slot");
+                    _il.Emit(OpCodes.Ldnull);
+                }
+                _il.Emit(OpCodes.Callvirt, s_dictSetItem);
+            }
+        }
+
+        _il.Emit(OpCodes.Call, s_hostMakeBlock);
     }
 
     /// <summary>

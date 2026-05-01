@@ -3,6 +3,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Tosh.Runtime\Tosh.Runtime.csproj" />
     <ProjectReference Include="..\Tosh.Stdlib\Tosh.Stdlib.csproj" />
+    <ProjectReference Include="..\Tosh.Language\Tosh.Language.csproj" />
   </ItemGroup>
 
   <PropertyGroup>

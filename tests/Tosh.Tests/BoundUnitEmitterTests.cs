@@ -115,14 +115,30 @@ public sealed class BoundUnitEmitterTests : IClassFixture<ToshRuntimeFixture>
     }
 
     [Fact]
-    public void Reports_pipeline_with_block_argument()
+    public void Multi_stage_pipeline_with_block_predicate()
     {
-        // Block arguments to pipeline stages aren't lowered yet
-        // (Phase 2 of the multi-stage pipeline rollout).
-        var (output, result) = CompileAndRunWithDiagnostics(
-            "[1, 2, 3] | where { _ > 1 }");
-        Assert.False(result.IsClean);
-        Assert.Equal(string.Empty, output.Trim());
+        // Phase 2: block argument to `where` filters numbers > 1.
+        var output = CompileAndRun("seq 3 | where { _ > 1 }");
+        var lines = output.Trim().Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        Assert.Equal(new[] { "2", "3" }, lines);
+    }
+
+    [Fact]
+    public void Multi_stage_pipeline_block_with_capture()
+    {
+        // Phase 2: block argument captures an outer-scope local.
+        var output = CompileAndRun(
+            "var threshold = 3\nseq 5 | where { _ > $threshold }");
+        var lines = output.Trim().Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        Assert.Equal(new[] { "4", "5" }, lines);
+    }
+
+    [Fact]
+    public void Multi_stage_pipeline_with_map_block()
+    {
+        var output = CompileAndRun("seq 3 | map { _ * 2 }");
+        var lines = output.Trim().Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        Assert.Equal(new[] { "2", "4", "6" }, lines);
     }
 
     [Fact]

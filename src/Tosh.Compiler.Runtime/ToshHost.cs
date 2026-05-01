@@ -1,4 +1,6 @@
 using Tosh.Runtime;
+using Tosh.Language;
+using Tosh.Language.Parsing;
 
 namespace Tosh.Compiler.Runtime;
 
@@ -52,7 +54,12 @@ public static class ToshHost
         lock (s_lock)
         {
             if (s_runtime is not null) return;
-            s_runtime = runtime ?? ToshRuntime.CreateDefault(Console.Out, Console.Error);
+            var rt = runtime ?? ToshRuntime.CreateDefault(Console.Out, Console.Error);
+            // Eagerly build a ToshEngine so rt.BlockExecutor is wired.
+            // Discarding the engine reference is fine — the executor
+            // captured by the runtime keeps it alive.
+            _ = new ToshEngine(rt);
+            s_runtime = rt;
         }
     }
 
@@ -242,4 +249,88 @@ public static class ToshHost
         yield break;
     }
 #pragma warning restore CS1998
+
+    // ─── Block source registration & materialization (Phase 2) ────
+
+    private static string? s_sourceText;
+    private static string? s_sourceName;
+    private static readonly Dictionary<long, BlockSyntax> s_blocksBySpan = new();
+
+    /// <summary>
+    /// Wires the source text the emitted assembly was compiled from
+    /// so that <see cref="MakeBlock"/> can materialize a
+    /// <see cref="ShellBlock"/> referring to the original
+    /// <see cref="BlockSyntax"/> by span. Idempotent on identical
+    /// source text — re-registers (replacing the span index) when
+    /// the source differs.
+    /// </summary>
+    public static void RegisterSource(string sourceText, string sourceName)
+    {
+        lock (s_lock)
+        {
+            if (string.Equals(s_sourceText, sourceText, StringComparison.Ordinal)) return;
+            var parsed = ToshParser.Parse(sourceText, sourceName);
+            s_blocksBySpan.Clear();
+            CollectBlocks(parsed.Statement, s_blocksBySpan);
+            s_sourceText = sourceText;
+            s_sourceName = sourceName;
+        }
+    }
+
+    /// <summary>
+    /// Builds a <see cref="ShellBlock"/> bound to the
+    /// previously-registered source. <paramref name="captures"/>
+    /// records local-variable bindings the IL emitter snapshotted at
+    /// the point the block was constructed.
+    /// </summary>
+    public static ShellBlock MakeBlock(int start, int length, Dictionary<string, object?>? captures)
+    {
+        if (s_sourceText is null || s_sourceName is null)
+        {
+            throw new InvalidOperationException(
+                "ToshHost.MakeBlock called before RegisterSource");
+        }
+        var key = ((long)start << 32) | (uint)length;
+        if (!s_blocksBySpan.TryGetValue(key, out var syntax))
+        {
+            throw new InvalidOperationException(
+                $"no block syntax found at span ({start},{length})");
+        }
+        return new ShellBlock(syntax, s_sourceName, s_sourceText, new TextSpan(start, length))
+        {
+            Captures = captures,
+        };
+    }
+
+    private static void CollectBlocks(object? node, Dictionary<long, BlockSyntax> map)
+    {
+        if (node is null) return;
+        if (node is BlockSyntax block)
+        {
+            var key = ((long)block.Span.Start << 32) | (uint)block.Span.Length;
+            map[key] = block;
+        }
+        var type = node.GetType();
+        if (type.Namespace is null || !type.Namespace.StartsWith("Tosh.Language", StringComparison.Ordinal)) return;
+
+        foreach (var prop in type.GetProperties(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance))
+        {
+            if (prop.GetIndexParameters().Length != 0) continue;
+            object? value;
+            try { value = prop.GetValue(node); }
+            catch { continue; }
+            if (value is null) continue;
+            if (value is string) continue;
+            if (value is System.Collections.IEnumerable seq && value is not BlockSyntax)
+            {
+                foreach (var item in seq) CollectBlocks(item, map);
+                continue;
+            }
+            var ns = value.GetType().Namespace;
+            if (ns is not null && ns.StartsWith("Tosh.Language", StringComparison.Ordinal))
+            {
+                CollectBlocks(value, map);
+            }
+        }
+    }
 }

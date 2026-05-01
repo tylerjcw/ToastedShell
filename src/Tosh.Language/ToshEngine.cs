@@ -10031,7 +10031,19 @@ public sealed partial class ToshEngine : IShellEvaluator
                 throw new InvalidOperationException("This runtime cannot execute the provided block.");
             }
 
-            await foreach (var value in _engine.ExecuteBlockAsync(block.SourceName, block.SourceText, syntax, cancellationToken, locals)
+            // Merge any captures recorded by the IL emitter under the
+            // host-supplied locals (host locals win on collision so a
+            // command can shadow an outer-scope name with $_ etc.).
+            IReadOnlyDictionary<string, object?> effectiveLocals = locals;
+            if (block.Captures is { Count: > 0 } captures)
+            {
+                var merged = new Dictionary<string, object?>(StringComparer.Ordinal);
+                foreach (var (k, v) in captures) merged[k] = v;
+                foreach (var (k, v) in locals) merged[k] = v;
+                effectiveLocals = merged;
+            }
+
+            await foreach (var value in _engine.ExecuteBlockAsync(block.SourceName, block.SourceText, syntax, cancellationToken, effectiveLocals)
                                .WithCancellation(cancellationToken))
             {
                 yield return value;
