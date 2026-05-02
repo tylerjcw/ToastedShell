@@ -170,6 +170,38 @@ public static class ToshHost
     public static IAsyncEnumerable<object?> EmptyInput() => EmptyAsync();
 
     /// <summary>
+    /// Seeds a multi-stage pipeline from an arbitrary expression
+    /// value (Phase 3). Lists/arrays/IEnumerables are walked
+    /// element-by-element; strings are passed through as a single
+    /// value (NOT char-at-a-time, unlike <see cref="ToEnumerable"/>,
+    /// because pipelines treat strings as scalar items); scalars
+    /// become a single-element sequence; null becomes empty. If the
+    /// value is already an <see cref="IAsyncEnumerable{T}"/> of
+    /// <see cref="object"/>, it is returned as-is.
+    /// </summary>
+    public static IAsyncEnumerable<object?> SeedFromValue(object? value)
+    {
+        if (value is null) return EmptyAsync();
+        if (value is IAsyncEnumerable<object?> asyncSeq) return asyncSeq;
+        if (value is string) return SingletonAsync(value);
+        if (value is System.Collections.IEnumerable seq) return SyncToAsync(seq);
+        return SingletonAsync(value);
+    }
+
+    private static async IAsyncEnumerable<object?> SingletonAsync(object? item)
+    {
+        yield return item;
+        await Task.CompletedTask;
+    }
+
+    private static async IAsyncEnumerable<object?> SyncToAsync(
+        System.Collections.IEnumerable source)
+    {
+        foreach (var item in source) yield return item;
+        await Task.CompletedTask;
+    }
+
+    /// <summary>
     /// Invokes <paramref name="command"/> as a pipeline stage with
     /// <paramref name="input"/> piped in. Returns the lazy
     /// <see cref="IAsyncEnumerable{T}"/> the command produces — the

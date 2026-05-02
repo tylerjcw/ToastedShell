@@ -119,6 +119,9 @@ internal sealed class EmitterImpl
     private static readonly MethodInfo s_hostMakeBlock =
         s_toshHost.GetMethod(nameof(global::Tosh.Compiler.Runtime.ToshHost.MakeBlock),
             new[] { typeof(int), typeof(int), typeof(Dictionary<string, object?>) })!;
+    private static readonly MethodInfo s_hostSeedFromValue =
+        s_toshHost.GetMethod(nameof(global::Tosh.Compiler.Runtime.ToshHost.SeedFromValue),
+            new[] { typeof(object) })!;
 
     private static readonly Type s_listOfObject = typeof(List<object?>);
     private static readonly ConstructorInfo s_listCtor =
@@ -773,37 +776,46 @@ internal sealed class EmitterImpl
     /// <see cref="List{T}"/>).
     ///
     /// v1 limitations:
-    ///   • First stage must be a command call (expression-first
-    ///     pipelines like <c>[1,2,3] | first 2</c> are deferred).
     ///   • User-defined functions cannot be pipeline stages.
-    ///   • Block / splat / named arguments still surface as
-    ///     diagnostics (block support arrives in phase 2).
+    ///   • Splat / named arguments still surface as diagnostics.
     /// </summary>
     private Type? EmitMultiStagePipeline(BoundPipeline pipeline, bool asStatement)
     {
-        // Validate first stage shape (Phase 1 restriction).
-        if (pipeline.Stages[0] is not BoundCommandCall first)
-        {
-            Diagnostics.Add(
-                "expression-first pipelines (e.g. `[1,2,3] | first 2`) not yet supported");
-            return null;
-        }
-        if (_userFunctions.ContainsKey(first.Name))
-        {
-            Diagnostics.Add(
-                $"user function '{first.Name}' cannot start a pipeline yet");
-            return null;
-        }
-
         // Reusable accumulator local: each stage replaces it.
         var accLocal = _il.DeclareLocal(typeof(IAsyncEnumerable<object?>));
 
-        // Stage 0: ResolveCommand(name) → RunStage(cmd, EmptyInput(), args0)
-        _il.Emit(OpCodes.Ldstr, first.Name);
-        _il.Emit(OpCodes.Call, s_hostResolveCommand);
-        _il.Emit(OpCodes.Call, s_hostEmptyInput);
-        if (!EmitStageArgsArray(first)) return null;
-        _il.Emit(OpCodes.Call, s_hostRunStage);
+        // Stage 0: either a command call (Phase 1) or an arbitrary
+        // expression seeding the pipeline (Phase 3).
+        switch (pipeline.Stages[0])
+        {
+            case BoundCommandCall first when _userFunctions.ContainsKey(first.Name):
+                Diagnostics.Add(
+                    $"user function '{first.Name}' cannot start a pipeline yet");
+                return null;
+
+            case BoundCommandCall first:
+                // ResolveCommand(name) → RunStage(cmd, EmptyInput(), args0)
+                _il.Emit(OpCodes.Ldstr, first.Name);
+                _il.Emit(OpCodes.Call, s_hostResolveCommand);
+                _il.Emit(OpCodes.Call, s_hostEmptyInput);
+                if (!EmitStageArgsArray(first)) return null;
+                _il.Emit(OpCodes.Call, s_hostRunStage);
+                break;
+
+            case BoundExpressionStage exprStage:
+                // SeedFromValue(<expr>) — boxes the value (if needed)
+                // and turns it into IAsyncEnumerable<object?>.
+                var exprType = EmitExpression(exprStage.Value);
+                if (exprType is null) return null;
+                BoxIfValueType(exprType);
+                _il.Emit(OpCodes.Call, s_hostSeedFromValue);
+                break;
+
+            default:
+                Diagnostics.Add(
+                    $"unsupported first pipeline stage: {pipeline.Stages[0].GetType().Name}");
+                return null;
+        }
         _il.Emit(OpCodes.Stloc, accLocal);
 
         // Stages 1..N-1: chain through RunStage(cmd, acc, args).

@@ -159,6 +159,42 @@ public sealed class BoundUnitEmitterTests : IClassFixture<ToshRuntimeFixture>
         Assert.Equal("5", output.Trim());
     }
 
+    [Fact]
+    public void Multi_stage_pipeline_list_literal_first_stage()
+    {
+        // Phase 3: expression-first stage — list literal seeds the
+        // pipeline via SeedFromValue.
+        var output = CompileAndRun("[1, 2, 3] | first 2");
+        var lines = output.Trim().Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        Assert.Equal(new[] { "1", "2" }, lines);
+    }
+
+    [Fact]
+    public void Multi_stage_pipeline_list_literal_with_map_block()
+    {
+        // Phase 3 + Phase 2 together — list literal feeds a map block.
+        var output = CompileAndRun("[1, 2, 3] | map { _ * 2 }");
+        var lines = output.Trim().Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        Assert.Equal(new[] { "2", "4", "6" }, lines);
+    }
+
+    [Fact]
+    public void Multi_stage_pipeline_var_bound_list_first_stage()
+    {
+        // Phase 3: variable holding a list flows through SeedFromValue.
+        var output = CompileAndRun("var xs = [1, 2, 3]\n$xs | first 2");
+        var lines = output.Trim().Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        Assert.Equal(new[] { "1", "2" }, lines);
+    }
+
+    [Fact]
+    public void Multi_stage_pipeline_scalar_first_stage()
+    {
+        // Phase 3: a bare scalar becomes a one-element pipeline seed.
+        var output = CompileAndRun("42 | first 1");
+        Assert.Equal("42", output.Trim());
+    }
+
     // ─── Runtime-host bridge dispatch ─────────────────────────────
     // These tests confirm that command calls other than `echo` route
     // through ToshHost into the live ShellCommandRegistry (populated
