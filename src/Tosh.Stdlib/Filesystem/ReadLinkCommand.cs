@@ -7,7 +7,7 @@ namespace Tosh.Stdlib.Filesystem;
 [CommandOption("-f", "Resolve the final target, following chains of symbolic links.")]
 [CommandExample("readlink ./link")]
 [CommandExample("readlink -f ./chain", Title = "Canonicalize")]
-[CommandOutput("Returns the target path of each symbolic link.")]
+[CommandOutput("Returns the target path of each symbolic link.", ClrType = typeof(IAsyncEnumerable<string>))]
 public sealed class ReadLinkCommand : ShellCommand
 {
     public ReadLinkCommand()

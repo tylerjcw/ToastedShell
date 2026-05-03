@@ -1,0 +1,24 @@
+<!-- Demo project that exercises the Tosh.Sdk MSBuild SDK using
+     direct file imports. Once Tosh.Sdk is published as a NuGet
+     package, replace these <Import> elements with the shorthand
+     `<Project Sdk="Tosh.Sdk">` form on the root element.
+
+     Build with:
+       TOSH_BIN=$(realpath ../../src/Tosh.Cli/bin/Debug/net10.0/tosh) \
+       dotnet build Hello.toshproj
+
+     Run with:
+       dotnet bin/Debug/net10.0/Hello.dll
+-->
+<Project>
+
+  <Import Project="..\..\src\Tosh.Sdk\Sdk\Sdk.props" />
+
+  <PropertyGroup>
+    <AssemblyName>Hello</AssemblyName>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+
+  <Import Project="..\..\src\Tosh.Sdk\Sdk\Sdk.targets" />
+
+</Project>

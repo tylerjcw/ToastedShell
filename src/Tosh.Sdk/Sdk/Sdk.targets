@@ -1,0 +1,139 @@
+<Project>
+
+  <!-- ════════════════════════════════════════════════════════════
+       Tosh.Sdk targets. Defines a `ToshCompile` target that invokes
+       the toshc compiler on every <ToshCompile> item and writes a
+       <AssemblyName>.dll into $(OutputPath).
+
+       Compilation strategy:
+         1. Preferred: in-process MSBuild task `Tosh.Sdk.Tasks.ToshCompile`
+            loaded from `tasks\net10.0\Tosh.Sdk.Tasks.dll` next to this
+            file. Avoids per-build process startup cost.
+         2. Fallback: spawn the `tosh` CLI binary via <Exec> when the
+            task assembly is missing or running on an unsupported
+            MSBuild host (legacy .NET Framework MSBuild).
+
+       Resolution of the toshc CLI binary (fallback path):
+         1. $(ToshCompilerPath) explicitly set by the user.
+         2. The TOSH_BIN environment variable.
+         3. `which tosh` / `where.exe tosh` on $PATH.
+       ════════════════════════════════════════════════════════════ -->
+
+  <PropertyGroup>
+    <AssemblyName Condition="'$(AssemblyName)' == ''">$(MSBuildProjectName)</AssemblyName>
+    <TargetExt Condition="'$(TargetExt)' == ''">.dll</TargetExt>
+    <TargetFileName>$(AssemblyName)$(TargetExt)</TargetFileName>
+    <TargetPath>$(OutputPath)$(TargetFileName)</TargetPath>
+    <_ToshSdkTaskAssembly>$(MSBuildThisFileDirectory)..\tasks\net10.0\Tosh.Sdk.Tasks.dll</_ToshSdkTaskAssembly>
+    <_ToshSdkTaskAvailable Condition="Exists('$(_ToshSdkTaskAssembly)')">true</_ToshSdkTaskAvailable>
+    <_ToshSdkTaskAvailable Condition="!Exists('$(_ToshSdkTaskAssembly)')">false</_ToshSdkTaskAvailable>
+  </PropertyGroup>
+
+  <UsingTask Condition="'$(_ToshSdkTaskAvailable)' == 'true'"
+             TaskName="Tosh.Sdk.Tasks.ToshCompile"
+             AssemblyFile="$(_ToshSdkTaskAssembly)" />
+
+  <Target Name="_ResolveToshCompiler" Condition="'$(_ToshSdkTaskAvailable)' != 'true'">
+    <PropertyGroup Condition="'$(ToshCompilerPath)' == ''">
+      <_ToshOnPath>$([System.Environment]::GetEnvironmentVariable('TOSH_BIN'))</_ToshOnPath>
+      <ToshCompilerPath Condition="'$(_ToshOnPath)' != ''">$(_ToshOnPath)</ToshCompilerPath>
+    </PropertyGroup>
+    <Exec Condition="'$(ToshCompilerPath)' == '' AND '$(OS)' != 'Windows_NT'"
+          Command="which tosh"
+          ConsoleToMsBuild="true"
+          IgnoreExitCode="true"
+          EchoOff="true"
+          StandardOutputImportance="low">
+      <Output TaskParameter="ConsoleOutput" PropertyName="_ToshFromWhich" />
+    </Exec>
+    <Exec Condition="'$(ToshCompilerPath)' == '' AND '$(OS)' == 'Windows_NT'"
+          Command="where.exe tosh"
+          ConsoleToMsBuild="true"
+          IgnoreExitCode="true"
+          EchoOff="true"
+          StandardOutputImportance="low">
+      <Output TaskParameter="ConsoleOutput" PropertyName="_ToshFromWhich" />
+    </Exec>
+    <PropertyGroup Condition="'$(ToshCompilerPath)' == '' AND '$(_ToshFromWhich)' != ''">
+      <ToshCompilerPath>$([System.Text.RegularExpressions.Regex]::Match($(_ToshFromWhich), `^[^\r\n]+`).Value.Trim())</ToshCompilerPath>
+    </PropertyGroup>
+    <Error Condition="'$(ToshCompilerPath)' == ''"
+           Text="Tosh.Sdk: cannot locate the tosh compiler. Set the TOSH_BIN environment variable, define &lt;ToshCompilerPath&gt; in the project, or place `tosh` on your PATH." />
+  </Target>
+
+  <Target Name="_ToshPrepareOutputDirs"
+          DependsOnTargets="_ResolveToshCompiler">
+    <MakeDir Directories="$(OutputPath);$(IntermediateOutputPath)" />
+  </Target>
+
+  <!-- Primary path: in-process Tosh.Sdk.Tasks.ToshCompile task. -->
+  <Target Name="_ToshCompileInProc"
+          Condition="'$(_ToshSdkTaskAvailable)' == 'true'"
+          DependsOnTargets="_ToshPrepareOutputDirs"
+          Inputs="@(ToshCompile)"
+          Outputs="$(TargetPath)">
+    <Message Importance="high"
+             Text="ToshCompile (in-process): $(AssemblyName) ← @(ToshCompile->'%(Identity)', ', ')" />
+    <Tosh.Sdk.Tasks.ToshCompile
+        Sources="@(ToshCompile)"
+        OutputPath="$(TargetPath)"
+        AssemblyName="$(AssemblyName)"
+        Profile="$(ToshCompileProfile)"
+        AllowDynamic="$(ToshAllowDynamic)"
+        EmitAppHost="$(ToshEmitAppHost)"
+        PublishSingleFile="$(ToshPublishSingleFile)" />
+  </Target>
+
+  <!-- Fallback path: spawn the tosh CLI when the task assembly is
+       not present (e.g. when MSBuild can't load net10.0 task DLLs). -->
+  <Target Name="_ToshCompileExec"
+          Condition="'$(_ToshSdkTaskAvailable)' != 'true'"
+          DependsOnTargets="_ToshPrepareOutputDirs"
+          Inputs="@(ToshCompile)"
+          Outputs="$(TargetPath)">
+
+    <PropertyGroup>
+      <_ToshAllowDynamicArg Condition="'$(ToshAllowDynamic)' == 'true'">--compile-allow-dynamic</_ToshAllowDynamicArg>
+      <_ToshAllowDynamicArg Condition="'$(ToshAllowDynamic)' != 'true'"></_ToshAllowDynamicArg>
+      <_ToshNoApphostArg Condition="'$(ToshEmitAppHost)' != 'true'">--no-apphost</_ToshNoApphostArg>
+      <_ToshNoApphostArg Condition="'$(ToshEmitAppHost)' == 'true'"></_ToshNoApphostArg>
+      <_ToshPublishArg Condition="'$(ToshPublishSingleFile)' == 'true'">--publish-single-file</_ToshPublishArg>
+      <_ToshPublishArg Condition="'$(ToshPublishSingleFile)' != 'true'"></_ToshPublishArg>
+      <_ToshSourceArgs>@(ToshCompile->'%(FullPath)', ' ')</_ToshSourceArgs>
+    </PropertyGroup>
+
+    <Message Importance="high"
+             Text="ToshCompile (Exec): $(AssemblyName) ← @(ToshCompile->'%(Identity)', ', ')" />
+
+    <Exec Command="&quot;$(ToshCompilerPath)&quot; --compile $(_ToshSourceArgs) -o &quot;$(TargetPath)&quot; --profile $(ToshCompileProfile) $(_ToshAllowDynamicArg) $(_ToshNoApphostArg) $(_ToshPublishArg)"
+          WorkingDirectory="$(MSBuildProjectDirectory)" />
+  </Target>
+
+  <!-- Composite entry point: depends on whichever leg matches the
+       runtime environment. Only one of the two targets will run
+       its body (the other's Condition will be false). -->
+  <Target Name="ToshCompile"
+          DependsOnTargets="_ToshCompileInProc;_ToshCompileExec" />
+
+  <!-- Standard MSBuild lifecycle hooks. ToshCompile becomes the
+       primary build action; Clean removes the emitted artifact and
+       its sidecar runtimeconfig. -->
+
+  <Target Name="Build" DependsOnTargets="ToshCompile" />
+
+  <Target Name="Rebuild" DependsOnTargets="Clean;Build" />
+
+  <Target Name="Clean">
+    <ItemGroup>
+      <_ToshOutputs Include="$(TargetPath)" />
+      <_ToshOutputs Include="$(OutputPath)$(AssemblyName).runtimeconfig.json" />
+      <_ToshOutputs Include="$(OutputPath)$(AssemblyName).deps.json" />
+    </ItemGroup>
+    <Delete Files="@(_ToshOutputs)" ContinueOnError="true" />
+  </Target>
+
+  <Target Name="Restore">
+    <Message Importance="low" Text="Tosh.Sdk: nothing to restore." />
+  </Target>
+
+</Project>

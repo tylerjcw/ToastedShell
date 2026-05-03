@@ -12,7 +12,7 @@ namespace Tosh.Stdlib.Sys;
 [CommandExample("echo $env.PATH", Title = "Read just the PATH value")]
 [CommandExample("echo $env.EDITOR", Title = "Read another environment variable directly")]
 [CommandNote("Env keeps its object-returning query mode, but it can also build a temporary environment snapshot with `name=value` and `-u name`, optionally running a nested command under that snapshot.")]
-[CommandOutput("Returns typed environment-variable entries, or the nested command's output when assignments/unsets are used with a command. Use `$env.NAME` for direct value-only access when you want the variable value instead of the structured `env` entry object. Missing `$env` members resolve to `null` rather than raising a missing-member error.")]
+[CommandOutput("Returns typed environment-variable entries, or the nested command's output when assignments/unsets are used with a command. Use `$env.NAME` for direct value-only access when you want the variable value instead of the structured `env` entry object. Missing `$env` members resolve to `null` rather than raising a missing-member error.", ClrType = typeof(IAsyncEnumerable<EnvironmentVariableEntry>))]
 [PipelineInput(AcceptsScalar = true, AcceptsRecord = true, Description = "With no explicit names, piped scalar values are treated as queried environment-variable names.")]
 public sealed class EnvironmentCommand : ShellCommand
 {

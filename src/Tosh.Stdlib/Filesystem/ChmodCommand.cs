@@ -10,7 +10,7 @@ namespace Tosh.Stdlib.Filesystem;
 [CommandExample("chmod 755 script.sh", Title = "Octal mode")]
 [CommandExample("chmod u+rw,go-w file.txt", Title = "Symbolic mode")]
 [CommandExample("chmod -R a+r ./docs", Title = "Recursive")]
-[CommandOutput("Returns FileSystemEntry objects with long display for each changed path.")]
+[CommandOutput("Returns FileSystemEntry objects with long display for each changed path.", ClrType = typeof(IAsyncEnumerable<FileSystemEntry>))]
 public sealed class ChmodCommand : ShellCommand
 {
     private static readonly UnixFileMode WindowsReadBits =

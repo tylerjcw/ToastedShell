@@ -10,7 +10,7 @@ namespace Tosh.Stdlib.Sys;
 [CommandExample("vars", Title = "List visible variables")]
 [CommandExample("vars path", Title = "Filter variable names")]
 [CommandExample("vars browse env", Title = "Browse variables interactively")]
-[CommandOutput("Records describing each binding in scope: name, kind (var/const/import), and current value.")]
+[CommandOutput("Records describing each binding in scope: name, kind (var/const/import), and current value.", ClrType = typeof(IAsyncEnumerable<ShellVariableEntry>))]
 public sealed class VarsCommand : ShellCommand
 {
     public VarsCommand()

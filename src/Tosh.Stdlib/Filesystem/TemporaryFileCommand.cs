@@ -7,7 +7,7 @@ namespace Tosh.Stdlib.Filesystem;
 [CommandArgument("extension", "Optional file extension.", Required = false)]
 [CommandExample("tempfile")]
 [CommandExample("tempfile data .csv", Title = "Custom prefix and extension")]
-[CommandOutput("Returns a FileSystemEntry for the created temporary file.")]
+[CommandOutput("Returns a FileSystemEntry for the created temporary file.", ClrType = typeof(IAsyncEnumerable<FileSystemEntry>))]
 public sealed class TemporaryFileCommand : ShellCommand
 {
     public TemporaryFileCommand()

@@ -8,7 +8,7 @@ namespace Tosh.Stdlib.Processes;
 [CommandExample("signal TERM 12345", Title = "Send SIGTERM to a process")]
 [CommandExample("jobs | where _.Status == \"Running\" | signal INT", Title = "Signal jobs from the pipeline")]
 [CommandNote("Signal sends a named or numeric signal to a ToSh job or a native process id.")]
-[CommandOutput("Emits nothing; delivers the requested signal as a side effect.")]
+[CommandOutput("Emits nothing; delivers the requested signal as a side effect.", ClrType = typeof(IAsyncEnumerable<JobControlResult>))]
 public sealed class SignalCommand : ShellCommand
 {
     public SignalCommand()

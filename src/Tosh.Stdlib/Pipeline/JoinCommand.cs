@@ -14,7 +14,7 @@ namespace Tosh.Stdlib.Pipeline;
 [CommandExample("cat words.txt | lines | join \" \"", Title = "Collapse lines into a single space-separated string")]
 [CommandExample("join -p \"etc\" \"tosh\" \"config.toml\"", Title = "Build a path from arguments")]
 [CommandExample("pwd | join -p \"logs\" \"today.log\"", Title = "Build a path from piped input plus more segments")]
-[CommandOutput("Default mode: a single string of pipeline items separated by the given separator. Path mode: a single path string.")]
+[CommandOutput("Default mode: a single string of pipeline items separated by the given separator. Path mode: a single path string.", ClrType = typeof(string))]
 [PipelineInput(AcceptsScalar = true, AcceptsRecord = true, AcceptsList = true, AcceptsTable = true,
     Description = "Consumes every pipeline item, converts it to a string, and joins them. In path mode, piped items become the leading path segments.")]
 public sealed class JoinCommand : ShellCommand

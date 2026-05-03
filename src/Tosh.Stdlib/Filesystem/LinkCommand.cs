@@ -12,7 +12,7 @@ namespace Tosh.Stdlib.Filesystem;
 [CommandOption("-f", "Remove existing destination files.")]
 [CommandExample("ln original.txt hardlink.txt")]
 [CommandExample("ln -s /usr/bin/python3 ./python", Title = "Create symbolic link")]
-[CommandOutput("Returns a FileSystemEntry for the created link.")]
+[CommandOutput("Returns a FileSystemEntry for the created link.", ClrType = typeof(IAsyncEnumerable<FileSystemEntry>))]
 public sealed class LinkCommand : ShellCommand
 {
     public LinkCommand()

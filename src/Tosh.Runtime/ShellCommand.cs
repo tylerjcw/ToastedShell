@@ -31,11 +31,21 @@ public abstract class ShellCommand : IShellCommand
                        ?? "Shell";
 
         var arguments = type.GetCustomAttributes<CommandArgumentAttribute>()
-            .Select(a => new CommandArgumentMetadata(a.Name, a.Description, a.Required, a.TypeName, a.Kind ?? InferArgumentKind(a.TypeName)))
+            .Select(a => new CommandArgumentMetadata(
+                a.Name,
+                a.Description,
+                a.Required,
+                a.TypeName,
+                a.Kind ?? InferArgumentKind(a.TypeName),
+                BuildArgumentTypeInfo(a)))
             .ToList();
 
         var options = type.GetCustomAttributes<CommandOptionAttribute>()
-            .Select(o => new CommandOptionMetadata(o.Syntax, o.Description))
+            .Select(o => new CommandOptionMetadata(
+                o.Syntax,
+                o.Description,
+                o.ValueClrType is null ? null : TypedTypeRefBuilder.FromType(o.ValueClrType),
+                o.IsFlag))
             .ToList();
 
         var examples = type.GetCustomAttributes<CommandExampleAttribute>()
@@ -48,6 +58,9 @@ public abstract class ShellCommand : IShellCommand
 
         var outputAttr = type.GetCustomAttribute<CommandOutputAttribute>();
         var output = outputAttr?.Description;
+        var outputTypeInfo = outputAttr?.ClrType is { } outClr
+            ? TypedTypeRefBuilder.FromType(outClr)
+            : null;
 
         CommandPipelineInputMetadata? pipelineInput = null;
         var pipeAttr = type.GetCustomAttribute<PipelineInputAttribute>();
@@ -103,8 +116,46 @@ public abstract class ShellCommand : IShellCommand
             CanonicalExamples: canonicalExamples,
             Stdlib: stdlibCategory?.ToString(),
             IsShellOnly: shellOnlyAttr is not null,
-            ShellOnlyReason: shellOnlyAttr?.Reason
+            ShellOnlyReason: shellOnlyAttr?.Reason,
+            OutputTypeInfo: outputTypeInfo
         );
+    }
+
+    /// <summary>
+    /// Build a <see cref="TypedTypeRef"/> for an argument from its
+    /// declared <see cref="CommandArgumentAttribute.ClrType"/> when
+    /// present, otherwise from the syntactic <c>Kind</c> string. The
+    /// kind path lets attribute authors keep the existing
+    /// <c>TypeName = "path"</c> / <c>"block"</c> shorthand while still
+    /// receiving structured metadata.
+    /// </summary>
+    private static TypedTypeRef? BuildArgumentTypeInfo(CommandArgumentAttribute a)
+    {
+        if (a.ClrType is { } t) return TypedTypeRefBuilder.FromType(t, a.Refinement);
+
+        var kind = (a.Kind ?? InferArgumentKind(a.TypeName))?.ToLowerInvariant();
+        if (kind is null) return a.Refinement is null
+            ? null
+            : new TypedTypeRef(null, null, TypedTypeKind.Any, null, a.Refinement, true);
+
+        var typedKind = kind switch
+        {
+            "path" => TypedTypeKind.Path,
+            "block" or "callable" => TypedTypeKind.Block,
+            "string" => TypedTypeKind.Scalar,
+            "expression" => TypedTypeKind.Expression,
+            "any" => TypedTypeKind.Any,
+            _ => TypedTypeKind.Any,
+        };
+        // No backing CLR type \u2014 leave names null but record kind +
+        // refinement so consumers can still type-check on shape.
+        return new TypedTypeRef(
+            ClrTypeName: null,
+            AssemblyQualifiedName: null,
+            Kind: typedKind,
+            ElementType: null,
+            Refinement: a.Refinement,
+            IsNullable: !a.Required);
     }
 
     private static string? InferArgumentKind(string? typeName) => typeName?.ToLowerInvariant() switch

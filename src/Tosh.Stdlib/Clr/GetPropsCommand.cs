@@ -7,7 +7,7 @@ namespace Tosh.Stdlib.Clr;
 [CommandCategory("CLR")]
 [CommandExample("$obj | get-props")]
 [CommandExample("get-props $obj")]
-[CommandOutput("Records describing each property/field: name, declared type, accessibility, and current value when available.")]
+[CommandOutput("Records describing each property/field: name, declared type, accessibility, and current value when available.", ClrType = typeof(IAsyncEnumerable<string>))]
 public sealed class GetPropsCommand : ShellCommand
 {
     public GetPropsCommand()

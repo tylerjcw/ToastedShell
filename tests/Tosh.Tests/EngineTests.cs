@@ -438,6 +438,76 @@ public sealed class EngineTests
     }
 
     [Fact]
+    public void Parser_desugars_dotted_module_names_into_nested_partial_modules()
+    {
+        var result = ToshParser.Parse("module Foo.Bar.Baz { var x = 1 }");
+
+        Assert.Empty(result.Diagnostics);
+        var outer = Assert.IsType<ModuleDefinitionStatementSyntax>(result.Statement);
+        Assert.Equal("Foo", outer.Name);
+        Assert.True(outer.IsPartial, "outer wrapper of dotted module should be partial");
+        Assert.Single(outer.Body.Statements);
+
+        var middle = Assert.IsType<ModuleDefinitionStatementSyntax>(outer.Body.Statements[0]);
+        Assert.Equal("Bar", middle.Name);
+        Assert.True(middle.IsPartial);
+        Assert.Single(middle.Body.Statements);
+
+        var inner = Assert.IsType<ModuleDefinitionStatementSyntax>(middle.Body.Statements[0]);
+        Assert.Equal("Baz", inner.Name);
+        Assert.False(inner.IsPartial, "innermost module inherits the user's `partial` keyword (none here)");
+    }
+
+    [Fact]
+    public void Parser_supports_partial_module_keyword()
+    {
+        var result = ToshParser.Parse("partial module Lib { var a = 1 }");
+
+        Assert.Empty(result.Diagnostics);
+        var module = Assert.IsType<ModuleDefinitionStatementSyntax>(result.Statement);
+        Assert.Equal("Lib", module.Name);
+        Assert.True(module.IsPartial);
+    }
+
+    [Fact]
+    public async Task Partial_modules_merge_within_the_same_scope()
+    {
+        var runtime = ToshRuntime.CreateDefault();
+        var engine = new ToshEngine(runtime);
+
+        var results = await engine.ExecuteToListAsync(
+            """
+            partial module Lib { var a = 1 }
+            partial module Lib { var b = 2 }
+            echo Lib.a
+            echo Lib.b
+            """);
+
+        Assert.Equal(2, results.Count);
+        Assert.Equal(1, Convert.ToInt32(results[0]));
+        Assert.Equal(2, Convert.ToInt32(results[1]));
+    }
+
+    [Fact]
+    public async Task Dotted_module_names_create_nested_modules()
+    {
+        var runtime = ToshRuntime.CreateDefault();
+        var engine = new ToshEngine(runtime);
+
+        var results = await engine.ExecuteToListAsync(
+            """
+            module App.Math { var pi = 3 }
+            module App.Text { var greeting = "hi" }
+            echo App.Math.pi
+            echo App.Text.greeting
+            """);
+
+        Assert.Equal(2, results.Count);
+        Assert.Equal(3, Convert.ToInt32(results[0]));
+        Assert.Equal("hi", results[1]);
+    }
+
+    [Fact]
     public void Parser_supports_newline_separated_top_level_statements()
     {
         var result = ToshParser.Parse("func ll => ls -la\nfunc recent(days: TimeSpan) -> FileSystemEntry { ls -la | where _.Modified > ((date now) - $days) }");

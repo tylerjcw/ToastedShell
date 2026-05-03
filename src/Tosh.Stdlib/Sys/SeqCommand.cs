@@ -11,7 +11,7 @@ namespace Tosh.Stdlib.Sys;
 [CommandExample("seq 5", Title = "Generate 1 through 5")]
 [CommandExample("seq 0 2 10", Title = "Generate an stepped sequence")]
 [CommandExample("seq 5 -1 1", Title = "Generate a descending sequence")]
-[CommandOutput("An int (or numeric) sequence — one value per element of the requested range.")]
+[CommandOutput("An int (or numeric) sequence — one value per element of the requested range.", ClrType = typeof(IAsyncEnumerable<int>))]
 public sealed class SeqCommand : ShellCommand
 {
     public SeqCommand()

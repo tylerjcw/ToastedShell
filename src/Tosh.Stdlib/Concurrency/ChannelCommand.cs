@@ -6,7 +6,7 @@ namespace Tosh.Stdlib.Concurrency;
 [CommandArgument("capacity", "Optional maximum number of items the channel can buffer. Omit for unbounded.", Required = false)]
 [CommandExample("var ch = channel", Title = "Create an unbounded channel")]
 [CommandExample("var ch = channel 10", Title = "Create a bounded channel that buffers up to 10 items")]
-[CommandOutput("Returns a ShellChannel value.")]
+[CommandOutput("Returns a ShellChannel value.", ClrType = typeof(IAsyncEnumerable<ShellChannel>))]
 [CommandNote("Send values with channel-send, receive with channel-recv, and close with channel-close.")]
 public sealed class ChannelCommand : ShellCommand
 {

@@ -13,7 +13,7 @@ namespace Tosh.Stdlib.Pipeline;
 [CommandExample("df | summarize _.Used", Title = "Infer every sensible aggregate for a single member path target")]
 [CommandExample("seq 5 | summarize --sum --avg --min --max --count", Title = "Summarize a scalar numeric pipeline explicitly")]
 [CommandExample("ps | summarize --avg Memory --max Memory", Title = "Compute multiple aggregates over one column")]
-[CommandOutput("Returns ColumnSummary objects describing the requested or inferred aggregates. The original input rows are not appended back into the result.")]
+[CommandOutput("Returns ColumnSummary objects describing the requested or inferred aggregates. The original input rows are not appended back into the result.", ClrType = typeof(IAsyncEnumerable<ColumnSummary>))]
 [PipelineInput(AcceptsScalar = true, AcceptsRecord = true, AcceptsList = true, AcceptsTable = true, Description = "Consumes the current pipeline rows and returns one structured ColumnSummary object per requested or inferred scalar target or member path.")]
 public sealed class SummarizeCommand : ShellCommand, ICurrentItemMemberPathCommand
 {

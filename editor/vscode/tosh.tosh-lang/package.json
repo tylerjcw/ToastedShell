@@ -1,7 +1,7 @@
 {
 	"name": "tosh-lang",
 	"displayName": "TōSh (ToastedShell)",
-	"description": "Syntax highlighting for TōSh (.tosh) scripts",
+	"description": "Syntax highlighting, language server, and debugging for TōSh (.tosh) scripts",
 	"version": "0.1.0",
 	"publisher": "tosh",
 	"engines": {
@@ -10,15 +10,33 @@
 	"dependencies": {
 		"vscode-languageclient": "9.0.1"
 	},
+	"icon": "icons/tosh-icon.png",
 	"categories": [
-		"Programming Languages"
+		"Programming Languages",
+		"Debuggers"
 	],
 	"main": "./extension.js",
 	"activationEvents": [
-		"onLanguage:tosh",
-		"onTerminalProfile:tosh.terminal"
+		"onDebugResolve:tosh"
 	],
 	"contributes": {
+		"viewsContainers": {
+			"activitybar": [
+				{
+					"id": "tosh-explorer",
+					"title": "TōSh",
+					"icon": "icons/tosh-dark.svg"
+				}
+			]
+		},
+		"views": {
+			"tosh-explorer": [
+				{ "id": "tosh.servers",  "name": "Servers"  },
+				{ "id": "tosh.solution", "name": "Solution" },
+				{ "id": "tosh.scripts",  "name": "Scripts"  },
+				{ "id": "tosh.commands", "name": "Commands" }
+			]
+		},
 		"languages": [
 			{
 				"id": "tosh",
@@ -31,6 +49,19 @@
 					".tosh"
 				],
 				"configuration": "./language-configuration.json",
+				"icon": {
+					"light": "./icons/tosh-light.svg",
+					"dark": "./icons/tosh-dark.svg"
+				}
+			},
+			{
+				"id": "toshproj",
+				"aliases": [
+					"TōSh Project"
+				],
+				"extensions": [
+					".toshproj"
+				],
 				"icon": {
 					"light": "./icons/tosh-light.svg",
 					"dark": "./icons/tosh-dark.svg"
@@ -61,6 +92,170 @@
 				}
 			]
 		},
+		"debuggers": [
+			{
+				"type": "tosh",
+				"label": "TōSh Debug",
+				"languages": ["tosh"],
+				"initialConfigurations": [
+					{
+						"type": "tosh",
+						"request": "launch",
+						"name": "Launch TōSh Script",
+						"program": "${file}",
+						"args": [],
+						"stopOnEntry": false
+					}
+				],
+				"configurationSnippets": [
+					{
+						"label": "TōSh: Launch Script",
+						"description": "Debug the current TōSh script",
+						"body": {
+							"type": "tosh",
+							"request": "launch",
+							"name": "${1:Launch TōSh Script}",
+							"program": "^\"${2:${file}}\"",
+							"args": [],
+							"stopOnEntry": false
+						}
+					}
+				],
+				"configurationAttributes": {
+					"launch": {
+						"required": ["program"],
+						"properties": {
+							"program": {
+								"type": "string",
+								"description": "Absolute path to the .tosh script to run.",
+								"default": "${file}"
+							},
+							"args": {
+								"type": "array",
+								"items": { "type": "string" },
+								"description": "Command-line arguments passed to the script.",
+								"default": []
+							},
+							"stopOnEntry": {
+								"type": "boolean",
+								"description": "Break at the first line of the script.",
+								"default": false
+							}
+						}
+					}
+				}
+			}
+		],
+		"commands": [
+			{ "command": "tosh.lsp.start",         "title": "Start",              "icon": "$(debug-start)",    "category": "TōSh LSP" },
+			{ "command": "tosh.lsp.stop",          "title": "Stop",               "icon": "$(debug-stop)",     "category": "TōSh LSP" },
+			{ "command": "tosh.lsp.restart",       "title": "Restart",            "icon": "$(refresh)",        "category": "TōSh LSP" },
+			{ "command": "tosh.lsp.viewLogs",      "title": "View Logs",          "icon": "$(output)",         "category": "TōSh LSP" },
+			{ "command": "tosh.mcp.viewLogs",      "title": "View Logs",          "icon": "$(output)",         "category": "TōSh MCP" },
+			{ "command": "tosh.runFile",           "title": "Run TōSh Script",    "icon": "$(play)",           "category": "TōSh" },
+			{ "command": "tosh.debugFile",         "title": "Debug TōSh Script",  "icon": "$(debug-alt)",      "category": "TōSh" },
+			{ "command": "tosh.newSolution",       "title": "New Solution (.slnx)", "icon": "$(new-folder)",     "category": "TōSh" },
+			{ "command": "tosh.newProject",        "title": "New Project",         "icon": "$(new-folder)",     "category": "TōSh" },
+			{ "command": "tosh.addFileToProject",  "title": "Add File",            "icon": "$(new-file)",       "category": "TōSh" },
+			{ "command": "tosh.removeFromProject", "title": "Remove from Project", "icon": "$(remove)",         "category": "TōSh" },
+			{ "command": "tosh.buildProject",      "title": "Build Project",       "icon": "$(tools)",          "category": "TōSh" },
+			{ "command": "tosh.buildSolution",     "title": "Build Solution",      "icon": "$(tools)",          "category": "TōSh" },
+			{ "command": "tosh.runScript",         "title": "Run Script",          "icon": "$(play)",           "category": "TōSh" },
+			{ "command": "tosh.openCommandRef",    "title": "Open Command Reference", "icon": "$(book)",        "category": "TōSh" },
+			{ "command": "tosh.solution.refresh",  "title": "Refresh",            "icon": "$(refresh)",        "category": "TōSh" },
+			{ "command": "tosh.scripts.refresh",   "title": "Refresh",            "icon": "$(refresh)",        "category": "TōSh" },
+			{ "command": "tosh.runSelection",      "title": "Run Selection in TōSh Terminal", "icon": "$(run-below)", "category": "TōSh" },
+				{ "command": "tosh.openRepl",           "title": "Open REPL",                        "icon": "$(terminal)",  "category": "TōSh" },
+				{ "command": "tosh.checkInstall",       "title": "Check Installation",               "icon": "$(check)",     "category": "TōSh" },
+				{ "command": "tosh.runFileWithArgs",   "title": "Run TōSh Script with Args...",     "icon": "$(play)",      "category": "TōSh" }
+		],
+		"menus": {
+			"view/title": [
+				{ "command": "tosh.newSolution",      "when": "view == tosh.solution", "group": "navigation@1" },
+				{ "command": "tosh.solution.refresh", "when": "view == tosh.solution", "group": "navigation@2" },
+				{ "command": "tosh.scripts.refresh",  "when": "view == tosh.scripts",  "group": "navigation@1" },
+				{ "command": "tosh.openCommandRef",   "when": "view == tosh.commands", "group": "navigation@1" },
+				{ "command": "tosh.openRepl",          "when": "view == tosh.servers",  "group": "navigation@1" }
+			],
+			"view/item/context": [
+				{ "command": "tosh.lsp.start",         "when": "view == tosh.servers  && viewItem == lspStopped",  "group": "inline@1" },
+				{ "command": "tosh.lsp.start",         "when": "view == tosh.servers  && viewItem == lspError",    "group": "inline@1" },
+				{ "command": "tosh.lsp.stop",          "when": "view == tosh.servers  && viewItem == lspRunning",  "group": "inline@1" },
+				{ "command": "tosh.lsp.restart",       "when": "view == tosh.servers  && viewItem == lspRunning",  "group": "inline@2" },
+				{ "command": "tosh.lsp.viewLogs",      "when": "view == tosh.servers  && viewItem =~ /^lsp/",      "group": "inline@3" },
+				{ "command": "tosh.mcp.viewLogs",      "when": "view == tosh.servers  && viewItem =~ /^mcp/",      "group": "inline@1" },
+				{ "command": "tosh.newProject",        "when": "view == tosh.solution && viewItem == solution",    "group": "inline@1" },
+				{ "command": "tosh.buildSolution",     "when": "view == tosh.solution && viewItem == solution",    "group": "inline@2" },
+				{ "command": "tosh.addFileToProject",  "when": "view == tosh.solution && viewItem == project",     "group": "inline@1" },
+				{ "command": "tosh.buildProject",      "when": "view == tosh.solution && viewItem == project",     "group": "inline@2" },
+				{ "command": "tosh.removeFromProject", "when": "view == tosh.solution && viewItem == project",     "group": "context@1" },
+				{ "command": "tosh.removeFromProject", "when": "view == tosh.solution && viewItem == projectFile", "group": "context@1" },
+				{ "command": "tosh.runScript",         "when": "view == tosh.scripts  && viewItem == script",      "group": "inline@1" }
+			],
+			"editor/title/run": [
+				{ "command": "tosh.runFile",       "when": "resourceExtname == .tosh", "group": "navigation@1" },
+				{ "command": "tosh.debugFile",     "when": "resourceExtname == .tosh", "group": "navigation@2" },
+				{ "command": "tosh.runSelection",    "when": "resourceExtname == .tosh && editorHasSelection", "group": "navigation@3" },
+				{ "command": "tosh.runFileWithArgs", "when": "resourceExtname == .tosh", "group": "navigation@4" }
+			],
+			"editor/context": [
+				{ "command": "tosh.runSelection",  "when": "resourceExtname == .tosh && editorHasSelection", "group": "tosh@1" }
+			]
+		},
+		"walkthroughs": [
+			{
+				"id": "tosh.gettingStarted",
+				"title": "Get Started with TōSh",
+				"description": "Set up TōSh in VS Code and start scripting.",
+				"steps": [
+					{
+						"id": "install",
+						"title": "Install TōSh",
+						"description": "Make sure the TōSh executable is on your PATH.\n\n[Check Installation](command:tosh.checkInstall)",
+						"media": { "markdown": "media/walkthrough/install.md" },
+						"completionEvents": ["onCommand:tosh.checkInstall"]
+					},
+					{
+						"id": "terminal",
+						"title": "Open a TōSh Terminal",
+						"description": "Use TōSh as your shell inside VS Code via the terminal profile.\n\n[Open New Terminal](command:workbench.action.terminal.new)",
+						"media": { "markdown": "media/walkthrough/terminal.md" }
+					},
+					{
+						"id": "repl",
+						"title": "Try the Interactive REPL",
+						"description": "Run TōSh expressions interactively in the REPL panel.\n\n[Open REPL](command:tosh.openRepl)",
+						"media": { "markdown": "media/walkthrough/repl.md" },
+						"completionEvents": ["onCommand:tosh.openRepl"]
+					},
+					{
+						"id": "commands",
+						"title": "Explore Built-in Commands",
+						"description": "Browse and search TōSh's built-in command library.\n\n[Open Command Reference](command:tosh.openCommandRef)",
+						"media": { "markdown": "media/walkthrough/commands.md" },
+						"completionEvents": ["onCommand:tosh.openCommandRef"]
+					},
+					{
+						"id": "script",
+						"title": "Write and Run Your First Script",
+						"description": "Create a .tosh file and use the ▶ Run button to execute it.",
+						"media": { "markdown": "media/walkthrough/script.md" }
+					}
+				]
+			}
+		],
+		"taskDefinitions": [
+			{
+				"type": "tosh",
+				"required": ["task"],
+				"properties": {
+					"task": {
+						"type": "string",
+						"description": "The TōSh task to run (e.g. build-solution, run-file)."
+					}
+				}
+			}
+		],
 		"configuration": {
 			"title": "TōSh",
 			"properties": {
@@ -79,10 +274,20 @@
 					"default": "",
 					"description": "Optional path to a Tosh.Lsp.dll or Tosh.Lsp.csproj. Relative paths are resolved from the first workspace folder."
 				},
+				"tosh.dap.serverPath": {
+					"type": "string",
+					"default": "",
+					"description": "Optional path to a Tosh.Dap.dll or Tosh.Dap.csproj. Relative paths are resolved from the first workspace folder."
+				},
 				"tosh.terminal.path": {
 					"type": "string",
 					"default": "tosh",
 					"description": "Path to the executable used by the contributed TōSh terminal profile."
+				},
+				"tosh.codeLens.enabled": {
+					"type": "boolean",
+					"default": true,
+					"description": "Show Run and Debug code lens actions above top-level function declarations in .tosh files."
 				}
 			}
 		}

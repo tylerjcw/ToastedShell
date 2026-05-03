@@ -6,7 +6,7 @@ namespace Tosh.Stdlib.Pipeline;
 [CommandArgument("start", "Optional starting index (default: 0).", Required = false)]
 [CommandExample("echo a b c | enumerate", Title = "Default 0-based indexing")]
 [CommandExample("echo a b c | enumerate 1", Title = "1-based indexing")]
-[CommandOutput("Two-element arrays [index, item] for each pipeline item.")]
+[CommandOutput("Two-element arrays [index, item] for each pipeline item.", ClrType = typeof(IAsyncEnumerable<object[]>))]
 [PipelineInput(AcceptsScalar = true, AcceptsRecord = true, Description = "Each item is paired with its index.")]
 public sealed class EnumerateCommand : ShellCommand
 {

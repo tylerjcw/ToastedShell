@@ -22,7 +22,7 @@ namespace Tosh.Stdlib.Filesystem;
 [CommandExample("ls -R --group-directories-first")]
 [CommandExample("ls -l --time access | where _.Type == file | get { Name, Accessed }")]
 [CommandNote("Filesystem metadata stays typed in the pipeline, even when Tosh renders it like a shell table.")]
-[CommandOutput("Produces typed filesystem entries that the display layer renders as shell tables by default.", TypeName = "FileSystemEntry", Members = "Name, Type, Size, Modified, Permissions, Owner, Group")]
+[CommandOutput("Produces typed filesystem entries that the display layer renders as shell tables by default.", TypeName = "FileSystemEntry", Members = "Name, Type, Size, Modified, Permissions, Owner, Group", ClrType = typeof(IAsyncEnumerable<FileSystemEntry>))]
 [CommandSideEffects(ReadsFiles = true)]
 [PipelineInput(Description = "Ls is still explicit-arg-first; path input is not yet consumed from the pipeline.")]
 public sealed class ListDirectoryCommand : ShellCommand

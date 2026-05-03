@@ -6,7 +6,7 @@ namespace Tosh.Stdlib.Pipeline;
 [CommandArgument("callable|block", "A predicate that returns true or false for each item.")]
 [CommandExample("echo 1 2 3 4 5 | partition { _ > 3 }", Title = "Partition by a condition")]
 [CommandExample("ls | partition { _.Extension == \".cs\" }", Title = "Separate C# files from others")]
-[CommandOutput("A two-element array: [items-where-true, items-where-false].")]
+[CommandOutput("A two-element array: [items-where-true, items-where-false].", ClrType = typeof(IAsyncEnumerable<object[]>))]
 [PipelineInput(AcceptsScalar = true, AcceptsRecord = true, Description = "Consumes the pipeline and splits items into two groups by predicate.")]
 public sealed class PartitionCommand : ShellCommand
 {

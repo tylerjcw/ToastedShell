@@ -144,7 +144,9 @@ TuiCommandTests.cs
 TuiCoreTests.cs
 TuiInlineTests.cs
 TuiScreenTests.cs
+TypeCheckerTests.cs
 TypeInferenceTests.cs
+TypeNameResolverTests.cs
 UtilityCommandTests.cs
 VarsCommandTests.cs
 VectorCommandTests.cs

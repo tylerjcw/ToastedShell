@@ -6,7 +6,7 @@ namespace Tosh.Stdlib.Clr;
 [CommandArgument("bytes|type-name", "Byte count to allocate, or a native interop type name whose unmanaged size should be allocated.")]
 [CommandExample("alloc 64", Title = "Allocate a 64-byte native buffer")]
 [CommandExample("alloc int32", Title = "Allocate enough native memory for one Int32")]
-[CommandOutput("A native pointer (IntPtr) to the freshly allocated buffer.")]
+[CommandOutput("A native pointer (IntPtr) to the freshly allocated buffer.", ClrType = typeof(IntPtr))]
 public sealed class NativeAllocCommand : ShellCommand
 {
     public NativeAllocCommand(string name = "native-alloc")

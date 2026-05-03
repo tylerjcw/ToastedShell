@@ -5,7 +5,7 @@ namespace Tosh.Stdlib.Filesystem;
 [CommandCategory("Filesystem")]
 [CommandArgument("path", "One or more paths to extract the directory from.", TypeName = "path-like")]
 [CommandExample("dirname /home/user/file.txt")]
-[CommandOutput("Returns the directory component of each path.")]
+[CommandOutput("Returns the directory component of each path.", ClrType = typeof(IAsyncEnumerable<string>))]
 [PipelineInput(AcceptsScalar = true, AcceptsList = true, Description = "Accepts piped path-like values.")]
 public sealed class DirNameCommand : ShellCommand
 {

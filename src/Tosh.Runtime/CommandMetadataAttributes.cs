@@ -259,6 +259,21 @@ public sealed class CommandArgumentAttribute(string name, string description) : 
     /// When null, the exporter infers the kind from <see cref="TypeName"/>.
     /// </summary>
     public string? Kind { get; init; }
+
+    /// <summary>
+    /// Optional CLR type the argument's value binds to. When set,
+    /// the exporter populates <c>CommandArgumentMetadata.TypeInfo</c>
+    /// with a structured <see cref="TypedTypeRef"/> derived from
+    /// <see cref="TypedTypeRefBuilder.FromType"/>. Coexists with
+    /// the free-form <see cref="TypeName"/> string.
+    /// </summary>
+    public Type? ClrType { get; init; }
+
+    /// <summary>
+    /// Human-readable refinement label preserved into the typed
+    /// metadata (e.g. <c>"positive int"</c>, <c>"non-empty string"</c>).
+    /// </summary>
+    public string? Refinement { get; init; }
 }
 
 /// <summary>
@@ -269,6 +284,17 @@ public sealed class CommandOptionAttribute(string syntax, string description) : 
 {
     public string Syntax { get; } = syntax;
     public string Description { get; } = description;
+
+    /// <summary>
+    /// Optional CLR type the option's value binds to (omit for
+    /// boolean flags). Surfaces a structured
+    /// <see cref="TypedTypeRef"/> on
+    /// <c>CommandOptionMetadata.ValueTypeInfo</c>.
+    /// </summary>
+    public Type? ValueClrType { get; init; }
+
+    /// <summary>True when the option is a value-less flag.</summary>
+    public bool IsFlag { get; init; }
 }
 
 /// <summary>
@@ -306,6 +332,15 @@ public sealed class CommandOutputAttribute(string description) : Attribute
 
     /// <summary>"structured" (typed objects), "text" (plain text lines), "mixed", or "none".</summary>
     public string Mode { get; init; } = "structured";
+
+    /// <summary>
+    /// Optional CLR type the command yields. When set, the exporter
+    /// populates <c>CommandMetadata.OutputTypeInfo</c> with a
+    /// structured <see cref="TypedTypeRef"/>. The element-type
+    /// inference handles <c>IAsyncEnumerable&lt;T&gt;</c> and
+    /// <c>IEnumerable&lt;T&gt;</c> correctly.
+    /// </summary>
+    public Type? ClrType { get; init; }
 }
 
 /// <summary>

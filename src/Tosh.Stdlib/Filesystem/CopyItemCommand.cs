@@ -20,7 +20,7 @@ namespace Tosh.Stdlib.Filesystem;
 [CommandExample("cp -r src/ dst/", Title = "Recursive directory copy")]
 [CommandExample("cp -s file.txt link.txt", Title = "Create a symbolic link")]
 [CommandExample("cp -l file.txt hardlink.txt", Title = "Create a hard link")]
-[CommandOutput("Returns FileInfo or DirectoryInfo objects for each copied target.")]
+[CommandOutput("Returns FileInfo or DirectoryInfo objects for each copied target.", ClrType = typeof(IAsyncEnumerable<FileSystemInfo>))]
 [CommandSideEffects(ReadsFiles = true, WritesFiles = true)]
 public sealed class CopyItemCommand : ShellCommand
 {

@@ -7,7 +7,7 @@ namespace Tosh.Stdlib.Filesystem;
 [CommandOption("-a", "Include hidden entries in results.")]
 [CommandExample("glob *.txt")]
 [CommandExample("glob -a **/*.cs", Title = "Recursive with hidden files")]
-[CommandOutput("Returns FileSystemEntry objects for each matched path.", TypeName = "FileSystemEntry", Members = "Name, FullName, Type, Size")]
+[CommandOutput("Returns FileSystemEntry objects for each matched path.", TypeName = "FileSystemEntry", Members = "Name, FullName, Type, Size", ClrType = typeof(IAsyncEnumerable<FileSystemEntry>))]
 [CommandSideEffects(ReadsFiles = true)]
 [PipelineInput(AcceptsList = true, Description = "Uses piped patterns when no arguments are given.")]
 public sealed class GlobCommand : ShellCommand

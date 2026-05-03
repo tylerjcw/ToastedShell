@@ -6,7 +6,7 @@ namespace Tosh.Stdlib.Filesystem;
 [CommandArgument("prefix", "Optional prefix for the directory name. Defaults to 'tosh'.", Required = false)]
 [CommandExample("mkdir-temp")]
 [CommandExample("mkdir-temp myapp", Title = "Custom prefix")]
-[CommandOutput("Returns a FileSystemEntry for the created temporary directory.")]
+[CommandOutput("Returns a FileSystemEntry for the created temporary directory.", ClrType = typeof(IAsyncEnumerable<FileSystemEntry>))]
 public sealed class MakeTempDirectoryCommand : ShellCommand
 {
     public MakeTempDirectoryCommand()

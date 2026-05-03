@@ -8,7 +8,7 @@ namespace Tosh.Stdlib.Text;
 [CommandArgument("text", "A template string with {{ member.path }} placeholders.")]
 [CommandExample("ls | template \"{{Name}} is {{Length}} bytes\"", Title = "Format file info")]
 [CommandExample("echo @{name=\"World\"} | template \"Hello, {{name}}!\"", Title = "Simple template rendering")]
-[CommandOutput("Rendered text with placeholders replaced by each pipeline object's member values.")]
+[CommandOutput("Rendered text with placeholders replaced by each pipeline object's member values.", ClrType = typeof(IAsyncEnumerable<ShellTextLine>))]
 [PipelineInput(AcceptsScalar = true, AcceptsRecord = true, Description = "Applies the template to each piped object.")]
 public sealed partial class TemplateCommand : ShellCommand
 {

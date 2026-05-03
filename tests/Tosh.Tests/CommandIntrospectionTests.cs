@@ -58,6 +58,23 @@ public sealed class CommandIntrospectionTests
         }
     }
 
+    [CommandCategory("Typed")]
+    [CommandArgument("count", "Item count.", Required = true, ClrType = typeof(int), Refinement = "positive int")]
+    [CommandArgument("name", "Item name.", Required = false, ClrType = typeof(string))]
+    [CommandArgument("body", "Block body.", Required = true, Kind = "block")]
+    [CommandOption("--limit <n>", "Cap output.", ValueClrType = typeof(int))]
+    [CommandOption("-v", "Verbose.", IsFlag = true)]
+    [CommandOutput("A stream of strings.", ClrType = typeof(IAsyncEnumerable<string>))]
+    private sealed class TypedCommand : ShellCommand
+    {
+        public TypedCommand() : base("typed", "Typed.", "typed <count> [name] <body>") { }
+        public override async IAsyncEnumerable<object?> ExecuteAsync(CommandContext context)
+        {
+            await Task.CompletedTask;
+            yield break;
+        }
+    }
+
     private static ShellCommandRegistry CreateRegistry(params IShellCommand[] commands)
     {
         var registry = new ShellCommandRegistry();
@@ -190,6 +207,110 @@ public sealed class CommandIntrospectionTests
         Assert.Equal(2, metadata.Count);
         Assert.Equal("Minimal", metadata[0].Category);
         Assert.Equal("Testing", metadata[1].Category);
+    }
+
+    // ── Typed metadata (TypedTypeRef) ────────────────────────────────────
+
+    [Fact]
+    public void TypedMetadata_argument_with_clr_type_emits_scalar_type_info()
+    {
+        var entry = Assert.Single(CommandMetadataExporter.BuildMetadata(CreateRegistry(new TypedCommand())));
+        var count = entry.Arguments[0];
+        Assert.Equal("count", count.Name);
+        Assert.NotNull(count.TypeInfo);
+        Assert.Equal(TypedTypeKind.Scalar, count.TypeInfo!.Kind);
+        Assert.Equal("System.Int32", count.TypeInfo.ClrTypeName);
+        Assert.Equal("positive int", count.TypeInfo.Refinement);
+        Assert.False(count.TypeInfo.IsNullable);
+    }
+
+    [Fact]
+    public void TypedMetadata_optional_argument_is_nullable()
+    {
+        var entry = Assert.Single(CommandMetadataExporter.BuildMetadata(CreateRegistry(new TypedCommand())));
+        var name = entry.Arguments[1];
+        Assert.NotNull(name.TypeInfo);
+        Assert.Equal(TypedTypeKind.Scalar, name.TypeInfo!.Kind);
+        Assert.Equal("System.String", name.TypeInfo.ClrTypeName);
+        Assert.True(name.TypeInfo.IsNullable);
+    }
+
+    [Fact]
+    public void TypedMetadata_block_kind_argument_uses_block_kind()
+    {
+        var entry = Assert.Single(CommandMetadataExporter.BuildMetadata(CreateRegistry(new TypedCommand())));
+        var body = entry.Arguments[2];
+        Assert.NotNull(body.TypeInfo);
+        Assert.Equal(TypedTypeKind.Block, body.TypeInfo!.Kind);
+        Assert.Null(body.TypeInfo.ClrTypeName);
+    }
+
+    [Fact]
+    public void TypedMetadata_option_value_type_and_flag_are_surfaced()
+    {
+        var entry = Assert.Single(CommandMetadataExporter.BuildMetadata(CreateRegistry(new TypedCommand())));
+        var limit = entry.Options.Single(o => o.Syntax == "--limit <n>");
+        Assert.NotNull(limit.ValueTypeInfo);
+        Assert.Equal("System.Int32", limit.ValueTypeInfo!.ClrTypeName);
+        Assert.False(limit.IsFlag);
+
+        var verbose = entry.Options.Single(o => o.Syntax == "-v");
+        Assert.Null(verbose.ValueTypeInfo);
+        Assert.True(verbose.IsFlag);
+    }
+
+    [Fact]
+    public void TypedMetadata_output_async_enumerable_unwraps_element_type()
+    {
+        var entry = Assert.Single(CommandMetadataExporter.BuildMetadata(CreateRegistry(new TypedCommand())));
+        Assert.NotNull(entry.OutputTypeInfo);
+        Assert.Equal(TypedTypeKind.Stream, entry.OutputTypeInfo!.Kind);
+        Assert.NotNull(entry.OutputTypeInfo.ElementType);
+        Assert.Equal(TypedTypeKind.Scalar, entry.OutputTypeInfo.ElementType!.Kind);
+        Assert.Equal("System.String", entry.OutputTypeInfo.ElementType.ClrTypeName);
+    }
+
+    [Fact]
+    public void TypedMetadata_unannotated_command_has_null_typeinfo()
+    {
+        var entry = Assert.Single(CommandMetadataExporter.BuildMetadata(CreateRegistry(new MinimalCommand())));
+        Assert.Empty(entry.Arguments);
+        Assert.Null(entry.OutputTypeInfo);
+    }
+
+    [Fact]
+    public void TypedTypeRefBuilder_array_is_list_with_element()
+    {
+        var info = TypedTypeRefBuilder.FromType(typeof(int[]));
+        Assert.Equal(TypedTypeKind.List, info.Kind);
+        Assert.NotNull(info.ElementType);
+        Assert.Equal(TypedTypeKind.Scalar, info.ElementType!.Kind);
+        Assert.Equal("System.Int32", info.ElementType.ClrTypeName);
+    }
+
+    [Fact]
+    public void TypedTypeRefBuilder_string_is_scalar_not_list()
+    {
+        // string is IEnumerable<char> but should classify as scalar.
+        var info = TypedTypeRefBuilder.FromType(typeof(string));
+        Assert.Equal(TypedTypeKind.Scalar, info.Kind);
+        Assert.Null(info.ElementType);
+    }
+
+    [Fact]
+    public void TypedTypeRefBuilder_record_for_pocos()
+    {
+        var info = TypedTypeRefBuilder.FromType(typeof(System.IO.FileInfo));
+        Assert.Equal(TypedTypeKind.Record, info.Kind);
+    }
+
+    [Fact]
+    public void TypedTypeRefBuilder_nullable_value_type_unwraps_and_marks_nullable()
+    {
+        var info = TypedTypeRefBuilder.FromType(typeof(int?));
+        Assert.Equal(TypedTypeKind.Scalar, info.Kind);
+        Assert.Equal("System.Int32", info.ClrTypeName);
+        Assert.True(info.IsNullable);
     }
 
     // ── ExportJson ───────────────────────────────────────────────────────

@@ -154,7 +154,8 @@ public static class CommandMetadataExporter
             Permissions: [],
             IsExperimental: false,
             ErrorConditions: [],
-            CanonicalExamples: []);
+            CanonicalExamples: [],
+            OutputTypeInfo: null);
     }
 
     /// <summary>Pick the shortest name as the "primary" for an alias group.</summary>
@@ -195,7 +196,8 @@ public sealed record CommandMetadata(
     IReadOnlyList<CommandCanonicalExampleMetadata> CanonicalExamples,
     string? Stdlib = null,
     bool IsShellOnly = false,
-    string? ShellOnlyReason = null);
+    string? ShellOnlyReason = null,
+    TypedTypeRef? OutputTypeInfo = null);
 
 public sealed record CommandCanonicalExampleMetadata(
     string Input,
@@ -207,11 +209,14 @@ public sealed record CommandArgumentMetadata(
     string Description,
     bool Required,
     string? TypeName,
-    string? Kind);
+    string? Kind,
+    TypedTypeRef? TypeInfo = null);
 
 public sealed record CommandOptionMetadata(
     string Syntax,
-    string Description);
+    string Description,
+    TypedTypeRef? ValueTypeInfo = null,
+    bool IsFlag = false);
 
 public sealed record CommandExampleMetadata(
     string Code,

@@ -12,6 +12,11 @@ public static class ShellIndexingUtilities
             throw new InvalidOperationException("Cannot index into null.");
         }
 
+        if (lookupKind != IndexLookupKind.ByValue && index is ToshRange range)
+        {
+            return GetSlice(target, range);
+        }
+
         if (lookupKind != IndexLookupKind.ByValue && TryGetIntegerIndex(index, out var numericIndex))
         {
             if (numericIndex < 0)
@@ -85,6 +90,78 @@ public static class ShellIndexingUtilities
 
         throw new InvalidOperationException(
             $"Type '{target.GetType().FullName}' does not support index access with '{index?.GetType().FullName ?? "null"}'.");
+    }
+
+    private static object GetSlice(object target, ToshRange range)
+    {
+        if (range.IsInfinite)
+        {
+            throw new InvalidOperationException("Cannot slice with an open-ended range.");
+        }
+
+        var indices = range.Enumerate().ToList();
+        var result = new List<object?>(indices.Count);
+
+        // String slice: return a string instead of a list of chars.
+        if (target is string text)
+        {
+            var sb = new System.Text.StringBuilder(indices.Count);
+            foreach (var idx in indices)
+            {
+                if (idx < 0 || idx >= text.Length)
+                {
+                    throw new InvalidOperationException($"Index {idx} is out of range for string length {text.Length}.");
+                }
+                sb.Append(text[idx]);
+            }
+            return sb.ToString();
+        }
+
+        if (target is Array array)
+        {
+            foreach (var idx in indices)
+            {
+                if (idx < 0 || idx >= array.Length)
+                {
+                    throw new InvalidOperationException($"Index {idx} is out of range for array length {array.Length}.");
+                }
+                result.Add(array.GetValue(idx));
+            }
+            return result;
+        }
+
+        if (target is IList list)
+        {
+            foreach (var idx in indices)
+            {
+                if (idx < 0 || idx >= list.Count)
+                {
+                    throw new InvalidOperationException($"Index {idx} is out of range for list length {list.Count}.");
+                }
+                result.Add(list[idx]);
+            }
+            return result;
+        }
+
+        if (target is IEnumerable enumerable && target is not IDictionary)
+        {
+            // Materialize once so we can index repeatedly.
+            var materialized = new List<object?>();
+            foreach (var item in enumerable) materialized.Add(item);
+
+            foreach (var idx in indices)
+            {
+                if (idx < 0 || idx >= materialized.Count)
+                {
+                    throw new InvalidOperationException($"Index {idx} is out of range for sequence length {materialized.Count}.");
+                }
+                result.Add(materialized[idx]);
+            }
+            return result;
+        }
+
+        throw new InvalidOperationException(
+            $"Type '{target.GetType().FullName}' does not support range slicing.");
     }
 
     private static bool TryGetIntegerIndex(object? index, out int numericIndex)

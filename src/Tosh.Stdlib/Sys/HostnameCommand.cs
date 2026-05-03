@@ -4,7 +4,7 @@ namespace Tosh.Stdlib.Sys;
 
 [CommandCategory("System")]
 [CommandExample("hostname", Title = "Show the current host name")]
-[CommandOutput("A single string containing the host name.")]
+[CommandOutput("A single string containing the host name.", ClrType = typeof(string))]
 public sealed class HostnameCommand : ShellCommand
 {
     public HostnameCommand()

@@ -5,7 +5,7 @@ namespace Tosh.Stdlib.Sys;
 [CommandCategory("System")]
 [CommandExample("free", Title = "Show memory and swap usage")]
 [CommandExample("free | get .UsedMemory", Title = "Get the used memory value")]
-[CommandOutput("A record with TotalMemory, UsedMemory, FreeMemory, TotalSwap, UsedSwap, and FreeSwap as StorageSize values.")]
+[CommandOutput("A record with TotalMemory, UsedMemory, FreeMemory, TotalSwap, UsedSwap, and FreeSwap as StorageSize values.", ClrType = typeof(IAsyncEnumerable<MemoryUsageInfo>))]
 public sealed class FreeCommand : ShellCommand
 {
     public FreeCommand()

@@ -35,6 +35,7 @@ public static class ToshParser
         private readonly IReadOnlyList<SyntaxToken> _tokens;
         private readonly IReadOnlyList<LineHushDirective> _lineHushDirectives;
         private readonly List<SyntaxDiagnostic> _diagnostics = [];
+        private readonly HashSet<string> _userFunctionNames;
         private int _position;
         private bool _stopRefinementAtEquals;
 
@@ -48,6 +49,26 @@ public static class ToshParser
             _sourceText = sourceText;
             _tokens = tokens;
             _lineHushDirectives = lineHushDirectives;
+            _userFunctionNames = ScanUserFunctionNames(tokens);
+        }
+
+        private static HashSet<string> ScanUserFunctionNames(IReadOnlyList<SyntaxToken> tokens)
+        {
+            var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            for (int i = 0; i < tokens.Count - 1; i++)
+            {
+                var t = tokens[i];
+                if (t.Kind == SyntaxTokenKind.Bareword &&
+                    string.Equals(t.Text, "func", StringComparison.OrdinalIgnoreCase))
+                {
+                    var next = tokens[i + 1];
+                    if (next.Kind == SyntaxTokenKind.Bareword && !string.IsNullOrEmpty(next.Text))
+                    {
+                        names.Add(next.Text);
+                    }
+                }
+            }
+            return names;
         }
 
         public ParseResult Parse()
@@ -2686,16 +2707,57 @@ public static class ToshParser
         {
             var declarationStart = Current.Span.Start;
             var modifier = ParseDeclarationModifier();
-            NextToken(); // module
-            var nameToken = ExpectVariableName();
-            var body = ParseRequiredBlock("module");
 
-            return new ModuleDefinitionStatementSyntax(
-                nameToken.Text,
-                body,
-                modifier,
-                TextSpan.FromBounds(declarationStart, body.Span.End),
-                DocComment: DocComment.Parse(docTokens ?? Array.Empty<SyntaxToken>()));
+            var isPartial = false;
+            if (Current.Kind == SyntaxTokenKind.Bareword &&
+                string.Equals(Current.Text, "partial", StringComparison.Ordinal))
+            {
+                isPartial = true;
+                NextToken();
+            }
+
+            NextToken(); // module
+
+            // The lexer keeps `Foo.Bar.Baz` as a single bareword. Split into
+            // segments so that dotted module names compile to nested modules.
+            var nameToken = Current.Kind == SyntaxTokenKind.Bareword
+                ? NextToken()
+                : ExpectVariableName();
+            var segments = nameToken.Text.Split('.');
+            var body = ParseRequiredBlock("module");
+            var fullSpan = TextSpan.FromBounds(declarationStart, body.Span.End);
+            var docComment = DocComment.Parse(docTokens ?? Array.Empty<SyntaxToken>());
+
+            // Innermost module owns the body and the doc-comment; intermediate
+            // wrappers are partial Default-scope shells that just propagate
+            // declarations outward.
+            var innerSpan = TextSpan.FromBounds(nameToken.Span.End, body.Span.End);
+            StatementSyntax current = new ModuleDefinitionStatementSyntax(
+                Name: segments[^1],
+                Body: body,
+                Modifier: segments.Length == 1 ? modifier : DeclarationModifier.Export,
+                Span: segments.Length == 1 ? fullSpan : innerSpan,
+                DocComment: docComment,
+                IsPartial: isPartial);
+
+            for (var index = segments.Length - 2; index >= 0; index--)
+            {
+                var wrapperBody = new BlockSyntax(
+                    new[] { current },
+                    current.Span);
+                current = new ModuleDefinitionStatementSyntax(
+                    Name: segments[index],
+                    Body: wrapperBody,
+                    Modifier: index == 0 ? modifier : DeclarationModifier.Export,
+                    Span: index == 0 ? fullSpan : current.Span,
+                    DocComment: index == 0 ? docComment : null,
+                    // Dotted segments imply partial wrapping so multiple files
+                    // (or multiple declarations) can contribute siblings under
+                    // the same parent without colliding.
+                    IsPartial: true);
+            }
+
+            return current;
         }
 
         private StatementSyntax ParseEnumDefinitionStatement(
@@ -4863,6 +4925,23 @@ public static class ToshParser
             return new SyntaxToken(SyntaxTokenKind.Bareword, token.Span.Start, "=", "=");
         }
 
+        private SyntaxToken ExpectRecordFieldSeparator(string title)
+        {
+            if (IsEqualsToken(Current) || IsColonToken(Current))
+            {
+                return NextToken();
+            }
+
+            var token = Current;
+            _diagnostics.Add(new SyntaxDiagnostic(
+                Code: "tosh.parser.expected_record_field_separator",
+                Title: title,
+                Span: token.Span,
+                Label: "insert '=' or ':' here"));
+
+            return new SyntaxToken(SyntaxTokenKind.Bareword, token.Span.Start, "=", "=");
+        }
+
         private SyntaxToken ExpectAssignmentOperatorToken(string title)
         {
             if (IsAssignmentOperatorToken(Current))
@@ -4961,7 +5040,8 @@ public static class ToshParser
                 var invocationArgs = ParseInvocationArguments();
                 arguments = new List<ArgumentSyntax>(invocationArgs.arguments);
             }
-            else if (TryGetCurrentItemExpressionArgumentIndex(nameToken.Text, out var expressionArgumentIndex))
+            else if (!_userFunctionNames.Contains(nameToken.Text) &&
+                     TryGetCurrentItemExpressionArgumentIndex(nameToken.Text, out var expressionArgumentIndex))
             {
                 arguments = ParseCurrentItemExpressionCommandArguments(
                     nameToken.Text,
@@ -4971,9 +5051,10 @@ public static class ToshParser
                     stopAtCloseBrace,
                     stopAtSemicolon);
             }
-            else if (string.Equals(nameToken.Text, "get", StringComparison.OrdinalIgnoreCase) ||
-                     string.Equals(nameToken.Text, "select", StringComparison.OrdinalIgnoreCase) ||
-                     string.Equals(nameToken.Text, "pick", StringComparison.OrdinalIgnoreCase))
+            else if (!_userFunctionNames.Contains(nameToken.Text) &&
+                     (string.Equals(nameToken.Text, "get", StringComparison.OrdinalIgnoreCase) ||
+                      string.Equals(nameToken.Text, "select", StringComparison.OrdinalIgnoreCase) ||
+                      string.Equals(nameToken.Text, "pick", StringComparison.OrdinalIgnoreCase)))
             {
                 arguments = ParseGetArguments(nameToken.Span.End, stopAtCloseParen, stopAtCloseBrace, stopAtSemicolon);
             }
@@ -7072,7 +7153,7 @@ public static class ToshParser
                             Label: "close the parenthesized expression"));
                     }
 
-                    ExpectEqualsToken("Computed record fields use '=' between the key expression and value.");
+                    ExpectRecordFieldSeparator("Computed record fields use '=' or ':' between the key expression and value.");
                     var compValue = ParseArgument(implicitCurrentItem: implicitCurrentItem);
 
                     if (nameExpr is not null && compValue is not null)
@@ -7097,12 +7178,22 @@ public static class ToshParser
 
                 string fieldName;
                 TextSpan fieldStart;
+                bool fieldNameHasTrailingColon = false;
 
                 if (Current.Kind == SyntaxTokenKind.Bareword)
                 {
                     var nameToken = NextToken();
                     fieldName = nameToken.Text;
                     fieldStart = nameToken.Span;
+
+                    // `name:` shorthand — the lexer didn't break on ':' so
+                    // it ended up glued to the field name. Strip it and
+                    // treat as if a separate ':' separator was present.
+                    if (fieldName.Length > 1 && fieldName.EndsWith(':') && !fieldName.EndsWith("::"))
+                    {
+                        fieldName = fieldName[..^1];
+                        fieldNameHasTrailingColon = true;
+                    }
                 }
                 else if (Current.Kind == SyntaxTokenKind.String)
                 {
@@ -7121,7 +7212,10 @@ public static class ToshParser
                     continue;
                 }
 
-                ExpectEqualsToken("Record fields use '=' between the field name and value.");
+                if (!fieldNameHasTrailingColon)
+                {
+                    ExpectRecordFieldSeparator("Record fields use '=' or ':' between the field name and value.");
+                }
                 var value = ParseArgument(implicitCurrentItem: implicitCurrentItem);
 
                 if (value is not null)
@@ -9071,9 +9165,17 @@ public static class ToshParser
         private bool LooksLikeModuleDefinition()
         {
             var offset = GetDeclarationModifierOffset();
+
+            // Skip optional 'partial' modifier (allows partial modules to span files).
+            if (Peek(offset).Kind == SyntaxTokenKind.Bareword &&
+                string.Equals(Peek(offset).Text, "partial", StringComparison.Ordinal))
+            {
+                offset++;
+            }
+
             return MatchesKeywordAtOffset(offset, "module") &&
                    Peek(offset + 1).Kind == SyntaxTokenKind.Bareword &&
-                   IsValidIdentifier(Peek(offset + 1).Text) &&
+                   IsValidQualifiedIdentifier(Peek(offset + 1).Text) &&
                    Peek(offset + 2).Kind == SyntaxTokenKind.OpenBrace;
         }
 
@@ -9756,12 +9858,28 @@ public static class ToshParser
                 return false;
             }
 
-            return IsEqualsToken(Peek(2));
+            // `{ name: value }` — the lexer keeps `name:` as a single
+            // bareword; treat that as a record key shorthand.
+            if (next.Kind == SyntaxTokenKind.Bareword &&
+                next.Text.Length > 1 &&
+                next.Text.EndsWith(':') &&
+                !next.Text.EndsWith("::") &&
+                !next.Text.StartsWith(':'))
+            {
+                return true;
+            }
+
+            return IsEqualsToken(Peek(2)) || IsColonToken(Peek(2));
         }
 
         private static bool IsEqualsToken(SyntaxToken token)
         {
             return token.Kind == SyntaxTokenKind.Bareword && string.Equals(token.Text, "=", StringComparison.Ordinal);
+        }
+
+        private static bool IsColonToken(SyntaxToken token)
+        {
+            return token.Kind == SyntaxTokenKind.Bareword && string.Equals(token.Text, ":", StringComparison.Ordinal);
         }
 
         private static bool IsAssignmentOperatorToken(SyntaxToken token)
@@ -10213,6 +10331,26 @@ public static class ToshParser
                 }
 
                 if (!(char.IsLetterOrDigit(character) || character == '_'))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private static bool IsValidQualifiedIdentifier(string text)
+        {
+            if (string.IsNullOrEmpty(text))
+            {
+                return false;
+            }
+
+            // A qualified identifier is a dot-separated list of valid identifiers,
+            // e.g. 'Foo', 'Foo.Bar', 'Foo.Bar.Baz'. Used by `module Foo.Bar { ... }`.
+            foreach (var segment in text.Split('.'))
+            {
+                if (!IsValidIdentifier(segment))
                 {
                     return false;
                 }

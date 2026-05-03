@@ -5,7 +5,7 @@ namespace Tosh.Stdlib.Filesystem;
 [CommandCategory("Filesystem")]
 [CommandArgument("path", "One or more paths to resolve.", TypeName = "path-like")]
 [CommandExample("realpath ./relative/path")]
-[CommandOutput("Returns fully resolved absolute path strings.")]
+[CommandOutput("Returns fully resolved absolute path strings.", ClrType = typeof(IAsyncEnumerable<string>))]
 public sealed class RealPathCommand : ShellCommand
 {
     public RealPathCommand()

@@ -19,7 +19,7 @@ namespace Tosh.Stdlib.Net;
 [CommandExample("ping -c 3 localhost", Title = "Ping localhost three times")]
 [CommandExample("ping -4 -W 1000 example.com | get { Host, Sequence, Status, RoundtripTime }", Title = "Project typed ping replies")]
 [CommandSideEffects(Network = true)]
-[CommandOutput("Per-reply records: address, round-trip time, and status flag.")]
+[CommandOutput("Per-reply records: address, round-trip time, and status flag.", ClrType = typeof(IAsyncEnumerable<PingReplyInfo>))]
 public sealed class PingCommand : ShellCommand
 {
     public PingCommand()

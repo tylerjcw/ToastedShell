@@ -11,7 +11,7 @@ namespace Tosh.Stdlib.Concurrency;
 [CommandExample("spawn dotnet --version", Title = "Start an external command in the background")]
 [CommandExample("echo hello | spawn cat", Title = "Feed pipeline input into a background process")]
 [CommandExample("spawn --foreground $bin_path --safe -c exit", Title = "Run a variable-path binary in the foreground")]
-[CommandOutput("Returns a ShellJobInfo object for the started background job, or nothing when --foreground is used.")]
+[CommandOutput("Returns a ShellJobInfo object for the started background job, or nothing when --foreground is used.", ClrType = typeof(IAsyncEnumerable<ShellJobInfo>))]
 [PipelineInput(AcceptsScalar = true, AcceptsList = true, Description = "Optional pipeline input forwarded to the spawned process stdin.")]
 [CommandNote("Use jobs to list active jobs and wait-for to await completion.")]
 public sealed class SpawnCommand : ShellCommand

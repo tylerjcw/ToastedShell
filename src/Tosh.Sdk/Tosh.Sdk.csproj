@@ -1,0 +1,54 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- The package is consumed via `<Project Sdk="Tosh.Sdk/<version>" />`,
+         which only needs the Sdk\Sdk.props + Sdk\Sdk.targets pair packed
+         under sdk\. There is no runtime/library output, so we suppress the
+         normal compile/build pipeline. -->
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <NoWarn>$(NoWarn);NU5128;NU5100;CS2008;CS8021</NoWarn>
+    <DisableImplicitFrameworkReferences>true</DisableImplicitFrameworkReferences>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <GenerateDependencyFile>false</GenerateDependencyFile>
+    <NoDefaultExcludes>true</NoDefaultExcludes>
+    <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <!-- NuGet packaging metadata. The PackageType=MSBuildSdk marker is what
+         lets `<Project Sdk="Tosh.Sdk/<version>" />` resolve via NuGet. -->
+    <IsPackable>true</IsPackable>
+    <PackageId>Tosh.Sdk</PackageId>
+    <PackageType>MSBuildSdk</PackageType>
+    <Description>MSBuild SDK for compiling .toshproj projects (TōSh / ToastedShell).</Description>
+    <Authors>Tosh contributors</Authors>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/komradbobo/tosh</PackageProjectUrl>
+    <PackageTags>tosh;toastedshell;msbuild;sdk</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Build the in-process task assembly first; we'll pack the
+         resulting binaries into the nupkg's tasks\ folder. -->
+    <ProjectReference Include="..\Tosh.Sdk.Tasks\Tosh.Sdk.Tasks.csproj"
+                      ReferenceOutputAssembly="false"
+                      SkipGetTargetFrameworkProperties="true"
+                      Private="false"
+                      PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The SDK contract: ship Sdk.props/Sdk.targets at sdk\ inside the
+         nupkg. NuGet's MSBuildSdk resolver finds them by convention. -->
+    <None Include="Sdk\Sdk.props" Pack="true" PackagePath="Sdk\Sdk.props" />
+    <None Include="Sdk\Sdk.targets" Pack="true" PackagePath="Sdk\Sdk.targets" />
+    <!-- Pack the task assembly + every dependency it copies next to
+         itself. Loaded by Sdk.targets via <UsingTask>. -->
+    <None Include="..\Tosh.Sdk.Tasks\bin\$(Configuration)\net10.0\*.dll"
+          Pack="true"
+          PackagePath="tasks\net10.0\" />
+  </ItemGroup>
+
+</Project>

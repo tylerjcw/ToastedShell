@@ -8,6 +8,15 @@ public sealed class LexicalScope
         IReadOnlyDictionary<string, object?>? variables = null,
         bool isModuleScope = false,
         bool exportDeclarationsByDefault = false)
+        : this(variables, isModuleScope, exportDeclarationsByDefault, exports: null)
+    {
+    }
+
+    internal LexicalScope(
+        IReadOnlyDictionary<string, object?>? variables,
+        bool isModuleScope,
+        bool exportDeclarationsByDefault,
+        ModuleExportTable? exports)
     {
         Variables = new Dictionary<string, object?>(variables ?? new Dictionary<string, object?>(), StringComparer.Ordinal);
         Commands = new Dictionary<string, IShellCommand>(StringComparer.Ordinal);
@@ -18,7 +27,7 @@ public sealed class LexicalScope
         TypeAliases = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         IsModuleScope = isModuleScope;
         ExportDeclarationsByDefault = exportDeclarationsByDefault;
-        Exports = isModuleScope ? new ModuleExportTable() : null;
+        Exports = isModuleScope ? (exports ?? new ModuleExportTable()) : null;
     }
 
     public Dictionary<string, object?> Variables { get; }

@@ -9,7 +9,7 @@ namespace Tosh.Stdlib.Clr;
 [CommandArgument("name", "The property name to check.")]
 [CommandExample("$obj | has-prop Name", Title = "Check if a piped object has a property")]
 [CommandExample("has-prop $obj Name", Title = "Check by passing the object directly")]
-[CommandOutput("A boolean: true if the property exists, false otherwise.")]
+[CommandOutput("A boolean: true if the property exists, false otherwise.", ClrType = typeof(bool))]
 [PipelineInput(AcceptsScalar = true, AcceptsRecord = true, Description = "Uses the piped object as the target when the object argument is omitted.")]
 public sealed class HasPropCommand : ShellCommand
 {

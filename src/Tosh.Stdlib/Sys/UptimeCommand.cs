@@ -4,7 +4,7 @@ namespace Tosh.Stdlib.Sys;
 
 [CommandCategory("System")]
 [CommandExample("uptime", Title = "Show uptime and load averages")]
-[CommandOutput("A record describing system uptime: boot time, elapsed duration, and load averages where available.")]
+[CommandOutput("A record describing system uptime: boot time, elapsed duration, and load averages where available.", ClrType = typeof(IAsyncEnumerable<SystemUptimeInfo>))]
 public sealed class UptimeCommand : ShellCommand
 {
     public UptimeCommand()

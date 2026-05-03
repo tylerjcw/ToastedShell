@@ -152,6 +152,62 @@ public sealed class CliInvocationResolverTests
         Assert.Equal("echo hi", plan.ScriptOrCommand);
     }
 
+    [Fact]
+    public void Resolver_compile_accepts_single_input()
+    {
+        using var tempDirectory = new TemporaryDirectory();
+        var script = Path.Combine(tempDirectory.Path, "a.tosh");
+        File.WriteAllText(script, "echo hi");
+
+        var plan = CliInvocationResolver.Resolve(["--compile", script, "-o", "out.dll"], tempDirectory.Path);
+
+        Assert.Equal(CliInvocationKind.Compile, plan.Kind);
+        // Compile-plan encoding: ScriptOrCommand = output, Arguments = inputs.
+        Assert.Equal(Path.Combine(tempDirectory.Path, "out.dll"), plan.ScriptOrCommand);
+        Assert.Equal([script], plan.Arguments);
+    }
+
+    [Fact]
+    public void Resolver_compile_accepts_multiple_inputs_before_output()
+    {
+        using var tempDirectory = new TemporaryDirectory();
+        var a = Path.Combine(tempDirectory.Path, "a.tosh");
+        var b = Path.Combine(tempDirectory.Path, "b.tosh");
+        var c = Path.Combine(tempDirectory.Path, "c.tosh");
+        File.WriteAllText(a, "");
+        File.WriteAllText(b, "");
+        File.WriteAllText(c, "");
+
+        var plan = CliInvocationResolver.Resolve(
+            ["--compile", a, b, c, "-o", "out.dll"],
+            tempDirectory.Path);
+
+        Assert.Equal(CliInvocationKind.Compile, plan.Kind);
+        Assert.Equal(Path.Combine(tempDirectory.Path, "out.dll"), plan.ScriptOrCommand);
+        Assert.Equal([a, b, c], plan.Arguments);
+    }
+
+    [Fact]
+    public void Resolver_compile_allows_omitting_output_path()
+    {
+        using var tempDirectory = new TemporaryDirectory();
+        var a = Path.Combine(tempDirectory.Path, "a.tosh");
+        File.WriteAllText(a, "");
+
+        var plan = CliInvocationResolver.Resolve(["--compile", a], tempDirectory.Path);
+
+        Assert.Equal(CliInvocationKind.Compile, plan.Kind);
+        Assert.Null(plan.ScriptOrCommand);
+        Assert.Equal([a], plan.Arguments);
+    }
+
+    [Fact]
+    public void Resolver_compile_rejects_unknown_option()
+    {
+        Assert.Throws<InvalidOperationException>(() =>
+            CliInvocationResolver.Resolve(["--compile", "a.tosh", "--bogus"], Environment.CurrentDirectory));
+    }
+
     private sealed class TemporaryDirectory : IDisposable
     {
         public TemporaryDirectory()

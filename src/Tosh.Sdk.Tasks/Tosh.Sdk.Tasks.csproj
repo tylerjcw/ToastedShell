@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <!-- This is an MSBuild task assembly. Don't add to nupkg
+         as a normal lib — Tosh.Sdk.csproj packs the build output
+         into the `tasks/` directory of the SDK nuget package. -->
+    <IsPackable>false</IsPackable>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    <!-- Microsoft.Build.* are loaded by the MSBuild host; don't ship
+         them inside our nupkg. -->
+    <ExcludeRestorePackageImports>true</ExcludeRestorePackageImports>
+    <NoWarn>$(NoWarn);NU1903</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Build.Utilities.Core" Version="17.11.4" PrivateAssets="all" ExcludeAssets="runtime" />
+    <PackageReference Include="Microsoft.Build.Framework" Version="17.11.4" PrivateAssets="all" ExcludeAssets="runtime" />
+    <PackageReference Include="Microsoft.NET.HostModel" Version="5.0.0-preview.1.20120.5" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Tosh.Compiler\Tosh.Compiler.csproj" />
+    <ProjectReference Include="..\Tosh.Compiler.Runtime\Tosh.Compiler.Runtime.csproj" />
+    <ProjectReference Include="..\Tosh.Language\Tosh.Language.csproj" />
+    <ProjectReference Include="..\Tosh.Runtime\Tosh.Runtime.csproj" />
+    <ProjectReference Include="..\Tosh.Stdlib\Tosh.Stdlib.csproj" />
+  </ItemGroup>
+
+</Project>

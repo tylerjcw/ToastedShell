@@ -10,7 +10,7 @@ namespace Tosh.Stdlib.Filesystem;
 [CommandOption("-v", "Explain what is being done.")]
 [CommandExample("rm temp.txt")]
 [CommandExample("rm -rf build/", Title = "Force recursive delete")]
-[CommandOutput("Returns a RemovalResult with total size and descendant tree.")]
+[CommandOutput("Returns a RemovalResult with total size and descendant tree.", ClrType = typeof(IAsyncEnumerable<RemovalResult>))]
 [CommandSideEffects(WritesFiles = true)]
 [PipelineInput(AcceptsList = true, Description = "Accepts piped path-like values.")]
 public sealed class RemoveItemCommand : ShellCommand

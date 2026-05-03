@@ -31,9 +31,104 @@ public static class Lowerer
         ArgumentNullException.ThrowIfNull(parseResult);
         ArgumentNullException.ThrowIfNull(commands);
 
-        var ctx = new LowerContext(commands);
+        var ctx = new LowerContext(commands, BuildUserTypeRegistry(parseResult.Statement));
         var root = LowerStatementAsScript(parseResult.Statement, ctx);
         return new BoundUnit(root, parseResult, ctx.Symbols.ToImmutableList());
+    }
+
+    /// <summary>
+    /// Walks the parse tree and harvests every user-declared type
+    /// name (class / record / struct / union / enum / interface /
+    /// trait / type-alias) so the
+    /// <see cref="TypeNameResolver"/> can resolve type annotations
+    /// that reference them. The entries are placeholder
+    /// <c>User…Type</c> wrappers — names exist, deeper structural
+    /// information is filled in by the runtime when the declaration
+    /// actually executes.
+    /// </summary>
+    private static IReadOnlyDictionary<string, BoundType> BuildUserTypeRegistry(StatementSyntax root)
+    {
+        var registry = new Dictionary<string, BoundType>(StringComparer.Ordinal);
+        Visit(root);
+        return registry;
+        void Visit(StatementSyntax statement)
+        {
+            switch (statement)
+            {
+                case ScriptStatementSyntax script:
+                    foreach (var s in script.Statements) Visit(s);
+                    break;
+
+                case ModuleDefinitionStatementSyntax module:
+                    foreach (var s in module.Body.Statements) Visit(s);
+                    break;
+
+                case ClassDefinitionStatementSyntax cls:
+                    registry[cls.Name] = new UserClassType(cls.Name, Definition: cls, BackingClrType: null);
+                    break;
+
+                case RecordDefinitionStatementSyntax rec:
+                    registry[rec.Name] = new UserRecordType(rec.Name, Definition: rec, BackingClrType: null);
+                    break;
+
+                case StructDefinitionStatementSyntax str:
+                    registry[str.Name] = new UserStructType(str.Name, Definition: str, BackingClrType: null);
+                    break;
+
+                case UnionDefinitionStatementSyntax uni:
+                    registry[uni.Name] = new UserUnionType(uni.Name, Definition: uni, BackingClrType: null);
+                    break;
+
+                case EnumDefinitionStatementSyntax enm:
+                    registry[enm.Name] = new UserEnumType(enm.Name, Definition: enm, BackingClrType: null);
+                    break;
+
+                case InterfaceDefinitionStatementSyntax iface:
+                    registry[iface.Name] = new UserInterfaceType(iface.Name, Definition: iface, BackingClrType: null);
+                    break;
+
+                case TraitDefinitionStatementSyntax tr:
+                    registry[tr.Name] = new UserTraitType(tr.Name, Definition: tr, BackingClrType: null);
+                    break;
+
+                case TypeAliasStatementSyntax alias:
+                    // Refinement-bearing aliases (e.g. `type Positive
+                    // = int where _ > 0`) project to a
+                    // `RefinementType` over the base so type-checking
+                    // (which goes through the base CLR type) and the
+                    // compiler IL emitter (which keys refinement-
+                    // check emission off RefinementType) both see
+                    // the right shape. Plain aliases without a
+                    // refinement clause stay user-class-shaped — the
+                    // type checker substitutes them later.
+                    if (alias.Refinement is not null)
+                    {
+                        var baseType = ResolveAliasBaseType(alias.BaseTypeName, registry);
+                        registry[alias.Name] = new RefinementType(baseType, alias.Name, alias);
+                    }
+                    else
+                    {
+                        registry[alias.Name] = new UserClassType(alias.Name, Definition: alias, BackingClrType: null);
+                    }
+                    break;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Resolves the base-type name of a refinement-bearing type
+    /// alias to a <see cref="BoundType"/> using the in-progress
+    /// registry plus a slim primitive lookup. Falls back to
+    /// <see cref="BoundType.Dynamic"/> when the base is unknown so
+    /// the registry pass never throws — downstream resolution will
+    /// surface the diagnostic at the alias declaration site.
+    /// </summary>
+    private static BoundType ResolveAliasBaseType(string baseTypeName, Dictionary<string, BoundType> registry)
+    {
+        if (string.IsNullOrEmpty(baseTypeName)) return BoundType.Dynamic;
+        if (registry.TryGetValue(baseTypeName, out var existing)) return existing;
+        var probe = new TypeNameResolver(userTypes: null).Resolve(baseTypeName);
+        return probe;
     }
 
     // ── statements ──────────────────────────────────────────────
@@ -176,7 +271,8 @@ public static class Lowerer
                 Name: moduleDef.Name,
                 Body: LowerBlock(moduleDef.Body, ctx),
                 Modifier: moduleDef.Modifier,
-                Span: moduleDef.Span),
+                Span: moduleDef.Span,
+                IsPartial: moduleDef.IsPartial),
 
         SubcommandStatementSyntax subcmd =>
             new BoundSubcommandStatement(
@@ -219,12 +315,24 @@ public static class Lowerer
         // VariableBinder semantics).
         var value = decl.Value is null ? null : LowerPipeline(decl.Value, ctx);
 
-        // Explicit `: T` annotations would override inference, but the
-        // parser doesn't carry resolved CLR types yet — leave them
-        // dynamic for now and fall through to value inference.
-        var declaredType = value is null
-            ? BoundType.Dynamic
-            : TypeInferrer.InferPipelineValue(value);
+        // Explicit `: T` annotation wins. Otherwise fall back to
+        // value inference. Annotations the resolver can't make sense
+        // of (unknown user types, malformed) collapse to dynamic and
+        // we still try inference — best-effort.
+        BoundType declaredType;
+        if (!string.IsNullOrEmpty(decl.TypeName))
+        {
+            var annotated = ctx.ResolveType(decl.TypeName);
+            declaredType = annotated.IsDynamic && value is not null
+                ? TypeInferrer.InferPipelineValue(value)
+                : annotated;
+        }
+        else
+        {
+            declaredType = value is null
+                ? BoundType.Dynamic
+                : TypeInferrer.InferPipelineValue(value);
+        }
         var symbol = ctx.DeclareLocal(decl.Name, declaredType);
 
         return new BoundVariableDeclaration(
@@ -1197,14 +1305,22 @@ public static class Lowerer
         for (var i = 0; i < parameters.Count; i++)
         {
             var param = parameters[i];
-            var symbol = ctx.DeclareLocal(param.Name, BoundSymbolKind.Parameter, BoundType.Dynamic);
+            // Resolve the parameter's annotation through the
+            // shared TypeNameResolver. Primitives, list/dict/set
+            // shorthands, nullables, arrays, tuples, and any
+            // user-declared types from the syntax-level registry
+            // all flow through. Unresolvable / missing annotations
+            // collapse to BoundType.Dynamic.
+            var declaredType = ctx.ResolveType(param.TypeName);
+            var symbol = ctx.DeclareLocal(param.Name, BoundSymbolKind.Parameter, declaredType);
             bound.Add(new BoundParameter(
                 Name: param.Name,
                 Symbol: symbol,
                 Default: defaults[i],
                 IsOptional: param.IsOptional,
                 IsRest: param.IsRest,
-                Span: param.Span));
+                Span: param.Span,
+                TypeName: param.TypeName));
         }
         return bound;
     }
@@ -1242,7 +1358,8 @@ public static class Lowerer
                     Captures: captures.ToImmutableList(),
                     IsCommandWrapper: funcDef.IsCommandWrapper,
                     Modifier: funcDef.Modifier,
-                    Span: funcDef.Span);
+                    Span: funcDef.Span,
+                    ReturnType: ctx.ResolveType(funcDef.ReturnTypeName));
             }
             finally
             {
@@ -1710,13 +1827,34 @@ public static class Lowerer
         // explicit).
         private readonly List<(int EntryDepth, HashSet<BoundSymbol> Seen, List<BoundSymbol> Order)> _lambdaFrames = new();
 
-        public LowerContext(ShellCommandRegistry commands)
+        public LowerContext(ShellCommandRegistry commands, IReadOnlyDictionary<string, BoundType>? userTypes = null)
         {
             Commands = commands;
             _scopes.Add(new Dictionary<string, BoundSymbol>(StringComparer.Ordinal));
+            // Resolver is constructed once per lowering pass; user
+            // types are seeded from a syntax-level scan of the
+            // program (BuildUserTypeRegistry). No CLR fallback is
+            // wired here — the binder runs without a runtime.
+            // Diagnostics for unresolvable annotations stay silent
+            // in v1; the type checker (T2) will surface them as
+            // warnings/errors.
+            TypeResolver = new TypeNameResolver(userTypes: userTypes);
         }
 
         public ShellCommandRegistry Commands { get; }
+
+        /// <summary>
+        /// Maps textual type annotations
+        /// (<see cref="FunctionParameterSyntax.TypeName"/>,
+        /// <see cref="FunctionDefinitionStatementSyntax.ReturnTypeName"/>,
+        /// <see cref="VariableDeclarationStatementSyntax.TypeName"/>,
+        /// …) to <see cref="BoundType"/> values. Returns
+        /// <see cref="BoundType.Dynamic"/> for null/empty input or
+        /// names the resolver can't make sense of.
+        /// </summary>
+        public TypeNameResolver TypeResolver { get; }
+
+        public BoundType ResolveType(string? typeName) => TypeResolver.Resolve(typeName);
 
         public List<BoundSymbol> Symbols { get; } = new();
 

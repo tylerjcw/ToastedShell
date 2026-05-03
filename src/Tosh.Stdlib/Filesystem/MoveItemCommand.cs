@@ -15,7 +15,7 @@ namespace Tosh.Stdlib.Filesystem;
 [CommandExample("mv -n *.txt archive/")]
 [CommandExample("mv -t archive alpha.txt beta.txt")]
 [CommandNote("Mv now overwrites existing file targets by default, closer to Unix `mv`. `-n`, `-u`, `-t`, and `-T` are available to control that behavior explicitly.")]
-[CommandOutput("Returns FileInfo or DirectoryInfo objects for the moved targets.")]
+[CommandOutput("Returns FileInfo or DirectoryInfo objects for the moved targets.", ClrType = typeof(IAsyncEnumerable<FileSystemInfo>))]
 [CommandSideEffects(WritesFiles = true)]
 [PipelineInput(Description = "The current `mv` implementation is explicit-arg-first and does not consume pipeline input.")]
 public sealed class MoveItemCommand : ShellCommand

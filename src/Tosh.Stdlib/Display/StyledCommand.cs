@@ -12,7 +12,7 @@ namespace Tosh.Stdlib.Display;
 [CommandOption("--dim", "Render the segment dimmed.")]
 [CommandExample("styled \"hello\" --fg cyan --bold")]
 [CommandExample("styled \"warning\" --fg yellow --bg red")]
-[CommandOutput("Styled-text values that carry inline color/format markup for downstream prompts and renderers.")]
+[CommandOutput("Styled-text values that carry inline color/format markup for downstream prompts and renderers.", ClrType = typeof(IAsyncEnumerable<StyledText>))]
 public sealed class StyledCommand : ShellCommand
 {
     public StyledCommand()

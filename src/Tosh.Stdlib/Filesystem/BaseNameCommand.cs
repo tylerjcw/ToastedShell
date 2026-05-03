@@ -7,7 +7,7 @@ namespace Tosh.Stdlib.Filesystem;
 [CommandArgument("suffix", "Optional suffix to strip from the filename.", Required = false)]
 [CommandExample("basename /home/user/file.txt")]
 [CommandExample("basename file.tar.gz .tar.gz", Title = "Strip suffix")]
-[CommandOutput("Returns the filename component of each path.")]
+[CommandOutput("Returns the filename component of each path.", ClrType = typeof(IAsyncEnumerable<string>))]
 [PipelineInput(AcceptsScalar = true, AcceptsList = true, Description = "Accepts piped path-like values.")]
 public sealed class BaseNameCommand : ShellCommand
 {

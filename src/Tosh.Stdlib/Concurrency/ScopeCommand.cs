@@ -7,7 +7,7 @@ namespace Tosh.Stdlib.Concurrency;
 [CommandExample(
     "scope { var j1 = spawn dotnet --version; var j2 = spawn dotnet --list-runtimes }",
     Title = "Start two background jobs and await both automatically")]
-[CommandOutput("Streams ShellJobCompletion records for every job started inside the scope.")]
+[CommandOutput("Streams ShellJobCompletion records for every job started inside the scope.", ClrType = typeof(IAsyncEnumerable<ShellJobCompletion>))]
 [CommandNote("All jobs registered during block execution are awaited on scope exit. If the block throws, every scope-owned job is killed before the exception propagates.")]
 public sealed class ScopeCommand : ShellCommand
 {

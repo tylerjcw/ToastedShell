@@ -12,7 +12,7 @@ namespace Tosh.Stdlib.Filesystem;
 [CommandOption("-R", "Operate recursively on directories.")]
 [CommandExample("chown user:group file.txt")]
 [CommandExample("chown -R www-data /var/www", Title = "Recursive change")]
-[CommandOutput("Returns FileSystemEntry objects for each changed path.")]
+[CommandOutput("Returns FileSystemEntry objects for each changed path.", ClrType = typeof(IAsyncEnumerable<FileSystemEntry>))]
 public sealed class ChownCommand : ShellCommand
 {
     public ChownCommand()

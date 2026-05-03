@@ -8,7 +8,7 @@ namespace Tosh.Stdlib.Maths;
 [CommandExample("round 3.14159 2", Title = "Round a literal to 2 decimal places")]
 [CommandExample("echo 3.14159 | round 2", Title = "Round a piped value to 2 decimal places")]
 [CommandExample("echo 3.7 | round", Title = "Round a piped value to nearest integer")]
-[CommandOutput("The rounded value as a double.")]
+[CommandOutput("The rounded value as a double.", ClrType = typeof(IAsyncEnumerable<double>))]
 [PipelineInput(AcceptsScalar = true, Description = "Accepts a numeric value to round when only the decimal count is passed as an argument.")]
 public sealed class RoundCommand : ShellCommand
 {

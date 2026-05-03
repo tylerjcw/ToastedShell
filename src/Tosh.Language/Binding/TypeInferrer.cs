@@ -1,4 +1,7 @@
+using System.Collections.Concurrent;
+using System.Reflection;
 using Tosh.Language.Binding.BoundNodes;
+using Tosh.Runtime;
 
 namespace Tosh.Language.Binding;
 
@@ -65,7 +68,7 @@ public static class TypeInferrer
     public static BoundType InferRange(BoundType start, BoundType? step, BoundType end)
     {
         var element = PromoteNumeric(start, end);
-        if (step.HasValue) element = PromoteNumeric(element, step.Value);
+        if (step is not null) element = PromoteNumeric(element, step);
         if (!IsNumeric(element) || element.ClrType is null) return BoundType.Dynamic;
 
         var enumerable = typeof(IEnumerable<>).MakeGenericType(element.ClrType);
@@ -74,10 +77,9 @@ public static class TypeInferrer
 
     /// <summary>
     /// Best-effort: a pipeline whose only stage is a single positional
-    /// expression takes that expression's type. Anything more
-    /// complicated (commands, multiple stages) stays dynamic in v1 —
-    /// command-output typing requires per-command return-type metadata
-    /// that the registry doesn't expose yet.
+    /// expression takes that expression's type. A single-stage
+    /// command call uses the command's <c>[CommandOutput(ClrType=…)]</c>
+    /// annotation when present.
     /// </summary>
     public static BoundType InferPipelineValue(BoundPipeline pipeline)
     {
@@ -86,8 +88,95 @@ public static class TypeInferrer
         return pipeline.Stages[0] switch
         {
             BoundExpressionStage expr => expr.Value.Type,
+            BoundCommandCall call => InferCommandOutput(call),
             _ => BoundType.Dynamic,
         };
+    }
+
+    /// <summary>
+    /// Reads <c>[CommandOutput(ClrType=…)]</c> off the resolved
+    /// command and folds it into a <see cref="BoundType"/>:
+    /// <c>IAsyncEnumerable&lt;T&gt;</c> and <c>IEnumerable&lt;T&gt;</c>
+    /// flatten to <c>list&lt;T&gt;</c> (the pipeline's element view);
+    /// arrays do the same; scalars become <see cref="ConcreteType"/>.
+    /// </summary>
+    public static BoundType InferCommandOutput(BoundCommandCall call)
+    {
+        if (call.ResolvedCommand is null) return BoundType.Dynamic;
+        var clr = GetCommandOutputClrType(call.ResolvedCommand.GetType());
+        if (clr is null) return BoundType.Dynamic;
+        return ClrToBoundForCommandOutput(clr);
+    }
+
+    private static readonly ConcurrentDictionary<Type, Type?> s_commandOutputClrTypeCache = new();
+
+    private static Type? GetCommandOutputClrType(Type commandType)
+    {
+        return s_commandOutputClrTypeCache.GetOrAdd(commandType, static t =>
+        {
+            var attr = t.GetCustomAttribute<CommandOutputAttribute>(inherit: false);
+            return attr?.ClrType;
+        });
+    }
+
+    /// <summary>
+    /// Map a <c>[CommandOutput(ClrType=T)]</c> CLR type to the bound
+    /// type the pipeline value would have. Stream / enumerable types
+    /// flatten to <c>list&lt;element&gt;</c> because tosh pipelines
+    /// always present their stages as a sequence of elements.
+    /// </summary>
+    private static BoundType ClrToBoundForCommandOutput(Type type)
+    {
+        // Unwrap Nullable<T>.
+        if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(Nullable<>))
+        {
+            type = type.GenericTypeArguments[0];
+        }
+
+        // IAsyncEnumerable<T> / IEnumerable<T> / IReadOnlyList<T> / arrays.
+        // Command output emerges through the pipeline as a sequence of
+        // values; modelling it as `stream<T>` lets the type checker
+        // honour tosh's runtime materialization rule (`values.Count == 1
+        // ? values[0] : values.ToArray()`) — `stream<T>` is assignable
+        // to `T`, `list<T>`, `T[]`, or `stream<T>`.
+        if (TryGetEnumerableElement(type, out var element))
+        {
+            return new StreamType(BoundType.FromClr(element!));
+        }
+
+        return BoundType.FromClr(type);
+    }
+
+    private static bool TryGetEnumerableElement(Type type, out Type? element)
+    {
+        element = null;
+        if (type == typeof(string)) return false;
+        if (type.IsArray) { element = type.GetElementType(); return element is not null; }
+
+        if (type.IsGenericType)
+        {
+            var def = type.GetGenericTypeDefinition();
+            if (def == typeof(IAsyncEnumerable<>) || def == typeof(IEnumerable<>) ||
+                def == typeof(IReadOnlyList<>) || def == typeof(IReadOnlyCollection<>) ||
+                def == typeof(IList<>) || def == typeof(ICollection<>) ||
+                def == typeof(List<>))
+            {
+                element = type.GenericTypeArguments[0];
+                return true;
+            }
+        }
+
+        foreach (var iface in type.GetInterfaces())
+        {
+            if (!iface.IsGenericType) continue;
+            var def = iface.GetGenericTypeDefinition();
+            if (def == typeof(IAsyncEnumerable<>) || def == typeof(IEnumerable<>))
+            {
+                element = iface.GenericTypeArguments[0];
+                return true;
+            }
+        }
+        return false;
     }
 
     private static BoundType PromoteNumeric(BoundType a, BoundType b)

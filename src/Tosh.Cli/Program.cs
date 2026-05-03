@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using System.Text;
+using Microsoft.NET.HostModel;
 using Tosh.Cli;
 using Tosh.Cli.Tui;
 using Tosh.Runtime;
@@ -524,22 +525,89 @@ static async Task ExportCommandMetadataAsync(CliInvocationPlan plan)
 
 static async Task<int> CompileScriptAsync(CliInvocationPlan plan, ToshRuntime runtime)
 {
-    var inputPath = plan.ScriptOrCommand!;
-    if (!File.Exists(inputPath))
+    // Compile-plan encoding (see CliInvocationResolver.Compile):
+    //   ScriptOrCommand = output path (nullable)
+    //   Arguments       = one or more input paths
+    var inputPaths = plan.Arguments;
+    if (inputPaths.Length == 0)
     {
-        await Console.Error.WriteLineAsync($"toshc: input not found: {inputPath}");
+        await Console.Error.WriteLineAsync("toshc: no input files");
         return 1;
     }
 
-    var outputPath = plan.Arguments.Length > 0
-        ? plan.Arguments[0]
-        : Path.ChangeExtension(inputPath, ".dll");
+    // Resolve the requested compile profile. Default = Permissive.
+    var compileProfile = Tosh.Compiler.CompileProfile.Permissive;
+    if (!string.IsNullOrEmpty(plan.CompileProfileName))
+    {
+        switch (plan.CompileProfileName.Trim().ToLowerInvariant())
+        {
+            case "permissive":
+                compileProfile = Tosh.Compiler.CompileProfile.Permissive;
+                break;
+            case "runtime":
+                compileProfile = Tosh.Compiler.CompileProfile.Runtime;
+                break;
+            case "pure":
+                compileProfile = Tosh.Compiler.CompileProfile.Pure;
+                break;
+            default:
+                await Console.Error.WriteLineAsync(
+                    $"toshc: unknown --profile '{plan.CompileProfileName}' (expected: permissive, runtime, pure)");
+                return 1;
+        }
+    }
+
+    foreach (var path in inputPaths)
+    {
+        if (!File.Exists(path))
+        {
+            await Console.Error.WriteLineAsync($"toshc: input not found: {path}");
+            return 1;
+        }
+    }
+
+    var primaryInput = inputPaths[0];
+    var outputPath = plan.ScriptOrCommand
+        ?? Path.ChangeExtension(primaryInput, ".dll");
+
+    // `dotnet <file>` only recognises `.dll` assemblies. If the
+    // user passed `-o foo` or `-o foo.exe`, normalise to `.dll` so
+    // the resulting artifact is actually launchable. We keep the
+    // user's stem for the assembly name, just fix the extension.
+    if (!string.Equals(Path.GetExtension(outputPath), ".dll", StringComparison.OrdinalIgnoreCase))
+    {
+        outputPath = Path.ChangeExtension(outputPath, ".dll");
+    }
 
     var assemblyName = Path.GetFileNameWithoutExtension(outputPath);
-    var source = await File.ReadAllTextAsync(inputPath);
+
+    // Concatenate all input files into a single source for parsing.
+    // Each file is preceded by a newline so spans never straddle a
+    // file boundary; the source name reflects the first file (used
+    // for diagnostics) plus a count when there are extras.
+    string source;
+    string sourceName;
+    if (inputPaths.Length == 1)
+    {
+        source = await File.ReadAllTextAsync(primaryInput);
+        sourceName = primaryInput;
+    }
+    else
+    {
+        var parts = new List<string>(inputPaths.Length);
+        foreach (var path in inputPaths)
+        {
+            // Header comment so binder/parser diagnostics point to
+            // the right file when multiple sources are merged.
+            parts.Add($"# --- {path} ---");
+            parts.Add(await File.ReadAllTextAsync(path));
+        }
+        source = string.Join("\n", parts);
+        sourceName = $"{primaryInput} (+{inputPaths.Length - 1} more)";
+    }
 
     var compileEngine = new ToshEngine(runtime);
-    var parseResult = compileEngine.Parse(source, inputPath);
+    var parseResult = compileEngine.Parse(source, sourceName);
     if (parseResult.Diagnostics.Count > 0)
     {
         foreach (var diag in parseResult.Diagnostics)
@@ -549,7 +617,71 @@ static async Task<int> CompileScriptAsync(CliInvocationPlan plan, ToshRuntime ru
         return 1;
     }
 
+    // Run the binder pass against the parsed program. Compiled
+    // builds always run binder in strict mode: unknown commands,
+    // shell-only commands, and scope-analysis findings become
+    // hard errors and the compiler refuses to write an artifact.
+    var binderDiagnostics = Tosh.Language.Binding.Binder.Bind(
+        parseResult,
+        runtime.Commands,
+        isInteractive: false);
+    if (binderDiagnostics.Count > 0)
+    {
+        var renderer = new Tosh.Runtime.DiagnosticRenderer(
+            runtime.Config.Theme.Diagnostics,
+            runtime.Config.Diagnostics);
+        foreach (var diagnostic in binderDiagnostics)
+        {
+            await Console.Error.WriteLineAsync(renderer.Render(diagnostic));
+        }
+        await Console.Error.WriteLineAsync(
+            $"toshc: {binderDiagnostics.Count} binder error(s); no output written.");
+        return 1;
+    }
+
     var unit = Lowerer.Lower(parseResult, runtime.Commands);
+
+    // Compile-mode annotation audit. Errors here are always fatal:
+    // missing param/return annotations, and (unless
+    // `--compile-allow-dynamic` is passed) implicit-dynamic
+    // `var` declarations.
+    var annotationDiagnostics = Tosh.Language.Binding.TypeChecker.CheckCompileAnnotations(
+        unit, allowDynamic: plan.CompileAllowDynamic);
+    if (annotationDiagnostics.Count > 0)
+    {
+        var annotationRenderer = new Tosh.Runtime.DiagnosticRenderer(
+            runtime.Config.Theme.Diagnostics,
+            runtime.Config.Diagnostics);
+        foreach (var diagnostic in annotationDiagnostics)
+        {
+            await Console.Error.WriteLineAsync(annotationRenderer.Render(diagnostic));
+        }
+        await Console.Error.WriteLineAsync(
+            $"toshc: {annotationDiagnostics.Count} annotation error(s); no output written.");
+        return 1;
+    }
+
+    // Type-check pass. In compile mode every type diagnostic is
+    // promoted to an error: the artifact is only written if the
+    // program is well-typed. T3 will introduce the
+    // `--compile-allow-dynamic` knob to soften the
+    // implicit-dynamic case specifically.
+    var typeDiagnostics = Tosh.Language.Binding.TypeChecker.Check(unit);
+    if (typeDiagnostics.Count > 0)
+    {
+        var typeRenderer = new Tosh.Runtime.DiagnosticRenderer(
+            runtime.Config.Theme.Diagnostics,
+            runtime.Config.Diagnostics);
+        foreach (var diagnostic in typeDiagnostics)
+        {
+            var promoted = Tosh.Language.Binding.TypeChecker.PromoteSeverity(
+                diagnostic, Tosh.Runtime.ToshDiagnosticSeverity.Error);
+            await Console.Error.WriteLineAsync(typeRenderer.Render(promoted));
+        }
+        await Console.Error.WriteLineAsync(
+            $"toshc: {typeDiagnostics.Count} type error(s); no output written.");
+        return 1;
+    }
 
     var dir = Path.GetDirectoryName(outputPath);
     if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
@@ -560,7 +692,26 @@ static async Task<int> CompileScriptAsync(CliInvocationPlan plan, ToshRuntime ru
     Tosh.Compiler.EmitResult result;
     using (var fs = File.Create(outputPath))
     {
-        result = Tosh.Compiler.BoundUnitEmitter.Emit(unit, assemblyName, fs);
+        result = Tosh.Compiler.BoundUnitEmitter.Emit(unit, assemblyName, fs, compileProfile);
+    }
+
+    // Fail-fast: if the emitter reported any unsupported shapes,
+    // refuse to ship a half-baked artifact. Delete the partially
+    // written .dll so a subsequent `dotnet <out>.dll` doesn't
+    // silently run stale output. The companion runtimeconfig is
+    // not yet written at this point, so nothing else to clean up.
+    if (!result.IsClean)
+    {
+        await Console.Error.WriteLineAsync(
+            $"toshc: {result.UnsupportedShapes.Count} unsupported shape(s):");
+        foreach (var shape in result.UnsupportedShapes)
+        {
+            await Console.Error.WriteLineAsync($"  - {shape}");
+        }
+        try { File.Delete(outputPath); } catch { /* best-effort cleanup */ }
+        await Console.Error.WriteLineAsync(
+            "toshc: refusing to write incomplete output.");
+        return 1;
     }
 
     // Emit a minimal runtimeconfig.json so `dotnet <out>.dll` runs.
@@ -579,15 +730,134 @@ static async Task<int> CompileScriptAsync(CliInvocationPlan plan, ToshRuntime ru
         """;
     await File.WriteAllTextAsync(runtimeConfigPath, runtimeConfig);
 
-    if (!result.IsClean)
+    // Stage the runtime DLLs the emitted assembly depends on next
+    // to the output so `dotnet <out>.dll` runs without the caller
+    // pre-populating its directory. Copies are best-effort: a
+    // missing source dll just means the user will see a load
+    // failure at runtime, same as before the staging existed.
+    StageCompilerRuntime(outputPath);
+
+    var outputDir = Path.GetDirectoryName(outputPath) ?? ".";
+    if (plan.EmitAppHost)
     {
-        await Console.Error.WriteLineAsync($"toshc: {result.UnsupportedShapes.Count} unsupported shape(s):");
-        foreach (var shape in result.UnsupportedShapes)
+        await CreateAppHostAsync(outputPath, outputDir);
+        if (plan.PublishSingleFile)
         {
-            await Console.Error.WriteLineAsync($"  - {shape}");
+            await CreateBundleAsync(outputPath, outputDir);
         }
     }
 
     await Console.Error.WriteLineAsync($"toshc: wrote {outputPath}");
+
+    if (plan.EmitRefasm)
+    {
+        // Reference assembly emission: re-run the emitter with the
+        // ReferenceAssembly attribute set so the C# / F# compilers
+        // accept the artifact as a metadata-only reference. Sits
+        // alongside the main .dll as `<output>.ref.dll`. Method
+        // bodies remain populated (fat refasm); body stripping is
+        // a deferred optimisation.
+        var refOutputPath = Path.Combine(
+            Path.GetDirectoryName(outputPath) ?? string.Empty,
+            $"{Path.GetFileNameWithoutExtension(outputPath)}.ref{Path.GetExtension(outputPath)}");
+        using (var rfs = File.Create(refOutputPath))
+        {
+            var refResult = Tosh.Compiler.BoundUnitEmitter.Emit(
+                unit, assemblyName, rfs, compileProfile, referenceAssembly: true);
+            if (!refResult.IsClean)
+            {
+                await Console.Error.WriteLineAsync(
+                    $"toshc: refasm emit reported {refResult.UnsupportedShapes.Count} unsupported shape(s).");
+            }
+        }
+        await Console.Error.WriteLineAsync($"toshc: wrote {refOutputPath}");
+    }
+
     return 0;
 }
+
+/// <summary>
+/// Copies the compiler-runtime DLLs (and their transitive shell
+/// dependencies — language, runtime, stdlib, tui, core) next to a
+/// freshly emitted compiled-tosh assembly so it can be launched
+/// with <c>dotnet &lt;out&gt;.dll</c> directly.
+///
+/// Source directory is the directory holding the running
+/// <c>tosh</c> binary (a self-contained publish or the dev-build
+/// <c>bin/Debug/net10.0</c>). Files only get overwritten when the
+/// source is strictly newer to keep repeated compiles cheap.
+/// </summary>
+static void StageCompilerRuntime(string outputPath)
+{
+    var outDir = Path.GetDirectoryName(Path.GetFullPath(outputPath));
+    if (string.IsNullOrEmpty(outDir)) return;
+    var sourceDir = AppContext.BaseDirectory;
+    if (string.IsNullOrEmpty(sourceDir) ||
+        string.Equals(sourceDir.TrimEnd(Path.DirectorySeparatorChar),
+            outDir.TrimEnd(Path.DirectorySeparatorChar),
+            StringComparison.OrdinalIgnoreCase))
+    {
+        return;
+    }
+
+    string[] required =
+    {
+        "Tosh.Compiler.Runtime.dll",
+        "Tosh.Language.dll",
+        "Tosh.Runtime.dll",
+        "Tosh.Stdlib.dll",
+        "Tosh.Core.dll",
+        "Tosh.Tui.dll",
+    };
+    foreach (var name in required)
+    {
+        var src = Path.Combine(sourceDir, name);
+        if (!File.Exists(src)) continue;
+        var dst = Path.Combine(outDir, name);
+        try
+        {
+            if (File.Exists(dst) && File.GetLastWriteTimeUtc(dst) >= File.GetLastWriteTimeUtc(src))
+            {
+                continue;
+            }
+            File.Copy(src, dst, overwrite: true);
+        }
+        catch
+        {
+            // Best-effort: leave the user with the load error if
+            // the copy fails (sandbox, read-only fs, etc.).
+        }
+    }
+}
+
+/// <summary>
+/// Creates an apphost wrapper executable that points to a .dll.
+/// On Windows, the wrapper is named <c>&lt;name&gt;.exe</c>.
+/// On Unix, it has no extension and is marked executable.
+///
+/// NOTE: The AppHost stamping API from Microsoft.NET.HostModel
+/// (version 5.0.0-preview) is not compatible with this codebase's
+/// usage pattern. Deferred to a future release when the API
+/// stabilizes. For now, use 'dotnet publish' with apphost-specific
+/// targets for executable generation.
+/// </summary>
+static async Task CreateAppHostAsync(string dllPath, string outputDir)
+{
+    await Console.Error.WriteLineAsync("tosh: apphost creation deferred (API incompatibility). Use 'dotnet publish' for executable wrappers.");
+}
+
+/// <summary>
+/// Bundles all runtime DLLs into a single-file executable using
+/// the Microsoft.NET.HostModel bundler. The result is a standalone
+/// executable (~70MB+ with .NET runtime).
+///
+/// NOTE: The Bundler API in the currently available NuGet package
+/// (5.0.0-preview.1) doesn't directly expose AddFile/GenerateBundle.
+/// This is deferred for now — the bundling can be done via
+/// `dotnet publish /p:PublishSingleFile=true` instead.
+/// </summary>
+static async Task CreateBundleAsync(string dllPath, string outputDir)
+{
+    await Console.Error.WriteLineAsync("tosh: --publish-single-file requires 'dotnet publish' for full support (bundler API not available in current HostModel). Use: dotnet publish -c Release /p:PublishSingleFile=true /p:SelfContained=true");
+}
+

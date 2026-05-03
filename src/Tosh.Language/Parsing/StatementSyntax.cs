@@ -236,7 +236,8 @@ public sealed record ModuleDefinitionStatementSyntax(
     BlockSyntax Body,
     DeclarationModifier Modifier,
     TextSpan Span,
-    DocComment? DocComment = null) : StatementSyntax(Span);
+    DocComment? DocComment = null,
+    bool IsPartial = false) : StatementSyntax(Span);
 
 public sealed record EnumMemberSyntax(
     string Name,

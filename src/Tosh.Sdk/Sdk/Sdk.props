@@ -1,0 +1,56 @@
+<Project>
+
+  <!-- ════════════════════════════════════════════════════════════
+       Tosh.Sdk — MSBuild SDK for compiling .tosh source files into
+       .NET assemblies via the toshc compiler.
+
+       Usage (in a .toshproj):
+
+         <Project Sdk="Tosh.Sdk">
+           <PropertyGroup>
+             <TargetFramework>net10.0</TargetFramework>
+           </PropertyGroup>
+         </Project>
+
+       By default, every .tosh file alongside the project is
+       automatically included as a compile input. Disable with
+       <EnableDefaultToshItems>false</EnableDefaultToshItems>.
+       ════════════════════════════════════════════════════════════ -->
+
+  <PropertyGroup>
+    <ToshSdkRoot>$(MSBuildThisFileDirectory)..\</ToshSdkRoot>
+    <DefaultLanguageSourceExtension>.tosh</DefaultLanguageSourceExtension>
+    <EnableDefaultToshItems Condition="'$(EnableDefaultToshItems)' == ''">true</EnableDefaultToshItems>
+    <OutputType Condition="'$(OutputType)' == ''">Exe</OutputType>
+    <TargetFramework Condition="'$(TargetFramework)' == ''">net10.0</TargetFramework>
+    <AppendTargetFrameworkToOutputPath Condition="'$(AppendTargetFrameworkToOutputPath)' == ''">true</AppendTargetFrameworkToOutputPath>
+    <BaseOutputPath Condition="'$(BaseOutputPath)' == ''">bin\</BaseOutputPath>
+    <BaseIntermediateOutputPath Condition="'$(BaseIntermediateOutputPath)' == ''">obj\</BaseIntermediateOutputPath>
+    <Configuration Condition="'$(Configuration)' == ''">Debug</Configuration>
+    <OutputPath Condition="'$(OutputPath)' == ''">$(BaseOutputPath)$(Configuration)\$(TargetFramework)\</OutputPath>
+    <IntermediateOutputPath Condition="'$(IntermediateOutputPath)' == ''">$(BaseIntermediateOutputPath)$(Configuration)\$(TargetFramework)\</IntermediateOutputPath>
+
+    <!-- Compile profile passed to toshc. permissive | runtime | pure -->
+    <ToshCompileProfile Condition="'$(ToshCompileProfile)' == ''">permissive</ToshCompileProfile>
+
+    <!-- When true, suppress tosh.compile.implicit_dynamic errors. -->
+    <ToshAllowDynamic Condition="'$(ToshAllowDynamic)' == ''">false</ToshAllowDynamic>
+
+    <!-- When true (default for OutputType=Exe), emit an apphost wrapper
+         executable alongside the DLL. The wrapper is <name>.exe on Windows,
+         <name> (no extension, marked executable) on Unix. -->
+    <ToshEmitAppHost Condition="'$(ToshEmitAppHost)' == '' and '$(OutputType)' == 'Exe'">true</ToshEmitAppHost>
+    <ToshEmitAppHost Condition="'$(ToshEmitAppHost)' == ''">false</ToshEmitAppHost>
+
+    <!-- When true, bundle the apphost with all .dll files into a single
+         self-contained executable (~70MB+ with .NET runtime). Requires
+         ToshEmitAppHost=true. -->
+    <ToshPublishSingleFile Condition="'$(ToshPublishSingleFile)' == ''">false</ToshPublishSingleFile>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(EnableDefaultToshItems)' == 'true'">
+    <ToshCompile Include="**\*.tosh"
+                 Exclude="$(BaseOutputPath)**;$(BaseIntermediateOutputPath)**;**\bin\**;**\obj\**" />
+  </ItemGroup>
+
+</Project>

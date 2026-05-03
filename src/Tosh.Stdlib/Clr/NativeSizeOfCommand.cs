@@ -8,7 +8,7 @@ namespace Tosh.Stdlib.Clr;
 [CommandArgument("type-name ...", "One or more supported native interop type names.")]
 [CommandExample("size-of int32", Title = "Size of a primitive native type")]
 [CommandExample("size-of int32 double nint", Title = "Size several native types")]
-[CommandOutput("An int — the size in bytes of the requested type or structure.")]
+[CommandOutput("An int — the size in bytes of the requested type or structure.", ClrType = typeof(int))]
 public sealed class NativeSizeOfCommand : ShellCommand
 {
     public NativeSizeOfCommand(string name = "native-sizeof")

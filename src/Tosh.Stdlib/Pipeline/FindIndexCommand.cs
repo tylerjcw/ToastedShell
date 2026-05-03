@@ -6,7 +6,7 @@ namespace Tosh.Stdlib.Pipeline;
 [CommandArgument("callable|block", "Predicate callable or block evaluated for each pipeline value.")]
 [CommandExample("echo 10 20 30 | find-index { _ == 20 }", Title = "Find the first matching index")]
 [CommandExample("ls | find-index func(f) => $f.Name.EndsWith(\".slnx\")", Title = "Find an index with a lambda")]
-[CommandOutput("An int — the zero-based index of the first matching item, or -1 if none matches.")]
+[CommandOutput("An int — the zero-based index of the first matching item, or -1 if none matches.", ClrType = typeof(int))]
 public sealed class FindIndexCommand : ShellCommand
 {
     public FindIndexCommand()

@@ -9,7 +9,7 @@ namespace Tosh.Stdlib.Clr;
 [CommandArgument("field-name", "Public struct field name when it is not embedded in the first argument.", Required = false)]
 [CommandExample("offset-of System.Runtime.InteropServices.ComTypes.FILETIME dwLowDateTime", Title = "Offset by type and field")]
 [CommandExample("offset-of System.Runtime.InteropServices.ComTypes.FILETIME.dwHighDateTime", Title = "Offset by dotted path")]
-[CommandOutput("An int — the byte offset of the named field within its containing struct.")]
+[CommandOutput("An int — the byte offset of the named field within its containing struct.", ClrType = typeof(int))]
 public sealed class NativeOffsetOfCommand : ShellCommand
 {
     public NativeOffsetOfCommand(string name = "native-offsetof")

@@ -289,7 +289,8 @@ public sealed record BoundParameter(
     BoundPipeline? Default,
     bool IsOptional,
     bool IsRest,
-    TextSpan Span)
+    TextSpan Span,
+    string? TypeName = null)
     : BoundNode(Span);
 
 /// <summary>
@@ -585,7 +586,8 @@ public sealed record BoundFunctionDefinition(
     IReadOnlyList<BoundSymbol> Captures,
     bool IsCommandWrapper,
     DeclarationModifier Modifier,
-    TextSpan Span)
+    TextSpan Span,
+    BoundType? ReturnType = null)
     : BoundStatement(Span);
 
 /// <summary>
@@ -786,7 +788,8 @@ public sealed record BoundModuleDefinition(
     string Name,
     BoundBlock Body,
     DeclarationModifier Modifier,
-    TextSpan Span)
+    TextSpan Span,
+    bool IsPartial = false)
     : BoundStatement(Span);
 
 public sealed record BoundSubcommandStatement(

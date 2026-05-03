@@ -6,7 +6,7 @@ namespace Tosh.Stdlib.Concurrency;
 [CommandArgument("operation", "A callable or block to run in the background.")]
 [CommandArgument("args", "Optional callable arguments.", Required = false)]
 [CommandExample("var f = async { sleep 0.2; echo done }", Title = "Start a deferred operation")]
-[CommandOutput("Returns a ShellFuture handle.")]
+[CommandOutput("Returns a ShellFuture handle.", ClrType = typeof(IAsyncEnumerable<ShellFuture>))]
 public sealed class AsyncCommand : ShellCommand
 {
     public AsyncCommand()

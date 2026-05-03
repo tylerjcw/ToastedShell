@@ -7,7 +7,7 @@ namespace Tosh.Stdlib.Filesystem;
 [CommandExample("read-bytes ./image.bin")]
 [CommandExample("read-bytes ./image.bin | type-of")]
 [CommandNote("These commands accept normal path-like values, including strings, FileInfo, and ToSh FileSystemEntry objects.")]
-[CommandOutput("Returns one byte-array value per file.")]
+[CommandOutput("Returns one byte-array value per file.", ClrType = typeof(IAsyncEnumerable<byte[]>))]
 [PipelineInput(AcceptsList = true, Description = "Consumes piped path-like input when explicit file paths are omitted.")]
 public sealed class ReadBytesCommand : ShellCommand
 {

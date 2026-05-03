@@ -7,7 +7,7 @@ namespace Tosh.Stdlib.Pipeline;
 [CommandExample("echo 1 2 3 | any { _ > 2 }", Title = "Check if any value exceeds 2")]
 [CommandExample("echo 2 4 6 | all { _ % 2 == 0 }", Title = "Check if all values are even")]
 [CommandExample("echo 1 3 5 | none { _ % 2 == 0 }", Title = "Check that no values are even")]
-[CommandOutput("A boolean: true or false.")]
+[CommandOutput("A boolean: true or false.", ClrType = typeof(bool))]
 [PipelineInput(AcceptsScalar = true, AcceptsRecord = true, Description = "Tests pipeline items against the predicate.")]
 public sealed class QuantifierCommand : ShellCommand
 {

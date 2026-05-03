@@ -8,7 +8,7 @@ namespace Tosh.Stdlib.Filesystem;
 [CommandExample("copy-to $source $target")]
 [CommandExample("$source | copy-to $target")]
 [CommandNote("These commands work with managed file handles returned by `open-file` or by `FileSystemEntry` methods like `OpenText()` and `OpenRead()`. `seek` returns the handle so you can keep piping through the stream workflow, while `copy-to` copies from one compatible handle into another.")]
-[CommandOutput("Returns the number of bytes or text characters copied into the target handle.")]
+[CommandOutput("Returns the number of bytes or text characters copied into the target handle.", ClrType = typeof(IAsyncEnumerable<int>))]
 [PipelineInput(AcceptsRecord = true, Description = "Consumes a piped source handle when you only pass the target handle explicitly.")]
 public sealed class CopyToCommand : ShellCommand
 {

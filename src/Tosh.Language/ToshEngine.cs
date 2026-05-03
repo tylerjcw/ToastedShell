@@ -336,7 +336,29 @@ public sealed partial class ToshEngine : IShellEvaluator
 
         try
         {
-            _ = Tosh.Language.Binding.Lowerer.Lower(parseResult, Runtime.Commands);
+            var unit = Tosh.Language.Binding.Lowerer.Lower(parseResult, Runtime.Commands);
+
+            // Type-check pass: piggy-backs on the lowered unit. Same
+            // disable env var (TOSH_DISABLE_LOWERER) suppresses both
+            // — they're implemented as one pipeline. Diagnostics flow
+            // through the same renderer the binder uses, at Warning
+            // severity for now (T3 will promote under --compile).
+            if (!string.Equals(
+                    Environment.GetEnvironmentVariable("TOSH_DISABLE_TYPECHECK"),
+                    "1",
+                    StringComparison.Ordinal))
+            {
+                var typeDiagnostics = Tosh.Language.Binding.TypeChecker.Check(unit);
+                if (typeDiagnostics.Count > 0)
+                {
+                    var renderer = new DiagnosticRenderer(
+                        Runtime.Config.Theme.Diagnostics, Runtime.Config.Diagnostics);
+                    foreach (var d in typeDiagnostics)
+                    {
+                        Runtime.Error.WriteLine(renderer.RenderWarning(d));
+                    }
+                }
+            }
         }
         catch
         {
@@ -2948,10 +2970,36 @@ public sealed partial class ToshEngine : IShellEvaluator
     {
         EnsureBindingNameIsNotReserved(sourceName, sourceText, module.Name, module.Span, "reserved runtime namespace");
 
+        // Partial modules merge their members into an existing module of the
+        // same name. We pre-seed the new module scope with the existing
+        // exports so that name resolution inside the partial body sees prior
+        // contributions, and we re-use the same ModuleExportTable so that all
+        // ToshModuleObject views observe the merged state automatically.
+        ToshModuleObject? existingModule = null;
+        ModuleExportTable? sharedExports = null;
+        if (module.IsPartial && TryFindExistingModule(module.Name, out existingModule))
+        {
+            sharedExports = existingModule.ExportTable;
+        }
+
         var moduleScope = new LexicalScope(
             new Dictionary<string, object?>(StringComparer.Ordinal),
             isModuleScope: true,
-            exportDeclarationsByDefault: true);
+            exportDeclarationsByDefault: true,
+            exports: sharedExports);
+
+        if (sharedExports is not null)
+        {
+            // Make prior exports visible to body-local resolution. Variables /
+            // types / commands / refinements / nested modules are all copied
+            // by reference so updates from the new body still flow through to
+            // the shared export table.
+            foreach (var (key, value) in sharedExports.Variables) moduleScope.Variables[key] = value;
+            foreach (var (key, value) in sharedExports.Commands) moduleScope.Commands[key] = value;
+            foreach (var (key, value) in sharedExports.Types) moduleScope.Classes[key] = value;
+            foreach (var (key, value) in sharedExports.RefinementTypes) moduleScope.RefinementTypes[key] = value;
+            foreach (var (key, value) in sharedExports.Modules) moduleScope.Modules[key] = value;
+        }
 
         using (PushScope(moduleScope))
         {
@@ -2959,6 +3007,13 @@ public sealed partial class ToshEngine : IShellEvaluator
                                .WithCancellation(cancellationToken))
             {
             }
+        }
+
+        if (existingModule is not null)
+        {
+            // Module already declared; the shared ModuleExportTable was
+            // mutated in place. Nothing else to register.
+            yield break;
         }
 
         var moduleObject = new ToshModuleObject(this, module.Name, moduleScope.Exports ?? new ModuleExportTable());
@@ -2973,6 +3028,38 @@ public sealed partial class ToshEngine : IShellEvaluator
 
         DeclareModule(module.Name, moduleObject, effectiveModifier);
         yield break;
+    }
+
+    private bool TryFindExistingModule(string name, out ToshModuleObject module)
+    {
+        // Walk inner scopes outward (most-nested first), then runtime, looking
+        // for a previously declared module with this name.
+        foreach (var scope in _scopes)
+        {
+            if (scope.Modules.TryGetValue(name, out var scoped) && scoped is ToshModuleObject scopedModule)
+            {
+                module = scopedModule;
+                return true;
+            }
+
+            if (scope.IsModuleScope &&
+                scope.Exports is { } exports &&
+                exports.Modules.TryGetValue(name, out var exported) &&
+                exported is ToshModuleObject exportedModule)
+            {
+                module = exportedModule;
+                return true;
+            }
+        }
+
+        if (Runtime.Modules.TryGetValue(name, out var runtimeModule) && runtimeModule is ToshModuleObject runtime)
+        {
+            module = runtime;
+            return true;
+        }
+
+        module = null!;
+        return false;
     }
 
     private async IAsyncEnumerable<object?> EvaluateEnumDefinitionAsync(
@@ -5865,6 +5952,20 @@ public sealed partial class ToshEngine : IShellEvaluator
 
     private object? ResolveQualifiedAccessOrFallback(string path)
     {
+        return ResolveQualifiedAccess(path);
+    }
+
+    /// <summary>
+    /// Resolves a dotted-path access like <c>Lib.greeting</c> or
+    /// <c>App.Math.add</c> against modules, classes, enums, and CLR
+    /// types in scope. Returns the path string itself if no match is
+    /// found (matching <see cref="ResolveQualifiedAccessOrFallback"/>'s
+    /// fallback). Exposed publicly so compiled tosh (the IL emitter's
+    /// host bridge) can resolve module-qualified names without
+    /// re-parsing.
+    /// </summary>
+    public object? ResolveQualifiedAccess(string path)
+    {
         if (TryResolveQualifiedAccess(path, out var value, out _))
         {
             return value;
@@ -5872,6 +5973,15 @@ public sealed partial class ToshEngine : IShellEvaluator
 
         return path;
     }
+
+    /// <summary>
+    /// Resolves and invokes a dotted-path static method like
+    /// <c>Lib.greet()</c> or <c>App.Math.add(1, 2)</c>. Public so
+    /// compiled tosh's host bridge can dispatch
+    /// <c>BoundStaticMethodCall</c> without re-parsing.
+    /// </summary>
+    public object? InvokeQualifiedMethodPublic(string path, IReadOnlyList<object?> arguments)
+        => InvokeQualifiedMethod(path, arguments);
 
     private object? InvokeQualifiedMethod(string path, IReadOnlyList<object?> arguments)
     {
@@ -7262,7 +7372,13 @@ public sealed partial class ToshEngine : IShellEvaluator
         Runtime.Modules[name] = module;
     }
 
-    private bool TryGetNamedType(string name, out IShellNamedType definition)
+    /// <summary>
+    /// Looks up a user-defined named type (class, record, struct, enum,
+    /// union, interface, trait) in the engine's scope or runtime registry.
+    /// Exposed publicly so compiled tosh (the IL emitter's host bridge)
+    /// can resolve types for <c>new</c>-expressions without re-parsing.
+    /// </summary>
+    public bool TryGetNamedType(string name, out IShellNamedType definition)
     {
         foreach (var scope in _scopes)
         {
@@ -7930,6 +8046,22 @@ public sealed partial class ToshEngine : IShellEvaluator
         var last = pipeline.Stages[^1].Span;
         return TextSpan.FromBounds(first.Start, last.End);
     }
+
+    /// <summary>
+    /// Public bridge for compiled-IL refinement enforcement: converts
+    /// (and validates) <paramref name="value"/> against the named
+    /// annotated type, throwing a diagnostic on failure. Used by
+    /// <c>Tosh.Compiler.Runtime.ToshHost.CheckType</c>.
+    /// </summary>
+    public object? ConvertValueToAnnotatedType(
+        string typeName,
+        object? value,
+        int spanStart,
+        int spanLength,
+        string sourceName,
+        string sourceText,
+        string owner)
+        => ConvertAnnotatedValue(typeName, value, new TextSpan(spanStart, spanLength), sourceName, sourceText, owner);
 
     internal object? ConvertAnnotatedValue(
         string? typeName,
