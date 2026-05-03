@@ -1,4 +1,4 @@
-<Project>
+<Project DefaultTargets="Build">
 
   <!-- ════════════════════════════════════════════════════════════
        Tosh.Sdk — MSBuild SDK for compiling .tosh source files into
@@ -27,8 +27,9 @@
     <BaseOutputPath Condition="'$(BaseOutputPath)' == ''">bin\</BaseOutputPath>
     <BaseIntermediateOutputPath Condition="'$(BaseIntermediateOutputPath)' == ''">obj\</BaseIntermediateOutputPath>
     <Configuration Condition="'$(Configuration)' == ''">Debug</Configuration>
-    <OutputPath Condition="'$(OutputPath)' == ''">$(BaseOutputPath)$(Configuration)\$(TargetFramework)\</OutputPath>
-    <IntermediateOutputPath Condition="'$(IntermediateOutputPath)' == ''">$(BaseIntermediateOutputPath)$(Configuration)\$(TargetFramework)\</IntermediateOutputPath>
+    <OutputPath Condition="'$(OutputPath)' == ''">$(MSBuildProjectDirectory)\$(BaseOutputPath)$(Configuration)\$(TargetFramework)\</OutputPath>
+    <IntermediateOutputPath Condition="'$(IntermediateOutputPath)' == ''">$(MSBuildProjectDirectory)\$(BaseIntermediateOutputPath)$(Configuration)\$(TargetFramework)\</IntermediateOutputPath>
+    <PublishDir Condition="'$(PublishDir)' == ''">$(OutputPath)publish\</PublishDir>
 
     <!-- Compile profile passed to toshc. permissive | runtime | pure -->
     <ToshCompileProfile Condition="'$(ToshCompileProfile)' == ''">permissive</ToshCompileProfile>
@@ -46,6 +47,7 @@
          self-contained executable (~70MB+ with .NET runtime). Requires
          ToshEmitAppHost=true. -->
     <ToshPublishSingleFile Condition="'$(ToshPublishSingleFile)' == ''">false</ToshPublishSingleFile>
+    <ToshEmitAppHost Condition="'$(ToshPublishSingleFile)' == 'true'">true</ToshEmitAppHost>
   </PropertyGroup>
 
   <ItemGroup Condition="'$(EnableDefaultToshItems)' == 'true'">

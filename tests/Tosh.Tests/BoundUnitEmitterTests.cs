@@ -585,6 +585,53 @@ public sealed class BoundUnitEmitterTests : IClassFixture<ToshRuntimeFixture>
     }
 
     [Fact]
+    public void Profile_runtime_accepts_pure_module_without_source_replay()
+    {
+        // A module containing only vars and CLR-emittable funcs should
+        // compile to a CLR static-class shell with no source-replay call —
+        // meaning it is Tier 2 (runtime), not Tier 3 (permissive).
+        var result = EmitWithProfile(
+            "module MathLib {\n" +
+            "    var pi = 3.14159\n" +
+            "    func double_it(n) { return $n * 2 }\n" +
+            "}\n" +
+            "echo (MathLib.pi)",
+            CompileProfile.Runtime);
+        Assert.True(result.IsClean,
+            $"expected clean emit at runtime profile, got: {string.Join(", ", result.UnsupportedShapes)}");
+    }
+
+    [Fact]
+    public void Profile_runtime_rejects_module_with_nested_class()
+    {
+        // A module that declares a class inside requires source replay (Tier 3).
+        var result = EmitWithProfile(
+            "module Ns {\n" +
+            "    class Foo(x) { prop X = x }\n" +
+            "}",
+            CompileProfile.Runtime);
+        Assert.False(result.IsClean);
+        Assert.Contains(result.UnsupportedShapes,
+            s => s.Contains("profile 'runtime'") && s.Contains("tier 3"));
+    }
+
+    [Fact]
+    public void Compiled_nested_module_method_resolves_without_source_replay()
+    {
+        // Nested module Outer.Inner — the CLR nested type (Outer+Inner) must
+        // be discovered via the dotted-name-aware type resolver without any
+        // source replay being registered.
+        var output = CompileAndRun(
+            "module Outer {\n" +
+            "    module Inner {\n" +
+            "        func greet() { return \"hi-from-inner\" }\n" +
+            "    }\n" +
+            "}\n" +
+            "echo (Outer.Inner.greet())");
+        Assert.Equal("hi-from-inner", output.Trim());
+    }
+
+    [Fact]
     public void Class_shell_emits_real_clr_type_with_fields_and_ctor()
     {
         var (_, result, asm) = CompileLoadAndRun(
@@ -609,6 +656,18 @@ public sealed class BoundUnitEmitterTests : IClassFixture<ToshRuntimeFixture>
         var inst = ctor!.Invoke(new object?[] { 7, 11 });
         Assert.Equal(7, pt.GetField("X")!.GetValue(inst));
         Assert.Equal(11, pt.GetField("Y")!.GetValue(inst));
+    }
+
+    [Fact]
+    public void Class_shell_constructs_via_host_newobject_without_source_replay()
+    {
+        // Static methods currently force SupportsDirectNewObj=false,
+        // which routes `new Greeter(...)` through ToshHost.NewObject.
+        // This should still succeed from CLR shell metadata, even
+        // without RegisterTypeFromSource replay.
+        var output = CompileAndRun(
+            "class Greeter(name) { prop Name = name\nstatic func make() { return 0 } }\nvar g = new Greeter(\"Ada\")\necho $g.Name");
+        Assert.Equal("Ada", output.Trim());
     }
 
     [Fact]
@@ -792,17 +851,32 @@ public sealed class BoundUnitEmitterTests : IClassFixture<ToshRuntimeFixture>
     }
 
     [Fact]
-    public void Subcommand_dispatch_is_tier3()
+    public void Subcommand_dispatch_no_longer_requires_tier3_with_pure_profile()
     {
-        // Pure profile rejects subcommand dispatch (Tier 3, source-replay).
+        // After Family 4, subcommand dispatch compiles natively (no source-replay).
+        // Pure profile still fails because `writeline` is a command invocation (Tier 2),
+        // but NOT because of a Tier-3 "subcommand-tree dispatch" shape.
         var engine = new ToshEngine(_runtime);
         var parse = engine.Parse("subcommand run { writeline 1 }", "<sub-tier>");
         var unit = Lowerer.Lower(parse, _runtime.Commands);
         using var stream = new MemoryStream();
         var result = BoundUnitEmitter.Emit(unit, $"SubTier_{Guid.NewGuid():N}", stream, CompileProfile.Pure);
         Assert.False(result.IsClean);
-        Assert.Contains(result.UnsupportedShapes,
-            s => s.Contains("subcommand-tree dispatch"));
+        Assert.DoesNotContain(result.UnsupportedShapes,
+            s => s.Contains("tier 3"));
+    }
+
+    [Fact]
+    public void Subcommand_dispatch_compiles_with_runtime_profile()
+    {
+        // With Runtime profile, a simple subcommand should compile cleanly (no source-replay).
+        var engine = new ToshEngine(_runtime);
+        var parse = engine.Parse("subcommand run { writeline 1 }", "<sub-runtime>");
+        var unit = Lowerer.Lower(parse, _runtime.Commands);
+        using var stream = new MemoryStream();
+        var result = BoundUnitEmitter.Emit(unit, $"SubRuntime_{Guid.NewGuid():N}", stream, CompileProfile.Runtime);
+        Assert.True(result.IsClean,
+            $"unexpected diagnostics: {string.Join(", ", result.UnsupportedShapes)}");
     }
 
     // ── T3.3: typed user-function CLR signatures ─────────────────
@@ -887,5 +961,50 @@ public sealed class BoundUnitEmitterTests : IClassFixture<ToshRuntimeFixture>
         Assert.NotNull(typed);
         Assert.Equal(typeof(string), typed!.ReturnType);
         Assert.Equal(typeof(string), typed.GetParameters()[0].ParameterType);
+    }
+
+    // ── Family 3: compiled block expressions ─────────────────────
+
+    [Fact]
+    public void Profile_runtime_accepts_simple_block_without_source_replay()
+    {
+        var result = EmitWithProfile(
+            "seq 3 | where { _ > 1 }",
+            CompileProfile.Runtime);
+        Assert.True(result.IsClean,
+            $"expected clean emit at runtime profile, got: {string.Join(", ", result.UnsupportedShapes)}");
+    }
+
+    [Fact]
+    public void Compiled_block_where_filters_correctly()
+    {
+        var output = CompileAndRun("seq 3 | where { _ > 1 }");
+        var lines = output.Trim().Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        Assert.Equal(new[] { "2", "3" }, lines);
+    }
+
+    [Fact]
+    public void Compiled_block_map_transforms_correctly()
+    {
+        var output = CompileAndRun("seq 3 | map { _ * 2 }");
+        var lines = output.Trim().Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        Assert.Equal(new[] { "2", "4", "6" }, lines);
+    }
+
+    [Fact]
+    public void Compiled_block_with_capture_filters_correctly()
+    {
+        var output = CompileAndRun(
+            "var threshold = 3\nseq 5 | where { _ > $threshold }");
+        var lines = output.Trim().Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        Assert.Equal(new[] { "4", "5" }, lines);
+    }
+
+    [Fact]
+    public void Compiled_block_list_literal_map()
+    {
+        var output = CompileAndRun("[1, 2, 3] | map { _ * 2 }");
+        var lines = output.Trim().Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        Assert.Equal(new[] { "2", "4", "6" }, lines);
     }
 }

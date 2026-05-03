@@ -10,6 +10,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <RootNamespace>Tosh.Stdlib</RootNamespace>
+    <NoWarn>$(NoWarn);CA2255</NoWarn>
   </PropertyGroup>
 
 </Project>

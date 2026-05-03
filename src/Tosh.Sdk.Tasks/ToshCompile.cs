@@ -96,12 +96,25 @@ public sealed class ToshCompile : Microsoft.Build.Utilities.Task
             return false;
         }
 
-        var profile = Profile.ToLowerInvariant() switch
+        var profileText = string.IsNullOrWhiteSpace(Profile)
+            ? "permissive"
+            : Profile.Trim();
+        CompileProfile profile;
+        switch (profileText.ToLowerInvariant())
         {
-            "pure" => CompileProfile.Pure,
-            "runtime" => CompileProfile.Runtime,
-            _ => CompileProfile.Permissive,
-        };
+            case "permissive":
+                profile = CompileProfile.Permissive;
+                break;
+            case "runtime":
+                profile = CompileProfile.Runtime;
+                break;
+            case "pure":
+                profile = CompileProfile.Pure;
+                break;
+            default:
+                Log.LogError($"ToshCompile: unknown compile profile '{Profile}'. Expected one of: permissive, runtime, pure.");
+                return false;
+        }
 
         // Concatenate sources with a `# --- <path> ---` header so
         // any reported span resolves back to a recognisable file
@@ -199,14 +212,18 @@ public sealed class ToshCompile : Microsoft.Build.Utilities.Task
         File.WriteAllText(runtimeConfigPath, runtimeConfig);
 
         StageCompilerRuntime(OutputPath);
+        var depsJsonPath = ToshPublisher.WriteDepsJson(OutputPath);
+        Log.LogMessage(MessageImportance.High, $"ToshCompile: wrote {depsJsonPath}");
 
         var outputDir = Path.GetDirectoryName(OutputPath) ?? ".";
-        if (EmitAppHost)
+        if (EmitAppHost || PublishSingleFile)
         {
-            CreateAppHost(OutputPath, outputDir);
+            var appHostPath = ToshPublisher.CreateAppHost(OutputPath, outputDir);
+            Log.LogMessage(MessageImportance.High, $"ToshCompile: wrote {appHostPath}");
             if (PublishSingleFile)
             {
-                CreateBundle(OutputPath, outputDir);
+                appHostPath = ToshPublisher.CreateSingleFileBundle(OutputPath, outputDir);
+                Log.LogMessage(MessageImportance.High, $"ToshCompile: wrote single-file bundle {appHostPath}");
             }
         }
 
@@ -271,61 +288,4 @@ public sealed class ToshCompile : Microsoft.Build.Utilities.Task
         }
     }
 
-    /// <summary>
-    /// Resolves the location of apphost.exe / apphost inside the
-    /// .NET SDK installation. Walks up from the build machine's
-    /// dotnet root.
-    /// </summary>
-    private static string? ResolveAppHostTemplate()
-    {
-        var dotnetExe = System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName;
-        if (string.IsNullOrEmpty(dotnetExe)) return null;
-
-        var dotnetRoot = Path.GetDirectoryName(dotnetExe);
-        if (string.IsNullOrEmpty(dotnetRoot)) return null;
-
-        var version = Environment.Version;
-        var tfm = $"net{version.Major}.{version.Minor}";
-        var sdkPath = Path.Combine(dotnetRoot, "sdk", version.ToString());
-
-        // Template location varies by platform.
-        var template = OperatingSystem.IsWindows()
-            ? Path.Combine(sdkPath, "AppHostTemplate", "apphost.exe")
-            : Path.Combine(sdkPath, "AppHostTemplate", "apphost");
-
-        return File.Exists(template) ? template : null;
-    }
-
-    /// <summary>
-    /// Creates an apphost wrapper that boots the .dll. On Windows,
-    /// the wrapper is named <c>&lt;name&gt;.exe</c>. On Unix, it has
-    /// no extension (e.g. <c>Hello</c>) and is marked executable.
-    ///
-    /// NOTE: The AppHost stamping API from Microsoft.NET.HostModel
-    /// (version 5.0.0-preview) is not compatible with the expected
-    /// API signature. Deferred to a future release when the API
-    /// stabilizes.
-    /// </summary>
-    private void CreateAppHost(string dllPath, string outputDir)
-    {
-        // TODO: Implement apphost creation when HostModel API is stable
-        // For now, users can use 'dotnet publish' with apphost-specific targets
-        Log.LogMessage(MessageImportance.High, $"ToshCompile: apphost creation deferred (API incompatibility). Use 'dotnet publish' for executable wrappers.");
-    }
-
-    /// <summary>
-    /// Bundles all runtime DLLs into a single-file executable using
-    /// the Microsoft.NET.HostModel bundler. The result is a standalone
-    /// executable (~70MB+ with .NET runtime).
-    ///
-    /// NOTE: The Bundler API in the currently available NuGet package
-    /// (5.0.0-preview.1) doesn't directly expose AddFile/GenerateBundle.
-    /// This is deferred — bundling can be done via `dotnet publish`
-    /// instead.
-    /// </summary>
-    private void CreateBundle(string dllPath, string outputDir)
-    {
-        Log.LogWarning("ToshCompile: --publish-single-file requires 'dotnet publish' for full support (bundler API not available in current HostModel). Use: dotnet publish /p:PublishSingleFile=true /p:SelfContained=true");
-    }
 }
-

@@ -1,3 +1,4 @@
+using System.Reflection;
 using Tosh.Runtime;
 using Tosh.Language;
 using Tosh.Language.Parsing;
@@ -102,6 +103,30 @@ public static class ToshHost
     /// Mirrors the runtime evaluator's <c>$x.member</c> semantics by
     /// delegating to <see cref="ToshRuntime.ObjectAccessor"/>.
     /// </summary>
+
+    /// <summary>
+    /// Block-context invocation: drains the command's output silently
+    /// (without printing to stdout) and returns all yielded items as an
+    /// array. Used by compiled block-body methods to collect command
+    /// output as pipeline values instead of writing to the console.
+    /// </summary>
+    public static object?[] InvokeCollect(string name, object?[] args)
+    {
+        var (_, all) = InvokeAndDrain(name, args, printItems: false);
+        return all.ToArray();
+    }
+
+    /// <summary>
+    /// Creates a <see cref="CompiledBlockCallable"/> wrapping a compiled
+    /// block-body delegate and its captured variable values. Called from
+    /// compiled-program Main instead of <see cref="MakeBlock"/> when the
+    /// block body was successfully lowered to CLR IL.
+    /// </summary>
+    public static global::Tosh.Runtime.CompiledBlockCallable MakeCompiledBlock(
+        Func<object?, object[], List<object?>> body,
+        object[] captureValues)
+        => new global::Tosh.Runtime.CompiledBlockCallable(body, captureValues);
+
     public static object? GetMember(object? target, string memberPath, bool nullSafe)
     {
         if (target is null) return nullSafe ? null : throw new NullReferenceException(
@@ -637,6 +662,425 @@ public static class ToshHost
         task.GetAwaiter().GetResult();
     }
 
+    // ─── Compiled subcommand dispatch ─────────────────────────────
+
+    /// <summary>
+    /// Factory for <see cref="CompiledSubcommandParam"/> called from
+    /// emitted IL to avoid complex object-initializer IL sequences.
+    /// </summary>
+    public static CompiledSubcommandParam MakeSubcommandParam(
+        string name,
+        string? typeName,
+        bool isOptional,
+        bool isRest,
+        bool isBool,
+        bool hasDefault,
+        object? defaultValue)
+        => new(name, typeName, isOptional, isRest, isBool, hasDefault, defaultValue);
+
+    /// <summary>
+    /// Factory for <see cref="CompiledSubcommandNode"/> called from
+    /// emitted IL. Builds the child dictionary from parallel arrays.
+    /// </summary>
+    public static CompiledSubcommandNode MakeSubcommandNode(
+        string? name,
+        int modifiers,
+        bool userDeclaredHelpFlag,
+        CompiledSubcommandParam[] flags,
+        CompiledSubcommandParam[] args,
+        string[] childNames,
+        CompiledSubcommandNode[] children,
+        Action<object?[]>? body)
+    {
+        var childDict = new Dictionary<string, CompiledSubcommandNode>(StringComparer.Ordinal);
+        for (var i = 0; i < childNames.Length; i++)
+            childDict[childNames[i]] = children[i];
+        return new CompiledSubcommandNode
+        {
+            Name = name,
+            Modifiers = (SubcommandModifier)modifiers,
+            UserDeclaredHelpFlag = userDeclaredHelpFlag,
+            Flags = flags,
+            Args = args,
+            Children = childDict,
+            Body = body,
+        };
+    }
+
+    /// <summary>
+    /// Entry-point for compiled scripts that use the compiled
+    /// subcommand dispatch path (Family 4).  Parses <paramref name="argv"/>,
+    /// builds a dispatch path through <paramref name="root"/>, calls
+    /// each node's compiled body delegate (which binds flag/arg values
+    /// into program-level static fields and runs the body statements),
+    /// and writes auto-help when requested.  No source text is
+    /// replayed; the dispatch algorithm is a pure C# port of
+    /// <c>ToshEngine.EvaluateScriptWithSubcommandsAsync</c>.
+    /// </summary>
+    public static void RunCompiledSubcommandDispatch(string[] argv, CompiledSubcommandNode root)
+    {
+        if (s_runtime is null) Initialize();
+        argv ??= Array.Empty<string>();
+
+        var (path, helpLevel) = ResolveCompiledDispatch(root, argv);
+
+        // Root body always runs (binds root-level flags + setup stmts).
+        if (root.Body is not null)
+        {
+            var rootBindings = BuildCompiledBindings(path[0], root);
+            root.Body(rootBindings);
+        }
+
+        if (helpLevel is not null)
+        {
+            WriteCompiledAutoHelp(helpLevel, path);
+            return;
+        }
+
+        // Walk deeper levels in order.
+        ExecuteCompiledDispatchPath(path, 1);
+
+        // If we stopped at root and it has children with no body, auto-help / vital.
+        if (path.Count == 1 && root.Children.Count > 0 && !CompiledNodeHasEffectiveBody(root))
+        {
+            if ((root.Modifiers & SubcommandModifier.Vital) != 0)
+                throw CreateCompiledRequiredChildException(root, null);
+            WriteCompiledAutoHelp(root, path);
+        }
+    }
+
+    // ─── Compiled dispatch internals ──────────────────────────────
+
+    private sealed class CompiledDispatchFrame
+    {
+        public required CompiledSubcommandNode Node;
+        public readonly Dictionary<string, object?> FlagValues =
+            new(StringComparer.OrdinalIgnoreCase);
+        public readonly List<object?> PositionalValues = new();
+    }
+
+    private static (List<CompiledDispatchFrame> Path, CompiledSubcommandNode? HelpLevel)
+        ResolveCompiledDispatch(CompiledSubcommandNode root, string[] argv)
+    {
+        var path = new List<CompiledDispatchFrame> { new() { Node = root } };
+        CompiledSubcommandNode? helpLevel = null;
+        var parseOptions = true;
+
+        for (var i = 0; i < argv.Length; i++)
+        {
+            var raw = argv[i];
+
+            if (parseOptions && raw is { Length: > 0 })
+            {
+                if (raw == "--")
+                {
+                    parseOptions = false;
+                    continue;
+                }
+
+                if (raw.StartsWith("--", StringComparison.Ordinal) && raw.Length > 2)
+                {
+                    var optionText = raw[2..];
+                    string optionName;
+                    string? inlineValue = null;
+                    var eq = optionText.IndexOf('=');
+                    if (eq >= 0)
+                    {
+                        optionName = optionText[..eq];
+                        inlineValue = optionText[(eq + 1)..];
+                    }
+                    else
+                    {
+                        optionName = optionText;
+                    }
+
+                    // Auto --help unless user declared their own help flag.
+                    if (string.Equals(optionName, "help", StringComparison.OrdinalIgnoreCase) &&
+                        !CompiledPathHasUserHelpFlag(path))
+                    {
+                        helpLevel = path[^1].Node;
+                        continue;
+                    }
+
+                    // Search leaf-to-root for a flag with this option name.
+                    CompiledSubcommandParam? matched = null;
+                    CompiledDispatchFrame? owningFrame = null;
+                    for (var j = path.Count - 1; j >= 0; j--)
+                    {
+                        foreach (var flag in path[j].Node.Flags)
+                        {
+                            if (CompiledScriptOptionNameMatches(flag, optionName))
+                            {
+                                matched = flag;
+                                owningFrame = path[j];
+                                break;
+                            }
+                        }
+                        if (matched is not null) break;
+                    }
+
+                    if (matched is null)
+                    {
+                        throw new InvalidOperationException(
+                            $"Unknown script flag '--{optionName}'.");
+                    }
+
+                    object? value;
+                    if (matched.IsBool)
+                    {
+                        value = inlineValue is null ? (object)true : inlineValue;
+                    }
+                    else if (inlineValue is not null)
+                    {
+                        value = inlineValue;
+                    }
+                    else
+                    {
+                        if (i + 1 >= argv.Length)
+                            throw new InvalidOperationException(
+                                $"Option '--{optionName}' requires a value.");
+                        value = argv[++i];
+                    }
+
+                    owningFrame!.FlagValues[matched.Name] = value;
+                    continue;
+                }
+            }
+
+            // Positional: try to route to a child subcommand first.
+            var leaf = path[^1];
+            if (parseOptions &&
+                leaf.PositionalValues.Count == 0 &&
+                leaf.Node.Children.TryGetValue(raw, out var child))
+            {
+                path.Add(new CompiledDispatchFrame { Node = child });
+                continue;
+            }
+
+            leaf.PositionalValues.Add(raw);
+        }
+
+        return (path, helpLevel);
+    }
+
+    private static object?[] BuildCompiledBindings(
+        CompiledDispatchFrame frame,
+        CompiledSubcommandNode node)
+    {
+        var total = node.Flags.Length + node.Args.Length;
+        var bindings = new object?[total];
+
+        for (var i = 0; i < node.Flags.Length; i++)
+        {
+            var p = node.Flags[i];
+            if (frame.FlagValues.TryGetValue(p.Name, out var flagVal))
+                bindings[i] = ConvertCompiledScriptArg(p.TypeName, flagVal);
+            else if (p.HasDefault)
+                bindings[i] = p.DefaultValue;
+            else if (p.IsOptional)
+                bindings[i] = null;
+            else
+                throw new InvalidOperationException(
+                    $"Missing required script flag '--{GetCompiledPrimaryOptionName(p.Name)}'.");
+        }
+
+        var positionals = frame.PositionalValues;
+        var positionalIndex = 0;
+        var flagBase = node.Flags.Length;
+        var hasRest = node.Args.Length > 0 && node.Args[^1].IsRest;
+
+        for (var i = 0; i < node.Args.Length; i++)
+        {
+            var p = node.Args[i];
+            if (p.IsRest)
+            {
+                var rest = new List<object?>();
+                while (positionalIndex < positionals.Count)
+                    rest.Add(ConvertCompiledScriptArg(p.TypeName, positionals[positionalIndex++]));
+                bindings[flagBase + i] = rest;
+                continue;
+            }
+
+            if (positionalIndex < positionals.Count)
+            {
+                bindings[flagBase + i] = ConvertCompiledScriptArg(
+                    p.TypeName, positionals[positionalIndex++]);
+            }
+            else if (p.HasDefault)
+            {
+                bindings[flagBase + i] = p.DefaultValue;
+            }
+            else if (p.IsOptional)
+            {
+                bindings[flagBase + i] = null;
+            }
+            else
+            {
+                throw new InvalidOperationException(
+                    $"Missing required script argument '{p.Name}'.");
+            }
+        }
+
+        if (!hasRest && positionalIndex < positionals.Count)
+            throw new InvalidOperationException(
+                $"Unexpected argument '{positionals[positionalIndex]}'.");
+
+        return bindings;
+    }
+
+    private static void ExecuteCompiledDispatchPath(
+        IReadOnlyList<CompiledDispatchFrame> path, int index)
+    {
+        if (index >= path.Count) return;
+
+        var frame = path[index];
+        var node = frame.Node;
+        var isLeaf = index == path.Count - 1;
+
+        var shouldRunBody = isLeaf || (node.Modifiers & SubcommandModifier.Eager) != 0;
+
+        if (shouldRunBody && node.Body is not null)
+        {
+            var bindings = BuildCompiledBindings(frame, node);
+            node.Body(bindings);
+        }
+
+        if (isLeaf)
+        {
+            if (node.Children.Count > 0 && !CompiledNodeHasEffectiveBody(node))
+            {
+                if ((node.Modifiers & SubcommandModifier.Vital) != 0)
+                    throw CreateCompiledRequiredChildException(node, null);
+                WriteCompiledAutoHelp(node, path);
+            }
+            return;
+        }
+
+        ExecuteCompiledDispatchPath(path, index + 1);
+    }
+
+    private static bool CompiledNodeHasEffectiveBody(CompiledSubcommandNode node)
+        => node.Body is not null;
+
+    private static bool CompiledPathHasUserHelpFlag(IReadOnlyList<CompiledDispatchFrame> path)
+    {
+        foreach (var frame in path)
+            if (frame.Node.UserDeclaredHelpFlag) return true;
+        return false;
+    }
+
+    private static bool CompiledScriptOptionNameMatches(CompiledSubcommandParam flag, string optionName)
+    {
+        if (string.Equals(flag.Name, optionName, StringComparison.OrdinalIgnoreCase)) return true;
+        var primary = GetCompiledPrimaryOptionName(flag.Name);
+        return string.Equals(primary, optionName, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string GetCompiledPrimaryOptionName(string paramName)
+    {
+        var sb = new System.Text.StringBuilder(paramName.Length + 4);
+        for (var i = 0; i < paramName.Length; i++)
+        {
+            var ch = paramName[i];
+            if (ch == '_') { sb.Append('-'); continue; }
+            if (char.IsUpper(ch) && i > 0 && sb.Length > 0 && sb[^1] != '-' &&
+                (char.IsLower(paramName[i - 1]) || char.IsDigit(paramName[i - 1])))
+                sb.Append('-');
+            sb.Append(char.ToLowerInvariant(ch));
+        }
+        return sb.ToString();
+    }
+
+    private static object? ConvertCompiledScriptArg(string? typeName, object? value)
+    {
+        if (typeName is null) return value;
+        var t = typeName.TrimEnd('?');
+        switch (t)
+        {
+            case "int" or "Int32" or "System.Int32":
+                if (value is int) return value;
+                return int.Parse(value?.ToString()
+                    ?? throw new InvalidOperationException("Expected int, got null"));
+            case "long" or "Int64" or "System.Int64":
+                if (value is long) return value;
+                return long.Parse(value?.ToString()
+                    ?? throw new InvalidOperationException("Expected long, got null"));
+            case "bool" or "Boolean" or "System.Boolean":
+                if (value is bool) return value;
+                var s = value?.ToString() ?? "";
+                return string.Equals(s, "true", StringComparison.OrdinalIgnoreCase) ||
+                       string.Equals(s, "1", StringComparison.Ordinal);
+            case "string" or "String" or "System.String":
+                return value?.ToString() ?? "";
+            default:
+                // For other types, return value as-is and let runtime handle it.
+                return value;
+        }
+    }
+
+    private static Exception CreateCompiledRequiredChildException(
+        CompiledSubcommandNode node, IReadOnlyList<CompiledDispatchFrame>? path)
+    {
+        var visible = node.Children
+            .Where(kv => (kv.Value.Modifiers & SubcommandModifier.Hidden) == 0)
+            .Select(kv => kv.Key);
+        var label = node.Name is null
+            ? $"A subcommand is required. Pick one of: {string.Join(" | ", visible)}"
+            : $"Subcommand '{node.Name}' requires a child. Pick one of: {string.Join(" | ", visible)}";
+        return new InvalidOperationException(label);
+    }
+
+    private static void WriteCompiledAutoHelp(
+        CompiledSubcommandNode target,
+        IReadOnlyList<CompiledDispatchFrame> path)
+    {
+        var writer = s_runtime?.Output ?? Console.Out;
+        // Usage line
+        var parts = new List<string> { "<script>" };
+        foreach (var frame in path)
+            if (frame.Node.Name is not null) parts.Add(frame.Node.Name);
+        if (!ReferenceEquals(path.Count > 0 ? path[^1].Node : null, target) && target.Name is not null)
+            parts.Add(target.Name);
+        var subcommandPart = target.Children.Count > 0 ? " <subcommand>" : "";
+        writer.WriteLine($"Usage: {string.Join(" ", parts)}{subcommandPart}");
+
+        if (target.Children.Count > 0)
+        {
+            writer.WriteLine();
+            writer.WriteLine("Subcommands:");
+            foreach (var kv in target.Children)
+            {
+                if ((kv.Value.Modifiers & SubcommandModifier.Hidden) != 0) continue;
+                writer.WriteLine($"  {kv.Key}");
+            }
+        }
+
+        var flagLines = new List<string>();
+        foreach (var frame in path)
+        {
+            foreach (var flag in frame.Node.Flags)
+                flagLines.Add($"  --{GetCompiledPrimaryOptionName(flag.Name),-16} {flag.TypeName ?? "any"}");
+        }
+        if (!path.Any(p => ReferenceEquals(p.Node, target)))
+        {
+            foreach (var flag in target.Flags)
+                flagLines.Add($"  --{GetCompiledPrimaryOptionName(flag.Name),-16} {flag.TypeName ?? "any"}");
+        }
+
+        if (flagLines.Count > 0 || !CompiledPathHasUserHelpFlag(path))
+        {
+            writer.WriteLine();
+            writer.WriteLine("Options:");
+            foreach (var line in flagLines) writer.WriteLine(line);
+            if (!CompiledPathHasUserHelpFlag(path) && !target.UserDeclaredHelpFlag)
+                writer.WriteLine("  --help             Show this help message");
+        }
+
+        writer.Flush();
+    }
+
+    // ─── Source-replay fallback (legacy) ──────────────────────────
+
     /// <summary>
     /// Entry-point bridge for compiled scripts that declare
     /// <c>subcommand</c> blocks or top-level <c>flag</c>/<c>arg</c>
@@ -667,25 +1111,136 @@ public static class ToshHost
     /// <summary>
     /// Resolves a dotted-path access like <c>Foo.Bar.greet</c>
     /// against the engine's module / class / type registries.
+    /// Tries compiled CLR module shells first (populated by
+    /// <see cref="RegisterCompiledAssembly"/>) so that pure modules
+    /// that skipped source replay resolve without an engine lookup.
     /// Mirrors the interpreter's
     /// <c>StaticMemberAccessArgumentSyntax</c> evaluation path.
     /// </summary>
     public static object? ResolveQualifiedAccess(string path)
     {
         if (s_engine is null) Initialize();
+        // Try compiled module shell CLR type first: avoids source
+        // replay for pure-shell modules and resolves correctly even
+        // when multiple test assemblies have types with the same name.
+        if (TryResolveCompiledModuleAccess(path, out var compiledValue))
+            return compiledValue;
         return s_engine!.ResolveQualifiedAccess(path);
     }
 
     /// <summary>
     /// Invokes a dotted static method path like
-    /// <c>Foo.Bar.greet</c>. Mirrors the interpreter's
+    /// <c>Foo.Bar.greet</c>. Tries compiled CLR module shells first
+    /// before delegating to the engine. Mirrors the interpreter's
     /// <c>StaticMethodCallArgumentSyntax</c> evaluation path and is
     /// the IL bridge for <c>BoundStaticMethodCall</c>.
     /// </summary>
     public static object? InvokeQualifiedMethod(string path, object?[] args)
     {
         if (s_engine is null) Initialize();
+        // Try compiled module shell CLR type first.
+        if (TryInvokeCompiledModuleMethod(path, args, out var compiledResult))
+            return compiledResult;
         return s_engine!.InvokeQualifiedMethodPublic(path, args);
+    }
+
+    // ─── Compiled module CLR-shell registry ───────────────────────
+
+    /// <summary>
+    /// Per-compiled-assembly map from tosh qualified module name
+    /// (e.g. "Foo.Bar") to the CLR static-class shell type that
+    /// backs it. Populated by <see cref="RegisterCompiledAssembly"/>.
+    /// Keyed by qualified name so dotted-path lookups are O(1).
+    /// </summary>
+    private static readonly Dictionary<string, Type> s_compiledModuleTypes =
+        new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Scans <paramref name="asm"/> for all types carrying
+    /// <see cref="ToshModuleShellAttribute"/> and caches the
+    /// <c>qualifiedName → Type</c> mapping. Called from the
+    /// compiled program's Main prologue whenever the program declares
+    /// any module, regardless of whether source replay is needed for
+    /// that module.
+    /// </summary>
+    public static void RegisterCompiledAssembly(Assembly asm)
+    {
+        if (asm is null) return;
+        IEnumerable<Type?> types;
+        try { types = asm.GetTypes(); }
+        catch (ReflectionTypeLoadException ex) { types = ex.Types; }
+        catch { return; }
+
+        lock (s_lock)
+        {
+            foreach (var type in types)
+            {
+                if (type is null) continue;
+                var attr = type.GetCustomAttribute<ToshModuleShellAttribute>();
+                if (attr is not null)
+                    s_compiledModuleTypes[attr.QualifiedName] = type;
+            }
+        }
+    }
+
+    private static bool TryResolveCompiledModuleAccess(string path, out object? value)
+    {
+        // Split into module-qualified prefix and member name.
+        // Try the longest prefix first (most-specific module).
+        var lastDot = path.LastIndexOf('.');
+        if (lastDot <= 0) { value = null; return false; }
+
+        for (var prefixLen = lastDot; prefixLen > 0; prefixLen = path.LastIndexOf('.', prefixLen - 1))
+        {
+            var modulePath = path[..prefixLen];
+            var memberPath = path[(prefixLen + 1)..];
+
+            if (!s_compiledModuleTypes.TryGetValue(modulePath, out var moduleType))
+            {
+                if (prefixLen == 0) break;
+                continue;
+            }
+
+            // Found the module type; get the static member.
+            try
+            {
+                value = Runtime.Invoker.GetStaticMember(moduleType, memberPath);
+                return true;
+            }
+            catch { }
+        }
+
+        value = null;
+        return false;
+    }
+
+    private static bool TryInvokeCompiledModuleMethod(string path, object?[] args, out object? value)
+    {
+        var lastDot = path.LastIndexOf('.');
+        if (lastDot <= 0) { value = null; return false; }
+
+        for (var prefixLen = lastDot; prefixLen > 0; prefixLen = path.LastIndexOf('.', prefixLen - 1))
+        {
+            var modulePath = path[..prefixLen];
+            var methodName = path[(prefixLen + 1)..];
+
+            if (!s_compiledModuleTypes.TryGetValue(modulePath, out var moduleType))
+            {
+                if (prefixLen == 0) break;
+                continue;
+            }
+
+            try
+            {
+                var invocation = Runtime.Invoker.InvokeStatic(moduleType, methodName, args);
+                value = invocation.ReturnedVoid ? null : invocation.Value;
+                return true;
+            }
+            catch { }
+        }
+
+        value = null;
+        return false;
     }
 
     /// <summary>
@@ -712,6 +1267,11 @@ public static class ToshHost
                     $"type '{typeName}' is not constructable"),
             };
         }
+        var compiledClr = ResolveCompiledToshClrType(typeName);
+        if (compiledClr is not null)
+        {
+            return Runtime.Invoker.CreateInstance(compiledClr, argList);
+        }
         var clrType = Type.GetType(typeName, throwOnError: false);
         if (clrType is not null)
         {
@@ -719,5 +1279,79 @@ public static class ToshHost
         }
         throw new InvalidOperationException(
             $"unknown type '{typeName}' in `new` expression");
+    }
+
+    private static Type? ResolveCompiledToshClrType(string typeName)
+    {
+        foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
+        {
+            IEnumerable<Type?> types;
+            try
+            {
+                types = asm.GetTypes();
+            }
+            catch (ReflectionTypeLoadException ex)
+            {
+                types = ex.Types;
+            }
+            catch
+            {
+                continue;
+            }
+
+            foreach (var type in types)
+            {
+                if (type is null) continue;
+                if (type.GetCustomAttribute<ToshTypeAttribute>() is null) continue;
+                if (IsToshTypeNameMatch(type, typeName)) return type;
+            }
+        }
+
+        return null;
+    }
+
+    private static bool IsToshTypeNameMatch(Type type, string requestedName)
+    {
+        if (string.Equals(type.Name, requestedName, StringComparison.Ordinal)) return true;
+        if (string.Equals(type.FullName, requestedName, StringComparison.Ordinal)) return true;
+
+        var original = type.GetCustomAttribute<ToshOriginalNameAttribute>()?.OriginalName;
+        if (!string.IsNullOrWhiteSpace(original)
+            && string.Equals(original, requestedName, StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        var mangled = MangleClrIdentifierForLookup(requestedName);
+        if (string.Equals(type.Name, mangled, StringComparison.Ordinal)) return true;
+        if (type.FullName is { Length: > 0 }
+            && type.FullName.EndsWith($".{mangled}", StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    private static string MangleClrIdentifierForLookup(string toshName)
+    {
+        if (string.IsNullOrEmpty(toshName)) return "_";
+        var needsMangling = false;
+        for (int i = 0; i < toshName.Length; i++)
+        {
+            var c = toshName[i];
+            if (i == 0 && char.IsDigit(c)) { needsMangling = true; break; }
+            if (!(char.IsLetterOrDigit(c) || c == '_')) { needsMangling = true; break; }
+        }
+        if (!needsMangling) return toshName;
+
+        var sb = new System.Text.StringBuilder(toshName.Length + 1);
+        if (char.IsDigit(toshName[0])) sb.Append('_');
+        for (int i = 0; i < toshName.Length; i++)
+        {
+            var c = toshName[i];
+            sb.Append(char.IsLetterOrDigit(c) || c == '_' ? c : '_');
+        }
+        return sb.ToString();
     }
 }

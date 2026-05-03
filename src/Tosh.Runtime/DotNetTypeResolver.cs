@@ -318,6 +318,27 @@ public sealed class DotNetTypeResolver : IImportingTypeResolver
             if (newMatch is not null) { type = newMatch; return true; }
         }
 
+        // Attempt to resolve a dotted name as a nested CLR type:
+        //   "Foo.Bar" → find type "Foo", then get its nested type "Bar".
+        // This handles compiled tosh module shells, where nested modules
+        // become nested CLR types ("Foo+Bar" in CLR notation) rather than
+        // types with a dotted full name.
+        {
+            var dotIdx = name.LastIndexOf('.');
+            if (dotIdx > 0)
+            {
+                var parentName = name[..dotIdx];
+                var nestedName = name[(dotIdx + 1)..];
+                if (TryResolveDirect(parentName, out var parentType) && parentType is not null)
+                {
+                    var nested = parentType.GetNestedType(
+                        nestedName,
+                        BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.IgnoreCase);
+                    if (nested is not null) { type = nested; return true; }
+                }
+            }
+        }
+
         _negativeResultCache.TryAdd(name, true);
         type = null;
         return false;

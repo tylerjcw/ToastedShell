@@ -99,7 +99,7 @@
       <_ToshNoApphostArg Condition="'$(ToshEmitAppHost)' == 'true'"></_ToshNoApphostArg>
       <_ToshPublishArg Condition="'$(ToshPublishSingleFile)' == 'true'">--publish-single-file</_ToshPublishArg>
       <_ToshPublishArg Condition="'$(ToshPublishSingleFile)' != 'true'"></_ToshPublishArg>
-      <_ToshSourceArgs>@(ToshCompile->'%(FullPath)', ' ')</_ToshSourceArgs>
+      <_ToshSourceArgs>@(ToshCompile->'&quot;%(FullPath)&quot;', ' ')</_ToshSourceArgs>
     </PropertyGroup>
 
     <Message Importance="high"
@@ -126,14 +126,70 @@
   <Target Name="Clean">
     <ItemGroup>
       <_ToshOutputs Include="$(TargetPath)" />
+      <_ToshOutputs Include="$(OutputPath)$(AssemblyName)" />
+      <_ToshOutputs Include="$(OutputPath)$(AssemblyName).exe" />
       <_ToshOutputs Include="$(OutputPath)$(AssemblyName).runtimeconfig.json" />
       <_ToshOutputs Include="$(OutputPath)$(AssemblyName).deps.json" />
+      <_ToshOutputs Include="$(OutputPath)Tosh.Compiler.Runtime.dll" />
+      <_ToshOutputs Include="$(OutputPath)Tosh.Language.dll" />
+      <_ToshOutputs Include="$(OutputPath)Tosh.Runtime.dll" />
+      <_ToshOutputs Include="$(OutputPath)Tosh.Stdlib.dll" />
+      <_ToshOutputs Include="$(OutputPath)Tosh.Core.dll" />
+      <_ToshOutputs Include="$(OutputPath)Tosh.Tui.dll" />
     </ItemGroup>
     <Delete Files="@(_ToshOutputs)" ContinueOnError="true" />
   </Target>
 
+  <Target Name="Publish" DependsOnTargets="Build">
+    <MakeDir Directories="$(PublishDir)" />
+    <PropertyGroup>
+      <_ToshAppHostFileName Condition="'$(OS)' == 'Windows_NT'">$(AssemblyName).exe</_ToshAppHostFileName>
+      <_ToshAppHostFileName Condition="'$(_ToshAppHostFileName)' == ''">$(AssemblyName)</_ToshAppHostFileName>
+    </PropertyGroup>
+    <ItemGroup>
+      <_ToshPublishFiles Include="$(TargetPath)" Condition="'$(ToshPublishSingleFile)' != 'true' and Exists('$(TargetPath)')" />
+      <_ToshPublishFiles Include="$(OutputPath)$(AssemblyName).runtimeconfig.json" Condition="'$(ToshPublishSingleFile)' != 'true' and Exists('$(OutputPath)$(AssemblyName).runtimeconfig.json')" />
+      <_ToshPublishFiles Include="$(OutputPath)$(AssemblyName).deps.json" Condition="'$(ToshPublishSingleFile)' != 'true' and Exists('$(OutputPath)$(AssemblyName).deps.json')" />
+      <_ToshPublishFiles Include="$(OutputPath)$(_ToshAppHostFileName)" Condition="Exists('$(OutputPath)$(_ToshAppHostFileName)')" />
+      <_ToshPublishFiles Include="$(OutputPath)Tosh.Compiler.Runtime.dll" Condition="'$(ToshPublishSingleFile)' != 'true' and Exists('$(OutputPath)Tosh.Compiler.Runtime.dll')" />
+      <_ToshPublishFiles Include="$(OutputPath)Tosh.Language.dll" Condition="'$(ToshPublishSingleFile)' != 'true' and Exists('$(OutputPath)Tosh.Language.dll')" />
+      <_ToshPublishFiles Include="$(OutputPath)Tosh.Runtime.dll" Condition="'$(ToshPublishSingleFile)' != 'true' and Exists('$(OutputPath)Tosh.Runtime.dll')" />
+      <_ToshPublishFiles Include="$(OutputPath)Tosh.Stdlib.dll" Condition="'$(ToshPublishSingleFile)' != 'true' and Exists('$(OutputPath)Tosh.Stdlib.dll')" />
+      <_ToshPublishFiles Include="$(OutputPath)Tosh.Core.dll" Condition="'$(ToshPublishSingleFile)' != 'true' and Exists('$(OutputPath)Tosh.Core.dll')" />
+      <_ToshPublishFiles Include="$(OutputPath)Tosh.Tui.dll" Condition="'$(ToshPublishSingleFile)' != 'true' and Exists('$(OutputPath)Tosh.Tui.dll')" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_ToshPublishFiles)"
+          DestinationFolder="$(PublishDir)"
+          SkipUnchangedFiles="true" />
+    <Message Importance="high"
+             Text="ToshPublish: wrote @(_ToshPublishFiles->Count()) file(s) to $(PublishDir)" />
+  </Target>
+
   <Target Name="Restore">
     <Message Importance="low" Text="Tosh.Sdk: nothing to restore." />
+  </Target>
+
+  <!-- `dotnet run` support. Sets RunCommand and RunArguments
+       so the dotnet CLI knows how to launch the compiled DLL. -->
+  <Target Name="ComputeRunArguments"
+          DependsOnTargets="Build">
+    <PropertyGroup>
+      <!-- DOTNET_HOST_PATH is set by the dotnet runtime to the
+           full path of the dotnet executable currently in use. -->
+      <_DotNetExe Condition="'$(DOTNET_HOST_PATH)' != ''">$(DOTNET_HOST_PATH)</_DotNetExe>
+      <_DotNetExe Condition="'$(_DotNetExe)' == ''">dotnet</_DotNetExe>
+      <RunCommand>$(_DotNetExe)</RunCommand>
+      <RunArguments Condition="'$(StartArguments)' != ''">exec &quot;$(TargetPath)&quot; $(StartArguments)</RunArguments>
+      <RunArguments Condition="'$(StartArguments)' == ''">exec &quot;$(TargetPath)&quot;</RunArguments>
+    </PropertyGroup>
+  </Target>
+
+  <Target Name="Run" DependsOnTargets="Build">
+    <PropertyGroup>
+      <_DotNetExe Condition="'$(DOTNET_HOST_PATH)' != ''">$(DOTNET_HOST_PATH)</_DotNetExe>
+      <_DotNetExe Condition="'$(_DotNetExe)' == ''">dotnet</_DotNetExe>
+    </PropertyGroup>
+    <Exec Command="&quot;$(_DotNetExe)&quot; exec &quot;$(TargetPath)&quot; $(StartArguments)" />
   </Target>
 
 </Project>

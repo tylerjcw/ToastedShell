@@ -1,8 +1,8 @@
 using System.Runtime.InteropServices;
 using System.Text;
-using Microsoft.NET.HostModel;
 using Tosh.Cli;
 using Tosh.Cli.Tui;
+using Tosh.Compiler;
 using Tosh.Runtime;
 using Tosh.Language;
 using Tosh.Language.Binding;
@@ -736,14 +736,18 @@ static async Task<int> CompileScriptAsync(CliInvocationPlan plan, ToshRuntime ru
     // missing source dll just means the user will see a load
     // failure at runtime, same as before the staging existed.
     StageCompilerRuntime(outputPath);
+    var depsJsonPath = ToshPublisher.WriteDepsJson(outputPath);
+    await Console.Error.WriteLineAsync($"toshc: wrote {depsJsonPath}");
 
     var outputDir = Path.GetDirectoryName(outputPath) ?? ".";
-    if (plan.EmitAppHost)
+    if (plan.EmitAppHost || plan.PublishSingleFile)
     {
-        await CreateAppHostAsync(outputPath, outputDir);
+        var appHostPath = ToshPublisher.CreateAppHost(outputPath, outputDir);
+        await Console.Error.WriteLineAsync($"toshc: wrote {appHostPath}");
         if (plan.PublishSingleFile)
         {
-            await CreateBundleAsync(outputPath, outputDir);
+            appHostPath = ToshPublisher.CreateSingleFileBundle(outputPath, outputDir);
+            await Console.Error.WriteLineAsync($"toshc: wrote single-file bundle {appHostPath}");
         }
     }
 
@@ -791,28 +795,12 @@ static void StageCompilerRuntime(string outputPath)
 {
     var outDir = Path.GetDirectoryName(Path.GetFullPath(outputPath));
     if (string.IsNullOrEmpty(outDir)) return;
-    var sourceDir = AppContext.BaseDirectory;
-    if (string.IsNullOrEmpty(sourceDir) ||
-        string.Equals(sourceDir.TrimEnd(Path.DirectorySeparatorChar),
-            outDir.TrimEnd(Path.DirectorySeparatorChar),
-            StringComparison.OrdinalIgnoreCase))
-    {
-        return;
-    }
+    var required = ToshPublisher.GetRuntimeDependencyFileNames();
+    var sources = ResolveRuntimeDependencySources(required);
 
-    string[] required =
-    {
-        "Tosh.Compiler.Runtime.dll",
-        "Tosh.Language.dll",
-        "Tosh.Runtime.dll",
-        "Tosh.Stdlib.dll",
-        "Tosh.Core.dll",
-        "Tosh.Tui.dll",
-    };
     foreach (var name in required)
     {
-        var src = Path.Combine(sourceDir, name);
-        if (!File.Exists(src)) continue;
+        if (!sources.TryGetValue(name, out var src)) continue;
         var dst = Path.Combine(outDir, name);
         try
         {
@@ -830,34 +818,133 @@ static void StageCompilerRuntime(string outputPath)
     }
 }
 
-/// <summary>
-/// Creates an apphost wrapper executable that points to a .dll.
-/// On Windows, the wrapper is named <c>&lt;name&gt;.exe</c>.
-/// On Unix, it has no extension and is marked executable.
-///
-/// NOTE: The AppHost stamping API from Microsoft.NET.HostModel
-/// (version 5.0.0-preview) is not compatible with this codebase's
-/// usage pattern. Deferred to a future release when the API
-/// stabilizes. For now, use 'dotnet publish' with apphost-specific
-/// targets for executable generation.
-/// </summary>
-static async Task CreateAppHostAsync(string dllPath, string outputDir)
+static Dictionary<string, string> ResolveRuntimeDependencySources(IReadOnlyList<string> required)
 {
-    await Console.Error.WriteLineAsync("tosh: apphost creation deferred (API incompatibility). Use 'dotnet publish' for executable wrappers.");
+    var expected = new HashSet<string>(required, StringComparer.OrdinalIgnoreCase);
+    var resolved = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+    static void TryAdd(
+        Dictionary<string, string> target,
+        HashSet<string> expectedNames,
+        string? candidatePath)
+    {
+        if (string.IsNullOrWhiteSpace(candidatePath)) return;
+
+        string fullPath;
+        try
+        {
+            fullPath = Path.GetFullPath(candidatePath);
+        }
+        catch
+        {
+            return;
+        }
+
+        if (!File.Exists(fullPath)) return;
+
+        var fileName = Path.GetFileName(fullPath);
+        if (!expectedNames.Contains(fileName) || target.ContainsKey(fileName)) return;
+
+        target[fileName] = fullPath;
+    }
+
+    foreach (var tpaPath in EnumerateTrustedPlatformAssemblies())
+    {
+        TryAdd(resolved, expected, tpaPath);
+    }
+
+    var candidateDirs = new List<string>();
+    var seen = new HashSet<string>(
+        OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
+
+    void AddCandidateDir(string? dir)
+    {
+        if (string.IsNullOrWhiteSpace(dir)) return;
+
+        string fullDir;
+        try
+        {
+            fullDir = Path.GetFullPath(dir);
+        }
+        catch
+        {
+            return;
+        }
+
+        if (!Directory.Exists(fullDir) || !seen.Add(fullDir)) return;
+
+        candidateDirs.Add(fullDir);
+    }
+
+    AddCandidateDir(AppContext.BaseDirectory);
+    AddCandidateDir(Path.GetDirectoryName(Environment.ProcessPath));
+
+    var depsFiles = AppContext.GetData("APP_CONTEXT_DEPS_FILES") as string;
+    if (!string.IsNullOrWhiteSpace(depsFiles))
+    {
+        foreach (var deps in depsFiles.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            AddCandidateDir(Path.GetDirectoryName(deps));
+        }
+    }
+
+    foreach (var extractDir in EnumerateSingleFileExtractionDirs())
+    {
+        AddCandidateDir(extractDir);
+    }
+
+    foreach (var dir in candidateDirs)
+    {
+        foreach (var name in required)
+        {
+            if (resolved.ContainsKey(name)) continue;
+            TryAdd(resolved, expected, Path.Combine(dir, name));
+        }
+    }
+
+    return resolved;
 }
 
-/// <summary>
-/// Bundles all runtime DLLs into a single-file executable using
-/// the Microsoft.NET.HostModel bundler. The result is a standalone
-/// executable (~70MB+ with .NET runtime).
-///
-/// NOTE: The Bundler API in the currently available NuGet package
-/// (5.0.0-preview.1) doesn't directly expose AddFile/GenerateBundle.
-/// This is deferred for now — the bundling can be done via
-/// `dotnet publish /p:PublishSingleFile=true` instead.
-/// </summary>
-static async Task CreateBundleAsync(string dllPath, string outputDir)
+static IEnumerable<string> EnumerateTrustedPlatformAssemblies()
 {
-    await Console.Error.WriteLineAsync("tosh: --publish-single-file requires 'dotnet publish' for full support (bundler API not available in current HostModel). Use: dotnet publish -c Release /p:PublishSingleFile=true /p:SelfContained=true");
+    var raw = AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES") as string;
+    if (string.IsNullOrWhiteSpace(raw))
+    {
+        yield break;
+    }
+
+    foreach (var path in raw.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+    {
+        yield return path;
+    }
 }
 
+static IEnumerable<string> EnumerateSingleFileExtractionDirs()
+{
+    var baseDir = Environment.GetEnvironmentVariable("DOTNET_BUNDLE_EXTRACT_BASE_DIR");
+    if (string.IsNullOrWhiteSpace(baseDir))
+    {
+        var userHome = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        if (!string.IsNullOrWhiteSpace(userHome))
+        {
+            baseDir = Path.Combine(userHome, ".net");
+        }
+    }
+
+    if (string.IsNullOrWhiteSpace(baseDir) || !Directory.Exists(baseDir))
+    {
+        yield break;
+    }
+
+    var singleDir = Path.Combine(baseDir, "single");
+    if (!Directory.Exists(singleDir))
+    {
+        yield break;
+    }
+
+    foreach (var dir in Directory.EnumerateDirectories(singleDir)
+                 .OrderByDescending(static d => Directory.GetLastWriteTimeUtc(d)))
+    {
+        yield return dir;
+    }
+}
