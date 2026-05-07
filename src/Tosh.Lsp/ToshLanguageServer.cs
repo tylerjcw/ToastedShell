@@ -95,6 +95,11 @@ public sealed class ToshLanguageServer
                         },
                         hoverProvider = true,
                         definitionProvider = true,
+                        referencesProvider = true,
+                        renameProvider = new
+                        {
+                            prepareProvider = true
+                        },
                         documentSymbolProvider = true,
                         semanticTokensProvider = new
                         {
@@ -156,6 +161,44 @@ public sealed class ToshLanguageServer
                     _documents.TryGetValue(uri, out var text);
                     var definitions = _features.GetDefinitions(text ?? string.Empty, uri, position);
                     await WriteResponseAsync(id, definitions.Count == 0 ? null : definitions, cancellationToken);
+                    break;
+                }
+
+            case "textDocument/references":
+                {
+                    var uri = parameters.GetProperty("textDocument").GetProperty("uri").GetString() ?? string.Empty;
+                    var position = parameters.GetProperty("position").Deserialize<LspPosition>(_jsonOptions) ?? new LspPosition(0, 0);
+                    var includeDeclaration = true;
+                    if (parameters.TryGetProperty("context", out var ctx)
+                        && ctx.TryGetProperty("includeDeclaration", out var incl)
+                        && incl.ValueKind == JsonValueKind.False)
+                    {
+                        includeDeclaration = false;
+                    }
+                    _documents.TryGetValue(uri, out var text);
+                    var refs = _features.GetReferences(text ?? string.Empty, uri, position, includeDeclaration);
+                    await WriteResponseAsync(id, refs.Count == 0 ? null : refs, cancellationToken);
+                    break;
+                }
+
+            case "textDocument/prepareRename":
+                {
+                    var uri = parameters.GetProperty("textDocument").GetProperty("uri").GetString() ?? string.Empty;
+                    var position = parameters.GetProperty("position").Deserialize<LspPosition>(_jsonOptions) ?? new LspPosition(0, 0);
+                    _documents.TryGetValue(uri, out var text);
+                    var prepare = _features.PrepareRename(text ?? string.Empty, uri, position);
+                    await WriteResponseAsync(id, prepare, cancellationToken);
+                    break;
+                }
+
+            case "textDocument/rename":
+                {
+                    var uri = parameters.GetProperty("textDocument").GetProperty("uri").GetString() ?? string.Empty;
+                    var position = parameters.GetProperty("position").Deserialize<LspPosition>(_jsonOptions) ?? new LspPosition(0, 0);
+                    var newName = parameters.TryGetProperty("newName", out var nn) ? (nn.GetString() ?? string.Empty) : string.Empty;
+                    _documents.TryGetValue(uri, out var text);
+                    var edit = _features.Rename(text ?? string.Empty, uri, position, newName);
+                    await WriteResponseAsync(id, edit, cancellationToken);
                     break;
                 }
 

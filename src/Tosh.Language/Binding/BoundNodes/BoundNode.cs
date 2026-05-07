@@ -127,7 +127,16 @@ public sealed record BoundVariableDeclaration(
     bool IsConst,
     DeclarationModifier Modifier,
     TextSpan Span)
-    : BoundStatement(Span);
+    : BoundStatement(Span)
+{
+    /// <summary>
+    /// True when the source wrote an explicit <c>: dynamic</c>
+    /// annotation. Distinguishes intentional opt-out from the
+    /// implicit-dynamic case (no annotation, dynamic-typed RHS),
+    /// which the compile audit reports as a strict-mode violation.
+    /// </summary>
+    public bool AnnotatedDynamic { get; init; }
+}
 
 // ─── Expressions ──────────────────────────────────────────────────────
 
@@ -656,6 +665,14 @@ public sealed record BoundClassConstructorMember(
     TextSpan Span)
     : BoundClassMember(Span);
 
+/// <summary>An event member declared inside a class: <c>event OnName: PayloadType</c>.</summary>
+public sealed record BoundClassEventMember(
+    string Name,
+    string? PayloadTypeName,
+    bool IsShy,
+    TextSpan Span)
+    : BoundClassMember(Span);
+
 /// <summary><c>class Name(primaryCtor) : Base { … }</c>.</summary>
 public sealed record BoundClassDefinition(
     string Name,
@@ -973,13 +990,39 @@ public sealed record BoundComparisonPattern(
 
 /// <summary>
 /// A bound pipeline. Stages run left-to-right and are connected by an
-/// async-iterator handshake at runtime. Redirections and input
-/// redirections are kept as raw syntax for now (rarely used; carve out
-/// later when the IL backend needs them).
+/// async-iterator handshake at runtime. Bound redirections carry
+/// fully lowered <see cref="BoundExpression"/> targets so the IL
+/// backend can emit them without source replay.
 /// </summary>
 public sealed record BoundPipeline(
     IReadOnlyList<BoundPipelineStage> Stages,
     PipelineSyntax Original,
+    TextSpan Span)
+    : BoundNode(Span)
+{
+    public IReadOnlyList<BoundRedirection> BoundRedirections { get; init; } = Array.Empty<BoundRedirection>();
+    public BoundInputRedirection? BoundInputRedirection { get; init; }
+}
+
+/// <summary>
+/// A redirection of a pipeline's stdout/stderr stream to a file
+/// path. <see cref="Target"/> is the lowered expression that
+/// evaluates (at runtime) to the file path string.
+/// </summary>
+public sealed record BoundRedirection(
+    Parsing.RedirectionStream Stream,
+    Parsing.RedirectionMode Mode,
+    BoundExpression Target,
+    TextSpan Span)
+    : BoundNode(Span);
+
+/// <summary>
+/// A redirection of a pipeline's stdin from a file path. <see
+/// cref="Source"/> is the lowered expression that evaluates to the
+/// file path string.
+/// </summary>
+public sealed record BoundInputRedirection(
+    BoundExpression Source,
     TextSpan Span)
     : BoundNode(Span);
 
@@ -998,7 +1041,16 @@ public sealed record BoundCommandCall(
     IShellCommand? ResolvedCommand,
     IReadOnlyList<BoundArgument> Arguments,
     TextSpan Span)
-    : BoundPipelineStage(Span);
+    : BoundPipelineStage(Span)
+{
+    /// <summary>
+    /// When the Lowerer resolves a call to a same-source overloaded function
+    /// by arity, this is the zero-based index into the declaration-order list
+    /// of overloads with that name.  <c>null</c> means unresolved (runtime
+    /// dispatch) or a non-overloaded function.
+    /// </summary>
+    public int? OverloadIndex { get; init; }
+}
 
 /// <summary>
 /// A pipeline stage that's just an expression (e.g. <c>42</c> or

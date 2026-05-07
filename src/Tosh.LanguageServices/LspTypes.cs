@@ -75,3 +75,14 @@ public sealed record LspSemanticTokensOptions(
 
 public sealed record LspSemanticTokens(
     [property: JsonPropertyName("data")] IReadOnlyList<int> Data);
+
+public sealed record LspTextEdit(
+    [property: JsonPropertyName("range")] LspRange Range,
+    [property: JsonPropertyName("newText")] string NewText);
+
+public sealed record LspWorkspaceEdit(
+    [property: JsonPropertyName("changes")] IReadOnlyDictionary<string, IReadOnlyList<LspTextEdit>> Changes);
+
+public sealed record LspPrepareRenameResult(
+    [property: JsonPropertyName("range")] LspRange Range,
+    [property: JsonPropertyName("placeholder")] string Placeholder);

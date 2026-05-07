@@ -1417,7 +1417,7 @@ public static class ToshParser
                 Current.Kind == SyntaxTokenKind.Pipe ||
                 HasImplicitStatementBoundaryAfter(throwToken.Span.End))
             {
-                return new ThrowStatementSyntax(null, throwToken.Span);
+                return TryWrapPostfixConditional(new ThrowStatementSyntax(null, throwToken.Span));
             }
 
             var value = ParsePipeline(
@@ -1426,9 +1426,9 @@ public static class ToshParser
                 untilSemicolon: stopAtSemicolon,
                 allowExpressionStart: true);
             var end = GetPipelineEnd(value, throwToken.Span.End);
-            return new ThrowStatementSyntax(
+            return TryWrapPostfixConditional(new ThrowStatementSyntax(
                 value.Stages.Count == 0 ? null : value,
-                TextSpan.FromBounds(throwToken.Span.Start, end));
+                TextSpan.FromBounds(throwToken.Span.Start, end)));
         }
 
         private StatementSyntax ParseTryStatement()
@@ -2048,7 +2048,7 @@ public static class ToshParser
                 Current.Kind == SyntaxTokenKind.Pipe ||
                 HasImplicitStatementBoundaryAfter(returnToken.Span.End))
             {
-                return new ReturnStatementSyntax(null, returnToken.Span);
+                return TryWrapPostfixConditional(new ReturnStatementSyntax(null, returnToken.Span));
             }
 
             var value = ParsePipeline(
@@ -2058,9 +2058,9 @@ public static class ToshParser
                 allowExpressionStart: true);
             var end = GetPipelineEnd(value, returnToken.Span.End);
 
-            return new ReturnStatementSyntax(
+            return TryWrapPostfixConditional(new ReturnStatementSyntax(
                 value.Stages.Count == 0 ? null : value,
-                TextSpan.FromBounds(returnToken.Span.Start, end));
+                TextSpan.FromBounds(returnToken.Span.Start, end)));
         }
 
         private StatementSyntax ParseYieldStatement(
@@ -2074,7 +2074,7 @@ public static class ToshParser
                 Current.Kind == SyntaxTokenKind.Pipe ||
                 HasImplicitStatementBoundaryAfter(yieldToken.Span.End))
             {
-                return new YieldStatementSyntax(null, yieldToken.Span);
+                return TryWrapPostfixConditional(new YieldStatementSyntax(null, yieldToken.Span));
             }
 
             var value = ParsePipeline(
@@ -2084,17 +2084,67 @@ public static class ToshParser
                 allowExpressionStart: true);
             var end = GetPipelineEnd(value, yieldToken.Span.End);
 
-            return new YieldStatementSyntax(
+            return TryWrapPostfixConditional(new YieldStatementSyntax(
                 value.Stages.Count == 0 ? null : value,
-                TextSpan.FromBounds(yieldToken.Span.Start, end));
+                TextSpan.FromBounds(yieldToken.Span.Start, end)));
         }
 
         private StatementSyntax ParseLoopControlStatement(bool isBreak)
         {
             var keyword = NextToken();
-            return isBreak
+            StatementSyntax stmt = isBreak
                 ? new BreakStatementSyntax(keyword.Span)
                 : new ContinueStatementSyntax(keyword.Span);
+            return TryWrapPostfixConditional(stmt);
+        }
+
+        /// <summary>
+        /// If the statement is followed by <c>if &lt;cond&gt;</c> or
+        /// <c>unless &lt;cond&gt;</c> (no leading <c>|</c>, no statement
+        /// boundary), wraps it in an <see cref="IfStatementSyntax"/>.
+        /// For <c>unless</c>, the inner statement goes in the else branch
+        /// so the original condition expression is preserved verbatim.
+        /// </summary>
+        private StatementSyntax TryWrapPostfixConditional(StatementSyntax inner)
+        {
+            if (Current.Kind != SyntaxTokenKind.Bareword)
+            {
+                return inner;
+            }
+
+            var isIf = string.Equals(Current.Text, "if", StringComparison.OrdinalIgnoreCase);
+            var isUnless = string.Equals(Current.Text, "unless", StringComparison.OrdinalIgnoreCase);
+
+            if (!isIf && !isUnless)
+            {
+                return inner;
+            }
+
+            if (HasImplicitStatementBoundaryAfter(inner.Span.End))
+            {
+                return inner;
+            }
+
+            var keyword = NextToken();
+            var condition = ParseArgument();
+
+            if (condition is null)
+            {
+                _diagnostics.Add(new SyntaxDiagnostic(
+                    Code: "tosh.parser.expected_postfix_condition",
+                    Title: $"Postfix '{keyword.Text}' requires a condition.",
+                    Span: keyword.Span,
+                    Label: $"write a condition after '{keyword.Text}'"));
+                return inner;
+            }
+
+            var innerBlock = new BlockSyntax([inner], inner.Span);
+            var emptyBlock = new BlockSyntax(Array.Empty<StatementSyntax>(), keyword.Span);
+            var span = TextSpan.FromBounds(inner.Span.Start, condition.Span.End);
+
+            return isIf
+                ? new IfStatementSyntax(condition, innerBlock, null, span)
+                : new IfStatementSyntax(condition, emptyBlock, innerBlock, span);
         }
 
         private StatementSyntax ParseScriptInputStatement(IReadOnlyList<SyntaxToken>? docTokens = null)
@@ -3472,6 +3522,22 @@ public static class ToshParser
             }
 
             if (Current.Kind == SyntaxTokenKind.Bareword &&
+                string.Equals(Current.Text, "event", StringComparison.Ordinal))
+            {
+                NextToken(); // consume 'event'
+                var eventNameToken = Current.Kind == SyntaxTokenKind.Bareword ? NextToken() : Current;
+                ParseTypedIdentifierToken(eventNameToken.Text, out var eventName, out var inlinePayloadType, out var expectsFollowingPayloadType);
+                string? payloadTypeName = inlinePayloadType;
+                var eventEnd = eventNameToken.Span.End;
+                if (expectsFollowingPayloadType)
+                {
+                    payloadTypeName = ParseTypeName("event payload type");
+                    eventEnd = Current.Span.Start;
+                }
+                return new ClassEventMemberSyntax(eventName, payloadTypeName, isShy, TextSpan.FromBounds(memberStart, eventEnd));
+            }
+
+            if (Current.Kind == SyntaxTokenKind.Bareword &&
                 string.Equals(Current.Text, className, StringComparison.Ordinal) &&
                 Peek(1).Kind == SyntaxTokenKind.OpenParen)
             {
@@ -4044,13 +4110,16 @@ public static class ToshParser
                 ? ParseFunctionParameters()
                 : Array.Empty<FunctionParameterSyntax>();
 
+            var returnTypeName = TryParseReturnTypeAnnotation();
+
             if (Current.Kind == SyntaxTokenKind.OpenBrace)
             {
                 var body = ParseBlock();
                 return new AnonymousFunctionArgumentSyntax(
                     parameters,
                     body,
-                    TextSpan.FromBounds(funcToken.Span.Start, body.Span.End));
+                    TextSpan.FromBounds(funcToken.Span.Start, body.Span.End),
+                    returnTypeName);
             }
 
             if (IsFatArrowToken(Current, Peek(1)))
@@ -4059,7 +4128,8 @@ public static class ToshParser
                 return new AnonymousFunctionArgumentSyntax(
                     parameters,
                     body,
-                    TextSpan.FromBounds(funcToken.Span.Start, body.Span.End));
+                    TextSpan.FromBounds(funcToken.Span.Start, body.Span.End),
+                    returnTypeName);
             }
 
             _diagnostics.Add(new SyntaxDiagnostic(
@@ -4071,7 +4141,8 @@ public static class ToshParser
             return new AnonymousFunctionArgumentSyntax(
                 parameters,
                 new BlockSyntax(Array.Empty<StatementSyntax>(), funcToken.Span),
-                funcToken.Span);
+                funcToken.Span,
+                returnTypeName);
         }
 
         private IReadOnlyList<FunctionParameterSyntax> ParseFunctionParameters(bool skipOpenParen = false)
@@ -5067,7 +5138,8 @@ public static class ToshParser
                        Current.Kind != SyntaxTokenKind.Pipe &&
                        !(Current.Kind == SyntaxTokenKind.Ampersand &&
                          !(Peek(1).Kind == SyntaxTokenKind.Bareword && IsValidCommandName(Peek(1).Text) && Current.Span.End == Peek(1).Span.Start)) &&
-                       !LooksLikeRedirectionOperator())
+                       !LooksLikeRedirectionOperator() &&
+                       !LooksLikeInputRedirection())
                 {
                     if (HasImplicitStatementBoundaryAfter(lastConsumedEnd))
                     {
@@ -5206,7 +5278,8 @@ public static class ToshParser
             if (IsPipelineTerminator(Current.Kind, stopAtCloseParen, stopAtCloseBrace, stopAtSemicolon) ||
                 Current.Kind == SyntaxTokenKind.Pipe ||
                 Current.Kind == SyntaxTokenKind.Ampersand ||
-                LooksLikeRedirectionOperator())
+                LooksLikeRedirectionOperator() ||
+                LooksLikeInputRedirection())
             {
                 return arguments;
             }
@@ -5238,6 +5311,7 @@ public static class ToshParser
                     Current.Kind != SyntaxTokenKind.Pipe &&
                     Current.Kind != SyntaxTokenKind.Ampersand &&
                     !LooksLikeRedirectionOperator() &&
+                    !LooksLikeInputRedirection() &&
                     !(expressionArgument is not null && HasImplicitStatementBoundaryAfter(expressionArgument.Span.End)))
                 {
                     _diagnostics.Add(new SyntaxDiagnostic(
@@ -5254,7 +5328,8 @@ public static class ToshParser
             while (!IsPipelineTerminator(Current.Kind, stopAtCloseParen, stopAtCloseBrace, stopAtSemicolon) &&
                    Current.Kind != SyntaxTokenKind.Pipe &&
                    Current.Kind != SyntaxTokenKind.Ampersand &&
-                   !LooksLikeRedirectionOperator())
+                   !LooksLikeRedirectionOperator() &&
+                   !LooksLikeInputRedirection())
             {
                 if (HasImplicitStatementBoundaryAfter(lastConsumedEnd))
                 {
@@ -5440,7 +5515,8 @@ public static class ToshParser
             return IsPipelineTerminator(Current.Kind, stopAtCloseParen, stopAtCloseBrace, stopAtSemicolon) ||
                    Current.Kind == SyntaxTokenKind.Pipe ||
                    (Current.Kind == SyntaxTokenKind.Ampersand && !LooksLikeFunctionReferenceArgument()) ||
-                   LooksLikeRedirectionOperator();
+                   LooksLikeRedirectionOperator() ||
+                   LooksLikeInputRedirection();
         }
 
         private bool LooksLikeFunctionReferenceArgument()
@@ -6284,24 +6360,72 @@ public static class ToshParser
         }
 
         // ── Comprehension clause parsing ──
-        // Parses: for $x in <source> [where <condition>] [let $y = <expr>] [for ...]
-        private ComprehensionClauseSyntax ParseComprehensionClause()
+        // Parses: for [$x | (a,b)] in <source> [where <cond>] [let $y=<expr>]
+        //         [for ...  |  , name in ...  |  || name in ...]
+        //
+        // requireFor = false is used after ',' or '||' where the 'for' keyword is optional.
+        private ComprehensionClauseSyntax ParseComprehensionClause(bool requireFor = true)
         {
-            var forToken = Current;
+            var clauseStart = Current.Span.Start;
 
-            if (!(forToken.Kind == SyntaxTokenKind.Bareword &&
-                  string.Equals(forToken.Text, "for", StringComparison.OrdinalIgnoreCase)))
+            // Consume optional/required 'for' keyword
+            if (Current.Kind == SyntaxTokenKind.Bareword &&
+                string.Equals(Current.Text, "for", StringComparison.OrdinalIgnoreCase))
+            {
+                NextToken(); // consume 'for'
+            }
+            else if (requireFor)
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
                     Code: "tosh.parser.expected_comprehension_for",
                     Title: "Comprehensions require a 'for' clause after '<|'.",
-                    Span: forToken.Span,
+                    Span: Current.Span,
                     Label: "expected 'for $variable in source'"));
-                return new ComprehensionClauseSyntax("_", new BarewordArgumentSyntax("_", forToken.Span), Array.Empty<ComprehensionModifierSyntax>(), null, forToken.Span);
+                return new ComprehensionClauseSyntax("_", new BarewordArgumentSyntax("_", Current.Span), Array.Empty<ComprehensionModifierSyntax>(), null, Current.Span);
             }
+            // else: 'for' absent after ',' or '||' — that's allowed
 
-            NextToken(); // consume 'for'
-            var nameToken = ExpectVariableName();
+            // Parse variable binding: either $name or (a, b, ...) destructure pattern
+            string variableName;
+            IReadOnlyList<string>? destructureNames = null;
+
+            if (Current.Kind == SyntaxTokenKind.OpenParen)
+            {
+                // Destructuring pattern: (a, b, ...)
+                NextToken(); // consume '('
+                var names = new List<string>();
+                while (Current.Kind != SyntaxTokenKind.CloseParen &&
+                       Current.Kind != SyntaxTokenKind.EndOfFile)
+                {
+                    if (names.Count > 0)
+                    {
+                        if (Current.Kind == SyntaxTokenKind.Comma)
+                            NextToken(); // consume ','
+                        else
+                            break;
+                    }
+
+                    var nameTok = ExpectVariableName();
+                    names.Add(nameTok.Text);
+                }
+
+                if (Current.Kind == SyntaxTokenKind.CloseParen)
+                    NextToken(); // consume ')'
+                else
+                    _diagnostics.Add(new SyntaxDiagnostic(
+                        Code: "tosh.parser.missing_closing_paren",
+                        Title: "Destructuring pattern requires a closing ')'.",
+                        Span: Current.Span,
+                        Label: "expected ')'"));
+
+                destructureNames = names;
+                variableName = $"__destr_{string.Join("_", names)}";
+            }
+            else
+            {
+                var nameToken = ExpectVariableName();
+                variableName = nameToken.Text;
+            }
 
             if (!(Current.Kind == SyntaxTokenKind.Bareword &&
                   string.Equals(Current.Text, "in", StringComparison.OrdinalIgnoreCase)))
@@ -6320,8 +6444,7 @@ public static class ToshParser
             var source = ParseArgument(implicitCurrentItem: false)
                          ?? new BarewordArgumentSyntax("_", Current.Span);
 
-            // Parse any number of `where` / `let` clauses in any order, preserving declared order
-            // so each clause observes bindings from earlier lets.
+            // Parse any number of `where` / `let` modifiers in declared order
             var modifiers = new List<ComprehensionModifierSyntax>();
 
             while (true)
@@ -6375,24 +6498,41 @@ public static class ToshParser
                 break;
             }
 
-            // Parse optional nested 'for' clause
+            // Parse optional inner clause — three forms:
+            //   , [for] name in ...   → Cartesian product (sugar for nested for)
+            //   || [for] name in ...  → Parallel / zip
+            //   for name in ...       → Explicit nested for
             ComprehensionClauseSyntax? innerClause = null;
+            var innerIsParallel = false;
 
-            if (Current.Kind == SyntaxTokenKind.Bareword &&
-                string.Equals(Current.Text, "for", StringComparison.OrdinalIgnoreCase))
+            if (Current.Kind == SyntaxTokenKind.Comma)
             {
-                innerClause = ParseComprehensionClause();
+                NextToken(); // consume ','
+                innerClause = ParseComprehensionClause(requireFor: false);
+            }
+            else if (Current.Kind == SyntaxTokenKind.DoublePipe)
+            {
+                NextToken(); // consume '||'
+                innerClause = ParseComprehensionClause(requireFor: false);
+                innerIsParallel = true;
+            }
+            else if (Current.Kind == SyntaxTokenKind.Bareword &&
+                     string.Equals(Current.Text, "for", StringComparison.OrdinalIgnoreCase))
+            {
+                innerClause = ParseComprehensionClause(requireFor: true);
             }
 
             var endPos = innerClause?.Span.End
                          ?? (modifiers.Count > 0 ? modifiers[^1].Span.End : source.Span.End);
 
             return new ComprehensionClauseSyntax(
-                nameToken.Text,
+                variableName,
                 source,
                 modifiers,
                 innerClause,
-                TextSpan.FromBounds(forToken.Span.Start, endPos));
+                TextSpan.FromBounds(clauseStart, endPos),
+                destructureNames,
+                innerIsParallel);
         }
 
         private bool IsComprehensionOperator()
@@ -7544,8 +7684,12 @@ public static class ToshParser
                     continue;
                 }
 
+                if (LooksLikeSplatArgument())
+                {
+                    arguments.Add(ParseSplatArgument());
+                }
                 // Named argument: identifier = value
-                if (Current.Kind == SyntaxTokenKind.Bareword &&
+                else if (Current.Kind == SyntaxTokenKind.Bareword &&
                     IsValidIdentifier(Current.Text) &&
                     !Current.Text.StartsWith("$", StringComparison.Ordinal) &&
                     Peek(1).Kind == SyntaxTokenKind.Bareword && Peek(1).Text == "=")
@@ -8596,6 +8740,15 @@ public static class ToshParser
 
                 if (stage is ExpressionPipelineStageSyntax)
                 {
+                    // Allow `<expr> if <cond>` / `<expr> unless <cond>` postfix
+                    // conditionals to fall back to the outer statement parser.
+                    if (Current.Kind == SyntaxTokenKind.Bareword &&
+                        (string.Equals(Current.Text, "if", StringComparison.OrdinalIgnoreCase) ||
+                         string.Equals(Current.Text, "unless", StringComparison.OrdinalIgnoreCase)))
+                    {
+                        break;
+                    }
+
                     _diagnostics.Add(new SyntaxDiagnostic(
                         Code: "tosh.parser.missing_pipeline_separator",
                         Title: "Expression pipeline stages must be separated by '|'.",

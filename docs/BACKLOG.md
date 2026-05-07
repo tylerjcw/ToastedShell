@@ -2,11 +2,19 @@
 
 Open work items by area, roughly ordered by priority within each section.
 
-Last updated: April 19, 2026 (evening).
+Last updated: May 7, 2026. Line Editor Phase 1 closed; user-defined error
+types, top-level signal flow fix, `Tosh.Compiler` IR + IL emitter spike,
+streaming display sinks, `iterate`/`recur` builders, VS Code extension,
+and MCP `run_snippet`/`explain_error` tools all landed.
+
+Recent additions: First-Class .NET Citizenship section (Waves 1–3) reflecting
+the 2026-05-06 audit; spec restructured with new `\part{Compilation}`. See
+[FIRST_CLASS_DOTNET_STATUS.md](FIRST_CLASS_DOTNET_STATUS.md) and
+[SPEC_STATUS.md](SPEC_STATUS.md) for the full audit/roadmap pairing.
 
 ---
 
-# REPL Line Editor (In Progress)
+# REPL Line Editor ✓ Phase 1 Complete
 
 Derived from [Line Editor RFC](LINE_EDITOR_RFC.md). Phase 1 is focused on safety and deterministic editing.
 
@@ -15,62 +23,52 @@ Derived from [Line Editor RFC](LINE_EDITOR_RFC.md). Phase 1 is focused on safety
 - [x] Preserve multiline draft while navigating wrapped lines
 - [x] Fix continuation indentation growth in multiline editing
 - [x] Add foundational undo/redo support in `LineEditorBuffer`
-- [ ] Add edit transaction grouping (coalesced typing, completion-accept as single transaction)
-- [ ] Add explicit draft snapshot/restore model around history traversal
-- [ ] Add multiline history traversal modifiers (`Alt+Up` / `Alt+Down`) without draft clobber
-- [ ] Add focused tests for key behavior matrix in multiline + completion contexts
+- [x] Add edit transaction grouping (coalesced typing, completion-accept as single transaction)
+- [x] Add explicit draft snapshot/restore model around history traversal
+- [x] Add multiline history traversal modifiers (`Alt+Up` / `Alt+Down`) without draft clobber
+- [x] Add focused tests for key behavior matrix in multiline + completion contexts
 
-### Priority: P0
+### Priority: P0 — Complete
 
 ---
 
 # Language Features & Paradigms (Planned)
 
-## Live / streaming command output
+## Live / streaming command output ✓ Shipped
 
-Long-running commands like `ping -c 60 www.google.com`, `tail -f`, or `http --stream`
-emit rows progressively (`yield return` from `IAsyncEnumerable<object?>`), but the REPL
-materializes the entire result with `ExecuteToListAsync` before formatting, so the user
-only sees output once the pipeline completes. The display path needs a streaming-capable
-sink that incrementally renders each row.
+Long-running commands now stream rows incrementally to the REPL.
+`IDisplaySink` ([src/Tosh.Cli/IDisplaySink.cs](../src/Tosh.Cli/IDisplaySink.cs)) is
+implemented by `BufferingDisplaySink`, `StreamingTableSink`, and
+`AutoDisplaySink` (the auto-decision wrapper). The CLI consumes pipelines
+directly via `await foreach` over `engine.ExecuteAsync(...)`. Append-only
+bordered rendering, TTY/streaming-hint decision rule, and Ctrl-C bottom-border
+cancellation are all in place.
 
-### Strategy
-
-1. **Streaming sink interface.** Add `IDisplaySink` with `BeginAsync(profile)`,
-   `EmitRowAsync(row)`, `EndAsync()`. Default: `BufferingDisplaySink` (current behavior).
-   New: `StreamingTableSink` for TTY append-only mode.
-2. **Direct streaming consumption.** Replace `engine.ExecuteToListAsync(...)` in
-   `src/Tosh.Cli/Program.cs#L304` and `src/Tosh.Cli/ToshRepl.cs#L151` with
-   `await foreach` over `engine.ExecuteAsync(...)` straight into the sink.
-3. **Streaming hint on `DisplayProfile`.** Add `StreamingHint` enum
-   (`Auto | FixedWidth | NeverStream`) and locked `MaxWidth` columns so widths are known
-   without seeing all rows. Set on `PingReplyInfo`, future `tail`, `watch`, `http --stream`.
-4. **Append-only renderer.** Emit `╭─ … ─╮` + header + `├─ … ─┤` immediately, then `│ … │`
-   per row as it arrives, with the closing `╰─ … ─╯` border drawn on `EndAsync()`.
-5. **Decision rule** for whether to stream:
-   - stderr/stdout not a TTY → buffered (current).
-   - profile lacks `StreamingHint` or stream is heterogeneous → buffered.
-   - first row arrives within ~250 ms (e.g. `ls`) → buffered (tight columns, no benefit).
-   - otherwise → streaming append-only.
-6. **Cancellation.** `try/finally` in the sink to draw the bottom border on Ctrl-C so the
-   user never sees a half-open table.
-
-### Out of scope (defer to follow-up)
+### Out of scope (still deferred)
 
 - Re-render-on-update for dynamic widths (cursor-up + redraw).
 - Alternate-screen `htop`-style live tables (belongs in `Tosh.Tui` widgets, not the shell).
 - Pagination interaction (height overflow auto-falls-back to append-only).
 
-### Priority: P1
+### Priority: P1 — closed
 
 ## Comprehensions — Future Extensions
 
-Core comprehensions (list, set, dict, generator) are implemented. Remaining work:
+Core comprehensions (list, set, dict, generator) are implemented, along
+with Cartesian product (`for x in [1,2], y in [10,20]`), parallel/zip
+(`for x in $a || y in $b`), and tuple destructuring (`for (a, b) in $pairs`).
 
-- Cartesian product syntax: `for x in 1..5, y in 1..5`
-- Parallel/zip comprehensions: `for x in $a || y in $b`
-- Pattern destructuring in generators: `for (k, v) in $dict`
-- True lazy generator expressions (currently eager)
+Verified 2026-05-07:
+
+```tosh
+[($x + $y) <| for x in [1,2], y in [10,20]]      # Cartesian → [11, 21, 12, 22]
+[$x + $y <| for x in [1,2,3] || y in [10,20,30]] # zip       → [11, 22, 33]
+[$a + $b <| for (a, b) in [(1,2),(3,4)]]         # destruct  → [3, 7]
+```
+
+Remaining work:
+
+- True lazy generator expressions (currently eager).
 
 ### Priority: P2
 
@@ -79,6 +77,19 @@ Core comprehensions (list, set, dict, generator) are implemented. Remaining work
 ## Lazy Infinite Lists & Self-Referential Sequences
 
 Haskell-style lazy evaluation for infinite, self-referential data structures.
+
+### Status (2026-05-07)
+
+- ✓ **`iterate` and `recur` built-ins shipped** — see
+  [src/Tosh.Stdlib/Functional/IterateCommand.cs](../src/Tosh.Stdlib/Functional/IterateCommand.cs)
+  and [RecurCommand.cs](../src/Tosh.Stdlib/Functional/RecurCommand.cs). They
+  produce infinite sequences from a seed and a callable; pair with `first`,
+  `take-while`, or `take-until` to bound. Examples like
+  `iterate 1 func(x) => ($x * 2) | first 10` and
+  `recur (0, 1) func($a, $b) => $a + $b` work today.
+- ✏ Remaining: `lazy […]` literal syntax with self-referential bindings
+  (`var fibs = lazy [0, 1, ...zip-with (+) $fibs ($fibs | skip 1)]`), the
+  `<|` lazy generator form, and thunk/memoized-cell runtime semantics.
 
 ### Motivation
 
@@ -148,45 +159,48 @@ var fibs = recur (0, 1) func($a, $b) => $a + $b
 
 ---
 
-## Macro System (AST Macros)
+## Macro System (Runes) — ✓ Shipped
 
-Boo-inspired AST-level macros that look and feel like native keywords.
+Boo-inspired AST-level macros are implemented under the name **runes**
+(distinguishing them from the runtime-evaluated `func`).
 
-### Concept
+### Surface syntax
+
 ```tosh
-# Usage — looks like a built-in:
-retry 3 {
-    http get $url
-}
-
-timeout 5s {
-    slow-operation
-}
-
-# Definition — a class/function that receives the AST block:
-macro retry($count, $body) {
-    for $i in 1..$count {
-        try {
-            $body
-            return
-        } catch $err {
-            if $i == $count { throw $err }
-        }
+# Definition — looks like a function but receives unevaluated arg thunks:
+rune unless(condition, body) {
+    if (not $condition) {
+        $body
     }
 }
+
+# Usage — looks like a built-in:
+unless $failed (echo "ok")
+with-retry 3 { http get $url }
+benchmark "fetch" { http get $url }
+dbg ($x + 1)
 ```
 
-### Design Notes
+### Implementation
 
-- Macros receive their arguments + body as AST nodes, not evaluated values.
-- The macro expands/transforms the AST before evaluation.
-- Unknown bare words are resolved by searching for a `<Name>Macro` class
-  (Boo pattern) — this makes the language extensible without parser changes.
-- Potential built-in macros: `retry`, `timeout`, `benchmark`, `suppress`,
-  `with`, `transaction`, `parallel`, `watch`.
-- Community macros could be distributed as modules.
+- Parser: `ParseRuneDefinitionStatement` ([ToshParser.cs:2420](../src/Tosh.Language/Parsing/ToshParser.cs#L2420)),
+  `LooksLikeRuneDefinition` ([ToshParser.cs:9188](../src/Tosh.Language/Parsing/ToshParser.cs#L9188)).
+- Runtime: [`RuneCommand`](../src/Tosh.Language/Bridge/RuneCommand.cs),
+  [`RuneDefinition`](../src/Tosh.Language/RuneDefinition.cs),
+  [`RuneThunk`](../src/Tosh.Language/RuneThunk.cs) (deferred-evaluation
+  argument thunks).
+- Built-ins: [`BuiltinRunes.cs`](../src/Tosh.Language/BuiltinRunes.cs)
+  ships `dbg`, `unless`, `benchmark`, `with-retry`.
+- Rune-level modifiers parsed today: `sealed` (default), `leaky`,
+  `fixed`, `lazy`.
 
-### Priority: P2
+### Still open (rune ecosystem)
+
+- Additional built-in runes: `timeout`, `suppress`, `with`,
+  `transaction`, `parallel`, `watch`.
+- Distribute community runes as modules.
+
+### Priority: P2 — closed for the core feature; ecosystem additions tracked above.
 
 ---
 
@@ -342,35 +356,75 @@ tail -f /var/log/app.log
 
 ## Boo-Inspired Ergonomics
 
-### `unless` keyword
-```tosh
-echo "ok" unless $failed
-```
-
-### Postfix conditionals
-```tosh
-return $x if $valid
-skip unless $ready
-```
-
-### Slicing syntax
+### Slicing syntax ✓ Shipped
 ```tosh
 $list[1:3]                      # elements 1..2
 $str[:-1]                       # all but last char
 $arr[::2]                       # every other element
 ```
+Bracket-slice notation is in. `get` also accepts `ToshRange` for the
+pipeline form (`... | get 2..5`, see [GetCommand.cs](../src/Tosh.Stdlib/Pipeline/GetCommand.cs#L40)).
 
-### `isa` operator
+### `is` / `is a` operator ✓ Shipped
 ```tosh
-if $obj isa Point { echo $obj.X }
+if $obj is Point { echo $obj.X }
+if $obj is a Point { echo $obj.X }
+```
+No separate `isa` keyword is planned — `is` (and the multi-word
+`is a` / `is not` / `is in` / `is not in`) covers it.
+
+### `unless` keyword ✓ Shipped
+
+Implemented as a built-in rune, not a parser keyword:
+
+```tosh
+unless $failed (echo "ok")
+unless false (echo 5)              # → 5
 ```
 
-### Callable types
+See [BuiltinRunes.cs](../src/Tosh.Language/BuiltinRunes.cs) and the
+macro/rune system above.
+
+### Callable values ✓ Shipped
+
+Typed-parameter lambdas with optional return-type annotations can be
+bound to variables and invoked with `$name(args)`:
+
 ```tosh
-var predicate: func(int) -> bool = func($x) => $x > 0
+var test = func(x: bool) -> bool { return (not $x) }
+$test(true)                         # → false
+
+var dbl = func(x: int) -> int => ($x * 2)
+$dbl(7)                             # → 14
 ```
 
-### Priority: P2
+Parameter type annotations (`x: bool`, `n: int`, etc.) and the new
+lambda-level return type annotation (`-> bool`) both flow through
+`AnonymousFunctionArgumentSyntax.ReturnTypeName` into the runtime's
+`CreateFunctionDefinition`. A dedicated `func(int) -> bool` first-class
+signature *type* (for storing in a variable annotation) is not yet a
+parser construct, but the practical capability is in.
+
+### Postfix conditionals ✓ Shipped
+
+```tosh
+return $x if ($x > 5)               # early return when condition holds
+break unless ($i < 5)               # break when condition fails
+continue if ($i % 2 == 0)
+throw "negative" if ($x < 0)
+yield $row if ($row.Active)
+```
+
+Applies to `return`, `break`, `continue`, `throw`, and `yield`.
+Implemented as a syntactic wrapper in the parser: when one of these
+statements is followed (on the same line, no boundary) by `if <cond>`
+or `unless <cond>`, the statement is wrapped in an
+`IfStatementSyntax`. `unless` places the inner statement in the else
+branch so the condition expression is preserved verbatim. See
+`TryWrapPostfixConditional` in
+[ToshParser.cs](../src/Tosh.Language/Parsing/ToshParser.cs).
+
+### Priority: P2 — closed
 
 ---
 
@@ -395,11 +449,12 @@ var predicate: func(int) -> bool = func($x) => $x > 0
 
 ## Class & Type System
 
-| Feature | Description |
-|---------|-------------|
-| Generics | Generic type parameters on classes, interfaces, methods (e.g. `class Stack<T>`) |
-| Operator overloading | Custom `+`, `-`, `*`, `/`, `[]`, etc. on class instances |
-| Interface default methods | Allow method bodies in interfaces as default implementations |
+| Feature | Status |
+|---------|--------|
+| Generics on classes / type aliases | ✓ Shipped — `class Stack<T>` / `type Pair<A, B> = ...` parsed via `ParseTypeParameterList` ([ToshParser.cs:4637](../src/Tosh.Language/Parsing/ToshParser.cs#L4637)). |
+| Function / method overloading | ✓ Shipped — same-name funcs with distinct arities/typed signatures merge through `OverloadedFunctionCommand` ([src/Tosh.Language/Bridge/OverloadedFunctionCommand.cs](../src/Tosh.Language/Bridge/OverloadedFunctionCommand.cs)) and `ToshClassDefinition` overload resolution. |
+| Operator overloading | ✓ Parser-level wired — `IsOverloadableOperatorToken` lets classes declare `+`, `-`, `*`, `/`, `[]`, etc. as method names ([ToshParser.cs:4903](../src/Tosh.Language/Parsing/ToshParser.cs#L4903)). |
+| Interface default methods | Open — allow method bodies in interfaces as default implementations. |
 
 ## Unix Command Parity
 
@@ -417,8 +472,8 @@ var predicate: func(int) -> bool = func($x) => $x > 0
 ## AI Companion Interop
 
 ### Tools
-- VS Code extension: syntax highlighting, bracket matching, comment toggling for `.tosh` files
-- MCP server enhancements: additional tools (e.g. `run_snippet`, `explain_error`, `suggest_command`)
+- ✓ VS Code extension: syntax highlighting, bracket matching, comment toggling for `.tosh` files — ships at [editor/vscode/tosh.tosh-lang](../editor/vscode/tosh.tosh-lang).
+- ✓ MCP server enhancements: `run_snippet` and `explain_error` tools shipped in [src/Tosh.Mcp/ToshMcpServer.cs](../src/Tosh.Mcp/ToshMcpServer.cs); `suggest_command` is still open.
 - Structured error output mode for machine-consumable diagnostics
 
 ### Documentation
@@ -430,7 +485,288 @@ var predicate: func(int) -> bool = func($x) => $x > 0
 
 ---
 
+# First-Class .NET Citizenship
+
+Derived from the 2026-05-06 codebase audit. Companion to
+[FIRST_CLASS_DOTNET_STATUS.md](FIRST_CLASS_DOTNET_STATUS.md) (full roadmap of
+14 items) and [SPEC_STATUS.md](SPEC_STATUS.md) Gap §10. The waves below are
+the execution order; each task lands with conformance rows and a doc update.
+
+## Wave 1 — "a tosh DLL feels like a .NET DLL"
+
+Reassessed 2026-05-06 with reflection probes against `--compile` output:
+
+- **Async `Task<T>` for user funcs (originally Wave 1 #1):** *Not a gap.*
+  Typed funcs already emit as sync `T`-returning CLR methods
+  ([BoundUnitEmitter.cs:4892](../src/Tosh.Compiler/BoundUnitEmitter.cs#L4892)).
+  There is no `async func` surface syntax, and reflection on a probe DLL
+  shows ordinary sync signatures (`add(Int32, Int32) -> Int32`). The audit
+  finding was a misread of the pipeline-stage code path. **De-scoped.**
+- **Single typed CLR method per func (originally Wave 1 #2):** *Already
+  done.* Reflection on an overloaded probe (`func pick(a: int)` and
+  `func pick(a: int, b: int)`) shows exactly two typed methods, no
+  `object`-shaped peer shim. **De-scoped.**
+- **Metadata-only reference assemblies (Wave 1 #3):** *Still real.* This
+  is the only remaining Wave 1 item.
+
+### Metadata-only reference assemblies
+
+`--emit-refasm` already stamps `[ReferenceAssembly]` but ships fat method
+bodies. Strip bodies in the refasm pass so `.ref.dll` is a real contract
+surface (prerequisite for ABI v1 work and library NuGet packaging).
+
+- [x] Replace body-bearing emit with metadata-only emit in the refasm pass at `BoundUnitEmitter.cs:697`.
+- [x] Verify metadata parity between implementation and refasm via reflection diff test.
+- [x] Conformance: C# direct compile against refasm; runtime resolution against the implementation DLL. _2026-05-07: validated via the A3 cross-language smoke test — a C# console with `<PackageReference Include="GreeterLib" />` compiled against `ref/net10.0/GreeterLib.dll` and at runtime resolved `lib/net10.0/GreeterLib.dll`, calling the tosh-defined `greet("C# consumer")` and printing `Hello, C# consumer!`._
+- Tracks: [FIRST_CLASS_DOTNET_STATUS.md](FIRST_CLASS_DOTNET_STATUS.md) item 8.
+- Priority: P0.
+
+## Wave 2 — "ship to NuGet"
+
+The distribution gap. Today only `Tosh.Sdk` is packable; user libraries
+have no NuGet path.
+
+### Standalone library NuGet packages
+
+- [x] Set `IsPackable=true` and pack metadata for `Tosh.Runtime`. _2026-05-07: shared metadata centralised in `Directory.Build.props`; nupkg lands in `artifacts/packages/`._
+- [x] Set `IsPackable=true` and pack metadata for `Tosh.Compiler.Runtime`. _2026-05-07: ProjectReferences (`Tosh.Runtime`, `Tosh.Stdlib`, `Tosh.Language`) correctly serialise as NuGet `<dependency>` entries — also packed transitively._
+- [x] Validate restore from a clean machine. _2026-05-07: validated end-to-end via the A2 `dotnet new tosh-lib`/`tosh-app` smoke test — a fresh project pointed at `artifacts/packages/` as a NuGet feed restored Tosh.Sdk + Tosh.Runtime + Tosh.Stdlib + Tosh.Language + Tosh.Compiler.Runtime + Tosh.Tui and produced a working DLL/apphost._
+- Tracks: [FIRST_CLASS_DOTNET_STATUS.md](FIRST_CLASS_DOTNET_STATUS.md) item 9 (audit follow-up).
+- Priority: P1.
+
+### `dotnet new` templates
+
+- [x] `dotnet new tosh-lib` template (library). _2026-05-07: ships in `Tosh.Templates`; defaults to `<OutputType>Library</OutputType>` with `ToshEmitReferenceAssembly=true`._
+- [x] `dotnet new tosh-app` template (executable). _2026-05-07: ships in `Tosh.Templates`; defaults to `<OutputType>Exe</OutputType>` with apphost._
+- [x] Smoke test: `dotnet new tosh-lib && dotnet build && dotnet pack` succeeds. _2026-05-07: lib builds to `MyLib.dll` + `MyLib.ref.dll`, app builds and runs (`Hello from a tosh-app!`). `dotnet pack` for `.toshproj` is A3 work and tracked there._
+- Tracks: [FIRST_CLASS_DOTNET_STATUS.md](FIRST_CLASS_DOTNET_STATUS.md) item 9 (audit follow-up).
+- Priority: P1.
+
+### `dotnet pack` for `.toshproj`
+
+- [x] Wire a `<ToshPack>` / `dotnet pack` flow in `Tosh.Sdk` so user-authored `.toshproj` libraries produce a NuGet consumable from C#. _2026-05-07: `Tosh.Sdk` now defaults `IsPackable=true` for `OutputType=Library` and emits a wrapper csproj under `obj/<cfg>/<tfm>/pack-wrapper/` that invokes `Microsoft.NET.Sdk` Pack to produce a nupkg with `lib/<tfm>/<asm>.dll`, `ref/<tfm>/<asm>.dll`, and transitive `<dependency>` entries for `Tosh.Runtime` / `Tosh.Stdlib` / `Tosh.Language` / `Tosh.Compiler.Runtime`. Forwards user `<PackageReference>` items, stamps `ToshRuntimeVersion` into the packed `Sdk.props`._
+- [x] Cross-language smoke test: pack a tosh library, reference it from a C# project via `<PackageReference>`, call into it. _2026-05-07: `dotnet new tosh-lib -n GreeterLib && dotnet pack` produced `GreeterLib.1.0.0.nupkg`; a separate C# console added it via `dotnet add package GreeterLib`, restored Tosh.* runtime deps from the local feed, and successfully invoked `Greeter.greet` and the top-level `greet` over reflection — matching the conformance row above._
+- Depends on Wave 1 #3 (real refasm).
+- Priority: P1.
+
+### Reproducibility, SourceLink, symbol packages
+
+- [x] Turn on `Deterministic`, `ContinuousIntegrationBuild`, `EmbedUntrackedSources` in `Directory.Build.props`. _2026-05-07: `Deterministic=true` always, `ContinuousIntegrationBuild=true` when any of `CI`/`TF_BUILD`/`GITHUB_ACTIONS` is set, `EmbedUntrackedSources=true` always, `PublishRepositoryUrl=true` so the nuspec carries the commit-pinned `<repository url=… commit=…>`._
+- [x] Wire SourceLink (`Microsoft.SourceLink.GitHub` or equivalent) across all `Tosh.*` projects. _2026-05-07: `Microsoft.SourceLink.GitHub` 8.0.0 added as a global build-only `<PackageReference>` in `Directory.Build.props`. `GitRepositoryRemoteName=github` overrides the default `origin` (which is a private host on dev machines). Verified: PDBs now contain `{"documents":{"/home/komrad/projects/tosh/*":"https://raw.githubusercontent.com/.../<commit>/*"}}`._
+- [x] Decide strong-naming policy (sign with project SNK, or explicitly opt out and document). _2026-05-07: deliberately **not** strong-named. Documented in the `Directory.Build.props` block — strong naming would force every consumer (tosh-lib NuGets, plugins) to either sign too or `InternalsVisibleTo` dance around it, with no meaningful security benefit for an OSS shell. Revisit if a Windows/Defender or GAC requirement ever appears._
+- [x] Emit `.snupkg` symbol packages alongside implementation packages. _2026-05-07: `IncludeSymbols=true; SymbolPackageFormat=snupkg` plumbed via `Directory.Build.targets` (so `<IsPackable>` is settled before evaluation). `dotnet pack Tosh.slnx` now produces 5 `.snupkg` files (one per C# library) next to the 7 `.nupkg`s. `Tosh.Sdk` and `Tosh.Templates` are content-only and explicitly opt out._
+- Tracks: [FIRST_CLASS_DOTNET_STATUS.md](FIRST_CLASS_DOTNET_STATUS.md) item 9 (audit follow-up).
+- Priority: P2.
+
+## Wave 3 — "tooling parity"
+
+### LSP capability gaps
+
+The binder and symbol resolution already support these; the LSP just needs
+to advertise and route them.
+
+- [x] `textDocument/references` (find all references). _2026-05-06: scope-aware via `DeclarationIndex.FindReferences`; covers variables, function overloads, classes/modules/enums/records; respects shadowing._
+- [x] `textDocument/rename` + `textDocument/prepareRename`. _2026-05-06: `BuildRenameEdits` returns a `WorkspaceEdit`; `PrepareRename` returns the editable range at the cursor (strips leading `$` for variable refs)._
+- [ ] `textDocument/formatting` and `textDocument/rangeFormatting` wired to a deterministic tosh formatter. _Deferred — needs a separate formatter library; tracked as its own follow-up._
+- Tracks: [FIRST_CLASS_DOTNET_STATUS.md](FIRST_CLASS_DOTNET_STATUS.md) item 12 (audit follow-up).
+- Priority: P1.
+
+### CLR ABI v1 spec document
+
+Lock the public rules once Waves 1–2 produce a stable shape. This is the
+"we promise not to break this" artefact downstream consumers need.
+
+- [x] Draft ABI v1 covering: assembly identity, type/method naming and mangling, visibility mapping, overload rules, library vs executable mode, attribute set (`ToshOriginalNameAttribute`, `ToshTypeAttribute`), nullability/refinements/dynamic erasure rules. _DONE 2026-05-07. Spec lives at [`docs/CLR_ABI_v1.md`](CLR_ABI_v1.md), normative + frozen at v1.0. Emitter changes: `guarded`→`Family`, `local`→`Assembly` on fields & methods; `[assembly: ToshAbi(1)]` stamp; `ParameterAttributes.HasDefault` + `SetConstant` on typed params with literal defaults; `[ParamArrayAttribute]` on rest params with array CLR type._
+- [x] ABI test set: reflection, Roslyn C# compile against refasm, `ProjectReference`, `PackageReference`, runtime `ToshHost` invocation. _DONE 2026-05-07 via the GreeterLib cross-language pack+consume smoke test (Wave 2 above): C# consumer with `<PackageReference Include="GreeterLib" />` compiles against refasm and runs against impl. Reflection / `ProjectReference` paths are exercised in the existing test suite (2315/2315 pass)._
+- Tracks: [FIRST_CLASS_DOTNET_STATUS.md](FIRST_CLASS_DOTNET_STATUS.md) item 5.
+- Priority: P2.
+
+### `--profile=library` alias
+
+Promote `runtime` to the official redistributable-library contract: alias
+`--profile=library` to `runtime` plus typed-public-signature enforcement
+plus metadata-only refasm. Document `permissive`-compiled assemblies as
+*executable bundles*, not libraries.
+
+- [ ] Add the alias in `CliInvocationResolver`.
+- [ ] Add an SDK property `<ToshLibraryMode>true</ToshLibraryMode>` shorthand.
+- [ ] Spec update: extend `\part{Compilation}` with a "library mode" sub-section.
+- Tracks: [FIRST_CLASS_DOTNET_STATUS.md](FIRST_CLASS_DOTNET_STATUS.md) item 3 (audit follow-up).
+- Priority: P2.
+
+## Deferred (post-wave)
+
+- **Tier-3 reduction** ([FIRST_CLASS_DOTNET_STATUS.md](FIRST_CLASS_DOTNET_STATUS.md) item 4). High-leverage long-term, high-cost short-term. Revisit after Waves 1–2.
+- **Rune model decision** ([FIRST_CLASS_DOTNET_STATUS.md](FIRST_CLASS_DOTNET_STATUS.md) item 13). Research-shaped; defer.
+- **Native interop expansion** beyond primitives (struct marshalling, callbacks, `Span<T>`, `[MarshalAs]`). Defer until a real user need surfaces.
+
+---
+
 ## Completed
+
+### Macro system (runes) ✓
+
+Tosh ships a full Boo-style AST-macro system under the name **runes**.
+Definitions use the `rune` keyword and receive their arguments as
+unevaluated `RuneThunk` objects so the macro can splice the body into a
+new AST shape before evaluation. Implementation:
+[ToshParser.ParseRuneDefinitionStatement](../src/Tosh.Language/Parsing/ToshParser.cs#L2420),
+[`RuneCommand`](../src/Tosh.Language/Bridge/RuneCommand.cs),
+[`RuneDefinition`](../src/Tosh.Language/RuneDefinition.cs),
+[`RuneThunk`](../src/Tosh.Language/RuneThunk.cs).
+Rune-level modifiers (`sealed`, `leaky`, `fixed`, `lazy`) are parsed
+today. Built-in runes (`dbg`, `unless`, `benchmark`, `with-retry`) live
+in [BuiltinRunes.cs](../src/Tosh.Language/BuiltinRunes.cs). `unless`
+works as `unless $failed (echo "ok")`.
+
+### Class & type system: generics, function overloading, operator overloading ✓
+
+- **Generics**: `class Stack<T>` and `type Pair<A, B> = …` are parsed by
+  `ParseTypeParameterList` ([ToshParser.cs:4637](../src/Tosh.Language/Parsing/ToshParser.cs#L4637)).
+- **Function overloading**: same-name `func` declarations with distinct
+  arities or typed signatures are merged into an
+  `OverloadedFunctionCommand` ([src/Tosh.Language/Bridge/OverloadedFunctionCommand.cs](../src/Tosh.Language/Bridge/OverloadedFunctionCommand.cs))
+  via `ToshEngine.TryMergeFunctionOverload`. Class methods/constructors
+  use the same overload resolution path in `ToshClassDefinition`.
+- **Operator overloading hook**: `IsOverloadableOperatorToken`
+  ([ToshParser.cs:4903](../src/Tosh.Language/Parsing/ToshParser.cs#L4903))
+  recognises `+`, `-`, `*`, `/`, `[]`, etc. as legal class-method names.
+
+### Slice / bracket indexing ✓
+
+`$list[1:3]`, `$str[:-1]`, `$arr[::2]`, and `$dict[$k]` all work today.
+The pipeline form (`... | get 2..5`) accepts a `ToshRange` and is
+implemented in [GetCommand.cs](../src/Tosh.Stdlib/Pipeline/GetCommand.cs#L40).
+
+### Comprehensions: Cartesian, parallel/zip, tuple destructuring ✓
+
+```tosh
+[($x + $y) <| for x in [1,2], y in [10,20]]       # Cartesian
+[$x + $y <| for x in [1,2,3] || y in [10,20,30]]  # parallel/zip
+[$a + $b <| for (a, b) in [(1,2),(3,4)]]          # destructuring
+```
+
+All three forms emit through the comprehension lowering path in
+`ToshParser` (`innerIsParallel`, multi-source `for`, tuple-pattern
+binders). Only true lazy generator expressions remain open.
+
+### `Tosh.Compiler` IR + IL emitter spike (toshc) ✓
+
+A walking-skeleton `Tosh.Compiler` now lowers a usable subset of tosh
+straight to .NET IL via `Reflection.Emit`. Bound IR carving covers C-1
+(try / throw / return / match / switch), C-2 (types), C-3 (declarations
+and niche literals/expressions), closures (Block / Lambda /
+CallableInvocation), and control flow (If / For / While / Until / Break /
+Continue / Conditional / IfExpression). On top of that the emitter
+handles variables, arithmetic, string interpolation, if/while/assignment,
+user-defined function definitions and calls, for-range loops + compound
+assignment, object-typed numeric ops, member access, list/dict literals,
+foreach over iterables, and a `ToshHost` runtime bridge that routes
+non-echo commands through the interpreter for parity. Multi-stage
+pipelines land in three phases: phase 1 (commands only), phase 2 (block
+arguments), phase 3 (full pipelines). All wired through `--compile` and
+covered by the existing test suite.
+
+### Streaming display sinks ✓
+
+The REPL no longer materializes long-running pipelines before rendering.
+`IDisplaySink` abstracts row delivery; `BufferingDisplaySink` keeps the
+classic "compute widths from all rows, then emit" path,
+`StreamingTableSink` writes an append-only bordered table as rows arrive,
+and `AutoDisplaySink` decides between them based on TTY-ness, the
+profile's `StreamingHint`, and a first-row latency threshold. The CLI
+consumes `engine.ExecuteAsync(...)` directly via `await foreach`.
+Bottom borders are drawn from `try/finally` so Ctrl-C never leaves a
+half-open table.
+
+### `iterate` / `recur` infinite sequence builders ✓
+
+Two new Functional pipeline commands cover the "stateful unfold" niche:
+`iterate <seed> <callable>` produces `[seed, f(seed), f(f(seed)), …]`
+and `recur (a, b, …) <callable>` produces values from a multi-seed
+recurrence relation (the callable receives the last N values). Both are
+infinite — pair with `first`, `take-while`, or `take-until` to bound.
+The full `lazy [...]` self-referential list syntax (Haskell-style) is
+still tracked in the open backlog.
+
+### MCP tools `run_snippet` and `explain_error` ✓
+
+`Tosh.Mcp.ToshMcpServer` now exposes two new agent-callable tools:
+`run_snippet` evaluates a tosh fragment in an isolated engine and
+returns structured stdout / stderr / diagnostics, and `explain_error`
+takes a `tosh.*` diagnostic code and returns its category, severity,
+suggested fix, and source-of-truth file. `suggest_command` remains
+open.
+
+### VS Code language extension ✓
+
+`editor/vscode/tosh.tosh-lang` ships a TextMate grammar with full
+syntax highlighting, bracket matching, comment toggling, snippet
+integration, and language-configuration for `.tosh` files. Pairs with
+the existing LSP and MCP servers for end-to-end editor support.
+
+### User-defined error types (`class FooError extends Error`) ✓
+
+Tosh classes can now extend `Tosh.Runtime.ToshError` (surfaced inside tosh
+as `Error`) to define typed, throwable error hierarchies that round-trip
+between interpreter, compiled mode, and C# consumers.
+
+- **`Tosh.Runtime.ToshError : Exception`**: unsealed base for user error
+  types; carries `Message`, `TextSpan Span` (auto-stamped at the throw
+  site), and `object? Cause`.
+- **`Error` alias**: registered in `DotNetTypeResolver.Aliases` so
+  `extends Error` and `Error` references resolve without a fully-qualified
+  name. `Tosh.Runtime` is now in `DefaultImplicitUsings`.
+- **Throw boundary normalization**: `RaiseThrownValue(span, value)` in
+  `ToshEngine` (and mirroring `ToshHost.ThrowValue` for compiled mode)
+  raises `Exception` instances verbatim (preserving CLR type identity for
+  cross-language `catch (HttpError)`), wraps `ToshClassInstance` whose
+  definition's `ClrBaseType` derives from `Exception` into a real
+  `ToshError` (so the user's tosh class crosses the boundary as a CLR
+  exception with the original instance available via `.Cause`), and
+  wraps non-Exception values in `ThrowSignalException` exactly as before.
+  All paths stamp `Data["tosh.thrown"] = true`.
+- **Catch round-trip**: `CreateCaughtErrorValue` (interpreter) and
+  `ToshHost.CaughtValueOf` (compiled) unwrap the `ToshError` →
+  `ToshClassInstance` bridge so inside `catch (err) { … }` the user sees
+  their original instance — pattern checks (`$err is FooError`) and
+  property access (`$err.Status`) work uniformly.
+- **IL catch widening**: compiled-mode `EmitTryStatement` now opens with
+  `BeginCatchBlock(typeof(Exception))` and routes through `CaughtValueOf`,
+  which rethrows control-flow signals (`Return`/`Break`/`Continue`) so
+  user catch blocks cannot swallow them.
+- **Diagnostic codes**: uncaught user errors surface as
+  `tosh.user.<TypeName>` (e.g. `tosh.user.HttpError`); plain throws
+  (`throw "boom"`, `throw 42`) keep `tosh.runtime.throw`. Re-throws
+  preserve the original diagnostic and append a `re-thrown at <site>`
+  info line.
+- **ABI**: `docs/CLR_ABI_v1.md` §9 rewritten with both throw shapes, the
+  `Data["tosh.thrown"]` marker, and the recommended `extends Error`
+  pattern with C# consumer example.
+
+### Top-level signal flow fix ✓
+
+Three latent bugs in `EvaluateParseResultAsync` were causing top-level
+`return`, `break`, `continue`, and synchronous user-throws to be silently
+swallowed when they occurred before `MoveNextAsync` was reached:
+
+- **`return` at script top level lost its values.** A subcommand body
+  ending in `return $hs` produced no output because the
+  `ReturnSignalException` catch added values to a local list but never
+  yielded them. Fixed by capturing `pendingReturnValues` and flushing
+  them via `yield return` after the outer try/finally.
+- **`break` / `continue` outside loops bubbled raw signals.** Because
+  some signal-throwing statements (`break`, `continue`, synchronous
+  `return`/`throw`) raise during `GetAsyncEnumerator()` rather than
+  `MoveNextAsync()`, the original catch arms never fired. Fixed by
+  wrapping enumerator creation in its own catch block that mirrors the
+  `MoveNextAsync` arms.
+- **Cleared three long-standing test failures**:
+  `Return_exits_top_level_scripts_early`,
+  `Auto_sourced_tosh_shebang_scripts_without_extension_can_be_used_in_subexpressions`,
+  `Break_and_continue_outside_loops_raise_diagnostics`. Also unblocked
+  user-facing scripts using subcommand `return` patterns (e.g.
+  `headset info` from `~/.local/bin/headset`).
 
 ### AI Companion foundations ✓
 

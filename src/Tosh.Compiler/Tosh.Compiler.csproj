@@ -10,6 +10,9 @@
     <Reference Include="Microsoft.NET.HostModel"
                HintPath="$(MSBuildSDKsPath)\..\Microsoft.NET.HostModel.dll"
                Private="true" />
+    <Reference Include="System.Reflection.MetadataLoadContext"
+               HintPath="$(MSBuildSDKsPath)\..\System.Reflection.MetadataLoadContext.dll"
+               Private="true" />
   </ItemGroup>
 
   <PropertyGroup>

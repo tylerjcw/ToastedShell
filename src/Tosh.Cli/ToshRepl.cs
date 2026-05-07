@@ -149,27 +149,10 @@ public sealed class ToshRepl
 
     private async Task ExecuteAndPrintAsync(string source, string sourceName)
     {
-        var values = await _engine.ExecuteToListAsync(source, sourceName);
-
-        try
+        await using var sink = new AutoDisplaySink(_runtime, renderTuiOutcome: true);
+        await foreach (var value in _engine.EvaluateAsync(source, sourceName))
         {
-            if (TuiRequestDispatcher.TryHandle(values, _runtime, out var outcomeValues))
-            {
-                if (outcomeValues is { Count: > 0 })
-                {
-                    var rendered = _runtime.Display.RenderMany(outcomeValues, ConsoleDisplay.CreateRenderOptions(_runtime));
-                    await ConsoleDisplay.WriteRenderedAsync(rendered, _runtime);
-                }
-
-                return;
-            }
-
-            var rendered2 = _runtime.Display.RenderMany(values, ConsoleDisplay.CreateRenderOptions(_runtime));
-            await ConsoleDisplay.WriteRenderedAsync(rendered2, _runtime);
-        }
-        finally
-        {
-            _runtime.ClearDisplaySelections();
+            await sink.EmitAsync(value);
         }
     }
 

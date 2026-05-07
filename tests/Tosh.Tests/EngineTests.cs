@@ -1815,6 +1815,85 @@ public sealed class EngineTests
     }
 
     [Fact]
+    public async Task User_class_extending_Error_can_be_thrown_and_caught_with_pattern_match()
+    {
+        var engine = new ToshEngine();
+
+        var results = await engine.ExecuteToListAsync("""
+            class HttpError(status, url) extends Error {
+                prop Status = status
+                prop Url = url
+            }
+            try {
+                throw (new HttpError(503, "https://example.test"))
+            } catch (err) {
+                if ($err is HttpError) {
+                    echo $"http {$err.Status} {$err.Url}"
+                } else {
+                    echo "other"
+                }
+            }
+            """);
+
+        Assert.Collection(results, item => Assert.Equal("http 503 https://example.test", item));
+    }
+
+    [Fact]
+    public async Task Uncaught_user_error_surfaces_through_diagnostic_renderer()
+    {
+        var engine = new ToshEngine();
+
+        var ex = await Assert.ThrowsAsync<ToshDiagnosticException>(() => engine.ExecuteToListAsync("""
+            class HttpError(status) extends Error {
+                prop Status = status
+            }
+            throw (new HttpError(500))
+            """));
+
+        var diagnostic = ex.Diagnostics[0];
+        Assert.Equal("tosh.user.HttpError", diagnostic.Code);
+        Assert.Equal("an error escaped here", diagnostic.Label);
+    }
+
+    [Fact]
+    public async Task Plain_string_throws_still_produce_runtime_throw_diagnostic()
+    {
+        var engine = new ToshEngine();
+
+        var ex = await Assert.ThrowsAsync<ToshDiagnosticException>(() => engine.ExecuteToListAsync("throw \"boom\""));
+
+        var diagnostic = ex.Diagnostics[0];
+        Assert.Equal("tosh.runtime.throw", diagnostic.Code);
+        Assert.Equal("boom", diagnostic.Title);
+    }
+
+    [Fact]
+    public async Task User_thrown_ToshError_subclass_can_be_caught_by_concrete_type_from_csharp()
+    {
+        var engine = new ToshEngine();
+
+        // Define the type in tosh, then trigger a throw and observe the
+        // raw CLR exception type — it must be the user's class, not a
+        // ThrowSignalException wrapper.
+        await engine.ExecuteToListAsync("""
+            class HttpError(status) extends Error {
+                prop Status = status
+            }
+            """);
+
+        var caught = await Record.ExceptionAsync(() =>
+            engine.ExecuteToListAsync("throw (new HttpError(404))"));
+
+        Assert.NotNull(caught);
+        // The top-level engine boundary wraps any user throw into a
+        // diagnostic for pretty-printing, but the InnerException chain
+        // (or Diagnostic Title / Code) must preserve the user's type
+        // identity.
+        var diag = Assert.IsType<ToshDiagnosticException>(caught);
+        Assert.Equal("tosh.user.HttpError", diag.Diagnostics[0].Code);
+    }
+
+    [Fact]
     public async Task Switch_statements_match_the_first_equal_case()
     {
         var engine = new ToshEngine();

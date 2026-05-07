@@ -1,0 +1,43 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    `dotnet new` template package that ships the `tosh-lib` and `tosh-app`
+    templates. Installed by users via:
+
+        dotnet new install Tosh.Templates
+
+    after which `dotnet new tosh-lib` and `dotnet new tosh-app` scaffold
+    new projects backed by Tosh.Sdk.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <DisableImplicitFrameworkReferences>true</DisableImplicitFrameworkReferences>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <GenerateDependencyFile>false</GenerateDependencyFile>
+    <NoDefaultExcludes>true</NoDefaultExcludes>
+    <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
+    <ContentTargetFolders>content</ContentTargetFolders>
+    <NoWarn>$(NoWarn);NU5128;NU5100;CS2008;CS8021</NoWarn>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <PackageId>Tosh.Templates</PackageId>
+    <PackageType>Template</PackageType>
+    <!-- Template pack: content-only, no code DLL of its own to symbolise. -->
+    <IncludeSymbols>false</IncludeSymbols>
+    <Description>`dotnet new` templates for TōSh: `tosh-lib` (library) and `tosh-app` (executable).</Description>
+    <PackageTags>tosh;toastedshell;template;dotnet-new</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Pack every file under templates/ into content/templates/ inside the nupkg. -->
+    <Content Include="templates\**\*"
+             Exclude="templates\**\bin\**;templates\**\obj\**" />
+    <Compile Remove="**\*" />
+  </ItemGroup>
+
+</Project>

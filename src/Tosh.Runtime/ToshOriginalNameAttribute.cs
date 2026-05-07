@@ -22,6 +22,7 @@ namespace Tosh.Runtime;
 /// </summary>
 [AttributeUsage(
     AttributeTargets.Class | AttributeTargets.Struct |
+    AttributeTargets.Enum |
     AttributeTargets.Method | AttributeTargets.Field |
     AttributeTargets.Property | AttributeTargets.Constructor,
     AllowMultiple = false)]

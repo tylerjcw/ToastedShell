@@ -24,13 +24,22 @@
     <TargetExt Condition="'$(TargetExt)' == ''">.dll</TargetExt>
     <TargetFileName>$(AssemblyName)$(TargetExt)</TargetFileName>
     <TargetPath>$(OutputPath)$(TargetFileName)</TargetPath>
+    <_ToshReferenceAssemblyPath>$(OutputPath)$(AssemblyName).ref$(TargetExt)</_ToshReferenceAssemblyPath>
+    <_ToshCompileOutputs>$(TargetPath)</_ToshCompileOutputs>
+    <_ToshCompileOutputs Condition="'$(ToshEmitReferenceAssembly)' == 'true'">$(TargetPath);$(_ToshReferenceAssemblyPath)</_ToshCompileOutputs>
     <_ToshSdkTaskAssembly>$(MSBuildThisFileDirectory)..\tasks\net10.0\Tosh.Sdk.Tasks.dll</_ToshSdkTaskAssembly>
     <_ToshSdkTaskAvailable Condition="Exists('$(_ToshSdkTaskAssembly)')">true</_ToshSdkTaskAvailable>
     <_ToshSdkTaskAvailable Condition="!Exists('$(_ToshSdkTaskAssembly)')">false</_ToshSdkTaskAvailable>
+    <_ToshPackageRestoreProject>$(IntermediateOutputPath)tosh-package-restore.csproj</_ToshPackageRestoreProject>
+    <_ToshPackageRestoreIntermediate>$(IntermediateOutputPath)tosh-package-restore/obj/</_ToshPackageRestoreIntermediate>
+    <_ToshPackageAssetsFile>$(_ToshPackageRestoreIntermediate)project.assets.json</_ToshPackageAssetsFile>
   </PropertyGroup>
 
   <UsingTask Condition="'$(_ToshSdkTaskAvailable)' == 'true'"
              TaskName="Tosh.Sdk.Tasks.ToshCompile"
+             AssemblyFile="$(_ToshSdkTaskAssembly)" />
+  <UsingTask Condition="'$(_ToshSdkTaskAvailable)' == 'true'"
+             TaskName="Tosh.Sdk.Tasks.ToshStagePackageReferences"
              AssemblyFile="$(_ToshSdkTaskAssembly)" />
 
   <Target Name="_ResolveToshCompiler" Condition="'$(_ToshSdkTaskAvailable)' != 'true'">
@@ -66,12 +75,101 @@
     <MakeDir Directories="$(OutputPath);$(IntermediateOutputPath)" />
   </Target>
 
+  <Target Name="_ToshPreparePackageRestoreProject"
+          Condition="'@(PackageReference)' != ''">
+    <MakeDir Directories="$(IntermediateOutputPath);$(_ToshPackageRestoreIntermediate)" />
+    <ItemGroup>
+      <_ToshGeneratedPackageReferenceLines Remove="@(_ToshGeneratedPackageReferenceLines)" />
+      <_ToshGeneratedPackageReferenceLines
+          Include="    &lt;PackageReference Include=&quot;%(PackageReference.Identity)&quot; Version=&quot;%(PackageReference.Version)&quot; /&gt;"
+          Condition="'%(PackageReference.Version)' != ''" />
+      <_ToshGeneratedPackageReferenceLines
+          Include="    &lt;PackageReference Include=&quot;%(PackageReference.Identity)&quot; /&gt;"
+          Condition="'%(PackageReference.Version)' == ''" />
+
+      <_ToshPackageRestoreProjectLines Remove="@(_ToshPackageRestoreProjectLines)" />
+      <_ToshPackageRestoreProjectLines Include="&lt;Project Sdk=&quot;Microsoft.NET.Sdk&quot;&gt;" />
+      <_ToshPackageRestoreProjectLines Include="  &lt;PropertyGroup&gt;" />
+      <_ToshPackageRestoreProjectLines Include="    &lt;TargetFramework&gt;$(TargetFramework)&lt;/TargetFramework&gt;" />
+      <_ToshPackageRestoreProjectLines Include="    &lt;OutputType&gt;Library&lt;/OutputType&gt;" />
+      <_ToshPackageRestoreProjectLines Include="    &lt;EnableDefaultCompileItems&gt;false&lt;/EnableDefaultCompileItems&gt;" />
+      <_ToshPackageRestoreProjectLines Include="    &lt;BaseIntermediateOutputPath&gt;$(_ToshPackageRestoreIntermediate)&lt;/BaseIntermediateOutputPath&gt;" />
+      <_ToshPackageRestoreProjectLines Include="    &lt;MSBuildProjectExtensionsPath&gt;$(_ToshPackageRestoreIntermediate)&lt;/MSBuildProjectExtensionsPath&gt;" />
+      <_ToshPackageRestoreProjectLines Include="    &lt;RestoreOutputPath&gt;$(_ToshPackageRestoreIntermediate)&lt;/RestoreOutputPath&gt;" />
+      <_ToshPackageRestoreProjectLines Include="    &lt;BaseOutputPath&gt;$(IntermediateOutputPath)tosh-package-restore/bin/&lt;/BaseOutputPath&gt;" />
+      <_ToshPackageRestoreProjectLines Include="    &lt;RestoreProjectStyle&gt;PackageReference&lt;/RestoreProjectStyle&gt;" />
+      <_ToshPackageRestoreProjectLines Include="    &lt;RuntimeIdentifier&gt;$(RuntimeIdentifier)&lt;/RuntimeIdentifier&gt;" Condition="'$(RuntimeIdentifier)' != ''" />
+      <_ToshPackageRestoreProjectLines Include="    &lt;RuntimeIdentifiers&gt;$(RuntimeIdentifiers)&lt;/RuntimeIdentifiers&gt;" Condition="'$(RuntimeIdentifiers)' != ''" />
+      <_ToshPackageRestoreProjectLines Include="    &lt;RestorePackagesPath&gt;$(RestorePackagesPath)&lt;/RestorePackagesPath&gt;" Condition="'$(RestorePackagesPath)' != ''" />
+      <_ToshPackageRestoreProjectLines Include="    &lt;RestoreSources&gt;$(RestoreSources)&lt;/RestoreSources&gt;" Condition="'$(RestoreSources)' != ''" />
+      <_ToshPackageRestoreProjectLines Include="  &lt;/PropertyGroup&gt;" />
+      <_ToshPackageRestoreProjectLines Include="  &lt;ItemGroup&gt;" />
+      <_ToshPackageRestoreProjectLines Include="@(_ToshGeneratedPackageReferenceLines)" />
+      <_ToshPackageRestoreProjectLines Include="  &lt;/ItemGroup&gt;" />
+      <_ToshPackageRestoreProjectLines Include="&lt;/Project&gt;" />
+    </ItemGroup>
+    <WriteLinesToFile File="$(_ToshPackageRestoreProject)"
+                      Lines="@(_ToshPackageRestoreProjectLines)"
+                      Overwrite="true" />
+  </Target>
+
+  <Target Name="_ToshRestorePackageReferences"
+          DependsOnTargets="_ToshPreparePackageRestoreProject"
+          Condition="'@(PackageReference)' != ''">
+    <PropertyGroup>
+      <_ToshDotNetExe Condition="'$(DOTNET_HOST_PATH)' != ''">$(DOTNET_HOST_PATH)</_ToshDotNetExe>
+      <_ToshDotNetExe Condition="'$(_ToshDotNetExe)' == ''">dotnet</_ToshDotNetExe>
+    </PropertyGroup>
+    <Message Importance="high"
+             Text="ToshRestore: restoring @(PackageReference->'%(Identity)', ', ')" />
+    <Exec Command="&quot;$(_ToshDotNetExe)&quot; restore &quot;$(_ToshPackageRestoreProject)&quot; --nologo /v:minimal"
+          WorkingDirectory="$(MSBuildProjectDirectory)" />
+  </Target>
+
+  <Target Name="_ToshStagePackageReferences"
+          DependsOnTargets="_ToshPrepareOutputDirs"
+          Condition="'@(PackageReference)' != ''">
+    <Error Condition="'$(_ToshSdkTaskAvailable)' != 'true'"
+           Text="Tosh.Sdk: PackageReference staging requires the packaged Tosh.Sdk task assembly. Use &lt;Project Sdk=&quot;Tosh.Sdk/version&quot;&gt; or remove PackageReference items from this direct-import project." />
+    <Error Condition="!Exists('$(_ToshPackageAssetsFile)')"
+           Text="Tosh.Sdk: PackageReference assets were not restored. Run `dotnet restore` for this project before building." />
+    <Tosh.Sdk.Tasks.ToshStagePackageReferences
+        AssetsFile="$(_ToshPackageAssetsFile)"
+        OutputDirectory="$(OutputPath)"
+        TargetFramework="$(TargetFramework)"
+        RuntimeIdentifier="$(RuntimeIdentifier)">
+      <Output TaskParameter="CopiedFiles" ItemName="_ToshPackageReferenceOutputs" />
+    </Tosh.Sdk.Tasks.ToshStagePackageReferences>
+  </Target>
+
+  <Target Name="_ToshPrepareReferences"
+          DependsOnTargets="_ToshBuildProjectReferences;_ToshStagePackageReferences" />
+
+  <!-- Build referenced projects before compiling this project and
+       stage their primary outputs beside this project's assembly.
+       This gives Tosh projects the same basic runtime probing shape
+       users expect from ordinary .NET ProjectReference usage. -->
+  <Target Name="_ToshBuildProjectReferences"
+          Condition="'@(ProjectReference)' != ''">
+    <MSBuild Projects="@(ProjectReference)"
+             Targets="Build"
+             Properties="Configuration=$(Configuration);TargetFramework=$(TargetFramework);ToshCompilerPath=$(ToshCompilerPath)"
+             BuildInParallel="true">
+      <Output TaskParameter="TargetOutputs" ItemName="_ToshProjectReferenceOutputs" />
+    </MSBuild>
+    <MakeDir Directories="$(OutputPath)" />
+    <Copy SourceFiles="@(_ToshProjectReferenceOutputs)"
+          DestinationFolder="$(OutputPath)"
+          SkipUnchangedFiles="true"
+          Condition="'@(_ToshProjectReferenceOutputs)' != ''" />
+  </Target>
+
   <!-- Primary path: in-process Tosh.Sdk.Tasks.ToshCompile task. -->
   <Target Name="_ToshCompileInProc"
           Condition="'$(_ToshSdkTaskAvailable)' == 'true'"
-          DependsOnTargets="_ToshPrepareOutputDirs"
-          Inputs="@(ToshCompile)"
-          Outputs="$(TargetPath)">
+          DependsOnTargets="_ToshPrepareOutputDirs;_ToshPrepareReferences"
+          Inputs="@(ToshCompile);$(MSBuildProjectFullPath);@(_ToshProjectReferenceOutputs);@(_ToshPackageReferenceOutputs)"
+          Outputs="$(_ToshCompileOutputs)">
     <Message Importance="high"
              Text="ToshCompile (in-process): $(AssemblyName) ← @(ToshCompile->'%(Identity)', ', ')" />
     <Tosh.Sdk.Tasks.ToshCompile
@@ -80,6 +178,7 @@
         AssemblyName="$(AssemblyName)"
         Profile="$(ToshCompileProfile)"
         AllowDynamic="$(ToshAllowDynamic)"
+        EmitReferenceAssembly="$(ToshEmitReferenceAssembly)"
         EmitAppHost="$(ToshEmitAppHost)"
         PublishSingleFile="$(ToshPublishSingleFile)" />
   </Target>
@@ -88,13 +187,15 @@
        not present (e.g. when MSBuild can't load net10.0 task DLLs). -->
   <Target Name="_ToshCompileExec"
           Condition="'$(_ToshSdkTaskAvailable)' != 'true'"
-          DependsOnTargets="_ToshPrepareOutputDirs"
-          Inputs="@(ToshCompile)"
-          Outputs="$(TargetPath)">
+          DependsOnTargets="_ToshPrepareOutputDirs;_ToshPrepareReferences"
+          Inputs="@(ToshCompile);$(MSBuildProjectFullPath);@(_ToshProjectReferenceOutputs);@(_ToshPackageReferenceOutputs)"
+          Outputs="$(_ToshCompileOutputs)">
 
     <PropertyGroup>
       <_ToshAllowDynamicArg Condition="'$(ToshAllowDynamic)' == 'true'">--compile-allow-dynamic</_ToshAllowDynamicArg>
       <_ToshAllowDynamicArg Condition="'$(ToshAllowDynamic)' != 'true'"></_ToshAllowDynamicArg>
+      <_ToshEmitRefasmArg Condition="'$(ToshEmitReferenceAssembly)' == 'true'">--emit-refasm</_ToshEmitRefasmArg>
+      <_ToshEmitRefasmArg Condition="'$(ToshEmitReferenceAssembly)' != 'true'"></_ToshEmitRefasmArg>
       <_ToshNoApphostArg Condition="'$(ToshEmitAppHost)' != 'true'">--no-apphost</_ToshNoApphostArg>
       <_ToshNoApphostArg Condition="'$(ToshEmitAppHost)' == 'true'"></_ToshNoApphostArg>
       <_ToshPublishArg Condition="'$(ToshPublishSingleFile)' == 'true'">--publish-single-file</_ToshPublishArg>
@@ -105,7 +206,7 @@
     <Message Importance="high"
              Text="ToshCompile (Exec): $(AssemblyName) ← @(ToshCompile->'%(Identity)', ', ')" />
 
-    <Exec Command="&quot;$(ToshCompilerPath)&quot; --compile $(_ToshSourceArgs) -o &quot;$(TargetPath)&quot; --profile $(ToshCompileProfile) $(_ToshAllowDynamicArg) $(_ToshNoApphostArg) $(_ToshPublishArg)"
+    <Exec Command="&quot;$(ToshCompilerPath)&quot; --compile $(_ToshSourceArgs) -o &quot;$(TargetPath)&quot; --profile $(ToshCompileProfile) $(_ToshAllowDynamicArg) $(_ToshEmitRefasmArg) $(_ToshNoApphostArg) $(_ToshPublishArg)"
           WorkingDirectory="$(MSBuildProjectDirectory)" />
   </Target>
 
@@ -119,13 +220,14 @@
        primary build action; Clean removes the emitted artifact and
        its sidecar runtimeconfig. -->
 
-  <Target Name="Build" DependsOnTargets="ToshCompile" />
+  <Target Name="Build" DependsOnTargets="ToshCompile" Outputs="$(TargetPath)" />
 
   <Target Name="Rebuild" DependsOnTargets="Clean;Build" />
 
   <Target Name="Clean">
     <ItemGroup>
       <_ToshOutputs Include="$(TargetPath)" />
+      <_ToshOutputs Include="$(_ToshReferenceAssemblyPath)" />
       <_ToshOutputs Include="$(OutputPath)$(AssemblyName)" />
       <_ToshOutputs Include="$(OutputPath)$(AssemblyName).exe" />
       <_ToshOutputs Include="$(OutputPath)$(AssemblyName).runtimeconfig.json" />
@@ -157,6 +259,9 @@
       <_ToshPublishFiles Include="$(OutputPath)Tosh.Stdlib.dll" Condition="'$(ToshPublishSingleFile)' != 'true' and Exists('$(OutputPath)Tosh.Stdlib.dll')" />
       <_ToshPublishFiles Include="$(OutputPath)Tosh.Core.dll" Condition="'$(ToshPublishSingleFile)' != 'true' and Exists('$(OutputPath)Tosh.Core.dll')" />
       <_ToshPublishFiles Include="$(OutputPath)Tosh.Tui.dll" Condition="'$(ToshPublishSingleFile)' != 'true' and Exists('$(OutputPath)Tosh.Tui.dll')" />
+      <_ToshPublishFiles Include="$(OutputPath)*.dll"
+                         Exclude="$(TargetPath);$(_ToshReferenceAssemblyPath)"
+                         Condition="'$(ToshPublishSingleFile)' != 'true'" />
     </ItemGroup>
     <Copy SourceFiles="@(_ToshPublishFiles)"
           DestinationFolder="$(PublishDir)"
@@ -165,8 +270,11 @@
              Text="ToshPublish: wrote @(_ToshPublishFiles->Count()) file(s) to $(PublishDir)" />
   </Target>
 
-  <Target Name="Restore">
-    <Message Importance="low" Text="Tosh.Sdk: nothing to restore." />
+  <Target Name="Restore"
+          DependsOnTargets="_ToshRestorePackageReferences">
+    <Message Condition="'@(PackageReference)' == ''"
+             Importance="low"
+             Text="Tosh.Sdk: nothing to restore." />
   </Target>
 
   <!-- `dotnet run` support. Sets RunCommand and RunArguments
@@ -190,6 +298,137 @@
       <_DotNetExe Condition="'$(_DotNetExe)' == ''">dotnet</_DotNetExe>
     </PropertyGroup>
     <Exec Command="&quot;$(_DotNetExe)&quot; exec &quot;$(TargetPath)&quot; $(StartArguments)" />
+  </Target>
+
+  <!-- ════════════════════════════════════════════════════════════
+       Pack: produce a NuGet package from a built .toshproj.
+
+       Microsoft.NET.Sdk's Pack target is not in scope here (Tosh.Sdk
+       does not import it), so we generate a small wrapper csproj
+       under obj/ that holds the compiled DLL (and the .ref.dll when
+       emitted) as packaged content, then run `dotnet pack` on it.
+
+       The wrapper expresses every Tosh.* runtime library plus the
+       user's own <PackageReference>s as NuGet <PackageReference>
+       entries so a consumer's `<PackageReference Include="MyLib" />`
+       transitively pulls Tosh.Runtime / Tosh.Stdlib / etc.
+       ════════════════════════════════════════════════════════════ -->
+  <PropertyGroup>
+    <_ToshPackWrapperDir>$(IntermediateOutputPath)pack-wrapper\</_ToshPackWrapperDir>
+    <_ToshPackWrapperProject>$(_ToshPackWrapperDir)$(AssemblyName).pack.csproj</_ToshPackWrapperProject>
+    <!-- Defaults that depend on values the project body may have just set. -->
+    <IsPackable Condition="'$(IsPackable)' == '' and '$(OutputType)' == 'Library'">true</IsPackable>
+    <IsPackable Condition="'$(IsPackable)' == ''">false</IsPackable>
+    <PackageId Condition="'$(PackageId)' == ''">$(AssemblyName)</PackageId>
+  </PropertyGroup>
+
+  <Target Name="_ToshPreparePackWrapper"
+          DependsOnTargets="Build"
+          Condition="'$(IsPackable)' == 'true'">
+    <MakeDir Directories="$(_ToshPackWrapperDir);$(PackageOutputPath)" />
+
+    <PropertyGroup>
+      <_ToshPackTargetPath>$(TargetPath)</_ToshPackTargetPath>
+      <_ToshPackRefAsmPath>$(_ToshReferenceAssemblyPath)</_ToshPackRefAsmPath>
+      <_ToshPackHasRefAsm Condition="'$(ToshEmitReferenceAssembly)' == 'true' and Exists('$(_ToshPackRefAsmPath)')">true</_ToshPackHasRefAsm>
+      <_ToshPackHasRefAsm Condition="'$(_ToshPackHasRefAsm)' == ''">false</_ToshPackHasRefAsm>
+
+      <_ToshPackRuntimeVersion Condition="'$(ToshRuntimeVersion)' != ''">$(ToshRuntimeVersion)</_ToshPackRuntimeVersion>
+      <_ToshPackRuntimeVersion Condition="'$(_ToshPackRuntimeVersion)' == ''">*</_ToshPackRuntimeVersion>
+
+      <_ToshPackVersion Condition="'$(PackageVersion)' != ''">$(PackageVersion)</_ToshPackVersion>
+      <_ToshPackVersion Condition="'$(_ToshPackVersion)' == ''">$(Version)</_ToshPackVersion>
+      <_ToshPackVersion Condition="'$(_ToshPackVersion)' == ''">1.0.0</_ToshPackVersion>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <_ToshPackWrapperLines Remove="@(_ToshPackWrapperLines)" />
+      <_ToshPackWrapperLines Include="&lt;Project Sdk=&quot;Microsoft.NET.Sdk&quot;&gt;" />
+      <_ToshPackWrapperLines Include="  &lt;PropertyGroup&gt;" />
+      <_ToshPackWrapperLines Include="    &lt;TargetFramework&gt;$(TargetFramework)&lt;/TargetFramework&gt;" />
+      <_ToshPackWrapperLines Include="    &lt;IncludeBuildOutput&gt;false&lt;/IncludeBuildOutput&gt;" />
+      <_ToshPackWrapperLines Include="    &lt;EnableDefaultCompileItems&gt;false&lt;/EnableDefaultCompileItems&gt;" />
+      <_ToshPackWrapperLines Include="    &lt;EnableDefaultEmbeddedResourceItems&gt;false&lt;/EnableDefaultEmbeddedResourceItems&gt;" />
+      <_ToshPackWrapperLines Include="    &lt;NoWarn&gt;NU5128;NU5100;NU5131&lt;/NoWarn&gt;" />
+      <_ToshPackWrapperLines Include="    &lt;IsPackable&gt;true&lt;/IsPackable&gt;" />
+      <_ToshPackWrapperLines Include="    &lt;PackageId&gt;$(PackageId)&lt;/PackageId&gt;" />
+      <_ToshPackWrapperLines Include="    &lt;Version&gt;$(_ToshPackVersion)&lt;/Version&gt;" />
+      <_ToshPackWrapperLines Include="    &lt;PackageVersion&gt;$(_ToshPackVersion)&lt;/PackageVersion&gt;" />
+      <_ToshPackWrapperLines Include="    &lt;Authors&gt;$(Authors)&lt;/Authors&gt;" Condition="'$(Authors)' != ''" />
+      <_ToshPackWrapperLines Include="    &lt;Company&gt;$(Company)&lt;/Company&gt;" Condition="'$(Company)' != ''" />
+      <_ToshPackWrapperLines Include="    &lt;Description&gt;$(Description)&lt;/Description&gt;" Condition="'$(Description)' != ''" />
+      <_ToshPackWrapperLines Include="    &lt;Copyright&gt;$(Copyright)&lt;/Copyright&gt;" Condition="'$(Copyright)' != ''" />
+      <_ToshPackWrapperLines Include="    &lt;PackageLicenseExpression&gt;$(PackageLicenseExpression)&lt;/PackageLicenseExpression&gt;" Condition="'$(PackageLicenseExpression)' != ''" />
+      <_ToshPackWrapperLines Include="    &lt;PackageProjectUrl&gt;$(PackageProjectUrl)&lt;/PackageProjectUrl&gt;" Condition="'$(PackageProjectUrl)' != ''" />
+      <_ToshPackWrapperLines Include="    &lt;RepositoryUrl&gt;$(RepositoryUrl)&lt;/RepositoryUrl&gt;" Condition="'$(RepositoryUrl)' != ''" />
+      <_ToshPackWrapperLines Include="    &lt;RepositoryType&gt;$(RepositoryType)&lt;/RepositoryType&gt;" Condition="'$(RepositoryType)' != ''" />
+      <_ToshPackWrapperLines Include="    &lt;PackageTags&gt;$(PackageTags)&lt;/PackageTags&gt;" Condition="'$(PackageTags)' != ''" />
+      <_ToshPackWrapperLines Include="    &lt;PackageReleaseNotes&gt;$(PackageReleaseNotes)&lt;/PackageReleaseNotes&gt;" Condition="'$(PackageReleaseNotes)' != ''" />
+      <_ToshPackWrapperLines Include="    &lt;PackageOutputPath&gt;$(PackageOutputPath)&lt;/PackageOutputPath&gt;" />
+      <_ToshPackWrapperLines Include="    &lt;BaseIntermediateOutputPath&gt;$(_ToshPackWrapperDir)obj\&lt;/BaseIntermediateOutputPath&gt;" />
+      <_ToshPackWrapperLines Include="    &lt;MSBuildProjectExtensionsPath&gt;$(_ToshPackWrapperDir)obj\&lt;/MSBuildProjectExtensionsPath&gt;" />
+      <_ToshPackWrapperLines Include="    &lt;BaseOutputPath&gt;$(_ToshPackWrapperDir)bin\&lt;/BaseOutputPath&gt;" />
+      <_ToshPackWrapperLines Include="    &lt;OutputPath&gt;$(_ToshPackWrapperDir)bin\&lt;/OutputPath&gt;" />
+      <_ToshPackWrapperLines Include="    &lt;DisableImplicitFrameworkReferences&gt;true&lt;/DisableImplicitFrameworkReferences&gt;" />
+      <_ToshPackWrapperLines Include="    &lt;GenerateAssemblyInfo&gt;false&lt;/GenerateAssemblyInfo&gt;" />
+      <_ToshPackWrapperLines Include="    &lt;GenerateDependencyFile&gt;false&lt;/GenerateDependencyFile&gt;" />
+      <_ToshPackWrapperLines Include="  &lt;/PropertyGroup&gt;" />
+
+      <_ToshPackWrapperLines Include="  &lt;ItemGroup&gt;" />
+      <_ToshPackWrapperLines Include="    &lt;None Include=&quot;$(_ToshPackTargetPath)&quot; Pack=&quot;true&quot; PackagePath=&quot;lib\$(TargetFramework)\&quot; /&gt;" />
+      <_ToshPackWrapperLines Include="    &lt;None Include=&quot;$(_ToshPackRefAsmPath)&quot; Pack=&quot;true&quot; PackagePath=&quot;ref\$(TargetFramework)\$(AssemblyName)$(TargetExt)&quot; /&gt;"
+                             Condition="'$(_ToshPackHasRefAsm)' == 'true'" />
+      <_ToshPackWrapperLines Include="  &lt;/ItemGroup&gt;" />
+
+      <_ToshPackWrapperLines Include="  &lt;ItemGroup&gt;" Condition="'$(ToshIncludeRuntimeDependencies)' == 'true'" />
+      <_ToshPackWrapperLines Include="    &lt;PackageReference Include=&quot;Tosh.Runtime&quot; Version=&quot;$(_ToshPackRuntimeVersion)&quot; /&gt;"
+                             Condition="'$(ToshIncludeRuntimeDependencies)' == 'true'" />
+      <_ToshPackWrapperLines Include="    &lt;PackageReference Include=&quot;Tosh.Stdlib&quot; Version=&quot;$(_ToshPackRuntimeVersion)&quot; /&gt;"
+                             Condition="'$(ToshIncludeRuntimeDependencies)' == 'true'" />
+      <_ToshPackWrapperLines Include="    &lt;PackageReference Include=&quot;Tosh.Language&quot; Version=&quot;$(_ToshPackRuntimeVersion)&quot; /&gt;"
+                             Condition="'$(ToshIncludeRuntimeDependencies)' == 'true'" />
+      <_ToshPackWrapperLines Include="    &lt;PackageReference Include=&quot;Tosh.Compiler.Runtime&quot; Version=&quot;$(_ToshPackRuntimeVersion)&quot; /&gt;"
+                             Condition="'$(ToshIncludeRuntimeDependencies)' == 'true'" />
+      <_ToshPackWrapperLines Include="  &lt;/ItemGroup&gt;" Condition="'$(ToshIncludeRuntimeDependencies)' == 'true'" />
+
+      <!-- Forward user-authored <PackageReference> entries. -->
+      <_ToshUserPackRefLines Remove="@(_ToshUserPackRefLines)" />
+      <_ToshUserPackRefLines
+          Include="    &lt;PackageReference Include=&quot;%(PackageReference.Identity)&quot; Version=&quot;%(PackageReference.Version)&quot; /&gt;"
+          Condition="'@(PackageReference)' != '' and '%(PackageReference.Identity)' != '' and '%(PackageReference.Version)' != ''" />
+      <_ToshUserPackRefLines
+          Include="    &lt;PackageReference Include=&quot;%(PackageReference.Identity)&quot; /&gt;"
+          Condition="'@(PackageReference)' != '' and '%(PackageReference.Identity)' != '' and '%(PackageReference.Version)' == ''" />
+      <_ToshPackWrapperLines Include="  &lt;ItemGroup&gt;" Condition="'@(_ToshUserPackRefLines)' != ''" />
+      <_ToshPackWrapperLines Include="@(_ToshUserPackRefLines)" Condition="'@(_ToshUserPackRefLines)' != ''" />
+      <_ToshPackWrapperLines Include="  &lt;/ItemGroup&gt;" Condition="'@(_ToshUserPackRefLines)' != ''" />
+
+      <_ToshPackWrapperLines Include="&lt;/Project&gt;" />
+    </ItemGroup>
+
+    <WriteLinesToFile File="$(_ToshPackWrapperProject)"
+                      Lines="@(_ToshPackWrapperLines)"
+                      Overwrite="true" />
+  </Target>
+
+  <Target Name="Pack"
+          DependsOnTargets="_ToshPreparePackWrapper"
+          Condition="'$(IsPackable)' == 'true'">
+    <PropertyGroup>
+      <_ToshDotNetExeForPack Condition="'$(DOTNET_HOST_PATH)' != ''">$(DOTNET_HOST_PATH)</_ToshDotNetExeForPack>
+      <_ToshDotNetExeForPack Condition="'$(_ToshDotNetExeForPack)' == ''">dotnet</_ToshDotNetExeForPack>
+    </PropertyGroup>
+    <Message Importance="high"
+             Text="ToshPack: $(PackageId).$(_ToshPackVersion).nupkg → $(PackageOutputPath)" />
+    <Exec Command="&quot;$(_ToshDotNetExeForPack)&quot; pack &quot;$(_ToshPackWrapperProject)&quot; --nologo /v:minimal /p:Configuration=$(Configuration)"
+          WorkingDirectory="$(MSBuildProjectDirectory)" />
+  </Target>
+
+  <Target Name="Pack_Skipped"
+          AfterTargets="Build"
+          Condition="'$(IsPackable)' != 'true' and '$(_IsPacking)' == 'true'">
+    <Message Importance="high"
+             Text="Tosh.Sdk: skipping pack because IsPackable is false. Set &lt;IsPackable&gt;true&lt;/IsPackable&gt; in the .toshproj, or use OutputType=Library which enables it by default." />
   </Target>
 
 </Project>

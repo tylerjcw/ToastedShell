@@ -12,6 +12,7 @@
     <Project Path="src/Tosh.Compiler.Runtime/Tosh.Compiler.Runtime.csproj" />
     <Project Path="src/Tosh.Sdk/Tosh.Sdk.csproj" />
     <Project Path="src/Tosh.Sdk.Tasks/Tosh.Sdk.Tasks.csproj" />
+    <Project Path="src/Tosh.Templates/Tosh.Templates.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Tosh.LspFixture/Tosh.LspFixture.csproj" />

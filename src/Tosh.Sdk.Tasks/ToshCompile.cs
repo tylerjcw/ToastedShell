@@ -54,6 +54,13 @@ public sealed class ToshCompile : Microsoft.Build.Utilities.Task
     public string? AssemblyName { get; set; }
 
     /// <summary>
+    /// When <c>true</c>, emit a sibling <c>.ref.dll</c> stamped with
+    /// <see cref="System.Runtime.CompilerServices.ReferenceAssemblyAttribute"/>.
+    /// Mirrors the CLI's <c>--emit-refasm</c> flag.
+    /// </summary>
+    public bool EmitReferenceAssembly { get; set; }
+
+    /// <summary>
     /// When <c>true</c>, generate an apphost wrapper executable
     /// (Windows: .exe; Unix: no extension) alongside the DLL.
     /// The wrapper points at the DLL and runs it via the .NET runtime.
@@ -179,9 +186,21 @@ public sealed class ToshCompile : Microsoft.Build.Utilities.Task
         if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir)) Directory.CreateDirectory(dir);
 
         EmitResult result;
+        var siblingPaths = new List<string>(Sources.Length);
+        foreach (var item in Sources)
+        {
+            var p = item.GetMetadata("FullPath");
+            if (!string.IsNullOrEmpty(p)) siblingPaths.Add(p);
+        }
         using (var fs = File.Create(OutputPath))
         {
-            result = BoundUnitEmitter.Emit(unit, asmName, fs, profile);
+            result = BoundUnitEmitter.Emit(
+                unit,
+                asmName,
+                fs,
+                profile,
+                referenceAssembly: false,
+                compilationSources: siblingPaths);
         }
 
         if (!result.IsClean)
@@ -192,6 +211,34 @@ public sealed class ToshCompile : Microsoft.Build.Utilities.Task
             }
             try { File.Delete(OutputPath); } catch { /* best-effort */ }
             return false;
+        }
+
+        if (EmitReferenceAssembly)
+        {
+            var refOutputPath = Path.Combine(
+                dir ?? string.Empty,
+                $"{Path.GetFileNameWithoutExtension(OutputPath)}.ref{Path.GetExtension(OutputPath)}");
+            using (var refStream = File.Create(refOutputPath))
+            {
+                var refResult = BoundUnitEmitter.Emit(
+                    unit,
+                    asmName,
+                    refStream,
+                    profile,
+                    referenceAssembly: true,
+                    compilationSources: siblingPaths);
+                if (!refResult.IsClean)
+                {
+                    foreach (var shape in refResult.UnsupportedShapes)
+                    {
+                        Log.LogError($"tosh refasm: {shape}");
+                    }
+                    try { File.Delete(refOutputPath); } catch { /* best-effort */ }
+                    return false;
+                }
+            }
+
+            Log.LogMessage(MessageImportance.High, $"ToshCompile: wrote {refOutputPath}");
         }
 
         // Companion runtimeconfig so `dotnet <out>.dll` can run

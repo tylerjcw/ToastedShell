@@ -731,4 +731,156 @@ public sealed class LspFeatureTests
         Assert.NotEmpty(items);
         Assert.All(items, item => Assert.True(item.Kind is 17 or 19));
     }
+
+    // ─── References ───────────────────────────────────────────────
+
+    [Fact]
+    public void References_finds_all_variable_uses_and_declaration()
+    {
+        const string script = "var greeting = \"hi\"\necho $greeting\necho $greeting world\n";
+
+        // Cursor on the `var greeting` declaration.
+        var refs = _features.GetReferences(script, "file:///refs-var.tosh", new LspPosition(0, 6), includeDeclaration: true);
+
+        Assert.Equal(3, refs.Count);
+        // Declaration site at line 0 (selection range covers `greeting`).
+        Assert.Contains(refs, r => r.Range.Start.Line == 0 && r.Range.End.Character > r.Range.Start.Character);
+        // Two usages on lines 1 and 2 — selection range covers the identifier
+        // after the `$` so editors highlight just the name.
+        Assert.Contains(refs, r => r.Range.Start.Line == 1);
+        Assert.Contains(refs, r => r.Range.Start.Line == 2);
+    }
+
+    [Fact]
+    public void References_excludes_declaration_when_requested()
+    {
+        const string script = "var x = 1\necho $x\n";
+
+        var refs = _features.GetReferences(script, "file:///refs-no-decl.tosh", new LspPosition(0, 4), includeDeclaration: false);
+
+        Assert.Single(refs);
+        Assert.Equal(1, refs[0].Range.Start.Line);
+    }
+
+    [Fact]
+    public void References_finds_function_call_sites()
+    {
+        const string script = "func greet(name) { echo hi $name }\ngreet alice\ngreet bob\n";
+
+        // Cursor on the `func greet` declaration name.
+        var refs = _features.GetReferences(script, "file:///refs-func.tosh", new LspPosition(0, 6), includeDeclaration: true);
+
+        Assert.True(refs.Count >= 3, $"expected at least 3 refs, got {refs.Count}");
+        Assert.Contains(refs, r => r.Range.Start.Line == 0); // declaration
+        Assert.Contains(refs, r => r.Range.Start.Line == 1); // call 1
+        Assert.Contains(refs, r => r.Range.Start.Line == 2); // call 2
+    }
+
+    [Fact]
+    public void References_does_not_match_a_different_variable_with_the_same_name()
+    {
+        const string script =
+            "var x = 1\n" +
+            "func inner() {\n" +
+            "  var x = 2\n" +
+            "  echo $x\n" +
+            "}\n" +
+            "echo $x\n";
+
+        // Cursor on outer `var x` declaration on line 0.
+        var refs = _features.GetReferences(script, "file:///refs-shadow.tosh", new LspPosition(0, 4), includeDeclaration: true);
+
+        // The inner `$x` on line 3 must NOT appear in the outer's references.
+        Assert.DoesNotContain(refs, r => r.Range.Start.Line == 3);
+        // But the outer reference on line 5 must.
+        Assert.Contains(refs, r => r.Range.Start.Line == 5);
+    }
+
+    // ─── Rename ───────────────────────────────────────────────────
+
+    [Fact]
+    public void PrepareRename_returns_identifier_range_for_variable()
+    {
+        const string script = "var greeting = \"hi\"\necho $greeting\n";
+
+        // Cursor inside the `$greeting` reference.
+        var prep = _features.PrepareRename(script, "file:///prep-var.tosh", new LspPosition(1, 8));
+
+        Assert.NotNull(prep);
+        // The placeholder is the bare identifier (no `$`).
+        Assert.Equal("greeting", prep!.Placeholder);
+        // The editable range starts past the `$`.
+        Assert.Equal(1, prep.Range.Start.Line);
+        Assert.Equal(6, prep.Range.Start.Character);
+        Assert.Equal(14, prep.Range.End.Character);
+    }
+
+    [Fact]
+    public void PrepareRename_returns_null_for_non_renamable_position()
+    {
+        const string script = "echo hello\n";
+
+        // Cursor on whitespace.
+        var prep = _features.PrepareRename(script, "file:///prep-none.tosh", new LspPosition(0, 4));
+
+        Assert.Null(prep);
+    }
+
+    [Fact]
+    public void Rename_variable_rewrites_declaration_and_all_uses_without_dollar()
+    {
+        const string script = "var x = 1\necho $x\necho ($x + 1)\n";
+
+        var edit = _features.Rename(script, "file:///rename-var.tosh", new LspPosition(0, 4), "renamed");
+
+        Assert.NotNull(edit);
+        var changes = Assert.Single(edit!.Changes);
+        var edits = changes.Value;
+        Assert.True(edits.Count >= 3, $"expected at least 3 edits, got {edits.Count}");
+        Assert.All(edits, e => Assert.Equal("renamed", e.NewText));
+
+        var newText = ApplyEdits(script, edits);
+        Assert.Contains("var renamed = 1", newText, StringComparison.Ordinal);
+        Assert.Contains("echo $renamed", newText, StringComparison.Ordinal);
+        Assert.Contains("$renamed + 1", newText, StringComparison.Ordinal);
+        Assert.DoesNotContain("$x", newText, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Rename_function_rewrites_declaration_and_call_sites()
+    {
+        const string script = "func greet(n) { echo hi $n }\ngreet alice\ngreet bob\n";
+
+        var edit = _features.Rename(script, "file:///rename-func.tosh", new LspPosition(0, 6), "salute");
+
+        Assert.NotNull(edit);
+        var edits = edit!.Changes.Single().Value;
+        var newText = ApplyEdits(script, edits);
+        Assert.Contains("func salute(n)", newText, StringComparison.Ordinal);
+        Assert.Contains("salute alice", newText, StringComparison.Ordinal);
+        Assert.Contains("salute bob", newText, StringComparison.Ordinal);
+        Assert.DoesNotContain("greet", newText, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Applies a set of non-overlapping <see cref="LspTextEdit"/>s to
+    /// <paramref name="text"/> in reverse offset order so earlier edits
+    /// don't shift later ones.
+    /// </summary>
+    private static string ApplyEdits(string text, IReadOnlyList<LspTextEdit> edits)
+    {
+        var lineStarts = TextCoordinateMap.BuildLineStarts(text);
+        int Offset(LspPosition p) => lineStarts[p.Line] + p.Character;
+        var ordered = edits
+            .Select(e => (Start: Offset(e.Range.Start), End: Offset(e.Range.End), e.NewText))
+            .OrderByDescending(t => t.Start)
+            .ToArray();
+        var sb = new System.Text.StringBuilder(text);
+        foreach (var (start, end, newText) in ordered)
+        {
+            sb.Remove(start, end - start);
+            sb.Insert(start, newText);
+        }
+        return sb.ToString();
+    }
 }

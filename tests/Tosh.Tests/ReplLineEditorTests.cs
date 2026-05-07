@@ -866,4 +866,106 @@ public sealed class ReplLineEditorTests
         ReplLineEditor.ApplySmartPaste(buffer, "line1\r\nline2\r\nline3");
         Assert.Equal("line1\nline2\nline3", buffer.Text);
     }
+
+    // ── Undo coalescing ────────────────────────────────────────────────────
+
+    [Fact]
+    public void Typing_run_coalesces_into_single_undo_entry()
+    {
+        var buffer = new LineEditorBuffer();
+        buffer.Insert('h');
+        buffer.Insert('e');
+        buffer.Insert('l');
+        buffer.Insert('l');
+        buffer.Insert('o');
+        Assert.Equal("hello", buffer.Text);
+
+        Assert.True(buffer.Undo());
+        Assert.Equal(string.Empty, buffer.Text);
+        Assert.False(buffer.CanUndo);
+    }
+
+    [Fact]
+    public void Backspace_run_coalesces_into_single_undo_entry()
+    {
+        var buffer = new LineEditorBuffer("hello");
+        buffer.Backspace();
+        buffer.Backspace();
+        buffer.Backspace();
+        Assert.Equal("he", buffer.Text);
+
+        Assert.True(buffer.Undo());
+        Assert.Equal("hello", buffer.Text);
+        Assert.False(buffer.CanUndo);
+    }
+
+    [Fact]
+    public void Cursor_movement_breaks_typing_coalescing()
+    {
+        var buffer = new LineEditorBuffer();
+        buffer.Insert('a');
+        buffer.Insert('b');
+        // Move left breaks the run
+        buffer.MoveLeft();
+        buffer.Insert('c');
+        Assert.Equal("acb", buffer.Text);
+
+        // Undo 'c' (its own entry)
+        Assert.True(buffer.Undo());
+        Assert.Equal("ab", buffer.Text);
+
+        // Undo "ab" run (single entry)
+        Assert.True(buffer.Undo());
+        Assert.Equal(string.Empty, buffer.Text);
+
+        Assert.False(buffer.CanUndo);
+    }
+
+    [Fact]
+    public void Completion_acceptance_creates_single_undo_entry()
+    {
+        var buffer = new LineEditorBuffer();
+        buffer.Insert('h');
+        buffer.Insert('e');
+        buffer.Insert('l');
+        // Simulate typing "hel" then accepting completion to "hello world "
+        // baseText is what the picker recorded before the prefix was typed,
+        // replacementStart/Length covers the typed prefix.
+        ReplLineEditor.ApplyCompletionSuggestion(buffer, string.Empty, 0, 0, "hello world");
+        Assert.Equal("hello world", buffer.Text);
+
+        // One undo should restore the pre-completion state ("hel" run)
+        Assert.True(buffer.Undo());
+        Assert.Equal("hel", buffer.Text);
+
+        // One more undo removes the typing run
+        Assert.True(buffer.Undo());
+        Assert.Equal(string.Empty, buffer.Text);
+    }
+
+    [Fact]
+    public void Alt_up_down_navigates_multiline_history_without_clobbering_draft()
+    {
+        var history = new LineEditorHistory(new[] { "ls", "echo hello" });
+        const string draft = "if $x {\n    ls\n}";
+
+        // Alt+Up: save draft, go to most-recent entry
+        Assert.True(history.TryPrevious(draft, out var entry1));
+        Assert.Equal("echo hello", entry1);
+
+        // Alt+Up again: go further back
+        Assert.True(history.TryPrevious(draft, out var entry2));
+        Assert.Equal("ls", entry2);
+
+        // Alt+Down: come back one step
+        Assert.True(history.TryNext(out var entry3));
+        Assert.Equal("echo hello", entry3);
+
+        // Alt+Down to index -1: draft is restored
+        Assert.True(history.TryNext(out var restored));
+        Assert.Equal(draft, restored);
+
+        // Alt+Down at -1: nothing left
+        Assert.False(history.TryNext(out _));
+    }
 }

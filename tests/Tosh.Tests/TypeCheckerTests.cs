@@ -168,6 +168,66 @@ public sealed class TypeCheckerTests : IClassFixture<ToshRuntimeFixture>
         Assert.Empty(diags);
     }
 
+    [Fact]
+    public void Reports_non_boolean_if_condition()
+    {
+        var diags = Check("if 42 { echo 1 }");
+        Assert.Contains(diags, d => d.Code == "tosh.type.condition");
+    }
+
+    [Fact]
+    public void Reports_non_boolean_while_condition()
+    {
+        var diags = Check("while \"nope\" { echo 1; break }");
+        Assert.Contains(diags, d => d.Code == "tosh.type.condition");
+    }
+
+    [Fact]
+    public void Reports_operator_incompatible_operands()
+    {
+        var diags = Check("var x = (true - 1)");
+        Assert.Contains(diags, d => d.Code == "tosh.type.operator");
+    }
+
+    [Fact]
+    public void Reports_missing_member_on_concrete_type()
+    {
+        var diags = Check("var s: string = \"abc\"; echo $s.NotARealMember");
+        Assert.Contains(diags, d => d.Code == "tosh.type.member_not_found");
+    }
+
+    [Fact]
+    public void Reports_method_overload_mismatch_on_concrete_type()
+    {
+        var diags = Check("var s: string = \"abc\"; echo ($s.Substring(\"x\"))");
+        Assert.Contains(diags, d => d.Code == "tosh.type.mismatch");
+    }
+
+    [Fact]
+    public void Reports_index_type_mismatch()
+    {
+        var diags = Check("var s: string = \"abc\"; echo $s[true]");
+        Assert.Contains(diags, d => d.Code == "tosh.type.index");
+    }
+
+    [Fact]
+    public void Reports_builtin_command_arity_from_metadata()
+    {
+        var diags = Check("first 1 2");
+        Assert.Contains(diags, d => d.Code == "tosh.type.command_arity");
+    }
+
+    [Theory]
+    [InlineData("mkdir -p foo")]
+    [InlineData("cut -d \":\" -f 2")]
+    [InlineData("sort -d Count")]
+    [InlineData("ping -c 1 localhost")]
+    public void Does_not_report_builtin_command_arity_for_shell_options(string source)
+    {
+        var diags = Check(source);
+        Assert.DoesNotContain(diags, d => d.Code == "tosh.type.command_arity");
+    }
+
     // ── CheckCompileAnnotations ─────────────────────────────────
 
     private IReadOnlyList<ToshDiagnostic> CheckCompile(string source, bool allowDynamic)
@@ -222,11 +282,32 @@ public sealed class TypeCheckerTests : IClassFixture<ToshRuntimeFixture>
     }
 
     [Fact]
+    public void Compile_audit_passes_explicit_dynamic_var_annotation()
+    {
+        // `var f: dynamic = ...` is an explicit opt-out, equivalent
+        // to the parameter-level `: dynamic` case above. The compile
+        // audit must not flag it as implicit dynamic.
+        var diags = CheckCompile("var f: dynamic = (ls)", allowDynamic: false);
+        Assert.Empty(diags);
+    }
+
+    [Fact]
     public void Compile_audit_passes_fully_typed_program()
     {
         var diags = CheckCompile("""
             func add(a: int, b: int) -> int { return $a + $b }
             var result: int = (add 1 2)
+            """, allowDynamic: false);
+        Assert.Empty(diags);
+    }
+
+    [Fact]
+    public void Compile_audit_allows_var_new_user_type_without_dynamic_opt_in()
+    {
+        var diags = CheckCompile("""
+            class Point(x, y) { prop X = $x
+            prop Y = $y }
+            var p = new Point(1, 2)
             """, allowDynamic: false);
         Assert.Empty(diags);
     }

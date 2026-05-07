@@ -25,6 +25,10 @@ public sealed class DotNetTypeResolver : IImportingTypeResolver
         ["double"] = typeof(double),
         ["duration"] = typeof(TemporalAmount),
         ["dynamic"] = typeof(object),
+        // `Error` is the recommended base class for user-defined
+        // error types declared in tosh. Exposed case-insensitively
+        // so `extends Error`, `error`, and `ERROR` all resolve.
+        ["error"] = typeof(ToshError),
         ["table"] = typeof(System.Dynamic.ExpandoObject),
         ["dict"] = typeof(Dictionary<string, object?>),
         ["map"] = typeof(Dictionary<string, object?>),
@@ -100,6 +104,10 @@ public sealed class DotNetTypeResolver : IImportingTypeResolver
         "System.Text.RegularExpressions",
         "System.Threading",
         "System.Threading.Tasks",
+        // Pull in the tosh runtime namespace so user code can
+        // reference ToshError, TextSpan, ToshDiagnostic, etc.
+        // by short name without an explicit `using`.
+        "Tosh.Runtime",
     ];
 
     private readonly Dictionary<string, string> _aliases = new(StringComparer.OrdinalIgnoreCase);

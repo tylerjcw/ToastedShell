@@ -29,7 +29,18 @@ Constructs that translate cleanly to .NET concepts.
 - **Async:** `async`/`await`, generator functions
 - **Modules:** `using` (CLR namespaces), `require` (TōSh modules — semantics shift, see [What semantically changes](#what-semantically-changes))
 
-**Verdict:** These all compile. No language feature in this bucket needs to be dropped.
+**Verdict / current state:** These are the language features that should remain
+part of compiled ToastScript. They should not be dropped. As of May 2026,
+the compiler has working paths for the core expression/control-flow surface,
+typed top-level functions, class and record shells, CLR-polymorphic
+`overrule`, inheritance, modules, enum metadata, interfaces, unions, overload
+binding, named/splat argument shapes, `require`-as-build-input cases, native
+`bind` lifting for supported P/Invoke signatures, and SDK build/run/publish
+flows. The exact source of truth is now the compiler feature matrix rather
+than this prose paragraph: every feature should be tracked as native IL /
+Tier 1, runtime-hosted / Tier 2, source replay / Tier 3, or deliberately
+unsupported. Runes remain the most important unresolved design surface because
+invocation is an engine expansion step with lazy thunk semantics.
 
 ### Bucket B — Library (keep, but move)
 
@@ -330,6 +341,7 @@ Snapshot of how far each layer has actually moved. Commits are on `master`.
 | `tosh --compile script.tosh [out.dll]` CLI flag                                       | done        | `Program.cs CompileScriptAsync` |
 | Strict `--compile` (binder runs, fail-fast on diagnostics, no half-baked output)      | done        | `Program.cs CompileScriptAsync` runs `Binder.Bind(parseResult, ...)` against the concatenated unit; binder diagnostics, parse errors, and emitter unsupported shapes all return non-zero. Partial `.dll` is deleted on emitter failure so `dotnet <out>.dll` can't run stale output. |
 | `--profile=permissive|runtime|pure` flag + tier-based diagnostic gate                 | done        | See [COMPILED_PROFILE.md](COMPILED_PROFILE.md). Three-tier model: pure IL (1) / IL + `ToshHost` (2) / source-replay (3). `BoundUnitEmitter.RequireTier` emits dedup'd diagnostics into `EmitResult.UnsupportedShapes` when an emit site exceeds the active profile's allowed tier; CLI deletes the partial `.dll` on failure. Default profile is `permissive`. |
+| Compiler feature matrix across `permissive`/`runtime`/`pure`                          | done / expanding | `tests/Tosh.Tests/CompilerFeatureMatrixTests.cs` is the executable ledger for compiled language coverage. The matrix now covers broad syntax, declaration, callable, module, metadata, interop, and SDK-facing families across all three profiles, with no all-profile-rejected rows in the latest documented audit. It must keep expanding until it is exhaustive rather than representative; every row should identify whether the implementation is native IL / Tier 1, runtime-hosted / Tier 2, source replay / Tier 3, or a deliberate unsupported diagnostic. Runes and any remaining source-replay paths should stay explicit profile decisions rather than accidental emitter gaps. |
 | Literals, arithmetic, string interpolation                                           | done        | `6044476` |
 | `var` / locals + `$x` reads + reassignment + compound assignment (`+= -= *= /= %=`)  | done        | `6044476`, `85392ea` |
 | `if` / `while` / `until`                                                              | done        | `ef9dcfa` |
@@ -343,10 +355,11 @@ Snapshot of how far each layer has actually moved. Commits are on `master`.
 | Live stdlib bridge (non-inlined commands routed through `ToshHost`)                  | done        | `70dd69b` — `pwd`, `whoami`, `ls`, `which`, etc. dispatch to the same registry the interpreter uses |
 | `break` / `continue`                                                                 | done        | `LoopFrame` stack + `OpCodes.Leave` — works inside `while`, range-`for`, and foreach (break leaves through the foreach dispose try) |
 | `try` / `catch` / `finally` / `throw`                                                | done        | `BeginExceptionBlock` / `BeginCatchBlock` filtering on `ThrowSignalException`; catch-var bound via `ToshHost.ThrownValueOf` |
-| Splat / named arguments                                                              | partial     | Command calls support splat and named arguments through `EmitArgsArray`: fast `newarr` path when no splat, `List<object?>` + `ToArray()` plus `ToshHost.SpreadArgs` when present; named args wrap as `NamedArgument(name, value)`. Direct user-function calls and direct CLR shell method calls still reject splat/named arguments. |
+| Splat / named arguments                                                              | done        | All call shapes that the parser produces with splat or named args lower through the shared `EmitArgsArrayCore(name, args)` emitter: fast `newarr` path when no splat, `List<object?>` + `ToArray()` + `ToshHost.SpreadArgs` when present, with named entries wrapped as `NamedArgument(name, value)`. Covers command calls, callable invocation (`$fn(...)`), `new TypeName(...)`, static method calls, instance method calls, user-function pipeline stages, and the union-variant constructor fallback. Runtime side: `ReflectionInvoker.TryBindParameters` unwraps `INamedArgument` (implemented by `Tosh.Language.NamedArgument`) and binds by parameter name; `ToshHost.InvokeMember` reflection fallback now routes through `Runtime.Invoker.InvokeInstance`; `ToshHost.RunUserFuncStage` and `ToshHost.TryBuildOverloadInvocation` split named/positional and bind by name. |
 | User functions as pipeline stages                                                    | done        | `ldtoken` the `Func_<name>` dynamic shim's `MethodBuilder` → `MethodInfo`; `ToshHost.RunUserFuncStage` dispatches by arity (drain-once vs. one invocation per input item). The shim is always emitted — even for fully-typed funcs — so reflection.Invoke sees a uniform `(object,…) -> object` signature regardless of typedness. |
 | Closures over top-level variables                                                    | done        | Tier 2 #5. `BoundUnitEmitter.PromoteCapturedSymbols` walks every nested `BoundFunctionDefinition.Captures`, promotes captures of top-level `var` symbols into `private static` fields on the program type, and rewrites reads/writes to `Ldsfld`/`Stsfld`. Captures of peer top-level functions resolve through the `_userFunctions` map. Deeper-than-top-level captures still emit a diagnostic. |
-| Classes / records / methods                                                          | partial     | Records: real CLR `public sealed class` with positional constructor + public `object` fields per field; `new Rec(a,b,c)` lowers to direct `newobj` and `$r.Field` lowers to direct `ldfld` when target's static type is the shell. Classes with primary-ctor properties + plain methods now also lower fully natively: each method becomes a real CLR instance method on the shell with `$this` mapped to `Ldarg_0`, `$this.Field` to direct `ldfld`, and `$this.method(args)` to direct `callvirt` against the shell's `MethodBuilder`. `new TypeName(...)` uses direct `newobj` whenever every member can be represented on the shell. Conservative fallbacks to engine dispatch (via `ToshHost.NewObject` / `ToshHost.InvokeMember`) for: inheritance, traits, interfaces, abstract / hermit classes, secondary constructors, computed properties (getter/setter bodies), lazy props, static methods, methods with rest/optional params or captures. Type-definition statements still register with the engine via `ToshHost.RegisterTypeFromSource` so dynamic call sites keep working uniformly. |
+| Classes / records / methods                                                          | partial     | Records: real CLR `public sealed class` with positional constructor + public `object` fields per field; `new Rec(a,b,c)` lowers to direct `newobj` and `$r.Field` lowers to direct `ldfld` when target's static type is the shell. Classes with primary-ctor properties + plain methods now also lower fully natively: each method becomes a real CLR instance method on the shell with `$this` mapped to `Ldarg_0`, `$this.Field` to direct `ldfld`, and `$this.method(args)` to direct `callvirt` against the shell's `MethodBuilder`. `new TypeName(...)` uses direct `newobj` whenever every member can be represented on the shell. Conservative fallbacks to engine dispatch (via `ToshHost.NewObject` / `ToshHost.InvokeMember`) for: inheritance, traits, interfaces, abstract / hermit classes, secondary constructors, computed properties (getter/setter bodies), lazy props, static methods, methods with rest/optional params or captures. CLR-shell-emitted class/record declarations skip Tier 3 source replay; fallback class/record forms still register from source. |
+| Enums                                                                                 | done        | Simple integral enums emit real CLR `enum` metadata with `[ToshType("enum", ...)]`, CLR-safe type/member names, `[ToshOriginalName]` on mangled names, correct integral underlying types, auto-incremented members, and literal explicit member values. Non-integral underlying types and dynamic/literal-only member values (e.g. `enum Label: string { Good = "good" }`) emit a CLR static class shell (`public sealed abstract class` with one `public static readonly object` field per member, populated in `.cctor`); `EnumName.Member` lowers to `ldsfld`. Both shapes are clean in `permissive`, `runtime`, and `pure`. Member access on integral enums resolves through the loaded CLR enum type (Tier 2 host lookup); member access on the static-shell shape is direct `ldsfld` (Tier 1). |
 | `match` / `switch` (lowered to `if`/`else` chains)                                   | done        | Tier 2, branch labels per arm; pattern tests (literal equality, comparison `_ op N`, ranges, guards) call `OperatorEvaluator.Matches` / `AreEqual`; scrutinee bound on `_underscoreStack` so `_` references resolve |
 | Spread elements (`[...$xs]`), record `{ name: ... }`, slice indices                  | done        | Spread elements: list literals call `ToshHost.SpreadArgs` for `...expr` items. Record literal `:` separator now accepted by parser alongside `=`. Slice `$xs[1..3]`: `ShellIndexingUtilities.GetSlice` materialises `ToshRange.Enumerate()` into the target collection (string / array / IList / IEnumerable); compiler emits `ToshRange` values via `BoundUnitEmitter.EmitRange`. |
 | User-function shadowing of builtin command names                                     | done        | Parser pre-scans tokens for `func <name>` declarations and bypasses the current-item-expression and `get`/`select`/`pick` argument-parsing branches when the name is shadowed (e.g. `func describe(n) {...}` then `(describe 5)` no longer wraps `5` in a block argument). |
@@ -356,10 +369,10 @@ Snapshot of how far each layer has actually moved. Commits are on `master`.
 | Portable PDB                                                                         | done        | Tier 2. `BoundUnitEmitter` calls the 3-arg `PersistedAssemblyBuilder.GenerateMetadata(out ilStream, out fieldData, out pdbBuilder)` overload, builds a `PortablePdbBuilder`, and embeds it in the PE via `DebugDirectoryBuilder.AddEmbeddedPortablePdbEntry`. Each `EmitStatement` call marks an `ISymbolDocumentWriter` sequence point at the statement's `BoundNode.Span` (1-based line/col, computed from a cached `_lineStarts` index over `ParseResult.SourceText`). Stack traces from compiled `.dll`s now point at `.tosh` file/line. Output is single-file — no companion `.pdb` — matching modern .NET defaults. Multi-file compile still uses one concatenated synthetic source document rather than one PDB document per input file. |
 | Source Link                                                                          | not started | No Source Link JSON/debug directory is emitted yet, so debuggers cannot fetch original `.tosh` text from a published source location. |
 | Subcommand-tree entry point (`subcommand` blocks → CLI dispatcher)                   | done        | Tier 3. When the bound unit contains any `BoundSubcommandStatement` or `BoundScriptInputStatement`, the emitter forces the source-registration prologue and replaces the per-statement `Main` body with a single `ToshHost.RunSubcommandScript(args)` call. The host helper sets `Runtime.InvocationArguments` from argv and replays the registered source through `ToshEngine.ExecuteToListAsync`, which already implements argv parsing, nested flag/arg binding, eager/hollow/vital semantics, and auto-help. Re-implementing dispatch in IL would dwarf the rest of the emitter for no benefit — the engine has the canonical implementation. Verified end-to-end: `tosh --compile script.tosh -o out.dll && dotnet out.dll math add 3 4` prints `7`; `dotnet out.dll --help` shows the auto-generated subcommand list. |
-| `Tosh.Sdk` MSBuild SDK + `.toshproj`                                                 | partial     | `src/Tosh.Sdk` and `src/Tosh.Sdk.Tasks` exist. The SDK has props/targets, in-process task support, CLI `Exec` fallback, runtimeconfig writing, runtime DLL staging, and a source-tree demo. Audit result: explicit `dotnet msbuild /t:Build examples/sdk-demo/Hello.toshproj` works and produces a runnable DLL; plain direct-import `dotnet build examples/sdk-demo/Hello.toshproj` did not invoke compilation. Needs packaged SDK smoke tests, default-target fix, robust path quoting, task diagnostic line/column mapping, profile validation parity, complete clean, and publish support. |
-| Reference-assembly emission                                                          | partial     | CLI `--emit-refasm` exists and emits a sibling `.ref.dll` stamped with `[ReferenceAssembly]`, but the artifact is still emitted through the normal emitter and appears body-bearing rather than metadata-only. SDK support is not wired yet. |
+| `Tosh.Sdk` MSBuild SDK + `.toshproj`                                                 | partial     | `src/Tosh.Sdk` and `src/Tosh.Sdk.Tasks` exist. The SDK has props/targets, in-process task support, CLI `Exec` fallback, default `Build`/`Run`/`Publish`/`Clean` targets, runtimeconfig writing, runtime DLL staging, apphost/single-file support, packaged-SDK smoke tests, direct-import lifecycle tests with paths containing spaces, multi-source direct-import coverage, `ProjectReference` build/stage/deps/run/publish coverage, packaged-SDK `PackageReference` restore/stage/deps/run/publish coverage including a transitive package dependency, and a C# consumer test that compiles against a generated TōSh refasm. Remaining polish: task diagnostics should report source file/line/column positions rather than raw span offsets; package-reference support is runtime-asset staging rather than full NuGet/MSBuild asset semantics (central package management, RID/native/resource assets, buildTransitive/analyzers, etc.); project-reference support still needs C# project references, transitive project references, and richer metadata semantics; and the refasm remains body-bearing. |
+| Reference-assembly emission                                                          | partial     | CLI `--emit-refasm` and SDK `<ToshEmitReferenceAssembly>true</ToshEmitReferenceAssembly>` emit a sibling `.ref.dll` stamped with `[ReferenceAssembly]`. Refasm output now uses target-framework reference metadata for public core types, so a C# project can compile against top-level functions, module functions/fields, class constructors/methods, and record constructors/fields from the `.ref.dll` while running against the implementation assembly. SDK `Clean` removes the refasm. The artifact is still emitted through the normal emitter and remains body-bearing rather than metadata-only. |
 | Name-mangling rules / cross-language ABI                                             | partial     | Basic CLR-safe identifier mangling and `[ToshOriginalName]` are present. A stable ABI spec is still needed for casing, keywords, visibility, overloads, properties vs fields, nullability, generics, refinements, XML docs, and how C#/F#/VB consumers should see TōSh APIs. |
-| Apphost / single-file publish                                                        | deferred    | CLI and SDK entry points contain hooks, but apphost creation and single-file bundling currently emit warnings and are deferred. |
+| Apphost / single-file publish                                                        | partial     | CLI and SDK paths can create apphost wrappers and the custom single-file bundle used by the current smoke tests. This is usable for isolated execution, but still needs a deliberate long-term dependency/publish model. |
 | Library-style output                                                                 | not started | Every emitted assembly currently has an implicit `Program.Main`. `OutputType=Library`, explicit `func main` selection, and no-entrypoint library mode remain to be designed and implemented. |
 
 ### Adjacent infrastructure
@@ -380,38 +393,243 @@ The procedural core is now mostly in place. The current gap is less
 "can this emit a runnable DLL?" and more "does this behave like a normal
 .NET language when used from the SDK, a debugger, and another .NET project?"
 
-**Tier 1 — .NET build UX:**
+The canonical ordered roadmap lives in
+[FIRST_CLASS_DOTNET_STATUS.md](FIRST_CLASS_DOTNET_STATUS.md#recommended-next-order).
+From this compiler document's viewpoint, the same work breaks down as follows:
 
-1. Make plain `dotnet build MyTool.toshproj` invoke the compiler in both
-   source-tree direct-import demos and packed-SDK consumption.
-2. Add SDK smoke tests for `dotnet build`, `dotnet run --project`,
-   `dotnet publish`, `Clean`, paths with spaces, multiple source files, and
-   project/package references.
-3. Bring the MSBuild task to CLI parity: invalid profiles should fail,
-   `--emit-refasm` should be exposed as a property, and diagnostics should
-   report real file/line/column locations rather than raw span offsets.
-4. Finish output cleanup and staging: `Clean` should delete every staged
-   runtime artifact, and publish should have a deliberate dependency model.
+1. **Protect the correctness baseline first.**
+   Keep the recently fixed input/redirection behavior covered from compiled
+   code, including `Console.In`, `CommandContext.Input`, nested redirect scopes,
+   pipeline input, output append, error redirection, and `try/finally`
+   restoration after failures.
 
-**Tier 2 — cross-language ABI:**
+2. **Turn `CompilerFeatureMatrixTests` into the language-surface gate.**
+   The matrix should be generated or audited against parser nodes, bound nodes,
+   lowerer/emitter cases, the language spec, and command metadata. Every row
+   should state its `permissive`/`runtime`/`pure` expectation and whether it is
+   native IL, runtime-hosted, source replay, or deliberately unsupported.
 
-5. Write the CLR ABI spec before expanding public shapes further:
-   mangling/casing, keywords, `[ToshOriginalName]`, visibility, overloads,
-   library vs exe, `func main`, nullability, generics, dynamic erasure,
-   refinements, and documentation metadata.
-6. Add C# consumer tests that reference emitted TōSh assemblies and call
-   top-level functions, module functions, module fields, class constructors,
-   record constructors, and generated reference assemblies.
-7. Replace the current body-bearing `.ref.dll` with a real metadata-only
-   reference assembly shape, then wire it through the SDK.
+3. **Freeze the profile contract.**
+   `permissive` is the full-language compatibility profile, `runtime` is the
+   normal app/library profile, and `pure` is the CLR-first public-ABI subset.
+   CI should treat profile failures as contract regressions once a row is
+   assigned.
+
+4. **Drive Tier-3 source replay down to deliberate design choices.**
+   Audit `Register*FromSource`, `RunScriptFromSource`, source-based subcommand
+   dispatch, and every `RequireTier(3, ...)` site. Ordinary module/type/function
+   code should run under `runtime`; remaining Tier-3 usage should be reserved
+   for features such as unresolved rune semantics.
+
+5. **Make the CLR ABI v1 spec normative.**
+   Before expanding public shapes further, lock assembly/type/member naming,
+   mangling, visibility, overloads, optional/rest parameter shape, constructor
+   rules, executable vs library output, `ToshOriginalNameAttribute`,
+   `ToshTypeAttribute`, dynamic erasure, nullability, refinements, and
+   compatibility policy.
+
+6. **Complete declaration metadata.**
+   Classes, interfaces, traits, unions, structs, events, aliases, refinements,
+   nested module declarations, and non-CLR enum shapes should become CLR
+   metadata first and source replay last. Each public shape needs reflection,
+   C# consumer, and runtime invocation tests.
+
+7. **Replace object-shaped public APIs with typed metadata where possible.**
+   Use annotations and inference for public signatures, while keeping dynamic
+   shims only where ToastScript semantics require them.
+
+8. **Replace body-bearing refasm output with true metadata-only reference
+   assemblies.**
+   Verify metadata parity against the implementation assembly and keep direct
+   Roslyn, `ProjectReference`, `PackageReference`, clean, and publish tests.
+
+9. **Productize the SDK path.**
+   Extend the current build/run/publish/package coverage into full NuGet and
+   MSBuild semantics: central package management, RID/native/resource assets,
+   buildTransitive/analyzers, Tosh-to-Tosh references, C#-to-Tosh references,
+   Tosh-to-C# references, transitive references, publish transitivity, and
+   file/line/column diagnostics.
+
+10. **Isolate the runtime host.**
+    Move global source/runtime state behind assembly-scoped registration, make
+    redirection/input state nestable and thread-safe, and verify multiple
+    compiled ToastScript assemblies can coexist in one process and unload via
+    `AssemblyLoadContext`.
+
+11. **Deepen static checking.**
+    Use command metadata, emitted type metadata, pipeline element flow, return
+    completeness, union/refinement narrowing, and member/index access checks to
+    catch common mistakes before runtime.
+
+12. **Finish the .NET tooling experience.**
+    Emit one PDB document per input file, add Source Link, verify stack traces
+    and stepping, and surface compiler/spec metadata through LSP hover,
+    completion, diagnostics, and go-to-definition.
+
+13. **Decide runes as a language-design item, not an emitter shortcut.**
+    Choose compile-time macro expansion, runtime-preserved quoted ASTs, or a
+    documented permissive-only replay model. Do not partially lower rune calls
+    until local-variable capture and lazy thunk semantics are solved.
+
+14. **Keep the docs in lockstep.**
+    Emitter/SDK/refasm changes update this document, first-class status changes
+    update `FIRST_CLASS_DOTNET_STATUS.md`, and language-contract changes update
+    `docs/spec/toastscript-spec.tex` plus `SPEC_STATUS.md`.
+
+### Public CLR ABI v1 (Draft, normative)
+
+> **Authoritative spec:** [`docs/CLR_ABI_v1.md`](CLR_ABI_v1.md) is the
+> normative, frozen v1 contract — including the visibility ladder for
+> `shy` / `guarded` / `local`, parameter-default and `params` rules,
+> the `[ToshAbi(1)]` assembly stamp, and a full worked example. The
+> sections below are kept here as a quick rationale companion; if the
+> two ever disagree, the dedicated spec wins.
+
+This section defines the contract that external .NET consumers should rely on.
+It intentionally separates stable ABI promises from implementation details.
+
+#### 1) Naming and identity
+
+- Assembly name: output stem (`-o foo.dll` => assembly `foo`).
+- Root program type: `<AssemblyName>.Program` (public static-class shape).
+- Identifier mangling rule (stable):
+  - If first char is a digit, prefix `_`.
+  - Any non `[A-Za-z0-9_]` char maps to `_`.
+  - Otherwise name is preserved verbatim.
+- Collision policy: if two distinct tosh names mangle to the same CLR name in
+  the same bucket (type bucket or top-level-function bucket), compile fails with
+  `tosh.compile.name_mangling_collision`.
+- Original-name recovery: when mangling changed a symbol name, emit
+  `[ToshOriginalName("...")]` on the generated type/method/field.
+
+#### 2) Visibility and surface area
+
+- Top-level user functions:
+  - Typed form: `public static <TReturn> <MangledName>(...)`.
+  - Dynamic form: `public static object Func_<MangledName>(object, ...)`.
+- Program entrypoint: `public static void Main(string[] args)` for executable
+  outputs.
+- Module shells:
+  - Top-level module: `public sealed abstract class` (CLR static class).
+  - Nested module: `nested public sealed abstract class`.
+  - Module vars/functions are `public static` members.
+- Class shells:
+  - Shell type is `public sealed class`.
+  - `shy` properties map to private backing fields; non-`shy` map to public
+    backing fields.
+  - `fixed` maps to `initonly` field semantics where applicable.
+- Record shells:
+  - `public sealed class` with public instance data members and positional ctor.
+
+#### 3) Properties vs fields (v1 rule)
+
+- v1 ABI uses fields, not CLR properties, for emitted class/record data slots.
+- Rationale:
+  - Keeps source-compat with current shells.
+  - Avoids accidental ABI breaks from auto-property accessor synthesis.
+- Future evolution rule:
+  - If/when CLR properties are introduced, field ABI is preserved for one major
+    version via dual emission (property plus compatibility field or explicit
+    redirect), then migrated with a declared breaking-change window.
+
+#### 4) Records
+
+- Record declaration emits `public sealed class` (not C# `record` metadata form
+  in v1).
+- Constructor ABI: positional ctor with one parameter per declared record field
+  in source order.
+- Record field ABI: public instance fields typed as `object` in v1.
+- Equality/hash/deconstruct are not part of the v1 ABI contract.
+
+#### 5) Modules
+
+- Every module path has a stable qualified identity (`Foo`, `Foo.Bar`, ...).
+- Shell identity mapping:
+  - Type is stamped with `[ToshModuleShell("Qualified.Name")]`.
+  - Assembly is stamped with one `[ToshModule("Qualified.Name", spanStart, spanLength)]`
+    per declared module (recursive for nested).
+- Partial modules merge into one CLR shell type by qualified module name.
+
+#### 6) Generated attributes (required set)
+
+- Required and stable in v1:
+  - `[ToshOriginalName]` on mangled symbols only.
+  - `[ToshType(kind, spanStart, spanLength)]` on emitted class/record shells.
+  - `[ToshModuleShell(qualifiedName)]` on generated module shell types.
+  - `[ToshModule(qualifiedName, spanStart, spanLength)]` at assembly level.
+- Optional/runtime-mode attributes:
+  - `[ReferenceAssembly]` only on `--emit-refasm` output.
+  - Refasm emission uses target-framework reference metadata for core public
+    types; implementation emission keeps runtime-core method bodies so the
+    runnable DLL remains executable.
+
+#### 7) Nullability
+
+- v1 public metadata nullability is conservative:
+  - Dynamic-erased values surface as `object`/`object?` depending on emission
+    site internals; consumers must treat dynamic slots as nullable/unknown.
+  - No stable guarantee yet for `NullableAttribute`/`NullableContextAttribute`
+    completeness across all emitted members.
+- Contract rule for consumers: nullability annotations are informational in v1,
+  not a compatibility boundary.
+- v2 target: deterministic NRT metadata for every public member.
+
+#### 8) Generics
+
+- v1 emitted user surface is non-generic at ABI boundary unless a future
+  feature explicitly opts in.
+- tosh type parameters/refinements do not emit CLR generic parameter metadata in
+  v1 public contracts.
+- Contract rule: generic arity (`Type`1`, Method`1`) is reserved for future use;
+  no compatibility guarantee until the feature is declared shipped.
+
+#### 9) Library vs executable behavior
+
+- Executable mode (current default):
+  - Emits `<Assembly>.Program.Main(string[] args)`.
+  - CLI host may also emit apphost/single-file wrappers.
+- Library mode (design contract for upcoming implementation):
+  - No `Main` emitted.
+  - Top-level exported symbols (functions/modules/types) still emitted as public
+    metadata for C#/F#/VB consumption.
+  - Entry resolution (`subcommand`/top-level statements/`func main`) is ignored
+    in library mode and treated as compile diagnostics when conflicting with
+    library intent.
+- Reference assembly mode:
+  - `.ref.dll` must be metadata-contract-equivalent to runtime assembly for
+    public symbols.
+  - Body stripping is an implementation detail; metadata parity is the ABI
+    requirement.
+  - Current implementation is a body-bearing refasm; consumers compile against
+    it, but must execute against the implementation assembly.
+
+#### 10) Compatibility policy
+
+- ABI compatibility for v1 is defined by:
+  - public type/member names after mangling,
+  - member kind (field/method/type),
+  - signature shape,
+  - required generated attributes listed above.
+- Non-breaking changes in v1:
+  - adding new non-conflicting public members,
+  - adding private/internal helper members,
+  - improving method bodies, diagnostics, or internal host routing.
+- Breaking changes (major-version only):
+  - changing mangling rules,
+  - changing field <-> property representation without compatibility shims,
+  - changing record/module/class shell identity rules,
+  - removing required attributes.
 
 **Tier 3 — reduce source replay:**
 
 8. Keep source replay as the compatibility path, but make `runtime` and
    `pure` profiles practical CI gates by moving high-value Tier 3 features
    down into Tier 2/Tier 1.
-9. Priorities: block arguments, module qualified access, simple class/record
-   members, subcommand dispatch, and type-definition registration.
+9. Priorities: advanced type declarations currently covered only by replay
+   (inheritance, interfaces, unions, structs, aliases/refinements,
+   hermit/static-only classes, nested declarations in modules, and remaining
+   non-CLR enum shapes), followed by subcommand dispatch and any remaining
+   module registration/qualified-access replay.
 10. Split global `ToshHost` state by compiled assembly/module so multiple
     TōSh assemblies can be loaded into one process without source-map or
     runtime-state collisions.
@@ -429,7 +647,8 @@ The procedural core is now mostly in place. The current gap is less
 
 **Tier 5 — explicitly deferred:**
 
-- Runes / `quote` (v2 per the original plan)
+- Native rune lowering and `quote` metadata (v2 per the original plan;
+  permissive currently uses whole-script source replay)
 - `source` / `eval` of runtime paths (v2; opt-in `Tosh.Eval` package)
 - NativeAOT (incompatible with TōSh's current reflection and dynamic runtime
   model)
@@ -438,16 +657,24 @@ The procedural core is now mostly in place. The current gap is less
 
 - **Type system: gradual, dynamic-compatible, increasingly enforced at
   compile time.** `BoundType`, `TypeNameResolver`, `TypeInferrer`, and
-  `TypeChecker` now participate in the compile path. The checker currently
-  covers function annotations, implicit-dynamic checks, returns, and
-  user-function calls. Many shapes still flow as `object` and route through
-  `ToshHost`; the next step is to use command metadata and emitted CLR type
-  metadata for broader static validation.
+  `TypeChecker` now participate in the compile path. The checker now covers:
+  function annotations, implicit-dynamic checks, returns, user-function calls,
+  condition typing (`if`/`while`/guards), builtin command arity (metadata),
+  pipeline input shape contracts (`[PipelineInput]`), member/method/index
+  validation on concrete CLR targets, and basic operator compatibility checks.
+  Many shapes still flow as `object` and route through `ToshHost`; the next
+  step is deeper builtin options/named-arg checks, class/module body semantic
+  checks, and richer expression-form typing.
 
 - **Source replay is a compatibility fallback, not the destination.** It keeps
   compiled programs behaviorally aligned with the interpreter while emitter
   support grows, but Tier 3 sites should continue shrinking so `runtime` and
   `pure` profiles become practical build gates.
+
+- **The compiler feature matrix is now the truth table.**
+  `CompilerFeatureMatrixTests` records which representative language forms are
+  accepted by `permissive`, `runtime`, and `pure`. A feature is not considered
+  moved forward unless the matrix expectation moves with it.
 
 - **Bound IR is an immutable record tree.** Same shape as the parse
   tree (`ArgumentSyntax` / `StatementSyntax`), one `BoundNode` per
@@ -510,15 +737,20 @@ For each layer:
 
 Current audit snapshot:
 
-- `dotnet build Tosh.slnx` passed with one warning about an unused local
-  function.
-- Focused compiler/type/CLI metadata tests passed: 295 passed, 0 failed.
-- Full suite result during the audit: 2050 passed, 24 failed. The observed
-  failures were UI/theme/rendering expectation mismatches, not compiler
-  productization failures.
-- SDK source-tree demo compiled and ran through explicit
-  `dotnet msbuild /t:Build`; plain direct-import `dotnet build` did not invoke
-  compilation and needs a target/default-target fix.
+- `dotnet build Tosh.slnx --no-restore /m:1 /v:minimal` passed with
+  0 warnings.
+- `dotnet test tests/Tosh.Tests/Tosh.Tests.csproj --no-build --filter
+  "FullyQualifiedName~CompilerFeatureMatrixTests"` passed: 23 passed, 0
+  failed.
+- Focused compiler/type/SDK/matrix tests passed: 256 passed, 0 failed.
+- Latest user-reported full suite result: 2298 passed, 0 failed. The full
+  suite was not re-run during this docs-only update.
+- SDK lifecycle tests cover direct-import `dotnet build`, `dotnet run
+  --project`, `dotnet publish`, apphost, single-file publish, refasm emission,
+  runtime staging, `Clean`, multi-source compilation, `ProjectReference`
+  build/stage/deps/run/publish behavior, packaged-SDK `PackageReference`
+  restore/stage/deps/run/publish behavior with a transitive package dependency,
+  C# refasm consumption, and packaged-SDK build/run smoke coverage.
 
 ## Open questions
 
@@ -529,8 +761,9 @@ These are the design calls that still shape the first-class .NET scope.
    frozen.
 2. **Stdlib packaging.** One `Tosh.Stdlib` NuGet (one big DLL) or namespaced
    subpackages (`Tosh.Stdlib.Filesystem`, `Tosh.Stdlib.System`, etc.)?
-3. **Runes in v1.** Compile-time only, or runtime preserved through an
-   interpreter dependency?
+3. **Runes in v1.** Keep the current permissive whole-script replay fallback,
+   move to compile-time expansion/source generation, or preserve runtime quoted
+   ASTs through an interpreter dependency?
 4. **Entry-point default.** Subcommand trees and top-level statements work;
    explicit `func main` priority and library/no-entrypoint mode still need
    final rules.
@@ -539,7 +772,64 @@ These are the design calls that still shape the first-class .NET scope.
 6. **Reference assemblies.** Emit true metadata-only reference assemblies from
    the SRE backend, or generate them through a secondary metadata-only path?
 
----
+## Emitter coverage gap matrix (May 2026)
+
+The lowerer intentionally understands more syntax than the IL emitter currently
+materializes. The remaining emitter backlog ("type-check passes, emit fails")
+is now explicitly tracked below.
+
+### Already closed recently
+
+- Compiled subcommand dispatch (Family 4) with source-replay fallback only.
+- Tuple literal emission (`BoundTupleLiteral`) to `ToshTuple`.
+- Set literal emission (`BoundSetLiteral`) to `HashSet<object?>`.
+- Command/process substitution expression nodes now emit through
+  `EmitPipelineAsValue` rather than hard-failing.
+- `using` statements now emit as a no-op in compiled mode (binder/type-level
+  effect only).
+- Member-path assignment emission (`BoundMemberAssignment`) now supports
+  plain and compound assignment (`=`, `+=`, `-=`, `*=`, `/=`, `%=`).
+- Destructuring declaration emission (`BoundDestructuringDeclaration`) now
+  supports array and record patterns.
+- Defer statement emission (`BoundDeferStatement`) now lowers to nested
+  block-scoped `try/finally`, matching LIFO unwind semantics.
+- Yield statement emission (`BoundYieldStatement`) now materializes in compiled
+  function bodies and no longer hard-fails emitter dispatch.
+
+### Remaining high-priority gaps
+
+- Whole-language acceptance: the current representative matrix has no
+  all-profile-rejected rows, but it is not exhaustive yet. New syntax-family
+  rows should be added until this becomes a true language-surface gate.
+- Advanced callable/closure interop without source replay.
+- Type-declaration emission completeness: advanced class/trait/interface/union/
+  enum/alias/event semantics currently represented by shells or replay paths.
+- Operator surface parity: remaining operators that still report unsupported in
+  IL (including non-numeric and niche language operators).
+
+### Next implementation slices
+
+Use the canonical roadmap above for ordering. At the emitter level, the next
+work should be sliced by contract surface rather than by whichever unsupported
+node happens to appear first:
+
+1. **Feature-matrix expansion**: cover every parser node, bound node,
+   operator, modifier, declaration family, command concept, and spec section.
+2. **Source-replay retirement**: reduce `Register*FromSource`,
+   `RunScriptFromSource`, subcommand replay, and `RequireTier(3, ...)` sites
+   until remaining replay is deliberate and documented.
+3. **Public ABI metadata**: lock and test CLR names, visibility, overloads,
+   constructors, attributes, typed signatures, refasm parity, and C# consumer
+   behavior.
+4. **Type-declaration completeness**: finish CLR-first classes, interfaces,
+   traits, unions, structs, events, aliases, refinements, nested module
+   declarations, and dynamic-only fallback rules.
+5. **SDK/refasm productization**: make `.toshproj`, `dotnet run`, publish,
+   package references, project references, clean, and metadata-only refasm act
+   like ordinary SDK-style .NET project features.
+6. **Spec and tooling loop**: update the language spec, compiled-status docs,
+   feature matrix, parity checks, LSP metadata, and generated references in the
+   same milestone rather than after the fact.
 
 ## Related
 

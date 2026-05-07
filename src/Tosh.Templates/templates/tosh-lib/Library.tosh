@@ -1,0 +1,15 @@
+# A TōSh library. Public functions and classes are exported on
+# the assembly's top-level type and as ordinary CLR types — both
+# are callable from C# or any other .NET language.
+
+func greet(name: string) -> string {
+    return $"Hello, {$name}!"
+}
+
+class Greeter {
+    proud prop Salutation: string = "Hello"
+
+    func greet(name: string) -> string {
+        return $"{$this.Salutation}, {$name}!"
+    }
+}

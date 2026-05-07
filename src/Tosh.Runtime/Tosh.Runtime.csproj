@@ -12,4 +12,10 @@
     <AssemblyName>Tosh.Runtime</AssemblyName>
   </PropertyGroup>
 
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <PackageId>Tosh.Runtime</PackageId>
+    <Description>Core runtime types and services for TōSh: object model, pipelines, environment, and host APIs consumed by compiled tosh assemblies.</Description>
+  </PropertyGroup>
+
 </Project>

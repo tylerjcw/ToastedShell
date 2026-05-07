@@ -1969,8 +1969,7 @@ public sealed class ReplLineEditor
         string suggestion,
         string suffix = "")
     {
-        buffer.SetText(baseText);
-        buffer.ReplaceRange(replacementStart, replacementLength, suggestion + suffix);
+        buffer.ApplyCompletion(baseText, replacementStart, replacementLength, suggestion + suffix);
     }
 
     private static bool TryHandleCompletionPickerKey(LineEditorBuffer buffer, ConsoleKeyInfo key, ref LineEditorCompletionState? completionState)

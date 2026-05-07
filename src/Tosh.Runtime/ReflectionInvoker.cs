@@ -170,19 +170,73 @@ public sealed class ReflectionInvoker
         IReadOnlyList<object?> rawArguments,
         out CandidateBinding binding)
     {
-        var hasParamArray = parameters.Count > 0 && IsParamArray(parameters[^1]);
-        var requiredCount = parameters.Count(parameter => !parameter.IsOptional && !IsParamArray(parameter));
+        // Split out named-arg wrappers (`name = value`) so they can be placed
+        // by parameter name. Positional args fill the remaining slots in order.
+        Dictionary<string, object?>? namedArgs = null;
+        List<object?>? positionalOnly = null;
+        for (var i = 0; i < rawArguments.Count; i++)
+        {
+            if (rawArguments[i] is INamedArgument named)
+            {
+                namedArgs ??= new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+                namedArgs[named.Name] = named.Value;
+                positionalOnly ??= new List<object?>(rawArguments.Count);
+                // copy any earlier positional args we hadn't started buffering
+                if (positionalOnly.Count < i)
+                {
+                    for (var j = 0; j < i; j++)
+                    {
+                        if (rawArguments[j] is not INamedArgument)
+                        {
+                            positionalOnly.Add(rawArguments[j]);
+                        }
+                    }
+                }
+            }
+            else if (positionalOnly is not null)
+            {
+                positionalOnly.Add(rawArguments[i]);
+            }
+        }
+        var positionalArgs = (IReadOnlyList<object?>?)positionalOnly ?? rawArguments;
 
-        if (rawArguments.Count < requiredCount)
+        var hasParamArray = parameters.Count > 0 && IsParamArray(parameters[^1]);
+        var requiredCount = parameters.Count(parameter =>
+            !parameter.IsOptional && !IsParamArray(parameter)
+            && (namedArgs is null || !namedArgs.ContainsKey(parameter.Name ?? string.Empty)));
+
+        if (positionalArgs.Count < requiredCount)
         {
             binding = default;
             return false;
         }
 
-        if (!hasParamArray && rawArguments.Count > parameters.Count)
+        if (!hasParamArray && positionalArgs.Count + (namedArgs?.Count ?? 0) > parameters.Count)
         {
             binding = default;
             return false;
+        }
+
+        // Reject named args that don't match any parameter name.
+        if (namedArgs is not null)
+        {
+            foreach (var name in namedArgs.Keys)
+            {
+                var found = false;
+                foreach (var p in parameters)
+                {
+                    if (string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase))
+                    {
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found)
+                {
+                    binding = default;
+                    return false;
+                }
+            }
         }
 
         var boundArguments = new object?[parameters.Count];
@@ -195,7 +249,7 @@ public sealed class ReflectionInvoker
 
             if (hasParamArray && index == parameters.Count - 1)
             {
-                if (!TryBindParamArray(parameter, rawArguments, rawIndex, out var paramArrayValue, out var paramArrayScore))
+                if (!TryBindParamArray(parameter, positionalArgs, rawIndex, out var paramArrayValue, out var paramArrayScore))
                 {
                     binding = default;
                     return false;
@@ -203,13 +257,27 @@ public sealed class ReflectionInvoker
 
                 boundArguments[index] = paramArrayValue;
                 score += paramArrayScore;
-                rawIndex = rawArguments.Count;
+                rawIndex = positionalArgs.Count;
                 continue;
             }
 
-            if (rawIndex < rawArguments.Count)
+            if (namedArgs is not null
+                && parameter.Name is not null
+                && namedArgs.TryGetValue(parameter.Name, out var namedValue))
             {
-                if (!TryConvertWithScore(rawArguments[rawIndex], parameter.ParameterType, out var converted, out var conversionScore))
+                if (!TryConvertWithScore(namedValue, parameter.ParameterType, out var convertedNamed, out var namedScore))
+                {
+                    binding = default;
+                    return false;
+                }
+                boundArguments[index] = convertedNamed;
+                score += namedScore;
+                continue;
+            }
+
+            if (rawIndex < positionalArgs.Count)
+            {
+                if (!TryConvertWithScore(positionalArgs[rawIndex], parameter.ParameterType, out var converted, out var conversionScore))
                 {
                     binding = default;
                     return false;
@@ -231,7 +299,7 @@ public sealed class ReflectionInvoker
             score += 4;
         }
 
-        if (rawIndex != rawArguments.Count)
+        if (rawIndex != positionalArgs.Count)
         {
             binding = default;
             return false;

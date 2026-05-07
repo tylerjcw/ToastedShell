@@ -64,6 +64,11 @@ if (plan.IsLoginShell)
     InitializeLoginShellEnvironment();
 }
 
+// Set interactive flag before loading startup files so the engine suppresses
+// type-checker warnings that fire on function bodies in autoload/profile scripts.
+if (plan.Kind == CliInvocationKind.Repl)
+    engine.IsInteractiveSession = true;
+
 if (plan.LoadStartup)
 {
     await ToshStartupLoader.LoadAsync(engine, configDirectory: null, skipProfile: plan.SkipProfile, errorWriter: Console.Error, profileStartup: plan.ProfileStartup);
@@ -318,44 +323,20 @@ async Task ExecuteAndPrintAsync(string source)
     var sourceName = historyEntry is not null
         ? $"commandline #{historyEntry.Id}"
         : $"commandline transient";
-    var values = await engine.ExecuteToListAsync(source, sourceName);
-
-    try
+    await using var sink = new BufferingDisplaySink(runtime, renderTuiOutcome: false);
+    await foreach (var value in engine.EvaluateAsync(source, sourceName))
     {
-        if (TuiRequestDispatcher.TryHandle(values, runtime))
-        {
-            return;
-        }
-
-        var rendered = runtime.Display.RenderMany(values, ConsoleDisplay.CreateRenderOptions(runtime));
-
-        await ConsoleDisplay.WriteRenderedAsync(rendered, runtime);
-    }
-    finally
-    {
-        runtime.ClearDisplaySelections();
+        await sink.EmitAsync(value);
     }
 }
 
 async Task ExecuteFileAndPrintAsync(string path, IReadOnlyList<object?> arguments)
 {
     runtime.RecordHistory(path);
-    var values = await AsyncEnumerableExtensions.ToListAsync(engine.ExecuteScriptFileAsync(path, arguments), default);
-
-    try
+    await using var sink = new BufferingDisplaySink(runtime, renderTuiOutcome: false);
+    await foreach (var value in engine.ExecuteScriptFileAsync(path, arguments))
     {
-        if (TuiRequestDispatcher.TryHandle(values, runtime))
-        {
-            return;
-        }
-
-        var rendered = runtime.Display.RenderMany(values, ConsoleDisplay.CreateRenderOptions(runtime));
-
-        await ConsoleDisplay.WriteRenderedAsync(rendered, runtime);
-    }
-    finally
-    {
-        runtime.ClearDisplaySelections();
+        await sink.EmitAsync(value);
     }
 }
 
@@ -692,7 +673,13 @@ static async Task<int> CompileScriptAsync(CliInvocationPlan plan, ToshRuntime ru
     Tosh.Compiler.EmitResult result;
     using (var fs = File.Create(outputPath))
     {
-        result = Tosh.Compiler.BoundUnitEmitter.Emit(unit, assemblyName, fs, compileProfile);
+        result = Tosh.Compiler.BoundUnitEmitter.Emit(
+            unit,
+            assemblyName,
+            fs,
+            compileProfile,
+            referenceAssembly: false,
+            compilationSources: inputPaths);
     }
 
     // Fail-fast: if the emitter reported any unsupported shapes,
@@ -759,15 +746,20 @@ static async Task<int> CompileScriptAsync(CliInvocationPlan plan, ToshRuntime ru
         // ReferenceAssembly attribute set so the C# / F# compilers
         // accept the artifact as a metadata-only reference. Sits
         // alongside the main .dll as `<output>.ref.dll`. Method
-        // bodies remain populated (fat refasm); body stripping is
-        // a deferred optimisation.
+        // bodies are stubbed to a uniform `ldnull; throw;` and the
+        // entry point is stripped so the artifact is contract-only.
         var refOutputPath = Path.Combine(
             Path.GetDirectoryName(outputPath) ?? string.Empty,
             $"{Path.GetFileNameWithoutExtension(outputPath)}.ref{Path.GetExtension(outputPath)}");
         using (var rfs = File.Create(refOutputPath))
         {
             var refResult = Tosh.Compiler.BoundUnitEmitter.Emit(
-                unit, assemblyName, rfs, compileProfile, referenceAssembly: true);
+                unit,
+                assemblyName,
+                rfs,
+                compileProfile,
+                referenceAssembly: true,
+                compilationSources: inputPaths);
             if (!refResult.IsClean)
             {
                 await Console.Error.WriteLineAsync(

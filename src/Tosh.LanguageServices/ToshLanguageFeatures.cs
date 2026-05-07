@@ -452,6 +452,21 @@ public sealed class ToshLanguageFeatures
         return DeclarationIndex.Create(sourceName, text).FindDefinitions(position);
     }
 
+    public IReadOnlyList<LspLocation> GetReferences(string text, string sourceName, LspPosition position, bool includeDeclaration)
+    {
+        return DeclarationIndex.Create(sourceName, text).FindReferences(position, includeDeclaration);
+    }
+
+    public LspPrepareRenameResult? PrepareRename(string text, string sourceName, LspPosition position)
+    {
+        return DeclarationIndex.Create(sourceName, text).PrepareRename(position);
+    }
+
+    public LspWorkspaceEdit? Rename(string text, string sourceName, LspPosition position, string newName)
+    {
+        return DeclarationIndex.Create(sourceName, text).BuildRenameEdits(position, newName);
+    }
+
     public LspHover? GetHover(string text, string sourceName, LspPosition position)
     {
         var index = DeclarationIndex.Create(sourceName, text);

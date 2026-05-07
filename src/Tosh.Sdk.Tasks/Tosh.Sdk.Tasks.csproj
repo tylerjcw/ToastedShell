@@ -21,6 +21,12 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Reference Include="System.Reflection.MetadataLoadContext"
+               HintPath="$(MSBuildSDKsPath)\..\System.Reflection.MetadataLoadContext.dll"
+               Private="true" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Tosh.Compiler\Tosh.Compiler.csproj" />
     <ProjectReference Include="..\Tosh.Compiler.Runtime\Tosh.Compiler.Runtime.csproj" />
     <ProjectReference Include="..\Tosh.Language\Tosh.Language.csproj" />

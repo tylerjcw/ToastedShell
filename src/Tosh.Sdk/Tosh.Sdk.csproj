@@ -22,6 +22,8 @@
     <IsPackable>true</IsPackable>
     <PackageId>Tosh.Sdk</PackageId>
     <PackageType>MSBuildSdk</PackageType>
+    <!-- MSBuild SDK package: content-only, no code DLL of its own to symbolise. -->
+    <IncludeSymbols>false</IncludeSymbols>
     <Description>MSBuild SDK for compiling .toshproj projects (TōSh / ToastedShell).</Description>
     <Authors>Tosh contributors</Authors>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
@@ -50,5 +52,33 @@
           Pack="true"
           PackagePath="tasks\net10.0\" />
   </ItemGroup>
+
+  <!--
+    Bake the current Tosh.* runtime version into the shipped Sdk.props
+    so consumer projects pull matching Tosh.Runtime/Tosh.Stdlib/etc.
+    PackageReference versions during `dotnet pack` of a .toshproj.
+
+    We rewrite the placeholder TOSH_RUNTIME_VERSION_PLACEHOLDER (set in
+    the source Sdk.props) to the SDK's own $(Version) before packing.
+  -->
+  <Target Name="_ToshSdkStampRuntimeVersion" BeforeTargets="GenerateNuspec;_GetPackageFiles">
+    <PropertyGroup>
+      <_ToshSdkStampedPropsDir>$(IntermediateOutputPath)stamped-sdk\</_ToshSdkStampedPropsDir>
+      <_ToshSdkStampedPropsFile>$(_ToshSdkStampedPropsDir)Sdk.props</_ToshSdkStampedPropsFile>
+      <_ToshSdkOriginalPropsContent>$([System.IO.File]::ReadAllText('$(MSBuildProjectDirectory)\Sdk\Sdk.props'))</_ToshSdkOriginalPropsContent>
+      <_ToshSdkStampedPropsContent>$(_ToshSdkOriginalPropsContent.Replace('TOSH_RUNTIME_VERSION_PLACEHOLDER', '$(Version)'))</_ToshSdkStampedPropsContent>
+    </PropertyGroup>
+    <MakeDir Directories="$(_ToshSdkStampedPropsDir)" />
+    <WriteLinesToFile File="$(_ToshSdkStampedPropsFile)"
+                      Lines="$(_ToshSdkStampedPropsContent)"
+                      Overwrite="true" />
+    <ItemGroup>
+      <!-- Replace the unstamped Sdk.props pack item with the stamped one. -->
+      <None Remove="Sdk\Sdk.props" />
+      <None Include="$(_ToshSdkStampedPropsFile)"
+            Pack="true"
+            PackagePath="Sdk\Sdk.props" />
+    </ItemGroup>
+  </Target>
 
 </Project>

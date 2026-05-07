@@ -54,7 +54,8 @@ public sealed record QuoteArgumentSyntax(ArgumentSyntax Inner, TextSpan Span) : 
 public sealed record AnonymousFunctionArgumentSyntax(
     IReadOnlyList<FunctionParameterSyntax> Parameters,
     BlockSyntax Body,
-    TextSpan Span) : ArgumentSyntax(Span);
+    TextSpan Span,
+    string? ReturnTypeName = null) : ArgumentSyntax(Span);
 
 public sealed record MemberProjectionArgumentSyntax(IReadOnlyList<string> MemberPaths, TextSpan Span) : ArgumentSyntax(Span);
 
@@ -229,7 +230,18 @@ public sealed record ComprehensionClauseSyntax(
     ArgumentSyntax Source,
     IReadOnlyList<ComprehensionModifierSyntax> Modifiers,
     ComprehensionClauseSyntax? InnerClause,
-    TextSpan Span);
+    TextSpan Span,
+    /// <summary>
+    /// Non-null for destructuring patterns like <c>for (a, b) in source</c>.
+    /// Contains the real variable names; <see cref="VariableName"/> is a synthetic
+    /// placeholder.
+    /// </summary>
+    IReadOnlyList<string>? DestructureNames = null,
+    /// <summary>
+    /// True when <see cref="InnerClause"/> was introduced by <c>||</c> and represents
+    /// a parallel/zip binding rather than a nested Cartesian loop.
+    /// </summary>
+    bool InnerIsParallel = false);
 
 public sealed record ListComprehensionArgumentSyntax(
     ArgumentSyntax Body,

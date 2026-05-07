@@ -31,7 +31,7 @@ public static class Lowerer
         ArgumentNullException.ThrowIfNull(parseResult);
         ArgumentNullException.ThrowIfNull(commands);
 
-        var ctx = new LowerContext(commands, BuildUserTypeRegistry(parseResult.Statement));
+        var ctx = new LowerContext(commands, BuildUserTypeRegistry(parseResult.Statement), BuildLocalFunctionOverloads(parseResult.Statement));
         var root = LowerStatementAsScript(parseResult.Statement, ctx);
         return new BoundUnit(root, parseResult, ctx.Symbols.ToImmutableList());
     }
@@ -129,6 +129,34 @@ public static class Lowerer
         if (registry.TryGetValue(baseTypeName, out var existing)) return existing;
         var probe = new TypeNameResolver(userTypes: null).Resolve(baseTypeName);
         return probe;
+    }
+
+    /// <summary>
+    /// Scans top-level <see cref="FunctionDefinitionStatementSyntax"/> nodes
+    /// and returns: name → ordered list of parameter counts (one entry per
+    /// overload, in declaration order).  Used by
+    /// <see cref="LowerCommand"/> to stamp
+    /// <see cref="BoundCommandCall.OverloadIndex"/> at call sites.
+    /// </summary>
+    private static IReadOnlyDictionary<string, List<int>> BuildLocalFunctionOverloads(StatementSyntax root)
+    {
+        var result = new Dictionary<string, List<int>>(StringComparer.Ordinal);
+        IEnumerable<StatementSyntax> stmts = root is ScriptStatementSyntax script
+            ? (IEnumerable<StatementSyntax>)script.Statements
+            : new[] { root };
+        foreach (var stmt in stmts)
+        {
+            if (stmt is FunctionDefinitionStatementSyntax fn)
+            {
+                if (!result.TryGetValue(fn.Name, out var list))
+                {
+                    list = new List<int>();
+                    result[fn.Name] = list;
+                }
+                list.Add(fn.Parameters.Count);
+            }
+        }
+        return result;
     }
 
     // ── statements ──────────────────────────────────────────────
@@ -319,13 +347,26 @@ public static class Lowerer
         // value inference. Annotations the resolver can't make sense
         // of (unknown user types, malformed) collapse to dynamic and
         // we still try inference — best-effort.
+        // An explicit `: dynamic` annotation is preserved verbatim
+        // and recorded on the bound node so downstream audits skip
+        // the implicit-dynamic diagnostic.
         BoundType declaredType;
+        var annotatedDynamic = false;
         if (!string.IsNullOrEmpty(decl.TypeName))
         {
-            var annotated = ctx.ResolveType(decl.TypeName);
-            declaredType = annotated.IsDynamic && value is not null
-                ? TypeInferrer.InferPipelineValue(value)
-                : annotated;
+            if (string.Equals(decl.TypeName, "dynamic",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                declaredType = BoundType.Dynamic;
+                annotatedDynamic = true;
+            }
+            else
+            {
+                var annotated = ctx.ResolveType(decl.TypeName);
+                declaredType = annotated.IsDynamic && value is not null
+                    ? TypeInferrer.InferPipelineValue(value)
+                    : annotated;
+            }
         }
         else
         {
@@ -340,7 +381,10 @@ public static class Lowerer
             Value: value,
             IsConst: decl.IsConst,
             Modifier: decl.Modifier,
-            Span: decl.Span);
+            Span: decl.Span)
+        {
+            AnnotatedDynamic = annotatedDynamic,
+        };
     }
 
     /// <summary>
@@ -497,7 +541,36 @@ public static class Lowerer
             ? pipeline.Stages[0].Span
             : new TextSpan(0, 0);
 
-        return new BoundPipeline(stages, pipeline, span);
+        var bound = new BoundPipeline(stages, pipeline, span);
+
+        IReadOnlyList<BoundRedirection> redirs = Array.Empty<BoundRedirection>();
+        if (pipeline.Redirections is { Count: > 0 })
+        {
+            var list = new List<BoundRedirection>(pipeline.Redirections.Count);
+            foreach (var r in pipeline.Redirections)
+            {
+                list.Add(new BoundRedirection(
+                    r.Stream,
+                    r.Mode,
+                    LowerExpression(r.Target, ctx),
+                    r.Span));
+            }
+            redirs = list;
+        }
+
+        BoundInputRedirection? inputRedir = null;
+        if (pipeline.InputRedirection is { } inRedir)
+        {
+            inputRedir = new BoundInputRedirection(
+                LowerExpression(inRedir.Source, ctx),
+                inRedir.Span);
+        }
+
+        return bound with
+        {
+            BoundRedirections = redirs,
+            BoundInputRedirection = inputRedir,
+        };
     }
 
     /// <summary>
@@ -625,12 +698,48 @@ public static class Lowerer
             arguments.Add(LowerArgument(argument, ctx));
         }
 
+        // Resolve overload index for same-source overloaded functions.
+        // Count positional (non-named, non-splat) syntax arguments; if
+        // exactly one overload has that arity the call is unambiguous.
+        int? overloadIndex = null;
+        if (ctx.LocalFunctionOverloads.TryGetValue(command.Name, out var overloadCounts)
+            && overloadCounts.Count > 1)
+        {
+            var positional = 0;
+            var hasSpecial = false;
+            foreach (var a in command.Arguments)
+            {
+                if (a is SplatArgumentSyntax or NamedArgumentSyntax)
+                {
+                    hasSpecial = true;
+                    break;
+                }
+                positional++;
+            }
+            if (!hasSpecial)
+            {
+                var match = -1;
+                for (var i = 0; i < overloadCounts.Count; i++)
+                {
+                    if (overloadCounts[i] == positional)
+                    {
+                        if (match >= 0) { match = -1; break; } // ambiguous → runtime
+                        match = i;
+                    }
+                }
+                if (match >= 0) overloadIndex = match;
+            }
+        }
+
         return new BoundCommandCall(
             Name: command.Name,
             NameSpan: command.NameSpan,
             ResolvedCommand: resolved,
             Arguments: arguments,
-            Span: command.Span);
+            Span: command.Span)
+        {
+            OverloadIndex = overloadIndex,
+        };
     }
 
     // ── arguments / expressions ──────────────────────────────────
@@ -732,7 +841,7 @@ public static class Lowerer
                 TypeName: newObj.TypeName,
                 Arguments: BuildArgumentList(newObj.Arguments, ctx),
                 Span: newObj.Span,
-                Type: BoundType.Dynamic),
+                Type: ctx.ResolveType(newObj.TypeName)),
 
         MethodCallArgumentSyntax method =>
             new BoundMethodCall(
@@ -1480,6 +1589,9 @@ public static class Lowerer
                     }
                 }
 
+            case ClassEventMemberSyntax ev:
+                return new BoundClassEventMember(ev.Name, ev.PayloadTypeName, ev.IsShy, ev.Span);
+
             default:
                 throw new InvalidOperationException($"Unknown class member kind: {member.GetType().Name}");
         }
@@ -1827,9 +1939,14 @@ public static class Lowerer
         // explicit).
         private readonly List<(int EntryDepth, HashSet<BoundSymbol> Seen, List<BoundSymbol> Order)> _lambdaFrames = new();
 
-        public LowerContext(ShellCommandRegistry commands, IReadOnlyDictionary<string, BoundType>? userTypes = null)
+        public LowerContext(
+            ShellCommandRegistry commands,
+            IReadOnlyDictionary<string, BoundType>? userTypes = null,
+            IReadOnlyDictionary<string, List<int>>? localFunctionOverloads = null)
         {
             Commands = commands;
+            LocalFunctionOverloads = localFunctionOverloads
+                ?? new Dictionary<string, List<int>>(StringComparer.Ordinal);
             _scopes.Add(new Dictionary<string, BoundSymbol>(StringComparer.Ordinal));
             // Resolver is constructed once per lowering pass; user
             // types are seeded from a syntax-level scan of the
@@ -1842,6 +1959,13 @@ public static class Lowerer
         }
 
         public ShellCommandRegistry Commands { get; }
+
+        /// <summary>
+        /// Maps each top-level function name to the ordered list of
+        /// parameter counts for its overloads (declaration order).
+        /// Single-definition names have a list of length&nbsp;1.
+        /// </summary>
+        public IReadOnlyDictionary<string, List<int>> LocalFunctionOverloads { get; }
 
         /// <summary>
         /// Maps textual type annotations

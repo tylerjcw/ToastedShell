@@ -218,6 +218,250 @@ public sealed class DeclarationIndex
             : [new LspLocation(_sourceName, declaration.SelectionRange)];
     }
 
+    /// <summary>
+    /// Returns every reference to the symbol at <paramref name="position"/>
+    /// within this document, including the declaration site when
+    /// <paramref name="includeDeclaration"/> is <c>true</c>. The reference
+    /// scan tokenises the source with the production lexer, then for each
+    /// candidate identifier resolves it through the same scope-aware lookup
+    /// used by <see cref="FindDefinitions(LspPosition)"/> and keeps only
+    /// the occurrences that bind to the same declaration.
+    /// </summary>
+    public IReadOnlyList<LspLocation> FindReferences(LspPosition position, bool includeDeclaration)
+    {
+        var target = ResolveTargetAtPosition(position);
+        if (target is null) return Array.Empty<LspLocation>();
+        return CollectReferences(target.Declaration, target.IsVariable, includeDeclaration)
+            .Select(range => new LspLocation(_sourceName, range))
+            .ToArray();
+    }
+
+    /// <summary>
+    /// Returns the editable identifier range at <paramref name="position"/>,
+    /// or <c>null</c> if the cursor is not on a renamable symbol. For
+    /// variable references (<c>$name</c>) the range excludes the leading
+    /// <c>$</c> so editor clients show only the identifier in the rename
+    /// affordance and the user types only the new identifier.
+    /// </summary>
+    public LspPrepareRenameResult? PrepareRename(LspPosition position)
+    {
+        var offset = _map.ToOffset(position);
+        var target = ResolveTargetAtPosition(position);
+        if (target is null) return null;
+
+        // Compute the editable range at the cursor itself (not the
+        // declaration site). For a `$name` reference, skip the leading `$`.
+        var token = FindWordAt(offset);
+        var start = token.Start;
+        var end = token.End;
+        if (target.IsVariable && start < _text.Length && _text[start] == '$')
+        {
+            start += 1;
+        }
+        // If the token is `$ns.member`, only the head identifier is renamable.
+        var word = _text[start..end];
+        var dot = word.IndexOf('.');
+        if (dot >= 0)
+        {
+            end = start + dot;
+        }
+        var range = new LspRange(_map.ToPosition(start), _map.ToPosition(end));
+        return new LspPrepareRenameResult(range, target.Declaration.Name);
+    }
+
+    /// <summary>
+    /// Builds the workspace edit that renames the symbol at
+    /// <paramref name="position"/> to <paramref name="newName"/>. Returns
+    /// <c>null</c> when the position does not point at a renamable
+    /// declaration. The edit includes the declaration site and every
+    /// reference; for variable references only the identifier portion
+    /// (after <c>$</c>) is rewritten.
+    /// </summary>
+    public LspWorkspaceEdit? BuildRenameEdits(LspPosition position, string newName)
+    {
+        var target = ResolveTargetAtPosition(position);
+        if (target is null) return null;
+        var ranges = CollectReferences(target.Declaration, target.IsVariable, includeDeclaration: true);
+        var edits = new List<LspTextEdit>(ranges.Count);
+        foreach (var range in ranges)
+        {
+            var editRange = target.IsVariable && IsVariableReferenceRange(range)
+                ? StripDollarPrefix(range)
+                : range;
+            edits.Add(new LspTextEdit(editRange, newName));
+        }
+        var changes = new Dictionary<string, IReadOnlyList<LspTextEdit>>(StringComparer.Ordinal)
+        {
+            [_sourceName] = edits,
+        };
+        return new LspWorkspaceEdit(changes);
+    }
+
+    private TargetSymbol? ResolveTargetAtPosition(LspPosition position)
+    {
+        var offset = _map.ToOffset(position);
+        var token = FindWordAt(offset);
+        if (string.IsNullOrWhiteSpace(token.Word)) return null;
+
+        // Fast path: cursor is exactly on a declaration's selection start
+        // (e.g. the identifier in `var greeting`, `func greet`, `class Item`).
+        // Resolve directly to that declaration so renames/refs work from the
+        // declaration site, not just from references.
+        var declAtCursor = _declarations.FirstOrDefault(d =>
+            d.SelectionStart >= token.Start && d.SelectionStart < token.End);
+        if (declAtCursor is not null)
+        {
+            var isVar = declAtCursor.Kind is DeclarationKind.Variable or DeclarationKind.Parameter or DeclarationKind.LoopVariable or DeclarationKind.CatchVariable;
+            return new TargetSymbol(declAtCursor, isVar, declAtCursor.SelectionRange);
+        }
+
+        if (TryGetVariableReferenceName(token.Word, out var varName))
+        {
+            var decl = ResolveVisibleDeclaration(offset, varName, entry =>
+                entry.Kind is DeclarationKind.Variable or DeclarationKind.Parameter or DeclarationKind.LoopVariable or DeclarationKind.CatchVariable);
+            return decl is null ? null : new TargetSymbol(decl, IsVariable: true, decl.SelectionRange);
+        }
+
+        if (token.Word.Contains('.', StringComparison.Ordinal)) return null;
+
+        // Function overloads share a name; treat them as a group keyed by name + scope.
+        var overloads = GetVisibleFunctionOverloads(offset, token.Word);
+        if (overloads.Count > 0)
+        {
+            var first = overloads[0];
+            var anchor = _declarations.FirstOrDefault(d =>
+                d.Kind == DeclarationKind.Function &&
+                string.Equals(d.Name, first.Name, StringComparison.Ordinal) &&
+                d.ScopeStart == first.ScopeStart &&
+                d.ScopeEnd == first.ScopeEnd);
+            if (anchor is null) return null;
+            return new TargetSymbol(anchor, IsVariable: false, anchor.SelectionRange);
+        }
+
+        var typeDecl = ResolveVisibleDeclaration(
+            offset,
+            token.Word,
+            entry => entry.Kind is DeclarationKind.Function or DeclarationKind.Class or DeclarationKind.Module or DeclarationKind.Enum or DeclarationKind.Record,
+            requireDeclarationBeforeUse: false);
+        return typeDecl is null ? null : new TargetSymbol(typeDecl, IsVariable: false, typeDecl.SelectionRange);
+    }
+
+    private List<LspRange> CollectReferences(IndexedDeclaration target, bool isVariable, bool includeDeclaration)
+    {
+        var results = new List<LspRange>();
+        if (includeDeclaration)
+        {
+            // Function overloads: include every overload's selection range as a "declaration".
+            if (target.Kind == DeclarationKind.Function)
+            {
+                foreach (var fn in _functions)
+                {
+                    if (string.Equals(fn.Name, target.Name, StringComparison.Ordinal)
+                        && fn.ScopeStart == target.ScopeStart
+                        && fn.ScopeEnd == target.ScopeEnd)
+                    {
+                        results.Add(fn.SelectionRange);
+                    }
+                }
+            }
+            else
+            {
+                results.Add(target.SelectionRange);
+            }
+        }
+
+        var lex = new ToshLexer(_text);
+        var tokens = lex.Lex();
+        foreach (var token in tokens)
+        {
+            if (token.Kind != SyntaxTokenKind.Bareword) continue;
+            var text = token.Text;
+            if (string.IsNullOrEmpty(text)) continue;
+
+            string head;
+            int headStart;
+            if (isVariable)
+            {
+                if (text.Length < 2 || text[0] != '$') continue;
+                var dot = text.IndexOf('.');
+                head = dot < 0 ? text[1..] : text[1..dot];
+                headStart = token.Position; // includes '$'
+            }
+            else
+            {
+                if (text[0] == '$') continue;
+                var dot = text.IndexOf('.');
+                head = dot < 0 ? text : text[..dot];
+                headStart = token.Position;
+            }
+            if (!string.Equals(head, target.Name, StringComparison.Ordinal)) continue;
+
+            // Probe inside the head identifier (token start +1 for variables to land past `$`).
+            var probeOffset = isVariable ? headStart + 1 : headStart;
+
+            IndexedDeclaration? resolved;
+            if (isVariable)
+            {
+                resolved = ResolveVisibleDeclaration(probeOffset, head, entry =>
+                    entry.Kind is DeclarationKind.Variable or DeclarationKind.Parameter or DeclarationKind.LoopVariable or DeclarationKind.CatchVariable);
+            }
+            else if (target.Kind == DeclarationKind.Function)
+            {
+                // Any in-scope overload of the same name counts as a reference.
+                var overloads = GetVisibleFunctionOverloads(probeOffset, head);
+                resolved = overloads.Count == 0 ? null
+                    : _declarations.FirstOrDefault(d =>
+                        d.Kind == DeclarationKind.Function &&
+                        string.Equals(d.Name, target.Name, StringComparison.Ordinal) &&
+                        d.ScopeStart == target.ScopeStart &&
+                        d.ScopeEnd == target.ScopeEnd);
+            }
+            else
+            {
+                resolved = ResolveVisibleDeclaration(probeOffset, head, entry =>
+                    entry.Kind is DeclarationKind.Function or DeclarationKind.Class or DeclarationKind.Module or DeclarationKind.Enum or DeclarationKind.Record,
+                    requireDeclarationBeforeUse: false);
+            }
+            if (resolved is null) continue;
+            if (resolved.SelectionStart != target.SelectionStart) continue;
+
+            var headEnd = headStart + (isVariable ? 1 + head.Length : head.Length);
+            var range = new LspRange(_map.ToPosition(headStart), _map.ToPosition(headEnd));
+
+            // Don't double-emit the declaration site.
+            if (RangeEquals(range, target.SelectionRange) && includeDeclaration) continue;
+            results.Add(range);
+        }
+        return results;
+    }
+
+    private LspRange StripDollarPrefix(LspRange range)
+    {
+        // Selection ranges for `$x` either start at `$` or already at `x`
+        // depending on the declaration vs. reference. When the range starts
+        // at a `$`, advance by one column.
+        var startOffset = _map.ToOffset(range.Start);
+        if (startOffset >= 0 && startOffset < _text.Length && _text[startOffset] == '$')
+        {
+            return new LspRange(_map.ToPosition(startOffset + 1), range.End);
+        }
+        return range;
+    }
+
+    private bool IsVariableReferenceRange(LspRange range)
+    {
+        var startOffset = _map.ToOffset(range.Start);
+        return startOffset >= 0 && startOffset < _text.Length && _text[startOffset] == '$';
+    }
+
+    private static bool RangeEquals(LspRange a, LspRange b)
+        => a.Start.Line == b.Start.Line
+            && a.Start.Character == b.Start.Character
+            && a.End.Line == b.End.Line
+            && a.End.Character == b.End.Character;
+
+    private sealed record TargetSymbol(IndexedDeclaration Declaration, bool IsVariable, LspRange SelectionRange);
+
     private IReadOnlyList<IndexedDeclaration> GetVisibleDeclarations(int offset, Func<IndexedDeclaration, bool> predicate)
     {
         return _declarations

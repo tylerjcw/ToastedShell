@@ -8,6 +8,9 @@ public sealed class LineEditorBuffer
     private readonly Stack<EditorSnapshot> _undoStack = new();
     private readonly Stack<EditorSnapshot> _redoStack = new();
     private const int MaxHistoryDepth = 256;
+    private EditKind _lastEditKind = EditKind.None;
+
+    private enum EditKind { None, InsertChar, DeleteBack, DeleteForward }
 
     public LineEditorBuffer(string text = "")
     {
@@ -23,6 +26,12 @@ public sealed class LineEditorBuffer
 
     public bool CanRedo => _redoStack.Count > 0;
 
+    /// <summary>
+    /// Ends the current coalescing run so the next character-level edit opens a fresh undo entry.
+    /// Call after any cursor movement or structural edit.
+    /// </summary>
+    public void BreakUndoCoalescing() => _lastEditKind = EditKind.None;
+
     public void SetText(string? text)
     {
         var newText = text ?? string.Empty;
@@ -36,10 +45,12 @@ public sealed class LineEditorBuffer
         _buffer.Clear();
         _buffer.Append(newText);
         CursorIndex = _buffer.Length;
+        _lastEditKind = EditKind.None;
     }
 
     public void SetCursor(int cursorIndex)
     {
+        _lastEditKind = EditKind.None;
         CursorIndex = Math.Clamp(cursorIndex, 0, _buffer.Length);
     }
 
@@ -60,14 +71,19 @@ public sealed class LineEditorBuffer
         _buffer.Remove(start, length);
         _buffer.Insert(start, replacement);
         CursorIndex = start + replacement.Length;
+        _lastEditKind = EditKind.None;
         return true;
     }
 
     public bool Insert(char value)
     {
-        PushUndoSnapshot();
+        if (_lastEditKind != EditKind.InsertChar)
+        {
+            PushUndoSnapshot();
+        }
         _buffer.Insert(CursorIndex, value);
         CursorIndex++;
+        _lastEditKind = EditKind.InsertChar;
         return true;
     }
 
@@ -83,6 +99,7 @@ public sealed class LineEditorBuffer
         PushUndoSnapshot();
         _buffer.Insert(CursorIndex, value);
         CursorIndex += value.Length;
+        _lastEditKind = EditKind.None;
         return true;
     }
 
@@ -93,9 +110,13 @@ public sealed class LineEditorBuffer
             return false;
         }
 
-        PushUndoSnapshot();
+        if (_lastEditKind != EditKind.DeleteBack)
+        {
+            PushUndoSnapshot();
+        }
         _buffer.Remove(CursorIndex - 1, 1);
         CursorIndex--;
+        _lastEditKind = EditKind.DeleteBack;
         return true;
     }
 
@@ -106,13 +127,35 @@ public sealed class LineEditorBuffer
             return false;
         }
 
-        PushUndoSnapshot();
+        if (_lastEditKind != EditKind.DeleteForward)
+        {
+            PushUndoSnapshot();
+        }
         _buffer.Remove(CursorIndex, 1);
+        _lastEditKind = EditKind.DeleteForward;
         return true;
+    }
+
+    /// <summary>
+    /// Atomically accepts a completion: sets the buffer to <paramref name="baseText"/> and
+    /// applies the replacement, recording the whole operation as a single undo entry.
+    /// </summary>
+    public void ApplyCompletion(string baseText, int replacementStart, int replacementLength, string replacement)
+    {
+        PushUndoSnapshot();
+        _buffer.Clear();
+        _buffer.Append(baseText ?? string.Empty);
+        var start = Math.Clamp(replacementStart, 0, _buffer.Length);
+        var length = Math.Clamp(replacementLength, 0, _buffer.Length - start);
+        _buffer.Remove(start, length);
+        _buffer.Insert(start, replacement);
+        CursorIndex = start + replacement.Length;
+        _lastEditKind = EditKind.None;
     }
 
     public bool MoveLeft()
     {
+        _lastEditKind = EditKind.None;
         if (CursorIndex == 0)
         {
             return false;
@@ -124,6 +167,7 @@ public sealed class LineEditorBuffer
 
     public bool MoveRight()
     {
+        _lastEditKind = EditKind.None;
         if (CursorIndex >= _buffer.Length)
         {
             return false;
@@ -135,6 +179,7 @@ public sealed class LineEditorBuffer
 
     public bool MoveWordLeft()
     {
+        _lastEditKind = EditKind.None;
         if (CursorIndex == 0)
         {
             return false;
@@ -163,6 +208,7 @@ public sealed class LineEditorBuffer
 
     public bool MoveWordRight()
     {
+        _lastEditKind = EditKind.None;
         if (CursorIndex >= _buffer.Length)
         {
             return false;
@@ -191,6 +237,7 @@ public sealed class LineEditorBuffer
 
     public bool MoveHome()
     {
+        _lastEditKind = EditKind.None;
         if (CursorIndex == 0)
         {
             return false;
@@ -202,6 +249,7 @@ public sealed class LineEditorBuffer
 
     public bool MoveEnd()
     {
+        _lastEditKind = EditKind.None;
         if (CursorIndex == _buffer.Length)
         {
             return false;
@@ -221,6 +269,7 @@ public sealed class LineEditorBuffer
         PushUndoSnapshot();
         _buffer.Clear();
         CursorIndex = 0;
+        _lastEditKind = EditKind.None;
         return true;
     }
 
@@ -247,6 +296,7 @@ public sealed class LineEditorBuffer
         PushUndoSnapshot();
         _buffer.Remove(pos, end - pos);
         CursorIndex = pos;
+        _lastEditKind = EditKind.None;
         return true;
     }
 
@@ -259,6 +309,7 @@ public sealed class LineEditorBuffer
 
         PushUndoSnapshot();
         _buffer.Remove(CursorIndex, _buffer.Length - CursorIndex);
+        _lastEditKind = EditKind.None;
         return true;
     }
 
@@ -271,6 +322,7 @@ public sealed class LineEditorBuffer
 
         PushRedoSnapshot();
         ApplySnapshot(_undoStack.Pop());
+        _lastEditKind = EditKind.None;
         return true;
     }
 
@@ -283,6 +335,7 @@ public sealed class LineEditorBuffer
 
         PushUndoSnapshot(clearRedo: false);
         ApplySnapshot(_redoStack.Pop());
+        _lastEditKind = EditKind.None;
         return true;
     }
 

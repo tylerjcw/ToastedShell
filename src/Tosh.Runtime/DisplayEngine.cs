@@ -120,6 +120,19 @@ public sealed class DisplayEngine
         return new InlineTablePlan(planColumns, planRows, TableTheme.BoxStyle, TableTheme);
     }
 
+    /// <summary>
+    /// Tries to resolve renderable columns for streaming output from the first row only.
+    /// Returns false if the row type has no table representation.
+    /// </summary>
+    public bool TryBuildStreamingColumns(object firstRow, DisplayRenderOptions options, out IReadOnlyList<DisplayTableColumn> columns)
+        => TryGetRenderableColumns([firstRow], options, out _, out columns);
+
+    /// <summary>
+    /// Formats a single value for display in a streaming table cell.
+    /// </summary>
+    public string FormatStreamingCellValue(object? value, DisplayRenderOptions options)
+        => FormatTableCellValue(value, options);
+
     private string RenderMany(
         IReadOnlyList<object?> values,
         DisplayRenderOptions options,

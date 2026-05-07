@@ -13,4 +13,10 @@
     <NoWarn>$(NoWarn);CA2255</NoWarn>
   </PropertyGroup>
 
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <PackageId>Tosh.Stdlib</PackageId>
+    <Description>Built-in command library for TōSh — filesystem, text, data, networking, and shell builtins registered via the runtime.</Description>
+  </PropertyGroup>
+
 </Project>

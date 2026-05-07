@@ -1,5 +1,6 @@
 using Tosh.Language.Binding.BoundNodes;
 using Tosh.Runtime;
+using System.Reflection;
 
 namespace Tosh.Language.Binding;
 
@@ -166,6 +167,9 @@ public static class TypeChecker
     {
         // Already concretely typed -> nothing to flag.
         if (!decl.Symbol.DeclaredType.IsDynamic) return;
+        // Explicit `: dynamic` is an intentional opt-out and must
+        // not be reported as implicit dynamic.
+        if (decl.AnnotatedDynamic) return;
         diagnostics.Add(new ToshDiagnostic(
             Code: "tosh.compile.implicit_dynamic",
             Title: $"Variable '{decl.Symbol.Name}' has no type annotation and the inferrer could not pin down a concrete type.",
@@ -250,6 +254,7 @@ public static class TypeChecker
 
             case BoundVariableDeclaration decl:
                 CheckVariableDeclaration(decl, ctx);
+                if (decl.Value is not null) CheckPipeline(decl.Value, ctx);
                 break;
 
             case BoundReturnStatement ret:
@@ -257,15 +262,18 @@ public static class TypeChecker
                 break;
 
             case BoundIfStatement i:
+                CheckCondition(i.Condition, i.Condition.Span, "if", ctx);
                 Walk(i.ThenBlock, ctx);
                 if (i.ElseBlock is not null) Walk(i.ElseBlock, ctx);
                 break;
 
             case BoundForStatement f:
+                CheckPipeline(f.Source, ctx);
                 Walk(f.Body, ctx);
                 break;
 
             case BoundWhileStatement w:
+                CheckCondition(w.Condition, w.Condition.Span, w.IsUntil ? "until" : "while", ctx);
                 Walk(w.Body, ctx);
                 break;
 
@@ -276,23 +284,339 @@ public static class TypeChecker
             case BoundVariableAssignment va:
                 CheckPipeline(va.Value, ctx);
                 break;
+
+            case BoundMemberAssignment ma:
+                WalkExpression(ma.Target, ctx);
+                CheckPipeline(ma.Value, ctx);
+                break;
+
+            case BoundTupleAssignment ta:
+                CheckPipeline(ta.Value, ctx);
+                break;
+
+            case BoundDestructuringDeclaration dd:
+                CheckPipeline(dd.Value, ctx);
+                break;
+
+            case BoundAllocStatement alloc:
+                CheckPipeline(alloc.Value, ctx);
+                break;
+
+            case BoundTryStatement ts:
+                Walk(ts.TryBlock, ctx);
+                if (ts.Catch is not null) Walk(ts.Catch.Body, ctx);
+                if (ts.Finally is not null) Walk(ts.Finally, ctx);
+                break;
+
+            case BoundSwitchStatement sw:
+                WalkExpression(sw.Value, ctx);
+                foreach (var c in sw.Cases)
+                {
+                    WalkExpression(c.Pattern, ctx);
+                    if (c.Guard is not null) CheckCondition(c.Guard, c.Guard.Span, "switch case guard", ctx);
+                    Walk(c.Body, ctx);
+                }
+                if (sw.Default is not null) Walk(sw.Default, ctx);
+                break;
+
+            case BoundThrowStatement thr:
+                if (thr.Value is not null) CheckPipeline(thr.Value, ctx);
+                break;
+
+            case BoundYieldStatement ys:
+                if (ys.Value is not null) CheckPipeline(ys.Value, ctx);
+                break;
+
+            case BoundModuleDefinition mod:
+                Walk(mod.Body, ctx);
+                break;
+
+            case BoundSubcommandStatement sub:
+                Walk(sub.Body, ctx);
+                break;
+
+            case BoundScriptInputStatement scriptInput:
+                foreach (var p in scriptInput.Parameters)
+                    if (p.Default is not null) CheckPipeline(p.Default, ctx);
+                break;
+
+            case BoundClassDefinition cls:
+                foreach (var member in cls.Members)
+                {
+                    switch (member)
+                    {
+                        case BoundClassPropertyMember prop:
+                            if (prop.Initializer is not null) CheckPipeline(prop.Initializer, ctx);
+                            if (prop.GetterBody is not null) Walk(prop.GetterBody, ctx);
+                            if (prop.SetterBody is not null) Walk(prop.SetterBody, ctx);
+                            break;
+                        case BoundClassMethodMember m:
+                            Walk(m.Method, ctx);
+                            break;
+                        case BoundClassConstructorMember ctor:
+                            foreach (var p in ctor.Parameters)
+                                if (p.Default is not null) CheckPipeline(p.Default, ctx);
+                            Walk(ctor.Body, ctx);
+                            break;
+                    }
+                }
+                break;
+
+            case BoundRecordDefinition rec:
+                foreach (var f in rec.Fields)
+                    if (f.DefaultValue is not null) CheckPipeline(f.DefaultValue, ctx);
+                break;
+
+            case BoundStructDefinition st:
+                foreach (var f in st.Fields)
+                    if (f.DefaultValue is not null) CheckPipeline(f.DefaultValue, ctx);
+                foreach (var member in st.Members)
+                {
+                    if (member is BoundClassPropertyMember prop)
+                    {
+                        if (prop.Initializer is not null) CheckPipeline(prop.Initializer, ctx);
+                        if (prop.GetterBody is not null) Walk(prop.GetterBody, ctx);
+                        if (prop.SetterBody is not null) Walk(prop.SetterBody, ctx);
+                    }
+                    else if (member is BoundClassMethodMember m)
+                    {
+                        Walk(m.Method, ctx);
+                    }
+                    else if (member is BoundClassConstructorMember ctor)
+                    {
+                        foreach (var p in ctor.Parameters)
+                            if (p.Default is not null) CheckPipeline(p.Default, ctx);
+                        Walk(ctor.Body, ctx);
+                    }
+                }
+                break;
+
+            case BoundEventDefinition ev:
+                foreach (var f in ev.Fields)
+                    if (f.DefaultValue is not null) CheckPipeline(f.DefaultValue, ctx);
+                break;
         }
     }
 
     private static void CheckPipeline(BoundPipeline pipeline, CheckContext ctx)
     {
-        foreach (var stage in pipeline.Stages)
+        BoundType? previousStageOutput = null;
+        for (var i = 0; i < pipeline.Stages.Count; i++)
         {
+            var stage = pipeline.Stages[i];
             if (stage is BoundCommandCall call)
             {
                 CheckCommandCall(call, ctx);
+
+                if (i > 0)
+                {
+                    CheckPipelineInputCompatibility(call, previousStageOutput, ctx);
+                }
+
+                previousStageOutput = TypeInferrer.InferCommandOutput(call);
             }
+            else if (stage is BoundExpressionStage exprStage)
+            {
+                WalkExpression(exprStage.Value, ctx);
+                previousStageOutput = exprStage.Value.Type;
+            }
+        }
+    }
+
+    private static void CheckCondition(BoundExpression condition, TextSpan span, string context, CheckContext ctx)
+    {
+        WalkExpression(condition, ctx);
+        var condType = condition.Type;
+        var boolType = BoundType.FromClr(typeof(bool));
+        if (condType.IsDynamic) return;
+        if (!IsAssignable(condType, boolType, out var reason))
+        {
+            ctx.Diagnostics.Add(new ToshDiagnostic(
+                Code: "tosh.type.condition",
+                Title: $"{context} condition expects 'bool' but received '{condType.DisplayName}'.",
+                SourceName: ctx.SourceName,
+                SourceText: ctx.SourceText,
+                Span: span,
+                Help: reason,
+                Severity: ToshDiagnosticSeverity.Warning,
+                Category: ToshDiagnosticCategory.Type,
+                Lifecycle: ToshDiagnosticLifecycle.Preview));
+        }
+    }
+
+    private static void WalkExpression(BoundExpression expression, CheckContext ctx)
+    {
+        switch (expression)
+        {
+            case BoundLiteral:
+            case BoundVariableReference:
+            case BoundStaticMemberAccess:
+            case BoundNameOfExpression:
+            case BoundFunctionReference:
+            case BoundQuoteExpression:
+                return;
+
+            case BoundMemberAccess ma:
+                WalkExpression(ma.Target, ctx);
+                CheckMemberAccess(ma, ctx);
+                return;
+
+            case BoundBinaryOperator bin:
+                WalkExpression(bin.Left, ctx);
+                WalkExpression(bin.Right, ctx);
+                CheckBinaryOperator(bin, ctx);
+                return;
+
+            case BoundUnaryOperator un:
+                WalkExpression(un.Operand, ctx);
+                CheckUnaryOperator(un, ctx);
+                return;
+
+            case BoundRange range:
+                WalkExpression(range.Start, ctx);
+                if (range.Step is not null) WalkExpression(range.Step, ctx);
+                if (range.End is not null) WalkExpression(range.End, ctx);
+                return;
+
+            case BoundArrayLiteral arr:
+                foreach (var item in arr.Items) WalkExpression(item.Value, ctx);
+                return;
+
+            case BoundInterpolatedString interp:
+                foreach (var part in interp.Parts)
+                    if (part is BoundInterpolatedExpression ie && ie.Expression is not null)
+                        WalkExpression(ie.Expression, ctx);
+                return;
+
+            case BoundConditional cond:
+                CheckCondition(cond.Condition, cond.Condition.Span, "conditional", ctx);
+                WalkExpression(cond.WhenTrue, ctx);
+                WalkExpression(cond.WhenFalse, ctx);
+                return;
+
+            case BoundIfExpression ifExpr:
+                CheckCondition(ifExpr.Condition, ifExpr.Condition.Span, "if-expression", ctx);
+                Walk(ifExpr.ThenBlock, ctx);
+                Walk(ifExpr.ElseBlock, ctx);
+                return;
+
+            case BoundBlockExpression be:
+                Walk(be.Body, ctx);
+                return;
+
+            case BoundLambda lambda:
+                foreach (var p in lambda.Parameters)
+                    if (p.Default is not null) CheckPipeline(p.Default, ctx);
+                Walk(lambda.Body, ctx);
+                return;
+
+            case BoundCallableInvocation inv:
+                WalkExpression(inv.Target, ctx);
+                foreach (var arg in inv.Arguments) WalkExpression(arg.Value, ctx);
+                return;
+
+            case BoundThrowExpression te:
+                if (te.Value is not null) WalkExpression(te.Value, ctx);
+                return;
+
+            case BoundMatchExpression match:
+                WalkExpression(match.Value, ctx);
+                foreach (var arm in match.Arms)
+                {
+                    if (arm.Pattern is not null) WalkExpression(arm.Pattern, ctx);
+                    if (arm.Guard is not null) CheckCondition(arm.Guard, arm.Guard.Span, "match arm guard", ctx);
+                    Walk(arm.Body, ctx);
+                }
+                return;
+
+            case BoundNewObject no:
+                foreach (var arg in no.Arguments) WalkExpression(arg.Value, ctx);
+                return;
+
+            case BoundMethodCall mc:
+                WalkExpression(mc.Target, ctx);
+                foreach (var arg in mc.Arguments) WalkExpression(arg.Value, ctx);
+                CheckMethodCall(mc, ctx);
+                return;
+
+            case BoundStaticMethodCall smc:
+                foreach (var arg in smc.Arguments) WalkExpression(arg.Value, ctx);
+                return;
+
+            case BoundIndexAccess idx:
+                WalkExpression(idx.Target, ctx);
+                WalkExpression(idx.Index, ctx);
+                CheckIndexAccess(idx, ctx);
+                return;
+
+            case BoundRecordLiteral rl:
+                foreach (var e in rl.Fields)
+                {
+                    if (e is BoundRecordField field) WalkExpression(field.Value, ctx);
+                    else if (e is BoundRecordSpreadEntry spread) WalkExpression(spread.Value, ctx);
+                    else if (e is BoundComputedRecordField computed)
+                    {
+                        WalkExpression(computed.NameExpression, ctx);
+                        WalkExpression(computed.Value, ctx);
+                    }
+                }
+                return;
+
+            case BoundDictLiteral dl:
+                foreach (var item in dl.Entries)
+                {
+                    WalkExpression(item.Key, ctx);
+                    WalkExpression(item.Value, ctx);
+                }
+                return;
+
+            case BoundSetLiteral sl:
+                foreach (var item in sl.Items) WalkExpression(item, ctx);
+                return;
+
+            case BoundTupleLiteral tl:
+                foreach (var item in tl.Items) WalkExpression(item, ctx);
+                return;
+
+            case BoundSubexpression sub:
+                CheckPipeline(sub.Pipeline, ctx);
+                return;
+
+            case BoundCommandSubstitution csub:
+                CheckPipeline(csub.Pipeline, ctx);
+                return;
+
+            case BoundInputProcessSubstitution ip:
+                CheckPipeline(ip.Pipeline, ctx);
+                return;
+
+            case BoundOutputProcessSubstitution op:
+                CheckPipeline(op.Pipeline, ctx);
+                return;
+
+            case BoundMemberProjection:
+            case BoundComparisonPattern:
+            case BoundDynamicExpression:
+                return;
         }
     }
 
     private static void CheckCommandCall(BoundCommandCall call, CheckContext ctx)
     {
-        if (!ctx.UserFunctions.TryGetValue(call.Name, out var fn)) return;
+        foreach (var arg in call.Arguments)
+            WalkExpression(arg.Value, ctx);
+
+        if (ctx.UserFunctions.TryGetValue(call.Name, out var fn))
+        {
+            CheckUserFunctionCommandCall(call, fn, ctx);
+            return;
+        }
+
+        CheckBuiltinCommandCall(call, ctx);
+    }
+
+    private static void CheckUserFunctionCommandCall(BoundCommandCall call, BoundFunctionDefinition fn, CheckContext ctx)
+    {
 
         // Strip splatted / named arguments — the checker can't reason
         // about those statically. Conservative: if any non-positional
@@ -353,6 +677,484 @@ public static class TypeChecker
                     Category: ToshDiagnosticCategory.Type,
                     Lifecycle: ToshDiagnosticLifecycle.Preview));
             }
+        }
+    }
+
+    private static void CheckBuiltinCommandCall(BoundCommandCall call, CheckContext ctx)
+    {
+        if (call.ResolvedCommand is null) return;
+
+        // Keep the pass conservative around splats/named arguments for now.
+        foreach (var a in call.Arguments)
+            if (a.IsSplat || a.Name is not null)
+                return;
+
+        var expectedArgs = call.ResolvedCommand.GetType()
+            .GetCustomAttributes<CommandArgumentAttribute>(inherit: false)
+            .ToArray();
+        if (expectedArgs.Length == 0) return;
+
+        if (!TryCollectBuiltinPositionals(call, ctx, out var positionals))
+            return;
+
+        var required = expectedArgs.Count(a => a.Required);
+        var maxAccepted = expectedArgs.Any(IsVariadicCommandArgument)
+            ? int.MaxValue
+            : expectedArgs.Length;
+        var provided = positionals.Count;
+        if (provided < required || provided > maxAccepted)
+        {
+            ctx.Diagnostics.Add(new ToshDiagnostic(
+                Code: "tosh.type.command_arity",
+                Title: $"Command '{call.Name}' expects {DescribeArity(required, maxAccepted)} but received {provided}.",
+                SourceName: ctx.SourceName,
+                SourceText: ctx.SourceText,
+                Span: call.NameSpan,
+                Severity: ToshDiagnosticSeverity.Warning,
+                Category: ToshDiagnosticCategory.Type,
+                Lifecycle: ToshDiagnosticLifecycle.Preview));
+            return;
+        }
+
+        var pairCount = Math.Min(provided, expectedArgs.Length);
+        for (var i = 0; i < pairCount; i++)
+        {
+            var expected = InferExpectedType(expectedArgs[i]);
+            if (expected is null || expected.IsDynamic) continue;
+            var actual = positionals[i].Value.Type;
+            if (!IsAssignable(actual, expected, out var reason))
+            {
+                ctx.Diagnostics.Add(new ToshDiagnostic(
+                    Code: "tosh.type.command_argument",
+                    Title: $"Command '{call.Name}' argument {i + 1} expects '{expected.DisplayName}' but received '{actual.DisplayName}'.",
+                    SourceName: ctx.SourceName,
+                    SourceText: ctx.SourceText,
+                    Span: positionals[i].Span,
+                    Help: reason,
+                    Severity: ToshDiagnosticSeverity.Warning,
+                    Category: ToshDiagnosticCategory.Type,
+                    Lifecycle: ToshDiagnosticLifecycle.Preview));
+            }
+        }
+    }
+
+    private sealed record CommandOptionShape(string Name, bool RequiresValue, bool AllowsOptionalValue);
+
+    private static bool TryCollectBuiltinPositionals(BoundCommandCall call, CheckContext ctx, out List<BoundArgument> positionals)
+    {
+        positionals = new List<BoundArgument>(call.Arguments.Count);
+        var optionShapes = call.ResolvedCommand!.GetType()
+            .GetCustomAttributes<CommandOptionAttribute>(inherit: false)
+            .SelectMany(BuildOptionShapes)
+            .ToArray();
+
+        var parseOptions = true;
+        for (var index = 0; index < call.Arguments.Count; index++)
+        {
+            var argument = call.Arguments[index];
+
+            if (!parseOptions || !TryGetLiteralString(argument.Value, out var text))
+            {
+                positionals.Add(argument);
+                continue;
+            }
+
+            if (text == "--")
+            {
+                parseOptions = false;
+                continue;
+            }
+
+            if (!LooksLikeOptionToken(text))
+            {
+                positionals.Add(argument);
+                continue;
+            }
+
+            if (optionShapes.Length == 0)
+            {
+                return false;
+            }
+
+            if (!TryMatchOption(text, optionShapes, out var shape, out var valueIsAttached))
+            {
+                ctx.Diagnostics.Add(new ToshDiagnostic(
+                    Code: "tosh.type.unknown_option",
+                    Title: $"Command '{call.Name}' has no option '{text}'.",
+                    SourceName: ctx.SourceName,
+                    SourceText: ctx.SourceText,
+                    Span: argument.Span,
+                    Help: BuildKnownOptionsHelp(optionShapes),
+                    Severity: ToshDiagnosticSeverity.Warning,
+                    Category: ToshDiagnosticCategory.Type,
+                    Lifecycle: ToshDiagnosticLifecycle.Preview));
+                return false;
+            }
+
+            if (shape.AllowsOptionalValue &&
+                !valueIsAttached &&
+                index + 1 < call.Arguments.Count &&
+                (!TryGetLiteralString(call.Arguments[index + 1].Value, out var nextText) ||
+                 !LooksLikeOptionToken(nextText)))
+            {
+                return false;
+            }
+
+            if (shape.RequiresValue && !valueIsAttached)
+            {
+                if (index + 1 >= call.Arguments.Count)
+                    return false;
+
+                index++;
+            }
+        }
+
+        return true;
+    }
+
+    private static string BuildKnownOptionsHelp(IReadOnlyList<CommandOptionShape> shapes)
+    {
+        var names = shapes.Select(s => s.Name).Distinct(StringComparer.Ordinal).Take(8);
+        return "known options: " + string.Join(", ", names);
+    }
+
+    private static IEnumerable<CommandOptionShape> BuildOptionShapes(CommandOptionAttribute attribute)
+    {
+        var aliasGroupRequiresValue = !attribute.IsFlag && attribute.Syntax.Contains('<', StringComparison.Ordinal);
+        var aliasGroupAllowsOptionalValue = !attribute.IsFlag && attribute.Syntax.Contains(" [", StringComparison.Ordinal);
+
+        foreach (var rawVariant in attribute.Syntax.Split([',', '|'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var variant = rawVariant.Trim();
+            if (variant.Length == 0) continue;
+
+            var firstWhitespace = variant.IndexOfAny([' ', '\t']);
+            var token = firstWhitespace >= 0 ? variant[..firstWhitespace] : variant;
+            var bracketIndex = token.IndexOf('[');
+            if (bracketIndex >= 0) token = token[..bracketIndex];
+            var equalsIndex = token.IndexOf('=');
+            if (equalsIndex >= 0) token = token[..equalsIndex];
+
+            if (!LooksLikeOptionToken(token)) continue;
+
+            var requiresValue = !attribute.IsFlag && (variant.Contains(" <", StringComparison.Ordinal) || aliasGroupRequiresValue);
+            var optionalValue = !attribute.IsFlag && (variant.Contains(" [", StringComparison.Ordinal) || aliasGroupAllowsOptionalValue);
+            yield return new CommandOptionShape(token, requiresValue, optionalValue);
+        }
+    }
+
+    private static bool TryMatchOption(
+        string text,
+        IReadOnlyList<CommandOptionShape> optionShapes,
+        out CommandOptionShape shape,
+        out bool valueIsAttached)
+    {
+        valueIsAttached = false;
+
+        if (text.StartsWith("--", StringComparison.Ordinal))
+        {
+            var equalsIndex = text.IndexOf('=');
+            var name = equalsIndex >= 0 ? text[..equalsIndex] : text;
+            shape = optionShapes.FirstOrDefault(s => string.Equals(s.Name, name, StringComparison.OrdinalIgnoreCase))!;
+            if (shape is null) return false;
+            valueIsAttached = equalsIndex >= 0;
+            return true;
+        }
+
+        shape = optionShapes.FirstOrDefault(s => string.Equals(s.Name, text, StringComparison.OrdinalIgnoreCase))!;
+        if (shape is not null) return true;
+
+        if (text.Length > 2 && text[0] == '-' && text[1] != '-')
+        {
+            var prefix = text[..2];
+            shape = optionShapes.FirstOrDefault(s =>
+                string.Equals(s.Name, prefix, StringComparison.OrdinalIgnoreCase) &&
+                s.RequiresValue)!;
+            if (shape is not null)
+            {
+                valueIsAttached = true;
+                return true;
+            }
+
+            foreach (var flag in text[1..])
+            {
+                var flagName = $"-{flag}";
+                var flagShape = optionShapes.FirstOrDefault(s =>
+                    string.Equals(s.Name, flagName, StringComparison.OrdinalIgnoreCase) &&
+                    !s.RequiresValue);
+                if (flagShape is null)
+                {
+                    shape = null!;
+                    return false;
+                }
+            }
+
+            shape = new CommandOptionShape(text, RequiresValue: false, AllowsOptionalValue: false);
+            return true;
+        }
+
+        shape = null!;
+        return false;
+    }
+
+    private static bool TryGetLiteralString(BoundExpression expression, out string text)
+    {
+        if (expression is BoundLiteral { Value: string value })
+        {
+            text = value;
+            return true;
+        }
+
+        text = string.Empty;
+        return false;
+    }
+
+    private static bool LooksLikeOptionToken(string text) =>
+        text.Length > 1 && text[0] == '-';
+
+    private static bool IsVariadicCommandArgument(CommandArgumentAttribute argument) =>
+        argument.Name.Contains("...", StringComparison.Ordinal) ||
+        argument.Description.Contains("one or more", StringComparison.OrdinalIgnoreCase) ||
+        argument.Description.Contains("zero or more", StringComparison.OrdinalIgnoreCase);
+
+    private static BoundType? InferExpectedType(CommandArgumentAttribute argument)
+    {
+        if (argument.ClrType is { } clr)
+            return BoundType.FromClr(clr);
+
+        var kind = argument.Kind ?? InferKindFromTypeName(argument.TypeName);
+        return kind?.ToLowerInvariant() switch
+        {
+            "path" => BoundType.FromClr(typeof(string)),
+            _ => BoundType.Dynamic,
+        };
+    }
+
+    private static string? InferKindFromTypeName(string? typeName) => typeName?.ToLowerInvariant() switch
+    {
+        null => null,
+        "path-like" or "path" => "path",
+        "block|callable" or "block" or "callable" => "block",
+        "string" => "string",
+        var t when t.Contains("expression", StringComparison.Ordinal) => "expression",
+        _ => "any"
+    };
+
+    private static void CheckPipelineInputCompatibility(BoundCommandCall call, BoundType? previousOutput, CheckContext ctx)
+    {
+        if (call.ResolvedCommand is null || previousOutput is null) return;
+        if (previousOutput.IsDynamic) return;
+
+        var pipeAttr = call.ResolvedCommand.GetType().GetCustomAttribute<PipelineInputAttribute>(inherit: false);
+        if (pipeAttr is null) return;
+
+        var shape = previousOutput is StreamType st ? st.Element : previousOutput;
+
+        var isListLike = shape is ListType or ArrayType || (shape.ClrType?.IsArray ?? false);
+        var isRecord = shape is DictType or UserClassType or UserRecordType or UserStructType;
+        var isScalar = !isListLike && !isRecord;
+
+        var accepts = (isListLike && pipeAttr.AcceptsList)
+            || (isRecord && pipeAttr.AcceptsRecord)
+            || (isScalar && pipeAttr.AcceptsScalar);
+
+        if (!accepts)
+        {
+            ctx.Diagnostics.Add(new ToshDiagnostic(
+                Code: "tosh.type.pipeline_input",
+                Title: $"Command '{call.Name}' does not accept pipeline input of type '{previousOutput.DisplayName}'.",
+                SourceName: ctx.SourceName,
+                SourceText: ctx.SourceText,
+                Span: call.NameSpan,
+                Help: pipeAttr.Description,
+                Severity: ToshDiagnosticSeverity.Warning,
+                Category: ToshDiagnosticCategory.Type,
+                Lifecycle: ToshDiagnosticLifecycle.Preview));
+        }
+    }
+
+    private static void CheckMemberAccess(BoundMemberAccess access, CheckContext ctx)
+    {
+        var targetType = access.Target.Type;
+        if (!targetType.IsConcrete || targetType.ClrType is null) return;
+
+        // MemberPath may be dotted; validate segment-by-segment.
+        var clr = targetType.ClrType;
+        var flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.IgnoreCase;
+        foreach (var segment in access.MemberPath.Split('.', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var member = clr.GetMember(segment, flags).FirstOrDefault();
+            if (member is null)
+            {
+                ctx.Diagnostics.Add(new ToshDiagnostic(
+                    Code: "tosh.type.member_not_found",
+                    Title: $"Member '{segment}' was not found on type '{clr.Name}'.",
+                    SourceName: ctx.SourceName,
+                    SourceText: ctx.SourceText,
+                    Span: access.Span,
+                    Severity: ToshDiagnosticSeverity.Warning,
+                    Category: ToshDiagnosticCategory.Type,
+                    Lifecycle: ToshDiagnosticLifecycle.Preview));
+                return;
+            }
+
+            clr = member switch
+            {
+                PropertyInfo pi => pi.PropertyType,
+                FieldInfo fi => fi.FieldType,
+                MethodInfo mi => mi.ReturnType,
+                _ => clr,
+            };
+        }
+    }
+
+    private static void CheckMethodCall(BoundMethodCall call, CheckContext ctx)
+    {
+        var targetType = call.Target.Type;
+        if (!targetType.IsConcrete || targetType.ClrType is null) return;
+
+        if (call.Arguments.Any(a => a.IsSplat || a.Name is not null)) return;
+
+        var flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.IgnoreCase;
+        var overloads = targetType.ClrType
+            .GetMethods(flags)
+            .Where(m => string.Equals(m.Name, call.MethodName, StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+
+        if (overloads.Length == 0)
+        {
+            ctx.Diagnostics.Add(new ToshDiagnostic(
+                Code: "tosh.type.member_not_found",
+                Title: $"Method '{call.MethodName}' was not found on type '{targetType.ClrType.Name}'.",
+                SourceName: ctx.SourceName,
+                SourceText: ctx.SourceText,
+                Span: call.Span,
+                Severity: ToshDiagnosticSeverity.Warning,
+                Category: ToshDiagnosticCategory.Type,
+                Lifecycle: ToshDiagnosticLifecycle.Preview));
+            return;
+        }
+
+        var positional = call.Arguments;
+        var arityMatch = overloads.Where(o => o.GetParameters().Length == positional.Count).ToArray();
+        if (arityMatch.Length == 0)
+        {
+            ctx.Diagnostics.Add(new ToshDiagnostic(
+                Code: "tosh.type.arity",
+                Title: $"Method '{call.MethodName}' on '{targetType.ClrType.Name}' does not accept {positional.Count} argument(s).",
+                SourceName: ctx.SourceName,
+                SourceText: ctx.SourceText,
+                Span: call.Span,
+                Severity: ToshDiagnosticSeverity.Warning,
+                Category: ToshDiagnosticCategory.Type,
+                Lifecycle: ToshDiagnosticLifecycle.Preview));
+            return;
+        }
+
+        foreach (var method in arityMatch)
+        {
+            var ps = method.GetParameters();
+            var ok = true;
+            for (var i = 0; i < ps.Length; i++)
+            {
+                var actual = positional[i].Value.Type;
+                var expected = BoundType.FromClr(ps[i].ParameterType);
+                if (!IsAssignable(actual, expected, out _)) { ok = false; break; }
+            }
+            if (ok) return;
+        }
+
+        ctx.Diagnostics.Add(new ToshDiagnostic(
+            Code: "tosh.type.mismatch",
+            Title: $"No overload of '{call.MethodName}' on '{targetType.ClrType.Name}' matches the provided argument types.",
+            SourceName: ctx.SourceName,
+            SourceText: ctx.SourceText,
+            Span: call.Span,
+            Severity: ToshDiagnosticSeverity.Warning,
+            Category: ToshDiagnosticCategory.Type,
+            Lifecycle: ToshDiagnosticLifecycle.Preview));
+    }
+
+    private static void CheckIndexAccess(BoundIndexAccess access, CheckContext ctx)
+    {
+        var indexType = access.Index.Type;
+        if (indexType.IsDynamic) return;
+
+        var expectsString = access.LookupKind is IndexLookupKind.ByKey;
+        var expected = expectsString ? BoundType.FromClr(typeof(string)) : BoundType.FromClr(typeof(int));
+        if (!IsAssignable(indexType, expected, out var reason))
+        {
+            ctx.Diagnostics.Add(new ToshDiagnostic(
+                Code: "tosh.type.index",
+                Title: $"Index access expects '{expected.DisplayName}' index but received '{indexType.DisplayName}'.",
+                SourceName: ctx.SourceName,
+                SourceText: ctx.SourceText,
+                Span: access.Span,
+                Help: reason,
+                Severity: ToshDiagnosticSeverity.Warning,
+                Category: ToshDiagnosticCategory.Type,
+                Lifecycle: ToshDiagnosticLifecycle.Preview));
+        }
+    }
+
+    private static void CheckBinaryOperator(BoundBinaryOperator binary, CheckContext ctx)
+    {
+        var left = binary.Left.Type;
+        var right = binary.Right.Type;
+        if (left.IsDynamic || right.IsDynamic) return;
+
+        bool isNumeric(BoundType t) => t.ClrType is { } c && NumericRank(c) > 0;
+        bool isBool(BoundType t) => t.ClrType == typeof(bool);
+        bool isString(BoundType t) => t.ClrType == typeof(string);
+
+        var op = binary.Operator;
+        var ok = op switch
+        {
+            "+" => (isNumeric(left) && isNumeric(right)) || (isString(left) || isString(right)),
+            "-" or "*" or "/" or "%" or "**" => isNumeric(left) && isNumeric(right),
+            "&&" or "||" or "and" or "or" => isBool(left) && isBool(right),
+            "<" or "<=" or ">" or ">=" => isNumeric(left) && isNumeric(right),
+            "==" or "!=" => true,
+            _ => true,
+        };
+
+        if (!ok)
+        {
+            ctx.Diagnostics.Add(new ToshDiagnostic(
+                Code: "tosh.type.operator",
+                Title: $"Operator '{op}' is not compatible with operand types '{left.DisplayName}' and '{right.DisplayName}'.",
+                SourceName: ctx.SourceName,
+                SourceText: ctx.SourceText,
+                Span: binary.Span,
+                Severity: ToshDiagnosticSeverity.Warning,
+                Category: ToshDiagnosticCategory.Type,
+                Lifecycle: ToshDiagnosticLifecycle.Preview));
+        }
+    }
+
+    private static void CheckUnaryOperator(BoundUnaryOperator unary, CheckContext ctx)
+    {
+        var operand = unary.Operand.Type;
+        if (operand.IsDynamic) return;
+
+        var ok = unary.Operator switch
+        {
+            "-" or "+" => operand.ClrType is { } c && NumericRank(c) > 0,
+            "!" or "not" => operand.ClrType == typeof(bool),
+            _ => true,
+        };
+
+        if (!ok)
+        {
+            ctx.Diagnostics.Add(new ToshDiagnostic(
+                Code: "tosh.type.operator",
+                Title: $"Unary operator '{unary.Operator}' is not compatible with operand type '{operand.DisplayName}'.",
+                SourceName: ctx.SourceName,
+                SourceText: ctx.SourceText,
+                Span: unary.Span,
+                Severity: ToshDiagnosticSeverity.Warning,
+                Category: ToshDiagnosticCategory.Type,
+                Lifecycle: ToshDiagnosticLifecycle.Preview));
         }
     }
 

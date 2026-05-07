@@ -251,7 +251,7 @@ def emit_latex(entries: dict[str, CodeEntry]) -> str:
     out.append("\\texttt{\\$tosh.Config.Diagnostics.Hushed}.")
     out.append("")
     total = sum(len(lst) for lst in by_ns.values())
-    out.append(f"This appendix lists all {total} diagnostic codes currently emitted by the")
+    out.append(f"This chapter lists all {total} diagnostic codes currently emitted by the")
     out.append("implementation, grouped by namespace. It is generated from the source tree")
     out.append("by \\texttt{scripts/extract\\_diagnostic\\_codes.py} and should be")
     out.append("regenerated whenever new diagnostics are added.")

@@ -1,6 +1,17 @@
 <Project>
 
   <!--
+    A4: emit a `.snupkg` symbol package next to every `.nupkg` we ship.
+    This must live in Directory.Build.targets (not .props) so that
+    <IsPackable> has been finalised by the project body before the
+    condition is evaluated.
+  -->
+  <PropertyGroup Condition="'$(IsPackable)' == 'true'">
+    <IncludeSymbols Condition="'$(IncludeSymbols)' == ''">true</IncludeSymbols>
+    <SymbolPackageFormat Condition="'$(SymbolPackageFormat)' == ''">snupkg</SymbolPackageFormat>
+  </PropertyGroup>
+
+  <!--
     Post-build hooks for all projects in the Tosh solution.
     Imported automatically by MSBuild from the repo root.
 

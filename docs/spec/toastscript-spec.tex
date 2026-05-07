@@ -2876,33 +2876,35 @@ Comprehensions build collections from sequences using a concise
 \emph{body}\,\code{<|}\,\emph{clause} syntax.  The clause specifies the
 source, an optional filter, and optional intermediate bindings.
 
-\subsection*{List Comprehensions}
+\subsection*{Collection Forms}
 
-\begin{lstlisting}
-[body <| for name in source]
-[body <| for name in source where condition]
-[body <| for name in source where condition let alias = expr]
-\end{lstlisting}
+The opening and closing delimiters determine the output type:
+
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+\textbf{Syntax} & \textbf{Result type} & \textbf{Evaluation} \\
+\midrule
+\code{[body <| clause]} & list (array) & eager \\
+\code{\{: body <| clause :\}} & set (\code{HashSet}) & eager \\
+\code{\{ key => value <| clause \}} & dict & eager \\
+\code{(body <| clause)} & \code{LazySequence} & lazy / on demand \\
+\bottomrule
+\end{tabular}
+\end{center}
 
 \begin{lstlisting}
 [$x * $x <| for x in 1..5]
 # [1, 4, 9, 16, 25]
 
-[$x <| for x in 1..20 where $x % 3 == 0]
-# [3, 6, 9, 12, 15, 18]
+{: $x * $x <| for x in 1..5 :}
+# {1, 4, 9, 16, 25}  -- duplicates removed automatically
 
-[$label <| for x in 1..5 where $x % 2 != 0 let label = $"item-{$x}"]
-# ["item-1", "item-3", "item-5"]
-\end{lstlisting}
+{ $x => $x * $x <| for x in 1..5 }
+# {1: 1, 2: 4, 3: 9, 4: 16, 5: 25}
 
-\subsection*{Generator Comprehensions}
-
-Wrapping with \code{()} instead of \code{[]} produces a lazy
-\code{LazySequence} rather than a materialised list.  This is efficient when
-only part of the sequence is consumed.
-
-\begin{lstlisting}
-($x * $x <| for x in 1..) | first 5    # 1, 4, 9, 16, 25 (infinite source)
+($x * $x <| for x in 1..) | first 5    # lazy -- safe with infinite source
+# 1, 4, 9, 16, 25
 \end{lstlisting}
 
 \subsection*{Clause Keywords}
@@ -2922,15 +2924,99 @@ only part of the sequence is consumed.
     \code{where} filter.  Multiple \code{let} bindings may appear; each is
     visible in subsequent bindings and in the body.
 
-  \item[Nested \code{for} (Cartesian product)]
-    A second \code{for} clause after the first produces the Cartesian
-    product of both sources:
-
 \begin{lstlisting}
-[($x, $y) <| for x in 1..3 for y in ["a", "b"]]
-# [(1,"a"), (1,"b"), (2,"a"), (2,"b"), (3,"a"), (3,"b")]
+[$x <| for x in 1..20 where $x % 3 == 0]
+# [3, 6, 9, 12, 15, 18]
+
+[$label <| for x in 1..5 where $x % 2 != 0 let label = $"item-{$x}"]
+# ["item-1", "item-3", "item-5"]
 \end{lstlisting}
 \end{description}
+
+\subsection*{Multi-Clause Forms}
+
+Three syntaxes extend a single \code{for} clause into a multi-variable iteration.
+
+\paragraph{Cartesian product (comma \texttt{,})}
+A comma after the source (or its modifiers) introduces a second clause.
+Every combination of elements is produced---equivalent to nesting two
+\code{for} loops:
+
+\begin{lstlisting}
+[($x, $y) <| for x in 1..3, y in ["a", "b"]]
+# [(1,"a"), (1,"b"), (2,"a"), (2,"b"), (3,"a"), (3,"b")]
+
+[$x + $y <| for x in [1, 2], y in [10, 20]]
+# [11, 21, 12, 22]
+\end{lstlisting}
+
+The explicit nested \code{for} keyword produces the same result:
+
+\begin{lstlisting}
+[($x, $y) <| for x in 1..3 for y in ["a", "b"]]   # identical
+\end{lstlisting}
+
+\paragraph{Parallel / zip (\texttt{||})}
+\code{||} between two clauses zips the sources together---one element from
+each source per step.  Iteration terminates when the \emph{shorter} source
+is exhausted:
+
+\begin{lstlisting}
+[$x + $y <| for x in [1, 2, 3] || y in [10, 20, 30]]
+# [11, 22, 33]
+
+[$x + $y <| for x in [1, 2, 3] || y in [10, 20]]   # shorter wins
+# [11, 22]
+\end{lstlisting}
+
+\paragraph{Pattern destructuring (\texttt{(a, b, \ldots)})}
+When the source yields tuples or lists, use a parenthesised name list to
+bind each element to its own variable:
+
+\begin{lstlisting}
+[$a + $b <| for (a, b) in [(1, 2), (3, 4)]]
+# [3, 7]
+
+[$a + $b + $c <| for (a, b, c) in [(1, 2, 3), (4, 5, 6)]]
+# [6, 15]
+
+# Pairs produced by 'entries' work too:
+{ $k => $v * 2 <| for (k, v) in ($myDict | entries) }
+\end{lstlisting}
+
+All three forms compose with \code{where}/\code{let} modifiers and work in
+every collection form (\code{[...]}, \code{\{:~:\}}, \code{\{~\}}, \code{(~)}).
+
+\section{Live / Streaming Output}
+\label{sec:streaming-output}
+
+Long-running commands that emit objects progressively (via \code{yield}
+internally) are displayed incrementally in an interactive TTY session.
+The REPL automatically promotes a pipeline to \emph{streaming mode} when it
+detects a gap of roughly 250\,ms or more between successive output objects.
+
+In streaming mode the REPL renders a live table:
+
+\begin{itemize}
+  \item The top border, header row, and mid-border are drawn immediately
+        after the first object arrives.
+  \item Each subsequent object is appended as a new row in real time.
+  \item If a later object causes a column to widen, the entire table is
+        redrawn from the top (using cursor-up escape sequences) to keep
+        widths consistent.
+  \item The closing bottom border is drawn when the command completes or
+        is interrupted with \code{Ctrl-C}.
+\end{itemize}
+
+\begin{lstlisting}
+ping -c 5 www.google.com    # rows appear one per second as replies arrive
+tail -f /var/log/app.log    # new rows stream in as lines are written
+\end{lstlisting}
+
+Commands that complete quickly (e.g.\ \code{ls}) fall back to the standard
+buffered renderer---the gap heuristic ensures short commands are never
+artificially slowed. Streaming is automatically disabled when stdout is
+redirected to a file or pipe (non-TTY).
 
 \section{Background Jobs}
 
@@ -3405,6 +3491,794 @@ tosh myscript.tosh git commit --help
 
 % #############################################################################
 % #############################################################################
+\part{Compilation}
+\label{part:compilation}
+% #############################################################################
+
+% =============================================================================
+\chapter{Overview \& Execution Model}
+\label{ch:compile-overview}
+% =============================================================================
+
+TōSh runs in two modes: an \emph{interpreter} (\code{ToshEngine}) and an
+\emph{ahead-of-time compiler} (\code{Tosh.Compiler}) that emits standard
+.NET assemblies. The interpreter is the canonical semantics; the compiler is
+a faithfulness-preserving lowering of those semantics onto the CLR. Both
+modes share the same lexer, parser, binder, lowerer, and type checker —
+only the back end differs.
+
+\section{When each mode runs}
+\label{sec:compile-when}
+
+\begin{tabular}{l p{0.65\linewidth}}
+\toprule
+\textbf{Mode} & \textbf{Triggered by} \\
+\midrule
+Interpreter (REPL) & \code{tosh}, no positional source. \\
+Interpreter (one-liner) & \code{tosh -c "..."}. \\
+Interpreter (script) & \code{tosh path/to/script.tosh}. \\
+Compiler (CLI) & \code{tosh --compile path.tosh -o out.dll} (\S\ref{ch:compile-cli}). \\
+Compiler (MSBuild) & \code{<Project Sdk="Tosh.Sdk">} (\S\ref{ch:compile-msbuild}). \\
+\bottomrule
+\end{tabular}
+
+\section{Compiler pipeline}
+\label{sec:compile-pipeline}
+
+\begin{enumerate}
+  \item \textbf{Lex / parse.} Identical to the interpreter; produces a
+        \code{ParseResult} with the same syntax tree.
+  \item \textbf{Bind / lower.} Identical to the interpreter; produces a
+        \code{BoundUnit} containing \code{BoundStatement}s and
+        \code{BoundExpression}s.
+  \item \textbf{Type check.} The same \code{TypeChecker} runs, but in
+        \emph{compile mode} it emits an extra audit pass
+        (\code{CheckCompileAnnotations}) for missing or implicit
+        \code{dynamic} annotations (\S\ref{ch:compile-types}).
+  \item \textbf{Emit.} \code{BoundUnitEmitter} walks the bound tree and
+        emits IL into a \code{PersistedAssemblyBuilder}. Each shape is
+        gated by a profile/tier check (\S\ref{ch:compile-profiles}).
+  \item \textbf{Persist.} The assembly is written to disk; an optional
+        reference assembly, apphost wrapper, and single-file bundle are
+        produced as requested (\S\ref{ch:compile-cli}).
+\end{enumerate}
+
+\section{Parity contract}
+\label{sec:compile-parity}
+
+A program that compiles cleanly must, when run, produce the same observable
+behaviour as the interpreter would for the same source. Observable here
+means: stdout, stderr, exit code, files written by redirection, and values
+returned to a hosting C\# caller. Internal scheduling, allocation, and
+diagnostics-not-yet-promoted-to-errors are not part of the contract.
+
+The conformance test layer (\S\ref{ch:compile-conformance}) is the
+machine-checked expression of this contract.
+
+\begin{tipbox}[Where to look]
+The full pipeline lives under \code{src/Tosh.Compiler/} and
+\code{src/Tosh.Compiler.Runtime/}. The bound tree the emitter walks is
+defined in \code{src/Tosh.Language/Binding/BoundNodes/}.
+\end{tipbox}
+
+
+% =============================================================================
+\chapter{Command-Line Interface}
+\label{ch:compile-cli}
+% =============================================================================
+
+The compiler is invoked through the same \code{tosh} binary that runs the
+shell. The first positional argument selects between shell and compile
+modes:
+
+\begin{lstlisting}
+# Interpret a script.
+tosh greet.tosh
+
+# Compile a script to a managed assembly.
+tosh --compile greet.tosh -o greet.dll
+tosh -C greet.tosh -o greet.dll
+\end{lstlisting}
+
+\section{Flags}
+\label{sec:compile-flags}
+
+\begin{tabular}{l p{0.55\linewidth}}
+\toprule
+\textbf{Flag} & \textbf{Effect} \\
+\midrule
+\code{-o PATH}, \code{--output PATH} & Output assembly path. Required; the file extension does not have to be \code{.dll}. \\
+\code{--profile NAME} & Compile profile (\code{permissive}, \code{runtime}, or \code{pure}). Default \code{permissive}. May also be written \code{--profile=NAME}. \\
+\code{--compile-allow-dynamic}, \code{--allow-dynamic} & Suppress \code{tosh.compile.implicit\_dynamic} diagnostics. Equivalent to opting out of strict-mode for variables whose type the inferrer cannot pin down. \\
+\code{--emit-refasm} & Also emit a sibling \code{*.ref.dll} stamped with \code{[ReferenceAssembly]} so C\# / F\# / Roslyn consumers can target the public surface without dragging in private members. \\
+\code{--no-apphost} & Skip the native apphost wrapper (Windows: \code{.exe}; Unix: bare). The \code{.dll} is still written and remains runnable via \code{dotnet}. \\
+\code{--publish-single-file} & Bundle the .NET runtime and all dependencies into a single self-contained executable. Implies an apphost. \\
+\bottomrule
+\end{tabular}
+
+\section{Examples}
+\label{sec:compile-examples}
+
+\begin{lstlisting}
+# Default profile -- accepts every shape the interpreter does.
+tosh --compile script.tosh -o script.dll
+
+# Strict -- reject source-replay (Tier 3) shapes.
+tosh --compile script.tosh -o script.dll --profile=runtime
+
+# Emit a refasm alongside the implementation assembly.
+tosh --compile lib.tosh -o lib.dll --emit-refasm
+
+# Single-file self-contained binary (~70 MB; bundles the runtime).
+tosh --compile cli.tosh -o cli --publish-single-file
+\end{lstlisting}
+
+\begin{notebox}[Errors]
+A \code{--compile} invocation with no source paths fails with
+``\code{The '--compile'/'-C' flag requires at least one script path.}''.
+Unknown options inside the \code{--compile} arg list fail with
+``\code{Unknown option '...' for --compile.}''.
+\end{notebox}
+
+
+% =============================================================================
+\chapter{Profiles \& the Tier Model}
+\label{ch:compile-profiles}
+% =============================================================================
+
+Every compiled shape lives at one of three tiers. The \emph{profile}
+selects how strict the compiler is about which tiers it accepts.
+
+\section{Tiers}
+\label{sec:compile-tiers}
+
+\begin{tabular}{l p{0.7\linewidth}}
+\toprule
+\textbf{Tier} & \textbf{Definition} \\
+\midrule
+1 — native IL & Pure IL with no \code{ToshHost} call at runtime: literals, arithmetic, control flow, top-level user-function calls resolved at IL-emit time, real CLR module-type field reads. \\
+2 — runtime-hosted & Real IL but calls into \code{Tosh.Compiler.Runtime.ToshHost} for builtin command dispatch, dynamic member access, qualified lookup, redirection scopes, etc. \\
+3 — source-replay & The emitted assembly registers a span of the original tosh source and re-evaluates it through \code{ToshEngine} at runtime. Used for class / record / struct / union / enum / trait bodies, complex module bodies, and block-pipeline arguments. \\
+\bottomrule
+\end{tabular}
+
+\section{Profiles}
+\label{sec:compile-profiles-table}
+
+\begin{tabular}{l c p{0.55\linewidth}}
+\toprule
+\textbf{Profile} & \textbf{Max tier} & \textbf{Use case} \\
+\midrule
+\code{permissive} & 3 & Default. Accepts every shape the interpreter does. The compile is guaranteed to succeed if the program parses, binds, and type-checks. \\
+\code{runtime} & 2 & Real, redistributable .NET assembly that doesn't carry its own source for re-evaluation. Rejects user-defined types, complex module bodies, and block arguments. \\
+\code{pure} & 1 & No \code{ToshHost} calls at runtime, no source replay. Today this is mostly aspirational — even \code{echo} is a Tier-2 builtin — but the profile exists as a forcing function for future ``lift this builtin into IL'' work. \\
+\bottomrule
+\end{tabular}
+
+\section{\code{RequireTier} semantics}
+\label{sec:compile-requiretier}
+
+Internally, every shape emitter calls \code{RequireTier(int tier, string
+feature)} before lowering itself. If the requested tier exceeds the maximum
+allowed by the active profile, the emitter records a diagnostic of the form
+
+\begin{lstlisting}
+profile 'pure' rejects tier 2 feature: builtin command dispatch (statement)
+\end{lstlisting}
+
+Diagnostics are deduplicated per \code{(tier, feature)} pair: a program with
+fifty calls to \code{ls} in pure profile reports the violation once, not
+fifty times.
+
+\section{Parity expectations}
+\label{sec:compile-profile-parity}
+
+A profile narrowing is \emph{always conservative}: any program that compiles
+under \code{pure} also compiles under \code{runtime} and \code{permissive},
+and any program that compiles under \code{runtime} also compiles under
+\code{permissive}. Behaviour is identical across profiles when the program
+compiles under all three.
+
+\begin{tipbox}[Choosing a profile]
+Pick \code{runtime} when you want a redistributable .NET library that does
+not need to ship its own source. Pick \code{permissive} during development
+or when the program uses class / record / module bodies the runtime profile
+rejects today. Pick \code{pure} only in tooling contexts (refasm-only
+builds, audit checks) where Tier-2 dispatch is itself the thing under test.
+\end{tipbox}
+
+
+% =============================================================================
+\chapter{Type Discipline in Compiled Mode}
+\label{ch:compile-types}
+% =============================================================================
+
+The type checker runs in every mode, but compile mode adds an
+\emph{annotation audit} that the interpreter does not. The audit promotes
+weakly-typed shapes to errors so a redistributable assembly cannot expose a
+public surface that silently degrades to \code{dynamic}.
+
+\section{The audit rules}
+\label{sec:compile-audit-rules}
+
+\begin{tabular}{l p{0.6\linewidth}}
+\toprule
+\textbf{Diagnostic} & \textbf{When} \\
+\midrule
+\code{tosh.compile.missing\_type\_annotation} & A \code{func} has no
+return-type annotation, or a parameter has no type annotation. \\
+\code{tosh.compile.implicit\_dynamic} & A \code{var} declaration has no
+type annotation \emph{and} the inferrer cannot pin down a concrete type from
+the initializer. \\
+\bottomrule
+\end{tabular}
+
+\section{Explicit \code{dynamic} opt-out}
+\label{sec:compile-explicit-dynamic}
+
+The audit treats an explicit \code{: dynamic} annotation as an
+intentional opt-out. Both of the following are accepted by the audit:
+
+\begin{lstlisting}
+func passthrough(x: dynamic) -> dynamic { return $x }
+
+var f: dynamic = (ls)
+\end{lstlisting}
+
+The same source without the annotations would fail compile:
+
+\begin{lstlisting}
+func passthrough(x) -> dynamic { return $x }
+# tosh.compile.missing_type_annotation: parameter 'x' is missing an
+# annotation. Use `dynamic` to opt out explicitly.
+
+var x = (ls)
+# tosh.compile.implicit_dynamic: variable 'x' has no type annotation
+# and the inferrer could not pin down a concrete type.
+\end{lstlisting}
+
+\section{The \code{--allow-dynamic} flag}
+\label{sec:compile-allow-dynamic}
+
+\code{--compile-allow-dynamic} (alias \code{--allow-dynamic}) suppresses
+\code{tosh.compile.implicit\_dynamic}. It does not suppress
+\code{tosh.compile.missing\_type\_annotation}: function signatures must
+always be either typed or explicitly \code{dynamic}, because they form the
+public CLR surface of the compiled assembly.
+
+\section{Implementation note}
+\label{sec:compile-types-impl}
+
+The \code{AnnotatedDynamic} flag on \code{BoundVariableDeclaration} records
+whether the source carried an explicit \code{: dynamic}. The Lowerer sets
+the flag (case-insensitive on the type name); the audit consults it in
+\code{CheckVarAnnotation}. Synonyms for explicit dynamic on parameters are
+\code{dynamic}, \code{any}, and \code{object}.
+
+
+% =============================================================================
+\chapter{Public CLR Shape}
+\label{ch:compile-clr-shape}
+% =============================================================================
+
+Compiled tosh source produces a single .NET assembly. The shape is designed
+to be consumable from C\#, F\#, and reflection-driven tooling without
+re-parsing the source.
+
+\section{Top-level statements}
+\label{sec:compile-clr-toplevel}
+
+A top-level user function \code{func greet(name: string) -> string} becomes
+a public static method on a class named after the assembly's main type.
+Module bodies become nested static classes.
+
+\section{Overloads}
+\label{sec:compile-clr-overloads}
+
+When a tosh function name is overloaded, every overload is emitted as a
+separate static method under the same CLR name. Argument types come from
+the parameter annotations, so overload resolution from C\# follows the
+ordinary CLR rules.
+
+\begin{lstlisting}
+# tosh
+func pick(a: int) -> string => $"one:$a"
+func pick(a: int, b: int) -> string => $"two:$a+$b"
+\end{lstlisting}
+
+\begin{lstlisting}[language={[Sharp]C}]
+// C# consumer
+Greet.pick(1);        // "one:1"
+Greet.pick(1, 2);     // "two:1+2"
+\end{lstlisting}
+
+\section{Name mangling}
+\label{sec:compile-clr-mangling}
+
+Tosh identifiers may contain characters the CLR-targeted languages reject —
+hyphens are the common case (\code{func to-json}). The emitter rewrites
+each illegal character to \code{\_} and prefixes leading digits, then
+stamps the original spelling on the resulting member with
+\code{[ToshOriginalName("to-json")]}. Tools such as the LSP, the MCP server,
+and editor extensions read the attribute to present the original
+identifier.
+
+When two top-level types or functions mangle to the same CLR name a
+\code{tosh.compile.name\_mangling\_collision} diagnostic fails the build.
+
+\section{User-defined types}
+\label{sec:compile-clr-types}
+
+Compiled \code{class}, \code{struct}, \code{record}, \code{enum},
+\code{interface}, \code{trait}, and \code{union} declarations are emitted
+as public CLR types stamped with \code{[ToshType(Kind, SpanStart,
+SpanLength)]}. The span identifies the original declaration in the
+registered source so source-replay-backed types can rebind full interpreter
+semantics through \code{ToshHost.RegisterTypeFromSource} when needed.
+
+\section{Reference assemblies}
+\label{sec:compile-clr-refasm}
+
+\code{--emit-refasm} writes a sibling \code{*.ref.dll} stamped with
+\code{[ReferenceAssembly]}. The refasm exposes only the public surface
+(types, methods, signatures) and is the recommended target for downstream
+C\# / F\# / Roslyn consumers — it isolates them from private-member churn
+and reduces incremental rebuild scope.
+
+
+% =============================================================================
+\chapter{Pipelines \& Redirections Under Compile}
+\label{ch:compile-pipelines}
+% =============================================================================
+
+Pipeline construction and stream redirection are emitted as IL that calls
+into \code{Tosh.Compiler.Runtime.ToshHost} (Tier 2). The lowering preserves
+both the lazy-by-stage semantics of the interpreter and the deterministic
+disposal order of redirection sinks.
+
+\section{Pipeline stages}
+\label{sec:compile-pipeline-stages}
+
+A multi-stage pipeline lowers to a chain of \code{RunStage} calls seeded by
+either \code{EmptyInput} (top-of-pipeline) or \code{SeedFromValue} (when a
+value-typed expression feeds the pipeline):
+
+\begin{lstlisting}
+ls -la | where _.Type == "file" | sort-by Size | head 10
+\end{lstlisting}
+
+becomes, schematically:
+
+\begin{lstlisting}[language={[Sharp]C}]
+var input = ToshHost.EmptyInput();
+input = ToshHost.RunStage(ToshHost.ResolveCommand("ls"),     input, ["-la"]);
+input = ToshHost.RunStage(ToshHost.ResolveCommand("where"),  input, [_filter]);
+input = ToshHost.RunStage(ToshHost.ResolveCommand("sort-by"),input, ["Size"]);
+input = ToshHost.RunStage(ToshHost.ResolveCommand("head"),   input, [10]);
+ToshHost.DrainStatement(input);
+\end{lstlisting}
+
+Each stage is executed lazily: a stage's body does not run until the next
+stage pulls from its async enumerable. \code{DrainStatement} (statement
+context) and \code{DrainEnumerator} (value context) are the only points
+that force evaluation.
+
+\section{Stream redirection}
+\label{sec:compile-redirection}
+
+Output redirections (\code{out>}, \code{err>}, \code{o+e>}, and the
+\code{>>} append variants) and input redirection (\code{in<}) all lower to
+a single \code{ToshHost.BeginRedirection} call wrapping the pipeline body
+in a \code{using} (try/finally + Dispose):
+
+\begin{lstlisting}
+echo hello out> "log.txt"
+\end{lstlisting}
+
+becomes, schematically:
+
+\begin{lstlisting}[language={[Sharp]C}]
+using (ToshHost.BeginRedirection(
+        streams: [1],         // stdout
+        modes:   [0],         // truncate
+        targets: ["log.txt"],
+        inputPath: null))
+{
+    /* pipeline body */
+}
+\end{lstlisting}
+
+Output sinks are flushed and closed in reverse order during \code{Dispose};
+\code{Console.Out} / \code{Console.Error} / \code{Console.In} are restored
+to their pre-scope readers.
+
+\section{Input redirection}
+\label{sec:compile-input-redirection}
+
+Input redirection installs \emph{both} a \code{Console.SetIn(...)} reader
+(so commands that read \code{Console.In} — e.g.\ \code{read-line} — observe
+the redirected file) and a thread-static input path consulted by
+\code{EmptyInput()} (so commands that consume the pipeline input — e.g.\
+\code{cat}, \code{wc}, \code{grep}, \code{read-lines} — observe the same
+file as a sequence of lines).
+
+\begin{lstlisting}
+echo (read-line) in< "in.txt"          # reads via Console.In
+cat in< "in.txt"                       # reads via pipeline input
+\end{lstlisting}
+
+\section{Nested redirection}
+\label{sec:compile-nested-redirection}
+
+\code{RedirectionScope} tracks per-scope state for the streams and sinks it
+opened. Each scope only restores state it actually installed: an
+output-only nested scope cannot clobber an outer scope's input path on
+dispose, and vice versa.
+
+\begin{warnbox}[Pre-existing footgun, now fixed]
+The original implementation restored the thread-static input path
+unconditionally on dispose. A nested output redirection inside an outer
+input redirection would therefore wipe the outer scope's input path,
+causing later pipeline-input consumers to see no input. The current
+implementation gates the restore on a \code{\_trackedInputPath} flag set
+only when the inner scope itself opened an input redirection.
+\end{warnbox}
+
+
+% =============================================================================
+\chapter{Function References in Compiled Mode}
+\label{ch:compile-funcrefs}
+% =============================================================================
+
+The \code{\&name} expression evaluates to an \code{IShellCallable}. In
+compiled mode the value is a \code{CompiledMethodReferenceValue} bound
+directly to one or more emitted \code{MethodInfo}s, not a late-bound name
+lookup.
+
+\section{Single-overload fast path}
+\label{sec:compile-funcref-single}
+
+When a function name has exactly one compiled overload the emitter loads
+the \code{MethodInfo} via \code{ldtoken} / \code{MethodBase.GetFromHandle}
+and calls \code{ToshHost.MakeFunctionReferenceFromMethod(method, name)}.
+Invocation reorders named arguments to match the parameter list and calls
+the method directly.
+
+\begin{lstlisting}
+func inc(n: int) -> int => $n + 1
+var f = &inc
+$f(41)                # 42
+\end{lstlisting}
+
+\section{Overloaded references}
+\label{sec:compile-funcref-overload}
+
+When a function name has two or more compiled overloads the emitter emits a
+\code{MethodInfo[]} containing each overload and calls
+\code{MakeFunctionReferenceFromMethods(methods, name)}. Invocation routes
+through \code{InvokeUserOverload}, which scores each candidate against the
+supplied argument list and dispatches to the best match.
+
+\begin{lstlisting}
+func pick(a: int) -> string => $"one:$a"
+func pick(a: int, b: int) -> string => $"two:$a+$b"
+var f = &pick
+$f(1)            # "one:1"
+$f(1, 2)         # "two:1+2"
+\end{lstlisting}
+
+\section{Named arguments through references}
+\label{sec:compile-funcref-named}
+
+Named-argument calls (\code{\$f(value=42, label="answer")}) are reordered
+against the chosen overload's parameter list. Single-overload calls reorder
+in \code{BindNamedArguments}; overload-set calls inherit the existing
+\code{InvokeUserOverload} reorder pass. Missing optional parameters fall
+back to their declared default; missing required parameters surface as the
+ordinary arity-mismatch failure.
+
+\section{Late-bound fallback}
+\label{sec:compile-funcref-fallback}
+
+For names that the compiler cannot resolve at emit time (e.g.\ a reference
+to a builtin command or to a function loaded later through a host) the
+emitter emits \code{MakeFunctionReference(name)} instead. The resulting
+callable consults the runtime command table at invocation time.
+
+
+% =============================================================================
+\chapter{Other Bound-Shape Emitters}
+\label{ch:compile-shapes}
+% =============================================================================
+
+Several language constructs lower to dedicated host helpers rather than
+inline IL. They are summarised here so the implementation surface is
+discoverable.
+
+\section{Records}
+\label{sec:compile-shape-records}
+
+\begin{tabular}{l p{0.6\linewidth}}
+\toprule
+\textbf{Field shape} & \textbf{Lowering} \\
+\midrule
+\code{name: value} & Plain \code{Ldstr} key + value expression. \\
+\code{(\$key): value} & Key expression evaluated, \code{ToString()}, then value (Tier 2). \\
+\code{...\$source} & Call to \code{ToshHost.SpreadRecord} with the source on the stack (Tier 2). \\
+\bottomrule
+\end{tabular}
+
+\begin{lstlisting}
+var base = { name: "alice", age: 30 }
+var ext  = { ...$base, age: 31, role: "admin" }
+echo $ext.name $ext.age $ext.role     # alice 31 admin
+\end{lstlisting}
+
+\section{Tuple destructuring}
+\label{sec:compile-shape-tuples}
+
+A statement of the form \code{(\$a, \$b) = expr} lowers to one
+\code{DestructureArray(value, count)} call followed by \code{count}
+strongly-typed local stores. Missing slots collapse to \code{null}.
+
+\begin{lstlisting}
+var a = 0
+var b = 0
+($a, $b) = [10, 20]
+echo $a $b           # 10 20
+\end{lstlisting}
+
+\section{\code{throw} as expression}
+\label{sec:compile-shape-throw}
+
+A \code{throw expr} in expression position lowers to a
+\code{ToshHost.ThrowAsException(value)} call that returns \code{object} so
+the rest of the surrounding expression typechecks.
+
+\begin{lstlisting}
+var port = $env.PORT ?? throw "PORT is required"
+\end{lstlisting}
+
+\section{Other helpers}
+\label{sec:compile-shape-other}
+
+\code{ToArray}, \code{IndexOrNull}, \code{IsTruthy},
+\code{AsRedirectionPath}, \code{MakeMemberProjection}, and
+\code{MakeFunctionReference[FromMethod[s]]} all live in
+\code{Tosh.Compiler.Runtime.ToshHost} and are called from the
+\code{BoundUnitEmitter} via cached \code{MethodInfo}s.
+
+
+% =============================================================================
+\chapter{MSBuild Integration}
+\label{ch:compile-msbuild}
+% =============================================================================
+
+The \code{Tosh.Sdk} MSBuild SDK turns a \code{.csproj}-style project into a
+.NET assembly built from \code{.tosh} sources, with the same flags the CLI
+exposes.
+
+\section{Project shape}
+\label{sec:compile-sdk-project}
+
+\begin{lstlisting}[language=XML]
+<Project Sdk="Tosh.Sdk/1.0.0">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>          <!-- or Library -->
+    <TargetFramework>net10.0</TargetFramework>
+    <ToshProfile>permissive</ToshProfile>
+    <ToshAllowDynamic>false</ToshAllowDynamic>
+    <ToshEmitReferenceAssembly>true</ToshEmitReferenceAssembly>
+    <PublishSingleFile>false</PublishSingleFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ToshCompile Include="src/**/*.tosh" />
+  </ItemGroup>
+
+</Project>
+\end{lstlisting}
+
+\section{Tasks}
+\label{sec:compile-sdk-tasks}
+
+\begin{tabular}{l p{0.65\linewidth}}
+\toprule
+\textbf{Task} & \textbf{Purpose} \\
+\midrule
+\code{Tosh.Sdk.Tasks.ToshCompile} & In-process MSBuild task. Mirrors the CLI compile pipeline (parse → bind → lower → type-check → emit) but runs inside the MSBuild worker, avoiding the per-build process-launch cost of the legacy \code{<Exec>}-based target. Inputs: \code{Sources}, \code{OutputPath}, \code{Profile}, \code{AllowDynamic}, \code{EmitReferenceAssembly}, \code{EmitAppHost}, \code{PublishSingleFile}, \code{AssemblyName}. \\
+\code{Tosh.Sdk.Tasks.ToshStagePackageReferences} & Stages NuGet \code{PackageReference} content into the runtime's reference and analyzer paths so package types are visible during compile and at runtime. \\
+\bottomrule
+\end{tabular}
+
+\section{Fallback path}
+\label{sec:compile-sdk-fallback}
+
+If the in-process task assembly is unavailable (e.g.\ the SDK is consumed
+by a pinned older runtime), \code{Sdk.targets} falls back to launching the
+\code{tosh} CLI through \code{<Exec>}. Behaviour is identical; only the
+process model differs.
+
+\section{NuGet consumption from C\#}
+\label{sec:compile-sdk-csharp}
+
+A library compiled with \code{<ToshEmitReferenceAssembly>true</ToshEmitReferenceAssembly>}
+ships both \code{lib.dll} and \code{lib.ref.dll}. Standard .NET tooling
+selects the refasm at compile time and the implementation at runtime, so a
+C\# consumer references the package with no special configuration:
+
+\begin{lstlisting}[language=XML]
+<PackageReference Include="MyToshLibrary" Version="1.0.0" />
+\end{lstlisting}
+
+
+% =============================================================================
+\chapter{Limits Per Profile}
+\label{ch:compile-limits}
+% =============================================================================
+
+The following matrix lists the major shapes by tier and shows which profiles
+accept them. ``\checkmark'' = compiles cleanly; ``\textbf{R}'' = rejected by
+that profile with a tier-violation diagnostic.
+
+\begin{tabular}{l c c c c}
+\toprule
+\textbf{Shape} & \textbf{Tier} & \textbf{Permissive} & \textbf{Runtime} & \textbf{Pure} \\
+\midrule
+literals, arithmetic, control flow            & 1 & \checkmark & \checkmark & \checkmark \\
+top-level user-function call (resolved at emit) & 1 & \checkmark & \checkmark & \checkmark \\
+real CLR module-type field read                & 1 & \checkmark & \checkmark & \checkmark \\
+\midrule
+builtin command dispatch (statement / value)   & 2 & \checkmark & \checkmark & \textbf{R} \\
+builtin command dispatch (multi-stage)         & 2 & \checkmark & \checkmark & \textbf{R} \\
+user function dispatch via host (pipeline)     & 2 & \checkmark & \checkmark & \textbf{R} \\
+stream redirection (out>/err>/in</etc.)        & 2 & \checkmark & \checkmark & \textbf{R} \\
+qualified-name resolution (\code{Foo.bar})     & 2 & \checkmark & \checkmark & \textbf{R} \\
+qualified-method invocation                    & 2 & \checkmark & \checkmark & \textbf{R} \\
+dynamic member access                          & 2 & \checkmark & \checkmark & \textbf{R} \\
+\code{new T(...)} object construction          & 2 & \checkmark & \checkmark & \textbf{R} \\
+record spread (\code{...\$rec})                & 2 & \checkmark & \checkmark & \textbf{R} \\
+function reference (compiled binding)          & 2 & \checkmark & \checkmark & \textbf{R} \\
+function reference (late-bound)                & 2 & \checkmark & \checkmark & \textbf{R} \\
+subcommand-tree dispatch (compiled)            & 2 & \checkmark & \checkmark & \textbf{R} \\
+\midrule
+class / record / struct / union / enum body    & 3 & \checkmark & \textbf{R} & \textbf{R} \\
+trait body                                      & 3 & \checkmark & \textbf{R} & \textbf{R} \\
+complex module body                             & 3 & \checkmark & \textbf{R} & \textbf{R} \\
+top-level non-\code{var}/\code{func} declaration & 3 & \checkmark & \textbf{R} & \textbf{R} \\
+block-pipeline argument                         & 3 & \checkmark & \textbf{R} & \textbf{R} \\
+subcommand-tree dispatch (argv-driven entry)    & 3 & \checkmark & \textbf{R} & \textbf{R} \\
+whole-script replay (rune expansion)            & 3 & \checkmark & \textbf{R} & \textbf{R} \\
+\bottomrule
+\end{tabular}
+
+
+% =============================================================================
+\chapter{Conformance Test Layer}
+\label{ch:compile-conformance}
+% =============================================================================
+
+Two test surfaces in \code{tests/Tosh.Tests/CompilerFeatureMatrixTests.cs}
+turn the parity contract from \S\ref{sec:compile-parity} into machine-checked
+expectations.
+
+\section{Feature matrix}
+\label{sec:compile-conformance-matrix}
+
+\code{FeatureCases()} yields one row per language shape with a flag per
+profile saying whether the shape should compile cleanly under that profile.
+The matrix is the executable form of \S\ref{ch:compile-limits}.
+
+\begin{lstlisting}[language={[Sharp]C}]
+yield return FeatureCase(
+    id: "redirection.out-file",
+    category: "redirection",
+    source: "echo hi out> \"x\"",
+    permissive: true, runtime: true, pure: false,
+    note: "stream redirection requires Tier 2");
+\end{lstlisting}
+
+\section{Conformance cases}
+\label{sec:compile-conformance-exec}
+
+\code{ConformanceCases()} yields one row per shape that should produce a
+specific stdout (and optionally a specific file) under the default profile.
+The harness compiles the source, runs the resulting assembly, and asserts
+on the captured streams.
+
+\begin{lstlisting}[language={[Sharp]C}]
+yield return ExecCase(
+    id: "redirection.in-pipeline",
+    source: "cat in< \"{TMPFILE}\"",
+    stdout: "alpha\nbeta",
+    note: "input redirection seeds pipeline-input commands like cat",
+    seedFile: "alpha\nbeta\n");
+\end{lstlisting}
+
+\section{Adding a row}
+\label{sec:compile-conformance-add}
+
+Two-step recipe:
+
+\begin{enumerate}
+  \item Add a \code{FeatureCase} or \code{ExecCase} row alongside the
+        implementation change. Runtime/Pure flags should reflect the
+        \code{RequireTier} call the emitter makes for the new shape.
+  \item Run \code{dotnet test tests/Tosh.Tests/Tosh.Tests.csproj
+        --filter "FullyQualifiedName~CompilerFeatureMatrixTests"} and
+        confirm the row passes for every profile its flags claim.
+\end{enumerate}
+
+\begin{notebox}[Console serialisation]
+Tests that capture stdout/stderr or install \code{Console.SetIn} share the
+xUnit collection \code{ConsoleSerialCollection} so xUnit serialises them.
+Concurrent collections that touch \code{Console.\{Out, Error, In\}}
+otherwise interleave output and produce flaky equality checks.
+\end{notebox}
+
+
+% =============================================================================
+\chapter{Compiler Diagnostics}
+\label{ch:compile-diagnostics}
+% =============================================================================
+
+The compiler emits two diagnostic families. The first is shared with the
+interpreter (parser, binder, type checker); the second is compile-only.
+
+\section{Compile-only diagnostic codes}
+\label{sec:compile-diag-codes}
+
+\begin{tabular}{l p{0.55\linewidth}}
+\toprule
+\textbf{Code} & \textbf{Meaning} \\
+\midrule
+\code{tosh.compile.implicit\_dynamic} & A \code{var} has no annotation and the inferrer cannot pin down a concrete type. Suppress with \code{--allow-dynamic} or annotate the variable. \\
+\code{tosh.compile.missing\_type\_annotation} & A \code{func} parameter or return type is missing an annotation. Annotate or use \code{dynamic}. Cannot be suppressed by \code{--allow-dynamic}. \\
+\code{tosh.compile.name\_mangling\_collision} & Two top-level types or functions mangle to the same CLR name. Rename one. \\
+\bottomrule
+\end{tabular}
+
+\section{Tier-violation diagnostics}
+\label{sec:compile-diag-tier}
+
+The deduped diagnostic emitted by \code{RequireTier} (\S\ref{sec:compile-requiretier})
+is not coded in the \code{tosh.compile.*} family today; it surfaces as a
+plain message of the form
+
+\begin{lstlisting}
+profile 'NAME' rejects tier T feature: FEATURE
+\end{lstlisting}
+
+\section{Runtime callable diagnostics}
+\label{sec:compile-diag-callable}
+
+These are emitted at runtime by the host, not at compile time, but are
+included here because they are reachable only through compiled code paths
+(\code{IShellCallable.InvokeAsync}, \code{CompiledLambdaCallable},
+\code{CompiledMethodReferenceValue}).
+
+\begin{tabular}{l p{0.55\linewidth}}
+\toprule
+\textbf{Code} & \textbf{Meaning} \\
+\midrule
+\code{tosh.runtime.callable\_argument\_count\_mismatch} & A callable was invoked with too few or too many arguments for any matching overload. \\
+\code{tosh.runtime.callable\_named\_argument} & A named argument did not match any parameter of the chosen overload. \\
+\code{tosh.runtime.callable\_invocation\_requires\_single\_value} & A callable was invoked in a context that demands exactly one value but the callable produced none or more than one. \\
+\bottomrule
+\end{tabular}
+
+\begin{tipbox}[Full reference]
+The complete diagnostic-code reference for every namespace
+(\code{tosh.parser.*}, \code{tosh.runtime.*}, \code{tosh.compile.*},
+\code{tosh.bind.*}, \ldots) lives in \textbf{Part~\ref{part:diagnostics}}
+and is regenerated from source by
+\code{python3 scripts/extract\_diagnostic\_codes.py}.
+\end{tipbox}
+
+
+% #############################################################################
+% #############################################################################
 \part{Command Reference}
 \label{part:commands}
 % #############################################################################
@@ -3721,83 +4595,13 @@ func service-manager() {
 
 
 % #############################################################################
-\part{Appendices}
-\label{part:appendices}
+\part{Diagnostics}
+\label{part:diagnostics}
 % #############################################################################
 
-\appendix
-
-% =============================================================================
-\chapter{Operator Precedence Table}
-\label{app:precedence}
-% =============================================================================
-
-See Table~\ref{tab:precedence} on page~\pageref{tab:precedence} for the full
-operator precedence table.
-
-% =============================================================================
-\chapter{Type Alias Reference}
-\label{app:types}
-% =============================================================================
-
-See Table~\ref{tab:types} on page~\pageref{tab:types} for the complete type
-alias mapping.
-
-% =============================================================================
-\chapter{Reserved Keywords}
-\label{app:keywords}
-% =============================================================================
-
-See Section~\ref{sec:keywords} on page~\pageref{sec:keywords} for the complete
-keyword list.
-
-% =============================================================================
-\chapter{String Varieties}
-\label{app:strings}
-% =============================================================================
-
-See Table~\ref{tab:strings} on page~\pageref{tab:strings} for the full
-string variety reference.
-
-% =============================================================================
-\chapter{Redirection Syntax}
-\label{app:redirection}
-\ikw{redirection}
-% =============================================================================
-
-See Table~\ref{tab:redirection} on page~\pageref{tab:redirection} for the
-complete redirection operator reference.
-
-% =============================================================================
-\chapter{Special Variables}
-\label{app:specialvars}
-% =============================================================================
-
-See Table~\ref{tab:specialvars} on page~\pageref{tab:specialvars} for all
-special variables.
-
-% =============================================================================
-\chapter{Truthiness Rules}
-\label{app:truthiness}
-% =============================================================================
-
-See Table~\ref{tab:truthiness} on page~\pageref{tab:truthiness} for the
-complete truthiness table.
-
-% =============================================================================
 % Auto-generated from `Code:` literals in the source tree.
 % Regenerate with: python3 scripts/extract_diagnostic_codes.py
 \InputIfFileExists{diagnostic-codes}{}{\textit{Diagnostic code reference not yet generated. Run \texttt{python3 scripts/extract\_diagnostic\_codes.py} to create it.}}
-
-% =============================================================================
-\chapter{Command Reference}
-\label{app:command-reference}
-% =============================================================================
-
-% Auto-generated from introspected command metadata.
-% Regenerate with: dotnet run --project src/Tosh.Cli -- --export-command-metadata --latex -o docs/spec/command-reference.tex
-\InputIfFileExists{command-reference}{}{\textit{Command reference not yet generated. Run the build to create it.}}
-
 
 % ─────────────────────────────────────────────────────────────────────────────
 %  BACK MATTER

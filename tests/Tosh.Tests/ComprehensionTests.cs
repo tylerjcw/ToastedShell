@@ -152,4 +152,87 @@ public sealed class ComprehensionTests
         var array = Assert.IsType<string[]>(results[0]);
         Assert.Equal(["item-1", "item-2", "item-3"], array);
     }
+
+    // --- Cartesian product (comma syntax) ---
+
+    [Fact]
+    public async Task List_comprehension_cartesian_product()
+    {
+        var engine = new ToshEngine();
+        var results = await engine.ExecuteToListAsync("echo [($x, $y) <| for x in [1, 2], y in [\"a\", \"b\"]]");
+        Assert.Single(results);
+        var list = Assert.IsAssignableFrom<System.Collections.IList>(results[0]);
+        Assert.Equal(4, list.Count);
+    }
+
+    [Fact]
+    public async Task List_comprehension_cartesian_product_values()
+    {
+        var engine = new ToshEngine();
+        var results = await engine.ExecuteToListAsync("echo [$x + $y <| for x in [1, 2], y in [10, 20]]");
+        Assert.Single(results);
+        var list = Assert.IsAssignableFrom<System.Collections.IList>(results[0]);
+        Assert.Equal(4, list.Count);
+        Assert.Equal(new object[] { 11, 21, 12, 22 }, list.Cast<object>().ToArray());
+    }
+
+    // --- Parallel / zip (|| syntax) ---
+
+    [Fact]
+    public async Task List_comprehension_parallel_zip()
+    {
+        var engine = new ToshEngine();
+        var results = await engine.ExecuteToListAsync("echo [$x + $y <| for x in [1, 2, 3] || y in [10, 20, 30]]");
+        Assert.Single(results);
+        var list = Assert.IsAssignableFrom<System.Collections.IList>(results[0]);
+        Assert.Equal(new object[] { 11, 22, 33 }, list.Cast<object>().ToArray());
+    }
+
+    [Fact]
+    public async Task List_comprehension_parallel_zip_shorter_terminates()
+    {
+        var engine = new ToshEngine();
+        var results = await engine.ExecuteToListAsync("echo [$x + $y <| for x in [1, 2, 3] || y in [10, 20]]");
+        Assert.Single(results);
+        var list = Assert.IsAssignableFrom<System.Collections.IList>(results[0]);
+        Assert.Equal(new object[] { 11, 22 }, list.Cast<object>().ToArray());
+    }
+
+    [Fact]
+    public async Task Generator_comprehension_parallel_zip()
+    {
+        var engine = new ToshEngine();
+        var results = await engine.ExecuteToListAsync("($x + $y <| for x in [1, 2, 3] || y in [10, 20, 30]) | each { $_ }");
+        Assert.Equal(new object[] { 11, 22, 33 }, results);
+    }
+
+    // --- Destructuring patterns ---
+
+    [Fact]
+    public async Task List_comprehension_destructuring_tuples()
+    {
+        var engine = new ToshEngine();
+        var results = await engine.ExecuteToListAsync("echo [$a + $b <| for (a, b) in [(1, 2), (3, 4)]]");
+        Assert.Single(results);
+        var list = Assert.IsAssignableFrom<System.Collections.IList>(results[0]);
+        Assert.Equal(new object[] { 3, 7 }, list.Cast<object>().ToArray());
+    }
+
+    [Fact]
+    public async Task List_comprehension_destructuring_three_elements()
+    {
+        var engine = new ToshEngine();
+        var results = await engine.ExecuteToListAsync("echo [$a + $b + $c <| for (a, b, c) in [(1, 2, 3), (4, 5, 6)]]");
+        Assert.Single(results);
+        var list = Assert.IsAssignableFrom<System.Collections.IList>(results[0]);
+        Assert.Equal(new object[] { 6, 15 }, list.Cast<object>().ToArray());
+    }
+
+    [Fact]
+    public async Task Generator_comprehension_destructuring_tuples()
+    {
+        var engine = new ToshEngine();
+        var results = await engine.ExecuteToListAsync("($a + $b <| for (a, b) in [(1, 2), (3, 4)]) | each { $_ }");
+        Assert.Equal(new object[] { 3, 7 }, results);
+    }
 }

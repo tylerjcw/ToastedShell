@@ -1,0 +1,50 @@
+{
+    "$schema": "http://json.schemastore.org/template",
+    "author": "Tosh contributors",
+    "classifications": [
+        "Tosh",
+        "ToastedShell",
+        "Console"
+    ],
+    "name": "TōSh Console Application",
+    "description": "A TōSh console application that compiles to a .NET executable via Tosh.Sdk.",
+    "identity": "Tosh.Templates.App",
+    "groupIdentity": "Tosh.Templates.App",
+    "shortName": "tosh-app",
+    "tags": {
+        "language": "tosh",
+        "type": "project"
+    },
+    "sourceName": "ToshApp1",
+    "preferNameDirectory": true,
+    "primaryOutputs": [
+        {
+            "path": "ToshApp1.toshproj"
+        },
+        {
+            "path": "Program.tosh"
+        }
+    ],
+    "symbols": {
+        "Framework": {
+            "type": "parameter",
+            "datatype": "choice",
+            "choices": [
+                {
+                    "choice": "net10.0",
+                    "description": ".NET 10"
+                }
+            ],
+            "defaultValue": "net10.0",
+            "description": "The target framework for the project.",
+            "replaces": "net10.0"
+        },
+        "ToshSdkVersion": {
+            "type": "parameter",
+            "datatype": "string",
+            "defaultValue": "26.5.2.10",
+            "description": "Version of the Tosh.Sdk MSBuild SDK to reference.",
+            "replaces": "TOSH_SDK_VERSION"
+        }
+    }
+}

@@ -189,6 +189,13 @@ public sealed record ClassConstructorMemberSyntax(
     BlockSyntax Body,
     TextSpan Span) : ClassMemberSyntax(IsShy: false, IsStatic: false, Span);
 
+/// <summary>An event member declared inside a class: <c>event OnName: PayloadType</c>.</summary>
+public sealed record ClassEventMemberSyntax(
+    string Name,
+    string? PayloadTypeName,
+    bool IsShy,
+    TextSpan Span) : ClassMemberSyntax(IsShy, IsStatic: false, Span);
+
 public sealed record ClassDefinitionStatementSyntax(
     string Name,
     IReadOnlyList<FunctionParameterSyntax> PrimaryConstructorParameters,

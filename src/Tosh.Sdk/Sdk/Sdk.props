@@ -37,6 +37,11 @@
     <!-- When true, suppress tosh.compile.implicit_dynamic errors. -->
     <ToshAllowDynamic Condition="'$(ToshAllowDynamic)' == ''">false</ToshAllowDynamic>
 
+    <!-- When true, emit a sibling reference assembly
+         (<AssemblyName>.ref.dll) stamped with [ReferenceAssembly]. -->
+    <ToshEmitReferenceAssembly Condition="'$(ToshEmitReferenceAssembly)' == '' and '$(ToshEmitRefasm)' != ''">$(ToshEmitRefasm)</ToshEmitReferenceAssembly>
+    <ToshEmitReferenceAssembly Condition="'$(ToshEmitReferenceAssembly)' == ''">false</ToshEmitReferenceAssembly>
+
     <!-- When true (default for OutputType=Exe), emit an apphost wrapper
          executable alongside the DLL. The wrapper is <name>.exe on Windows,
          <name> (no extension, marked executable) on Unix. -->
@@ -48,6 +53,31 @@
          ToshEmitAppHost=true. -->
     <ToshPublishSingleFile Condition="'$(ToshPublishSingleFile)' == ''">false</ToshPublishSingleFile>
     <ToshEmitAppHost Condition="'$(ToshPublishSingleFile)' == 'true'">true</ToshEmitAppHost>
+
+    <!--
+      Version of the Tosh.* runtime library NuGets that pack/restore
+      flows depend on. Tosh.Sdk and Tosh.Runtime/Tosh.Stdlib/etc. ship
+      together in lock-step, so this normally matches the SDK's own
+      version. The shipped Sdk.props is rewritten by the Tosh.Sdk pack
+      pipeline to set this default to the matching runtime version
+      (TOSH_RUNTIME_VERSION_PLACEHOLDER below). Override per-project
+      with <ToshRuntimeVersion>...</ToshRuntimeVersion>.
+    -->
+    <ToshRuntimeVersion Condition="'$(ToshRuntimeVersion)' == ''">TOSH_RUNTIME_VERSION_PLACEHOLDER</ToshRuntimeVersion>
+
+    <!--
+      Standard NuGet packing knobs. Defaults: pack the implementation
+      DLL into lib/$(TargetFramework)/, pack the reference assembly
+      (when ToshEmitReferenceAssembly=true) into ref/$(TargetFramework)/,
+      and emit dependency entries for every Tosh.* runtime library so a
+      consumer's `<PackageReference Include="<lib>" />` transitively pulls
+      the runtime in.
+
+      IsPackable + PackageId are finalised in Sdk.targets (after the
+      project body has had a chance to set OutputType / AssemblyName).
+    -->
+    <PackageOutputPath Condition="'$(PackageOutputPath)' == ''">$(MSBuildProjectDirectory)\bin\$(Configuration)\</PackageOutputPath>
+    <ToshIncludeRuntimeDependencies Condition="'$(ToshIncludeRuntimeDependencies)' == ''">true</ToshIncludeRuntimeDependencies>
   </PropertyGroup>
 
   <ItemGroup Condition="'$(EnableDefaultToshItems)' == 'true'">

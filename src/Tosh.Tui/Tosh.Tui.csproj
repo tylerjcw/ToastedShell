@@ -6,4 +6,10 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <PackageId>Tosh.Tui</PackageId>
+    <Description>Terminal UI primitives (rendering, layout, input) used by TōSh's runtime and shell.</Description>
+  </PropertyGroup>
+
 </Project>

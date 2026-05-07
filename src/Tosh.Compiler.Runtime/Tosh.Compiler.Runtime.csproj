@@ -13,4 +13,10 @@
     <RootNamespace>Tosh.Compiler.Runtime</RootNamespace>
   </PropertyGroup>
 
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <PackageId>Tosh.Compiler.Runtime</PackageId>
+    <Description>Runtime support library required by IL emitted from the TōSh compiler: pipeline glue, dispatch helpers, and host bindings used by compiled .tosh assemblies.</Description>
+  </PropertyGroup>
+
 </Project>

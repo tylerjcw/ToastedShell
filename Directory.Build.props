@@ -61,4 +61,73 @@
     <VSTestResultsDirectory>$(ArtifactsRoot)test-results\</VSTestResultsDirectory>
   </PropertyGroup>
 
+  <!--
+    Shared NuGet packaging metadata. Individual library csprojs that opt in
+    to packaging by setting <IsPackable>true</IsPackable> inherit these
+    fields. Each project still supplies its own <PackageId> (defaults to
+    AssemblyName) and <Description>.
+
+    Output goes to artifacts/packages/.
+  -->
+  <PropertyGroup>
+    <Authors>Tosh contributors</Authors>
+    <Company>Tosh contributors</Company>
+    <Product>TōSh</Product>
+    <Copyright>Copyright © Tosh contributors</Copyright>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/komradbobo/tosh</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/komradbobo/tosh</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageTags>tosh;toastedshell;shell;repl;scripting;dotnet</PackageTags>
+    <PackageOutputPath>$(ArtifactsRoot)packages\</PackageOutputPath>
+    <!-- Default off; library projects opt in. -->
+    <IsPackable Condition="'$(IsPackable)' == ''">false</IsPackable>
+  </PropertyGroup>
+
+  <!--
+    A4: reproducibility + SourceLink + symbol packages.
+
+    * Deterministic + ContinuousIntegrationBuild: bit-for-bit reproducible
+      builds. CI=true is set by GitHub Actions / most other CI runners;
+      we honour it when present. Local dev builds are deterministic but
+      not "CI" so paths in PDBs stay full (easier to step through).
+    * EmbedUntrackedSources: any source file not under git (e.g.
+      generated AssemblyInfo) is embedded into the PDB so SourceLink
+      consumers can still step through.
+    * PublishRepositoryUrl: writes the actual commit-pinned repo URL
+      into the nuspec so debuggers can resolve sources.
+    * Symbol packages: every packable project also produces a `.snupkg`
+      next to the `.nupkg`, suitable for upload to the symbol server.
+
+    Strong naming: deliberately not enabled. TōSh ships as an OSS shell
+    + scripting runtime; signing the assemblies would force every
+    consumer (tosh-lib NuGets, plugins, etc.) to either sign too or
+    InternalsVisibleTo dance around it, which adds friction without
+    meaningful security benefit. Revisit if a desktop/Windows-Defender
+    integration ever requires it.
+  -->
+  <PropertyGroup>
+    <Deterministic>true</Deterministic>
+    <ContinuousIntegrationBuild Condition="'$(CI)' == 'true' or '$(TF_BUILD)' == 'true' or '$(GITHUB_ACTIONS)' == 'true'">true</ContinuousIntegrationBuild>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <!-- The default `origin` remote points at a private host on dev
+         machines; the GitHub remote is named `github`. SourceLink
+         walks the configured remote to build raw.githubusercontent
+         URLs, so steer it explicitly. Override locally by setting
+         GitRepositoryRemoteName=origin if your fork uses `origin`. -->
+    <GitRepositoryRemoteName Condition="'$(GitRepositoryRemoteName)' == ''">github</GitRepositoryRemoteName>
+    <!-- Symbol-package settings live in Directory.Build.targets so
+         they see the final value of <IsPackable> after each project
+         body has run. -->
+  </PropertyGroup>
+
+  <!--
+    SourceLink for github.com/komradbobo/tosh. Build-only PackageReference;
+    never propagates to consumers.
+  -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="all" IncludeAssets="runtime; build; native; contentfiles; analyzers; buildtransitive" />
+  </ItemGroup>
+
 </Project>

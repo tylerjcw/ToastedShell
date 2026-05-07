@@ -15,7 +15,19 @@ public sealed class DisplayProfile
 
     public Type TargetType => _targetType;
 
+    /// <summary>
+    /// How the streaming display sink should treat pipelines whose rows match this profile.
+    /// Defaults to <see cref="StreamingHint.Auto"/>.
+    /// </summary>
+    public StreamingHint StreamingHint { get; private set; } = StreamingHint.Auto;
+
     public static DisplayProfile For<T>() => new(typeof(T));
+
+    public DisplayProfile WithStreamingHint(StreamingHint hint)
+    {
+        StreamingHint = hint;
+        return this;
+    }
 
     public DisplayProfile AddValueCase(DisplaySurface surfaces, Func<DisplayValueContext, string> render)
     {

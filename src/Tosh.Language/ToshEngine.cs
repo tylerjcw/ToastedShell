@@ -349,7 +349,7 @@ public sealed partial class ToshEngine : IShellEvaluator
                     StringComparison.Ordinal))
             {
                 var typeDiagnostics = Tosh.Language.Binding.TypeChecker.Check(unit);
-                if (typeDiagnostics.Count > 0)
+                if (typeDiagnostics.Count > 0 && !IsInteractiveSession)
                 {
                     var renderer = new DiagnosticRenderer(
                         Runtime.Config.Theme.Diagnostics, Runtime.Config.Diagnostics);
@@ -540,52 +540,148 @@ public sealed partial class ToshEngine : IShellEvaluator
         _commandEventDepth++;
         _scriptNameStack.Push(parseResult.SourceName);
         var exitCode = 0;
+        System.Runtime.ExceptionServices.ExceptionDispatchInfo? pendingException = null;
+        // Values produced by a top-level `return ...` statement: the catch
+        // arm captures them but cannot `yield return` from inside the
+        // try (C# forbids yield in try/catch). They're flushed below
+        // after the outer try/finally has run.
+        IReadOnlyList<object?>? pendingReturnValues = null;
+
+        // Drive the inner enumerator manually so we can yield values as they arrive.
+        // C# allows yield return inside try-finally but not try-catch; the inner
+        // try-catch only wraps MoveNextAsync, keeping the yield return outside it.
+        //
+        // Some statements (break, continue, return) throw signal exceptions
+        // synchronously inside EvaluateStatementAsync before returning an
+        // IAsyncEnumerable. Wrap enumerator creation in its own catch so those
+        // signals are handled identically to the in-loop case below.
+        IAsyncEnumerator<object?> enumerator;
         try
         {
-            await foreach (var value in EvaluateStatementAsync(
-                               parseResult.SourceName,
-                               parseResult.SourceText,
-                               parseResult.Statement,
-                               cancellationToken)
-                               .WithCancellation(cancellationToken))
-            {
-                values.Add(value);
-            }
+            enumerator = EvaluateStatementAsync(
+                parseResult.SourceName,
+                parseResult.SourceText,
+                parseResult.Statement,
+                cancellationToken)
+                .GetAsyncEnumerator(cancellationToken);
         }
         catch (ReturnSignalException signal)
         {
             values.AddRange(signal.Values);
             UpdateLastResultIfAny(signal.Values);
+            pendingReturnValues = signal.Values;
+            enumerator = EmptyAsyncEnumerable().GetAsyncEnumerator(cancellationToken);
         }
         catch (BreakSignalException signal)
         {
-            throw CreateLoopControlDiagnostic(
-                parseResult.SourceName,
-                parseResult.SourceText,
-                signal.Span,
-                keyword: "break",
-                code: "tosh.runtime.break_outside_loop",
-                title: "'break' can only be used inside 'for', 'while', or 'each' blocks.");
+            pendingException = System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(
+                CreateLoopControlDiagnostic(
+                    parseResult.SourceName, parseResult.SourceText, signal.Span,
+                    keyword: "break", code: "tosh.runtime.break_outside_loop",
+                    title: "'break' can only be used inside 'for', 'while', or 'each' blocks."));
+            enumerator = EmptyAsyncEnumerable().GetAsyncEnumerator(cancellationToken);
         }
         catch (ContinueSignalException signal)
         {
-            throw CreateLoopControlDiagnostic(
-                parseResult.SourceName,
-                parseResult.SourceText,
-                signal.Span,
-                keyword: "continue",
-                code: "tosh.runtime.continue_outside_loop",
-                title: "'continue' can only be used inside 'for', 'while', or 'each' blocks.");
+            pendingException = System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(
+                CreateLoopControlDiagnostic(
+                    parseResult.SourceName, parseResult.SourceText, signal.Span,
+                    keyword: "continue", code: "tosh.runtime.continue_outside_loop",
+                    title: "'continue' can only be used inside 'for', 'while', or 'each' blocks."));
+            enumerator = EmptyAsyncEnumerable().GetAsyncEnumerator(cancellationToken);
         }
         catch (ThrowSignalException signal)
         {
             exitCode = 1;
-            throw CreateThrownValueDiagnostic(parseResult.SourceName, parseResult.SourceText, signal);
+            pendingException = System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(
+                CreateThrownValueDiagnostic(parseResult.SourceName, parseResult.SourceText, signal));
+            enumerator = EmptyAsyncEnumerable().GetAsyncEnumerator(cancellationToken);
         }
-        catch (Exception) when (exitCode == 0)
+        catch (Exception thrown) when (IsToshThrown(thrown))
         {
             exitCode = 1;
-            throw;
+            pendingException = System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(
+                CreateThrownValueDiagnostic(parseResult.SourceName, parseResult.SourceText, thrown));
+            enumerator = EmptyAsyncEnumerable().GetAsyncEnumerator(cancellationToken);
+        }
+
+        try // outer: ensures cleanup + CommandCompleted event
+        {
+            try // inner: ensures enumerator disposal
+            {
+                while (true)
+                {
+                    bool hasNext;
+                    try
+                    {
+                        hasNext = await enumerator.MoveNextAsync();
+                    }
+                    catch (ReturnSignalException signal)
+                    {
+                        values.AddRange(signal.Values);
+                        UpdateLastResultIfAny(signal.Values);
+                        pendingReturnValues = signal.Values;
+                        break;
+                    }
+                    catch (BreakSignalException signal)
+                    {
+                        pendingException = System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(
+                            CreateLoopControlDiagnostic(
+                                parseResult.SourceName,
+                                parseResult.SourceText,
+                                signal.Span,
+                                keyword: "break",
+                                code: "tosh.runtime.break_outside_loop",
+                                title: "'break' can only be used inside 'for', 'while', or 'each' blocks."));
+                        break;
+                    }
+                    catch (ContinueSignalException signal)
+                    {
+                        pendingException = System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(
+                            CreateLoopControlDiagnostic(
+                                parseResult.SourceName,
+                                parseResult.SourceText,
+                                signal.Span,
+                                keyword: "continue",
+                                code: "tosh.runtime.continue_outside_loop",
+                                title: "'continue' can only be used inside 'for', 'while', or 'each' blocks."));
+                        break;
+                    }
+                    catch (ThrowSignalException signal)
+                    {
+                        exitCode = 1;
+                        pendingException = System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(
+                            CreateThrownValueDiagnostic(parseResult.SourceName, parseResult.SourceText, signal));
+                        break;
+                    }
+                    catch (Exception thrown) when (IsToshThrown(thrown))
+                    {
+                        // A user-thrown CLR exception (e.g. `throw (new MyError())`)
+                        // bubbled past every tosh-level catch. Surface it via
+                        // the same pretty diagnostic path used for
+                        // ThrowSignalException so the REPL frame still gets
+                        // a span, label, and source snippet.
+                        exitCode = 1;
+                        pendingException = System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(
+                            CreateThrownValueDiagnostic(parseResult.SourceName, parseResult.SourceText, thrown));
+                        break;
+                    }
+                    catch (Exception) when (exitCode == 0)
+                    {
+                        exitCode = 1;
+                        throw; // re-throw immediately; outer finally still runs
+                    }
+
+                    if (!hasNext) break;
+
+                    values.Add(enumerator.Current);
+                    yield return enumerator.Current; // allowed: inside try-finally only, no catch
+                }
+            }
+            finally
+            {
+                await enumerator.DisposeAsync();
+            }
         }
         finally
         {
@@ -619,11 +715,19 @@ public sealed partial class ToshEngine : IShellEvaluator
             UpdateLastResultIfAny(values);
         }
 
-        foreach (var value in values)
+        // Flush any values captured by a top-level `return` statement
+        // (added to `values` inside the catch but not yet yielded —
+        // `yield return` is illegal inside a try/catch in C#).
+        if (pendingReturnValues is not null)
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            yield return value;
+            foreach (var value in pendingReturnValues)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                yield return value;
+            }
         }
+
+        pendingException?.Throw();
     }
 
     private IAsyncEnumerable<object?> EvaluateStatementAsync(
@@ -1667,10 +1771,36 @@ public sealed partial class ToshEngine : IShellEvaluator
             statement.Modifier,
             sourceName,
             sourceText,
-            statement.Span);
+            statement.Span,
+            allowTypeNameConflict: false);
 
         await Task.CompletedTask;
         yield break;
+    }
+
+    /// <summary>
+    /// Registers a type-alias declaration from source text without executing
+    /// it as a script statement. Used by compiled CLR emission to preserve
+    /// refinement/generic alias semantics while avoiding source replay.
+    /// </summary>
+    public void RegisterCompiledTypeAliasFromSource(string sourceName, string aliasSourceText)
+    {
+        var parse = ToshParser.Parse(aliasSourceText, sourceName);
+        if (parse.Diagnostics.Count > 0 || parse.Statement is not TypeAliasStatementSyntax alias)
+        {
+            var diagnostic = parse.Diagnostics.FirstOrDefault();
+            throw new InvalidOperationException(
+                $"Compiled alias registration failed: {diagnostic?.Title ?? "not a valid type alias declaration."}");
+        }
+
+        EnsureBindingNameIsNotReserved(sourceName, aliasSourceText, alias.Name, alias.Span, "reserved runtime namespace");
+        DeclareRefinementType(
+            CreateRefinementTypeDefinition(sourceName, aliasSourceText, alias),
+            alias.Modifier,
+            sourceName,
+            aliasSourceText,
+            alias.Span,
+            allowTypeNameConflict: true);
     }
 
     private async IAsyncEnumerable<object?> EvaluateRequireStatementAsync(
@@ -1941,7 +2071,7 @@ public sealed partial class ToshEngine : IShellEvaluator
             };
         }
 
-        throw new ThrowSignalException(statement.Span, value);
+        RaiseThrownValue(statement.Span, value);
 #pragma warning disable CS0162
         yield break;
 #pragma warning restore CS0162
@@ -4646,6 +4776,14 @@ public sealed partial class ToshEngine : IShellEvaluator
             {
                 throw;
             }
+            catch (Exception exception) when (IsToshThrown(exception))
+            {
+                // A user `throw (new MyError(...))` directly raised a CLR
+                // exception (not the wrapper signal); let it propagate so
+                // a higher-level catch / diagnostic stage handles it,
+                // rather than rewrapping it as a runtime command failure.
+                throw;
+            }
             catch (Exception exception)
             {
                 throw CreateCommandDiagnostic(sourceName, sourceText, commandSyntax, exception);
@@ -5021,6 +5159,29 @@ public sealed partial class ToshEngine : IShellEvaluator
         return values;
     }
 
+    private async Task<IReadOnlyList<object?>> EvaluateCallableInvocationArgumentsAsync(
+        string sourceName,
+        string sourceText,
+        IReadOnlyList<ArgumentSyntax> arguments,
+        CancellationToken cancellationToken)
+    {
+        var values = new List<object?>(arguments.Count);
+
+        foreach (var argument in arguments)
+        {
+            if (argument is SplatArgumentSyntax splat)
+            {
+                var splatValue = await EvaluateArgumentAsync(sourceName, sourceText, splat.Value, cancellationToken);
+                values.AddRange(ExpandSplatValues(sourceName, sourceText, splat, splatValue));
+                continue;
+            }
+
+            values.Add(await EvaluateArgumentAsync(sourceName, sourceText, argument, cancellationToken));
+        }
+
+        return values;
+    }
+
     private async Task<object?> EvaluateArgumentAsync(
         string sourceName,
         string sourceText,
@@ -5319,7 +5480,7 @@ public sealed partial class ToshEngine : IShellEvaluator
                         var definition = CreateFunctionDefinition(
                             "<lambda>",
                             anonymousFunction.Parameters,
-                            returnTypeName: null,
+                            returnTypeName: anonymousFunction.ReturnTypeName,
                             anonymousFunction.Body,
                             isCommandWrapper: false,
                             sourceName,
@@ -5393,7 +5554,7 @@ public sealed partial class ToshEngine : IShellEvaluator
                                 Help: "pass a lambda like 'func(x) => ...' or another callable shell value."));
                         }
 
-                        var callArguments = await EvaluateArgumentsAsync(sourceName, sourceText, callableInvocation.Arguments, cancellationToken);
+                        var callArguments = await EvaluateCallableInvocationArgumentsAsync(sourceName, sourceText, callableInvocation.Arguments, cancellationToken);
                         var invocation = new CommandInvocation(
                             sourceName,
                             sourceText,
@@ -5572,7 +5733,8 @@ public sealed partial class ToshEngine : IShellEvaluator
                         {
                             raised = await EvaluateArgumentAsync(sourceName, sourceText, throwArg.Value, cancellationToken);
                         }
-                        throw new ThrowSignalException(throwArg.Span, raised);
+                        RaiseThrownValue(throwArg.Span, raised);
+                        return null; // unreachable; satisfies the compiler
                     }
 
                 case MatchArgumentSyntax match:
@@ -6475,10 +6637,109 @@ public sealed partial class ToshEngine : IShellEvaluator
         return exception switch
         {
             ThrowSignalException thrown => thrown.Value,
+            // A ToshError wrapping a ToshClassInstance was synthesized
+            // by RaiseThrownValue when the user threw an instance of
+            // `class FooError extends Error`. Inside tosh `catch (err)`
+            // the user expects to see the original instance (so
+            // `$err is FooError` works); the ToshError wrapper only
+            // exists to bridge the CLR boundary.
+            ToshError { Cause: ToshClassInstance instance } => instance,
             ToshDiagnosticException diagnostic => diagnostic,
             _ => exception,
         };
     }
+
+    /// <summary>
+    /// Raise a tosh <c>throw</c>. When <paramref name="value"/> is itself
+    /// an <see cref="Exception"/>, that exception is raised verbatim so
+    /// cross-language callers can <c>catch</c> it by its concrete type;
+    /// non-exception values are wrapped in a <see cref="ThrowSignalException"/>
+    /// so the original payload round-trips through tosh <c>catch (err)</c>
+    /// intact. The exception's <c>Data["tosh.thrown"]</c> entry is set
+    /// so the engine's pipeline-level catches can let user-thrown
+    /// exceptions pass through without being rewrapped as runtime
+    /// command diagnostics. Control-flow signals
+    /// (<see cref="ShellControlFlowException"/>) are not valid throw
+    /// payloads and are wrapped into <see cref="ThrowSignalException"/>
+    /// rather than rethrown as control flow.
+    /// </summary>
+    [System.Diagnostics.CodeAnalysis.DoesNotReturn]
+    private static void RaiseThrownValue(TextSpan span, object? value)
+    {
+        // A tosh user class declared as `class FooError extends Error`
+        // surfaces at runtime as a sealed ToshClassInstance whose
+        // definition's ClrBaseType points at ToshError (or another
+        // Exception subclass). Wrap such instances in a ToshError so
+        // C# consumers see a real CLR exception, with the original
+        // tosh instance available via .Cause and the user's class
+        // name preserved on the wrapper for diagnostic-code routing.
+        if (value is ToshClassInstance instance && DefinitionExtendsException(instance.Definition))
+        {
+            var message = TryGetInstanceMessage(instance) ?? instance.Definition.Name;
+            var wrapper = new ToshError(message, span, cause: instance);
+            wrapper.Data["tosh.thrown"] = true;
+            wrapper.Data["tosh.user.type"] = instance.Definition.Name;
+            throw wrapper;
+        }
+        if (value is ToshError tosh)
+        {
+            // Stamp a span on the ToshError if the user didn't supply one;
+            // the renderer needs a span to point at the throw site.
+            if (tosh.Span.Length == 0 && tosh.Span.Start == 0)
+            {
+                tosh.Span = span;
+            }
+            tosh.Data["tosh.thrown"] = true;
+            throw tosh;
+        }
+        if (value is Exception ex && value is not ShellControlFlowException)
+        {
+            ex.Data["tosh.thrown"] = true;
+            throw ex;
+        }
+        var signal = new ThrowSignalException(span, value);
+        signal.Data["tosh.thrown"] = true;
+        throw signal;
+    }
+
+    /// <summary>True when any class in <paramref name="definition"/>'s
+    /// inheritance chain has a <see cref="ToshClassDefinition.ClrBaseType"/>
+    /// that derives from <see cref="Exception"/>.</summary>
+    private static bool DefinitionExtendsException(ToshClassDefinition definition)
+    {
+        for (var d = definition; d is not null; d = d.BaseClass)
+        {
+            if (d.ClrBaseType is { } clr && typeof(Exception).IsAssignableFrom(clr))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Returns a tosh class instance's most-likely "message"
+    /// (`Message` or `message` property), used to populate the wrapping
+    /// <see cref="ToshError.Message"/> when a user throws an instance
+    /// of a class that extends <c>Error</c>.
+    /// </summary>
+    private static string? TryGetInstanceMessage(ToshClassInstance instance)
+    {
+        if (instance.TryGetMember("Message", out var msg) && msg is not null) return msg.ToString();
+        if (instance.TryGetMember("message", out var msg2) && msg2 is not null) return msg2.ToString();
+        return null;
+    }
+
+    /// <summary>
+    /// True when <paramref name="exception"/> originated from a tosh
+    /// <c>throw</c> statement (either a wrapped <see cref="ThrowSignalException"/>
+    /// or a directly raised <see cref="Exception"/> stamped by
+    /// <see cref="RaiseThrownValue"/>).
+    /// </summary>
+    private static bool IsToshThrown(Exception exception)
+        => exception is ThrowSignalException
+           || (exception is not ShellControlFlowException
+               && exception.Data.Contains("tosh.thrown"));
 
     public ShellNameRemovalResult Forget(string name)
     {
@@ -7167,10 +7428,14 @@ public sealed partial class ToshEngine : IShellEvaluator
         DeclarationModifier modifier,
         string? sourceName = null,
         string? sourceText = null,
-        TextSpan? span = null)
+        TextSpan? span = null,
+        bool allowTypeNameConflict = false)
     {
         EnsureReservedBindingName(definition.Name);
-        EnsureRefinementAliasNameDoesNotConflictWithType(definition.Name, sourceName ?? definition.SourceName, sourceText ?? definition.SourceText, span ?? definition.Span);
+        if (!allowTypeNameConflict)
+        {
+            EnsureRefinementAliasNameDoesNotConflictWithType(definition.Name, sourceName ?? definition.SourceName, sourceText ?? definition.SourceText, span ?? definition.Span);
+        }
 
         if (modifier == DeclarationModifier.Default &&
             _scopes.Count > 0 &&
@@ -10035,16 +10300,49 @@ public sealed partial class ToshEngine : IShellEvaluator
         string sourceName,
         string sourceText,
         ThrowSignalException signal)
+        => CreateThrownValueDiagnostic(sourceName, sourceText, signal.Span, signal.Value, signal);
+
+    /// <summary>
+    /// Pretty-format any tosh-thrown <see cref="Exception"/> (raised
+    /// either as a wrapper <see cref="ThrowSignalException"/> or as a
+    /// directly thrown <see cref="Exception"/> subclass) into a
+    /// <see cref="ToshDiagnosticException"/> the renderer can box-draw
+    /// with a source snippet and underline. Callers from non-throw
+    /// contexts (e.g. unhandled <see cref="ToshError"/> escaping a
+    /// pipeline) should use this overload directly.
+    /// </summary>
+    private ToshDiagnosticException CreateThrownValueDiagnostic(
+        string sourceName,
+        string sourceText,
+        Exception exception)
+    {
+        switch (exception)
+        {
+            case ThrowSignalException signal:
+                return CreateThrownValueDiagnostic(sourceName, sourceText, signal.Span, signal.Value, signal);
+            case ToshError tosh:
+                return CreateThrownValueDiagnostic(sourceName, sourceText, tosh.Span, tosh, tosh);
+            default:
+                return CreateThrownValueDiagnostic(sourceName, sourceText, default, exception, exception);
+        }
+    }
+
+    private ToshDiagnosticException CreateThrownValueDiagnostic(
+        string sourceName,
+        string sourceText,
+        TextSpan span,
+        object? value,
+        Exception originalException)
     {
         // If the thrown value is itself a diagnostic (the common `throw $err`
         // re-raise pattern from a catch block), preserve its original source,
         // span, and snippet so the renderer still points at the underlying
         // problem. The throw-site location is surfaced as an `info:` footer
         // so the user still knows where the rethrow happened.
-        if (signal.Value is ToshDiagnosticException inner && inner.Diagnostics.Count > 0)
+        if (value is ToshDiagnosticException inner && inner.Diagnostics.Count > 0)
         {
             var rethrown = inner.Diagnostics[0];
-            var line = LineFromOffset(sourceText, signal.Span.Start);
+            var line = LineFromOffset(sourceText, span.Start);
             var throwSite = line > 0 ? $"{sourceName}:{line}" : sourceName;
             var info = string.IsNullOrWhiteSpace(rethrown.Info)
                 ? $"re-thrown at {throwSite}"
@@ -10052,21 +10350,46 @@ public sealed partial class ToshEngine : IShellEvaluator
             return ToshDiagnosticException.Create(rethrown with { Info = info });
         }
 
-        var title = signal.Value switch
+        var title = value switch
         {
             null => "An error was thrown.",
             ICommandResult result => result.Message,
             Exception exception => exception.Message,
-            _ => Runtime.Formatter.Format(signal.Value),
+            _ => Runtime.Formatter.Format(value),
+        };
+
+        // For ToshError-derived types, surface the user's class name as
+        // the diagnostic code so the renderer's tail tag reads
+        // `tosh.user.MyError` instead of the generic
+        // `tosh.runtime.throw`. Bare strings / records / numbers fall
+        // back to the generic code.
+        var code = value switch
+        {
+            ToshError tosh when tosh.Data["tosh.user.type"] is string userType
+                => $"tosh.user.{userType}",
+            ToshError tosh when tosh.GetType() != typeof(ToshError)
+                => $"tosh.user.{tosh.GetType().Name}",
+            ToshError => "tosh.user.error",
+            ToshClassInstance instance when DefinitionExtendsException(instance.Definition)
+                => $"tosh.user.{instance.Definition.Name}",
+            _ => "tosh.runtime.throw",
+        };
+
+        var label = value switch
+        {
+            Exception => "an error escaped here",
+            ToshClassInstance instance when DefinitionExtendsException(instance.Definition)
+                => "an error escaped here",
+            _ => "an unhandled value was thrown here",
         };
 
         return ToshDiagnosticException.Create(new ToshDiagnostic(
-            Code: "tosh.runtime.throw",
+            Code: code,
             Title: title,
             SourceName: sourceName,
             SourceText: sourceText,
-            Span: signal.Span,
-            Label: "an unhandled value was thrown here"));
+            Span: span,
+            Label: label));
     }
 
     private static string ExtractSourceText(string sourceText, int start, int end)
@@ -10461,15 +10784,73 @@ public sealed partial class ToshEngine : IShellEvaluator
                 Label: "this source is infinite"));
         }
 
+        // Parallel/zip: bind both clause variables per step; terminate when either source ends
+        if (clause.InnerClause is not null && clause.InnerIsParallel)
+        {
+            var innerSourceValue = await EvaluateArgumentAsync(sourceName, sourceText, clause.InnerClause.Source, cancellationToken);
+            using var outerEnum = ShellIterationUtilities.ExpandIterationItems(sourceValue).GetEnumerator();
+            using var innerEnum = ShellIterationUtilities.ExpandIterationItems(innerSourceValue).GetEnumerator();
+
+            while (outerEnum.MoveNext() && innerEnum.MoveNext())
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                var vars = new Dictionary<string, object?>(StringComparer.Ordinal) { ["_"] = outerEnum.Current };
+                AddClauseBindings(vars, clause, outerEnum.Current);
+                AddClauseBindings(vars, clause.InnerClause, innerEnum.Current);
+                using var _ = PushScope(vars);
+
+                var skip = false;
+                foreach (var modifier in clause.Modifiers)
+                {
+                    switch (modifier)
+                    {
+                        case ComprehensionWhereSyntax where:
+                            if (!await EvaluateConditionAsync(sourceName, sourceText, where.Condition, cancellationToken))
+                                skip = true;
+                            break;
+                        case ComprehensionLetSyntax let:
+                            var letValue = await EvaluateArgumentAsync(sourceName, sourceText, let.Value, cancellationToken);
+                            _scopes.Peek().Variables[let.VariableName] = ToVariableBinding(letValue);
+                            break;
+                    }
+                    if (skip) break;
+                }
+                if (!skip)
+                {
+                    foreach (var modifier in clause.InnerClause.Modifiers)
+                    {
+                        switch (modifier)
+                        {
+                            case ComprehensionWhereSyntax where:
+                                if (!await EvaluateConditionAsync(sourceName, sourceText, where.Condition, cancellationToken))
+                                    skip = true;
+                                break;
+                            case ComprehensionLetSyntax let:
+                                var letValue = await EvaluateArgumentAsync(sourceName, sourceText, let.Value, cancellationToken);
+                                _scopes.Peek().Variables[let.VariableName] = ToVariableBinding(letValue);
+                                break;
+                        }
+                        if (skip) break;
+                    }
+                }
+                if (skip) continue;
+
+                if (clause.InnerClause.InnerClause is not null)
+                    await EvaluateComprehensionClauseAsync(sourceName, sourceText, clause.InnerClause.InnerClause, bodyAction, cancellationToken);
+                else
+                    await bodyAction(cancellationToken);
+            }
+            return;
+        }
+
         foreach (var current in ShellIterationUtilities.ExpandIterationItems(sourceValue))
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            using var _ = PushScope(new Dictionary<string, object?>(StringComparer.Ordinal)
-            {
-                [clause.VariableName] = current,
-                ["_"] = current,
-            });
+            var vars = new Dictionary<string, object?>(StringComparer.Ordinal) { ["_"] = current };
+            AddClauseBindings(vars, clause, current);
+            using var _ = PushScope(vars);
 
             // Walk where/let modifiers in declared order: later clauses observe earlier lets.
             var skip = false;
@@ -10532,6 +10913,29 @@ public sealed partial class ToshEngine : IShellEvaluator
         return false;
     }
 
+    private static void AddClauseBindings(Dictionary<string, object?> vars, ComprehensionClauseSyntax clause, object? current)
+    {
+        if (clause.DestructureNames is { } names)
+        {
+            var elements = ExtractDestructureElements(current);
+            for (var i = 0; i < names.Count; i++)
+                vars[names[i]] = elements is not null && i < elements.Count ? elements[i] : null;
+        }
+        else
+        {
+            vars[clause.VariableName] = current;
+        }
+    }
+
+    private static IReadOnlyList<object?>? ExtractDestructureElements(object? value) =>
+        value switch
+        {
+            IReadOnlyList<object?> list => list,
+            KeyValuePair<object, object?> kvp => [kvp.Key, kvp.Value],
+            KeyValuePair<string, object?> kvp => [kvp.Key, kvp.Value],
+            _ => null,
+        };
+
     /// <summary>
     /// Produces a lazy IEnumerable that evaluates comprehension body items on demand.
     /// The source is already evaluated; body evaluation blocks on async via GetAwaiter().GetResult().
@@ -10543,8 +10947,8 @@ public sealed partial class ToshEngine : IShellEvaluator
         ArgumentSyntax body,
         object? sourceValue)
     {
-        // If there's an inner clause and either source is infinite, use diagonal enumeration
-        if (clause.InnerClause is not null && IsInfiniteSource(sourceValue))
+        // If there's a non-parallel inner clause and the outer source is infinite, use diagonal enumeration
+        if (clause.InnerClause is not null && !clause.InnerIsParallel && IsInfiniteSource(sourceValue))
         {
             foreach (var item in EnumerateComprehensionDiagonal(sourceName, sourceText, clause, clause.InnerClause, body, sourceValue))
             {
@@ -10553,13 +10957,84 @@ public sealed partial class ToshEngine : IShellEvaluator
             yield break;
         }
 
+        // Parallel/zip: bind both clause variables per step; terminate when either source ends
+        if (clause.InnerClause is not null && clause.InnerIsParallel)
+        {
+            var innerSource = EvaluateArgumentAsync(sourceName, sourceText, clause.InnerClause.Source, CancellationToken.None)
+                .GetAwaiter().GetResult();
+            using var outerEnum = ShellIterationUtilities.ExpandIterationItems(sourceValue).GetEnumerator();
+            using var innerEnum = ShellIterationUtilities.ExpandIterationItems(innerSource).GetEnumerator();
+
+            while (outerEnum.MoveNext() && innerEnum.MoveNext())
+            {
+                var vars = new Dictionary<string, object?>(StringComparer.Ordinal) { ["_"] = outerEnum.Current };
+                AddClauseBindings(vars, clause, outerEnum.Current);
+                AddClauseBindings(vars, clause.InnerClause, innerEnum.Current);
+                using var scope = PushScope(vars);
+
+                var skip = false;
+                foreach (var modifier in clause.Modifiers)
+                {
+                    switch (modifier)
+                    {
+                        case ComprehensionWhereSyntax where:
+                            if (!EvaluateConditionAsync(sourceName, sourceText, where.Condition, CancellationToken.None)
+                                .GetAwaiter().GetResult())
+                                skip = true;
+                            break;
+                        case ComprehensionLetSyntax let:
+                            var letValue = EvaluateArgumentAsync(sourceName, sourceText, let.Value, CancellationToken.None)
+                                .GetAwaiter().GetResult();
+                            _scopes.Peek().Variables[let.VariableName] = ToVariableBinding(letValue);
+                            break;
+                    }
+                    if (skip) break;
+                }
+                if (!skip)
+                {
+                    foreach (var modifier in clause.InnerClause.Modifiers)
+                    {
+                        switch (modifier)
+                        {
+                            case ComprehensionWhereSyntax where:
+                                if (!EvaluateConditionAsync(sourceName, sourceText, where.Condition, CancellationToken.None)
+                                    .GetAwaiter().GetResult())
+                                    skip = true;
+                                break;
+                            case ComprehensionLetSyntax let:
+                                var letValue = EvaluateArgumentAsync(sourceName, sourceText, let.Value, CancellationToken.None)
+                                    .GetAwaiter().GetResult();
+                                _scopes.Peek().Variables[let.VariableName] = ToVariableBinding(letValue);
+                                break;
+                        }
+                        if (skip) break;
+                    }
+                }
+                if (skip) continue;
+
+                if (clause.InnerClause.InnerClause is not null)
+                {
+                    var deepSource = EvaluateArgumentAsync(sourceName, sourceText, clause.InnerClause.InnerClause.Source, CancellationToken.None)
+                        .GetAwaiter().GetResult();
+                    foreach (var item in EnumerateComprehensionLazily(sourceName, sourceText, clause.InnerClause.InnerClause, body, deepSource))
+                    {
+                        yield return item;
+                    }
+                }
+                else
+                {
+                    yield return EvaluateArgumentAsync(sourceName, sourceText, body, CancellationToken.None)
+                        .GetAwaiter().GetResult();
+                }
+            }
+            yield break;
+        }
+
         foreach (var current in ShellIterationUtilities.ExpandIterationItems(sourceValue))
         {
-            using var scope = PushScope(new Dictionary<string, object?>(StringComparer.Ordinal)
-            {
-                [clause.VariableName] = current,
-                ["_"] = current,
-            });
+            var vars = new Dictionary<string, object?>(StringComparer.Ordinal) { ["_"] = current };
+            AddClauseBindings(vars, clause, current);
+            using var scope = PushScope(vars);
 
             // Walk modifiers in declared order (blocking on async each time)
             var skip = false;

@@ -17,4 +17,10 @@ public sealed record DisplayTableColumn(
     string? SelectionKey = null,
     bool IsTree = false,
     bool UseHeaderTheme = true,
-    bool UseIndexTheme = true);
+    bool UseIndexTheme = true,
+    /// <summary>
+    /// Fixed render width used by the streaming path when column widths cannot be computed
+    /// from observed data.  Null means the streaming sink will track the observed maximum
+    /// and rewrite prior rows when a wider cell arrives.
+    /// </summary>
+    int? StreamWidth = null);

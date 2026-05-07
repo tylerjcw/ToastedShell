@@ -25,111 +25,110 @@
   \indexspace
 \indexgroup{A}
 
-  \item \texttt  {all} (command) \dotfill\enspace 116, 285
+  \item \texttt  {all} (command) \dotfill\enspace 141
   \item \texttt  {and} (operator) \dotfill\enspace 17
-  \item \texttt  {any} (command) \dotfill\enspace 116, 285
-  \item \texttt  {append-file} (command) \dotfill\enspace 75, 244
-  \item \texttt  {apropos} (command) \dotfill\enspace 153, 322
-  \item \texttt  {arg} (keyword) \dotfill\enspace 50
+  \item \texttt  {any} (command) \dotfill\enspace 141
+  \item \texttt  {append-file} (command) \dotfill\enspace 100
+  \item \texttt  {apropos} (command) \dotfill\enspace 178
+  \item \texttt  {arg} (keyword) \dotfill\enspace 51
   \item \texttt  {as} (operator) \dotfill\enspace 18
-  \item \texttt  {as-file} (command) \dotfill\enspace 71, 240
-  \item \texttt  {assert} (command) \dotfill\enspace 152, 321
-  \item \texttt  {async} (command) \dotfill\enspace 66, 235
-  \item \texttt  {average} (command) \dotfill\enspace 116, 285
-  \item \texttt  {await} (command) \dotfill\enspace 66, 235
+  \item \texttt  {as-file} (command) \dotfill\enspace 96
+  \item \texttt  {assert} (command) \dotfill\enspace 177
+  \item \texttt  {async} (command) \dotfill\enspace 91
+  \item \texttt  {average} (command) \dotfill\enspace 141
+  \item \texttt  {await} (command) \dotfill\enspace 91
 
   \indexspace
 \indexgroup{B}
 
-  \item \texttt  {back} (command) \dotfill\enspace 76, 245
-  \item \texttt  {basename} (command) \dotfill\enspace 76, 245
-  \item \texttt  {benchmark} (command) \dotfill\enspace 154, 323
-  \item \texttt  {bg} (command) \dotfill\enspace 141, 310
+  \item \texttt  {back} (command) \dotfill\enspace 101
+  \item \texttt  {basename} (command) \dotfill\enspace 101
+  \item \texttt  {benchmark} (command) \dotfill\enspace 179
+  \item \texttt  {bg} (command) \dotfill\enspace 166
   \item \texttt  {bind} (keyword) \dotfill\enspace 35
   \item \texttt  {break} (keyword) \dotfill\enspace 26
 
   \indexspace
 \indexgroup{C}
 
-  \item \texttt  {call} (command) \dotfill\enspace 55, 224
-  \item \texttt  {call-method} (command) \dotfill\enspace 56, 224
+  \item \texttt  {call} (command) \dotfill\enspace 80
+  \item \texttt  {call-method} (command) \dotfill\enspace 81
   \item \texttt  {callconv} (keyword) \dotfill\enspace 35
-  \item \texttt  {cartesian-product} (command) \dotfill\enspace 117, 
-		286
+  \item \texttt  {cartesian-product} (command) \dotfill\enspace 142
   \item \texttt  {case} (keyword) \dotfill\enspace 24
-  \item \texttt  {cast} (command) \dotfill\enspace 56, 225
-  \item \texttt  {cat} (command) \dotfill\enspace 77, 245
+  \item \texttt  {cast} (command) \dotfill\enspace 81
+  \item \texttt  {cat} (command) \dotfill\enspace 102
   \item \texttt  {catch} (keyword) \dotfill\enspace 25
-  \item \texttt  {cd} (command) \dotfill\enspace 78, 246
-  \item \texttt  {chain} (command) \dotfill\enspace 117, 286
-  \item \texttt  {channel} (command) \dotfill\enspace 67, 236
-  \item \texttt  {channel-close} (command) \dotfill\enspace 67, 236
-  \item \texttt  {channel-recv} (command) \dotfill\enspace 68, 237
-  \item \texttt  {channel-select} (command) \dotfill\enspace 68, 237
-  \item \texttt  {channel-send} (command) \dotfill\enspace 69, 237
-  \item \texttt  {chmod} (command) \dotfill\enspace 78, 247
-  \item \texttt  {chown} (command) \dotfill\enspace 79, 247
-  \item \texttt  {chunk} (command) \dotfill\enspace 118, 287
+  \item \texttt  {cd} (command) \dotfill\enspace 103
+  \item \texttt  {chain} (command) \dotfill\enspace 142
+  \item \texttt  {channel} (command) \dotfill\enspace 92
+  \item \texttt  {channel-close} (command) \dotfill\enspace 92
+  \item \texttt  {channel-recv} (command) \dotfill\enspace 93
+  \item \texttt  {channel-select} (command) \dotfill\enspace 93
+  \item \texttt  {channel-send} (command) \dotfill\enspace 94
+  \item \texttt  {chmod} (command) \dotfill\enspace 103
+  \item \texttt  {chown} (command) \dotfill\enspace 104
+  \item \texttt  {chunk} (command) \dotfill\enspace 143
   \item \texttt  {class} (keyword) \dotfill\enspace 36
-  \item \texttt  {clear} (command) \dotfill\enspace 154, 323
-  \item \texttt  {clone} (command) \dotfill\enspace 56, 225
-  \item \texttt  {close} (command) \dotfill\enspace 79, 248
+  \item \texttt  {clear} (command) \dotfill\enspace 179
+  \item \texttt  {clone} (command) \dotfill\enspace 81
+  \item \texttt  {close} (command) \dotfill\enspace 104
   \item \texttt  {coerce} (keyword) \dotfill\enspace 14
-  \item \texttt  {collect} (command) \dotfill\enspace 118, 287
-  \item \texttt  {combinations} (command) \dotfill\enspace 119, 288
+  \item \texttt  {collect} (command) \dotfill\enspace 143
+  \item \texttt  {combinations} (command) \dotfill\enspace 144
   \item \texttt  {comment} (keyword) \dotfill\enspace 4
   \item \texttt  {Complex} (keyword) \dotfill\enspace 11
-  \item \texttt  {complex} (command) \dotfill\enspace 72, 241
+  \item \texttt  {complex} (command) \dotfill\enspace 97
   \item \texttt  {complex} (keyword) \dotfill\enspace 11
-  \item \texttt  {compose} (command) \dotfill\enspace 104, 273
-  \item \texttt  {config} (command) \dotfill\enspace 154, 323
+  \item \texttt  {compose} (command) \dotfill\enspace 129
+  \item \texttt  {config} (command) \dotfill\enspace 179
   \item \texttt  {const} (keyword) \dotfill\enspace 20
-  \item \texttt  {constructors} (command) \dotfill\enspace 57, 226
+  \item \texttt  {constructors} (command) \dotfill\enspace 82
   \item \texttt  {contains} (operator) \dotfill\enspace 18
   \item \texttt  {continue} (keyword) \dotfill\enspace 26
-  \item \texttt  {converge} (command) \dotfill\enspace 105, 274
-  \item \texttt  {copy-to} (command) \dotfill\enspace 80, 248
-  \item \texttt  {count} (command) \dotfill\enspace 119, 288
-  \item \texttt  {cp} (command) \dotfill\enspace 80, 249
-  \item \texttt  {curry} (command) \dotfill\enspace 105, 274
-  \item \texttt  {cut} (command) \dotfill\enspace 180, 349
-  \item \texttt  {cycle} (command) \dotfill\enspace 106, 275
+  \item \texttt  {converge} (command) \dotfill\enspace 130
+  \item \texttt  {copy-to} (command) \dotfill\enspace 105
+  \item \texttt  {count} (command) \dotfill\enspace 144
+  \item \texttt  {cp} (command) \dotfill\enspace 105
+  \item \texttt  {curry} (command) \dotfill\enspace 130
+  \item \texttt  {cut} (command) \dotfill\enspace 205
+  \item \texttt  {cycle} (command) \dotfill\enspace 131
 
   \indexspace
 \indexgroup{D}
 
-  \item \texttt  {date} (command) \dotfill\enspace 165, 334
-  \item \texttt  {dbg} (command) \dotfill\enspace 155, 324
-  \item \texttt  {debug} (command) \dotfill\enspace 155, 324
-  \item \texttt  {dedup} (command) \dotfill\enspace 119, 288
+  \item \texttt  {date} (command) \dotfill\enspace 190
+  \item \texttt  {dbg} (command) \dotfill\enspace 180
+  \item \texttt  {debug} (command) \dotfill\enspace 180
+  \item \texttt  {dedup} (command) \dotfill\enspace 144
   \item \texttt  {default} (keyword) \dotfill\enspace 24
   \item \texttt  {defer} (keyword) \dotfill\enspace 26
-  \item \texttt  {del-prop} (command) \dotfill\enspace 57, 226
-  \item \texttt  {describe} (command) \dotfill\enspace 120, 289
-  \item \texttt  {describe-type} (command) \dotfill\enspace 58, 226
-  \item \texttt  {df} (command) \dotfill\enspace 81, 250
-  \item \texttt  {dirname} (command) \dotfill\enspace 82, 250
-  \item \texttt  {dirs} (command) \dotfill\enspace 82, 251
-  \item \texttt  {distinct} (command) \dotfill\enspace 120, 289
-  \item \texttt  {du} (command) \dotfill\enspace 83, 251
+  \item \texttt  {del-prop} (command) \dotfill\enspace 82
+  \item \texttt  {describe} (command) \dotfill\enspace 145
+  \item \texttt  {describe-type} (command) \dotfill\enspace 83
+  \item \texttt  {df} (command) \dotfill\enspace 106
+  \item \texttt  {dirname} (command) \dotfill\enspace 107
+  \item \texttt  {dirs} (command) \dotfill\enspace 107
+  \item \texttt  {distinct} (command) \dotfill\enspace 145
+  \item \texttt  {du} (command) \dotfill\enspace 108
 
   \indexspace
 \indexgroup{E}
 
-  \item \texttt  {each} (command) \dotfill\enspace 121, 290
-  \item \texttt  {eager} (keyword) \dotfill\enspace 50
-  \item \texttt  {echo} (command) \dotfill\enspace 180, 349
+  \item \texttt  {each} (command) \dotfill\enspace 146
+  \item \texttt  {eager} (keyword) \dotfill\enspace 51
+  \item \texttt  {echo} (command) \dotfill\enspace 205
   \item \texttt  {else} (keyword) \dotfill\enspace 23
   \item \texttt  {ends-with} (operator) \dotfill\enspace 18
   \item \texttt  {enum} (keyword) \dotfill\enspace 41
-  \item \texttt  {enumerate} (command) \dotfill\enspace 121, 290
-  \item \texttt  {env} (command) \dotfill\enspace 166, 335
+  \item \texttt  {enumerate} (command) \dotfill\enspace 146
+  \item \texttt  {env} (command) \dotfill\enspace 191
   \item \texttt  {event} (keyword) \dotfill\enspace 41
-  \item \texttt  {events} (command) \dotfill\enspace 156, 325
-  \item \texttt  {exec} (command) \dotfill\enspace 156, 325
-  \item \texttt  {exists} (command) \dotfill\enspace 84, 252
-  \item \texttt  {exit} (command) \dotfill\enspace 157, 326
-  \item \texttt  {export} (command) \dotfill\enspace 166, 335
+  \item \texttt  {events} (command) \dotfill\enspace 181
+  \item \texttt  {exec} (command) \dotfill\enspace 181
+  \item \texttt  {exists} (command) \dotfill\enspace 109
+  \item \texttt  {exit} (command) \dotfill\enspace 182
+  \item \texttt  {export} (command) \dotfill\enspace 191
   \item \texttt  {export} (keyword) \dotfill\enspace 22
   \item \texttt  {extends} (keyword) \dotfill\enspace 38
 
@@ -138,151 +137,151 @@
 
   \item \texttt  {fading} (keyword) \dotfill\enspace 38
   \item \texttt  {false} (keyword) \dotfill\enspace 7
-  \item \texttt  {fg} (command) \dotfill\enspace 142, 311
-  \item \texttt  {filter} (command) \dotfill\enspace 122, 291
+  \item \texttt  {fg} (command) \dotfill\enspace 167
+  \item \texttt  {filter} (command) \dotfill\enspace 147
   \item \texttt  {finally} (keyword) \dotfill\enspace 25
-  \item \texttt  {find} (command) \dotfill\enspace 84, 252
-  \item \texttt  {find-index} (command) \dotfill\enspace 122, 291
-  \item \texttt  {findmnt} (command) \dotfill\enspace 85, 253
-  \item \texttt  {first} (command) \dotfill\enspace 123, 292
+  \item \texttt  {find} (command) \dotfill\enspace 109
+  \item \texttt  {find-index} (command) \dotfill\enspace 147
+  \item \texttt  {findmnt} (command) \dotfill\enspace 110
+  \item \texttt  {first} (command) \dotfill\enspace 148
   \item \texttt  {fixed} (keyword) \dotfill\enspace 38
-  \item \texttt  {flag} (keyword) \dotfill\enspace 50
-  \item \texttt  {flat-map} (command) \dotfill\enspace 123, 292
-  \item \texttt  {flatten} (command) \dotfill\enspace 123, 292
+  \item \texttt  {flag} (keyword) \dotfill\enspace 51
+  \item \texttt  {flat-map} (command) \dotfill\enspace 148
+  \item \texttt  {flatten} (command) \dotfill\enspace 148
   \item \texttt  {fluid} (keyword) \dotfill\enspace 40
-  \item \texttt  {flush} (command) \dotfill\enspace 86, 254
+  \item \texttt  {flush} (command) \dotfill\enspace 111
   \item \texttt  {for} (keyword) \dotfill\enspace 23
-  \item \texttt  {forget} (command) \dotfill\enspace 167, 336
-  \item \texttt  {forward} (command) \dotfill\enspace 86, 255
-  \item \texttt  {free} (command) \dotfill\enspace 167, 336
-  \item \texttt  {frequencies} (command) \dotfill\enspace 124, 293
-  \item \texttt  {from} (command) \dotfill\enspace 72, 241
+  \item \texttt  {forget} (command) \dotfill\enspace 192
+  \item \texttt  {forward} (command) \dotfill\enspace 111
+  \item \texttt  {free} (command) \dotfill\enspace 192
+  \item \texttt  {frequencies} (command) \dotfill\enspace 149
+  \item \texttt  {from} (command) \dotfill\enspace 97
   \item \texttt  {fulfills} (keyword) \dotfill\enspace 38
   \item \texttt  {func} (keyword) \dotfill\enspace 28
 
   \indexspace
 \indexgroup{G}
 
-  \item \texttt  {get} (command) \dotfill\enspace 124, 293
-  \item \texttt  {get-methods} (command) \dotfill\enspace 58, 227
-  \item \texttt  {get-prop} (command) \dotfill\enspace 59, 227
-  \item \texttt  {get-props} (command) \dotfill\enspace 59, 228
-  \item \texttt  {glob} (command) \dotfill\enspace 87, 255
-  \item \texttt  {glob} (keyword) \dotfill\enspace 45
+  \item \texttt  {get} (command) \dotfill\enspace 149
+  \item \texttt  {get-methods} (command) \dotfill\enspace 83
+  \item \texttt  {get-prop} (command) \dotfill\enspace 84
+  \item \texttt  {get-props} (command) \dotfill\enspace 84
+  \item \texttt  {glob} (command) \dotfill\enspace 112
+  \item \texttt  {glob} (keyword) \dotfill\enspace 46
   \item \texttt  {global} (keyword) \dotfill\enspace 22
-  \item \texttt  {grep} (command) \dotfill\enspace 180, 349
-  \item \texttt  {group-by} (command) \dotfill\enspace 124, 293
-  \item \texttt  {group-while} (command) \dotfill\enspace 125, 294
+  \item \texttt  {grep} (command) \dotfill\enspace 205
+  \item \texttt  {group-by} (command) \dotfill\enspace 149
+  \item \texttt  {group-while} (command) \dotfill\enspace 150
   \item \texttt  {guarded} (keyword) \dotfill\enspace 38
-  \item \texttt  {guid} (command) \dotfill\enspace 168, 337
+  \item \texttt  {guid} (command) \dotfill\enspace 193
 
   \indexspace
 \indexgroup{H}
 
   \item \texttt  {handles} (keyword) \dotfill\enspace 31
-  \item \texttt  {has-method} (command) \dotfill\enspace 59, 228
-  \item \texttt  {has-prop} (command) \dotfill\enspace 60, 228
-  \item \texttt  {hash} (command) \dotfill\enspace 73, 242
-  \item \texttt  {head} (command) \dotfill\enspace 181, 350
-  \item \texttt  {help} (command) \dotfill\enspace 157, 326
+  \item \texttt  {has-method} (command) \dotfill\enspace 84
+  \item \texttt  {has-prop} (command) \dotfill\enspace 85
+  \item \texttt  {hash} (command) \dotfill\enspace 98
+  \item \texttt  {head} (command) \dotfill\enspace 206
+  \item \texttt  {help} (command) \dotfill\enspace 182
   \item \texttt  {hermit} (keyword) \dotfill\enspace 37
-  \item \texttt  {hidden} (keyword) \dotfill\enspace 50
-  \item \texttt  {history} (command) \dotfill\enspace 158, 327
-  \item \texttt  {history-search} (command) \dotfill\enspace 159, 328
+  \item \texttt  {hidden} (keyword) \dotfill\enspace 51
+  \item \texttt  {history} (command) \dotfill\enspace 183
+  \item \texttt  {history-search} (command) \dotfill\enspace 184
   \item \texttt  {hollow} (keyword) \dotfill\enspace 37
-  \item \texttt  {hostname} (command) \dotfill\enspace 168, 337
-  \item \texttt  {hostnamectl} (command) \dotfill\enspace 168, 337
-  \item \texttt  {http} (command) \dotfill\enspace 111, 280
-  \item \texttt  {hush} (command) \dotfill\enspace 160, 329
+  \item \texttt  {hostname} (command) \dotfill\enspace 193
+  \item \texttt  {hostnamectl} (command) \dotfill\enspace 193
+  \item \texttt  {http} (command) \dotfill\enspace 136
+  \item \texttt  {hush} (command) \dotfill\enspace 185
 
   \indexspace
 \indexgroup{I}
 
-  \item \texttt  {id} (command) \dotfill\enspace 169, 338
+  \item \texttt  {id} (command) \dotfill\enspace 194
   \item \texttt  {if} (keyword) \dotfill\enspace 23
-  \item \texttt  {ignore} (command) \dotfill\enspace 125, 294
+  \item \texttt  {ignore} (command) \dotfill\enspace 150
   \item \texttt  {implements} (keyword) \dotfill\enspace 38
   \item \texttt  {in} (operator) \dotfill\enspace 18
-  \item \texttt  {inspect} (command) \dotfill\enspace 126, 295
+  \item \texttt  {inspect} (command) \dotfill\enspace 151
   \item \texttt  {interface} (keyword) \dotfill\enspace 39
-  \item \texttt  {interleave} (command) \dotfill\enspace 126, 295
+  \item \texttt  {interleave} (command) \dotfill\enspace 151
   \item \texttt  {interpolation} (keyword) \dotfill\enspace 6
-  \item \texttt  {intersperse} (command) \dotfill\enspace 127, 296
-  \item \texttt  {invoke} (command) \dotfill\enspace 106, 275
-  \item \texttt  {ip} (command) \dotfill\enspace 113, 282
+  \item \texttt  {intersperse} (command) \dotfill\enspace 152
+  \item \texttt  {invoke} (command) \dotfill\enspace 131
+  \item \texttt  {ip} (command) \dotfill\enspace 138
   \item \texttt  {is} (operator) \dotfill\enspace 18
   \item \texttt  {is in} (operator) \dotfill\enspace 18
   \item \texttt  {is not} (operator) \dotfill\enspace 18
   \item \texttt  {is not in} (operator) \dotfill\enspace 18
-  \item \texttt  {is-dir} (command) \dotfill\enspace 87, 256
-  \item \texttt  {is-file} (command) \dotfill\enspace 87, 256
-  \item \texttt  {is-link} (command) \dotfill\enspace 88, 256
-  \item \texttt  {iterate} (command) \dotfill\enspace 107, 276
+  \item \texttt  {is-dir} (command) \dotfill\enspace 112
+  \item \texttt  {is-file} (command) \dotfill\enspace 112
+  \item \texttt  {is-link} (command) \dotfill\enspace 113
+  \item \texttt  {iterate} (command) \dotfill\enspace 132
 
   \indexspace
 \indexgroup{J}
 
-  \item \texttt  {jobs} (command) \dotfill\enspace 142, 311
-  \item \texttt  {join} (command) \dotfill\enspace 127, 296
-  \item \texttt  {join-lines} (command) \dotfill\enspace 182, 351
-  \item \texttt  {journalctl} (command) \dotfill\enspace 169, 338
+  \item \texttt  {jobs} (command) \dotfill\enspace 167
+  \item \texttt  {join} (command) \dotfill\enspace 152
+  \item \texttt  {join-lines} (command) \dotfill\enspace 207
+  \item \texttt  {journalctl} (command) \dotfill\enspace 194
 
   \indexspace
 \indexgroup{K}
 
-  \item \texttt  {kill} (command) \dotfill\enspace 143, 312
+  \item \texttt  {kill} (command) \dotfill\enspace 168
 
   \indexspace
 \indexgroup{L}
 
-  \item \texttt  {last} (command) \dotfill\enspace 128, 297
+  \item \texttt  {last} (command) \dotfill\enspace 153
   \item \texttt  {lazy} (keyword) \dotfill\enspace 10
   \item \texttt  {leaky} (keyword) \dotfill\enspace 33
-  \item \texttt  {length} (command) \dotfill\enspace 88, 257
+  \item \texttt  {length} (command) \dotfill\enspace 113
   \item \texttt  {let} (keyword) \dotfill\enspace 44
-  \item \texttt  {lines} (command) \dotfill\enspace 182, 351
-  \item \texttt  {ln} (command) \dotfill\enspace 89, 257
-  \item \texttt  {load-assembly} (command) \dotfill\enspace 60, 229
+  \item \texttt  {lines} (command) \dotfill\enspace 207
+  \item \texttt  {ln} (command) \dotfill\enspace 114
+  \item \texttt  {load-assembly} (command) \dotfill\enspace 85
   \item \texttt  {local} (keyword) \dotfill\enspace 38
-  \item \texttt  {loginctl} (command) \dotfill\enspace 170, 339
-  \item \texttt  {ls} (command) \dotfill\enspace 89, 258
-  \item \texttt  {lsblk} (command) \dotfill\enspace 90, 259
-  \item \texttt  {lscpu} (command) \dotfill\enspace 171, 340
-  \item \texttt  {lsfd} (command) \dotfill\enspace 143, 312
-  \item \texttt  {lsipc} (command) \dotfill\enspace 173, 342
+  \item \texttt  {loginctl} (command) \dotfill\enspace 195
+  \item \texttt  {ls} (command) \dotfill\enspace 114
+  \item \texttt  {lsblk} (command) \dotfill\enspace 115
+  \item \texttt  {lscpu} (command) \dotfill\enspace 196
+  \item \texttt  {lsfd} (command) \dotfill\enspace 168
+  \item \texttt  {lsipc} (command) \dotfill\enspace 198
 
   \indexspace
 \indexgroup{M}
 
-  \item \texttt  {map} (command) \dotfill\enspace 128, 297
-  \item \texttt  {mat} (command) \dotfill\enspace 73, 242
+  \item \texttt  {map} (command) \dotfill\enspace 153
+  \item \texttt  {mat} (command) \dotfill\enspace 98
   \item \texttt  {mat} (keyword) \dotfill\enspace 11
-  \item \texttt  {match} (command) \dotfill\enspace 183, 352
+  \item \texttt  {match} (command) \dotfill\enspace 208
   \item \texttt  {match} (keyword) \dotfill\enspace 24
   \item \texttt  {Matrix} (keyword) \dotfill\enspace 11
-  \item \texttt  {max} (command) \dotfill\enspace 128, 297
-  \item \texttt  {median} (command) \dotfill\enspace 129, 298
-  \item \texttt  {members} (command) \dotfill\enspace 60, 229
-  \item \texttt  {methods} (command) \dotfill\enspace 61, 230
-  \item \texttt  {min} (command) \dotfill\enspace 129, 298
-  \item \texttt  {mkdir} (command) \dotfill\enspace 91, 260
-  \item \texttt  {mkdir-temp} (command) \dotfill\enspace 92, 261
+  \item \texttt  {max} (command) \dotfill\enspace 153
+  \item \texttt  {median} (command) \dotfill\enspace 154
+  \item \texttt  {members} (command) \dotfill\enspace 85
+  \item \texttt  {methods} (command) \dotfill\enspace 86
+  \item \texttt  {min} (command) \dotfill\enspace 154
+  \item \texttt  {mkdir} (command) \dotfill\enspace 116
+  \item \texttt  {mkdir-temp} (command) \dotfill\enspace 117
   \item \texttt  {module} (keyword) \dotfill\enspace 36
-  \item \texttt  {mv} (command) \dotfill\enspace 92, 261
+  \item \texttt  {mv} (command) \dotfill\enspace 117
 
   \indexspace
 \indexgroup{N}
 
-  \item \texttt  {native-alloc} (command) \dotfill\enspace 61, 230
-  \item \texttt  {native-free} (command) \dotfill\enspace 62, 230
-  \item \texttt  {native-offsetof} (command) \dotfill\enspace 62, 231
-  \item \texttt  {native-read} (command) \dotfill\enspace 63, 231
-  \item \texttt  {native-sizeof} (command) \dotfill\enspace 63, 232
-  \item \texttt  {native-write} (command) \dotfill\enspace 64, 232
-  \item \texttt  {networkctl} (command) \dotfill\enspace 174, 343
-  \item \texttt  {new} (command) \dotfill\enspace 64, 233
-  \item \texttt  {new} (keyword) \dotfill\enspace 46
-  \item \texttt  {none} (command) \dotfill\enspace 130, 299
+  \item \texttt  {native-alloc} (command) \dotfill\enspace 86
+  \item \texttt  {native-free} (command) \dotfill\enspace 87
+  \item \texttt  {native-offsetof} (command) \dotfill\enspace 87
+  \item \texttt  {native-read} (command) \dotfill\enspace 88
+  \item \texttt  {native-sizeof} (command) \dotfill\enspace 88
+  \item \texttt  {native-write} (command) \dotfill\enspace 89
+  \item \texttt  {networkctl} (command) \dotfill\enspace 199
+  \item \texttt  {new} (command) \dotfill\enspace 89
+  \item \texttt  {new} (keyword) \dotfill\enspace 47
+  \item \texttt  {none} (command) \dotfill\enspace 155
   \item \texttt  {not} (operator) \dotfill\enspace 17
   \item \texttt  {not in} (operator) \dotfill\enspace 18
   \item \texttt  {null} (keyword) \dotfill\enspace 7
@@ -290,37 +289,37 @@
   \indexspace
 \indexgroup{O}
 
-  \item \texttt  {open-file} (command) \dotfill\enspace 93, 262
+  \item \texttt  {open-file} (command) \dotfill\enspace 118
   \item \texttt  {or} (operator) \dotfill\enspace 17
   \item \texttt  {overrule} (keyword) \dotfill\enspace 38
 
   \indexspace
 \indexgroup{P}
 
-  \item \texttt  {parallel} (command) \dotfill\enspace 130, 299
-  \item \texttt  {parse} (command) \dotfill\enspace 74, 242
-  \item \texttt  {partial} (command) \dotfill\enspace 107, 276
+  \item \texttt  {parallel} (command) \dotfill\enspace 155
+  \item \texttt  {parse} (command) \dotfill\enspace 99
+  \item \texttt  {partial} (command) \dotfill\enspace 132
   \item \texttt  {partial} (keyword) \dotfill\enspace 37
-  \item \texttt  {partition} (command) \dotfill\enspace 131, 300
-  \item \texttt  {percentile} (command) \dotfill\enspace 131, 300
-  \item \texttt  {permutations} (command) \dotfill\enspace 132, 301
-  \item \texttt  {ping} (command) \dotfill\enspace 115, 284
-  \item \texttt  {position} (command) \dotfill\enspace 94, 263
-  \item \texttt  {prompt-dir} (command) \dotfill\enspace 146, 315
-  \item \texttt  {prompt-duration} (command) \dotfill\enspace 147, 316
-  \item \texttt  {prompt-exit} (command) \dotfill\enspace 147, 316
-  \item \texttt  {prompt-git} (command) \dotfill\enspace 148, 317
-  \item \texttt  {prompt-history} (command) \dotfill\enspace 148, 317
-  \item \texttt  {prompt-jobs} (command) \dotfill\enspace 149, 318
-  \item \texttt  {prompt-newline} (command) \dotfill\enspace 149, 318
-  \item \texttt  {prompt-text} (command) \dotfill\enspace 150, 319
-  \item \texttt  {prompt-time} (command) \dotfill\enspace 150, 319
-  \item \texttt  {prompt-userhost} (command) \dotfill\enspace 151, 320
+  \item \texttt  {partition} (command) \dotfill\enspace 156
+  \item \texttt  {percentile} (command) \dotfill\enspace 156
+  \item \texttt  {permutations} (command) \dotfill\enspace 157
+  \item \texttt  {ping} (command) \dotfill\enspace 140
+  \item \texttt  {position} (command) \dotfill\enspace 119
+  \item \texttt  {prompt-dir} (command) \dotfill\enspace 171
+  \item \texttt  {prompt-duration} (command) \dotfill\enspace 172
+  \item \texttt  {prompt-exit} (command) \dotfill\enspace 172
+  \item \texttt  {prompt-git} (command) \dotfill\enspace 173
+  \item \texttt  {prompt-history} (command) \dotfill\enspace 173
+  \item \texttt  {prompt-jobs} (command) \dotfill\enspace 174
+  \item \texttt  {prompt-newline} (command) \dotfill\enspace 174
+  \item \texttt  {prompt-text} (command) \dotfill\enspace 175
+  \item \texttt  {prompt-time} (command) \dotfill\enspace 175
+  \item \texttt  {prompt-userhost} (command) \dotfill\enspace 176
   \item \texttt  {prop} (keyword) \dotfill\enspace 36
   \item \texttt  {proud} (keyword) \dotfill\enspace 38
-  \item \texttt  {ps} (command) \dotfill\enspace 144, 313
+  \item \texttt  {ps} (command) \dotfill\enspace 169
   \item \texttt  {public} (keyword) \dotfill\enspace 38
-  \item \texttt  {pwd} (command) \dotfill\enspace 94, 263
+  \item \texttt  {pwd} (command) \dotfill\enspace 119
 
   \indexspace
 \indexgroup{Q}
@@ -330,110 +329,109 @@
   \indexspace
 \indexgroup{R}
 
-  \item \texttt  {race} (command) \dotfill\enspace 69, 238
-  \item \texttt  {raise} (command) \dotfill\enspace 152, 321
+  \item \texttt  {race} (command) \dotfill\enspace 94
+  \item \texttt  {raise} (command) \dotfill\enspace 177
   \item \texttt  {raise} (keyword) \dotfill\enspace 41
   \item \texttt  {range} (keyword) \dotfill\enspace 9
-  \item \texttt  {raw} (command) \dotfill\enspace 183, 352
+  \item \texttt  {raw} (command) \dotfill\enspace 208
   \item \texttt  {raw} (keyword) \dotfill\enspace 38
-  \item \texttt  {read-bytes} (command) \dotfill\enspace 95, 264
-  \item \texttt  {read-file} (command) \dotfill\enspace 95, 264
-  \item \texttt  {read-from} (command) \dotfill\enspace 96, 265
-  \item \texttt  {read-line} (command) \dotfill\enspace 160, 329
-  \item \texttt  {read-line-from} (command) \dotfill\enspace 96, 265
-  \item \texttt  {read-lines} (command) \dotfill\enspace 97, 266
-  \item \texttt  {read-to-end} (command) \dotfill\enspace 98, 267
-  \item \texttt  {readlink} (command) \dotfill\enspace 98, 267
-  \item \texttt  {realpath} (command) \dotfill\enspace 98, 267
+  \item \texttt  {read-bytes} (command) \dotfill\enspace 120
+  \item \texttt  {read-file} (command) \dotfill\enspace 120
+  \item \texttt  {read-from} (command) \dotfill\enspace 121
+  \item \texttt  {read-line} (command) \dotfill\enspace 185
+  \item \texttt  {read-line-from} (command) \dotfill\enspace 121
+  \item \texttt  {read-lines} (command) \dotfill\enspace 122
+  \item \texttt  {read-to-end} (command) \dotfill\enspace 123
+  \item \texttt  {readlink} (command) \dotfill\enspace 123
+  \item \texttt  {realpath} (command) \dotfill\enspace 123
   \item \texttt  {record} (keyword) \dotfill\enspace 41
-  \item \texttt  {recur} (command) \dotfill\enspace 108, 277
-  \item \texttt  {redirection} (keyword) \dotfill\enspace 200
-  \item \texttt  {reduce} (command) \dotfill\enspace 132, 301
-  \item \texttt  {rename} (command) \dotfill\enspace 132, 301
-  \item \texttt  {repeat} (command) \dotfill\enspace 108, 277
-  \item \texttt  {repeatedly} (command) \dotfill\enspace 109, 278
-  \item \texttt  {replace} (command) \dotfill\enspace 184, 353
+  \item \texttt  {recur} (command) \dotfill\enspace 133
+  \item \texttt  {reduce} (command) \dotfill\enspace 157
+  \item \texttt  {rename} (command) \dotfill\enspace 157
+  \item \texttt  {repeat} (command) \dotfill\enspace 133
+  \item \texttt  {repeatedly} (command) \dotfill\enspace 134
+  \item \texttt  {replace} (command) \dotfill\enspace 209
   \item \texttt  {require} (keyword) \dotfill\enspace 35
   \item \texttt  {required} (keyword) \dotfill\enspace 41
   \item \texttt  {return} (keyword) \dotfill\enspace 26
-  \item \texttt  {reverse} (command) \dotfill\enspace 133, 302
-  \item \texttt  {rm} (command) \dotfill\enspace 99, 268
-  \item \texttt  {round} (command) \dotfill\enspace 110, 279
+  \item \texttt  {reverse} (command) \dotfill\enspace 158
+  \item \texttt  {rm} (command) \dotfill\enspace 124
+  \item \texttt  {round} (command) \dotfill\enspace 135
   \item \texttt  {rune} (keyword) \dotfill\enspace 33
 
   \indexspace
 \indexgroup{S}
 
-  \item \texttt  {scan} (command) \dotfill\enspace 133, 302
-  \item \texttt  {scope} (command) \dotfill\enspace 69, 238
+  \item \texttt  {scan} (command) \dotfill\enspace 158
+  \item \texttt  {scope} (command) \dotfill\enspace 94
   \item \texttt  {sealed} (keyword) \dotfill\enspace 33, 37
-  \item \texttt  {seek} (command) \dotfill\enspace 99, 268
-  \item \texttt  {seq} (command) \dotfill\enspace 175, 344
-  \item \texttt  {set-prop} (command) \dotfill\enspace 65, 233
-  \item \texttt  {settle} (command) \dotfill\enspace 70, 239
+  \item \texttt  {seek} (command) \dotfill\enspace 124
+  \item \texttt  {seq} (command) \dotfill\enspace 200
+  \item \texttt  {set-prop} (command) \dotfill\enspace 90
+  \item \texttt  {settle} (command) \dotfill\enspace 95
   \item \texttt  {shared} (keyword) \dotfill\enspace 38
   \item \texttt  {shy} (keyword) \dotfill\enspace 22, 38
-  \item \texttt  {signal} (command) \dotfill\enspace 145, 314
-  \item \texttt  {skip} (command) \dotfill\enspace 134, 303
-  \item \texttt  {skip-until} (command) \dotfill\enspace 134, 303
-  \item \texttt  {skip-while} (command) \dotfill\enspace 134, 303
-  \item \texttt  {sleep} (command) \dotfill\enspace 176, 345
-  \item \texttt  {sort} (command) \dotfill\enspace 135, 304
-  \item \texttt  {source} (command) \dotfill\enspace 160, 329
-  \item \texttt  {spawn} (command) \dotfill\enspace 70, 239
-  \item \texttt  {split} (command) \dotfill\enspace 184, 353
+  \item \texttt  {signal} (command) \dotfill\enspace 170
+  \item \texttt  {skip} (command) \dotfill\enspace 159
+  \item \texttt  {skip-until} (command) \dotfill\enspace 159
+  \item \texttt  {skip-while} (command) \dotfill\enspace 159
+  \item \texttt  {sleep} (command) \dotfill\enspace 201
+  \item \texttt  {sort} (command) \dotfill\enspace 160
+  \item \texttt  {source} (command) \dotfill\enspace 185
+  \item \texttt  {spawn} (command) \dotfill\enspace 95
+  \item \texttt  {split} (command) \dotfill\enspace 209
   \item \texttt  {starts-with} (operator) \dotfill\enspace 18
-  \item \texttt  {stat} (command) \dotfill\enspace 100, 269
+  \item \texttt  {stat} (command) \dotfill\enspace 125
   \item \texttt  {static} (keyword) \dotfill\enspace 38
-  \item \texttt  {stdev} (command) \dotfill\enspace 135, 304
-  \item \texttt  {step-by} (command) \dotfill\enspace 136, 305
+  \item \texttt  {stdev} (command) \dotfill\enspace 160
+  \item \texttt  {step-by} (command) \dotfill\enspace 161
   \item \texttt  {strict} (keyword) \dotfill\enspace 37
   \item \texttt  {struct} (keyword) \dotfill\enspace 40
-  \item \texttt  {styled} (command) \dotfill\enspace 151, 320
-  \item \texttt  {subcommand} (keyword) \dotfill\enspace 50
-  \item \texttt  {sum} (command) \dotfill\enspace 136, 305
-  \item \texttt  {summarize} (command) \dotfill\enspace 137, 306
+  \item \texttt  {styled} (command) \dotfill\enspace 176
+  \item \texttt  {subcommand} (keyword) \dotfill\enspace 51
+  \item \texttt  {sum} (command) \dotfill\enspace 161
+  \item \texttt  {summarize} (command) \dotfill\enspace 162
   \item \texttt  {switch} (keyword) \dotfill\enspace 24
-  \item \texttt  {systemctl} (command) \dotfill\enspace 176, 345
+  \item \texttt  {systemctl} (command) \dotfill\enspace 201
 
   \indexspace
 \indexgroup{T}
 
-  \item \texttt  {tail} (command) \dotfill\enspace 185, 354
-  \item \texttt  {take-until} (command) \dotfill\enspace 138, 307
-  \item \texttt  {take-while} (command) \dotfill\enspace 138, 307
-  \item \texttt  {tee} (command) \dotfill\enspace 138, 307
-  \item \texttt  {tempfile} (command) \dotfill\enspace 101, 270
-  \item \texttt  {template} (command) \dotfill\enspace 186, 355
+  \item \texttt  {tail} (command) \dotfill\enspace 210
+  \item \texttt  {take-until} (command) \dotfill\enspace 163
+  \item \texttt  {take-while} (command) \dotfill\enspace 163
+  \item \texttt  {tee} (command) \dotfill\enspace 163
+  \item \texttt  {tempfile} (command) \dotfill\enspace 126
+  \item \texttt  {template} (command) \dotfill\enspace 211
   \item \texttt  {throw} (keyword) \dotfill\enspace 26
-  \item \texttt  {time} (command) \dotfill\enspace 161, 330
-  \item \texttt  {timeout} (command) \dotfill\enspace 71, 240
-  \item \texttt  {timespan} (command) \dotfill\enspace 177, 346
-  \item \texttt  {to} (command) \dotfill\enspace 75, 243
-  \item \texttt  {touch} (command) \dotfill\enspace 101, 270
-  \item \texttt  {tr} (command) \dotfill\enspace 186, 355
+  \item \texttt  {time} (command) \dotfill\enspace 186
+  \item \texttt  {timeout} (command) \dotfill\enspace 96
+  \item \texttt  {timespan} (command) \dotfill\enspace 202
+  \item \texttt  {to} (command) \dotfill\enspace 100
+  \item \texttt  {touch} (command) \dotfill\enspace 126
+  \item \texttt  {tr} (command) \dotfill\enspace 211
   \item \texttt  {trait} (keyword) \dotfill\enspace 39
-  \item \texttt  {transpose} (command) \dotfill\enspace 139, 308
-  \item \texttt  {tree} (command) \dotfill\enspace 102, 271
+  \item \texttt  {transpose} (command) \dotfill\enspace 164
+  \item \texttt  {tree} (command) \dotfill\enspace 127
   \item \texttt  {true} (keyword) \dotfill\enspace 7
   \item \texttt  {try} (keyword) \dotfill\enspace 25
-  \item \texttt  {tui} (command) \dotfill\enspace 161, 330
-  \item \texttt  {type-of} (command) \dotfill\enspace 65, 234
-  \item \texttt  {types} (command) \dotfill\enspace 65, 234
+  \item \texttt  {tui} (command) \dotfill\enspace 186
+  \item \texttt  {type-of} (command) \dotfill\enspace 90
+  \item \texttt  {types} (command) \dotfill\enspace 90
 
   \indexspace
 \indexgroup{U}
 
-  \item \texttt  {ulimit} (command) \dotfill\enspace 162, 331
-  \item \texttt  {umask} (command) \dotfill\enspace 163, 332
-  \item \texttt  {uname} (command) \dotfill\enspace 178, 347
-  \item \texttt  {undef} (command) \dotfill\enspace 153, 322
-  \item \texttt  {unfold} (command) \dotfill\enspace 110, 279
+  \item \texttt  {ulimit} (command) \dotfill\enspace 187
+  \item \texttt  {umask} (command) \dotfill\enspace 188
+  \item \texttt  {uname} (command) \dotfill\enspace 203
+  \item \texttt  {undef} (command) \dotfill\enspace 178
+  \item \texttt  {unfold} (command) \dotfill\enspace 135
   \item \texttt  {union} (keyword) \dotfill\enspace 39
-  \item \texttt  {uniq} (command) \dotfill\enspace 187, 356
-  \item \texttt  {unless} (command) \dotfill\enspace 164, 333
+  \item \texttt  {uniq} (command) \dotfill\enspace 212
+  \item \texttt  {unless} (command) \dotfill\enspace 189
   \item \texttt  {until} (keyword) \dotfill\enspace 24
-  \item \texttt  {uptime} (command) \dotfill\enspace 178, 347
+  \item \texttt  {uptime} (command) \dotfill\enspace 203
   \item \texttt  {uses} (keyword) \dotfill\enspace 38
   \item \texttt  {using} (keyword) \dotfill\enspace 35
 
@@ -441,37 +439,37 @@
 \indexgroup{V}
 
   \item \texttt  {var} (keyword) \dotfill\enspace 20
-  \item \texttt  {variance} (command) \dotfill\enspace 139, 308
-  \item \texttt  {vars} (command) \dotfill\enspace 179, 348
-  \item \texttt  {vec} (command) \dotfill\enspace 75, 244
+  \item \texttt  {variance} (command) \dotfill\enspace 164
+  \item \texttt  {vars} (command) \dotfill\enspace 204
+  \item \texttt  {vec} (command) \dotfill\enspace 100
   \item \texttt  {vec} (keyword) \dotfill\enspace 10
   \item \texttt  {Vector} (keyword) \dotfill\enspace 10
-  \item \texttt  {view} (command) \dotfill\enspace 164, 333
+  \item \texttt  {view} (command) \dotfill\enspace 189
   \item \texttt  {vital} (keyword) \dotfill\enspace 38
 
   \indexspace
 \indexgroup{W}
 
-  \item \texttt  {wait-for} (command) \dotfill\enspace 146, 315
-  \item \texttt  {wc} (command) \dotfill\enspace 187, 356
-  \item \texttt  {where} (command) \dotfill\enspace 140, 309
+  \item \texttt  {wait-for} (command) \dotfill\enspace 171
+  \item \texttt  {wc} (command) \dotfill\enspace 212
+  \item \texttt  {where} (command) \dotfill\enspace 165
   \item \texttt  {where} (keyword) \dotfill\enspace 44
-  \item \texttt  {which} (command) \dotfill\enspace 164, 333
+  \item \texttt  {which} (command) \dotfill\enspace 189
   \item \texttt  {while} (keyword) \dotfill\enspace 23
-  \item \texttt  {whoami} (command) \dotfill\enspace 179, 348
-  \item \texttt  {window} (command) \dotfill\enspace 140, 309
-  \item \texttt  {with-retry} (command) \dotfill\enspace 165, 334
-  \item \texttt  {write} (command) \dotfill\enspace 188, 357
-  \item \texttt  {write-bytes} (command) \dotfill\enspace 102, 271
-  \item \texttt  {write-file} (command) \dotfill\enspace 103, 272
-  \item \texttt  {write-line-to} (command) \dotfill\enspace 103, 272
-  \item \texttt  {write-to} (command) \dotfill\enspace 104, 273
-  \item \texttt  {writeline} (command) \dotfill\enspace 188, 357
+  \item \texttt  {whoami} (command) \dotfill\enspace 204
+  \item \texttt  {window} (command) \dotfill\enspace 165
+  \item \texttt  {with-retry} (command) \dotfill\enspace 190
+  \item \texttt  {write} (command) \dotfill\enspace 213
+  \item \texttt  {write-bytes} (command) \dotfill\enspace 127
+  \item \texttt  {write-file} (command) \dotfill\enspace 128
+  \item \texttt  {write-line-to} (command) \dotfill\enspace 128
+  \item \texttt  {write-to} (command) \dotfill\enspace 129
+  \item \texttt  {writeline} (command) \dotfill\enspace 213
 
   \indexspace
 \indexgroup{X}
 
-  \item \texttt  {xargs} (command) \dotfill\enspace 140, 309
+  \item \texttt  {xargs} (command) \dotfill\enspace 165
 
   \indexspace
 \indexgroup{Y}
@@ -481,6 +479,6 @@
   \indexspace
 \indexgroup{Z}
 
-  \item \texttt  {zip} (command) \dotfill\enspace 141, 310
+  \item \texttt  {zip} (command) \dotfill\enspace 166
 
 \end{theindex}

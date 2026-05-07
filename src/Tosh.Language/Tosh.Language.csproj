@@ -11,4 +11,10 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <PackageId>Tosh.Language</PackageId>
+    <Description>TōSh language frontend: lexer, parser, evaluator (ToshEngine), and AST. Used for embedding tosh evaluation or building tooling.</Description>
+  </PropertyGroup>
+
 </Project>
