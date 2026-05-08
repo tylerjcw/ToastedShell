@@ -104,7 +104,7 @@ public sealed class DeclarationIndex
     {
         return GetVisibleDeclarations(
                 offset,
-                declaration => declaration.Kind is DeclarationKind.Class or DeclarationKind.Record or DeclarationKind.Enum or DeclarationKind.Module
+                declaration => declaration.Kind is DeclarationKind.Class or DeclarationKind.Record or DeclarationKind.Enum or DeclarationKind.Module or DeclarationKind.Subcommand or DeclarationKind.Flag or DeclarationKind.Argument or DeclarationKind.TypeAlias or DeclarationKind.Property or DeclarationKind.ClassMethod or DeclarationKind.EnumMember or DeclarationKind.RecordField
                     && string.Equals(declaration.Name, name, StringComparison.Ordinal))
             .Select(declaration => declaration.DocComment)
             .FirstOrDefault(doc => doc is not null);
@@ -114,7 +114,7 @@ public sealed class DeclarationIndex
     {
         return GetVisibleDeclarations(
                 offset,
-                declaration => declaration.Kind is DeclarationKind.Class or DeclarationKind.Record or DeclarationKind.Enum or DeclarationKind.Module
+                declaration => declaration.Kind is DeclarationKind.Class or DeclarationKind.Record or DeclarationKind.Enum or DeclarationKind.Module or DeclarationKind.Subcommand or DeclarationKind.Flag or DeclarationKind.Argument or DeclarationKind.TypeAlias or DeclarationKind.Property or DeclarationKind.ClassMethod or DeclarationKind.EnumMember or DeclarationKind.RecordField
                     && string.Equals(declaration.Name, name, StringComparison.Ordinal))
             .Select(declaration => declaration.Kind switch
             {
@@ -122,6 +122,14 @@ public sealed class DeclarationIndex
                 DeclarationKind.Record => "Record",
                 DeclarationKind.Enum => "Enum",
                 DeclarationKind.Module => "Module",
+                DeclarationKind.Subcommand => "Subcommand",
+                DeclarationKind.Flag => "Flag",
+                DeclarationKind.Argument => "Argument",
+                DeclarationKind.TypeAlias => "Type alias",
+                DeclarationKind.Property => "Property",
+                DeclarationKind.ClassMethod => "Method",
+                DeclarationKind.EnumMember => "Enum member",
+                DeclarationKind.RecordField => "Field",
                 _ => null,
             })
             .FirstOrDefault();
@@ -560,6 +568,14 @@ public sealed class DeclarationIndex
         Module,
         Enum,
         Record,
+        Subcommand,
+        Flag,
+        Argument,
+        TypeAlias,
+        Property,
+        ClassMethod,
+        EnumMember,
+        RecordField,
     }
 
     public sealed record IndexedSymbol(
@@ -673,6 +689,43 @@ public sealed class DeclarationIndex
 
                 case ClassDefinitionStatementSyntax @class:
                     AddDeclaration(@class.Name, DeclarationKind.Class, @class.Span, scopeSpan, depth, @class.DocComment);
+                    foreach (var member in @class.Members)
+                    {
+                        switch (member)
+                        {
+                            case ClassPropertyMemberSyntax prop:
+                                AddDeclaration(prop.Name, DeclarationKind.Property, prop.Span, @class.Span, depth + 1, prop.DocComment);
+                                if (prop.Initializer is not null)
+                                {
+                                    CollectPipeline(prop.Initializer, @class.Span, depth + 1);
+                                }
+                                if (prop.GetterBody is not null)
+                                {
+                                    CollectBlock(prop.GetterBody, depth + 2);
+                                }
+                                if (prop.SetterBody is not null)
+                                {
+                                    CollectBlock(prop.SetterBody, depth + 2);
+                                }
+                                break;
+
+                            case ClassMethodMemberSyntax method:
+                                AddDeclaration(method.Method.Name, DeclarationKind.ClassMethod, method.Span, @class.Span, depth + 1, method.Method.DocComment);
+                                if (method.Method.Body is not null)
+                                {
+                                    var methodScope = method.Method.Body.Span;
+                                    foreach (var parameter in method.Method.Parameters)
+                                    {
+                                        AddDeclaration(parameter.Name, DeclarationKind.Parameter, parameter.Span, methodScope, depth + 2);
+                                    }
+                                    foreach (var child in method.Method.Body.Statements)
+                                    {
+                                        CollectStatement(child, methodScope, depth + 2);
+                                    }
+                                }
+                                break;
+                        }
+                    }
                     break;
 
                 case ModuleDefinitionStatementSyntax module:
@@ -684,6 +737,7 @@ public sealed class DeclarationIndex
                     AddDeclaration(@enum.Name, DeclarationKind.Enum, @enum.Span, scopeSpan, depth, @enum.DocComment);
                     foreach (var member in @enum.Members)
                     {
+                        AddDeclaration(member.Name, DeclarationKind.EnumMember, member.Span, @enum.Span, depth + 1);
                         if (member.Value is not null)
                         {
                             CollectPipeline(member.Value, scopeSpan, depth);
@@ -695,9 +749,66 @@ public sealed class DeclarationIndex
                     AddDeclaration(record.Name, DeclarationKind.Record, record.Span, scopeSpan, depth, record.DocComment);
                     foreach (var field in record.Fields)
                     {
+                        AddDeclaration(field.Name, DeclarationKind.RecordField, field.Span, record.Span, depth + 1);
                         if (field.DefaultValue is not null)
                         {
                             CollectPipeline(field.DefaultValue, scopeSpan, depth);
+                        }
+                    }
+                    break;
+
+                case TypeAliasStatementSyntax typeAlias:
+                    AddDeclaration(typeAlias.Name, DeclarationKind.TypeAlias, typeAlias.Span, scopeSpan, depth, typeAlias.DocComment);
+                    if (typeAlias.Refinement is not null)
+                    {
+                        CollectArgument(typeAlias.Refinement, scopeSpan, depth);
+                    }
+                    break;
+
+                case SubcommandStatementSyntax subcommand:
+                    // Index the subcommand name itself, scoped to its body so
+                    // hover/find-references work on the keyword + on nested
+                    // calls. Doc-comment renders the @summary/@example block.
+                    AddDeclaration(
+                        subcommand.Name,
+                        DeclarationKind.Subcommand,
+                        subcommand.Span,
+                        scopeSpan,
+                        depth,
+                        subcommand.DocComment);
+                    CollectBlock(subcommand.Body, depth + 1);
+                    break;
+
+                case ScriptInputStatementSyntax scriptInput:
+                    {
+                        // Each `flag` / `arg` declaration scopes its parameter
+                        // name(s) to the enclosing block (subcommand body, or
+                        // top-level script body) so hovering over the name
+                        // anywhere in that block surfaces the doc-comment.
+                        var inputKind = scriptInput.Kind == ScriptInputDeclarationKind.Flag
+                            ? DeclarationKind.Flag
+                            : DeclarationKind.Argument;
+                        foreach (var parameter in scriptInput.Parameters)
+                        {
+                            // Synthesise a per-parameter DocComment when the
+                            // raw doc-comment block is missing but the parser
+                            // captured a one-line description on the parameter
+                            // itself (the common single-flag case).
+                            var doc = scriptInput.DocComment;
+                            if (doc is null && !string.IsNullOrEmpty(parameter.Description))
+                            {
+                                doc = new DocComment(
+                                    parameter.Description!,
+                                    new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase),
+                                    Returns: null,
+                                    Examples: Array.Empty<string>());
+                            }
+
+                            // Also expose as a plain Variable declaration so
+                            // existing variable hover / completion code paths
+                            // continue to work for `$year`, `$dryRun`, etc.
+                            AddDeclaration(parameter.Name, DeclarationKind.Variable, parameter.Span, scopeSpan, depth);
+                            AddDeclaration(parameter.Name, inputKind, parameter.Span, scopeSpan, depth, doc);
                         }
                     }
                     break;

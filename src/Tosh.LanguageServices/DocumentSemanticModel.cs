@@ -1240,7 +1240,7 @@ public sealed class DocumentSemanticModel
         bool IsWritable,
         bool IsComputed,
         bool IsHidden,
-        string? DocDescription = null);
+        DocComment? Doc = null);
 
     public sealed record ShellClassMethodSymbol(
         string Name,
@@ -1248,7 +1248,7 @@ public sealed class DocumentSemanticModel
         IReadOnlyList<FunctionParameterSyntax> Parameters,
         bool IsStatic,
         bool IsHidden,
-        string? DocDescription = null);
+        DocComment? Doc = null);
 
     public sealed record ShellClassConstructorSymbol(
         IReadOnlyList<FunctionParameterSyntax> Parameters);
@@ -1507,7 +1507,7 @@ public sealed class DocumentSemanticModel
                     IsWritable: property.SetterBody is not null || property.GetterBody is null,
                     IsComputed: property.GetterBody is not null,
                     IsHidden: property.IsShy,
-                    DocDescription: property.DocComment?.Description is { Length: > 0 } propDesc ? propDesc : null))
+                    Doc: property.DocComment))
                 .ToArray();
 
             var methods = @class.Members
@@ -1518,7 +1518,7 @@ public sealed class DocumentSemanticModel
                     methodMember.Method.Parameters,
                     methodMember.IsStatic,
                     methodMember.IsShy,
-                    DocDescription: methodMember.Method.DocComment?.Description is { Length: > 0 } methDesc ? methDesc : null))
+                    Doc: methodMember.Method.DocComment))
                 .ToArray();
 
             var constructors = @class.Members

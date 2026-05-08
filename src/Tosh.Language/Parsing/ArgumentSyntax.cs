@@ -14,7 +14,25 @@ public sealed record VariableReferenceArgumentSyntax(string Name, TextSpan Span)
 
 public sealed record SplatArgumentSyntax(ArgumentSyntax Value, TextSpan Span) : ArgumentSyntax(Span);
 
-public sealed record NewObjectArgumentSyntax(string TypeName, IReadOnlyList<ArgumentSyntax> Arguments, TextSpan Span) : ArgumentSyntax(Span);
+public sealed record NewObjectArgumentSyntax(
+    string TypeName,
+    IReadOnlyList<ArgumentSyntax> Arguments,
+    TextSpan Span,
+    string? BareTypeName = null,
+    IReadOnlyList<string>? TypeArguments = null) : ArgumentSyntax(Span)
+{
+    /// <summary>The unqualified type name without the <c>&lt;...&gt;</c> suffix.
+    /// For non-generic constructions this equals <see cref="TypeName"/>.</summary>
+    public string EffectiveBareName => BareTypeName ?? TypeName;
+
+    /// <summary>The structured list of type-argument strings (e.g. <c>["int", "string"]</c>).
+    /// Empty for non-generic constructions or when the user wrote <c>&lt;&gt;</c>.</summary>
+    public IReadOnlyList<string> EffectiveTypeArguments => TypeArguments ?? Array.Empty<string>();
+
+    /// <summary><c>true</c> when the source contained an explicit <c>&lt;...&gt;</c> suffix
+    /// (even an empty one). Distinguishes <c>new Point()</c> from <c>new Point&lt;&gt;()</c>.</summary>
+    public bool HasExplicitTypeArgumentList => TypeArguments is not null;
+}
 
 public sealed record StaticMethodCallArgumentSyntax(
     string Path,

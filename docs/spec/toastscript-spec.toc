@@ -396,114 +396,115 @@
 \contentsline {subsection}{\numberline {25.10.11}\texttt {styled}}{176}{subsection.25.10.11}%
 \contentsline {section}{\numberline {25.11}Scripting}{177}{section.25.11}%
 \contentsline {subsection}{\numberline {25.11.1}\texttt {assert}}{177}{subsection.25.11.1}%
-\contentsline {subsection}{\numberline {25.11.2}\texttt {raise}}{177}{subsection.25.11.2}%
-\contentsline {subsection}{\numberline {25.11.3}\texttt {undef}}{178}{subsection.25.11.3}%
-\contentsline {section}{\numberline {25.12}Shell}{178}{section.25.12}%
-\contentsline {subsection}{\numberline {25.12.1}\texttt {apropos}}{178}{subsection.25.12.1}%
+\contentsline {subsection}{\numberline {25.11.2}\texttt {format}}{177}{subsection.25.11.2}%
+\contentsline {subsection}{\numberline {25.11.3}\texttt {raise}}{178}{subsection.25.11.3}%
+\contentsline {subsection}{\numberline {25.11.4}\texttt {undef}}{178}{subsection.25.11.4}%
+\contentsline {section}{\numberline {25.12}Shell}{179}{section.25.12}%
+\contentsline {subsection}{\numberline {25.12.1}\texttt {apropos}}{179}{subsection.25.12.1}%
 \contentsline {subsection}{\numberline {25.12.2}\texttt {benchmark}}{179}{subsection.25.12.2}%
 \contentsline {subsection}{\numberline {25.12.3}\texttt {clear}}{179}{subsection.25.12.3}%
-\contentsline {subsection}{\numberline {25.12.4}\texttt {config}}{179}{subsection.25.12.4}%
-\contentsline {subsection}{\numberline {25.12.5}\texttt {dbg}}{180}{subsection.25.12.5}%
-\contentsline {subsection}{\numberline {25.12.6}\texttt {debug}}{180}{subsection.25.12.6}%
+\contentsline {subsection}{\numberline {25.12.4}\texttt {config}}{180}{subsection.25.12.4}%
+\contentsline {subsection}{\numberline {25.12.5}\texttt {dbg}}{181}{subsection.25.12.5}%
+\contentsline {subsection}{\numberline {25.12.6}\texttt {debug}}{181}{subsection.25.12.6}%
 \contentsline {subsection}{\numberline {25.12.7}\texttt {events}}{181}{subsection.25.12.7}%
-\contentsline {subsection}{\numberline {25.12.8}\texttt {exec}}{181}{subsection.25.12.8}%
+\contentsline {subsection}{\numberline {25.12.8}\texttt {exec}}{182}{subsection.25.12.8}%
 \contentsline {subsection}{\numberline {25.12.9}\texttt {exit}}{182}{subsection.25.12.9}%
-\contentsline {subsection}{\numberline {25.12.10}\texttt {help}}{182}{subsection.25.12.10}%
-\contentsline {subsection}{\numberline {25.12.11}\texttt {history}}{183}{subsection.25.12.11}%
-\contentsline {subsection}{\numberline {25.12.12}\texttt {history-search}}{184}{subsection.25.12.12}%
+\contentsline {subsection}{\numberline {25.12.10}\texttt {help}}{183}{subsection.25.12.10}%
+\contentsline {subsection}{\numberline {25.12.11}\texttt {history}}{184}{subsection.25.12.11}%
+\contentsline {subsection}{\numberline {25.12.12}\texttt {history-search}}{185}{subsection.25.12.12}%
 \contentsline {subsection}{\numberline {25.12.13}\texttt {hush}}{185}{subsection.25.12.13}%
 \contentsline {subsection}{\numberline {25.12.14}\texttt {read-line}}{185}{subsection.25.12.14}%
-\contentsline {subsection}{\numberline {25.12.15}\texttt {source}}{185}{subsection.25.12.15}%
+\contentsline {subsection}{\numberline {25.12.15}\texttt {source}}{186}{subsection.25.12.15}%
 \contentsline {subsection}{\numberline {25.12.16}\texttt {time}}{186}{subsection.25.12.16}%
-\contentsline {subsection}{\numberline {25.12.17}\texttt {tui}}{186}{subsection.25.12.17}%
-\contentsline {subsection}{\numberline {25.12.18}\texttt {ulimit}}{187}{subsection.25.12.18}%
-\contentsline {subsection}{\numberline {25.12.19}\texttt {umask}}{188}{subsection.25.12.19}%
-\contentsline {subsection}{\numberline {25.12.20}\texttt {unless}}{189}{subsection.25.12.20}%
-\contentsline {subsection}{\numberline {25.12.21}\texttt {view}}{189}{subsection.25.12.21}%
-\contentsline {subsection}{\numberline {25.12.22}\texttt {which}}{189}{subsection.25.12.22}%
-\contentsline {subsection}{\numberline {25.12.23}\texttt {with-retry}}{190}{subsection.25.12.23}%
-\contentsline {section}{\numberline {25.13}System}{190}{section.25.13}%
-\contentsline {subsection}{\numberline {25.13.1}\texttt {date}}{190}{subsection.25.13.1}%
+\contentsline {subsection}{\numberline {25.12.17}\texttt {tui}}{187}{subsection.25.12.17}%
+\contentsline {subsection}{\numberline {25.12.18}\texttt {ulimit}}{188}{subsection.25.12.18}%
+\contentsline {subsection}{\numberline {25.12.19}\texttt {umask}}{189}{subsection.25.12.19}%
+\contentsline {subsection}{\numberline {25.12.20}\texttt {unless}}{190}{subsection.25.12.20}%
+\contentsline {subsection}{\numberline {25.12.21}\texttt {view}}{190}{subsection.25.12.21}%
+\contentsline {subsection}{\numberline {25.12.22}\texttt {which}}{190}{subsection.25.12.22}%
+\contentsline {subsection}{\numberline {25.12.23}\texttt {with-retry}}{191}{subsection.25.12.23}%
+\contentsline {section}{\numberline {25.13}System}{191}{section.25.13}%
+\contentsline {subsection}{\numberline {25.13.1}\texttt {date}}{191}{subsection.25.13.1}%
 \contentsline {subsection}{\numberline {25.13.2}\texttt {env}}{191}{subsection.25.13.2}%
-\contentsline {subsection}{\numberline {25.13.3}\texttt {export}}{191}{subsection.25.13.3}%
-\contentsline {subsection}{\numberline {25.13.4}\texttt {forget}}{192}{subsection.25.13.4}%
-\contentsline {subsection}{\numberline {25.13.5}\texttt {free}}{192}{subsection.25.13.5}%
-\contentsline {subsection}{\numberline {25.13.6}\texttt {guid}}{193}{subsection.25.13.6}%
-\contentsline {subsection}{\numberline {25.13.7}\texttt {hostname}}{193}{subsection.25.13.7}%
-\contentsline {subsection}{\numberline {25.13.8}\texttt {hostnamectl}}{193}{subsection.25.13.8}%
-\contentsline {subsection}{\numberline {25.13.9}\texttt {id}}{194}{subsection.25.13.9}%
-\contentsline {subsection}{\numberline {25.13.10}\texttt {journalctl}}{194}{subsection.25.13.10}%
-\contentsline {subsection}{\numberline {25.13.11}\texttt {loginctl}}{195}{subsection.25.13.11}%
-\contentsline {subsection}{\numberline {25.13.12}\texttt {lscpu}}{196}{subsection.25.13.12}%
-\contentsline {subsection}{\numberline {25.13.13}\texttt {lsipc}}{198}{subsection.25.13.13}%
-\contentsline {subsection}{\numberline {25.13.14}\texttt {networkctl}}{199}{subsection.25.13.14}%
-\contentsline {subsection}{\numberline {25.13.15}\texttt {seq}}{200}{subsection.25.13.15}%
-\contentsline {subsection}{\numberline {25.13.16}\texttt {sleep}}{201}{subsection.25.13.16}%
-\contentsline {subsection}{\numberline {25.13.17}\texttt {systemctl}}{201}{subsection.25.13.17}%
-\contentsline {subsection}{\numberline {25.13.18}\texttt {timespan}}{202}{subsection.25.13.18}%
-\contentsline {subsection}{\numberline {25.13.19}\texttt {uname}}{203}{subsection.25.13.19}%
-\contentsline {subsection}{\numberline {25.13.20}\texttt {uptime}}{203}{subsection.25.13.20}%
-\contentsline {subsection}{\numberline {25.13.21}\texttt {vars}}{204}{subsection.25.13.21}%
-\contentsline {subsection}{\numberline {25.13.22}\texttt {whoami}}{204}{subsection.25.13.22}%
-\contentsline {section}{\numberline {25.14}Text}{204}{section.25.14}%
-\contentsline {subsection}{\numberline {25.14.1}\texttt {cut}}{205}{subsection.25.14.1}%
-\contentsline {subsection}{\numberline {25.14.2}\texttt {echo}}{205}{subsection.25.14.2}%
-\contentsline {subsection}{\numberline {25.14.3}\texttt {grep}}{205}{subsection.25.14.3}%
-\contentsline {subsection}{\numberline {25.14.4}\texttt {head}}{206}{subsection.25.14.4}%
-\contentsline {subsection}{\numberline {25.14.5}\texttt {join-lines}}{207}{subsection.25.14.5}%
-\contentsline {subsection}{\numberline {25.14.6}\texttt {lines}}{207}{subsection.25.14.6}%
-\contentsline {subsection}{\numberline {25.14.7}\texttt {match}}{208}{subsection.25.14.7}%
-\contentsline {subsection}{\numberline {25.14.8}\texttt {raw}}{208}{subsection.25.14.8}%
-\contentsline {subsection}{\numberline {25.14.9}\texttt {replace}}{209}{subsection.25.14.9}%
-\contentsline {subsection}{\numberline {25.14.10}\texttt {split}}{209}{subsection.25.14.10}%
-\contentsline {subsection}{\numberline {25.14.11}\texttt {tail}}{210}{subsection.25.14.11}%
-\contentsline {subsection}{\numberline {25.14.12}\texttt {template}}{211}{subsection.25.14.12}%
-\contentsline {subsection}{\numberline {25.14.13}\texttt {tr}}{211}{subsection.25.14.13}%
-\contentsline {subsection}{\numberline {25.14.14}\texttt {uniq}}{212}{subsection.25.14.14}%
-\contentsline {subsection}{\numberline {25.14.15}\texttt {wc}}{212}{subsection.25.14.15}%
-\contentsline {subsection}{\numberline {25.14.16}\texttt {write}}{213}{subsection.25.14.16}%
-\contentsline {subsection}{\numberline {25.14.17}\texttt {writeline}}{213}{subsection.25.14.17}%
-\contentsline {part}{IV\hspace {1em}Cookbook}{214}{part.4}%
-\contentsline {chapter}{\numberline {26}Common Tasks}{215}{chapter.26}%
-\contentsline {section}{\numberline {26.1}File System Operations}{215}{section.26.1}%
-\contentsline {subsection}{\numberline {26.1.1}Find Large Files}{215}{subsection.26.1.1}%
-\contentsline {subsection}{\numberline {26.1.2}Batch Rename}{215}{subsection.26.1.2}%
-\contentsline {subsection}{\numberline {26.1.3}Disk Space Report}{215}{subsection.26.1.3}%
-\contentsline {subsection}{\numberline {26.1.4}Watch for New Files}{215}{subsection.26.1.4}%
-\contentsline {section}{\numberline {26.2}Text Processing}{215}{section.26.2}%
-\contentsline {subsection}{\numberline {26.2.1}Log Analysis}{215}{subsection.26.2.1}%
-\contentsline {subsection}{\numberline {26.2.2}CSV Processing}{216}{subsection.26.2.2}%
-\contentsline {subsection}{\numberline {26.2.3}Extract Unique Values}{216}{subsection.26.2.3}%
-\contentsline {section}{\numberline {26.3}System Administration}{216}{section.26.3}%
-\contentsline {subsection}{\numberline {26.3.1}Process Monitor}{216}{subsection.26.3.1}%
-\contentsline {subsection}{\numberline {26.3.2}Service Health Check}{216}{subsection.26.3.2}%
-\contentsline {subsection}{\numberline {26.3.3}Network Diagnostics}{216}{subsection.26.3.3}%
-\contentsline {section}{\numberline {26.4}Data Transformation}{217}{section.26.4}%
-\contentsline {subsection}{\numberline {26.4.1}JSON API Processing}{217}{subsection.26.4.1}%
-\contentsline {subsection}{\numberline {26.4.2}Build a Report}{217}{subsection.26.4.2}%
-\contentsline {subsection}{\numberline {26.4.3}Pivot Data}{217}{subsection.26.4.3}%
-\contentsline {section}{\numberline {26.5}Functional Patterns}{217}{section.26.5}%
-\contentsline {subsection}{\numberline {26.5.1}Pipeline Composition}{217}{subsection.26.5.1}%
-\contentsline {subsection}{\numberline {26.5.2}Memoization with Records}{218}{subsection.26.5.2}%
-\contentsline {subsection}{\numberline {26.5.3}Fibonacci with Unfold}{218}{subsection.26.5.3}%
-\contentsline {subsection}{\numberline {26.5.4}Power Set}{218}{subsection.26.5.4}%
-\contentsline {section}{\numberline {26.6}Configuration Recipes}{218}{section.26.6}%
-\contentsline {subsection}{\numberline {26.6.1}Custom Prompt}{218}{subsection.26.6.1}%
-\contentsline {subsection}{\numberline {26.6.2}Project-Specific Setup}{218}{subsection.26.6.2}%
-\contentsline {section}{\numberline {26.7}TUI Applications}{219}{section.26.7}%
-\contentsline {subsection}{\numberline {26.7.1}Interactive File Browser}{219}{subsection.26.7.1}%
-\contentsline {subsection}{\numberline {26.7.2}Service Manager}{219}{subsection.26.7.2}%
-\contentsline {part}{V\hspace {1em}Diagnostics}{220}{part.5}%
-\contentsline {chapter}{\numberline {27}Diagnostic Code Reference}{221}{chapter.27}%
-\contentsline {section}{\numberline {27.1}\texttt {tosh.bind.*}}{221}{section.27.1}%
-\contentsline {section}{\numberline {27.2}\texttt {tosh.compile.*}}{222}{section.27.2}%
-\contentsline {section}{\numberline {27.3}\texttt {tosh.config.*}}{222}{section.27.3}%
-\contentsline {section}{\numberline {27.4}\texttt {tosh.get.*}}{222}{section.27.4}%
-\contentsline {section}{\numberline {27.5}\texttt {tosh.help.*}}{222}{section.27.5}%
-\contentsline {section}{\numberline {27.6}\texttt {tosh.history.*}}{222}{section.27.6}%
-\contentsline {section}{\numberline {27.7}\texttt {tosh.naming.*}}{222}{section.27.7}%
-\contentsline {section}{\numberline {27.8}\texttt {tosh.parser.*}}{222}{section.27.8}%
-\contentsline {section}{\numberline {27.9}\texttt {tosh.runtime.*}}{229}{section.27.9}%
-\contentsline {section}{\numberline {27.10}\texttt {tosh.tui.*}}{241}{section.27.10}%
-\contentsline {section}{\numberline {27.11}\texttt {tosh.type.*}}{241}{section.27.11}%
-\contentsline {chapter}{Index}{243}{section*.13}%
+\contentsline {subsection}{\numberline {25.13.3}\texttt {export}}{192}{subsection.25.13.3}%
+\contentsline {subsection}{\numberline {25.13.4}\texttt {forget}}{193}{subsection.25.13.4}%
+\contentsline {subsection}{\numberline {25.13.5}\texttt {free}}{193}{subsection.25.13.5}%
+\contentsline {subsection}{\numberline {25.13.6}\texttt {guid}}{194}{subsection.25.13.6}%
+\contentsline {subsection}{\numberline {25.13.7}\texttt {hostname}}{194}{subsection.25.13.7}%
+\contentsline {subsection}{\numberline {25.13.8}\texttt {hostnamectl}}{194}{subsection.25.13.8}%
+\contentsline {subsection}{\numberline {25.13.9}\texttt {id}}{195}{subsection.25.13.9}%
+\contentsline {subsection}{\numberline {25.13.10}\texttt {journalctl}}{195}{subsection.25.13.10}%
+\contentsline {subsection}{\numberline {25.13.11}\texttt {loginctl}}{196}{subsection.25.13.11}%
+\contentsline {subsection}{\numberline {25.13.12}\texttt {lscpu}}{197}{subsection.25.13.12}%
+\contentsline {subsection}{\numberline {25.13.13}\texttt {lsipc}}{199}{subsection.25.13.13}%
+\contentsline {subsection}{\numberline {25.13.14}\texttt {networkctl}}{200}{subsection.25.13.14}%
+\contentsline {subsection}{\numberline {25.13.15}\texttt {seq}}{201}{subsection.25.13.15}%
+\contentsline {subsection}{\numberline {25.13.16}\texttt {sleep}}{202}{subsection.25.13.16}%
+\contentsline {subsection}{\numberline {25.13.17}\texttt {systemctl}}{202}{subsection.25.13.17}%
+\contentsline {subsection}{\numberline {25.13.18}\texttt {timespan}}{203}{subsection.25.13.18}%
+\contentsline {subsection}{\numberline {25.13.19}\texttt {uname}}{204}{subsection.25.13.19}%
+\contentsline {subsection}{\numberline {25.13.20}\texttt {uptime}}{204}{subsection.25.13.20}%
+\contentsline {subsection}{\numberline {25.13.21}\texttt {vars}}{205}{subsection.25.13.21}%
+\contentsline {subsection}{\numberline {25.13.22}\texttt {whoami}}{205}{subsection.25.13.22}%
+\contentsline {section}{\numberline {25.14}Text}{205}{section.25.14}%
+\contentsline {subsection}{\numberline {25.14.1}\texttt {cut}}{206}{subsection.25.14.1}%
+\contentsline {subsection}{\numberline {25.14.2}\texttt {echo}}{206}{subsection.25.14.2}%
+\contentsline {subsection}{\numberline {25.14.3}\texttt {grep}}{206}{subsection.25.14.3}%
+\contentsline {subsection}{\numberline {25.14.4}\texttt {head}}{207}{subsection.25.14.4}%
+\contentsline {subsection}{\numberline {25.14.5}\texttt {join-lines}}{208}{subsection.25.14.5}%
+\contentsline {subsection}{\numberline {25.14.6}\texttt {lines}}{208}{subsection.25.14.6}%
+\contentsline {subsection}{\numberline {25.14.7}\texttt {match}}{209}{subsection.25.14.7}%
+\contentsline {subsection}{\numberline {25.14.8}\texttt {raw}}{209}{subsection.25.14.8}%
+\contentsline {subsection}{\numberline {25.14.9}\texttt {replace}}{210}{subsection.25.14.9}%
+\contentsline {subsection}{\numberline {25.14.10}\texttt {split}}{210}{subsection.25.14.10}%
+\contentsline {subsection}{\numberline {25.14.11}\texttt {tail}}{211}{subsection.25.14.11}%
+\contentsline {subsection}{\numberline {25.14.12}\texttt {template}}{212}{subsection.25.14.12}%
+\contentsline {subsection}{\numberline {25.14.13}\texttt {tr}}{212}{subsection.25.14.13}%
+\contentsline {subsection}{\numberline {25.14.14}\texttt {uniq}}{213}{subsection.25.14.14}%
+\contentsline {subsection}{\numberline {25.14.15}\texttt {wc}}{213}{subsection.25.14.15}%
+\contentsline {subsection}{\numberline {25.14.16}\texttt {write}}{214}{subsection.25.14.16}%
+\contentsline {subsection}{\numberline {25.14.17}\texttt {writeline}}{214}{subsection.25.14.17}%
+\contentsline {part}{IV\hspace {1em}Cookbook}{215}{part.4}%
+\contentsline {chapter}{\numberline {26}Common Tasks}{216}{chapter.26}%
+\contentsline {section}{\numberline {26.1}File System Operations}{216}{section.26.1}%
+\contentsline {subsection}{\numberline {26.1.1}Find Large Files}{216}{subsection.26.1.1}%
+\contentsline {subsection}{\numberline {26.1.2}Batch Rename}{216}{subsection.26.1.2}%
+\contentsline {subsection}{\numberline {26.1.3}Disk Space Report}{216}{subsection.26.1.3}%
+\contentsline {subsection}{\numberline {26.1.4}Watch for New Files}{216}{subsection.26.1.4}%
+\contentsline {section}{\numberline {26.2}Text Processing}{216}{section.26.2}%
+\contentsline {subsection}{\numberline {26.2.1}Log Analysis}{216}{subsection.26.2.1}%
+\contentsline {subsection}{\numberline {26.2.2}CSV Processing}{217}{subsection.26.2.2}%
+\contentsline {subsection}{\numberline {26.2.3}Extract Unique Values}{217}{subsection.26.2.3}%
+\contentsline {section}{\numberline {26.3}System Administration}{217}{section.26.3}%
+\contentsline {subsection}{\numberline {26.3.1}Process Monitor}{217}{subsection.26.3.1}%
+\contentsline {subsection}{\numberline {26.3.2}Service Health Check}{217}{subsection.26.3.2}%
+\contentsline {subsection}{\numberline {26.3.3}Network Diagnostics}{217}{subsection.26.3.3}%
+\contentsline {section}{\numberline {26.4}Data Transformation}{218}{section.26.4}%
+\contentsline {subsection}{\numberline {26.4.1}JSON API Processing}{218}{subsection.26.4.1}%
+\contentsline {subsection}{\numberline {26.4.2}Build a Report}{218}{subsection.26.4.2}%
+\contentsline {subsection}{\numberline {26.4.3}Pivot Data}{218}{subsection.26.4.3}%
+\contentsline {section}{\numberline {26.5}Functional Patterns}{218}{section.26.5}%
+\contentsline {subsection}{\numberline {26.5.1}Pipeline Composition}{218}{subsection.26.5.1}%
+\contentsline {subsection}{\numberline {26.5.2}Memoization with Records}{219}{subsection.26.5.2}%
+\contentsline {subsection}{\numberline {26.5.3}Fibonacci with Unfold}{219}{subsection.26.5.3}%
+\contentsline {subsection}{\numberline {26.5.4}Power Set}{219}{subsection.26.5.4}%
+\contentsline {section}{\numberline {26.6}Configuration Recipes}{219}{section.26.6}%
+\contentsline {subsection}{\numberline {26.6.1}Custom Prompt}{219}{subsection.26.6.1}%
+\contentsline {subsection}{\numberline {26.6.2}Project-Specific Setup}{219}{subsection.26.6.2}%
+\contentsline {section}{\numberline {26.7}TUI Applications}{220}{section.26.7}%
+\contentsline {subsection}{\numberline {26.7.1}Interactive File Browser}{220}{subsection.26.7.1}%
+\contentsline {subsection}{\numberline {26.7.2}Service Manager}{220}{subsection.26.7.2}%
+\contentsline {part}{V\hspace {1em}Diagnostics}{221}{part.5}%
+\contentsline {chapter}{\numberline {27}Diagnostic Code Reference}{222}{chapter.27}%
+\contentsline {section}{\numberline {27.1}\texttt {tosh.bind.*}}{222}{section.27.1}%
+\contentsline {section}{\numberline {27.2}\texttt {tosh.compile.*}}{223}{section.27.2}%
+\contentsline {section}{\numberline {27.3}\texttt {tosh.config.*}}{223}{section.27.3}%
+\contentsline {section}{\numberline {27.4}\texttt {tosh.get.*}}{223}{section.27.4}%
+\contentsline {section}{\numberline {27.5}\texttt {tosh.help.*}}{223}{section.27.5}%
+\contentsline {section}{\numberline {27.6}\texttt {tosh.history.*}}{223}{section.27.6}%
+\contentsline {section}{\numberline {27.7}\texttt {tosh.naming.*}}{223}{section.27.7}%
+\contentsline {section}{\numberline {27.8}\texttt {tosh.parser.*}}{223}{section.27.8}%
+\contentsline {section}{\numberline {27.9}\texttt {tosh.runtime.*}}{230}{section.27.9}%
+\contentsline {section}{\numberline {27.10}\texttt {tosh.tui.*}}{242}{section.27.10}%
+\contentsline {section}{\numberline {27.11}\texttt {tosh.type.*}}{242}{section.27.11}%
+\contentsline {chapter}{Index}{244}{section*.13}%

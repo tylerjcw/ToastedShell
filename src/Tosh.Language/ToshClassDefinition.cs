@@ -24,10 +24,12 @@ public sealed class ToshClassDefinition : IShellNamedType
         string sourceName,
         string sourceText,
         TextSpan span,
-        IReadOnlyList<LexicalScope>? capturedScopes)
+        IReadOnlyList<LexicalScope>? capturedScopes,
+        IReadOnlyList<string>? typeParameters = null)
     {
         _engine = engine;
         Name = name;
+        TypeParameterNames = typeParameters ?? Array.Empty<string>();
         _primaryConstructorParameters = primaryConstructorParameters;
         _properties = new List<ToshClassPropertyDefinition>(properties);
         _methods = new List<ToshClassMethodDefinition>(methods);
@@ -52,6 +54,8 @@ public sealed class ToshClassDefinition : IShellNamedType
 
     public string Name { get; }
 
+    public IReadOnlyList<string> TypeParameterNames { get; }
+
     public IReadOnlyList<ToshClassPropertyDefinition> Properties { get; }
 
     public IReadOnlyList<ToshClassMethodDefinition> Methods { get; }
@@ -71,6 +75,23 @@ public sealed class ToshClassDefinition : IShellNamedType
     public IReadOnlyList<ToshTraitDefinition> UsedTraits { get; internal set; } = Array.Empty<ToshTraitDefinition>();
 
     public IReadOnlyList<PipelineSyntax>? BaseConstructorArgs { get; internal set; }
+
+    /// <summary>
+    /// Type-argument expressions written on the <c>extends Foo&lt;T1, T2&gt;</c>
+    /// clause, captured as raw strings (e.g. <c>"int"</c>, <c>"T1"</c>,
+    /// <c>"list&lt;string&gt;"</c>). Resolved at construction time using the
+    /// child instance's own type-argument bindings.
+    /// </summary>
+    public IReadOnlyList<string>? BaseTypeArguments { get; internal set; }
+
+    /// <summary>
+    /// Eagerly-resolved CLR types matching <see cref="BaseTypeArguments"/>.
+    /// Each entry is the resolved <see cref="Type"/> for a concrete name
+    /// (e.g. <c>"int"</c> -&gt; <c>typeof(int)</c>) or <c>null</c> when the
+    /// corresponding argument is itself a type-parameter of the child class
+    /// (forwarded at construction time) or could not be resolved.
+    /// </summary>
+    public IReadOnlyList<Type?>? BaseTypeArgumentsResolved { get; internal set; }
 
     public ToshClassDefinition? BaseClass { get; internal set; }
 
@@ -186,6 +207,43 @@ public sealed class ToshClassDefinition : IShellNamedType
 
     public object CreateInstance(IReadOnlyList<object?> arguments)
     {
+        return CreateInstanceCore(arguments, typeArgumentBindings: null);
+    }
+
+    /// <summary>
+    /// Generic-aware construction. <paramref name="resolvedTypeArguments"/>
+    /// must have <see cref="TypeParameterNames"/>.Count entries, in declaration
+    /// order. Each entry is the resolved CLR <see cref="Type"/> for that
+    /// parameter, or <c>null</c> when the user-supplied type-argument string
+    /// could not be resolved (e.g. another open generic). <paramref
+    /// name="typeArgumentDisplay"/> mirrors the original strings for
+    /// diagnostic messages.
+    /// </summary>
+    public object CreateGenericInstance(
+        IReadOnlyList<Type?> resolvedTypeArguments,
+        IReadOnlyList<string> typeArgumentDisplay,
+        IReadOnlyList<object?> arguments)
+    {
+        if (resolvedTypeArguments.Count != TypeParameterNames.Count)
+        {
+            throw new InvalidOperationException(
+                $"Generic class '{Name}' expects {TypeParameterNames.Count} type argument(s) " +
+                $"<{string.Join(", ", TypeParameterNames)}> but received {resolvedTypeArguments.Count}.");
+        }
+
+        var bindings = new Dictionary<string, Type?>(StringComparer.OrdinalIgnoreCase);
+        for (int i = 0; i < TypeParameterNames.Count; i++)
+        {
+            bindings[TypeParameterNames[i]] = resolvedTypeArguments[i];
+        }
+
+        return CreateInstanceCore(arguments, bindings);
+    }
+
+    private object CreateInstanceCore(
+        IReadOnlyList<object?> arguments,
+        IReadOnlyDictionary<string, Type?>? typeArgumentBindings)
+    {
         if (IsAbstract)
         {
             throw new InvalidOperationException($"Cannot create an instance of hollow class '{Name}'. Extend it with a concrete subclass first.");
@@ -196,8 +254,16 @@ public sealed class ToshClassDefinition : IShellNamedType
             throw new InvalidOperationException($"Cannot create an instance of hermit class '{Name}'. Hermit classes contain only shared (static) members.");
         }
 
+        if (TypeParameterNames.Count > 0 && typeArgumentBindings is null)
+        {
+            throw new InvalidOperationException(
+                $"Generic class '{Name}' requires type arguments, e.g. " +
+                $"'new {Name}<{string.Join(", ", TypeParameterNames)}>(…)'.");
+        }
+
         var constructor = SelectConstructor(arguments, out var locals);
-        var instance = new ToshClassInstance(this);
+        var instance = new ToshClassInstance(this, typeArgumentBindings);
+        ValidateConstructorTypeArguments(constructor!, locals, instance);
         instance.Initialize(locals, constructor);
 
         // Validate that all vital (required) properties have been set to non-null values
@@ -448,7 +514,7 @@ public sealed class ToshClassDefinition : IShellNamedType
             throw new InvalidOperationException($"Property '{property.Name}' on class '{Name}' is fixed and cannot be reassigned after initialization.");
         }
 
-        instance.SetStoredValue(property.Name, ConvertPropertyValue(property, value));
+        instance.SetStoredValue(property.Name, ConvertPropertyValue(instance, property, value));
         return true;
     }
 
@@ -598,7 +664,7 @@ public sealed class ToshClassDefinition : IShellNamedType
 
         var locals = CreateLocals(instance, constructorLocals);
         var value = _engine.EvaluateClassPipelineValueSync(SourceName, SourceText, property.Initializer, locals, CapturedScopes);
-        return ConvertPropertyValue(property, value);
+        return ConvertPropertyValue(instance, property, value);
     }
 
     internal void RunConstructor(ToshClassInstance instance, ToshClassConstructorDefinition constructor, IReadOnlyDictionary<string, object?> constructorLocals)
@@ -639,15 +705,36 @@ public sealed class ToshClassDefinition : IShellNamedType
         _engine.ExecuteClassBlockSync(SourceName, SourceText, property.SetterBody!, locals, CapturedScopes, $"{Name}.{property.Name}.set");
     }
 
-    private object? ConvertPropertyValue(ToshClassPropertyDefinition property, object? value)
+    private object? ConvertPropertyValue(ToshClassInstance? instance, ToshClassPropertyDefinition property, object? value)
     {
         if (property.TypeName is null)
         {
             return value;
         }
 
+        // Substitute generic type-parameter names (e.g. 'T1') against the
+        // instance's resolved type-argument bindings. Falls through to the
+        // raw name when no binding applies (non-generic class, or the name
+        // is a concrete type).
+        var effectiveTypeName = property.TypeName;
+        if (instance is not null)
+        {
+            var bindings = instance.GetBindingsFor(this);
+            if (bindings is not null && bindings.TryGetValue(property.TypeName, out var boundType))
+            {
+                if (boundType is null)
+                {
+                    // Type parameter is recognised but the user did not
+                    // supply a resolvable CLR type — accept any value
+                    // (effectively nominal-only).
+                    return value;
+                }
+                effectiveTypeName = boundType.FullName ?? boundType.Name;
+            }
+        }
+
         return _engine.ConvertAnnotatedValue(
-            property.TypeName,
+            effectiveTypeName,
             property.Refinement,
             value,
             property.Span,
@@ -658,12 +745,97 @@ public sealed class ToshClassDefinition : IShellNamedType
 
     private IReadOnlyList<object?> ExecuteMethodBlock(ToshClassMethodDefinition method, IReadOnlyDictionary<string, object?> boundLocals, ToshClassInstance? instance)
     {
+        // For generic instance methods, validate any parameters whose original
+        // (un-erased) annotation references a class type-parameter and
+        // substitute the instance's binding before running the body.
+        if (instance is not null && !method.IsStatic)
+        {
+            var bindings = instance.GetBindingsFor(this);
+            if (bindings is { Count: > 0 })
+            {
+                foreach (var parameter in method.Parameters)
+                {
+                    if (parameter.RawTypeName is null) continue;
+                    if (!bindings.TryGetValue(parameter.RawTypeName, out var bound)) continue;
+                    if (bound is null) continue; // unresolved type-parameter binding
+                    if (!boundLocals.TryGetValue(parameter.Name, out var value)) continue;
+
+                    if (parameter.IsRest && value is System.Collections.IList list)
+                    {
+                        for (int i = 0; i < list.Count; i++)
+                        {
+                            EnforceStrictBinding(
+                                bound,
+                                list[i],
+                                parameter.Span,
+                                method.SourceName,
+                                method.SourceText,
+                                $"{Name}.{method.Name}.{parameter.Name}");
+                        }
+                    }
+                    else
+                    {
+                        EnforceStrictBinding(
+                            bound,
+                            value,
+                            parameter.Span,
+                            method.SourceName,
+                            method.SourceText,
+                            $"{Name}.{method.Name}.{parameter.Name}");
+                    }
+                }
+            }
+        }
+
         var locals = CreateLocals(instance, boundLocals);
         var values = _engine.ExecuteClassBlockSync(method.SourceName, method.SourceText, method.Body, locals, method.CapturedScopes, $"{Name}.{method.Name}");
-        return method.ReturnTypeName is null
+
+        // Resolve the effective return-type annotation: prefer the un-erased
+        // RawReturnTypeName when it names a bound class type-parameter,
+        // otherwise fall through to the (possibly-erased) ReturnTypeName.
+        // When the return type is bound from a type-parameter we apply a
+        // strict no-coercion check; otherwise we go through the engine's
+        // standard annotated-value conversion path.
+        Type? strictReturnBinding = null;
+        string? effectiveReturnType = method.ReturnTypeName;
+        if (instance is not null && method.RawReturnTypeName is not null)
+        {
+            var bindings = instance.GetBindingsFor(this);
+            if (bindings is not null && bindings.TryGetValue(method.RawReturnTypeName, out var bound))
+            {
+                if (bound is null)
+                {
+                    // Type parameter is recognised but unresolved — accept any value.
+                    effectiveReturnType = null;
+                }
+                else
+                {
+                    strictReturnBinding = bound;
+                    effectiveReturnType = bound.FullName ?? bound.Name;
+                }
+            }
+        }
+
+        if (strictReturnBinding is not null)
+        {
+            var unwrapped = UnwrapValues(values).ToArray();
+            foreach (var value in unwrapped)
+            {
+                EnforceStrictBinding(
+                    strictReturnBinding,
+                    value,
+                    method.Span,
+                    method.SourceName,
+                    method.SourceText,
+                    $"{Name}.{method.Name}");
+            }
+            return unwrapped;
+        }
+
+        return effectiveReturnType is null
             ? UnwrapValues(values)
             : UnwrapValues(values)
-                .Select(value => _engine.ConvertAnnotatedValue(method.ReturnTypeName, value, method.Span, method.SourceName, method.SourceText, $"{Name}.{method.Name}"))
+                .Select(value => _engine.ConvertAnnotatedValue(effectiveReturnType, value, method.Span, method.SourceName, method.SourceText, $"{Name}.{method.Name}"))
                 .ToArray();
     }
 
@@ -816,6 +988,118 @@ public sealed class ToshClassDefinition : IShellNamedType
                 Span: parameter.Span,
                 Label: $"'{parameter.Name}' expects {parameter.TypeName}"));
         }
+    }
+
+    /// <summary>
+    /// After a constructor has been selected, walk its parameters and for any
+    /// whose original (un-erased) annotation referred to a class type-parameter,
+    /// substitute the bound CLR type and validate the supplied argument. Mutates
+    /// <paramref name="locals"/> in place to reflect any coercion that
+    /// <see cref="ToshEngine.ConvertAnnotatedValue(string, RefinementAnnotation?, object?, TextSpan, string, string, string)"/>
+    /// performed.
+    /// </summary>
+    private void ValidateConstructorTypeArguments(
+        ToshClassConstructorDefinition constructor,
+        Dictionary<string, object?> locals,
+        ToshClassInstance instance)
+    {
+        var bindings = instance.GetBindingsFor(this);
+        if (bindings is null || bindings.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var parameter in constructor.Parameters)
+        {
+            if (parameter.RawTypeName is null)
+            {
+                continue;
+            }
+
+            // Only revalidate parameters whose RawTypeName is actually a
+            // class type-parameter (otherwise the standard conversion in
+            // SelectBestCallableMatches has already enforced the annotation).
+            if (!bindings.TryGetValue(parameter.RawTypeName, out var boundType))
+            {
+                continue;
+            }
+
+            if (boundType is null)
+            {
+                // Unresolved type-parameter binding — accept any value.
+                continue;
+            }
+
+            if (!locals.TryGetValue(parameter.Name, out var value))
+            {
+                continue;
+            }
+
+            if (parameter.IsRest && value is System.Collections.IList list)
+            {
+                for (var i = 0; i < list.Count; i++)
+                {
+                    EnforceStrictBinding(
+                        boundType,
+                        list[i],
+                        parameter.Span,
+                        constructor.SourceName,
+                        constructor.SourceText,
+                        $"{Name}.{parameter.Name}");
+                }
+                continue;
+            }
+
+            EnforceStrictBinding(
+                boundType,
+                value,
+                parameter.Span,
+                constructor.SourceName,
+                constructor.SourceText,
+                $"{Name}.{parameter.Name}");
+        }
+    }
+
+    /// <summary>
+    /// Strict (no-coercion) check used when a parameter or return type was
+    /// declared as a class type-parameter (e.g. <c>x: T</c>) and is being
+    /// re-validated against the concrete CLR type bound at instantiation
+    /// (e.g. <c>T = int</c>). Unlike
+    /// <see cref="ToshEngine.ConvertAnnotatedValue(string, RefinementAnnotation?, object?, TextSpan, string, string, string)"/>
+    /// this does not run <see cref="TypeConversion"/>; it only accepts a
+    /// value that is already an instance of the bound type. This prevents
+    /// surprising widening (e.g. <c>int</c> → <c>double</c>) and
+    /// stringification (e.g. <c>4</c> → <c>"4"</c>) that would
+    /// otherwise silently succeed for <c>new Box&lt;string&gt;(4)</c>.
+    /// </summary>
+    private void EnforceStrictBinding(
+        Type boundType,
+        object? value,
+        TextSpan span,
+        string sourceName,
+        string sourceText,
+        string owner)
+    {
+        if (value is null)
+        {
+            if (!boundType.IsValueType || Nullable.GetUnderlyingType(boundType) is not null)
+            {
+                return;
+            }
+        }
+        else if (boundType.IsInstanceOfType(value))
+        {
+            return;
+        }
+
+        var typeName = boundType.FullName ?? boundType.Name;
+        throw ToshDiagnosticException.Create(new ToshDiagnostic(
+            Code: "tosh.runtime.annotation_conversion_failed",
+            Title: $"'{owner}' produced a value that could not be converted to '{typeName}'.",
+            SourceName: sourceName,
+            SourceText: sourceText,
+            Span: span,
+            Label: $"the value does not match '{typeName}'"));
     }
 
     private ToshClassMethodDefinition SelectMethod(IReadOnlyList<ToshClassMethodDefinition> candidates, IReadOnlyList<object?> arguments, out Dictionary<string, object?> locals)

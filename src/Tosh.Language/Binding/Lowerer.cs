@@ -841,7 +841,9 @@ public static class Lowerer
                 TypeName: newObj.TypeName,
                 Arguments: BuildArgumentList(newObj.Arguments, ctx),
                 Span: newObj.Span,
-                Type: ctx.ResolveType(newObj.TypeName)),
+                Type: ctx.ResolveType(newObj.TypeName),
+                BareTypeName: newObj.BareTypeName,
+                TypeArguments: newObj.TypeArguments),
 
         MethodCallArgumentSyntax method =>
             new BoundMethodCall(
@@ -1648,7 +1650,8 @@ public static class Lowerer
             IsStrict: classDef.IsStrict,
             IsPartial: classDef.IsPartial,
             Modifier: classDef.Modifier,
-            Span: classDef.Span);
+            Span: classDef.Span,
+            TypeParameters: classDef.TypeParameters);
     }
 
     private static BoundInterfaceDefinition LowerInterfaceDefinition(

@@ -1514,41 +1514,19 @@ public sealed class ToshLanguageFeatures
         var overflow = overloads.Count > 6 ? $"\n... {overloads.Count - 6} more overload(s)" : string.Empty;
 
         var doc = overloads.Select(o => o.DocComment).FirstOrDefault(d => d is not null);
-        var parts = new List<string> { $"{label}" };
+        var parts = new List<string> { label };
 
-        if (doc?.IsDeprecated == true)
-            parts.Add(doc.Deprecated is { Length: > 0 } depMsg
-                ? $"**@deprecated** {depMsg}"
-                : "**@deprecated**");
-
-        if (doc?.Description is { Length: > 0 } desc)
-            // Preserve newlines in description
-            parts.Add(desc.Replace("\\n", "\n"));
+        AppendDeprecatedBanner(parts, doc);
+        AppendSummary(parts, doc);
 
         parts.Add($"```tosh\n{signatures}{overflow}\n```");
 
         if (doc is not null)
         {
-            foreach (var overload in overloads.Take(6))
-            {
-                foreach (var param in overload.Parameters)
-                {
-                    if (doc.Parameters.TryGetValue(param.Name, out var paramDesc) && paramDesc.Length > 0)
-                    {
-                        var typeAnnotation = param.TypeName is not null ? $" `{param.TypeName}`" : string.Empty;
-                        parts.Add($"**@param** `{param.Name}`{typeAnnotation} — {paramDesc}");
-                    }
-                }
-                break; // parameter docs from first overload
-            }
-
-            if (doc.Returns is { Length: > 0 } ret)
-            {
-                var returnType = overloads[0].ReturnTypeName is not null ? $" `{overloads[0].ReturnTypeName}`" : string.Empty;
-                parts.Add($"**@returns**{returnType} — {ret}");
-            }
-
-            AppendDocCommentExtras(parts, doc);
+            // Use the first overload as the canonical source of parameter
+            // names and types when rendering @param/@returns docs.
+            var canonical = overloads[0];
+            AppendDocCommentSections(parts, doc, canonical.Parameters, canonical.ReturnTypeName);
         }
 
         return string.Join("\n\n", parts);
@@ -1572,43 +1550,142 @@ public sealed class ToshLanguageFeatures
         var parts = new List<string> { kindLabel };
 
         var doc = index.GetDeclarationDocComment(offset, token);
-
-        if (doc?.IsDeprecated == true)
-            parts.Add(doc.Deprecated is { Length: > 0 } depMsg
-                ? $"**@deprecated** {depMsg}"
-                : "**@deprecated**");
-
-        if (doc?.Description is { Length: > 0 } desc)
-            parts.Add(desc);
+        AppendDeprecatedBanner(parts, doc);
+        AppendSummary(parts, doc);
 
         if (doc is not null)
-            AppendDocCommentExtras(parts, doc);
+        {
+            AppendDocCommentSections(parts, doc, parameters: null, returnTypeName: null);
+        }
 
         return string.Join("\n\n", parts);
     }
 
-    private static void AppendDocCommentExtras(List<string> parts, DocComment doc)
+    private static void AppendDeprecatedBanner(List<string> parts, DocComment? doc)
     {
-
-        foreach (var example in doc.Examples)
+        if (doc?.IsDeprecated != true)
         {
-            // Render each example as a fenced code block, preserving newlines
-            parts.Add($"**Example:**\n```tosh\n{example}\n```");
+            return;
+        }
+
+        parts.Add(doc.Deprecated is { Length: > 0 } depMsg
+            ? $"⚠️ **Deprecated** — {depMsg}"
+            : "⚠️ **Deprecated**");
+    }
+
+    private static void AppendSummary(List<string> parts, DocComment? doc)
+    {
+        if (doc?.Description is { Length: > 0 } desc)
+        {
+            parts.Add(desc);
+        }
+    }
+
+    /// <summary>
+    /// Appends the non-summary doc-comment sections (remarks, type
+    /// parameters, parameters, returns, value, exceptions, examples,
+    /// see-also, since) to <paramref name="parts"/> in a consistent
+    /// Markdown layout. Each entry in <paramref name="parts"/> ends up
+    /// being joined with a blank line, so every section is its own
+    /// paragraph in the rendered hover.
+    /// </summary>
+    private static void AppendDocCommentSections(
+        List<string> parts,
+        DocComment doc,
+        IReadOnlyList<FunctionParameterSyntax>? parameters,
+        string? returnTypeName)
+    {
+        if (doc.Remarks is { Length: > 0 } remarks)
+        {
+            parts.Add($"**Remarks**\n\n{remarks}");
+        }
+
+        if (doc.TypeParameters is { Count: > 0 } typeParams)
+        {
+            var lines = new List<string> { "**Type parameters**" };
+            foreach (var (name, description) in typeParams)
+            {
+                lines.Add(description.Length > 0
+                    ? $"- `{name}` — {description}"
+                    : $"- `{name}`");
+            }
+            parts.Add(string.Join("\n", lines));
+        }
+
+        if (doc.Parameters is { Count: > 0 } && parameters is not null)
+        {
+            var paramLines = new List<string>();
+            foreach (var param in parameters)
+            {
+                if (!doc.Parameters.TryGetValue(param.Name, out var paramDesc) || paramDesc.Length == 0)
+                {
+                    continue;
+                }
+
+                var typeAnnotation = param.TypeName is not null ? $" `{param.TypeName}`" : string.Empty;
+                paramLines.Add($"- `{param.Name}`{typeAnnotation} — {paramDesc}");
+            }
+
+            if (paramLines.Count > 0)
+            {
+                parts.Add("**Parameters**\n" + string.Join("\n", paramLines));
+            }
+        }
+        else if (doc.Parameters is { Count: > 0 } looseParams && parameters is null)
+        {
+            // No syntactic parameter list available (e.g. record/class
+            // hover); fall back to the names captured in the doc-comment.
+            var paramLines = new List<string> { "**Parameters**" };
+            foreach (var (name, description) in looseParams)
+            {
+                paramLines.Add(description.Length > 0
+                    ? $"- `{name}` — {description}"
+                    : $"- `{name}`");
+            }
+            parts.Add(string.Join("\n", paramLines));
+        }
+
+        if (doc.Returns is { Length: > 0 } ret)
+        {
+            var returnType = returnTypeName is { Length: > 0 } rt ? $" `{rt}`" : string.Empty;
+            parts.Add($"**Returns**{returnType} — {ret}");
+        }
+
+        if (doc.Value is { Length: > 0 } val)
+        {
+            parts.Add($"**Value** — {val}");
         }
 
         if (doc.Throws is { Count: > 0 } throws)
         {
+            var throwLines = new List<string> { "**Throws**" };
             foreach (var t in throws)
             {
-                parts.Add(t.Length > 0 ? $"**@throws** {t}" : "**@throws**");
+                throwLines.Add(t.Length > 0 ? $"- {t}" : "- _(unspecified)_");
             }
+            parts.Add(string.Join("\n", throwLines));
+        }
+
+        if (doc.Examples is { Count: > 0 } examples)
+        {
+            var heading = examples.Count == 1 ? "**Example**" : "**Examples**";
+            var blocks = new List<string> { heading };
+            foreach (var example in examples)
+            {
+                blocks.Add($"```tosh\n{example}\n```");
+            }
+            parts.Add(string.Join("\n\n", blocks));
+        }
+
+        if (doc.SeeAlso is { Count: > 0 } seeAlso)
+        {
+            parts.Add($"**See also:** {string.Join(", ", seeAlso.Select(s => $"`{s}`"))}");
         }
 
         if (doc.Since is { Length: > 0 } since)
-            parts.Add($"**@since** {since}");
-
-        if (doc.SeeAlso is { Count: > 0 } seeAlso)
-            parts.Add($"**@see** {string.Join(", ", seeAlso.Select(s => $"`{s}`"))}");
+        {
+            parts.Add($"_Since {since}_");
+        }
     }
 
     private static string? GetClrHoverDescription(DocumentSemanticModel semantics, int offset, string token)
@@ -1809,13 +1886,29 @@ public sealed class ToshLanguageFeatures
         {
             DocumentSemanticModel.ShellReferenceSymbol.Class shellClass => $"Class\n\n```tosh\n{shellClass.Symbol.Name}\n```",
             DocumentSemanticModel.ShellReferenceSymbol.Property property =>
-                property.Symbol.DocDescription is { Length: > 0 } propDoc
-                    ? $"Property\n\n{propDoc}\n\n```tosh\n{FormatShellPropertySignature(property.Symbol)}\n```"
-                    : $"Property\n\n```tosh\n{FormatShellPropertySignature(property.Symbol)}\n```",
+                FormatShellPropertyReferenceHover(property),
             DocumentSemanticModel.ShellReferenceSymbol.Method method =>
                 FormatShellMethodReferenceHover(method),
             _ => null,
         };
+    }
+
+    private static string FormatShellPropertyReferenceHover(DocumentSemanticModel.ShellReferenceSymbol.Property property)
+    {
+        var parts = new List<string> { "Property" };
+        var doc = property.Symbol.Doc;
+
+        AppendDeprecatedBanner(parts, doc);
+        AppendSummary(parts, doc);
+
+        parts.Add($"```tosh\n{FormatShellPropertySignature(property.Symbol)}\n```");
+
+        if (doc is not null)
+        {
+            AppendDocCommentSections(parts, doc, parameters: null, returnTypeName: property.Symbol.TypeName);
+        }
+
+        return string.Join("\n\n", parts);
     }
 
     private static string FormatShellMethodReferenceHover(DocumentSemanticModel.ShellReferenceSymbol.Method method)
@@ -1825,11 +1918,22 @@ public sealed class ToshLanguageFeatures
         var overflow = method.Overloads.Count > 6
             ? $"\n... {method.Overloads.Count - 6} more overload(s)"
             : string.Empty;
-        var doc = method.Overloads.Select(o => o.DocDescription).FirstOrDefault(d => d is not null);
+        var doc = method.Overloads.Select(o => o.Doc).FirstOrDefault(d => d is not null);
 
-        return doc is { Length: > 0 }
-            ? $"{label}\n\n{doc}\n\n```tosh\n{signatures}{overflow}\n```"
-            : $"{label}\n\n```tosh\n{signatures}{overflow}\n```";
+        var parts = new List<string> { label };
+
+        AppendDeprecatedBanner(parts, doc);
+        AppendSummary(parts, doc);
+
+        parts.Add($"```tosh\n{signatures}{overflow}\n```");
+
+        if (doc is not null)
+        {
+            var canonical = method.Overloads[0];
+            AppendDocCommentSections(parts, doc, canonical.Parameters, canonical.ReturnTypeName);
+        }
+
+        return string.Join("\n\n", parts);
     }
 
     private static string FormatShellPropertySignature(DocumentSemanticModel.ShellClassPropertySymbol property)

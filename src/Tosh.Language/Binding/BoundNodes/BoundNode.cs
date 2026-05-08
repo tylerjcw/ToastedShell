@@ -439,7 +439,9 @@ public sealed record BoundNewObject(
     string TypeName,
     IReadOnlyList<BoundArgument> Arguments,
     TextSpan Span,
-    BoundType Type)
+    BoundType Type,
+    string? BareTypeName = null,
+    IReadOnlyList<string>? TypeArguments = null)
     : BoundExpression(Span, Type);
 
 /// <summary>
@@ -688,7 +690,8 @@ public sealed record BoundClassDefinition(
     bool IsStrict,
     bool IsPartial,
     DeclarationModifier Modifier,
-    TextSpan Span)
+    TextSpan Span,
+    IReadOnlyList<string>? TypeParameters = null)
     : BoundStatement(Span);
 
 /// <summary>One method signature on an interface.</summary>

@@ -554,6 +554,9 @@ internal sealed class EmitterImpl : IDisposable
     private static readonly MethodInfo s_hostNewObject =
         s_toshHost.GetMethod(nameof(global::Tosh.Compiler.Runtime.ToshHost.NewObject),
             new[] { typeof(string), typeof(object?[]) })!;
+    private static readonly MethodInfo s_hostNewObjectGeneric =
+        s_toshHost.GetMethod(nameof(global::Tosh.Compiler.Runtime.ToshHost.NewObject),
+            new[] { typeof(string), typeof(string), typeof(string[]), typeof(object?[]) })!;
     private static readonly MethodInfo s_hostInvokeMember =
         s_toshHost.GetMethod(nameof(global::Tosh.Compiler.Runtime.ToshHost.InvokeMember),
             new[] { typeof(object), typeof(string), typeof(object?[]), typeof(bool) })!;
@@ -2646,6 +2649,15 @@ internal sealed class EmitterImpl : IDisposable
     private void DeclareClrClassShell(BoundClassDefinition cls)
     {
         if (_clrTypeShells.ContainsKey(cls.Name)) return;
+
+        // Generic user-defined classes (e.g. `class Box<T>`) cannot be
+        // expressed as a single CLR shell type with substituted
+        // properties at compile time. We instead defer entirely to the
+        // engine via source-replay (see TypeDefinitionNeedsSourceReplay):
+        // skipping shell emission keeps `_clrTypeShells` empty for the
+        // class, which causes IsClrShellEmittedTypeDefinition to return
+        // false and the registration call to be emitted.
+        if (cls.TypeParameters is { Count: > 0 }) return;
 
         var attrs = TypeAttributes.Public | TypeAttributes.Class;
         if (cls.IsHermit)
@@ -8341,9 +8353,26 @@ internal sealed class EmitterImpl : IDisposable
         // so that `new TypeName(arg, name: value, ...rest)` flows through to
         // `ToshHost.NewObject`, which delegates to the engine's CreateInstance
         // path. The engine already understands `NamedArgument` wrappers.
+        var hasTypeArgs = newObj.TypeArguments is { Count: > 0 };
+        if (hasTypeArgs)
+        {
+            // Emit bare type name and the string[] of type arguments before
+            // the args array so we can call the generic-aware overload.
+            _il.Emit(OpCodes.Ldstr, newObj.BareTypeName ?? newObj.TypeName);
+            var typeArgs = newObj.TypeArguments!;
+            _il.Emit(OpCodes.Ldc_I4, typeArgs.Count);
+            _il.Emit(OpCodes.Newarr, typeof(string));
+            for (var i = 0; i < typeArgs.Count; i++)
+            {
+                _il.Emit(OpCodes.Dup);
+                _il.Emit(OpCodes.Ldc_I4, i);
+                _il.Emit(OpCodes.Ldstr, typeArgs[i]);
+                _il.Emit(OpCodes.Stelem_Ref);
+            }
+        }
         if (!EmitArgsArrayCore($"new {newObj.TypeName}", newObj.Arguments)) return null;
         RequireTier(2, "new object construction via host dispatch");
-        _il.Emit(OpCodes.Call, s_hostNewObject);
+        _il.Emit(OpCodes.Call, hasTypeArgs ? s_hostNewObjectGeneric : s_hostNewObject);
         return typeof(object);
     }
 

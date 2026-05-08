@@ -86,7 +86,9 @@ ExtensionCommandTests.cs
 ExternalCommandCacheTests.cs
 ExternalCommandTests.cs
 FindmntJsonParserTests.cs
+FormatterTests.cs
 FunctionalPipelineCommandTests.cs
+GenericClassTests.cs
 GlobalUsings.cs
 GlobEdgeCaseTests.cs
 HelpBrowserScreenTests.cs
@@ -153,6 +155,7 @@ TypeNameResolverTests.cs
 UtilityCommandTests.cs
 VarsCommandTests.cs
 VectorCommandTests.cs
+_HoverProbe.cs
 
 [metadataReferences]
 ../../src/

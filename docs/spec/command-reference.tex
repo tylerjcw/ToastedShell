@@ -6812,6 +6812,47 @@ assert { $env.HOME != null } "HOME must be set"  # Assertion with a custom messa
 
 \end{cmdbox}
 
+\subsection{\texttt{format}}
+\label{ref:format}
+\icmd{format}
+
+\textit{Library: \code{Tosh.Stdlib.Scripting}}
+
+\begin{cmdbox}{format}
+Pretty-prints tosh source files.
+
+\begin{signature}
+format [--check] [--stdout] [--diff] <path>...
+\end{signature}
+
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+path & One or more tosh source files. Use '-' to read stdin. \textit{(path-like)} \\
+\bottomrule
+\end{tabular}
+
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Flag / Option} & \textbf{Description} \\
+\midrule
+--check & Do not write; exit non-zero if any file would change. \\
+--stdout & Print formatted output to stdout instead of rewriting the file. \\
+--diff & Print a unified-style diff of the changes that would be applied. \\
+\bottomrule
+\end{tabular}
+
+\textbf{Output:} Yields one record per file with Path, Changed, and (in --check mode) Match status.
+
+\begin{lstlisting}
+format script.tosh  # Rewrite a single file in place
+format --check src/**/*.tosh  # Verify a tree without writing
+cat script.tosh | format -  # Format stdin and emit to stdout
+\end{lstlisting}
+
+\end{cmdbox}
+
 \subsection{\texttt{raise}}
 \label{ref:raise}
 \icmd{raise}

@@ -609,6 +609,183 @@ public sealed class DocCommentTests
         Assert.Equal("When the file is not readable.", doc.Throws[1]);
     }
 
+    // ── XML-aligned tag names ──────────────────────────────────────
+    //
+    // The canonical Tosh tag set tracks the .NET XML doc-comment
+    // vocabulary (<seealso>, <exception>, <remarks>, <typeparam>,
+    // <value>, <para>, <summary>). The pre-XML spellings @see and
+    // @throws remain accepted as silent back-compat aliases, which the
+    // existing tests above exercise.
+
+    [Fact]
+    public void Parse_recognises_seealso_as_xml_aligned_tag()
+    {
+        var tokens = new[]
+        {
+            new SyntaxToken(SyntaxTokenKind.DocComment, 0, "Parses JSON."),
+            new SyntaxToken(SyntaxTokenKind.DocComment, 0, "@seealso to-json"),
+            new SyntaxToken(SyntaxTokenKind.DocComment, 0, "@seealso from-yaml"),
+        };
+
+        var doc = DocComment.Parse(tokens);
+
+        Assert.NotNull(doc);
+        Assert.NotNull(doc.SeeAlso);
+        Assert.Equal(new[] { "to-json", "from-yaml" }, doc.SeeAlso);
+    }
+
+    [Fact]
+    public void Parse_recognises_exception_as_xml_aligned_tag()
+    {
+        var tokens = new[]
+        {
+            new SyntaxToken(SyntaxTokenKind.DocComment, 0, "Reads a file."),
+            new SyntaxToken(SyntaxTokenKind.DocComment, 0, "@exception When the file does not exist."),
+        };
+
+        var doc = DocComment.Parse(tokens);
+
+        Assert.NotNull(doc);
+        Assert.NotNull(doc.Exceptions);
+        Assert.Single(doc.Exceptions!);
+        Assert.Equal("When the file does not exist.", doc.Exceptions![0]);
+        // Throws/Exceptions are aliases for the same backing collection.
+        Assert.Same(doc.Throws, doc.Exceptions);
+    }
+
+    [Fact]
+    public void Parse_summary_alias_mirrors_description()
+    {
+        var tokens = new[]
+        {
+            new SyntaxToken(SyntaxTokenKind.DocComment, 0, "Computes the answer."),
+        };
+
+        var doc = DocComment.Parse(tokens);
+
+        Assert.NotNull(doc);
+        Assert.Equal("Computes the answer.", doc.Summary);
+        Assert.Equal(doc.Description, doc.Summary);
+    }
+
+    [Fact]
+    public void Parse_explicit_summary_tag_contributes_to_description()
+    {
+        var tokens = new[]
+        {
+            new SyntaxToken(SyntaxTokenKind.DocComment, 0, "@summary Computes Fibonacci."),
+        };
+
+        var doc = DocComment.Parse(tokens);
+
+        Assert.NotNull(doc);
+        Assert.Equal("Computes Fibonacci.", doc.Summary);
+    }
+
+    [Fact]
+    public void Parse_extracts_remarks_with_continuation()
+    {
+        var tokens = new[]
+        {
+            new SyntaxToken(SyntaxTokenKind.DocComment, 0, "Brief summary."),
+            new SyntaxToken(SyntaxTokenKind.DocComment, 0, "@remarks This algorithm runs in O(n) time."),
+            new SyntaxToken(SyntaxTokenKind.DocComment, 0, "  It allocates one buffer per call."),
+        };
+
+        var doc = DocComment.Parse(tokens);
+
+        Assert.NotNull(doc);
+        Assert.Equal("Brief summary.", doc.Description);
+        Assert.Equal(
+            "This algorithm runs in O(n) time. It allocates one buffer per call.",
+            doc.Remarks);
+    }
+
+    [Fact]
+    public void Parse_extracts_typeparam()
+    {
+        var tokens = new[]
+        {
+            new SyntaxToken(SyntaxTokenKind.DocComment, 0, "Identity."),
+            new SyntaxToken(SyntaxTokenKind.DocComment, 0, "@typeparam=T The element type."),
+            new SyntaxToken(SyntaxTokenKind.DocComment, 0, "@typeparam=U The result type."),
+        };
+
+        var doc = DocComment.Parse(tokens);
+
+        Assert.NotNull(doc);
+        Assert.NotNull(doc.TypeParameters);
+        Assert.Equal(2, doc.TypeParameters!.Count);
+        Assert.Equal("The element type.", doc.TypeParameters["T"]);
+        Assert.Equal("The result type.", doc.TypeParameters["U"]);
+    }
+
+    [Fact]
+    public void Parse_extracts_value_for_property()
+    {
+        var tokens = new[]
+        {
+            new SyntaxToken(SyntaxTokenKind.DocComment, 0, "The cached path."),
+            new SyntaxToken(SyntaxTokenKind.DocComment, 0, "@value An absolute filesystem path."),
+        };
+
+        var doc = DocComment.Parse(tokens);
+
+        Assert.NotNull(doc);
+        Assert.Equal("An absolute filesystem path.", doc.Value);
+    }
+
+    [Fact]
+    public void Parse_para_tag_inserts_paragraph_break_in_description()
+    {
+        var tokens = new[]
+        {
+            new SyntaxToken(SyntaxTokenKind.DocComment, 0, "First paragraph."),
+            new SyntaxToken(SyntaxTokenKind.DocComment, 0, "@para"),
+            new SyntaxToken(SyntaxTokenKind.DocComment, 0, "Second paragraph."),
+        };
+
+        var doc = DocComment.Parse(tokens);
+
+        Assert.NotNull(doc);
+        // `string.Join(" ", lines).Trim()` collapses the empty marker
+        // line into a double-space so XML emit can split on it.
+        Assert.Contains("First paragraph.", doc.Description);
+        Assert.Contains("Second paragraph.", doc.Description);
+    }
+
+    [Fact]
+    public void Parse_full_xml_aligned_block_round_trips_all_tags()
+    {
+        var tokens = new[]
+        {
+            new SyntaxToken(SyntaxTokenKind.DocComment, 0, "Adds two numbers."),
+            new SyntaxToken(SyntaxTokenKind.DocComment, 0, "@remarks Saturates on overflow."),
+            new SyntaxToken(SyntaxTokenKind.DocComment, 0, "@typeparam=T Numeric element type."),
+            new SyntaxToken(SyntaxTokenKind.DocComment, 0, "@param=a First operand."),
+            new SyntaxToken(SyntaxTokenKind.DocComment, 0, "@param=b Second operand."),
+            new SyntaxToken(SyntaxTokenKind.DocComment, 0, "@returns The sum."),
+            new SyntaxToken(SyntaxTokenKind.DocComment, 0, "@value Always non-negative."),
+            new SyntaxToken(SyntaxTokenKind.DocComment, 0, "@exception When the result overflows."),
+            new SyntaxToken(SyntaxTokenKind.DocComment, 0, "@seealso subtract"),
+            new SyntaxToken(SyntaxTokenKind.DocComment, 0, "@example add 1 2"),
+        };
+
+        var doc = DocComment.Parse(tokens);
+
+        Assert.NotNull(doc);
+        Assert.Equal("Adds two numbers.", doc.Summary);
+        Assert.Equal("Saturates on overflow.", doc.Remarks);
+        Assert.Equal("Numeric element type.", doc.TypeParameters!["T"]);
+        Assert.Equal("First operand.", doc.Parameters["a"]);
+        Assert.Equal("Second operand.", doc.Parameters["b"]);
+        Assert.Equal("The sum.", doc.Returns);
+        Assert.Equal("Always non-negative.", doc.Value);
+        Assert.Single(doc.Exceptions!);
+        Assert.Single(doc.SeeAlso!);
+        Assert.Single(doc.Examples);
+    }
+
     [Fact]
     public void Parse_handles_all_new_tags_together()
     {
@@ -674,6 +851,146 @@ public sealed class DocCommentTests
         Assert.Equal("The response body.", doc.Returns);
     }
 
+    [Fact]
+    public void Parse_multiline_summary_appends_indented_continuation()
+    {
+        var tokens = new[]
+        {
+            new SyntaxToken(SyntaxTokenKind.DocComment, 0, "@summary Computes the area of a polygon."),
+            new SyntaxToken(SyntaxTokenKind.DocComment, 0, "  Uses the shoelace formula."),
+            new SyntaxToken(SyntaxTokenKind.DocComment, 0, "  Vertices must be ordered."),
+        };
+
+        var doc = DocComment.Parse(tokens);
+
+        Assert.NotNull(doc);
+        Assert.Equal(
+            "Computes the area of a polygon. Uses the shoelace formula. Vertices must be ordered.",
+            doc.Description);
+    }
+
+    [Fact]
+    public void Parse_multiline_implicit_summary_appends_indented_continuation()
+    {
+        var tokens = new[]
+        {
+            new SyntaxToken(SyntaxTokenKind.DocComment, 0, "Computes the area of a polygon."),
+            new SyntaxToken(SyntaxTokenKind.DocComment, 0, "  Uses the shoelace formula."),
+        };
+
+        var doc = DocComment.Parse(tokens);
+
+        Assert.NotNull(doc);
+        Assert.Equal(
+            "Computes the area of a polygon. Uses the shoelace formula.",
+            doc.Description);
+    }
+
+    [Fact]
+    public void Parse_multiline_seealso_appends_indented_continuation()
+    {
+        var tokens = new[]
+        {
+            new SyntaxToken(SyntaxTokenKind.DocComment, 0, "@seealso polygon-area"),
+            new SyntaxToken(SyntaxTokenKind.DocComment, 0, "  for a higher-level wrapper."),
+        };
+
+        var doc = DocComment.Parse(tokens);
+
+        Assert.NotNull(doc);
+        Assert.Single(doc.SeeAlso!);
+        Assert.Equal("polygon-area for a higher-level wrapper.", doc.SeeAlso![0]);
+    }
+
+    [Fact]
+    public void Parse_multiline_exception_appends_indented_continuation()
+    {
+        var tokens = new[]
+        {
+            new SyntaxToken(SyntaxTokenKind.DocComment, 0, "@exception ArgumentException when the input is empty"),
+            new SyntaxToken(SyntaxTokenKind.DocComment, 0, "  or contains fewer than three vertices."),
+        };
+
+        var doc = DocComment.Parse(tokens);
+
+        Assert.NotNull(doc);
+        Assert.Single(doc.Throws!);
+        Assert.Equal(
+            "ArgumentException when the input is empty or contains fewer than three vertices.",
+            doc.Throws![0]);
+    }
+
+    [Fact]
+    public void Parse_multiline_deprecated_appends_indented_continuation()
+    {
+        var tokens = new[]
+        {
+            new SyntaxToken(SyntaxTokenKind.DocComment, 0, "@deprecated Use `fetch` instead."),
+            new SyntaxToken(SyntaxTokenKind.DocComment, 0, "  This wrapper will be removed in 2.0."),
+        };
+
+        var doc = DocComment.Parse(tokens);
+
+        Assert.NotNull(doc);
+        Assert.True(doc.IsDeprecated);
+        Assert.Equal(
+            "Use `fetch` instead. This wrapper will be removed in 2.0.",
+            doc.Deprecated);
+    }
+
+    [Fact]
+    public void Parse_multiline_since_appends_indented_continuation()
+    {
+        var tokens = new[]
+        {
+            new SyntaxToken(SyntaxTokenKind.DocComment, 0, "@since 1.4.0"),
+            new SyntaxToken(SyntaxTokenKind.DocComment, 0, "  (preview in 1.3.0 behind --experimental)."),
+        };
+
+        var doc = DocComment.Parse(tokens);
+
+        Assert.NotNull(doc);
+        Assert.Equal(
+            "1.4.0 (preview in 1.3.0 behind --experimental).",
+            doc.Since);
+    }
+
+    [Fact]
+    public void Parse_multiple_seealso_continuations_only_extend_last_entry()
+    {
+        var tokens = new[]
+        {
+            new SyntaxToken(SyntaxTokenKind.DocComment, 0, "@seealso first-ref"),
+            new SyntaxToken(SyntaxTokenKind.DocComment, 0, "@seealso second-ref"),
+            new SyntaxToken(SyntaxTokenKind.DocComment, 0, "  with a continuation."),
+        };
+
+        var doc = DocComment.Parse(tokens);
+
+        Assert.NotNull(doc);
+        Assert.Equal(2, doc.SeeAlso!.Count);
+        Assert.Equal("first-ref", doc.SeeAlso[0]);
+        Assert.Equal("second-ref with a continuation.", doc.SeeAlso[1]);
+    }
+
+    [Fact]
+    public void Parse_multiline_continuation_stops_at_next_tag_for_summary()
+    {
+        var tokens = new[]
+        {
+            new SyntaxToken(SyntaxTokenKind.DocComment, 0, "@summary Headline."),
+            new SyntaxToken(SyntaxTokenKind.DocComment, 0, "  Continued summary."),
+            new SyntaxToken(SyntaxTokenKind.DocComment, 0, "@returns Result."),
+            new SyntaxToken(SyntaxTokenKind.DocComment, 0, "  More about the result."),
+        };
+
+        var doc = DocComment.Parse(tokens);
+
+        Assert.NotNull(doc);
+        Assert.Equal("Headline. Continued summary.", doc.Description);
+        Assert.Equal("Result. More about the result.", doc.Returns);
+    }
+
     // ── Hover rendering of new tags ────────────────────────────────
 
     [Fact]
@@ -690,7 +1007,7 @@ public sealed class DocCommentTests
         var hover = features.GetHover(script, "test.tosh", new LspPosition(3, 2));
 
         Assert.NotNull(hover);
-        Assert.Contains("@deprecated", hover.Contents.Value, StringComparison.Ordinal);
+        Assert.Contains("Deprecated", hover.Contents.Value, StringComparison.Ordinal);
         Assert.Contains("Use `fetch` instead.", hover.Contents.Value, StringComparison.Ordinal);
     }
 
@@ -710,11 +1027,11 @@ public sealed class DocCommentTests
         var hover = features.GetHover(script, "test.tosh", new LspPosition(5, 2));
 
         Assert.NotNull(hover);
-        Assert.Contains("@throws", hover.Contents.Value, StringComparison.Ordinal);
+        Assert.Contains("Throws", hover.Contents.Value, StringComparison.Ordinal);
         Assert.Contains("When the file is missing.", hover.Contents.Value, StringComparison.Ordinal);
-        Assert.Contains("@since", hover.Contents.Value, StringComparison.Ordinal);
+        Assert.Contains("Since", hover.Contents.Value, StringComparison.Ordinal);
         Assert.Contains("0.8.0", hover.Contents.Value, StringComparison.Ordinal);
-        Assert.Contains("@see", hover.Contents.Value, StringComparison.Ordinal);
+        Assert.Contains("See also", hover.Contents.Value, StringComparison.Ordinal);
         Assert.Contains("write-config", hover.Contents.Value, StringComparison.Ordinal);
     }
 
@@ -733,8 +1050,105 @@ public sealed class DocCommentTests
         var hover = features.GetHover(script, "test.tosh", new LspPosition(4, 6));
 
         Assert.NotNull(hover);
-        Assert.Contains("@deprecated", hover.Contents.Value, StringComparison.Ordinal);
+        Assert.Contains("Deprecated", hover.Contents.Value, StringComparison.Ordinal);
         Assert.Contains("Use `Point3D` instead.", hover.Contents.Value, StringComparison.Ordinal);
+    }
+
+    // ── Subcommand / flag / arg hover ──────────────────────────────
+
+    [Fact]
+    public void Hover_shows_summary_for_subcommand()
+    {
+        var features = new ToshLanguageFeatures();
+        const string script = """
+            ## Build the release artifacts.
+            ## @example tosh build release
+            subcommand release {
+                echo "build"
+            }
+            """;
+
+        // Position over the 'release' identifier on the `subcommand` line.
+        var hover = features.GetHover(script, "test.tosh", new LspPosition(2, 13));
+
+        Assert.NotNull(hover);
+        Assert.Contains("Subcommand", hover.Contents.Value, StringComparison.Ordinal);
+        Assert.Contains("Build the release artifacts.", hover.Contents.Value, StringComparison.Ordinal);
+        Assert.Contains("tosh build release", hover.Contents.Value, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Hover_shows_description_for_flag_declaration()
+    {
+        var features = new ToshLanguageFeatures();
+        const string script = """
+            ## The semantic version to embed.
+            flag version: string
+            """;
+
+        // Position over the 'version' identifier on the `flag` line.
+        var hover = features.GetHover(script, "test.tosh", new LspPosition(1, 7));
+
+        Assert.NotNull(hover);
+        Assert.Contains("Flag", hover.Contents.Value, StringComparison.Ordinal);
+        Assert.Contains("The semantic version to embed.", hover.Contents.Value, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Hover_shows_description_for_arg_declaration()
+    {
+        var features = new ToshLanguageFeatures();
+        const string script = """
+            ## Path of the file to read.
+            arg path: string
+            """;
+
+        // Position over the 'path' identifier on the `arg` line.
+        var hover = features.GetHover(script, "test.tosh", new LspPosition(1, 5));
+
+        Assert.NotNull(hover);
+        Assert.Contains("Argument", hover.Contents.Value, StringComparison.Ordinal);
+        Assert.Contains("Path of the file to read.", hover.Contents.Value, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Hover_subcommand_named_version_does_not_resolve_to_clr_type()
+    {
+        // Regression: a subcommand whose name collides with a CLR
+        // type (System.Version) was falling through to the CLR-type
+        // hover branch. The subcommand declaration must take priority.
+        var features = new ToshLanguageFeatures();
+        const string script = """
+            ## Inspect or set the persisted version components.
+            subcommand version {
+                echo "version"
+            }
+            """;
+
+        // Position over the 'version' identifier on the `subcommand` line.
+        var hover = features.GetHover(script, "test.tosh", new LspPosition(1, 13));
+
+        Assert.NotNull(hover);
+        Assert.Contains("Subcommand", hover.Contents.Value, StringComparison.Ordinal);
+        Assert.DoesNotContain("System.Version", hover.Contents.Value, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Hover_shows_type_alias_with_summary()
+    {
+        var features = new ToshLanguageFeatures();
+        const string script = """
+            ## A non-empty string.
+            type NonEmptyString = string where (not String.IsNullOrEmpty(_))
+            func greet(msg: NonEmptyString) => echo $msg
+            """;
+
+        // Position over the 'NonEmptyString' usage on the func signature line.
+        var hover = features.GetHover(script, "test.tosh", new LspPosition(2, 21));
+
+        Assert.NotNull(hover);
+        Assert.Contains("Type alias", hover.Contents.Value, StringComparison.Ordinal);
+        Assert.Contains("A non-empty string.", hover.Contents.Value, StringComparison.Ordinal);
     }
 
     // ── Completion deprecated tag ──────────────────────────────────

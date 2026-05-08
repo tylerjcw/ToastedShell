@@ -1,61 +1,134 @@
 #!/usr/bin/env tosh
-# build.tosh — TōSh unified build system
-#
-# Subcommands:
-#   publish   Build, version-bump, package, and install TōSh
-#   version   Inspect or set the persisted version components
-#   test      Run the test suite (whole or filtered by group / pattern)
-#   check     Build all projects without installing (CI gate)
-#   clean     Remove build artifacts, bin/obj, TestResults
-#   bench     Benchmark publish configurations
-#
-# Usage:
-#   scripts/build.tosh <subcommand> [options]
-#   scripts/build.tosh --help
+## @summary TōSh unified build system.
+## @remarks
+##   Subcommands:
+##   - `publish` — build, version-bump, package, and install TōSh
+##   - `version` — inspect or set the persisted version components
+##   - `test`    — run the test suite (whole or filtered by group / pattern)
+##   - `check`   — build all projects without installing (CI gate)
+##   - `clean`   — remove build artifacts, bin/obj, TestResults
+##   - `info`    — print a digest of the current repository state
+##   - `errors`  — surface diagnostic codes from the latest build/test
+##   - `bench`   — benchmark publish configurations
+## @example scripts/build.tosh publish
+## @example scripts/build.tosh test --group lsp
+## @example scripts/build.tosh --help
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Shared helpers
-# ─────────────────────────────────────────────────────────────────────────────
-
+## @summary Refinement type guaranteeing a non-null, non-empty string.
+## @remarks
+##   Used pervasively as the parameter type for log/print helpers so
+##   accidentally passing `null` or `""` is rejected at the call site
+##   rather than producing an empty styled line at the terminal.
+## @seealso DirectoryPath
 type NonEmptyString = string where (not String.IsNullOrEmpty(_))
+
+## @summary Refinement type for paths that must already exist as a directory.
+## @remarks
+##   Refinements are evaluated each time a value flows into a parameter
+##   typed as `DirectoryPath`, so callers cannot accidentally smuggle in
+##   a stale or relative path that no longer resolves.
 type DirectoryPath = string where (is-dir _).IsDirectory
 
-## Prints a success message with a green checkmark.
-## @param=msg The message to display (must be non-empty).
+## @summary Prints a success message with a green checkmark.
+## @param=msg The message to display.
+##   Must be non-empty (enforced by the `NonEmptyString` refinement).
+## @example ok "Build succeeded"
 func ok(msg: NonEmptyString) => styled $"  ✓ {$msg}" --fg bright-green | writeline
 
-## Prints an informational message in gray.
-## @param=msg The message to display (must be non-empty).
+## @summary Prints an informational message in dim gray.
+## @remarks
+##   Use this for progress narration that is helpful but not
+##   essential — `ok`/`warn`/`fail` should remain visually dominant.
+## @param=msg The message to display.
+## @example info "Skipping cached step"
 func info(msg: NonEmptyString) => styled $"  {$msg}" --fg gray --dim | writeline
 
-## Prints a warning message with a yellow warning symbol.
-## @param=msg The message to display (must be non-empty).
+## @summary Prints a warning message with a yellow ⚠ symbol.
+## @param=msg The message to display.
+## @example warn "Cap_net_raw could not be set"
+## @seealso fail
 func warn(msg: NonEmptyString) => styled $"  ⚠ {$msg}" --fg yellow | writeline
 
-## Prints an error message with a red cross symbol.
-## @param=msg The message to display (must be non-empty).
+## @summary Prints an error message with a red ✗ symbol.
+## @remarks
+##   This helper only renders the message — it does not exit or throw.
+##   Wrap with `throw` when the failure is fatal.
+## @para
+##   Pair with `assert_ok` for command-exit-code propagation.
+## @param=msg The message to display.
+## @example fail "makepkg returned non-zero"
+## @seealso warn
+## @seealso assert_ok
 func fail(msg: NonEmptyString) => styled $"  ✗ {$msg}" --fg bright-red --bold | writeline
 
-## Asserts that the last command succeeded.
-## @param=label The label to display in case of failure (must be non-empty).
+## @summary Asserts that the most-recent external command exited with code 0.
+## @remarks
+##   Inspects `$tosh.Last.ExitCode` and throws a labelled error if the
+##   previous command failed. Always call directly after the command —
+##   any other `dotnet`/`spawn`/etc. call will overwrite `$tosh.Last`.
+## @param=label Human-readable name of the step being asserted.
+##   Quoted into the error message so a stack trace identifies which
+##   shell command failed.
+## @exception When `$tosh.Last.ExitCode != 0`. The thrown string
+##   embeds both the label and the numeric exit code.
+## @example
+##   dotnet build $slnx -c Release
+##   assert_ok "dotnet build"
 func assert_ok(label: NonEmptyString) {
     if ($tosh.Last.ExitCode != 0) {
         throw $"{$label} failed (exit {$tosh.Last.ExitCode})"
     }
 }
 
+## @summary Resolves the absolute path of the repository root.
+## @remarks
+##   Walks two `dirname` levels up from the running script
+##   (`scripts/build.tosh` → repo root). Symlinks are resolved via
+##   `realpath` so the result is canonical even if the script is
+##   invoked through a symlinked checkout.
+## @returns The repository root directory as a `DirectoryPath`.
 func repo_root() -> DirectoryPath => (dirname (dirname (realpath $tosh.Script.Path)))
 
+## @summary Returns the current UTC timestamp formatted as ISO 8601.
+## @returns Timestamp in `yyyy-MM-ddTHH:mm:ssZ` form,
+##   suitable for use as a `ts` field in JSONL history entries.
+## @example var ts = ts_now    ## "2026-05-07T17:42:13Z"
 func ts_now() -> string => ((date now).ToString("yyyy-MM-ddTHH:mm:ssZ"))
 
+## @summary Resolves the absolute path of the JSONL history file.
+## @param=root The repository root.
+## @returns Absolute path to `<root>/artifacts/history.jsonl`.
+##   The file is *not* created by this call — `history_append` is
+##   responsible for ensuring the parent directory exists.
 func history_path(root: DirectoryPath) -> string => $root | join -p "artifacts" "history.jsonl"
 
+## @summary Appends a single JSONL line to the build history file.
+## @remarks
+##   Creates `artifacts/` on demand. Each call writes exactly one
+##   record terminated with a newline; callers must pre-serialise their
+##   record to JSON.
+## @param=root The repository root.
+## @param=line A single line of JSON (no embedded newlines).
+## @example
+##   history_append $root ($entry | to json).Replace("\n", "")
+## @seealso history_read_last
 func history_append(root: DirectoryPath, line: NonEmptyString) {
     var path = history_path $root
     mkdir -p (realpath (dirname $path)) | ignore
     echo $line out>> $path
 }
 
+## @summary Reads the most-recent history entry of a given kind.
+## @remarks
+##   Performs a linear scan over the JSONL file looking for entries
+##   whose `kind` field matches the supplied filter. Used by the
+##   `info` and `bench --compare` subcommands to surface the previous
+##   run for delta reporting.
+## @param=root The repository root.
+## @param=kind The record kind to filter on (e.g. `"test"`, `"bench"`).
+## @returns The matching JSONL line, or `null` when no history file
+##   exists or when no entry of the given kind has been recorded yet.
+## @seealso history_append
 func history_read_last(root: DirectoryPath, kind: NonEmptyString) -> string? {
     var path = (history_path $root)
     if (not ((is-file $path).IsFile)) { return null }
@@ -66,6 +139,13 @@ func history_read_last(root: DirectoryPath, kind: NonEmptyString) -> string? {
     return $last
 }
 
+## @summary Prints a centred, bracketed section header in bright cyan.
+## @remarks
+##   Output looks like `────────[ BUILD ]────────`. The total width is
+##   constrained around 56 columns; callers with very long labels will
+##   simply get the minimum padding (`──[ … ]──`).
+## @param=label The text shown between the brackets.
+## @example sep "PUBLISH"
 func sep(label: NonEmptyString) {
     var pad = (28 - (($label | count) // 2))
     if ($pad < 2) { $pad = 2 }
@@ -73,24 +153,37 @@ func sep(label: NonEmptyString) {
     styled $line --fg bright-cyan --bold | writeline
 }
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Versioning (shared with publish subcommand)
-# ─────────────────────────────────────────────────────────────────────────────
-#
-# Format of `.tosh-publish-state`:
-#   {calver}:{publish}[:{dotnet}]
-# where
-#   calver  is YY.M  (two-digit year, one or two-digit month, no zero pad)
-#   publish is an int counter that resets when calver rolls over
-#   dotnet  is the .NET SDK major version (defaults to 10 for legacy state files)
-#
-# Combined version string used by PKGBUILD and assembly attributes:
-#   {calver}.{publish}.{dotnet}     e.g. 26.4.14.10
-
 const DefaultDotnetMajor = 10
 
+## @summary On-disk representation of `.tosh-publish-state`.
+## @remarks
+##   The state file persists three numbers between publish runs:
+##
+## @para
+##   `CalVer` is bumped at the start of every new month, `Publish`
+##   resets to 1 on a CalVer rollover and otherwise increments by 1,
+##   and `DotnetMajor` is updated by hand when the project upgrades
+##   to a new SDK major.
+##
+## @para
+##   The combined version string emitted to PKGBUILD and assembly
+##   attributes is `{CalVer}.{Publish}.{DotnetMajor}`.
+## @seealso format_version
+## @seealso parse_calver
 record PublishState(CalVer: string, Publish: int, DotnetMajor: int)
 
+## @summary Reads and parses `.tosh-publish-state` from disk.
+## @remarks
+##   Accepts both the legacy two-field form (`calver:publish`) and the
+##   current three-field form (`calver:publish:dotnet`). When the
+##   `dotnet` field is missing it defaults to `DefaultDotnetMajor`
+##   for backwards compatibility with state files that predate the
+##   .NET-major component.
+## @param=path Absolute path to the state file (typically
+##   `<repo-root>/.tosh-publish-state`).
+## @returns A populated `PublishState` record.
+## @exception When the file is empty, malformed, or contains fewer
+##   than two colon-separated fields.
 func read_publish_state(path: string) -> PublishState {
     var line = (cat $path | lines | first)
     var parts = ($line.Split(":"))
@@ -101,61 +194,159 @@ func read_publish_state(path: string) -> PublishState {
     return new PublishState($calver, $num, $dotnet)
 }
 
+## @summary Writes the publish-state file in the canonical three-field form.
+## @remarks
+##   The file is overwritten in place. Callers are responsible for
+##   making a backup if rollback is desired (the `publish` subcommand
+##   does this around the build proper).
+## @param=path Absolute path to the state file.
+## @param=calver Two-component CalVer string in `YY.M` form.
+## @param=num Monotonic publish counter (>= 1).
+## @param=dotnet .NET SDK major version (>= 1).
 func write_publish_state(path: string, calver: string, num: int, dotnet: int) {
     write-file $path $"{$calver}:{$num}:{$dotnet}" | ignore
 }
 
+## @summary Renders a `PublishState` as the canonical version string.
+## @param=state The state to format.
+## @returns Version string in `"{CalVer}.{Publish}.{DotnetMajor}"` form
+##   (e.g. `"26.4.14.10"`).
+## @example format_version $state    ## "26.4.14.10"
 func format_version(state: PublishState) -> string => $"{$state.CalVer}.{$state.Publish}.{$state.DotnetMajor}"
 
+## @summary Parses a CalVer string into its `[year, month]` components.
+## @param=calver A two-component CalVer string in `YY.M` form.
+## @returns A 2-element integer array `[year, month]`.
+## @exception When `calver` does not contain exactly one `.` separator.
 func parse_calver(calver: string) -> array {
     var parts = ($calver.Split("."))
     if ($parts.Length != 2) { throw $"calver '{$calver}' is not in YY.M form" }
     return [System.Convert.ToInt32($parts[0]), System.Convert.ToInt32($parts[1])]
 }
 
+## @summary Rewrites the `pkgver=` line of an Arch Linux PKGBUILD.
+## @remarks
+##   Performs a simple in-place regex replacement; no validation is
+##   done on the surrounding fields. Run this only after a successful
+##   `read_publish_state` so that the version string is guaranteed to
+##   be well-formed.
+## @param=path Absolute path to the PKGBUILD file.
+## @param=version Version string to stamp into `pkgver=`.
 func update_pkgbuild_version(path: string, version: string) => read-file $path | replace -r "pkgver=.*" $"pkgver={$version}" | write-file $path | ignore
 
+## @summary Renders a `PublishState` as a 3-part semver string for VS Code/npm.
+## @remarks
+##   VS Code Marketplace and npm reject 4-part versions, so the extension
+##   uses `YY.M.Publish` (drops the `.NET major` field) — e.g. `26.5.2`.
+##   The .NET major is irrelevant for the editor surface.
+## @param=state The state to format.
+## @returns Version string in `"{Year}.{Month}.{Publish}"` form.
+func format_semver(state: PublishState) -> string => $"{$state.CalVer}.{$state.Publish}"
+
+## @summary Computes the current CalVer (`yy.M`) from the system clock.
+## @returns A two-component CalVer string suitable for storing in
+##   `PublishState.CalVer`. The month is *not* zero-padded
+##   (e.g. April → `"26.4"`, October → `"26.10"`).
 func compute_calver() -> string => (date now).ToString("yy.M")
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Publish configuration
-# ─────────────────────────────────────────────────────────────────────────────
-
+## @summary Mutable plan describing how `dotnet publish` should be invoked.
+## @remarks
+##   `PublishPlan` lazily resolves machine-dependent defaults
+##   (`RuntimeId`, output `Directory`) the first time they are read,
+##   so a freshly-constructed plan is immediately usable while still
+##   allowing every property to be overridden after construction.
+##
+## @para
+##   Trim mode is controlled by `Trimmed`; framework-vs-self-contained
+##   by `SelfContained`; the `BuildArgs` and `PublishArgs` properties
+##   compute the final `dotnet` argv from those switches.
+##
+## @example
+##   var plan = new PublishPlan()
+##   $plan.Trimmed = true
+##   dotnet ...$plan.PublishArgs
+## @seealso BuildResult
 sealed class PublishPlan {
+    ## @summary When `true`, applies aggressive IL trimming.
+    ## @remarks May break reflection-heavy code paths; defaults to off.
     prop Trimmed: bool = false
+
+    ## @summary When `true`, the published binary embeds the .NET runtime.
+    ## @value `true` for a self-contained executable, `false` for a
+    ##   framework-dependent build that requires the matching SDK at runtime.
     prop SelfContained: bool = true
+
+    ## @summary When `true`, skips the `makepkg -si` install step.
     prop NoInstall: bool = false
+
+    ## @summary When `true`, executes the freshly-published binary at the end.
     prop ExecAfter: bool = false
+
+    ## @summary When `true`, reuses the existing `.tosh-publish-state` version
+    ##   instead of bumping the publish counter.
     prop NoBump: bool = false
 
     shy prop _rid: string? = null
     shy prop _dir: string? = null
+
+    ## @summary When true, enables ReadyToRun for publish (default: true).
+    prop PublishReadyToRun: bool = true
+
     shy prop _binary: string? = null
 
+    ## @summary Absolute path to the repository root.
     prop RepoRoot: string { get => repo_root() }
 
+    ## @summary Target Runtime Identifier for the publish.
+    ## @value Defaults to `RuntimeInformation.RuntimeIdentifier`
+    ##   (the platform the script is running on).
     prop RuntimeId: string {
         get => ($this._rid ?? System.Runtime.InteropServices.RuntimeInformation.RuntimeIdentifier)
         set => $this._rid = $value
     }
 
+    ## @summary Sub-directory name representing the trim mode.
+    ## @value `"single-file-trimmed"` when `Trimmed`, otherwise `"single-file"`.
     prop ModeDir: string { get => ($this.Trimmed ? "single-file-trimmed" : "single-file") }
 
+    ## @summary Effective publish output directory.
+    ## @remarks
+    ##   When unset, defaults to
+    ##   `<repo>/artifacts/publish/<rid>/<modedir>`. Setting this property
+    ##   stores the override; the getter normalises whatever was set into
+    ##   an absolute path.
     prop Directory: string {
         get => $this.effective_directory()
         set => $this._dir = $value
     }
 
+    ## @summary Absolute path of the produced binary.
+    ## @remarks Populated by `publish` after the binary has been located
+    ##   and renamed; `null` until then.
     prop Binary: string? {
         get => $this._binary
         set => $this._binary = $value
     }
 
+    ## @summary Argument list for the dependency-resolution `dotnet build`.
     prop BuildArgs: array { get => $this.make_build_args() }
+
+    ## @summary Argument list for `dotnet publish`.
+    ## @remarks Includes ReadyToRun, no-debug-symbols, and (when
+    ##   `Trimmed`) the trim-mode switches.
     prop PublishArgs: array { get => $this.make_publish_args() }
 
+    ## @summary Constructs a `PublishPlan` with all defaults.
     PublishPlan() {}
 
+    ## @summary Resolves the configured `Directory` to an absolute path.
+    ## @remarks
+    ##   When the user has set `Directory` via the public setter, that
+    ##   value is normalised through `Path.GetFullPath`. Otherwise the
+    ##   default `<repo>/artifacts/publish/<rid>/<modedir>` layout is
+    ##   produced from the current `RepoRoot`, `RuntimeId`, and
+    ##   `ModeDir` values.
+    ## @returns Absolute output directory.
     shy func effective_directory() -> string {
         if ($this._dir != null and $this._dir != "") {
             return System.IO.Path.GetFullPath($this._dir)
@@ -163,6 +354,8 @@ sealed class PublishPlan {
         return $this.RepoRoot | join -p "artifacts" "publish" $this.RuntimeId $this.ModeDir
     }
 
+    ## @summary Constructs the argv for the dependency `dotnet build`.
+    ## @returns A flat string array suitable for splatting into `dotnet`.
     shy func make_build_args() -> array {
         return [
             "build", $"{$this.RepoRoot}/src/Tosh.Cli/Tosh.Cli.csproj",
@@ -171,13 +364,20 @@ sealed class PublishPlan {
         ]
     }
 
+    ## @summary Constructs the argv for `dotnet publish`.
+    ## @remarks
+    ##   Always emits ReadyToRun and disables debug symbols so the
+    ##   resulting binary is shipping-ready. When `Trimmed` is `true`,
+    ##   appends `-p:PublishTrimmed=true -p:TrimMode=partial`.
+    ## @returns A flat string array suitable for splatting into `dotnet`.
     shy func make_publish_args() -> array {
         var args = [
             "publish", $"{$this.RepoRoot}/src/Tosh.Cli/Tosh.Cli.csproj",
             "-c", "Release", "-r", $this.RuntimeId,
             "-o", $this.Directory,
             "-p:PublishSingleFile=true",
-            "-p:PublishReadyToRun=true",
+            $"-p:PublishReadyToRun={$this.PublishReadyToRun}",
+            "-p:IncludeAllContentForSelfExtract=true",
             "-p:EnableCompressionInSingleFile=false",
             "-p:DebugType=None",
             "-p:DebugSymbols=false",
@@ -191,6 +391,13 @@ sealed class PublishPlan {
     }
 }
 
+## @summary Summary of a successful `publish` invocation.
+## @remarks
+##   Returned to the caller and printed on the `DONE` separator line
+##   so downstream tooling (CI, packaging scripts) can pick up the
+##   binary path, version stamp, and duration without re-parsing log
+##   output.
+## @seealso PublishPlan
 record BuildResult(
     Binary: string,
     Size: StorageSize,
@@ -202,10 +409,20 @@ record BuildResult(
     Version: string
 )
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Test group → xUnit FullyQualifiedName filter pattern
-# ─────────────────────────────────────────────────────────────────────────────
-
+## @summary Maps a high-level test group to an xUnit `FullyQualifiedName` filter.
+## @remarks
+##   Test groups are surface-level affordances on `build.tosh test
+##   --group ...`; each group expands to a regex alternation matched
+##   against the fully-qualified xUnit test name. The reserved group
+##   `"all"` returns `null`, signalling the caller to omit `--filter`
+##   entirely and run every test.
+## @param=group The group name supplied on the command line.
+## @returns The filter pattern, or `null` for `"all"`.
+## @exception When `group` is not one of the recognised groups.
+## @example
+##   group_filter_pattern "engine"
+##   ## "EngineTests|ComplexCommand|Comprehension|ExpressionEval"
+## @seealso run_tests
 func group_filter_pattern(group: string) -> string? {
     switch ($group) {
         case "repl"        { return "ReplLineEditor|ReplCompletion|ReplInput|ReplHistory" }
@@ -230,33 +447,44 @@ func group_filter_pattern(group: string) -> string? {
     }
 }
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Subcommand: version
-# ─────────────────────────────────────────────────────────────────────────────
-## Inspect or update the persisted version state in `.tosh-publish-state` and
-## keep `packaging/archlinux/PKGBUILD` in sync. With no flags, prints the
-## current version. Each component is individually settable.
+## @summary Inspect or update the persisted version state.
+## @remarks
+##   Reads `.tosh-publish-state`, optionally rewrites it, and keeps
+##   `packaging/archlinux/PKGBUILD` in sync. With no flags, prints
+##   the current version. Each component (`year`, `month`, `publish`,
+##   `dotnet`) is individually settable; omitted components are
+##   preserved.
 ##
-## Examples:
-##   build.tosh version
-##   build.tosh version --year 26 --month 10
-##   build.tosh version --publish 1
-##   build.tosh version --dotnet 11
-##   build.tosh version --year 26 --month 10 --publish 13 --dotnet 11
+## @para
+##   Combine with `--dryRun` to preview the resulting version string
+##   without touching any file on disk.
+## @example build.tosh version
+## @example build.tosh version --year 26 --month 10
+## @example build.tosh version --publish 1
+## @example build.tosh version --dotnet 11
+## @example build.tosh version --year 26 --month 10 --publish 13 --dotnet 11
+## @exception When `year` is outside `0..99`, `month` outside `1..12`,
+##   `publish` < 1, or `dotnet` < 1.
+## @seealso publish
 subcommand version {
-    ## Two-digit year component of CalVer (e.g. 26 for 2026). Optional.
+    ## @summary Two-digit year component of CalVer (e.g. 26 for 2026).
+    ## @value `null` (the default) leaves the year unchanged.
     flag year: int? = null
 
-    ## One- or two-digit month component of CalVer (1..12). Optional.
+    ## @summary One- or two-digit month component of CalVer (1..12).
+    ## @value `null` (the default) leaves the month unchanged.
     flag month: int? = null
 
-    ## Publish counter — resets to 1 on a CalVer rollover during `publish`. Optional.
+    ## @summary Publish counter.
+    ## @remarks Resets to 1 on a CalVer rollover during `publish`.
+    ##   Setting this manually does not change the CalVer.
     flag publish: int? = null
 
-    ## .NET SDK major version stamped into the version string. Optional.
+    ## @summary .NET SDK major version stamped into the version string.
+    ## @value `null` (the default) leaves the dotnet major unchanged.
     flag dotnet: int? = null
 
-    ## When set, only print the resulting version; do not modify any files.
+    ## @summary Print the resulting version without modifying any file.
     flag dryRun: bool = false
 
     var root = repo_root
@@ -309,32 +537,72 @@ subcommand version {
     else {
         warn $"PKGBUILD not found at {$pkgbuild_path}; skipped."
     }
+
+    var ext_dir = $root | join -p "editor" "vscode" "tosh.tosh-lang"
+    var ext_pkg_json = $ext_dir | join -p "package.json"
+    if ((is-file $ext_pkg_json).IsFile) {
+        var prev_for_npm = (pwd).FullName
+        cd $ext_dir | ignore
+        npm pkg set $"version={(format_semver $new_state)}" | ignore
+        cd $prev_for_npm | ignore
+        ok $"Updated {$ext_pkg_json}"
+    }
 }
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Subcommand: publish
-# ─────────────────────────────────────────────────────────────────────────────
-## Builds the solution, version-bumps, updates PKGBUILD, publishes to a directory, optionally installs via makepkg, and optionally executes the new binary.
+## @summary Build, version-bump, package, and install TōSh.
+## @remarks
+##   Bumps `.tosh-publish-state` (unless `--noBump`), updates the
+##   PKGBUILD, runs `dotnet build` followed by `dotnet publish` for
+##   the CLI, LSP, and MCP projects, locates the produced binary,
+##   and (unless `--noInstall`) hands the result off to
+##   `makepkg -sif` followed by `setcap cap_net_raw+ep`.
+##
+## @para
+##   On any failure the version state and PKGBUILD are rolled back
+##   to their pre-publish values so the working tree is left in a
+##   consistent state.
+## @example build.tosh publish
+## @example build.tosh publish --trimmed --exec
+## @example build.tosh publish --rid linux-x64 --noInstall
+## @returns A `BuildResult` capturing the binary path, size, RID,
+##   self-contained/trim mode, elapsed time, and the new version.
+## @exception When any `dotnet build`/`publish`, `makepkg`, or
+##   binary-resolution step fails.
+## @seealso version
+## @seealso check
 subcommand publish {
-    ## When set, specifies the target runtime identifier (RID) for publishing (e.g. win-x64, linux-x64, osx-arm64). Defaults to the current platform's RID.
+    ## @summary Target Runtime Identifier (RID) for the publish.
+    ## @remarks Examples: `win-x64`, `linux-x64`, `osx-arm64`.
+    ## @value Empty string (the default) means “use the current
+    ##   platform's RID” as reported by
+    ##   `RuntimeInformation.RuntimeIdentifier`.
     flag rid: string = ""
 
-    ## When set, specifies the output directory for the published binaries. Defaults to artifacts/publish/{rid}/{mode}.
+    ## @summary Output directory for the published binaries.
+    ## @value Empty string (the default) means
+    ##   `artifacts/publish/{rid}/{single-file|single-file-trimmed}`.
     flag output: string = ""
 
-    ## When set, enables aggressive trimming for a smaller single-file binary (may cause issues with reflection or dynamic code generation).
+    ## @summary Enable aggressive IL trimming for a smaller binary.
+    ## @remarks May break reflection or dynamic-code paths.
     flag trimmed: bool = false
 
-    ## When set, specifies whether the published binary should be framework-dependent. Defaults to false (self-contained).
+    ## @summary Produce a framework-dependent (non-self-contained) build.
     flag frameworkDependent: bool = false
 
-    ## When set, skips the installation step (makepkg) after publishing, useful for manual testing or CI.
+    ## @summary Skip the `makepkg -si` install step after publishing.
     flag noInstall: bool = false
 
-    ## When set, prevents automatic version bumping and uses the existing version from the publish state (useful for patch releases or manual control over versioning).
+    ## @summary Reuse the existing version instead of bumping the publish
+    ##   counter.
+    ## @remarks
+    ##   Useful for republishing the same version after a build error
+    ##   has been fixed without polluting the CalVer counter.
     flag noBump: bool = false
 
-    ## When set, executes the published binary immediately after a successful publish (use with caution, especially if the new version has breaking changes or bugs). Defaults to false.
+    ## @summary Execute the freshly-published binary on success.
+    ## @remarks Use with caution — the new binary replaces the running
+    ##   shell when `exec` succeeds.
     flag exec: bool = false
 
     var plan = new PublishPlan()
@@ -375,6 +643,24 @@ subcommand publish {
         mkdir -p $plan.Directory | ignore
         var t0 = date now
 
+        sep "CLEAN"
+        info "dotnet clean Tosh.slnx ..."
+        dotnet clean $"{$root}/Tosh.slnx" -c Release --verbosity quiet | ignore
+        info "Removing artifacts/publish ..."
+        rm -rf $plan.Directory | ignore
+        mkdir -p $plan.Directory | ignore
+        info "Removing src/**/bin and src/**/obj ..."
+        for d in (find $"{$root}/src" $"{$root}/tests" -type d -name bin) {
+            if ($d.FullName != null) { rm -rf $d.FullName | ignore }
+        }
+        for d in (find $"{$root}/src" $"{$root}/tests" -type d -name obj) {
+            if ($d.FullName != null) { rm -rf $d.FullName | ignore }
+        }
+
+        sep "RESTORE"
+        dotnet restore $"{$root}/Tosh.slnx" --force
+        assert_ok "dotnet restore"
+
         sep "BUILD"
         dotnet ...$plan.BuildArgs
         assert_ok "dotnet build"
@@ -404,7 +690,6 @@ subcommand publish {
 
         var elapsed = (((date now) - $t0).ToString("hh\\:mm\\:ss\\.fff"))
 
-        # Find the published binary
         var candidates = [
             ($plan.Directory | join -p "tosh"),
             ($plan.Directory | join -p "tosh.exe"),
@@ -430,12 +715,14 @@ subcommand publish {
 
         if (not $plan.NoInstall) {
             sep "INSTALL"
-            info "Installing via PKGBUILD (makepkg -si)..."
+            info "Installing via PKGBUILD (makepkg -sifC)..."
             var pkgdir = dirname $pkgbuild_path
             var prev_cwd = (pwd).FullName
             cd $pkgdir
             try {
-                makepkg -sif --noconfirm
+                try { /usr/bin/chmod -R u+rwx $"{$pkgdir}/pkg" $"{$pkgdir}/src" } catch { }
+                rm -rf $"{$pkgdir}/pkg" $"{$pkgdir}/src" | ignore
+                makepkg -sifC --noconfirm
                 assert_ok "makepkg"
             } finally {
                 cd $prev_cwd
@@ -446,8 +733,18 @@ subcommand publish {
                     info "Setting cap_net_raw on /usr/bin/tosh..."
                     sudo setcap cap_net_raw+ep /usr/bin/tosh
                 } catch ($e) {
-                    warn $"Could not set cap_net_raw: {$e.Message}"
+                    warn $"Could not set cap_net_raw: {$e}"
                 }
+            }
+
+            sep "SYNC EXTENSION"
+            try {
+                info "Syncing VS Code extension into ~/.vscode/extensions ..."
+                python3 $"{$root}/scripts/sync_vscode_extension.py" --quiet
+                assert_ok "sync_vscode_extension.py"
+                ok "VS Code extension synced"
+            } catch ($e) {
+                warn $"Could not sync VS Code extension: {$e}"
             }
         }
 
@@ -457,16 +754,16 @@ subcommand publish {
 
         if ($plan.ExecAfter) { exec $plan.Binary }
 
-        return new BuildResult(
-            $plan.Binary,
-            $binfo.Size,
-            $plan.RuntimeId,
-            $plan.Directory,
-            $plan.SelfContained,
-            $plan.Trimmed,
-            $elapsed,
-            $new_version
-        )
+        ## Re-stat the binary now (post-install) so the BuildResult reflects
+        ## the final on-disk file rather than a possibly-stale capture.
+        var final_size = 0
+        try {
+            if ((is-file $plan.Binary).IsFile) {
+                $final_size = (ls $plan.Binary | first).Size
+            }
+        } catch ($e) { }
+
+        return new BuildResult($plan.Binary, $final_size, $plan.RuntimeId, $plan.Directory, $plan.SelfContained, $plan.Trimmed, $elapsed, $new_version)
     } catch ($err) {
         fail $"Publish failed: {$err}"
         if (not $plan.NoBump) {
@@ -478,10 +775,17 @@ subcommand publish {
     }
 }
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Subcommand: test
-# ─────────────────────────────────────────────────────────────────────────────
-
+## @summary Builds an xUnit filter that re-runs only the failing tests
+##   from a previous TRX file.
+## @remarks
+##   Parses the supplied TRX file, extracts every
+##   `<UnitTestResult outcome="Failed">` element, and joins the
+##   `testName` attributes into an xUnit `FullyQualifiedName=...|...`
+##   filter expression.
+## @param=trx_path Absolute path to the previous run's `last.trx`.
+## @returns The composite filter string, or `null` when the file does
+##   not exist or contained no failed tests.
+## @seealso run_tests
 func trx_failed_filter(trx_path: string) -> string? {
     if (not ((is-file $trx_path).IsFile)) { return null }
     var content = System.IO.File.ReadAllText($trx_path)
@@ -494,8 +798,34 @@ func trx_failed_filter(trx_path: string) -> string? {
     return ($parts | join "|")
 }
 
+## @summary History entry written after every successful `test` run.
+## @remarks Stored as a single JSONL line in `artifacts/history.jsonl`.
 record TestEntry(kind: string, ts: string, group: string, total: int, passed: int, failed: int, duration: string)
 
+## @summary Core test runner shared by the `test` and `check` subcommands.
+## @remarks
+##   Resolves the effective xUnit filter from `group`, an explicit
+##   override, or a previous TRX (when `rerun_failed`), invokes
+##   `dotnet test` against `Tosh.slnx`, parses the result counts back
+##   out of the TRX summary attributes, and appends a `TestEntry` to
+##   the JSONL history file.
+##
+## @para
+##   When tests fail this function throws after printing a `RESULTS`
+##   separator so the calling subcommand can surface a non-zero exit.
+## @param=group Test group name; ignored when `filter_override` is set.
+## @param=filter_override Raw xUnit filter; takes precedence over `group`.
+##   Pass `null` to fall back to `group`.
+## @param=rerun_failed When `true`, derive the filter from the last
+##   TRX file's failed tests and ignore `group`/`filter_override`.
+## @param=no_build When `true`, pass `--no-build` to `dotnet test`.
+## @param=verbose When `true`, set `console;verbosity=detailed`.
+## @param=blame When `true`, attach the xUnit Blame logger.
+## @param=results_dir Output directory for TRX/coverage artefacts.
+##   Pass `null` to use the default `artifacts/test-results`.
+## @exception When the `dotnet test` invocation returns non-zero.
+## @seealso group_filter_pattern
+## @seealso trx_failed_filter
 func run_tests(group: string, filter_override: string?, rerun_failed: bool, no_build: bool, verbose: bool, blame: bool, results_dir: string?) {
     var root = (repo_root)
     var slnx = $root | join -p "Tosh.slnx"
@@ -503,7 +833,6 @@ func run_tests(group: string, filter_override: string?, rerun_failed: bool, no_b
     var out_dir = ($results_dir ?? $def_results)
     var trx_path = $out_dir | join -p "last.trx"
 
-    # --failed: load previous TRX and build filter
     if ($rerun_failed) {
         var failed_filter = (trx_failed_filter $trx_path)
         if ($failed_filter == null) {
@@ -514,14 +843,12 @@ func run_tests(group: string, filter_override: string?, rerun_failed: bool, no_b
         info $"Rerunning {($failed_filter | match -r "FullyQualifiedName=" | count)} failed test(s)..."
     }
 
-    # Build
     if (not $no_build) {
         sep "BUILD"
         dotnet build $slnx -c Debug --verbosity quiet
         assert_ok "dotnet build"
     }
 
-    # Resolve filter
     var filter_pattern = ($filter_override ?? (group_filter_pattern $group))
     var label = ($rerun_failed ? "failed tests" : ($filter_override != null ? $"filter '{$filter_override}'" : ($group != "all" ? $"group '{$group}'" : "all tests")))
 
@@ -545,7 +872,6 @@ func run_tests(group: string, filter_override: string?, rerun_failed: bool, no_b
     var exit_code = $tosh.Last.ExitCode
     var elapsed = (((date now) - $t0).ToString("hh\\:mm\\:ss\\.fff"))
 
-    # Parse totals from TRX for history
     var total_count = 0
     var passed_count = 0
     var failed_count = 0
@@ -571,30 +897,52 @@ func run_tests(group: string, filter_override: string?, rerun_failed: bool, no_b
     }
 }
 
-## Runs the test suite, optionally filtered by group or xUnit filter pattern, with options for rerunning failed tests, skipping build, and outputting results to a specific directory.
+## @summary Run the test suite, optionally filtered by group or pattern.
+## @remarks
+##   Builds the solution (unless `--noBuild`), invokes `dotnet test`
+##   with a TRX logger, parses the result counts, and appends a
+##   `TestEntry` to the JSONL history file on success.
+##
+## @para
+##   `--filter` takes precedence over `--group`; `--failed` takes
+##   precedence over both and replays only the previously-failing
+##   tests parsed out of the last TRX file.
+## @example build.tosh test
+## @example build.tosh test --group repl
+## @example build.tosh test --filter "EngineTests.Eval"
+## @example build.tosh test --failed --noBuild
+## @exception When the underlying `dotnet test` invocation fails.
+## @seealso check
+## @seealso run_tests
 subcommand test {
-    ## When set, only runs tests from the specified group (see `test --list-groups`).
+    ## @summary Test group to run.
+    ## @value `"all"` (the default) runs every test;
+    ##   see `--listGroups` for the full set.
     flag group: string = "all"
 
-    ## When set, only runs tests matching the given xUnit FullyQualifiedName filter pattern (overrides --group).
+    ## @summary xUnit `FullyQualifiedName` filter.
+    ## @remarks When non-empty, takes precedence over `--group`.
     flag filter: string = ""
 
-    ## When set, reruns only the tests that failed in the previous run (requires --results to locate the TRX file).
+    ## @summary Re-run only the tests that failed in the previous run.
+    ## @remarks Requires that a `last.trx` exists in the results
+    ##   directory. Overrides both `--group` and `--filter`.
     flag failed: bool = false
 
-    ## When set, lists available test groups and exits.
+    ## @summary List available test groups and exit.
     flag listGroups: bool = false
 
-    ## When set, skips the build step and runs tests against the last build output (useful for iterative test runs without rebuilding).
+    ## @summary Skip the build step and run tests against the last build output.
     flag noBuild: bool = false
 
-    ## When set, outputs detailed test execution logs to the console.
+    ## @summary Output detailed test execution logs.
     flag verbose: bool = false
 
-    ## When set, enables the xUnit Blame logger to capture additional diagnostics on test failures (requires --results to locate the TRX file).
+    ## @summary Attach the xUnit Blame logger for crash diagnostics.
     flag blame: bool = false
 
-    ## When set, specifies a custom directory for test results output (must contain the TRX file for --failed and --blame to work).
+    ## @summary Custom directory for test results.
+    ## @value Empty string defaults to `artifacts/test-results`.
     flag results: string = ""
 
     if ($listGroups) {
@@ -611,21 +959,30 @@ subcommand test {
     run_tests $group ($filter == "" ? null : $filter) $failed $noBuild $verbose $blame ($results == "" ? null : $results)
 }
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Subcommand: check (build only, no install — for CI)
-# ─────────────────────────────────────────────────────────────────────────────
-## Builds the entire solution without installing, used as a CI gate to ensure no build errors before running tests.
+## @summary CI gate: build the solution and optionally run a subset of tests.
+## @remarks
+##   Always builds at minimal verbosity. By default also runs the
+##   full test suite; pass `--noTest` for a build-only sanity check
+##   or `--fast` to run a tightly-scoped smoke filter that exercises
+##   the engine, system, and pipeline tests.
+## @example build.tosh check
+## @example build.tosh check --fast
+## @example build.tosh check --noTest
+## @exception When `dotnet build` fails or any selected test fails.
+## @seealso test
 subcommand check {
-    ## When set, skips running tests after building, only checks that the build succeeds.
+    ## @summary Skip running tests after a successful build.
     flag noTest: bool = false
 
-    ## When set, only runs a subset of tests after building, filtered by group (see `test --list-groups`).
+    ## @summary Run a small smoke filter instead of the full suite.
+    ## @remarks Mutually exclusive with `--filter`/`--group`.
     flag fast: bool = false
 
-    ## When set, only runs tests matching the given xUnit FullyQualifiedName filter pattern (overrides --fast).
+    ## @summary Test group to run after build.
+    ## @value `"all"` runs every test; see `test --listGroups`.
     flag group: string = "all"
 
-    ## When set, only runs tests matching the given xUnit FullyQualifiedName filter pattern (overrides --fast).
+    ## @summary Explicit xUnit `FullyQualifiedName` filter; overrides `--fast`.
     flag filter: string = ""
 
     var root = repo_root
@@ -645,20 +1002,28 @@ subcommand check {
     sep "CHECK PASSED"
 }
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Subcommand: clean
-# ─────────────────────────────────────────────────────────────────────────────
-## Cleans build artifacts: bin/obj directories, test results, published outputs.
+## @summary Remove build artefacts: `bin/`, `obj/`, `TestResults/`,
+##   and the test-results history.
+## @remarks
+##   Always invokes `dotnet clean` first, then sweeps any surviving
+##   `bin`, `obj`, and `TestResults` directories under `src/` and
+##   `tests/`. With `--all`, also removes the `artifacts/publish`
+##   tree and the VS Code extension's `node_modules`.
+## @example build.tosh clean
+## @example build.tosh clean --dryRun
+## @example build.tosh clean --all
 subcommand clean {
-    ## When set, performs a dry run without actually deleting anything, printing what would be removed.
+    ## @summary Print what would be removed without deleting anything.
     flag dryRun: bool = false
 
-    ## When set, also removes published outputs and node_modules (full clean).
+    ## @summary Also remove published binaries and `node_modules`.
     flag all: bool = false
 
     var root = repo_root
     var removed = 0
 
+    ## @summary Remove a single directory, honouring `--dryRun`.
+    ## @param=path Absolute path to the directory.
     func remove_dir(path: string) {
         if ((is-dir $path).IsDirectory) {
             if ($dryRun) {
@@ -674,7 +1039,6 @@ subcommand clean {
 
     sep "CLEAN"
 
-    # dotnet clean removes bin/obj; we also nuke stale ones
     if (not $dryRun) {
         dotnet clean $"{$root}/Tosh.slnx" --verbosity quiet
     }
@@ -682,7 +1046,6 @@ subcommand clean {
         info "[dry-run] would run: dotnet clean"
     }
 
-    # Find and remove any surviving bin/obj/TestResults directories
     var dirs_to_scan = chain ["bin", "obj", "TestResults"]
     
     for name in $dirs_to_scan {
@@ -711,26 +1074,29 @@ subcommand clean {
     }
 }
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Subcommand: info
-# ─────────────────────────────────────────────────────────────────────────────
-## Displays information about the current repository state, including version, .NET SDK version, Git branch and status, and last test/bench runs.
+## @summary Print a digest of the current repository state.
+## @remarks
+##   Surfaces the persisted TōSh version, the active .NET SDK,
+##   the current Git branch + dirtiness, and the most recent
+##   `test` and `bench` history entries. All output goes to stdout
+##   in human-readable form; pair with `errors --json` if you need
+##   machine-readable equivalents.
+## @example build.tosh info
+## @seealso version
+## @seealso errors
 subcommand info {
     var root = repo_root
     var state_path = $root | join -p ".tosh-publish-state"
 
     sep "INFO"
 
-    # Version
     var state = read_publish_state $state_path
     ok $"Version:   {(format_version $state)}"
 
-    # .NET SDK
     var sdk_job = spawn dotnet --version | wait-for | first
     var sdk_ver = echo $sdk_job.Output | first
     ok $".NET SDK:  {$sdk_ver}"
 
-    # Git
     var branch_job = spawn git -C $root rev-parse --abbrev-ref HEAD | wait-for | first
     var branch = echo $branch_job.Output | first
     var status_job = spawn git -C $root status --porcelain | wait-for | first
@@ -738,7 +1104,6 @@ subcommand info {
     var git_str = $dirty > 0 ? $"{$branch} ({$dirty} modified)" : $"{$branch} (clean)"
     ok $"Git:       {$git_str}"
 
-    # Last test run
     var last_test = history_read_last $root "test"
     if ($last_test != null) {
         var t = ($last_test | from json)
@@ -748,7 +1113,6 @@ subcommand info {
         info "Last test: (no history yet)"
     }
 
-    # Last bench run
     var last_bench = history_read_last $root "bench"
     if ($last_bench != null) {
         var b = $last_bench | from json
@@ -759,15 +1123,23 @@ subcommand info {
     }
 }
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Subcommand: errors
-# ─────────────────────────────────────────────────────────────────────────────
-
+## @summary One parsed compiler diagnostic.
+## @remarks Severity is the literal token (`"error"` or `"warning"`)
+##   from the MSBuild output line, not a normalised enum.
 record Diag(Severity: string, Code: string, File: string, Line: int, Col: int, Message: string)
 
-## Builds the solution and parses compiler errors/warnings from the output, optionally emitting as JSON.
+## @summary Build the solution and surface compiler diagnostics.
+## @remarks
+##   Runs `dotnet build` against `Tosh.slnx`, scrapes errors and
+##   warnings out of the captured stdout/stderr stream using a single
+##   regex, and renders them either as styled lines (default) or as
+##   a JSON array (`--json`). Exits silently with `ok` when there
+##   are no diagnostics and the build succeeded.
+## @example build.tosh errors
+## @example build.tosh errors --json | jq '.[] | select(.Severity == "error")'
+## @seealso check
 subcommand errors {
-    ## When set, outputs diagnostics as JSON instead of human-readable text.
+    ## @summary Emit diagnostics as JSON instead of human-readable text.
     flag json: bool = false
 
     var root = repo_root
@@ -804,20 +1176,67 @@ subcommand errors {
     info $"{($errors | count)} error(s), {($warnings | count)} warning(s)"
 }
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Subcommand: bench
-# ─────────────────────────────────────────────────────────────────────────────
-
+## @summary One row of the bench summary table.
+## @remarks
+##   All numeric fields are stored as their already-formatted display
+##   strings (`F1`/`F2`) so the row can be echoed straight to the
+##   terminal without further conversion.
+## @seealso BenchConfig
+## @seealso BenchEntry
 record BenchResult(Label: string, PublishSec: string, SizeMB: string, ColdMs: string, WarmMs: string)
+
+## @summary Static description of one publish configuration to bench.
+## @remarks
+##   `Label` is the human-readable name printed in summary tables;
+##   `DirName` is the on-disk slug used as both an output sub-directory
+##   and a `BenchEntry` field-name prefix (e.g. `sc-r2r` ⇒
+##   `sc_r2r_cold_ms`); `Args` is the configuration-specific tail of
+##   the `dotnet publish` argv.
 record BenchConfig(Label: string, DirName: string, Args: array)
+
+## @summary One row of the `--compare` delta table.
+## @remarks Deltas are stored pre-formatted with sign
+##   (`+`/`-`/`0.0`) and a trailing `ms` suffix.
 record DeltaRow(Label: string, ColdDelta: string, WarmDelta: string)
+
+## @summary History entry written after every `bench` run.
+## @remarks
+##   Each `*_cold_ms` / `*_warm_ms` field stores the average startup
+##   time for the corresponding `BenchConfig.DirName` slug, encoded as
+##   the same `F1` display string used in `BenchResult` so reading the
+##   entry back is round-trip-stable.
+## @seealso BenchResult
+## @seealso BenchConfig
 record BenchEntry(kind: string, ts: string, sc_cold_ms: string, sc_warm_ms: string, sc_r2r_cold_ms: string, sc_r2r_warm_ms: string, fdd_cold_ms: string, fdd_warm_ms: string, fdd_r2r_cold_ms: string, fdd_r2r_warm_ms: string)
 
+## @summary Spawns the supplied binary in `--safe -c exit` mode and
+##   returns its wall-clock startup time formatted as milliseconds.
+## @remarks
+##   `--safe` skips startup files so the measurement reflects the
+##   shell's intrinsic cold/warm cost, not user configuration. The
+##   `binary` parameter is constrained by an inline refinement to
+##   reject paths that do not point at an existing file.
+## @param=binary Absolute path to the published `tosh` binary.
+##   Refined with `is-file` so a missing path fails fast.
+## @returns Startup duration in milliseconds, formatted as `"F1"`
+##   (e.g. `"42.3"`).
 func measure_startup_ms(binary: string where (is-file _).IsFile) -> string {
     var result = spawn $binary --safe -c exit | wait-for | first
     return $result.Duration.TotalMilliseconds.ToString("F1")
 }
 
+## @summary Reflectively reads a numeric field from a previous
+##   `BenchEntry` deserialised as `object`.
+## @remarks
+##   Used by `--compare`, where the previous entry comes back from
+##   `from json` as a generic object whose shape is not statically
+##   known. Returns `null` when the field is absent (e.g. the previous
+##   entry was written before the field was introduced) so callers can
+##   gracefully degrade.
+## @param=prev_bench A previous bench entry decoded from JSONL.
+## @param=key The property name to look up (e.g. `"sc_cold_ms"`).
+## @returns The numeric value as `double`, or `null` if the property
+##   does not exist on `prev_bench`.
 func read_prev_field(prev_bench: object, key: string) -> double?
 {
     var prop = $prev_bench.GetType().GetProperty($key)
@@ -825,18 +1244,47 @@ func read_prev_field(prev_bench: object, key: string) -> double?
     return ($prop.GetValue($prev_bench) as double)
 }
 
-## Runs Benchmarks against publish configurations
+## @summary Benchmark the four canonical TōSh publish configurations.
+## @remarks
+##   For each of `Self-Contained`, `Self-Contained + ReadyToRun`,
+##   `Framework-Dependent`, and `Framework-Dependent + ReadyToRun`,
+##   publishes a fresh single-file binary, captures its size and
+##   publish duration, then measures one cold start followed by
+##   `--runs` warm starts (averaged).
+##
+## @para
+##   On `--compare`, deltas are computed against the most recent
+##   `bench` history entry in `artifacts/history.jsonl` and printed
+##   as a side-by-side table. Every successful run appends a fresh
+##   `BenchEntry` to the same history file.
+## @example build.tosh bench
+## @example build.tosh bench --runs 10 --compare
+## @example build.tosh bench --rid linux-x64 --output /tmp/bench
+## @exception When any of the four `dotnet publish` invocations fail.
+## @seealso BenchResult
+## @seealso BenchEntry
 subcommand bench {
-    ## The Runtime Identifier (RID) to publish for. Defaults to current platform RID if not specified.
+    ## @summary Target Runtime Identifier (RID) to publish for.
+    ## @value Empty string (the default) selects the current platform's
+    ##   RID via `RuntimeInformation.RuntimeIdentifier`.
     flag rid: string = ""
 
-    ## Number of times to run the warm startup measurement (average will be reported). Default: 5
+    ## @summary Number of warm-start iterations averaged into the
+    ##   reported warm-start time.
+    ## @remarks Cold start is always measured exactly once per
+    ##   configuration. Higher values reduce noise at the cost of run
+    ##   time.
     flag runs: int = 5
 
-    ## Output directory for published binaries and benchmark results. Defaults to "artifacts/benchmarks/{rid}" under the repo root.
+    ## @summary Output directory for published binaries and bench
+    ##   artefacts.
+    ## @value Empty string (the default) means
+    ##   `artifacts/benchmarks` under the repo root.
     flag output: string = ""
 
-    ## When set, compares startup times against the previous bench run and shows deltas.
+    ## @summary Compare cold/warm timings against the previous
+    ##   `bench` entry from history and print a delta table.
+    ## @remarks No-op (with a warning) when no prior entry exists.
     flag compare: bool = false
 
     if ($rid == "") { $rid = System.Runtime.InteropServices.RuntimeInformation.RuntimeIdentifier }
@@ -847,7 +1295,6 @@ subcommand bench {
 
     mkdir -p $bench_dir | ignore
 
-    # Load previous bench for --compare
     var prev_bench = null
     if ($compare) {
         var prev_line = history_read_last $root "bench"
@@ -861,10 +1308,12 @@ subcommand bench {
     }
 
     var configs = [
-        new BenchConfig("Self-Contained",                     "sc",     ["-p:SelfContained=true"]),
-        new BenchConfig("Self-Contained, Ready-To-Run",       "sc-r2r", ["-p:SelfContained=true", "-p:PublishReadyToRun=true"]),
-        new BenchConfig("Framework-Dependent",                "fdd",    ["-p:SelfContained=false"]),
-        new BenchConfig("Framework-Dependent, Ready-To-Run",  "fdd-r2r",["-p:SelfContained=false", "-p:PublishReadyToRun=true"]),
+        new BenchConfig("Self-Contained",                     "sc",     ["-p:SelfContained=true", "-p:IncludeAllContentForSelfExtract=true"]),
+        new BenchConfig("Self-Contained, Ready-To-Run",       "sc-r2r", ["-p:SelfContained=true", "-p:PublishReadyToRun=true", "-p:IncludeAllContentForSelfExtract=true"]),
+        new BenchConfig("Self-Contained, No ReadyToRun",      "sc-nor2r", ["-p:SelfContained=true", "-p:PublishReadyToRun=false", "-p:IncludeAllContentForSelfExtract=true"]),
+        new BenchConfig("Framework-Dependent",                "fdd",    ["-p:SelfContained=false", "-p:IncludeAllContentForSelfExtract=true"]),
+        new BenchConfig("Framework-Dependent, Ready-To-Run",  "fdd-r2r",["-p:SelfContained=false", "-p:PublishReadyToRun=true", "-p:IncludeAllContentForSelfExtract=true"]),
+        new BenchConfig("Framework-Dependent, No ReadyToRun", "fdd-nor2r",["-p:SelfContained=false", "-p:PublishReadyToRun=false", "-p:IncludeAllContentForSelfExtract=true"]),
     ]
 
     var results = []
@@ -885,7 +1334,6 @@ subcommand bench {
         assert_ok $"publish {$cfg.Label}"
         var pub_sec = ((((date now) - $pub_t0).TotalSeconds).ToString("F2"))
 
-        # Find the binary
         var bin_path = [($cfg_dir | join -p "tosh"), ($cfg_dir | join -p "Tosh.Cli")] | where { (is-file $_).IsFile } | first
         if ($bin_path == null) { warn $"Binary not found for {$cfg.Label}, skipping"; continue }
 
@@ -894,11 +1342,9 @@ subcommand bench {
 
         info $"  Published {$size_mb} MB in {$pub_sec}s, measuring startup..."
 
-        # Cold start (first run, OS hasn't cached pages)
         var cold_result = (spawn $bin_path --safe -c exit | wait-for | first)
         var cold_ms = ($cold_result.Duration.TotalMilliseconds.ToString("F1"))
 
-        # Warm starts — sum measurement durations over $runs iterations
         var warm_total = 0.0
         var r = 0
         while ($r < $runs) {
@@ -909,13 +1355,12 @@ subcommand bench {
         var warm_avg = (($warm_total / $runs).ToString("F1"))
 
         ok $"{$cfg.Label}  publish={$pub_sec}s  size={$size_mb}MB  cold={$cold_ms}ms  warm={$warm_avg}ms"
-        $results = (chain $results [new BenchResult($cfg.Label, $pub_sec, $size_mb, $cold_ms, $warm_avg)])
+        $results = (chain $results [new BenchResult($cfg.Label, $pub_sec, $size_mb, $cold_ms, $warm_avg)] | collect)
     }
 
     sep "SUMMARY"
     echo $results
 
-    # --compare: print delta table
     if ($compare and $prev_bench != null) {
         writeline ""
         sep "COMPARE vs previous"
@@ -933,7 +1378,11 @@ subcommand bench {
         if (($deltas | count) > 0) { echo $deltas }
     }
 
-    # Append to history
+    ## @summary Looks up `cold` or `warm` ms for one config in `$results`.
+    ## @param=lbl `BenchConfig.Label` to look up.
+    ## @param=field Either `"cold"` or `"warm"`.
+    ## @returns The formatted ms string, or `"0"` when the config was
+    ##   skipped (e.g. its binary was not found).
     func result_field(lbl: string, field: string) -> string {
         var m = ($results | where { $_.Label == $lbl } | first)
         if ($m == null) { return "0" }
@@ -949,5 +1398,260 @@ subcommand bench {
     history_append $root ($bench_entry | to json).Replace("\n", "").Replace("  ", "")
 }
 
-# Dispatch is handled natively by the `subcommand` blocks above.
-# Running `build.tosh` bare or with `--help` shows auto-generated help.
+subcommand install {
+    ## @summary Builds and installs the requested targets in a single PKGBUILD pass.
+    ## @param targets A string, comma-separated list, array, or "all".
+    ## @remarks
+    ##   Usage:
+    ##     build.tosh install              # all three (tosh, tosh-lsp, tosh-mcp)
+    ##     build.tosh install lsp
+    ##     build.tosh install lsp,mcp
+    ##     build.tosh install ["tosh","lsp"]
+    ##
+    ##   The PKGBUILD reads $TOSH_TARGETS to decide which binaries to publish
+    ##   and package, so a single `makepkg -sifC` invocation handles everything.
+    arg targets = "all"
+
+    var root = repo_root
+    var arch_dir = $root | join -p "packaging" "archlinux"
+    var valid = ["tosh", "lsp", "mcp"]
+    var requested = []
+    if ($targets is array) {
+        $requested = $targets
+    } else if ($targets == "all") {
+        $requested = $valid
+    } else {
+        $requested = ($targets | split "," | collect)
+    }
+    var to_install = ($requested
+        | each { ($_ as string).Trim().ToLowerInvariant() }
+        | where { $_ in $valid }
+        | collect)
+    if (($to_install | count) == 0) {
+        fail "No valid targets specified. Choose from: tosh, lsp, mcp, all."
+        return
+    }
+    var spec = ($to_install | join ",")
+    sep "INSTALL"
+    info $"Building targets: {$spec}"
+    var prev_cwd = (pwd).FullName
+    cd $arch_dir
+    try {
+        try { /usr/bin/chmod -R u+rwx pkg src } catch { }
+        rm -rf pkg src | ignore
+        export TOSH_TARGETS = $spec | ignore
+        makepkg -sifC --noconfirm PKGBUILD
+        assert_ok "makepkg"
+        ok $"Installed: {$spec}"
+    } catch ($e) {
+        fail $"Install failed: {$e}"
+    } finally {
+        cd $prev_cwd
+    }
+    sep "DONE"
+}
+
+subcommand vsix {
+    ## @summary Packages the TōSh VS Code extension into a .vsix and installs it locally.
+    ## @param noInstall If true, only build the .vsix without installing it.
+    ## @param noPublish If true, skip publishing to the local Valinor Marketplace.
+    ## @param marketplaceUrl Override the marketplace base URL (default http://localhost:7781).
+    ## @remarks
+    ##   1. Runs `vsce package` in editor/vscode/tosh.tosh-lang/.
+    ##   2. Copies the resulting .vsix into artifacts/.
+    ##   3. Installs/updates it in the local VS Code via `code --install-extension`.
+    ##   4. Publishes it to the local Valinor Marketplace at $marketplaceUrl/publish
+    ##      so other VS Code instances/sessions can fetch the latest build.
+    flag noInstall: bool = false
+    flag noPublish: bool = false
+    flag marketplaceUrl: string = "http://localhost:7781"
+
+    var root = repo_root
+    var ext_dir = $root | join -p "editor" "vscode" "tosh.tosh-lang"
+    var artifacts = $root | join -p "artifacts"
+
+    if (not (is-dir $ext_dir).IsDirectory) {
+        fail $"Extension directory not found: {$ext_dir}"
+        return
+    }
+
+    sep "VSIX"
+
+    # Sync extension version with the canonical TōSh CalVer state.
+    var state_path = $root | join -p ".tosh-publish-state"
+    var pkg_json = $ext_dir | join -p "package.json"
+    if ((is-file $state_path).IsFile and (is-file $pkg_json).IsFile) {
+        var state = (read_publish_state $state_path)
+        var ver = (format_semver $state)
+        var prev_for_npm = (pwd).FullName
+        cd $ext_dir | ignore
+        npm pkg set $"version={$ver}" | ignore
+        cd $prev_for_npm | ignore
+        ok $"Synced extension version → {$ver}"
+    } else {
+        warn "Could not sync extension version (state or package.json missing)"
+    }
+
+    var prev_cwd = (pwd).FullName
+    cd $ext_dir
+    try {
+        # Make sure node_modules are present (vsce will rebuild from package.json otherwise).
+        if (not (is-dir ($ext_dir | join -p "node_modules")).IsDirectory) {
+            info "Installing npm dependencies ..."
+            npm install --no-audit --no-fund --silent
+            assert_ok "npm install"
+        }
+
+        # Remove stale .vsix files in the extension dir so we can pick the new one unambiguously.
+        try { ls *.vsix | each { rm $_.FullName | ignore } | ignore } catch { }
+
+        info "Packaging extension with vsce ..."
+        npx --yes @vscode/vsce package --no-dependencies --allow-missing-repository --skip-license --out . | ignore
+        assert_ok "vsce package"
+
+        var vsix = (ls *.vsix | first)
+        if ($vsix == null) {
+            fail "vsce produced no .vsix file"
+            return
+        }
+        var vsix_path = $vsix.FullName
+
+        mkdir -p $artifacts | ignore
+        var dest = $artifacts | join -p $vsix.Name
+        cp $vsix_path $dest | ignore
+        ok $"Built {$vsix.Name}"
+        info $"Copied to {$dest}"
+
+        if ($noInstall) {
+            info "Skipping local install (--noInstall)"
+        } else {
+            var code_path = (which code | first)
+            if ($code_path == null) {
+                warn "VS Code CLI ('code') not on PATH; skipping install"
+            } else {
+                info "Installing/updating extension in local VS Code ..."
+                code --install-extension $dest --force | ignore
+                assert_ok "code --install-extension"
+                ok "Extension installed/updated in local VS Code"
+            }
+        }
+
+        if ($noPublish) {
+            info "Skipping marketplace publish (--noPublish)"
+        } else {
+            var publish_url = $"{$marketplaceUrl}/publish"
+            var health_url = $"{$marketplaceUrl}/health"
+            info $"Checking marketplace at {$health_url} ..."
+            var reachable = false
+            try {
+                var resp = (http get $health_url --as response)
+                if ($resp.StatusCode == 200) { $reachable = true }
+            } catch { $reachable = false }
+            if (not $reachable) {
+                warn $"Valinor Marketplace not reachable at {$marketplaceUrl}; skipping publish"
+            } else {
+                info $"Publishing to {$publish_url} ..."
+                curl -sS -f -o /dev/null -X POST -F $"file=@{$dest}" $publish_url | ignore
+                assert_ok "marketplace publish"
+                ok $"Published to Valinor Marketplace ({$marketplaceUrl})"
+            }
+        }
+    } catch ($e) {
+        fail $"VSIX build/install failed: {$e}"
+    } finally {
+        cd $prev_cwd | ignore
+    }
+    sep "DONE"
+}
+
+## @summary Run the full release pipeline: clean → check → publish → install → vsix.
+## @remarks
+##   This is the "do everything" subcommand. It chains the other
+##   subcommands by re-invoking this same script via tosh, so each
+##   step runs in a clean dispatcher state and any failure halts
+##   the pipeline immediately (fail-fast).
+##
+##   Steps, in order:
+##     1. clean --all           (remove bin/obj/TestResults + publish + node_modules)
+##     2. check                 (dotnet build + smoke tests)
+##     3. version --publish N+1 (only when --bump is set)
+##     4. publish               (dotnet publish for tosh, lsp, mcp)
+##     5. install               (makepkg → pacman install)
+##     6. vsix                  (build + install + marketplace publish)
+##
+##   Pass `--noBump` (default) to keep the current version, or
+##   `--bump` to increment the publish number once at the start.
+## @example build.tosh all
+## @example build.tosh all --bump
+## @example build.tosh all --skipTests
+## @example build.tosh all --noVsix --noInstall
+subcommand all {
+    ## @summary Bump the publish counter at the start of the pipeline.
+    flag bump: bool = false
+
+    ## @summary Skip the `clean` step.
+    flag noClean: bool = false
+
+    ## @summary Skip the test suite during `check`.
+    flag skipTests: bool = false
+
+    ## @summary Skip the `publish` step.
+    flag noPublish: bool = false
+
+    ## @summary Skip the `install` (makepkg) step.
+    flag noInstall: bool = false
+
+    ## @summary Skip the `vsix` step.
+    flag noVsix: bool = false
+
+    ## @summary Targets passed through to `install` (default: all).
+    flag targets: string = "all"
+
+    var script = $tosh.Script.Path
+
+    sep "ALL · START"
+
+    if (not $noClean) {
+        sep "ALL · clean"
+        tosh $script clean --all
+        assert_ok "step 'clean'"
+    }
+
+    sep "ALL · check"
+    if ($skipTests) {
+        tosh $script check --noTest
+    } else {
+        tosh $script check
+    }
+    assert_ok "step 'check'"
+
+    if ($bump) {
+        var state_path = ((repo_root) | join -p ".tosh-publish-state")
+        var state = (read_publish_state $state_path)
+        var next_publish = ($state.Publish + 1)
+        sep "ALL · version"
+        tosh $script version --publish $next_publish.ToString()
+        assert_ok "step 'version'"
+    }
+
+    if (not $noPublish) {
+        sep "ALL · publish"
+        tosh $script publish
+        assert_ok "step 'publish'"
+    }
+
+    if (not $noInstall) {
+        sep "ALL · install"
+        tosh $script install $targets
+        assert_ok "step 'install'"
+    }
+
+    if (not $noVsix) {
+        sep "ALL · vsix"
+        tosh $script vsix
+        assert_ok "step 'vsix'"
+    }
+
+    sep "ALL · DONE"
+    ok "Full pipeline completed successfully."
+}

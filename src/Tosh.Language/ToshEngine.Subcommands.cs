@@ -11,6 +11,7 @@ public sealed partial class ToshEngine
     {
         public string? Name;
         public string? Description;
+        public IReadOnlyList<string>? Examples;
         public SubcommandModifier Modifiers;
         public TextSpan Span;
         public IReadOnlyList<FunctionParameterSyntax> Flags = Array.Empty<FunctionParameterSyntax>();
@@ -40,6 +41,7 @@ public sealed partial class ToshEngine
         {
             Name = name,
             Description = docComment?.Description?.Trim() is { Length: > 0 } desc ? desc : null,
+            Examples = docComment?.Examples is { Count: > 0 } ex ? ex : null,
             Modifiers = modifiers,
             Span = span,
         };
@@ -112,7 +114,8 @@ public sealed partial class ToshEngine
             name: null,
             modifiers: SubcommandModifier.None,
             span: script.Span,
-            statements: script.Statements);
+            statements: script.Statements,
+            docComment: script.DocComment);
 
         var argv = GetCurrentScriptArguments();
         var (path, helpLevel) = ResolveDispatch(sourceName, sourceText, root, argv);
@@ -605,78 +608,162 @@ public sealed partial class ToshEngine
     private void WriteAutoHelp(SubcommandNode target, IReadOnlyList<DispatchFrame> path)
     {
         var writer = Runtime.Output;
-        writer.WriteLine(BuildSubcommandUsageLine(path, target));
+        var usageLine = BuildSubcommandUsageLine(path, target);
 
-        if (!string.IsNullOrEmpty(target.Description))
+        // Header: "name — description" (or just usage if no description).
+        var titlePieces = new List<string>();
+        var rootName = path.Count > 0 ? path[0].Node.Name : null;
+        var displayName = target.Name is not null
+            ? string.Join(' ', path.Where(p => p.Node.Name is not null).Select(p => p.Node.Name).Append(target.Name).Distinct())
+            : rootName;
+
+        if (!string.IsNullOrEmpty(displayName))
         {
+            titlePieces.Add(displayName!);
+            if (!string.IsNullOrEmpty(target.Description))
+            {
+                titlePieces.Add("— " + target.Description);
+            }
+        }
+        else if (!string.IsNullOrEmpty(target.Description))
+        {
+            // Root invocation without a name still benefits from a
+            // file-level description (sourced from a top-of-file
+            // `## @summary ...` doc-comment block).
+            titlePieces.Add(target.Description);
+        }
+        if (titlePieces.Count > 0)
+        {
+            writer.WriteLine(string.Join(' ', titlePieces));
             writer.WriteLine();
-            writer.WriteLine(target.Description);
         }
 
-        if (target.Children.Count > 0)
+        writer.WriteLine("  Usage  " + usageLine[("Usage: ".Length)..]);
+
+        // ── Subcommands ────────────────────────────────────────────────
+        var visibleChildren = target.Children
+            .Where(kv => (kv.Value.Modifiers & SubcommandModifier.Hidden) == 0)
+            .ToList();
+
+        if (visibleChildren.Count > 0)
         {
             writer.WriteLine();
-            writer.WriteLine("Subcommands:");
-            foreach (var kv in target.Children)
+            writer.WriteLine("  Subcommands");
+            var nameWidth = visibleChildren.Max(kv => kv.Key.Length);
+            foreach (var kv in visibleChildren)
             {
                 var child = kv.Value;
-                if ((child.Modifiers & SubcommandModifier.Hidden) != 0) continue;
+                var name = kv.Key.PadRight(nameWidth);
                 if (!string.IsNullOrEmpty(child.Description))
-                    writer.WriteLine($"  {kv.Key,-18} {child.Description}");
+                {
+                    writer.WriteLine($"    {name}  {child.Description}");
+                }
                 else
-                    writer.WriteLine($"  {kv.Key}");
+                {
+                    writer.WriteLine($"    {kv.Key}");
+                }
             }
         }
 
-        // Local + inherited (global) flags shown together.
-        var flagLines = new List<string>();
+        // ── Options ───────────────────────────────────────────────────
+        // Collect every flag from every frame on the dispatch path AND the
+        // target itself (when target isn't already on the path).
+        var flagEntries = new List<(string Scope, FunctionParameterSyntax Flag)>();
         foreach (var frame in path)
         {
-            var scopeLabel = frame.Node.Name is null ? "global" : frame.Node.Name;
+            var scopeLabel = frame.Node.Name is null ? "global" : frame.Node.Name!;
             foreach (var flag in frame.Node.Flags)
             {
-                flagLines.Add(FormatFlagLine(flag, scopeLabel));
+                flagEntries.Add((scopeLabel, flag));
             }
         }
-        if (target.Children.Count > 0 || target.Flags.Count == 0 || !path.Any(p => p.Node.Flags.Count > 0))
-        {
-            // Nothing — flagLines already captures everything including target.Flags if target is on path.
-        }
-        // If target is not root and not yet appended (because target != any path frame)...
         if (!path.Any(p => ReferenceEquals(p.Node, target)))
         {
             foreach (var flag in target.Flags)
             {
-                flagLines.Add(FormatFlagLine(flag, target.Name ?? ""));
+                flagEntries.Add((target.Name ?? string.Empty, flag));
             }
         }
 
-        if (flagLines.Count > 0)
+        var includeHelpFlag = !PathHasUserHelpFlag(path) && !target.UserDeclaredHelpFlag;
+
+        if (flagEntries.Count > 0 || includeHelpFlag)
+        {
+            // Compute the rendered "--name" widths so we can right-align the
+            // (optional) type column and align descriptions.
+            var nameTokens = flagEntries
+                .Select(e => "--" + GetPrimaryScriptOptionName(e.Flag.Name))
+                .Append(includeHelpFlag ? "--help" : null)
+                .Where(n => n is not null)
+                .Cast<string>()
+                .ToList();
+            var nameWidth = nameTokens.Count == 0 ? 6 : nameTokens.Max(n => n.Length);
+
+            // Type column width: only non-bool flags carry an explicit type.
+            var typeTokens = flagEntries
+                .Select(e => RenderTypeBadge(e.Flag.TypeName))
+                .Where(t => !string.IsNullOrEmpty(t))
+                .ToList();
+            var typeWidth = typeTokens.Count == 0 ? 0 : typeTokens.Max(t => t!.Length);
+
+            writer.WriteLine();
+            writer.WriteLine("  Options");
+
+            // Group flags by scope so global options stay together and
+            // subcommand-local options follow.
+            foreach (var group in flagEntries
+                .GroupBy(e => e.Scope, StringComparer.Ordinal)
+                .OrderBy(g => g.Key == "global" ? 0 : 1))
+            {
+                foreach (var (_, flag) in group)
+                {
+                    writer.WriteLine(FormatFlagLine(flag, nameWidth, typeWidth));
+                }
+            }
+
+            if (includeHelpFlag)
+            {
+                var name = "--help".PadRight(nameWidth);
+                var typePad = typeWidth == 0 ? string.Empty : new string(' ', typeWidth + 2);
+                writer.WriteLine($"    {name}  {typePad}Show this help message");
+            }
+        }
+
+        if (target.Examples is { Count: > 0 } examples)
         {
             writer.WriteLine();
-            writer.WriteLine("Options:");
-            foreach (var line in flagLines) writer.WriteLine(line);
-        }
-
-        if (!PathHasUserHelpFlag(path) && !target.UserDeclaredHelpFlag)
-        {
-            if (flagLines.Count == 0)
+            writer.WriteLine("  Examples");
+            foreach (var example in examples)
             {
-                writer.WriteLine();
-                writer.WriteLine("Options:");
+                foreach (var line in example.Split('\n'))
+                {
+                    writer.WriteLine("    " + line.TrimEnd('\r'));
+                }
             }
-            writer.WriteLine("  --help             Show this help message");
         }
 
         writer.Flush();
     }
 
-    private static string FormatFlagLine(FunctionParameterSyntax flag, string scope)
+    private static string FormatFlagLine(FunctionParameterSyntax flag, int nameWidth, int typeWidth)
     {
-        var primary = GetPrimaryScriptOptionName(flag.Name);
-        var typeLabel = flag.TypeName ?? "any";
-        var scopeTag = string.IsNullOrEmpty(scope) ? "" : $"  [{scope}]";
-        var descriptionSuffix = !string.IsNullOrEmpty(flag.Description) ? $"  {flag.Description}" : "";
-        return $"  --{primary,-16} {typeLabel}{scopeTag}{descriptionSuffix}";
+        var primary = "--" + GetPrimaryScriptOptionName(flag.Name);
+        var name = primary.PadRight(nameWidth);
+
+        var typeBadge = RenderTypeBadge(flag.TypeName);
+        var typeColumn = typeWidth == 0
+            ? string.Empty
+            : (typeBadge ?? string.Empty).PadRight(typeWidth) + "  ";
+
+        var description = string.IsNullOrEmpty(flag.Description) ? string.Empty : flag.Description;
+        return $"    {name}  {typeColumn}{description}".TrimEnd();
+    }
+
+    private static string? RenderTypeBadge(string? typeName)
+    {
+        if (string.IsNullOrEmpty(typeName)) return null;
+        // Boolean flags are switches; rendering "<bool>" is noise.
+        if (string.Equals(typeName, "bool", StringComparison.OrdinalIgnoreCase)) return null;
+        return $"<{typeName}>";
     }
 }

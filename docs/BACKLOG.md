@@ -2,10 +2,14 @@
 
 Open work items by area, roughly ordered by priority within each section.
 
-Last updated: May 7, 2026. Line Editor Phase 1 closed; user-defined error
-types, top-level signal flow fix, `Tosh.Compiler` IR + IL emitter spike,
-streaming display sinks, `iterate`/`recur` builders, VS Code extension,
-and MCP `run_snippet`/`explain_error` tools all landed.
+Last updated: May 7, 2026. Lambda return-type annotations, postfix
+`if`/`unless` on `return`/`break`/`continue`/`throw`/`yield`, lazy
+parenthesised generator comprehensions `(body <| for ...)`, the rune
+base set, and a backlog audit against the actual implementation all
+landed in this pass. Earlier additions: Line Editor Phase 1, user-defined
+error types, top-level signal flow fix, `Tosh.Compiler` IR + IL emitter
+spike, streaming display sinks, `iterate`/`recur` builders, VS Code
+extension, MCP `run_snippet`/`explain_error` tools.
 
 Recent additions: First-Class .NET Citizenship section (Waves 1–3) reflecting
 the 2026-05-06 audit; spec restructured with new `\part{Compilation}`. See
@@ -52,11 +56,16 @@ cancellation are all in place.
 
 ### Priority: P1 — closed
 
-## Comprehensions — Future Extensions
+## Comprehensions ✓ Shipped
 
 Core comprehensions (list, set, dict, generator) are implemented, along
 with Cartesian product (`for x in [1,2], y in [10,20]`), parallel/zip
 (`for x in $a || y in $b`), and tuple destructuring (`for (a, b) in $pairs`).
+
+The **bracket form `[...]` is eager** (materialised list); the
+**parenthesised form `(...)` is lazy** — it returns a `LazySequence`
+that evaluates the body on demand and composes naturally with infinite
+sources like ranges, `iterate`, and `recur`.
 
 Verified 2026-05-07:
 
@@ -64,13 +73,15 @@ Verified 2026-05-07:
 [($x + $y) <| for x in [1,2], y in [10,20]]      # Cartesian → [11, 21, 12, 22]
 [$x + $y <| for x in [1,2,3] || y in [10,20,30]] # zip       → [11, 22, 33]
 [$a + $b <| for (a, b) in [(1,2),(3,4)]]         # destruct  → [3, 7]
+($x ** 2 <| for x in 1..) | first 5              # lazy      → [1, 4, 9, 16, 25]
 ```
 
-Remaining work:
+See [ParseGeneratorComprehension](../src/Tosh.Language/Parsing/ToshParser.cs#L6581)
+and the `GeneratorComprehensionArgumentSyntax` evaluation path in
+[ToshEngine.cs](../src/Tosh.Language/ToshEngine.cs#L5444), which
+returns a [`LazySequence`](../src/Tosh.Runtime/LazySequence.cs).
 
-- True lazy generator expressions (currently eager).
-
-### Priority: P2
+### Priority: P2 — closed
 
 ---
 
@@ -80,16 +91,28 @@ Haskell-style lazy evaluation for infinite, self-referential data structures.
 
 ### Status (2026-05-07)
 
-- ✓ **`iterate` and `recur` built-ins shipped** — see
-  [src/Tosh.Stdlib/Functional/IterateCommand.cs](../src/Tosh.Stdlib/Functional/IterateCommand.cs)
-  and [RecurCommand.cs](../src/Tosh.Stdlib/Functional/RecurCommand.cs). They
-  produce infinite sequences from a seed and a callable; pair with `first`,
-  `take-while`, or `take-until` to bound. Examples like
-  `iterate 1 func(x) => ($x * 2) | first 10` and
-  `recur (0, 1) func($a, $b) => $a + $b` work today.
-- ✏ Remaining: `lazy […]` literal syntax with self-referential bindings
-  (`var fibs = lazy [0, 1, ...zip-with (+) $fibs ($fibs | skip 1)]`), the
-  `<|` lazy generator form, and thunk/memoized-cell runtime semantics.
+Most of this section is already shipped:
+
+- ✓ **`iterate` and `recur` built-ins** — see
+  [IterateCommand.cs](../src/Tosh.Stdlib/Functional/IterateCommand.cs)
+  and [RecurCommand.cs](../src/Tosh.Stdlib/Functional/RecurCommand.cs).
+  Pair with `first` / `take-while` / `take-until` to bound:
+  `iterate 1 func(x) => ($x * 2) | first 10`,
+  `recur (0, 1) func($a, $b) => $a + $b`.
+- ✓ **Lazy `<|` generator form** — the parenthesised comprehension
+  `($x ** 2 <| for x in 1..)` produces a [`LazySequence`](../src/Tosh.Runtime/LazySequence.cs).
+- ✓ **Infinite ranges** — `1..` is a `ToshRange { IsInfinite: true }`
+  recognised by Cartesian product, comprehensions, and the
+  `IsLazyOrInfinite` helper in [ToshEngine.cs](../src/Tosh.Language/ToshEngine.cs#L11084).
+- ✓ **`lazy` modifier on class properties** — defers initializer until
+  first access (see [ToshClassPropertyDefinition.IsLazy](../src/Tosh.Language/ToshClassPropertyDefinition.cs)
+  and `_lazyInitialized` cache in [ToshClassInstance.cs](../src/Tosh.Language/ToshClassInstance.cs#L177)).
+- ✏ Remaining: `lazy […]` literal syntax with **self-referential bindings**
+  (`var fibs = lazy [0, 1, ...zip-with (+) $fibs ($fibs | skip 1)]`).
+  Requires thunk/memoised-cell runtime semantics for the inner
+  forward-reference to resolve as the same sequence being constructed.
+  This is the only true gap; everything else listed under "Syntax
+  Proposals" below already works in some form.
 
 ### Motivation
 
@@ -194,13 +217,15 @@ dbg ($x + 1)
 - Rune-level modifiers parsed today: `sealed` (default), `leaky`,
   `fixed`, `lazy`.
 
-### Still open (rune ecosystem)
+### Status: ✓ Closed
 
-- Additional built-in runes: `timeout`, `suppress`, `with`,
-  `transaction`, `parallel`, `watch`.
-- Distribute community runes as modules.
+The shipped base set (`dbg`, `unless`, `benchmark`, `with-retry`) covers
+the common ergonomic cases. Additional runes (`timeout`, `suppress`,
+`with`, `transaction`, `parallel`, `watch`) are deliberately left for
+user code — the whole point of runes is that user-defined macros are
+first-class. Community runes can ship as ordinary `.tosh` modules.
 
-### Priority: P2 — closed for the core feature; ecosystem additions tracked above.
+### Priority: P2 — closed
 
 ---
 
@@ -567,9 +592,129 @@ to advertise and route them.
 
 - [x] `textDocument/references` (find all references). _2026-05-06: scope-aware via `DeclarationIndex.FindReferences`; covers variables, function overloads, classes/modules/enums/records; respects shadowing._
 - [x] `textDocument/rename` + `textDocument/prepareRename`. _2026-05-06: `BuildRenameEdits` returns a `WorkspaceEdit`; `PrepareRename` returns the editable range at the cursor (strips leading `$` for variable refs)._
-- [ ] `textDocument/formatting` and `textDocument/rangeFormatting` wired to a deterministic tosh formatter. _Deferred — needs a separate formatter library; tracked as its own follow-up._
+- [ ] `textDocument/formatting` and `textDocument/rangeFormatting` wired to a deterministic tosh formatter. _Deferred — see **Source Formatter** below._
 - Tracks: [FIRST_CLASS_DOTNET_STATUS.md](FIRST_CLASS_DOTNET_STATUS.md) item 12 (audit follow-up).
 - Priority: P1.
+
+### Source Formatter
+
+A deterministic source-code formatter for `.tosh` files. **Phase 1
+shipped 2026-05-07.** Lives at
+[`src/Tosh.Language/Formatting/ToshFormatter.cs`](../src/Tosh.Language/Formatting/ToshFormatter.cs);
+exposed as the `format` builtin
+([`src/Tosh.Language/Bridge/Scripting/FormatCommand.cs`](../src/Tosh.Language/Bridge/Scripting/FormatCommand.cs)).
+
+#### Phase 1 — shipped
+
+- [x] Pure round-trip: re-renders top-level structure
+      (statement separators, indentation, blank lines, brace placement,
+      keyword spacing) and uses original-source slices for inner
+      expressions and unsupported statement kinds, so output is
+      always valid.
+- [x] Style: 4-space indent, single blank line between top-level
+      declarations, opening braces same line, no trailing semicolons.
+- [x] Idempotent: `format(format(x)) == format(x)` (verified by
+      `Format_is_idempotent` test).
+- [x] Coverage: `var`/`const`/`export`/`global`/`shy` declarations,
+      pipelines, `return`/`yield`/`break`/`continue`/`throw`,
+      `if`/`else`, `for`, `while`, `func` definitions; brace-delimited
+      decls (class/enum/record/struct/interface/trait/union/module/rune)
+      slice through to the matching `}` to work around a parser-side
+      span quirk.
+- [x] CLI: `format <path>` (rewrite in place), `format --check <path>`
+      (non-zero exit if any file would change), `format --stdout <path>`,
+      `format --diff <path>`, `format -` (read stdin).
+- [x] Tests: [`tests/Tosh.Tests/FormatterTests.cs`](../tests/Tosh.Tests/FormatterTests.cs)
+      (9 cases — var, func, if/else, blank-line separators, class
+      closing-brace, idempotency, parse-error fallback, trailing
+      newline, postfix conditionals).
+
+#### Phase 2 — open
+
+- [ ] Real-AST formatting for inner expressions (drops the
+      source-slice fallback) so spacing inside arithmetic,
+      member-access, function calls, etc. is normalised.
+- [x] Comment preservation. Lexer captures every `#` line comment
+      (full-line + trailing) into a parallel `LineComment` list
+      surfaced via `ParseResult.LineComments`; the formatter flushes
+      pending full-line comments before each statement (preserving
+      blank-line gaps between groups) and re-attaches trailing
+      same-line comments to the line they came from. Works inside
+      block bodies via the `WriteStatement` flush hook.
+- [x] Structural coverage for `try`/`catch`/`finally`, `switch`/`case`,
+      and variable/member assignments (`$x = expr`, `$x += expr`,
+      `$obj.field = expr`). `match` expressions and lambda bodies
+      still take the source-slice path for now.
+- [x] Wire LSP `textDocument/formatting` and `textDocument/rangeFormatting`
+      (range currently delegates to whole-document formatting) plus
+      `documentFormattingProvider` / `documentRangeFormattingProvider`
+      capabilities.
+- [ ] `match` arms and lambda bodies — currently slice-fallback;
+      promote to AST emit so nested decls reformat consistently.
+- Priority: P2.
+
+### XML doc comments (CLR-visible documentation)
+
+Tosh already keeps `##` lines as `DocComment` tokens with structured
+`@param`/`@returns`/`@example`/`@throws`/`@see`/`@since`/`@deprecated`
+tags. Make them surface to other .NET languages by emitting an ECMA-334
+sidecar `<assembly>.xml` next to the compiled `.dll` so Roslyn, Rider,
+IntelliSense and DocFX pick them up the same way they would for a
+C#-authored library.
+
+No new tosh syntax is required — `## <summary>...</summary>` already
+parses today because the lexer keeps the post-`## ` text verbatim. The
+work is on the emit + parsing-shape side.
+
+- [ ] Extend [`DocComment`](../src/Tosh.Language/Parsing/DocComment.cs)
+      to also capture **raw XML pass-through** lines (lines that begin
+      with `<` after stripping the `## `) into a new
+      `IReadOnlyList<string> XmlBlocks` member. Keep the existing
+      `@`-tag parsing for ergonomic authoring; both can coexist on a
+      single declaration.
+- [ ] Auto-translate `@`-tags to standard XML on emit:
+      `Description` → `<summary>`, `@param=name desc` →
+      `<param name="name">desc</param>`, `@returns` → `<returns>`,
+      `@example` → `<example><code>…</code></example>`, `@throws T msg`
+      → `<exception cref="T">msg</exception>`, `@see ref` →
+      `<seealso cref="ref"/>`, `@since v` → `<remarks>Since v.</remarks>`.
+      `@deprecated` is already a CLR concern — keep emitting
+      `[ObsoleteAttribute]` and additionally translate the message into
+      a `<remarks>` block.
+- [ ] New `XmlDocWriter` next to
+      [`BoundUnitEmitter`](../src/Tosh.Compiler/BoundUnitEmitter.cs)
+      that walks types/methods/properties/fields/events as they are
+      defined and accumulates `<member name="…">…</member>` entries
+      keyed by ECMA-334 doc-IDs (`T:Ns.Type`,
+      `M:Ns.Type.Method(System.Int32)` with mangled parameter type
+      names, `P:`, `F:`, `E:`). Generic arity uses the ECMA backtick
+      form (`` `1 ``).
+- [ ] Wire writer flush into
+      [`ToshPublisher`](../src/Tosh.Compiler/ToshPublisher.cs) so the
+      `.xml` lands beside the `.dll` in `bin/<config>/<tfm>/` and is
+      copied to the publish output and the ref-asm package layout
+      (`lib/<tfm>/Foo.xml` + `ref/<tfm>/Foo.xml` for nupkg).
+- [ ] Stamp `<doc><assembly><name>{asm}</name></assembly>` header.
+      Honour CLR's "no XML comment" warning suppression — emit only
+      `<members>` entries for declarations that actually had `##`.
+- [ ] Tests:
+      1. Parse-level: `## <summary>desc</summary>` + `## @param=x foo`
+         on the same func produces both an `XmlBlocks` entry and a
+         `Parameters[x]` entry without losing either.
+      2. Emit-level: compile a `library`-profile script with `func
+         add(a: int, b: int) -> int` carrying `## adds two numbers`
+         and `## @param=a first` and `## @returns sum`; assert the
+         emitted `.xml` has `<member
+         name="M:…add(System.Int32,System.Int32)">` containing
+         `<summary>` + `<param name="a">` + `<returns>`.
+      3. Roundtrip: a C# consumer hovers the tosh-emitted method and
+         Roslyn surfaces the summary (xunit + Roslyn workspace).
+- [ ] Doc-ID generator must respect mangling rules from `CLR_ABI_v1`
+      (Tosh-original-name → CLR name) so the IDs match the methods
+      Roslyn sees, not the source-language identifiers.
+- Tracks: [FIRST_CLASS_DOTNET_STATUS.md](FIRST_CLASS_DOTNET_STATUS.md).
+- Priority: P2 — nice ergonomics for downstream .NET consumers, no
+  blocker for ABI v1.
 
 ### CLR ABI v1 spec document
 

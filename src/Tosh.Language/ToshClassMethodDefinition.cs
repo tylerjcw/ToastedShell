@@ -19,4 +19,5 @@ public sealed record ToshClassMethodDefinition(
     string SourceName,
     string SourceText,
     TextSpan Span,
-    IReadOnlyList<LexicalScope>? CapturedScopes = null);
+    IReadOnlyList<LexicalScope>? CapturedScopes = null,
+    string? RawReturnTypeName = null);

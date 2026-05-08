@@ -2672,19 +2672,53 @@ public static class ToshHost
     /// </summary>
     public static object? NewObject(string typeName, object?[] args)
     {
+        return NewObjectCore(typeName, bareTypeName: null, typeArguments: null, args);
+    }
+
+    /// <summary>
+    /// Generic-aware overload: <paramref name="bareTypeName"/> is the
+    /// unqualified class name (e.g. <c>"Box"</c>) and
+    /// <paramref name="typeArguments"/> are the verbatim
+    /// type-argument strings written by the source
+    /// (e.g. <c>["int", "string"]</c>). Falls back to the legacy path
+    /// when <paramref name="typeArguments"/> is null/empty.
+    /// </summary>
+    public static object? NewObject(string typeName, string bareTypeName, string[] typeArguments, object?[] args)
+    {
+        return NewObjectCore(typeName, bareTypeName, typeArguments, args);
+    }
+
+    private static object? NewObjectCore(string typeName, string? bareTypeName, IReadOnlyList<string>? typeArguments, object?[] args)
+    {
         if (s_engine is null) Initialize();
         var argList = (IReadOnlyList<object?>)args;
-        if (s_engine!.TryGetNamedType(typeName, out var named))
+
+        var hasTypeArgs = typeArguments is { Count: > 0 };
+        var lookupName = hasTypeArgs && bareTypeName is not null ? bareTypeName : typeName;
+
+        if (s_engine!.TryGetNamedType(lookupName, out var named))
         {
+            if (named is ToshClassDefinition cls)
+            {
+                if (hasTypeArgs)
+                {
+                    var resolved = new Type?[typeArguments!.Count];
+                    for (int i = 0; i < typeArguments.Count; i++)
+                    {
+                        resolved[i] = s_engine.TryResolveTypeName(typeArguments[i]);
+                    }
+                    return cls.CreateGenericInstance(resolved, typeArguments, argList);
+                }
+                return cls.CreateInstance(argList);
+            }
             return named switch
             {
-                ToshClassDefinition cls => cls.CreateInstance(argList),
                 ToshRecordDefinition rec => rec.CreateInstance(argList),
                 ToshStructDefinition st => st.CreateInstance(argList),
                 ToshEnumDefinition en => en.CreateInstance(argList),
                 ToshUnionDefinition un => un.CreateInstance(argList),
                 _ => throw new InvalidOperationException(
-                    $"type '{typeName}' is not constructable"),
+                    $"type '{lookupName}' is not constructable"),
             };
         }
         var compiledClr = ResolveCompiledToshClrType(typeName);

@@ -10,4 +10,5 @@ public sealed record FunctionParameterDefinition(
     bool IsRest,
     PipelineSyntax? DefaultValue,
     TextSpan Span,
-    RefinementAnnotation? Refinement = null);
+    RefinementAnnotation? Refinement = null,
+    string? RawTypeName = null);

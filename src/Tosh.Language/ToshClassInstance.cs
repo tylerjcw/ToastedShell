@@ -15,7 +15,114 @@ public sealed class ToshClassInstance : IShellRecordObject, IShellInvocableObjec
         Definition = definition;
     }
 
+    internal ToshClassInstance(ToshClassDefinition definition, IReadOnlyDictionary<string, Type?>? typeArguments)
+    {
+        Definition = definition;
+        TypeArguments = typeArguments;
+
+        // Build the binding chain whenever this class itself or any
+        // ancestor declares type parameters; otherwise lookups never
+        // resolve substitutions for inherited generic properties on
+        // non-generic descendants (e.g. `class IntChild extends Base<int>`).
+        if (typeArguments is not null || HasAnyGenericAncestor(definition))
+        {
+            _bindingChain = BuildBindingChain(
+                definition,
+                typeArguments ?? (IReadOnlyDictionary<string, Type?>)new Dictionary<string, Type?>(StringComparer.OrdinalIgnoreCase));
+        }
+    }
+
+    private static bool HasAnyGenericAncestor(ToshClassDefinition def)
+    {
+        for (var c = def; c is not null; c = c.BaseClass)
+        {
+            if (c.TypeParameterNames.Count > 0) return true;
+        }
+        return false;
+    }
+
+    private readonly Dictionary<ToshClassDefinition, IReadOnlyDictionary<string, Type?>>? _bindingChain;
+
+    /// <summary>
+    /// Returns the type-argument bindings to apply when resolving member type
+    /// names declared on <paramref name="def"/>. For the instance's own
+    /// definition this is identical to <see cref="TypeArguments"/>; for an
+    /// ancestor declared via <c>extends Foo&lt;T1, T2&gt;</c>, the bindings
+    /// are derived by substituting the child's bindings into the
+    /// <see cref="ToshClassDefinition.BaseTypeArguments"/> strings.
+    /// </summary>
+    internal IReadOnlyDictionary<string, Type?>? GetBindingsFor(ToshClassDefinition def)
+    {
+        if (_bindingChain is null) return null;
+        return _bindingChain.TryGetValue(def, out var bindings) ? bindings : null;
+    }
+
+    private static Dictionary<ToshClassDefinition, IReadOnlyDictionary<string, Type?>> BuildBindingChain(
+        ToshClassDefinition leaf,
+        IReadOnlyDictionary<string, Type?> leafBindings)
+    {
+        var chain = new Dictionary<ToshClassDefinition, IReadOnlyDictionary<string, Type?>>(ReferenceEqualityComparer.Instance)
+        {
+            [leaf] = leafBindings,
+        };
+
+        var currentDef = leaf;
+        var currentBindings = leafBindings;
+
+        while (currentDef.BaseClass is { } parent)
+        {
+            // Need parent bindings: parent's TypeParameterNames[i] →
+            // resolve currentDef.BaseTypeArguments[i] using currentBindings.
+            if (parent.TypeParameterNames.Count == 0)
+            {
+                break;
+            }
+
+            var baseArgs = currentDef.BaseTypeArguments;
+            var baseResolved = currentDef.BaseTypeArgumentsResolved;
+            if (baseArgs is null || baseArgs.Count != parent.TypeParameterNames.Count)
+            {
+                // arity mismatch was checked at class-binding time; if we get
+                // here treat parent as unbound (no substitution).
+                break;
+            }
+
+            var parentBindings = new Dictionary<string, Type?>(StringComparer.OrdinalIgnoreCase);
+            for (int i = 0; i < parent.TypeParameterNames.Count; i++)
+            {
+                var argString = baseArgs[i];
+                // If the argument is itself a type-parameter of currentDef,
+                // forward its current binding. Otherwise prefer the
+                // pre-resolved CLR type captured at class-binding time.
+                if (currentBindings.TryGetValue(argString, out var bound))
+                {
+                    parentBindings[parent.TypeParameterNames[i]] = bound;
+                }
+                else
+                {
+                    parentBindings[parent.TypeParameterNames[i]] =
+                        baseResolved is not null && i < baseResolved.Count ? baseResolved[i] : null;
+                }
+            }
+
+            chain[parent] = parentBindings;
+            currentDef = parent;
+            currentBindings = parentBindings;
+        }
+
+        return chain;
+    }
+
     public ToshClassDefinition Definition { get; }
+
+    /// <summary>
+    /// Resolved type-argument bindings for this instance, keyed by the
+    /// class type-parameter name (e.g. <c>"T1"</c> → <c>typeof(int)</c>).
+    /// <c>null</c> for non-generic classes; values may be <c>null</c> if a
+    /// type-argument string did not resolve to a known CLR type (kept as a
+    /// nominal binding for diagnostic display only).
+    /// </summary>
+    public IReadOnlyDictionary<string, Type?>? TypeArguments { get; }
 
     internal bool IsInitializing { get; private set; } = true;
 
@@ -94,7 +201,7 @@ public sealed class ToshClassInstance : IShellRecordObject, IShellInvocableObjec
 
     public object Clone()
     {
-        var clone = new ToshClassInstance(Definition);
+        var clone = new ToshClassInstance(Definition, TypeArguments);
 
         foreach (var (name, value) in _values)
         {

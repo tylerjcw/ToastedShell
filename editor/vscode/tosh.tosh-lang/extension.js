@@ -86,17 +86,17 @@ async function activate(context) {
     );
 
     // Solution / project commands
-    context.subscriptions.push(vscode.commands.registerCommand("tosh.newSolution",       () => solutionProvider.newSolution()));
-    context.subscriptions.push(vscode.commands.registerCommand("tosh.newProject",        (node) => solutionProvider.newProject(node)));
-    context.subscriptions.push(vscode.commands.registerCommand("tosh.addFileToProject",  (node) => solutionProvider.addFile(node)));
+    context.subscriptions.push(vscode.commands.registerCommand("tosh.newSolution", () => solutionProvider.newSolution()));
+    context.subscriptions.push(vscode.commands.registerCommand("tosh.newProject", (node) => solutionProvider.newProject(node)));
+    context.subscriptions.push(vscode.commands.registerCommand("tosh.addFileToProject", (node) => solutionProvider.addFile(node)));
     context.subscriptions.push(vscode.commands.registerCommand("tosh.removeFromProject", (node) => solutionProvider.removeNode(node)));
-    context.subscriptions.push(vscode.commands.registerCommand("tosh.buildProject",      (node) => solutionProvider.buildProject(node)));
-    context.subscriptions.push(vscode.commands.registerCommand("tosh.buildSolution",     (node) => solutionProvider.buildSolution(node)));
-    context.subscriptions.push(vscode.commands.registerCommand("tosh.solution.refresh",  () => solutionProvider.refresh()));
+    context.subscriptions.push(vscode.commands.registerCommand("tosh.buildProject", (node) => solutionProvider.buildProject(node)));
+    context.subscriptions.push(vscode.commands.registerCommand("tosh.buildSolution", (node) => solutionProvider.buildSolution(node)));
+    context.subscriptions.push(vscode.commands.registerCommand("tosh.solution.refresh", () => solutionProvider.refresh()));
 
     // Scripts commands
-    context.subscriptions.push(vscode.commands.registerCommand("tosh.runScript",        (node) => runScriptNode(node)));
-    context.subscriptions.push(vscode.commands.registerCommand("tosh.scripts.refresh",  () => scriptsProvider.refresh()));
+    context.subscriptions.push(vscode.commands.registerCommand("tosh.runScript", (node) => runScriptNode(node)));
+    context.subscriptions.push(vscode.commands.registerCommand("tosh.scripts.refresh", () => scriptsProvider.refresh()));
 
     // Command reference
     context.subscriptions.push(vscode.commands.registerCommand("tosh.openCommandRef", () => ToshCommandRefPanel.show(context)));
@@ -394,6 +394,18 @@ function findLanguageServerOptions(configuration, outputChannel) {
         return createServerOptions(dotnetPath, explicitPath);
     }
 
+    // Prefer the system-installed tosh-lsp binary so editor + CLI stay in lockstep.
+    const installedServerCandidates = [
+        "/usr/bin/tosh-lsp",
+        "/usr/local/bin/tosh-lsp",
+        "/bin/tosh-lsp",
+    ];
+    for (const candidate of installedServerCandidates) {
+        if (fs.existsSync(candidate)) {
+            return createServerOptions(dotnetPath, candidate);
+        }
+    }
+
     for (const workspaceFolder of vscode.workspace.workspaceFolders || []) {
         const root = workspaceFolder.uri.fsPath;
         const builtDllCandidates = [
@@ -536,7 +548,7 @@ class ToshServersProvider {
 
     _buildLspItem() {
         const stateLabel = { stopped: "Stopped", starting: "Starting…", running: "Running", error: "Error" }[lspState] || lspState;
-        const iconName  = { stopped: "circle-slash", starting: "loading~spin", running: "check", error: "error" }[lspState] || "circle-slash";
+        const iconName = { stopped: "circle-slash", starting: "loading~spin", running: "check", error: "error" }[lspState] || "circle-slash";
 
         const item = new vscode.TreeItem("LSP");
         item.description = stateLabel;
@@ -579,8 +591,8 @@ function findDapServerPath() {
     for (const workspaceFolder of vscode.workspace.workspaceFolders || []) {
         const root = workspaceFolder.uri.fsPath;
         for (const candidate of [
-            path.join(root, "src", "Tosh.Dap", "bin", "Debug",   "net10.0", "Tosh.Dap.dll"),
-            path.join(root, "src", "Tosh.Dap", "bin", "Release",  "net10.0", "Tosh.Dap.dll")
+            path.join(root, "src", "Tosh.Dap", "bin", "Debug", "net10.0", "Tosh.Dap.dll"),
+            path.join(root, "src", "Tosh.Dap", "bin", "Release", "net10.0", "Tosh.Dap.dll")
         ]) {
             if (fs.existsSync(candidate)) return { dll: candidate, dotnetPath };
         }
@@ -822,7 +834,7 @@ class ToshSolutionProvider {
 
     _updateFileDiag(uri) {
         const diags = vscode.languages.getDiagnostics(uri);
-        const errors   = diags.filter(d => d.severity === vscode.DiagnosticSeverity.Error).length;
+        const errors = diags.filter(d => d.severity === vscode.DiagnosticSeverity.Error).length;
         const warnings = diags.filter(d => d.severity === vscode.DiagnosticSeverity.Warning).length;
         if (errors === 0 && warnings === 0) this._diagMap.delete(uri.fsPath);
         else this._diagMap.set(uri.fsPath, { errors, warnings });
@@ -1744,7 +1756,7 @@ function checkToshInstall() {
     });
     if (result.status === 0) {
         const ver = (result.stdout || Buffer.alloc(0)).toString("utf8").trim() ||
-                    (result.stderr || Buffer.alloc(0)).toString("utf8").trim();
+            (result.stderr || Buffer.alloc(0)).toString("utf8").trim();
         vscode.window.showInformationMessage(`TōSh is installed: ${ver || "(version unavailable)"}`);
     } else {
         vscode.window.showErrorMessage(
@@ -1786,10 +1798,10 @@ class ToshReplPanel {
 
         this._panel.webview.onDidReceiveMessage(msg => {
             switch (msg.type) {
-                case "run":     this._run(msg.code); break;
-                case "clear":   this._post({ type: "clear" }); break;
+                case "run": this._run(msg.code); break;
+                case "clear": this._post({ type: "clear" }); break;
                 case "restart": this._restart(); break;
-                case "ready":   this._post({ type: "status", state: this._proc ? "running" : "stopped" }); break;
+                case "ready": this._post({ type: "status", state: this._proc ? "running" : "stopped" }); break;
             }
         });
 
@@ -1865,11 +1877,11 @@ class ToshReplPanel {
     }
 
     _kill() {
-        if (this._proc) { try { this._proc.kill(); } catch {} this._proc = null; }
+        if (this._proc) { try { this._proc.kill(); } catch { } this._proc = null; }
     }
 
     _post(msg) {
-        try { this._panel.webview.postMessage(msg); } catch {}
+        try { this._panel.webview.postMessage(msg); } catch { }
     }
 
     _buildHtml() {

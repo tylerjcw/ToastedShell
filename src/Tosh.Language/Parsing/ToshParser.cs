@@ -13,7 +13,7 @@ public static class ToshParser
             var sourceText = source ?? string.Empty;
             var lexer = new ToshLexer(sourceText);
             var tokens = lexer.Lex();
-            var parser = new InternalParser(sourceName, sourceText, tokens, lexer.LineHushDirectives);
+            var parser = new InternalParser(sourceName, sourceText, tokens, lexer.LineHushDirectives, lexer.LineComments);
             return parser.Parse();
         }
         catch (ToshLexer.LexerDiagnosticException exception)
@@ -34,6 +34,7 @@ public static class ToshParser
         private readonly string _sourceText;
         private readonly IReadOnlyList<SyntaxToken> _tokens;
         private readonly IReadOnlyList<LineHushDirective> _lineHushDirectives;
+        private readonly IReadOnlyList<LineComment> _lineComments;
         private readonly List<SyntaxDiagnostic> _diagnostics = [];
         private readonly HashSet<string> _userFunctionNames;
         private int _position;
@@ -43,12 +44,14 @@ public static class ToshParser
             string sourceName,
             string sourceText,
             IReadOnlyList<SyntaxToken> tokens,
-            IReadOnlyList<LineHushDirective> lineHushDirectives)
+            IReadOnlyList<LineHushDirective> lineHushDirectives,
+            IReadOnlyList<LineComment> lineComments)
         {
             _sourceName = sourceName;
             _sourceText = sourceText;
             _tokens = tokens;
             _lineHushDirectives = lineHushDirectives;
+            _lineComments = lineComments;
             _userFunctionNames = ScanUserFunctionNames(tokens);
         }
 
@@ -74,12 +77,53 @@ public static class ToshParser
         public ParseResult Parse()
         {
             var statement = ParseScript();
-            return new ParseResult(_sourceName, _sourceText, statement, _diagnostics, _lineHushDirectives);
+            return new ParseResult(_sourceName, _sourceText, statement, _diagnostics, _lineHushDirectives, _lineComments);
         }
 
         private StatementSyntax ParseScript()
         {
             var statements = new List<StatementSyntax>();
+
+            // Capture a free-floating leading doc-comment block as the
+            // script's own documentation: the run of `##` lines at the
+            // very top of the file that is followed by at least one
+            // blank line before the first real statement. This lets a
+            // file-level `## @summary ...` block describe the whole
+            // script (surfaced in `--help` and via the LSP).
+            DocComment? scriptDoc = null;
+            if (Current.Kind == SyntaxTokenKind.DocComment)
+            {
+                // Walk the contiguous block: stop at the first gap that
+                // contains a blank line, so we don't merge a file-level
+                // doc-block with the doc-block of the next declaration.
+                var lookahead = _position;
+                while (lookahead < _tokens.Count && _tokens[lookahead].Kind == SyntaxTokenKind.DocComment)
+                {
+                    if (lookahead + 1 < _tokens.Count
+                        && _tokens[lookahead + 1].Kind == SyntaxTokenKind.DocComment
+                        && CountNewlinesBetween(_tokens[lookahead].Span.End, _tokens[lookahead + 1].Span.Start) >= 2)
+                    {
+                        lookahead++;
+                        break;
+                    }
+                    lookahead++;
+                }
+
+                var lastDocEnd = _tokens[lookahead - 1].Span.End;
+                var nextStart = lookahead < _tokens.Count ? _tokens[lookahead].Span.Start : _sourceText.Length;
+                var trailingNewlines = CountNewlinesBetween(lastDocEnd, nextStart);
+
+                // Only adopt as a script-level doc when the block ends
+                // with a blank line (or hits EOF) — otherwise the block
+                // belongs to whatever declaration follows it.
+                if (trailingNewlines >= 2 || lookahead >= _tokens.Count - 1)
+                {
+                    var docTokens = new List<SyntaxToken>(lookahead - _position);
+                    while (_position < lookahead)
+                        docTokens.Add(NextToken());
+                    scriptDoc = DocComment.Parse(docTokens);
+                }
+            }
 
             while (Current.Kind != SyntaxTokenKind.EndOfFile)
             {
@@ -125,14 +169,20 @@ public static class ToshParser
 
             return statements.Count switch
             {
-                0 => new ScriptStatementSyntax(Array.Empty<StatementSyntax>(), new TextSpan(0, 0)),
+                0 => new ScriptStatementSyntax(Array.Empty<StatementSyntax>(), new TextSpan(0, 0), scriptDoc),
                 1 when statements[0] is ScriptInputStatementSyntax or SubcommandStatementSyntax => new ScriptStatementSyntax(
                     statements,
-                    statements[0].Span),
+                    statements[0].Span,
+                    scriptDoc),
+                1 when scriptDoc is not null => new ScriptStatementSyntax(
+                    statements,
+                    statements[0].Span,
+                    scriptDoc),
                 1 => statements[0],
                 _ => new ScriptStatementSyntax(
                     statements,
-                    TextSpan.FromBounds(statements[0].Span.Start, statements[^1].Span.End)),
+                    TextSpan.FromBounds(statements[0].Span.Start, statements[^1].Span.End),
+                    scriptDoc),
             };
         }
 
@@ -2361,6 +2411,8 @@ public static class ToshParser
             // the opening "(" of the parameter list was already consumed as part of that token.
             var opNameOpenParenConsumed = allowOperatorName && openParenConsumed;
 
+            var typeParameters = opNameOpenParenConsumed ? Array.Empty<string>() : ParseTypeParameterList();
+
             IReadOnlyList<FunctionParameterSyntax> parameters = Array.Empty<FunctionParameterSyntax>();
 
             if (opNameOpenParenConsumed || Current.Kind == SyntaxTokenKind.OpenParen)
@@ -2464,7 +2516,8 @@ public static class ToshParser
                 handlerPriority,
                 isOnceHandler,
                 whenGuard,
-                DocComment: DocComment.Parse(docTokens ?? Array.Empty<SyntaxToken>()));
+                DocComment: DocComment.Parse(docTokens ?? Array.Empty<SyntaxToken>()),
+                TypeParameters: typeParameters.Count > 0 ? typeParameters : null);
         }
 
         private StatementSyntax ParseRuneDefinitionStatement(IReadOnlyList<SyntaxToken>? docTokens = null)
@@ -2545,6 +2598,7 @@ public static class ToshParser
 
             var classToken = NextToken();
             var nameToken = ExpectVariableName();
+            var typeParameters = ParseTypeParameterList();
             var primaryConstructorParameters = Current.Kind == SyntaxTokenKind.OpenParen
                 ? ParseFunctionParameters()
                 : Array.Empty<FunctionParameterSyntax>();
@@ -2552,11 +2606,34 @@ public static class ToshParser
             // Parse optional 'extends BaseClass' with optional constructor args
             string? baseClassName = null;
             IReadOnlyList<PipelineSyntax>? baseConstructorArgs = null;
+            IReadOnlyList<string>? baseTypeArgs = null;
             if (Current.Kind == SyntaxTokenKind.Bareword &&
                 string.Equals(Current.Text, "extends", StringComparison.OrdinalIgnoreCase))
             {
                 NextToken(); // consume 'extends'
-                baseClassName = ParseTypeName("base class");
+                var baseNameStart = Current.Span;
+                // Parse a dotted bareword (e.g. 'System.Uri') but stop
+                // before any generic-argument list so that
+                // 'extends Foo<X, Y>' splits cleanly into name + type-args.
+                var baseNameBuilder = new StringBuilder();
+                if (Current.Kind == SyntaxTokenKind.Bareword)
+                {
+                    baseNameBuilder.Append(NextToken().Text);
+                }
+                else
+                {
+                    _diagnostics.Add(new SyntaxDiagnostic(
+                        Code: "tosh.parser.expected_type_name",
+                        Title: "Expected a base class name.",
+                        Span: Current.Span,
+                        Label: "write a class or CLR type after 'extends'"));
+                }
+                baseClassName = baseNameBuilder.ToString();
+                if (Current.Kind == SyntaxTokenKind.LessThan)
+                {
+                    var (_, args, hasAngles) = ParseGenericTypeArgumentsStructured();
+                    if (hasAngles) baseTypeArgs = args;
+                }
 
                 // Parse optional base constructor args: extends Parent($x, $y)
                 if (Current.Kind == SyntaxTokenKind.OpenParen)
@@ -2607,6 +2684,7 @@ public static class ToshParser
                 modifier,
                 TextSpan.FromBounds(declarationStart, body.Count == 0 ? nameToken.Span.End : body[^1].Span.End),
                 DocComment: DocComment.Parse(docTokens ?? Array.Empty<SyntaxToken>()),
+                TypeParameters: typeParameters.Count > 0 ? typeParameters : null,
                 BaseClassName: baseClassName,
                 BaseConstructorArgs: baseConstructorArgs,
                 ImplementedInterfaces: implementedInterfaces,
@@ -2615,7 +2693,8 @@ public static class ToshParser
                 IsAbstract: isAbstract,
                 IsHermit: isHermit,
                 IsStrict: isStrict,
-                IsPartial: isPartial);
+                IsPartial: isPartial,
+                BaseTypeArguments: baseTypeArgs);
         }
 
         private StatementSyntax ParseInterfaceDefinitionStatement(IReadOnlyList<SyntaxToken>? docTokens = null)
@@ -2624,6 +2703,7 @@ public static class ToshParser
             var modifier = ParseDeclarationModifier();
             NextToken(); // consume 'interface'
             var nameToken = ExpectVariableName();
+            var typeParameters = ParseTypeParameterList();
 
             if (Current.Kind != SyntaxTokenKind.OpenBrace)
             {
@@ -2694,7 +2774,8 @@ public static class ToshParser
                 methods,
                 modifier,
                 TextSpan.FromBounds(declarationStart, closeBrace.Span.End),
-                DocComment: DocComment.Parse(docTokens ?? Array.Empty<SyntaxToken>()));
+                DocComment: DocComment.Parse(docTokens ?? Array.Empty<SyntaxToken>()),
+                TypeParameters: typeParameters.Count > 0 ? typeParameters : null);
         }
 
         private StatementSyntax ParseUnionDefinitionStatement(IReadOnlyList<SyntaxToken>? docTokens = null)
@@ -3539,7 +3620,7 @@ public static class ToshParser
 
             if (Current.Kind == SyntaxTokenKind.Bareword &&
                 string.Equals(Current.Text, className, StringComparison.Ordinal) &&
-                Peek(1).Kind == SyntaxTokenKind.OpenParen)
+                (Peek(1).Kind == SyntaxTokenKind.OpenParen || Peek(1).Kind == SyntaxTokenKind.LessThan))
             {
                 return ParseClassConstructorMember(className, memberStart);
             }
@@ -3719,6 +3800,7 @@ public static class ToshParser
         private ClassMemberSyntax ParseClassConstructorMember(string className, int memberStart)
         {
             var nameToken = NextToken();
+            ParseTypeParameterList(); // consume optional <T, U, ...> — type params are on the class, not the constructor
             var parameters = ParseFunctionParameters();
             var body = ParseRequiredBlock(className);
 
@@ -4866,6 +4948,108 @@ public static class ToshParser
             }
 
             return builder.ToString();
+        }
+
+        /// <summary>
+        /// Parses <c>&lt;A, B, C&gt;</c> into a structured list of top-level type-argument
+        /// strings (with nested generics preserved as inner text). Returns
+        /// <c>(displayString, args, hasAngles)</c> — <paramref name="hasAngles"/> is
+        /// <c>true</c> even when the user wrote <c>&lt;&gt;</c> with no arguments,
+        /// so callers can distinguish that from "no generic suffix at all".
+        /// </summary>
+        private (string Display, IReadOnlyList<string> Arguments, bool HasAngles) ParseGenericTypeArgumentsStructured()
+        {
+            if (Current.Kind != SyntaxTokenKind.LessThan)
+            {
+                return (string.Empty, Array.Empty<string>(), false);
+            }
+
+            var display = new StringBuilder();
+            var args = new List<string>();
+            var current = new StringBuilder();
+            var depth = 0;
+            var sawAny = false;
+
+            while (Current.Kind is SyntaxTokenKind.LessThan or SyntaxTokenKind.GreaterThan or SyntaxTokenKind.GreaterThanGreaterThan or SyntaxTokenKind.Comma or SyntaxTokenKind.Bareword)
+            {
+                if (Current.Kind == SyntaxTokenKind.LessThan)
+                {
+                    if (depth > 0) current.Append('<');
+                    depth++;
+                    display.Append('<');
+                    NextToken();
+                    continue;
+                }
+
+                if (Current.Kind == SyntaxTokenKind.Comma)
+                {
+                    if (depth == 1)
+                    {
+                        if (current.Length > 0) { args.Add(current.ToString().Trim()); current.Clear(); sawAny = true; }
+                    }
+                    else
+                    {
+                        current.Append(',');
+                    }
+                    display.Append(", ");
+                    NextToken();
+                    continue;
+                }
+
+                if (Current.Kind == SyntaxTokenKind.GreaterThan)
+                {
+                    depth--;
+                    if (depth == 0)
+                    {
+                        if (current.Length > 0) { args.Add(current.ToString().Trim()); current.Clear(); sawAny = true; }
+                        display.Append('>');
+                        NextToken();
+                        return (display.ToString(), args, true);
+                    }
+                    current.Append('>');
+                    display.Append('>');
+                    NextToken();
+                    continue;
+                }
+
+                if (Current.Kind == SyntaxTokenKind.GreaterThanGreaterThan)
+                {
+                    // closes two depth levels
+                    depth -= 2;
+                    if (depth <= 0)
+                    {
+                        if (current.Length > 0) { args.Add(current.ToString().Trim()); current.Clear(); sawAny = true; }
+                        display.Append(">>");
+                        NextToken();
+                        return (display.ToString(), args, true);
+                    }
+                    current.Append(">>");
+                    display.Append(">>");
+                    NextToken();
+                    continue;
+                }
+
+                if (Current.Kind == SyntaxTokenKind.Bareword)
+                {
+                    var inner = ParseTypeNameSuffix(NextToken().Text) ?? string.Empty;
+                    current.Append(inner);
+                    display.Append(inner);
+                    continue;
+                }
+            }
+
+            if (depth > 0)
+            {
+                _diagnostics.Add(new SyntaxDiagnostic(
+                    Code: "tosh.parser.missing_closing_angle",
+                    Title: "A closing '>' is required here.",
+                    Span: Current.Span,
+                    Label: "this generic type argument list never closes",
+                    Help: "close the generic argument list with '>' after the last type."));
+            }
+
+            if (current.Length > 0) { args.Add(current.ToString().Trim()); }
+            return (display.ToString(), args, sawAny || depth != 0);
         }
 
         private SyntaxToken ExpectVariableName()
@@ -7417,7 +7601,16 @@ public static class ToshParser
             }
 
             var typeToken = NextToken();
-            var typeName = ParseTypeNameSuffix(typeToken.Text) ?? string.Empty;
+            var bareTypeName = typeToken.Text;
+            string typeName = bareTypeName;
+            IReadOnlyList<string>? typeArguments = null;
+
+            if (Current.Kind == SyntaxTokenKind.LessThan)
+            {
+                var (display, args, hasAngles) = ParseGenericTypeArgumentsStructured();
+                typeName = bareTypeName + display;
+                if (hasAngles) typeArguments = args;
+            }
 
             if (Current.Kind != SyntaxTokenKind.OpenParen)
             {
@@ -7427,7 +7620,7 @@ public static class ToshParser
                     Span: typeToken.Span,
                     Label: "add '(' after the type name",
                     Help: "try 'new SomeType(...)' instead of command-style construction."));
-                return new NewObjectArgumentSyntax(typeName, Array.Empty<ArgumentSyntax>(), TextSpan.FromBounds(newToken.Span.Start, typeToken.Span.End));
+                return new NewObjectArgumentSyntax(typeName, Array.Empty<ArgumentSyntax>(), TextSpan.FromBounds(newToken.Span.Start, typeToken.Span.End), bareTypeName, typeArguments);
             }
 
             var openParen = NextToken();
@@ -7482,14 +7675,18 @@ public static class ToshParser
                 return new NewObjectArgumentSyntax(
                     typeName,
                     arguments,
-                    TextSpan.FromBounds(newToken.Span.Start, arguments.Count > 0 ? arguments[^1].Span.End : typeToken.Span.End));
+                    TextSpan.FromBounds(newToken.Span.Start, arguments.Count > 0 ? arguments[^1].Span.End : typeToken.Span.End),
+                    bareTypeName,
+                    typeArguments);
             }
 
             var constructorCloseParen = NextToken();
             return new NewObjectArgumentSyntax(
                 typeName,
                 arguments,
-                TextSpan.FromBounds(newToken.Span.Start, constructorCloseParen.Span.End));
+                TextSpan.FromBounds(newToken.Span.Start, constructorCloseParen.Span.End),
+                bareTypeName,
+                typeArguments);
         }
 
         private ArgumentSyntax ParsePostfixChain(ArgumentSyntax expression, bool implicitCurrentItem = false)
@@ -9236,7 +9433,9 @@ public static class ToshParser
             return MatchesKeywordAtOffset(offset, "func") &&
                    Peek(offset + 1).Kind == SyntaxTokenKind.Bareword &&
                    IsValidCommandName(Peek(offset + 1).Text) &&
-                   (Peek(offset + 2).Kind == SyntaxTokenKind.OpenParen || IsFatArrowToken(Peek(offset + 2), Peek(offset + 3)));
+                   (Peek(offset + 2).Kind == SyntaxTokenKind.OpenParen ||
+                    Peek(offset + 2).Kind == SyntaxTokenKind.LessThan ||
+                    IsFatArrowToken(Peek(offset + 2), Peek(offset + 3)));
         }
 
         private bool LooksLikeScriptInputDeclaration()
@@ -9290,6 +9489,7 @@ public static class ToshParser
                    IsValidIdentifier(Peek(offset + 1).Text) &&
                    (Peek(offset + 2).Kind == SyntaxTokenKind.OpenParen ||
                     Peek(offset + 2).Kind == SyntaxTokenKind.OpenBrace ||
+                    Peek(offset + 2).Kind == SyntaxTokenKind.LessThan ||
                     (Peek(offset + 2).Kind == SyntaxTokenKind.Bareword &&
                      (string.Equals(Peek(offset + 2).Text, "fulfills", StringComparison.OrdinalIgnoreCase) ||
                       string.Equals(Peek(offset + 2).Text, "implements", StringComparison.OrdinalIgnoreCase) ||
@@ -9303,7 +9503,8 @@ public static class ToshParser
             return MatchesKeywordAtOffset(offset, "interface") &&
                    Peek(offset + 1).Kind == SyntaxTokenKind.Bareword &&
                    IsValidIdentifier(Peek(offset + 1).Text) &&
-                   Peek(offset + 2).Kind == SyntaxTokenKind.OpenBrace;
+                   (Peek(offset + 2).Kind == SyntaxTokenKind.OpenBrace ||
+                    Peek(offset + 2).Kind == SyntaxTokenKind.LessThan);
         }
 
         private bool LooksLikeUnionDefinition()
@@ -10595,7 +10796,11 @@ public static class ToshParser
         {
             return token.Kind == SyntaxTokenKind.Bareword &&
                    token.Text.Length > 1 &&
-                   token.Text[0] == '.';
+                   token.Text[0] == '.' &&
+                   // Reject `..` (range) and `...` (spread/splat) — they are
+                   // never member access, even when whitespace-adjacent to a
+                   // preceding variable reference.
+                   token.Text[1] != '.';
         }
 
         private static void ParseTypedIdentifierToken(
@@ -10726,6 +10931,21 @@ public static class ToshParser
             while (Current.Kind == SyntaxTokenKind.DocComment)
                 tokens.Add(NextToken());
             return tokens;
+        }
+
+        private int CountNewlinesBetween(int start, int end)
+        {
+            if (start >= end || end > _sourceText.Length) return 0;
+            var count = 0;
+            for (var i = start; i < end; i++)
+            {
+                if (_sourceText[i] == '\n')
+                {
+                    count++;
+                    if (count >= 2) return count;
+                }
+            }
+            return count;
         }
     }
 }

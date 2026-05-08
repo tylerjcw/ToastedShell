@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Tosh.Language.Formatting;
 using Tosh.LanguageServices;
 
 namespace Tosh.Lsp;
@@ -101,6 +102,8 @@ public sealed class ToshLanguageServer
                             prepareProvider = true
                         },
                         documentSymbolProvider = true,
+                        documentFormattingProvider = true,
+                        documentRangeFormattingProvider = true,
                         semanticTokensProvider = new
                         {
                             legend = new
@@ -222,6 +225,30 @@ public sealed class ToshLanguageServer
                     break;
                 }
 
+            case "textDocument/formatting":
+                {
+                    var uri = parameters.GetProperty("textDocument").GetProperty("uri").GetString() ?? string.Empty;
+                    _documents.TryGetValue(uri, out var text);
+                    var edits = ComputeFullDocumentFormat(text ?? string.Empty, uri);
+                    await WriteResponseAsync(id, edits, cancellationToken);
+                    break;
+                }
+
+            case "textDocument/rangeFormatting":
+                {
+                    // We currently format the whole document regardless of the
+                    // requested range — partial-range formatting requires
+                    // statement-boundary detection that the formatter doesn't
+                    // yet expose. Returning the full-document edits keeps the
+                    // editor's "Format Selection" command useful instead of
+                    // failing.
+                    var uri = parameters.GetProperty("textDocument").GetProperty("uri").GetString() ?? string.Empty;
+                    _documents.TryGetValue(uri, out var text);
+                    var edits = ComputeFullDocumentFormat(text ?? string.Empty, uri);
+                    await WriteResponseAsync(id, edits, cancellationToken);
+                    break;
+                }
+
             default:
                 await WriteErrorAsync(id, -32601, $"Method '{method}' is not supported.", cancellationToken);
                 break;
@@ -286,6 +313,55 @@ public sealed class ToshLanguageServer
             uri,
             diagnostics
         }, cancellationToken);
+    }
+
+    /// <summary>
+    /// Run the source formatter and return the LSP <c>TextEdit[]</c> that
+    /// replaces the entire document with the formatted text. Returns an
+    /// empty array when the formatter declined to change anything (e.g. the
+    /// source is already canonical, or it contained parse errors).
+    /// </summary>
+    private static object[] ComputeFullDocumentFormat(string text, string uri)
+    {
+        var result = ToshFormatter.Format(text, uri);
+        if (!result.IsSyntacticallyValid || string.Equals(result.FormattedText, text, StringComparison.Ordinal))
+        {
+            return Array.Empty<object>();
+        }
+
+        var (endLine, endChar) = ComputeEndPosition(text);
+        return new object[]
+        {
+            new
+            {
+                range = new
+                {
+                    start = new { line = 0, character = 0 },
+                    end = new { line = endLine, character = endChar }
+                },
+                newText = result.FormattedText
+            }
+        };
+    }
+
+    /// <summary>End-of-document position in (line, character) for an LSP range.</summary>
+    private static (int Line, int Character) ComputeEndPosition(string text)
+    {
+        var line = 0;
+        var column = 0;
+        for (var i = 0; i < text.Length; i++)
+        {
+            if (text[i] == '\n')
+            {
+                line++;
+                column = 0;
+            }
+            else
+            {
+                column++;
+            }
+        }
+        return (line, column);
     }
 
     private async Task<string?> ReadMessageAsync(CancellationToken cancellationToken)

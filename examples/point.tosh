@@ -1,37 +1,36 @@
-hollow class _Point {
-    hollow prop X: int
-    hollow prop Y: int
+hollow class _Point<T1, T2> {
+    hollow prop X: T1
+    hollow prop Y: T2
     hollow prop IsEmpty: bool
-    hollow shared func Empty() -> _Point {}
+    hollow shared func Empty() -> _Point<T1, T2> {}
 }
+class Point2D<T1, T2> extends _Point<T1, T2> {
+    overrule prop X: T1 = 0
+    overrule prop Y: T2 = 0
+    overrule prop IsEmpty: bool => (($this.X, $this.Y) == (0, 0))
  
-class Point extends _Point {
-    overrule prop X: int = 0
-    overrule prop Y: int = 0
-    overrule prop IsEmpty: bool => ($this.X, $this.Y) == (0, 0)
- 
-    Point(x: int, y: int) {
+    Point2D<T1, T2>(x: T1, y: T2) {
         $this.X = $x
         $this.Y = $y
     }
      
-    overrule shared func Empty() -> Point {
-        return new Point(0, 0)
+    overrule shared func Empty() -> Point2D<int, int> {
+        return new Point2D<int, int>(0, 0)
     }
 }
+sealed class Point3D<T1, T2, T3> extends _Point<T1, T2> {
+    overrule prop X: T1 = 0
+    overrule prop Y: T2 = 0
+    prop Z: T3 = 0
+    overrule prop IsEmpty: bool => (($this.X, $this.Y, $this.Z) == (0, 0, 0))
 
-sealed class Point3 extends Point {
-    overrule prop X: int = 0
-    overrule prop Y: int = 0
-    prop Z: int = 0
-    overrule prop IsEmpty: bool => ($this.X, $this.Y, $this.Z) == (0, 0, 0)
-
-    Point3(x: int, y: int, z: int) {
+    Point3D<T1, T2, T3>(x: T1, y: T2, z: T3) {
+        $this.X = $x
+        $this.Y = $y
         $this.Z = $z
-        $super($x, $y)
     }
 
-    overrule shared func Empty() -> Point3 {
-        return new Point3(0, 0, 0)
+    overrule shared func Empty() -> Point3D<int, int, int> {
+        return new Point3D<int, int, int>(0, 0, 0)
     }
 }

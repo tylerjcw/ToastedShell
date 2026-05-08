@@ -12,7 +12,7 @@ public enum DeclarationModifier
     Export,
 }
 
-public sealed record ScriptStatementSyntax(IReadOnlyList<StatementSyntax> Statements, TextSpan Span) : StatementSyntax(Span);
+public sealed record ScriptStatementSyntax(IReadOnlyList<StatementSyntax> Statements, TextSpan Span, DocComment? DocComment = null) : StatementSyntax(Span);
 
 public sealed record PipelineStatementSyntax(PipelineSyntax Pipeline, TextSpan Span) : StatementSyntax(Span);
 
@@ -125,7 +125,8 @@ public sealed record FunctionDefinitionStatementSyntax(
     int? HandlerPriority = null,
     bool IsOnceHandler = false,
     BlockSyntax? WhenGuard = null,
-    DocComment? DocComment = null) : StatementSyntax(Span);
+    DocComment? DocComment = null,
+    IReadOnlyList<string>? TypeParameters = null) : StatementSyntax(Span);
 
 public sealed record RuneDefinitionStatementSyntax(
     string Name,
@@ -203,6 +204,7 @@ public sealed record ClassDefinitionStatementSyntax(
     DeclarationModifier Modifier,
     TextSpan Span,
     DocComment? DocComment = null,
+    IReadOnlyList<string>? TypeParameters = null,
     string? BaseClassName = null,
     IReadOnlyList<PipelineSyntax>? BaseConstructorArgs = null,
     IReadOnlyList<string>? ImplementedInterfaces = null,
@@ -211,7 +213,8 @@ public sealed record ClassDefinitionStatementSyntax(
     bool IsAbstract = false,
     bool IsHermit = false,
     bool IsStrict = false,
-    bool IsPartial = false) : StatementSyntax(Span);
+    bool IsPartial = false,
+    IReadOnlyList<string>? BaseTypeArguments = null) : StatementSyntax(Span);
 
 public sealed record InterfaceMethodSignatureSyntax(
     string Name,
@@ -224,7 +227,8 @@ public sealed record InterfaceDefinitionStatementSyntax(
     IReadOnlyList<InterfaceMethodSignatureSyntax> Methods,
     DeclarationModifier Modifier,
     TextSpan Span,
-    DocComment? DocComment = null) : StatementSyntax(Span);
+    DocComment? DocComment = null,
+    IReadOnlyList<string>? TypeParameters = null) : StatementSyntax(Span);
 
 public sealed record UnionVariantSyntax(
     string Name,

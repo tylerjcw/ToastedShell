@@ -26,7 +26,7 @@ public sealed class XmlDataFormat : IDataFormat
             throw new InvalidOperationException($"Could not parse XML input. {exception.Message}");
         }
 
-        yield return document;
+        yield return ConvertElement(document.Root);
     }
 
     public async IAsyncEnumerable<object?> SerializeAsync(IReadOnlyList<object?> values, IReadOnlyList<object?> arguments)

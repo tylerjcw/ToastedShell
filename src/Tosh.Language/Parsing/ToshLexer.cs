@@ -11,6 +11,7 @@ public sealed class ToshLexer
     private readonly string _source;
     private int _position;
     private readonly List<LineHushDirective> _lineHushDirectives = [];
+    private readonly List<LineComment> _lineComments = [];
 
     public ToshLexer(string source)
     {
@@ -24,6 +25,14 @@ public sealed class ToshLexer
     /// so users can silence a single noisy line without changing global config.
     /// </summary>
     public IReadOnlyList<LineHushDirective> LineHushDirectives => _lineHushDirectives;
+
+    /// <summary>
+    /// All `#`-style line comments encountered during lexing, in source order.
+    /// Used by the source formatter to preserve comments across a format pass.
+    /// Doc comments (<c>##</c>) are emitted as <see cref="SyntaxTokenKind.DocComment"/>
+    /// tokens instead and are not included here.
+    /// </summary>
+    public IReadOnlyList<LineComment> LineComments => _lineComments;
 
     public IReadOnlyList<SyntaxToken> Lex()
     {
@@ -351,17 +360,38 @@ public sealed class ToshLexer
     {
         // Capture the comment body so we can recognize inline directives like
         //   echo $value  # hush tosh.naming.shadowed_underscore
+        var hashStart = _position;
         var bodyStart = _position + 1; // skip leading '#'
         while (!IsAtEnd && Current != '\n')
         {
             _position++;
         }
         var bodyEnd = _position;
-        if (bodyEnd > bodyStart)
+        var body = bodyEnd > bodyStart ? _source.Substring(bodyStart, bodyEnd - bodyStart) : string.Empty;
+        if (body.Length > 0)
         {
-            var body = _source.Substring(bodyStart, bodyEnd - bodyStart);
             TryRecordHushDirective(bodyStart, body);
         }
+        var line = GetLineNumber(hashStart);
+        var isFullLine = IsFullLineComment(hashStart);
+        _lineComments.Add(new LineComment(
+            Position: hashStart,
+            EndPosition: bodyEnd,
+            Line: line,
+            IsFullLine: isFullLine,
+            Text: "#" + body));
+    }
+
+    private bool IsFullLineComment(int hashStart)
+    {
+        // A comment is "full-line" if only whitespace precedes it on its line.
+        var i = hashStart - 1;
+        while (i >= 0 && _source[i] != '\n')
+        {
+            if (!char.IsWhiteSpace(_source[i])) return false;
+            i--;
+        }
+        return true;
     }
 
     private void TryRecordHushDirective(int bodyStart, string body)

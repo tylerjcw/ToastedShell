@@ -93,6 +93,11 @@ public sealed partial class ToshEngine : IShellEvaluator
             Runtime.Commands.Register(new DebugCommand(this));
         }
 
+        if (!Runtime.Commands.TryGet("format", out _))
+        {
+            Runtime.Commands.Register(new Bridge.Scripting.FormatCommand());
+        }
+
         // Load built-in rune definitions
         LoadBuiltinRunesAsync().GetAwaiter().GetResult();
     }
@@ -2356,19 +2361,31 @@ public sealed partial class ToshEngine : IShellEvaluator
             IsGenerator: ContainsYieldStatement(body));
     }
 
+    private static string? EraseTypeParameter(string? typeName, IReadOnlyList<string>? typeParameters)
+    {
+        if (typeName is null || typeParameters is not { Count: > 0 }) return typeName;
+        return typeParameters.Contains(typeName, StringComparer.Ordinal) ? null : typeName;
+    }
+
     private FunctionParameterDefinition CreateParameterDefinition(
         FunctionParameterSyntax parameter,
         string sourceName,
-        string sourceText)
+        string sourceText,
+        IReadOnlyList<string>? typeParameters = null)
     {
+        var erased = EraseTypeParameter(parameter.TypeName, typeParameters);
         return new FunctionParameterDefinition(
             parameter.Name,
-            parameter.TypeName,
+            erased,
             parameter.IsOptional,
             parameter.IsRest,
             parameter.DefaultValue,
             parameter.Span,
-            CreateRefinementAnnotation(sourceName, sourceText, parameter.Refinement));
+            CreateRefinementAnnotation(sourceName, sourceText, parameter.Refinement),
+            // Preserve the original (un-erased) annotation so generic
+            // classes can re-validate against substituted type parameters
+            // at construction / call time.
+            RawTypeName: parameter.TypeName);
     }
 
     private RefinementTypeDefinition CreateRefinementTypeDefinition(
@@ -2622,10 +2639,16 @@ public sealed partial class ToshEngine : IShellEvaluator
             EnsureBindingNameIsNotReserved(sourceName, sourceText, methodParameter.Name, methodParameter.Span, "reserved runtime namespace");
         }
 
+        var classTypeParams = @class.TypeParameters;
+
         var runtimeProperties = @class.Members
             .OfType<ClassPropertyMemberSyntax>()
             .Select(property => new ToshClassPropertyDefinition(
                 property.Name,
+                // Keep the original type-parameter name (e.g. 'T1') so
+                // the runtime can substitute it against the instance's
+                // generic bindings on each access. Concrete CLR-style
+                // types are passed through unchanged.
                 property.TypeName,
                 property.Initializer,
                 property.GetterBody,
@@ -2648,9 +2671,9 @@ public sealed partial class ToshEngine : IShellEvaluator
             .Select(method => new ToshClassMethodDefinition(
                 method.Method.Name,
                 method.Method.Parameters
-                    .Select(parameter => CreateParameterDefinition(parameter, sourceName, sourceText))
+                    .Select(parameter => CreateParameterDefinition(parameter, sourceName, sourceText, classTypeParams))
                     .ToArray(),
-                method.Method.ReturnTypeName,
+                EraseTypeParameter(method.Method.ReturnTypeName, classTypeParams),
                 method.Method.Body,
                 method.IsStatic || @class.IsHermit,  // hermit classes make all members implicitly shared
                 method.IsShy,
@@ -2663,14 +2686,18 @@ public sealed partial class ToshEngine : IShellEvaluator
                 sourceName,
                 sourceText,
                 method.Span,
-                CaptureVisibleScopes()))
+                CaptureVisibleScopes(),
+                // Preserve the un-erased return-type annotation so a generic
+                // class can substitute T against the instance's bindings at
+                // call time (see ToshClassDefinition.ExecuteMethodBlock).
+                RawReturnTypeName: method.Method.ReturnTypeName))
             .ToArray();
 
         var runtimeConstructors = @class.Members
             .OfType<ClassConstructorMemberSyntax>()
             .Select(constructor => new ToshClassConstructorDefinition(
                 constructor.Parameters
-                    .Select(parameter => CreateParameterDefinition(parameter, sourceName, sourceText))
+                    .Select(parameter => CreateParameterDefinition(parameter, sourceName, sourceText, classTypeParams))
                     .ToArray(),
                 constructor.Body,
                 sourceName,
@@ -2683,7 +2710,7 @@ public sealed partial class ToshEngine : IShellEvaluator
             this,
             @class.Name,
             @class.PrimaryConstructorParameters
-                .Select(parameter => CreateParameterDefinition(parameter, sourceName, sourceText))
+                .Select(parameter => CreateParameterDefinition(parameter, sourceName, sourceText, classTypeParams))
                 .ToArray(),
             runtimeProperties,
             runtimeMethods,
@@ -2691,7 +2718,8 @@ public sealed partial class ToshEngine : IShellEvaluator
             sourceName,
             sourceText,
             @class.Span,
-            CaptureVisibleScopes());
+            CaptureVisibleScopes(),
+            typeParameters: classTypeParams);
 
         // Handle partial class merging: if this is a partial class and one already exists, merge members
         if (@class.IsPartial && TryGetNamedType(@class.Name, out var existingType) && existingType is ToshClassDefinition existingDef)
@@ -2756,6 +2784,52 @@ public sealed partial class ToshEngine : IShellEvaluator
                 if (@class.BaseConstructorArgs is { Count: > 0 })
                 {
                     definition.BaseConstructorArgs = @class.BaseConstructorArgs;
+                }
+
+                // Store extends clause type-arguments and validate arity
+                if (@class.BaseTypeArguments is not null)
+                {
+                    if (@class.BaseTypeArguments.Count != baseClassDef.TypeParameterNames.Count)
+                    {
+                        throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                            Code: "tosh.runtime.base_type_argument_arity",
+                            Title: $"Class '{@class.Name}' supplies {@class.BaseTypeArguments.Count} type argument(s) to base class '{baseClassDef.Name}', which expects {baseClassDef.TypeParameterNames.Count}.",
+                            SourceName: sourceName,
+                            SourceText: sourceText,
+                            Span: @class.Span,
+                            Label: $"'{baseClassDef.Name}' has {baseClassDef.TypeParameterNames.Count} type parameter(s): <{string.Join(", ", baseClassDef.TypeParameterNames)}>"));
+                    }
+
+                    definition.BaseTypeArguments = @class.BaseTypeArguments;
+
+                    // Eagerly resolve concrete type-argument strings; entries
+                    // that are themselves child type-parameters are left null
+                    // (they get forwarded at instance construction time).
+                    var childTypeParams = definition.TypeParameterNames;
+                    var resolved = new Type?[@class.BaseTypeArguments.Count];
+                    for (int i = 0; i < @class.BaseTypeArguments.Count; i++)
+                    {
+                        var argString = @class.BaseTypeArguments[i];
+                        if (childTypeParams.Contains(argString, StringComparer.OrdinalIgnoreCase))
+                        {
+                            resolved[i] = null;
+                        }
+                        else
+                        {
+                            resolved[i] = ResolveTypeName(argString);
+                        }
+                    }
+                    definition.BaseTypeArgumentsResolved = resolved;
+                }
+                else if (baseClassDef.TypeParameterNames.Count > 0)
+                {
+                    throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                        Code: "tosh.runtime.base_type_argument_missing",
+                        Title: $"Class '{@class.Name}' extends generic class '{baseClassDef.Name}' without supplying type arguments.",
+                        SourceName: sourceName,
+                        SourceText: sourceText,
+                        Span: @class.Span,
+                        Label: $"write 'extends {baseClassDef.Name}<{string.Join(", ", baseClassDef.TypeParameterNames)}>'"));
                 }
             }
             else
@@ -5237,13 +5311,72 @@ public sealed partial class ToshEngine : IShellEvaluator
                     {
                         var constructorArguments = await EvaluateArgumentsAsync(sourceName, sourceText, newObject.Arguments, cancellationToken);
 
-                        if (TryResolveShellStaticType(newObject.TypeName, out var shellType))
+                        var bareName = newObject.EffectiveBareName;
+                        var typeArgList = newObject.EffectiveTypeArguments;
+                        var hasAngles = newObject.HasExplicitTypeArgumentList;
+
+                        // Reject empty `<>` early — it's never useful and
+                        // is almost always a typo for an inferred-args
+                        // attempt that we don't yet support.
+                        if (hasAngles && typeArgList.Count == 0)
                         {
+                            throw new InvalidOperationException(
+                                $"Empty type-argument list '<>' is not allowed on 'new {bareName}'. Either omit the angle brackets or supply concrete type arguments.");
+                        }
+
+                        if (TryResolveShellStaticType(bareName, out var shellType))
+                        {
+                            if (shellType is ToshClassDefinition classDef)
+                            {
+                                if (classDef.TypeParameterNames.Count == 0)
+                                {
+                                    if (hasAngles)
+                                    {
+                                        throw new InvalidOperationException(
+                                            $"Class '{bareName}' is not generic and does not accept type arguments.");
+                                    }
+
+                                    return classDef.CreateInstance(constructorArguments);
+                                }
+
+                                // Generic class — must have matching type-arg list
+                                if (!hasAngles)
+                                {
+                                    throw new InvalidOperationException(
+                                        $"Generic class '{bareName}' requires type arguments, e.g. 'new {bareName}<{string.Join(", ", classDef.TypeParameterNames)}>(…)'.");
+                                }
+
+                                if (typeArgList.Count != classDef.TypeParameterNames.Count)
+                                {
+                                    throw new InvalidOperationException(
+                                        $"Generic class '{bareName}' expects {classDef.TypeParameterNames.Count} type argument(s) " +
+                                        $"<{string.Join(", ", classDef.TypeParameterNames)}> but received {typeArgList.Count}: <{string.Join(", ", typeArgList)}>.");
+                                }
+
+                                var resolved = new Type?[typeArgList.Count];
+                                for (int i = 0; i < typeArgList.Count; i++)
+                                {
+                                    resolved[i] = ResolveTypeName(typeArgList[i]);
+                                }
+                                return classDef.CreateGenericInstance(resolved, typeArgList, constructorArguments);
+                            }
+
+                            // Non-Tosh-class shell static type
+                            // (built-in collection alias such as
+                            // 'list', 'array', 'dict', or a CLR-backed
+                            // descriptor) — these accept type
+                            // arguments cosmetically and infer
+                            // element types from the constructor
+                            // arguments. Forward as-is.
                             return Runtime.Invoker.CreateInstance(shellType, constructorArguments);
                         }
 
-                        var type = ResolveTypeName(newObject.TypeName)
-                                   ?? throw new InvalidOperationException($"Unable to resolve type '{newObject.TypeName}'.");
+                        // Fall back to CLR resolution — pass the original
+                        // (concatenated) type name including any generic
+                        // suffix so reflection can find e.g. 'List`1'.
+                        var lookupName = newObject.TypeName;
+                        var type = ResolveTypeName(lookupName)
+                                   ?? throw new InvalidOperationException($"Unable to resolve type '{lookupName}'.");
                         return Runtime.Invoker.CreateInstance(type, constructorArguments);
                     }
 
@@ -7801,6 +7934,14 @@ public sealed partial class ToshEngine : IShellEvaluator
         return CreateScopedTypeResolver().Resolve(name);
     }
 
+    /// <summary>
+    /// Public wrapper around the internal scoped type resolver. Used by the
+    /// compiled-code host (`ToshHost.NewObject`) to resolve verbatim
+    /// type-argument strings (e.g. <c>"int"</c>, <c>"list&lt;string&gt;"</c>)
+    /// against the engine's named-type registry and CLR fallback.
+    /// </summary>
+    public Type? TryResolveTypeName(string name) => ResolveTypeName(name);
+
     private IDisposable PushScope(IReadOnlyDictionary<string, object?> locals, bool isModuleScope = false)
     {
         _scopes.Push(new LexicalScope(locals, isModuleScope));
@@ -8284,6 +8425,35 @@ public sealed partial class ToshEngine : IShellEvaluator
             }
         }
 
+        // User-defined generic class annotation, e.g. 'Box<int>'. We accept a
+        // ToshClassInstance whose definition (or any ancestor in the
+        // inheritance chain) names the same generic class. Match before
+        // falling through to ResolveTypeName, because angle-bracket-and-
+        // comma syntax can throw "given assembly name was invalid" inside
+        // the CLR type loader (Type.GetType treats commas as
+        // type/assembly separators).
+        if (TryGetGenericClassAnnotation(normalizedTypeName, out var genericClass, out _) &&
+            value is ToshClassInstance genericInstance)
+        {
+            var current = genericInstance.Definition;
+            while (current is not null)
+            {
+                if (ReferenceEquals(current, genericClass) ||
+                    string.Equals(current.Name, genericClass.Name, StringComparison.Ordinal))
+                {
+                    converted = value;
+                    return true;
+                }
+                current = current.BaseClass;
+            }
+
+            // Bare-name didn't match any ancestor; treat as a hard mismatch
+            // rather than falling through to the CLR type-loader (which
+            // would choke on the angle-bracketed name anyway).
+            converted = null;
+            return false;
+        }
+
         var resolvedType = ResolveTypeName(normalizedTypeName);
 
         if (resolvedType is not null)
@@ -8446,7 +8616,107 @@ public sealed partial class ToshEngine : IShellEvaluator
             return known;
         }
 
-        return TryGetNamedType(normalizedTypeName, out _) || ResolveTypeName(normalizedTypeName) is not null;
+        if (TryGetNamedType(normalizedTypeName, out _))
+        {
+            return true;
+        }
+
+        // User-defined generic class instantiation: 'Foo<int, string>'. Accept
+        // when the bare name resolves to a ToshClassDefinition whose
+        // type-parameter arity matches the supplied argument count, and
+        // every supplied argument is itself a known annotated type. Check
+        // this before ResolveTypeName because the CLR type loader can
+        // throw on angle-bracketed names containing commas.
+        if (TryGetGenericClassAnnotation(normalizedTypeName, out _, out var genericArgs))
+        {
+            foreach (var arg in genericArgs)
+            {
+                if (!IsKnownAnnotatedType(arg, activeRefinements))
+                {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        return ResolveTypeName(normalizedTypeName) is not null;
+    }
+
+    /// <summary>
+    /// Recognises the textual form <c>Bare&lt;arg1, arg2, …&gt;</c> as an
+    /// instantiation of a user-defined generic <see cref="ToshClassDefinition"/>.
+    /// Splits type-arguments at the top angle-bracket level, validates arity,
+    /// and returns the matched class definition.
+    /// </summary>
+    private bool TryGetGenericClassAnnotation(
+        string typeName,
+        out ToshClassDefinition definition,
+        out IReadOnlyList<string> typeArguments)
+    {
+        definition = null!;
+        typeArguments = Array.Empty<string>();
+
+        if (string.IsNullOrEmpty(typeName) || !typeName.EndsWith(">", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var lt = typeName.IndexOf('<');
+        if (lt <= 0)
+        {
+            return false;
+        }
+
+        var bare = typeName[..lt];
+        var inner = typeName.Substring(lt + 1, typeName.Length - lt - 2);
+
+        if (!TryGetNamedType(bare, out var named) || named is not ToshClassDefinition cls || cls.TypeParameterNames.Count == 0)
+        {
+            return false;
+        }
+
+        var args = SplitTopLevelTypeArguments(inner);
+        if (args.Count != cls.TypeParameterNames.Count)
+        {
+            return false;
+        }
+
+        definition = cls;
+        typeArguments = args;
+        return true;
+    }
+
+    private static IReadOnlyList<string> SplitTopLevelTypeArguments(string inner)
+    {
+        var result = new List<string>();
+        var depth = 0;
+        var start = 0;
+        for (var i = 0; i < inner.Length; i++)
+        {
+            var c = inner[i];
+            if (c == '<')
+            {
+                depth++;
+            }
+            else if (c == '>')
+            {
+                depth--;
+            }
+            else if (c == ',' && depth == 0)
+            {
+                result.Add(inner[start..i].Trim());
+                start = i + 1;
+            }
+        }
+        if (start <= inner.Length)
+        {
+            var tail = inner[start..].Trim();
+            if (tail.Length > 0)
+            {
+                result.Add(tail);
+            }
+        }
+        return result;
     }
 
     private string? ResolveNearestAnnotatedTypeSuggestion(string typeName)
