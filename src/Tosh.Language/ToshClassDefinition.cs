@@ -713,10 +713,11 @@ public sealed class ToshClassDefinition : IShellNamedType
         }
 
         // Substitute generic type-parameter names (e.g. 'T1') against the
-        // instance's resolved type-argument bindings. Falls through to the
-        // raw name when no binding applies (non-generic class, or the name
-        // is a concrete type).
-        var effectiveTypeName = property.TypeName;
+        // instance's resolved type-argument bindings. When the property's
+        // declared type is itself a class type-parameter we apply a
+        // strict no-coercion check (matching the constructor and method
+        // parameter behaviour); otherwise we go through the engine's
+        // standard annotated-value conversion path.
         if (instance is not null)
         {
             var bindings = instance.GetBindingsFor(this);
@@ -729,12 +730,20 @@ public sealed class ToshClassDefinition : IShellNamedType
                     // (effectively nominal-only).
                     return value;
                 }
-                effectiveTypeName = boundType.FullName ?? boundType.Name;
+
+                EnforceStrictBinding(
+                    boundType,
+                    value,
+                    property.Span,
+                    SourceName,
+                    SourceText,
+                    $"{Name}.{property.Name}");
+                return value;
             }
         }
 
         return _engine.ConvertAnnotatedValue(
-            effectiveTypeName,
+            property.TypeName,
             property.Refinement,
             value,
             property.Span,

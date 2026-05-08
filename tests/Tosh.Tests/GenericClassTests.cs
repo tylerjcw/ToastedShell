@@ -37,25 +37,24 @@ public sealed class GenericClassTests
     }
 
     [Fact]
-    public async Task Generic_class_coerces_compatible_constructor_argument_to_substituted_type()
+    public async Task Generic_class_strictly_rejects_constructor_argument_with_mismatched_type()
     {
         var engine = new ToshEngine();
 
-        // Assigning an integer to a Box<string> should coerce via standard
-        // value-conversion (string is the canonical target).
-        var results = await engine.ExecuteToListAsync(
-            """
-            class Box<T>(initial) {
-                prop value: T = $initial
-            }
+        // Assigning an integer to a Box<string> must reject under strict
+        // no-coercion semantics for type-parameter bindings.
+        var ex = await Assert.ThrowsAsync<ToshDiagnosticException>(async () =>
+            await engine.ExecuteToListAsync(
+                """
+                class Box<T>(initial) {
+                    prop value: T = $initial
+                }
 
-            var b = new Box<string>(42)
-            echo (type-of $b.value | get Name)
-            echo $b.value
-            """);
+                var b = new Box<string>(42)
+                """));
 
-        Assert.Equal("String", results[0]);
-        Assert.Equal("42", results[1]);
+        Assert.Contains(ex.Diagnostics, d =>
+            d.Code == "tosh.runtime.annotation_conversion_failed");
     }
 
     [Fact]

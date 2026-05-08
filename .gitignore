@@ -41,6 +41,21 @@ docs/cheatsheets/*
 TestResults/
 # LaTeX intermediate output (the canonical PDF is ToastScript.pdf)
 docs/spec/toastscript-spec.pdf
+docs/spec/*.aux
+docs/spec/*.fdb_latexmk
+docs/spec/*.fls
+docs/spec/*.idx
+docs/spec/*.ilg
+docs/spec/*.ind
+docs/spec/*.lof
+docs/spec/*.toc
+docs/spec/*.synctex.gz
+docs/spec/*.out
+docs/cheatsheets/**/*.aux
+docs/cheatsheets/**/*.fdb_latexmk
+docs/cheatsheets/**/*.fls
+docs/cheatsheets/**/*.log
+docs/cheatsheets/**/*.out
 
 # IDE / editor caches
 .vs/

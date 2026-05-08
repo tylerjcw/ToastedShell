@@ -118,6 +118,20 @@ A `Tosh.Sdk` (MSBuild SDK) so users can write:
 
 `.toshproj` files glob `*.tosh` from the project directory. Compiled output is a normal `.dll`/`.exe`/`.pdb`.
 
+#### Scaffolding new projects
+
+The `Tosh.Templates` package ships `dotnet new` templates so users can
+scaffold projects without hand-writing the `.toshproj`:
+
+```bash
+dotnet new install Tosh.Templates
+dotnet new tosh-app  -n MyTool        # OutputType=Exe + apphost
+dotnet new tosh-lib  -n MyLib         # OutputType=Library + reference assembly
+```
+
+Each generated project pre-references `Tosh.Sdk`, sets a sensible
+`TargetFramework` (`net10.0`), and includes a starter `Program.tosh`.
+
 ### 3. Semantic / binding pass
 
 The interpreter binds names lazily. The compiler needs an eager binder:
@@ -576,12 +590,29 @@ It intentionally separates stable ABI promises from implementation details.
 
 #### 8) Generics
 
-- v1 emitted user surface is non-generic at ABI boundary unless a future
-  feature explicitly opts in.
-- tosh type parameters/refinements do not emit CLR generic parameter metadata in
-  v1 public contracts.
-- Contract rule: generic arity (`Type`1`, Method`1`) is reserved for future use;
-  no compatibility guarantee until the feature is declared shipped.
+- User-defined generic classes (`class Foo<T1, T2> { ... }`) are
+  supported end-to-end in compiled mode as of 2026-05. The compiler
+  does **not** emit a CLR generic shell type for them; instead, the
+  declaration is registered via source replay so the engine can reify
+  the class at runtime.
+- `new Foo<int, string>(args)` is emitted through a typed host overload
+  `ToshHost.NewObject(typeName, bareTypeName, string[] typeArgs, object?[] args)`.
+  The host resolves each type-argument string against the engine's
+  named-type registry and CLR fallback, then dispatches to
+  `ToshClassDefinition.CreateGenericInstance`.
+- Type-parameter-bound parameters and return values use **strict
+  no-coercion** semantics: `new Box<string>(42)` rejects rather than
+  stringifying. This matches REPL behavior exactly.
+- The v1 emitted public ABI surface is still non-generic. tosh type
+  parameters do not currently surface as CLR generic parameter
+  metadata on emitted public contracts; consumers from C#/F#/VB see
+  the source-replay registration through the engine, not as a
+  `Foo<>` open generic.
+- v2 target: emit user-defined generic classes as proper CLR generic
+  type definitions so they participate in cross-language ABI.
+- Contract rule: ECMA-style backtick arity (`Type\`1`, `Method\`1`)
+  is reserved for the v2 lowering; no compatibility guarantee until
+  the feature is declared shipped.
 
 #### 9) Library vs executable behavior
 

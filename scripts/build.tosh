@@ -10,6 +10,9 @@
 ##   - `info`    — print a digest of the current repository state
 ##   - `errors`  — surface diagnostic codes from the latest build/test
 ##   - `bench`   — benchmark publish configurations
+##   - `sync`    — sync the VS Code extension into ~/.vscode/extensions
+##   - `install` — Arch package install (with `--linuxDesktop` for MIME/icons)
+##   - `vsix`    — package the VS Code extension as a .vsix
 ## @example scripts/build.tosh publish
 ## @example scripts/build.tosh test --group lsp
 ## @example scripts/build.tosh --help
@@ -740,6 +743,9 @@ subcommand publish {
             sep "SYNC EXTENSION"
             try {
                 info "Syncing VS Code extension into ~/.vscode/extensions ..."
+                # Bootstrap path: python3 runs the legacy .py. A self-hosted
+                # .tosh port lives at scripts/sync_vscode_extension.tosh and
+                # can be run manually with `tosh scripts/sync_vscode_extension.tosh`.
                 python3 $"{$root}/scripts/sync_vscode_extension.py" --quiet
                 assert_ok "sync_vscode_extension.py"
                 ok "VS Code extension synced"
@@ -1403,14 +1409,26 @@ subcommand install {
     ## @param targets A string, comma-separated list, array, or "all".
     ## @remarks
     ##   Usage:
-    ##     build.tosh install              # all three (tosh, tosh-lsp, tosh-mcp)
+    ##     build.tosh install                          # all three (tosh, tosh-lsp, tosh-mcp)
     ##     build.tosh install lsp
     ##     build.tosh install lsp,mcp
     ##     build.tosh install ["tosh","lsp"]
+    ##     build.tosh install --linuxDesktop           # also install MIME/icons/.desktop (user)
+    ##     build.tosh install --linuxDesktop --system  # MIME/icons/.desktop in /usr/share
     ##
     ##   The PKGBUILD reads $TOSH_TARGETS to decide which binaries to publish
     ##   and package, so a single `makepkg -sifC` invocation handles everything.
+    ##
+    ##   When `--linuxDesktop` is set, runs the freedesktop integration step
+    ##   after the package install (text/x-tosh MIME, hicolor icons, app
+    ##   launcher, "Run with TōSh" Open With, GtkSourceView language specs).
     arg targets = "all"
+
+    ## @summary Also install Linux desktop integration (MIME/icons/.desktop).
+    flag linuxDesktop: bool = false
+
+    ## @summary For `--linuxDesktop`: install into /usr/share (sudo) instead of ~/.local/share.
+    flag system: bool = false
 
     var root = repo_root
     var arch_dir = $root | join -p "packaging" "archlinux"
@@ -1448,7 +1466,173 @@ subcommand install {
     } finally {
         cd $prev_cwd
     }
+
+    if ($linuxDesktop) {
+        install_linux_desktop $root $system
+    }
+
     sep "DONE"
+}
+
+## @summary Install freedesktop integration (MIME, icons, .desktop, GtkSourceView).
+## @param=root Repository root.
+## @param=system When true, install into /usr/share via sudo; else ~/.local/share.
+## @remarks
+##   Folded in from the legacy scripts/install-linux-desktop.sh. Uses only
+##   the hicolor icon theme (no named themes). Requires `xdg-mime`,
+##   `desktop-file-validate` (optional), `update-mime-database`,
+##   `gtk-update-icon-cache`, and `update-desktop-database` to be present
+##   for full effect; missing tools are skipped silently.
+func install_linux_desktop(root: DirectoryPath, system: bool) {
+    sep "LINUX DESKTOP"
+    var lang_spec = $root | join -p "editor" "gtksourceview" "tosh.lang"
+    var file_icon = $root | join -p "editor" "vscode" "tosh.tosh-lang" "icons" "tosh-dark.svg"
+    if (not (is-file $lang_spec).IsFile) {
+        fail $"Missing GtkSourceView spec: {$lang_spec}"
+        return
+    }
+    if (not (is-file $file_icon).IsFile) {
+        fail $"Missing icon: {$file_icon}"
+        return
+    }
+
+    var data_root = ""
+    var use_sudo = false
+    if ($system) {
+        $data_root = "/usr/share"
+        var uid = (id -u).Uid
+        if ($uid != 0) { $use_sudo = true }
+    } else {
+        var xdg = $env.XDG_DATA_HOME
+        if ($xdg == null or $xdg == "") {
+            $data_root = $"{$env.HOME}/.local/share"
+        } else {
+            $data_root = $xdg
+        }
+    }
+    var applications_dir = $"{$data_root}/applications"
+    var mime_dir = $"{$data_root}/mime"
+    var icons_dir = $"{$data_root}/icons/hicolor"
+
+    var current_default = ""
+    if (not $system) {
+        try { $current_default = (xdg-mime query default text/x-tosh).Trim() } catch { }
+    }
+
+    var tmp_dir = (mktemp -d).FullName
+    defer { try { rm -rf $tmp_dir | ignore } catch { } }
+
+    write-file $"{$tmp_dir}/tosh.xml" '<?xml version="1.0" encoding="UTF-8"?>
+<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
+  <mime-type type="text/x-tosh">
+    <comment>TōSh script</comment>
+    <icon name="text-x-tosh"/>
+    <sub-class-of type="text/plain"/>
+    <glob pattern="*.tosh" weight="100"/>
+    <magic priority="80">
+      <match type="string" value="#!/usr/bin/tosh" offset="0"/>
+      <match type="string" value="#!/bin/tosh" offset="0"/>
+      <match type="string" value="#!/bin/env tosh" offset="0"/>
+      <match type="string" value="#!/usr/bin/env tosh" offset="0"/>
+    </magic>
+  </mime-type>
+</mime-info>
+'
+
+    write-file $"{$tmp_dir}/tosh.desktop" '[Desktop Entry]
+Type=Application
+Name=TōSh
+GenericName=Shell
+Comment=ToastedShell interactive shell
+Exec=tosh
+TryExec=tosh
+Icon=tosh
+Terminal=true
+Categories=System;TerminalEmulator;
+StartupNotify=false
+'
+
+    write-file $"{$tmp_dir}/tosh-open.desktop" '[Desktop Entry]
+Type=Application
+Name=Run with TōSh
+GenericName=Shell
+Comment=Run a TōSh script
+Exec=tosh %f
+TryExec=tosh
+Icon=tosh
+Terminal=true
+NoDisplay=true
+MimeType=text/x-tosh;
+Categories=System;TerminalEmulator;
+StartupNotify=false
+'
+
+    func sudo_install(use_sudo: bool, src: string, dst: string) {
+        if ($use_sudo) {
+            sudo install -Dm644 $src $dst | ignore
+        } else {
+            install -Dm644 $src $dst | ignore
+        }
+    }
+
+    info $"Installing into {$data_root}"
+    sudo_install $use_sudo $"{$tmp_dir}/tosh.xml" $"{$mime_dir}/packages/tosh.xml"
+    sudo_install $use_sudo $file_icon $"{$icons_dir}/scalable/mimetypes/text-x-tosh.svg"
+    sudo_install $use_sudo $file_icon $"{$icons_dir}/scalable/apps/tosh.svg"
+    sudo_install $use_sudo $"{$tmp_dir}/tosh.desktop" $"{$applications_dir}/tosh.desktop"
+    sudo_install $use_sudo $"{$tmp_dir}/tosh-open.desktop" $"{$applications_dir}/tosh-open.desktop"
+    for v in ["2.0", "3.0", "4", "5"] {
+        sudo_install $use_sudo $lang_spec $"{$data_root}/gtksourceview-{$v}/language-specs/tosh.lang"
+    }
+
+    if ($use_sudo) {
+        try { sudo update-mime-database $mime_dir | ignore } catch { }
+        try { sudo gtk-update-icon-cache -f -t $icons_dir | ignore } catch { }
+        try { sudo update-desktop-database $applications_dir | ignore } catch { }
+    } else {
+        try { update-mime-database $mime_dir | ignore } catch { }
+        try { gtk-update-icon-cache -f -t $icons_dir | ignore } catch { }
+        try { update-desktop-database $applications_dir | ignore } catch { }
+    }
+
+    if (not $system and $current_default != "" and $current_default != "tosh-open.desktop") {
+        try { xdg-mime default $current_default text/x-tosh | ignore } catch { }
+    }
+
+    ok "Linux desktop integration installed"
+    info $"  MIME:           {$mime_dir}/packages/tosh.xml"
+    info $"  App launcher:   {$applications_dir}/tosh.desktop"
+    info $"  Open With:      {$applications_dir}/tosh-open.desktop"
+}
+
+## @summary Sync the VS Code extension into ~/.vscode/extensions.
+## @remarks
+##   Thin wrapper around scripts/sync_vscode_extension.tosh. Reads the
+##   extension's package.json for {publisher, name, version}, runs
+##   `npm install` if package-lock.json is newer than node_modules,
+##   then mirrors the source tree into the matching versioned directory
+##   under ~/.vscode/extensions.
+## @example build.tosh sync
+## @example build.tosh sync --quiet
+## @example build.tosh sync --regenerate
+subcommand sync {
+    ## @summary Suppress informational output (errors still go to stderr).
+    flag quiet: bool = false
+
+    ## @summary Force a fresh `npm install` even if node_modules is current.
+    flag regenerate: bool = false
+
+    var root = repo_root
+    var script = $root | join -p "scripts" "sync_vscode_extension.tosh"
+    if ($quiet and $regenerate) {
+        source $script --quiet --regenerate
+    } else if ($quiet) {
+        source $script --quiet
+    } else if ($regenerate) {
+        source $script --regenerate
+    } else {
+        source $script
+    }
 }
 
 subcommand vsix {

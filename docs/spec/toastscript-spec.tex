@@ -1955,6 +1955,50 @@ var label = match ($input) {
 \end{lstlisting}
 
 
+\section{Postfix Conditionals (\code{if} / \code{unless})}
+\label{sec:postfix-conditionals}
+\ikw{if}\ikw{unless}
+
+A jump statement \textemdash{} \code{return}, \code{yield}, \code{throw},
+\code{break}, or \code{continue} \textemdash{} may be followed by a
+\emph{postfix conditional} that guards execution.  The form is:
+
+\begin{lstlisting}
+return 5  if   $x == 9
+return 8  unless $ready
+yield $i  if   ($i % 2 == 0)
+throw "bad" unless (validate $input)
+break     if   $done
+continue  unless $found
+\end{lstlisting}
+
+Semantics:
+
+\begin{itemize}
+  \item \code{stmt if cond} executes \code{stmt} only when \code{cond}
+        is truthy. It is exactly equivalent to
+        \code{if cond \{ stmt \}}.
+  \item \code{stmt unless cond} executes \code{stmt} only when
+        \code{cond} is falsy. It is exactly equivalent to
+        \code{if cond \{ \} else \{ stmt \}}; the original condition
+        expression is preserved verbatim (no negation operator is
+        inserted).
+\end{itemize}
+
+The condition is parsed as a single argument expression, so non-trivial
+conditions should be parenthesised.  The postfix form is recognised only
+when the \code{if} or \code{unless} keyword appears on the same logical
+line as the jump statement (no implicit statement boundary in between);
+this avoids ambiguity with a free-standing \code{if} block on the
+following line.  Omitting the condition raises
+\code{tosh.parser.expected\_postfix\_condition}.
+
+Postfix conditionals attach \emph{only} to jump statements.  Regular
+commands (\code{echo "hi" if \$x}) and assignments
+(\code{var x = 1 if \$y}) are not supported \textemdash{} use a block
+\code{if} instead.
+
+
 % =============================================================================
 \chapter{Functions}
 \label{ch:functions}
@@ -2120,6 +2164,72 @@ greet "World"      # Hello, World!
 kind 42            # integer
 kind "hi"          # string
 \end{lstlisting}
+
+\section{Operator Overloading}
+\label{sec:operator-overloading}
+
+Classes may overload binary operators by declaring methods whose names are
+the operator symbol itself. The method receives the right-hand operand as
+its single argument; \code{\$this} refers to the left-hand operand.
+
+\begin{lstlisting}
+class Vec {
+    prop X: int = 0
+    prop Y: int = 0
+
+    func +(other) { var r = new Vec(); $r.X = $this.X + $other.X; $r.Y = $this.Y + $other.Y; return $r }
+    func *(scalar) { var r = new Vec(); $r.X = $this.X * $scalar; $r.Y = $this.Y * $scalar; return $r }
+    func ==(other) { return $this.X == $other.X and $this.Y == $other.Y }
+}
+
+var a = new Vec(); $a.X = 1; $a.Y = 2
+var b = new Vec(); $b.X = 3; $b.Y = 4
+$a + $b              # Vec { X: 4, Y: 6 }
+$a * 3               # Vec { X: 3, Y: 6 }
+\end{lstlisting}
+
+The following operator symbols are accepted as method names:
+
+\begin{center}
+\begin{tabular}{l l}
+\toprule
+\textbf{Category} & \textbf{Symbols} \\
+\midrule
+Arithmetic & \code{+}, \code{-}, \code{*}, \code{/}, \code{//}, \code{\%}, \code{**} \\
+Comparison & \code{==}, \code{!=}, \code{<}, \code{<=}, \code{>}, \code{>=} \\
+Match      & \code{=\textasciitilde}, \code{!\textasciitilde} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{Resolution order}
+
+When evaluating \code{a OP b} where either operand is a class instance:
+
+\begin{enumerate}
+    \item If the left operand defines an \code{OP} method, it is invoked
+      with \code{b} as the argument.
+    \item Otherwise, if the right operand defines an \code{OP} method, it
+      is invoked with \code{a} as the argument (note: \code{\$this} is
+      still the right operand).
+    \item Otherwise, the standard built-in operator semantics apply, which
+      typically raises a runtime error if neither side is a supported
+      type.
+\end{enumerate}
+
+\subsection{Limitations}
+
+\begin{itemize}
+    \item Unary operators (prefix \code{-}, \code{not}) are not currently
+      overloadable. Only the binary forms above are accepted as method
+      names.
+    \item Compound-assignment operators (\code{+=}, \code{-=}, etc.) are
+      not overloadable directly; they desugar to the binary form, so
+      defining \code{+} also covers \code{+=}.
+    \item Indexer-style access (\code{a[i]}) is parser-level wired but
+      not yet a spec-level guarantee; prefer named methods until indexer
+      semantics stabilise.
+\end{itemize}
 
 \section{Generator Functions}
 \ikw{yield}
@@ -2576,6 +2686,115 @@ class Product {
     fading prop OldName = "use NewName"
 }
 \end{lstlisting}
+
+\section{Generic Classes}
+\label{sec:generic-classes}
+
+A class declaration may introduce one or more \emph{type parameters}
+inside angle brackets after the class name.  Type parameters can be used
+anywhere a type annotation is accepted: primary-constructor parameters,
+property types, method parameter and return types, and the
+\code{extends} clause of a derived class.
+
+\begin{lstlisting}
+class Box<T>(initial: T) {
+    prop value: T = $initial
+    func unwrap() -> T { return $this.value }
+    func set(v: T) { $this.value = $v }
+}
+
+var bi = new Box<int>(42)
+echo $bi.unwrap()              # 42
+
+var bs = new Box<string>("hi")
+echo $bs.unwrap()              # hi
+\end{lstlisting}
+
+\subsection*{Instantiation}
+
+\code{new ClassName<arg1, arg2, \ldots>(ctorArgs)} creates an instance
+whose type parameters are bound to the supplied CLR types.  The
+type-argument list must match the class's declared arity exactly;
+mismatches \textemdash{} too few, too many, an empty
+\code{<>} list, or omitting the angle brackets entirely on a class
+that declares type parameters \textemdash{} raise an instantiation
+error.
+
+\subsection*{Strict (no-coercion) bindings}
+
+When a constructor parameter, method parameter, method return value, or
+property type is declared as a class type parameter (e.g.\ \code{x: T}),
+the engine performs a \emph{strict} \code{IsInstanceOfType} check at
+each use site against the bound CLR type --- it does \emph{not} run
+the standard value-conversion path that applies to ordinary
+annotations.  In particular:
+
+\begin{itemize}
+  \item \code{new Box<string>(42)} rejects with
+    \code{tosh.runtime.annotation\_conversion\_failed} rather than
+    silently stringifying \code{42} to \code{"42"}.
+  \item \code{new Box<double>(9)} rejects rather than widening
+    \code{int} to \code{double}.
+  \item Reassignment to \code{\$this.value} where \code{value: T} is
+    bound goes through the same strict check.
+\end{itemize}
+
+\noindent Type-parameters whose binding does \emph{not} resolve to a
+known CLR type (rare; usually a forward-declared user type) are
+treated nominally --- any value is accepted, and the binding only
+participates in display.
+
+\subsection*{Inheritance}
+
+A subclass can pass type arguments through to its base, propagate its
+own type parameters, or fix the base's parameters to concrete types:
+
+\begin{lstlisting}
+class _Point<T1, T2> {
+    hollow prop X: T1
+    hollow prop Y: T2
+}
+
+class Point2D<T1, T2> extends _Point<T1, T2> {
+    overrule prop X: T1
+    overrule prop Y: T2
+
+    Point2D<T1, T2>(x: T1, y: T2) {
+        $this.X = $x
+        $this.Y = $y
+    }
+}
+
+var p = new Point2D<int, int>(3, 4)
+echo $p.X                      # 3
+\end{lstlisting}
+
+Bindings flow through the inheritance chain: when an instance of
+\code{Point2D<int, int>} accesses an inherited member declared on
+\code{\_Point}, the engine resolves \code{T1} and \code{T2} against
+the base's type-argument list using the child's bindings.
+
+\subsection*{Generic annotations}
+
+Anywhere a type annotation is accepted, the form
+\code{ClassName<arg1, arg2, \ldots>} refers to the user-defined
+generic class \code{ClassName}.  Annotations with this shape are
+recognised before falling through to the CLR type loader (where
+multi-arg names like \code{Foo<int, int>} would otherwise produce a
+\code{Type.GetType} error treating commas as type/assembly separators).
+A value satisfies the annotation when it is a
+\code{ToshClassInstance} whose definition (or any ancestor in the
+inheritance chain) names \code{ClassName}; the per-instance type-argument
+strings are not currently validated against the annotation strings.
+
+\subsection*{Compiled mode}
+
+Generic classes do not emit a CLR shell type at compile time.  Instead,
+the compiler registers the class via source-replay and emits
+\code{new}-expressions through a typed host overload\\
+\code{ToshHost.NewObject(typeName, bareTypeName, string[] typeArgs, object?[] args)}\\
+which delegates to the engine's reification path.  This means
+generic classes behave identically in REPL and compiled execution.
 
 \section{Inheritance, Interfaces, and Traits}
 \ikw{extends}\ikw{fulfills}\ikw{implements}\ikw{uses}

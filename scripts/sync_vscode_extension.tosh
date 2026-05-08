@@ -1,0 +1,133 @@
+#!/usr/bin/env tosh
+## @summary Sync the repo-owned ToSh VS Code extension into the local
+##   VS Code extensions directory.
+## @remarks
+##   ToSh port of `scripts/sync_vscode_extension.py`. Reads
+##   `package.json` from the source directory to derive the target
+##   `<publisher>.<name>-<version>` folder, optionally regenerates
+##   `language-data.json` from the CLI, ensures the source
+##   `node_modules/` is up to date, then mirrors the tree into the
+##   target VS Code extensions directory.
+
+## @summary Extension source directory inside the repo. Default is
+##   `editor/vscode/tosh.tosh-lang/`.
+flag sourceDir: string = ""
+
+## @summary VS Code extensions directory to sync into. Defaults to
+##   `$VSCODE_EXTENSIONS_DIR` if set, otherwise `~/.vscode/extensions`.
+flag extensionsDir: string = ""
+
+## @summary Suppress normal status output.
+flag quiet: bool = false
+
+## @summary Regenerate `language-data.json` from command metadata
+##   before syncing.
+flag regenerate: bool = false
+
+func info(msg) {
+    if (not $quiet) { writeline $msg }
+}
+
+# ── Resolve source / target directories ─────────────────────────────
+var script_dir = $tosh.Script.Directory
+var root = $"{$script_dir}/.."
+
+var srcDir = $sourceDir
+if ($srcDir == "") {
+    $srcDir = $"{$root}/editor/vscode/tosh.tosh-lang"
+}
+
+if (not (exists $srcDir).Exists) {
+    throw $"Extension source directory was not found: {$srcDir}"
+}
+
+var extDir = $extensionsDir
+if ($extDir == "") {
+    if ($env.VSCODE_EXTENSIONS_DIR != null and $env.VSCODE_EXTENSIONS_DIR != "") {
+        $extDir = $env.VSCODE_EXTENSIONS_DIR
+    } else {
+        $extDir = $"{$env.HOME}/.vscode/extensions"
+    }
+}
+
+# ── Optionally regenerate language-data.json ────────────────────────
+if ($regenerate) {
+    var cliProj = $"{$root}/src/Tosh.Cli/Tosh.Cli.csproj"
+    var dataOut = $"{$srcDir}/language-data.json"
+    info $"Regenerating {$dataOut} ..."
+    var prev = $tosh.Session.CurrentDirectory
+    try {
+        cd $root
+        dotnet run --project $cliProj -- --export-command-metadata --vscode -o $dataOut
+        if ($tosh.Last.ExitCode != 0) {
+            throw $"language-data regen failed (exit {$tosh.Last.ExitCode})"
+        }
+    } finally {
+        cd $prev
+    }
+}
+
+# ── Ensure node_modules is up to date ───────────────────────────────
+var pkg_path  = $"{$srcDir}/package.json"
+var lock_path = $"{$srcDir}/package-lock.json"
+var marker    = $"{$srcDir}/node_modules/vscode-languageclient/package.json"
+
+var input_mtime = (stat $pkg_path).LastWriteTime
+if ((exists $lock_path).Exists) {
+    var lock_mtime = (stat $lock_path).LastWriteTime
+    if ($lock_mtime > $input_mtime) { $input_mtime = $lock_mtime }
+}
+
+var needs_install = true
+if ((exists $marker).Exists) {
+    var marker_mtime = (stat $marker).LastWriteTime
+    if ($marker_mtime >= $input_mtime) {
+        $needs_install = false
+    }
+}
+
+if ($needs_install) {
+    info $"Running npm install in {$srcDir} ..."
+    var prev = $tosh.Session.CurrentDirectory
+    try {
+        cd $srcDir
+        npm install --no-audit --no-fund
+        if ($tosh.Last.ExitCode != 0) {
+            throw $"npm install failed (exit {$tosh.Last.ExitCode})"
+        }
+    } finally {
+        cd $prev
+    }
+}
+
+# ── Read package metadata ───────────────────────────────────────────
+var pkg = (cat $pkg_path | from json)
+var publisher = $pkg.publisher
+var name      = $pkg.name
+var version   = $pkg.version
+
+var target = $"{$extDir}/{$publisher}.{$name}-{$version}"
+
+# ── Sync the tree ───────────────────────────────────────────────────
+if ((exists $target).Exists) {
+    try {
+        rm -rf $target out> /dev/null err> /dev/null
+    } catch ($err) {
+        sleep 200
+        rm -rf $target out> /dev/null err> /dev/null
+    }
+}
+
+mkdir -p $target out> /dev/null
+for child in (ls -a $srcDir | where { $_.Name != "." and $_.Name != ".." }) {
+    cp -r $child.FullName $target out> /dev/null
+    if ($tosh.Last.ExitCode != 0) {
+        throw $"cp -r {$child.FullName} failed (exit {$tosh.Last.ExitCode})"
+    }
+}
+
+if (not $quiet) {
+    writeline "Synced ToSh VS Code extension:"
+    writeline $"  source: {$srcDir}"
+    writeline $"  target: {$target}"
+}

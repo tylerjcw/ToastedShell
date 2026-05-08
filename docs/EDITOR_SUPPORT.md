@@ -78,6 +78,64 @@ Or add it to `.mcp.json` at the repo root:
 The MCP server exposes the same language-service backend as the LSP, plus a
 `run_snippet` tool for executing ToSh code interactively.
 
+### MCP Tools
+
+The server exposes the following tools (callable via `tools/call`):
+
+| Tool                   | Purpose                                                                                                |
+|------------------------|--------------------------------------------------------------------------------------------------------|
+| `lsp_diagnostics`      | Parse + analyse a snippet; returns diagnostic codes, severities, ranges, and messages.                 |
+| `lsp_completions`      | Word-level completion proposals at a `(line, column)` offset.                                          |
+| `lsp_hover`            | Hover info (type, signature, docstring) for the symbol at a given position.                            |
+| `lsp_signature_help`   | Active parameter info for a function call at a given position.                                         |
+| `lsp_definitions`      | Go-to-definition results for the symbol at a given position.                                           |
+| `lsp_document_symbols` | Hierarchical symbol outline for an entire snippet.                                                     |
+| `command_metadata`     | Full metadata for one or all built-in commands (signatures, args, options, examples, output schema).   |
+| `operator_metadata`    | Metadata for every operator (unary/binary, precedence, associativity, examples).                       |
+| `run_snippet`          | Execute a ToSh snippet under a sandbox + timeout; returns stdout, stderr, diagnostics, exit code.      |
+| `explain_error`        | Given a diagnostic code, return human-readable cause, fix suggestions, and example resolutions.        |
+
+All tools accept JSON arguments and return JSON results following the MCP
+`tools/call` contract. The server also responds to `initialize`, `tools/list`,
+and `ping` lifecycle requests.
+
+## Language Server Capabilities
+
+`Tosh.Lsp` implements the following Language Server Protocol methods:
+
+| LSP method                              | Behaviour                                                                          |
+|-----------------------------------------|------------------------------------------------------------------------------------|
+| `textDocument/completion`               | Symbol/keyword/path completions with kind, detail, documentation, and sort priority. |
+| `textDocument/hover`                    | Type + docstring for the symbol under the cursor.                                  |
+| `textDocument/signatureHelp`            | Parameter info for the current call site, including active parameter index.        |
+| `textDocument/definition`               | Jump to the declaration of a symbol, function, or type.                            |
+| `textDocument/references`               | All references to a symbol across the open document.                               |
+| `textDocument/prepareRename`            | Validates whether a symbol is renameable; returns the precise edit range.          |
+| `textDocument/rename`                   | Performs the rename across all known references.                                   |
+| `textDocument/documentSymbol`           | Hierarchical outline (functions, classes, properties, modules, etc.).              |
+| `textDocument/semanticTokens/full`      | Semantic-token highlighting (variables, types, runes, member access).              |
+| `textDocument/formatting`               | Whole-document formatter.                                                          |
+| `textDocument/rangeFormatting`          | Range-scoped formatter.                                                            |
+| `textDocument/didOpen` / `didChange` / `didClose` | Standard document lifecycle.                                              |
+| `textDocument/publishDiagnostics`       | Pushed automatically on parse/change; mirrors the diagnostics from the runtime.    |
+
+## Debug Adapter (DAP)
+
+`Tosh.Dap` is a Debug Adapter Protocol server (`src/Tosh.Dap`) that lets
+editors drive an interactive debug session over stdin/stdout. It implements
+the standard DAP request set:
+
+- `initialize`, `launch`, `configurationDone`
+- `setBreakpoints`, `setExceptionBreakpoints`
+- `threads`, `stackTrace`, `scopes`, `variables`
+- `continue`, `next`, `stepIn`, `stepOut`, `pause`
+- `evaluate` (REPL-style expression evaluation against the paused frame)
+- `disconnect`, `terminate`
+
+It is published alongside the CLI as a self-contained binary at
+`artifacts/publish/<rid>/single-file/Tosh.Dap` and is intended to be
+launched per-session by editor tooling (e.g. a future VS Code launcher).
+
 ## Building the Language Server and MCP Server
 
 Both binaries are published as part of the normal build:

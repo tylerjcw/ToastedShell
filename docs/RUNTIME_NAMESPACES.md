@@ -9,6 +9,12 @@ These are always available and cannot be shadowed by user declarations.
 
 ## `$tosh`
 
+### Top-level properties
+
+| Property        | Type | Description                                                            |
+|-----------------|------|------------------------------------------------------------------------|
+| `IsLoginShell`  | bool | `true` when started as a login shell (`-` argv[0] prefix or `--login`) |
+
 ### `$tosh.Last`
 
 The result of the most recently executed statement.
@@ -121,17 +127,19 @@ See [CONFIGURATION.md](CONFIGURATION.md) for the full config schema.
 
 ## `$env`
 
-Direct read/write access to process environment variables.
+Read access to process environment variables. **Read-only as a namespace**
+— use the `export` command to set or update environment variables.
 
 ```tosh
 echo $env.HOME          # /home/user
 echo $env.PATH
 
-$env.MY_VAR = "hello"   # sets the environment variable
-echo $env.MY_VAR        # hello
-```
+export MY_VAR = "hello"     # set it
+echo $env.MY_VAR            # hello
 
-Environment variable names are case-sensitive on Linux/macOS.
+# This does NOT work — raises tosh.runtime.member_assignment_failed:
+# $env.MY_VAR = "hello"
+```
 
 ---
 
