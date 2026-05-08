@@ -5,7 +5,7 @@ namespace Tosh.Stdlib.Filesystem;
 [CommandCategory("Filesystem")]
 [CommandArgument("path", "One or more paths to inspect.", TypeName = "path-like")]
 [CommandOption("-L", "Dereference symlinks before reading metadata.")]
-[CommandOption("-f", "Return filesystem usage information for the containing mount instead of file-entry metadata.")]
+[CommandOption("-f, --filesystem", "Return filesystem usage information for the containing mount instead of file-entry metadata.")]
 [CommandOption("--show <columns>", "Select which properties are rendered.")]
 [CommandOption("--hide <columns>", "Hide specific properties from the output.")]
 [CommandOption("--show-all", "Display every available column.")]

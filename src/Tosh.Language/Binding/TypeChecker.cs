@@ -694,7 +694,7 @@ public static class TypeChecker
             .ToArray();
         if (expectedArgs.Length == 0) return;
 
-        if (!TryCollectBuiltinPositionals(call, ctx, out var positionals))
+        if (!TryCollectBuiltinPositionals(call, ctx, expectedArgs, out var positionals))
             return;
 
         var required = expectedArgs.Count(a => a.Required);
@@ -740,13 +740,23 @@ public static class TypeChecker
 
     private sealed record CommandOptionShape(string Name, bool RequiresValue, bool AllowsOptionalValue);
 
-    private static bool TryCollectBuiltinPositionals(BoundCommandCall call, CheckContext ctx, out List<BoundArgument> positionals)
+    private static bool TryCollectBuiltinPositionals(BoundCommandCall call, CheckContext ctx, CommandArgumentAttribute[] expectedArgs, out List<BoundArgument> positionals)
     {
         positionals = new List<BoundArgument>(call.Arguments.Count);
         var optionShapes = call.ResolvedCommand!.GetType()
             .GetCustomAttributes<CommandOptionAttribute>(inherit: false)
             .SelectMany(BuildOptionShapes)
             .ToArray();
+
+        // Find the index (in expectedArgs) at which positional parsing
+        // becomes passthrough — once that many positionals have been
+        // collected, every remaining token is treated as an opaque
+        // positional.
+        var passthroughAt = -1;
+        for (var i = 0; i < expectedArgs.Length; i++)
+        {
+            if (expectedArgs[i].Passthrough) { passthroughAt = i; break; }
+        }
 
         var parseOptions = true;
         for (var index = 0; index < call.Arguments.Count; index++)
@@ -756,6 +766,8 @@ public static class TypeChecker
             if (!parseOptions || !TryGetLiteralString(argument.Value, out var text))
             {
                 positionals.Add(argument);
+                if (passthroughAt >= 0 && positionals.Count > passthroughAt)
+                    parseOptions = false;
                 continue;
             }
 
@@ -768,6 +780,8 @@ public static class TypeChecker
             if (!LooksLikeOptionToken(text))
             {
                 positionals.Add(argument);
+                if (passthroughAt >= 0 && positionals.Count > passthroughAt)
+                    parseOptions = false;
                 continue;
             }
 
@@ -913,6 +927,7 @@ public static class TypeChecker
         text.Length > 1 && text[0] == '-';
 
     private static bool IsVariadicCommandArgument(CommandArgumentAttribute argument) =>
+        argument.Variadic ||
         argument.Name.Contains("...", StringComparison.Ordinal) ||
         argument.Description.Contains("one or more", StringComparison.OrdinalIgnoreCase) ||
         argument.Description.Contains("zero or more", StringComparison.OrdinalIgnoreCase);

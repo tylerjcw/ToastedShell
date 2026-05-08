@@ -149,15 +149,15 @@ single-file native executables to `artifacts/publish/<rid>/single-file/`.
 
 ## Syncing the VS Code Extension
 
-The installed local VS Code extension at `~/.vscode/extensions/tosh.tosh-lang-0.1.0` is synced from the repo copy.
+The installed local VS Code extension at `~/.vscode/extensions/tosh.tosh-lang-*` is synced from the repo copy.
 
 Manual sync:
 
 ```bash
-python3 scripts/sync_vscode_extension.py
+tosh scripts/build.tosh sync
 ```
 
-The sync script also ensures the extension's npm dependencies are installed before copying it into `~/.vscode/extensions/`.
+The sync step also ensures the extension's npm dependencies are installed before copying it into `~/.vscode/extensions/`.
 
 Automatic sync:
 

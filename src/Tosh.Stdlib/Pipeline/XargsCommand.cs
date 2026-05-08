@@ -6,7 +6,7 @@ namespace Tosh.Stdlib.Pipeline;
 [CommandArgument("command", "Command to invoke for the generated arguments.")]
 [CommandArgument("fixed-arg ...", "Arguments that are always passed before piped arguments.", Required = false)]
 [CommandOption("-n, --max-args <count>", "Invoke the command repeatedly with at most this many piped arguments per invocation.")]
-[CommandExample("echo README.md docs/INDEX.md | xargs wc -l", Title = "Pass piped words as command arguments")]
+[CommandExample("echo README.md AGENTS.md | xargs wc -l", Title = "Pass piped words as command arguments")]
 [CommandExample("glob \"*.log\" | xargs -n 1 rm", Title = "Run one invocation per input argument")]
 [CommandOutput("Streams whatever the invoked sub-command produces, once per batch of input arguments.")]
 public sealed class XargsCommand : ShellCommand

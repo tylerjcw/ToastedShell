@@ -6,7 +6,7 @@ using Tosh.Runtime;
 namespace Tosh.Stdlib.Pipeline;
 
 [CommandCategory("Pipeline")]
-[CommandArgument("separator-or-segment", "In default mode: the string placed between items. In path mode (-p/--path): an additional path segment appended after any piped input.", Required = false, TypeName = "string")]
+[CommandArgument("separator-or-segment", "In default mode: the string placed between items. In path mode (-p/--path): an additional path segment appended after any piped input.", Required = false, TypeName = "string", Variadic = true)]
 [CommandOption("-p", "Path mode: join segments with the platform path separator using System.IO.Path.Join semantics. Piped input is prepended; positional args are additional segments.")]
 [CommandOption("--path", "Alias for -p.")]
 [CommandExample("echo a b c | join \"-\"", Title = "Join scalar items with '-'")]

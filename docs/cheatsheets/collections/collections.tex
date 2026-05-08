@@ -1,0 +1,340 @@
+\input{../_shared/preamble.tex}
+
+\begin{document}
+\footnotesize
+\sheettitle{Collections And Pipelines}{Literals, typed containers, projection, grouping, and summaries}{spec + examples + tests}
+
+\begin{multicols*}{3}
+
+\section{Collection Literals}
+\begin{lstlisting}
+# arrays
+[1, 2, 3]
+["alpha", "beta"]
+
+# record-like dynamic objects
+{ Name = "Komrad", Uid = 1000 }
+
+# sets
+{: "alpha", "beta", "alpha" :}
+
+# tuples
+(42, "hello")
+\end{lstlisting}
+
+\tighttable{>{\ttfamily\raggedright\arraybackslash}p{0.26\linewidth}X}{
+\toprule
+Literal & Runtime shape \\
+\midrule
+\texttt{[...]} & array \\
+\texttt{\{ Name = Value \}} & dynamic record \\
+\texttt{\{: ... :\}} & set with de-duplication \\
+\texttt{(..., ...)} & tuple with \texttt{Item1}, \texttt{Item2}, ... \\
+\bottomrule
+}
+
+\section{Constructed Collections}
+\begin{lstlisting}
+new list<int>(10, 20, 30)
+new array<int>(1, 2, 3)
+new dict<string, int>(Alice, 95, Bob, 87)
+new map({ Theme = "dark", TabSize = 4 })
+new hashtable(HOME, "/home/me", SHELL, "/usr/bin/tosh")
+new table(Name, "Toast", Uid, 1000)
+new tuple(alpha, 42)
+\end{lstlisting}
+
+\begin{itemize}
+\item \texttt{list<T>} is growable and works well for accumulation.
+\item \texttt{dict<K, V>} gives a strongly typed dictionary.
+\item \texttt{map(...)} and record literals are handy for dynamic data.
+\item \texttt{table} is useful when you want a record that renders well.
+\end{itemize}
+
+\section{Basic Access}
+\begin{lstlisting}
+var words = ["hello", "world"]
+echo $words[0]
+echo $words.Length
+
+var pair = (42, "hello")
+echo $pair.Item2
+\end{lstlisting}
+
+\begin{lstlisting}
+var person = { Name = "Komrad", Uid = 1000 }
+echo $person.Name
+get-props $person
+has-prop $person Name
+\end{lstlisting}
+
+\columnbreak
+
+\section{Pipeline Core}
+\tighttable{>{\ttfamily\raggedright\arraybackslash}p{0.27\linewidth}X}{
+\toprule
+Command & Use \\
+\midrule
+\texttt{where} & filter rows with a predicate \\
+\texttt{get} / \texttt{pick} / \texttt{select} & project members or indices \\
+\texttt{each} & run a block per item \\
+\texttt{map} & transform each item \\
+\texttt{flat-map} & transform and flatten \\
+\texttt{flatten} & expand one nesting level \\
+\texttt{sort}, \texttt{reverse} & reorder results \\
+\texttt{first}, \texttt{last}, \texttt{skip} & slice a stream \\
+\bottomrule
+}
+
+\begin{lstlisting}
+ls -la | where _.Type == file | get { Name, Size }
+echo "Hello" "World" | each { _.ToLower() }
+echo [1, 2, 3] | flatten | map { _ * 2 }
+\end{lstlisting}
+
+\note{Inside pipeline predicates, \texttt{\_} is the current item. In many places a block like \texttt{\{ \_.Size > 1kb \}} is easier to read than a named lambda.}
+
+\section{Grouping And Stats}
+\begin{lstlisting}
+ls -la | group-by Type
+ls -la | frequencies
+ls -la | distinct
+\end{lstlisting}
+
+\begin{lstlisting}
+seq 5 | summarize --sum --avg --min --max --count
+df | summarize _.Used
+ps | summarize --avg WorkingSet --max WorkingSet
+\end{lstlisting}
+
+\tighttable{>{\ttfamily\raggedright\arraybackslash}p{0.28\linewidth}X}{
+\toprule
+Command & Best for \\
+\midrule
+\texttt{group-by} & collect rows by key \\
+\texttt{group-while} & consecutive runs \\
+\texttt{frequencies} & histogram-like counts \\
+\texttt{summary} / \texttt{summarize} & aggregates over scalars or columns \\
+\bottomrule
+}
+
+\section{Structured Text}
+\begin{lstlisting}
+echo "[{\"name\":\"alpha\",\"score\":95}]" | from json | flatten
+echo "a,b\n1,2" | from csv
+echo "toast" | hash sha256
+echo "the quick brown fox" | grep "quick"
+\end{lstlisting}
+
+\begin{lstlisting}
+$items | to json
+$rows | to csv
+$rows | template "{{ Name }} => {{ Quantity }}"
+\end{lstlisting}
+
+\columnbreak
+
+\section{Collection Patterns}
+\begin{lstlisting}
+var items = new list<string>("bread", "coffee", "soap")
+$items | where _.Length > 4 | sort | each { echo _ }
+\end{lstlisting}
+
+\begin{lstlisting}
+var report = new list()
+ls -la | where _.Type == file | each {
+    $report.Add({ Name = _.Name, Size = _.Size }) | ignore
+}
+$report | sort Size | reverse
+\end{lstlisting}
+
+\section{Transform Recipes}
+\begin{lstlisting}
+# top 5 files by size
+ls -la | where _.Type == file | sort Size | reverse | first 5
+
+# names only
+ls -la | get Name
+
+# files grouped by extension
+ls -la | where _.Type == file | group-by Extension
+\end{lstlisting}
+
+\begin{lstlisting}
+# flatten JSON rows then rank them
+echo "[{\"name\":\"a\",\"score\":1},{\"name\":\"b\",\"score\":2}]" |
+from json | flatten | sort score | reverse | get { name, score }
+\end{lstlisting}
+
+\section{Small But Handy}
+\tighttable{>{\ttfamily\raggedright\arraybackslash}p{0.29\linewidth}X}{
+\toprule
+Tool & Why it matters \\
+\midrule
+\texttt{collect} & gather a pipeline into one list \\
+\texttt{partition} & split into matching/non-matching lists \\
+\texttt{rename} & rename projected fields \\
+\texttt{transpose} & pivot rows into columns \\
+\texttt{zip}, \texttt{window}, \texttt{chunk} & sequence reshaping \\
+\bottomrule
+}
+
+\note{\textbf{ToSh sweet spot:} load typed rows, project only the fields you care about, then summarize or regroup them without dropping down to fragile text parsing.}
+
+\end{multicols*}
+\newpage
+
+\sheettitle{Collections And Pipelines}{Reshaping, folding, formatting, and advanced stream tools}{page 2 / reference}
+
+\begin{multicols*}{3}
+
+\section{Reshape Toolbox}
+\tighttable{>{\ttfamily\raggedright\arraybackslash}p{0.27\linewidth}X}{
+\toprule
+Command & What it does \\
+\midrule
+\texttt{collect} & buffer the whole pipeline into one array \\
+\texttt{chunk N} & fixed-size batches \\
+\texttt{window N} & sliding windows over neighbors \\
+\texttt{zip seq} & pair items with another sequence \\
+\texttt{interleave seq} & alternate values from two sequences \\
+\texttt{take-while} / \texttt{skip-while} & prefix/suffix slicing by predicate \\
+\bottomrule
+}
+
+\begin{lstlisting}
+echo 1 2 3 | collect
+echo 1 2 3 4 | chunk 2
+echo 1 2 3 4 | window 3
+echo 1 2 3 | zip [10, 20, 30]
+\end{lstlisting}
+
+\section{Fold And Trace}
+\begin{lstlisting}
+echo 1 2 3 4 | reduce 0 func(acc, x) => ($acc + $x)
+echo one two three | reduce "" { $acc + _.Substring(0, 1) }
+echo 1 2 3 4 | scan 0 { $acc + _ }
+\end{lstlisting}
+
+\begin{itemize}
+\item \texttt{reduce} returns one final accumulator.
+\item \texttt{scan} yields every intermediate accumulator value.
+\item On empty input, \texttt{reduce} returns the seed unchanged.
+\end{itemize}
+
+\section{Split And De-Dupe}
+\begin{lstlisting}
+var [evens, odds] = (echo 1 2 3 4 | partition { (_ % 2) == 0 })
+echo alpha beta alpha gamma | distinct
+echo alpha beta alpha gamma | frequencies
+\end{lstlisting}
+
+\section{Stopping And Slicing}
+\begin{lstlisting}
+echo 1 2 3 4 | take-while { _ < 3 }
+echo 1 2 3 4 | skip-while { _ < 3 }
+echo alpha beta gamma | first 2
+echo alpha beta gamma | last 2
+\end{lstlisting}
+
+\columnbreak
+
+\section{Projection Cleanup}
+\begin{lstlisting}
+ls -la |
+get { Name, Size, Modified } |
+rename Name FileName Size Bytes
+\end{lstlisting}
+
+\begin{lstlisting}
+echo { A = 1, B = 2 } { A = 3, B = 4 } | transpose
+\end{lstlisting}
+
+\tighttable{>{\ttfamily\raggedright\arraybackslash}p{0.30\linewidth}X}{
+\toprule
+Command & Best for \\
+\midrule
+\texttt{rename} & clean projected field names \\
+\texttt{transpose} & rows-to-columns pivoting \\
+\texttt{pick}/\texttt{select} & aliases for \texttt{get} \\
+\texttt{tee} & pass through while also capturing or writing \\
+\bottomrule
+}
+
+\section{Structured Format Bridges}
+\begin{lstlisting}
+echo "{\"name\":\"toast\"}" | from json
+curl https://example/api | from json | flatten
+cat data.csv | from csv
+\end{lstlisting}
+
+\begin{lstlisting}
+ls | to json
+ls | to csv
+ls | to json --compact
+\end{lstlisting}
+
+\note{\texttt{from} and \texttt{to} keep data as CLR objects until you explicitly flatten or stringify it, which is why downstream \texttt{get}, \texttt{where}, and \texttt{summarize} still work.}
+
+\section{Text Templates}
+\begin{lstlisting}
+$rows | template "{{ Name }} => {{ Quantity }}"
+$rows | template "{{ Category }} / {{ Name }}"
+\end{lstlisting}
+
+\section{Capture And Replay}
+\begin{lstlisting}
+ls | tee -v snapshot | first 3
+$snapshot | get Name
+ls | to json | tee report.json | count
+\end{lstlisting}
+
+\columnbreak
+
+\section{Pipeline Recipes}
+\begin{lstlisting}
+func bigFiles(minSize: StorageSize) {
+    ls -la | where _.Type == file |
+    where _.Size >= $minSize |
+    sort Size | reverse
+}
+\end{lstlisting}
+
+\begin{lstlisting}
+echo "[{\"name\":\"alpha\",\"score\":95},{\"name\":\"beta\",\"score\":87}]" |
+from json | flatten | sort score | reverse | get { name, score }
+\end{lstlisting}
+
+\section{Grouping Recipes}
+\begin{lstlisting}
+ls | group-by Extension
+ps | group-by func(p) => ($p.Name.Substring(0, 1))
+echo 1 2 3 10 11 | group-while { _ < 10 }
+\end{lstlisting}
+
+\note{\texttt{group-by} groups by key across the whole stream, while \texttt{group-while} is about consecutive runs. Use the latter when input order already carries meaning.}
+
+\section{Summary Patterns}
+\begin{lstlisting}
+df | summarize
+df | summarize _.Used
+seq 5 | summarize --sum --avg --min --max --count
+ps | summarize --avg Memory --max Memory
+\end{lstlisting}
+
+\begin{itemize}
+\item \texttt{sum}, \texttt{avg}, \texttt{min}, and \texttt{max} are great for one target.
+\item \texttt{summarize} shines when you want multiple aggregates or structured column summaries back.
+\end{itemize}
+
+\section{Generated Sequences}
+\begin{lstlisting}
+iterate 1 { _ * 2 } | take 6
+unfold 5 { if _ > 0 { [_, _ - 1] } else { null } }
+converge "  toast  " { _.Trim() }
+\end{lstlisting}
+
+\note{\texttt{iterate} grows a stream from a seed, \texttt{unfold} emits value/state pairs until \texttt{null}, and \texttt{converge} keeps normalizing until two consecutive results are equal.}
+
+\end{multicols*}
+\end{document}

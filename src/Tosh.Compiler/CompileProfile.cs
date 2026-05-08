@@ -28,7 +28,7 @@ namespace Tosh.Compiler;
 ///   nested <c>module</c>), and block-pipeline arguments.
 ///   </description></item>
 /// </list>
-/// See <c>docs/COMPILED_PROFILE.md</c> for the authoritative list.
+/// See <c>docs/COMPILED_TOSH.md</c> ("Profiles &amp; the tier model" section) for the authoritative list.
 /// </remarks>
 public enum CompileProfile
 {

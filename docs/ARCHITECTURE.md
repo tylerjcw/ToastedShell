@@ -273,82 +273,33 @@ That means the object still exists in the pipeline, but interactive display can 
 
 ## Project Structure
 
-## Current Shape
+The repo is split into focused projects under `src/`:
 
-Today the project is split into:
+| Project | Responsibility |
+|---|---|
+| `Tosh.Cli` | CLI entry point, REPL host, startup loader |
+| `Tosh.Runtime` | Shared runtime types, attributes, value model, command metadata |
+| `Tosh.Stdlib` | Built-in commands grouped by category (Filesystem, Text, System, …) |
+| `Tosh.Language` | Lexer, parser, binder, lowerer, evaluator (`ToshEngine`), formatter |
+| `Tosh.Compiler` | `tosh --compile` IL emitter (PersistedAssemblyBuilder) |
+| `Tosh.Compiler.Runtime` | `ToshHost` shim that compiled assemblies link against |
+| `Tosh.Sdk` / `Tosh.Sdk.Tasks` | MSBuild SDK + tasks driving `.toshproj` build/run/publish/pack |
+| `Tosh.Templates` | `dotnet new tosh-app` / `tosh-lib` templates |
+| `Tosh.LanguageServices` | Shared analysis backend used by LSP/MCP |
+| `Tosh.Lsp` | Language Server Protocol server (self-contained binary) |
+| `Tosh.Mcp` | Model Context Protocol server for AI agents |
+| `Tosh.Dap` | Debug Adapter Protocol server |
+| `Tosh.Tui` | Terminal UI runtime (widgets, frames, screens) |
+| `Tosh.Core` | Legacy shim (`DisplayProfileRegistry`) — being phased out |
 
-- `src/TōSh.Core`
-- `src/TōSh.Language`
-- `src/TōSh.Cli`
+Tests live under `tests/Tosh.Tests` and `tests/Tosh.LspFixture`. Benchmarks
+live under `bench/Tosh.Benchmarks`. The full solution is `Tosh.slnx`.
 
-This is a fine starting point, but `TōSh.Core` is already carrying too many concerns:
-
-- runtime/session state
-- display/rendering
-- built-in commands
-- `.NET` interop
-- external process integration
-- shell value objects
-- help/discovery
-
-## Near-Term Folder Shape
-
-Before splitting more assemblies, we should organize the code by responsibility inside the existing projects.
-
-Recommended near-term shape:
-
-```text
-src/TōSh.Core/
-  Runtime/
-  Values/
-  Diagnostics/
-  Display/
-  Interop/
-  External/
-  Commands/
-  Help/
-
-src/TōSh.Language/
-  Lexing/
-  Parsing/
-  Syntax/
-  Binding/
-  Evaluation/
-  Modules/
-  Commands/
-
-src/TōSh.Cli/
-  Host/
-  Repl/
-  Editing/
-  Completion/
-  Paging/
-  Styling/
-```
-
-## Long-Term Assembly Shape
-
-Once the architecture settles, the likely destination is:
-
-```text
-src/TōSh.Runtime
-src/TōSh.Display
-src/TōSh.Interop.DotNet
-src/TōSh.Interop.Process
-src/TōSh.Builtins
-src/TōSh.Language
-src/TōSh.Cli
-```
-
-That split keeps the responsibilities clean:
-
-- runtime and session state
-- display and formatting
-- CLR access
-- external process access
-- builtin commands
-- language implementation
-- CLI/REPL host
+The earlier roadmap to split runtime / display / interop into their own
+assemblies has largely landed: stdlib commands are factored out of the
+runtime core, the language project owns its full pipeline (parse → bind →
+lower → emit), and the compiler runtime is a separate assembly that
+compiled artefacts link against rather than against the interpreter.
 
 ## Reference Codebases
 

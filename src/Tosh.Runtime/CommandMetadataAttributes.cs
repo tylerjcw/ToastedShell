@@ -274,6 +274,22 @@ public sealed class CommandArgumentAttribute(string name, string description) : 
     /// metadata (e.g. <c>"positive int"</c>, <c>"non-empty string"</c>).
     /// </summary>
     public string? Refinement { get; init; }
+
+    /// <summary>
+    /// True when this argument accepts zero or more values (variadic /
+    /// rest parameter). The binder treats commands with any variadic
+    /// argument as having an unbounded maximum arity.
+    /// </summary>
+    public bool Variadic { get; init; }
+
+    /// <summary>
+    /// True when this argument and every subsequent token should be
+    /// treated as opaque positional values (option parsing stops once
+    /// this argument starts being filled). Used for commands such as
+    /// <c>spawn</c>/<c>exec</c> that forward arguments to an external
+    /// process verbatim.
+    /// </summary>
+    public bool Passthrough { get; init; }
 }
 
 /// <summary>

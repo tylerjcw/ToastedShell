@@ -5,8 +5,8 @@ using Tosh.Runtime;
 namespace Tosh.Stdlib.Concurrency;
 
 [CommandCategory("Concurrency")]
-[CommandArgument("command", "External command name or path to start as a background job.")]
-[CommandArgument("args", "Arguments to pass to the external command.", Required = false)]
+[CommandArgument("command", "External command name or path to start as a background job.", Passthrough = true)]
+[CommandArgument("args", "Arguments to pass to the external command.", Required = false, Variadic = true, Passthrough = true)]
 [CommandOption("-f, --foreground", "Run the process in the foreground (terminal passthrough) instead of as a background job.")]
 [CommandExample("spawn dotnet --version", Title = "Start an external command in the background")]
 [CommandExample("echo hello | spawn cat", Title = "Feed pipeline input into a background process")]

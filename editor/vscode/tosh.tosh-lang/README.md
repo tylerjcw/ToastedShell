@@ -11,7 +11,7 @@ When the current workspace contains `src/Tosh.Lsp`, the extension prefers the re
 From the repo root:
 
 ```bash
-python3 scripts/sync_vscode_extension.py
+tosh scripts/build.tosh sync
 ```
 
 The sync step also installs npm dependencies when needed so the copied extension is runnable immediately.
@@ -36,10 +36,10 @@ as the terminal `iconPath`.
 After changing icons, run:
 
 ```bash
-python3 scripts/sync_vscode_extension.py
+tosh scripts/build.tosh sync
 dotnet build Tosh.slnx
-sha256sum editor/vscode/tosh.tosh-lang/icons/tosh-*.svg ~/.vscode/extensions/tosh.tosh-lang-0.1.0/icons/tosh-*.svg
-code --list-extensions --show-versions | rg '^tosh\.tosh-lang@0\.1\.0$'
+sha256sum editor/vscode/tosh.tosh-lang/icons/tosh-*.svg ~/.vscode/extensions/tosh.tosh-lang-*/icons/tosh-*.svg
+code --list-extensions --show-versions | rg '^tosh\.tosh-lang@'
 ```
 
 Reload VS Code after syncing so its extension manifest and icon cache are refreshed.

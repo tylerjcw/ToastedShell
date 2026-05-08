@@ -314,6 +314,115 @@ Generate C# from the bound IR; let Roslyn do the heavy lifting. Subset-driven: s
 
 ---
 
+## Profiles & the tier model
+
+`tosh --compile` always emits the same IL; the **profile** controls which
+features the compiler will accept before considering an emit clean.
+
+### Tiers
+
+Every IL feature falls into one of three tiers based on how much
+runtime support it needs:
+
+#### Tier 1 — *pure*
+
+Real IL with **no `ToshHost` / `ToshEngine` calls** at execution time.
+The resulting code is indistinguishable from a hand-written .NET
+assembly that happens to share method conventions with tosh.
+
+Examples currently in Tier 1:
+
+- Literals (string / int / double / bool / null).
+- Arithmetic, comparison, boolean operators.
+- `if` / `else`, `for`, `while`, `try` / `catch` / `finally`.
+- `var` declarations and reassignments at any scope.
+- Top-level `func` calls resolved at IL-emit time (`call`).
+- Module-scope `var` reads / writes (`ldsfld` / `stsfld`).
+- Module-scope `func` calls when statically resolvable (`call`).
+- The inlined `echo` fast path (`Console.WriteLine`) — no host call
+  unless there's a splat or named argument.
+- List / dict / set / range literals, interpolated strings.
+- Pattern match (when patterns are statically lowerable).
+
+#### Tier 2 — *runtime*
+
+Real IL **plus** at least one call into `ToshHost` (or `ToshEngine`
+through it) at runtime. The host call is the only dynamic part; the
+arguments are still computed in real IL.
+
+Tier-2 host entry points (each one of these triggers Tier 2):
+
+| Host call                              | Used for                                         |
+|----------------------------------------|--------------------------------------------------|
+| `ToshHost.RunStage`                    | Builtin command in a pipeline stage              |
+| `ToshHost.RunUserFuncStage`            | User-func call inside a pipeline stage           |
+| `ToshHost.InvokeStatement`             | Top-level command invocation (statement)         |
+| `ToshHost.InvokeValue`                 | Top-level command invocation (value)             |
+| `ToshHost.InvokeMember`                | Dynamic `.member` access on an unknown shape     |
+| `ToshHost.ResolveQualifiedAccess`      | `Foo.bar` lookup that isn't a real CLR field     |
+| `ToshHost.InvokeQualifiedMethod`       | `Foo.bar(...)` call that isn't a real CLR method |
+
+Tier 2 is today's *default* — most non-trivial programs need at least
+one builtin command.
+
+#### Tier 3 — *source replay*
+
+The emitted assembly **registers a span of the original tosh source**
+and re-evaluates that span through `ToshEngine` at runtime. The
+compiled output therefore carries its own source code and is not
+self-contained.
+
+Tier-3 features:
+
+| Feature                        | Reason                                              |
+|--------------------------------|-----------------------------------------------------|
+| `class` / `record` / `struct` declarations | No `TypeBuilder` lowering yet — engine builds the type. |
+| `union` / `enum` / `trait` declarations    | Same.                                               |
+| Block-pipeline arguments (`{ ... }`)       | Block bodies are re-parsed from source by the engine. |
+| `module` bodies with non-trivial declarations | Module shells are real CLR types, but a body containing a class/record/etc still needs source replay. |
+
+### Profiles
+
+| `--profile=`   | Allowed tiers | Use when                                                       |
+|----------------|---------------|----------------------------------------------------------------|
+| `permissive`   | 1, 2, 3       | (default) any tosh feature works, output may carry source.     |
+| `runtime`      | 1, 2          | you want a redistributable `.dll` that doesn't ship its own source. |
+| `pure`         | 1             | aspirational — useful for diagnosing what's still host-bound.  |
+
+### Output
+
+When the active profile rejects an emit, the diagnostic is added to
+the same `EmitResult.UnsupportedShapes` list that drives the
+`toshc: refusing to write incomplete output.` failure path. The
+partial `.dll` is deleted, and the process exits with code 1.
+
+```
+$ tosh --compile script.tosh -o script.dll --profile=runtime
+toshc: 1 unsupported shape(s):
+  - profile 'runtime' rejects tier 3 feature: user-defined type (BoundClassDefinition)
+toshc: refusing to write incomplete output.
+$ echo $?
+1
+```
+
+Diagnostics are deduplicated per (tier, feature) pair, so a program
+with many calls to the same Tier-2 builtin only reports once.
+
+### Goal
+
+Each release should:
+
+1. Move at least one Tier-3 feature down to Tier 2 (e.g. by adding
+   real CLR-type emission for a class shape).
+2. Move at least one Tier-2 host call down to Tier 1 (e.g. by inlining
+   another builtin's hot path).
+
+Use `--profile=runtime` regularly to make sure new features don't
+silently regress to Tier 3, and `--profile=pure` to find the
+remaining Tier-2 cliffs.
+
+---
+
 ## Implementation status (May 2026)
 
 Snapshot of how far each layer has actually moved. Commits are on `master`.
@@ -354,7 +463,7 @@ Snapshot of how far each layer has actually moved. Commits are on `master`.
 | `Tosh.Compiler` project + `Tosh.Compiler.Runtime` host shim                          | done        | `3ff32d7` walking-skeleton; emitter uses `PersistedAssemblyBuilder` to produce a real PE + emits `<out>.runtimeconfig.json` so `dotnet <out>.dll` runs |
 | `tosh --compile script.tosh [out.dll]` CLI flag                                       | done        | `Program.cs CompileScriptAsync` |
 | Strict `--compile` (binder runs, fail-fast on diagnostics, no half-baked output)      | done        | `Program.cs CompileScriptAsync` runs `Binder.Bind(parseResult, ...)` against the concatenated unit; binder diagnostics, parse errors, and emitter unsupported shapes all return non-zero. Partial `.dll` is deleted on emitter failure so `dotnet <out>.dll` can't run stale output. |
-| `--profile=permissive|runtime|pure` flag + tier-based diagnostic gate                 | done        | See [COMPILED_PROFILE.md](COMPILED_PROFILE.md). Three-tier model: pure IL (1) / IL + `ToshHost` (2) / source-replay (3). `BoundUnitEmitter.RequireTier` emits dedup'd diagnostics into `EmitResult.UnsupportedShapes` when an emit site exceeds the active profile's allowed tier; CLI deletes the partial `.dll` on failure. Default profile is `permissive`. |
+| `--profile=permissive|runtime|pure` flag + tier-based diagnostic gate                 | done        | See [Profiles & the tier model](#profiles--the-tier-model). Three-tier model: pure IL (1) / IL + `ToshHost` (2) / source-replay (3). `BoundUnitEmitter.RequireTier` emits dedup'd diagnostics into `EmitResult.UnsupportedShapes` when an emit site exceeds the active profile's allowed tier; CLI deletes the partial `.dll` on failure. Default profile is `permissive`. |
 | Compiler feature matrix across `permissive`/`runtime`/`pure`                          | done / expanding | `tests/Tosh.Tests/CompilerFeatureMatrixTests.cs` is the executable ledger for compiled language coverage. The matrix now covers broad syntax, declaration, callable, module, metadata, interop, and SDK-facing families across all three profiles, with no all-profile-rejected rows in the latest documented audit. It must keep expanding until it is exhaustive rather than representative; every row should identify whether the implementation is native IL / Tier 1, runtime-hosted / Tier 2, source replay / Tier 3, or a deliberate unsupported diagnostic. Runes and any remaining source-replay paths should stay explicit profile decisions rather than accidental emitter gaps. |
 | Literals, arithmetic, string interpolation                                           | done        | `6044476` |
 | `var` / locals + `$x` reads + reassignment + compound assignment (`+= -= *= /= %=`)  | done        | `6044476`, `85392ea` |

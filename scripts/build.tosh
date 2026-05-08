@@ -222,7 +222,7 @@ func format_version(state: PublishState) -> string => $"{$state.CalVer}.{$state.
 ## @returns A 2-element integer array `[year, month]`.
 ## @exception When `calver` does not contain exactly one `.` separator.
 func parse_calver(calver: string) -> array {
-    var parts = ($calver.Split("."))
+    var parts = ($calver.Split(".".ToCharArray()))
     if ($parts.Length != 2) { throw $"calver '{$calver}' is not in YY.M form" }
     return [System.Convert.ToInt32($parts[0]), System.Convert.ToInt32($parts[1])]
 }
@@ -774,7 +774,7 @@ subcommand publish {
         fail $"Publish failed: {$err}"
         if (not $plan.NoBump) {
             warn "Rolling back version state..."
-            write_publish_state $state_path $orig_calver $orig_publish
+            write_publish_state $state_path $orig_calver $orig_publish $dotnet_major
             $orig_pkgbuild | write-file $pkgbuild_path | ignore
         }
         throw $err
@@ -846,7 +846,7 @@ func run_tests(group: string, filter_override: string?, rerun_failed: bool, no_b
             return
         }
         $filter_override = $failed_filter
-        info $"Rerunning {($failed_filter | match -r "FullyQualifiedName=" | count)} failed test(s)..."
+        info $"Rerunning {($failed_filter | match "FullyQualifiedName=" | count)} failed test(s)..."
     }
 
     if (not $no_build) {

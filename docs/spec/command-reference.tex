@@ -1897,6 +1897,9 @@ path ... & Optional paths used to resolve the containing mounted filesystem. (op
 --total & Appends a typed aggregate total row. \\
 -i & Displays inode usage instead of block usage. \\
 --output <columns> & Selects which filesystem properties are rendered. \\
+--show <columns> & Select which properties are rendered (display-only column selection). \\
+--hide <columns> & Hide specific properties from the output. \\
+--show-all & Display every available column. \\
 \bottomrule
 \end{tabular}
 
@@ -2016,6 +2019,9 @@ path ... & Optional roots to measure. (optional) \textit{(path-like)} \\
 -t <size> & Exclude entries smaller than size (or with - prefix, larger than absolute size). \\
 --threshold <size> & Alias for -t. \\
 --exclude <pattern> & Exclude files matching the shell glob pattern. \\
+--show <columns> & Select which properties are rendered (display-only column selection). \\
+--hide <columns> & Hide specific properties from the output. \\
+--show-all & Display every available column. \\
 \bottomrule
 \end{tabular}
 
@@ -2098,6 +2104,14 @@ root ... & One or more filesystem roots to search. (optional) \textit{(path-like
 -iregex <pattern> & Case-insensitive regex filter against the root-relative path. \\
 -type <file|\allowbreak dir|\allowbreak link> & Filter by filesystem entry kind. \\
 -perm <mode> & Filter by Unix permission bits (octal). Prefix with - for 'at least' or / for 'any of'. \\
+-maxdepth <n> & Limit recursion to at most N directory levels below the starting path. \\
+-mindepth <n> & Skip results shallower than N directory levels. \\
+-empty & Match only empty files and empty directories. \\
+-size <expr> & Filter by size; accepts +N/-N suffixes c/k/M/G (e.g. -size +1M). \\
+-mtime <expr> & Filter by modification age in days (+N for older, -N for newer). \\
+-days <expr> & Alias for -mtime. \\
+-newer-than <path-or-time> & Match entries modified after the given file or timestamp. \\
+-older-than <path-or-time> & Match entries modified before the given file or timestamp. \\
 \bottomrule
 \end{tabular}
 
@@ -2485,6 +2499,11 @@ path ... & Optional directories or files to list. (optional) \textit{(path-like)
 --time <modified|\allowbreak access|\allowbreak created> & Choose which time field long listings and time sorts use. \\
 --group-directories-first & Group directories ahead of files before applying the primary sort. \\
 -la & Combine hidden and long listing output. \\
+-T <depth> & Render entries as a tree (optional max depth). \\
+--tree & Render entries as a tree. \\
+--show <columns> & Select which properties are rendered (display-only column selection). \\
+--hide <columns> & Hide specific properties from the output. \\
+--show-all & Display every available column. \\
 \bottomrule
 \end{tabular}
 
@@ -3206,7 +3225,7 @@ path & One or more paths to inspect. \textit{(path-like)} \\
 \textbf{Flag / Option} & \textbf{Description} \\
 \midrule
 -L & Dereference symlinks before reading metadata. \\
--f & Return filesystem usage information for the containing mount instead of file-entry metadata. \\
+-f, --filesystem & Return filesystem usage information for the containing mount instead of file-entry metadata. \\
 --show <columns> & Select which properties are rendered. \\
 --hide <columns> & Hide specific properties from the output. \\
 --show-all & Display every available column. \\
@@ -5573,10 +5592,11 @@ key & A member path, callable, or block to extract the sort key. (optional) \tex
 \toprule
 \textbf{Flag / Option} & \textbf{Description} \\
 \midrule
--r & Reverse the sort order. \\
--n & Use numeric comparison. \\
--u & Remove duplicate values after sorting. \\
--h & Human-numeric sort (understands storage sizes). \\
+-r, --reverse & Reverse the sort order. \\
+-d, --desc, --descending & Alias for --reverse: sort in descending order. \\
+-n, --numeric & Use numeric comparison. \\
+-u, --unique & Remove duplicate values after sorting. \\
+-h, --human-numeric & Human-numeric sort (understands storage sizes). \\
 \bottomrule
 \end{tabular}
 
@@ -5997,7 +6017,7 @@ fixed-arg ... & Arguments that are always passed before piped arguments. (option
 \textbf{Output:} Streams whatever the invoked sub-command produces, once per batch of input arguments.
 
 \begin{lstlisting}
-echo README.md docs/INDEX.md | xargs wc -l  # Pass piped words as command arguments
+echo README.md AGENTS.md | xargs wc -l  # Pass piped words as command arguments
 glob "*.log" | xargs -n 1 rm  # Run one invocation per input argument
 \end{lstlisting}
 
@@ -8620,6 +8640,15 @@ path & Optional file paths to search instead of consuming piped text. (optional)
 -m & Multiline mode. \\
 -s & Singleline mode so '.' matches newlines. \\
 -x & Require a full-line match. \\
+-r, -R, --recursive & Recurse into directories when path arguments are supplied. \\
+-w, --word-regexp & Match only whole words. \\
+-o, --only-matching & Print only the matching portion of each line. \\
+-c, --count & Print only the count of matching lines per source. \\
+-l, --files-with-matches & Print only the names of files that contain a match. \\
+-L, --files-without-match & Print only the names of files that contain no match. \\
+-A, --after-context & Print N lines of trailing context after each match. \\
+-B, --before-context & Print N lines of leading context before each match. \\
+-C, --context & Print N lines of context around each match. \\
 --explicit-capture & Return structured capture results instead of plain matching lines. \\
 \bottomrule
 \end{tabular}

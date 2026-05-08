@@ -1,4 +1,5 @@
-#ToSh_Brainstorming.txt
+README.old.md
+.tosh-publish-state
 
 # Build output
 bin/
@@ -12,7 +13,11 @@ docs/*
 docs/spec/*
 docs/cheatsheets/*
 !docs/spec/
-!docs/spec/ToastScript.pdf
+docs/spec/ToastScript.pdf
+!docs/spec/toastscript-spec.pdf
+!docs/cheatsheets/
+!docs/cheatsheets/README.md
+!docs/cheatsheets/Makefile
 !docs/cheatsheets/basics/
 !docs/cheatsheets/basics/basics.pdf
 !docs/cheatsheets/collections/
@@ -37,16 +42,21 @@ docs/cheatsheets/*
 !docs/RUNTIME_NAMESPACES.md
 !docs/TUI_ARCHITECTURE.md
 
+# Scripts
+scripts/*
+!scripts/build.tosh
+!scripts/publish_tosh.sh
+
 # Test results
 TestResults/
 # LaTeX intermediate output (the canonical PDF is ToastScript.pdf)
-docs/spec/toastscript-spec.pdf
 docs/spec/*.aux
 docs/spec/*.fdb_latexmk
 docs/spec/*.fls
 docs/spec/*.idx
 docs/spec/*.ilg
 docs/spec/*.ind
+docs/spec/*.ist
 docs/spec/*.lof
 docs/spec/*.toc
 docs/spec/*.synctex.gz
@@ -81,6 +91,7 @@ AGENTS.md
 .env
 
 # User-specific files
+.vscode/
 *.rsuser
 *.suo
 *.user
