@@ -40,6 +40,16 @@ internal sealed class StreamingTableSink : IDisplaySink
     {
         if (!_isTable)
         {
+            // Some values have a custom single-value renderer in DisplayEngine.RenderMany
+            // (e.g. HelpTopic, IShellRuntimeNamespaceSummarySource). Route those through the
+            // fallback path so the bespoke layout fires instead of being flattened into a
+            // generic streaming table.
+            if (value is HelpTopic || value is IShellRuntimeNamespaceSummarySource)
+            {
+                _fallbackValues.Add(value);
+                return;
+            }
+
             if (value is not null && _columns is null)
             {
                 if (_display.TryBuildStreamingColumns(value, _options, out var cols) && cols.Count > 0)

@@ -2,13 +2,13 @@
 # using fakeroot version 1.37.2
 pkgname = tosh
 pkgbase = tosh
-xdata = pkgtype=split
-pkgver = 26.5.6.10-1
+xdata = pkgtype=pkg
+pkgver = 26.5.8.10-1
 pkgdesc = ToastedShell — a modern, object-oriented shell for Linux
 url = https://github.com/komrad/tosh
-builddate = 1778214895
+builddate = 1778231819
 packager = Unknown Packager
-size = 102905274
+size = 102969274
 arch = x86_64
 license = MIT
 depend = icu

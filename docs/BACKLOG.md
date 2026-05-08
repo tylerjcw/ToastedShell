@@ -231,6 +231,32 @@ first-class. Community runes can ship as ordinary `.tosh` modules.
 
 ---
 
+## Help Topic Display Profile — `Default` column for Options
+
+The `HelpTopicSummaryRenderer` (added 2026-05-08) renders single
+`HelpTopic` instances with a layout modeled on `$tosh`: title bar,
+description, and sub-boxes for Usage / Arguments / Options /
+Pipeline / Examples / Related, with REPL-style syntax highlighting
+on examples.
+
+The Options sub-box currently has two columns (Flag, Description).
+A third `Default` column would make defaults discoverable without
+having to scan the prose, but `HelpOptionInfo` does not yet carry a
+default-value field.
+
+### Work
+- Extend `HelpOptionInfo` with `Default` (string?, optional).
+- Backfill defaults in stdlib `[CommandOption]` metadata where
+  obvious (e.g. `--sort` defaults to `name`, `--time` to `modified`).
+- Render a third column in `RenderOptionsSubBox` when any option in
+  the list carries a default; keep two-column layout otherwise.
+- Surface the field in JSON `to json` output and the MCP
+  `command_metadata` tool.
+
+### Priority: P3
+
+---
+
 ## Enhanced LINQ-like Features
 
 ### Query Expression Syntax

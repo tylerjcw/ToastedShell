@@ -41,6 +41,13 @@ public sealed class DisplayEngine
 
     public DisplayPreferences? Preferences { get; set; }
 
+    /// <summary>
+    /// Optional code highlighter used by per-type renderers (e.g. the help-topic
+    /// example block) to colorise pipeline code in the same style as the REPL.
+    /// Set by the CLI when syntax highlighting is enabled; null otherwise.
+    /// </summary>
+    public Func<string, string>? CodeHighlighter { get; set; }
+
     public string Render(object? value)
     {
         return Render(value, new DisplayRenderOptions(Style));
@@ -67,6 +74,14 @@ public sealed class DisplayEngine
         if (values.Count == 1 && values[0] is IShellRuntimeNamespaceSummarySource summarySource)
         {
             return RuntimeNamespaceSummaryRenderer.Render(summarySource.GetDisplaySummary());
+        }
+
+        // Single HelpTopic gets a custom rich layout (mirrors the $tosh design),
+        // including syntax-highlighted examples when a CodeHighlighter is wired up.
+        // Multiple HelpTopics fall through to the standard table profile.
+        if (values.Count == 1 && values[0] is HelpTopic helpTopic)
+        {
+            return HelpTopicSummaryRenderer.Render(helpTopic, CodeHighlighter);
         }
 
         return RenderMany(values, options, depth: 0, new HashSet<object>(ReferenceEqualityComparer.Instance));

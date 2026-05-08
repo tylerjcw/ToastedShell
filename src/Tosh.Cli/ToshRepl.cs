@@ -24,6 +24,12 @@ public sealed class ToshRepl
         _commandLineInsertion = new ReplCommandLineInsertionSink();
         _runtime.CommandLineInsertion = _commandLineInsertion;
         _completionEngine = new ReplCompletionEngine(_runtime);
+
+        // Let display profiles (e.g. HelpTopic example block) reuse the REPL syntax highlighter.
+        if (_runtime.Display is not null)
+        {
+            _runtime.Display.CodeHighlighter = text => SyntaxHighlighter.Highlight(text, _runtime);
+        }
     }
 
     public async Task RunAsync()
