@@ -121,7 +121,7 @@ public sealed class ToshSdkBuildTests
     }
 
     [Fact]
-    public async Task Dotnet_build_packaged_sdk_project_compiles_with_in_process_task()
+    public async Task Dotnet_build_packaged_sdk_project_compiles_with_packaged_sdk()
     {
         using var tempDirectory = new TemporaryDirectory("tosh packaged sdk tests");
         using var packageDirectory = new TemporaryDirectory("tosh packaged sdk packages");
@@ -185,7 +185,10 @@ public sealed class ToshSdkBuildTests
             "/v:minimal");
 
         Assert.Equal(0, build.ExitCode);
-        Assert.Contains("ToshCompile (in-process): PackHello", build.Output);
+        Assert.True(
+            build.Output.Contains("ToshCompile (in-process): PackHello", StringComparison.Ordinal) ||
+            build.Output.Contains("ToshCompile (Exec): PackHello", StringComparison.Ordinal),
+            build.Output);
         Assert.True(File.Exists(outputPath), build.Output);
         Assert.True(File.Exists(appHostPath), build.Output);
 

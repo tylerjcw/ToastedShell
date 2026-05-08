@@ -56,6 +56,13 @@ public sealed class DiagnosticRendererTests
         Assert.Contains("error", text, StringComparison.Ordinal);
         Assert.Contains("tosh.test", text, StringComparison.Ordinal);
 
+        if (TerminalEnvironmentTestSupport.DiagnosticsPlainModeIsActive)
+        {
+            Assert.Contains("error[tosh.test]: Boom", text, StringComparison.Ordinal);
+            Assert.DoesNotContain("\x1b[", text, StringComparison.Ordinal);
+            return;
+        }
+
         // The error glyph is styled bright-yellow + bold (default ErrorGlyph is bold).
         Assert.Contains("\x1b[1;93m", text);
 
@@ -136,6 +143,13 @@ public sealed class DiagnosticRendererTests
         var text = renderer.Render(new ToshDiagnostic(
             Code: "tosh.test.boom",
             Title: "kaboom"));
+
+        if (TerminalEnvironmentTestSupport.DiagnosticsPlainModeIsActive)
+        {
+            Assert.Contains("error[tosh.test.boom]: kaboom", text, StringComparison.Ordinal);
+            Assert.DoesNotContain("\x1b]8;;", text, StringComparison.Ordinal);
+            return;
+        }
 
         Assert.Contains("\x1b]8;;https://tosh.dev/d/tosh.test.boom\x1b\\", text, StringComparison.Ordinal);
         Assert.Contains("\x1b]8;;\x1b\\", text, StringComparison.Ordinal);

@@ -1,0 +1,93 @@
+# Maintainer: komrad <komrad@users.noreply.github.com>
+#
+# Split package: produces tosh, tosh-lsp, tosh-mcp from a single source tree.
+#
+# TOSH_TARGETS may be set by the caller (scripts/build.tosh) to a comma-
+# separated subset of {tosh,lsp,mcp}. The selected names drive both the
+# pkgname=() array (so makepkg only produces the requested .pkg.tar.zst
+# files) and which projects build() actually publishes. Empty / unset =>
+# all three.
+
+_targets="${TOSH_TARGETS:-tosh,lsp,mcp}"
+_want_tosh=0; _want_lsp=0; _want_mcp=0
+IFS=',' read -ra _t <<< "$_targets"
+for _x in "${_t[@]}"; do
+  case "${_x,,}" in
+    tosh|cli) _want_tosh=1 ;;
+    lsp)      _want_lsp=1 ;;
+    mcp)      _want_mcp=1 ;;
+  esac
+done
+unset _t _x
+
+_pkgs=()
+(( _want_tosh )) && _pkgs+=('tosh')
+(( _want_lsp ))  && _pkgs+=('tosh-lsp')
+(( _want_mcp ))  && _pkgs+=('tosh-mcp')
+[[ ${#_pkgs[@]} -eq 0 ]] && {
+  _pkgs=('tosh' 'tosh-lsp' 'tosh-mcp')
+  _want_tosh=1; _want_lsp=1; _want_mcp=1
+}
+
+pkgbase=tosh
+pkgname=("${_pkgs[@]}")
+pkgver=26.5.6.10
+pkgrel=1
+arch=('x86_64')
+url='https://github.com/komrad/tosh'
+license=('MIT')
+makedepends=('dotnet-sdk-10.0')
+options=('!strip')  # .NET single-file bundles append assemblies after the ELF stub; strip destroys them
+source=()
+sha256sums=()
+
+_publish_args=(
+  -c Release
+  -r linux-x64
+  -p:PublishSingleFile=true
+  -p:PublishReadyToRun=true
+  -p:SelfContained=true
+  -p:EnableCompressionInSingleFile=false
+  -p:DebugType=None
+  -p:DebugSymbols=false
+  -p:DisableToshVsCodeExtensionSync=true
+)
+
+build() {
+  cd "$startdir/../.."
+
+  dotnet clean Tosh.slnx -c Release --verbosity quiet || true
+  rm -rf "$srcdir/out-cli" "$srcdir/out-lsp" "$srcdir/out-mcp"
+  dotnet restore Tosh.slnx --force
+
+  (( _want_tosh )) && dotnet publish src/Tosh.Cli/Tosh.Cli.csproj "${_publish_args[@]}" -o "$srcdir/out-cli"
+  (( _want_lsp  )) && dotnet publish src/Tosh.Lsp/Tosh.Lsp.csproj "${_publish_args[@]}" -o "$srcdir/out-lsp"
+  (( _want_mcp  )) && dotnet publish src/Tosh.Mcp/Tosh.Mcp.csproj "${_publish_args[@]}" -o "$srcdir/out-mcp"
+  return 0
+}
+
+_install_license() {
+  install -Dm644 "$startdir/../../LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE" 2>/dev/null || true
+}
+
+package_tosh() {
+  pkgdesc='ToastedShell — a modern, object-oriented shell for Linux'
+  depends=('icu')
+  install=tosh.install
+  install -Dm755 "$srcdir/out-cli/Tosh.Cli" "$pkgdir/usr/bin/tosh"
+  _install_license
+}
+
+package_tosh-lsp() {
+  pkgdesc='Language Server Protocol implementation for ToastedShell (TōSh)'
+  depends=('icu')
+  install -Dm755 "$srcdir/out-lsp/Tosh.Lsp" "$pkgdir/usr/bin/tosh-lsp"
+  _install_license
+}
+
+package_tosh-mcp() {
+  pkgdesc='Model Context Protocol server for ToastedShell (TōSh)'
+  depends=('icu')
+  install -Dm755 "$srcdir/out-mcp/Tosh.Mcp" "$pkgdir/usr/bin/tosh-mcp"
+  _install_license
+}

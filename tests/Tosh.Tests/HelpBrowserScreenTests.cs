@@ -40,7 +40,7 @@ public sealed class HelpBrowserScreenTests(ToshRuntimeFixture fixture) : IClassF
         var frame = screen.Render(new TuiSize(80, 20));
         var rendered = StyledText.StripAnsi(frame.Content);
 
-        Assert.Contains("╭", rendered, StringComparison.Ordinal);
+        Assert.Contains(TerminalEnvironmentTestSupport.RoundedTableTopLeft, rendered);
         Assert.Contains("Help Browser", rendered, StringComparison.Ordinal);
         Assert.Contains("ToastedShell", rendered, StringComparison.Ordinal);
         Assert.Contains("grep [BuiltIn]", rendered, StringComparison.Ordinal);

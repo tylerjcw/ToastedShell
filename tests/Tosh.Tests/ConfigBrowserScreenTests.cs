@@ -67,7 +67,7 @@ public sealed class ConfigBrowserScreenTests
         Assert.Contains("Config Browser", rendered, StringComparison.Ordinal);
         Assert.Contains("Configuration", rendered, StringComparison.Ordinal);
         Assert.Contains("Box Style", rendered, StringComparison.Ordinal);
-        Assert.Contains("╭", rendered, StringComparison.Ordinal);
+        Assert.Contains(TerminalEnvironmentTestSupport.RoundedTableTopLeft, rendered);
     }
 
     [Fact]
@@ -508,7 +508,7 @@ public sealed class ConfigBrowserScreenTests
         Assert.Contains(lines, line => line.Contains("Sample Failure Preview", StringComparison.Ordinal));
         Assert.Contains(lines, line => line.Contains("!432", StringComparison.Ordinal));
         Assert.Contains(lines, line => line.Contains("toast", StringComparison.Ordinal));
-        Assert.Contains(lines, line => line.Contains("✘ 7", StringComparison.Ordinal));
+        Assert.Contains(lines, line => line.Contains(TerminalEnvironmentTestSupport.ExitCodeText(7), StringComparison.Ordinal));
         Assert.Contains(lines, line => line.Contains("jobs:2", StringComparison.Ordinal));
     }
 

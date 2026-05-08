@@ -104,7 +104,8 @@ internal sealed class StreamingTableSink : IDisplaySink
 
         try
         {
-            if (TuiRequestDispatcher.TryHandle(_fallbackValues, _runtime, out var outcomeValues))
+            if (TuiRequestProbe.IsTuiRequestBatch(_fallbackValues) &&
+                TuiRequestDispatcher.TryHandle(_fallbackValues, _runtime, out var outcomeValues))
             {
                 if (outcomeValues is { Count: > 0 })
                 {
@@ -211,6 +212,7 @@ internal sealed class StreamingTableSink : IDisplaySink
         var widths = new int[columns.Count];
         for (var i = 0; i < columns.Count; i++)
             widths[i] = Math.Max(StyledText.GetVisibleLength(columns[i].Header), columns[i].MinWidth);
+        ClampToMaxWidth(widths);
         return widths;
     }
 
@@ -235,6 +237,7 @@ internal sealed class StreamingTableSink : IDisplaySink
             if (needed > _widths![i])
                 _widths[i] = needed;
         }
+        ClampToMaxWidth(_widths!);
     }
 
     private void RecalculateWidths()
@@ -242,5 +245,42 @@ internal sealed class StreamingTableSink : IDisplaySink
         _widths = InitializeWidths(_columns!);
         foreach (var cells in _renderedCells)
             UpdateWidths(cells);
+    }
+
+    /// <summary>
+    /// Shrinks column widths in-place so that the rendered table fits within
+    /// <see cref="DisplayRenderOptions.MaxWidth"/>. Mirrors the buffered-table
+    /// behaviour in <c>DisplayEngine.BuildVisibleColumns</c>: widest columns
+    /// shrink first, never below their per-column <c>MinWidth</c>.
+    /// </summary>
+    private void ClampToMaxWidth(int[] widths)
+    {
+        if (_options.MaxWidth is not int maxWidth || maxWidth <= 0 || _columns is null)
+            return;
+
+        // Total rendered width = sum(width + 2 padding) + (count + 1) borders.
+        static int Total(int[] w, int count) => w.Take(count).Sum() + 3 * count + 1;
+
+        while (Total(widths, _columns.Count) > maxWidth)
+        {
+            var excess = Total(widths, _columns.Count) - maxWidth;
+            var shrinkableIndex = -1;
+            var shrinkableSlack = 0;
+            for (var i = 0; i < _columns.Count; i++)
+            {
+                var slack = widths[i] - _columns[i].MinWidth;
+                if (slack > shrinkableSlack)
+                {
+                    shrinkableSlack = slack;
+                    shrinkableIndex = i;
+                }
+            }
+
+            if (shrinkableIndex < 0)
+                break;
+
+            var reduction = Math.Min(shrinkableSlack, excess);
+            widths[shrinkableIndex] -= reduction;
+        }
     }
 }

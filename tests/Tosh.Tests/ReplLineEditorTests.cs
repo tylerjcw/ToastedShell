@@ -398,6 +398,7 @@ public sealed class ReplLineEditorTests
     [Fact]
     public void Dynamic_gutter_renders_single_rail_for_depth_one_body_lines()
     {
+        var glyphs = ReplLineEditor.ResolveGutterGlyphs();
         var gutters = ReplLineEditor.BuildDynamicContinuationGutters(
             ["func test() {", "echo hi", "}"],
             "❯ ",
@@ -406,8 +407,8 @@ public sealed class ReplLineEditorTests
             gutterRightBorder: false);
 
         Assert.Equal(3, gutters.Count);
-        Assert.Equal("│ ", gutters[1]);
-        Assert.Equal("╯ ", gutters[2]);
+        Assert.Equal($"{glyphs.Vertical} ", gutters[1]);
+        Assert.Equal($"{glyphs.Close} ", gutters[2]);
     }
 
     [Fact]
@@ -421,8 +422,9 @@ public sealed class ReplLineEditorTests
             consoleWidth: 120);
 
         var lines = layout.RenderedText.Split('\n').Select(StripAnsiCodes).ToArray();
-        Assert.StartsWith("││", lines[1], StringComparison.Ordinal);
-        Assert.StartsWith("╯│", lines[2], StringComparison.Ordinal);
+        var glyphs = ReplLineEditor.ResolveGutterGlyphs();
+        Assert.StartsWith($"{glyphs.Vertical}{glyphs.Vertical}", lines[1], StringComparison.Ordinal);
+        Assert.StartsWith($"{glyphs.Close}{glyphs.Vertical}", lines[2], StringComparison.Ordinal);
     }
 
     [Fact]
@@ -443,6 +445,7 @@ public sealed class ReplLineEditorTests
     [Fact]
     public void Dynamic_gutter_uses_join_transitions_for_nested_open_and_close()
     {
+        var glyphs = ReplLineEditor.ResolveGutterGlyphs();
         var gutters = ReplLineEditor.BuildDynamicContinuationGutters(
             ["func nextFunc() {", "echo a", "if (true) {", "echo b", "}", "}"],
             "❯ ",
@@ -450,9 +453,9 @@ public sealed class ReplLineEditorTests
             consoleWidth: 120,
             gutterRightBorder: false);
 
-        Assert.Equal("│ ", gutters[1]);
-        Assert.Equal("├╮", gutters[2]);
-        Assert.Equal("├╯", gutters[4]);
+        Assert.Equal($"{glyphs.Vertical} ", gutters[1]);
+        Assert.Equal($"{glyphs.Join}{glyphs.Open}", gutters[2]);
+        Assert.Equal($"{glyphs.Join}{glyphs.Close}", gutters[4]);
     }
 
     [Fact]
@@ -470,15 +473,21 @@ public sealed class ReplLineEditorTests
     }
 
     [Fact]
-    public void Gutter_glyphs_match_rounded_table_style_when_no_fallback_is_active()
+    public void Gutter_glyphs_match_resolved_terminal_box_style()
     {
         var glyphs = ReplLineEditor.ResolveGutterGlyphs();
+        var resolvedStyle = Tosh.Runtime.TerminalGlyphs.ResolveBoxStyle(Tosh.Runtime.ToshTableBoxStyle.Rounded);
 
-        Assert.Equal('│', glyphs.Vertical);
-        Assert.Equal('╮', glyphs.Open);
-        Assert.Equal('╯', glyphs.Close);
-        Assert.Equal('├', glyphs.Join);
-        Assert.Equal('┤', glyphs.Transition);
+        var expected = resolvedStyle switch
+        {
+            Tosh.Runtime.ToshTableBoxStyle.Ascii => new ReplLineEditor.GutterGlyphs('|', '+', '+', '+', '+', '.'),
+            Tosh.Runtime.ToshTableBoxStyle.Square => new ReplLineEditor.GutterGlyphs('│', '┐', '┘', '├', '┤', '.'),
+            Tosh.Runtime.ToshTableBoxStyle.Heavy => new ReplLineEditor.GutterGlyphs('┃', '┓', '┛', '┣', '┫', '·'),
+            Tosh.Runtime.ToshTableBoxStyle.Double => new ReplLineEditor.GutterGlyphs('║', '╗', '╝', '╠', '╣', '·'),
+            _ => new ReplLineEditor.GutterGlyphs('│', '╮', '╯', '├', '┤', '·'),
+        };
+
+        Assert.Equal(expected, glyphs);
     }
 
     [Fact]
@@ -503,8 +512,9 @@ public sealed class ReplLineEditorTests
             continuationLineNumbers: true);
 
         var lines = layout.RenderedText.Split('\n').Select(StripAnsiCodes).ToArray();
-        Assert.StartsWith("│ 2│", lines[1], StringComparison.Ordinal);
-        Assert.StartsWith("· 3│", lines[2], StringComparison.Ordinal);
+        var glyphs = ReplLineEditor.ResolveGutterGlyphs();
+        Assert.StartsWith($"{glyphs.Vertical} 2{glyphs.Vertical}", lines[1], StringComparison.Ordinal);
+        Assert.StartsWith($"{glyphs.Dot} 3{glyphs.Vertical}", lines[2], StringComparison.Ordinal);
     }
 
     [Fact]
@@ -631,7 +641,7 @@ public sealed class ReplLineEditorTests
         Assert.Contains("jobs:2", lines[0], StringComparison.Ordinal);
         Assert.Contains("1.4s", lines[0], StringComparison.Ordinal);
         Assert.Contains("!432", lines[1], StringComparison.Ordinal);
-        Assert.Contains("✘ 7", lines[1], StringComparison.Ordinal);
+        Assert.Contains(TerminalEnvironmentTestSupport.ExitCodeText(7), lines[1], StringComparison.Ordinal);
         Assert.Contains("tosh", lines[1], StringComparison.Ordinal);
         Assert.True(Tosh.Runtime.StyledText.GetVisibleLength(lines[0]) < 120);
     }

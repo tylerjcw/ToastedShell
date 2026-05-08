@@ -35,7 +35,8 @@ internal sealed class BufferingDisplaySink : IDisplaySink
     {
         try
         {
-            if (TuiRequestDispatcher.TryHandle(_values, _runtime, out var outcomeValues))
+            if (TuiRequestProbe.IsTuiRequestBatch(_values) &&
+                TuiRequestDispatcher.TryHandle(_values, _runtime, out var outcomeValues))
             {
                 if (_renderTuiOutcome && outcomeValues is { Count: > 0 })
                 {

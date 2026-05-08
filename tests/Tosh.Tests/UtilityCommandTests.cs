@@ -182,7 +182,7 @@ public sealed class UtilityCommandTests
         Assert.Empty(zeroExitResults);
 
         var exitSegment = Assert.IsType<StyledText>(Assert.Single(failureExitResults));
-        Assert.Equal("✘ 7", exitSegment.Text);
+        Assert.Equal(TerminalEnvironmentTestSupport.ExitCodeText(7), exitSegment.Text);
         Assert.True(exitSegment.Bold);
     }
 

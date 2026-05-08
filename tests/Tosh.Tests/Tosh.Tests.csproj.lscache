@@ -142,6 +142,7 @@ SubcommandTests.cs
 SyntaxHighlighterTests.cs
 SystemdJsonParserTests.cs
 TerminalControlTests.cs
+TerminalEnvironmentTestSupport.cs
 TimeCommandTests.cs
 ToshRuntimeFixture.cs
 ToshSdkBuildTests.cs

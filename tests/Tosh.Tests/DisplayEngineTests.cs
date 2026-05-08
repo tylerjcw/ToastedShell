@@ -29,8 +29,8 @@ public sealed class DisplayEngineTests
 
         var text = display.RenderMany(values);
 
-        Assert.Contains("╭", text, StringComparison.Ordinal);
-        Assert.Contains("╰", text, StringComparison.Ordinal);
+        Assert.Contains(TerminalEnvironmentTestSupport.RoundedTableTopLeft, text);
+        Assert.Contains(TerminalEnvironmentTestSupport.RoundedTableBottomLeft, text);
         Assert.Contains("│ # ", text, StringComparison.Ordinal);
         Assert.Contains("Id", text, StringComparison.Ordinal);
         Assert.Contains("Text", text, StringComparison.Ordinal);
@@ -56,7 +56,7 @@ public sealed class DisplayEngineTests
 
         var text = display.RenderMany(values, new DisplayRenderOptions(ObjectRenderStyle.Compact, MaxWidth: 34));
 
-        Assert.Contains("╭", text, StringComparison.Ordinal);
+        Assert.Contains(TerminalEnvironmentTestSupport.RoundedTableTopLeft, text);
         Assert.Contains("Name", text, StringComparison.Ordinal);
         Assert.Contains("Type", text, StringComparison.Ordinal);
         Assert.Contains("Size", text, StringComparison.Ordinal);
@@ -79,7 +79,7 @@ public sealed class DisplayEngineTests
 
         var text = display.RenderMany(values);
 
-        Assert.Contains("╭", text, StringComparison.Ordinal);
+        Assert.Contains(TerminalEnvironmentTestSupport.RoundedTableTopLeft, text);
         Assert.Contains("│ Name", text, StringComparison.Ordinal);
         Assert.Contains("alpha.txt", text, StringComparison.Ordinal);
         Assert.DoesNotContain("│ # ", text, StringComparison.Ordinal);
@@ -143,7 +143,7 @@ public sealed class DisplayEngineTests
 
         var text = display.RenderMany(values);
 
-        Assert.Contains("╭", text, StringComparison.Ordinal);
+        Assert.Contains(TerminalEnvironmentTestSupport.RoundedTableTopLeft, text);
         Assert.Contains("│ 0 │ alpha │", text, StringComparison.Ordinal);
         Assert.Contains("│ 1 │ beta  │", text, StringComparison.Ordinal);
         Assert.DoesNotContain("├", text, StringComparison.Ordinal);
@@ -294,7 +294,7 @@ public sealed class DisplayEngineTests
         Assert.Contains("First", text, StringComparison.Ordinal);
         Assert.Contains("Last", text, StringComparison.Ordinal);
         Assert.DoesNotContain("<ExpandoObject>", text, StringComparison.Ordinal);
-        Assert.True(text.Count(character => character == '╭') >= 2);
+        Assert.True(text.Count(character => character == TerminalEnvironmentTestSupport.RoundedTableTopLeft) >= 2);
     }
 
     [Fact]
@@ -1071,7 +1071,7 @@ public sealed class DisplayEngineTests
         Assert.Contains("Size", text, StringComparison.Ordinal);
         Assert.Contains("Key", text, StringComparison.Ordinal);
         Assert.Contains("Count", text, StringComparison.Ordinal);
-        Assert.True(text.Count(character => character == '╭') >= 2);
+        Assert.True(text.Count(character => character == TerminalEnvironmentTestSupport.RoundedTableTopLeft) >= 2);
     }
 
     [Fact]
@@ -1085,7 +1085,7 @@ public sealed class DisplayEngineTests
         Assert.DoesNotContain("[TimeOnly]", text, StringComparison.Ordinal);
         Assert.Contains("DateOnly", text, StringComparison.Ordinal);
         Assert.Contains("TimeOnly", text, StringComparison.Ordinal);
-        Assert.True(text.Count(character => character == '╭') >= 2);
+        Assert.True(text.Count(character => character == TerminalEnvironmentTestSupport.RoundedTableTopLeft) >= 2);
     }
 
     [Fact]
@@ -1142,7 +1142,7 @@ public sealed class DisplayEngineTests
 
         var text = display.RenderMany(values);
 
-        Assert.Contains("╭", text, StringComparison.Ordinal);
+        Assert.Contains(TerminalEnvironmentTestSupport.RoundedTableTopLeft, text);
         Assert.Contains("alpha", text, StringComparison.Ordinal);
         Assert.Contains("beta", text, StringComparison.Ordinal);
         Assert.DoesNotContain("Object[]", text, StringComparison.Ordinal);
@@ -1263,7 +1263,7 @@ public sealed class DisplayEngineTests
         Assert.Contains("│ 0 │", plain, StringComparison.Ordinal);
         Assert.Contains("│ A │", plain, StringComparison.Ordinal);
         Assert.Contains("│ B │", plain, StringComparison.Ordinal);
-        Assert.True(text.Count(character => character == '╭') >= 3);
+        Assert.True(text.Count(character => character == TerminalEnvironmentTestSupport.RoundedTableTopLeft) >= 3);
     }
 
     [Fact]
@@ -1286,7 +1286,7 @@ public sealed class DisplayEngineTests
         Assert.Contains("│ 0 │", plain, StringComparison.Ordinal);
         Assert.Contains("│ A │", plain, StringComparison.Ordinal);
         Assert.Contains("│ B │", plain, StringComparison.Ordinal);
-        Assert.True(text.Count(character => character == '╭') >= 3);
+        Assert.True(text.Count(character => character == TerminalEnvironmentTestSupport.RoundedTableTopLeft) >= 3);
     }
 
     [Fact]
@@ -1342,9 +1342,9 @@ public sealed class DisplayEngineTests
         Assert.DoesNotContain("…", plain, StringComparison.Ordinal);
         Assert.DoesNotContain("[Slice", plain, StringComparison.Ordinal);
         Assert.DoesNotContain("A/I/", plain, StringComparison.Ordinal);
-        Assert.Contains("│ A │ ╭", plain, StringComparison.Ordinal);
-        Assert.Contains("│ B │ ╭", plain, StringComparison.Ordinal);
-        Assert.True(text.Count(character => character == '╭') >= 7, $"Expected nested tensor cells, but got:{Environment.NewLine}{text}");
+        Assert.Contains($"│ A │ {TerminalEnvironmentTestSupport.RoundedTableTopLeft}", plain, StringComparison.Ordinal);
+        Assert.Contains($"│ B │ {TerminalEnvironmentTestSupport.RoundedTableTopLeft}", plain, StringComparison.Ordinal);
+        Assert.True(text.Count(character => character == TerminalEnvironmentTestSupport.RoundedTableTopLeft) >= 7, $"Expected nested tensor cells, but got:{Environment.NewLine}{text}");
     }
 
     [Fact]
@@ -1360,9 +1360,9 @@ public sealed class DisplayEngineTests
         Assert.DoesNotContain("…", plain, StringComparison.Ordinal);
         Assert.DoesNotContain("[Slice", plain, StringComparison.Ordinal);
         Assert.DoesNotContain("A/I/", plain, StringComparison.Ordinal);
-        Assert.Contains("│ A │ ╭", plain, StringComparison.Ordinal);
-        Assert.Contains("│ B │ ╭", plain, StringComparison.Ordinal);
-        Assert.True(text.Count(character => character == '╭') >= 8, $"Expected a deeply nested tensor layout, but got:{Environment.NewLine}{text}");
+        Assert.Contains($"│ A │ {TerminalEnvironmentTestSupport.RoundedTableTopLeft}", plain, StringComparison.Ordinal);
+        Assert.Contains($"│ B │ {TerminalEnvironmentTestSupport.RoundedTableTopLeft}", plain, StringComparison.Ordinal);
+        Assert.True(text.Count(character => character == TerminalEnvironmentTestSupport.RoundedTableTopLeft) >= 8, $"Expected a deeply nested tensor layout, but got:{Environment.NewLine}{text}");
     }
 
     [Fact]
