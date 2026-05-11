@@ -1,21 +1,22 @@
 # Maintainer: komrad <komrad@users.noreply.github.com>
 #
-# Split package: produces tosh, tosh-lsp, tosh-mcp from a single source tree.
+# Split package: produces tosh, tosh-lsp, tosh-mcp, tosh-devcompanion from a single source tree.
 #
 # TOSH_TARGETS may be set by the caller (scripts/build.tosh) to a comma-
-# separated subset of {tosh,lsp,mcp}. The selected names drive both the
-# pkgname=() array (so makepkg only produces the requested .pkg.tar.zst
-# files) and which projects build() actually publishes. Empty / unset =>
-# all three.
+# separated subset of {tosh,lsp,mcp,devcompanion}. The selected names drive
+# both the pkgname=() array (so makepkg only produces the requested
+# .pkg.tar.zst files) and which projects build() actually publishes.
+# Empty / unset => tosh, tosh-lsp, tosh-mcp (devcompanion is opt-in, dev-only).
 
 _targets="${TOSH_TARGETS:-tosh,lsp,mcp}"
-_want_tosh=0; _want_lsp=0; _want_mcp=0
+_want_tosh=0; _want_lsp=0; _want_mcp=0; _want_dc=0
 IFS=',' read -ra _t <<< "$_targets"
 for _x in "${_t[@]}"; do
   case "${_x,,}" in
-    tosh|cli) _want_tosh=1 ;;
-    lsp)      _want_lsp=1 ;;
-    mcp)      _want_mcp=1 ;;
+    tosh|cli)                    _want_tosh=1 ;;
+    lsp)                         _want_lsp=1 ;;
+    mcp)                         _want_mcp=1 ;;
+    devcompanion|dc|companion)   _want_dc=1 ;;
   esac
 done
 unset _t _x
@@ -24,6 +25,7 @@ _pkgs=()
 (( _want_tosh )) && _pkgs+=('tosh')
 (( _want_lsp ))  && _pkgs+=('tosh-lsp')
 (( _want_mcp ))  && _pkgs+=('tosh-mcp')
+(( _want_dc ))   && _pkgs+=('tosh-devcompanion')
 [[ ${#_pkgs[@]} -eq 0 ]] && {
   _pkgs=('tosh' 'tosh-lsp' 'tosh-mcp')
   _want_tosh=1; _want_lsp=1; _want_mcp=1
@@ -57,12 +59,13 @@ build() {
   cd "$startdir/../.."
 
   dotnet clean Tosh.slnx -c Release --verbosity quiet || true
-  rm -rf "$srcdir/out-cli" "$srcdir/out-lsp" "$srcdir/out-mcp"
+  rm -rf "$srcdir/out-cli" "$srcdir/out-lsp" "$srcdir/out-mcp" "$srcdir/out-dc"
   dotnet restore Tosh.slnx --force
 
   (( _want_tosh )) && dotnet publish src/Tosh.Cli/Tosh.Cli.csproj "${_publish_args[@]}" -o "$srcdir/out-cli"
   (( _want_lsp  )) && dotnet publish src/Tosh.Lsp/Tosh.Lsp.csproj "${_publish_args[@]}" -o "$srcdir/out-lsp"
   (( _want_mcp  )) && dotnet publish src/Tosh.Mcp/Tosh.Mcp.csproj "${_publish_args[@]}" -o "$srcdir/out-mcp"
+  (( _want_dc   )) && dotnet publish tools/Tosh.DevCompanion/Tosh.DevCompanion.csproj "${_publish_args[@]}" -p:IsPublishable=true -p:IncludeNativeLibrariesForSelfExtract=true -o "$srcdir/out-dc"
   return 0
 }
 
@@ -89,5 +92,12 @@ package_tosh-mcp() {
   pkgdesc='Model Context Protocol server for ToastedShell (TōSh)'
   depends=('icu')
   install -Dm755 "$srcdir/out-mcp/Tosh.Mcp" "$pkgdir/usr/bin/tosh-mcp"
+  _install_license
+}
+
+package_tosh-devcompanion() {
+  pkgdesc='AI companion memory store for TōSh development (dev tool, not for distribution)'
+  depends=('icu')
+  install -Dm755 "$srcdir/out-dc/Tosh.DevCompanion" "$pkgdir/usr/bin/tosh-devcompanion"
   _install_license
 }

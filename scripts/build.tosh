@@ -1413,15 +1413,18 @@ subcommand install {
     ## @param targets A string, comma-separated list, array, or "all".
     ## @remarks
     ##   Usage:
-    ##     build.tosh install                          # all three (tosh, tosh-lsp, tosh-mcp)
+    ##     build.tosh install                          # tosh, tosh-lsp, tosh-mcp (not devcompanion)
     ##     build.tosh install lsp
     ##     build.tosh install lsp,mcp
     ##     build.tosh install ["tosh","lsp"]
+    ##     build.tosh install devcompanion             # dev-only AI memory tool
     ##     build.tosh install --linuxDesktop           # also install MIME/icons/.desktop (user)
     ##     build.tosh install --linuxDesktop --system  # MIME/icons/.desktop in /usr/share
     ##
     ##   The PKGBUILD reads $TOSH_TARGETS to decide which binaries to publish
     ##   and package, so a single `makepkg -sifC` invocation handles everything.
+    ##   Note: `devcompanion` is a dev-only tool and is never included in the
+    ##   default "all" set — it must be requested explicitly.
     ##
     ##   When `--linuxDesktop` is set, runs the freedesktop integration step
     ##   after the package install (text/x-tosh MIME, hicolor icons, app
@@ -1436,12 +1439,12 @@ subcommand install {
 
     var root = repo_root
     var arch_dir = $root | join -p "packaging" "archlinux"
-    var valid = ["tosh", "lsp", "mcp"]
+    var valid = ["tosh", "lsp", "mcp", "devcompanion"]
     var requested = []
     if ($targets is array) {
         $requested = $targets
     } else if ($targets == "all") {
-        $requested = $valid
+        $requested = ["tosh", "lsp", "mcp"]
     } else {
         $requested = ($targets | split "," | collect)
     }
