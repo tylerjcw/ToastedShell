@@ -21,7 +21,7 @@ ProjectAssetsFile=<PATH>obj/project.assets.json
 RootNamespace=Tosh.Tests
 RunAnalyzers=
 RunAnalyzersDuringLiveAnalysis=
-SolutionPath=<PATH>../../Tosh.slnx
+SolutionPath=*Undefined*
 TargetFrameworkIdentifier=.NETCoreApp
 TargetPath=<PATH>bin/Debug/net10.0/Tosh.Tests.dll
 TargetRefPath=<PATH>obj/Debug/net10.0/ref/Tosh.Tests.dll
@@ -95,6 +95,7 @@ HelpBrowserScreenTests.cs
 HelpCommandTests.cs
 HelpTreeStateTests.cs
 InspectTreeTests.cs
+IntrospectionAndPickingTests.cs
 IpJsonParserTests.cs
 IteratorCommandTests.cs
 JobControlTests.cs

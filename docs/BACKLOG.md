@@ -20,9 +20,481 @@ the 2026-05-06 audit; spec restructured with new `\part{Compilation}`. See
 
 ---
 
-# REPL Line Editor ✓ Phase 1 Complete
+# Surface & Identity Audit (2026-05-08)
 
-Derived from [Line Editor RFC](LINE_EDITOR_RFC.md). Phase 1 is focused on safety and deterministic editing.
+A holistic project review surfaced seven priorities for the next quarter,
+ordered by leverage. They cluster into three themes: **closing language
+gaps that force user boilerplate** (#1), **lowering the onboarding tax for
+polyglot developers** (#2, #7), and **tightening project identity** (#3,
+#4, #5, #6). Items #1, #2, and #7 landed on 2026-05-08.
+
+## 1. Numeric Generics / Trait-Like Constraints — P1 — closed (2026-05-08)
+
+The current generic system has no equivalent of C# 11 static-abstract
+interface members (`INumber<T>`, `IAdditionOperators<T,U,R>`), F# inline
++ SRTP, or Rust trait bounds. The forcing example is
+[examples/point.tosh](../examples/point.tosh) — a generic `Point2D<T1, T2>`
+must enumerate `+`/`-`/`*`/`/` overloads four times (one per right-hand
+operand type) because the language cannot say "T must support `+`".
+
+### Goals
+
+- Express constraints like `where T: Add` / `where T: INumber` so a single
+  `func +(other: T)` covers every numeric `T`.
+- At minimum, recognise the four CLR static-abstract numeric interfaces
+  (`IAdditionOperators<,,>`, `ISubtractionOperators<,,>`, `IMultiply…`,
+  `IDivision…`) and surface them as built-in shorthand (`Numeric`,
+  `Addable`, etc.).
+- Extend the binder to verify operator-arithmetic statements against the
+  declared bound at parse-time, not at value-flow time.
+- Reduce the `point.tosh` body to a single overload set per operator.
+
+### Non-goals
+
+- Full Haskell-style typeclass system.
+- User-defined trait declarations on top of CLR interfaces (defer until a
+  pattern emerges).
+
+### Priority: P1 — **closed (2026-05-08)**
+
+Initial implementation:
+- Parser accepts `where T: <Constraint>[, <Constraint>…]` clauses after
+  the class header (multiple `where` clauses allowed).
+- Built-in constraint registry (`Numeric`/`Number`/`INumber`,
+  `Add`/`Sub`/`Mul`/`Div`, `Comparable`, `Eq`) — see
+  [src/Tosh.Language/ToshTypeParameterConstraintRegistry.cs](../src/Tosh.Language/ToshTypeParameterConstraintRegistry.cs).
+- Validation runs at instantiation; violations throw a structured
+  diagnostic citing the failing constraint.
+- Unknown constraint names are accepted conservatively (reserved for
+  user-defined trait constraints in a future pass).
+- Followups: surface constraints in LSP hover, propagate to operator
+  dispatch type-checking, allow user-defined constraints.
+
+### Phase 1.x / Phase 2 update — 2026-05-09
+
+Generics evolved past the original "trait-like constraints" goal into a
+fuller C#-style system. Landed in this round:
+
+- **Phase 1.2** — `type-of` on a generic instance returns a
+  `BoundGenericTypeDescriptor` whose `Name` / `FullName` /
+  `IsGenericType` / `TypeArguments` reflect the bound substitution
+  (e.g. `Point2D<Int32>`). See
+  [src/Tosh.Language/BoundGenericTypeDescriptor.cs](../src/Tosh.Language/BoundGenericTypeDescriptor.cs).
+- **Phase 1.3** — User-defined constraints. A `where T: SomeName`
+  whose name is not in the built-in registry now resolves through
+  `ToshEngine.TryResolveTypeName` and accepts any CLR type assignable
+  to it (so `where T: IDisposable` works without a built-in entry).
+  See `ToshClassDefinition.TrySatisfyUserConstraint`.
+- **Phase 2.1** — `func name<T>(...)` / `func map<T,U>(...)` parse and
+  execute. `EraseTypeParameter` recursively strips type-parameter
+  names from nested generic annotations (`list<T>` → `list`).
+- **Phase 2.2** — Per-call inference. `BindFunctionParameters` returns
+  an inferred-type table; `ApplyGenericBinding` records the first
+  binding and strict-validates later parameters. Mismatch raises
+  `tosh.runtime.generic_argument_type_mismatch`.
+- **Phase 2.3** — `where T: …` clauses on free functions; reuses the
+  built-in registry plus the CLR-interface fallback.
+- **Phase 2 deferred** — explicit call-site type args (`box<int> 42`)
+  are blocked on parser disambiguation: `<` is overloaded for input
+  redirection. Plan: input redirection is always followed by `(`
+  (`<( … )`), so `foo<X>` with a non-`(` next token is unambiguously
+  a generic call. Capture in Phase 3.3 below.
+
+### Phase 3 — Inference depth & call-site polish — P1
+
+Next round, in priority order:
+
+1. **Nested-shape inference** (`func first<T>(items: list<T>) -> T`).
+   ✓ DONE (2026-05-09) — annotation walker unifies
+   element / key / value types into the per-call binding table; nested
+   `dict<K, list<V>>` etc. work. Inference now runs *before*
+   `ConvertFunctionParameterValue` so element types aren't widened.
+2. **Return-type contribution.** ✓ DONE (2026-05-09).
+   When `T` only appears in the return type and the call site has a
+   target type (`var x: int = identity<T> 42`), the LHS annotation
+   propagates through an `AsyncLocal<string?>` set at the
+   variable-declaration boundary, stamped onto `CommandInvocation`,
+   and unified annotation-vs-annotation against the function's
+   `RawReturnTypeName` to seed the per-call binding table. Nested
+   shapes (`var xs: list<int> = wrap 42`) work via recursive
+   head/arg matching.
+3. **Explicit call-site type args.** ✓ DONE (2026-05-09).
+   Disambiguation is trivial because the lexer already emits a single
+   `<(` token for input redirection — a bare `<` immediately after a
+   command name (no whitespace) is unambiguously a generic argument
+   list. Inferred-binding table is seeded from the parsed type-args
+   before parameter conversion. Operator-detection lookahead skips
+   over generic-arg lists at depth 0 to avoid mis-parsing
+   `foo<int> 1 2` as a comparison.
+4. **Generic methods on classes.** ✓ DONE (2026-05-09).
+   Parser, type-parameter erasure (combined class+method scope), and
+   class-method invocation all carry the method's `TypeParameters` /
+   `TypeParameterConstraints`. `ToshClassDefinition.ExecuteMethodBlock`
+   now constructs a synthetic `CommandContext` from the method's
+   source info + parameter spans and calls
+   `ToshEngine.InferMethodTypeBindings` to populate a method-scoped
+   binding table, which is merged with any class-level bindings
+   carried by the instance. Strict per-call validation fires when
+   different arguments imply different bindings for the same `U`,
+   matching the diagnostic shape used for free functions.
+
+### Phase 4 — Constraint richness — P2
+
+5. **Recursive / parameterized constraints**
+   (`where T: IComparable<T>`). ✓ DONE (2026-05-09).
+   Parser now consumes `<…>` after the constraint bareword via
+   `ParseTypeNameSuffix`, producing a constraint string like
+   `IComparable<T>`. The runtime constraint check substitutes
+   type-parameter references with their inferred bindings (the
+   currently-binding T plus any other type parameters already in
+   `typeBindings`) before resolving via `TryResolveTypeName`. Mixed
+   bindings flow correctly: `IDictionary<K, V>` resolves with both
+   parameters substituted.
+6. **C#-style multiple constraints** (`where T: A, B`).
+   ✓ DONE (2026-05-09). The parser already supported comma-separated
+   constraints in a single clause, and multiple separate `where`
+   clauses also work (`where A: Numeric where B: Comparable`).
+   Each constraint name is checked independently in registration order.
+7. **Special constraints** — `new()`, `class`, `struct`, `notnull`,
+   `unmanaged`. ✓ DONE (2026-05-09). Added to
+   `ToshTypeParameterConstraintRegistry`:
+   - `new` / `new()` — public parameterless ctor (value types always pass).
+   - `class` — non-value type (reference type / interface).
+   - `struct` — non-nullable value type.
+   - `notnull` — accept-all (CLR types are never null).
+   - `unmanaged` — recursive predicate over fields.
+   Parser passes `new` as a bareword constraint; the registry alias
+   for `new()` covers users who write the C# form.
+8. **`default(T)` expression.** *Deferred* — requires a new expression
+   AST node, parser support for `default(TypeName)`, and pushing the
+   per-call `typeBindings` table into a scope visible from the
+   function body so `T` can resolve to its bound CLR type. Workaround:
+   pass a default-valued argument explicitly, or use `null` for
+   reference types.
+
+### Phase 5 — Generics on other declarations — P2
+
+9. ✓ DONE — Generic records (`record Pair<A,B>(first: A, second: B)`).
+   - Parser: type-parameter list and `where` clauses (both pre- and
+     post-field positions).
+   - `ToshRecordDefinition` carries `TypeParameterNames` /
+     `TypeParameterConstraints`; `CreateGenericInstance` validates
+     constraints and builds bound instances. Field annotations matching
+     a type-parameter name are strict-checked (`IsInstanceOfType`),
+     mirroring class-parameter behavior.
+   - Engine `new` dispatch handles records analogously to classes.
+   - Structs / unions / enums deferred — out of scope until concrete use
+     cases surface.
+10. ✓ DONE — Generic interfaces (`interface IRepo<T>`) with substitution
+    at `fulfills` check time.
+    - Interface parser accepts `where` clauses; runtime carries
+      `TypeParameterNames` / `TypeParameterConstraints`.
+    - At `class … fulfills IRepo<int>` sites, `ValidateInterfaceTypeArguments`
+      enforces arity, rejects bare references to generic interfaces, and
+      validates concrete type arguments against the interface's
+      where-clauses. Type arguments that forward the implementing
+      class's own type parameters are deferred (validated at
+      instantiation).
+    - New diagnostics: `tosh.runtime.missing_interface_type_arguments`,
+      `tosh.runtime.unexpected_interface_type_arguments`,
+      `tosh.runtime.interface_type_argument_arity_mismatch`,
+      `tosh.runtime.interface_type_argument_constraint_violation`.
+11. ✓ DONE — Type-alias transparency in the type checker.
+    - Plain aliases (`type Id = int`) and refinement aliases (`type
+      Positive = int where _ > 0`) both project to a `RefinementType`
+      wrapper around the resolved base; the type checker now unwraps
+      that wrapper inside `IsAssignable`, so alias names compare
+      transparently to their bases without false `tosh.type.mismatch`
+      diagnostics in script-mode.
+    - Generic aliases (`type MyList<T> = list<T>`, `type Bounded<T> = T
+      where _ > 0`) work at use sites by recursing through the alias's
+      template base — leaning on `Dynamic`-element placeholders and the
+      structural list/array/dict element-recursion now in `IsAssignable`.
+      Precise structural substitution of type parameters is a separate
+      follow-up.
+    - List-literal `IList` source compatibility: a raw list literal
+      (currently lowered as `BoundType.FromClr(typeof(IList))`) now
+      flows freely into any `ListType` / `ArrayType` slot and likewise
+      for raw dictionaries.
+    - `EnsureRefinementAliasNameDoesNotConflictWithType` no longer
+      consults the wide CLR-resolver fallback, fixing spurious
+      `tosh.runtime.type_name_conflict` errors on alias names like
+      `Pair` that happen to collide with arbitrary loaded-assembly
+      types. Conflicts now only fire against user-declared named types.
+    - Tests: 6 new cases in `tests/Tosh.Tests/TypeCheckerTests.cs`
+      lock in alias transparency for plain, refinement, generic-
+      refinement, parameterized-base, and forwarding-generic aliases,
+      plus a negative case ensuring real mismatches still report.
+
+### Phase 5 — Followups still open
+
+- ✓ DONE — Precise structural substitution of generic-alias type
+  parameters. `TypeNameResolver.ResolveGeneric` now detects when a
+  user-type template is a `RefinementType` carrying a
+  `TypeAliasStatementSyntax` with declared type parameters, validates
+  arity, overlays each `T -> arg` mapping into a child resolver, and
+  re-resolves the alias's `BaseTypeName`. The result is a precise
+  `RefinementType(substitutedBase, "MyList<int>", alias)` instead of
+  the previous `Dynamic`-erased `GenericInstanceType` wrap.
+  Diagnostic emitted on arity mismatch and on type arguments applied
+  to a non-generic alias. 4 new tests in `TypeCheckerTests.cs` cover
+  int/string substitution, two-parameter aliases, and arity errors.
+
+### Phase 6 — Advanced features — P3
+
+12. ✓ **Variance (`out T` / `in T`).** *Done 2026-05-09.* The
+    parser recognises optional `out` / `in` prefixes inside a
+    type-parameter list and threads them through
+    `InterfaceDefinitionStatementSyntax.TypeParameterVariances`,
+    `ToshInterfaceDefinition.TypeParameterVariances`, and the
+    `UserInterfaceType` registry entry. `TypeChecker.IsAssignable`
+    now consults the per-parameter variance when comparing two
+    `GenericInstanceType`s wrapping the same interface template:
+    covariant slots use one-way `IsAssignable(fromArg, toArg)`,
+    contravariant slots flip it, invariant slots require
+    bidirectional assignability. Variance is honored only for
+    interface templates — classes/records/structs stay invariant,
+    matching C#. 4 new tests in `TypeCheckerTests.cs` cover
+    covariant widening, invariant rejection of widening,
+    contravariant flow in reverse, and covariant rejection of
+    narrowing.
+13. *Skipped for now — reflection builtins.* `is-generic-type`,
+    `type-arguments`, `generic-definition`, `make-generic-type` would
+    be cheap to add but pile onto the ~209-builtin surface that
+    section 3 below already flags as needing pruning. Revisit after
+    the command-audit pass settles which families consolidate.
+14. **Compiler-emit (`tosh --compile`) lowering of generic call
+    sites.** Largest effort. The interpreter path is the source of
+    truth; `BoundUnitEmitter` currently bails on generic-instance
+    member access and constrained dispatch. Needs parallel work for
+    type-param-keyed locals, generic-method dispatch, and runtime
+    `IsInstanceOfType` checks at member boundaries.
+15. **Constraint expressiveness — user-interface constraints.** ✓ DONE
+    `where T: ISomeUserInterface` is now enforced at generic-class
+    instantiation: `ToshClassDefinition.TrySatisfyUserConstraint` looks
+    up the constraint name as a `ToshInterfaceDefinition` and walks the
+    bound type-arg's `ToshClassDefinition.ImplementedInterfaces` chain
+    (including base classes) for membership. Inherited interfaces from
+    a parent class satisfy the constraint. Built-in registry constraints
+    (Numeric, Comparable, op_Add, …) and CLR interface constraints
+    (`IDisposable`, etc.) continue to work as before. Truly unknown
+    constraint names remain conservatively accepted. Records and
+    interfaces still accept user-interface constraints conservatively
+    — mirroring the new class behavior is a small follow-up.
+16. **Type inference at call sites.** ✓ DONE
+    Ctor-position inference now binds type parameters from the
+    runtime types of `new ClassName(args)` arguments — both the
+    bare-T case (`class Box<T>(initial: T)` ⇒ `T = int` for
+    `new Box(42)`) and nested annotations (`class Box<T>(values:
+    list<T>)` peeks the list's element type). Unified via a small
+    recursive `UnifyCtorAnnotationWithValue` that handles
+    list/array/dict shapes and any generic CLR type with matching
+    arity. Applies to both classes and records. Constraint
+    validation still fires after inference, so `new Box("hi")` on
+    a `where T: Numeric` class is rejected. Method-call inference
+    on instance / static methods remains explicit-`<T>`-only and
+    is a follow-up.
+
+---
+
+## 2. Standard-Name Aliases for Class Modifiers — P1 — closed (2026-05-08)
+
+The flavored modifier set (`shy`, `proud`, `guarded`, `vital`, `overrule`,
+`hollow`, `hermit`, `fading`, `fixed`) renames concepts that already have
+universal industry names. Every C#/Java/Swift/Kotlin/TypeScript developer
+must learn a translation layer with no semantic payoff, and LLM tooling
+mis-suggests TōSh code accordingly.
+
+### Goals
+
+- Accept these canonical aliases in the parser **without removing the
+  flavored forms**:
+
+  | Canonical (new) | Flavored (kept) |
+  |-----------------|-----------------|
+  | `private`       | `shy`           |
+  | `public`        | `proud`         |
+  | `protected`     | `guarded`       |
+  | `required`      | `vital`         |
+  | `override`      | `overrule`      |
+  | `abstract`      | `hollow`        |
+  | `static`        | `shared` (existing)/`hermit` (class) |
+  | `readonly`      | `fixed`         |
+  | `obsolete`      | `fading`        |
+
+- Document canonical forms as the recommended style, with flavored forms
+  preserved as synonyms.
+- Update LSP completions, hover text, and AGENTS.md to lead with the
+  canonical names; mention the flavored synonyms in a short table.
+- Run a single pass over `examples/` to convert at least the headline
+  examples (e.g. `examples/point.tosh`) to canonical names so search
+  results land on canonical syntax.
+
+### Non-goals
+
+- Removing flavored forms (would break `examples/`, profile.tosh
+  ecosystems, and stylistic charm).
+- Changing IL emission for these modifiers — they already lower to the
+  same CLR semantics.
+
+### Priority: P1 — **closed (2026-05-08)**
+
+- Parser accepts `private`, `public`, `protected`, `required`,
+  `override`, `abstract`, `static`, `readonly`, `obsolete` as direct
+  synonyms for the flavored modifiers (member-level), and `abstract` /
+  `static` at the class level. See
+  [src/Tosh.Language/Parsing/ToshParser.cs](../src/Tosh.Language/Parsing/ToshParser.cs).
+- AGENTS.md modifier tables now lead with the canonical name.
+- Followups: LSP completions/hover prefer canonical names; convert
+  example sources opportunistically.
+
+---
+
+## 3. Surface-Area Pruning — P2 — audit complete + first wave landed (2026-05-10)
+
+255 builtins is PowerShell-scale and growing. Several clusters duplicate
+each other or expose unsafe primitives by default.
+
+### Audit pass — DONE 2026-05-09
+
+Full audit lives at [`docs/SURFACE_AUDIT.md`](SURFACE_AUDIT.md), driven
+by the `--export-command-metadata` JSON dump (255 commands). Every
+command is tagged **Keep / Fade / Move / Consolidate / Rename** with
+rationale. Counts: 196 keep, 12 fade, 6 move, 30 consolidate, 11 rename.
+
+### First-wave consolidation — DONE 2026-05-10
+
+- **CLR verb-fade landed.** `call`, `call-method`, `get-prop`,
+  `get-props`, `get-methods`, `set-prop`, `del-prop`, `has-prop`,
+  `has-method` carry `[CommandDeprecated("26.05.0.10")]` with notes
+  pointing at the canonical syntax (`$obj.Method($args)`, `$obj.Prop`,
+  `$obj.Prop = value`, `members has X`, …).
+- **`members` and `methods` got subcommands.** Both accept
+  `has <name>` and `get <name>`. `members` additionally accepts
+  `props` / `fields` / `methods` / `events` to slice by member kind.
+  `props` and `funcs` are top-level shortcuts.
+- **`get` is now the canonical column-picker** with variadic field
+  projection (`get name size extra`). `select` and `pick` remain as
+  soft aliases.
+- **`row` is the new canonical row-picker** — variadic on indices,
+  list literals, and ranges (`row 7 8 9`, `row [3,1,0]`, `row 1..3`).
+  Bad indices throw `tosh.row.index_out_of_range`.
+
+### Remaining action items
+
+1. **Gate native FFI behind `tosh-interop` module** — six `native-*`
+   commands (and short aliases) load only when explicitly imported.
+   Default off. (OWASP A04.) _Open._
+2. **Streaming/throughput contract** (item 6 below) — uses this audit
+   as the authoritative command list. Tag each Pipeline command
+   lazy/eager/short-circuiting in `help`. _Open._
+3. **`prompt <segment>` subcommand consolidation** — spec migration
+   path; keep `prompt-*` as fading aliases for one major. _Design-first._
+4. **Alias-fade mechanism.** `RegisterAlias` has no "soft-deprecated"
+   flag. Either extend the registry, or document the secondary aliases
+   (`pick`, `select`, `foreach`, `avg`, `sort-by`, `stddev`, `summary`)
+   as docs-only fading until a registry change lands. _Open._
+5. **Pin canonical names for soft-alias rows** in AGENTS.md so
+   completion + LLM tooling rank canonical first
+   (`average` over `avg`, `each` over `foreach`, `get` over
+   `pick`/`select`, `sort` over `sort-by`, `stdev` over `stddev`,
+   `summarize` over `summary`, `forget` over `unset`). _Open — doc only._
+
+### Priority: P2 — *first wave landed (2026-05-10); remaining items are mechanical or design-first*
+
+---
+
+## 4. Operator-Overload IL Emission Uses CLR Conventions — P2
+
+`func +(other) { … }` currently lowers to a method named after the
+symbol. CLR consumers (C#, F#, PowerShell) cannot resolve TōSh-defined
+operators because they expect `op_Addition`, `op_Subtraction`, etc.
+
+### Goals
+
+- Emit both names (or emit only the CLR-canonical name and accept the
+  symbolic form as syntax sugar that resolves to it).
+- Verify a TōSh class's `+` is callable from a C# consumer in the
+  `Tosh.Tests` cross-language sample.
+- Map the full overloadable set: `+ - * / % == != < <= > >=` (and the
+  corresponding `op_*` names; `=~`/`!~` and `**`/`//` need either custom
+  attribute-tagged dispatch or a TōSh-specific calling convention).
+
+### Priority: P2
+
+---
+
+## 5. Identity Statement in README — P2
+
+The README sells three things at once: interactive shell, scripting
+language, compiled-program target. Most example traffic
+(`scripts/build.tosh`, `~/.local/bin/headset`, profile autoload modules)
+suggests **scripting is the dominant identity**. Pick one (or rank
+them) so future feature decisions have a north star.
+
+### Goals
+
+- Write a single-paragraph "what is TōSh" lede that ranks the three
+  identities and explains the pitch in one sentence.
+- Reorder the README's feature highlights to match.
+- Consider stripping the compiled-program pitch from the headline if
+  Wave 2 of First-Class .NET Citizenship isn't shipping in this cycle.
+
+### Priority: P2
+
+---
+
+## 6. Streaming/Throughput Contract — P2
+
+`first N` short-circuits today, but there's no documented contract that
+says so. Users (and our own renderer optimisations) need a written
+guarantee about which builtins are lazy, which are eager, and which
+require materialisation.
+
+### Goals
+
+- Document each pipeline builtin's behaviour: **lazy** (`where`, `each`,
+  `map`, `filter`, `take`/`first`, `skip`, `flatmap`), **eager**
+  (`sort`, `sort-by`, `reverse`, `group-by`, `summarize`, `to json`,
+  `count` when consuming the whole stream), **partial** (`first N`
+  short-circuits; `last N` still drains).
+- Add focused tests for each lazy builtin proving short-circuit
+  behaviour against an infinite generator.
+- Surface the contract in `help` topics (a one-line "Streaming: lazy /
+  eager / short-circuiting" field on each builtin).
+
+### Priority: P2
+
+---
+
+## 7. `$env.X = "value"` Assignment Sugar — P3 — closed (2026-05-08)
+
+Documented as gotcha #1 in [AGENTS.md](../AGENTS.md). There is no
+semantic reason `$env.X = "v"` should not desugar to `export X = "v"`;
+the asymmetry exists because `$env` is currently a read-only namespace.
+
+### Goals
+
+- Recognise assignment to `$env.<name>` as sugar for `export <name> =
+  <value>` at the binder/lowering stage; reject only on
+  case/format-conflict edge cases that `export` itself rejects.
+- Strip the gotcha from AGENTS.md and any other docs that warn about it.
+- Add a regression test verifying both forms produce identical
+  environment after execution.
+
+### Priority: P3 — **closed (2026-05-08)**
+
+- `ShellEnvironmentNamespace.TrySetMember` now routes through
+  `ToshRuntime.ExportEnvironmentVariable`, the exact same path used by
+  `export NAME = …`. See
+  [src/Tosh.Runtime/ShellEnvironmentNamespace.cs](../src/Tosh.Runtime/ShellEnvironmentNamespace.cs).
+- Case-insensitive lookup picks the canonical existing name, so
+  `$env.path = "…"` updates `PATH`.
+- AGENTS.md gotcha removed; both forms are documented as equivalent.
+
+---
+
+
 
 ## Phase 1 Checklist
 
@@ -239,21 +711,24 @@ description, and sub-boxes for Usage / Arguments / Options /
 Pipeline / Examples / Related, with REPL-style syntax highlighting
 on examples.
 
-The Options sub-box currently has two columns (Flag, Description).
-A third `Default` column would make defaults discoverable without
-having to scan the prose, but `HelpOptionInfo` does not yet carry a
-default-value field.
+The Options sub-box now renders a third `Default` column when any
+option in the list carries a literal default. Defaults flow through
+`CommandOptionAttribute.Default` → `CommandOptionMetadata.Default` →
+`HelpOptionInfo.Default` and are surfaced in `to json` /
+`--export-command-metadata` and the MCP `command_metadata` tool.
 
 ### Work
-- Extend `HelpOptionInfo` with `Default` (string?, optional).
-- Backfill defaults in stdlib `[CommandOption]` metadata where
-  obvious (e.g. `--sort` defaults to `name`, `--time` to `modified`).
-- Render a third column in `RenderOptionsSubBox` when any option in
-  the list carries a default; keep two-column layout otherwise.
-- Surface the field in JSON `to json` output and the MCP
+- ✅ Extend `HelpOptionInfo` with `Default` (string?, optional).
+- ✅ Backfill defaults in stdlib `[CommandOption]` metadata where
+  obvious (`ls --sort`/`--time`, `ping --count`/`--timeout`/`--size`/
+  `--interval`, `head`/`tail -n`, `cut -d`, `http --as`/`--bind`/
+  `--index`, `prompt-time --format`, `tui --page-size`).
+- ✅ Render a third column in `RenderOptionsSubBox` when any option
+  in the list carries a default; keep two-column layout otherwise.
+- ✅ Surface the field in JSON `to json` output and the MCP
   `command_metadata` tool.
 
-### Priority: P3
+### Priority: P3 — closed (2026-05-08)
 
 ---
 

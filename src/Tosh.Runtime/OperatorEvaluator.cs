@@ -8,6 +8,15 @@ namespace Tosh.Runtime;
 
 public static class OperatorEvaluator
 {
+    /// <summary>
+    /// Optional host hook for resolving named trait-style type constraints used by the
+    /// `is`/`is-not` operators (e.g. `$x is Numeric`). Receives the constraint name and
+    /// the value's CLR <see cref="Type"/>; returns <c>true</c> when the type satisfies it.
+    /// When unset (or returns <c>false</c>), <see cref="IsType"/> falls back to the
+    /// built-in alias table and per-type matching.
+    /// </summary>
+    public static Func<string, Type, bool>? ResolveTraitConstraint { get; set; }
+
     public static object? EvaluateUnary(string @operator, object? operand)
     {
         return @operator switch
@@ -330,6 +339,20 @@ public static class OperatorEvaluator
             return false;
         }
 
+        // Trait-style constraint names (Numeric, Comparable, Add, etc.) — checked first
+        // so they can succeed for primitive CLR values that don't implement
+        // IShellTypeCheckable. Host (Tosh.Language) registers the full registry; the
+        // inline fallback below covers the most common names when unhosted.
+        var actualType = value.GetType();
+        if (ResolveTraitConstraint is { } resolver && resolver(typeName, actualType))
+        {
+            return true;
+        }
+        if (TryMatchInlineTrait(typeName, actualType))
+        {
+            return true;
+        }
+
         // Check Tosh custom types (classes, enums) via the IShellTypeCheckable interface,
         // which walks the full type hierarchy including base classes and implemented interfaces.
         if (value is IShellTypeCheckable checkable && checkable.IsInstanceOf(typeName))
@@ -344,8 +367,6 @@ public static class OperatorEvaluator
         {
             return true;
         }
-
-        var actualType = value.GetType();
 
         // Check simple name match (e.g. "String", "Int32", "FileSystemEntry")
         if (string.Equals(actualType.Name, typeName, StringComparison.OrdinalIgnoreCase) ||
@@ -941,5 +962,34 @@ public static class OperatorEvaluator
                 quantity = null!;
                 return false;
         }
+    }
+
+    // Numeric CLR types recognised by inline trait fallback for `is Numeric` etc.
+    private static readonly HashSet<Type> _numericClrTypes = new()
+    {
+        typeof(byte), typeof(sbyte),
+        typeof(short), typeof(ushort),
+        typeof(int), typeof(uint),
+        typeof(long), typeof(ulong),
+        typeof(float), typeof(double),
+        typeof(decimal),
+        typeof(Half),
+        typeof(BigInteger),
+    };
+
+    private static bool TryMatchInlineTrait(string name, Type type)
+    {
+        // Mirrors a subset of ToshTypeParameterConstraintRegistry so the `is`
+        // operator works for the most common trait constraints even before the
+        // language host has registered ResolveTraitConstraint.
+        return name switch
+        {
+            var n when string.Equals(n, "Numeric", StringComparison.OrdinalIgnoreCase) => _numericClrTypes.Contains(type),
+            var n when string.Equals(n, "Number", StringComparison.OrdinalIgnoreCase) => _numericClrTypes.Contains(type),
+            var n when string.Equals(n, "INumber", StringComparison.OrdinalIgnoreCase) => _numericClrTypes.Contains(type),
+            var n when string.Equals(n, "Comparable", StringComparison.OrdinalIgnoreCase) => typeof(IComparable).IsAssignableFrom(type),
+            var n when string.Equals(n, "Eq", StringComparison.OrdinalIgnoreCase) => true,
+            _ => false,
+        };
     }
 }

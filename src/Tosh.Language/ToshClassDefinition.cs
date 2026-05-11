@@ -25,11 +25,13 @@ public sealed class ToshClassDefinition : IShellNamedType
         string sourceText,
         TextSpan span,
         IReadOnlyList<LexicalScope>? capturedScopes,
-        IReadOnlyList<string>? typeParameters = null)
+        IReadOnlyList<string>? typeParameters = null,
+        IReadOnlyList<ToshTypeParameterConstraint>? typeParameterConstraints = null)
     {
         _engine = engine;
         Name = name;
         TypeParameterNames = typeParameters ?? Array.Empty<string>();
+        TypeParameterConstraints = typeParameterConstraints ?? Array.Empty<ToshTypeParameterConstraint>();
         _primaryConstructorParameters = primaryConstructorParameters;
         _properties = new List<ToshClassPropertyDefinition>(properties);
         _methods = new List<ToshClassMethodDefinition>(methods);
@@ -56,11 +58,28 @@ public sealed class ToshClassDefinition : IShellNamedType
 
     public IReadOnlyList<string> TypeParameterNames { get; }
 
+    /// <summary>
+    /// Trait-style constraints declared via <c>where T: Constraint, …</c>.
+    /// Validated at instantiation; see
+    /// <see cref="ToshTypeParameterConstraintRegistry"/>.
+    /// </summary>
+    public IReadOnlyList<ToshTypeParameterConstraint> TypeParameterConstraints { get; }
+
     public IReadOnlyList<ToshClassPropertyDefinition> Properties { get; }
 
     public IReadOnlyList<ToshClassMethodDefinition> Methods { get; }
 
     public bool HasPrimaryConstructor => _primaryConstructorParameters.Count > 0;
+
+    /// <summary>
+    /// Primary-constructor parameter declarations, in declaration order.
+    /// Empty when the class has no primary constructor (i.e. when ctors
+    /// are declared as named-method blocks). Used by call-site type
+    /// inference to back-infer generic type arguments from positional
+    /// constructor arguments.
+    /// </summary>
+    internal IReadOnlyList<FunctionParameterDefinition> PrimaryConstructorParameters
+        => _primaryConstructorParameters;
 
     public string SourceName { get; }
 
@@ -199,7 +218,7 @@ public sealed class ToshClassDefinition : IShellNamedType
 
     public bool ShellIsAbstract => IsAbstract;
 
-    public bool ShellIsGenericType => false;
+    public bool ShellIsGenericType => TypeParameterNames.Count > 0;
 
     public bool ShellIsArray => false;
 
@@ -237,7 +256,158 @@ public sealed class ToshClassDefinition : IShellNamedType
             bindings[TypeParameterNames[i]] = resolvedTypeArguments[i];
         }
 
+        ValidateTypeParameterConstraints(bindings, typeArgumentDisplay);
+
         return CreateInstanceCore(arguments, bindings);
+    }
+
+    private void ValidateTypeParameterConstraints(
+        IReadOnlyDictionary<string, Type?> bindings,
+        IReadOnlyList<string> typeArgumentDisplay)
+    {
+        if (TypeParameterConstraints.Count == 0) return;
+        foreach (var clause in TypeParameterConstraints)
+        {
+            var displayIndex = TypeParameterNames
+                .Select((n, i) => (n, i))
+                .FirstOrDefault(t => string.Equals(t.n, clause.TypeParameter, StringComparison.OrdinalIgnoreCase)).i;
+            var argDisplay = displayIndex < typeArgumentDisplay.Count
+                ? typeArgumentDisplay[displayIndex]
+                : clause.TypeParameter;
+
+            bindings.TryGetValue(clause.TypeParameter, out var bound);
+
+            foreach (var constraintName in clause.ConstraintNames)
+            {
+                bool satisfied;
+                bool known;
+                if (ToshTypeParameterConstraintRegistry.TryGet(constraintName, out var predicate))
+                {
+                    if (bound is null)
+                    {
+                        // Forwarded / unresolved CLR type — skip the
+                        // built-in predicate check; precise enforcement
+                        // happens at the next concrete instantiation.
+                        continue;
+                    }
+                    satisfied = predicate(bound);
+                    known = true;
+                }
+                else
+                {
+                    satisfied = TrySatisfyUserConstraint(constraintName, bound, argDisplay, out known);
+                }
+
+                if (satisfied) continue;
+                if (!known) continue; // unknown name — accept conservatively
+
+                throw new InvalidOperationException(
+                    $"Generic class '{Name}' requires type parameter '{clause.TypeParameter}' to satisfy '{constraintName}', " +
+                    $"but '{argDisplay}' (CLR {bound?.FullName ?? bound?.Name ?? "<unresolved>"}) does not.");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Tries to satisfy a non-built-in constraint name by treating it
+    /// as a user-defined CLR interface, CLR class, or TōSh class /
+    /// interface name. <paramref name="argDisplay"/> is the original
+    /// user-supplied type-argument string (e.g. <c>"Dog"</c>) used
+    /// to resolve TōSh-named user types whose CLR backing is shared
+    /// across all user instances (so the CLR <see cref="Type"/>
+    /// alone cannot identify the user class).
+    /// </summary>
+    /// <param name="known">
+    /// Set to true when the name resolved to a known type (so a
+    /// failure should produce a diagnostic). Left false when the
+    /// name is unknown — those are accepted conservatively to keep
+    /// custom constraint vocabularies extensible.
+    /// </param>
+    private bool TrySatisfyUserConstraint(string constraintName, Type? bound, string argDisplay, out bool known)
+    {
+        // CLR fallback: any registered CLR type whose
+        // `IsAssignableFrom(bound)` holds satisfies the constraint.
+        // This makes `where T: IDisposable` and similar work without
+        // adding a built-in entry to the registry.
+        if (bound is not null)
+        {
+            var clr = _engine.TryResolveTypeName(constraintName);
+            if (clr is not null)
+            {
+                known = true;
+                return clr.IsAssignableFrom(bound);
+            }
+        }
+
+        // TōSh user-defined constraint. Only enforce when the
+        // constraint name resolves to a `ToshInterfaceDefinition`
+        // and the type-argument display name resolves to a
+        // `ToshClassDefinition` whose interface chain (including
+        // base classes) contains the constraint interface. Other
+        // shell-named-type combinations (trait, struct, record …)
+        // remain conservative for now — we only commit to the
+        // interface case in this phase.
+        if (_engine.TryGetNamedType(constraintName, out var constraintType)
+            && constraintType is ToshInterfaceDefinition constraintIface)
+        {
+            var argLookup = StripGenericTypeArguments(argDisplay);
+            if (_engine.TryGetNamedType(argLookup, out var argType))
+            {
+                if (argType is ToshClassDefinition argClass)
+                {
+                    known = true;
+                    return ClassImplementsInterface(argClass, constraintIface.Name);
+                }
+                if (argType is ToshInterfaceDefinition argIface)
+                {
+                    // An interface type-arg satisfies an interface
+                    // constraint when it is the same interface (we
+                    // do not yet model interface inheritance).
+                    known = true;
+                    return string.Equals(argIface.Name, constraintIface.Name, StringComparison.OrdinalIgnoreCase);
+                }
+            }
+            // Constraint is known, type-arg is not a recognised
+            // TōSh class — fall through to conservative accept so
+            // CLR-backed type args (e.g. `int`) do not trip the
+            // diagnostic.
+            known = false;
+            return true;
+        }
+
+        // Constraint name resolves to some other shell-named type
+        // (class, trait, etc.) — accept conservatively.
+        if (_engine.TryGetNamedType(constraintName, out _))
+        {
+            known = false;
+            return true;
+        }
+
+        known = false;
+        return false;
+    }
+
+    private static string StripGenericTypeArguments(string typeName)
+    {
+        var lt = typeName.IndexOf('<');
+        return lt < 0 ? typeName.Trim() : typeName.Substring(0, lt).Trim();
+    }
+
+    private static bool ClassImplementsInterface(ToshClassDefinition cls, string interfaceName)
+    {
+        var current = cls;
+        while (current is not null)
+        {
+            foreach (var iface in current.ImplementedInterfaces)
+            {
+                if (string.Equals(iface.Name, interfaceName, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+            current = current.BaseClass;
+        }
+        return false;
     }
 
     private object CreateInstanceCore(
@@ -754,19 +924,61 @@ public sealed class ToshClassDefinition : IShellNamedType
 
     private IReadOnlyList<object?> ExecuteMethodBlock(ToshClassMethodDefinition method, IReadOnlyDictionary<string, object?> boundLocals, ToshClassInstance? instance)
     {
+        // Phase 3.4 — method-level generic inference.
+        // For methods that declare their own type parameters
+        // (`func describe<U>(label: U) -> U`), unify each argument
+        // value against the parameter's raw annotation to populate a
+        // method-scoped binding table. These bindings are merged with
+        // any class-level bindings carried by the instance so that
+        // `class Box<T>` + `func map<U>(transform)` both resolve.
+        Dictionary<string, Type>? methodBindings = null;
+        if (method.TypeParameters is { Count: > 0 })
+        {
+            var argumentValues = new object?[method.Parameters.Count];
+            var argumentSpans = new TextSpan[method.Parameters.Count];
+            for (var i = 0; i < method.Parameters.Count; i++)
+            {
+                var parameter = method.Parameters[i];
+                argumentSpans[i] = parameter.Span;
+                boundLocals.TryGetValue(parameter.Name, out var v);
+                argumentValues[i] = v;
+            }
+
+            var syntheticInvocation = new CommandInvocation(
+                SourceName: method.SourceName,
+                SourceText: method.SourceText,
+                CommandName: $"{Name}.{method.Name}",
+                CommandSpan: method.Span,
+                ArgumentSpans: argumentSpans);
+            var syntheticContext = new CommandContext(
+                Runtime: _engine.Runtime,
+                Input: System.Linq.AsyncEnumerable.Empty<object?>(),
+                Arguments: argumentValues,
+                CancellationToken: System.Threading.CancellationToken.None,
+                Invocation: syntheticInvocation);
+
+            methodBindings = _engine.InferMethodTypeBindings(
+                method,
+                argumentValues,
+                syntheticContext,
+                ownerLabel: $"{Name}.{method.Name}");
+        }
+
         // For generic instance methods, validate any parameters whose original
         // (un-erased) annotation references a class type-parameter and
         // substitute the instance's binding before running the body.
         if (instance is not null && !method.IsStatic)
         {
             var bindings = instance.GetBindingsFor(this);
-            if (bindings is { Count: > 0 })
+            if (bindings is { Count: > 0 } || methodBindings is { Count: > 0 })
             {
                 foreach (var parameter in method.Parameters)
                 {
                     if (parameter.RawTypeName is null) continue;
-                    if (!bindings.TryGetValue(parameter.RawTypeName, out var bound)) continue;
-                    if (bound is null) continue; // unresolved type-parameter binding
+                    Type? bound = null;
+                    if (bindings is not null && bindings.TryGetValue(parameter.RawTypeName, out var classBound)) bound = classBound;
+                    if (bound is null && methodBindings is not null && methodBindings.TryGetValue(parameter.RawTypeName, out var mBound)) bound = mBound;
+                    if (bound is null) continue;
                     if (!boundLocals.TryGetValue(parameter.Name, out var value)) continue;
 
                     if (parameter.IsRest && value is System.Collections.IList list)
@@ -795,6 +1007,27 @@ public sealed class ToshClassDefinition : IShellNamedType
                 }
             }
         }
+        else if (methodBindings is { Count: > 0 })
+        {
+            // Static method (or no instance) — apply method-level bindings only.
+            foreach (var parameter in method.Parameters)
+            {
+                if (parameter.RawTypeName is null) continue;
+                if (!methodBindings.TryGetValue(parameter.RawTypeName, out var bound) || bound is null) continue;
+                if (!boundLocals.TryGetValue(parameter.Name, out var value)) continue;
+                if (parameter.IsRest && value is System.Collections.IList list)
+                {
+                    for (int i = 0; i < list.Count; i++)
+                    {
+                        EnforceStrictBinding(bound, list[i], parameter.Span, method.SourceName, method.SourceText, $"{Name}.{method.Name}.{parameter.Name}");
+                    }
+                }
+                else
+                {
+                    EnforceStrictBinding(bound, value, parameter.Span, method.SourceName, method.SourceText, $"{Name}.{method.Name}.{parameter.Name}");
+                }
+            }
+        }
 
         var locals = CreateLocals(instance, boundLocals);
         var values = _engine.ExecuteClassBlockSync(method.SourceName, method.SourceText, method.Body, locals, method.CapturedScopes, $"{Name}.{method.Name}");
@@ -807,21 +1040,30 @@ public sealed class ToshClassDefinition : IShellNamedType
         // standard annotated-value conversion path.
         Type? strictReturnBinding = null;
         string? effectiveReturnType = method.ReturnTypeName;
-        if (instance is not null && method.RawReturnTypeName is not null)
+        if (method.RawReturnTypeName is not null)
         {
-            var bindings = instance.GetBindingsFor(this);
-            if (bindings is not null && bindings.TryGetValue(method.RawReturnTypeName, out var bound))
+            // Prefer instance (class-level) binding, then method-level.
+            if (instance is not null)
             {
-                if (bound is null)
+                var bindings = instance.GetBindingsFor(this);
+                if (bindings is not null && bindings.TryGetValue(method.RawReturnTypeName, out var bound))
                 {
-                    // Type parameter is recognised but unresolved — accept any value.
-                    effectiveReturnType = null;
+                    if (bound is null)
+                    {
+                        effectiveReturnType = null;
+                    }
+                    else
+                    {
+                        strictReturnBinding = bound;
+                        effectiveReturnType = bound.FullName ?? bound.Name;
+                    }
                 }
-                else
-                {
-                    strictReturnBinding = bound;
-                    effectiveReturnType = bound.FullName ?? bound.Name;
-                }
+            }
+            if (strictReturnBinding is null && effectiveReturnType is not null && methodBindings is not null
+                && methodBindings.TryGetValue(method.RawReturnTypeName, out var mBound) && mBound is not null)
+            {
+                strictReturnBinding = mBound;
+                effectiveReturnType = mBound.FullName ?? mBound.Name;
             }
         }
 

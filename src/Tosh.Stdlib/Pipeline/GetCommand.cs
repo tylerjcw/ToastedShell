@@ -3,20 +3,37 @@ using Tosh.Runtime;
 namespace Tosh.Stdlib.Pipeline;
 
 [CommandCategory("Pipeline")]
-[CommandExample("ls -la | get Name")]
-[CommandExample("ps | get { Name, PID, Memory }")]
-[CommandExample("echo 1 2 3 | get func(x) => ($x * 2)")]
-[CommandOutput("The selected member value(s) — one item per requested path/index, in input order.")]
+[CommandExample("ls -la | get Name", Title = "Pluck a single field")]
+[CommandExample("ls | get Name Size Modified", Title = "Project multiple fields (variadic)")]
+[CommandExample("ps | get { Name, PID, Memory }", Title = "Project multiple fields with brace syntax")]
+[CommandExample("echo 1 2 3 | get func(x) => ($x * 2)", Title = "Project with a function")]
+[CommandNote("`get` is the column-picker (member values). For row picking by index/range/list, use `row`.")]
+[CommandOutput("The selected member value(s) — one item per requested path, in input order.")]
 public sealed class GetCommand : ShellCommand
 {
     public GetCommand(string name = "get")
-        : base(name, "Gets a member, projects fields, or retrieves an item by index.", $"{name} <member-path> or {name} {{ <member-path>, ... }} or {name} <index>") { }
+        : base(name, "Gets a member or projects fields from each pipeline item.", $"{name} <member-path> or {name} <m1> <m2> ... or {name} {{ <member-path>, ... }}") { }
 
     public override async IAsyncEnumerable<object?> ExecuteAsync(CommandContext context)
     {
         if (context.Arguments.Count == 0)
         {
-            throw new InvalidOperationException("Missing required argument: member path or index.");
+            throw new InvalidOperationException("Missing required argument: member path.");
+        }
+
+        // Variadic field projection: get Name Size Email
+        // Triggered when 2+ args and every arg is a string (bareword identifier).
+        if (context.Arguments.Count >= 2 && context.Arguments.All(arg => arg is string))
+        {
+            var paths = context.Arguments.Cast<string>().ToList();
+            var variadic = new ProjectedMemberSelection(paths);
+
+            await foreach (var item in context.Input.WithCancellation(context.CancellationToken))
+            {
+                yield return Project(item, variadic, context.Runtime.ObjectAccessor);
+            }
+
+            yield break;
         }
 
         if (context.Arguments[0] is IShellCallable callable)

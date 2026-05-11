@@ -757,6 +757,10 @@ subcommand publish {
         sep "DONE"
         ok $"Binary: {$plan.Binary}"
         ok $"Version: {$new_version}"
+        if (not $plan.NoInstall) {
+            styled "  ⚠ Restart any running tosh shells (exec tosh) to pick up the new binary." --fg yellow | writeline
+            styled "    Verify with: echo \$tosh.Host.BuildSha256" --fg gray --dim | writeline
+        }
 
         if ($plan.ExecAfter) { exec $plan.Binary }
 
@@ -1461,6 +1465,8 @@ subcommand install {
         makepkg -sifC --noconfirm PKGBUILD
         assert_ok "makepkg"
         ok $"Installed: {$spec}"
+        styled "  ⚠ Restart any running tosh shells (exec tosh) to pick up the new binary." --fg yellow | writeline
+        styled "    Verify with: echo \$tosh.Host.BuildSha256" --fg gray --dim | writeline
     } catch ($e) {
         fail $"Install failed: {$e}"
     } finally {

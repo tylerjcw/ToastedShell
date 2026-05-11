@@ -230,6 +230,61 @@ public sealed class FormatterTests
     }
 
     [Fact]
+    public void Optional_parameter_marker_stays_on_parameter_name()
+    {
+        var result = ToshFormatter.Format("func largest-files(dir?: string, n?: int) { echo $dir $n }");
+
+        Assert.True(result.IsSyntacticallyValid);
+        Assert.Contains("func largest-files(dir?: string, n?: int) {", result.FormattedText);
+        Assert.DoesNotContain("dir: string?", result.FormattedText);
+        Assert.DoesNotContain("n: int?", result.FormattedText);
+    }
+
+    [Fact]
+    public void Rest_parameter_marker_stays_after_parameter_name()
+    {
+        var result = ToshFormatter.Format("func log-all(args...) { echo $args }");
+
+        Assert.True(result.IsSyntacticallyValid);
+        Assert.Contains("func log-all(args...) {", result.FormattedText);
+        Assert.DoesNotContain("func log-all(...args)", result.FormattedText);
+    }
+
+    [Fact]
+    public void Comments_inside_sliced_declarations_are_not_duplicated()
+    {
+        var input = """
+            class Box {
+                # member note
+                prop Value = 1
+            }
+            func after() { echo ok }
+            """;
+
+        var result = ToshFormatter.Format(input);
+
+        Assert.True(result.IsSyntacticallyValid);
+        Assert.Equal(1, CountOccurrences(result.FormattedText, "# member note"));
+        Assert.Contains("prop Value = 1", result.FormattedText);
+        Assert.Contains("func after() {", result.FormattedText);
+    }
+
+    [Fact]
+    public void Commented_top_level_declarations_keep_blank_line_separator()
+    {
+        var input = """
+            func a() { echo a }
+            # next function
+            func b() { echo b }
+            """;
+
+        var result = ToshFormatter.Format(input);
+
+        Assert.True(result.IsSyntacticallyValid);
+        Assert.Contains("}\n\n# next function\nfunc b() {", result.FormattedText);
+    }
+
+    [Fact]
     public void Doc_comments_are_left_untouched()
     {
         // Until the formatter learns to round-trip ## doc-comments,
@@ -243,5 +298,17 @@ public sealed class FormatterTests
         var result = ToshFormatter.Format(input);
         Assert.True(result.IsSyntacticallyValid);
         Assert.Equal(input, result.FormattedText);
+    }
+
+    private static int CountOccurrences(string text, string value)
+    {
+        var count = 0;
+        var index = 0;
+        while ((index = text.IndexOf(value, index, StringComparison.Ordinal)) >= 0)
+        {
+            count++;
+            index += value.Length;
+        }
+        return count;
     }
 }

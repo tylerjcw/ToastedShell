@@ -3,6 +3,8 @@ using Tosh.Runtime;
 namespace Tosh.Stdlib.Clr;
 
 [CommandCategory("CLR")]
+[CommandDeprecated("26.05.0.10")]
+[CommandNote("Deprecated. Prefer assignment syntax: `$obj.Prop = value`.")]
 [CommandArgument("object", "The target object. If omitted, reads from the pipeline.", Required = false)]
 [CommandArgument("name", "The property name to set.")]
 [CommandArgument("value", "The value to assign.")]

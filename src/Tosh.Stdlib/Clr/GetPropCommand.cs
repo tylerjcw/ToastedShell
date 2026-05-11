@@ -5,6 +5,8 @@ using Tosh.Runtime;
 namespace Tosh.Stdlib.Clr;
 
 [CommandCategory("CLR")]
+[CommandDeprecated("26.05.0.10")]
+[CommandNote("Deprecated. Prefer member-access syntax: `$obj.Prop`.")]
 [CommandArgument("object", "The target object. If omitted, reads from the pipeline.", Required = false)]
 [CommandArgument("name", "The property name to retrieve.")]
 [CommandExample("$obj | get-prop $propName", Title = "Get a dynamically-named property from a piped object")]

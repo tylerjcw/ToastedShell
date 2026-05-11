@@ -227,4 +227,94 @@ public sealed class GenericClassTests
 
         Assert.Equal("hi", results[0]);
     }
+
+    [Fact]
+    public async Task Generic_class_method_accepts_same_generic_class_parameter()
+    {
+        var engine = new ToshEngine();
+
+        var results = await engine.ExecuteToListAsync(
+            """
+            class Point<T>(x: T) {
+                prop x: T = $x
+                func otherX(other: Point<T>) { return $other.x }
+            }
+
+            var a = new Point<int>(1)
+            var b = new Point<int>(2)
+            echo ($a.otherX($b))
+            """);
+
+        Assert.Equal(2, results[0]);
+    }
+
+    [Fact]
+    public async Task Generic_class_user_interface_constraint_accepts_implementing_class()
+    {
+        var engine = new ToshEngine();
+
+        var results = await engine.ExecuteToListAsync(
+            """
+            interface IShape { func area() }
+            class Circle fulfills IShape {
+                func area() { return 3 }
+            }
+            class Holder<T>(item: T) where T: IShape {
+                prop item: T = $item
+            }
+
+            var h = new Holder<Circle>(new Circle())
+            echo ($h.item.area())
+            """);
+
+        Assert.Equal(3, results[0]);
+    }
+
+    [Fact]
+    public async Task Generic_class_user_interface_constraint_rejects_non_implementing_class()
+    {
+        var engine = new ToshEngine();
+
+        var ex = await Assert.ThrowsAsync<ToshDiagnosticException>(async () =>
+            await engine.ExecuteToListAsync(
+                """
+                interface IShape { func area() }
+                class Square { prop side: int = 1 }
+                class Holder<T>(item: T) where T: IShape {
+                    prop item: T = $item
+                }
+
+                var h = new Holder<Square>(new Square())
+                """));
+
+        Assert.Contains(ex.Diagnostics, d =>
+            d.Title.Contains("requires type parameter")
+            && d.Title.Contains("'IShape'")
+            && d.Title.Contains("'Square'"));
+    }
+
+    [Fact]
+    public async Task Generic_class_user_interface_constraint_accepts_inherited_interface()
+    {
+        var engine = new ToshEngine();
+
+        var results = await engine.ExecuteToListAsync(
+            """
+            interface IShape { func area() }
+            class Shape fulfills IShape {
+                func area() { return 0 }
+            }
+            class Triangle extends Shape {
+                overrule func area() { return 6 }
+            }
+            class Holder<T>(item: T) where T: IShape {
+                prop item: T = $item
+            }
+
+            var h = new Holder<Triangle>(new Triangle())
+            echo ($h.item.area())
+            """);
+
+        Assert.Equal(6, results[0]);
+    }
 }

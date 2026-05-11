@@ -147,7 +147,7 @@ internal static class SystemInfoServices
         var unit = parts.Length > 1 ? parts[1] : string.Empty;
 
         return unit.Equals("kB", StringComparison.OrdinalIgnoreCase)
-            ? numeric * 1024L
+            ? numeric * 1000L
             : numeric;
     }
 

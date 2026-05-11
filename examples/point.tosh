@@ -1,187 +1,259 @@
-hollow class _Point<T1, T2> {
-    hollow prop X: T1
-    hollow prop Y: T2
-    hollow prop IsEmpty: bool
-    
-    hollow shared func Empty() -> _Point<T1, T2> {}
+## @summary Generic 2D / 3D point types. Demonstrates several recently
+## @remarks
+##  polished pieces of the language:
+##
+##   • generic interfaces (Phase 5.10): `IPoint<T>` declares the
+##     numeric-shaped operator surface that both Point2D and
+##     Point3D fulfill.
+##
+##   • generic classes with primary constructors and `where T:
+##     Numeric` constraints (Phase 5.x): the constraint catches
+##     `new Point2D<string>(…)` at instantiation rather than at
+##     the first failed `+`.
+##
+##   • symmetric operator dispatch: `2 * $pt` works even though we
+##     only define the point-on-left form below — the runtime
+##     consults overloads on either operand.
+##
+##   • expression-bodied properties cut the per-member boilerplate
+##     compared to a full prop+getter declaration.
 
-    hollow func +(other: _Point<T1, T2>) -> _Point<T1, T2> {}
-    hollow func -(other: _Point<T1, T2>) -> _Point<T1, T2> {}
-    hollow func *(other: _Point<T1, T2>) -> _Point<T1, T2> {}
-    hollow func /(other: _Point<T1, T2>) -> _Point<T1, T2> {}
-    
-    hollow func +(other: int) -> _Point<T1, T2> {}
-    hollow func -(other: int) -> _Point<T1, T2> {}
-    hollow func *(other: int) -> _Point<T1, T2> {}
-    hollow func /(other: int) -> _Point<T1, T2> {}
-
-    hollow func +(other: float) -> _Point<T1, T2> {}
-    hollow func -(other: float) -> _Point<T1, T2> {}
-    hollow func *(other: float) -> _Point<T1, T2> {}
-    hollow func /(other: float) -> _Point<T1, T2> {}
-
-    hollow func +(other: double) -> _Point<T1, T2> {}
-    hollow func -(other: double) -> _Point<T1, T2> {}
-    hollow func *(other: double) -> _Point<T1, T2> {}
-    hollow func /(other: double) -> _Point<T1, T2> {}
+## @summary Generic Point interface with operator methods.
+interface IPoint<T> where T: Numeric {
+    func +(other) -> IPoint<T>
+    func -(other) -> IPoint<T>
+    func *(other) -> IPoint<T>
+    func /(other) -> IPoint<T>
+    func %(other) -> IPoint<T>
 }
 
-class Point2D<T1, T2> extends _Point<T1, T2> {
-    overrule prop X: T1
-    overrule prop Y: T2
-    overrule prop IsEmpty: bool => (($this.X, $this.Y) == (0, 0))
- 
-    Point2D<T1, T2>(x: T1, y: T2) {
-        $this.X = $x
-        $this.Y = $y
-    }
-     
-    overrule shared func Empty() -> Point2D<int, int> {
-        return new Point2D<int, int>(0, 0)
+## @summary Custom error type for invalid point operands.
+## @remarks
+##   This demonstrates the diagnostic properties TōSh looks for on user
+##   errors: Code, DiagnosticTitle, Message, Label, Help, and Information.
+## 
+## @example throw new PointArgumentError("+", "hello", "Point2D or Numeric")
+class PointArgumentError(operation: string, operand, expected: string) extends Error {
+    prop Operation: string   = $operation
+    prop Operand             = $operand
+    prop OperandType: string = $"{$operand | type-of}"
+    prop Expected: string    = $expected
+
+    prop Code: string            = "point.argument.unsupported"
+    prop DiagnosticTitle: string = "Unsupported point operand"
+    prop Message: string         => $"Cannot apply '{$this.Operation}' to {$this.OperandType}."
+    prop Label: string           => $"{$this.Operation} expects {$this.Expected}"
+    prop Help: string            = "Use another point with the same dimension, or use a numeric scalar."
+    prop Information: string => 
+    $"""{$this.Message}
+      operation: {$this.Operation}
+      type: {$this.OperandType}
+      expected: {$this.Expected}
+      got: {$this.Operand.ToString()} ({$this.OperandType})
+    """
+}
+# ---------------------------------------------------------------
+# 2D point.
+# ---------------------------------------------------------------
+## @summary 2D point class with operator overloads and properties.
+##
+## @remarks
+##   This class fulfills the `IPoint<T>` interface and provides implementations
+##   for the arithmetic operators. It also includes properties for checking if
+##   the point is empty (at the origin) and for calculating its magnitude.
+##
+## @example
+##   var pt1 = new Point2D<int>(3, 4)
+##   var pt2 = new Point2D<int>(1, 2)
+##   var sum = $pt1 + $pt2  # Point2D(4, 6)
+##   var scaled = $pt1 * 2  # Point2D(6, 8)
+##   var distance = $pt1.DistanceTo($pt2)  # 2.8284271247461903
+## @seealso Point3D
+sealed class Point2D<T>(x: T, y: T) fulfills IPoint<T> where T: Numeric {
+    ## The X coordinate of the point.
+    prop X: T = $x
+    ## The Y coordinate of the point.
+    prop Y: T = $y
+    ## A boolean property that checks if the point is at the origin (0, 0).
+    prop IsEmpty: bool => $this.X == 0 && $this.Y == 0
+    ## The squared vector length. Useful when comparing distances.
+    prop MagnitudeSquared => ($this.X ** 2) + ($this.Y ** 2)
+    ## The magnitude (length) of the point vector.
+    prop Magnitude: double => Math.Sqrt($this.MagnitudeSquared)
+
+    ## @summary Adds another point or a scalar to this point.
+    ## @param o The operand to add, which can be either a Point2D or a numeric scalar.
+    ## @returns A new Point2D that is the result of the addition.
+    ## @throws PointArgumentError if the operand type is unsupported.
+    func +(o) => match ($o) {
+        _ is Point2D => new Point2D<T>($this.X + $o.X, $this.Y + $o.Y)
+        _ is Numeric => new Point2D<T>($this.X + $o, $this.Y + $o)
+        default      => throw new PointArgumentError("+", $o, "Point2D or Numeric")
     }
 
-    overrule func +(other: _Point<T1, T2>) -> Point2D<T1, T2> {
-        return new Point2D<T1, T2>($this.X + $other.X, $this.Y + $other.Y)
+    func -(o) => match ($o) {
+        _ is Point2D => new Point2D<T>($this.X - $o.X, $this.Y - $o.Y)
+        _ is Numeric => new Point2D<T>($this.X - $o, $this.Y - $o)
+        default      => throw new PointArgumentError("-", $o, "Point2D or Numeric")
     }
 
-    overrule func -(other: _Point<T1, T2>) -> Point2D<T1, T2> {
-        return new Point2D<T1, T2>($this.X - $other.X, $this.Y - $other.Y)
+    func *(o) => match ($o) {
+        _ is Point2D => new Point2D<T>($this.X * $o.X, $this.Y * $o.Y)
+        _ is Numeric => new Point2D<T>($this.X * $o, $this.Y * $o)
+        default      => throw new PointArgumentError("*", $o, "Point2D or Numeric")
     }
 
-    overrule func *(other: _Point<T1, T2>) -> Point2D<T1, T2> {
-        return new Point2D<T1, T2>($this.X * $other.X, $this.Y * $other.Y)
+    func /(o) => match ($o) {
+        _ is Point2D => new Point2D<T>($this.X / $o.X, $this.Y / $o.Y)
+        _ is Numeric => new Point2D<T>($this.X / $o, $this.Y / $o)
+        default      => throw new PointArgumentError("/", $o, "Point2D or Numeric")
     }
 
-    overrule func /(other: _Point<T1, T2>) -> Point2D<T1, T2> {
-        return new Point2D<T1, T2>($this.X / $other.X, $this.Y / $other.Y)
+    func %(o) => match ($o) {
+        _ is Point2D => new Point2D<T>($this.X % $o.X, $this.Y % $o.Y)
+        _ is Numeric => new Point2D<T>($this.X % $o, $this.Y % $o)
+        default      => throw new PointArgumentError("%", $o, "Point2D or Numeric")
     }
 
-    overrule func +(other: int) -> Point2D<T1, T2> {
-        return new Point2D<T1, T2>($this.X + $other, $this.Y + $other)
+    func ==(o) => match ($o) {
+        _ is Point2D => ($this.X == $o.X) && ($this.Y == $o.Y)
+        default      => false
     }
 
-    overrule func -(other: int) -> Point2D<T1, T2> {
-        return new Point2D<T1, T2>($this.X - $other, $this.Y - $other)
+    func !=(o) => match ($o) {
+        _ is Point2D => ($this.X != $o.X) || ($this.Y != $o.Y)
+        default      => true
     }
 
-    overrule func *(other: int) -> Point2D<T1, T2> {
-        return new Point2D<T1, T2>($this.X * $other, $this.Y * $other)
+    ## @summary Calculates the distance from this point to another Point2D.
+    ## @param other The other Point2D to which the distance will be calculated.
+    ## @returns The distance as a double.
+    func DistanceSquaredTo(other: Point2D) {
+        var dx = $this.X - $other.X
+        var dy = $this.Y - $other.Y
+        return ($dx ** 2) + ($dy ** 2)
     }
 
-    overrule func /(other: int) -> Point2D<T1, T2> {
-        return new Point2D<T1, T2>($this.X / $other, $this.Y / $other)
+    func DistanceTo(other: Point2D) -> double {
+        return Math.Sqrt($this.DistanceSquaredTo($other))
     }
 
-    overrule func +(other: float) -> Point2D<T1, T2> {
-        return new Point2D<T1, T2>($this.X + $other, $this.Y + $other)
+    func Dot(other: Point2D) => ($this.X * $other.X) + ($this.Y * $other.Y)
+    func WithX(x: T) -> Point2D<T> => new Point2D<T>($x, $this.Y)
+    func WithY(y: T) -> Point2D<T> => new Point2D<T>($this.X, $y)
+    func ToString() -> string => $"Point2D({$this.X}, {$this.Y})"
+
+    ## @summary A static method that returns an empty point at the origin.
+    ## @returns A new Point2D with coordinates (0, 0).
+    static func Empty<T>() -> Point2D<T> => new Point2D<T>(0, 0)
+}
+# ---------------------------------------------------------------
+# 3D point.
+# ---------------------------------------------------------------
+## @summary 3D point class with operator overloads and properties.
+##
+## @remarks
+##   This class fulfills the `IPoint<T>` interface and provides implementations
+##   for the arithmetic operators. It also includes properties for checking if
+##   the point is empty (at the origin) and for calculating its magnitude. Additionally,
+##   it includes a method for calculating the distance to another Point3D.
+##
+## @example
+##   var pt1 = new Point3D<int>(3, 4, 5)
+##   var pt2 = new Point3D<int>(1, 2, 3)
+##   var sum = $pt1 + $pt2  # Point3D(4, 6, 8)
+##   var scaled = $pt1 * 2  # Point3D(6, 8, 10)
+##   var distance = $pt1.DistanceTo($pt2)  # 3.4641016151377544
+## @seealso Point2D
+sealed class Point3D<T>(x: T, y: T, z: T) fulfills IPoint<T> where T: Numeric {
+    ## The X coordinate of the point.
+    prop X: T = $x
+    ## The Y coordinate of the point.
+    prop Y: T = $y
+    ## The Z coordinate of the point.
+    prop Z: T = $z
+    ## A boolean property that checks if the point is at the origin (0, 0, 0).
+    prop IsEmpty: bool => ($this.X == 0) and ($this.Y == 0) and ($this.Z == 0)
+    ## The squared vector length. Useful when comparing distances.
+    prop MagnitudeSquared => ($this.X ** 2) + ($this.Y ** 2) + ($this.Z ** 2)
+    ## The magnitude (length) of the point vector.
+    prop Magnitude: double => Math.Sqrt($this.MagnitudeSquared)
+
+    func +(o) => match ($o) {
+        _ is Point3D => new Point3D<T>($this.X + $o.X, $this.Y + $o.Y, $this.Z + $o.Z)
+        _ is Numeric => new Point3D<T>($this.X + $o, $this.Y + $o, $this.Z + $o)
+        default      => throw new PointArgumentError("+", $o, "Point3D or Numeric")
     }
 
-    overrule func -(other: float) -> Point2D<T1, T2> {
-        return new Point2D<T1, T2>($this.X - $other, $this.Y - $other)
+    func -(o) => match ($o) {
+        _ is Point3D => new Point3D<T>($this.X - $o.X, $this.Y - $o.Y, $this.Z - $o.Z)
+        _ is Numeric => new Point3D<T>($this.X - $o, $this.Y - $o, $this.Z - $o)
+        default      => throw new PointArgumentError("-", $o, "Point3D or Numeric")
     }
 
-    overrule func *(other: float) -> Point2D<T1, T2> {
-        return new Point2D<T1, T2>($this.X * $other, $this.Y * $other)
+    func *(o) => match ($o) {
+        _ is Point3D => new Point3D<T>($this.X * $o.X, $this.Y * $o.Y, $this.Z * $o.Z)
+        _ is Numeric => new Point3D<T>($this.X * $o, $this.Y * $o, $this.Z * $o)
+        default      => throw new PointArgumentError("*", $o, "Point3D or Numeric")
     }
 
-    overrule func /(other: float) -> Point2D<T1, T2> {
-        return new Point2D<T1, T2>($this.X / $other, $this.Y / $other)
+    func /(o) => match ($o) {
+        _ is Point3D => new Point3D<T>($this.X / $o.X, $this.Y / $o.Y, $this.Z / $o.Z)
+        _ is Numeric => new Point3D<T>($this.X / $o, $this.Y / $o, $this.Z / $o)
+        default      => throw new PointArgumentError("/", $o, "Point3D or Numeric")
     }
 
-    overrule func +(other: double) -> Point2D<T1, T2> {
-        return new Point2D<T1, T2>($this.X + $other, $this.Y + $other)
+    func %(o) => match ($o) {
+        _ is Point3D => new Point3D<T>($this.X % $o.X, $this.Y % $o.Y, $this.Z % $o.Z)
+        _ is Numeric => new Point3D<T>($this.X % $o, $this.Y % $o, $this.Z % $o)
+        default      => throw new PointArgumentError("%", $o, "Point3D or Numeric")
     }
 
-    overrule func -(other: double) -> Point2D<T1, T2> {
-        return new Point2D<T1, T2>($this.X - $other, $this.Y - $other)
+    func ==(o) => match ($o) {
+        _ is Point3D => ($this.X == $o.X) && ($this.Y == $o.Y) && ($this.Z == $o.Z)
+        default      => false
     }
 
-    overrule func *(other: double) -> Point2D<T1, T2> {
-        return new Point2D<T1, T2>($this.X * $other, $this.Y * $other)
+    func !=(o) => match ($o) {
+        _ is Point3D => ($this.X != $o.X) || ($this.Y != $o.Y) || ($this.Z != $o.Z)
+        default      => true
     }
 
-    overrule func /(other: double) -> Point2D<T1, T2> {
-        return new Point2D<T1, T2>($this.X / $other, $this.Y / $other)
+    ## @summary Calculates the distance from this point to another Point3D.
+    ## @param other The other Point3D to which the distance will be calculated.
+    ## @returns The distance as a double.
+    func DistanceSquaredTo(other: Point3D) {
+        var dx = $this.X - $other.X
+        var dy = $this.Y - $other.Y
+        var dz = $this.Z - $other.Z
+        return ($dx ** 2) + ($dy ** 2) + ($dz ** 2)
     }
+
+    func DistanceTo(other: Point3D) -> double {
+        return Math.Sqrt($this.DistanceSquaredTo($other))
+    }
+
+    func Dot(other: Point3D) => ($this.X * $other.X) + ($this.Y * $other.Y) + ($this.Z * $other.Z)
+    func Cross(other: Point3D) -> Point3D<T> => new Point3D<T>(($this.Y * $other.Z) - ($this.Z * $other.Y), ($this.Z * $other.X) - ($this.X * $other.Z), ($this.X * $other.Y) - ($this.Y * $other.X))
+    func WithX(x: T) -> Point3D<T> => new Point3D<T>($x, $this.Y, $this.Z)
+    func WithY(y: T) -> Point3D<T> => new Point3D<T>($this.X, $y, $this.Z)
+    func WithZ(z: T) -> Point3D<T> => new Point3D<T>($this.X, $this.Y, $z)
+    func ToString() -> string => $"Point3D({$this.X}, {$this.Y}, {$this.Z})"
+
+    ## @summary A static method that returns an empty point at the origin.
+    ## @returns A new Point3D with coordinates (0, 0, 0
+    static func Empty() -> Point3D<T> { new Point3D<T>(0, 0, 0) }
 }
 
-sealed class Point3D<T1, T2, T3> extends _Point<T1, T2> {
-    overrule prop X: T1
-    overrule prop Y: T2
-    prop Z: T3
-    overrule prop IsEmpty: bool => (($this.X, $this.Y, $this.Z) == (0, 0, 0))
+## @summary Small source-safe demo. Run `demo_points` after sourcing this file.
+func demo_points() {
+    var a = new Point2D<int>(2, 3)
+    var b = new Point2D<int>(4, 5)
+    var c = new Point3D<int>(1, 0, 0)
+    var d = new Point3D<int>(0, 1, 0)
 
-    Point3D<T1, T2, T3>(x: T1, y: T2, z: T3) {
-        $this.X = $x
-        $this.Y = $y
-        $this.Z = $z
-    }
-
-    overrule shared func Empty() -> Point3D<int, int, int> {
-        return new Point3D<int, int, int>(0, 0, 0)
-    }
-
-    overrule func +(other: Point3D<T1, T2, T3>) -> Point3D<T1, T2, T3> {
-        return new Point3D<T1, T2, T3>($this.X + $other.X, $this.Y + $other.Y, $this.Z + $other.Z)
-    }
-
-    overrule func -(other: Point3D<T1, T2, T3>) -> Point3D<T1, T2, T3> {
-        return new Point3D<T1, T2, T3>($this.X - $other.X, $this.Y - $other.Y, $this.Z - $other.Z)
-    }
-
-    overrule func *(other: Point3D<T1, T2, T3>) -> Point3D<T1, T2, T3> {
-        return new Point3D<T1, T2, T3>($this.X * $other.X, $this.Y * $other.Y, $this.Z * $other.Z)
-    }
-
-    overrule func /(other: Point3D<T1, T2, T3>) -> Point3D<T1, T2, T3> {
-        return new Point3D<T1, T2, T3>($this.X / $other.X, $this.Y / $other.Y, $this.Z / $other.Z)
-    }
-
-    overrule func +(other: int) -> Point3D<T1, T2, T3> {
-        return new Point3D<T1, T2, T3>($this.X + $other, $this.Y + $other, $this.Z + $other)
-    }
-
-    overrule func -(other: int) -> Point3D<T1, T2, T3> {
-        return new Point3D<T1, T2, T3>($this.X - $other, $this.Y - $other, $this.Z - $other)
-    }
-
-    overrule func *(other: int) -> Point3D<T1, T2, T3> {
-        return new Point3D<T1, T2, T3>($this.X * $other, $this.Y * $other, $this.Z * $other)
-    }
-
-    overrule func /(other: int) -> Point3D<T1, T2, T3> {
-        return new Point3D<T1, T2, T3>($this.X / $other, $this.Y / $other, $this.Z / $other)
-    }
-
-    overrule func +(other: float) -> Point3D<T1, T2, T3> {
-        return new Point3D<T1, T2, T3>($this.X + $other, $this.Y + $other, $this.Z + $other)
-    }
-
-    overrule func -(other: float) -> Point3D<T1, T2, T3> {
-        return new Point3D<T1, T2, T3>($this.X - $other, $this.Y - $other, $this.Z - $other)
-    }
-
-    overrule func *(other: float) -> Point3D<T1, T2, T3> {
-        return new Point3D<T1, T2, T3>($this.X * $other, $this.Y * $other, $this.Z * $other)
-    }
-
-    overrule func /(other: float) -> Point3D<T1, T2, T3> {
-        return new Point3D<T1, T2, T3>($this.X / $other, $this.Y / $other, $this.Z / $other)
-    }
-
-    overrule func +(other: double) -> Point3D<T1, T2, T3> {
-        return new Point3D<T1, T2, T3>($this.X + $other, $this.Y + $other, $this.Z + $other)
-    }
-
-    overrule func -(other: double) -> Point3D<T1, T2, T3> {
-        return new Point3D<T1, T2, T3>($this.X - $other, $this.Y - $other, $this.Z - $other)
-    }
-
-    overrule func *(other: double) -> Point3D<T1, T2, T3> {
-        return new Point3D<T1, T2, T3>($this.X * $other, $this.Y * $other, $this.Z * $other)
-    }
-
-    overrule func /(other: double) -> Point3D<T1, T2, T3> {
-        return new Point3D<T1, T2, T3>($this.X / $other, $this.Y / $other, $this.Z / $other)
-    }
+    echo ($a + $b)
+    echo ($a.DistanceTo($b))
+    echo ($a.Dot($b))
+    echo ($c.Cross($d))
 }

@@ -45,7 +45,8 @@ public abstract class ShellCommand : IShellCommand
                 o.Syntax,
                 o.Description,
                 o.ValueClrType is null ? null : TypedTypeRefBuilder.FromType(o.ValueClrType),
-                o.IsFlag))
+                o.IsFlag,
+                o.Default))
             .ToList();
 
         var examples = type.GetCustomAttributes<CommandExampleAttribute>()

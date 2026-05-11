@@ -321,5 +321,130 @@
       "| sort ${1:Property} | first ${2:10}"
     ],
     "description": "Pipeline with sort and take first N"
+  },
+  "Interface": {
+    "prefix": "interface",
+    "body": [
+      "interface ${1:IName} {",
+      "\tfunc ${2:method-name}(${3})${4: -> ${5:Type}}",
+      "\t$0",
+      "}"
+    ],
+    "description": "Define an interface"
+  },
+  "Struct": {
+    "prefix": "struct",
+    "body": [
+      "struct ${1:Name}(${2:fields}) {",
+      "\t$0",
+      "}"
+    ],
+    "description": "Define a value-type struct"
+  },
+  "Trait": {
+    "prefix": "trait",
+    "body": [
+      "trait ${1:Name} {",
+      "\t$0",
+      "}"
+    ],
+    "description": "Define a trait"
+  },
+  "Union": {
+    "prefix": "union",
+    "body": [
+      "union ${1:Name} {",
+      "\tcase ${2:Variant}",
+      "\t$0",
+      "}"
+    ],
+    "description": "Define a tagged union"
+  },
+  "Rune": {
+    "prefix": "rune",
+    "body": [
+      "rune ${1:name}(${2}) {",
+      "\t$0",
+      "}"
+    ],
+    "description": "Define a rune (parse-time macro)"
+  },
+  "Event": {
+    "prefix": "event",
+    "body": [
+      "event ${1:name}"
+    ],
+    "description": "Declare an event"
+  },
+  "Generic Class": {
+    "prefix": "class<T>",
+    "body": [
+      "class ${1:Name}<${2:T}>(${3:initial}: ${2:T}) where ${2:T}: ${4:Numeric} {",
+      "\tprop value: ${2:T} = \\$${3:initial}",
+      "\t$0",
+      "}"
+    ],
+    "description": "Generic class with type-parameter constraint"
+  },
+  "Generic Function": {
+    "prefix": "func<T>",
+    "body": [
+      "func ${1:name}<${2:T}>(${3:x}: ${2:T}) -> ${2:T}",
+      "\twhere ${2:T}: ${4:Numeric}",
+      "{",
+      "\t$0",
+      "}"
+    ],
+    "description": "Generic function with constraint clause"
+  },
+  "Defer Block": {
+    "prefix": "defer",
+    "body": [
+      "defer {",
+      "\t$0",
+      "}"
+    ],
+    "description": "Schedule a block for scope-exit cleanup"
+  },
+  "Fat-Arrow Method": {
+    "prefix": "method=>",
+    "body": [
+      "func ${1:name}(${2}) => ${3:expression}"
+    ],
+    "description": "One-liner fat-arrow method body"
+  },
+  "Class Fulfills Interface": {
+    "prefix": "class-fulfills",
+    "body": [
+      "class ${1:Name}(${2}) fulfills ${3:IShape} {",
+      "\toverrule func ${4:method}(${5}) {",
+      "\t\t$0",
+      "\t}",
+      "}"
+    ],
+    "description": "Class that fulfills an interface"
+  },
+  "Class Extends": {
+    "prefix": "class-extends",
+    "body": [
+      "class ${1:Derived}(${2}) extends ${3:Base} {",
+      "\t$0",
+      "}"
+    ],
+    "description": "Class with base-class inheritance"
+  },
+  "Const": {
+    "prefix": "const",
+    "body": [
+      "const ${1:NAME} = ${2:value}"
+    ],
+    "description": "Declare a constant"
+  },
+  "Yield": {
+    "prefix": "yield",
+    "body": [
+      "yield ${1:value}"
+    ],
+    "description": "Emit a value from a generator function"
   }
 }

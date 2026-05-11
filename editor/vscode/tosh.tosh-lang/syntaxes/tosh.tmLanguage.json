@@ -34,6 +34,24 @@
       "include": "#class-definition"
     },
     {
+      "include": "#interface-definition"
+    },
+    {
+      "include": "#struct-definition"
+    },
+    {
+      "include": "#trait-definition"
+    },
+    {
+      "include": "#union-definition"
+    },
+    {
+      "include": "#rune-definition"
+    },
+    {
+      "include": "#event-definition"
+    },
+    {
       "include": "#module-definition"
     },
     {
@@ -44,6 +62,12 @@
     },
     {
       "include": "#function-definition"
+    },
+    {
+      "include": "#type-clause"
+    },
+    {
+      "include": "#storage-modifier"
     },
     {
       "include": "#control-flow"
@@ -311,10 +335,14 @@
       ]
     },
     "class-definition": {
-      "match": "\\b(?:(shy|global|export)\\s+)?(class)\\s+([a-zA-Z_][a-zA-Z0-9_-]*)\\b",
+      "match": "\\b((?:(?:shy|private|proud|public|guarded|protected|local|global|export|sealed|hollow|abstract|partial|hermit|strict|static|fluid|leaky)\\s+)*)(class)\\s+([a-zA-Z_][a-zA-Z0-9_-]*)\\b",
       "captures": {
         "1": {
-          "name": "storage.modifier.tosh"
+          "patterns": [
+            {
+              "include": "#storage-modifier"
+            }
+          ]
         },
         "2": {
           "name": "keyword.control.tosh"
@@ -324,11 +352,123 @@
         }
       }
     },
-    "module-definition": {
-      "match": "\\b(?:(shy|global|export)\\s+)?(module)\\s+([a-zA-Z_][a-zA-Z0-9_-]*)\\b",
+    "interface-definition": {
+      "match": "\\b((?:(?:shy|private|proud|public|local|global|export|partial)\\s+)*)(interface)\\s+([a-zA-Z_][a-zA-Z0-9_-]*)\\b",
       "captures": {
         "1": {
-          "name": "storage.modifier.tosh"
+          "patterns": [
+            {
+              "include": "#storage-modifier"
+            }
+          ]
+        },
+        "2": {
+          "name": "keyword.control.tosh"
+        },
+        "3": {
+          "name": "entity.name.type.interface.tosh"
+        }
+      }
+    },
+    "struct-definition": {
+      "match": "\\b((?:(?:shy|private|proud|public|local|global|export|fluid|partial|sealed)\\s+)*)(struct)\\s+([a-zA-Z_][a-zA-Z0-9_-]*)\\b",
+      "captures": {
+        "1": {
+          "patterns": [
+            {
+              "include": "#storage-modifier"
+            }
+          ]
+        },
+        "2": {
+          "name": "keyword.control.tosh"
+        },
+        "3": {
+          "name": "entity.name.type.struct.tosh"
+        }
+      }
+    },
+    "trait-definition": {
+      "match": "\\b((?:(?:shy|private|proud|public|local|global|export|partial)\\s+)*)(trait)\\s+([a-zA-Z_][a-zA-Z0-9_-]*)\\b",
+      "captures": {
+        "1": {
+          "patterns": [
+            {
+              "include": "#storage-modifier"
+            }
+          ]
+        },
+        "2": {
+          "name": "keyword.control.tosh"
+        },
+        "3": {
+          "name": "entity.name.type.trait.tosh"
+        }
+      }
+    },
+    "union-definition": {
+      "match": "\\b((?:(?:shy|private|proud|public|local|global|export)\\s+)*)(union)\\s+([a-zA-Z_][a-zA-Z0-9_-]*)\\b",
+      "captures": {
+        "1": {
+          "patterns": [
+            {
+              "include": "#storage-modifier"
+            }
+          ]
+        },
+        "2": {
+          "name": "keyword.control.tosh"
+        },
+        "3": {
+          "name": "entity.name.type.union.tosh"
+        }
+      }
+    },
+    "rune-definition": {
+      "match": "\\b((?:(?:shy|private|proud|public|local|global|export)\\s+)*)(rune)\\s+([a-zA-Z_][a-zA-Z0-9_-]*)\\b",
+      "captures": {
+        "1": {
+          "patterns": [
+            {
+              "include": "#storage-modifier"
+            }
+          ]
+        },
+        "2": {
+          "name": "keyword.control.tosh"
+        },
+        "3": {
+          "name": "entity.name.type.rune.tosh"
+        }
+      }
+    },
+    "event-definition": {
+      "match": "\\b((?:(?:shy|private|proud|public|local|global|export)\\s+)*)(event)\\s+([a-zA-Z_][a-zA-Z0-9_-]*)\\b",
+      "captures": {
+        "1": {
+          "patterns": [
+            {
+              "include": "#storage-modifier"
+            }
+          ]
+        },
+        "2": {
+          "name": "keyword.control.tosh"
+        },
+        "3": {
+          "name": "entity.name.type.event.tosh"
+        }
+      }
+    },
+    "module-definition": {
+      "match": "\\b((?:(?:shy|private|proud|public|local|global|export|partial)\\s+)*)(module)\\s+([a-zA-Z_][a-zA-Z0-9_-]*)\\b",
+      "captures": {
+        "1": {
+          "patterns": [
+            {
+              "include": "#storage-modifier"
+            }
+          ]
         },
         "2": {
           "name": "keyword.control.tosh"
@@ -339,10 +479,14 @@
       }
     },
     "enum-definition": {
-      "match": "\\b(?:(shy|global|export)\\s+)?(enum)\\s+([a-zA-Z_][a-zA-Z0-9_-]*)\\b",
+      "match": "\\b((?:(?:shy|private|proud|public|local|global|export)\\s+)*)(enum)\\s+([a-zA-Z_][a-zA-Z0-9_-]*)\\b",
       "captures": {
         "1": {
-          "name": "storage.modifier.tosh"
+          "patterns": [
+            {
+              "include": "#storage-modifier"
+            }
+          ]
         },
         "2": {
           "name": "keyword.control.tosh"
@@ -353,10 +497,14 @@
       }
     },
     "record-definition": {
-      "match": "\\b(?:(shy|global|export)\\s+)?(record)\\s+([a-zA-Z_][a-zA-Z0-9_-]*)\\b",
+      "match": "\\b((?:(?:shy|private|proud|public|local|global|export|sealed|strict|partial)\\s+)*)(record)\\s+([a-zA-Z_][a-zA-Z0-9_-]*)\\b",
       "captures": {
         "1": {
-          "name": "storage.modifier.tosh"
+          "patterns": [
+            {
+              "include": "#storage-modifier"
+            }
+          ]
         },
         "2": {
           "name": "keyword.control.tosh"
@@ -367,10 +515,14 @@
       }
     },
     "function-definition": {
-      "match": "\\b(?:(shy|global|export)\\s+)?(func)\\s+([a-zA-Z_][a-zA-Z0-9_-]*)\\s*(?=\\(|=>)",
+      "match": "\\b((?:(?:shy|private|proud|public|guarded|protected|local|global|export|static|shared|hollow|abstract|sealed|overrule|override|partial|fading|obsolete|raw|lazy)\\s+)*)(func)\\s+([a-zA-Z_][a-zA-Z0-9_-]*)\\s*(?=<|\\(|=>)",
       "captures": {
         "1": {
-          "name": "storage.modifier.tosh"
+          "patterns": [
+            {
+              "include": "#storage-modifier"
+            }
+          ]
         },
         "2": {
           "name": "keyword.control.tosh"
@@ -380,8 +532,32 @@
         }
       }
     },
+    "storage-modifier": {
+      "match": "\\b(shy|private|proud|public|guarded|protected|local|sealed|hollow|abstract|partial|overrule|override|static|shared|hermit|strict|fluid|leaky|lazy|fixed|readonly|vital|required|fading|obsolete|raw)\\b",
+      "name": "storage.modifier.tosh"
+    },
+    "type-clause": {
+      "comment": "Type clauses on declarations: extends, fulfills, implements, uses, where",
+      "patterns": [
+        {
+          "match": "\\b(extends|fulfills|implements|uses)\\b\\s*([A-Za-z_][a-zA-Z0-9_.<>,\\s-]*)?",
+          "captures": {
+            "1": {
+              "name": "keyword.control.inheritance.tosh"
+            },
+            "2": {
+              "name": "entity.other.inherited-class.tosh"
+            }
+          }
+        },
+        {
+          "match": "\\b(where)\\b",
+          "name": "keyword.control.constraint.tosh"
+        }
+      ]
+    },
     "control-flow": {
-      "match": "\\b(if|else|for|in|while|until|break|continue|return|throw|try|catch|finally|switch|case|default|match|func|var|alloc|class|module|enum|record|prop|shy|static|using|require|native|bind|from|as|out|ref|callconv|global|export|new|nameof|name-of|and|or|not|is|is-not|not-in|handles|when)\\b",
+      "match": "\\b(if|else|unless|for|in|while|until|break|continue|return|yield|throw|try|catch|finally|defer|switch|case|default|match|when|handles|priority|once|func|var|const|alloc|class|interface|struct|trait|union|module|enum|record|rune|event|prop|using|require|native|bind|from|as|out|ref|callconv|global|export|new|nameof|name-of|let|pick|quote|and|or|not|is|is-not|not-in|is-in|is-not-in|contains|starts-with|ends-with)\\b",
       "name": "keyword.control.tosh"
     },
     "constants": {
@@ -429,10 +605,14 @@
       ]
     },
     "variable-declaration": {
-      "match": "\\b(?:(shy|global|export)\\s+)?(var|alloc)\\s+([a-zA-Z_][a-zA-Z0-9_]*)\\s*(?==|$)",
+      "match": "\\b((?:(?:shy|private|proud|public|local|global|export)\\s+)*)(var|const|alloc)\\s+([a-zA-Z_][a-zA-Z0-9_]*)\\s*(?=:|=|$)",
       "captures": {
         "1": {
-          "name": "storage.modifier.tosh"
+          "patterns": [
+            {
+              "include": "#storage-modifier"
+            }
+          ]
         },
         "2": {
           "name": "keyword.control.tosh"

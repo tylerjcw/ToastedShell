@@ -37,6 +37,16 @@ public sealed partial class ToshEngine : IShellEvaluator
     private readonly ShellEnvironmentNamespace _environmentNamespace;
 
     /// <summary>
+    /// Phase 3.2 — When evaluating the initializer pipeline of a typed
+    /// `var x: T = …` declaration (or any other call site that knows
+    /// its expected target type), this carries the LHS annotation so
+    /// the inner CommandInvocation can be stamped with it. Generic
+    /// function calls then seed type-parameter bindings from the
+    /// target before parameter conversion runs.
+    /// </summary>
+    private readonly System.Threading.AsyncLocal<string?> _targetTypeAnnotation = new();
+
+    /// <summary>
     /// Active binder strictness for evaluation calls that don't pass an explicit override.
     /// Defaults to <see cref="BinderStrictness.Warn"/>; the CLI raises this to
     /// <see cref="BinderStrictness.Strict"/> for <c>-c</c>, script files, and the
@@ -82,7 +92,7 @@ public sealed partial class ToshEngine : IShellEvaluator
         Runtime.EventSenderFactory = CreateEventSender;
         _toshNamespace = new ToshRuntimeNamespace(this);
         Runtime.RuntimeNamespace ??= _toshNamespace;
-        _environmentNamespace = new ShellEnvironmentNamespace();
+        _environmentNamespace = new ShellEnvironmentNamespace(Runtime);
         if (!Runtime.Commands.TryGet("source", out _))
         {
             Runtime.Commands.Register(new SourceCommand(this));
@@ -100,6 +110,12 @@ public sealed partial class ToshEngine : IShellEvaluator
 
         // Load built-in rune definitions
         LoadBuiltinRunesAsync().GetAwaiter().GetResult();
+
+        // Register the trait-constraint resolver for the `is` / `is-not` operators so
+        // expressions like `$x is Numeric` consult the same registry used by generic
+        // type-parameter constraint validation.
+        Tosh.Runtime.OperatorEvaluator.ResolveTraitConstraint ??= static (name, type) =>
+            ToshTypeParameterConstraintRegistry.TryGet(name, out var predicate) && predicate(type);
     }
 
     /// <summary>
@@ -113,7 +129,7 @@ public sealed partial class ToshEngine : IShellEvaluator
     {
         Runtime = runtime;
         _toshNamespace = new ToshRuntimeNamespace(this);
-        _environmentNamespace = new ShellEnvironmentNamespace();
+        _environmentNamespace = new ShellEnvironmentNamespace(Runtime);
         // Pre-seed the scope stack with clones of the parent's visible scopes.
         // capturedScopes is ordered outer-to-inner; pushing outer-first means
         // the inner-most scope ends up on top of the stack — correct lookup order.
@@ -1481,9 +1497,26 @@ public sealed partial class ToshEngine : IShellEvaluator
     {
         EnsureBindingNameIsNotReserved(sourceName, sourceText, declaration.Name, declaration.Span, "reserved runtime namespace");
 
-        var binding = declaration.Value is null
-            ? new VariableBinding(null, ReplayAsPipeline: false, IsAllocatedOnly: true)
-            : await EvaluateVariableBindingAsync(sourceName, sourceText, declaration.Value, cancellationToken);
+        VariableBinding binding;
+        if (declaration.Value is null)
+        {
+            binding = new VariableBinding(null, ReplayAsPipeline: false, IsAllocatedOnly: true);
+        }
+        else
+        {
+            // Phase 3.2 — push the target type annotation so generic
+            // calls in the initializer can seed bindings from it.
+            var prevTarget = _targetTypeAnnotation.Value;
+            _targetTypeAnnotation.Value = declaration.TypeName;
+            try
+            {
+                binding = await EvaluateVariableBindingAsync(sourceName, sourceText, declaration.Value, cancellationToken);
+            }
+            finally
+            {
+                _targetTypeAnnotation.Value = prevTarget;
+            }
+        }
 
         // Struct copy-on-assign: clone struct instances to enforce value-type semantics
         if (binding.Value is ToshStructInstance structInstance)
@@ -2260,7 +2293,9 @@ public sealed partial class ToshEngine : IShellEvaluator
             sourceName,
             sourceText,
             function.Span,
-            function.DocComment);
+            function.DocComment,
+            typeParameters: function.TypeParameters,
+            typeParameterConstraints: function.TypeParameterConstraints);
 
         var functionCommand = new FunctionCommand(this, definition);
         DeclareCommand(functionCommand, function.Modifier);
@@ -2323,7 +2358,9 @@ public sealed partial class ToshEngine : IShellEvaluator
         string sourceName,
         string sourceText,
         TextSpan span,
-        DocComment? docComment = null)
+        DocComment? docComment = null,
+        IReadOnlyList<string>? typeParameters = null,
+        IReadOnlyList<TypeParameterConstraintSyntax>? typeParameterConstraints = null)
     {
         var duplicateParameters = parameters
             .GroupBy(parameter => parameter.Name, StringComparer.Ordinal)
@@ -2348,9 +2385,9 @@ public sealed partial class ToshEngine : IShellEvaluator
         return new FunctionDefinition(
             name,
             parameters
-                .Select(parameter => CreateParameterDefinition(parameter, sourceName, sourceText))
+                .Select(parameter => CreateParameterDefinition(parameter, sourceName, sourceText, typeParameters))
                 .ToArray(),
-            returnTypeName,
+            EraseTypeParameter(returnTypeName, typeParameters),
             body,
             isCommandWrapper,
             sourceName,
@@ -2358,13 +2395,75 @@ public sealed partial class ToshEngine : IShellEvaluator
             span,
             CaptureVisibleScopes(),
             docComment,
-            IsGenerator: ContainsYieldStatement(body));
+            IsGenerator: ContainsYieldStatement(body),
+            TypeParameters: typeParameters,
+            RawReturnTypeName: returnTypeName,
+            TypeParameterConstraints: typeParameterConstraints?
+                .Select(c => new ToshTypeParameterConstraint(c.TypeParameter, c.ConstraintNames))
+                .ToArray());
     }
 
     private static string? EraseTypeParameter(string? typeName, IReadOnlyList<string>? typeParameters)
     {
         if (typeName is null || typeParameters is not { Count: > 0 }) return typeName;
-        return typeParameters.Contains(typeName, StringComparer.Ordinal) ? null : typeName;
+        if (typeParameters.Contains(typeName, StringComparer.Ordinal)) return null;
+
+        // Generic type whose arg list mentions a type parameter — strip
+        // arguments that are themselves type-parameter names so the
+        // outer constructor can still be resolved (e.g. `list<T>`
+        // becomes `list`). Recursively erase nested generic args.
+        var lt = typeName.IndexOf('<');
+        var gt = typeName.LastIndexOf('>');
+        if (lt > 0 && gt == typeName.Length - 1)
+        {
+            var head = typeName.Substring(0, lt);
+            var inner = typeName.Substring(lt + 1, gt - lt - 1);
+            var args = SplitTopLevelCommas(inner);
+            var anyParam = false;
+            var rebuilt = new List<string>(args.Count);
+            foreach (var arg in args)
+            {
+                var trimmed = arg.Trim();
+                if (typeParameters.Contains(trimmed, StringComparer.Ordinal))
+                {
+                    anyParam = true;
+                    continue;
+                }
+                var erased = EraseTypeParameter(trimmed, typeParameters);
+                if (erased is null)
+                {
+                    anyParam = true;
+                    continue;
+                }
+                if (!ReferenceEquals(erased, trimmed)) anyParam = true;
+                rebuilt.Add(erased);
+            }
+            if (anyParam)
+            {
+                return rebuilt.Count == 0 ? head : $"{head}<{string.Join(", ", rebuilt)}>";
+            }
+        }
+        return typeName;
+    }
+
+    private static IReadOnlyList<string> SplitTopLevelCommas(string s)
+    {
+        var result = new List<string>();
+        var depth = 0;
+        var start = 0;
+        for (var i = 0; i < s.Length; i++)
+        {
+            var c = s[i];
+            if (c == '<') depth++;
+            else if (c == '>') depth--;
+            else if (c == ',' && depth == 0)
+            {
+                result.Add(s.Substring(start, i - start));
+                start = i + 1;
+            }
+        }
+        if (start <= s.Length) result.Add(s.Substring(start));
+        return result;
     }
 
     private FunctionParameterDefinition CreateParameterDefinition(
@@ -2668,12 +2767,30 @@ public sealed partial class ToshEngine : IShellEvaluator
 
         var runtimeMethods = @class.Members
             .OfType<ClassMethodMemberSyntax>()
-            .Select(method => new ToshClassMethodDefinition(
+            .Select(method =>
+            {
+                // Phase 3.4 — method-level type parameters. Combine
+                // the class's type-parameter names with the method's
+                // own so erasure removes both before annotation
+                // resolution.
+                var methodTypeParams = method.Method.TypeParameters;
+                IReadOnlyList<string>? combinedTypeParams = classTypeParams;
+                if (methodTypeParams is { Count: > 0 })
+                {
+                    combinedTypeParams = (classTypeParams is { Count: > 0 })
+                        ? classTypeParams.Concat(methodTypeParams).ToArray()
+                        : methodTypeParams;
+                }
+                var methodConstraints = method.Method.TypeParameterConstraints?
+                    .Select(c => new ToshTypeParameterConstraint(c.TypeParameter, c.ConstraintNames))
+                    .ToArray();
+
+                return new ToshClassMethodDefinition(
                 method.Method.Name,
                 method.Method.Parameters
-                    .Select(parameter => CreateParameterDefinition(parameter, sourceName, sourceText, classTypeParams))
+                    .Select(parameter => CreateParameterDefinition(parameter, sourceName, sourceText, combinedTypeParams))
                     .ToArray(),
-                EraseTypeParameter(method.Method.ReturnTypeName, classTypeParams),
+                EraseTypeParameter(method.Method.ReturnTypeName, combinedTypeParams),
                 method.Method.Body,
                 method.IsStatic || @class.IsHermit,  // hermit classes make all members implicitly shared
                 method.IsShy,
@@ -2690,7 +2807,10 @@ public sealed partial class ToshEngine : IShellEvaluator
                 // Preserve the un-erased return-type annotation so a generic
                 // class can substitute T against the instance's bindings at
                 // call time (see ToshClassDefinition.ExecuteMethodBlock).
-                RawReturnTypeName: method.Method.ReturnTypeName))
+                RawReturnTypeName: method.Method.ReturnTypeName,
+                TypeParameters: methodTypeParams,
+                TypeParameterConstraints: methodConstraints);
+            })
             .ToArray();
 
         var runtimeConstructors = @class.Members
@@ -2706,6 +2826,10 @@ public sealed partial class ToshEngine : IShellEvaluator
                 CaptureVisibleScopes()))
             .ToArray();
 
+        var typeParameterConstraints = @class.TypeParameterConstraints?
+            .Select(c => new ToshTypeParameterConstraint(c.TypeParameter, c.ConstraintNames))
+            .ToArray();
+
         var definition = new ToshClassDefinition(
             this,
             @class.Name,
@@ -2719,7 +2843,8 @@ public sealed partial class ToshEngine : IShellEvaluator
             sourceText,
             @class.Span,
             CaptureVisibleScopes(),
-            typeParameters: classTypeParams);
+            typeParameters: classTypeParams,
+            typeParameterConstraints: typeParameterConstraints);
 
         // Handle partial class merging: if this is a partial class and one already exists, merge members
         if (@class.IsPartial && TryGetNamedType(@class.Name, out var existingType) && existingType is ToshClassDefinition existingDef)
@@ -2858,7 +2983,13 @@ public sealed partial class ToshEngine : IShellEvaluator
         {
             foreach (var ifaceName in @class.ImplementedInterfaces)
             {
-                if (!TryGetNamedType(ifaceName, out var namedType) || namedType is not ToshInterfaceDefinition ifaceDefinition)
+                // The fulfills clause may carry generic type arguments
+                // (e.g. 'fulfills IPoint<int>'). Type definitions are
+                // registered by their bare name, so look up using the
+                // unparameterised head while keeping the full reference
+                // string for diagnostics.
+                var lookupName = StripGenericTypeArguments(ifaceName);
+                if (!TryGetNamedType(lookupName, out var namedType) || namedType is not ToshInterfaceDefinition ifaceDefinition)
                 {
                     throw ToshDiagnosticException.Create(new ToshDiagnostic(
                         Code: "tosh.runtime.unknown_interface",
@@ -2868,6 +2999,16 @@ public sealed partial class ToshEngine : IShellEvaluator
                         Span: @class.Span,
                         Label: $"'{ifaceName}' is not a known interface"));
                 }
+
+                // Validate type-argument arity / constraints when the
+                // interface is generic and the fulfills clause carries
+                // type arguments.
+                ValidateInterfaceTypeArguments(
+                    sourceName,
+                    sourceText,
+                    @class,
+                    ifaceDefinition,
+                    ifaceName);
 
                 var missing = ifaceDefinition.GetMissingMethods(definition);
                 if (missing.Count > 0)
@@ -2883,7 +3024,7 @@ public sealed partial class ToshEngine : IShellEvaluator
             }
 
             definition.ImplementedInterfaces = @class.ImplementedInterfaces
-                .Select(name => TryGetNamedType(name, out var t) && t is ToshInterfaceDefinition iface ? iface : null)
+                .Select(name => TryGetNamedType(StripGenericTypeArguments(name), out var t) && t is ToshInterfaceDefinition iface ? iface : null)
                 .Where(i => i is not null)
                 .ToArray()!;
         }
@@ -3135,7 +3276,10 @@ public sealed partial class ToshEngine : IShellEvaluator
             methods,
             sourceName,
             sourceText,
-            @interface.Span);
+            @interface.Span,
+            typeParameterNames: @interface.TypeParameters,
+            typeParameterConstraints: @interface.TypeParameterConstraints,
+            typeParameterVariances: @interface.TypeParameterVariances);
 
         DeclareType(@interface.Name, definition, @interface.Modifier, sourceName, sourceText, @interface.Span);
         yield break;
@@ -3433,7 +3577,9 @@ public sealed partial class ToshEngine : IShellEvaluator
             sourceName,
             sourceText,
             record.Span,
-            CaptureVisibleScopes());
+            CaptureVisibleScopes(),
+            typeParameterNames: record.TypeParameters,
+            typeParameterConstraints: record.TypeParameterConstraints);
 
         definition.IsSealed = record.IsSealed;
         definition.IsStrict = record.IsStrict;
@@ -4660,6 +4806,14 @@ public sealed partial class ToshEngine : IShellEvaluator
         {
             throw;
         }
+        catch (Tosh.Runtime.ShellControlFlowException)
+        {
+            throw;
+        }
+        catch (Exception exception) when (IsToshThrown(exception))
+        {
+            throw;
+        }
         catch (Exception exception)
         {
             throw CreateExpressionDiagnostic(sourceName, sourceText, expressionStage.Expression, exception);
@@ -4801,7 +4955,9 @@ public sealed partial class ToshEngine : IShellEvaluator
             sourceText,
             commandSyntax.Name,
             commandSyntax.Span,
-            commandSyntax.Arguments.Select(argument => argument.Span).ToArray());
+            commandSyntax.Arguments.Select(argument => argument.Span).ToArray(),
+            commandSyntax.ExplicitTypeArguments,
+            _targetTypeAnnotation.Value);
         var context = new CommandContext(Runtime, input, arguments, cancellationToken, invocation, isPipelined, CreateScopedTypeResolver(), pipelineExitStatusTracker, BlockExecutor: _ownBlockExecutor);
 
         if (Runtime.Config.Shell.Trace)
@@ -5342,6 +5498,16 @@ public sealed partial class ToshEngine : IShellEvaluator
                                 // Generic class — must have matching type-arg list
                                 if (!hasAngles)
                                 {
+                                    if (TryInferTypeArgumentsFromCtorArgs(
+                                            classDef.TypeParameterNames,
+                                            classDef.PrimaryConstructorParameters,
+                                            constructorArguments,
+                                            out var inferredResolved,
+                                            out var inferredDisplay))
+                                    {
+                                        return classDef.CreateGenericInstance(inferredResolved, inferredDisplay, constructorArguments);
+                                    }
+
                                     throw new InvalidOperationException(
                                         $"Generic class '{bareName}' requires type arguments, e.g. 'new {bareName}<{string.Join(", ", classDef.TypeParameterNames)}>(…)'.");
                                 }
@@ -5359,6 +5525,50 @@ public sealed partial class ToshEngine : IShellEvaluator
                                     resolved[i] = ResolveTypeName(typeArgList[i]);
                                 }
                                 return classDef.CreateGenericInstance(resolved, typeArgList, constructorArguments);
+                            }
+
+                            if (shellType is ToshRecordDefinition recordDef)
+                            {
+                                if (recordDef.TypeParameterNames.Count == 0)
+                                {
+                                    if (hasAngles)
+                                    {
+                                        throw new InvalidOperationException(
+                                            $"Record '{bareName}' is not generic and does not accept type arguments.");
+                                    }
+
+                                    return recordDef.CreateInstance(constructorArguments);
+                                }
+
+                                if (!hasAngles)
+                                {
+                                    if (TryInferTypeArgumentsFromRecordFields(
+                                            recordDef.TypeParameterNames,
+                                            recordDef.Fields,
+                                            constructorArguments,
+                                            out var inferredResolvedRec,
+                                            out var inferredDisplayRec))
+                                    {
+                                        return recordDef.CreateGenericInstance(inferredResolvedRec, inferredDisplayRec, constructorArguments);
+                                    }
+
+                                    throw new InvalidOperationException(
+                                        $"Generic record '{bareName}' requires type arguments, e.g. 'new {bareName}<{string.Join(", ", recordDef.TypeParameterNames)}>(\u2026)'.");
+                                }
+
+                                if (typeArgList.Count != recordDef.TypeParameterNames.Count)
+                                {
+                                    throw new InvalidOperationException(
+                                        $"Generic record '{bareName}' expects {recordDef.TypeParameterNames.Count} type argument(s) " +
+                                        $"<{string.Join(", ", recordDef.TypeParameterNames)}> but received {typeArgList.Count}: <{string.Join(", ", typeArgList)}>.");
+                                }
+
+                                var resolvedRec = new Type?[typeArgList.Count];
+                                for (int i = 0; i < typeArgList.Count; i++)
+                                {
+                                    resolvedRec[i] = ResolveTypeName(typeArgList[i]);
+                                }
+                                return recordDef.CreateGenericInstance(resolvedRec, typeArgList, constructorArguments);
                             }
 
                             // Non-Tosh-class shell static type
@@ -5835,15 +6045,19 @@ public sealed partial class ToshEngine : IShellEvaluator
 
                         var right = await EvaluateArgumentAsync(sourceName, sourceText, operation.Right, cancellationToken);
 
-                        // Operator overloading: left operand takes priority, then right.
-                        if (left is ToshClassInstance leftInst &&
-                            TryInvokeClassBinaryOperator(leftInst, operation.Operator, right, out var opResult))
-                            return opResult;
-
-                        if (right is ToshClassInstance rightInst &&
-                            TryInvokeClassBinaryOperator(rightInst, operation.Operator, left, out opResult))
-                            return opResult;
-
+                        // Symmetric operator overloading: check both operands for overloads.
+                        object? opResult;
+                        bool leftTried = false, rightTried = false;
+                        if (left is ToshClassInstance leftInst)
+                        {
+                            leftTried = TryInvokeClassBinaryOperator(leftInst, operation.Operator, right, out opResult);
+                            if (leftTried) return opResult;
+                        }
+                        if (right is ToshClassInstance rightInst)
+                        {
+                            rightTried = TryInvokeClassBinaryOperator(rightInst, operation.Operator, left, out opResult);
+                            if (rightTried) return opResult;
+                        }
                         return OperatorEvaluator.EvaluateBinary(left, operation.Operator, right);
                     }
 
@@ -6021,7 +6235,7 @@ public sealed partial class ToshEngine : IShellEvaluator
                     throw new InvalidOperationException($"Unsupported argument syntax: {argument.GetType().Name}.");
             }
         }
-        catch (Exception exception) when (exception is not ToshDiagnosticException && exception is not OperationCanceledException)
+        catch (Exception exception) when (exception is not ToshDiagnosticException && exception is not OperationCanceledException && exception is not Tosh.Runtime.ShellControlFlowException && !IsToshThrown(exception))
         {
             throw CreateExpressionDiagnostic(sourceName, sourceText, argument, exception);
         }
@@ -6226,6 +6440,205 @@ public sealed partial class ToshEngine : IShellEvaluator
         }
 
         return await EvaluateArgumentAsync(sourceName, sourceText, rootExpression, cancellationToken);
+    }
+
+    /// <summary>
+    /// Phase 6.16 — call-site type-argument inference for generic
+    /// classes. When the user writes <c>new Box(42)</c> without the
+    /// <c>&lt;int&gt;</c> ceremony, walk each generic type parameter
+    /// and look for the *first* primary-constructor parameter whose
+    /// raw annotation is exactly that type-parameter name (e.g.
+    /// <c>x: T</c>). Use the runtime CLR type of the corresponding
+    /// constructor argument as the inferred binding for that
+    /// type-parameter. All type-parameters must be inferred or the
+    /// helper returns false. Limited to bare type-parameter
+    /// annotations — nested shapes like <c>list&lt;T&gt;</c> are
+    /// out of scope for this phase.
+    /// </summary>
+    private static bool TryInferTypeArgumentsFromCtorArgs(
+        IReadOnlyList<string> typeParameterNames,
+        IReadOnlyList<FunctionParameterDefinition> ctorParameters,
+        IReadOnlyList<object?> ctorArguments,
+        out Type?[] resolved,
+        out string[] display)
+    {
+        var bindings = new Dictionary<string, Type>(StringComparer.Ordinal);
+        var paramSet = new HashSet<string>(typeParameterNames, StringComparer.Ordinal);
+
+        for (int i = 0; i < ctorParameters.Count && i < ctorArguments.Count; i++)
+        {
+            var raw = ctorParameters[i].RawTypeName;
+            if (raw is null) continue;
+            UnifyCtorAnnotationWithValue(paramSet, raw, ctorArguments[i], bindings);
+        }
+
+        return FinishCtorInference(typeParameterNames, bindings, out resolved, out display);
+    }
+
+    /// <summary>Records mirror class inference but use field annotations
+    /// as the primary-constructor surface.</summary>
+    private static bool TryInferTypeArgumentsFromRecordFields(
+        IReadOnlyList<string> typeParameterNames,
+        IReadOnlyList<ToshRecordFieldDefinition> fields,
+        IReadOnlyList<object?> ctorArguments,
+        out Type?[] resolved,
+        out string[] display)
+    {
+        var bindings = new Dictionary<string, Type>(StringComparer.Ordinal);
+        var paramSet = new HashSet<string>(typeParameterNames, StringComparer.Ordinal);
+
+        for (int i = 0; i < fields.Count && i < ctorArguments.Count; i++)
+        {
+            var raw = fields[i].TypeName;
+            if (raw is null) continue;
+            UnifyCtorAnnotationWithValue(paramSet, raw, ctorArguments[i], bindings);
+        }
+
+        return FinishCtorInference(typeParameterNames, bindings, out resolved, out display);
+    }
+
+    private static bool FinishCtorInference(
+        IReadOnlyList<string> typeParameterNames,
+        Dictionary<string, Type> bindings,
+        out Type?[] resolved,
+        out string[] display)
+    {
+        resolved = new Type?[typeParameterNames.Count];
+        display = new string[typeParameterNames.Count];
+        for (int p = 0; p < typeParameterNames.Count; p++)
+        {
+            if (!bindings.TryGetValue(typeParameterNames[p], out var bound))
+            {
+                resolved = Array.Empty<Type?>();
+                display = Array.Empty<string>();
+                return false;
+            }
+            resolved[p] = bound;
+            display[p] = bound.Name;
+        }
+        return true;
+    }
+
+    /// <summary>
+    /// Lightweight recursive unifier for ctor / record-field
+    /// inference. Handles three shapes:
+    ///   • bare T            → bind T to value's runtime type
+    ///   • Head&lt;args…&gt; on a generic CLR value → pointwise unify
+    ///   • list/array/dict   → peek element / key&amp;value types
+    /// First-binding-wins; later inconsistencies are tolerated and
+    /// caught by the constraint validator (or the caller's bare-T
+    /// fallback when inference is incomplete).
+    /// </summary>
+    private static void UnifyCtorAnnotationWithValue(
+        HashSet<string> typeParameters,
+        string annotation,
+        object? value,
+        Dictionary<string, Type> bindings)
+    {
+        annotation = annotation.Trim();
+        if (annotation.Length == 0 || value is null) return;
+
+        // Bare type-parameter reference.
+        if (typeParameters.Contains(annotation))
+        {
+            if (!bindings.ContainsKey(annotation))
+            {
+                bindings[annotation] = value.GetType();
+            }
+            return;
+        }
+
+        var lt = annotation.IndexOf('<');
+        var gt = annotation.LastIndexOf('>');
+        if (lt <= 0 || gt != annotation.Length - 1) return;
+
+        var head = annotation.Substring(0, lt).Trim();
+        var inner = annotation.Substring(lt + 1, gt - lt - 1);
+        var args = SplitTopLevelCommas(inner);
+        if (args.Count == 0) return;
+
+        switch (head.ToLowerInvariant())
+        {
+            case "list":
+            case "array":
+            case "ienumerable":
+            case "icollection":
+            case "ireadonlylist":
+            case "ireadonlycollection":
+                if (args.Count == 1 && TryGetElementType(value, out var elemType, out var elemSample))
+                {
+                    UnifyCtorAnnotationWithType(typeParameters, args[0].Trim(), elemType, elemSample, bindings);
+                }
+                return;
+
+            case "dict":
+            case "dictionary":
+            case "map":
+            case "idictionary":
+            case "ireadonlydictionary":
+                if (args.Count == 2 && TryGetDictionaryKVTypes(value, out var keyType, out var valType, out var keySample, out var valSample))
+                {
+                    UnifyCtorAnnotationWithType(typeParameters, args[0].Trim(), keyType, keySample, bindings);
+                    UnifyCtorAnnotationWithType(typeParameters, args[1].Trim(), valType, valSample, bindings);
+                }
+                return;
+
+            default:
+                // Generic CLR type: read its bound type-args from the
+                // runtime value and unify pointwise.
+                var clrType = value.GetType();
+                if (clrType.IsGenericType)
+                {
+                    var clrArgs = clrType.GetGenericArguments();
+                    var pairs = Math.Min(clrArgs.Length, args.Count);
+                    for (var i = 0; i < pairs; i++)
+                    {
+                        UnifyCtorAnnotationWithType(typeParameters, args[i].Trim(), clrArgs[i], sample: null, bindings);
+                    }
+                }
+                return;
+        }
+    }
+
+    private static void UnifyCtorAnnotationWithType(
+        HashSet<string> typeParameters,
+        string annotation,
+        Type? clrType,
+        object? sample,
+        Dictionary<string, Type> bindings)
+    {
+        annotation = annotation.Trim();
+        if (annotation.Length == 0) return;
+
+        if (typeParameters.Contains(annotation))
+        {
+            if (bindings.ContainsKey(annotation)) return;
+            if (clrType is not null && clrType != typeof(object))
+            {
+                bindings[annotation] = clrType;
+            }
+            else if (sample is not null)
+            {
+                bindings[annotation] = sample.GetType();
+            }
+            return;
+        }
+
+        // Recurse into nested annotations using the CLR type only;
+        // we don't have a value to peek at this depth.
+        var lt = annotation.IndexOf('<');
+        var gt = annotation.LastIndexOf('>');
+        if (lt <= 0 || gt != annotation.Length - 1) return;
+        var inner = annotation.Substring(lt + 1, gt - lt - 1);
+        var args = SplitTopLevelCommas(inner);
+        if (args.Count == 0 || clrType is null || !clrType.IsGenericType) return;
+
+        var clrArgs = clrType.GetGenericArguments();
+        var pairs = Math.Min(clrArgs.Length, args.Count);
+        for (var i = 0; i < pairs; i++)
+        {
+            UnifyCtorAnnotationWithType(typeParameters, args[i].Trim(), clrArgs[i], sample: null, bindings);
+        }
     }
 
     private static ToshDiagnosticException CreateExpressionDiagnostic(
@@ -7685,7 +8098,17 @@ public sealed partial class ToshEngine : IShellEvaluator
         string? sourceText,
         TextSpan? span)
     {
-        if (!TryGetNamedType(name, out _) && ResolveTypeName(name) is null)
+        // Only block conflicts with user-declared named types
+        // (classes, records, structs, enums, interfaces, traits,
+        // unions, modules). The wider CLR-resolver fallback used to
+        // be consulted here, but that scans every loaded assembly
+        // for a type with a matching name and produces spurious
+        // collisions for ordinary aliases like `Pair` (which clashes
+        // with assorted CLR types such as `System.Web.UI.Pair`).
+        // Authors get to pick their own alias names; the CLR
+        // resolver only kicks in at use sites where an unqualified
+        // type name needs disambiguating.
+        if (!TryGetNamedType(name, out _))
         {
             return;
         }
@@ -8423,6 +8846,20 @@ public sealed partial class ToshEngine : IShellEvaluator
                 converted = enumValue;
                 return true;
             }
+
+            if (shellType is ToshClassDefinition classDefinition &&
+                value is ToshClassInstance classInstance)
+            {
+                for (var current = classInstance.Definition; current is not null; current = current.BaseClass)
+                {
+                    if (ReferenceEquals(current, classDefinition) ||
+                        string.Equals(current.Name, classDefinition.Name, StringComparison.Ordinal))
+                    {
+                        converted = value;
+                        return true;
+                    }
+                }
+            }
         }
 
         // User-defined generic class annotation, e.g. 'Box<int>'. We accept a
@@ -8459,6 +8896,24 @@ public sealed partial class ToshEngine : IShellEvaluator
         if (resolvedType is not null)
         {
             return TypeConversion.TryConvert(value, resolvedType, out converted);
+        }
+
+        // Trait-style constraint names (Numeric, Add, Comparable, …) used as
+        // a parameter type annotation: accept any value whose CLR type
+        // satisfies the constraint predicate. Lets users write
+        // `func +(other: Numeric)` to overload against arbitrary numeric
+        // operands without having to enumerate every primitive type.
+        if (ToshTypeParameterConstraintRegistry.TryGet(normalizedTypeName, out var constraintPredicate))
+        {
+            var clrType = value?.GetType();
+            if (clrType is not null && constraintPredicate(clrType))
+            {
+                converted = value;
+                return true;
+            }
+
+            converted = null;
+            return false;
         }
 
         converted = null;
@@ -9057,6 +9512,156 @@ public sealed partial class ToshEngine : IShellEvaluator
         return result;
     }
 
+    /// <summary>
+    /// Returns the bare type name without any '&lt;...&gt;' generic argument
+    /// suffix. Used by interface/trait/base-class lookup paths so that
+    /// references like 'IPoint&lt;int&gt;' resolve to the registered
+    /// 'IPoint' definition.
+    /// </summary>
+    private static string StripGenericTypeArguments(string typeName)
+    {
+        if (string.IsNullOrEmpty(typeName))
+        {
+            return typeName;
+        }
+        var lt = typeName.IndexOf('<');
+        return lt < 0 ? typeName : typeName.Substring(0, lt);
+    }
+
+    /// <summary>
+    /// Validates type-argument arity and constraints on a 'fulfills'
+    /// clause referencing a generic interface. Type arguments that
+    /// reference the implementing class's own type parameters are
+    /// accepted without constraint checks (they're checked when the
+    /// class is instantiated). Concrete types are validated against
+    /// the interface's where-clauses.
+    /// </summary>
+    private void ValidateInterfaceTypeArguments(
+        string sourceName,
+        string sourceText,
+        ClassDefinitionStatementSyntax @class,
+        ToshInterfaceDefinition ifaceDefinition,
+        string ifaceReference)
+    {
+        var lt = ifaceReference.IndexOf('<');
+        var hasArgs = lt >= 0 && ifaceReference.EndsWith(">", StringComparison.Ordinal);
+        var ifaceArity = ifaceDefinition.TypeParameterNames.Count;
+
+        if (!hasArgs)
+        {
+            // Bare reference to an unparameterised or generic
+            // interface. Generic interfaces require explicit type
+            // arguments at fulfills sites.
+            if (ifaceArity > 0)
+            {
+                throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                    Code: "tosh.runtime.missing_interface_type_arguments",
+                    Title: $"Class '{@class.Name}' fulfills generic interface '{ifaceDefinition.Name}' without type arguments.",
+                    SourceName: sourceName,
+                    SourceText: sourceText,
+                    Span: @class.Span,
+                    Label: $"write 'fulfills {ifaceDefinition.Name}<{string.Join(", ", ifaceDefinition.TypeParameterNames)}>'"));
+            }
+            return;
+        }
+
+        var inner = ifaceReference.Substring(lt + 1, ifaceReference.Length - lt - 2);
+        var args = SplitTopLevelTypeArguments(inner);
+
+        if (ifaceArity == 0)
+        {
+            throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                Code: "tosh.runtime.unexpected_interface_type_arguments",
+                Title: $"Interface '{ifaceDefinition.Name}' is not generic and does not accept type arguments.",
+                SourceName: sourceName,
+                SourceText: sourceText,
+                Span: @class.Span,
+                Label: $"remove '<{inner}>'"));
+        }
+
+        if (args.Count != ifaceArity)
+        {
+            throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                Code: "tosh.runtime.interface_type_argument_arity_mismatch",
+                Title: $"Generic interface '{ifaceDefinition.Name}' expects {ifaceArity} type argument(s) <{string.Join(", ", ifaceDefinition.TypeParameterNames)}> but received {args.Count}.",
+                SourceName: sourceName,
+                SourceText: sourceText,
+                Span: @class.Span,
+                Label: $"<{string.Join(", ", args)}> has {args.Count} arg(s)"));
+        }
+
+        if (ifaceDefinition.TypeParameterConstraints.Count == 0)
+        {
+            return;
+        }
+
+        // Build map: interface type-param name → supplied argument string.
+        var argByParam = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        for (int i = 0; i < ifaceArity; i++)
+        {
+            argByParam[ifaceDefinition.TypeParameterNames[i]] = args[i];
+        }
+
+        // Set of class's own type-parameter names — args matching one
+        // are deferred (validated at instantiation).
+        var classTypeParams = new HashSet<string>(
+            @class.TypeParameters ?? Array.Empty<string>(),
+            StringComparer.OrdinalIgnoreCase);
+
+        foreach (var clause in ifaceDefinition.TypeParameterConstraints)
+        {
+            if (!argByParam.TryGetValue(clause.TypeParameter, out var argText))
+            {
+                continue;
+            }
+            argText = argText.Trim();
+            if (classTypeParams.Contains(argText))
+            {
+                continue; // forwarded — defer to instantiation site
+            }
+            var bound = TryResolveTypeName(argText);
+            if (bound is null)
+            {
+                continue; // unknown name — accept conservatively
+            }
+
+            foreach (var constraintName in clause.ConstraintNames)
+            {
+                bool satisfied;
+                bool known;
+                if (ToshTypeParameterConstraintRegistry.TryGet(constraintName, out var predicate))
+                {
+                    satisfied = predicate(bound);
+                    known = true;
+                }
+                else
+                {
+                    var clr = TryResolveTypeName(constraintName);
+                    if (clr is not null)
+                    {
+                        satisfied = clr.IsAssignableFrom(bound);
+                        known = true;
+                    }
+                    else
+                    {
+                        satisfied = true;
+                        known = false;
+                    }
+                }
+
+                if (satisfied || !known) continue;
+
+                throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                    Code: "tosh.runtime.interface_type_argument_constraint_violation",
+                    Title: $"Generic interface '{ifaceDefinition.Name}' requires type parameter '{clause.TypeParameter}' to satisfy '{constraintName}', but '{argText}' (CLR {bound.FullName ?? bound.Name}) does not.",
+                    SourceName: sourceName,
+                    SourceText: sourceText,
+                    Span: @class.Span,
+                    Label: $"'{argText}' does not satisfy '{constraintName}'"));
+            }
+        }
+    }
+
     private RefinementAnnotation? SpecializeRefinementAnnotation(
         RefinementTypeDefinition genericDefinition,
         string closedTypeName,
@@ -9372,7 +9977,7 @@ public sealed partial class ToshEngine : IShellEvaluator
     {
         using var capturedScopes = PushCapturedScopes(definition.CapturedScopes);
         var inputItems = await AsyncEnumerableExtensions.ToListAsync(context.Input, context.CancellationToken);
-        var locals = BindFunctionParameters(definition, context, inputItems);
+        var (locals, typeBindings) = BindFunctionParameters(definition, context, inputItems);
 
         // Evaluate default values for parameters that were not provided
         var namedArgNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -9476,7 +10081,7 @@ public sealed partial class ToshEngine : IShellEvaluator
                         break;
                     }
 
-                    yield return ConvertFunctionReturnValue(definition, context, current);
+                    yield return ConvertFunctionReturnValue(definition, context, current, typeBindings);
                 }
             }
             finally
@@ -9494,7 +10099,7 @@ public sealed partial class ToshEngine : IShellEvaluator
             {
                 foreach (var value in returnValues)
                 {
-                    yield return ConvertFunctionReturnValue(definition, context, value);
+                    yield return ConvertFunctionReturnValue(definition, context, value, typeBindings);
                 }
             }
         }
@@ -9552,7 +10157,7 @@ public sealed partial class ToshEngine : IShellEvaluator
             foreach (var value in values)
             {
                 context.CancellationToken.ThrowIfCancellationRequested();
-                yield return ConvertFunctionReturnValue(definition, context, value);
+                yield return ConvertFunctionReturnValue(definition, context, value, typeBindings);
             }
         }
     }
@@ -9772,11 +10377,70 @@ public sealed partial class ToshEngine : IShellEvaluator
         _ = BindFunctionParameters(definition, context, Array.Empty<object?>());
     }
 
-    private Dictionary<string, object?> BindFunctionParameters(
+    private Dictionary<string, object?> BindFunctionParametersForLambdaCheck(
+        FunctionDefinition definition,
+        CommandContext context)
+    {
+        return BindFunctionParameters(definition, context, Array.Empty<object?>()).Locals;
+    }
+
+    private (Dictionary<string, object?> Locals, Dictionary<string, Type>? TypeBindings) BindFunctionParameters(
         FunctionDefinition definition,
         CommandContext context,
         IReadOnlyList<object?> inputItems)
     {
+        Dictionary<string, Type>? typeBindings = null;
+        if (definition.TypeParameters is { Count: > 0 } typeParamsForSeed)
+        {
+            typeBindings = new Dictionary<string, Type>(StringComparer.Ordinal);
+
+            // Phase 3.3 — seed explicit call-site type arguments
+            // (e.g. `box<int> 42`). These bindings are authoritative:
+            // later inference must agree with them, otherwise the
+            // strict-mismatch path fires.
+            var explicitArgs = context.Invocation?.ExplicitTypeArguments;
+            if (explicitArgs is { Count: > 0 } explicitList)
+            {
+                if (explicitList.Count != typeParamsForSeed.Count)
+                {
+                    throw context.CreateDiagnostic(
+                        code: "tosh.runtime.generic_type_argument_count_mismatch",
+                        title: $"Function '{definition.Name}' has {typeParamsForSeed.Count} type parameter(s) but received {explicitList.Count} type argument(s).",
+                        label: $"'{definition.Name}' takes <{string.Join(", ", typeParamsForSeed)}>");
+                }
+                for (var i = 0; i < typeParamsForSeed.Count; i++)
+                {
+                    var typeName = explicitList[i];
+                    var resolved = TryResolveTypeName(typeName);
+                    if (resolved is null)
+                    {
+                        throw context.CreateDiagnostic(
+                            code: "tosh.runtime.unknown_type_name",
+                            title: $"Type '{typeName}' could not be resolved for type parameter '{typeParamsForSeed[i]}' of function '{definition.Name}'.",
+                            label: $"unknown type '{typeName}'");
+                    }
+                    typeBindings[typeParamsForSeed[i]] = resolved;
+                }
+            }
+
+            // Phase 3.2 — seed bindings from the LHS target-type
+            // annotation when explicit type args weren't supplied.
+            // Example: `var x: int = identity<T> 42` — the target type
+            // `int` propagates into `T` via the function's return
+            // annotation. Annotation-vs-annotation unification handles
+            // nested shapes (e.g. `var xs: list<int> = make<list<T>>()`).
+            if ((typeBindings.Count == 0)
+                && context.Invocation?.TargetTypeAnnotation is { Length: > 0 } targetAnnot
+                && definition.RawReturnTypeName is { Length: > 0 } returnAnnot)
+            {
+                var seedTarget = new GenericInferenceTarget(
+                    OwnerLabel: $"function '{definition.Name}'",
+                    TypeParameters: typeParamsForSeed,
+                    TypeParameterConstraints: definition.TypeParameterConstraints);
+                UnifyAnnotationWithAnnotation(seedTarget, returnAnnot, targetAnnot, typeBindings);
+            }
+        }
+
         var hasRestParameter = definition.Parameters.Count > 0 && definition.Parameters[^1].IsRest;
         var positionalCount = hasRestParameter ? definition.Parameters.Count - 1 : definition.Parameters.Count;
         var allowsImplicitWrapperArguments = definition.IsCommandWrapper && definition.Parameters.Count == 0;
@@ -9827,7 +10491,12 @@ public sealed partial class ToshEngine : IShellEvaluator
             // Named argument takes priority
             if (namedArgs.TryGetValue(parameter.Name, out var namedValue))
             {
-                locals[parameter.Name] = ConvertFunctionParameterValue(definition, context, parameter, namedValue, index);
+                // Bind generics from the pre-conversion value so
+                // element-type info isn't widened to object by the
+                // erased-annotation conversion path.
+                ApplyGenericBinding(definition, parameter, namedValue, context, index, typeBindings);
+                var converted = ConvertFunctionParameterValue(definition, context, parameter, namedValue, index);
+                locals[parameter.Name] = converted;
                 continue;
             }
 
@@ -9840,7 +10509,9 @@ public sealed partial class ToshEngine : IShellEvaluator
 
             var value = positionalArgs[positionalIndex++];
 
-            locals[parameter.Name] = ConvertFunctionParameterValue(definition, context, parameter, value, index);
+            ApplyGenericBinding(definition, parameter, value, context, index, typeBindings);
+            var convertedValue = ConvertFunctionParameterValue(definition, context, parameter, value, index);
+            locals[parameter.Name] = convertedValue;
         }
 
         if (hasRestParameter)
@@ -9849,12 +10520,523 @@ public sealed partial class ToshEngine : IShellEvaluator
             var restArgs = new List<object?>();
             for (var i = positionalCount; i < context.Arguments.Count; i++)
             {
-                restArgs.Add(ConvertFunctionParameterValue(definition, context, restParam, context.Arguments[i], i));
+                var rawRest = context.Arguments[i];
+                ApplyGenericBinding(definition, restParam, rawRest, context, i, typeBindings);
+                var convertedRest = ConvertFunctionParameterValue(definition, context, restParam, rawRest, i);
+                restArgs.Add(convertedRest);
             }
             locals[restParam.Name] = restArgs;
         }
 
-        return locals;
+        return (locals, typeBindings);
+    }
+
+    /// <summary>
+    /// <summary>
+    /// Lightweight descriptor used by the generic-inference helpers
+    /// so they don't depend on <see cref="FunctionDefinition"/>
+    /// directly. Both free-function calls and class-method calls
+    /// build one of these per call to share the same nested-shape
+    /// unification, constraint validation, and diagnostic codes.
+    /// </summary>
+    internal sealed record GenericInferenceTarget(
+        string OwnerLabel,
+        IReadOnlyList<string> TypeParameters,
+        IReadOnlyList<ToshTypeParameterConstraint>? TypeParameterConstraints);
+
+    /// <summary>
+    /// Infers / validates type-parameter bindings for one parameter.
+    /// Walks the raw annotation tree alongside the runtime value's
+    /// shape so nested forms (<c>list&lt;T&gt;</c>, <c>dict&lt;K,V&gt;</c>,
+    /// <c>T[]</c>) contribute to inference, not just bare <c>T</c>.
+    /// </summary>
+    private void ApplyGenericBinding(
+        FunctionDefinition definition,
+        FunctionParameterDefinition parameter,
+        object? value,
+        CommandContext context,
+        int argumentIndex,
+        Dictionary<string, Type>? typeBindings)
+    {
+        if (typeBindings is null) return;
+        if (definition.TypeParameters is not { Count: > 0 } typeParams) return;
+        var raw = parameter.RawTypeName;
+        if (raw is null) return;
+        if (value is null) return;
+
+        var target = new GenericInferenceTarget(
+            definition.Name,
+            typeParams,
+            definition.TypeParameterConstraints);
+        UnifyAnnotationWithValue(
+            target,
+            parameter.Name,
+            raw,
+            value,
+            context,
+            argumentIndex,
+            typeBindings);
+    }
+
+    /// <summary>
+    /// Method-level type-parameter inference for class methods.
+    /// Mirrors <see cref="ApplyGenericBinding"/> but driven by a
+    /// <see cref="ToshClassMethodDefinition"/> instead of a free
+    /// function. Returns the populated binding table so callers can
+    /// strict-validate parameter values and the return type against
+    /// the inferred substitutions.
+    /// </summary>
+    internal Dictionary<string, Type>? InferMethodTypeBindings(
+        ToshClassMethodDefinition method,
+        IReadOnlyList<object?> argumentValues,
+        CommandContext context,
+        string ownerLabel)
+    {
+        if (method.TypeParameters is not { Count: > 0 } typeParams) return null;
+
+        var typeBindings = new Dictionary<string, Type>(StringComparer.Ordinal);
+        var target = new GenericInferenceTarget(
+            ownerLabel,
+            typeParams,
+            method.TypeParameterConstraints);
+
+        var count = Math.Min(method.Parameters.Count, argumentValues.Count);
+        for (var i = 0; i < count; i++)
+        {
+            var parameter = method.Parameters[i];
+            var raw = parameter.RawTypeName;
+            if (raw is null) continue;
+            var value = argumentValues[i];
+            if (value is null) continue;
+
+            UnifyAnnotationWithValue(
+                target,
+                parameter.Name,
+                raw,
+                value,
+                context,
+                argumentIndex: i,
+                typeBindings);
+        }
+
+        return typeBindings.Count == 0 ? null : typeBindings;
+    }
+
+    /// <summary>
+    /// Phase 4.5 — substitute type-parameter references inside a
+    /// constraint annotation. The currently-binding parameter
+    /// (<paramref name="currentBindingName"/>) is replaced with
+    /// <paramref name="currentBindingType"/>; other type parameters
+    /// of <paramref name="target"/> are replaced with whatever
+    /// <paramref name="typeBindings"/> holds for them.
+    /// </summary>
+    private static string SubstituteTypeParametersInAnnotation(
+        string annotation,
+        GenericInferenceTarget target,
+        Dictionary<string, Type> typeBindings,
+        string currentBindingName,
+        Type currentBindingType)
+    {
+        if (annotation.IndexOf('<') < 0) return annotation;
+
+        var sb = new StringBuilder();
+        var i = 0;
+        while (i < annotation.Length)
+        {
+            // Greedy identifier scan.
+            if (char.IsLetter(annotation[i]) || annotation[i] == '_')
+            {
+                var start = i;
+                while (i < annotation.Length && (char.IsLetterOrDigit(annotation[i]) || annotation[i] == '_'))
+                {
+                    i++;
+                }
+                var ident = annotation.Substring(start, i - start);
+                if (string.Equals(ident, currentBindingName, StringComparison.Ordinal))
+                {
+                    sb.Append(currentBindingType.FullName ?? currentBindingType.Name);
+                }
+                else if (target.TypeParameters.Contains(ident, StringComparer.Ordinal)
+                         && typeBindings.TryGetValue(ident, out var bound))
+                {
+                    sb.Append(bound.FullName ?? bound.Name);
+                }
+                else
+                {
+                    sb.Append(ident);
+                }
+                continue;
+            }
+            sb.Append(annotation[i]);
+            i++;
+        }
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// Phase 3.2 — annotation-vs-annotation unification. Used to
+    /// seed type-parameter bindings from a target type (LHS of
+    /// `var x: T = …`) against a function's declared return type.
+    /// Best-effort: silently no-ops on shape mismatches so a wrong
+    /// guess at the call site doesn't poison the binding table.
+    /// </summary>
+    private void UnifyAnnotationWithAnnotation(
+        GenericInferenceTarget target,
+        string returnAnnotation,
+        string targetAnnotation,
+        Dictionary<string, Type> typeBindings)
+    {
+        returnAnnotation = returnAnnotation.Trim();
+        targetAnnotation = targetAnnotation.Trim();
+        if (returnAnnotation.Length == 0 || targetAnnotation.Length == 0) return;
+
+        // Bare type-parameter reference: resolve target as a CLR type
+        // and bind. Unresolvable target types are silently ignored.
+        if (target.TypeParameters.Contains(returnAnnotation, StringComparer.Ordinal))
+        {
+            if (typeBindings.ContainsKey(returnAnnotation)) return;
+            var resolved = TryResolveTypeName(targetAnnotation);
+            if (resolved is not null)
+            {
+                typeBindings[returnAnnotation] = resolved;
+            }
+            return;
+        }
+
+        // Decompose `Head<args>` on both sides; heads must match
+        // (case-insensitive).
+        var rLt = returnAnnotation.IndexOf('<');
+        var rGt = returnAnnotation.LastIndexOf('>');
+        var tLt = targetAnnotation.IndexOf('<');
+        var tGt = targetAnnotation.LastIndexOf('>');
+        if (rLt <= 0 || rGt != returnAnnotation.Length - 1) return;
+        if (tLt <= 0 || tGt != targetAnnotation.Length - 1) return;
+
+        var rHead = returnAnnotation.Substring(0, rLt).Trim();
+        var tHead = targetAnnotation.Substring(0, tLt).Trim();
+        if (!string.Equals(rHead, tHead, StringComparison.OrdinalIgnoreCase)) return;
+
+        var rArgs = SplitTopLevelCommas(returnAnnotation.Substring(rLt + 1, rGt - rLt - 1));
+        var tArgs = SplitTopLevelCommas(targetAnnotation.Substring(tLt + 1, tGt - tLt - 1));
+        if (rArgs.Count != tArgs.Count) return;
+        for (var i = 0; i < rArgs.Count; i++)
+        {
+            UnifyAnnotationWithAnnotation(target, rArgs[i], tArgs[i], typeBindings);
+        }
+    }
+
+    /// <summary>
+    /// Recursive driver: parse one annotation node, match its head
+    /// against the value's runtime shape, then recurse into nested
+    /// type arguments using the value's element / key / value types.
+    /// </summary>
+    private void UnifyAnnotationWithValue(
+        GenericInferenceTarget target,
+        string parameterName,
+        string annotation,
+        object? value,
+        CommandContext context,
+        int argumentIndex,
+        Dictionary<string, Type> typeBindings)
+    {
+        annotation = annotation.Trim();
+        if (annotation.Length == 0 || value is null) return;
+
+        // Bare type-parameter reference: bind / validate directly.
+        if (target.TypeParameters.Contains(annotation, StringComparer.Ordinal))
+        {
+            BindOrValidateTypeParameter(target, parameterName, annotation, value, context, argumentIndex, typeBindings);
+            return;
+        }
+
+        // Decompose `Head<arg1, arg2, ...>`.
+        var lt = annotation.IndexOf('<');
+        var gt = annotation.LastIndexOf('>');
+        if (lt <= 0 || gt != annotation.Length - 1) return; // no nested args — nothing to infer
+        var head = annotation.Substring(0, lt).Trim();
+        var inner = annotation.Substring(lt + 1, gt - lt - 1);
+        var args = SplitTopLevelCommas(inner);
+        if (args.Count == 0) return;
+
+        // Unify each annotation arg with the matching shape from
+        // the runtime value. Heads we recognise: list, array, dict,
+        // map, tuple. Unknown heads fall back to a single-arg
+        // element-type peek if the value is enumerable.
+        var headLower = head.ToLowerInvariant();
+        switch (headLower)
+        {
+            case "list":
+            case "array":
+            case "ienumerable":
+            case "icollection":
+            case "ireadonlylist":
+            case "ireadonlycollection":
+                if (args.Count == 1 && TryGetElementType(value, out var elemType, out var sample))
+                {
+                    UnifyShapeArg(target, parameterName, args[0].Trim(), sample, elemType, context, argumentIndex, typeBindings);
+                }
+                break;
+
+            case "dict":
+            case "dictionary":
+            case "map":
+            case "idictionary":
+            case "ireadonlydictionary":
+                if (args.Count == 2 && TryGetDictionaryKVTypes(value, out var keyType, out var valType, out var keySample, out var valSample))
+                {
+                    UnifyShapeArg(target, parameterName, args[0].Trim(), keySample, keyType, context, argumentIndex, typeBindings);
+                    UnifyShapeArg(target, parameterName, args[1].Trim(), valSample, valType, context, argumentIndex, typeBindings);
+                }
+                break;
+
+            default:
+                // Generic CLR type: try to read its bound type-args
+                // from the runtime instance's GetType() and unify
+                // pointwise.
+                var clrType = value.GetType();
+                if (clrType.IsGenericType)
+                {
+                    var clrArgs = clrType.GetGenericArguments();
+                    var pairs = Math.Min(clrArgs.Length, args.Count);
+                    for (var i = 0; i < pairs; i++)
+                    {
+                        UnifyShapeArg(target, parameterName, args[i].Trim(), null, clrArgs[i], context, argumentIndex, typeBindings);
+                    }
+                }
+                break;
+        }
+    }
+
+    /// <summary>
+    /// Unify an annotation argument with either a concrete CLR type
+    /// (when the runtime value's shape was reflected) or a sample
+    /// element value (when we only saw it through enumeration).
+    /// </summary>
+    private void UnifyShapeArg(
+        GenericInferenceTarget target,
+        string parameterName,
+        string annotation,
+        object? sample,
+        Type? clrType,
+        CommandContext context,
+        int argumentIndex,
+        Dictionary<string, Type> typeBindings)
+    {
+        if (target.TypeParameters.Contains(annotation, StringComparer.Ordinal))
+        {
+            if (clrType is not null)
+            {
+                BindOrValidateBoundType(target, parameterName, annotation, clrType, context, argumentIndex, typeBindings);
+            }
+            else if (sample is not null)
+            {
+                BindOrValidateTypeParameter(target, parameterName, annotation, sample, context, argumentIndex, typeBindings);
+            }
+            return;
+        }
+
+        if (sample is not null)
+        {
+            UnifyAnnotationWithValue(target, parameterName, annotation, sample, context, argumentIndex, typeBindings);
+        }
+    }
+
+    /// <summary>
+    /// Tries to peek at an enumerable's element type and the first
+    /// sample value (used for further nested unification).
+    /// </summary>
+    private static bool TryGetElementType(object? value, out Type elementType, out object? sample)
+    {
+        elementType = typeof(object);
+        sample = null;
+        if (value is null) return false;
+
+        var clrType = value.GetType();
+        if (clrType.IsArray)
+        {
+            elementType = clrType.GetElementType() ?? typeof(object);
+            if (value is System.Collections.IEnumerable enumerable)
+            {
+                foreach (var first in enumerable) { sample = first; break; }
+            }
+            return true;
+        }
+
+        // IEnumerable<T> on the runtime type.
+        foreach (var iface in clrType.GetInterfaces())
+        {
+            if (iface.IsGenericType && iface.GetGenericTypeDefinition() == typeof(IEnumerable<>))
+            {
+                elementType = iface.GetGenericArguments()[0];
+                if (value is System.Collections.IEnumerable enumerable)
+                {
+                    foreach (var first in enumerable) { sample = first; break; }
+                }
+                return true;
+            }
+        }
+
+        // Loose enumerable (e.g. ArrayList, IList) — peek at the
+        // first element to derive a runtime type.
+        if (value is System.Collections.IEnumerable loose)
+        {
+            foreach (var first in loose) { sample = first; break; }
+            if (sample is not null)
+            {
+                elementType = sample.GetType();
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Tries to peek at a dictionary's key/value types (and one
+    /// sample of each, when available).
+    /// </summary>
+    private static bool TryGetDictionaryKVTypes(
+        object? value,
+        out Type keyType,
+        out Type valueType,
+        out object? keySample,
+        out object? valueSample)
+    {
+        keyType = typeof(object);
+        valueType = typeof(object);
+        keySample = null;
+        valueSample = null;
+        if (value is null) return false;
+
+        foreach (var iface in value.GetType().GetInterfaces())
+        {
+            if (iface.IsGenericType && iface.GetGenericTypeDefinition() == typeof(IDictionary<,>))
+            {
+                var args = iface.GetGenericArguments();
+                keyType = args[0];
+                valueType = args[1];
+                if (value is System.Collections.IDictionary loose)
+                {
+                    foreach (System.Collections.DictionaryEntry e in loose)
+                    {
+                        keySample = e.Key;
+                        valueSample = e.Value;
+                        break;
+                    }
+                }
+                return true;
+            }
+        }
+
+        if (value is System.Collections.IDictionary plain)
+        {
+            foreach (System.Collections.DictionaryEntry e in plain)
+            {
+                keySample = e.Key;
+                valueSample = e.Value;
+                if (keySample is not null) keyType = keySample.GetType();
+                if (valueSample is not null) valueType = valueSample.GetType();
+                return true;
+            }
+            return true; // empty dict — leave types as object
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// First-bind / strict-validate path keyed on a runtime value
+    /// (uses <c>value.GetType()</c> as the inferred CLR type).
+    /// </summary>
+    private void BindOrValidateTypeParameter(
+        GenericInferenceTarget target,
+        string parameterName,
+        string typeParameterName,
+        object value,
+        CommandContext context,
+        int argumentIndex,
+        Dictionary<string, Type> typeBindings)
+    {
+        BindOrValidateBoundType(
+            target, parameterName, typeParameterName,
+            value.GetType(), context, argumentIndex, typeBindings,
+            mismatchValue: value);
+    }
+
+    /// <summary>
+    /// First-bind / strict-validate path keyed on a CLR type
+    /// (used when the value's element type was reflected, not
+    /// observed directly).
+    /// </summary>
+    private void BindOrValidateBoundType(
+        GenericInferenceTarget target,
+        string parameterName,
+        string typeParameterName,
+        Type clrType,
+        CommandContext context,
+        int argumentIndex,
+        Dictionary<string, Type> typeBindings,
+        object? mismatchValue = null)
+    {
+        if (typeBindings.TryGetValue(typeParameterName, out var bound))
+        {
+            var ok = mismatchValue is not null
+                ? bound.IsInstanceOfType(mismatchValue)
+                : bound.IsAssignableFrom(clrType);
+            if (!ok)
+            {
+                throw context.CreateDiagnostic(
+                    code: "tosh.runtime.generic_argument_type_mismatch",
+                    title: $"'{target.OwnerLabel}' inferred type parameter '{typeParameterName}' as '{bound.Name}', but argument '{parameterName}' is '{clrType.Name}'.",
+                    argumentIndex: argumentIndex,
+                    label: $"'{parameterName}' must be a {bound.Name} ({typeParameterName} was bound earlier in this call)");
+            }
+            return;
+        }
+
+        // First binding — verify any `where` constraints declared
+        // for this type parameter.
+        if (target.TypeParameterConstraints is { Count: > 0 } constraints)
+        {
+            foreach (var clause in constraints)
+            {
+                if (!string.Equals(clause.TypeParameter, typeParameterName, StringComparison.Ordinal)) continue;
+                foreach (var constraintName in clause.ConstraintNames)
+                {
+                    if (ToshTypeParameterConstraintRegistry.TryGet(constraintName, out var predicate))
+                    {
+                        if (predicate(clrType)) continue;
+                        throw context.CreateDiagnostic(
+                            code: "tosh.runtime.generic_constraint_failed",
+                            title: $"'{target.OwnerLabel}' requires '{typeParameterName}' to satisfy '{constraintName}', but '{clrType.Name}' does not.",
+                            argumentIndex: argumentIndex,
+                            label: $"'{parameterName}' (CLR {clrType.Name}) does not satisfy '{constraintName}'");
+                    }
+
+                    // Phase 4.5 — substitute type-parameter references
+                    // in the constraint name (e.g. `IComparable<T>`
+                    // becomes `IComparable<Int32>` once T binds to int).
+                    var resolvedConstraintName = SubstituteTypeParametersInAnnotation(
+                        constraintName, target, typeBindings, typeParameterName, clrType);
+                    var constraintType = TryResolveTypeName(resolvedConstraintName);
+                    if (constraintType is not null)
+                    {
+                        if (!constraintType.IsAssignableFrom(clrType))
+                        {
+                            throw context.CreateDiagnostic(
+                                code: "tosh.runtime.generic_constraint_failed",
+                                title: $"'{target.OwnerLabel}' requires '{typeParameterName}' to satisfy '{constraintName}', but '{clrType.Name}' does not.",
+                                argumentIndex: argumentIndex,
+                                label: $"'{parameterName}' (CLR {clrType.Name}) is not assignable to '{constraintName}'");
+                        }
+                        continue;
+                    }
+                    // Unknown name — accept conservatively.
+                }
+            }
+        }
+
+        typeBindings[typeParameterName] = clrType;
     }
 
     private object? ConvertFunctionParameterValue(
@@ -9911,6 +11093,33 @@ public sealed partial class ToshEngine : IShellEvaluator
         CommandContext context,
         object? value)
     {
+        return ConvertFunctionReturnValue(definition, context, value, typeBindings: null);
+    }
+
+    private object? ConvertFunctionReturnValue(
+        FunctionDefinition definition,
+        CommandContext context,
+        object? value,
+        Dictionary<string, Type>? typeBindings)
+    {
+        // Generic return type bound at call site: validate against the
+        // inferred CLR type rather than the (erased) annotation.
+        if (typeBindings is { Count: > 0 } &&
+            definition.RawReturnTypeName is { } rawReturn &&
+            definition.TypeParameters is { Count: > 0 } typeParams &&
+            typeParams.Contains(rawReturn, StringComparer.Ordinal))
+        {
+            if (typeBindings.TryGetValue(rawReturn, out var bound) && value is not null && !bound.IsInstanceOfType(value))
+            {
+                throw context.CreateDiagnostic(
+                    code: "tosh.runtime.generic_return_type_mismatch",
+                    title: $"Function '{definition.Name}' inferred '{rawReturn}' as '{bound.Name}', but returned a '{value.GetType().Name}'.",
+                    label: $"return value must be a {bound.Name} (T was bound from the arguments)",
+                    span: definition.Span);
+            }
+            return value;
+        }
+
         if (definition.ReturnTypeName is null)
         {
             return value;
@@ -9956,6 +11165,14 @@ public sealed partial class ToshEngine : IShellEvaluator
             conditionValue = await EvaluateArgumentAsync(sourceName, sourceText, condition, cancellationToken);
         }
         catch (ToshDiagnosticException)
+        {
+            throw;
+        }
+        catch (Tosh.Runtime.ShellControlFlowException)
+        {
+            throw;
+        }
+        catch (Exception exception) when (IsToshThrown(exception))
         {
             throw;
         }
@@ -10620,38 +11837,53 @@ public sealed partial class ToshEngine : IShellEvaluator
             return ToshDiagnosticException.Create(rethrown with { Info = info });
         }
 
-        var title = value switch
+        var userErrorInstance = TryGetUserErrorInstance(value);
+
+        var title = TryGetUserErrorDiagnosticString(userErrorInstance, "DiagnosticTitle", "Message", "Title")
+            ?? (value switch
         {
             null => "An error was thrown.",
             ICommandResult result => result.Message,
             Exception exception => exception.Message,
             _ => Runtime.Formatter.Format(value),
-        };
+        });
 
         // For ToshError-derived types, surface the user's class name as
         // the diagnostic code so the renderer's tail tag reads
         // `tosh.user.MyError` instead of the generic
         // `tosh.runtime.throw`. Bare strings / records / numbers fall
         // back to the generic code.
-        var code = value switch
+        // Diagnostic code surfaces the thrown value's identity:
+        //   • user-defined tosh classes (incl. those extending Error) →
+        //     bare class name, e.g. `ArgumentError`.
+        //   • bare CLR exceptions thrown via `throw new System.X(...)` →
+        //     full CLR type name, e.g. `System.ArgumentException`.
+        //   • everything else (raw strings/records/numbers, ToshError
+        //     without a user type) → generic `tosh.runtime.throw`.
+        var code = TryGetUserErrorDiagnosticString(userErrorInstance, "Code", "DiagnosticCode")
+            ?? (value switch
         {
             ToshError tosh when tosh.Data["tosh.user.type"] is string userType
-                => $"tosh.user.{userType}",
+                => userType,
             ToshError tosh when tosh.GetType() != typeof(ToshError)
-                => $"tosh.user.{tosh.GetType().Name}",
-            ToshError => "tosh.user.error",
+                => tosh.GetType().FullName ?? tosh.GetType().Name,
             ToshClassInstance instance when DefinitionExtendsException(instance.Definition)
-                => $"tosh.user.{instance.Definition.Name}",
+                => instance.Definition.Name,
+            ToshError => "tosh.runtime.throw",
+            Exception ex => ex.GetType().FullName ?? ex.GetType().Name,
             _ => "tosh.runtime.throw",
-        };
+        });
 
-        var label = value switch
+        var label = TryGetUserErrorDiagnosticString(userErrorInstance, "Label")
+            ?? (value switch
         {
             Exception => "an error escaped here",
             ToshClassInstance instance when DefinitionExtendsException(instance.Definition)
                 => "an error escaped here",
             _ => "an unhandled value was thrown here",
-        };
+        });
+        var help = TryGetUserErrorDiagnosticString(userErrorInstance, "Help", "Tip", "Hint");
+        var footerInfo = TryGetUserErrorDiagnosticString(userErrorInstance, "Info", "Information", "Context", "Details");
 
         return ToshDiagnosticException.Create(new ToshDiagnostic(
             Code: code,
@@ -10659,7 +11891,48 @@ public sealed partial class ToshEngine : IShellEvaluator
             SourceName: sourceName,
             SourceText: sourceText,
             Span: span,
-            Label: label));
+            Label: label,
+            Help: help,
+            Info: footerInfo));
+    }
+
+    private static ToshClassInstance? TryGetUserErrorInstance(object? value)
+    {
+        return value switch
+        {
+            ToshError { Cause: ToshClassInstance instance } => instance,
+            ToshClassInstance instance when DefinitionExtendsException(instance.Definition) => instance,
+            _ => null,
+        };
+    }
+
+    private string? TryGetUserErrorDiagnosticString(ToshClassInstance? instance, params string[] memberNames)
+    {
+        if (instance is null) return null;
+
+        foreach (var memberName in memberNames)
+        {
+            object? value;
+            try
+            {
+                if (!instance.TryGetMember(memberName, out value) || value is null)
+                {
+                    continue;
+                }
+            }
+            catch
+            {
+                continue;
+            }
+
+            var text = value is string s ? s : Runtime.Formatter.Format(value);
+            if (!string.IsNullOrWhiteSpace(text))
+            {
+                return text;
+            }
+        }
+
+        return null;
     }
 
     private static string ExtractSourceText(string sourceText, int start, int end)

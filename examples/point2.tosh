@@ -1,0 +1,60 @@
+# Constructor-header form auto-promotes params to public props.
+# `prop … => …` introduces a computed property.
+# Operator overloads dispatch by argument type, so the two
+# overload groups (Point2D and Numeric) stay distinct but can
+# share a private helper to remove the per-axis repetition.
+interface IPoint<T> where T: Numeric {
+    func +(other) -> IPoint<T>
+    func -(other) -> IPoint<T>
+    func *(other) -> IPoint<T>
+    func /(other) -> IPoint<T>
+    func %(other) -> IPoint<T>
+}
+
+class Point2D<T>(X: T, Y: T) fulfills IPoint<T> where T: Numeric {
+    prop IsEmpty: bool => ($this.X == 0 and $this.Y == 0)
+
+    static func Empty() -> Point2D<T> => new Point2D<T>(0, 0)
+
+    # One private helper per binary axis combiner — removes the
+    # 5×2 copy-paste block down to 5 one-liners per overload group.
+    private func combine(ox: T, oy: T, op) -> Point2D<T> => new Point2D<T>($op($this.X, $ox), $op($this.Y, $oy))
+
+    func +(o: Point2D<T>) -> Point2D<T> => $this.combine($o.X, $o.Y, (func(a, b) => $a + $b))
+    func -(o: Point2D<T>) -> Point2D<T> => $this.combine($o.X, $o.Y, (func(a, b) => $a - $b))
+    func *(o: Point2D<T>) -> Point2D<T> => $this.combine($o.X, $o.Y, (func(a, b) => $a * $b))
+    func /(o: Point2D<T>) -> Point2D<T> => $this.combine($o.X, $o.Y, (func(a, b) => $a / $b))
+    func %(o: Point2D<T>) -> Point2D<T> => $this.combine($o.X, $o.Y, (func(a, b) => $a % $b))
+
+    # Scalar overloads broadcast the same value to both axes.
+    func +<U>(s: T) -> Point2D<T> where T: Numeric => $this.combine($s, $s, (func(a, b) => $a + $b))
+    func -<U>(s: T) -> Point2D<T> where T: Numeric => $this.combine($s, $s, (func(a, b) => $a - $b))
+    func *<U>(s: T) -> Point2D<T> where T: Numeric => $this.combine($s, $s, (func(a, b) => $a * $b))
+    func /<U>(s: T) -> Point2D<T> where T: Numeric => $this.combine($s, $s, (func(a, b) => $a / $b))
+    func %<U>(s: T) -> Point2D<T> where T: Numeric => $this.combine($s, $s, (func(a, b) => $a % $b))
+}
+# One private helper per binary axis combiner — removes the
+# 5×2 copy-paste block down to 5 one-liners per overload group.
+
+# Scalar overloads broadcast the same value to both axes.
+sealed class Point3D<T>(X: T, Y: T, Z: T) fulfills IPoint<T> where T: Numeric {
+    prop IsEmpty: bool => ($this.X == 0 and $this.Y == 0 and $this.Z == 0)
+
+    shared func Empty() -> Point3D<T> => new Point3D<T>(0, 0, 0)
+
+    shy func combine(ox: T, oy: T, oz: T, op) -> Point3D<T> => new Point3D<T>(($op($this.X, $ox)), ($op($this.Y, $oy)), ($op($this.Z, $oz)))
+
+    func +(o: Point3D<T>) -> Point3D<T> => $this.combine($o.X, $o.Y, $o.Z, (func(a, b) => $a + $b))
+    func -(o: Point3D<T>) -> Point3D<T> => $this.combine($o.X, $o.Y, $o.Z, (func(a, b) => $a - $b))
+    func *(o: Point3D<T>) -> Point3D<T> => $this.combine($o.X, $o.Y, $o.Z, (func(a, b) => $a * $b))
+    func /(o: Point3D<T>) -> Point3D<T> => $this.combine($o.X, $o.Y, $o.Z, (func(a, b) => $a / $b))
+    func %(o: Point3D<T>) -> Point3D<T> => $this.combine($o.X, $o.Y, $o.Z, (func(a, b) => $a % $b))
+
+    func +<U>(s: U) -> Point3D<T> where U: Numeric => $this.combine($s, $s, $s, (func(a, b) => $a + $b))
+    func -<U>(s: U) -> Point3D<T> where U: Numeric => $this.combine($s, $s, $s, (func(a, b) => $a - $b))
+    func *<U>(s: U) -> Point3D<T> where U: Numeric => $this.combine($s, $s, $s, (func(a, b) => $a * $b))
+    func /<U>(s: U) -> Point3D<T> where U: Numeric => $this.combine($s, $s, $s, (func(a, b) => $a / $b))
+    func %<U>(s: U) -> Point3D<T> where U: Numeric => $this.combine($s, $s, $s, (func(a, b) => $a % $b))
+}
+
+new Point2D<int>(1, 2)

@@ -216,7 +216,8 @@ public sealed record CommandOptionMetadata(
     string Syntax,
     string Description,
     TypedTypeRef? ValueTypeInfo = null,
-    bool IsFlag = false);
+    bool IsFlag = false,
+    string? Default = null);
 
 public sealed record CommandExampleMetadata(
     string Code,

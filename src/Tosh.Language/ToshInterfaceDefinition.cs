@@ -10,14 +10,35 @@ public sealed class ToshInterfaceDefinition : IShellNamedType
         IReadOnlyList<InterfaceMethodSignature> methods,
         string sourceName,
         string sourceText,
-        TextSpan span)
+        TextSpan span,
+        IReadOnlyList<string>? typeParameterNames = null,
+        IReadOnlyList<TypeParameterConstraintSyntax>? typeParameterConstraints = null,
+        IReadOnlyList<TypeParameterVariance>? typeParameterVariances = null)
     {
         Name = name;
         Methods = methods;
         SourceName = sourceName;
         SourceText = sourceText;
         Span = span;
+        TypeParameterNames = typeParameterNames ?? Array.Empty<string>();
+        TypeParameterConstraints = typeParameterConstraints ?? Array.Empty<TypeParameterConstraintSyntax>();
+        TypeParameterVariances = typeParameterVariances ?? Array.Empty<TypeParameterVariance>();
     }
+
+    public IReadOnlyList<string> TypeParameterNames { get; }
+
+    public IReadOnlyList<TypeParameterConstraintSyntax> TypeParameterConstraints { get; }
+
+    /// <summary>
+    /// Per-type-parameter variance markers. Aligned with
+    /// <see cref="TypeParameterNames"/> by position; an empty list
+    /// implies all parameters are invariant. Currently honored only
+    /// when judging assignability between two
+    /// <c>GenericInstanceType</c>s wrapping the same interface
+    /// template (covariant args allow widening; contravariant args
+    /// allow narrowing; invariant args require exact match).
+    /// </summary>
+    public IReadOnlyList<TypeParameterVariance> TypeParameterVariances { get; }
 
     public string Name { get; }
 
@@ -49,7 +70,7 @@ public sealed class ToshInterfaceDefinition : IShellNamedType
 
     public bool ShellIsAbstract => true;
 
-    public bool ShellIsGenericType => false;
+    public bool ShellIsGenericType => TypeParameterNames.Count > 0;
 
     public bool ShellIsArray => false;
 

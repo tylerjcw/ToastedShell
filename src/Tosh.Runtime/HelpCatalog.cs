@@ -1403,7 +1403,7 @@ public static class HelpCatalog
             : null;
 
         var options = metadata.Options.Count > 0
-            ? metadata.Options.Select(o => new HelpOptionInfo(o.Syntax, o.Description)).ToList()
+            ? metadata.Options.Select(o => new HelpOptionInfo(o.Syntax, o.Description, o.Default)).ToList()
             : null;
 
         HelpPipelineInputInfo? pipelineInput = metadata.PipelineInput is { } pi

@@ -179,8 +179,12 @@
       <keyword>case</keyword>
       <keyword>default</keyword>
       <keyword>match</keyword>
+      <keyword>defer</keyword>
+      <keyword>yield</keyword>
+      <keyword>unless</keyword>
       <keyword>func</keyword>
       <keyword>var</keyword>
+      <keyword>const</keyword>
       <keyword>alloc</keyword>
       <keyword>class</keyword>
       <keyword>module</keyword>
@@ -190,10 +194,9 @@
       <keyword>interface</keyword>
       <keyword>trait</keyword>
       <keyword>union</keyword>
+      <keyword>rune</keyword>
+      <keyword>event</keyword>
       <keyword>prop</keyword>
-      <keyword>shy</keyword>
-      <keyword>static</keyword>
-      <keyword>shared</keyword>
       <keyword>using</keyword>
       <keyword>require</keyword>
       <keyword>native</keyword>
@@ -208,14 +211,59 @@
       <keyword>new</keyword>
       <keyword>nameof</keyword>
       <keyword>name-of</keyword>
+      <keyword>let</keyword>
+      <keyword>pick</keyword>
+      <keyword>quote</keyword>
       <keyword>and</keyword>
       <keyword>or</keyword>
       <keyword>not</keyword>
       <keyword>is</keyword>
       <keyword>is-not</keyword>
+      <keyword>is-in</keyword>
+      <keyword>is-not-in</keyword>
       <keyword>not-in</keyword>
+      <keyword>contains</keyword>
+      <keyword>starts-with</keyword>
+      <keyword>ends-with</keyword>
       <keyword>handles</keyword>
       <keyword>when</keyword>
+      <keyword>priority</keyword>
+      <keyword>once</keyword>
+      <keyword>where</keyword>
+      <keyword>extends</keyword>
+      <keyword>fulfills</keyword>
+      <keyword>implements</keyword>
+      <keyword>uses</keyword>
+    </context>
+
+    <context id="modifiers" style-ref="modifier">
+      <keyword>shy</keyword>
+      <keyword>private</keyword>
+      <keyword>proud</keyword>
+      <keyword>public</keyword>
+      <keyword>guarded</keyword>
+      <keyword>protected</keyword>
+      <keyword>local</keyword>
+      <keyword>sealed</keyword>
+      <keyword>hollow</keyword>
+      <keyword>abstract</keyword>
+      <keyword>partial</keyword>
+      <keyword>overrule</keyword>
+      <keyword>override</keyword>
+      <keyword>static</keyword>
+      <keyword>shared</keyword>
+      <keyword>hermit</keyword>
+      <keyword>strict</keyword>
+      <keyword>fluid</keyword>
+      <keyword>leaky</keyword>
+      <keyword>lazy</keyword>
+      <keyword>fixed</keyword>
+      <keyword>readonly</keyword>
+      <keyword>vital</keyword>
+      <keyword>required</keyword>
+      <keyword>fading</keyword>
+      <keyword>obsolete</keyword>
+      <keyword>raw</keyword>
     </context>
 
     <context id="builtins" style-ref="builtin">
@@ -384,6 +432,7 @@
         <context ref="variable"/>
         <context ref="pipeline-variable"/>
         <context ref="constants"/>
+        <context ref="modifiers"/>
         <context ref="keywords"/>
         <context ref="builtins"/>
         <context ref="flags"/>

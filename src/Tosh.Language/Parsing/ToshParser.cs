@@ -2068,6 +2068,18 @@ public static class ToshParser
                 var block = ParseBlock();
                 body = new MatchArmBlockBodySyntax(block, block.Span);
             }
+            else if (Current.Kind == SyntaxTokenKind.Bareword &&
+                     IsJumpStatementKeyword(Current.Text))
+            {
+                // Allow jump statements (`throw`, `return`, `yield`, `break`,
+                // `continue`) to appear as the head of a match-arm body. Without
+                // this branch the pipeline parser sees `throw` as a bareword
+                // command name and emits a "Command 'throw' was not found" error.
+                var jumpStart = Current.Span.Start;
+                var jump = ParseJumpStatementForArm();
+                var wrapped = new BlockSyntax(new[] { jump }, TextSpan.FromBounds(jumpStart, jump.Span.End));
+                body = new MatchArmBlockBodySyntax(wrapped, wrapped.Span);
+            }
             else
             {
                 var pipeline = ParsePipeline(
@@ -2085,6 +2097,40 @@ public static class ToshParser
                 body,
                 isWildcard,
                 TextSpan.FromBounds(armStart, body.Span.End));
+        }
+
+        private static bool IsJumpStatementKeyword(string text) =>
+            string.Equals(text, "throw", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(text, "return", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(text, "yield", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(text, "break", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(text, "continue", StringComparison.OrdinalIgnoreCase);
+
+        // Parse a jump statement appearing as the head of a match-arm body. Mirrors
+        // the dispatch in ParseStatement but uses arm-appropriate stop conditions
+        // (stop at close-brace and semicolon, not close-paren since arm bodies are
+        // not enclosed in parens).
+        private StatementSyntax ParseJumpStatementForArm()
+        {
+            var text = Current.Text;
+            if (string.Equals(text, "throw", StringComparison.OrdinalIgnoreCase))
+            {
+                return ParseThrowStatement(stopAtCloseParen: false, stopAtCloseBrace: true, stopAtSemicolon: true);
+            }
+            if (string.Equals(text, "return", StringComparison.OrdinalIgnoreCase))
+            {
+                return ParseReturnStatement(stopAtCloseParen: false, stopAtCloseBrace: true, stopAtSemicolon: true);
+            }
+            if (string.Equals(text, "yield", StringComparison.OrdinalIgnoreCase))
+            {
+                return ParseYieldStatement(stopAtCloseParen: false, stopAtCloseBrace: true, stopAtSemicolon: true);
+            }
+            if (string.Equals(text, "break", StringComparison.OrdinalIgnoreCase))
+            {
+                return ParseLoopControlStatement(isBreak: true);
+            }
+            // continue
+            return ParseLoopControlStatement(isBreak: false);
         }
 
         private StatementSyntax ParseReturnStatement(
@@ -2438,6 +2484,21 @@ public static class ToshParser
 
             var returnTypeName = TryParseReturnTypeAnnotation();
 
+            // Optional `where T: Constraint[, ...]` clauses (one per type parameter).
+            List<TypeParameterConstraintSyntax>? typeParameterConstraints = null;
+            while (MatchesKeyword(Current, "where"))
+            {
+                if (TryParseWhereClause(out var clause))
+                {
+                    typeParameterConstraints ??= new List<TypeParameterConstraintSyntax>();
+                    typeParameterConstraints.Add(clause);
+                }
+                else
+                {
+                    break;
+                }
+            }
+
             string? handlesEvent = null;
             int? handlerPriority = null;
             var isOnceHandler = false;
@@ -2517,7 +2578,8 @@ public static class ToshParser
                 isOnceHandler,
                 whenGuard,
                 DocComment: DocComment.Parse(docTokens ?? Array.Empty<SyntaxToken>()),
-                TypeParameters: typeParameters.Count > 0 ? typeParameters : null);
+                TypeParameters: typeParameters.Count > 0 ? typeParameters : null,
+                TypeParameterConstraints: typeParameterConstraints);
         }
 
         private StatementSyntax ParseRuneDefinitionStatement(IReadOnlyList<SyntaxToken>? docTokens = null)
@@ -2584,13 +2646,17 @@ public static class ToshParser
             while (Current.Kind == SyntaxTokenKind.Bareword &&
                    (string.Equals(Current.Text, "sealed", StringComparison.Ordinal) ||
                     string.Equals(Current.Text, "hollow", StringComparison.Ordinal) ||
+                    string.Equals(Current.Text, "abstract", StringComparison.Ordinal) ||
                     string.Equals(Current.Text, "hermit", StringComparison.Ordinal) ||
+                    string.Equals(Current.Text, "static", StringComparison.Ordinal) ||
                     string.Equals(Current.Text, "strict", StringComparison.Ordinal) ||
                     string.Equals(Current.Text, "partial", StringComparison.Ordinal)))
             {
                 isSealed |= string.Equals(Current.Text, "sealed", StringComparison.Ordinal);
-                isAbstract |= string.Equals(Current.Text, "hollow", StringComparison.Ordinal);
-                isHermit |= string.Equals(Current.Text, "hermit", StringComparison.Ordinal);
+                isAbstract |= string.Equals(Current.Text, "hollow", StringComparison.Ordinal) ||
+                              string.Equals(Current.Text, "abstract", StringComparison.Ordinal);
+                isHermit |= string.Equals(Current.Text, "hermit", StringComparison.Ordinal) ||
+                            string.Equals(Current.Text, "static", StringComparison.Ordinal);
                 isStrict |= string.Equals(Current.Text, "strict", StringComparison.Ordinal);
                 isPartial |= string.Equals(Current.Text, "partial", StringComparison.Ordinal);
                 NextToken();
@@ -2642,37 +2708,59 @@ public static class ToshParser
                 }
             }
 
-            // Parse optional 'fulfills Interface1, Interface2, ...'
+            // Parse optional 'fulfills' / 'uses' / 'where' clauses. They may
+            // appear in any order, and `where` clauses may even be interleaved
+            // (each occurrence is accumulated). We loop until none of the
+            // three keywords matches the current token.
             List<string>? implementedInterfaces = null;
-            if (Current.Kind == SyntaxTokenKind.Bareword &&
-                (string.Equals(Current.Text, "fulfills", StringComparison.OrdinalIgnoreCase) ||
-                 string.Equals(Current.Text, "implements", StringComparison.OrdinalIgnoreCase)))
-            {
-                NextToken(); // consume 'fulfills'/'implements'
-                implementedInterfaces = new List<string>();
-                implementedInterfaces.Add(ParseTypeName("interface"));
-
-                while (Current.Kind == SyntaxTokenKind.Comma)
-                {
-                    NextToken(); // consume ','
-                    implementedInterfaces.Add(ParseTypeName("interface"));
-                }
-            }
-
-            // Parse optional 'uses Trait1, Trait2, ...'
             List<string>? usedTraits = null;
-            if (Current.Kind == SyntaxTokenKind.Bareword &&
-                string.Equals(Current.Text, "uses", StringComparison.OrdinalIgnoreCase))
-            {
-                NextToken(); // consume 'uses'
-                usedTraits = new List<string>();
-                usedTraits.Add(ParseTypeName("trait"));
+            List<TypeParameterConstraintSyntax>? typeParameterConstraints = null;
 
-                while (Current.Kind == SyntaxTokenKind.Comma)
+            while (Current.Kind == SyntaxTokenKind.Bareword)
+            {
+                var text = Current.Text;
+                if (string.Equals(text, "fulfills", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(text, "implements", StringComparison.OrdinalIgnoreCase))
                 {
-                    NextToken(); // consume ','
-                    usedTraits.Add(ParseTypeName("trait"));
+                    NextToken(); // consume 'fulfills'/'implements'
+                    implementedInterfaces ??= new List<string>();
+                    implementedInterfaces.Add(ParseTypeName("interface"));
+                    while (Current.Kind == SyntaxTokenKind.Comma)
+                    {
+                        NextToken();
+                        implementedInterfaces.Add(ParseTypeName("interface"));
+                    }
+                    continue;
                 }
+
+                if (string.Equals(text, "uses", StringComparison.OrdinalIgnoreCase))
+                {
+                    NextToken(); // consume 'uses'
+                    usedTraits ??= new List<string>();
+                    usedTraits.Add(ParseTypeName("trait"));
+                    while (Current.Kind == SyntaxTokenKind.Comma)
+                    {
+                        NextToken();
+                        usedTraits.Add(ParseTypeName("trait"));
+                    }
+                    continue;
+                }
+
+                if (string.Equals(text, "where", StringComparison.Ordinal))
+                {
+                    typeParameterConstraints ??= new List<TypeParameterConstraintSyntax>();
+                    if (TryParseWhereClause(out var clause))
+                    {
+                        typeParameterConstraints.Add(clause);
+                    }
+                    else
+                    {
+                        break;
+                    }
+                    continue;
+                }
+
+                break;
             }
 
             var body = ParseClassBody(nameToken.Text);
@@ -2694,7 +2782,8 @@ public static class ToshParser
                 IsHermit: isHermit,
                 IsStrict: isStrict,
                 IsPartial: isPartial,
-                BaseTypeArguments: baseTypeArgs);
+                BaseTypeArguments: baseTypeArgs,
+                TypeParameterConstraints: typeParameterConstraints);
         }
 
         private StatementSyntax ParseInterfaceDefinitionStatement(IReadOnlyList<SyntaxToken>? docTokens = null)
@@ -2703,7 +2792,23 @@ public static class ToshParser
             var modifier = ParseDeclarationModifier();
             NextToken(); // consume 'interface'
             var nameToken = ExpectVariableName();
-            var typeParameters = ParseTypeParameterList();
+            var typeParameters = ParseTypeParameterList(out var typeParameterVariances);
+
+            // Optional `where T: Constraint[, ...]` clauses.
+            List<TypeParameterConstraintSyntax>? typeParameterConstraints = null;
+            while (Current.Kind == SyntaxTokenKind.Bareword
+                && string.Equals(Current.Text, "where", StringComparison.Ordinal))
+            {
+                typeParameterConstraints ??= new List<TypeParameterConstraintSyntax>();
+                if (TryParseWhereClause(out var clause))
+                {
+                    typeParameterConstraints.Add(clause);
+                }
+                else
+                {
+                    break;
+                }
+            }
 
             if (Current.Kind != SyntaxTokenKind.OpenBrace)
             {
@@ -2717,7 +2822,10 @@ public static class ToshParser
                     Array.Empty<InterfaceMethodSignatureSyntax>(),
                     modifier,
                     TextSpan.FromBounds(declarationStart, nameToken.Span.End),
-                    DocComment: DocComment.Parse(docTokens ?? Array.Empty<SyntaxToken>()));
+                    DocComment: DocComment.Parse(docTokens ?? Array.Empty<SyntaxToken>()),
+                    TypeParameters: typeParameters.Count > 0 ? typeParameters : null,
+                    TypeParameterConstraints: typeParameterConstraints,
+                    TypeParameterVariances: typeParameterVariances.Count > 0 ? typeParameterVariances : null);
             }
 
             NextToken(); // consume '{'
@@ -2735,25 +2843,43 @@ public static class ToshParser
                 {
                     var methodStart = Current.Span.Start;
                     NextToken(); // consume 'func'
-                    var methodName = ExpectVariableName();
-                    var parameters = Current.Kind == SyntaxTokenKind.OpenParen
-                        ? ParseFunctionParameters()
-                        : Array.Empty<FunctionParameterSyntax>();
 
-                    // Optional return type: ': TypeName'
-                    string? returnTypeName = null;
-                    if (Current.Kind == SyntaxTokenKind.Bareword && Current.Text == ":")
+                    // Allow operator-symbol names (e.g. 'func +(other)') so that
+                    // interfaces can describe operator-overload contracts. The
+                    // '<(' token (LessThanOpenParen) eats the opening paren, so
+                    // tell ParseFunctionParameters to skip it in that case.
+                    var openParenConsumed = false;
+                    var methodName = ExpectCommandOrOperatorName(out openParenConsumed);
+
+                    IReadOnlyList<FunctionParameterSyntax> parameters = Array.Empty<FunctionParameterSyntax>();
+                    if (openParenConsumed || Current.Kind == SyntaxTokenKind.OpenParen)
                     {
-                        NextToken(); // consume ':'
-                        var typeToken = ExpectVariableName();
-                        returnTypeName = typeToken.Text;
+                        parameters = ParseFunctionParameters(skipOpenParen: openParenConsumed);
                     }
 
+                    // Optional return type annotation. Accept the same forms
+                    // that class/free functions accept: '->', '- >', '->T'.
+                    // Tolerate the older 'func name(): T' shorthand by also
+                    // matching a freestanding ':' bareword.
+                    string? returnTypeName = TryParseReturnTypeAnnotation();
+                    if (returnTypeName is null &&
+                        Current.Kind == SyntaxTokenKind.Bareword &&
+                        Current.Text == ":")
+                    {
+                        NextToken(); // consume ':'
+                        returnTypeName = ParseTypeName("return type");
+                    }
+
+                    var methodEnd = Current.Span.Start;
+                    if (methodEnd <= methodName.Span.End)
+                    {
+                        methodEnd = parameters.Count > 0 ? parameters[^1].Span.End : methodName.Span.End;
+                    }
                     methods.Add(new InterfaceMethodSignatureSyntax(
                         methodName.Text,
                         parameters,
                         returnTypeName,
-                        TextSpan.FromBounds(methodStart, parameters.Count > 0 ? parameters[^1].Span.End : methodName.Span.End)));
+                        TextSpan.FromBounds(methodStart, methodEnd)));
                 }
                 else
                 {
@@ -2775,7 +2901,9 @@ public static class ToshParser
                 modifier,
                 TextSpan.FromBounds(declarationStart, closeBrace.Span.End),
                 DocComment: DocComment.Parse(docTokens ?? Array.Empty<SyntaxToken>()),
-                TypeParameters: typeParameters.Count > 0 ? typeParameters : null);
+                TypeParameters: typeParameters.Count > 0 ? typeParameters : null,
+                TypeParameterConstraints: typeParameterConstraints,
+                TypeParameterVariances: typeParameterVariances.Count > 0 ? typeParameterVariances : null);
         }
 
         private StatementSyntax ParseUnionDefinitionStatement(IReadOnlyList<SyntaxToken>? docTokens = null)
@@ -3032,6 +3160,24 @@ public static class ToshParser
 
             NextToken(); // record
             var nameToken = ExpectVariableName();
+            var typeParameters = ParseTypeParameterList();
+
+            // Optional `where T: Constraint[, ...]` clauses (between
+            // type parameter list and field list).
+            List<TypeParameterConstraintSyntax>? typeParameterConstraints = null;
+            while (Current.Kind == SyntaxTokenKind.Bareword &&
+                   string.Equals(Current.Text, "where", StringComparison.Ordinal))
+            {
+                typeParameterConstraints ??= new List<TypeParameterConstraintSyntax>();
+                if (TryParseWhereClause(out var clause))
+                {
+                    typeParameterConstraints.Add(clause);
+                }
+                else
+                {
+                    break;
+                }
+            }
 
             if (Current.Kind != SyntaxTokenKind.OpenParen)
             {
@@ -3041,10 +3187,29 @@ public static class ToshParser
                     Span: Current.Span,
                     Label: $"write '(...)' after record '{nameToken.Text}'"));
                 return new RecordDefinitionStatementSyntax(nameToken.Text, Array.Empty<RecordFieldDefinitionSyntax>(), modifier, isSealed, isStrict, isPartial, TextSpan.FromBounds(declarationStart, nameToken.Span.End),
-                    DocComment: DocComment.Parse(docTokens ?? Array.Empty<SyntaxToken>()));
+                    DocComment: DocComment.Parse(docTokens ?? Array.Empty<SyntaxToken>()),
+                    TypeParameters: typeParameters.Count > 0 ? typeParameters : null,
+                    TypeParameterConstraints: typeParameterConstraints);
             }
 
             var fields = ParseRecordDefinitionFields(stopAtCloseParen, stopAtCloseBrace, stopAtSemicolon);
+
+            // Also accept `where` clauses after the field list (more
+            // natural placement, matches class-style ordering).
+            while (Current.Kind == SyntaxTokenKind.Bareword &&
+                   string.Equals(Current.Text, "where", StringComparison.Ordinal))
+            {
+                typeParameterConstraints ??= new List<TypeParameterConstraintSyntax>();
+                if (TryParseWhereClause(out var clause))
+                {
+                    typeParameterConstraints.Add(clause);
+                }
+                else
+                {
+                    break;
+                }
+            }
+
             var end = fields.Count == 0 ? nameToken.Span.End : fields[^1].Span.End;
             return new RecordDefinitionStatementSyntax(
                 nameToken.Text,
@@ -3054,7 +3219,9 @@ public static class ToshParser
                 isStrict,
                 isPartial,
                 TextSpan.FromBounds(declarationStart, end),
-                DocComment: DocComment.Parse(docTokens ?? Array.Empty<SyntaxToken>()));
+                DocComment: DocComment.Parse(docTokens ?? Array.Empty<SyntaxToken>()),
+                TypeParameters: typeParameters.Count > 0 ? typeParameters : null,
+                TypeParameterConstraints: typeParameterConstraints);
         }
 
         private StatementSyntax ParseStructDefinitionStatement(IReadOnlyList<SyntaxToken>? docTokens = null)
@@ -3558,30 +3725,44 @@ public static class ToshParser
 
             while (Current.Kind == SyntaxTokenKind.Bareword &&
                    (string.Equals(Current.Text, "shy", StringComparison.Ordinal) ||
+                    string.Equals(Current.Text, "private", StringComparison.Ordinal) ||
                     string.Equals(Current.Text, "static", StringComparison.Ordinal) ||
                     string.Equals(Current.Text, "shared", StringComparison.Ordinal) ||
                     string.Equals(Current.Text, "public", StringComparison.Ordinal) ||
                     string.Equals(Current.Text, "proud", StringComparison.Ordinal) ||
                     string.Equals(Current.Text, "hollow", StringComparison.Ordinal) ||
+                    string.Equals(Current.Text, "abstract", StringComparison.Ordinal) ||
                     string.Equals(Current.Text, "fixed", StringComparison.Ordinal) ||
+                    string.Equals(Current.Text, "readonly", StringComparison.Ordinal) ||
                     string.Equals(Current.Text, "vital", StringComparison.Ordinal) ||
+                    string.Equals(Current.Text, "required", StringComparison.Ordinal) ||
                     string.Equals(Current.Text, "overrule", StringComparison.Ordinal) ||
+                    string.Equals(Current.Text, "override", StringComparison.Ordinal) ||
                     string.Equals(Current.Text, "guarded", StringComparison.Ordinal) ||
+                    string.Equals(Current.Text, "protected", StringComparison.Ordinal) ||
                     string.Equals(Current.Text, "lazy", StringComparison.Ordinal) ||
                     string.Equals(Current.Text, "fading", StringComparison.Ordinal) ||
+                    string.Equals(Current.Text, "obsolete", StringComparison.Ordinal) ||
                     string.Equals(Current.Text, "local", StringComparison.Ordinal) ||
                     string.Equals(Current.Text, "raw", StringComparison.Ordinal)))
             {
-                isShy |= string.Equals(Current.Text, "shy", StringComparison.Ordinal);
+                isShy |= string.Equals(Current.Text, "shy", StringComparison.Ordinal) ||
+                         string.Equals(Current.Text, "private", StringComparison.Ordinal);
                 isStatic |= string.Equals(Current.Text, "static", StringComparison.Ordinal) ||
                             string.Equals(Current.Text, "shared", StringComparison.Ordinal);
-                isAbstract |= string.Equals(Current.Text, "hollow", StringComparison.Ordinal);
-                isFixed |= string.Equals(Current.Text, "fixed", StringComparison.Ordinal);
-                isVital |= string.Equals(Current.Text, "vital", StringComparison.Ordinal);
-                isOverride |= string.Equals(Current.Text, "overrule", StringComparison.Ordinal);
-                isGuarded |= string.Equals(Current.Text, "guarded", StringComparison.Ordinal);
+                isAbstract |= string.Equals(Current.Text, "hollow", StringComparison.Ordinal) ||
+                              string.Equals(Current.Text, "abstract", StringComparison.Ordinal);
+                isFixed |= string.Equals(Current.Text, "fixed", StringComparison.Ordinal) ||
+                           string.Equals(Current.Text, "readonly", StringComparison.Ordinal);
+                isVital |= string.Equals(Current.Text, "vital", StringComparison.Ordinal) ||
+                           string.Equals(Current.Text, "required", StringComparison.Ordinal);
+                isOverride |= string.Equals(Current.Text, "overrule", StringComparison.Ordinal) ||
+                              string.Equals(Current.Text, "override", StringComparison.Ordinal);
+                isGuarded |= string.Equals(Current.Text, "guarded", StringComparison.Ordinal) ||
+                             string.Equals(Current.Text, "protected", StringComparison.Ordinal);
                 isLazy |= string.Equals(Current.Text, "lazy", StringComparison.Ordinal);
-                isFading |= string.Equals(Current.Text, "fading", StringComparison.Ordinal);
+                isFading |= string.Equals(Current.Text, "fading", StringComparison.Ordinal) ||
+                            string.Equals(Current.Text, "obsolete", StringComparison.Ordinal);
                 isLocal |= string.Equals(Current.Text, "local", StringComparison.Ordinal);
                 isRaw |= string.Equals(Current.Text, "raw", StringComparison.Ordinal);
                 // 'public'/'proud' recognized and consumed but has no effect (it's the default)
@@ -4150,9 +4331,16 @@ public static class ToshParser
             var arrowStart = Current.Span.Start;
             ConsumeFatArrow();
 
+            // Fat-arrow bodies are a single pipeline expression. They
+            // terminate at ';', a newline-followed-by-statement-start
+            // (handled inside ParsePipeline), or a closing '}' that
+            // belongs to the enclosing block (class body, if/while
+            // body, anonymous block, …). Without `untilCloseBrace`,
+            // `class B { func d(x) => $x * 2 }` would consume the
+            // class's closing brace as part of the expression.
             var pipeline = ParsePipeline(
                 untilCloseParen: false,
-                untilCloseBrace: false,
+                untilCloseBrace: true,
                 untilSemicolon: true,
                 allowExpressionStart: allowExpressionStart);
             var span = GetPipelineSpan(pipeline, new TextSpan(arrowStart, 0));
@@ -4773,21 +4961,51 @@ public static class ToshParser
 
         private IReadOnlyList<string> ParseTypeParameterList()
         {
+            return ParseTypeParameterList(out _);
+        }
+
+        /// <summary>
+        /// Parses a generic type-parameter list <c>&lt;T, U, ...&gt;</c>,
+        /// returning the parameter names. When <paramref name="variances"/>
+        /// is requested, recognises an optional <c>out</c> / <c>in</c>
+        /// prefix on each parameter and emits a parallel variance list:
+        /// <c>out T</c> ⇒ covariant, <c>in T</c> ⇒ contravariant, no
+        /// prefix ⇒ invariant. Variance annotations are syntactically
+        /// accepted on every declaration form so the lists stay in sync;
+        /// downstream passes only honor them on interfaces (matching C#).
+        /// </summary>
+        private IReadOnlyList<string> ParseTypeParameterList(out IReadOnlyList<TypeParameterVariance> variances)
+        {
             if (Current.Kind != SyntaxTokenKind.LessThan)
             {
+                variances = Array.Empty<TypeParameterVariance>();
                 return Array.Empty<string>();
             }
 
             var open = NextToken();
             var parameters = new List<string>();
+            var varianceList = new List<TypeParameterVariance>();
 
             while (Current.Kind is not SyntaxTokenKind.GreaterThan and not SyntaxTokenKind.EndOfFile)
             {
+                var variance = TypeParameterVariance.Invariant;
+                if (Current.Kind == SyntaxTokenKind.Bareword
+                    && (Current.Text == "out" || Current.Text == "in")
+                    && Peek(1).Kind == SyntaxTokenKind.Bareword
+                    && IsValidIdentifier(Peek(1).Text))
+                {
+                    variance = Current.Text == "out"
+                        ? TypeParameterVariance.Covariant
+                        : TypeParameterVariance.Contravariant;
+                    NextToken();
+                }
+
                 var nameToken = ExpectVariableName();
 
                 if (!string.IsNullOrWhiteSpace(nameToken.Text))
                 {
                     parameters.Add(nameToken.Text);
+                    varianceList.Add(variance);
                 }
 
                 if (Current.Kind == SyntaxTokenKind.Comma)
@@ -4820,7 +5038,59 @@ public static class ToshParser
                     Help: "close the type parameter list with '>' after the last parameter."));
             }
 
+            variances = varianceList;
             return parameters;
+        }
+
+        /// <summary>
+        /// Parses one <c>where T: Constraint[, Constraint...]</c> clause.
+        /// Caller has already verified that <see cref="Current"/> is the
+        /// <c>where</c> bareword. Returns false if a parse error occurred
+        /// (the caller should stop the where-loop).
+        /// </summary>
+        private bool TryParseWhereClause(out TypeParameterConstraintSyntax clause)
+        {
+            clause = default!;
+            var whereStart = Current.Span.Start;
+            NextToken(); // consume 'where'
+            if (Current.Kind != SyntaxTokenKind.Bareword)
+            {
+                _diagnostics.Add(new SyntaxDiagnostic(
+                    Code: "tosh.parser.expected_type_parameter",
+                    Title: "Expected a type-parameter name after 'where'.",
+                    Span: Current.Span,
+                    Label: "name a type parameter declared earlier"));
+                return false;
+            }
+
+            var headToken = NextToken();
+            ParseTypedIdentifierToken(headToken.Text, out var paramName, out var inlineConstraint, out var expectsFollowingConstraint);
+            var constraints = new List<string>();
+            if (!string.IsNullOrEmpty(inlineConstraint))
+            {
+                // Inline constraint may be followed by `<...>` for
+                // recursive / parameterized constraints like
+                // `where T: IComparable<T>`.
+                var suffixed = ParseTypeNameSuffix(inlineConstraint);
+                constraints.Add(suffixed ?? inlineConstraint);
+            }
+            if (expectsFollowingConstraint && Current.Kind == SyntaxTokenKind.Bareword)
+            {
+                var name = NextToken().Text;
+                var suffixed = ParseTypeNameSuffix(name);
+                constraints.Add(suffixed ?? name);
+            }
+            while (Current.Kind == SyntaxTokenKind.Comma)
+            {
+                NextToken();
+                if (Current.Kind != SyntaxTokenKind.Bareword) break;
+                var name = NextToken().Text;
+                var suffixed = ParseTypeNameSuffix(name);
+                constraints.Add(suffixed ?? name);
+            }
+            var whereEnd = Current.Span.Start;
+            clause = new TypeParameterConstraintSyntax(paramName, constraints, TextSpan.FromBounds(whereStart, whereEnd));
+            return true;
         }
 
         private string ParseTypeName(string label)
@@ -5286,6 +5556,36 @@ public static class ToshParser
             var nameToken = NextToken();
             List<ArgumentSyntax> arguments;
 
+            // Explicit generic call-site type arguments: `name<T1, T2>`
+            // with no whitespace between the name and the '<'. The
+            // '<(' input-redirection form is its own lexer token
+            // (LessThanOpenParen), so a plain LessThan immediately
+            // following the name is unambiguously a generic argument
+            // list — never input redirection. We still require
+            // ParseGenericTypeArgumentsStructured to find a closing
+            // '>'; if it doesn't, no args are consumed.
+            IReadOnlyList<string>? explicitTypeArgs = null;
+            if (Current.Kind == SyntaxTokenKind.LessThan &&
+                Current.Span.Start == nameToken.Span.End)
+            {
+                var savedPosition = _position;
+                var savedDiagnosticCount = _diagnostics.Count;
+                var (_, parsedArgs, hasAngles) = ParseGenericTypeArgumentsStructured();
+                if (hasAngles && parsedArgs.Count > 0)
+                {
+                    explicitTypeArgs = parsedArgs;
+                }
+                else
+                {
+                    // Roll back: this wasn't a generic argument list.
+                    _position = savedPosition;
+                    if (_diagnostics.Count > savedDiagnosticCount)
+                    {
+                        _diagnostics.RemoveRange(savedDiagnosticCount, _diagnostics.Count - savedDiagnosticCount);
+                    }
+                }
+            }
+
             // Function-call syntax: command immediately followed by '(' with no space.
             // e.g. test_args(1, 2, 3) — parse the parenthesized list as individual arguments,
             // not as a tuple literal.
@@ -5348,7 +5648,10 @@ public static class ToshParser
             }
 
             var end = arguments.Count > 0 ? arguments[^1].Span.End : nameToken.Span.End;
-            return new CommandSyntax(nameToken.Text, nameToken.Span, arguments, TextSpan.FromBounds(nameToken.Span.Start, end));
+            return new CommandSyntax(nameToken.Text, nameToken.Span, arguments, TextSpan.FromBounds(nameToken.Span.Start, end))
+            {
+                ExplicitTypeArguments = explicitTypeArgs,
+            };
         }
 
         private bool TryParseCommaJoinedCommandArgument(out ArgumentSyntax argument)
@@ -9024,6 +9327,61 @@ public static class ToshParser
             };
         }
 
+        /// <summary>
+        /// If <c>_tokens[startIndex]</c> is a bareword adjacent (no
+        /// whitespace) to a <c>&lt;</c> followed by what looks like a
+        /// generic type-argument list closed by <c>&gt;</c>, returns
+        /// the index of the token after the closing <c>&gt;</c>.
+        /// Otherwise returns <paramref name="startIndex"/>.
+        /// Used by lookahead helpers so command-call syntax
+        /// <c>name&lt;T&gt;</c> isn't mis-parsed as a comparison
+        /// expression. Conservative: only Bareword / Comma /
+        /// LessThan / GreaterThan / GreaterThanGreaterThan / Dot
+        /// tokens are accepted inside the angle bracket span.
+        /// </summary>
+        private int SkipAdjacentGenericTypeArguments(int startIndex)
+        {
+            if (startIndex < 0 || startIndex + 1 >= _tokens.Count) return startIndex;
+            var name = _tokens[startIndex];
+            var lt = _tokens[startIndex + 1];
+            if (name.Kind != SyntaxTokenKind.Bareword) return startIndex;
+            if (lt.Kind != SyntaxTokenKind.LessThan) return startIndex;
+            if (name.Span.End != lt.Span.Start) return startIndex;
+
+            var depth = 1;
+            var index = startIndex + 2;
+            while (index < _tokens.Count)
+            {
+                var token = _tokens[index];
+                switch (token.Kind)
+                {
+                    case SyntaxTokenKind.LessThan:
+                        depth++;
+                        index++;
+                        continue;
+                    case SyntaxTokenKind.GreaterThan:
+                        depth--;
+                        index++;
+                        if (depth == 0) return index;
+                        continue;
+                    case SyntaxTokenKind.GreaterThanGreaterThan:
+                        depth -= 2;
+                        index++;
+                        if (depth <= 0) return index;
+                        continue;
+                    case SyntaxTokenKind.Bareword:
+                    case SyntaxTokenKind.Comma:
+                        index++;
+                        continue;
+                    default:
+                        // Any other token shape — bail; this isn't a
+                        // generic-argument list.
+                        return startIndex;
+                }
+            }
+            return startIndex;
+        }
+
         private bool HasTopLevelOperatorBeforeCloseParen() => HasTopLevelOperatorBeforeCloseParen(_position);
 
         private bool HasTopLevelCommaBeforeCloseParen()
@@ -9147,6 +9505,12 @@ public static class ToshParser
 
             for (var index = _position; index < _tokens.Count; index++)
             {
+                if (depth == 0)
+                {
+                    var skipped = SkipAdjacentGenericTypeArguments(index);
+                    if (skipped > index) { index = skipped - 1; continue; }
+                }
+
                 var token = _tokens[index];
 
                 switch (token.Kind)
@@ -9234,6 +9598,15 @@ public static class ToshParser
 
             for (var index = startIndex; index < _tokens.Count; index++)
             {
+                // Phase 3.3 — skip past adjacent generic type-argument
+                // lists (`name<T1, T2>`) so the `<`/`>` inside don't
+                // trigger comparison-expression detection.
+                if (depth == 0)
+                {
+                    var skipped = SkipAdjacentGenericTypeArguments(index);
+                    if (skipped > index) { index = skipped - 1; continue; }
+                }
+
                 var token = _tokens[index];
 
                 switch (token.Kind)
@@ -9567,10 +9940,46 @@ public static class ToshParser
                 offset++;
             }
 
-            return MatchesKeywordAtOffset(offset, "record") &&
-                   Peek(offset + 1).Kind == SyntaxTokenKind.Bareword &&
-                   IsValidIdentifier(Peek(offset + 1).Text) &&
-                   Peek(offset + 2).Kind == SyntaxTokenKind.OpenParen;
+            if (!(MatchesKeywordAtOffset(offset, "record") &&
+                  Peek(offset + 1).Kind == SyntaxTokenKind.Bareword &&
+                  IsValidIdentifier(Peek(offset + 1).Text)))
+            {
+                return false;
+            }
+
+            var cursor = offset + 2;
+
+            // Optional generic type-parameter list <T, U, …>.
+            if (Peek(cursor).Kind == SyntaxTokenKind.LessThan)
+            {
+                var depth = 0;
+                while (Peek(cursor).Kind is not SyntaxTokenKind.EndOfFile)
+                {
+                    if (Peek(cursor).Kind == SyntaxTokenKind.LessThan) depth++;
+                    else if (Peek(cursor).Kind == SyntaxTokenKind.GreaterThan)
+                    {
+                        depth--;
+                        if (depth == 0) { cursor++; break; }
+                    }
+                    cursor++;
+                }
+            }
+
+            // Optional `where` clauses before the field list.
+            while (Peek(cursor).Kind == SyntaxTokenKind.Bareword &&
+                   string.Equals(Peek(cursor).Text, "where", StringComparison.Ordinal))
+            {
+                cursor++;
+                while (Peek(cursor).Kind is not SyntaxTokenKind.EndOfFile
+                    && Peek(cursor).Kind != SyntaxTokenKind.OpenParen
+                    && !(Peek(cursor).Kind == SyntaxTokenKind.Bareword
+                         && string.Equals(Peek(cursor).Text, "where", StringComparison.Ordinal)))
+                {
+                    cursor++;
+                }
+            }
+
+            return Peek(cursor).Kind == SyntaxTokenKind.OpenParen;
         }
 
         private bool LooksLikeTypeAliasDeclaration()

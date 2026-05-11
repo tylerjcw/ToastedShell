@@ -37,6 +37,10 @@ call System.Math Sqrt 144  # Call a static method
 \end{lstlisting}
 
 \begin{notebox}
+Deprecated. Prefer member-access syntax: `\$obj.Method(\$args)` or `\$callable(\$args)`.
+\end{notebox}
+
+\begin{notebox}
 Prefer the fluent `\$obj.Method()` expression syntax for instance calls and `TypeName.Method()` for static calls. The `call` command form is a legacy fallback.
 \end{notebox}
 
@@ -61,6 +65,10 @@ call-method [object] <method-name> [args...]
 echo hello | call-method ToUpper
 call-method $obj MethodName arg1
 \end{lstlisting}
+
+\begin{notebox}
+Deprecated. Prefer member-access syntax: `\$obj.Method(\$args)`.
+\end{notebox}
 
 \end{cmdbox}
 
@@ -184,6 +192,10 @@ del-prop $obj Name  # Remove by passing the object directly
 \end{lstlisting}
 
 \begin{notebox}
+Deprecated. Prefer `\$obj.Prop = null`, or `forget` for dict keys.
+\end{notebox}
+
+\begin{notebox}
 Only works on dictionary-backed dynamic records. CLR properties cannot be removed.
 \end{notebox}
 
@@ -223,6 +235,39 @@ describe-type list dict table  # Describe multiple shell types
 
 \end{cmdbox}
 
+\subsection{\texttt{funcs}}
+\label{ref:funcs}
+\icmd{funcs}
+
+\textit{Library: \code{Tosh.Stdlib.Clr}}
+
+\begin{cmdbox}{funcs}
+Lists public methods for CLR types or pipeline objects (shortcut for `methods`).
+
+\begin{signature}
+funcs [type ...]
+\end{signature}
+
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+type & Optional type name. When omitted, uses piped objects. (optional) \\
+\bottomrule
+\end{tabular}
+
+\textbf{Pipeline input:} scalar, record
+ --- Inspects the type of each piped object.
+
+\textbf{Output:} Method descriptor objects (alias for `methods`).
+
+\begin{lstlisting}
+string | funcs  # List public methods of String
+$obj | funcs  # List public methods of a piped object
+\end{lstlisting}
+
+\end{cmdbox}
+
 \subsection{\texttt{get-methods}}
 \label{ref:get-methods}
 \icmd{get-methods}
@@ -242,6 +287,10 @@ get-methods [object]
 $obj | get-methods
 get-methods $obj
 \end{lstlisting}
+
+\begin{notebox}
+Deprecated. Prefer `methods` (or `funcs` shortcut).
+\end{notebox}
 
 \end{cmdbox}
 
@@ -277,6 +326,10 @@ $obj | get-prop $propName  # Get a dynamically-named property from a piped objec
 get-prop $obj Name  # Get a property by passing the object as an argument
 \end{lstlisting}
 
+\begin{notebox}
+Deprecated. Prefer member-access syntax: `\$obj.Prop`.
+\end{notebox}
+
 \end{cmdbox}
 
 \subsection{\texttt{get-props}}
@@ -299,6 +352,10 @@ $obj | get-props
 get-props $obj
 \end{lstlisting}
 
+\begin{notebox}
+Deprecated. Prefer `members props` (or `props` shortcut).
+\end{notebox}
+
 \end{cmdbox}
 
 \subsection{\texttt{has-method}}
@@ -320,6 +377,10 @@ has-method [object] <name>
 $obj | has-method ToString
 has-method $obj ToString
 \end{lstlisting}
+
+\begin{notebox}
+Deprecated. Prefer `methods has Name`.
+\end{notebox}
 
 \end{cmdbox}
 
@@ -354,6 +415,10 @@ name & The property name to check. \\
 $obj | has-prop Name  # Check if a piped object has a property
 has-prop $obj Name  # Check by passing the object directly
 \end{lstlisting}
+
+\begin{notebox}
+Deprecated. Prefer `members has Name`.
+\end{notebox}
 
 \end{cmdbox}
 
@@ -394,28 +459,35 @@ load-assembly Newtonsoft.Json.dll System.Data.dll  # Load multiple assemblies
 \textit{Library: \code{Tosh.Stdlib.Clr}}
 
 \begin{cmdbox}{members}
-Lists public members for CLR types or pipeline objects.
+Lists or queries members for CLR types or pipeline objects.
 
 \begin{signature}
-members [type ...]
+members [has|\allowbreak get|\allowbreak props|\allowbreak fields|\allowbreak methods|\allowbreak events] [name] | members [type \\
+\quad ...]
 \end{signature}
 
 \begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
 \toprule
 \textbf{Argument} & \textbf{Description} \\
 \midrule
-type & One or more type names or piped objects to inspect. (optional) \\
+subcommand-or-type & Optional subcommand keyword (`has`, `get`, `props`, `fields`, `methods`, `events`) or a type name. (optional) \\
+name & Operand for `has`/`get`: the member name to look up. (optional) \\
 \bottomrule
 \end{tabular}
 
 \textbf{Pipeline input:} scalar, record
  --- Inspects the type of each piped object.
 
-\textbf{Output:} Member descriptor objects with Name, MemberType, DeclaringType, and Signature properties.
+\textbf{Output:} Member descriptor objects with Name, Kind, MemberType, and other reflection metadata.
 
 \begin{lstlisting}
-members string  # List String members
-DateTime.Now | members  # List members of a piped object
+members string  # List all members of String
+DateTime.Now | members  # List all members of a piped object
+$obj | members has Name  # Check whether $obj has a member named 'Name'
+$obj | members get FullName  # Return the descriptor for member 'FullName' (or null)
+$obj | members props  # Filter to properties only
+$obj | members fields  # Filter to fields only
+$obj | members methods  # Filter to methods only
 \end{lstlisting}
 
 \end{cmdbox}
@@ -427,28 +499,31 @@ DateTime.Now | members  # List members of a piped object
 \textit{Library: \code{Tosh.Stdlib.Clr}}
 
 \begin{cmdbox}{methods}
-Lists public methods for CLR types or pipeline objects.
+Lists or queries public methods for CLR types or pipeline objects.
 
 \begin{signature}
-methods [type ...]
+methods [has|get] [name] | methods [type ...]
 \end{signature}
 
 \begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
 \toprule
 \textbf{Argument} & \textbf{Description} \\
 \midrule
-type & One or more type names or piped objects to inspect. (optional) \\
+subcommand-or-type & Optional subcommand keyword (`has`, `get`) or a type name. (optional) \\
+name & Operand for `has`/`get`: the method name to look up. (optional) \\
 \bottomrule
 \end{tabular}
 
 \textbf{Pipeline input:} scalar, record
- --- Lists public methods of each piped object's type.
+ --- Lists or queries methods of each piped object's type.
 
 \textbf{Output:} Method descriptor objects with Name, ReturnType, Parameters, and Signature properties.
 
 \begin{lstlisting}
-methods string  # List String methods
-DateTime.Now | methods  # List methods of a piped object
+methods string  # List all methods of String
+DateTime.Now | methods  # List all methods of a piped object
+$obj | methods has ToString  # Check whether $obj has a method named 'ToString'
+$obj | methods get ToString  # Return the descriptor for method 'ToString' (or null)
 \end{lstlisting}
 
 \end{cmdbox}
@@ -686,6 +761,39 @@ Tosh supports both the legacy `new <Type> ...` command form and the newer C\#-st
 
 \end{cmdbox}
 
+\subsection{\texttt{props}}
+\label{ref:props}
+\icmd{props}
+
+\textit{Library: \code{Tosh.Stdlib.Clr}}
+
+\begin{cmdbox}{props}
+Lists public properties for CLR types or pipeline objects (shortcut for `members props`).
+
+\begin{signature}
+props [type ...]
+\end{signature}
+
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+type & Optional type name. When omitted, uses piped objects. (optional) \\
+\bottomrule
+\end{tabular}
+
+\textbf{Pipeline input:} scalar, record
+ --- Inspects the type of each piped object.
+
+\textbf{Output:} Property descriptor objects (subset of `members` output, filtered to Kind == Property).
+
+\begin{lstlisting}
+string | props  # List public properties of String
+$obj | props  # List public properties of a piped object
+\end{lstlisting}
+
+\end{cmdbox}
+
 \subsection{\texttt{set-prop}}
 \label{ref:set-prop}
 \icmd{set-prop}
@@ -718,6 +826,10 @@ value & The value to assign. \\
 $obj | set-prop Name "value"  # Set a property on a piped object
 set-prop $obj Name "value"  # Set a property by passing the object directly
 \end{lstlisting}
+
+\begin{notebox}
+Deprecated. Prefer assignment syntax: `\$obj.Prop = value`.
+\end{notebox}
 
 \end{cmdbox}
 
@@ -4775,21 +4887,26 @@ ls | frequencies Extension  # Count file extensions
 \textit{Library: \code{Tosh.Stdlib.Pipeline}}
 
 \begin{cmdbox}{get}
-Gets a member, projects fields, or retrieves an item by index.
+Gets a member or projects fields from each pipeline item.
 
 \textit{Aliases:} \code{pick}, \code{select}
 
 \begin{signature}
-get <member-path> or get \{ <member-path>, ... \} or get <index>
+get <member-path> or get <m1> <m2> ... or get \{ <member-path>, ... \}
 \end{signature}
 
-\textbf{Output:} The selected member value(s) — one item per requested path/index, in input order.
+\textbf{Output:} The selected member value(s) — one item per requested path, in input order.
 
 \begin{lstlisting}
-ls -la | get Name
-ps | get { Name, PID, Memory }
-echo 1 2 3 | get func(x) => ($x * 2)
+ls -la | get Name  # Pluck a single field
+ls | get Name Size Modified  # Project multiple fields (variadic)
+ps | get { Name, PID, Memory }  # Project multiple fields with brace syntax
+echo 1 2 3 | get func(x) => ($x * 2)  # Project with a function
 \end{lstlisting}
+
+\begin{notebox}
+`get` is the column-picker (member values). For row picking by index/range/list, use `row`.
+\end{notebox}
 
 \end{cmdbox}
 
@@ -5439,6 +5556,41 @@ reverse
 \begin{lstlisting}
 echo 1 2 3 | reverse  # Reverse a sequence
 ls | sort .Name | reverse  # Reverse a sorted listing
+\end{lstlisting}
+
+\end{cmdbox}
+
+\subsection{\texttt{row}}
+\label{ref:row}
+\icmd{row}
+
+\textit{Library: \code{Tosh.Stdlib.Pipeline}}
+
+\begin{cmdbox}{row}
+Picks one or more rows from the pipeline by index, range, or list of indices.
+
+\begin{signature}
+row <index ...> | row <range> | row <list>
+\end{signature}
+
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+indices & One or more zero-based indices, a range, or a list/array of indices. \\
+\bottomrule
+\end{tabular}
+
+\textbf{Pipeline input:} scalar, record
+ --- Reads input items by their zero-based position.
+
+\textbf{Output:} The pipeline rows at the requested indices, in the order they were requested.
+
+\begin{lstlisting}
+ls | row 3  # Pick the row at index 3
+ls | row 7 8 9  # Pick multiple rows by index (variadic)
+ls | row [3, 1, 0]  # Pick rows from a list literal (preserves the listed order)
+ls | row 2..5  # Pick a contiguous slice
 \end{lstlisting}
 
 \end{cmdbox}

@@ -14,4 +14,7 @@ public sealed record FunctionDefinition(
     TextSpan Span,
     IReadOnlyList<LexicalScope>? CapturedScopes = null,
     DocComment? DocComment = null,
-    bool IsGenerator = false);
+    bool IsGenerator = false,
+    IReadOnlyList<string>? TypeParameters = null,
+    string? RawReturnTypeName = null,
+    IReadOnlyList<ToshTypeParameterConstraint>? TypeParameterConstraints = null);

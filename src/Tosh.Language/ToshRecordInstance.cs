@@ -7,11 +7,21 @@ public sealed class ToshRecordInstance : IShellRecordObject, IShellTypedObject, 
     private readonly Dictionary<string, object?> _values = new(StringComparer.OrdinalIgnoreCase);
 
     public ToshRecordInstance(ToshRecordDefinition definition)
+        : this(definition, typeArgumentBindings: null)
+    {
+    }
+
+    public ToshRecordInstance(
+        ToshRecordDefinition definition,
+        IReadOnlyDictionary<string, Type?>? typeArgumentBindings)
     {
         Definition = definition;
+        TypeArgumentBindings = typeArgumentBindings;
     }
 
     public ToshRecordDefinition Definition { get; }
+
+    public IReadOnlyDictionary<string, Type?>? TypeArgumentBindings { get; }
 
     public IShellTypeDescriptor ShellTypeDescriptor => Definition;
 
@@ -29,7 +39,7 @@ public sealed class ToshRecordInstance : IShellRecordObject, IShellTypedObject, 
             return false;
         }
 
-        _values[field.Name] = Definition.ConvertFieldValue(field, value);
+        _values[field.Name] = Definition.ConvertFieldValue(field, value, TypeArgumentBindings);
         return true;
     }
 
@@ -42,7 +52,7 @@ public sealed class ToshRecordInstance : IShellRecordObject, IShellTypedObject, 
 
     public object Clone()
     {
-        var clone = new ToshRecordInstance(Definition);
+        var clone = new ToshRecordInstance(Definition, TypeArgumentBindings);
 
         foreach (var (name, value) in _values)
         {

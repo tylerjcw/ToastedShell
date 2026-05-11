@@ -5,6 +5,8 @@ using Tosh.Runtime;
 namespace Tosh.Stdlib.Clr;
 
 [CommandCategory("CLR")]
+[CommandDeprecated("26.05.0.10")]
+[CommandNote("Deprecated. Prefer `members has Name`.")]
 [CommandArgument("object", "The target object. If omitted, reads from the pipeline.", Required = false)]
 [CommandArgument("name", "The property name to check.")]
 [CommandExample("$obj | has-prop Name", Title = "Check if a piped object has a property")]

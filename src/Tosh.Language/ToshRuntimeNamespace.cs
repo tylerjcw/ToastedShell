@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.IO;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using Tosh.Runtime;
@@ -103,6 +104,7 @@ internal sealed class ToshRuntimeNamespace
                     ("RuntimeId", Host.RuntimeId),
                     ("Framework", Host.Framework),
                     ("ProcessId", Host.ProcessId.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                    ("BuildSha256", FormatShortBuildSha(Host.BuildSha256)),
                 ]),
             new(
                 "$tosh.Session",
@@ -176,6 +178,9 @@ internal sealed class ToshRuntimeNamespace
             sections,
             footnotes);
     }
+
+    private static string FormatShortBuildSha(string sha)
+        => string.IsNullOrEmpty(sha) ? "(unknown)" : sha[..Math.Min(12, sha.Length)];
 }
 
 internal sealed class ToshLastNamespace
@@ -457,6 +462,8 @@ internal sealed class ToshSessionNamespace
 internal sealed class ToshHostNamespace
     : IShellRecordObject
 {
+    private static string? _cachedBuildSha;
+
     public string Version => Assembly.GetEntryAssembly()?.GetName().Version?.ToString()
                              ?? Assembly.GetExecutingAssembly().GetName().Version?.ToString()
                              ?? "0.0.0";
@@ -472,6 +479,38 @@ internal sealed class ToshHostNamespace
     public string ExecutablePath => Environment.ProcessPath ?? string.Empty;
 
     public bool IsInteractive => !Console.IsInputRedirected;
+
+    /// <summary>
+    /// SHA-256 of the running executable, computed lazily on first read and
+    /// cached for the life of the process. Lets users verify which binary a
+    /// session is actually running (helpful after upgrading <c>/usr/bin/tosh</c>
+    /// while older shells are still attached to the previous on-disk file).
+    /// </summary>
+    public string BuildSha256
+    {
+        get
+        {
+            if (_cachedBuildSha is not null) return _cachedBuildSha;
+            try
+            {
+                var path = Environment.ProcessPath;
+                if (string.IsNullOrEmpty(path) || !File.Exists(path))
+                {
+                    _cachedBuildSha = string.Empty;
+                    return _cachedBuildSha;
+                }
+                using var stream = File.OpenRead(path);
+                using var sha = System.Security.Cryptography.SHA256.Create();
+                var bytes = sha.ComputeHash(stream);
+                _cachedBuildSha = Convert.ToHexString(bytes).ToLowerInvariant();
+            }
+            catch
+            {
+                _cachedBuildSha = string.Empty;
+            }
+            return _cachedBuildSha;
+        }
+    }
 
     public string ShellTypeName => "ToshRuntime.Host";
 
@@ -500,6 +539,9 @@ internal sealed class ToshHostNamespace
             case nameof(IsInteractive):
                 value = IsInteractive;
                 return true;
+            case nameof(BuildSha256):
+                value = BuildSha256;
+                return true;
             default:
                 value = null;
                 return false;
@@ -518,5 +560,6 @@ internal sealed class ToshHostNamespace
             new(nameof(ProcessId), ProcessId),
             new(nameof(ExecutablePath), ExecutablePath),
             new(nameof(IsInteractive), IsInteractive),
+            new(nameof(BuildSha256), BuildSha256),
         ];
 }

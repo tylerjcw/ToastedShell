@@ -4,6 +4,13 @@ namespace Tosh.Runtime;
 
 public sealed class ShellEnvironmentNamespace : IShellRecordObject
 {
+    private readonly ToshRuntime? _runtime;
+
+    public ShellEnvironmentNamespace(ToshRuntime? runtime = null)
+    {
+        _runtime = runtime;
+    }
+
     public string ShellTypeName => "Environment";
 
     public bool TryGetMember(string name, out object? value, bool includeHidden = false)
@@ -33,7 +40,35 @@ public sealed class ShellEnvironmentNamespace : IShellRecordObject
 
     public bool TrySetMember(string name, object? value)
     {
-        return false;
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return false;
+        }
+
+        // Resolve the canonical case of an existing variable so $env.path = "x"
+        // updates PATH rather than creating a separate "path" entry.
+        var canonical = name;
+        foreach (DictionaryEntry entry in Environment.GetEnvironmentVariables())
+        {
+            var key = entry.Key?.ToString();
+            if (key is not null && string.Equals(key, name, StringComparison.OrdinalIgnoreCase))
+            {
+                canonical = key;
+                break;
+            }
+        }
+
+        if (_runtime is not null)
+        {
+            // Route through the runtime so the variable is tracked as exported and
+            // mirrored into the local Variables dictionary, matching `export NAME = …`.
+            _runtime.ExportEnvironmentVariable(canonical, value);
+        }
+        else
+        {
+            Environment.SetEnvironmentVariable(canonical, ExternalTextSerializer.Serialize(value));
+        }
+        return true;
     }
 
     public IReadOnlyList<KeyValuePair<string, object?>> GetMembers(bool includeHidden = false)

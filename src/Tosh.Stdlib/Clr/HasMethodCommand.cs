@@ -5,6 +5,8 @@ using Tosh.Runtime;
 namespace Tosh.Stdlib.Clr;
 
 [CommandCategory("CLR")]
+[CommandDeprecated("26.05.0.10")]
+[CommandNote("Deprecated. Prefer `methods has Name`.")]
 [CommandExample("$obj | has-method ToString")]
 [CommandExample("has-method $obj ToString")]
 [CommandOutput("A bool — true when the target type/object exposes a method with the given name.", ClrType = typeof(bool))]

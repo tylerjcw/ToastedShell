@@ -19,7 +19,7 @@ namespace Tosh.Stdlib.Shell;
 [CommandOption("--result", "Return a structured outcome object instead of only the selected value/result.")]
 [CommandOption("--prompt <text>", "Prompt text for picker, filter, input, and widget subcommands.")]
 [CommandOption("--display <property>", "Property name used as the display label for object items.")]
-[CommandOption("--page-size <n>", "Number of visible entries in pick/filter lists.")]
+[CommandOption("--page-size <n>", "Number of visible entries in pick/filter lists.", Default = "10")]
 [CommandOption("--default <value|yes|no>", "Default input value or confirmation default.")]
 [CommandOption("--multiline", "Allow multiline input for `input` and `add-input`.")]
 [CommandOption("--password", "Mask text for `input`.")]

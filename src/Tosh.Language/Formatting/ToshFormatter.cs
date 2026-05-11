@@ -163,17 +163,9 @@ public sealed class ToshFormatter
             var stmt = statements[i];
             var isTopLevelDecl = IsTopLevelDeclaration(stmt);
 
-            // Determine separator before invoking WriteStatement, which
-            // itself flushes any preceding full-line comments.
-            var hasPendingFullLineComment = HasPendingFullLineCommentBefore(stmt.Span.Start);
-
-            if (i > 0 && (isTopLevelDecl || _wantBlankLineBefore) && !hasPendingFullLineComment)
+            if (i > 0 && (isTopLevelDecl || _wantBlankLineBefore))
             {
                 _output.Append('\n');
-                _wantBlankLineBefore = false;
-            }
-            else if (hasPendingFullLineComment)
-            {
                 _wantBlankLineBefore = false;
             }
 
@@ -184,18 +176,6 @@ public sealed class ToshFormatter
                 _wantBlankLineBefore = true;
             }
         }
-    }
-
-    /// <summary>True when at least one full-line comment is pending before <paramref name="position"/>.</summary>
-    private bool HasPendingFullLineCommentBefore(int position)
-    {
-        var idx = _nextCommentIndex;
-        while (idx < _comments.Count && _comments[idx].Position < position)
-        {
-            if (_comments[idx].IsFullLine) return true;
-            idx++;
-        }
-        return false;
     }
 
     private static bool IsTopLevelDeclaration(StatementSyntax stmt) => stmt
@@ -286,7 +266,9 @@ public sealed class ToshFormatter
             default:
                 if (IsBraceDelimitedDeclaration(stmt))
                 {
-                    WriteIndented(SliceTrimmedWithMatchingBrace(stmt.Span));
+                    var extendedSpan = ExtendSpanToMatchingBrace(stmt.Span);
+                    WriteIndented(SliceTrimmed(extendedSpan));
+                    AdvanceCommentsBefore(extendedSpan.End);
                 }
                 else
                 {
@@ -319,16 +301,16 @@ public sealed class ToshFormatter
     /// blocks are handled correctly. Falls back to <see cref="SliceTrimmed"/>
     /// when no opening brace is found inside the span.
     /// </summary>
-    private string SliceTrimmedWithMatchingBrace(TextSpan span)
+    private TextSpan ExtendSpanToMatchingBrace(TextSpan span)
     {
-        if (span.Start < 0 || span.Start >= _source.Length) return string.Empty;
+        if (span.Start < 0 || span.Start >= _source.Length) return span;
         var end = Math.Min(span.End, _source.Length);
 
         // Find the first '{' inside the span; if there isn't one, the
         // declaration has no body (e.g. a class with primary-constructor
         // params and no members) and the span is already correct.
         var firstBrace = _source.IndexOf('{', span.Start, end - span.Start);
-        if (firstBrace < 0) return SliceTrimmed(span);
+        if (firstBrace < 0) return span;
 
         // Scan forward from the span end, tracking brace depth that the
         // parser already balanced *inside* the span. Start depth at the
@@ -351,7 +333,7 @@ public sealed class ToshFormatter
             if (depth == 0) break;
         }
 
-        return _source[span.Start..scan].Trim();
+        return TextSpan.FromBounds(span.Start, scan);
     }
 
     private void WriteVariableDeclaration(VariableDeclarationStatementSyntax decl)
@@ -608,15 +590,15 @@ public sealed class ToshFormatter
         {
             if (i > 0) sb.Append(", ");
             var p = parameters[i];
-            if (p.IsRest) sb.Append("...");
             sb.Append(p.Name);
-            if (!string.IsNullOrEmpty(p.TypeName))
-            {
-                sb.Append(": ").Append(p.TypeName);
-            }
+            if (p.IsRest) sb.Append("...");
             if (p.IsOptional && p.DefaultValue is null)
             {
                 sb.Append('?');
+            }
+            if (!string.IsNullOrEmpty(p.TypeName))
+            {
+                sb.Append(": ").Append(p.TypeName);
             }
             if (p.DefaultValue is not null && p.DefaultValue.Stages.Count > 0)
             {
@@ -729,6 +711,20 @@ public sealed class ToshFormatter
             _nextCommentIndex++;
         }
         return emittedAny;
+    }
+
+    /// <summary>
+    /// Marks comments before <paramref name="position"/> as consumed.
+    /// Used after emitting an exact source slice that already contains
+    /// those comments, such as a currently-unformatted class body.
+    /// </summary>
+    private void AdvanceCommentsBefore(int position)
+    {
+        while (_nextCommentIndex < _comments.Count
+               && _comments[_nextCommentIndex].Position < position)
+        {
+            _nextCommentIndex++;
+        }
     }
 
     /// <summary>

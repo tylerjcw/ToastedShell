@@ -5,6 +5,8 @@ using Tosh.Runtime;
 namespace Tosh.Stdlib.Clr;
 
 [CommandCategory("CLR")]
+[CommandDeprecated("26.05.0.10")]
+[CommandNote("Deprecated. Prefer `members props` (or `props` shortcut).")]
 [CommandExample("$obj | get-props")]
 [CommandExample("get-props $obj")]
 [CommandOutput("Records describing each property/field: name, declared type, accessibility, and current value when available.", ClrType = typeof(IAsyncEnumerable<string>))]

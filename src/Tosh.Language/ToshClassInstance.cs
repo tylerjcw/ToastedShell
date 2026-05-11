@@ -130,7 +130,9 @@ public sealed class ToshClassInstance : IShellRecordObject, IShellInvocableObjec
 
     internal object? ClrBaseObject { get; set; }
 
-    public IShellTypeDescriptor ShellTypeDescriptor => Definition;
+    public IShellTypeDescriptor ShellTypeDescriptor => TypeArguments is { Count: > 0 }
+        ? new BoundGenericTypeDescriptor(Definition, TypeArguments)
+        : Definition;
 
     public string ShellTypeName => Definition.Name;
 

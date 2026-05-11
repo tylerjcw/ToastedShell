@@ -126,7 +126,8 @@ public sealed record FunctionDefinitionStatementSyntax(
     bool IsOnceHandler = false,
     BlockSyntax? WhenGuard = null,
     DocComment? DocComment = null,
-    IReadOnlyList<string>? TypeParameters = null) : StatementSyntax(Span);
+    IReadOnlyList<string>? TypeParameters = null,
+    IReadOnlyList<TypeParameterConstraintSyntax>? TypeParameterConstraints = null) : StatementSyntax(Span);
 
 public sealed record RuneDefinitionStatementSyntax(
     string Name,
@@ -214,7 +215,17 @@ public sealed record ClassDefinitionStatementSyntax(
     bool IsHermit = false,
     bool IsStrict = false,
     bool IsPartial = false,
-    IReadOnlyList<string>? BaseTypeArguments = null) : StatementSyntax(Span);
+    IReadOnlyList<string>? BaseTypeArguments = null,
+    IReadOnlyList<TypeParameterConstraintSyntax>? TypeParameterConstraints = null) : StatementSyntax(Span);
+
+/// <summary>
+/// Constraints on a generic type parameter, e.g. <c>where T: Numeric, Add</c>.
+/// Multiple constraint clauses may apply to the same type parameter.
+/// </summary>
+public sealed record TypeParameterConstraintSyntax(
+    string TypeParameter,
+    IReadOnlyList<string> ConstraintNames,
+    TextSpan Span);
 
 public sealed record InterfaceMethodSignatureSyntax(
     string Name,
@@ -228,7 +239,24 @@ public sealed record InterfaceDefinitionStatementSyntax(
     DeclarationModifier Modifier,
     TextSpan Span,
     DocComment? DocComment = null,
-    IReadOnlyList<string>? TypeParameters = null) : StatementSyntax(Span);
+    IReadOnlyList<string>? TypeParameters = null,
+    IReadOnlyList<TypeParameterConstraintSyntax>? TypeParameterConstraints = null,
+    IReadOnlyList<TypeParameterVariance>? TypeParameterVariances = null) : StatementSyntax(Span);
+
+/// <summary>
+/// Variance annotation on a generic type parameter declaration.
+/// Currently meaningful only on interfaces (matches C# semantics):
+/// <c>out T</c> declares <c>T</c> covariant (the type appears only in
+/// output positions, allowing <c>IFoo&lt;Derived&gt;</c> to flow into a
+/// <c>IFoo&lt;Base&gt;</c> slot); <c>in T</c> declares it contravariant
+/// (input positions only, reversed flow); the default is invariant.
+/// </summary>
+public enum TypeParameterVariance
+{
+    Invariant,
+    Covariant,
+    Contravariant,
+}
 
 public sealed record UnionVariantSyntax(
     string Name,
@@ -279,7 +307,9 @@ public sealed record RecordDefinitionStatementSyntax(
     bool IsStrict = false,
     bool IsPartial = false,
     TextSpan Span = default,
-    DocComment? DocComment = null) : StatementSyntax(Span);
+    DocComment? DocComment = null,
+    IReadOnlyList<string>? TypeParameters = null,
+    IReadOnlyList<TypeParameterConstraintSyntax>? TypeParameterConstraints = null) : StatementSyntax(Span);
 
 public sealed record StructDefinitionStatementSyntax(
     string Name,

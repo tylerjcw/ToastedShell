@@ -325,7 +325,30 @@ internal static class HelpTopicSummaryRenderer
         var contentWidth = innerWidth - 4;
         var flagCol = Math.Max(6, opts.Max(o => o.Syntax.Length));
         flagCol = Math.Min(flagCol, Math.Max(10, contentWidth * 2 / 5));
-        var descCol = contentWidth - flagCol - 2;
+
+        // Decide whether to render a third "Default" column. Only show it when
+        // at least one option carries a non-empty default; keep the two-column
+        // layout otherwise so common commands stay compact.
+        var hasDefaults = opts.Any(o => !string.IsNullOrEmpty(o.Default));
+        var defaultCol = 0;
+        if (hasDefaults)
+        {
+            defaultCol = Math.Max(7, opts.Max(o => (o.Default ?? "").Length));
+            defaultCol = Math.Min(defaultCol, Math.Max(7, contentWidth / 5));
+        }
+
+        // Spacing: "Flag" + "  " + (Default + "  ")? + "Description"
+        var spacing = 2 + (defaultCol > 0 ? defaultCol + 2 : 0);
+        var descCol = contentWidth - flagCol - spacing;
+        if (descCol < 12)
+        {
+            // Drop the default column if it crowds the description.
+            if (defaultCol > 0)
+            {
+                defaultCol = 0;
+                descCol = contentWidth - flagCol - 2;
+            }
+        }
         if (descCol < 12)
         {
             // Stack mode: flag on one line, description indented on the next.
@@ -337,6 +360,13 @@ internal static class HelpTopicSummaryRenderer
                 var o = opts[oi];
                 var flagStyled = StyleUsageLine(o.Syntax);
                 sb.AppendLine(WrapInOuter($"│ {flagStyled}{Pad(contentWidth - o.Syntax.Length)} │", innerWidth, outerContentWidth));
+                if (!string.IsNullOrEmpty(o.Default))
+                {
+                    var defLabel = "  default: ";
+                    var defLine = defLabel + o.Default;
+                    var combined = Style(DimStyle, defLabel) + Style(TypeStyle, o.Default!);
+                    sb.AppendLine(WrapInOuter($"│ {combined}{Pad(contentWidth - defLine.Length)} │", innerWidth, outerContentWidth));
+                }
                 foreach (var line in WrapText(o.Description ?? "", contentWidth - 2))
                 {
                     var styled = "  " + line;
@@ -356,8 +386,13 @@ internal static class HelpTopicSummaryRenderer
         sb.AppendLine(WrapInOuter($"├{new string('─', innerWidth - 2)}┤", innerWidth, outerContentWidth));
 
         // Header row.
-        var hdr = Style(DimStyle, PadRightPlain("Flag", flagCol)) + "  " + Style(DimStyle, PadRightPlain("Description", descCol));
-        sb.AppendLine(WrapInOuter($"│ {hdr}{Pad(contentWidth - flagCol - 2 - descCol)} │", innerWidth, outerContentWidth));
+        var headerSb = new StringBuilder();
+        headerSb.Append(Style(DimStyle, PadRightPlain("Flag", flagCol)));
+        if (defaultCol > 0)
+            headerSb.Append("  ").Append(Style(DimStyle, PadRightPlain("Default", defaultCol)));
+        headerSb.Append("  ").Append(Style(DimStyle, PadRightPlain("Description", descCol)));
+        var visibleHeader = flagCol + (defaultCol > 0 ? 2 + defaultCol : 0) + 2 + descCol;
+        sb.AppendLine(WrapInOuter($"│ {headerSb}{Pad(contentWidth - visibleHeader)} │", innerWidth, outerContentWidth));
         sb.AppendLine(WrapInOuter($"├{new string('─', innerWidth - 2)}┤", innerWidth, outerContentWidth));
 
         for (var oi = 0; oi < opts.Count; oi++)
@@ -365,13 +400,27 @@ internal static class HelpTopicSummaryRenderer
             var o = opts[oi];
             var flagPlain = ClipWithEllipsis(o.Syntax, flagCol);
             var flagStyled = StyleUsageLine(flagPlain) + Pad(flagCol - flagPlain.Length);
+
+            string defaultStyled = string.Empty;
+            if (defaultCol > 0)
+            {
+                var defText = ClipWithEllipsis(o.Default ?? "", defaultCol);
+                defaultStyled = string.IsNullOrEmpty(defText)
+                    ? Style(OptionalMarkStyle, PadRightPlain("·", defaultCol))
+                    : Style(TypeStyle, PadRightPlain(defText, defaultCol));
+            }
+
             var descLines = WrapText(o.Description ?? "", descCol).ToList();
             for (var i = 0; i < Math.Max(1, descLines.Count); i++)
             {
                 var descLine = i < descLines.Count ? descLines[i] : string.Empty;
                 var leftCell = i == 0 ? flagStyled : Pad(flagCol);
-                var row = $"│ {leftCell}  {PadRightPlain(descLine, descCol)} │";
-                sb.AppendLine(WrapInOuter(row, innerWidth, outerContentWidth));
+                var defCell = i == 0 ? defaultStyled : Pad(defaultCol);
+                var rowSb = new StringBuilder();
+                rowSb.Append("│ ").Append(leftCell);
+                if (defaultCol > 0) rowSb.Append("  ").Append(defCell);
+                rowSb.Append("  ").Append(PadRightPlain(descLine, descCol)).Append(" │");
+                sb.AppendLine(WrapInOuter(rowSb.ToString(), innerWidth, outerContentWidth));
             }
             if (oi < opts.Count - 1)
             {
@@ -800,7 +849,10 @@ internal static class HelpTopicSummaryRenderer
     {
         if (opts is null || opts.Count == 0) return 0;
         var flag = opts.Max(o => o.Syntax.Length);
-        return flag + 36 + 8;
+        var defaults = opts.Any(o => !string.IsNullOrEmpty(o.Default))
+            ? opts.Max(o => (o.Default ?? "").Length) + 2
+            : 0;
+        return flag + defaults + 36 + 8;
     }
 
     private static int ComputePipelineDesiredOuter(HelpPipelineInputInfo? input, string? output)

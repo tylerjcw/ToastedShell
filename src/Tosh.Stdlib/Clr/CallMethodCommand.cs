@@ -3,6 +3,8 @@ using Tosh.Runtime;
 namespace Tosh.Stdlib.Clr;
 
 [CommandCategory("CLR")]
+[CommandDeprecated("26.05.0.10")]
+[CommandNote("Deprecated. Prefer member-access syntax: `$obj.Method($args)`.")]
 [CommandExample("echo hello | call-method ToUpper")]
 [CommandExample("call-method $obj MethodName arg1")]
 [CommandOutput("Streams whatever the invoked method returns (single value, an enumeration of values, or nothing for void methods).")]

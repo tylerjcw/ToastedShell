@@ -1851,8 +1851,34 @@ public sealed class EngineTests
             """));
 
         var diagnostic = ex.Diagnostics[0];
-        Assert.Equal("tosh.user.HttpError", diagnostic.Code);
+        Assert.Equal("HttpError", diagnostic.Code);
         Assert.Equal("an error escaped here", diagnostic.Label);
+    }
+
+    [Fact]
+    public async Task Uncaught_user_error_maps_diagnostic_footer_properties()
+    {
+        var engine = new ToshEngine();
+
+        var ex = await Assert.ThrowsAsync<ToshDiagnosticException>(() => engine.ExecuteToListAsync("""
+            class ArgumentError(message: string) extends Error {
+                prop Code: string = "point.argument"
+                prop Title: string = "short label"
+                prop Message: string = $message
+                prop Label: string = $this.Title
+                prop Help: string = "Use another point value or a Numeric scalar."
+                prop Information: string => $"ArgumentError: {$this.Message}"
+            }
+
+            throw (new ArgumentError("Unsupported operand type: string"))
+            """));
+
+        var diagnostic = ex.Diagnostics[0];
+        Assert.Equal("point.argument", diagnostic.Code);
+        Assert.Equal("Unsupported operand type: string", diagnostic.Title);
+        Assert.Equal("short label", diagnostic.Label);
+        Assert.Equal("Use another point value or a Numeric scalar.", diagnostic.Help);
+        Assert.Equal("ArgumentError: Unsupported operand type: string", diagnostic.Info);
     }
 
     [Fact]
@@ -1890,7 +1916,7 @@ public sealed class EngineTests
         // (or Diagnostic Title / Code) must preserve the user's type
         // identity.
         var diag = Assert.IsType<ToshDiagnosticException>(caught);
-        Assert.Equal("tosh.user.HttpError", diag.Diagnostics[0].Code);
+        Assert.Equal("HttpError", diag.Diagnostics[0].Code);
     }
 
     [Fact]

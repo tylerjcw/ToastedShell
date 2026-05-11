@@ -5,7 +5,9 @@ public sealed record CommandInvocation(
     string SourceText,
     string CommandName,
     TextSpan CommandSpan,
-    IReadOnlyList<TextSpan> ArgumentSpans)
+    IReadOnlyList<TextSpan> ArgumentSpans,
+    IReadOnlyList<string>? ExplicitTypeArguments = null,
+    string? TargetTypeAnnotation = null)
 {
     public TextSpan? GetArgumentSpan(int index)
     {

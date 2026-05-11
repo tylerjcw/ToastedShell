@@ -1801,6 +1801,23 @@ block (\code{pattern => \{ ... \}}).  An optional guard clause
 \code{if ((<condition>))} after the pattern skips the arm when the guard
 evaluates to \code{false} even if the pattern matched.
 
+The fat-arrow body also accepts the jump statements \code{return},
+\code{yield}, \code{throw}, \code{break}, and \code{continue} directly,
+so generators and short-circuit returns can be expressed without an
+explicit block:
+
+\begin{lstlisting}
+func emit-codes(events) {
+    for $e in $events {
+        match ($e.kind) {
+            "ack" => yield $e
+            "fatal" => throw $e.message
+            default => continue
+        }
+    }
+}
+\end{lstlisting}
+
 \code{match} is an expression: its value is the result of the matched arm.
 When used as a statement the result is discarded (side effects still apply).
 
@@ -2675,6 +2692,18 @@ class body.
     An empty body \code{\{ \}} is required: \code{hollow func name() \{ \}}.
 \end{description}
 
+\noindent \textbf{Canonical aliases.}  Every flavored modifier has an
+equally-valid canonical alias drawn from the wider .NET / object-oriented
+vocabulary; either form is accepted at parse time and produces identical
+semantics.  Use whichever reads better in context.  The pairs are:
+\code{shy}/\code{private}, \code{proud}/\code{public},
+\code{guarded}/\code{protected}, \code{shared}/\code{static},
+\code{fixed}/\code{readonly}, \code{vital}/\code{required},
+\code{overrule}/\code{override}, \code{hollow}/\code{abstract},
+\code{fading}/\code{obsolete}, \code{hermit}/\code{static} (class-level).
+The same canonical/flavored equivalence applies to class-level modifiers
+(\code{abstract}/\code{hollow}, \code{static}/\code{hermit}).
+
 \noindent Example:
 \begin{lstlisting}
 class Product {
@@ -2795,6 +2824,54 @@ the compiler registers the class via source-replay and emits
 \code{ToshHost.NewObject(typeName, bareTypeName, string[] typeArgs, object?[] args)}\\
 which delegates to the engine's reification path.  This means
 generic classes behave identically in REPL and compiled execution.
+
+\subsection*{Type-Parameter Constraints}
+
+A \code{where T: <Constraint>[, <Constraint>\ldots]} clause may follow
+the class header to restrict acceptable type arguments.  Built-in
+constraints are summarised below; multiple \code{where} clauses may
+follow one another to constrain different type parameters.  Unknown
+constraint names are accepted conservatively (reserved for future
+user-defined constraints).
+
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+\textbf{Constraint} & \textbf{Satisfied by} \\
+\midrule
+\code{Numeric} / \code{Number} / \code{INumber} &
+  \code{int}, \code{long}, \code{short}, \code{byte}, signed/unsigned variants,
+  \code{float}, \code{double}, \code{decimal}, \code{Half}, \code{BigInteger} \\
+\code{Add} / \code{Sub} / \code{Mul} / \code{Div} &
+  Any numeric type, or any CLR type with a matching \code{op\_*} static method \\
+\code{Comparable} & Any type implementing \code{IComparable} \\
+\code{Eq} & Always satisfied (placeholder) \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{lstlisting}
+class Box<T>(initial: T) where T: Numeric {
+    prop value: T = $initial
+    func bump(amount) { $this.value = $this.value + $amount }
+}
+
+var bi = new Box<int>(10);     $bi.bump(5)     # 15
+var bf = new Box<double>(1.5); $bf.bump(2.5)   # 4.0
+# new Box<string>("hi")  -> rejected: 'string' does not satisfy 'Numeric'
+\end{lstlisting}
+
+The same constraint names also work as right-hand operands for the
+\code{is} / \code{is-not} operators on values, so runtime checks reuse
+the same registry as compile-time generic-parameter validation:
+
+\begin{lstlisting}
+var x = 42
+$x is Numeric           # true
+$x is Comparable        # true
+"hello" is Numeric      # false
+$x is-not Numeric       # false
+\end{lstlisting}
 
 \section{Inheritance, Interfaces, and Traits}
 \ikw{extends}\ikw{fulfills}\ikw{implements}\ikw{uses}
@@ -3368,6 +3445,116 @@ alloc buffer = 1024     # Allocate 1024 bytes of native memory
 
 See Chapter~\ref{ch:cmd-native} for full native interop commands.
 
+\section{Picking Columns vs Rows}
+\label{sec:get-row}
+
+\code{get} and \code{row} form the canonical pipeline-slicing cluster.
+\code{get} projects \emph{members} (columns); \code{row} selects
+\emph{positions} (rows).  Both are variadic.
+
+\begin{lstlisting}
+ls | get Name Size              # column picker -- variadic field projection
+ls | get Name                   # single column (yields scalars)
+[10,20,30,40,50] | row 2        # row picker -- single index
+[10,20,30,40,50] | row 4 0 2    # variadic, yields 50, 10, 30 in requested order
+[10,20,30,40,50] | row [3,1,0]  # list literal works too
+[10,20,30,40,50] | row 1..3     # contiguous range
+\end{lstlisting}
+
+\code{select} and \code{pick} are soft aliases for \code{get}.  Bad
+indices in \code{row} throw \code{tosh.row.index\_out\_of\_range}.
+\code{row} only materialises the prefix of the pipeline necessary to
+satisfy the highest requested index, so it is safe on long but bounded
+streams; infinite ranges (\code{row 0..}) are rejected.
+
+\section{Structured Introspection}
+\label{sec:introspection}
+
+\code{members} and \code{methods} are the canonical introspection
+commands.  Both accept first-argument keywords for filtering and
+querying:
+
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+\textbf{Subcommand} & \textbf{Effect} \\
+\midrule
+\code{has <Name>} & \code{true}/\code{false} for whether the named member exists. \\
+\code{get <Name>} & Yields each matching member descriptor (zero-or-more). \\
+\code{props}      & Filter to properties only (\code{members} only). \\
+\code{fields}     & Filter to fields only (\code{members} only). \\
+\code{methods}    & Filter to methods only (\code{members} only). \\
+\code{events}     & Filter to events only (\code{members} only; reserved). \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The keyword may consume a trailing operand; any further arguments are
+parsed as type targets, so the piped form and the named-type form are
+interchangeable:
+
+\begin{lstlisting}
+$obj | members has Length        # bool from a piped instance
+$obj | members get FullName      # descriptor record(s)
+$obj | members props             # all properties of $obj's type
+$obj | methods has ToUpper       # bool
+
+members has Length string        # equivalent: type as trailing arg
+methods get ToUpper string       # descriptor for String.ToUpper
+\end{lstlisting}
+
+\code{props} and \code{funcs} are top-level shortcuts for
+\code{members props} and \code{methods}, respectively.
+
+The verb-form CLR commands (\code{call}, \code{call-method},
+\code{get-prop}, \code{get-props}, \code{get-methods}, \code{has-prop},
+\code{has-method}, \code{set-prop}, \code{del-prop}) are deprecated
+since version \code{26.05.0.10}; they remain registered for backward
+compatibility but emit deprecation diagnostics.  Prefer the fluent
+member-access syntax (\code{\$obj.Method(\$args)}, \code{\$obj.Prop},
+\code{\$obj.Prop = value}) and the introspection cluster above.
+
+\section{System Namespace}
+
+The full \code{System.*} namespace tree is exposed via the CLR resolver
+without an \code{import} statement.  This makes \code{System.IO.*} the
+canonical handle API for file streams, paths, and binary IO:
+
+\begin{lstlisting}
+var fh = System.IO.File.OpenRead "/etc/hostname"
+defer { $fh.Dispose() }
+var bytes = System.IO.File.ReadAllBytes "/etc/hostname"
+var leaf  = System.IO.Path.GetFileName $path
+var b64   = System.Convert.ToBase64String $bytes
+\end{lstlisting}
+
+\section{Binder Pass}
+\label{sec:binder-pass}
+
+Between parse and evaluate, a static binder pass walks the AST and
+emits \code{tosh.bind.unknown\_command} diagnostics for command names
+that look like typos for registered builtins or aliases (Levenshtein
+distance \(\le 1\) for short names, \(\le 2\) for longer).  Same-source
+\code{func} declarations are recognised and never flagged.
+
+Strictness depends on context:
+
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+\textbf{Context} & \textbf{Default mode} \\
+\midrule
+Interactive REPL                 & \code{Warn} (stderr) \\
+\code{tosh -c "\ldots"}          & \code{Strict} \\
+\code{tosh script.tosh} / \code{source} & \code{Strict} \\
+\code{profile.tosh} / \code{autoload/*} & \code{Warn} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+To bypass the binder entirely (recovery escape hatch; undocumented in
+user-facing help), set \code{TOSH\_DISABLE\_BINDER=1}.
+
 
 % =============================================================================
 \chapter{Configuration}
@@ -3518,7 +3705,7 @@ config init                         # Scaffold missing startup files
 \code{\$tosh.Host.ProcessId} & PID of the current shell process. \\
 \midrule
 \multicolumn{2}{l}{\textit{Environment and configuration}} \\
-\code{\$env.NAME} & Environment variable (case-insensitive lookup). \\
+\code{\$env.NAME} & Environment variable (case-insensitive lookup). Assigning to \code{\$env.NAME = "value"} routes through the same export path as \code{export NAME = "value"} and is also case-insensitive against existing variables. \\
 \code{\$tosh.Config} & Live configuration object; see Chapter~\ref{ch:config}. \\
 \bottomrule
 \caption{Special variables}

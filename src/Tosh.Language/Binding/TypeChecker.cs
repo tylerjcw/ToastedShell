@@ -1122,6 +1122,18 @@ public static class TypeChecker
         bool isBool(BoundType t) => t.ClrType == typeof(bool);
         bool isString(BoundType t) => t.ClrType == typeof(string);
 
+        // If either operand isn't a built-in scalar, skip the check —
+        // user-defined classes (and unresolved CLR types) may carry
+        // operator overloads that the checker can't see.
+        bool isPrimitiveScalar(BoundType t)
+        {
+            var c = t.ClrType;
+            if (c is null) return false;
+            return c == typeof(bool) || c == typeof(string) || c == typeof(char)
+                || c == typeof(DateTime) || NumericRank(c) > 0;
+        }
+        if (!isPrimitiveScalar(left) || !isPrimitiveScalar(right)) return;
+
         var op = binary.Operator;
         var ok = op switch
         {
@@ -1252,9 +1264,85 @@ public static class TypeChecker
         if (to.IsDynamic || from.IsDynamic) return true;
         if (to.IsVoid && from.IsVoid) return true;
 
+        // Type-alias transparency. A `RefinementType` is a named
+        // wrapper around an underlying base type — both refinement-
+        // bearing aliases (e.g. `type Positive = int where _ > 0`)
+        // and plain aliases (e.g. `type Id = int`) reach this
+        // checker via the `RefinementType` shape. For assignability
+        // we unwrap the wrapper and compare against the base; the
+        // refinement clauses themselves are validated dynamically
+        // by the runtime/IL path on the actual value.
+        if (from is RefinementType frt) return IsAssignable(frt.Base, to, out reason);
+        if (to is RefinementType trt) return IsAssignable(from, trt.Base, out reason);
+
+        // Generic alias instantiation: when the LHS is a constructed
+        // generic whose template is itself an alias (e.g.
+        // `MyList<T> = list<T>` used as `MyList<string>`), the
+        // template carries the open base. Recurse against that base
+        // — its element types may be `Dynamic` placeholders for the
+        // alias's type parameters, which the IsDynamic short-circuit
+        // happily accepts. This is intentionally lenient; precise
+        // generic-alias substitution is a separate follow-up.
+        if (to is GenericInstanceType toGiAlias && toGiAlias.Template is RefinementType toGiTpl)
+        {
+            return IsAssignable(from, toGiTpl.Base, out reason);
+        }
+        if (from is GenericInstanceType fromGiAlias && fromGiAlias.Template is RefinementType fromGiTpl)
+        {
+            return IsAssignable(fromGiTpl.Base, to, out reason);
+        }
+
         // Exact match on the BoundType structure (handles list<int> ==
         // list<int>, user types, refinements, function types, etc.).
         if (from.Equals(to)) return true;
+
+        // Element-wise recursion for the homogeneous container shapes.
+        // The `Equals` short-circuit above already covers the
+        // identical-element case; this branch additionally lets a
+        // `Dynamic`-element flow into a slot with a concrete element
+        // type, and pairs structurally so nested shapes are checked
+        // recursively rather than via the loose CLR-type fallback
+        // (which conflates `List<T>` with `IList`).
+        if (from is ListType fromList && to is ListType toList)
+        {
+            return IsAssignable(fromList.Element, toList.Element, out reason);
+        }
+        if (from is ArrayType fromArr && to is ArrayType toArr)
+        {
+            return IsAssignable(fromArr.Element, toArr.Element, out reason);
+        }
+        if (from is SetType fromSet && to is SetType toSet)
+        {
+            return IsAssignable(fromSet.Element, toSet.Element, out reason);
+        }
+        if (from is DictType fromDict && to is DictType toDict)
+        {
+            return IsAssignable(fromDict.Key, toDict.Key, out reason)
+                && IsAssignable(fromDict.Value, toDict.Value, out reason);
+        }
+
+        // Loose-list-literal compatibility. Today the lowerer types
+        // every list literal as the non-generic
+        // `System.Collections.IList` regardless of element shape, so
+        // a `list<int>` slot fed by `[1,2,3]` looks like
+        // `IList -> List<int>` to the CLR-type fallback below \u2014 a
+        // false negative. Accept any source whose CLR shape is the
+        // raw `IList` (with no element type at the BoundType level)
+        // when the destination is one of our structured list/array
+        // shapes; the runtime conversion handles the actual element
+        // coercion.
+        if (from.ClrType == typeof(System.Collections.IList)
+            && from is not ListType && from is not ArrayType
+            && (to is ListType or ArrayType))
+        {
+            return true;
+        }
+        if (from.ClrType == typeof(System.Collections.IDictionary)
+            && from is not DictType
+            && to is DictType)
+        {
+            return true;
+        }
 
         // stream<T> models the polymorphic pipeline materialization
         // rule (single-element → T, multi-element → T[] / list<T>).
@@ -1281,8 +1369,101 @@ public static class TypeChecker
             return false;
         }
 
+        // Generic-instance ⇄ bare-template equivalence. A generic class
+        // declared `class Point2D<T>` may be referenced inside its own
+        // body either as the bare name `Point2D` (when annotating a
+        // return type) or as a constructed `Point2D<T>`. Treat
+        // `GenericInstanceType { Template = X }` and the bare user
+        // template `X` as compatible whenever the templates match;
+        // recurse on type arguments pointwise so nested shapes still
+        // get checked. Type parameters and dynamic args are accepted
+        // (handled by the IsDynamic short-circuit at the top).
+        if (from is GenericInstanceType fromGi && SameUserTemplate(fromGi.Template, to))
+        {
+            return true;
+        }
+        if (to is GenericInstanceType toGi && SameUserTemplate(toGi.Template, from))
+        {
+            return true;
+        }
+        if (from is GenericInstanceType fgi && to is GenericInstanceType tgi
+            && SameUserTemplate(fgi.Template, tgi.Template)
+            && fgi.TypeArguments.Count == tgi.TypeArguments.Count)
+        {
+            // Variance dispatch. For interface templates, consult
+            // the declared `out`/`in` annotations on each type
+            // parameter and apply the matching directional check.
+            // All other templates (classes, records, structs, …)
+            // remain invariant — matching C# semantics, where only
+            // interface (and delegate) parameters can declare
+            // variance.
+            var variances = GetTemplateVariances(fgi.Template, fgi.TypeArguments.Count);
+            for (var i = 0; i < fgi.TypeArguments.Count; i++)
+            {
+                var fromArg = fgi.TypeArguments[i];
+                var toArg = tgi.TypeArguments[i];
+                var ok = variances[i] switch
+                {
+                    Tosh.Language.Parsing.TypeParameterVariance.Covariant
+                        => IsAssignable(fromArg, toArg, out _),
+                    Tosh.Language.Parsing.TypeParameterVariance.Contravariant
+                        => IsAssignable(toArg, fromArg, out _),
+                    // Invariant: bidirectional assignability — accepts
+                    // pure equality plus alias/refinement unwraps and
+                    // dynamic placeholders, but rejects asymmetric
+                    // narrowing/widening that pure covariance would
+                    // accept.
+                    _ => IsAssignable(fromArg, toArg, out _) && IsAssignable(toArg, fromArg, out _),
+                };
+                if (!ok) goto notAssignable;
+            }
+            return true;
+        notAssignable:;
+        }
+
         reason = "shapes differ.";
         return false;
+    }
+
+    /// <summary>
+    /// Returns the per-type-parameter variance list for a generic
+    /// template. Falls back to all-invariant when the template
+    /// doesn't carry variance metadata (i.e. anything other than a
+    /// user interface). The returned list is exactly
+    /// <paramref name="arity"/> elements long for safe indexing.
+    /// </summary>
+    private static IReadOnlyList<Tosh.Language.Parsing.TypeParameterVariance> GetTemplateVariances(
+        BoundType template, int arity)
+    {
+        if (template is UserInterfaceType iface
+            && iface.Definition is Tosh.Language.Parsing.InterfaceDefinitionStatementSyntax def
+            && def.TypeParameterVariances is { Count: > 0 } declared
+            && declared.Count == arity)
+        {
+            return declared;
+        }
+        return Enumerable.Repeat(Tosh.Language.Parsing.TypeParameterVariance.Invariant, arity).ToList();
+    }
+
+    /// <summary>
+    /// Compares two user-type bound nodes by template identity. Used
+    /// by the generic-instance ⇄ bare-template assignability rule so
+    /// that <c>Point2D&lt;T&gt;</c> and <c>Point2D</c> match without
+    /// the latter being expanded into an explicit instance form.
+    /// </summary>
+    private static bool SameUserTemplate(BoundType a, BoundType b)
+    {
+        return (a, b) switch
+        {
+            (UserClassType ax, UserClassType bx) => string.Equals(ax.Name, bx.Name, StringComparison.Ordinal),
+            (UserRecordType ax, UserRecordType bx) => string.Equals(ax.Name, bx.Name, StringComparison.Ordinal),
+            (UserStructType ax, UserStructType bx) => string.Equals(ax.Name, bx.Name, StringComparison.Ordinal),
+            (UserInterfaceType ax, UserInterfaceType bx) => string.Equals(ax.Name, bx.Name, StringComparison.Ordinal),
+            (UserUnionType ax, UserUnionType bx) => string.Equals(ax.Name, bx.Name, StringComparison.Ordinal),
+            (UserTraitType ax, UserTraitType bx) => string.Equals(ax.Name, bx.Name, StringComparison.Ordinal),
+            (UserEnumType ax, UserEnumType bx) => string.Equals(ax.Name, bx.Name, StringComparison.Ordinal),
+            _ => false,
+        };
     }
 
     private static bool IsNumericWidening(Type from, Type to)

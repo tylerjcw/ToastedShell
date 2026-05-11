@@ -8,7 +8,7 @@ namespace Tosh.Stdlib.Shell;
 [CommandOption("--bg <color>", "Background color name or ANSI-style color token.")]
 [CommandOption("--bold", "Render the segment in bold.")]
 [CommandOption("--dim", "Render the segment dimmed.")]
-[CommandOption("--format <pattern>", "Date/time format string used to render the current time.")]
+[CommandOption("--format <pattern>", "Date/time format string used to render the current time.", Default = "HH:mm")]
 [CommandExample("prompt-time --dim")]
 [CommandExample("prompt-time --format \"HH:mm:ss\" --fg gray")]
 [CommandOutput("Styled prompt segment(s) showing the current wall-clock time.")]

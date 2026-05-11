@@ -175,6 +175,7 @@ public static class BuiltInCommands
         commands.Register(new GetCommand());
         commands.RegisterAlias("select", "get");
         commands.RegisterAlias("pick", "get");
+        commands.Register(new RowCommand());
         commands.Register(new RenameCommand());
         commands.Register(new InspectCommand());
         commands.Register(new WhereCommand());
@@ -291,6 +292,26 @@ public static class BuiltInCommands
         commands.Register(new RoundCommand());
 
         // ── Clr (reflection, interop, native memory) ──
+        // Structured-introspection canonical surface.
+        commands.Register(new MembersCommand());
+        commands.Register(new MethodsCommand());
+        commands.Register(new PropsCommand());
+        commands.Register(new FuncsCommand());
+        commands.Register(new CloneCommand());
+        commands.Register(new TypeOfCommand());
+        commands.Register(new DescribeTypeCommand());
+        commands.Register(new ConstructorsCommand());
+        commands.Register(new TypesCommand());
+        commands.Register(new LoadAssemblyCommand());
+        commands.Register(new CastCommand());
+        commands.Register(new NewObjectCommand());
+        // Verb-form commands deprecated 2026-05-10. Replacements:
+        //   call / call-method  → $obj.Method($args) or $callable($args)
+        //   get-prop / get-props → $obj.Prop, members props
+        //   set-prop             → $obj.Prop = value
+        //   del-prop             → $obj.Prop = null  (or `forget` for dict keys)
+        //   has-prop / has-method → members has Name, methods has Name
+        //   get-methods          → methods, or members methods
         commands.Register(new HasPropCommand());
         commands.Register(new HasMethodCommand());
         commands.Register(new GetPropsCommand());
@@ -299,16 +320,6 @@ public static class BuiltInCommands
         commands.Register(new SetPropCommand());
         commands.Register(new DelPropCommand());
         commands.Register(new CallMethodCommand());
-        commands.Register(new CloneCommand());
-        commands.Register(new TypeOfCommand());
-        commands.Register(new DescribeTypeCommand());
-        commands.Register(new MembersCommand());
-        commands.Register(new MethodsCommand());
-        commands.Register(new ConstructorsCommand());
-        commands.Register(new TypesCommand());
-        commands.Register(new LoadAssemblyCommand());
-        commands.Register(new CastCommand());
-        commands.Register(new NewObjectCommand());
         commands.Register(new CallCommand());
         commands.Register(new NativeAllocCommand());
         commands.RegisterAlias("alloc", "native-alloc");

@@ -1391,6 +1391,160 @@ public sealed class LanguageFeatureTests
     }
 
     [Fact]
+    public async Task Is_operator_recognises_numeric_trait_constraint()
+    {
+        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var results = await engine.ExecuteToListAsync(@"
+            var i = 42
+            var f = 3.14
+            var s = ""hello""
+            echo ($i is Numeric) ($f is Numeric) ($s is Numeric) ($i is Number) ($i is INumber) ($s is-not Numeric)
+        ");
+        Assert.Equal([true, true, false, true, true, true], results);
+    }
+
+    [Fact]
+    public async Task Is_operator_recognises_comparable_trait_constraint()
+    {
+        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var results = await engine.ExecuteToListAsync(@"
+            var i = 42
+            var s = ""hello""
+            echo ($i is Comparable) ($s is Comparable)
+        ");
+        Assert.Equal([true, true], results);
+    }
+
+    [Fact]
+    public async Task Match_arm_pipeline_body_supports_throw_statement()
+    {
+        // Regression: previously `default => throw new ...` was parsed as a
+        // pipeline starting with the bareword command `throw`, producing
+        // 'tosh.runtime.unknown_command' instead of raising the exception.
+        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var results = await engine.ExecuteToListAsync(@"
+            func classify(x) {
+                return match ($x) {
+                    _ is Numeric => ""number""
+                    _ is String  => ""string""
+                    default      => throw ""unsupported""
+                }
+            }
+            try {
+                classify [1, 2]
+            } catch ($err) {
+                echo $""caught: {$err}""
+            }
+            echo (classify 42)
+            echo (classify ""hi"")
+        ");
+        Assert.Equal(["caught: unsupported", "number", "string"], results);
+    }
+
+    [Fact]
+    public async Task Match_arm_pipeline_body_supports_return_statement()
+    {
+        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var results = await engine.ExecuteToListAsync(@"
+            func classify(x) {
+                match ($x) {
+                    _ > 0 => return ""pos""
+                    _ < 0 => return ""neg""
+                    default => return ""zero""
+                }
+                return ""?""
+            }
+            echo (classify 5)
+            echo (classify -3)
+            echo (classify 0)
+        ");
+        Assert.Equal(["pos", "neg", "zero"], results);
+    }
+
+    [Fact]
+    public async Task Generic_class_infers_type_arguments_from_ctor_args()
+    {
+        // Phase 6.16 — `new Box(42)` ⇒ `T = int` from the ctor argument
+        // type, no `<int>` ceremony required.
+        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var results = await engine.ExecuteToListAsync(@"
+            class Box<T>(initial: T) where T: Numeric {
+                prop value: T = $initial
+            }
+            var bi = new Box(42)
+            var bf = new Box(3.14)
+            echo $bi.value
+            echo $bf.value
+            echo ((type-of $bi).TypeArguments[0].Name)
+            echo ((type-of $bf).TypeArguments[0].Name)
+        ");
+        Assert.Equal([42, 3.14, "Int32", "Double"], results);
+    }
+
+    [Fact]
+    public async Task Generic_class_inference_still_enforces_constraints()
+    {
+        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var results = await engine.ExecuteToListAsync(@"
+            class Box<T>(initial: T) where T: Numeric {
+                prop value: T = $initial
+            }
+            try {
+                var bad = new Box(""hi"")
+                echo ""unreachable""
+            } catch ($err) {
+                echo ""caught""
+            }
+        ");
+        Assert.Equal(["caught"], results);
+    }
+
+    [Fact]
+    public async Task Generic_record_infers_type_arguments_from_ctor_args()
+    {
+        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var results = await engine.ExecuteToListAsync(@"
+            record Pair<A, B>(first: A, second: B)
+            var p = new Pair(""hello"", 7)
+            echo $p.first
+            echo $p.second
+        ");
+        Assert.Equal(["hello", 7], results);
+    }
+
+    [Fact]
+    public async Task Generic_class_infers_nested_list_element_type()
+    {
+        // Phase 6.16 — nested annotations: `class Box<T>(values: list<T>)`
+        // should infer T from the element type of the supplied list.
+        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var results = await engine.ExecuteToListAsync(@"
+            class Box<T>(values: list<T>) {
+                prop values = $values
+            }
+            var b = new Box([1, 2, 3])
+            echo ((type-of $b).TypeArguments[0].Name)
+        ");
+        Assert.Equal(["Int32"], results);
+    }
+
+    [Fact]
+    public async Task Generic_class_infers_type_arguments_through_clr_generic_type()
+    {
+        // Phase 6.16 — `Head<T>` annotation matched against any generic
+        // CLR runtime type unifies pointwise.
+        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var results = await engine.ExecuteToListAsync(@"
+            class Wrap<T>(items: list<T>) {
+                prop items = $items
+            }
+            var w = new Wrap([""a"", ""b""])
+            echo ((type-of $w).TypeArguments[0].Name)
+        ");
+        Assert.Equal(["String"], results);
+    }
+
+    [Fact]
     public async Task Is_operator_walks_tosh_class_hierarchy()
     {
         var engine = new ToshEngine(ToshRuntime.CreateDefault());

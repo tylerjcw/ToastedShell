@@ -15,7 +15,9 @@ public sealed class ToshRecordDefinition : IShellNamedType
         string sourceName,
         string sourceText,
         TextSpan span,
-        IReadOnlyList<LexicalScope>? capturedScopes)
+        IReadOnlyList<LexicalScope>? capturedScopes,
+        IReadOnlyList<string>? typeParameterNames = null,
+        IReadOnlyList<TypeParameterConstraintSyntax>? typeParameterConstraints = null)
     {
         _engine = engine;
         Name = name;
@@ -24,6 +26,8 @@ public sealed class ToshRecordDefinition : IShellNamedType
         SourceText = sourceText;
         Span = span;
         CapturedScopes = capturedScopes;
+        TypeParameterNames = typeParameterNames ?? Array.Empty<string>();
+        TypeParameterConstraints = typeParameterConstraints ?? Array.Empty<TypeParameterConstraintSyntax>();
         _fieldsByName = fields.ToDictionary(field => field.Name, StringComparer.OrdinalIgnoreCase);
     }
 
@@ -45,6 +49,10 @@ public sealed class ToshRecordDefinition : IShellNamedType
 
     public IReadOnlyList<LexicalScope>? CapturedScopes { get; }
 
+    public IReadOnlyList<string> TypeParameterNames { get; }
+
+    public IReadOnlyList<TypeParameterConstraintSyntax> TypeParameterConstraints { get; }
+
     public string ShellTypeName => Name;
 
     public string ShellFullName => Name;
@@ -65,7 +73,7 @@ public sealed class ToshRecordDefinition : IShellNamedType
 
     public bool ShellIsAbstract => false;
 
-    public bool ShellIsGenericType => false;
+    public bool ShellIsGenericType => TypeParameterNames.Count > 0;
 
     public bool ShellIsArray => false;
 
@@ -73,8 +81,100 @@ public sealed class ToshRecordDefinition : IShellNamedType
 
     public object CreateInstance(IReadOnlyList<object?> arguments)
     {
-        var instance = new ToshRecordInstance(this);
-        var bound = BindFields(arguments);
+        return CreateInstanceCore(arguments, typeArgumentBindings: null);
+    }
+
+    /// <summary>
+    /// Generic-aware construction. Mirrors
+    /// <see cref="ToshClassDefinition.CreateGenericInstance"/> but for
+    /// records (no methods, just typed fields).
+    /// </summary>
+    public object CreateGenericInstance(
+        IReadOnlyList<Type?> resolvedTypeArguments,
+        IReadOnlyList<string> typeArgumentDisplay,
+        IReadOnlyList<object?> arguments)
+    {
+        if (resolvedTypeArguments.Count != TypeParameterNames.Count)
+        {
+            throw new InvalidOperationException(
+                $"Generic record '{Name}' expects {TypeParameterNames.Count} type argument(s) " +
+                $"<{string.Join(", ", TypeParameterNames)}> but received {resolvedTypeArguments.Count}.");
+        }
+
+        var bindings = new Dictionary<string, Type?>(StringComparer.OrdinalIgnoreCase);
+        for (int i = 0; i < TypeParameterNames.Count; i++)
+        {
+            bindings[TypeParameterNames[i]] = resolvedTypeArguments[i];
+        }
+
+        ValidateTypeParameterConstraints(bindings, typeArgumentDisplay);
+
+        return CreateInstanceCore(arguments, bindings);
+    }
+
+    private void ValidateTypeParameterConstraints(
+        IReadOnlyDictionary<string, Type?> bindings,
+        IReadOnlyList<string> typeArgumentDisplay)
+    {
+        if (TypeParameterConstraints.Count == 0) return;
+        foreach (var clause in TypeParameterConstraints)
+        {
+            if (!bindings.TryGetValue(clause.TypeParameter, out var bound) || bound is null)
+            {
+                continue;
+            }
+            foreach (var constraintName in clause.ConstraintNames)
+            {
+                bool satisfied;
+                bool known;
+                if (ToshTypeParameterConstraintRegistry.TryGet(constraintName, out var predicate))
+                {
+                    satisfied = predicate(bound);
+                    known = true;
+                }
+                else
+                {
+                    var clr = _engine.TryResolveTypeName(constraintName);
+                    if (clr is not null)
+                    {
+                        satisfied = clr.IsAssignableFrom(bound);
+                        known = true;
+                    }
+                    else
+                    {
+                        satisfied = true;
+                        known = false;
+                    }
+                }
+
+                if (satisfied) continue;
+                if (!known) continue;
+
+                var displayIndex = TypeParameterNames
+                    .Select((n, i) => (n, i))
+                    .FirstOrDefault(t => string.Equals(t.n, clause.TypeParameter, StringComparison.OrdinalIgnoreCase)).i;
+                var argDisplay = displayIndex < typeArgumentDisplay.Count
+                    ? typeArgumentDisplay[displayIndex]
+                    : bound.Name;
+                throw new InvalidOperationException(
+                    $"Generic record '{Name}' requires type parameter '{clause.TypeParameter}' to satisfy '{constraintName}', " +
+                    $"but '{argDisplay}' (CLR {bound.FullName ?? bound.Name}) does not.");
+            }
+        }
+    }
+
+    private object CreateInstanceCore(
+        IReadOnlyList<object?> arguments,
+        IReadOnlyDictionary<string, Type?>? typeArgumentBindings)
+    {
+        if (TypeParameterNames.Count > 0 && typeArgumentBindings is null)
+        {
+            throw new InvalidOperationException(
+                $"Generic record '{Name}' requires type arguments, e.g. 'new {Name}<{string.Join(", ", TypeParameterNames)}>(…)'.");
+        }
+
+        var instance = new ToshRecordInstance(this, typeArgumentBindings);
+        var bound = BindFields(arguments, typeArgumentBindings);
 
         foreach (var field in Fields)
         {
@@ -156,6 +256,32 @@ public sealed class ToshRecordDefinition : IShellNamedType
 
     internal object? ConvertFieldValue(ToshRecordFieldDefinition field, object? value)
     {
+        return ConvertFieldValue(field, value, typeArgumentBindings: null);
+    }
+
+    internal object? ConvertFieldValue(
+        ToshRecordFieldDefinition field,
+        object? value,
+        IReadOnlyDictionary<string, Type?>? typeArgumentBindings)
+    {
+        // If the field's annotation is a type-parameter name, perform a
+        // strict IsInstanceOfType check against the bound CLR type — no
+        // coercion. Mirrors generic-class parameter behavior.
+        if (field.TypeName is not null
+            && typeArgumentBindings is not null
+            && typeArgumentBindings.TryGetValue(field.TypeName, out var boundType)
+            && boundType is not null)
+        {
+            if (value is null) return null;
+            if (!boundType.IsInstanceOfType(value))
+            {
+                throw new InvalidOperationException(
+                    $"Record field '{Name}.{field.Name}' expects type parameter '{field.TypeName}' bound to '{boundType.FullName ?? boundType.Name}', " +
+                    $"but received a value of type '{value.GetType().FullName ?? value.GetType().Name}'.");
+            }
+            return value;
+        }
+
         return _engine.ConvertAnnotatedValue(
             field.TypeName,
             field.Refinement,
@@ -166,7 +292,9 @@ public sealed class ToshRecordDefinition : IShellNamedType
             $"{Name}.{field.Name}");
     }
 
-    private Dictionary<string, object?> BindFields(IReadOnlyList<object?> arguments)
+    private Dictionary<string, object?> BindFields(
+        IReadOnlyList<object?> arguments,
+        IReadOnlyDictionary<string, Type?>? typeArgumentBindings = null)
     {
         var values = new Dictionary<string, object?>(StringComparer.Ordinal);
 
@@ -176,14 +304,14 @@ public sealed class ToshRecordDefinition : IShellNamedType
 
             if (index < arguments.Count)
             {
-                values[field.Name] = ConvertFieldValue(field, arguments[index]);
+                values[field.Name] = ConvertFieldValue(field, arguments[index], typeArgumentBindings);
                 continue;
             }
 
             if (field.DefaultValue is not null)
             {
                 var defaultValue = _engine.EvaluateClassPipelineValueSync(SourceName, SourceText, field.DefaultValue, values, CapturedScopes);
-                values[field.Name] = ConvertFieldValue(field, defaultValue);
+                values[field.Name] = ConvertFieldValue(field, defaultValue, typeArgumentBindings);
                 continue;
             }
 

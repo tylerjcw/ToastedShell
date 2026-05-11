@@ -4,7 +4,7 @@ namespace Tosh.Stdlib.Text;
 
 [CommandCategory("Text")]
 [CommandArgument("path ...", "Optional files to read instead of pipeline input.", Required = false, TypeName = "path-like")]
-[CommandOption("-n, --lines <count>", "Return this many lines or pipeline items. Defaults to 10.")]
+[CommandOption("-n, --lines <count>", "Return this many lines or pipeline items. Defaults to 10.", Default = "10")]
 [CommandOption("-c, --bytes <bytes>", "Return this many trailing bytes from each file. Requires file paths.")]
 [CommandOption("-f, --follow", "Continue following a single file and emit newly appended lines.")]
 [CommandExample("ls | tail -n 5", Title = "Take the last five pipeline items")]

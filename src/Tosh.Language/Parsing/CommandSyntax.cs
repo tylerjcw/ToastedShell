@@ -19,4 +19,15 @@ public sealed record CommandSyntax(
     /// not affect AST equality semantics.
     /// </summary>
     public IShellCommand? BoundCommand { get; set; }
+
+    /// <summary>
+    /// Explicit generic type arguments written at the call site
+    /// (e.g. <c>box&lt;int&gt; 42</c>). Adjacency is required: the
+    /// <c>&lt;</c> must immediately follow the command name with no
+    /// whitespace, so this never collides with input redirection
+    /// (<c>&lt;(...)</c> is its own lexer token) or comparison.
+    /// Body-declared record properties are excluded from value
+    /// equality, so this property does not affect AST equality.
+    /// </summary>
+    public IReadOnlyList<string>? ExplicitTypeArguments { get; init; }
 }

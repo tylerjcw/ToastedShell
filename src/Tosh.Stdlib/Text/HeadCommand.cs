@@ -4,7 +4,7 @@ namespace Tosh.Stdlib.Text;
 
 [CommandCategory("Text")]
 [CommandArgument("path ...", "Optional files to read instead of pipeline input.", Required = false, TypeName = "path-like")]
-[CommandOption("-n, --lines <count>", "Return this many lines or pipeline items. Defaults to 10.")]
+[CommandOption("-n, --lines <count>", "Return this many lines or pipeline items. Defaults to 10.", Default = "10")]
 [CommandOption("-c, --bytes <bytes>", "Return this many bytes from each file. Requires file paths.")]
 [CommandExample("ls | head -n 5", Title = "Take the first five pipeline items")]
 [CommandExample("head -n 20 app.log", Title = "Read the first twenty lines of a file")]

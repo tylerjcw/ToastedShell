@@ -311,6 +311,14 @@ public sealed class CommandOptionAttribute(string syntax, string description) : 
 
     /// <summary>True when the option is a value-less flag.</summary>
     public bool IsFlag { get; init; }
+
+    /// <summary>
+    /// Optional default value, displayed in the help-topic Options table
+    /// and surfaced on <c>CommandOptionMetadata.Default</c>. Use the literal
+    /// string the user would type (e.g. <c>"name"</c>, <c>"true"</c>,
+    /// <c>"0"</c>); leave <c>null</c> when there is no meaningful default.
+    /// </summary>
+    public string? Default { get; init; }
 }
 
 /// <summary>

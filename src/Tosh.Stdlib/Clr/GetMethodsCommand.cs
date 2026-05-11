@@ -5,6 +5,8 @@ using Tosh.Runtime;
 namespace Tosh.Stdlib.Clr;
 
 [CommandCategory("CLR")]
+[CommandDeprecated("26.05.0.10")]
+[CommandNote("Deprecated. Prefer `methods` (or `funcs` shortcut).")]
 [CommandExample("$obj | get-methods")]
 [CommandExample("get-methods $obj")]
 [CommandOutput("Records describing each method: name, return type, parameter list, and arity flags.")]

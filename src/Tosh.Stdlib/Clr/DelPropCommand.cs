@@ -3,6 +3,8 @@ using Tosh.Runtime;
 namespace Tosh.Stdlib.Clr;
 
 [CommandCategory("CLR")]
+[CommandDeprecated("26.05.0.10")]
+[CommandNote("Deprecated. Prefer `$obj.Prop = null`, or `forget` for dict keys.")]
 [CommandArgument("object", "The target dynamic record. If omitted, reads from the pipeline.", Required = false)]
 [CommandArgument("name", "The property name to remove.")]
 [CommandExample("$obj | del-prop Name", Title = "Remove a property from a piped record")]
