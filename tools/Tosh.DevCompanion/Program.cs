@@ -43,9 +43,13 @@ static async Task<int> RunCliAsync(string[] args, IMemoryStore store)
     {
         case "recall":
         {
-            var query = string.Join(' ', rest);
+            var query = string.Join(' ', GetPositional(rest));
             if (string.IsNullOrWhiteSpace(query)) { Console.Error.WriteLine("Usage: recall <query>"); return 1; }
-            var result = await store.RecallAsync(new RecallRequest(query, Limit: 20));
+            var limitStr = GetFlag(rest, "--limit");
+            var limit    = limitStr is not null && int.TryParse(limitStr, out var l) ? l : 20;
+            var category = GetFlag(rest, "--category");
+            var scope    = GetFlag(rest, "--scope") ?? "all";
+            var result   = await store.RecallAsync(new RecallRequest(query, Limit: limit, Category: category, Scope: scope));
             Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(result, json));
             return 0;
         }
@@ -53,8 +57,11 @@ static async Task<int> RunCliAsync(string[] args, IMemoryStore store)
         {
             var category = GetFlag(rest, "--category");
             var scope    = GetFlag(rest, "--scope") ?? "all";
-            var entries  = await store.ListAsync(new ListRequest(Category: category, Scope: scope, IncludeContent: HasFlag(rest, "--full")));
-            Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(entries, json));
+            var limitStr = GetFlag(rest, "--limit");
+            var limit    = limitStr is not null && int.TryParse(limitStr, out var l) ? l : 50;
+            var entries  = await store.ListAsync(new ListRequest(Category: category, Scope: scope, IncludeContent: HasFlag(rest, "--full"), Limit: limit));
+            var wrapped  = new { total = entries.Count, memories = entries };
+            Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(wrapped, json));
             return 0;
         }
         case "store":
@@ -107,3 +114,20 @@ static string? GetFlag(string[] args, string flag)
 }
 
 static bool HasFlag(string[] args, string flag) => Array.IndexOf(args, flag) >= 0;
+
+// Returns args that are not --flag names or their values.
+static IEnumerable<string> GetPositional(string[] args)
+{
+    var i = 0;
+    while (i < args.Length)
+    {
+        if (args[i].StartsWith("--", StringComparison.Ordinal))
+        {
+            i += 2; // skip --flag and its value
+        }
+        else
+        {
+            yield return args[i++];
+        }
+    }
+}
