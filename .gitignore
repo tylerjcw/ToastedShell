@@ -6,7 +6,8 @@ bin/
 obj/
 artifacts/
 packaging/**/*.zst
-packaging/archlinux/src/out-*
+packaging/archlinux/src/
+packaging/archlinux/pkg/
 tmp/
 
 # Docs
