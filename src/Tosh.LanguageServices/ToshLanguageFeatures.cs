@@ -467,6 +467,53 @@ public sealed class ToshLanguageFeatures
         return DeclarationIndex.Create(sourceName, text).BuildRenameEdits(position, newName);
     }
 
+    public IReadOnlyList<LspCodeAction> GetCodeActions(
+        string text,
+        string sourceName,
+        LspCodeActionContext context)
+    {
+        var actions = new List<LspCodeAction>();
+        foreach (var diag in context.Diagnostics)
+        {
+            switch (diag.Code)
+            {
+                case "tosh.parser.variable_references_require_dollar":
+                {
+                    var insertAt = new LspRange(diag.Range.Start, diag.Range.Start);
+                    var edit = new LspWorkspaceEdit(
+                        new Dictionary<string, IReadOnlyList<LspTextEdit>>(StringComparer.Ordinal)
+                        {
+                            [sourceName] = [new LspTextEdit(insertAt, "$")]
+                        });
+                    actions.Add(new LspCodeAction(
+                        Title: "Add '$' prefix",
+                        Kind: "quickfix",
+                        Diagnostics: [diag],
+                        Edit: edit));
+                    break;
+                }
+
+                case "tosh.parser.missing_statement_separator":
+                {
+                    // Insert a semicolon immediately before the offending token
+                    var insertAt = new LspRange(diag.Range.Start, diag.Range.Start);
+                    var edit = new LspWorkspaceEdit(
+                        new Dictionary<string, IReadOnlyList<LspTextEdit>>(StringComparer.Ordinal)
+                        {
+                            [sourceName] = [new LspTextEdit(insertAt, ";\n")]
+                        });
+                    actions.Add(new LspCodeAction(
+                        Title: "Insert ';' separator",
+                        Kind: "quickfix",
+                        Diagnostics: [diag],
+                        Edit: edit));
+                    break;
+                }
+            }
+        }
+        return actions;
+    }
+
     public LspHover? GetHover(string text, string sourceName, LspPosition position)
     {
         var index = DeclarationIndex.Create(sourceName, text);

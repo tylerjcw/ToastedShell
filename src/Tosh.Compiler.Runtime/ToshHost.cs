@@ -2016,6 +2016,40 @@ public static class ToshHost
             slice);
     }
 
+    /// <summary>
+    /// Registers a compiled rune (macro) declaration by parsing the source slice and
+    /// inserting its runtime definition directly, avoiding source replay.
+    /// </summary>
+    public static void RegisterRuneFromSource(int spanStart, int spanLength)
+    {
+        if (s_sourceText is null)
+        {
+            throw new InvalidOperationException(
+                $"ToshHost.{nameof(RegisterRuneFromSource)} called before RegisterSource");
+        }
+
+        if (s_engine is null) Initialize();
+
+        var slice = s_sourceText.Substring(spanStart, spanLength);
+        s_engine!.RegisterRuneFromSource(s_sourceName ?? "<compiled>", slice);
+    }
+
+    /// <summary>
+    /// Loads and imports a required module from a compiled assembly context. Called by
+    /// compiled assemblies at runtime to satisfy <c>require</c> statements that target
+    /// external scripts or assemblies without replaying the parent script's source.
+    /// </summary>
+    public static void RequireModule(string target, string[] importedNames, string[] importedAliases)
+    {
+        if (s_engine is null) Initialize();
+
+        var resolveFrom = s_sourceName is not null
+            ? Path.GetDirectoryName(s_sourceName) ?? Runtime.CurrentDirectory
+            : Runtime.CurrentDirectory;
+
+        s_engine!.RequireModuleFromCompiled(target, importedNames, importedAliases, resolveFrom);
+    }
+
     private static void ExecuteRegisteredSourceSlice(int spanStart, int spanLength, string caller)
     {
         if (s_sourceText is null)

@@ -1,6 +1,6 @@
 using Tosh.Language;
 using Tosh.Language.Binding;
-using Tosh.Language.Binding.BoundNodes;
+using Tosh.Compiler.IR;
 using Tosh.Runtime;
 
 namespace Tosh.Tests;
@@ -389,7 +389,7 @@ public sealed class TypeCheckerTests : IClassFixture<ToshRuntimeFixture>
             TypeParameters: new[] { "T" },
             BaseTypeName: "list<T>",
             Refinement: null,
-            Modifier: Tosh.Language.Parsing.DeclarationModifier.Default,
+            Modifier: DeclarationModifier.Default,
             Span: default);
         registry["MyList"] = new RefinementType(BoundType.Dynamic, "MyList", alias);
 
@@ -411,7 +411,7 @@ public sealed class TypeCheckerTests : IClassFixture<ToshRuntimeFixture>
             TypeParameters: new[] { "T" },
             BaseTypeName: "list<T>",
             Refinement: null,
-            Modifier: Tosh.Language.Parsing.DeclarationModifier.Default,
+            Modifier: DeclarationModifier.Default,
             Span: default);
         registry["MyList"] = new RefinementType(BoundType.Dynamic, "MyList", alias);
 
@@ -432,7 +432,7 @@ public sealed class TypeCheckerTests : IClassFixture<ToshRuntimeFixture>
             TypeParameters: new[] { "A", "B" },
             BaseTypeName: "tuple<A,B>",
             Refinement: null,
-            Modifier: Tosh.Language.Parsing.DeclarationModifier.Default,
+            Modifier: DeclarationModifier.Default,
             Span: default);
         registry["Pair"] = new RefinementType(BoundType.Dynamic, "Pair", alias);
 
@@ -456,7 +456,7 @@ public sealed class TypeCheckerTests : IClassFixture<ToshRuntimeFixture>
             TypeParameters: new[] { "A", "B" },
             BaseTypeName: "tuple<A,B>",
             Refinement: null,
-            Modifier: Tosh.Language.Parsing.DeclarationModifier.Default,
+            Modifier: DeclarationModifier.Default,
             Span: default);
         registry["Pair"] = new RefinementType(BoundType.Dynamic, "Pair", alias);
 

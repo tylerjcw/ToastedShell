@@ -311,4 +311,65 @@ public sealed class FormatterTests
         }
         return count;
     }
+
+    [Fact]
+    public void Match_expression_in_var_decl_is_expanded()
+    {
+        var input = "var x = match ($n) { 1 => \"one\"\n2 => \"two\"\ndefault => \"other\" }";
+        var result = ToshFormatter.Format(input);
+        Assert.True(result.IsSyntacticallyValid);
+        Assert.Equal(
+            """
+            var x = match ($n) {
+                1 => "one"
+                2 => "two"
+                default => "other"
+            }
+
+            """.ReplaceLineEndings("\n"),
+            result.FormattedText);
+        // Idempotent.
+        var second = ToshFormatter.Format(result.FormattedText);
+        Assert.Equal(result.FormattedText, second.FormattedText);
+    }
+
+    [Fact]
+    public void Match_expression_with_block_arm_recurses()
+    {
+        var input = "var x = match ($n) { 1 => { var y = 10\n$y }\ndefault => 0 }";
+        var result = ToshFormatter.Format(input);
+        Assert.True(result.IsSyntacticallyValid);
+        Assert.Contains("1 => {", result.FormattedText);
+        Assert.Contains("    var y = 10", result.FormattedText);
+        Assert.Contains("default => 0", result.FormattedText);
+        var second = ToshFormatter.Format(result.FormattedText);
+        Assert.Equal(result.FormattedText, second.FormattedText);
+    }
+
+    [Fact]
+    public void Lambda_with_block_body_in_var_decl_is_expanded()
+    {
+        var input = "var f = func(x) { var y = ($x * 2)\n$y }";
+        var result = ToshFormatter.Format(input);
+        Assert.True(result.IsSyntacticallyValid);
+        Assert.Equal(
+            """
+            var f = func(x) {
+                var y = ($x * 2)
+                $y
+            }
+
+            """.ReplaceLineEndings("\n"),
+            result.FormattedText);
+        var second = ToshFormatter.Format(result.FormattedText);
+        Assert.Equal(result.FormattedText, second.FormattedText);
+    }
+
+    [Fact]
+    public void Lambda_arrow_form_in_assignment_round_trips()
+    {
+        var result = ToshFormatter.Format("$f = func(x) => ($x + 1)");
+        Assert.True(result.IsSyntacticallyValid);
+        Assert.Equal("$f = func(x) => ($x + 1)\n", result.FormattedText);
+    }
 }

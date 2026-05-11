@@ -1,0 +1,191 @@
+#!/usr/bin/env tosh
+## @summary Manage the TōSh AI companion memory store from the command line.
+## @remarks
+##   A thin TōSh wrapper around `Tosh.DevCompanion` — a development-only tool
+##   that is never shipped with TōSh itself. Requires the DevCompanion binary
+##   to be built:
+##
+##     dotnet build tools/Tosh.DevCompanion/Tosh.DevCompanion.csproj
+##
+##   Subcommands:
+##   - `recall <query>`   Full-text search memories and print results.
+##   - `list`             List all memories (summaries by default).
+##   - `store <text>`     Store a new user memory.
+##   - `forget <id>`      Soft-delete a memory by id.
+##   - `build`            Build the DevCompanion binary.
+##
+## @example toshmem.tosh recall "formatter match expression"
+## @example toshmem.tosh store "Always emit match (value) { arms }" --category note
+## @example toshmem.tosh list --category decision --full
+## @example toshmem.tosh forget d4f2a1c3-... --confirm
+
+using System
+
+## @summary Resolves the path to the DevCompanion binary.
+## @remarks Tries the Debug output path first, then Release.
+func companion_bin() -> string {
+    var root = (dirname (dirname (realpath $tosh.Script.Path)))
+    var debug   = $root | join -p "tools" "Tosh.DevCompanion" "bin" "Debug"   "net10.0" "Tosh.DevCompanion"
+    var release = $root | join -p "tools" "Tosh.DevCompanion" "bin" "Release" "net10.0" "Tosh.DevCompanion"
+
+    if ((is-file $debug).IsFile)   { return $debug   }
+    if ((is-file $release).IsFile) { return $release }
+
+    throw "DevCompanion binary not found. Run: toshmem.tosh build"
+}
+
+## @summary Prints a success message with a green checkmark.
+func ok(msg: string) => styled $"  ✓ {$msg}" --fg bright-green | writeline
+
+## @summary Prints an informational message in dim gray.
+func info(msg: string) => styled $"  {$msg}" --fg gray --dim | writeline
+
+## @summary Prints a section separator.
+func sep(label: string) {
+    writeline
+    styled $"── {$label} " --fg bright-cyan --bold | write
+    writeline
+}
+
+# ── Subcommands ────────────────────────────────────────────────────────────────
+
+## @summary Full-text search the memory store.
+## @param=query The search query (FTS5 syntax supported).
+## @flag=category Filter to a single category (fact|preference|pattern|decision|history|note).
+## @flag=scope Scope filter: project|global|all (default: all).
+## @flag=limit Maximum results (default 10).
+## @example toshmem.tosh recall "match expression formatter"
+## @example toshmem.tosh recall "architecture" --category decision
+subcommand recall {
+    flag category: string? = null
+    flag scope:    string  = "all"
+    flag limit:    int     = 10
+
+    var bin  = companion_bin
+    var args = ["recall", ($tosh.Script.Args | skip 1 | where { not ($_ starts-with "--") } | collect)]
+    
+    if ($category != null) { $args = ($args | echo [$args, ["--category", $category]] | flatten | collect) }
+    $args = ($args | echo [$args, ["--scope", $scope, "--limit", (string $limit)]] | flatten | collect)
+
+    var result = spawn $bin $args | wait-for | first | from json
+
+    sep $"RECALL · {$result.total} result(s)"
+    if ($result.total == 0) {
+        info "No memories matched."
+        return
+    }
+
+    for $r in $result.results {
+        styled $"  [{$r.category}] " --fg bright-yellow | write
+        styled $r.summary --fg white --bold | writeline
+        info $"  id={$r.id}  score={$r.relevance_score}  accessed={$r.access_count}×"
+        if (not String.IsNullOrEmpty($r.content)) {
+            styled $"  {$r.content}" --fg gray --dim | writeline
+        }
+        writeline
+    }
+}
+
+## @summary List memories with optional filters.
+## @flag=category Filter by category.
+## @flag=scope Scope: project|global|all (default: all).
+## @flag=full Include full content (default: summaries only).
+## @flag=limit Maximum results (default 50).
+## @example toshmem.tosh list --category decision
+## @example toshmem.tosh list --full --limit 5
+subcommand list {
+    flag category: string? = null
+    flag scope:    string  = "all"
+    flag full:     bool    = false
+    flag limit:    int     = 50
+
+    var bin  = companion_bin
+    var args = ["list", "--scope", $scope, "--limit", (string $limit)]
+
+    if ($category != null) { $args = ($args | echo [$args, ["--category", $category]] | flatten | collect) }
+    if ($full)             { $args = ($args | echo [$args, ["--full"]]                | flatten | collect) }
+
+    var result = spawn $bin $args | wait-for | first | from json
+
+    sep $"MEMORIES · {$result.total} result(s)"
+    if ($result.total == 0) {
+        info "No memories found."
+        return
+    }
+
+    for $m in $result.memories {
+        styled $"  [{$m.category}] " --fg bright-yellow | write
+        styled $m.summary --fg white | writeline
+        info $"  id={$m.id}  scope={$m.scope}  visibility={$m.visibility}"
+        if ($full and not String.IsNullOrEmpty($m.content)) {
+            styled $"  {$m.content}" --fg gray --dim | writeline
+        }
+        writeline
+    }
+}
+
+## @summary Store a new user-authored memory.
+## @param=text The memory content. Quote multi-word content.
+## @flag=summary A one-line summary (auto-derived from content if omitted).
+## @flag=category Category: fact|preference|pattern|decision|history|note (default: note).
+## @flag=tags Comma-separated tags (e.g. "parser,match,architecture").
+## @flag=visibility private|shared (default: private).
+## @flag=scope project|global (default: project).
+## @example toshmem.tosh store "Match arm block syntax requires => before {" --category fact --tags "parser,match"
+## @example toshmem.tosh store "Prefer guard clauses over nested ifs" --category preference --scope global
+subcommand store {
+    flag summary:    string? = null
+    flag category:   string  = "note"
+    flag tags:       string  = ""
+    flag visibility: string  = "private"
+    flag scope:      string  = "project"
+
+    var content = ($tosh.Script.Args | skip 1 | where { not ($_ starts-with "--") } | join " ")
+    if (String.IsNullOrWhiteSpace($content)) { throw "Provide content as positional arguments." }
+
+    var bin  = companion_bin
+    var args = ["store", "--content", $content, "--category", $category,
+                "--visibility", $visibility, "--scope", $scope]
+
+    if ($summary != null)              { $args = ($args | echo [$args, ["--summary", $summary]] | flatten | collect) }
+    if (not String.IsNullOrEmpty($tags)) { $args = ($args | echo [$args, ["--tags", $tags]]   | flatten | collect) }
+
+    var entry = spawn $bin $args | wait-for | first | from json
+
+    sep "STORED"
+    ok $"id={$entry.id}"
+    info $"  category={$entry.category}  visibility={$entry.visibility}"
+    info $"  {$entry.summary}"
+}
+
+## @summary Soft-delete a memory by id.
+## @param=id The UUID of the memory to delete.
+## @flag=confirm Required when deleting user-authored memories.
+## @example toshmem.tosh forget d4f2a1c3-7e8b-4a1f-9c2d-0e5f6a7b8c9d --confirm
+subcommand forget {
+    flag confirm: bool = false
+
+    var id = ($tosh.Script.Args | skip 1 | where { not ($_ starts-with "--") } | first)
+    if (String.IsNullOrWhiteSpace($id)) { throw "Provide a memory id as a positional argument." }
+
+    var bin  = companion_bin
+    var args = ["forget", $id]
+    if ($confirm) { $args = ($args | echo [$args, ["--confirm"]] | flatten | collect) }
+
+    var result = spawn $bin $args | wait-for | first
+    if ($result == "deleted") { ok $"Forgot memory {$id}" }
+    else                      { info $"Memory {$id} not found or already deleted." }
+}
+
+## @summary Build the DevCompanion binary.
+## @remarks Run this once after cloning, or after changes to Tosh.DevCompanion.
+## @example toshmem.tosh build
+subcommand build {
+    var root    = (dirname (dirname (realpath $tosh.Script.Path)))
+    var proj    = $root | join -p "tools" "Tosh.DevCompanion" "Tosh.DevCompanion.csproj"
+
+    sep "BUILD · Tosh.DevCompanion"
+    dotnet build $proj -c Debug --nologo -q
+    if ($tosh.Last.ExitCode != 0) { throw "Build failed." }
+    ok "DevCompanion ready."
+}

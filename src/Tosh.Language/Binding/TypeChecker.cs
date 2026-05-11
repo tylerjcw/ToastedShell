@@ -1,4 +1,5 @@
-using Tosh.Language.Binding.BoundNodes;
+using Tosh.Compiler.IR;
+using Tosh.Language.Parsing;
 using Tosh.Runtime;
 using System.Reflection;
 
@@ -114,8 +115,8 @@ public static class TypeChecker
             diagnostics.Add(new ToshDiagnostic(
                 Code: "tosh.compile.missing_type_annotation",
                 Title: $"Function '{fn.Name}' is missing a return-type annotation.",
-                SourceName: unit.ParseResult?.SourceName,
-                SourceText: unit.ParseResult?.SourceText,
+                SourceName: (unit.ParseResult as ParseResult)?.SourceName,
+                SourceText: (unit.ParseResult as ParseResult)?.SourceText,
                 Span: fn.Span,
                 Help: "annotate the return type, e.g. `func " + fn.Name + "(...) -> int { ... }`. Use `dynamic` to opt out explicitly.",
                 Severity: ToshDiagnosticSeverity.Error,
@@ -131,8 +132,8 @@ public static class TypeChecker
                 diagnostics.Add(new ToshDiagnostic(
                     Code: "tosh.compile.missing_type_annotation",
                     Title: $"Parameter '{p.Name}' of '{fn.Name}' is missing a type annotation.",
-                    SourceName: unit.ParseResult?.SourceName,
-                    SourceText: unit.ParseResult?.SourceText,
+                    SourceName: (unit.ParseResult as ParseResult)?.SourceName,
+                    SourceText: (unit.ParseResult as ParseResult)?.SourceText,
                     Span: p.Span,
                     Help: $"annotate the parameter, e.g. `{p.Name}: int`. Use `dynamic` to opt out explicitly.",
                     Severity: ToshDiagnosticSeverity.Error,
@@ -173,8 +174,8 @@ public static class TypeChecker
         diagnostics.Add(new ToshDiagnostic(
             Code: "tosh.compile.implicit_dynamic",
             Title: $"Variable '{decl.Symbol.Name}' has no type annotation and the inferrer could not pin down a concrete type.",
-            SourceName: unit.ParseResult?.SourceName,
-            SourceText: unit.ParseResult?.SourceText,
+            SourceName: (unit.ParseResult as ParseResult)?.SourceName,
+            SourceText: (unit.ParseResult as ParseResult)?.SourceText,
             Span: decl.Span,
             Help: "annotate the variable (e.g. `var " + decl.Symbol.Name + ": int = ...`) or pass `--compile-allow-dynamic` to allow implicit dynamic.",
             Severity: ToshDiagnosticSeverity.Error,
@@ -198,8 +199,8 @@ public static class TypeChecker
         public Dictionary<string, BoundFunctionDefinition> UserFunctions { get; } =
             new(StringComparer.Ordinal);
         public BoundType? CurrentReturnType { get; set; }
-        public string? SourceName => Unit.ParseResult?.SourceName;
-        public string? SourceText => Unit.ParseResult?.SourceText;
+        public string? SourceName => (Unit.ParseResult as ParseResult)?.SourceName;
+        public string? SourceText => (Unit.ParseResult as ParseResult)?.SourceText;
     }
 
     private static void CollectUserFunctions(

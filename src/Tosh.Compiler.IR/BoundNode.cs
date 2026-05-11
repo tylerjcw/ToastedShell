@@ -1,7 +1,6 @@
-using Tosh.Language.Parsing;
 using Tosh.Runtime;
 
-namespace Tosh.Language.Binding.BoundNodes;
+namespace Tosh.Compiler.IR;
 
 /// <summary>
 /// Root of the bound IR. Every node carries the original <see cref="TextSpan"/>
@@ -32,7 +31,7 @@ public abstract record BoundExpression(TextSpan Span, BoundType Type) : BoundNod
 /// previous use of this wrapper.
 /// </summary>
 /// <param name="Original">The parse-tree expression to evaluate dynamically.</param>
-public sealed record BoundDynamicExpression(ArgumentSyntax Original, TextSpan Span)
+public sealed record BoundDynamicExpression(object Original, TextSpan Span)
     : BoundExpression(Span, BoundType.Dynamic);
 
 /// <summary>
@@ -46,7 +45,7 @@ public abstract record BoundStatement(TextSpan Span) : BoundNode(Span);
 /// Catch-all wrapper for statement nodes not yet modeled. Mirror of
 /// <see cref="BoundDynamicExpression"/>.
 /// </summary>
-public sealed record BoundDynamicStatement(StatementSyntax Original, TextSpan Span)
+public sealed record BoundDynamicStatement(object Original, TextSpan Span)
     : BoundStatement(Span);
 
 // ─── Statements ───────────────────────────────────────────────────────
@@ -949,7 +948,7 @@ public sealed record BoundOutputProcessSubstitution(
 
 /// <summary><c>quote { … }</c> — captures argument's AST as a value.</summary>
 public sealed record BoundQuoteExpression(
-    ArgumentSyntax Inner,
+    object Inner,
     TextSpan Span,
     BoundType Type)
     : BoundExpression(Span, Type);
@@ -999,7 +998,7 @@ public sealed record BoundComparisonPattern(
 /// </summary>
 public sealed record BoundPipeline(
     IReadOnlyList<BoundPipelineStage> Stages,
-    PipelineSyntax Original,
+    object Original,
     TextSpan Span)
     : BoundNode(Span)
 {
@@ -1013,8 +1012,8 @@ public sealed record BoundPipeline(
 /// evaluates (at runtime) to the file path string.
 /// </summary>
 public sealed record BoundRedirection(
-    Parsing.RedirectionStream Stream,
-    Parsing.RedirectionMode Mode,
+    RedirectionStream Stream,
+    RedirectionMode Mode,
     BoundExpression Target,
     TextSpan Span)
     : BoundNode(Span);
@@ -1117,5 +1116,5 @@ public enum BoundSymbolKind
 /// </summary>
 public sealed record BoundUnit(
     BoundScript Root,
-    ParseResult ParseResult,
+    object ParseResult,
     IReadOnlyList<BoundSymbol> Symbols);

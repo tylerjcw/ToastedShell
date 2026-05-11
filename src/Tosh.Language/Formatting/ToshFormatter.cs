@@ -352,13 +352,29 @@ public sealed class ToshFormatter
         {
             sb.Append(": ").Append(decl.TypeName);
         }
-        if (decl.Value is not null)
+        if (decl.Value is not null && decl.Value.Stages.Count > 0)
         {
-            sb.Append(" = ").Append(SliceTrimmed(decl.Value.Stages.Count > 0
-                ? TextSpan.FromBounds(
-                    decl.Value.Stages[0].Span.Start,
-                    decl.Value.Stages[^1].Span.End)
-                : decl.Span));
+            var singleExpr = TryGetSingleExpression(decl.Value);
+            if (singleExpr is MatchArgumentSyntax matchArg)
+            {
+                WriteIndentedRaw($"{sb} = ");
+                WriteMatchInline(matchArg);
+                return;
+            }
+            if (singleExpr is AnonymousFunctionArgumentSyntax lambdaArg)
+            {
+                WriteIndentedRaw($"{sb} = ");
+                WriteAnonymousFunctionInline(lambdaArg);
+                return;
+            }
+            var valueSpan = TextSpan.FromBounds(
+                decl.Value.Stages[0].Span.Start,
+                decl.Value.Stages[^1].Span.End);
+            sb.Append(" = ").Append(SliceTrimmed(valueSpan));
+        }
+        else if (decl.Value is not null)
+        {
+            sb.Append(" = ").Append(SliceTrimmed(decl.Span));
         }
         WriteIndented(sb.ToString());
     }
@@ -528,6 +544,19 @@ public sealed class ToshFormatter
             WriteIndented($"{lhs} {op}");
             return;
         }
+        var singleExpr = TryGetSingleExpression(value);
+        if (singleExpr is MatchArgumentSyntax matchArg)
+        {
+            WriteIndentedRaw($"{lhs} {op} ");
+            WriteMatchInline(matchArg);
+            return;
+        }
+        if (singleExpr is AnonymousFunctionArgumentSyntax lambdaArg)
+        {
+            WriteIndentedRaw($"{lhs} {op} ");
+            WriteAnonymousFunctionInline(lambdaArg);
+            return;
+        }
         var valueSpan = TextSpan.FromBounds(value.Stages[0].Span.Start, value.Stages[^1].Span.End);
         WriteIndented($"{lhs} {op} {SliceTrimmed(valueSpan)}");
     }
@@ -581,6 +610,105 @@ public sealed class ToshFormatter
         }
         _depth--;
         WriteIndented("}");
+    }
+
+    private static ArgumentSyntax? TryGetSingleExpression(PipelineSyntax pipeline)
+    {
+        if (pipeline.Stages.Count == 1
+            && pipeline.Stages[0] is ExpressionPipelineStageSyntax expr)
+            return expr.Expression;
+        return null;
+    }
+
+    /// <summary>
+    /// Renders a <c>match</c> expression starting at the current output position
+    /// (no leading indentation). The caller must have already written any prefix
+    /// (e.g. <c>"var x = "</c>) via <see cref="WriteIndentedRaw"/>.
+    /// </summary>
+    private void WriteMatchInline(MatchArgumentSyntax match)
+    {
+        _output.Append("match ").Append(SliceTrimmed(match.Value.Span)).Append(" {\n");
+        _depth++;
+        foreach (var arm in match.Arms)
+            WriteMatchArm(arm);
+        _depth--;
+        WriteIndented("}");
+    }
+
+    private void WriteMatchArm(MatchArmSyntax arm)
+    {
+        var pattern = arm.IsWildcard ? "default" : SliceTrimmed(arm.Pattern!.Span);
+        var guard = arm.Guard is null ? string.Empty : $" if {SliceTrimmed(arm.Guard.Span)}";
+        switch (arm.Body)
+        {
+            case MatchArmPipelineBodySyntax { Pipeline.Stages.Count: > 0 } pipeBody:
+                var valueSpan = TextSpan.FromBounds(
+                    pipeBody.Pipeline.Stages[0].Span.Start,
+                    pipeBody.Pipeline.Stages[^1].Span.End);
+                WriteIndented($"{pattern}{guard} => {SliceTrimmed(valueSpan)}");
+                break;
+            case MatchArmBlockBodySyntax blockBody:
+                WriteIndented($"{pattern}{guard} => {{");
+                _depth++;
+                foreach (var inner in blockBody.Block.Statements)
+                    WriteStatement(inner);
+                _depth--;
+                WriteIndented("}");
+                break;
+            default:
+                WriteIndented($"{pattern}{guard} => ()");
+                break;
+        }
+    }
+
+    /// <summary>
+    /// Renders an anonymous function expression starting at the current output
+    /// position (no leading indentation). Arrow form is preserved when detected.
+    /// </summary>
+    private void WriteAnonymousFunctionInline(AnonymousFunctionArgumentSyntax fn)
+    {
+        var sb = new StringBuilder();
+        sb.Append("func");
+        AppendParameterList(sb, fn.Parameters);
+        if (!string.IsNullOrEmpty(fn.ReturnTypeName))
+            sb.Append(" -> ").Append(fn.ReturnTypeName);
+
+        if (TryExtractArrowBodyForAnonymous(fn, out var arrowBody))
+        {
+            _output.Append(sb).Append(" => ").Append(arrowBody).Append('\n');
+            return;
+        }
+
+        _output.Append(sb).Append(" {\n");
+        _depth++;
+        foreach (var inner in fn.Body.Statements)
+            WriteStatement(inner);
+        _depth--;
+        WriteIndented("}");
+    }
+
+    /// <summary>
+    /// Arrow-body detection for anonymous functions. Unlike named functions
+    /// where <see cref="TryExtractArrowBody"/> works by scanning source before
+    /// the body span, anonymous function bodies in arrow form have
+    /// <c>Body.Span.Start</c> pointing directly at <c>=&gt;</c> — so we
+    /// detect the form by checking that character position directly.
+    /// </summary>
+    private bool TryExtractArrowBodyForAnonymous(AnonymousFunctionArgumentSyntax fn, out string arrowBody)
+    {
+        arrowBody = string.Empty;
+        if (fn.Body.Statements.Count != 1) return false;
+
+        var bodyStart = fn.Body.Span.Start;
+        if (bodyStart < 0 || bodyStart + 1 >= _source.Length) return false;
+        if (_source[bodyStart] != '=' || _source[bodyStart + 1] != '>') return false;
+
+        // The single statement's span also starts at `=>`. Strip it.
+        var stmtText = SliceTrimmed(fn.Body.Statements[0].Span);
+        if (!stmtText.StartsWith("=>")) return false;
+
+        arrowBody = stmtText[2..].TrimStart();
+        return true;
     }
 
     private void AppendParameterList(StringBuilder sb, IReadOnlyList<FunctionParameterSyntax> parameters)

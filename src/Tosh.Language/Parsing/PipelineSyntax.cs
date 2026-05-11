@@ -1,20 +1,7 @@
+using Tosh.Compiler.IR;
 using Tosh.Runtime;
 
 namespace Tosh.Language.Parsing;
-
-public enum RedirectionStream
-{
-    Output,          // o> / out>
-    Error,           // e> / err>
-    OutputThenError, // o+e> / out+err>
-    ErrorThenOutput, // e+o> / err+out>
-}
-
-public enum RedirectionMode
-{
-    Truncate,   // >
-    Append,     // >>
-}
 
 public sealed record RedirectionSyntax(
     RedirectionStream Stream,

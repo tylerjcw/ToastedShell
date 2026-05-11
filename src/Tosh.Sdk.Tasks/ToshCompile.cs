@@ -305,15 +305,7 @@ public sealed class ToshCompile : Microsoft.Build.Utilities.Task
             return;
         }
 
-        string[] required =
-        {
-            "Tosh.Compiler.Runtime.dll",
-            "Tosh.Language.dll",
-            "Tosh.Runtime.dll",
-            "Tosh.Stdlib.dll",
-            "Tosh.Core.dll",
-            "Tosh.Tui.dll",
-        };
+        string[] required = [.. ToshPublisher.GetRuntimeDependencyFileNames()];
         foreach (var name in required)
         {
             var src = Path.Combine(sourceDir, name);

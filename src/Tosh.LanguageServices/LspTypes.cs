@@ -86,3 +86,12 @@ public sealed record LspWorkspaceEdit(
 public sealed record LspPrepareRenameResult(
     [property: JsonPropertyName("range")] LspRange Range,
     [property: JsonPropertyName("placeholder")] string Placeholder);
+
+public sealed record LspCodeActionContext(
+    [property: JsonPropertyName("diagnostics")] IReadOnlyList<LspDiagnostic> Diagnostics);
+
+public sealed record LspCodeAction(
+    [property: JsonPropertyName("title")] string Title,
+    [property: JsonPropertyName("kind")] string? Kind = null,
+    [property: JsonPropertyName("diagnostics")] IReadOnlyList<LspDiagnostic>? Diagnostics = null,
+    [property: JsonPropertyName("edit")] LspWorkspaceEdit? Edit = null);

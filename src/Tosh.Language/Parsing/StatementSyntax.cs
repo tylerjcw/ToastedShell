@@ -1,16 +1,9 @@
+using Tosh.Compiler.IR;
 using Tosh.Runtime;
 
 namespace Tosh.Language.Parsing;
 
 public abstract record StatementSyntax(TextSpan Span);
-
-public enum DeclarationModifier
-{
-    Default,
-    Shy,
-    Global,
-    Export,
-}
 
 public sealed record ScriptStatementSyntax(IReadOnlyList<StatementSyntax> Statements, TextSpan Span, DocComment? DocComment = null) : StatementSyntax(Span);
 
@@ -71,27 +64,11 @@ public sealed record RequireStatementSyntax(
 
 public sealed record FunctionParameterSyntax(string Name, string? TypeName, bool IsOptional, bool IsRest, PipelineSyntax? DefaultValue, TextSpan Span, ArgumentSyntax? Refinement = null, string? Description = null);
 
-public enum ScriptInputDeclarationKind
-{
-    Flag,
-    Argument,
-}
-
 public sealed record ScriptInputStatementSyntax(
     ScriptInputDeclarationKind Kind,
     IReadOnlyList<FunctionParameterSyntax> Parameters,
     TextSpan Span,
     DocComment? DocComment = null) : StatementSyntax(Span);
-
-[Flags]
-public enum SubcommandModifier
-{
-    None = 0,
-    Eager = 1 << 0,
-    Hidden = 1 << 1,
-    Hollow = 1 << 2,
-    Vital = 1 << 3,
-}
 
 public sealed record SubcommandStatementSyntax(
     string Name,
@@ -99,13 +76,6 @@ public sealed record SubcommandStatementSyntax(
     BlockSyntax Body,
     TextSpan Span,
     DocComment? DocComment = null) : StatementSyntax(Span);
-
-public enum NativeParameterPassingMode
-{
-    In,
-    Ref,
-    Out,
-}
 
 public sealed record NativeFunctionParameterSyntax(
     string Name,

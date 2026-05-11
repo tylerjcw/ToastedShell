@@ -512,18 +512,18 @@ public sealed partial class ToshEngine : IShellEvaluator
     }
 
     /// <summary>
-    /// Evaluate a previously-lowered <see cref="Tosh.Language.Binding.BoundNodes.BoundUnit"/>.
+    /// Evaluate a previously-lowered <see cref="Tosh.Compiler.IR.BoundUnit"/>.
     /// v1 delegates to the parse-tree evaluator using the unit's
-    /// <see cref="Tosh.Language.Binding.BoundNodes.BoundUnit.ParseResult"/>;
+    /// <see cref="Tosh.Compiler.IR.BoundUnit.ParseResult"/>;
     /// future commits will fast-path individual carved-out bound
     /// shapes without changing this public seam.
     /// </summary>
     public IAsyncEnumerable<object?> EvaluateAsync(
-        Tosh.Language.Binding.BoundNodes.BoundUnit unit,
+        Tosh.Compiler.IR.BoundUnit unit,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(unit);
-        return EvaluateParseResultAsync(unit.ParseResult, cancellationToken);
+        return EvaluateParseResultAsync((ParseResult)unit.ParseResult, cancellationToken);
     }
 
     private async IAsyncEnumerable<object?> EvaluateParseResultAsync(
@@ -1839,6 +1839,211 @@ public sealed partial class ToshEngine : IShellEvaluator
             aliasSourceText,
             alias.Span,
             allowTypeNameConflict: true);
+    }
+
+    /// <summary>
+    /// Registers a rune (macro) declaration from a source slice without executing it
+    /// through the interpreter pipeline. Used by compiled CLR emission to preserve rune
+    /// semantics while avoiding Tier-3 source replay.
+    /// </summary>
+    public void RegisterRuneFromSource(string sourceName, string runeDeclarationSlice)
+    {
+        var parse = ToshParser.Parse(runeDeclarationSlice, sourceName);
+        if (parse.Diagnostics.Count > 0 || parse.Statement is not RuneDefinitionStatementSyntax rune)
+        {
+            var diagnostic = parse.Diagnostics.FirstOrDefault();
+            throw new InvalidOperationException(
+                $"Compiled rune registration failed: {diagnostic?.Title ?? "not a valid rune declaration."}");
+        }
+
+        EnsureBindingNameIsNotReserved(sourceName, runeDeclarationSlice, rune.Name, rune.Span, "reserved runtime namespace");
+
+        var duplicateParameters = rune.Parameters
+            .GroupBy(p => p.Name, StringComparer.Ordinal)
+            .FirstOrDefault(g => g.Count() > 1);
+
+        if (duplicateParameters is not null)
+        {
+            throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                Code: "tosh.runtime.duplicate_rune_parameter",
+                Title: $"Rune '{rune.Name}' defines parameter '{duplicateParameters.Key}' more than once.",
+                SourceName: sourceName,
+                SourceText: runeDeclarationSlice,
+                Span: duplicateParameters.First().Span,
+                Label: $"'{duplicateParameters.Key}' is declared multiple times"));
+        }
+
+        var definition = new RuneDefinition(
+            rune.Name,
+            rune.Parameters.Select(p => new RuneParameterDefinition(p.Name, p.Span)).ToArray(),
+            rune.Body,
+            rune.IsSealed,
+            rune.IsFixed,
+            sourceName,
+            runeDeclarationSlice,
+            rune.Span,
+            CapturedScopes: null,
+            rune.DocComment is not null
+                ? DocComment.Parse(new[] { new SyntaxToken(SyntaxTokenKind.DocComment, 0, rune.DocComment.ToString() ?? "") })
+                : null);
+
+        DeclareCommand(new RuneCommand(definition), rune.Modifier);
+    }
+
+    /// <summary>
+    /// Loads and imports a required module from a compiled assembly context, bypassing
+    /// Tier-3 source replay. Called by compiled assemblies at runtime to satisfy
+    /// <c>require</c> statements targeting external .tosh scripts or assemblies.
+    /// </summary>
+    public void RequireModuleFromCompiled(
+        string target,
+        string[] importedNames,
+        string[] importedAliases,
+        string resolveFrom)
+    {
+        var requirement = ResolveRequirement(target, resolveFrom);
+
+        switch (requirement.Kind)
+        {
+            case RequireTargetKind.Script:
+            {
+                if (!_requiredScripts.TryGetValue(requirement.CacheKey, out var artifact))
+                {
+                    if (!_currentlyRequiring.Add(requirement.CacheKey))
+                    {
+                        throw new InvalidOperationException(
+                            $"Circular require detected: '{requirement.CacheKey}' is already being loaded.");
+                    }
+
+                    try
+                    {
+                        var moduleSource = File.ReadAllText(requirement.ResolvedPath);
+                        artifact = ExecuteRequiredScriptAsync(moduleSource, requirement.ResolvedPath, CancellationToken.None)
+                            .GetAwaiter().GetResult();
+                        _requiredScripts[requirement.CacheKey] = artifact;
+                    }
+                    finally
+                    {
+                        _currentlyRequiring.Remove(requirement.CacheKey);
+                    }
+                }
+
+                ImportRequiredArtifact(artifact, importedNames, importedAliases);
+                break;
+            }
+
+            case RequireTargetKind.Assembly:
+            {
+                if (importedNames.Length > 0)
+                {
+                    throw new InvalidOperationException("Selective require imports are only supported for .tosh files.");
+                }
+
+                if (!Runtime.LoadedModules.Add(requirement.CacheKey))
+                {
+                    break;
+                }
+
+                AssemblyLoadContext.Default.LoadFromAssemblyPath(requirement.ResolvedPath);
+                break;
+            }
+
+            case RequireTargetKind.Project:
+            {
+                if (importedNames.Length > 0)
+                {
+                    throw new InvalidOperationException("Selective require imports are only supported for .tosh files.");
+                }
+
+                if (!Runtime.LoadedModules.Add(requirement.CacheKey))
+                {
+                    break;
+                }
+
+                var assemblyPath = BuildProjectAndResolveAssemblyPathAsync(requirement.ResolvedPath, CancellationToken.None)
+                    .GetAwaiter().GetResult();
+                AssemblyLoadContext.Default.LoadFromAssemblyPath(assemblyPath);
+                break;
+            }
+
+            default:
+                throw new InvalidOperationException($"Unsupported require target kind '{requirement.Kind}'.");
+        }
+    }
+
+    private void ImportRequiredArtifact(
+        ToshRequiredScriptArtifact artifact,
+        string[] importedNames,
+        string[] importedAliases)
+    {
+        if (importedNames.Length == 0)
+        {
+            foreach (var (name, value) in artifact.Exports.Variables)
+                DeclareVariable(name, ToVariableBinding(value), DeclarationModifier.Default);
+
+            foreach (var (_, command) in artifact.Exports.Commands)
+                DeclareCommand(command, DeclarationModifier.Default);
+
+            foreach (var (name, type) in artifact.Exports.Types)
+                DeclareType(name, type, DeclarationModifier.Default, artifact.Path);
+
+            foreach (var (_, refinementType) in artifact.Exports.RefinementTypes)
+                DeclareRefinementType(refinementType, DeclarationModifier.Default, artifact.Path);
+
+            foreach (var (name, module) in artifact.Exports.Modules)
+            {
+                if (module is not null)
+                    DeclareModule(name, module, DeclarationModifier.Default);
+            }
+
+            return;
+        }
+
+        for (var i = 0; i < importedNames.Length; i++)
+        {
+            var name = importedNames[i];
+            var bindingName = (i < importedAliases.Length && !string.IsNullOrEmpty(importedAliases[i]))
+                ? importedAliases[i]
+                : name;
+
+            if (artifact.Exports.Modules.TryGetValue(name, out var module))
+            {
+                if (module is null)
+                    throw new InvalidOperationException($"Export '{name}' in '{artifact.Path}' was null.");
+                DeclareModule(bindingName, module, DeclarationModifier.Default);
+                continue;
+            }
+
+            if (artifact.Exports.Types.TryGetValue(name, out var type))
+            {
+                DeclareType(bindingName, type, DeclarationModifier.Default, artifact.Path);
+                continue;
+            }
+
+            if (artifact.Exports.RefinementTypes.TryGetValue(name, out var refinementType))
+            {
+                DeclareRefinementType(refinementType with { Name = bindingName }, DeclarationModifier.Default, artifact.Path);
+                continue;
+            }
+
+            if (artifact.Exports.Commands.TryGetValue(name, out var command))
+            {
+                DeclareCommand(
+                    string.Equals(bindingName, command.Name, StringComparison.Ordinal)
+                        ? command
+                        : new RenamedCommand(bindingName, command),
+                    DeclarationModifier.Default);
+                continue;
+            }
+
+            if (artifact.Exports.Variables.TryGetValue(name, out var value))
+            {
+                DeclareVariable(bindingName, ToVariableBinding(value), DeclarationModifier.Default);
+                continue;
+            }
+
+            throw new InvalidOperationException($"Export '{name}' was not found in '{artifact.Path}'.");
+        }
     }
 
     private async IAsyncEnumerable<object?> EvaluateRequireStatementAsync(

@@ -226,9 +226,9 @@ public sealed class CompilerFeatureMatrixTests : IClassFixture<ToshRuntimeFixtur
             "Runes",
             "rune twice(body) { $body\n$body }",
             permissive: true,
-            runtime: false,
+            runtime: true,
             pure: false,
-            "Runes are Tier 3 source replay.");
+            "Rune definitions compile to a Tier-2 RegisterRuneFromSource call; definition-only scripts are runtime-clean.");
 
         yield return Case(
             "modules.pure-module-shell",
@@ -253,9 +253,9 @@ public sealed class CompilerFeatureMatrixTests : IClassFixture<ToshRuntimeFixtur
             "Interop",
             "require Inventory from \"./inventory.tosh\"",
             permissive: true,
-            runtime: false,
+            runtime: true,
             pure: false,
-            "Require statements are accepted in permissive through runtime source replay; no build-time dependency model yet.");
+            "Non-native require statements compile to a Tier-2 RequireModule call; the target is loaded at runtime without replaying the parent script.");
 
         yield return Case(
             "interop.native-bind",
@@ -645,6 +645,35 @@ public sealed class CompilerFeatureMatrixTests : IClassFixture<ToshRuntimeFixtur
                 $"Note: {feature.Note}\n" +
                 $"Diagnostics: {outcome.Diagnostics ?? "<none>"}");
         }
+    }
+
+    /// <summary>
+    /// CI gate: every feature row marked <c>runtime: true</c> must compile
+    /// cleanly under <see cref="CompileProfile.Runtime"/>. This is a
+    /// regression contract — adding source replay to a previously
+    /// runtime-clean feature is a breaking change that must be deliberate.
+    /// Run in isolation with:
+    ///   dotnet test --filter "FullyQualifiedName~Runtime_profile_gate_is_clean"
+    /// </summary>
+    public static IEnumerable<object[]> RuntimeGateCases() =>
+        FeatureCases()
+            .Where(row => ((FeatureCase)row[0]).Runtime)
+            .ToList();
+
+    [Theory]
+    [MemberData(nameof(RuntimeGateCases))]
+    public void Runtime_profile_gate_is_clean(FeatureCase feature)
+    {
+        var outcome = TryEmit(feature.Source, CompileProfile.Runtime);
+
+        Assert.False(
+            outcome.Threw,
+            $"Runtime gate '{feature.Id}' threw: {outcome.ExceptionText}");
+        Assert.True(
+            outcome.IsClean,
+            $"Runtime gate REGRESSION: '{feature.Id}' was previously runtime-clean but now has unsupported shapes.\n" +
+            $"Note: {feature.Note}\n" +
+            $"Diagnostics: {outcome.Diagnostics ?? "<none>"}");
     }
 
     /// <summary>
