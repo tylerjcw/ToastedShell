@@ -5,7 +5,7 @@ using System.Reflection.Metadata.Ecma335;
 using System.Reflection.PortableExecutable;
 using System.Diagnostics.SymbolStore;
 using Tosh.Language.Binding;
-using Tosh.Language.Binding.BoundNodes;
+using Tosh.Compiler.IR;
 using Tosh.Language.Parsing;
 using Tosh.Runtime;
 namespace Tosh.Compiler;
@@ -1090,11 +1090,10 @@ internal sealed partial class EmitterImpl
     /// </summary>
     private (int Start, int Length) ExtendTypeDefinitionSpan(TextSpan span)
     {
-        var src = _unit.ParseResult.SourceText;
+        var src = ((ParseResult)_unit.ParseResult).SourceText;
         var sliceEnd = span.Start + span.Length;
 
         // Compute running brace/paren depth across the original slice
-        // so we know how many closers we still need.
         int braceDepth = 0;
         int parenDepth = 0;
         for (int i = span.Start; i < sliceEnd && i < src.Length; i++)

@@ -1,6 +1,6 @@
 using Tosh.Language;
 using Tosh.Language.Binding;
-using Tosh.Language.Binding.BoundNodes;
+using Tosh.Compiler.IR;
 using Tosh.Runtime;
 
 namespace Tosh.Tests;
@@ -310,5 +310,236 @@ public sealed class TypeCheckerTests : IClassFixture<ToshRuntimeFixture>
             var p = new Point(1, 2)
             """, allowDynamic: false);
         Assert.Empty(diags);
+    }
+
+    // ---------------------------------------------------------------
+    // Phase 5.11: type-alias transparency in IsAssignable.
+    //
+    // A `type` declaration projects to a `RefinementType` wrapper
+    // around the resolved base. The type checker must unwrap that
+    // wrapper so assignment compatibility is judged against the base,
+    // not the alias name. These tests lock that behavior in for both
+    // refinement-bearing and plain aliases, including parameterized
+    // bases.
+    // ---------------------------------------------------------------
+
+    [Fact]
+    public void Plain_alias_to_primitive_accepts_base_value()
+    {
+        var diags = Check("type Id = int\nvar a: Id = 42");
+        Assert.Empty(diags);
+    }
+
+    [Fact]
+    public void Plain_alias_to_parameterized_list_accepts_list_literal()
+    {
+        var diags = Check("type IntList = list<int>\nvar d: IntList = [1,2,3]");
+        Assert.Empty(diags);
+    }
+
+    [Fact]
+    public void Refinement_alias_accepts_base_value_statically()
+    {
+        // The refinement clause is enforced dynamically; the static
+        // checker should only see `int -> int` and stay silent.
+        var diags = Check("type Positive = int where _ > 0\nvar b: Positive = 5");
+        Assert.Empty(diags);
+    }
+
+    [Fact]
+    public void Generic_refinement_alias_accepts_concrete_value()
+    {
+        var diags = Check("type Bounded<T> = T where _ > 0\nvar c: Bounded<int> = 7");
+        Assert.Empty(diags);
+    }
+
+    [Fact]
+    public void Generic_alias_forwarding_accepts_constructed_list_literal()
+    {
+        var diags = Check("type MyList<T> = list<T>\nvar e: MyList<string> = [\"a\",\"b\"]");
+        Assert.Empty(diags);
+    }
+
+    [Fact]
+    public void Plain_alias_still_reports_truly_incompatible_assignment()
+    {
+        // Alias transparency must not silence real mismatches: `Id`
+        // unwraps to `int`, and `"hello"` is a string.
+        var diags = Check("type Id = int\nvar a: Id = \"hello\"");
+        Assert.Single(diags);
+        Assert.Equal("tosh.type.mismatch", diags[0].Code);
+    }
+
+    // ---------------------------------------------------------------
+    // Phase 5 followup: precise generic-alias substitution.
+    //
+    // When a generic alias is used at a concrete type-arg site (e.g.
+    // `MyList<int>`), the resolver substitutes the type parameters
+    // structurally rather than erasing them to `Dynamic`. The
+    // resulting `RefinementType` still wraps the alias name for
+    // diagnostics, but the `Base` is precise.
+    // ---------------------------------------------------------------
+
+    [Fact]
+    public void Generic_alias_substitution_produces_precise_base_for_int()
+    {
+        var registry = new Dictionary<string, BoundType>(StringComparer.Ordinal);
+        var alias = new Tosh.Language.Parsing.TypeAliasStatementSyntax(
+            Name: "MyList",
+            TypeParameters: new[] { "T" },
+            BaseTypeName: "list<T>",
+            Refinement: null,
+            Modifier: DeclarationModifier.Default,
+            Span: default);
+        registry["MyList"] = new RefinementType(BoundType.Dynamic, "MyList", alias);
+
+        var resolver = new TypeNameResolver(registry);
+        var resolved = resolver.Resolve("MyList<int>");
+
+        var refType = Assert.IsType<RefinementType>(resolved);
+        Assert.Equal("MyList<Int32>", refType.DisplayName);
+        var listType = Assert.IsType<ListType>(refType.Base);
+        Assert.Equal(typeof(int), listType.Element.ClrType);
+    }
+
+    [Fact]
+    public void Generic_alias_substitution_produces_precise_base_for_string()
+    {
+        var registry = new Dictionary<string, BoundType>(StringComparer.Ordinal);
+        var alias = new Tosh.Language.Parsing.TypeAliasStatementSyntax(
+            Name: "MyList",
+            TypeParameters: new[] { "T" },
+            BaseTypeName: "list<T>",
+            Refinement: null,
+            Modifier: DeclarationModifier.Default,
+            Span: default);
+        registry["MyList"] = new RefinementType(BoundType.Dynamic, "MyList", alias);
+
+        var resolver = new TypeNameResolver(registry);
+        var resolved = resolver.Resolve("MyList<string>");
+
+        var refType = Assert.IsType<RefinementType>(resolved);
+        var listType = Assert.IsType<ListType>(refType.Base);
+        Assert.Equal(typeof(string), listType.Element.ClrType);
+    }
+
+    [Fact]
+    public void Generic_alias_substitution_handles_two_parameter_alias()
+    {
+        var registry = new Dictionary<string, BoundType>(StringComparer.Ordinal);
+        var alias = new Tosh.Language.Parsing.TypeAliasStatementSyntax(
+            Name: "Pair",
+            TypeParameters: new[] { "A", "B" },
+            BaseTypeName: "tuple<A,B>",
+            Refinement: null,
+            Modifier: DeclarationModifier.Default,
+            Span: default);
+        registry["Pair"] = new RefinementType(BoundType.Dynamic, "Pair", alias);
+
+        var resolver = new TypeNameResolver(registry);
+        var resolved = resolver.Resolve("Pair<int,string>");
+
+        var refType = Assert.IsType<RefinementType>(resolved);
+        Assert.Equal("Pair<Int32, String>", refType.DisplayName);
+        var tup = Assert.IsType<TupleType>(refType.Base);
+        Assert.Equal(2, tup.Elements.Count);
+        Assert.Equal(typeof(int), tup.Elements[0].ClrType);
+        Assert.Equal(typeof(string), tup.Elements[1].ClrType);
+    }
+
+    [Fact]
+    public void Generic_alias_arity_mismatch_emits_diagnostic()
+    {
+        var registry = new Dictionary<string, BoundType>(StringComparer.Ordinal);
+        var alias = new Tosh.Language.Parsing.TypeAliasStatementSyntax(
+            Name: "Pair",
+            TypeParameters: new[] { "A", "B" },
+            BaseTypeName: "tuple<A,B>",
+            Refinement: null,
+            Modifier: DeclarationModifier.Default,
+            Span: default);
+        registry["Pair"] = new RefinementType(BoundType.Dynamic, "Pair", alias);
+
+        var diagnostics = new List<string>();
+        var resolver = new TypeNameResolver(registry, onDiagnostic: diagnostics.Add);
+        resolver.Resolve("Pair<int>");
+
+        Assert.Contains(diagnostics, d => d.Contains("expects 2 type argument", StringComparison.Ordinal));
+    }
+
+    // ---------------------------------------------------------------
+    // Phase 6.12: type-parameter variance on generic interfaces.
+    //
+    // Interfaces may declare each type parameter as `out T`
+    // (covariant), `in T` (contravariant), or omit the marker
+    // (invariant — default). The static type-checker honors those
+    // markers when judging assignability between two
+    // `GenericInstanceType`s wrapping the same interface template.
+    // Variance only applies to interface templates; classes,
+    // records, and structs remain invariant regardless of any
+    // accidental annotations.
+    // ---------------------------------------------------------------
+
+    [Fact]
+    public void Covariant_interface_accepts_widening_type_arg()
+    {
+        // Numeric widening is one-way: int → long. With `out T`
+        // the covariant slot accepts the narrower IBox<int>.
+        var src = """
+            interface IBox<out T> { func get() -> T }
+            func consume(b: IBox<int>) {
+                var a: IBox<long> = $b
+            }
+            """;
+        var diags = Check(src);
+        Assert.DoesNotContain(diags, d => d.Code == "tosh.type.mismatch");
+    }
+
+    [Fact]
+    public void Invariant_interface_rejects_widening_type_arg()
+    {
+        // Without `out`, the slot is invariant and bidirectional
+        // assignability is required. `long` is not assignable to
+        // `int` (narrowing), so the invariant pair must fail.
+        var src = """
+            interface IBox<T> { func get() -> T }
+            func consume(b: IBox<int>) {
+                var a: IBox<long> = $b
+            }
+            """;
+        var diags = Check(src);
+        Assert.Contains(diags, d => d.Code == "tosh.type.mismatch");
+    }
+
+    [Fact]
+    public void Contravariant_interface_accepts_widening_in_reverse()
+    {
+        // `in T` flips the direction. `IBox<long>` fits into an
+        // `IBox<int>` slot because the LHS slot's int is
+        // assignable to the RHS value's long (the contravariant
+        // direction).
+        var src = """
+            interface IBox<in T> { func put(x: T) }
+            func consume(b: IBox<long>) {
+                var a: IBox<int> = $b
+            }
+            """;
+        var diags = Check(src);
+        Assert.DoesNotContain(diags, d => d.Code == "tosh.type.mismatch");
+    }
+
+    [Fact]
+    public void Covariant_interface_rejects_narrowing_type_arg()
+    {
+        // `out T` only allows widening: IBox<long> assigned to
+        // IBox<int> slot must still fail (narrowing).
+        var src = """
+            interface IBox<out T> { func get() -> T }
+            func consume(b: IBox<long>) {
+                var a: IBox<int> = $b
+            }
+            """;
+        var diags = Check(src);
+        Assert.Contains(diags, d => d.Code == "tosh.type.mismatch");
     }
 }

@@ -11,6 +11,7 @@ public static class ToshPublisher
 {
     private static readonly string[] RuntimeDependencyFileNames =
     [
+        "Tosh.Compiler.IR.dll",
         "Tosh.Compiler.Runtime.dll",
         "Tosh.Language.dll",
         "Tosh.Runtime.dll",

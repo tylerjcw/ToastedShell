@@ -5,7 +5,7 @@ using System.Reflection.Metadata.Ecma335;
 using System.Reflection.PortableExecutable;
 using System.Diagnostics.SymbolStore;
 using Tosh.Language.Binding;
-using Tosh.Language.Binding.BoundNodes;
+using Tosh.Compiler.IR;
 using Tosh.Language.Parsing;
 using Tosh.Runtime;
 namespace Tosh.Compiler;
@@ -23,7 +23,7 @@ internal sealed partial class EmitterImpl
         var hasRedirections = pipeline.BoundRedirections.Count > 0
             || pipeline.BoundInputRedirection is not null;
 
-        if (pipeline.Original.IsBackground)
+        if (((PipelineSyntax)pipeline.Original).IsBackground)
         {
             Diagnostics.Add("background pipelines (`&`) are not yet supported in compiled tosh");
             return null;

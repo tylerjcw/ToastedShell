@@ -5,7 +5,7 @@ using System.Reflection.Metadata.Ecma335;
 using System.Reflection.PortableExecutable;
 using System.Diagnostics.SymbolStore;
 using Tosh.Language.Binding;
-using Tosh.Language.Binding.BoundNodes;
+using Tosh.Compiler.IR;
 using Tosh.Language.Parsing;
 using Tosh.Runtime;
 namespace Tosh.Compiler;
@@ -331,7 +331,7 @@ internal sealed partial class EmitterImpl
         // replay. Definition-only programs (no callers) compile to
         // pure IL apart from the per-declaration source-replay that
         // registers the rune itself.
-        var src = _unit.ParseResult.SourceText;
+        var src = ((ParseResult)_unit.ParseResult).SourceText;
         if (string.IsNullOrEmpty(src)) return false;
 
         // Build a mask of byte positions that lie inside any rune

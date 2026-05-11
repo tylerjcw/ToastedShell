@@ -5,7 +5,7 @@ using System.Reflection.Metadata.Ecma335;
 using System.Reflection.PortableExecutable;
 using System.Diagnostics.SymbolStore;
 using Tosh.Language.Binding;
-using Tosh.Language.Binding.BoundNodes;
+using Tosh.Compiler.IR;
 using Tosh.Language.Parsing;
 using Tosh.Runtime;
 
@@ -755,7 +755,7 @@ internal sealed partial class EmitterImpl : IDisposable
         // GUID is the well-known Roslyn "Tosh" reservation; if/when
         // a tosh-specific GUID is registered with the debugger
         // ecosystem this can be swapped without changing call sites.
-        var sourceName = unit.ParseResult.SourceName;
+        var sourceName = ((ParseResult)unit.ParseResult).SourceName;
         if (!string.IsNullOrEmpty(sourceName))
         {
             // Use Guid.Empty for the language so debuggers fall back
@@ -909,7 +909,7 @@ internal sealed partial class EmitterImpl : IDisposable
     /// </summary>
     private (int Line, int Column) GetLineColumn(int offset)
     {
-        var src = _unit.ParseResult.SourceText;
+        var src = ((ParseResult)_unit.ParseResult).SourceText;
         if (_lineStarts is null)
         {
             var starts = new List<int> { 0 };
@@ -1118,8 +1118,8 @@ internal sealed partial class EmitterImpl : IDisposable
             || wholeScriptNeedsReplay
             || subcommandNeedsReplay)
         {
-            _il.Emit(OpCodes.Ldstr, _unit.ParseResult.SourceText);
-            _il.Emit(OpCodes.Ldstr, _unit.ParseResult.SourceName);
+            _il.Emit(OpCodes.Ldstr, ((ParseResult)_unit.ParseResult).SourceText);
+            _il.Emit(OpCodes.Ldstr, ((ParseResult)_unit.ParseResult).SourceName);
             _il.Emit(OpCodes.Call, s_hostRegisterSource);
         }
 

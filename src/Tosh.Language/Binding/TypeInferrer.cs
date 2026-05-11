@@ -1,6 +1,6 @@
 using System.Collections.Concurrent;
 using System.Reflection;
-using Tosh.Language.Binding.BoundNodes;
+using Tosh.Compiler.IR;
 using Tosh.Runtime;
 
 namespace Tosh.Language.Binding;

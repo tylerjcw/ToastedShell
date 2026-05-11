@@ -1,5 +1,5 @@
 using System.Collections.Immutable;
-using Tosh.Language.Binding.BoundNodes;
+using Tosh.Compiler.IR;
 using Tosh.Language.Parsing;
 using Tosh.Runtime;
 
@@ -92,23 +92,22 @@ public static class Lowerer
                     break;
 
                 case TypeAliasStatementSyntax alias:
-                    // Refinement-bearing aliases (e.g. `type Positive
-                    // = int where _ > 0`) project to a
-                    // `RefinementType` over the base so type-checking
-                    // (which goes through the base CLR type) and the
-                    // compiler IL emitter (which keys refinement-
-                    // check emission off RefinementType) both see
-                    // the right shape. Plain aliases without a
-                    // refinement clause stay user-class-shaped — the
-                    // type checker substitutes them later.
-                    if (alias.Refinement is not null)
+                    // Both refinement-bearing aliases (e.g. `type
+                    // Positive = int where _ > 0`) and plain
+                    // aliases (e.g. `type Id = int`) project to a
+                    // `RefinementType` over the resolved base so
+                    // (a) type-checking can transparently unwrap
+                    // them via IsAssignable, (b) the compiler IL
+                    // emitter routes through ToshHost.CheckType
+                    // (a no-op when the alias has no clauses), and
+                    // (c) the alias name still surfaces in
+                    // diagnostics via DisplayName. The runtime
+                    // registers plain aliases through
+                    // DeclareRefinementType too, so the dual
+                    // representation stays consistent.
                     {
                         var baseType = ResolveAliasBaseType(alias.BaseTypeName, registry);
                         registry[alias.Name] = new RefinementType(baseType, alias.Name, alias);
-                    }
-                    else
-                    {
-                        registry[alias.Name] = new UserClassType(alias.Name, Definition: alias, BackingClrType: null);
                     }
                     break;
             }

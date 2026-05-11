@@ -1,6 +1,6 @@
 using Tosh.Language;
 using Tosh.Language.Binding;
-using Tosh.Language.Binding.BoundNodes;
+using Tosh.Compiler.IR;
 using Tosh.Runtime;
 
 namespace Tosh.Tests;

@@ -1,5 +1,5 @@
 using Tosh.Language.Binding;
-using Tosh.Language.Binding.BoundNodes;
+using Tosh.Compiler.IR;
 
 namespace Tosh.Tests;
 

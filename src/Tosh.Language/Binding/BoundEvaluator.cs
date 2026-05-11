@@ -1,7 +1,7 @@
 using System.Threading;
 using System.Threading.Tasks;
 using System.Collections.Generic;
-using Tosh.Language.Binding.BoundNodes;
+using Tosh.Compiler.IR;
 
 namespace Tosh.Language.Binding;
 

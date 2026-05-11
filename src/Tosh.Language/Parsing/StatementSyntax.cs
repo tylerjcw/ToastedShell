@@ -1,16 +1,9 @@
+using Tosh.Compiler.IR;
 using Tosh.Runtime;
 
 namespace Tosh.Language.Parsing;
 
 public abstract record StatementSyntax(TextSpan Span);
-
-public enum DeclarationModifier
-{
-    Default,
-    Shy,
-    Global,
-    Export,
-}
 
 public sealed record ScriptStatementSyntax(IReadOnlyList<StatementSyntax> Statements, TextSpan Span, DocComment? DocComment = null) : StatementSyntax(Span);
 
@@ -71,27 +64,11 @@ public sealed record RequireStatementSyntax(
 
 public sealed record FunctionParameterSyntax(string Name, string? TypeName, bool IsOptional, bool IsRest, PipelineSyntax? DefaultValue, TextSpan Span, ArgumentSyntax? Refinement = null, string? Description = null);
 
-public enum ScriptInputDeclarationKind
-{
-    Flag,
-    Argument,
-}
-
 public sealed record ScriptInputStatementSyntax(
     ScriptInputDeclarationKind Kind,
     IReadOnlyList<FunctionParameterSyntax> Parameters,
     TextSpan Span,
     DocComment? DocComment = null) : StatementSyntax(Span);
-
-[Flags]
-public enum SubcommandModifier
-{
-    None = 0,
-    Eager = 1 << 0,
-    Hidden = 1 << 1,
-    Hollow = 1 << 2,
-    Vital = 1 << 3,
-}
 
 public sealed record SubcommandStatementSyntax(
     string Name,
@@ -99,13 +76,6 @@ public sealed record SubcommandStatementSyntax(
     BlockSyntax Body,
     TextSpan Span,
     DocComment? DocComment = null) : StatementSyntax(Span);
-
-public enum NativeParameterPassingMode
-{
-    In,
-    Ref,
-    Out,
-}
 
 public sealed record NativeFunctionParameterSyntax(
     string Name,
@@ -126,7 +96,8 @@ public sealed record FunctionDefinitionStatementSyntax(
     bool IsOnceHandler = false,
     BlockSyntax? WhenGuard = null,
     DocComment? DocComment = null,
-    IReadOnlyList<string>? TypeParameters = null) : StatementSyntax(Span);
+    IReadOnlyList<string>? TypeParameters = null,
+    IReadOnlyList<TypeParameterConstraintSyntax>? TypeParameterConstraints = null) : StatementSyntax(Span);
 
 public sealed record RuneDefinitionStatementSyntax(
     string Name,
@@ -214,7 +185,17 @@ public sealed record ClassDefinitionStatementSyntax(
     bool IsHermit = false,
     bool IsStrict = false,
     bool IsPartial = false,
-    IReadOnlyList<string>? BaseTypeArguments = null) : StatementSyntax(Span);
+    IReadOnlyList<string>? BaseTypeArguments = null,
+    IReadOnlyList<TypeParameterConstraintSyntax>? TypeParameterConstraints = null) : StatementSyntax(Span);
+
+/// <summary>
+/// Constraints on a generic type parameter, e.g. <c>where T: Numeric, Add</c>.
+/// Multiple constraint clauses may apply to the same type parameter.
+/// </summary>
+public sealed record TypeParameterConstraintSyntax(
+    string TypeParameter,
+    IReadOnlyList<string> ConstraintNames,
+    TextSpan Span);
 
 public sealed record InterfaceMethodSignatureSyntax(
     string Name,
@@ -228,7 +209,24 @@ public sealed record InterfaceDefinitionStatementSyntax(
     DeclarationModifier Modifier,
     TextSpan Span,
     DocComment? DocComment = null,
-    IReadOnlyList<string>? TypeParameters = null) : StatementSyntax(Span);
+    IReadOnlyList<string>? TypeParameters = null,
+    IReadOnlyList<TypeParameterConstraintSyntax>? TypeParameterConstraints = null,
+    IReadOnlyList<TypeParameterVariance>? TypeParameterVariances = null) : StatementSyntax(Span);
+
+/// <summary>
+/// Variance annotation on a generic type parameter declaration.
+/// Currently meaningful only on interfaces (matches C# semantics):
+/// <c>out T</c> declares <c>T</c> covariant (the type appears only in
+/// output positions, allowing <c>IFoo&lt;Derived&gt;</c> to flow into a
+/// <c>IFoo&lt;Base&gt;</c> slot); <c>in T</c> declares it contravariant
+/// (input positions only, reversed flow); the default is invariant.
+/// </summary>
+public enum TypeParameterVariance
+{
+    Invariant,
+    Covariant,
+    Contravariant,
+}
 
 public sealed record UnionVariantSyntax(
     string Name,
@@ -279,7 +277,9 @@ public sealed record RecordDefinitionStatementSyntax(
     bool IsStrict = false,
     bool IsPartial = false,
     TextSpan Span = default,
-    DocComment? DocComment = null) : StatementSyntax(Span);
+    DocComment? DocComment = null,
+    IReadOnlyList<string>? TypeParameters = null,
+    IReadOnlyList<TypeParameterConstraintSyntax>? TypeParameterConstraints = null) : StatementSyntax(Span);
 
 public sealed record StructDefinitionStatementSyntax(
     string Name,

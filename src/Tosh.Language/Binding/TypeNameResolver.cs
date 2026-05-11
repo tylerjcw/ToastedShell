@@ -1,4 +1,5 @@
-using Tosh.Language.Binding.BoundNodes;
+using Tosh.Compiler.IR;
+using Tosh.Language.Parsing;
 using Tosh.Runtime;
 
 namespace Tosh.Language.Binding;
@@ -133,6 +134,54 @@ public sealed class TypeNameResolver
         // Try user types — generic instantiation of a user template.
         if (_userTypes is not null && _userTypes.TryGetValue(g.Name, out var template))
         {
+            // Generic type-alias substitution. When the template is a
+            // `RefinementType` carrying a `TypeAliasStatementSyntax`
+            // with declared type parameters, substitute the supplied
+            // arguments for the parameter names and re-resolve the
+            // alias's base-type text. This produces a precise
+            // structural type (e.g. `MyList<string>` ⇒
+            // `RefinementType(ListType(string), "MyList<string>",
+            // alias)`) instead of the lenient
+            // `GenericInstanceType` wrap that would otherwise leave
+            // the parameter slots as `Dynamic`. Refinement clauses
+            // are preserved on the wrapper so dynamic validation
+            // still fires; the displayed name reflects the
+            // instantiated form for diagnostics.
+            if (template is RefinementType { Annotation: TypeAliasStatementSyntax aliasSyntax } aliasRef
+                && aliasSyntax.TypeParameters.Count > 0)
+            {
+                if (aliasSyntax.TypeParameters.Count != args.Count)
+                {
+                    _onDiagnostic?.Invoke(
+                        $"type alias '{g.Name}' expects {aliasSyntax.TypeParameters.Count} type "
+                        + $"argument(s) but {args.Count} were supplied in '{sourceText}'");
+                    return new GenericInstanceType(template, args);
+                }
+
+                var overlay = new Dictionary<string, BoundType>(StringComparer.Ordinal);
+                if (_userTypes is not null)
+                {
+                    foreach (var kv in _userTypes) overlay[kv.Key] = kv.Value;
+                }
+                for (var i = 0; i < aliasSyntax.TypeParameters.Count; i++)
+                {
+                    overlay[aliasSyntax.TypeParameters[i]] = args[i];
+                }
+                var childResolver = new TypeNameResolver(overlay, _clrResolver, _onDiagnostic);
+                var substitutedBase = childResolver.Resolve(aliasSyntax.BaseTypeName);
+                var instantiatedName = $"{g.Name}<{string.Join(", ", args.Select(a => a.DisplayName))}>";
+                return new RefinementType(substitutedBase, instantiatedName, aliasSyntax);
+            }
+
+            // Reject type arguments on a non-generic alias.
+            if (template is RefinementType { Annotation: TypeAliasStatementSyntax aliasNoTp }
+                && aliasNoTp.TypeParameters.Count == 0)
+            {
+                _onDiagnostic?.Invoke(
+                    $"type alias '{g.Name}' is not generic but was used with type arguments in '{sourceText}'");
+                return template;
+            }
+
             return new GenericInstanceType(template, args);
         }
 
