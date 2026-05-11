@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: ["master", "main"]
+  pull_request:
+
+jobs:
+  build-and-test:
+    name: Build & test
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Restore
+        run: dotnet restore Tosh.slnx
+
+      - name: Build
+        run: dotnet build Tosh.slnx --no-restore -q
+
+      - name: Full test suite
+        run: dotnet test Tosh.slnx --no-build -q
+
+  runtime-gate:
+    name: Runtime profile gate
+    runs-on: ubuntu-latest
+    needs: build-and-test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Restore & build
+        run: dotnet restore Tosh.slnx && dotnet build Tosh.slnx --no-restore -q
+
+      - name: Assert all runtime-guaranteed features compile without source replay
+        run: >
+          dotnet test Tosh.slnx --no-build
+          --filter "FullyQualifiedName~Runtime_profile_gate_is_clean"
+          --logger "console;verbosity=normal"

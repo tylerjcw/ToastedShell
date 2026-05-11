@@ -648,6 +648,35 @@ public sealed class CompilerFeatureMatrixTests : IClassFixture<ToshRuntimeFixtur
     }
 
     /// <summary>
+    /// CI gate: every feature row marked <c>runtime: true</c> must compile
+    /// cleanly under <see cref="CompileProfile.Runtime"/>. This is a
+    /// regression contract — adding source replay to a previously
+    /// runtime-clean feature is a breaking change that must be deliberate.
+    /// Run in isolation with:
+    ///   dotnet test --filter "FullyQualifiedName~Runtime_profile_gate_is_clean"
+    /// </summary>
+    public static IEnumerable<object[]> RuntimeGateCases() =>
+        FeatureCases()
+            .Where(row => ((FeatureCase)row[0]).Runtime)
+            .ToList();
+
+    [Theory]
+    [MemberData(nameof(RuntimeGateCases))]
+    public void Runtime_profile_gate_is_clean(FeatureCase feature)
+    {
+        var outcome = TryEmit(feature.Source, CompileProfile.Runtime);
+
+        Assert.False(
+            outcome.Threw,
+            $"Runtime gate '{feature.Id}' threw: {outcome.ExceptionText}");
+        Assert.True(
+            outcome.IsClean,
+            $"Runtime gate REGRESSION: '{feature.Id}' was previously runtime-clean but now has unsupported shapes.\n" +
+            $"Note: {feature.Note}\n" +
+            $"Diagnostics: {outcome.Diagnostics ?? "<none>"}");
+    }
+
+    /// <summary>
     /// Conformance cases: observable, not just emit-clean. Each
     /// entry compiles the source, loads the assembly, invokes
     /// <c>Main</c>, and asserts the captured stdout matches.
