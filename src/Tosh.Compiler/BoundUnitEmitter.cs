@@ -531,6 +531,12 @@ internal sealed partial class EmitterImpl : IDisposable
     private static readonly MethodInfo s_hostRegisterCompiledTypeAlias =
         s_toshHost.GetMethod(nameof(global::Tosh.Compiler.Runtime.ToshHost.RegisterCompiledTypeAlias),
             new[] { typeof(int), typeof(int) })!;
+    private static readonly MethodInfo s_hostRegisterRuneFromSource =
+        s_toshHost.GetMethod(nameof(global::Tosh.Compiler.Runtime.ToshHost.RegisterRuneFromSource),
+            new[] { typeof(int), typeof(int) })!;
+    private static readonly MethodInfo s_hostRequireModule =
+        s_toshHost.GetMethod(nameof(global::Tosh.Compiler.Runtime.ToshHost.RequireModule),
+            new[] { typeof(string), typeof(string[]), typeof(string[]) })!;
     private static readonly MethodInfo s_hostRegisterCompiledAssembly =
         s_toshHost.GetMethod(nameof(global::Tosh.Compiler.Runtime.ToshHost.RegisterCompiledAssembly),
             new[] { typeof(System.Reflection.Assembly) })!;
@@ -1115,6 +1121,8 @@ internal sealed partial class EmitterImpl : IDisposable
             || ProgramHasModuleDefinitionsNeedingReplay()
             || ProgramHasTopLevelDeclarationsNeedingReplay()
             || ProgramHasCompiledAliasRegistration()
+            || ProgramHasRuneDefinitionsForTier2()
+            || ProgramHasUnsatisfiedNonNativeRequires()
             || wholeScriptNeedsReplay
             || subcommandNeedsReplay)
         {
@@ -1170,6 +1178,59 @@ internal sealed partial class EmitterImpl : IDisposable
                 _il.Emit(OpCodes.Ldc_I4, start);
                 _il.Emit(OpCodes.Ldc_I4, length);
                 _il.Emit(OpCodes.Call, s_hostRegisterDeclarationFromSource);
+            }
+        }
+
+        // Register rune (macro) definitions via direct parsing — Tier 2.
+        // Each rune's source slice is parsed synchronously into a RuneDefinition
+        // and declared via ToshHost, avoiding full interpreter evaluation.
+        foreach (var statement in _unit.Root.Statements)
+        {
+            if (!wholeScriptNeedsReplay && statement is BoundRuneDefinition rune)
+            {
+                RequireTier(2, "rune definition (runtime registration)");
+                _il.Emit(OpCodes.Ldc_I4, rune.Span.Start);
+                _il.Emit(OpCodes.Ldc_I4, rune.Span.Length);
+                _il.Emit(OpCodes.Call, s_hostRegisterRuneFromSource);
+            }
+        }
+
+        // Register unsatisfied require statements via the Tier-2 RequireModule bridge.
+        // Native requires remain Tier 3 (bind blocks are not yet CLR-emittable).
+        foreach (var statement in _unit.Root.Statements)
+        {
+            if (!wholeScriptNeedsReplay &&
+                statement is BoundRequireStatement require &&
+                !require.IsNative &&
+                !RequireTargetIsSatisfiedAtBuildTime(require))
+            {
+                RequireTier(2, "require statement (runtime module load)");
+                // Emit: ToshHost.RequireModule(target, importedNames[], importedAliases[])
+                _il.Emit(OpCodes.Ldstr, require.Target);
+
+                // importedNames[]
+                _il.Emit(OpCodes.Ldc_I4, require.Imports.Count);
+                _il.Emit(OpCodes.Newarr, typeof(string));
+                for (var i = 0; i < require.Imports.Count; i++)
+                {
+                    _il.Emit(OpCodes.Dup);
+                    _il.Emit(OpCodes.Ldc_I4, i);
+                    _il.Emit(OpCodes.Ldstr, require.Imports[i].Name);
+                    _il.Emit(OpCodes.Stelem_Ref);
+                }
+
+                // importedAliases[]
+                _il.Emit(OpCodes.Ldc_I4, require.Imports.Count);
+                _il.Emit(OpCodes.Newarr, typeof(string));
+                for (var i = 0; i < require.Imports.Count; i++)
+                {
+                    _il.Emit(OpCodes.Dup);
+                    _il.Emit(OpCodes.Ldc_I4, i);
+                    _il.Emit(OpCodes.Ldstr, require.Imports[i].Alias ?? "");
+                    _il.Emit(OpCodes.Stelem_Ref);
+                }
+
+                _il.Emit(OpCodes.Call, s_hostRequireModule);
             }
         }
 
@@ -1269,12 +1330,16 @@ internal sealed partial class EmitterImpl : IDisposable
                     // Registered in the source-replay prologue.
                     continue;
                 }
+                if (statement is BoundRuneDefinition)
+                {
+                    // Registered in the Tier-2 rune prologue.
+                    continue;
+                }
                 if (statement is BoundRequireStatement)
                 {
-                    // Build-time-satisfied require: its target is a
-                    // sibling source merged into this assembly, so
-                    // the symbols are already present and the
-                    // statement has no compiled effect.
+                    // Require statements are either build-time-satisfied (sibling
+                    // compilation), or registered via the Tier-2 RequireModule
+                    // prologue call; either way they have no remaining effect here.
                     continue;
                 }
                 if (statement is BoundBindStatement bindStmt && _clrNativeBinds.Contains(bindStmt))

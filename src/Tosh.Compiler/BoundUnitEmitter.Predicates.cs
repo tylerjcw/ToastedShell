@@ -118,6 +118,31 @@ internal sealed partial class EmitterImpl
         return false;
     }
 
+    /// <summary>
+    /// Returns true if the bound unit contains any rune (macro) definition
+    /// that will be registered via the Tier-2 <c>RegisterRuneFromSource</c>
+    /// bridge. The bridge slices the source text, so <c>RegisterSource</c>
+    /// must be called before it.
+    /// </summary>
+    private bool ProgramHasRuneDefinitionsForTier2()
+    {
+        return _unit.Root.Statements.Any(s => s is BoundRuneDefinition);
+    }
+
+    /// <summary>
+    /// Returns true if the bound unit contains any non-native require
+    /// statement that is not already satisfied by a sibling compilation
+    /// source. Such requires are resolved at runtime via the Tier-2
+    /// <c>RequireModule</c> bridge.
+    /// </summary>
+    private bool ProgramHasUnsatisfiedNonNativeRequires()
+    {
+        return _unit.Root.Statements.Any(s =>
+            s is BoundRequireStatement req &&
+            !req.IsNative &&
+            !RequireTargetIsSatisfiedAtBuildTime(req));
+    }
+
     private bool TopLevelDeclarationNeedsSourceReplay(BoundStatement stmt, out TextSpan span)
     {
         switch (stmt)
@@ -125,10 +150,9 @@ internal sealed partial class EmitterImpl
             case BoundFunctionDefinition fn when FunctionNeedsSourceReplay(fn):
                 span = fn.Span;
                 return true;
-            case BoundRuneDefinition rune:
-                span = rune.Span;
-                return true;
-            case BoundRequireStatement require when !RequireTargetIsSatisfiedAtBuildTime(require):
+            // Native requires still need source replay: bind blocks are Tier 3
+            // until first-class .NET plan step 7 is complete.
+            case BoundRequireStatement require when require.IsNative:
                 span = require.Span;
                 return true;
             case BoundBindStatement bind when !_clrNativeBinds.Contains(bind):

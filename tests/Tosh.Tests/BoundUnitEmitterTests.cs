@@ -993,17 +993,18 @@ public sealed class BoundUnitEmitterTests : IClassFixture<ToshRuntimeFixture>
     }
 
     [Fact]
-    public void Require_without_sibling_sources_still_forces_tier3()
+    public void Require_without_sibling_sources_is_tier2_clean_in_runtime()
     {
-        // First-class .NET plan, step 2: require still needs source
-        // replay when the build doesn't know about a sibling source
-        // that satisfies it (single-file compile, in-memory tests).
+        // First-class .NET plan, Push 2: require no longer forces source
+        // replay under the runtime profile. When the build doesn't know
+        // about a sibling source, the emit still succeeds (Tier 2) —
+        // the compiled assembly calls ToshHost.RequireModule at runtime
+        // to load the module without replaying the parent script's source.
         var result = EmitWithProfile(
             "require Inventory from \"./inventory.tosh\"",
             CompileProfile.Runtime);
-        Assert.False(result.IsClean);
-        Assert.Contains(result.UnsupportedShapes,
-            s => s.Contains("profile 'runtime'") && s.Contains("tier 3"));
+        Assert.True(result.IsClean,
+            $"expected Tier-2 clean emit, got: {string.Join(", ", result.UnsupportedShapes)}");
     }
 
     [Fact]

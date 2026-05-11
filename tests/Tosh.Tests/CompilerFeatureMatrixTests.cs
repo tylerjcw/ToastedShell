@@ -226,9 +226,9 @@ public sealed class CompilerFeatureMatrixTests : IClassFixture<ToshRuntimeFixtur
             "Runes",
             "rune twice(body) { $body\n$body }",
             permissive: true,
-            runtime: false,
+            runtime: true,
             pure: false,
-            "Runes are Tier 3 source replay.");
+            "Rune definitions compile to a Tier-2 RegisterRuneFromSource call; definition-only scripts are runtime-clean.");
 
         yield return Case(
             "modules.pure-module-shell",
@@ -253,9 +253,9 @@ public sealed class CompilerFeatureMatrixTests : IClassFixture<ToshRuntimeFixtur
             "Interop",
             "require Inventory from \"./inventory.tosh\"",
             permissive: true,
-            runtime: false,
+            runtime: true,
             pure: false,
-            "Require statements are accepted in permissive through runtime source replay; no build-time dependency model yet.");
+            "Non-native require statements compile to a Tier-2 RequireModule call; the target is loaded at runtime without replaying the parent script.");
 
         yield return Case(
             "interop.native-bind",
