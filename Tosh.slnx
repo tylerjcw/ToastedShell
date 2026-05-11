@@ -19,6 +19,10 @@
     <Project Path="tests/Tosh.LspFixture/Tosh.LspFixture.csproj" />
     <Project Path="tests/Tosh.Tests/Tosh.Tests.csproj" />
   </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/Tosh.ParityCheck/Tosh.ParityCheck.csproj" />
+    <Project Path="tools/Tosh.DevCompanion/Tosh.DevCompanion.csproj" />
+  </Folder>
   <Folder Name="/bench/">
     <Project Path="bench/Tosh.Benchmarks/Tosh.Benchmarks.csproj" />
   </Folder>

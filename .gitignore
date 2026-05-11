@@ -47,6 +47,7 @@ docs/spec/ToastScript.pdf
 scripts/*
 !scripts/build.tosh
 !scripts/publish_tosh.sh
+!scripts/toshmem.tosh
 
 # Test results
 TestResults/
@@ -567,3 +568,8 @@ $RECYCLE.BIN/
 # Vim temporary swap files
 *.swp
 *.lscache
+
+# AI companion memory — local databases are private
+.tosh/memory.db
+# ~/.tosh/memory.db is outside the repo; no entry needed
+# .tosh/memories.toml is intentionally tracked for shared decisions
