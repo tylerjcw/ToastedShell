@@ -104,6 +104,10 @@ public sealed class ToshLanguageServer
                         documentSymbolProvider = true,
                         documentFormattingProvider = true,
                         documentRangeFormattingProvider = true,
+                        codeActionProvider = new
+                        {
+                            codeActionKinds = new[] { "quickfix" }
+                        },
                         semanticTokensProvider = new
                         {
                             legend = new
@@ -246,6 +250,18 @@ public sealed class ToshLanguageServer
                     _documents.TryGetValue(uri, out var text);
                     var edits = ComputeFullDocumentFormat(text ?? string.Empty, uri);
                     await WriteResponseAsync(id, edits, cancellationToken);
+                    break;
+                }
+
+            case "textDocument/codeAction":
+                {
+                    var uri = parameters.GetProperty("textDocument").GetProperty("uri").GetString() ?? string.Empty;
+                    var context = parameters.TryGetProperty("context", out var ctx)
+                        ? ctx.Deserialize<LspCodeActionContext>(_jsonOptions) ?? new LspCodeActionContext([])
+                        : new LspCodeActionContext([]);
+                    _documents.TryGetValue(uri, out var text);
+                    var actions = _features.GetCodeActions(text ?? string.Empty, uri, context);
+                    await WriteResponseAsync(id, actions.Count == 0 ? null : actions, cancellationToken);
                     break;
                 }
 
