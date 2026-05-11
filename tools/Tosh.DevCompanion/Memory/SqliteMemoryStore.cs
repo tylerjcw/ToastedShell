@@ -21,7 +21,7 @@ public sealed class SqliteMemoryStore : IMemoryStore
 
     public async Task<MemoryEntry> StoreAsync(StoreRequest req, CancellationToken ct = default)
     {
-        var id  = Guid.NewGuid().ToString();
+        var id  = Guid.CreateVersion7().ToString();
         var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         var tags = string.Join(',', req.Tags);
 
