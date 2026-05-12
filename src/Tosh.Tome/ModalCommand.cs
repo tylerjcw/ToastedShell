@@ -235,7 +235,7 @@ internal sealed partial class TomeApp
         "w", "write", "wq", "x",
         "q", "quit", "q!",
         "e", "edit",
-        "tabnew", "tabclose", "tabnext", "tabprev", "tn", "tp", "bd",
+        "tabnew", "tabclose", "tabnext", "tabprev", "tn", "tp", "tc", "bd",
         "goto", "g",
         "diag", "d",
         "set",
@@ -306,6 +306,7 @@ internal sealed partial class TomeApp
                 NewTab();
                 return;
             case "tabclose":
+            case "tc":
             case "bd":
                 CloseTab();
                 return;
@@ -329,7 +330,7 @@ internal sealed partial class TomeApp
             case "help":
             case "h":
                 _message = string.IsNullOrEmpty(arg)
-                    ? "verbs: w q wq e tabnew tabclose tn tp goto diag set mode  |  prefix '!' for shell"
+                    ? "verbs: w q wq e tabnew tabclose tc tn tp goto diag set mode  |  prefix '!' for shell"
                     : $"help: {arg} (not yet implemented — use Ctrl+K for symbol hover)";
                 return;
             case "set":
