@@ -83,13 +83,25 @@ public sealed class TextEditorView
     }
 
     /// <summary>
-    /// Scrolls the viewport vertically by <paramref name="delta"/> lines
-    /// without moving the cursor. Positive scrolls down (reveals later
-    /// lines). Clamped to valid buffer range.
+    /// Scrolls the viewport vertically by <paramref name="delta"/> lines.
+    /// Positive scrolls down (reveals later lines). The cursor is pulled
+    /// along so it stays inside the visible viewport — otherwise
+    /// <see cref="EnsureCursorVisible"/> would snap the scroll back as
+    /// soon as the cursor fell off-screen.
     /// </summary>
     public void ScrollBy(int delta)
     {
         var max = Math.Max(0, Buffer.LineCount - 1);
         ScrollLine = Math.Clamp(ScrollLine + delta, 0, max);
+
+        if (ViewportHeight <= 0) return;
+
+        var cursor = Buffer.Cursor;
+        var top = ScrollLine;
+        var bottom = Math.Min(max, ScrollLine + ViewportHeight - 1);
+        if (cursor.Line < top)
+            Buffer.MoveCursor(new TextLocation(top, cursor.Column));
+        else if (cursor.Line > bottom)
+            Buffer.MoveCursor(new TextLocation(bottom, cursor.Column));
     }
 }

@@ -82,6 +82,34 @@ internal sealed class ExplorerPane : IDisposable
     public void MoveHome() => _selected = 0;
     public void MoveEnd() => _selected = Math.Max(0, _flat.Count - 1);
 
+    /// <summary>Number of visible rows in the flattened tree.</summary>
+    public int VisibleCount => _flat.Count;
+
+    /// <summary>
+    /// Scroll the pane by <paramref name="delta"/> rows without moving the
+    /// selection. Positive scrolls down. Clamped so the last row never
+    /// scrolls past the top of the viewport.
+    /// </summary>
+    public void ScrollBy(int delta, int visibleRows)
+    {
+        if (_flat.Count == 0) { _scroll = 0; return; }
+        var maxScroll = Math.Max(0, _flat.Count - Math.Max(1, visibleRows));
+        _scroll = Math.Clamp(_scroll + delta, 0, maxScroll);
+    }
+
+    /// <summary>
+    /// Translate a visible-row index (0 = top of pane) into a selection
+    /// change. Returns true when the row hits an actual entry; false for
+    /// clicks past the end of the tree.
+    /// </summary>
+    public bool SelectAtRow(int visibleRow)
+    {
+        var index = _scroll + visibleRow;
+        if (index < 0 || index >= _flat.Count) return false;
+        _selected = index;
+        return true;
+    }
+
     /// <summary>Toggle expand/collapse on the selected node. Returns true if the node is a directory.</summary>
     public bool ToggleSelected()
     {

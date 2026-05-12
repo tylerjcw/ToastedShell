@@ -84,6 +84,12 @@ internal sealed partial class TomeApp
     private readonly List<(int Start, int End)> _layoutTabRanges = new();
     private bool _mouseDragging;
 
+    // Double-click detection for the explorer pane. We only need a single
+    // "last click" — there is no overlap with other surfaces.
+    private long _lastExplorerClickTickMs;
+    private int _lastExplorerClickRow = -1;
+    private const int DoubleClickWindowMs = 350;
+
     public TomeApp(TerminalDriver terminal, string? filePath, string initialText)
     {
         _terminal = terminal;
@@ -898,11 +904,48 @@ internal sealed partial class TomeApp
     {
         _message = string.Empty;
 
-        // Wheel scrolls the editor regardless of where the pointer is —
-        // matches most terminal-editor conventions.
+        var editorBottom = _layoutEditorTopRow + _layoutEditorHeight;
+        var inEditorRows = evt.Row >= _layoutEditorTopRow && evt.Row < editorBottom;
+        var explorerVisible = _layoutExplorerWidth > 0;
+        var inExplorer = explorerVisible && inEditorRows && evt.Column < _layoutExplorerWidth;
+
+        // Mouse wheel: scrolls whichever pane the pointer is over. Defaults
+        // to the editor when not over the explorer.
         if (evt.Kind == InputEventKind.MouseWheel)
         {
-            _view.ScrollBy(-evt.WheelDelta * 3);
+            if (inExplorer)
+                _explorer.ScrollBy(-evt.WheelDelta * 3, _layoutEditorHeight);
+            else
+                _view.ScrollBy(-evt.WheelDelta * 3);
+            return;
+        }
+
+        // Explorer click — single click selects + focuses; double click on
+        // the same row activates (toggle directory / open file). Release
+        // and move events inside the explorer are ignored.
+        if (inExplorer)
+        {
+            if (evt.Kind == InputEventKind.MousePress && evt.Button == MouseButton.Left)
+            {
+                var visibleRow = evt.Row - _layoutEditorTopRow;
+                if (!_explorer.SelectAtRow(visibleRow)) return;
+                _focusExplorer = true;
+                _focusRepl = false;
+                _mouseDragging = false;
+                var now = Environment.TickCount64;
+                if (_lastExplorerClickRow == visibleRow
+                    && now - _lastExplorerClickTickMs <= DoubleClickWindowMs)
+                {
+                    OpenSelectedExplorerEntry();
+                    _lastExplorerClickRow = -1;
+                    _lastExplorerClickTickMs = 0;
+                }
+                else
+                {
+                    _lastExplorerClickRow = visibleRow;
+                    _lastExplorerClickTickMs = now;
+                }
+            }
             return;
         }
 
@@ -920,9 +963,7 @@ internal sealed partial class TomeApp
         }
 
         // Editor area: translate screen coords to buffer coords.
-        var editorBottom = _layoutEditorTopRow + _layoutEditorHeight;
-        var inEditor = evt.Row >= _layoutEditorTopRow && evt.Row < editorBottom
-                       && evt.Column >= _layoutTextLeftCol;
+        var inEditor = inEditorRows && evt.Column >= _layoutTextLeftCol;
 
         // REPL pane click — transfer focus on press.
         if (_layoutReplHeight > 0
