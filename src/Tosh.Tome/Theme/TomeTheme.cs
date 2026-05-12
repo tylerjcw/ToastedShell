@@ -36,6 +36,13 @@ internal enum Role
     GutterDiagWarn,
     GutterDiagInfo,
     GutterDim,         // faint depth bars
+    GutterDiffAdded,   // green ▍ for added lines
+    GutterDiffModified,// yellow ▍ for modified lines
+    GutterDiffDeleted, // red ▍ (currently unused: deleted lines have no row)
+    GutterSelection,   // bright bar for lines covered by the current selection
+    GutterSearchHit,   // cyan marker for lines containing the active search term
+    GutterBreakpoint,  // red ● for breakpointed lines
+    GutterMultiCaret,  // green '+' for lines with an extra caret
 
     StatusBarBg,       // explorer banner, status line accents
     PopupBg,           // completion popup default-row bg
@@ -110,20 +117,20 @@ internal sealed class TomeTheme
         // Colour palette (RGB picked to approximate the legacy xterm-256
         // indices listed in the trailing comment, then anchored to the
         // canonical hue).
-        var keyword       = new Color(0xAF, 0x87, 0xFF, 141); // soft purple
-        var controlFlow   = new Color(0xFF, 0x5F, 0x87, 204); // pink/red
-        var stringG       = new Color(0xAF, 0xD7, 0x87, 150); // green
+        var keyword = new Color(0xAF, 0x87, 0xFF, 141); // soft purple
+        var controlFlow = new Color(0xFF, 0x5F, 0x87, 204); // pink/red
+        var stringG = new Color(0xAF, 0xD7, 0x87, 150); // green
         var escapedString = new Color(0x87, 0xAF, 0x87, 108); // muted green
-        var interpolated  = new Color(0xAF, 0xAF, 0x87, 144); // tan-green
-        var number        = new Color(0xFF, 0xAF, 0x5F, 215); // orange
-        var soft          = new Color(0x87, 0xAF, 0xD7, 110); // soft blue
-        var tan           = new Color(0xD7, 0xAF, 0x87, 180); // tan
-        var grey245       = new Color(0x8A, 0x8A, 0x8A, 245); // grey
-        var grey244       = new Color(0x80, 0x80, 0x80, 244); // dim grey
-        var red203        = new Color(0xFF, 0x5F, 0x5F, 203); // bright red
-        var yellow221     = new Color(0xFF, 0xD7, 0x5F, 221); // bright yellow
-        var bg236         = new Color(0x30, 0x30, 0x30, 236); // current-line / popup bg
-        var bg238         = new Color(0x44, 0x44, 0x44, 238); // explorer unfocused
+        var interpolated = new Color(0xAF, 0xAF, 0x87, 144); // tan-green
+        var number = new Color(0xFF, 0xAF, 0x5F, 215); // orange
+        var soft = new Color(0x87, 0xAF, 0xD7, 110); // soft blue
+        var tan = new Color(0xD7, 0xAF, 0x87, 180); // tan
+        var grey245 = new Color(0x8A, 0x8A, 0x8A, 245); // grey
+        var grey244 = new Color(0x80, 0x80, 0x80, 244); // dim grey
+        var red203 = new Color(0xFF, 0x5F, 0x5F, 203); // bright red
+        var yellow221 = new Color(0xFF, 0xD7, 0x5F, 221); // bright yellow
+        var bg236 = new Color(0x30, 0x30, 0x30, 236); // current-line / popup bg
+        var bg238 = new Color(0x44, 0x44, 0x44, 238); // explorer unfocused
 
         const string Bold = "\u001b[1m";
         const string Italic = "\u001b[3m";
@@ -132,38 +139,45 @@ internal sealed class TomeTheme
         var open = new Dictionary<Role, string>
         {
             // syntax
-            [Role.Keyword]        = keyword.Fg(truecolor),
-            [Role.ControlFlow]    = controlFlow.Fg(truecolor),
-            [Role.String]         = stringG.Fg(truecolor),
-            [Role.EscapedString]  = escapedString.Fg(truecolor),
-            [Role.Interpolated]   = interpolated.Fg(truecolor),
-            [Role.Number]         = number.Fg(truecolor),
-            [Role.Constant]       = number.Fg(truecolor),
-            [Role.Operator]       = soft.Fg(truecolor),
-            [Role.Punctuation]    = grey245.Fg(truecolor),
-            [Role.Variable]       = soft.Fg(truecolor),
-            [Role.Flag]           = tan.Fg(truecolor),
-            [Role.Comment]        = grey244.Fg(truecolor),
-            [Role.DocComment]     = Italic + grey244.Fg(truecolor),
-            [Role.TypeName]       = tan.Fg(truecolor),
-            [Role.FunctionName]   = tan.Fg(truecolor),
-            [Role.Heading]        = Bold + keyword.Fg(truecolor),
-            [Role.Emphasis]       = Italic,
-            [Role.Strong]         = Bold,
+            [Role.Keyword] = keyword.Fg(truecolor),
+            [Role.ControlFlow] = controlFlow.Fg(truecolor),
+            [Role.String] = stringG.Fg(truecolor),
+            [Role.EscapedString] = escapedString.Fg(truecolor),
+            [Role.Interpolated] = interpolated.Fg(truecolor),
+            [Role.Number] = number.Fg(truecolor),
+            [Role.Constant] = number.Fg(truecolor),
+            [Role.Operator] = soft.Fg(truecolor),
+            [Role.Punctuation] = grey245.Fg(truecolor),
+            [Role.Variable] = soft.Fg(truecolor),
+            [Role.Flag] = tan.Fg(truecolor),
+            [Role.Comment] = grey244.Fg(truecolor),
+            [Role.DocComment] = Italic + grey244.Fg(truecolor),
+            [Role.TypeName] = tan.Fg(truecolor),
+            [Role.FunctionName] = tan.Fg(truecolor),
+            [Role.Heading] = Bold + keyword.Fg(truecolor),
+            [Role.Emphasis] = Italic,
+            [Role.Strong] = Bold,
 
             // chrome
-            [Role.CurrentLineBg]      = bg236.Bg(truecolor),
-            [Role.GutterCurrentLine]  = number.Fg(truecolor),
-            [Role.GutterDiagError]    = red203.Fg(truecolor) + Bold,
-            [Role.GutterDiagWarn]     = yellow221.Fg(truecolor) + Bold,
-            [Role.GutterDiagInfo]     = soft.Fg(truecolor),
-            [Role.GutterDim]          = Faint,
+            [Role.CurrentLineBg] = bg236.Bg(truecolor),
+            [Role.GutterCurrentLine] = number.Fg(truecolor),
+            [Role.GutterDiagError] = red203.Fg(truecolor) + Bold,
+            [Role.GutterDiagWarn] = yellow221.Fg(truecolor) + Bold,
+            [Role.GutterDiagInfo] = soft.Fg(truecolor),
+            [Role.GutterDim] = Faint,
+            [Role.GutterDiffAdded] = stringG.Fg(truecolor),
+            [Role.GutterDiffModified] = yellow221.Fg(truecolor),
+            [Role.GutterDiffDeleted] = red203.Fg(truecolor),
+            [Role.GutterSelection] = soft.Fg(truecolor) + Bold,
+            [Role.GutterSearchHit] = interpolated.Fg(truecolor) + Bold,
+            [Role.GutterBreakpoint] = red203.Fg(truecolor) + Bold,
+            [Role.GutterMultiCaret] = stringG.Fg(truecolor) + Bold,
 
-            [Role.StatusBarBg]        = Bold + bg236.Bg(truecolor),
-            [Role.PopupBg]            = bg236.Bg(truecolor),
-            [Role.PopupSelectedBg]    = "\u001b[7m", // reverse video — preserved verbatim
+            [Role.StatusBarBg] = Bold + bg236.Bg(truecolor),
+            [Role.PopupBg] = bg236.Bg(truecolor),
+            [Role.PopupSelectedBg] = "\u001b[7m", // reverse video — preserved verbatim
 
-            [Role.ExplorerSelectedFocused]   = "\u001b[7m",
+            [Role.ExplorerSelectedFocused] = "\u001b[7m",
             [Role.ExplorerSelectedUnfocused] = bg238.Bg(truecolor),
         };
 

@@ -174,6 +174,66 @@ internal sealed partial class TomeApp
         return map;
     }
 
+    /// <summary>
+    /// Assemble the per-frame gutter context: diagnostics, breakpoints,
+    /// extra-caret lines, selection line range, git diff annotations, and
+    /// search hits. All collections are computed cheaply from existing
+    /// per-tab state; the git tracker rate-limits its own refresh.
+    /// </summary>
+    private GutterContext BuildGutterContext()
+    {
+        // Extra-caret lines (skip the primary; the renderer uses these to
+        // place the '+' indicator in the left marker column).
+        HashSet<int>? extraLines = null;
+        if (_buffer.HasMultipleCarets)
+        {
+            extraLines = new HashSet<int>();
+            var primary = _buffer.Cursor;
+            foreach (var c in _buffer.AllCarets)
+            {
+                if (c == primary) continue;
+                extraLines.Add(c.Line);
+            }
+        }
+
+        // Selection line range, normalised to 0-based inclusive bounds.
+        (int Start, int End)? selRange = null;
+        if (_buffer.Selection is { } sel)
+            selRange = (sel.Start.Line, sel.End.Line);
+
+        // Git diff — lazily attach and ask the tracker. Cheap if cached.
+        IReadOnlyDictionary<int, DiffKind>? diff = null;
+        if (!string.IsNullOrEmpty(Current.FilePath))
+        {
+            Current.EnsureGitDiff();
+            diff = Current.GitDiff?.GetDiff();
+        }
+
+        // Search hits — literal substring scan of every line. Skipped when
+        // the search term is empty (so the gutter is clean at rest).
+        HashSet<int>? hits = null;
+        if (!string.IsNullOrEmpty(Current.LastSearch))
+        {
+            hits = new HashSet<int>();
+            var needle = Current.LastSearch;
+            var cmp = Current.SearchIgnoreCase ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+            for (var i = 0; i < _buffer.LineCount; i++)
+            {
+                if (_buffer.GetLine(i).IndexOf(needle, cmp) >= 0) hits.Add(i);
+            }
+        }
+
+        return new GutterContext
+        {
+            SeverityByLine = BuildSeverityByLine(),
+            Breakpoints = Current.Breakpoints,
+            ExtraCaretLines = extraLines,
+            SelectionLineRange = selRange,
+            DiffLines = diff,
+            SearchHitLines = hits,
+        };
+    }
+
     private static bool IsOpenBracket(char c) => c is '(' or '[' or '{';
     private static bool IsCloseBracket(char c) => c is ')' or ']' or '}';
     private static char MatchingClose(char c) => c switch { '(' => ')', '[' => ']', '{' => '}', _ => '\0' };
@@ -325,7 +385,7 @@ internal sealed partial class TomeApp
         RecomputeBracketMatch();
         RefreshSignatureHelp();
         CheckExternalChange();
-        var gutter = new GutterRenderer(_buffer, BuildSeverityByLine());
+        var gutter = new GutterRenderer(_buffer, BuildGutterContext());
 
         // Explorer pane sits flush against the left edge. When visible
         // it consumes the configured Width plus a one-column separator;
@@ -1421,6 +1481,7 @@ internal sealed partial class TomeApp
             _buffer.MarkClean();
             PersistentUndoStore.Save(Current.FilePath, _buffer);
             Current.StampFromDisk();
+            Current.GitDiff?.Invalidate();
             _message = $"saved {Current.FilePath}";
         }
         catch (Exception ex)

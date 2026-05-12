@@ -30,6 +30,21 @@ internal sealed class Tab
     public long DiskSize { get; set; } = -1;
     public bool ExternalChangePending { get; set; }
 
+    /// <summary>Set of buffer line indices flagged with breakpoints.</summary>
+    public HashSet<int> Breakpoints { get; } = new();
+
+    /// <summary>
+    /// Lazy git diff tracker. Null when the tab has no file path (a new
+    /// unsaved buffer). Created on first access via <see cref="EnsureGitDiff"/>.
+    /// </summary>
+    public GitDiffTracker? GitDiff { get; private set; }
+
+    public void EnsureGitDiff()
+    {
+        if (GitDiff is null && !string.IsNullOrEmpty(FilePath))
+            GitDiff = new GitDiffTracker(FilePath);
+    }
+
     public Tab(string filePath, string initialText, ISyntaxColorizer? colorizer)
     {
         Buffer = new TextBuffer(initialText);

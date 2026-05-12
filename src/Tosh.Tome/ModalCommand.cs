@@ -246,6 +246,7 @@ internal sealed partial class TomeApp
         "grep", "rg",
         "gsub",
         "carets", "cursors",
+        "break",
     };
 
     private void DispatchCommand(string command)
@@ -330,11 +331,14 @@ internal sealed partial class TomeApp
             case "help":
             case "h":
                 _message = string.IsNullOrEmpty(arg)
-                    ? "verbs: w q wq e tabnew tabclose tc tn tp goto diag set mode  |  prefix '!' for shell"
+                    ? "verbs: w q wq e tabnew tabclose tc tn tp goto diag set mode break  |  prefix '!' for shell"
                     : $"help: {arg} (not yet implemented — use Ctrl+K for symbol hover)";
                 return;
             case "set":
                 HandleSet(arg);
+                return;
+            case "break":
+                ToggleBreakpoint(arg);
                 return;
             case "mode":
                 if (arg == "edit") { EnterEditMode(); return; }
@@ -468,6 +472,34 @@ internal sealed partial class TomeApp
     }
 
     // ─── Formatter dispatch ──────────────────────────────────────────────
+
+    private void ToggleBreakpoint(string arg)
+    {
+        int line;
+        if (string.IsNullOrWhiteSpace(arg))
+        {
+            line = _buffer.Cursor.Line;
+        }
+        else if (int.TryParse(arg.Trim(), out var oneBased) && oneBased >= 1 && oneBased <= _buffer.LineCount)
+        {
+            line = oneBased - 1;
+        }
+        else
+        {
+            _message = $"break: invalid line '{arg}'";
+            return;
+        }
+
+        if (!Current.Breakpoints.Add(line))
+        {
+            Current.Breakpoints.Remove(line);
+            _message = $"breakpoint removed at line {line + 1}";
+        }
+        else
+        {
+            _message = $"breakpoint set at line {line + 1}";
+        }
+    }
 
     private void HandleSet(string arg)
     {

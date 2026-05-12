@@ -56,6 +56,13 @@ public sealed class TextBuffer
 
     public bool IsModified { get; private set; }
 
+    /// <summary>
+    /// Monotonic counter bumped on every mutation (insert, delete, undo,
+    /// redo, LoadText). External consumers can cache derived data keyed by
+    /// this value and invalidate when it changes.
+    /// </summary>
+    public int Revision { get; private set; }
+
     public bool CanUndo => _undo.Count > 0;
 
     public bool CanRedo => _redo.Count > 0;
@@ -223,6 +230,8 @@ public sealed class TextBuffer
     /// <summary>Replaces the entire buffer; resets cursor to (0,0) and clears history.</summary>
     public void LoadText(string text)
     {
+        Revision++;
+        _braceCache = null;
         _undo.Clear();
         _redo.Clear();
         _lines.Clear();
@@ -511,6 +520,8 @@ public sealed class TextBuffer
 
     private void ApplySnapshot(UndoFrame snapshot)
     {
+        Revision++;
+        _braceCache = null;
         _lines.Clear();
         foreach (var line in snapshot.Lines)
             _lines.Add(line);
@@ -544,6 +555,8 @@ public sealed class TextBuffer
     private void PushUndo()
     {
         if (_inCompoundEdit) return;
+        Revision++;
+        _braceCache = null;
         _undo.Push(CaptureSnapshot());
         _redo.Clear();
         if (_undo.Count > MaxHistoryDepth)
@@ -558,7 +571,97 @@ public sealed class TextBuffer
     }
 
     private enum EditKind { None, InsertChar, DeleteBack, DeleteForward }
+
+    // ─── Brace-depth cache (used by gutter rendering) ────────────────
+
+    private BraceLineInfo[]? _braceCache;
+
+    /// <summary>
+    /// Per-line brace nesting depth and opener/closer flags, computed
+    /// once per <see cref="Revision"/>. Treats <c>#</c> as a line
+    /// comment and respects single/double-quoted strings with backslash
+    /// escapes — matches the .tosh grammar's bracketing rules.
+    /// </summary>
+    public IReadOnlyList<BraceLineInfo> GetBraceLineInfo()
+    {
+        if (_braceCache is not null) return _braceCache;
+
+        var info = new BraceLineInfo[_lines.Count];
+        var depth = 0;
+
+        for (var i = 0; i < _lines.Count; i++)
+        {
+            var line = _lines[i];
+            var startsWithCloser = LineStartsWithCloser(line);
+            var endsWithOpener = LineEndsWithOpener(line);
+            var prevEndsWithOpener = i > 0 && info[i - 1].EndsWithOpener;
+
+            var effective = Math.Max(0, depth - (startsWithCloser ? 1 : 0));
+            if (prevEndsWithOpener && !startsWithCloser)
+                effective = Math.Max(1, effective);
+
+            info[i] = new BraceLineInfo(effective, startsWithCloser, endsWithOpener);
+            depth = Math.Max(0, depth + ComputeBraceDelta(line));
+        }
+
+        _braceCache = info;
+        return info;
+    }
+
+    private static bool LineStartsWithCloser(string line)
+    {
+        var trimmed = line.TrimStart();
+        return trimmed.Length > 0 && trimmed[0] == '}';
+    }
+
+    private static bool LineEndsWithOpener(string line) =>
+        line.TrimEnd().EndsWith('{');
+
+    private static int ComputeBraceDelta(string line)
+    {
+        var delta = 0;
+        var inSingle = false;
+        var inDouble = false;
+        var escaping = false;
+        var inComment = false;
+
+        foreach (var ch in line)
+        {
+            if (inComment) continue;
+            if (inSingle)
+            {
+                if (escaping) { escaping = false; continue; }
+                if (ch == '\\') { escaping = true; continue; }
+                if (ch == '\'') inSingle = false;
+                continue;
+            }
+            if (inDouble)
+            {
+                if (escaping) { escaping = false; continue; }
+                if (ch == '\\') { escaping = true; continue; }
+                if (ch == '"') inDouble = false;
+                continue;
+            }
+            switch (ch)
+            {
+                case '#': inComment = true; break;
+                case '\'': inSingle = true; break;
+                case '"': inDouble = true; break;
+                case '{': delta++; break;
+                case '}': delta--; break;
+            }
+        }
+        return delta;
+    }
 }
+
+/// <summary>
+/// Per-line brace info exposed by <see cref="TextBuffer.GetBraceLineInfo"/>.
+/// <see cref="Depth"/> is the visual nesting level used by the gutter
+/// renderer (bars to draw); <see cref="StartsWithCloser"/> and
+/// <see cref="EndsWithOpener"/> drive the open/close/transition glyphs.
+/// </summary>
+public readonly record struct BraceLineInfo(int Depth, bool StartsWithCloser, bool EndsWithOpener);
 
 /// <summary>
 /// One persisted undo/redo frame: full line array plus cursor + dirty flag.

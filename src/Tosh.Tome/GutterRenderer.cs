@@ -5,23 +5,52 @@ using Tosh.Tui.Editing;
 namespace Tosh.Tome;
 
 /// <summary>
-/// Renders a left gutter for every buffer line, modeled on the REPL's multi-line
-/// continuation gutter. Each row gets a right-padded line number, depth bars
-/// (one '│' per level of brace nesting at the start of the line), an optional
-/// transition glyph for lines that open or close a block, and a final '│'
-/// separator dividing the gutter from the text area.
-///
-/// State is rebuilt per frame from a snapshot of the buffer — cheap because a
-/// single pass over all lines suffices and frames only happen on keystrokes.
+/// Per-frame state consumed by <see cref="GutterRenderer"/>. Pass-through
+/// dictionaries / sets are read-only; callers retain ownership. All
+/// fields are optional — the renderer treats a missing collection as
+/// "no annotations of that kind on any line".
+/// </summary>
+internal sealed class GutterContext
+{
+    public IReadOnlyDictionary<int, int>? SeverityByLine { get; init; }
+    public IReadOnlySet<int>? Breakpoints { get; init; }
+    public IReadOnlySet<int>? ExtraCaretLines { get; init; }
+    public (int Start, int End)? SelectionLineRange { get; init; }
+    public IReadOnlyDictionary<int, DiffKind>? DiffLines { get; init; }
+    public IReadOnlySet<int>? SearchHitLines { get; init; }
+}
+
+/// <summary>
+/// Renders the left gutter for every buffer line. Layout, left to right:
+/// <list type="bullet">
+///   <item>1 cell — breakpoint <c>●</c> or extra-caret <c>+</c> indicator</item>
+///   <item>line number, right-padded, severity-coloured</item>
+///   <item>1 space</item>
+///   <item>depth bars + per-line marker (block opener/closer/transition, or
+///     a diagnostic glyph that overrides the dot when the line has issues)</item>
+///   <item>1 cell — selection / diff / search-hit annotation</item>
+///   <item><c>│</c> separator + trailing space</item>
+/// </list>
+/// Brace depths and opener/closer flags are pulled from
+/// <see cref="TextBuffer.GetBraceLineInfo"/> (cached on the buffer by
+/// <see cref="TextBuffer.Revision"/>) so the renderer no longer rescans
+/// every line for braces/strings/comments on every frame.
 /// </summary>
 internal sealed class GutterRenderer
 {
-    private const string DimOpen = "\u001b[2m";          // faint
-    private static string CurrentLineOpen => TomeTheme.Active.Open(Role.GutterCurrentLine);
-    private static string DiagErrorOpen   => TomeTheme.Active.Open(Role.GutterDiagError);
-    private static string DiagWarnOpen    => TomeTheme.Active.Open(Role.GutterDiagWarn);
-    private static string DiagInfoOpen    => TomeTheme.Active.Open(Role.GutterDiagInfo);
+    private const string DimOpen = "\u001b[2m";
     private const string Reset = "\u001b[0m";
+    private static string CurrentLineOpen => TomeTheme.Active.Open(Role.GutterCurrentLine);
+    private static string DiagErrorOpen => TomeTheme.Active.Open(Role.GutterDiagError);
+    private static string DiagWarnOpen => TomeTheme.Active.Open(Role.GutterDiagWarn);
+    private static string DiagInfoOpen => TomeTheme.Active.Open(Role.GutterDiagInfo);
+    private static string DiffAddedOpen => TomeTheme.Active.Open(Role.GutterDiffAdded);
+    private static string DiffModifiedOpen => TomeTheme.Active.Open(Role.GutterDiffModified);
+    private static string DiffDeletedOpen => TomeTheme.Active.Open(Role.GutterDiffDeleted);
+    private static string SelectionOpen => TomeTheme.Active.Open(Role.GutterSelection);
+    private static string SearchHitOpen => TomeTheme.Active.Open(Role.GutterSearchHit);
+    private static string BreakpointOpen => TomeTheme.Active.Open(Role.GutterBreakpoint);
+    private static string MultiCaretOpen => TomeTheme.Active.Open(Role.GutterMultiCaret);
 
     private static readonly GutterGlyphs Glyphs = new(
         Vertical: '│',
@@ -31,45 +60,45 @@ internal sealed class GutterRenderer
         Transition: '┤',
         Dot: '·');
 
+    private const char BreakpointGlyph = '●';
+    private const char MultiCaretGlyph = '+';
+    private const char SelectionBarGlyph = '▌';
+    private const char DiffBarGlyph = '▍';
+    private const char SearchHitGlyph = '◆';
+    private const char DiagErrorGlyph = '⚠';
+    private const char DiagWarnGlyph = '!';
+    private const char DiagInfoGlyph = 'i';
+
     private readonly GutterMarker[] _markers;
     private readonly int[] _depths;
     private readonly int _maxDepth;
     private readonly int _lineNumberWidth;
-    private readonly IReadOnlyDictionary<int, int>? _severityByLine;
+    private readonly GutterContext _ctx;
 
-    public GutterRenderer(TextBuffer buffer, IReadOnlyDictionary<int, int>? severityByLine = null)
+    public GutterRenderer(TextBuffer buffer, GutterContext? context = null)
     {
         ArgumentNullException.ThrowIfNull(buffer);
-        _severityByLine = severityByLine;
+        _ctx = context ?? new GutterContext();
 
         var lineCount = buffer.LineCount;
         _markers = new GutterMarker[lineCount];
         _depths = new int[lineCount];
 
-        // Per-line gutter classification mirrors the REPL's continuation gutter:
-        // walk lines tracking brace depth, mark openers/closers/transitions.
-        var depth = 0;
+        var braceInfo = buffer.GetBraceLineInfo();
         var maxDepth = 0;
 
         for (var i = 0; i < lineCount; i++)
         {
-            var line = buffer.GetLine(i);
-            var previousLine = i > 0 ? buffer.GetLine(i - 1) : string.Empty;
+            var info = braceInfo[i];
+            _depths[i] = info.Depth;
+            _markers[i] = SelectGutterMarker(info.StartsWithCloser, info.EndsWithOpener, info.Depth);
 
-            var startsWithCloser = StartsWithCloserToken(line);
-            var endsWithOpener = EndsWithOpenerToken(line);
-            var previousEndsWithOpener = EndsWithOpenerToken(previousLine);
+            // Blank lines suppress the dot — keeps the gutter visually quiet
+            // in the long whitespace runs that pad most source files.
+            if (_markers[i] == GutterMarker.Dot && string.IsNullOrWhiteSpace(buffer.GetLine(i)))
+                _markers[i] = GutterMarker.Blank;
 
-            var effectiveDepth = Math.Max(0, depth - (startsWithCloser ? 1 : 0));
-            if (previousEndsWithOpener && !startsWithCloser)
-                effectiveDepth = Math.Max(1, effectiveDepth);
-
-            _depths[i] = effectiveDepth;
-            _markers[i] = SelectGutterMarker(startsWithCloser, endsWithOpener, effectiveDepth);
-
-            if (effectiveDepth > maxDepth) maxDepth = effectiveDepth;
-
-            depth = Math.Max(0, depth + ComputeBraceDelta(line));
+            if (info.Depth > maxDepth) maxDepth = info.Depth;
         }
 
         _maxDepth = maxDepth;
@@ -77,24 +106,68 @@ internal sealed class GutterRenderer
     }
 
     /// <summary>
-    /// Total gutter width in cells. Layout: [line number][space][depth bars + marker][│][space].
-    /// At minimum: 2-digit line number + space + 1 marker col + │ + space = 6.
+    /// Total gutter width in cells. Layout: [left marker][line number]
+    /// [space][depth bars + marker][right bar][│][space].
     /// </summary>
-    public int Width => _lineNumberWidth + 1 + Math.Max(1, _maxDepth + 1) + 1 + 1;
+    public int Width => 1 + _lineNumberWidth + 1 + Math.Max(1, _maxDepth + 1) + 1 + 1 + 1;
 
     public string Render(int lineIndex, bool isCurrentLine)
     {
         if (lineIndex < 0 || lineIndex >= _markers.Length)
             return RenderEmpty();
 
-        var sb = new StringBuilder(Width + 16);
+        var sb = new StringBuilder(Width + 32);
 
-        // Line number, right-aligned in _lineNumberWidth, then a space. The
-        // colour escalates with diagnostic severity so an at-a-glance scan of
-        // the gutter shows where problems live.
+        // ── Left marker cell: breakpoint > extra-caret > blank.
+        AppendLeftMarker(sb, lineIndex);
+
+        // ── Line number, severity-coloured (or dim/current-line on clean rows).
+        AppendLineNumber(sb, lineIndex, isCurrentLine);
+        sb.Append(' ');
+
+        // ── Depth bars + per-line marker. The dot is replaced by a
+        // diagnostic glyph when the line carries an issue.
+        AppendDepthCells(sb, lineIndex);
+
+        // ── Right marker cell: selection > diff > search hit > blank.
+        AppendRightMarker(sb, lineIndex);
+
+        // ── Separator + trailing space.
+        sb.Append(DimOpen).Append(Glyphs.Vertical).Append(Reset);
+        sb.Append(' ');
+
+        return sb.ToString();
+    }
+
+    private string RenderEmpty()
+    {
+        var sb = new StringBuilder(Width);
+        sb.Append(new string(' ', Width - 2));
+        sb.Append(DimOpen).Append(Glyphs.Vertical).Append(Reset);
+        sb.Append(' ');
+        return sb.ToString();
+    }
+
+    private void AppendLeftMarker(StringBuilder sb, int lineIndex)
+    {
+        if (_ctx.Breakpoints is not null && _ctx.Breakpoints.Contains(lineIndex))
+        {
+            sb.Append(BreakpointOpen).Append(BreakpointGlyph).Append(Reset);
+            return;
+        }
+        if (_ctx.ExtraCaretLines is not null && _ctx.ExtraCaretLines.Contains(lineIndex))
+        {
+            sb.Append(MultiCaretOpen).Append(MultiCaretGlyph).Append(Reset);
+            return;
+        }
+        sb.Append(' ');
+    }
+
+    private void AppendLineNumber(StringBuilder sb, int lineIndex, bool isCurrentLine)
+    {
         var lineNumber = (lineIndex + 1).ToString();
         var pad = _lineNumberWidth - lineNumber.Length;
-        var sev = _severityByLine is not null && _severityByLine.TryGetValue(lineIndex, out var s) ? s : 0;
+        var sev = _ctx.SeverityByLine is not null && _ctx.SeverityByLine.TryGetValue(lineIndex, out var s) ? s : 0;
         var numberOpen = sev switch
         {
             1 => DiagErrorOpen,
@@ -106,33 +179,12 @@ internal sealed class GutterRenderer
         for (var i = 0; i < pad; i++) sb.Append(' ');
         sb.Append(lineNumber);
         sb.Append(Reset);
-        sb.Append(' ');
-
-        // Depth bars + marker, dim.
-        sb.Append(DimOpen);
-        sb.Append(BuildDepthCells(_markers[lineIndex], _depths[lineIndex]));
-        sb.Append(Reset);
-
-        // Right border separator and trailing space.
-        sb.Append(DimOpen).Append(Glyphs.Vertical).Append(Reset);
-        sb.Append(' ');
-
-        return sb.ToString();
     }
 
-    private string RenderEmpty()
+    private void AppendDepthCells(StringBuilder sb, int lineIndex)
     {
-        // For rows past end-of-buffer: blank gutter cells then dim '│' separator.
-        var sb = new StringBuilder(Width);
-        sb.Append(new string(' ', Width - 2));
-        sb.Append(DimOpen).Append(Glyphs.Vertical).Append(Reset);
-        sb.Append(' ');
-        return sb.ToString();
-    }
-
-    private string BuildDepthCells(GutterMarker marker, int depth)
-    {
-        // Width = max(1, _maxDepth + 1). Bars fill positions [0..bars-1], marker at markerColumn.
+        var marker = _markers[lineIndex];
+        var depth = _depths[lineIndex];
         var cells = Math.Max(1, _maxDepth + 1);
         var chars = new char[cells];
         for (var i = 0; i < cells; i++) chars[i] = ' ';
@@ -140,25 +192,39 @@ internal sealed class GutterRenderer
         var bars = marker == GutterMarker.Vertical
             ? Math.Clamp(depth - 1, 0, cells - 1)
             : Math.Clamp(depth, 0, cells - 1);
-
         for (var i = 0; i < bars; i++) chars[i] = Glyphs.Vertical;
 
         var markerColumn = marker == GutterMarker.Vertical
             ? Math.Clamp(depth - 1, 0, cells - 1)
             : Math.Min(bars, cells - 1);
-
-        if (marker == GutterMarker.Dot)
+        if (marker == GutterMarker.Dot || marker == GutterMarker.Blank)
             markerColumn = 0;
 
-        chars[markerColumn] = marker switch
+        // Diagnostic glyph replaces the dot/blank when severity is set,
+        // so the marker column doubles as the "this line has an issue"
+        // indicator without consuming an extra slot.
+        var sev = _ctx.SeverityByLine is not null && _ctx.SeverityByLine.TryGetValue(lineIndex, out var s) ? s : 0;
+        var diagGlyph = sev switch
+        {
+            1 => DiagErrorGlyph,
+            2 => DiagWarnGlyph,
+            3 or 4 => DiagInfoGlyph,
+            _ => '\0',
+        };
+
+        var markerGlyph = marker switch
         {
             GutterMarker.Open => Glyphs.Open,
             GutterMarker.Close => Glyphs.Close,
             GutterMarker.Transition => Glyphs.Transition,
             GutterMarker.Dot => Glyphs.Dot,
+            GutterMarker.Blank => ' ',
             _ => Glyphs.Vertical,
         };
+        if (diagGlyph != '\0' && marker is GutterMarker.Dot or GutterMarker.Blank or GutterMarker.Vertical)
+            markerGlyph = diagGlyph;
 
+        chars[markerColumn] = markerGlyph;
         if (marker is GutterMarker.Open or GutterMarker.Close or GutterMarker.Transition && depth > 0)
         {
             var joinColumn = Math.Clamp(depth - 1, 0, cells - 1);
@@ -166,19 +232,66 @@ internal sealed class GutterRenderer
                 chars[joinColumn] = Glyphs.Join;
         }
 
-        return new string(chars);
+        // Emit with appropriate styling: diag glyph picks up its own
+        // severity colour; everything else stays dim.
+        if (diagGlyph != '\0' && chars[markerColumn] == diagGlyph)
+        {
+            // Render the bars dim, then the marker in severity colour.
+            if (markerColumn > 0)
+            {
+                sb.Append(DimOpen);
+                sb.Append(chars, 0, markerColumn);
+                sb.Append(Reset);
+            }
+            var diagOpen = sev switch
+            {
+                1 => DiagErrorOpen,
+                2 => DiagWarnOpen,
+                _ => DiagInfoOpen,
+            };
+            sb.Append(diagOpen).Append(chars[markerColumn]).Append(Reset);
+            if (markerColumn + 1 < cells)
+            {
+                sb.Append(DimOpen);
+                sb.Append(chars, markerColumn + 1, cells - markerColumn - 1);
+                sb.Append(Reset);
+            }
+        }
+        else
+        {
+            sb.Append(DimOpen);
+            sb.Append(chars);
+            sb.Append(Reset);
+        }
     }
 
-    private static bool StartsWithCloserToken(string line)
+    private void AppendRightMarker(StringBuilder sb, int lineIndex)
     {
-        var trimmed = line.TrimStart();
-        return trimmed.Length > 0 && trimmed[0] == '}';
-    }
-
-    private static bool EndsWithOpenerToken(string line)
-    {
-        var trimmed = line.TrimEnd();
-        return trimmed.EndsWith('{');
+        // Priority: selection > diff > search-hit.
+        if (_ctx.SelectionLineRange is { } range
+            && lineIndex >= range.Start && lineIndex <= range.End)
+        {
+            sb.Append(SelectionOpen).Append(SelectionBarGlyph).Append(Reset);
+            return;
+        }
+        if (_ctx.DiffLines is not null && _ctx.DiffLines.TryGetValue(lineIndex, out var kind))
+        {
+            var open = kind switch
+            {
+                DiffKind.Added => DiffAddedOpen,
+                DiffKind.Modified => DiffModifiedOpen,
+                DiffKind.Deleted => DiffDeletedOpen,
+                _ => DimOpen,
+            };
+            sb.Append(open).Append(DiffBarGlyph).Append(Reset);
+            return;
+        }
+        if (_ctx.SearchHitLines is not null && _ctx.SearchHitLines.Contains(lineIndex))
+        {
+            sb.Append(SearchHitOpen).Append(SearchHitGlyph).Append(Reset);
+            return;
+        }
+        sb.Append(' ');
     }
 
     private static GutterMarker SelectGutterMarker(bool startsWithCloser, bool endsWithOpener, int depth)
@@ -190,48 +303,7 @@ internal sealed class GutterRenderer
         return GutterMarker.Dot;
     }
 
-    private static int ComputeBraceDelta(string line)
-    {
-        var delta = 0;
-        var inSingle = false;
-        var inDouble = false;
-        var escaping = false;
-        var inComment = false;
-
-        foreach (var ch in line)
-        {
-            if (inComment) continue;
-
-            if (inSingle)
-            {
-                if (escaping) { escaping = false; continue; }
-                if (ch == '\\') { escaping = true; continue; }
-                if (ch == '\'') inSingle = false;
-                continue;
-            }
-
-            if (inDouble)
-            {
-                if (escaping) { escaping = false; continue; }
-                if (ch == '\\') { escaping = true; continue; }
-                if (ch == '"') inDouble = false;
-                continue;
-            }
-
-            switch (ch)
-            {
-                case '#': inComment = true; break;
-                case '\'': inSingle = true; break;
-                case '"': inDouble = true; break;
-                case '{': delta++; break;
-                case '}': delta--; break;
-            }
-        }
-
-        return delta;
-    }
-
     private readonly record struct GutterGlyphs(char Vertical, char Open, char Close, char Join, char Transition, char Dot);
 
-    private enum GutterMarker { Dot, Vertical, Open, Close, Transition }
+    private enum GutterMarker { Dot, Vertical, Open, Close, Transition, Blank }
 }
