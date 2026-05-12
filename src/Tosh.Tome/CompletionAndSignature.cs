@@ -1,6 +1,7 @@
 using System.Text;
 using Tosh.LanguageServices;
 using Tosh.Tui.Editing;
+using Tosh.Tome.Theme;
 
 namespace Tosh.Tome;
 
@@ -306,8 +307,8 @@ internal sealed partial class TomeApp
             sb.Append("\u001b[").Append(startRow + row).Append(';').Append(anchorCol).Append('H');
 
             var selected = idx == _completionSelected;
-            // Frame: reverse for selected, dim background otherwise.
-            sb.Append(selected ? "\u001b[7m" : "\u001b[48;5;236m");
+            // Frame: reverse for selected, themed dim background otherwise.
+            sb.Append(selected ? TomeTheme.Active.Open(Role.PopupSelectedBg) : TomeTheme.Active.Open(Role.PopupBg));
 
             var icon = KindIcon(item.Kind);
             var detail = item.Detail ?? string.Empty;

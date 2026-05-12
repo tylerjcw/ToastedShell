@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using System.Text;
+using Tosh.Tome.Theme;
 using Tosh.Tui.Editing;
 using static Tosh.Tome.TreeSitter.TreeSitterNative;
 
@@ -25,24 +26,26 @@ namespace Tosh.Tome.TreeSitter;
 /// </summary>
 internal sealed class TreeSitterColorizer : ISyntaxColorizer, IDisposable
 {
-    // ANSI 256-color foregrounds. Match the LSP colorizer palette for
-    // visual consistency across the editor.
-    private static readonly Dictionary<string, string> Palette = new(StringComparer.Ordinal)
+    // SGR-open sequences keyed by node-category, resolved through TomeTheme
+    // so the active palette (truecolor vs. 256-color) is honoured. Match
+    // the LSP colorizer palette for visual consistency across the editor.
+    private static Dictionary<string, string> Palette => _palette ??= new(StringComparer.Ordinal)
     {
-        ["comment"] = "\u001b[38;5;244m",  // dim grey
-        ["keyword"] = "\u001b[38;5;141m",  // soft purple
-        ["string"] = "\u001b[38;5;150m",  // green
-        ["number"] = "\u001b[38;5;215m",  // orange
-        ["variable"] = "\u001b[38;5;110m",  // soft blue
-        ["function"] = "\u001b[38;5;180m",  // tan
-        ["type"] = "\u001b[38;5;110m",  // soft blue (same family as variable, brighter via type rules)
-        ["operator"] = "\u001b[38;5;110m",  // soft blue
-        ["constant"] = "\u001b[38;5;215m",  // orange (numerics + true/false/nil)
-        ["punctuation"] = "\u001b[38;5;244m",  // dim
-        ["heading"] = "\u001b[1;38;5;141m",// bold purple (markdown)
-        ["emphasis"] = "\u001b[3m",         // italic
-        ["strong"] = "\u001b[1m",         // bold
+        ["comment"]     = TomeTheme.Active.Open(Role.Comment),
+        ["keyword"]     = TomeTheme.Active.Open(Role.Keyword),
+        ["string"]      = TomeTheme.Active.Open(Role.EscapedString),
+        ["number"]      = TomeTheme.Active.Open(Role.Number),
+        ["variable"]    = TomeTheme.Active.Open(Role.Variable),
+        ["function"]    = TomeTheme.Active.Open(Role.FunctionName),
+        ["type"]        = TomeTheme.Active.Open(Role.TypeName),
+        ["operator"]    = TomeTheme.Active.Open(Role.Operator),
+        ["constant"]    = TomeTheme.Active.Open(Role.Constant),
+        ["punctuation"] = TomeTheme.Active.Open(Role.Punctuation),
+        ["heading"]     = TomeTheme.Active.Open(Role.Heading),
+        ["emphasis"]    = TomeTheme.Active.Open(Role.Emphasis),
+        ["strong"]      = TomeTheme.Active.Open(Role.Strong),
     };
+    private static Dictionary<string, string>? _palette;
 
     private readonly Func<string> _readText;
     private readonly IntPtr _language;
@@ -115,12 +118,23 @@ internal sealed class TreeSitterColorizer : ISyntaxColorizer, IDisposable
             }
         }
 
+        // Incremental reparse: when we already have a tree and a known
+        // previous text, diff the two and tell tree-sitter what changed
+        // so it can reuse subtrees outside the modified range.
+        var reuseTree = IntPtr.Zero;
+        if (_tree != IntPtr.Zero && _lastText is { } prev)
+        {
+            var edit = ComputeEdit(prev, text);
+            ts_tree_edit(_tree, ref edit);
+            reuseTree = _tree;
+        }
+
         IntPtr newTree;
         unsafe
         {
             fixed (byte* p = bytes)
             {
-                newTree = ts_parser_parse_string(_parser, IntPtr.Zero, (IntPtr)p, (uint)bytes.Length);
+                newTree = ts_parser_parse_string(_parser, reuseTree, (IntPtr)p, (uint)bytes.Length);
             }
         }
         if (newTree == IntPtr.Zero) return;
@@ -323,11 +337,81 @@ internal sealed class TreeSitterColorizer : ISyntaxColorizer, IDisposable
         return count;
     }
 
+    /// <summary>
+    /// Builds a single <see cref="TSInputEdit"/> describing the
+    /// difference between <paramref name="oldText"/> and
+    /// <paramref name="newText"/>. We diff by trimming the longest
+    /// common prefix and suffix and treating everything in between as a
+    /// single contiguous replacement — exactly what tree-sitter's
+    /// incremental engine needs to skip untouched subtrees. Multi-edit
+    /// batches collapse to one bounding edit, which is conservative but
+    /// still beats a full reparse for the keystroke-paced edits Tōme
+    /// sees.
+    /// </summary>
+    private static TSInputEdit ComputeEdit(string oldText, string newText)
+    {
+        var oldBytes = Encoding.UTF8.GetBytes(oldText);
+        var newBytes = Encoding.UTF8.GetBytes(newText);
+
+        var prefix = 0;
+        var max = Math.Min(oldBytes.Length, newBytes.Length);
+        while (prefix < max && oldBytes[prefix] == newBytes[prefix]) prefix++;
+
+        var oldSuffix = oldBytes.Length;
+        var newSuffix = newBytes.Length;
+        while (oldSuffix > prefix && newSuffix > prefix
+            && oldBytes[oldSuffix - 1] == newBytes[newSuffix - 1])
+        {
+            oldSuffix--;
+            newSuffix--;
+        }
+
+        return new TSInputEdit
+        {
+            StartByte = (uint)prefix,
+            OldEndByte = (uint)oldSuffix,
+            NewEndByte = (uint)newSuffix,
+            StartPoint = ByteOffsetToPoint(oldBytes, prefix),
+            OldEndPoint = ByteOffsetToPoint(oldBytes, oldSuffix),
+            NewEndPoint = ByteOffsetToPoint(newBytes, newSuffix),
+        };
+    }
+
+    private static TSPoint ByteOffsetToPoint(byte[] bytes, int offset)
+    {
+        uint row = 0;
+        uint col = 0;
+        var clamped = Math.Min(offset, bytes.Length);
+        for (var i = 0; i < clamped; i++)
+        {
+            if (bytes[i] == (byte)'\n') { row++; col = 0; }
+            else col++;
+        }
+        return new TSPoint { Row = row, Column = col };
+    }
+
     public void Dispose()
     {
         if (_disposed) return;
         _disposed = true;
         if (_tree != IntPtr.Zero) { ts_tree_delete(_tree); _tree = IntPtr.Zero; }
         if (_parser != IntPtr.Zero) { ts_parser_delete(_parser); _parser = IntPtr.Zero; }
+    }
+
+    /// <summary>
+    /// Returns the byte range of the smallest named tree-sitter node
+    /// containing <paramref name="location"/>, in (line, column)
+    /// coordinates. Returns null when no parse tree is available.
+    /// </summary>
+    public (TextLocation start, TextLocation end)? RangeAt(TextLocation location)
+    {
+        if (_tree == IntPtr.Zero) return null;
+        var root = ts_tree_root_node(_tree);
+        var p = new TSPoint { Row = (uint)Math.Max(0, location.Line), Column = (uint)Math.Max(0, location.Column) };
+        var node = ts_node_named_descendant_for_point_range(root, p, p);
+        if (node.Id == IntPtr.Zero) return null;
+        var s = ts_node_start_point(node);
+        var e = ts_node_end_point(node);
+        return (new TextLocation((int)s.Row, (int)s.Column), new TextLocation((int)e.Row, (int)e.Column));
     }
 }

@@ -66,6 +66,48 @@ internal sealed partial class TomeApp
             : $"workspace '{ws.Name}' loaded ({ws.Folders.Count} folder(s))";
     }
 
+    /// <summary>
+    /// Loads a <c>.tome</c> workspace at startup, before <c>Run()</c>
+    /// begins the render loop. If any tabs are restored, drops the
+    /// initial placeholder buffer the constructor created so the user
+    /// lands directly on a restored file.
+    /// </summary>
+    public void OpenWorkspaceAtStartup(string path)
+    {
+        var hadEmptyPlaceholder = _tabs.Count == 1
+            && string.IsNullOrEmpty(_tabs[0].FilePath)
+            && !_tabs[0].Buffer.IsModified;
+        var tabCountBefore = _tabs.Count;
+        WorkspaceOpen(path);
+        if (hadEmptyPlaceholder && _tabs.Count > tabCountBefore)
+        {
+            _tabs.RemoveAt(0);
+            _active = Math.Max(0, _active - 1);
+        }
+    }
+
+    /// <summary>
+    /// Opens <paramref name="directory"/> as an ad-hoc single-folder
+    /// workspace with no source <c>.tome</c> file. The explorer pane
+    /// lights up immediately; <c>:workspace save &lt;path&gt;</c>
+    /// persists it.
+    /// </summary>
+    public void OpenDirectoryAsWorkspace(string directory)
+    {
+        var resolved = Path.GetFullPath(directory);
+        if (!Directory.Exists(resolved)) { _message = $"workspace: '{resolved}' is not a directory"; return; }
+        var name = Path.GetFileName(resolved.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+        if (string.IsNullOrEmpty(name)) name = resolved;
+        var ws = new Workspace.Workspace
+        {
+            Name = name,
+            Folders = new[] { new Workspace.WorkspaceFolder(resolved) },
+        };
+        _workspace = ws;
+        _explorer.LoadFromWorkspace(ws);
+        _message = $"workspace '{name}' (unsaved, {resolved})";
+    }
+
     private void WorkspaceSave(string path)
     {
         if (_workspace is null) { _message = "workspace save: no workspace loaded — use ':workspace new <path>' first"; return; }

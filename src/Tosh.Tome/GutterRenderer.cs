@@ -1,4 +1,5 @@
 using System.Text;
+using Tosh.Tome.Theme;
 using Tosh.Tui.Editing;
 
 namespace Tosh.Tome;
@@ -16,10 +17,10 @@ namespace Tosh.Tome;
 internal sealed class GutterRenderer
 {
     private const string DimOpen = "\u001b[2m";          // faint
-    private const string CurrentLineOpen = "\u001b[38;5;215m"; // orange — current line number
-    private const string DiagErrorOpen = "\u001b[38;5;203m\u001b[1m"; // bold red — error line number
-    private const string DiagWarnOpen = "\u001b[38;5;221m\u001b[1m";  // bold yellow — warning line number
-    private const string DiagInfoOpen = "\u001b[38;5;110m";          // soft blue — info line number
+    private static string CurrentLineOpen => TomeTheme.Active.Open(Role.GutterCurrentLine);
+    private static string DiagErrorOpen   => TomeTheme.Active.Open(Role.GutterDiagError);
+    private static string DiagWarnOpen    => TomeTheme.Active.Open(Role.GutterDiagWarn);
+    private static string DiagInfoOpen    => TomeTheme.Active.Open(Role.GutterDiagInfo);
     private const string Reset = "\u001b[0m";
 
     private static readonly GutterGlyphs Glyphs = new(

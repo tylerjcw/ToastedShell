@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using Tosh.LanguageServices;
 using Tosh.Tome.Settings;
+using Tosh.Tome.Theme;
 using Tosh.Tui.Editing;
 
 namespace Tosh.Tome;
@@ -34,6 +35,16 @@ internal sealed partial class TomeApp
     private readonly ExplorerPane _explorer = new();
     private bool _focusExplorer;
 
+    // Bottom-dock embedded Tōsh REPL. Hidden until `:repl` (or `:repl open`)
+    // toggles it on. Focus toggles with Ctrl+R; Esc returns focus to the
+    // editor while leaving the pane visible.
+    private readonly ReplPane _repl = new();
+    private bool _focusRepl;
+
+    // When true, every successful :w saves runs the formatter first.
+    // Toggled via `:set format-on-save on|off`. Off by default.
+    private bool _formatOnSave;
+
     // Modal editing — Edit (current insert-anywhere behavior) and Command
     // (vim-ish normal mode + ':' opens the command palette). Default is Edit
     // so opening Tōme feels unchanged; Esc switches to Command mode.
@@ -52,6 +63,26 @@ internal sealed partial class TomeApp
     // User settings (status-bar layout, glyphs, colors). Loaded once at
     // startup from $TOME_CONFIG or ~/.config/tome/settings.json.
     private readonly TomeSettings _settings = TomeSettings.Load();
+
+    // Layout coordinates captured at the end of each Render() so the mouse
+    // dispatcher can hit-test without recomputing them. All values are in
+    // 0-based screen rows/columns.
+    private int _layoutTabBarRow = -1;
+    private int _layoutEditorTopRow;
+    private int _layoutEditorHeight;
+    private int _layoutLeftOffset;          // explorer + separator
+    private int _layoutExplorerWidth;
+    private int _layoutGutterWidth;
+    private int _layoutTextLeftCol;         // first screen column inside text area
+    private int _layoutStatusRow;
+    private int _layoutReplTopRow = -1;
+    private int _layoutReplHeight;
+    private int _layoutReplLeftCol;
+    private int _layoutReplWidth;
+    // Tab bar hit ranges, parallel to _tabs, recorded as half-open
+    // [startCol, endCol) intervals in the same row as _layoutTabBarRow.
+    private readonly List<(int Start, int End)> _layoutTabRanges = new();
+    private bool _mouseDragging;
 
     public TomeApp(TerminalDriver terminal, string? filePath, string initialText)
     {
@@ -97,7 +128,9 @@ internal sealed partial class TomeApp
         while (!_quit)
         {
             Render();
-            HandleKey(_terminal.ReadKey());
+            var evt = _terminal.ReadEvent();
+            if (evt.Kind == InputEventKind.Key) HandleKey(evt.Key);
+            else HandleMouse(evt);
         }
     }
 
@@ -276,13 +309,16 @@ internal sealed partial class TomeApp
     {
         var width = _terminal.Width;
         var height = _terminal.Height;
-        var editorHeight = Math.Max(1, height - StatusLineHeight - MessageLineHeight - TabBarHeight);
+        var editorHeightTotal = Math.Max(1, height - StatusLineHeight - MessageLineHeight - TabBarHeight);
+        var replHeight = _repl.EffectiveHeight(editorHeightTotal);
+        var editorHeight = Math.Max(1, editorHeightTotal - replHeight);
         var editorTopRow = TabBarHeight + 1;
 
         _explorer.ConsumeChanges();
         RefreshDiagnosticsIfStale();
         RecomputeBracketMatch();
         RefreshSignatureHelp();
+        CheckExternalChange();
         var gutter = new GutterRenderer(_buffer, BuildSeverityByLine());
 
         // Explorer pane sits flush against the left edge. When visible
@@ -299,6 +335,16 @@ internal sealed partial class TomeApp
         _view.SetViewportSize(textWidth, editorHeight);
         _view.EnsureCursorVisible();
 
+        // Stash layout coords for the mouse dispatcher.
+        _layoutTabBarRow = TabBarHeight > 0 ? 0 : -1;
+        _layoutEditorTopRow = editorTopRow - 1; // 0-based
+        _layoutEditorHeight = editorHeight;
+        _layoutLeftOffset = leftOffset;
+        _layoutExplorerWidth = explorerVisible ? explorerWidth : 0;
+        _layoutGutterWidth = gutterWidth;
+        _layoutTextLeftCol = leftOffset + gutterWidth;
+        _layoutStatusRow = (editorTopRow - 1) + editorHeight;
+
         var sb = new StringBuilder(width * height);
 
         if (TabBarHeight > 0)
@@ -309,7 +355,7 @@ internal sealed partial class TomeApp
                 // Workspace name banner aligned with the explorer column.
                 var banner = _workspace is null ? string.Empty : " " + _workspace.Name;
                 if (banner.Length > explorerWidth) banner = banner.Substring(0, explorerWidth);
-                sb.Append("\u001b[1m\u001b[48;5;236m").Append(banner.PadRight(explorerWidth)).Append("\u001b[0m");
+                sb.Append(TomeTheme.Active.Open(Role.StatusBarBg)).Append(banner.PadRight(explorerWidth)).Append("\u001b[0m");
                 sb.Append("\u001b[2m\u2502\u001b[22m");
             }
             sb.Append(BuildTabBar(width - leftOffset));
@@ -342,7 +388,27 @@ internal sealed partial class TomeApp
             }
         }
 
-        var statusRow = editorTopRow + editorHeight;
+        var statusRow = editorTopRow + editorHeight + replHeight;
+        // Paint the REPL pane (if visible) between the editor body and the
+        // status row. It always sits flush right of the explorer like the
+        // editor body — the explorer column is never split.
+        if (replHeight > 0)
+        {
+            var replTop = editorTopRow + editorHeight;          // 1-based row
+            var replLeftCol = leftOffset + 1;                   // 1-based col
+            var replWidth = Math.Max(1, width - leftOffset);
+            _layoutReplTopRow = replTop - 1;                    // 0-based
+            _layoutReplHeight = replHeight;
+            _layoutReplLeftCol = leftOffset;                    // 0-based
+            _layoutReplWidth = replWidth;
+            _repl.Render(sb, replTop, replLeftCol, replWidth, replHeight, _focusRepl);
+        }
+        else
+        {
+            _layoutReplTopRow = -1;
+            _layoutReplHeight = 0;
+        }
+
         sb.Append("\u001b[").Append(statusRow).Append(";1H\u001b[2K");
         sb.Append(BuildStatusLine(width));
         sb.Append("\u001b[0m");
@@ -355,6 +421,7 @@ internal sealed partial class TomeApp
 
         // Popup overlay last, so it paints on top of the editor body.
         PaintCompletionPopup(sb, leftOffset + gutterWidth, editorTopRow, editorHeight, width);
+        PaintFuzzyPicker(sb, width, height);
 
         _terminal.Write(sb.ToString());
 
@@ -364,10 +431,52 @@ internal sealed partial class TomeApp
             // distract; selection is rendered via reverse-video.
             _terminal.ShowCursorAt(editorTopRow, 1);
         }
+        else if (_pickerOpen)
+        {
+            var (r, c) = GetPickerCursorScreenPosition(width, height);
+            _terminal.ShowCursorAt(r, c);
+        }
+        else if (_focusRepl && _layoutReplHeight > 0)
+        {
+            var (r, c) = _repl.GetCursorScreenPosition(
+                _layoutReplTopRow + 1, _layoutReplLeftCol + 1, _layoutReplWidth, _layoutReplHeight);
+            _terminal.ShowCursorAt(r, c);
+        }
         else
         {
             var (cursorRow, cursorCol) = _view.GetCursorScreenPosition();
             _terminal.ShowCursorAt(cursorRow + TabBarHeight, cursorCol + leftOffset + gutterWidth);
+
+            // Paint extra carets as reverse-video block characters at their
+            // viewport positions. The hardware terminal cursor can only sit
+            // at one location, so secondaries are drawn as text styling.
+            if (_buffer.HasMultipleCarets)
+            {
+                var extras = _view.GetExtraCursorScreenPositions();
+                if (extras.Count > 0)
+                {
+                    var paint = new StringBuilder();
+                    foreach (var (r, c) in extras)
+                    {
+                        // Mirror the body-paint coords from above: rows are
+                        // 1-based screen rows (editorTopRow + viewport row),
+                        // columns are 1-based screen cols (leftOffset +
+                        // gutterWidth + viewport col + 1).
+                        var screenRow = editorTopRow + r;
+                        var screenCol = leftOffset + gutterWidth + c + 1;
+                        var lineIdx = _view.ScrollLine + r;
+                        var colIdx = _view.ScrollColumn + c;
+                        var line = _buffer.GetLine(lineIdx);
+                        var ch = (colIdx >= 0 && colIdx < line.Length) ? line[colIdx] : ' ';
+                        paint.Append($"\u001b[{screenRow};{screenCol}H");
+                        paint.Append("\u001b[7m").Append(ch).Append("\u001b[27m");
+                    }
+                    _terminal.Write(paint.ToString());
+                    // Re-park the hardware cursor on the primary so the
+                    // visible caret lands at the right spot.
+                    _terminal.ShowCursorAt(cursorRow + TabBarHeight, cursorCol + leftOffset + gutterWidth);
+                }
+            }
         }
         _terminal.Flush();
     }
@@ -375,13 +484,17 @@ internal sealed partial class TomeApp
     private string BuildTabBar(int width)
     {
         var sb = new StringBuilder();
+        _layoutTabRanges.Clear();
+        var startCol = _layoutLeftOffset;
         for (var i = 0; i < _tabs.Count; i++)
         {
             var t = _tabs[i];
             var label = $" {t.DisplayName}{(t.Buffer.IsModified ? "*" : "")} ";
             if (i == _active) sb.Append("\u001b[7m").Append(label).Append("\u001b[27m");
             else sb.Append("\u001b[2m").Append(label).Append("\u001b[22m");
-            if (i < _tabs.Count - 1) sb.Append('|');
+            _layoutTabRanges.Add((startCol, startCol + label.Length));
+            startCol += label.Length;
+            if (i < _tabs.Count - 1) { sb.Append('|'); startCol += 1; }
         }
         var rendered = sb.ToString();
         // Trim ANSI-aware: simple length cap with overflow truncation is fine here for the bar.
@@ -416,6 +529,19 @@ internal sealed partial class TomeApp
         _message = string.Empty;
         _terminal.HideCursor();
 
+        // Picker overlay consumes everything until dismissed.
+        if (_pickerOpen) { HandlePickerKey(key); return; }
+
+        // *Results* tab intercepts Enter to jump to the match under cursor.
+        if (TryHandleResultsTabKey(key)) return;
+
+        // Global: Ctrl+P opens the fuzzy picker regardless of mode/focus.
+        if (key.Key == ConsoleKey.P && (key.Modifiers & ConsoleModifiers.Control) != 0)
+        {
+            OpenFuzzyPicker();
+            return;
+        }
+
         // Global: Ctrl+B toggles the explorer pane regardless of mode/focus.
         if (key.Key == ConsoleKey.B && (key.Modifiers & ConsoleModifiers.Control) != 0)
         {
@@ -444,11 +570,35 @@ internal sealed partial class TomeApp
             return;
         }
 
+        // Global: Ctrl+R toggles focus to/from the embedded REPL pane.
+        // Opens the pane if it isn't visible yet.
+        if (key.Key == ConsoleKey.R && (key.Modifiers & ConsoleModifiers.Control) != 0)
+        {
+            var cwd = !string.IsNullOrEmpty(Current.FilePath)
+                ? Path.GetDirectoryName(Path.GetFullPath(Current.FilePath))
+                : Environment.CurrentDirectory;
+            if (!_repl.Visible) { _repl.Open(cwd); _focusRepl = true; _message = "-- REPL --"; }
+            else if (_focusRepl) { _focusRepl = false; _message = string.Empty; }
+            else { _focusRepl = true; _message = "-- REPL --"; }
+            return;
+        }
+
         // When the explorer has focus, the editor sees no input until
         // focus returns. Tab or Escape returns focus to the editor.
         if (_focusExplorer)
         {
             HandleExplorerKey(key);
+            return;
+        }
+
+        // When the REPL has focus, it consumes everything until Esc.
+        if (_focusRepl && _repl.Visible)
+        {
+            if (!_repl.HandleKey(key))
+            {
+                _focusRepl = false;
+                _message = string.Empty;
+            }
             return;
         }
 
@@ -460,8 +610,17 @@ internal sealed partial class TomeApp
 
         // Escape from Edit mode drops into Command mode (vim-style). Any
         // active selection is cleared so the user sees a clean cursor.
+        // BUT: if there are extra carets, the first Esc collapses them
+        // and stays in Edit mode — second press then enters Command mode.
         if (key.Key == ConsoleKey.Escape)
         {
+            if (_buffer.HasMultipleCarets)
+            {
+                var n = _buffer.ExtraCaretCount;
+                _buffer.ClearExtraCarets();
+                _message = $"collapsed {n} extra caret(s)";
+                return;
+            }
             _buffer.ClearSelection();
             _mode = EditorMode.Command;
             _message = "-- COMMAND --";
@@ -492,6 +651,15 @@ internal sealed partial class TomeApp
             return;
         }
 
+        // Ctrl+Alt+Up/Down and Alt+Shift+Up/Down — add caret above / below the
+        // primary. Some terminals/WMs swallow Ctrl+Alt+Arrow (i3, KDE, etc.),
+        // so Alt+Shift is offered as a reliable fallback.
+        if ((ctrl && alt) || (alt && shift))
+        {
+            if (key.Key == ConsoleKey.UpArrow) { AddCaretAbove(); return; }
+            if (key.Key == ConsoleKey.DownArrow) { AddCaretBelow(); return; }
+        }
+
         if (alt)
         {
             switch (key.Key)
@@ -519,6 +687,7 @@ internal sealed partial class TomeApp
                 case ConsoleKey.E: ApplyMove(_buffer.MoveLineEnd, shift); return;
                 case ConsoleKey.F: StartSearch(); return;
                 case ConsoleKey.G: FindNext(); return;
+                case ConsoleKey.R: StartInteractiveReplace(); return;
                 case ConsoleKey.K: ShowHover(); return;
                 case ConsoleKey.Spacebar: OpenCompletions(); return;
                 case ConsoleKey.C: CopySelection(); return;
@@ -544,34 +713,95 @@ internal sealed partial class TomeApp
             case ConsoleKey.PageUp: ApplyMove(() => PageBy(-_view.ViewportHeight), shift); return;
             case ConsoleKey.PageDown: ApplyMove(() => PageBy(_view.ViewportHeight), shift); return;
             case ConsoleKey.Backspace:
-                if (_buffer.HasSelection) _buffer.DeleteSelection();
-                else _buffer.Backspace();
+                EditAll(b => { if (b.HasSelection) b.DeleteSelection(); else b.Backspace(); });
                 return;
             case ConsoleKey.Delete:
-                if (_buffer.HasSelection) _buffer.DeleteSelection();
-                else _buffer.DeleteForward();
+                EditAll(b => { if (b.HasSelection) b.DeleteSelection(); else b.DeleteForward(); });
                 return;
             case ConsoleKey.Enter:
-                if (_buffer.HasSelection) _buffer.DeleteSelection();
-                _buffer.InsertNewline();
+                EditAll(b => { if (b.HasSelection) b.DeleteSelection(); b.InsertNewline(); });
                 return;
             case ConsoleKey.Tab:
-                if (_buffer.HasSelection) _buffer.DeleteSelection();
-                _buffer.InsertText("    ");
+                EditAll(b => { if (b.HasSelection) b.DeleteSelection(); b.InsertText("    "); });
                 return;
         }
 
         if (!char.IsControl(key.KeyChar))
         {
-            if (TryAutoPair(key.KeyChar)) { TryRefilterCompletions(); return; }
-            if (_buffer.HasSelection) _buffer.DeleteSelection();
-            _buffer.InsertChar(key.KeyChar);
+            // Auto-pair only makes sense at the primary caret; with extras
+            // we just insert the literal char everywhere.
+            if (!_buffer.HasMultipleCarets && TryAutoPair(key.KeyChar))
+            { TryRefilterCompletions(); return; }
+            var ch = key.KeyChar;
+            EditAll(b => { if (b.HasSelection) b.DeleteSelection(); b.InsertChar(ch); });
             TryRefilterCompletions();
         }
     }
 
+    /// <summary>
+    /// Run <paramref name="op"/> at every active caret as a single undo
+    /// transaction. Falls through to a plain call when there's only one
+    /// caret, so undo coalescing still works for ordinary typing.
+    /// </summary>
+    private void EditAll(Action<TextBuffer> op)
+    {
+        if (_buffer.HasMultipleCarets) _buffer.ApplyAtAllCarets(op);
+        else op(_buffer);
+    }
+
+    /// <summary>
+    /// Add an extra caret one line above the topmost existing caret,
+    /// using the primary caret's column as the anchor so each successive
+    /// press grows the column vertically rather than staying pinned to
+    /// the primary's line.
+    /// </summary>
+    private void AddCaretAbove()
+    {
+        var anchorCol = _buffer.Cursor.Column;
+        var topLine = int.MaxValue;
+        foreach (var c in _buffer.AllCarets)
+            if (c.Line < topLine) topLine = c.Line;
+        if (topLine <= 0) { _message = "no line above"; return; }
+        var targetLine = topLine - 1;
+        var target = new TextLocation(targetLine,
+            Math.Min(anchorCol, _buffer.GetLineLength(targetLine)));
+        _buffer.AddCaret(target);
+        _message = $"{_buffer.ExtraCaretCount + 1} carets";
+    }
+
+    /// <summary>
+    /// Add an extra caret one line below the bottommost existing caret
+    /// (see <see cref="AddCaretAbove"/> for column-anchor rationale).
+    /// </summary>
+    private void AddCaretBelow()
+    {
+        var anchorCol = _buffer.Cursor.Column;
+        var bottomLine = -1;
+        foreach (var c in _buffer.AllCarets)
+            if (c.Line > bottomLine) bottomLine = c.Line;
+        if (bottomLine + 1 >= _buffer.LineCount) { _message = "no line below"; return; }
+        var targetLine = bottomLine + 1;
+        var target = new TextLocation(targetLine,
+            Math.Min(anchorCol, _buffer.GetLineLength(targetLine)));
+        _buffer.AddCaret(target);
+        _message = $"{_buffer.ExtraCaretCount + 1} carets";
+    }
+
     private void ApplyMove(Action move, bool extend)
     {
+        if (_buffer.HasMultipleCarets)
+        {
+            // Fan a movement out across every caret. The `move` delegate
+            // operates on whatever the current primary is, so swapping each
+            // caret in turn produces the same motion at every site.
+            _buffer.ApplyAtAllCarets(_ =>
+            {
+                if (extend) _buffer.BeginSelection();
+                else _buffer.ClearSelection();
+                move();
+            });
+            return;
+        }
         if (extend) _buffer.BeginSelection();
         else _buffer.ClearSelection();
         move();
@@ -662,6 +892,109 @@ internal sealed partial class TomeApp
     {
         if (_tabs.Count <= 1) return;
         _active = (_active + delta + _tabs.Count) % _tabs.Count;
+    }
+
+    private void HandleMouse(InputEvent evt)
+    {
+        _message = string.Empty;
+
+        // Wheel scrolls the editor regardless of where the pointer is —
+        // matches most terminal-editor conventions.
+        if (evt.Kind == InputEventKind.MouseWheel)
+        {
+            _view.ScrollBy(-evt.WheelDelta * 3);
+            return;
+        }
+
+        // Tab bar click — switch to the clicked tab. Press only; ignore
+        // release/move on the tab bar.
+        if (evt.Kind == InputEventKind.MousePress && evt.Button == MouseButton.Left
+            && _layoutTabBarRow >= 0 && evt.Row == _layoutTabBarRow)
+        {
+            for (var i = 0; i < _layoutTabRanges.Count; i++)
+            {
+                var (s, e) = _layoutTabRanges[i];
+                if (evt.Column >= s && evt.Column < e) { _active = i; return; }
+            }
+            return;
+        }
+
+        // Editor area: translate screen coords to buffer coords.
+        var editorBottom = _layoutEditorTopRow + _layoutEditorHeight;
+        var inEditor = evt.Row >= _layoutEditorTopRow && evt.Row < editorBottom
+                       && evt.Column >= _layoutTextLeftCol;
+
+        // REPL pane click — transfer focus on press.
+        if (_layoutReplHeight > 0
+            && evt.Row >= _layoutReplTopRow
+            && evt.Row < _layoutReplTopRow + _layoutReplHeight
+            && evt.Column >= _layoutReplLeftCol)
+        {
+            if (evt.Kind == InputEventKind.MousePress && evt.Button == MouseButton.Left)
+            {
+                _focusRepl = true;
+                _focusExplorer = false;
+                _message = "-- REPL --";
+            }
+            return;
+        }
+
+        if (!inEditor)
+        {
+            // A press outside the editor cancels any in-progress drag.
+            if (evt.Kind == InputEventKind.MousePress) _mouseDragging = false;
+            return;
+        }
+
+        if (evt.Button != MouseButton.Left && evt.Kind != InputEventKind.MouseMove)
+            return;
+
+        // Move focus back to the editor if the explorer had it.
+        if (_focusExplorer) _focusExplorer = false;
+
+        var bufLine = _view.ScrollLine + (evt.Row - _layoutEditorTopRow);
+        bufLine = Math.Clamp(bufLine, 0, Math.Max(0, _buffer.LineCount - 1));
+        var bufCol = _view.ScrollColumn + (evt.Column - _layoutTextLeftCol);
+        bufCol = Math.Clamp(bufCol, 0, _buffer.GetLineLength(bufLine));
+        var target = new TextLocation(bufLine, bufCol);
+
+        switch (evt.Kind)
+        {
+            case InputEventKind.MousePress:
+                if (evt.Alt)
+                {
+                    // Alt+click adds an extra caret at the click position,
+                    // leaving the primary where it was. Selection is cleared
+                    // first so we don't end up with a stretched primary
+                    // selection bridging both points.
+                    _buffer.ClearSelection();
+                    _buffer.AddCaret(target);
+                    _message = $"{_buffer.ExtraCaretCount + 1} carets";
+                    break;
+                }
+                if (evt.Shift)
+                {
+                    _buffer.BeginSelection();
+                }
+                else
+                {
+                    _buffer.ClearSelection();
+                    _buffer.ClearExtraCarets();
+                }
+                _buffer.MoveCursor(target);
+                _mouseDragging = true;
+                break;
+            case InputEventKind.MouseMove:
+                if (_mouseDragging)
+                {
+                    _buffer.BeginSelection();
+                    _buffer.MoveCursor(target);
+                }
+                break;
+            case InputEventKind.MouseRelease:
+                _mouseDragging = false;
+                break;
+        }
     }
 
     private void OpenFile()
@@ -1032,8 +1365,21 @@ internal sealed partial class TomeApp
 
         try
         {
+            if (_formatOnSave && Formatter.HasFormatterFor(Current.FilePath))
+            {
+                var pre = _buffer.GetText();
+                var fr = Formatter.Format(Current.FilePath, pre);
+                if (fr.Ok && !string.Equals(fr.Text, pre, StringComparison.Ordinal))
+                {
+                    var savedCursor = _buffer.Cursor;
+                    _buffer.ReplaceAll(fr.Text);
+                    _buffer.MoveCursor(savedCursor);
+                }
+            }
             File.WriteAllText(Current.FilePath, _buffer.GetText());
             _buffer.MarkClean();
+            PersistentUndoStore.Save(Current.FilePath, _buffer);
+            Current.StampFromDisk();
             _message = $"saved {Current.FilePath}";
         }
         catch (Exception ex)

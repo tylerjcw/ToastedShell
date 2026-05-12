@@ -1,4 +1,5 @@
 using System.Text;
+using Tosh.Tome.Theme;
 using Tosh.Tui.Editing;
 
 namespace Tosh.Tome;
@@ -21,8 +22,9 @@ internal static class LineRenderer
     private const string MatchClose = "\u001b[22;24m";
     private const string DimOpen = "\u001b[2m";
     private const string DimClose = "\u001b[22m";
-    private const string CurrentLineBg = "\u001b[48;5;236m"; // subtle dark grey
     private const string DefaultBgReset = "\u001b[49m";
+
+    private static string CurrentLineBg => TomeTheme.Active.Open(Role.CurrentLineBg);
 
     public sealed record LineDecorations(
         int SelStart,

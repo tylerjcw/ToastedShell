@@ -23,12 +23,50 @@ internal sealed class Tab
     public string DiagnosticsForText { get; set; } = string.Empty;
     public bool DiagnosticsPopulated { get; set; }
 
+    // Disk-stamps for reload-on-change detection. Set on load/save; the
+    // render loop polls the file each frame (rate-limited) and surfaces
+    // a reload prompt when these no longer match what's on disk.
+    public DateTime DiskMTimeUtc { get; set; }
+    public long DiskSize { get; set; } = -1;
+    public bool ExternalChangePending { get; set; }
+
     public Tab(string filePath, string initialText, ISyntaxColorizer? colorizer)
     {
         Buffer = new TextBuffer(initialText);
         View = new TextEditorView(Buffer);
         FilePath = filePath;
         Colorizer = colorizer;
+
+        if (!string.IsNullOrEmpty(filePath))
+        {
+            PersistentUndoStore.TryRestore(filePath, Buffer);
+            StampFromDisk();
+        }
+    }
+
+    public void StampFromDisk()
+    {
+        if (string.IsNullOrEmpty(FilePath)) { DiskSize = -1; return; }
+        try
+        {
+            var fi = new FileInfo(FilePath);
+            if (fi.Exists)
+            {
+                DiskMTimeUtc = fi.LastWriteTimeUtc;
+                DiskSize = fi.Length;
+            }
+            else
+            {
+                DiskMTimeUtc = default;
+                DiskSize = -1;
+            }
+        }
+        catch
+        {
+            DiskMTimeUtc = default;
+            DiskSize = -1;
+        }
+        ExternalChangePending = false;
     }
 
     public string DisplayName =>

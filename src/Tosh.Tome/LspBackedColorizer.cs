@@ -1,4 +1,5 @@
 using Tosh.LanguageServices;
+using Tosh.Tome.Theme;
 using Tosh.Tui.Editing;
 
 namespace Tosh.Tome;
@@ -24,21 +25,23 @@ internal sealed class LspBackedColorizer : ISyntaxColorizer
     private string? _lastText;
     private List<List<StyledSpan>> _spansByLine = new();
 
-    // ANSI 256-color foregrounds, indexed by LSP semantic-token-type id.
-    // The legend (see ToshLanguageFeatures.SemanticTokenTypes) is:
+    // SGR-open sequences indexed by LSP semantic-token-type id, resolved
+    // through TomeTheme so the active palette (truecolor vs. 256-color)
+    // is honoured. Legend (see ToshLanguageFeatures.SemanticTokenTypes):
     //   0 comment, 1 keyword, 2 string, 3 number,
     //   4 variable, 5 function, 6 type, 7 operator
-    private static readonly string[] StyleByType =
-    [
-        "\u001b[38;5;244m",  // comment   — dim grey
-        "\u001b[38;5;141m",  // keyword   — soft purple
-        "\u001b[38;5;150m",  // string    — green
-        "\u001b[38;5;215m",  // number    — orange
-        "\u001b[38;5;110m",  // variable  — soft blue
-        "\u001b[38;5;180m",  // function  — tan
-        "\u001b[38;5;180m",  // type      — tan
-        "\u001b[38;5;110m",  // operator  — soft blue
-    ];
+    private static string[] StyleByType => _styleByType ??= new[]
+    {
+        TomeTheme.Active.Open(Role.Comment),
+        TomeTheme.Active.Open(Role.Keyword),
+        TomeTheme.Active.Open(Role.EscapedString),
+        TomeTheme.Active.Open(Role.Number),
+        TomeTheme.Active.Open(Role.Variable),
+        TomeTheme.Active.Open(Role.FunctionName),
+        TomeTheme.Active.Open(Role.TypeName),
+        TomeTheme.Active.Open(Role.Operator),
+    };
+    private static string[]? _styleByType;
 
     // Italic-faint for documentation comments (## …). Composes with the
     // comment color.

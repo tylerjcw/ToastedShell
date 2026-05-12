@@ -1,4 +1,5 @@
 using Tosh.Language.Parsing;
+using Tosh.Tome.Theme;
 using Tosh.Tui.Editing;
 
 namespace Tosh.Tome;
@@ -7,26 +8,27 @@ namespace Tosh.Tome;
 /// Lex-driven colorizer for .tosh source files. Each line is lexed independently —
 /// fast enough for interactive editing, and the worst case (an unterminated string
 /// literal continuing onto the next line) is a useful visual cue rather than a bug.
-/// Styles are fixed ANSI 256-color foregrounds; theming can be hooked in later.
+/// Styles route through <see cref="TomeTheme"/>, so 24-bit terminals get
+/// truecolor SGR while indexed terminals get the equivalent 256-color fallback.
 /// </summary>
 internal sealed class ToshSyntaxColorizer : ISyntaxColorizer
 {
-    // ANSI 38;5;<n>m foreground colors picked to match the REPL's default palette
-    // roughly. These are intentionally hardcoded for now; a future revision can
-    // pull from ToshSyntaxThemeConfig once highlighting lives in a shared lib.
-    private const string Keyword = "\u001b[38;5;141m";       // soft purple
-    private const string ControlFlow = "\u001b[38;5;204m";   // pink/red
-    private const string String = "\u001b[38;5;150m";        // green
-    private const string EscapedString = "\u001b[38;5;108m"; // muted green
-    private const string Interpolated = "\u001b[38;5;144m";  // tan-green
-    private const string Number = "\u001b[38;5;215m";        // orange
-    private const string Constant = "\u001b[38;5;215m";      // orange
-    private const string Operator = "\u001b[38;5;110m";      // soft blue
-    private const string Punctuation = "\u001b[38;5;245m";   // grey
-    private const string Variable = "\u001b[38;5;110m";      // soft blue
-    private const string Flag = "\u001b[38;5;180m";          // tan
-    private const string Comment = "\u001b[38;5;244m";       // dim grey
-    private const string TypeName = "\u001b[38;5;180m";      // tan
+    private static string S(Role r) => TomeTheme.Active.Open(r);
+
+    // Cached per-call because Role resolution is theme-instance-scoped; the
+    // theme is process-wide so these lookups are O(1) dictionary hits.
+    private static string Keyword       => S(Role.Keyword);
+    private static string ControlFlow   => S(Role.ControlFlow);
+    private static string EscapedString => S(Role.EscapedString);
+    private static string Interpolated  => S(Role.Interpolated);
+    private static string Number        => S(Role.Number);
+    private static string Constant      => S(Role.Constant);
+    private static string Operator      => S(Role.Operator);
+    private static string Punctuation   => S(Role.Punctuation);
+    private static string Variable      => S(Role.Variable);
+    private static string Flag          => S(Role.Flag);
+    private static string Comment       => S(Role.Comment);
+    private static string TypeName      => S(Role.TypeName);
 
     private static readonly HashSet<string> Keywords = new(StringComparer.Ordinal)
     {

@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Text;
+using Tosh.Tome.Theme;
 using Tosh.Tome.Workspace;
 
 namespace Tosh.Tome;
@@ -146,8 +147,8 @@ internal sealed class ExplorerPane : IDisposable
         var sb = new StringBuilder(visible.Length + 32);
         if (selected)
         {
-            if (focused) sb.Append("\u001b[7m");          // reverse
-            else sb.Append("\u001b[48;5;238m");   // dim selection bg when unfocused
+            if (focused) sb.Append(TomeTheme.Active.Open(Role.ExplorerSelectedFocused));
+            else sb.Append(TomeTheme.Active.Open(Role.ExplorerSelectedUnfocused));
         }
         else if (node.IsDirectory)
         {

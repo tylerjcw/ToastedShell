@@ -22,12 +22,26 @@ public sealed class TextBuffer
     private const int MaxHistoryDepth = 256;
 
     private readonly List<string> _lines = new() { string.Empty };
-    private readonly Stack<Snapshot> _undo = new();
-    private readonly Stack<Snapshot> _redo = new();
+    private readonly Stack<UndoFrame> _undo = new();
+    private readonly Stack<UndoFrame> _redo = new();
 
     private TextLocation _cursor;
     private TextLocation? _selectionAnchor;
     private EditKind _lastEditKind = EditKind.None;
+
+    /// <summary>
+    /// Additional carets. Each entry is (cursor, anchor); a null anchor means
+    /// the caret has no selection. The "primary" caret is the one stored in
+    /// <see cref="_cursor"/>/<see cref="_selectionAnchor"/>; extras live here.
+    /// </summary>
+    private readonly List<(TextLocation cursor, TextLocation? anchor)> _extraCarets = new();
+
+    /// <summary>
+    /// When true, <see cref="PushUndo"/> is a no-op. Used by
+    /// <see cref="ApplyAtAllCarets"/> to coalesce a multi-caret edit into a
+    /// single undo entry.
+    /// </summary>
+    private bool _inCompoundEdit;
 
     public TextBuffer() { }
 
@@ -71,6 +85,98 @@ public sealed class TextBuffer
     }
 
     public void ClearSelection() => _selectionAnchor = null;
+
+    // ─── Multi-cursor ───────────────────────────────────────────────────
+    //
+    // The buffer carries one "primary" caret (the legacy <see cref="Cursor"/>)
+    // plus any number of additional carets. Edits to the buffer normally
+    // affect only the primary; call <see cref="ApplyAtAllCarets"/> to fan
+    // an edit out across every caret in a single undo transaction.
+
+    /// <summary>Number of extra carets beyond the primary.</summary>
+    public int ExtraCaretCount => _extraCarets.Count;
+
+    /// <summary>True when there is more than one active caret.</summary>
+    public bool HasMultipleCarets => _extraCarets.Count > 0;
+
+    /// <summary>
+    /// Every caret position (primary + extras), sorted top-to-bottom,
+    /// left-to-right. Useful for rendering and for fan-out helpers.
+    /// </summary>
+    public IReadOnlyList<TextLocation> AllCarets
+    {
+        get
+        {
+            var list = new List<TextLocation>(1 + _extraCarets.Count) { _cursor };
+            foreach (var (c, _) in _extraCarets) list.Add(c);
+            list.Sort(Compare);
+            return list;
+        }
+    }
+
+    /// <summary>
+    /// Add an extra caret at <paramref name="cursor"/>. Optional
+    /// <paramref name="anchor"/> seeds a selection at that caret. No-op if
+    /// the target coincides with the primary or an existing extra.
+    /// </summary>
+    public void AddCaret(TextLocation cursor, TextLocation? anchor = null)
+    {
+        cursor = ClampLocation(cursor);
+        if (cursor == _cursor) return;
+        foreach (var (c, _) in _extraCarets)
+            if (c == cursor) return;
+        _extraCarets.Add((cursor, anchor is { } a ? ClampLocation(a) : null));
+    }
+
+    /// <summary>Drop every extra caret, leaving only the primary.</summary>
+    public void ClearExtraCarets() => _extraCarets.Clear();
+
+    /// <summary>
+    /// Run <paramref name="action"/> at every caret as a single undo
+    /// transaction. Edits are applied bottom-up so an edit at one caret
+    /// doesn't shift the positions of carets above it.
+    /// </summary>
+    public void ApplyAtAllCarets(Action<TextBuffer> action)
+    {
+        if (_extraCarets.Count == 0) { action(this); return; }
+
+        // Stash every caret + anchor.
+        var carets = new List<(TextLocation cursor, TextLocation? anchor)>(1 + _extraCarets.Count)
+        {
+            (_cursor, _selectionAnchor),
+        };
+        carets.AddRange(_extraCarets);
+
+        // Bottom-up so edits don't perturb upstream positions.
+        carets.Sort((a, b) => Compare(b.cursor, a.cursor));
+
+        PushUndo();
+        _inCompoundEdit = true;
+        var updated = new List<(TextLocation cursor, TextLocation? anchor)>(carets.Count);
+        try
+        {
+            foreach (var (c, anchor) in carets)
+            {
+                _cursor = c;
+                _selectionAnchor = anchor;
+                action(this);
+                updated.Add((_cursor, _selectionAnchor));
+            }
+        }
+        finally
+        {
+            _inCompoundEdit = false;
+        }
+
+        // Promote the top-most updated caret to primary; rest become extras.
+        updated.Sort((a, b) => Compare(a.cursor, b.cursor));
+        _cursor = updated[0].cursor;
+        _selectionAnchor = updated[0].anchor;
+        _extraCarets.Clear();
+        for (var i = 1; i < updated.Count; i++)
+            _extraCarets.Add(updated[i]);
+        _lastEditKind = EditKind.None;
+    }
 
     public string GetSelectionText()
     {
@@ -120,6 +226,8 @@ public sealed class TextBuffer
         _undo.Clear();
         _redo.Clear();
         _lines.Clear();
+        _extraCarets.Clear();
+        _selectionAnchor = null;
 
         var normalized = (text ?? string.Empty).Replace("\r\n", "\n").Replace('\r', '\n');
         var parts = normalized.Split('\n');
@@ -136,6 +244,28 @@ public sealed class TextBuffer
 
     /// <summary>Marks the buffer as freshly persisted; does not change content.</summary>
     public void MarkClean() => IsModified = false;
+
+    /// <summary>
+    /// Replace the entire buffer text as a single undoable edit. Unlike
+    /// <see cref="LoadText"/>, the existing undo/redo history is preserved
+    /// and a new snapshot is pushed so the operation can be undone.
+    /// </summary>
+    public void ReplaceAll(string text)
+    {
+        var normalized = (text ?? string.Empty).Replace("\r\n", "\n").Replace('\r', '\n');
+        // Skip the work and the undo entry when nothing actually changes.
+        if (string.Equals(GetText(), normalized, StringComparison.Ordinal)) return;
+
+        PushUndo();
+        _lines.Clear();
+        foreach (var part in normalized.Split('\n')) _lines.Add(part);
+        if (_lines.Count == 0) _lines.Add(string.Empty);
+        _cursor = ClampLocation(_cursor);
+        _selectionAnchor = null;
+        _extraCarets.Clear();
+        _lastEditKind = EditKind.None;
+        IsModified = true;
+    }
 
     public void MoveCursor(TextLocation location)
     {
@@ -377,21 +507,43 @@ public sealed class TextBuffer
         return sb.ToString();
     }
 
-    private Snapshot CaptureSnapshot() => new(_lines.ToArray(), _cursor, IsModified);
+    private UndoFrame CaptureSnapshot() => new(_lines.ToArray(), _cursor.Line, _cursor.Column, IsModified);
 
-    private void ApplySnapshot(Snapshot snapshot)
+    private void ApplySnapshot(UndoFrame snapshot)
     {
         _lines.Clear();
         foreach (var line in snapshot.Lines)
             _lines.Add(line);
         if (_lines.Count == 0)
             _lines.Add(string.Empty);
-        _cursor = ClampLocation(snapshot.Cursor);
+        _cursor = ClampLocation(new TextLocation(snapshot.CursorLine, snapshot.CursorColumn));
+        _selectionAnchor = null;
+        _extraCarets.Clear();
         IsModified = snapshot.IsModified;
+    }
+
+    /// <summary>Undo stack snapshot, bottom (oldest) → top (most recent).</summary>
+    public IReadOnlyList<UndoFrame> ExportUndoStack() => _undo.Reverse().ToArray();
+
+    /// <summary>Redo stack snapshot, bottom (oldest) → top (most recent).</summary>
+    public IReadOnlyList<UndoFrame> ExportRedoStack() => _redo.Reverse().ToArray();
+
+    /// <summary>
+    /// Replace the undo/redo stacks with the supplied frames (bottom → top).
+    /// Does not touch the live buffer content or cursor.
+    /// </summary>
+    public void ImportHistory(IReadOnlyList<UndoFrame> undo, IReadOnlyList<UndoFrame> redo)
+    {
+        _undo.Clear();
+        _redo.Clear();
+        foreach (var f in undo) _undo.Push(f);
+        foreach (var f in redo) _redo.Push(f);
+        _lastEditKind = EditKind.None;
     }
 
     private void PushUndo()
     {
+        if (_inCompoundEdit) return;
         _undo.Push(CaptureSnapshot());
         _redo.Clear();
         if (_undo.Count > MaxHistoryDepth)
@@ -406,6 +558,9 @@ public sealed class TextBuffer
     }
 
     private enum EditKind { None, InsertChar, DeleteBack, DeleteForward }
-
-    private readonly record struct Snapshot(string[] Lines, TextLocation Cursor, bool IsModified);
 }
+
+/// <summary>
+/// One persisted undo/redo frame: full line array plus cursor + dirty flag.
+/// </summary>
+public readonly record struct UndoFrame(string[] Lines, int CursorLine, int CursorColumn, bool IsModified);

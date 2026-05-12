@@ -59,4 +59,37 @@ public sealed class TextEditorView
         var c = Buffer.Cursor;
         return (c.Line - ScrollLine, c.Column - ScrollColumn);
     }
+
+    /// <summary>
+    /// Viewport-relative positions of every extra caret currently on screen,
+    /// in document order. Excludes the primary caret. Off-screen carets are
+    /// omitted.
+    /// </summary>
+    public IReadOnlyList<(int Row, int Column)> GetExtraCursorScreenPositions()
+    {
+        if (Buffer.ExtraCaretCount == 0) return Array.Empty<(int, int)>();
+        var primary = Buffer.Cursor;
+        var result = new List<(int, int)>(Buffer.ExtraCaretCount);
+        foreach (var c in Buffer.AllCarets)
+        {
+            if (c == primary) continue;
+            var row = c.Line - ScrollLine;
+            var col = c.Column - ScrollColumn;
+            if (row < 0 || row >= ViewportHeight) continue;
+            if (col < 0 || col >= ViewportWidth) continue;
+            result.Add((row, col));
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// Scrolls the viewport vertically by <paramref name="delta"/> lines
+    /// without moving the cursor. Positive scrolls down (reveals later
+    /// lines). Clamped to valid buffer range.
+    /// </summary>
+    public void ScrollBy(int delta)
+    {
+        var max = Math.Max(0, Buffer.LineCount - 1);
+        ScrollLine = Math.Clamp(ScrollLine + delta, 0, max);
+    }
 }

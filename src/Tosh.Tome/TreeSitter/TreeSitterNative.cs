@@ -30,6 +30,23 @@ internal static class TreeSitterNative
         public uint Column;
     }
 
+    /// <summary>
+    /// Single-edit description handed to <c>ts_tree_edit</c> so the next
+    /// <c>ts_parser_parse</c> can reuse subtrees outside the changed range.
+    /// All offsets are in bytes; <c>StartPoint</c>/<c>OldEndPoint</c>/
+    /// <c>NewEndPoint</c> are (row, column-in-bytes) coordinates.
+    /// </summary>
+    [StructLayout(LayoutKind.Sequential)]
+    public struct TSInputEdit
+    {
+        public uint StartByte;
+        public uint OldEndByte;
+        public uint NewEndByte;
+        public TSPoint StartPoint;
+        public TSPoint OldEndPoint;
+        public TSPoint NewEndPoint;
+    }
+
     // TSTreeCursor is 2 pointers + 3*u32 = 28 bytes; pad to next aligned size.
     [StructLayout(LayoutKind.Sequential)]
     public struct TSTreeCursor
@@ -48,6 +65,7 @@ internal static class TreeSitterNative
 
     [DllImport(Lib)] public static extern void ts_tree_delete(IntPtr tree);
     [DllImport(Lib)] public static extern TSNode ts_tree_root_node(IntPtr tree);
+    [DllImport(Lib)] public static extern void ts_tree_edit(IntPtr tree, ref TSInputEdit edit);
 
     [DllImport(Lib)] public static extern IntPtr ts_node_type(TSNode node);
     [DllImport(Lib)] public static extern bool ts_node_is_named(TSNode node);
@@ -57,6 +75,8 @@ internal static class TreeSitterNative
     [DllImport(Lib)] public static extern TSPoint ts_node_end_point(TSNode node);
     [DllImport(Lib)] public static extern uint ts_node_child_count(TSNode node);
     [DllImport(Lib)] public static extern TSNode ts_node_parent(TSNode node);
+    [DllImport(Lib)] public static extern TSNode ts_node_descendant_for_point_range(TSNode self, TSPoint start, TSPoint end);
+    [DllImport(Lib)] public static extern TSNode ts_node_named_descendant_for_point_range(TSNode self, TSPoint start, TSPoint end);
 
     [DllImport(Lib)] public static extern TSTreeCursor ts_tree_cursor_new(TSNode node);
     [DllImport(Lib)] public static extern void ts_tree_cursor_delete(ref TSTreeCursor cursor);

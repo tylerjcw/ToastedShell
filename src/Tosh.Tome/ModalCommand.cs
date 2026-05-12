@@ -40,7 +40,7 @@ internal sealed partial class TomeApp
             case ConsoleKey.End: ApplyMove(_buffer.MoveLineEnd, shift); return;
             case ConsoleKey.PageUp: ApplyMove(() => PageBy(-_view.ViewportHeight), shift); return;
             case ConsoleKey.PageDown: ApplyMove(() => PageBy(_view.ViewportHeight), shift); return;
-            case ConsoleKey.Escape: return; // already in Command mode; no-op
+            case ConsoleKey.Escape: ClearPending(); return; // also clears any pending operator
         }
 
         // Ctrl+R = redo (vim convention); Ctrl+S/Q/etc still useful here.
@@ -53,6 +53,11 @@ internal sealed partial class TomeApp
                 case ConsoleKey.Q: TryQuit(); return;
             }
         }
+
+        // Operator+motion+text-object state machine. Consumes multi-key
+        // sequences (dd, ciw, gg, f<c>, etc.). When it returns false the
+        // key falls through to the single-key motion/mode table below.
+        if (TryHandleMotionOrOperator(key)) return;
 
         switch (key.KeyChar)
         {
@@ -237,6 +242,10 @@ internal sealed partial class TomeApp
         "help", "h",
         "mode",
         "workspace", "ws",
+        "s", "sub", "substitute",
+        "grep", "rg",
+        "gsub",
+        "carets", "cursors",
     };
 
     private void DispatchCommand(string command)
@@ -246,6 +255,20 @@ internal sealed partial class TomeApp
         if (command.StartsWith('!'))
         {
             RunShellBridge(command[1..].Trim());
+            return;
+        }
+
+        // ':s/pat/repl/flags' and ':gsub/pat/repl/flags' — the slash sticks
+        // to the verb, so detect these before the space-tokenizer.
+        if (command.Length >= 2 && command[0] == 's' && !char.IsLetterOrDigit(command[1]))
+        {
+            SubstituteCommand(command[1..]);
+            return;
+        }
+        if (command.StartsWith("gsub", StringComparison.Ordinal)
+            && command.Length >= 5 && !char.IsLetterOrDigit(command[4]))
+        {
+            GsubCommand(command[4..]);
             return;
         }
 
@@ -310,7 +333,7 @@ internal sealed partial class TomeApp
                     : $"help: {arg} (not yet implemented — use Ctrl+K for symbol hover)";
                 return;
             case "set":
-                _message = $"set: '{arg}' (not yet wired)";
+                HandleSet(arg);
                 return;
             case "mode":
                 if (arg == "edit") { EnterEditMode(); return; }
@@ -320,6 +343,38 @@ internal sealed partial class TomeApp
             case "workspace":
             case "ws":
                 HandleWorkspaceVerb(arg);
+                return;
+            case "sub":
+            case "substitute":
+                SubstituteCommand(arg);
+                return;
+            case "grep":
+            case "rg":
+                GrepCommand(arg);
+                return;
+            case "find":
+            case "f":
+                FindCommand(arg);
+                return;
+            case "carets":
+            case "cursors":
+                CaretsCommand(arg);
+                return;
+            case "repl":
+                HandleReplVerb(arg);
+                return;
+            case "fmt":
+            case "format":
+                FormatCurrentBuffer();
+                return;
+            case "files":
+            case "p":
+            case "fuzzy":
+                OpenFuzzyPicker();
+                return;
+            case "reload":
+            case "e!":
+                ReloadFromDisk(silent: false);
                 return;
             default:
                 // Unknown editor verb → fall through to the shell bridge.
@@ -364,6 +419,108 @@ internal sealed partial class TomeApp
         _buffer.ClearSelection();
         _buffer.MoveCursor(new TextLocation(li, ci));
         _message = $"jumped to {li + 1}:{ci + 1}";
+    }
+
+    // ─── Embedded REPL pane ──────────────────────────────────────────────
+
+    private void HandleReplVerb(string arg)
+    {
+        var sub = string.IsNullOrEmpty(arg) ? "toggle" : arg.Trim();
+        var cwd = !string.IsNullOrEmpty(Current.FilePath)
+            ? Path.GetDirectoryName(Path.GetFullPath(Current.FilePath))
+            : Environment.CurrentDirectory;
+        switch (sub)
+        {
+            case "open":
+                _repl.Open(cwd);
+                _focusRepl = true;
+                _message = "-- REPL --";
+                return;
+            case "close":
+            case "hide":
+                _repl.Close();
+                _focusRepl = false;
+                _message = "repl closed";
+                return;
+            case "toggle":
+                _repl.Toggle(cwd);
+                _focusRepl = _repl.Visible;
+                _message = _repl.Visible ? "-- REPL --" : "repl closed";
+                return;
+            case "focus":
+                if (!_repl.Visible) _repl.Open(cwd);
+                _focusRepl = true;
+                _message = "-- REPL --";
+                return;
+            default:
+                // ":repl <N>" — set pane height to N rows.
+                if (int.TryParse(sub, out var h) && h >= 4)
+                {
+                    _repl.Height = h;
+                    if (!_repl.Visible) _repl.Open(cwd);
+                    _message = $"repl height = {h}";
+                    return;
+                }
+                _message = "repl: open | close | toggle | focus | <rows>";
+                return;
+        }
+    }
+
+    // ─── Formatter dispatch ──────────────────────────────────────────────
+
+    private void HandleSet(string arg)
+    {
+        var parts = arg.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length == 0) { _message = "set: <option> [value]"; return; }
+        var name = parts[0].ToLowerInvariant();
+        var value = parts.Length > 1 ? parts[1].Trim() : string.Empty;
+
+        switch (name)
+        {
+            case "format-on-save":
+            case "fmt-on-save":
+                _formatOnSave = ParseBool(value, _formatOnSave);
+                _message = $"format-on-save = {(_formatOnSave ? "on" : "off")}";
+                return;
+            default:
+                _message = $"set: unknown option '{name}'";
+                return;
+        }
+    }
+
+    private static bool ParseBool(string s, bool fallback) => s.ToLowerInvariant() switch
+    {
+        "on" or "true" or "yes" or "1" => true,
+        "off" or "false" or "no" or "0" => false,
+        _ => fallback,
+    };
+
+    private void FormatCurrentBuffer()
+    {
+        var path = Current.FilePath;
+        if (!Formatter.HasFormatterFor(path))
+        {
+            var ext = string.IsNullOrEmpty(path) ? "(untitled)" : Path.GetExtension(path);
+            _message = $"fmt: no formatter for {ext}";
+            return;
+        }
+        var original = _buffer.GetText();
+        var result = Formatter.Format(path, original);
+        if (!result.Ok)
+        {
+            _message = result.Message;
+            return;
+        }
+        if (string.Equals(result.Text, original, StringComparison.Ordinal))
+        {
+            _message = $"{result.Message} (no changes)";
+            return;
+        }
+        // Preserve cursor when possible; ReplaceAll keeps undo history intact.
+        var savedCursor = _buffer.Cursor;
+        _buffer.ReplaceAll(result.Text);
+        _buffer.MoveCursor(savedCursor);
+        _message = result.Message;
     }
 
     // ─── Shell bridge → *Output* tab ─────────────────────────────────────
