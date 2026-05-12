@@ -43,6 +43,7 @@ docs/spec/ToastScript.pdf
 !docs/ROADMAP.md
 !docs/RUNTIME_NAMESPACES.md
 !docs/TUI_ARCHITECTURE.md
+!docs/TOME.md
 
 # Scripts
 scripts/*
