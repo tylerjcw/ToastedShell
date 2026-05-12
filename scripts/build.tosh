@@ -450,6 +450,10 @@ func group_filter_pattern(group: string) -> string? {
     }
 }
 
+subcommand edit {
+    tome /home/komrad/projects/tosh/ToSh.tome
+}
+
 ## @summary Inspect or update the persisted version state.
 ## @remarks
 ##   Reads `.tosh-publish-state`, optionally rewrites it, and keeps
