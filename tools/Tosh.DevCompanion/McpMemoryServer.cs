@@ -10,11 +10,25 @@ namespace Tosh.DevCompanion;
 /// </summary>
 public sealed class McpMemoryServer(IMemoryStore store)
 {
-    private static readonly JsonSerializerOptions JsonOptions = new()
+    // JSON-RPC / MCP protocol fields are camelCase by spec (inputSchema,
+    // protocolVersion, serverInfo, isError, …). The envelope MUST use these
+    // names verbatim or clients silently drop the schema and fail to forward
+    // arguments to tool calls.
+    private static readonly JsonSerializerOptions EnvelopeOptions = new()
     {
-        PropertyNamingPolicy        = JsonNamingPolicy.SnakeCaseLower,
-        DefaultIgnoreCondition      = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
-        WriteIndented               = false
+        PropertyNamingPolicy   = JsonNamingPolicy.CamelCase,
+        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
+        WriteIndented          = false
+    };
+
+    // Tool result payloads (the JSON nested inside `content[].text`) use
+    // snake_case so callers can pattern-match on stable, language-agnostic
+    // keys (created_at, access_count, relevance_score, …).
+    private static readonly JsonSerializerOptions PayloadOptions = new()
+    {
+        PropertyNamingPolicy   = JsonNamingPolicy.SnakeCaseLower,
+        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
+        WriteIndented          = false
     };
 
     private readonly SemaphoreSlim _writeLock = new(1, 1);
@@ -208,7 +222,7 @@ public sealed class McpMemoryServer(IMemoryStore store)
         };
 
         if (result is not null)
-            response["result"] = JsonSerializer.SerializeToNode(result, JsonOptions);
+            response["result"] = JsonSerializer.SerializeToNode(result, EnvelopeOptions);
 
         var bytes = System.Text.Encoding.UTF8.GetBytes(response.ToJsonString() + "\n");
         await _writeLock.WaitAsync(ct);
@@ -231,7 +245,7 @@ public sealed class McpMemoryServer(IMemoryStore store)
     }
 
     private static object OkContent(object data) =>
-        new { content = new[] { new { type = "text", text = JsonSerializer.Serialize(data, JsonOptions) } } };
+        new { content = new[] { new { type = "text", text = JsonSerializer.Serialize(data, PayloadOptions) } } };
 
     private static object ErrorContent(string message) =>
         new { content = new[] { new { type = "text", text = $"Error: {message}" } }, isError = true };

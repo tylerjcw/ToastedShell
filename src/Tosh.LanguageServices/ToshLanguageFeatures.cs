@@ -134,7 +134,49 @@ public sealed class ToshLanguageFeatures
         var parseResult = ToshParser.Parse(text, sourceName);
         var map = new TextCoordinateMap(parseResult.SourceText);
 
-        return parseResult.Diagnostics
+        // Collect parse diagnostics
+        var diagnostics = new List<(string Code, string Title, string? Help, TextSpan Span)>();
+
+        foreach (var d in parseResult.Diagnostics)
+            diagnostics.Add((d.Code, d.Title, d.Help, d.Span));
+
+        // Run binder pass and collect binder diagnostics
+        var binderDiagnostics = Tosh.Language.Binding.Binder.Bind(
+            parseResult,
+            _runtime.Commands,
+            isInteractive: false // Tome is not a REPL, so strict binder
+        );
+        // If a binder diagnostic has null Span, map it to the whole file
+        var fileWideSpan = new Tosh.Runtime.TextSpan(0, parseResult.SourceText.Length);
+        foreach (var d in binderDiagnostics)
+        {
+            var span = d.Span ?? fileWideSpan;
+            diagnostics.Add((d.Code, d.Title, d.Help, span));
+        }
+
+        // Lower + type-check pass: surfaces builtin arity / argument-type
+        // diagnostics (tosh.type.command_arity, tosh.type.command_argument,
+        // …) that the binder alone cannot detect. Wrapped in try/catch
+        // because lowering must never block the editor from showing the
+        // parse + binder diagnostics it already produced.
+        try
+        {
+            var unit = Tosh.Language.Binding.Lowerer.Lower(parseResult, _runtime.Commands);
+            var typeDiagnostics = Tosh.Language.Binding.TypeChecker.Check(unit);
+            foreach (var d in typeDiagnostics)
+            {
+                var span = d.Span ?? fileWideSpan;
+                diagnostics.Add((d.Code, d.Title, d.Help, span));
+            }
+        }
+        catch
+        {
+            // Lowering failures shouldn't suppress the diagnostics
+            // already collected above.
+        }
+
+        // Map all diagnostics to LspDiagnostic
+        return diagnostics
             .Select(diagnostic => new LspDiagnostic(
                 map.ToRange(diagnostic.Span.Start, diagnostic.Span.End),
                 Severity: 1,
@@ -478,37 +520,37 @@ public sealed class ToshLanguageFeatures
             switch (diag.Code)
             {
                 case "tosh.parser.variable_references_require_dollar":
-                {
-                    var insertAt = new LspRange(diag.Range.Start, diag.Range.Start);
-                    var edit = new LspWorkspaceEdit(
-                        new Dictionary<string, IReadOnlyList<LspTextEdit>>(StringComparer.Ordinal)
-                        {
-                            [sourceName] = [new LspTextEdit(insertAt, "$")]
-                        });
-                    actions.Add(new LspCodeAction(
-                        Title: "Add '$' prefix",
-                        Kind: "quickfix",
-                        Diagnostics: [diag],
-                        Edit: edit));
-                    break;
-                }
+                    {
+                        var insertAt = new LspRange(diag.Range.Start, diag.Range.Start);
+                        var edit = new LspWorkspaceEdit(
+                            new Dictionary<string, IReadOnlyList<LspTextEdit>>(StringComparer.Ordinal)
+                            {
+                                [sourceName] = [new LspTextEdit(insertAt, "$")]
+                            });
+                        actions.Add(new LspCodeAction(
+                            Title: "Add '$' prefix",
+                            Kind: "quickfix",
+                            Diagnostics: [diag],
+                            Edit: edit));
+                        break;
+                    }
 
                 case "tosh.parser.missing_statement_separator":
-                {
-                    // Insert a semicolon immediately before the offending token
-                    var insertAt = new LspRange(diag.Range.Start, diag.Range.Start);
-                    var edit = new LspWorkspaceEdit(
-                        new Dictionary<string, IReadOnlyList<LspTextEdit>>(StringComparer.Ordinal)
-                        {
-                            [sourceName] = [new LspTextEdit(insertAt, ";\n")]
-                        });
-                    actions.Add(new LspCodeAction(
-                        Title: "Insert ';' separator",
-                        Kind: "quickfix",
-                        Diagnostics: [diag],
-                        Edit: edit));
-                    break;
-                }
+                    {
+                        // Insert a semicolon immediately before the offending token
+                        var insertAt = new LspRange(diag.Range.Start, diag.Range.Start);
+                        var edit = new LspWorkspaceEdit(
+                            new Dictionary<string, IReadOnlyList<LspTextEdit>>(StringComparer.Ordinal)
+                            {
+                                [sourceName] = [new LspTextEdit(insertAt, ";\n")]
+                            });
+                        actions.Add(new LspCodeAction(
+                            Title: "Insert ';' separator",
+                            Kind: "quickfix",
+                            Diagnostics: [diag],
+                            Edit: edit));
+                        break;
+                    }
             }
         }
         return actions;

@@ -21,7 +21,7 @@ ProjectAssetsFile=<PATH>obj/project.assets.json
 RootNamespace=Tosh.Benchmarks
 RunAnalyzers=
 RunAnalyzersDuringLiveAnalysis=
-SolutionPath=*Undefined*
+SolutionPath=<PATH>../../Tosh.slnx
 TargetFrameworkIdentifier=.NETCoreApp
 TargetPath=<PATH>bin/Debug/net10.0/Tosh.Benchmarks.dll
 TargetRefPath=<PATH>obj/Debug/net10.0/ref/Tosh.Benchmarks.dll
@@ -65,6 +65,7 @@ Program.cs
 
 [metadataReferences]
 ../../src/
+ Tosh.Compiler.IR/obj/Debug/net10.0/ref/Tosh.Compiler.IR.dll
  Tosh.Language/obj/Debug/net10.0/ref/Tosh.Language.dll
  Tosh.Runtime/obj/Debug/net10.0/ref/Tosh.Runtime.dll
  Tosh.Stdlib/obj/Debug/net10.0/ref/Tosh.Stdlib.dll

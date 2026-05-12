@@ -21,7 +21,7 @@ ProjectAssetsFile=<PATH>obj/project.assets.json
 RootNamespace=Tosh.Tests
 RunAnalyzers=
 RunAnalyzersDuringLiveAnalysis=
-SolutionPath=*Undefined*
+SolutionPath=<PATH>../../Tosh.slnx
 TargetFrameworkIdentifier=.NETCoreApp
 TargetPath=<PATH>bin/Debug/net10.0/Tosh.Tests.dll
 TargetRefPath=<PATH>obj/Debug/net10.0/ref/Tosh.Tests.dll
@@ -162,6 +162,7 @@ _HoverProbe.cs
 [metadataReferences]
 ../../src/
  Tosh.Cli/obj/Debug/net10.0/ref/Tosh.Cli.dll
+ Tosh.Compiler.IR/obj/Debug/net10.0/ref/Tosh.Compiler.IR.dll
  Tosh.Compiler.Runtime/obj/Debug/net10.0/ref/Tosh.Compiler.Runtime.dll
  Tosh.Compiler/obj/Debug/net10.0/ref/Tosh.Compiler.dll
  Tosh.Language/obj/Debug/net10.0/ref/Tosh.Language.dll

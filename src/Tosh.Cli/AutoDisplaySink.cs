@@ -48,7 +48,11 @@ internal sealed class AutoDisplaySink : IDisplaySink
         }
 
         // Still buffering — check if the gap since the last value is large enough to promote.
-        if (_canStream && gap >= StreamingThreshold)
+        // The first emit is always buffered: its "gap" measures time since the sink was
+        // constructed (i.e. the command's startup latency), not the cadence between rows.
+        // Promoting on a slow first value would force single-record results (e.g. `headset
+        // connect`) into a wide horizontal table instead of the vertical record layout.
+        if (_canStream && _buffer.Count > 0 && gap >= StreamingThreshold)
         {
             _mode = Mode.Streaming;
             _streamingSink = new StreamingTableSink(_runtime);

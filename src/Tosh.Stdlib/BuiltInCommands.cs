@@ -39,6 +39,7 @@ public static class BuiltInCommands
         commands.Register(new ExitCommand());
         commands.RegisterAlias("logout", "exit");
         commands.Register(new ExecCommand());
+        commands.Register(new EditCommand());
         commands.Register(new UmaskCommand());
         commands.Register(new UlimitCommand());
         commands.Register(new ClearCommand());
@@ -55,6 +56,7 @@ public static class BuiltInCommands
         commands.Register(new HushCommand());
         commands.Register(new ReadLineCommand());
         commands.Register(new TuiCommand());
+        commands.Register(new PromptCommand());
         commands.Register(new PromptTimeCommand());
         commands.Register(new PromptDirCommand());
         commands.Register(new PromptGitCommand());

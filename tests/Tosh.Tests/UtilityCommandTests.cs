@@ -187,6 +187,62 @@ public sealed class UtilityCommandTests
     }
 
     [Fact]
+    public async Task Prompt_dispatcher_matches_legacy_per_segment_commands()
+    {
+        // The consolidated `prompt <segment>` form must produce identical
+        // output to the legacy `prompt-<segment>` form for every segment.
+        var engine = new ToshEngine(ToshRuntime.CreateDefault()) { IsInteractiveSession = true };
+
+        var pairs = new (string Legacy, string Dispatched)[]
+        {
+            ("prompt-userhost",                            "prompt userhost"),
+            ("prompt-history 432 --bold",                  "prompt history 432 --bold"),
+            ("prompt-jobs 3 --bold",                       "prompt jobs 3 --bold"),
+            ("prompt-duration 2.5s --threshold-ms 250",    "prompt duration 2.5s --threshold-ms 250"),
+            ("prompt-exit 7 --bold",                       "prompt exit 7 --bold"),
+            ("prompt-text \" » \" --fg gray",              "prompt text \" » \" --fg gray"),
+            ("prompt-newline",                             "prompt newline"),
+            ("prompt-dir --depth 1",                       "prompt dir --depth 1"),
+        };
+
+        foreach (var (legacy, dispatched) in pairs)
+        {
+            var legacyResults = await engine.ExecuteToListAsync(legacy);
+            var dispatchedResults = await engine.ExecuteToListAsync(dispatched);
+
+            Assert.Equal(legacyResults.Count, dispatchedResults.Count);
+            for (var i = 0; i < legacyResults.Count; i++)
+            {
+                // StyledText is a value type-ish record — equality compares
+                // text + styling, so a direct Equal call covers both axes.
+                Assert.Equal(legacyResults[i], dispatchedResults[i]);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task Prompt_dispatcher_reports_missing_subcommand()
+    {
+        var engine = new ToshEngine(ToshRuntime.CreateDefault()) { IsInteractiveSession = true };
+
+        var ex = await Assert.ThrowsAsync<ToshDiagnosticException>(
+            () => engine.ExecuteToListAsync("prompt"));
+
+        Assert.Contains(ex.Diagnostics, d => d.Code == "tosh.command.missing_subcommand");
+    }
+
+    [Fact]
+    public async Task Prompt_dispatcher_reports_unknown_subcommand()
+    {
+        var engine = new ToshEngine(ToshRuntime.CreateDefault()) { IsInteractiveSession = true };
+
+        var ex = await Assert.ThrowsAsync<ToshDiagnosticException>(
+            () => engine.ExecuteToListAsync("prompt frobnicate"));
+
+        Assert.Contains(ex.Diagnostics, d => d.Code == "tosh.command.unknown_subcommand");
+    }
+
+    [Fact]
     public async Task Guid_command_supports_creation_parsing_formatting_and_info()
     {
         var engine = new ToshEngine(ToshRuntime.CreateDefault());

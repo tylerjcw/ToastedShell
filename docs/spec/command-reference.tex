@@ -6525,6 +6525,45 @@ Wait-for blocks until one or more background jobs finish and returns structured 
 
 \section{Prompt}
 
+\subsection{\texttt{prompt}}
+\label{ref:prompt}
+\icmd{prompt}
+
+\textit{Library: \code{Tosh.Stdlib.Shell}}
+
+\textbf{[shell-only]} — only available inside an interactive TōSh session.
+
+\begin{cmdbox}{prompt}
+Returns a styled prompt segment. Dispatches to the named segment builder (time, dir, git, userhost, history, jobs, duration, exit, text, newline).
+
+\begin{signature}
+prompt <segment> [args ...]
+\end{signature}
+
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+segment & Segment kind. One of: time, dir, git, userhost, history, jobs, duration, exit, text, newline. \\
+args ... & Remaining arguments forwarded to the chosen segment builder (segment-specific options, e.g. --fg, --bg, --bold, --dim, plus per-segment flags). (optional) \\
+\bottomrule
+\end{tabular}
+
+\textbf{Output:} Styled prompt segment(s) produced by the selected segment builder.
+
+\begin{lstlisting}
+prompt time --format HH:mm --dim
+prompt dir --depth 2 --fg cyan
+prompt git --bold
+prompt text " » " --fg gray
+\end{lstlisting}
+
+\begin{notebox}
+Each subcommand corresponds to a legacy `prompt-<segment>` command. The legacy names remain available for now; use `help prompt-<segment>` (e.g. `help prompt-time`) for the per-segment option reference.
+\end{notebox}
+
+\end{cmdbox}
+
 \subsection{\texttt{prompt-dir}}
 \label{ref:prompt-dir}
 \icmd{prompt-dir}
@@ -7244,6 +7283,40 @@ debug ./script.tosh arg1 arg2  # Debug a script passing arguments.
 
 \begin{notebox}
 Use 'n' or 'next' to step, 'c' or 'continue' to resume, 'q' or 'quit' to abort, 'vars' to inspect variables.
+\end{notebox}
+
+\end{cmdbox}
+
+\subsection{\texttt{edit}}
+\label{ref:edit}
+\icmd{edit}
+
+\textit{Library: \code{Tosh.Stdlib.Shell}}
+
+\begin{cmdbox}{edit}
+Open a file in the configured terminal editor.
+
+\begin{signature}
+edit [file]
+\end{signature}
+
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+file & Path of the file to edit. (optional) \\
+\bottomrule
+\end{tabular}
+
+\textbf{Output:} No output — the editor takes over the terminal until it exits.
+
+\begin{lstlisting}
+edit ~/.config/tosh/profile.tosh  # Open a file in the configured editor
+edit notes.md  # Open a local file
+\end{lstlisting}
+
+\begin{notebox}
+Resolves the editor from \$EDITOR, \$VISUAL, then falls back to `tome`, then `vi`, then `nano`. The child process inherits the terminal, so it can run a full-screen UI.
 \end{notebox}
 
 \end{cmdbox}

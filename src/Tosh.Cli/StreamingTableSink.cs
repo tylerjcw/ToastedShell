@@ -24,6 +24,14 @@ internal sealed class StreamingTableSink : IDisplaySink
     private int _renderedRowCount;
     private bool _widthsLocked;
     private bool _isTable;
+    private bool _hasDrawn;
+
+    // The first table-shaped value is held back until either (a) a second row
+    // arrives — at which point we draw the full horizontal table — or
+    // (b) the sink is disposed with no further values, in which case we route
+    // the lone value through RenderMany so it gets the vertical record layout.
+    private object? _pendingFirstValue;
+    private bool _hasPendingFirstValue;
 
     private readonly List<object?> _fallbackValues = [];
 
@@ -62,7 +70,12 @@ internal sealed class StreamingTableSink : IDisplaySink
                     UpdateWidths(cells);
                     _renderedCells.Add(cells);
                     _renderedRowCount = 1;
-                    await DrawInitialTableAsync();
+
+                    // Defer drawing until a second row arrives — if this turns
+                    // out to be the only value, DisposeAsync re-renders it via
+                    // RenderMany so single records get the vertical layout.
+                    _pendingFirstValue = value;
+                    _hasPendingFirstValue = true;
                     return;
                 }
             }
@@ -76,6 +89,17 @@ internal sealed class StreamingTableSink : IDisplaySink
             return;
 
         var newCells = FormatCells(value);
+
+        if (_hasPendingFirstValue)
+        {
+            // Second row has arrived: flush the deferred initial draw, then
+            // fall through to render this row as a normal append.
+            _hasPendingFirstValue = false;
+            _pendingFirstValue = null;
+            await DrawInitialTableAsync();
+            _hasDrawn = true;
+        }
+
         var expansionNeeded = WouldExpand(newCells);
 
         _renderedCells.Add(newCells);
@@ -108,6 +132,23 @@ internal sealed class StreamingTableSink : IDisplaySink
     {
         if (_isTable)
         {
+            // Exactly one table-shaped value was emitted — defer to RenderMany
+            // so it renders as a vertical record instead of a wide single-row
+            // table.
+            if (_hasPendingFirstValue && !_hasDrawn)
+            {
+                try
+                {
+                    var rendered = _runtime.Display.RenderMany([_pendingFirstValue], _options);
+                    await ConsoleDisplay.WriteRenderedAsync(rendered, _runtime);
+                }
+                finally
+                {
+                    _runtime.ClearDisplaySelections();
+                }
+                return;
+            }
+
             _runtime.ClearDisplaySelections();
             return;
         }

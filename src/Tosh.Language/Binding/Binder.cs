@@ -27,6 +27,20 @@ public static class Binder
     private const int ShortNameMaxLength = 4;
     private const int MaxSuggestions = 3;
 
+    // Language keywords that look like bare command heads. Suggestion pool
+    // expansion lets typos such as `rquire` map to `require`, even though
+    // `require` is a parser keyword and never appears in ShellCommandRegistry.
+    private static readonly string[] KeywordSuggestionPool = new[]
+    {
+        "require", "using", "import", "export", "var", "const",
+        "func", "class", "interface", "trait", "module", "enum",
+        "record", "struct", "union", "rune", "event",
+        "if", "else", "for", "while", "until", "return", "yield",
+        "throw", "try", "catch", "finally", "switch", "case", "match",
+        "default", "break", "continue", "defer", "new", "nameof",
+        "alloc", "bind", "global",
+    };
+
     /// <summary>
     /// Binds every <see cref="CommandSyntax"/> reachable from
     /// <paramref name="parseResult"/> against <paramref name="commandRegistry"/>
@@ -520,6 +534,14 @@ public static class Binder
             if (Math.Abs(candidate.Length - name.Length) > threshold) continue;
             var distance = Levenshtein(name, candidate);
             if (distance <= threshold) scored.Add((candidate, distance));
+        }
+
+        foreach (var keyword in KeywordSuggestionPool)
+        {
+            if (Math.Abs(keyword.Length - name.Length) > threshold) continue;
+            if (string.Equals(keyword, name, StringComparison.Ordinal)) continue;
+            var distance = Levenshtein(name, keyword);
+            if (distance <= threshold) scored.Add((keyword, distance));
         }
 
         return scored

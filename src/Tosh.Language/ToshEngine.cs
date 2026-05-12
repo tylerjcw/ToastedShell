@@ -1906,65 +1906,65 @@ public sealed partial class ToshEngine : IShellEvaluator
         switch (requirement.Kind)
         {
             case RequireTargetKind.Script:
-            {
-                if (!_requiredScripts.TryGetValue(requirement.CacheKey, out var artifact))
                 {
-                    if (!_currentlyRequiring.Add(requirement.CacheKey))
+                    if (!_requiredScripts.TryGetValue(requirement.CacheKey, out var artifact))
                     {
-                        throw new InvalidOperationException(
-                            $"Circular require detected: '{requirement.CacheKey}' is already being loaded.");
+                        if (!_currentlyRequiring.Add(requirement.CacheKey))
+                        {
+                            throw new InvalidOperationException(
+                                $"Circular require detected: '{requirement.CacheKey}' is already being loaded.");
+                        }
+
+                        try
+                        {
+                            var moduleSource = File.ReadAllText(requirement.ResolvedPath);
+                            artifact = ExecuteRequiredScriptAsync(moduleSource, requirement.ResolvedPath, CancellationToken.None)
+                                .GetAwaiter().GetResult();
+                            _requiredScripts[requirement.CacheKey] = artifact;
+                        }
+                        finally
+                        {
+                            _currentlyRequiring.Remove(requirement.CacheKey);
+                        }
                     }
 
-                    try
-                    {
-                        var moduleSource = File.ReadAllText(requirement.ResolvedPath);
-                        artifact = ExecuteRequiredScriptAsync(moduleSource, requirement.ResolvedPath, CancellationToken.None)
-                            .GetAwaiter().GetResult();
-                        _requiredScripts[requirement.CacheKey] = artifact;
-                    }
-                    finally
-                    {
-                        _currentlyRequiring.Remove(requirement.CacheKey);
-                    }
+                    ImportRequiredArtifact(artifact, importedNames, importedAliases);
+                    break;
                 }
-
-                ImportRequiredArtifact(artifact, importedNames, importedAliases);
-                break;
-            }
 
             case RequireTargetKind.Assembly:
-            {
-                if (importedNames.Length > 0)
                 {
-                    throw new InvalidOperationException("Selective require imports are only supported for .tosh files.");
-                }
+                    if (importedNames.Length > 0)
+                    {
+                        throw new InvalidOperationException("Selective require imports are only supported for .tosh files.");
+                    }
 
-                if (!Runtime.LoadedModules.Add(requirement.CacheKey))
-                {
+                    if (!Runtime.LoadedModules.Add(requirement.CacheKey))
+                    {
+                        break;
+                    }
+
+                    AssemblyLoadContext.Default.LoadFromAssemblyPath(requirement.ResolvedPath);
                     break;
                 }
-
-                AssemblyLoadContext.Default.LoadFromAssemblyPath(requirement.ResolvedPath);
-                break;
-            }
 
             case RequireTargetKind.Project:
-            {
-                if (importedNames.Length > 0)
                 {
-                    throw new InvalidOperationException("Selective require imports are only supported for .tosh files.");
-                }
+                    if (importedNames.Length > 0)
+                    {
+                        throw new InvalidOperationException("Selective require imports are only supported for .tosh files.");
+                    }
 
-                if (!Runtime.LoadedModules.Add(requirement.CacheKey))
-                {
+                    if (!Runtime.LoadedModules.Add(requirement.CacheKey))
+                    {
+                        break;
+                    }
+
+                    var assemblyPath = BuildProjectAndResolveAssemblyPathAsync(requirement.ResolvedPath, CancellationToken.None)
+                        .GetAwaiter().GetResult();
+                    AssemblyLoadContext.Default.LoadFromAssemblyPath(assemblyPath);
                     break;
                 }
-
-                var assemblyPath = BuildProjectAndResolveAssemblyPathAsync(requirement.ResolvedPath, CancellationToken.None)
-                    .GetAwaiter().GetResult();
-                AssemblyLoadContext.Default.LoadFromAssemblyPath(assemblyPath);
-                break;
-            }
 
             default:
                 throw new InvalidOperationException($"Unsupported require target kind '{requirement.Kind}'.");
@@ -10216,7 +10216,16 @@ public sealed partial class ToshEngine : IShellEvaluator
             }
         }
 
-        var initialInput = AsyncEnumerableExtensions.FromEnumerable(inputItems);
+        // Only seed the function body with an "initial input" enumerable when
+        // the caller actually piped data in (or the call site is inside a
+        // pipeline). Otherwise EvaluatePipelineAsync would treat every first
+        // statement in the body as pipelined (because initialInput != null),
+        // which forces external commands into RedirectStandardInput=true mode
+        // and breaks interactive children like `sudo pacman -Syu` that need a
+        // real TTY for password / confirmation prompts.
+        IAsyncEnumerable<object?>? initialInput = (inputItems.Count > 0 || context.IsPipelined)
+            ? AsyncEnumerableExtensions.FromEnumerable(inputItems)
+            : null;
         var firstCommandArguments = definition.IsCommandWrapper && definition.Parameters.Count == 0
             ? context.Arguments
             : null;
@@ -12046,12 +12055,12 @@ public sealed partial class ToshEngine : IShellEvaluator
 
         var title = TryGetUserErrorDiagnosticString(userErrorInstance, "DiagnosticTitle", "Message", "Title")
             ?? (value switch
-        {
-            null => "An error was thrown.",
-            ICommandResult result => result.Message,
-            Exception exception => exception.Message,
-            _ => Runtime.Formatter.Format(value),
-        });
+            {
+                null => "An error was thrown.",
+                ICommandResult result => result.Message,
+                Exception exception => exception.Message,
+                _ => Runtime.Formatter.Format(value),
+            });
 
         // For ToshError-derived types, surface the user's class name as
         // the diagnostic code so the renderer's tail tag reads
@@ -12067,26 +12076,26 @@ public sealed partial class ToshEngine : IShellEvaluator
         //     without a user type) → generic `tosh.runtime.throw`.
         var code = TryGetUserErrorDiagnosticString(userErrorInstance, "Code", "DiagnosticCode")
             ?? (value switch
-        {
-            ToshError tosh when tosh.Data["tosh.user.type"] is string userType
-                => userType,
-            ToshError tosh when tosh.GetType() != typeof(ToshError)
-                => tosh.GetType().FullName ?? tosh.GetType().Name,
-            ToshClassInstance instance when DefinitionExtendsException(instance.Definition)
-                => instance.Definition.Name,
-            ToshError => "tosh.runtime.throw",
-            Exception ex => ex.GetType().FullName ?? ex.GetType().Name,
-            _ => "tosh.runtime.throw",
-        });
+            {
+                ToshError tosh when tosh.Data["tosh.user.type"] is string userType
+                    => userType,
+                ToshError tosh when tosh.GetType() != typeof(ToshError)
+                    => tosh.GetType().FullName ?? tosh.GetType().Name,
+                ToshClassInstance instance when DefinitionExtendsException(instance.Definition)
+                    => instance.Definition.Name,
+                ToshError => "tosh.runtime.throw",
+                Exception ex => ex.GetType().FullName ?? ex.GetType().Name,
+                _ => "tosh.runtime.throw",
+            });
 
         var label = TryGetUserErrorDiagnosticString(userErrorInstance, "Label")
             ?? (value switch
-        {
-            Exception => "an error escaped here",
-            ToshClassInstance instance when DefinitionExtendsException(instance.Definition)
-                => "an error escaped here",
-            _ => "an unhandled value was thrown here",
-        });
+            {
+                Exception => "an error escaped here",
+                ToshClassInstance instance when DefinitionExtendsException(instance.Definition)
+                    => "an error escaped here",
+                _ => "an unhandled value was thrown here",
+            });
         var help = TryGetUserErrorDiagnosticString(userErrorInstance, "Help", "Tip", "Hint");
         var footerInfo = TryGetUserErrorDiagnosticString(userErrorInstance, "Info", "Information", "Context", "Details");
 
