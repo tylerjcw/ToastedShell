@@ -33,59 +33,59 @@ static async Task<int> RunCliAsync(string[] args, IMemoryStore store)
     var json = new System.Text.Json.JsonSerializerOptions
     {
         PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.SnakeCaseLower,
-        WriteIndented        = true
+        WriteIndented = true
     };
 
-    var cmd  = args[0];
+    var cmd = args[0];
     var rest = args[1..];
 
     switch (cmd)
     {
         case "recall":
-        {
-            var query = string.Join(' ', GetPositional(rest));
-            if (string.IsNullOrWhiteSpace(query)) { Console.Error.WriteLine("Usage: recall <query>"); return 1; }
-            var limitStr = GetFlag(rest, "--limit");
-            var limit    = limitStr is not null && int.TryParse(limitStr, out var l) ? l : 20;
-            var category = GetFlag(rest, "--category");
-            var scope    = GetFlag(rest, "--scope") ?? "all";
-            var result   = await store.RecallAsync(new RecallRequest(query, Limit: limit, Category: category, Scope: scope));
-            Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(result, json));
-            return 0;
-        }
+            {
+                var query = string.Join(' ', GetPositional(rest));
+                if (string.IsNullOrWhiteSpace(query)) { Console.Error.WriteLine("Usage: recall <query>"); return 1; }
+                var limitStr = GetFlag(rest, "--limit");
+                var limit = limitStr is not null && int.TryParse(limitStr, out var l) ? l : 20;
+                var category = GetFlag(rest, "--category");
+                var scope = GetFlag(rest, "--scope") ?? "all";
+                var result = await store.RecallAsync(new RecallRequest(query, Limit: limit, Category: category, Scope: scope));
+                Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(result, json));
+                return 0;
+            }
         case "list":
-        {
-            var category = GetFlag(rest, "--category");
-            var scope    = GetFlag(rest, "--scope") ?? "all";
-            var limitStr = GetFlag(rest, "--limit");
-            var limit    = limitStr is not null && int.TryParse(limitStr, out var l) ? l : 50;
-            var entries  = await store.ListAsync(new ListRequest(Category: category, Scope: scope, IncludeContent: HasFlag(rest, "--full"), Limit: limit));
-            var wrapped  = new { total = entries.Count, memories = entries };
-            Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(wrapped, json));
-            return 0;
-        }
+            {
+                var category = GetFlag(rest, "--category");
+                var scope = GetFlag(rest, "--scope") ?? "all";
+                var limitStr = GetFlag(rest, "--limit");
+                var limit = limitStr is not null && int.TryParse(limitStr, out var l) ? l : 50;
+                var entries = await store.ListAsync(new ListRequest(Category: category, Scope: scope, IncludeContent: HasFlag(rest, "--full"), Limit: limit));
+                var wrapped = new { total = entries.Count, memories = entries };
+                Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(wrapped, json));
+                return 0;
+            }
         case "store":
-        {
-            var content    = GetFlag(rest, "--content")    ?? string.Join(' ', rest.Where(a => !a.StartsWith("--")));
-            var summary    = GetFlag(rest, "--summary")    ?? content[..Math.Min(content.Length, 100)];
-            var category   = GetFlag(rest, "--category")   ?? "note";
-            var tags       = (GetFlag(rest, "--tags") ?? string.Empty).Split(',', StringSplitOptions.RemoveEmptyEntries);
-            var visibility = GetFlag(rest, "--visibility") ?? "private";
-            var scope      = GetFlag(rest, "--scope")      ?? "project";
+            {
+                var content = GetFlag(rest, "--content") ?? string.Join(' ', rest.Where(a => !a.StartsWith("--")));
+                var summary = GetFlag(rest, "--summary") ?? content[..Math.Min(content.Length, 100)];
+                var category = GetFlag(rest, "--category") ?? "note";
+                var tags = (GetFlag(rest, "--tags") ?? string.Empty).Split(',', StringSplitOptions.RemoveEmptyEntries);
+                var visibility = GetFlag(rest, "--visibility") ?? "private";
+                var scope = GetFlag(rest, "--scope") ?? "project";
 
-            var entry = await store.StoreAsync(new StoreRequest(
-                Content: content, Summary: summary, Category: category,
-                Source: "user", Tags: tags, Visibility: visibility, Scope: scope));
-            Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(entry, json));
-            return 0;
-        }
+                var entry = await store.StoreAsync(new StoreRequest(
+                    Content: content, Summary: summary, Category: category,
+                    Source: "user", Tags: tags, Visibility: visibility, Scope: scope));
+                Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(entry.Entry, json));
+                return 0;
+            }
         case "forget":
-        {
-            if (rest.Length == 0) { Console.Error.WriteLine("Usage: forget <id> [--confirm]"); return 1; }
-            var deleted = await store.ForgetAsync(new ForgetRequest(rest[0], Confirm: HasFlag(rest, "--confirm")));
-            Console.WriteLine(deleted ? "deleted" : "not found");
-            return 0;
-        }
+            {
+                if (rest.Length == 0) { Console.Error.WriteLine("Usage: forget <id> [--confirm]"); return 1; }
+                var deleted = await store.ForgetAsync(new ForgetRequest(rest[0], Confirm: HasFlag(rest, "--confirm")));
+                Console.WriteLine(deleted ? "deleted" : "not found");
+                return 0;
+            }
         default:
             Console.Error.WriteLine($"Unknown command '{cmd}'. Use --mcp, recall, list, store, or forget.");
             return 1;
