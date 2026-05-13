@@ -197,7 +197,8 @@ public sealed record CommandMetadata(
     string? Stdlib = null,
     bool IsShellOnly = false,
     string? ShellOnlyReason = null,
-    TypedTypeRef? OutputTypeInfo = null);
+    TypedTypeRef? OutputTypeInfo = null,
+    string? Streaming = null);
 
 public sealed record CommandCanonicalExampleMetadata(
     string Input,

@@ -22,6 +22,9 @@ public sealed class ToshConfig : IResettableShellConfig
         Startup = new ToshStartupConfig(startupRootDirectory);
         Tty = new ToshTtyConfig();
         Diagnostics = new ToshDiagnosticsConfig();
+        Renderers = new ToshRenderersConfig();
+        Schemas = new ToshSchemasConfig();
+        External = new ToshExternalConfig();
     }
 
     public ToshThemeConfig Theme { get; }
@@ -42,6 +45,12 @@ public sealed class ToshConfig : IResettableShellConfig
 
     public ToshDiagnosticsConfig Diagnostics { get; }
 
+    public ToshRenderersConfig Renderers { get; }
+
+    public ToshSchemasConfig Schemas { get; }
+
+    public ToshExternalConfig External { get; }
+
     public void Reset()
     {
         Theme.Reset();
@@ -53,6 +62,9 @@ public sealed class ToshConfig : IResettableShellConfig
         Startup.Reset();
         Tty.Reset();
         Diagnostics.Reset();
+        Renderers.Reset();
+        Schemas.Reset();
+        External.Reset();
     }
 }
 
@@ -554,6 +566,9 @@ public sealed class ToshTableThemeConfig : IResettableShellConfig
         MatrixDepth2 = new ToshTextStyleConfig(foreground: "bright-blue");
         MatrixDepth3 = new ToshTextStyleConfig(foreground: "green");
         MatrixDepth4 = new ToshTextStyleConfig(foreground: "bright-yellow");
+        SuccessGlyph = new ToshTextStyleConfig(foreground: "green", bold: true);
+        WarningGlyph = new ToshTextStyleConfig(foreground: "yellow", bold: true);
+        ErrorGlyph = new ToshTextStyleConfig(foreground: "red", bold: true);
     }
 
     public ToshTableBoxStyle BoxStyle { get; set; } = ToshTableBoxStyle.Rounded;
@@ -578,6 +593,12 @@ public sealed class ToshTableThemeConfig : IResettableShellConfig
 
     public ToshTextStyleConfig MatrixDepth4 { get; }
 
+    public ToshTextStyleConfig SuccessGlyph { get; }
+
+    public ToshTextStyleConfig WarningGlyph { get; }
+
+    public ToshTextStyleConfig ErrorGlyph { get; }
+
     public void Reset()
     {
         BoxStyle = _defaultBoxStyle;
@@ -591,6 +612,9 @@ public sealed class ToshTableThemeConfig : IResettableShellConfig
         MatrixDepth2.Reset();
         MatrixDepth3.Reset();
         MatrixDepth4.Reset();
+        SuccessGlyph.Reset();
+        WarningGlyph.Reset();
+        ErrorGlyph.Reset();
     }
 }
 

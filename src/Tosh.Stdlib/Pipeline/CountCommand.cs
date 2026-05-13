@@ -7,6 +7,7 @@ namespace Tosh.Stdlib.Pipeline;
 [CommandExample("ls | count", Title = "Count files in the current directory")]
 [CommandOutput("An integer representing the total number of pipeline objects.", ClrType = typeof(int))]
 [PipelineInput(AcceptsScalar = true, AcceptsRecord = true, Description = "Consumes the entire pipeline and returns the count.")]
+[CommandStreaming(StreamingBehavior.Eager)]
 public sealed class CountCommand : ShellCommand
 {
     public CountCommand()

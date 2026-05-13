@@ -8,6 +8,7 @@ namespace Tosh.Stdlib.Pipeline;
 [CommandExample("ls | partition { _.Extension == \".cs\" }", Title = "Separate C# files from others")]
 [CommandOutput("A two-element array: [items-where-true, items-where-false].", ClrType = typeof(IAsyncEnumerable<object[]>))]
 [PipelineInput(AcceptsScalar = true, AcceptsRecord = true, Description = "Consumes the pipeline and splits items into two groups by predicate.")]
+[CommandStreaming(StreamingBehavior.Eager)]
 public sealed class PartitionCommand : ShellCommand
 {
     public PartitionCommand()

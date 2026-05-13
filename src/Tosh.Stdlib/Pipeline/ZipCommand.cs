@@ -9,6 +9,7 @@ namespace Tosh.Stdlib.Pipeline;
 [CommandExample("echo 1 2 3 | zip [10 20 30] func(a, b) => ($a + $b)", Title = "Zip with a combiner")]
 [CommandOutput("One result per pair. Without a combiner, yields two-element arrays.")]
 [PipelineInput(AcceptsScalar = true, AcceptsRecord = true, Description = "Merges the pipeline with another sequence pairwise.")]
+[CommandStreaming(StreamingBehavior.Lazy)]
 public sealed class ZipCommand : ShellCommand
 {
     public ZipCommand()

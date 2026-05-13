@@ -8,6 +8,7 @@ namespace Tosh.Stdlib.Pipeline;
 [CommandExample("ls | median .Length", Title = "Median file size")]
 [CommandOutput("The median value of the pipeline. For even-length lists, returns the average of the two middle values.")]
 [PipelineInput(AcceptsScalar = true, AcceptsRecord = true, Description = "Consumes the pipeline and returns the median.")]
+[CommandStreaming(StreamingBehavior.Eager)]
 public sealed class MedianCommand : ShellCommand, ICurrentItemMemberPathCommand
 {
     public MedianCommand()

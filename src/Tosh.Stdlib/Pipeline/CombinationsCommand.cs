@@ -8,6 +8,7 @@ namespace Tosh.Stdlib.Pipeline;
 [CommandExample("echo a b c d | combinations 3", Title = "All 3-element subsets")]
 [CommandOutput("Arrays of k elements from the pipeline in lexicographic order.")]
 [PipelineInput(AcceptsScalar = true, AcceptsRecord = true, Description = "Items to select combinations from.")]
+[CommandStreaming(StreamingBehavior.Eager)]
 public sealed class CombinationsCommand : ShellCommand
 {
     public CombinationsCommand()

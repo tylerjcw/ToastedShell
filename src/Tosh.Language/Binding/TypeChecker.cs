@@ -1096,6 +1096,14 @@ public static class TypeChecker
         var indexType = access.Index.Type;
         if (indexType.IsDynamic) return;
 
+        // Skip the check entirely when the target is dynamic or implements
+        // IShellRecordObject (record-object protocol — supports string keys
+        // even when LookupKind didn't make that explicit, e.g. $foo["bar"]
+        // on an unknown-shape config object).
+        var targetType = access.Target.Type;
+        if (targetType.IsDynamic) return;
+        if (targetType.ClrType is { } tc && typeof(IShellRecordObject).IsAssignableFrom(tc)) return;
+
         var expectsString = access.LookupKind is IndexLookupKind.ByKey;
         var expected = expectsString ? BoundType.FromClr(typeof(string)) : BoundType.FromClr(typeof(int));
         if (!IsAssignable(indexType, expected, out var reason))

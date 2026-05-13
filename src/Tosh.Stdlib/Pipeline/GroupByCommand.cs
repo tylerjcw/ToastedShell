@@ -6,6 +6,7 @@ namespace Tosh.Stdlib.Pipeline;
 [CommandExample("ls | group-by Extension")]
 [CommandExample("ps | group-by func(p) => ($p.Name.Substring(0, 1))")]
 [CommandOutput("Group records of the form { Key, Items } — one per distinct key produced by the projection.", ClrType = typeof(IAsyncEnumerable<GroupingInfo>))]
+[CommandStreaming(StreamingBehavior.Eager)]
 public sealed class GroupByCommand : ShellCommand, ICurrentItemMemberPathCommand
 {
     public GroupByCommand()

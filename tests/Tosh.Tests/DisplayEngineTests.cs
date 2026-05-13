@@ -279,6 +279,133 @@ public sealed class DisplayEngineTests
     }
 
     [Fact]
+    public void Display_engine_hides_tssp_meta_sentinel_and_uses_its_title()
+    {
+        var display = new DisplayEngine(new ObjectFormatter());
+        var meta = ShellRecordUtilities.CreateExpando(new[]
+        {
+            new KeyValuePair<string, object?>("title", "dotnet-host | 10.0.4"),
+        });
+        var row = ShellRecordUtilities.CreateExpando(new[]
+        {
+            new KeyValuePair<string, object?>("Name", "dotnet-host"),
+            new KeyValuePair<string, object?>("Version", "10.0.4"),
+            new KeyValuePair<string, object?>(ShellRecordUtilities.TsspMetaKey, (object?)meta),
+        });
+
+        var text = display.RenderMany(new object?[] { row });
+
+        Assert.DoesNotContain("__tssp_meta", text, StringComparison.Ordinal);
+        Assert.Contains("dotnet-host | 10.0.4", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Display_engine_word_wraps_long_prose_cells()
+    {
+        var display = new DisplayEngine(new ObjectFormatter());
+        var longDescription =
+            "A reasonably long sentence about a package that should soft-wrap across multiple lines instead of being clipped with a single ellipsis.";
+
+        var rows = new object?[]
+        {
+            ShellRecordUtilities.CreateExpando(new[]
+            {
+                new KeyValuePair<string, object?>("Name", "pkg-a"),
+                new KeyValuePair<string, object?>("Description", (object?)longDescription),
+            }),
+            ShellRecordUtilities.CreateExpando(new[]
+            {
+                new KeyValuePair<string, object?>("Name", "pkg-b"),
+                new KeyValuePair<string, object?>("Description", (object?)"short."),
+            }),
+        };
+
+        var text = display.RenderMany(rows);
+        var plain = StyledText.StripAnsi(text);
+        var lines = plain.Split(Environment.NewLine);
+
+        // The long description should wrap (a fragment from the tail must land
+        // on a line that does not also contain the head of the description).
+        Assert.DoesNotContain("…", plain, StringComparison.Ordinal);
+        Assert.Contains(lines, line => line.Contains("A reasonably", StringComparison.Ordinal));
+        Assert.Contains(lines, line => line.Contains("ellipsis", StringComparison.Ordinal)
+                                       && !line.Contains("A reasonably", StringComparison.Ordinal));
+
+        // First wrapped line gets a 4-space indent so the wrapped row stands
+        // out from neighbouring single-line rows.
+        Assert.Contains(lines, line => line.Contains("    A reasonably", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Display_engine_does_not_wrap_cells_containing_nested_box_drawing()
+    {
+        var display = new DisplayEngine(new ObjectFormatter());
+        var nested = "╭─┬─╮" + Environment.NewLine + "│a│b│" + Environment.NewLine + "╰─┴─╯";
+        var rows = new object?[]
+        {
+            ShellRecordUtilities.CreateExpando(new[]
+            {
+                new KeyValuePair<string, object?>("Name", "alpha"),
+                new KeyValuePair<string, object?>("Nested", (object?)nested),
+            }),
+            ShellRecordUtilities.CreateExpando(new[]
+            {
+                new KeyValuePair<string, object?>("Name", "beta"),
+                new KeyValuePair<string, object?>("Nested", (object?)"plain"),
+            }),
+        };
+
+        var text = display.RenderMany(rows);
+        var plain = StyledText.StripAnsi(text);
+
+        Assert.Contains("╭─┬─╮", plain, StringComparison.Ordinal);
+        Assert.Contains("│a│b│", plain, StringComparison.Ordinal);
+        Assert.Contains("╰─┴─╯", plain, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Display_engine_styles_status_glyph_cells_with_ansi_color()
+    {
+        var display = new DisplayEngine(new ObjectFormatter());
+        var rows = new object?[]
+        {
+            ShellRecordUtilities.CreateExpando(new[]
+            {
+                new KeyValuePair<string, object?>("Name", "pkg-a"),
+                new KeyValuePair<string, object?>("Status", (object?)"✓"),
+            }),
+            ShellRecordUtilities.CreateExpando(new[]
+            {
+                new KeyValuePair<string, object?>("Name", "pkg-b"),
+                new KeyValuePair<string, object?>("Status", (object?)"✗"),
+            }),
+            ShellRecordUtilities.CreateExpando(new[]
+            {
+                new KeyValuePair<string, object?>("Name", "pkg-c"),
+                new KeyValuePair<string, object?>("Status", (object?)"⚠"),
+            }),
+            ShellRecordUtilities.CreateExpando(new[]
+            {
+                new KeyValuePair<string, object?>("Name", "pkg-d"),
+                new KeyValuePair<string, object?>("Status", (object?)"✓ done"),
+            }),
+        };
+
+        var text = display.RenderMany(rows);
+
+        // Glyph cells get ANSI; mixed prose like "✓ done" must not.
+        Assert.Contains("\x1b[", text, StringComparison.Ordinal);
+        var plain = StyledText.StripAnsi(text);
+        Assert.Contains("✓ done", plain, StringComparison.Ordinal);
+
+        // Each standalone glyph must appear at least once wrapped in ANSI.
+        // The simplest check: the rendered text contains the glyph adjacent to ESC.
+        Assert.Matches(@"\x1b\[[0-9;]*m\s*✓", text);
+        Assert.Matches(@"\x1b\[[0-9;]*m\s*✗", text);
+        Assert.Matches(@"\x1b\[[0-9;]*m\s*⚠", text);
+    }
+
+    [Fact]
     public void Display_engine_renders_nested_expando_values_inline_in_record_cells()
     {
         var display = new DisplayEngine(new ObjectFormatter());

@@ -15,4 +15,5 @@ public sealed record HelpTopic(
     IReadOnlyList<HelpOptionInfo>? Options = null,
     HelpPipelineInputInfo? PipelineInput = null,
     string? Output = null,
-    IReadOnlyList<HelpExample>? ExampleItems = null);
+    IReadOnlyList<HelpExample>? ExampleItems = null,
+    string? Streaming = null);

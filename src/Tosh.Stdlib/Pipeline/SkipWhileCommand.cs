@@ -6,6 +6,7 @@ namespace Tosh.Stdlib.Pipeline;
 [CommandExample("echo 1 2 3 4 | skip-while { _ < 3 }")]
 [CommandExample("echo 1 2 3 4 | skip-while func(x) => ($x < 3)")]
 [CommandOutput("All input items starting from (and including) the first one for which the predicate returned false.")]
+[CommandStreaming(StreamingBehavior.Lazy)]
 public sealed class SkipWhileCommand : ShellCommand
 {
     public SkipWhileCommand()

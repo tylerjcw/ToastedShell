@@ -8,6 +8,7 @@ namespace Tosh.Stdlib.Pipeline;
 [CommandExample("ls | min .Length", Title = "Find the smallest file by size")]
 [CommandOutput("The minimum value from the pipeline.")]
 [PipelineInput(AcceptsScalar = true, AcceptsRecord = true, Description = "Consumes the pipeline and returns the minimum value.")]
+[CommandStreaming(StreamingBehavior.Eager)]
 public sealed class MinCommand : ShellCommand, ICurrentItemMemberPathCommand
 {
     public MinCommand()

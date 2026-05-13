@@ -8,6 +8,7 @@ namespace Tosh.Stdlib.Pipeline;
 [CommandExample("ls | map { _.Name }", Title = "Transform values with a block")]
 [CommandOutput("Returns one transformed value for each input item.")]
 [PipelineInput(AcceptsScalar = true, AcceptsRecord = true, Description = "Consumes the current pipeline and emits one transformed value per input item.")]
+[CommandStreaming(StreamingBehavior.Lazy)]
 public sealed class MapCommand : ShellCommand
 {
     public MapCommand()

@@ -8,6 +8,7 @@ namespace Tosh.Stdlib.Pipeline;
 [CommandExample("ls | max .Length", Title = "Find the largest file by size")]
 [CommandOutput("The maximum value from the pipeline.")]
 [PipelineInput(AcceptsScalar = true, AcceptsRecord = true, Description = "Consumes the pipeline and returns the maximum value.")]
+[CommandStreaming(StreamingBehavior.Eager)]
 public sealed class MaxCommand : ShellCommand, ICurrentItemMemberPathCommand
 {
     public MaxCommand()

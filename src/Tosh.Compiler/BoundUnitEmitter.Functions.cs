@@ -156,8 +156,34 @@ internal sealed partial class EmitterImpl
     }
 
     /// <summary>
-    /// Pattern-matches type-declaration statements that compiled
-    /// tosh delegates to the engine via
+    /// Maps a TōSh operator symbol used as a method name (e.g. <c>+</c>) to the
+    /// CLR-canonical <c>op_*</c> name (<c>op_Addition</c>, etc.) so cross-language
+    /// consumers can resolve the overload by name. Non-operator names pass
+    /// through unchanged. Note: CLR operators are conventionally static and
+    /// two-arg; TōSh emits these as instance methods with an implicit
+    /// <c>$this</c>, so C# consumers see them as <c>obj.op_Addition(other)</c>
+    /// rather than <c>obj + other</c>. Symbolic dispatch (=~, !~, **, //) has
+    /// no CLR convention and keeps a raw <c>op_</c>-prefixed name.
+    /// </summary>
+    internal static string ToClrOperatorName(string toshMethodName) => toshMethodName switch
+    {
+        "+" => "op_Addition",
+        "-" => "op_Subtraction",
+        "*" => "op_Multiply",
+        "/" => "op_Division",
+        "%" => "op_Modulus",
+        "==" => "op_Equality",
+        "!=" => "op_Inequality",
+        "<" => "op_LessThan",
+        "<=" => "op_LessThanOrEqual",
+        ">" => "op_GreaterThan",
+        ">=" => "op_GreaterThanOrEqual",
+        "**" => "op_ToshPower",
+        "//" => "op_ToshIntegerDivision",
+        "=~" => "op_ToshRegexMatch",
+        "!~" => "op_ToshRegexNotMatch",
+        _ => toshMethodName,
+    };
     /// <see cref="global::Tosh.Compiler.Runtime.ToshHost.RegisterTypeFromSource"/>.
     /// Returns the source span that should be re-evaluated.
     /// </summary>

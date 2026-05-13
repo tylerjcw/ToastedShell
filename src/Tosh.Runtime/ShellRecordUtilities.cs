@@ -24,6 +24,48 @@ public static class ShellRecordUtilities
         return value is IShellRecordObject or IReadOnlyDictionary<string, object?> or IDictionary<string, object?> or IDictionary;
     }
 
+    /// <summary>Reserved key carrying per-record render hints attached by
+    /// the TSSP consumer (e.g. a precomputed title string from a schema's
+    /// <c>title</c> template). Hidden from column inference and standard
+    /// table rendering; consulted by DisplayEngine for single-record
+    /// titling.</summary>
+    public const string TsspMetaKey = "__tssp_meta";
+
+    /// <summary>Returns true when a field key should not be surfaced as a
+    /// column. Currently filters the TSSP meta sentinel.</summary>
+    public static bool IsHiddenField(string key)
+        => string.Equals(key, TsspMetaKey, StringComparison.Ordinal);
+
+    /// <summary>Reads the optional <c>title</c> string from a record's
+    /// TSSP meta sentinel, if present.</summary>
+    public static string? TryGetTsspTitle(object? target)
+    {
+        if (!TryGetValue(target, TsspMetaKey, out var meta) || meta is null) return null;
+        if (!TryGetValue(meta, "title", out var t)) return null;
+        return t as string;
+    }
+
+    /// <summary>Same as <see cref="TryGetFields"/> but filters reserved
+    /// sentinel keys (e.g. <see cref="TsspMetaKey"/>) so column-inference
+    /// callers do not surface them as user-visible columns.</summary>
+    public static bool TryGetVisibleFields(object? target, out IReadOnlyList<KeyValuePair<string, object?>> fields)
+    {
+        if (!TryGetFields(target, out var raw))
+        {
+            fields = raw;
+            return false;
+        }
+
+        if (!raw.Any(f => IsHiddenField(f.Key)))
+        {
+            fields = raw;
+            return true;
+        }
+
+        fields = raw.Where(f => !IsHiddenField(f.Key)).ToArray();
+        return true;
+    }
+
     public static bool TryGetFields(object? target, out IReadOnlyList<KeyValuePair<string, object?>> fields)
     {
         switch (target)

@@ -8,6 +8,7 @@ namespace Tosh.Stdlib.Pipeline;
 [CommandExample("ls | filter { _.Type == file }", Title = "Filter with a block")]
 [CommandOutput("Returns the input items that matched the predicate.")]
 [PipelineInput(AcceptsScalar = true, AcceptsRecord = true, Description = "Consumes the current pipeline and keeps only items whose predicate evaluates to true. Tree-shaped inputs are pruned like `where`.")]
+[CommandStreaming(StreamingBehavior.Lazy)]
 public sealed class FilterCommand : ShellCommand
 {
     public FilterCommand()

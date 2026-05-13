@@ -6,6 +6,7 @@ namespace Tosh.Stdlib.Pipeline;
 [CommandExample("build-project | ignore", Title = "Run for side effects and discard output")]
 [CommandExample("http post https://example.com/hooks --json $payload | ignore", Title = "Suppress response output")]
 [CommandOutput("Emits nothing; drains the input pipeline silently.")]
+[CommandStreaming(StreamingBehavior.Lazy)]
 public sealed class IgnoreCommand : ShellCommand
 {
     public IgnoreCommand()

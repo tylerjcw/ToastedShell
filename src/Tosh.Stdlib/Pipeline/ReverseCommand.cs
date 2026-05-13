@@ -7,6 +7,7 @@ namespace Tosh.Stdlib.Pipeline;
 [CommandExample("ls | sort .Name | reverse", Title = "Reverse a sorted listing")]
 [CommandOutput("All pipeline objects in reversed order.")]
 [PipelineInput(AcceptsScalar = true, AcceptsRecord = true, Description = "Buffers the pipeline then yields items in reverse order.")]
+[CommandStreaming(StreamingBehavior.Eager)]
 public sealed class ReverseCommand : ShellCommand
 {
     public ReverseCommand()

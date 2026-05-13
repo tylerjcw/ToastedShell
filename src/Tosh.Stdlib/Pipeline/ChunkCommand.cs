@@ -8,6 +8,7 @@ namespace Tosh.Stdlib.Pipeline;
 [CommandExample("1..10 | chunk 3 | map { count }", Title = "Chunk then count each group")]
 [CommandOutput("Arrays of up to `size` items. The last chunk may be smaller.", ClrType = typeof(IAsyncEnumerable<object[]>))]
 [PipelineInput(AcceptsScalar = true, AcceptsRecord = true, Description = "Collects pipeline items into fixed-size batches.")]
+[CommandStreaming(StreamingBehavior.Lazy)]
 public sealed class ChunkCommand : ShellCommand
 {
     public ChunkCommand()

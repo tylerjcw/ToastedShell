@@ -8,6 +8,7 @@ namespace Tosh.Stdlib.Pipeline;
 [CommandExample("echo 1 2 3 10 11 12 | group-while func(x, prev) => ($x - $prev <= 1)", Title = "Group runs of nearly consecutive numbers")]
 [CommandOutput("Arrays of consecutive items grouped while the predicate holds.")]
 [PipelineInput(AcceptsScalar = true, AcceptsRecord = true, Description = "Groups consecutive pipeline items while the predicate returns true.")]
+[CommandStreaming(StreamingBehavior.Lazy)]
 public sealed class GroupWhileCommand : ShellCommand
 {
     public GroupWhileCommand()

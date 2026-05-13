@@ -243,6 +243,46 @@ public sealed class CommandAliasAttribute(string canonicalName) : Attribute
 }
 
 /// <summary>
+/// Streaming/throughput contract for a pipeline command. Surfaced in help
+/// topics and metadata exports so users and the compiler can reason about
+/// which builtins materialise the whole input vs. flow row-by-row.
+/// </summary>
+public enum StreamingBehavior
+{
+    /// <summary>
+    /// Yields output as input arrives. Safe to compose on infinite streams.
+    /// Examples: where, map, filter, each, flatmap, skip.
+    /// </summary>
+    Lazy,
+
+    /// <summary>
+    /// Lazy AND stops reading input once its result is satisfied. Composable
+    /// with infinite streams; the upstream producer is cancelled as soon as
+    /// the short-circuit fires. Examples: first, take-while, take-until,
+    /// find-index, quantifier (any/all).
+    /// </summary>
+    ShortCircuit,
+
+    /// <summary>
+    /// Drains the entire input before yielding any output. Not safe on
+    /// unbounded streams. Examples: sort, reverse, group-by, summarize,
+    /// last, count, sum, distinct.
+    /// </summary>
+    Eager,
+}
+
+/// <summary>
+/// Declares the command's streaming behaviour. Used by help, by the
+/// streaming display sink, and by the future compiler/binder to reject
+/// eager commands on lazy-only pipelines.
+/// </summary>
+[AttributeUsage(AttributeTargets.Class, AllowMultiple = false)]
+public sealed class CommandStreamingAttribute(StreamingBehavior behavior) : Attribute
+{
+    public StreamingBehavior Behavior { get; } = behavior;
+}
+
+/// <summary>
 /// Declares a positional argument accepted by the command.
 /// Multiple attributes are allowed and define ordered parameters.
 /// </summary>

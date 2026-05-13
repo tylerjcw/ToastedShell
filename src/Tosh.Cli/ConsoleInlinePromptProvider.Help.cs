@@ -386,6 +386,11 @@ internal sealed partial class ConsoleInlinePromptProvider
             meta += $"  •  {topic.Path}";
         }
 
+        if (!string.IsNullOrWhiteSpace(topic.Streaming))
+        {
+            meta += $"  •  streaming: {topic.Streaming!.ToLowerInvariant()}";
+        }
+
         var notesOrOutput = !string.IsNullOrWhiteSpace(topic.Output)
             ? topic.Output!
             : !string.IsNullOrWhiteSpace(topic.Notes)

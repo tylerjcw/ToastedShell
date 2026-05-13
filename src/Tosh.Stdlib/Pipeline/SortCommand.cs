@@ -14,6 +14,7 @@ namespace Tosh.Stdlib.Pipeline;
 [CommandExample("ps | sort func(p) => ($p.Name.Length)", Title = "Lambda sort key")]
 [CommandOutput("The input pipeline objects in sorted order.")]
 [PipelineInput(AcceptsScalar = true, Description = "Collects all pipeline objects, sorts them, then re-emits.")]
+[CommandStreaming(StreamingBehavior.Eager)]
 public sealed class SortCommand : ShellCommand
 {
     public SortCommand(string name = "sort")

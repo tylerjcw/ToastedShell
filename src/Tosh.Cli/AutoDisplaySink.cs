@@ -18,6 +18,13 @@ internal sealed class AutoDisplaySink : IDisplaySink
 {
     private static readonly TimeSpan StreamingThreshold = TimeSpan.FromMilliseconds(250);
 
+    // Hard cap on rows held in memory before forcing streaming promotion. A
+    // million-row burst from an external pipe would otherwise grow _buffer
+    // without bound. When the cap is hit and the sink can stream, it promotes
+    // immediately regardless of timing; otherwise (output redirected) it
+    // keeps buffering — the user opted into a non-interactive sink.
+    private const int BufferRowCap = 5000;
+
     private readonly ToshRuntime _runtime;
     private readonly bool _renderTuiOutcome;
     private readonly bool _canStream;
@@ -52,7 +59,7 @@ internal sealed class AutoDisplaySink : IDisplaySink
         // constructed (i.e. the command's startup latency), not the cadence between rows.
         // Promoting on a slow first value would force single-record results (e.g. `headset
         // connect`) into a wide horizontal table instead of the vertical record layout.
-        if (_canStream && _buffer.Count > 0 && gap >= StreamingThreshold)
+        if (_canStream && _buffer.Count > 0 && (gap >= StreamingThreshold || _buffer.Count >= BufferRowCap))
         {
             _mode = Mode.Streaming;
             _streamingSink = new StreamingTableSink(_runtime);

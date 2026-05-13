@@ -17,6 +17,7 @@ namespace Tosh.Stdlib.Pipeline;
 [CommandOutput("Default mode: a single string of pipeline items separated by the given separator. Path mode: a single path string.", ClrType = typeof(string))]
 [PipelineInput(AcceptsScalar = true, AcceptsRecord = true, AcceptsList = true, AcceptsTable = true,
     Description = "Consumes every pipeline item, converts it to a string, and joins them. In path mode, piped items become the leading path segments.")]
+[CommandStreaming(StreamingBehavior.Eager)]
 public sealed class JoinCommand : ShellCommand
 {
     public JoinCommand()

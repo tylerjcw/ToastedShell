@@ -9,6 +9,7 @@ namespace Tosh.Stdlib.Pipeline;
 [CommandNote("Collections stay intact until you explicitly expand them with `each` or `flatten`.")]
 [CommandOutput("Returns whatever values the callable or block emits for each input item.")]
 [PipelineInput(AcceptsScalar = true, AcceptsRecord = true, Description = "Consumes the current pipeline and executes the callable or block once per input item.")]
+[CommandStreaming(StreamingBehavior.Lazy)]
 public sealed class EachCommand : ShellCommand
 {
     public EachCommand(string name = "each")

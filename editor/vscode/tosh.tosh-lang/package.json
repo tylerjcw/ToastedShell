@@ -60,6 +60,21 @@
 				"extensions": [
 					".tosh"
 				],
+				"configuration": "./language-configuration-tome.json",
+				"icon": {
+					"light": "./icons/tosh-light.svg",
+					"dark": "./icons/tosh-dark.svg"
+				}
+			},
+			{
+				"id": "tome",
+				"aliases": [
+					"Tome Workspace",
+					"tome"
+				],
+				"extensions": [
+					".tome"
+				],
 				"configuration": "./language-configuration.json",
 				"icon": {
 					"light": "./icons/tosh-light.svg",
@@ -88,12 +103,21 @@
 				"embeddedLanguages": {
 					"source.tosh.embedded": "tosh"
 				}
+			},
+			{
+				"language": "tome",
+				"scopeName": "source.tome",
+				"path": "./syntaxes/tome.tmLanguage.json"
 			}
 		],
 		"snippets": [
 			{
 				"language": "tosh",
 				"path": "./snippets/tosh.code-snippets"
+			},
+			{
+				"language": "tome",
+				"path": "./snippets/tome.code-snippets"
 			}
 		],
 		"terminal": {

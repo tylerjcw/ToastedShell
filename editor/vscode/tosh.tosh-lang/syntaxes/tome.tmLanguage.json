@@ -1,0 +1,97 @@
+{
+    "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+    "name": "Tome Workspace",
+    "scopeName": "source.tome",
+    "patterns": [
+        {
+            "include": "#comment"
+        },
+        {
+            "include": "#section"
+        },
+        {
+            "include": "#keyword"
+        },
+        {
+            "include": "#string"
+        },
+        {
+            "include": "#number"
+        },
+        {
+            "include": "#punctuation"
+        }
+    ],
+    "repository": {
+        "comment": {
+            "patterns": [
+                {
+                    "name": "comment.line.number-sign.tome",
+                    "match": "#.*$"
+                }
+            ]
+        },
+        "section": {
+            "patterns": [
+                {
+                    "name": "entity.name.section.tome",
+                    "match": "^\s*\[([a-zA-Z0-9_-]+)\]"
+                }
+            ]
+        },
+        "keyword": {
+            "patterns": [
+                {
+                    "name": "keyword.control.tome",
+                    "match": "\b(workspace|folder|layout|file|include|exclude|env|var|command|depends|type|name|path|root|settings|open|close|tab|pane|split|horizontal|vertical|group|project|solution|startup|profile|theme|icon|label|title|description|run|args|shell|cwd|before|after|onOpen|onClose|onSave|onBuild|onRun|onTest|onDebug)\b"
+                }
+            ]
+        },
+        "string": {
+            "patterns": [
+                {
+                    "name": "string.quoted.double.tome",
+                    "begin": "\"",
+                    "end": "\""
+                },
+                {
+                    "name": "string.quoted.single.tome",
+                    "begin": "'",
+                    "end": "'"
+                }
+            ]
+        },
+        "number": {
+            "patterns": [
+                {
+                    "name": "constant.numeric.tome",
+                    "match": "\b\d+(?:\.\d+)?\b"
+                }
+            ]
+        },
+        "punctuation": {
+            "patterns": [
+                {
+                    "name": "punctuation.separator.key-value.tome",
+                    "match": ":|="
+                },
+                {
+                    "name": "punctuation.section.brackets.tome",
+                    "match": "[\[\]]"
+                },
+                {
+                    "name": "punctuation.section.braces.tome",
+                    "match": "[{}]"
+                },
+                {
+                    "name": "punctuation.section.parens.tome",
+                    "match": "[()]"
+                },
+                {
+                    "name": "punctuation.comma.tome",
+                    "match": ","
+                }
+            ]
+        }
+    }
+}

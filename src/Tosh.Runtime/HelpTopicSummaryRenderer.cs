@@ -160,10 +160,10 @@ internal static class HelpTopicSummaryRenderer
         }
 
         // ── Pipeline sub-box (Accepts / Output) ──────────────────────────────
-        if (topic.PipelineInput is not null || !string.IsNullOrWhiteSpace(topic.Output))
+        if (topic.PipelineInput is not null || !string.IsNullOrWhiteSpace(topic.Output) || !string.IsNullOrWhiteSpace(topic.Streaming))
         {
             if (!firstSubBox) EmitSubBoxSpacer(); else { sb.AppendLine(BuildOuterRow(string.Empty, outerContentWidth)); firstSubBox = false; }
-            RenderPipelineSubBox(sb, topic.PipelineInput, topic.Output, innerWidth, outerContentWidth);
+            RenderPipelineSubBox(sb, topic.PipelineInput, topic.Output, topic.Streaming, innerWidth, outerContentWidth);
         }
 
         // ── Examples sub-box ─────────────────────────────────────────────────
@@ -435,6 +435,7 @@ internal static class HelpTopicSummaryRenderer
         StringBuilder sb,
         HelpPipelineInputInfo? input,
         string? output,
+        string? streaming,
         int innerWidth,
         int outerContentWidth)
     {
@@ -482,6 +483,24 @@ internal static class HelpTopicSummaryRenderer
         {
             var label = "Output:  ";
             var line = label + output;
+            foreach (var wrapped in WrapText(line, contentWidth))
+            {
+                if (wrapped.StartsWith(label))
+                {
+                    var combined = Style(DimStyle, label) + Style(TypeStyle, wrapped[label.Length..]);
+                    sb.AppendLine(WrapInOuter($"│ {combined}{Pad(contentWidth - wrapped.Length)} │", innerWidth, outerContentWidth));
+                }
+                else
+                {
+                    sb.AppendLine(WrapInOuter($"│ {Style(TypeStyle, wrapped)}{Pad(contentWidth - wrapped.Length)} │", innerWidth, outerContentWidth));
+                }
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(streaming))
+        {
+            var label = "Stream:  ";
+            var line = label + streaming;
             foreach (var wrapped in WrapText(line, contentWidth))
             {
                 if (wrapped.StartsWith(label))

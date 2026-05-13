@@ -7,6 +7,7 @@ namespace Tosh.Stdlib.Pipeline;
 [CommandExample("echo 2 4 4 4 5 5 7 9 | variance", Title = "Population variance")]
 [CommandOutput("The population variance of the pipeline values.")]
 [PipelineInput(AcceptsScalar = true, AcceptsRecord = true, Description = "Consumes the pipeline and returns the variance.")]
+[CommandStreaming(StreamingBehavior.Eager)]
 public sealed class VarianceCommand : ShellCommand, ICurrentItemMemberPathCommand
 {
     public VarianceCommand()

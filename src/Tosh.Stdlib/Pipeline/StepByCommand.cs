@@ -8,6 +8,7 @@ namespace Tosh.Stdlib.Pipeline;
 [CommandExample("echo a b c d e f g | step-by 2", Title = "Every other item")]
 [CommandOutput("Every Nth item from the pipeline.")]
 [PipelineInput(AcceptsScalar = true, AcceptsRecord = true, Description = "Yields every Nth item from the pipeline.")]
+[CommandStreaming(StreamingBehavior.Lazy)]
 public sealed class StepByCommand : ShellCommand
 {
     public StepByCommand()

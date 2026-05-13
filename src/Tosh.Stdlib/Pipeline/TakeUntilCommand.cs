@@ -8,6 +8,7 @@ namespace Tosh.Stdlib.Pipeline;
 [CommandExample("1..100 | take-until func(x) => ($x > 10)", Title = "Take until value exceeds 10")]
 [CommandOutput("Pipeline items up to (but not including) the first that satisfies the predicate.")]
 [PipelineInput(AcceptsScalar = true, AcceptsRecord = true, Description = "Yields items until the predicate returns true.")]
+[CommandStreaming(StreamingBehavior.ShortCircuit)]
 public sealed class TakeUntilCommand : ShellCommand
 {
     public TakeUntilCommand()

@@ -20,7 +20,199 @@ the 2026-05-06 audit; spec restructured with new `\part{Compilation}`. See
 
 ---
 
-# Surface & Identity Audit (2026-05-08)
+# External-Program I/O Compact (2026-05-13) — P0
+
+**Status:** M1–M4 landed 2026-05-13. M5 (polish) deferred. See
+[TSSP.md §11](TSSP.md#11-producing-tssp-from-net-toshclient) for the
+`Tosh.Client` surface; [examples/tsspdemo](../examples/tsspdemo) is
+the canonical second-consumer demo.
+
+Building first-party tools (`crumb`, future helpers) for daily use as
+login-shell children exposed a sharp gap: there is no clean,
+documented way for an external program to render structured output to
+TōSh *and* read interactive input from the user at the same time.
+
+The forcing example: `crumb -S <many AUR pkgs>` at a bare TōSh prompt.
+Crumb was on the `KnownStructuredCommands` allowlist in
+[ExternalProcessCommand.cs](../src/Tosh.Stdlib/ExternalProcessCommand.cs),
+which forces the piped path so TōSh can parse TSSP frames. That path
+also redirects stdin and never calls `tcsetpgrp`, so the child opens
+`/dev/tty` but TōSh's REPL still owns the controlling terminal — every
+keystroke is contended. Symptom: prompts that accept no input.
+
+Immediate mitigation: the allowlist is empty. Interactive children
+take the full passthrough path (`tcsetpgrp` → foreground group →
+inherited stdio). TSSP rendering for `crumb` at a bare prompt is
+suspended until the proper plumbing lands.
+
+### Goals
+
+1. **Hybrid passthrough mode** — pipe stdout *only*, inherit stdin and
+   stderr, hand off the foreground process group, parse TSSP framing
+   from the piped stdout while child I/O on `/dev/tty` works normally.
+2. **A documented client contract** that external programs can adopt:
+   - Negotiation envvars (`TOSH_STRUCTURED_STDOUT`, `TOSH_STDOUT_CONSUMER`,
+     `TOSH_TSSP_VERSION`, `TOSH_STDIN_ACCEPTS`, color/width hints,
+     `TOSH_TTY`, `TOSH_STDIO_MODE`).
+   - Where to write human status (stderr / `/dev/tty`).
+   - Where to write structured data (stdout, TSSP frames only).
+   - Where to read input (always `/dev/tty`, with `TCIFLUSH` drain).
+   - Job-control expectations (child becomes group leader, parent
+     `tcsetpgrp`s the child, child handles SIGINT/SIGTSTP/SIGQUIT).
+3. **A reusable client library** so we stop reimplementing this per app:
+   - C#: `Tosh.Client` package (`src/Tosh.Client`, `net10.0`, zero deps
+     on the rest of the tree). TSSP frame writer, status/prompt helpers
+     backed by `/dev/tty`, env-var negotiation, color detection.
+     Replaces `Tosh.Crumb/Output/{Confirm,Tty,TtyRedirect}.cs`.
+   - Shipped as both a ProjectReference (in-tree) and a NuGet package.
+   - Eventually mirror libraries for other languages.
+4. **Worked example + docs** wired into `docs/ARCHITECTURE.md` and a
+   new `docs/EXTERNAL_PROGRAMS.md` so anyone building a tool for
+   TōSh has one canonical reference.
+
+### Milestones (locked 2026-05-13)
+
+**M1 — Hybrid spawn mode in ToSh.** ✅ Landed 2026-05-13.
+`ExecuteWithHybridAsync` in
+[ExternalProcessCommand.cs](../src/Tosh.Stdlib/ExternalProcessCommand.cs):
+stdout piped (TSSP parser), stdin/stderr inherited, child placed in its
+own pgrp with `TrySetForegroundGroup`, `WaitForForegroundChild` for full
+Ctrl-C/Z/D job control. Opt-in via `$tosh.Config.External.HybridConsumers`
+(default seeded with `crumb`). `ApplyTsspEnvironment` adds
+`TOSH_TTY` and `TOSH_STDIO_MODE`. Frame parser is liberal: non-TSSP
+bytes on hybrid stdout are echoed verbatim with a one-time
+`tosh: tssp.unframed_output` stderr warning.
+
+**M2 — `Tosh.Client` library.** ✅ Landed 2026-05-13.
+New `src/Tosh.Client` project. `ToshHost.Current` exposes `Info`,
+`Status` (/dev/tty-first), `Prompt` (/dev/tty + TCIFLUSH per call),
+`OpenFrameWriter(schema)` returning a thread-safe `ToshFrameWriter`.
+`ChildTtyScope.Acquire()` provides a dup/dup2 fd-swap for child
+spawns that should drive the terminal directly.
+
+**M3 — Crumb migration.** ✅ Landed 2026-05-13.
+Deleted `src/Tosh.Crumb/Output/{Tty,TtyRedirect}.cs`. `Confirm.cs`
+rewritten as an 8-line shim over `ToshHost.Current`. `PackageFormatter`
+uses `ToshFrameWriter` (`CrumbTsspMetaFrameTests` passes — wire-
+compatible). 4 `TtyRedirect.Acquire()` call sites repointed to
+`Tosh.Client.ChildTtyScope`. End-to-end smoke under hybrid spawn:
+`crumb list --explicit | first 3` renders the full 30-column table.
+
+**M4 — Docs + second consumer.** ✅ Landed 2026-05-13.
+[docs/TSSP.md §11](TSSP.md#11-producing-tssp-from-net-toshclient)
+documents the `Tosh.Client` surface and hybrid-spawn opt-in.
+[examples/tsspdemo](../examples/tsspdemo) is a 30-line second consumer
+proving the contract isn't crumb-specific.
+
+**M5 — Polish (deferred).** Real `crumb.install-plan` schema with
+box-drawing TōSh display profile. Optional: TSSP `progress` frame
+routed to a Tome progress bar. Optional: probe-based auto-discovery
+for hybrid-capable binaries when config lists are inconvenient.
+Line-buffered forwarding of unframed hybrid output.
+
+### Acceptance
+
+- Crumb's `Output/` directory replaced with `Tosh.Client` calls.
+- `crumb -S` at a bare ToSh prompt: prompts work, status streams live,
+  install-plan summary renders as a TōSh-styled table (TSSP frame).
+- `crumb -Ss dotnet | from json` still produces structured records.
+- Smoke test: a second tiny consumer demonstrates the contract end-to-end.
+
+### Non-Goals
+
+- A full pty multiplexer or terminal-emulator layer.
+- Forcing every external command to participate — programs that
+  ignore the envvars must keep working exactly like they do today.
+
+---
+
+# Crumb (Pacman + AUR Helper) Polish — 2026-05-13 — P2
+
+After the M1–M4 TSSP work plus the upgrade/install/removal UX pass
+(boxed colorized tables, summary matrix, group expansion, quiet
+makepkg by default), the project review surfaced the items below as
+the next batch of polish. None block daily use; ordered roughly by
+leverage.
+
+## P1 — quick wins (each ≲1 hr)
+
+- **Tests project for `Tosh.Crumb`.** No coverage today; argument
+  parsing is the user-facing surface and the highest-value target.
+  Start with `PacmanFlags.TryExpand` (`-Ss`, `-Qqe`, `-RsN`, edge
+  cases), `CrumbOptions.Parse` (all flags, `=` syntax, errors), and
+  `Vercmp.IsOlder` (known version pairs). Pure functions, no
+  fixtures needed. `Tosh.Crumb.csproj` already has
+  `<InternalsVisibleTo Tosh.Tests>` ready.
+- **De-duplicate `SupportsTrueColor()`.** Same logic lives in
+  [PackageFormatter.cs](../src/Tosh.Crumb/Output/PackageFormatter.cs)
+  and [UpgradeListFormatter.cs](../src/Tosh.Crumb/Output/UpgradeListFormatter.cs).
+  Extract to `Output/ColorSupport.cs` so colour gating + truecolor
+  detection are defined once.
+- **Validate `$HOME` at `Program.Main`.** Currently throws
+  `InvalidOperationException` lazily inside `AurBuilder` property
+  getters. Move the check to startup so unset-`$HOME` users see a
+  clear error instead of a stack trace mid-command.
+- **`--limit N` on `crumb search`.** The aurweb RPC v5 already
+  accepts `limit`; today users have to pipe to `head`. Add
+  `--limit 50` default, wire through `AurClient.SearchAsync`.
+
+## P2 — medium features
+
+- **Honest stub handling.** `-Sw` (download only) and `-U` (install
+  from file) currently `throw new ArgumentException("not implemented
+  yet")` from `PacmanFlags.cs` / `Program.cs`. Either implement
+  (mostly delegating to pacman) or remove them from the help text so
+  the listed surface is real.
+- **Split `UpdateAsync` and `InstallAsync` into phase methods.**
+  Both sit around 200 lines and mix planning, escalation, build
+  looping, and reporting. Suggested extracts:
+  `UpgradeRepoAsync`, `UpgradeAurAsync`,
+  `ValidateAndPlanInstallAsync`, `ExecuteRepoInstallAsync`,
+  `ExecuteAurBuildsAsync`. Makes the long methods testable and the
+  flow easier to read.
+- **`crumb logs` subcommand.** Build logs already land in
+  `$XDG_CACHE_HOME/crumb/log/` when `--quiet` is in effect; nothing
+  exposes them. Add `crumb logs [--pkg <name>] [--tail] [--clean]
+  [--limit N]`.
+- **Config file** (`~/.config/crumb/crumb.toml`). Today everything is
+  env vars (`CRUMB_SUDO`, `CRUMB_PAGER`, `CRUMB_REVIEW`,
+  `CRUMB_NO_TRUECOLOR`, `CRUMB_NO_COLOR`, `TOSH_TTY`). A TOML config
+  with env-var overrides would let users persist build flags, default
+  `--quiet`/`--verbose`, an exclude list for `-Syu` (e.g. skip
+  `*-git`), pager, and truecolor preference.
+- **Improved conflict-resolution UX.** `DependencyResolver` already
+  detects conflicts; the prompt is binary proceed/abort. Show which
+  installed package the conflict is with, and offer granular
+  remove-or-skip for each.
+
+## P3 — larger / optional
+
+- **Pacnew/pacsave detection** after install — paru-style.
+- **Downgrade support** via the Arch archive.
+- **`--aur-base-url`** env var / config for testing against mock or
+  mirror AUR endpoints (`AurClient` already accepts the constructor
+  arg; just no CLI wiring).
+- **Document implicit behaviour**: pager precedence
+  (`pagerOverride` > `CRUMB_PAGER` > `PAGER` > `less`), pacman-flag
+  expansion semantics, format-flag last-wins.
+
+### Acceptance
+
+- P1 batch landed before the next user-visible feature pass.
+- Long methods in `CrumbCommands.Update.cs` /
+  `CrumbCommands.Install.cs` either split or annotated with phase
+  comments — whichever serves clarity better.
+- `crumb --help` lists no commands that throw `not implemented`.
+
+### Non-Goals
+
+- A mirror ranker (pacman owns mirrors).
+- An alpm FFI binding (the on-disk DB parser is sufficient).
+- Repo management (`crumb` is a client, not an admin tool).
+
+---
+
+
 
 A holistic project review surfaced seven priorities for the next quarter,
 ordered by leverage. They cluster into three themes: **closing language
@@ -404,7 +596,7 @@ rationale. Counts: 196 keep, 12 fade, 6 move, 30 consolidate, 11 rename.
 
 ---
 
-## 4. Operator-Overload IL Emission Uses CLR Conventions — P2
+## 4. Operator-Overload IL Emission Uses CLR Conventions — P2 — closed (2026-05-13)
 
 `func +(other) { … }` currently lowers to a method named after the
 symbol. CLR consumers (C#, F#, PowerShell) cannot resolve TōSh-defined
@@ -420,7 +612,28 @@ operators because they expect `op_Addition`, `op_Subtraction`, etc.
   corresponding `op_*` names; `=~`/`!~` and `**`/`//` need either custom
   attribute-tagged dispatch or a TōSh-specific calling convention).
 
-### Priority: P2
+### Priority: P2 — **closed (2026-05-13)**
+
+- `ToClrOperatorName` helper in
+  [src/Tosh.Compiler/BoundUnitEmitter.Functions.cs](../src/Tosh.Compiler/BoundUnitEmitter.Functions.cs)
+  maps the full canonical set (`+` → `op_Addition`, `-` → `op_Subtraction`,
+  `*` → `op_Multiply`, `/` → `op_Division`, `%` → `op_Modulus`, `==`,
+  `!=`, `<`, `<=`, `>`, `>=`). Symbolic-only operators with no CLR
+  convention (`**`, `//`, `=~`, `!~`) get stable `op_Tosh*` names.
+- Applied at both `DefineMethod` sites in
+  [BoundUnitEmitter.Classes.cs](../src/Tosh.Compiler/BoundUnitEmitter.Classes.cs)
+  (abstract method stub + regular instance method).
+- Regression coverage:
+  [BoundUnitEmitterTests.Compiled_operator_overload_emits_clr_canonical_method_name](../tests/Tosh.Tests/BoundUnitEmitterTests.cs)
+  asserts `op_Addition` lands on the emitted type.
+
+### Follow-up (not blocking closure)
+
+TōSh operator methods are instance methods with `HasThis`, so a C#
+consumer sees `box.op_Addition(other)` rather than `box + other`. Native
+C# `+` syntax additionally requires the method to be `public static`
+with both operands as parameters — a future change can synthesise a
+static wrapper that forwards to the instance method.
 
 ---
 
@@ -444,7 +657,7 @@ them) so future feature decisions have a north star.
 
 ---
 
-## 6. Streaming/Throughput Contract — P2
+## 6. Streaming/Throughput Contract — P2 — closed (2026-05-13)
 
 `first N` short-circuits today, but there's no documented contract that
 says so. Users (and our own renderer optimisations) need a written
@@ -463,7 +676,21 @@ require materialisation.
 - Surface the contract in `help` topics (a one-line "Streaming: lazy /
   eager / short-circuiting" field on each builtin).
 
-### Priority: P2
+### Priority: P2 — **closed (2026-05-13)**
+
+- `StreamingBehavior` enum (`Lazy` / `Eager` / `ShortCircuit`) + a
+  class-level `[CommandStreaming(...)]` attribute live in
+  [src/Tosh.Runtime/CommandStreamingAttribute.cs](../src/Tosh.Runtime/CommandStreamingAttribute.cs);
+  reflected into `CommandMetadata.Streaming` by
+  [ShellCommand.cs](../src/Tosh.Runtime/ShellCommand.cs) with a
+  humanised form ("lazy" / "eager" / "short-circuit").
+- ~56 pipeline commands under `src/Tosh.Stdlib/Pipeline/*` are tagged.
+- `help` topics render a `Stream:` line inside the Pipeline sub-box
+  ([HelpTopicSummaryRenderer.cs](../src/Tosh.Runtime/HelpTopicSummaryRenderer.cs))
+  and the LSP markdown surface
+  ([ToshLanguageFeatures.cs](../src/Tosh.LanguageServices/ToshLanguageFeatures.cs)).
+- Short-circuit regression tests against an infinite generator land in
+  [tests/Tosh.Tests/StreamingContractTests.cs](../tests/Tosh.Tests/StreamingContractTests.cs).
 
 ---
 

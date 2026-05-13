@@ -88,6 +88,7 @@ public abstract class ShellCommand : IShellCommand
 
         var stdlibCategory = StdlibCategoryResolver.Resolve(type);
         var shellOnlyAttr = type.GetCustomAttribute<ShellOnlyAttribute>();
+        var streamingAttr = type.GetCustomAttribute<CommandStreamingAttribute>();
 
         return new CommandMetadata(
             Name: Name,
@@ -118,9 +119,18 @@ public abstract class ShellCommand : IShellCommand
             Stdlib: stdlibCategory?.ToString(),
             IsShellOnly: shellOnlyAttr is not null,
             ShellOnlyReason: shellOnlyAttr?.Reason,
-            OutputTypeInfo: outputTypeInfo
+            OutputTypeInfo: outputTypeInfo,
+            Streaming: streamingAttr is null ? null : FormatStreamingBehavior(streamingAttr.Behavior)
         );
     }
+
+    private static string FormatStreamingBehavior(StreamingBehavior behavior) => behavior switch
+    {
+        StreamingBehavior.Lazy => "lazy",
+        StreamingBehavior.Eager => "eager",
+        StreamingBehavior.ShortCircuit => "short-circuit",
+        _ => behavior.ToString().ToLowerInvariant(),
+    };
 
     /// <summary>
     /// Build a <see cref="TypedTypeRef"/> for an argument from its

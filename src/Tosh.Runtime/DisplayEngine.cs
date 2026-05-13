@@ -462,7 +462,8 @@ public sealed class DisplayEngine
             return false;
         }
 
-        rendered = RenderRecord(row, columns, options, depth, visited, GetSingleRecordTitle(rowType));
+        var title = ShellRecordUtilities.TryGetTsspTitle(row) ?? GetSingleRecordTitle(rowType);
+        rendered = RenderRecord(row, columns, options, depth, visited, title);
         return true;
     }
 
@@ -1348,9 +1349,8 @@ public sealed class DisplayEngine
             return false;
         }
 
-        var title = ShouldRenderSingleRecordWithTitle(rowType)
-            ? GetSingleRecordTitle(rowType)
-            : null;
+        var title = ShellRecordUtilities.TryGetTsspTitle(row)
+            ?? (ShouldRenderSingleRecordWithTitle(rowType) ? GetSingleRecordTitle(rowType) : null);
         table = RenderRecord(row, columns, options, depth, visited, title);
         return true;
     }
@@ -1988,12 +1988,30 @@ public sealed class DisplayEngine
 
     private IReadOnlyList<DisplayTableColumn> BuildRecordLikeColumns(IReadOnlyList<object> rows, bool allowStructuredValues = false)
     {
-        if (rows.Count == 0 || !ShellRecordUtilities.TryGetFields(rows[0], out var fields))
+        if (rows.Count == 0 || !ShellRecordUtilities.TryGetVisibleFields(rows[0], out var fields))
         {
             return Array.Empty<DisplayTableColumn>();
         }
 
+        // Auto-drop columns where every row's value is null or an empty string —
+        // typical for sparse cross-source records (e.g. AUR-only columns in a
+        // mixed listing). Skip the drop for single-row records so users still
+        // see absent fields in the detail view.
+        var hidden = rows.Count > 1
+            ? new HashSet<string>(
+                fields
+                    .Select(f => f.Key)
+                    .Where(name => rows.All(r =>
+                    {
+                        if (!ShellRecordUtilities.TryGetValue(r, name, out var v) || v is null) return true;
+                        if (v is string s) return s.Length == 0;
+                        return false;
+                    })),
+                StringComparer.Ordinal)
+            : new HashSet<string>(StringComparer.Ordinal);
+
         return fields
+            .Where(field => !hidden.Contains(field.Key))
             .Select((field, index) => new
             {
                 Name = field.Key,
@@ -2363,7 +2381,7 @@ public sealed class DisplayEngine
             return columns.Count > 0;
         }
 
-        columns = BuildGenericColumns(rowType, allowStructuredValues: true);
+        columns = BuildGenericColumns(rowType, allowStructuredValues: true, maxColumns: null);
         columns = ApplyColumnPreferences(rowType, row, columns, allowStructuredValues: true, options);
         return columns.Count > 0;
     }
@@ -2869,7 +2887,9 @@ public sealed class DisplayEngine
         ToshTableThemeConfig theme,
         bool isHeader = false)
     {
-        var splitCells = cells.Select(SplitLines).ToArray();
+        var splitCells = cells
+            .Select((cell, idx) => WrapCellLines(cell, columns[idx].Width, isHeader))
+            .ToArray();
         var rowHeight = splitCells.Max(static lines => lines.Count);
         var lines = new string[rowHeight];
         var vertical = theme.Border.Apply(box.Vertical.ToString()).ToAnsi();
@@ -3440,6 +3460,39 @@ public sealed class DisplayEngine
 
     private string FormatTableCellValue(object? value, DisplayRenderOptions options)
     {
+        return ApplyValueStyling(FormatTableCellValueCore(value, options));
+    }
+
+    // Light-touch ANSI styling for "status glyph" cells. Applies only when the
+    // visible payload is exactly one of the well-known glyphs, so prose
+    // containing "✓ done" is left untouched.
+    private string ApplyValueStyling(string text)
+    {
+        if (string.IsNullOrEmpty(text))
+        {
+            return text;
+        }
+
+        var trimmed = text.Trim();
+
+        if (trimmed.Length == 0 || trimmed.Length > 2)
+        {
+            return text;
+        }
+
+        var theme = TableTheme;
+
+        return trimmed switch
+        {
+            "✓" or "✔" => theme.SuccessGlyph.Apply(text).ToAnsi(),
+            "✗" or "✘" => theme.ErrorGlyph.Apply(text).ToAnsi(),
+            "⚠" => theme.WarningGlyph.Apply(text).ToAnsi(),
+            _ => text,
+        };
+    }
+
+    private string FormatTableCellValueCore(object? value, DisplayRenderOptions options)
+    {
         if (value is null)
         {
             return string.Empty;
@@ -3681,6 +3734,115 @@ public sealed class DisplayEngine
         return text
             .Replace("\r\n", "\n", StringComparison.Ordinal)
             .Split('\n');
+    }
+
+    // Soft-wrap a cell's content to a column width, preferring space breaks
+    // and falling back to hard splits. Caps wrapped output at
+    // MaxWrappedLinesPerCell so a paragraph-sized field doesn't blow up
+    // row height; the overflow line ends with "…" to signal truncation.
+    // Lines that already contain ANSI escapes are left intact (downstream
+    // ClipCell handles them) — wrapping styled text would require parsing
+    // escape sequences and is deferred.
+    private const int MaxWrappedLinesPerCell = 8;
+
+    private static IReadOnlyList<string> WrapCellLines(string cell, int width, bool isHeader)
+    {
+        var inputLines = SplitLines(cell);
+
+        if (isHeader || width <= 1)
+        {
+            return inputLines;
+        }
+
+        // Skip wrapping for cells that look structural (nested tables, ANSI
+        // styling, or multi-line composite content). Breaking those on
+        // spaces shatters their layout. Single-line prose is the target.
+        if (inputLines.Count > 1 || ContainsStructuralChars(cell))
+        {
+            return inputLines;
+        }
+
+        var result = new List<string>(1);
+
+        foreach (var line in inputLines)
+        {
+            if (StyledText.GetVisibleLength(line) <= width)
+            {
+                result.Add(line);
+            }
+            else
+            {
+                WrapPlainLine(line, width, result);
+            }
+
+            if (result.Count >= MaxWrappedLinesPerCell)
+            {
+                break;
+            }
+        }
+
+        if (result.Count > MaxWrappedLinesPerCell)
+        {
+            var trimmed = result.Take(MaxWrappedLinesPerCell - 1).ToList();
+            var lastFull = result[MaxWrappedLinesPerCell - 1];
+            trimmed.Add(lastFull.Length > 0
+                ? (lastFull.Length > width - 1 ? lastFull[..(width - 1)] + "…" : lastFull + "…")
+                : "…");
+            return trimmed;
+        }
+
+        return result;
+    }
+
+    private static bool ContainsStructuralChars(string text)
+    {
+        foreach (var ch in text)
+        {
+            // ESC for ANSI styling, or any Unicode box-drawing / block char.
+            if (ch == '\x1b' || (ch >= '\u2500' && ch <= '\u259F'))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static void WrapPlainLine(string line, int width, List<string> output)
+    {
+        // First wrapped line gets a 4-space indent — a visual cue that
+        // anchors "row N starts here" when neighbouring rows fit on one
+        // line. Continuation lines stay flush so the wrap reads as a
+        // single paragraph.
+        const string FirstLineIndent = "    ";
+        var firstBudget = Math.Max(1, width - FirstLineIndent.Length);
+        var i = 0;
+        var isFirst = true;
+
+        while (i < line.Length)
+        {
+            var budget = isFirst ? firstBudget : width;
+            var remaining = line.Length - i;
+
+            if (remaining <= budget)
+            {
+                output.Add(isFirst ? FirstLineIndent + line[i..] : line[i..]);
+                return;
+            }
+
+            var slice = line.AsSpan(i, budget);
+            var breakAt = slice.LastIndexOf(' ');
+            var take = breakAt > 0 ? breakAt : budget;
+            var chunk = line.Substring(i, take);
+            output.Add(isFirst ? FirstLineIndent + chunk : chunk);
+            i += take;
+            while (i < line.Length && line[i] == ' ')
+            {
+                i++;
+            }
+
+            isFirst = false;
+        }
     }
 
     private static int GetCellDisplayWidth(string value)

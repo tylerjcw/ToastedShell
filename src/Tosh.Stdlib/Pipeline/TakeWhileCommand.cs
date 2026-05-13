@@ -6,6 +6,7 @@ namespace Tosh.Stdlib.Pipeline;
 [CommandExample("echo 1 2 3 4 | take-while { _ < 3 }")]
 [CommandExample("echo 1 2 3 4 | take-while func(x) => ($x < 3)")]
 [CommandOutput("Input items from the front of the stream up to (but not including) the first one for which the predicate returned false.")]
+[CommandStreaming(StreamingBehavior.ShortCircuit)]
 public sealed class TakeWhileCommand : ShellCommand
 {
     public TakeWhileCommand()

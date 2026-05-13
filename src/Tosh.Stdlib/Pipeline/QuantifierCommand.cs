@@ -9,6 +9,7 @@ namespace Tosh.Stdlib.Pipeline;
 [CommandExample("echo 1 3 5 | none { _ % 2 == 0 }", Title = "Check that no values are even")]
 [CommandOutput("A boolean: true or false.", ClrType = typeof(bool))]
 [PipelineInput(AcceptsScalar = true, AcceptsRecord = true, Description = "Tests pipeline items against the predicate.")]
+[CommandStreaming(StreamingBehavior.ShortCircuit)]
 public sealed class QuantifierCommand : ShellCommand
 {
     private readonly QuantifierKind _kind;

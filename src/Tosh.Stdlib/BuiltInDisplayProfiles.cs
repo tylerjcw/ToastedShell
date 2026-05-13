@@ -5885,7 +5885,7 @@ public static class BuiltInDisplayProfiles
     private static IReadOnlyList<DisplayTableColumn> BuildRecordColumns(IReadOnlyList<object> rows)
     {
         var fieldNames = rows
-            .SelectMany(row => ShellRecordUtilities.TryGetFields(row, out var fields)
+            .SelectMany(row => ShellRecordUtilities.TryGetVisibleFields(row, out var fields)
                 ? fields.Select(field => field.Key)
                 : Array.Empty<string>())
             .Distinct(StringComparer.OrdinalIgnoreCase)

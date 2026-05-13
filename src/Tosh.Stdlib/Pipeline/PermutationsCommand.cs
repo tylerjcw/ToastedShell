@@ -8,6 +8,7 @@ namespace Tosh.Stdlib.Pipeline;
 [CommandExample("echo a b c | permutations 2", Title = "All 2-element orderings")]
 [CommandOutput("Arrays of k elements representing each permutation.")]
 [PipelineInput(AcceptsScalar = true, AcceptsRecord = true, Description = "Items to permute.")]
+[CommandStreaming(StreamingBehavior.Eager)]
 public sealed class PermutationsCommand : ShellCommand
 {
     public PermutationsCommand()

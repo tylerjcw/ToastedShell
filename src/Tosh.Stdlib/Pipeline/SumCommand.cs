@@ -8,6 +8,7 @@ namespace Tosh.Stdlib.Pipeline;
 [CommandExample("ls | sum .Length", Title = "Total file sizes")]
 [CommandOutput("The sum of the pipeline values. Supports numeric, StorageSize, and TimeSpan types.")]
 [PipelineInput(AcceptsScalar = true, AcceptsRecord = true, Description = "Consumes the pipeline and returns the total.")]
+[CommandStreaming(StreamingBehavior.Eager)]
 public sealed class SumCommand : ShellCommand, ICurrentItemMemberPathCommand
 {
     public SumCommand()

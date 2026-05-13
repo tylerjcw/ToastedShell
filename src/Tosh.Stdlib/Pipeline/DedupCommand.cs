@@ -9,6 +9,7 @@ namespace Tosh.Stdlib.Pipeline;
 [CommandNote("Unlike `distinct`, only removes adjacent duplicates. Preserves non-consecutive repeats.")]
 [CommandOutput("Pipeline items with consecutive duplicate values removed.")]
 [PipelineInput(AcceptsScalar = true, AcceptsRecord = true, Description = "Yields each item only if different from the previous.")]
+[CommandStreaming(StreamingBehavior.Lazy)]
 public sealed class DedupCommand : ShellCommand, ICurrentItemMemberPathCommand
 {
     public DedupCommand()

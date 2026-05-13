@@ -560,7 +560,7 @@ subcommand version {
 ## @remarks
 ##   Bumps `.tosh-publish-state` (unless `--noBump`), updates the
 ##   PKGBUILD, runs `dotnet build` followed by `dotnet publish` for
-##   the CLI, LSP, and MCP projects, locates the produced binary,
+##   the CLI, LSP, MCP, and Crumb projects, locates the produced binary,
 ##   and (unless `--noInstall`) hands the result off to
 ##   `makepkg -sif` followed by `setcap cap_net_raw+ep`.
 ##
@@ -694,6 +694,10 @@ subcommand publish {
         dotnet publish $"{$root}/src/Tosh.Mcp/Tosh.Mcp.csproj" ...$tool_publish_args
         assert_ok "dotnet publish Tosh.Mcp"
         ok "Published Tosh.Mcp"
+
+        dotnet publish $"{$root}/src/Tosh.Crumb/Tosh.Crumb.csproj" ...$tool_publish_args
+        assert_ok "dotnet publish Tosh.Crumb"
+        ok "Published Tosh.Crumb"
 
         var elapsed = (((date now) - $t0).ToString("hh\\:mm\\:ss\\.fff"))
 
@@ -1417,11 +1421,12 @@ subcommand install {
     ## @param targets A string, comma-separated list, array, or "all".
     ## @remarks
     ##   Usage:
-    ##     build.tosh install                          # tosh, tosh-lsp, tosh-mcp, tome (not devcompanion)
+    ##     build.tosh install                          # tosh, tosh-lsp, tosh-mcp, tome, crumb (not devcompanion)
     ##     build.tosh install lsp
     ##     build.tosh install lsp,mcp
     ##     build.tosh install ["tosh","lsp"]
     ##     build.tosh install tome                     # just the tome editor
+    ##     build.tosh install crumb                    # just the crumb pacman/AUR wrapper
     ##     build.tosh install devcompanion             # dev-only AI memory tool
     ##     build.tosh install --linuxDesktop           # also install MIME/icons/.desktop (user)
     ##     build.tosh install --linuxDesktop --system  # MIME/icons/.desktop in /usr/share
@@ -1444,12 +1449,12 @@ subcommand install {
 
     var root = repo_root
     var arch_dir = $root | join -p "packaging" "archlinux"
-    var valid = ["tosh", "lsp", "mcp", "tome", "devcompanion"]
+    var valid = ["tosh", "lsp", "mcp", "tome", "crumb", "devcompanion"]
     var requested = []
     if ($targets is array) {
         $requested = $targets
     } else if ($targets == "all") {
-        $requested = ["tosh", "lsp", "mcp", "tome"]
+        $requested = ["tosh", "lsp", "mcp", "tome", "crumb"]
     } else {
         $requested = ($targets | split "," | collect)
     }
@@ -1458,7 +1463,7 @@ subcommand install {
         | where { $_ in $valid }
         | collect)
     if (($to_install | count) == 0) {
-        fail "No valid targets specified. Choose from: tosh, lsp, mcp, tome, devcompanion, all."
+        fail "No valid targets specified. Choose from: tosh, lsp, mcp, tome, crumb, devcompanion, all."
         return
     }
     var spec = ($to_install | join ",")

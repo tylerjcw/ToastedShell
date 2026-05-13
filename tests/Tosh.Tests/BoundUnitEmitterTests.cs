@@ -498,6 +498,22 @@ public sealed class BoundUnitEmitterTests : IClassFixture<ToshRuntimeFixture>
     }
 
     [Fact]
+    public void Compiled_operator_overload_emits_clr_canonical_method_name()
+    {
+        // `func +(other) { ... }` should land as `op_Addition`, not
+        // the legacy mangled `_` form, so CLR consumers can resolve
+        // the overload by its canonical name.
+        var (_, _, asm) = CompileLoadAndRun(
+            "class Box { prop V = 0\nfunc +(other) { return $this.V + $other.V } }\n" +
+            "echo done");
+        var box = asm.GetTypes().FirstOrDefault(t => t.Name == "Box");
+        Assert.NotNull(box);
+        var add = box!.GetMethod("op_Addition", BindingFlags.Public | BindingFlags.Instance);
+        Assert.NotNull(add);
+        Assert.Null(box.GetMethod("_", BindingFlags.Public | BindingFlags.Instance));
+    }
+
+    [Fact]
     public void Compiled_nested_module_becomes_nested_static_class()
     {
         var (_, _, asm) = CompileLoadAndRun(

@@ -7,6 +7,7 @@ namespace Tosh.Stdlib.Pipeline;
 [CommandExample("echo 1 2 3 4 5 | skip-until { _ >= 3 }", Title = "Skip until a condition is met")]
 [CommandOutput("Pipeline items starting from the first that satisfies the predicate.")]
 [PipelineInput(AcceptsScalar = true, AcceptsRecord = true, Description = "Discards items until the predicate returns true, then yields the rest.")]
+[CommandStreaming(StreamingBehavior.Lazy)]
 public sealed class SkipUntilCommand : ShellCommand
 {
     public SkipUntilCommand()

@@ -15,6 +15,7 @@ namespace Tosh.Stdlib.Pipeline;
 [CommandExample("ls | row 2..5", Title = "Pick a contiguous slice")]
 [CommandOutput("The pipeline rows at the requested indices, in the order they were requested.")]
 [PipelineInput(AcceptsScalar = true, AcceptsRecord = true, Description = "Reads input items by their zero-based position.")]
+[CommandStreaming(StreamingBehavior.Eager)]
 public sealed class RowCommand : ShellCommand
 {
     public RowCommand()

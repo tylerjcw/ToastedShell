@@ -1437,7 +1437,8 @@ public static class HelpCatalog
             Options: options,
             PipelineInput: pipelineInput,
             Output: metadata.Output,
-            ExampleItems: exampleItems);
+            ExampleItems: exampleItems,
+            Streaming: metadata.Streaming);
     }
 
     internal static IReadOnlyDictionary<string, IReadOnlyList<string>> BuildBuiltInAliasMap(IEnumerable<IShellCommand> commands)

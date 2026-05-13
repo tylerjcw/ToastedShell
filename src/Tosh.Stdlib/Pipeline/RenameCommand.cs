@@ -7,6 +7,7 @@ namespace Tosh.Stdlib.Pipeline;
 [CommandExample("ls | get { Name, Length } | rename Length Size", Title = "Rename one field")]
 [CommandExample("ps | get { Id, Name } | rename Id Pid Name Command", Title = "Rename several fields")]
 [CommandOutput("Records describing each rename operation, or nothing when used purely for its side effect.")]
+[CommandStreaming(StreamingBehavior.Lazy)]
 public sealed class RenameCommand : ShellCommand
 {
     public RenameCommand()

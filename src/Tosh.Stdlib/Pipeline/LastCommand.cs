@@ -8,6 +8,7 @@ namespace Tosh.Stdlib.Pipeline;
 [CommandExample("ls | last 3", Title = "Get the last three items")]
 [CommandOutput("The last N pipeline objects.")]
 [PipelineInput(AcceptsScalar = true, AcceptsRecord = true, Description = "Buffers the pipeline and returns the final N items.")]
+[CommandStreaming(StreamingBehavior.Eager)]
 public sealed class LastCommand : ShellCommand
 {
     public LastCommand()

@@ -430,7 +430,7 @@ internal sealed partial class EmitterImpl
                     var abstractParamTypes = new Type[abstractArity];
                     for (var i = 0; i < abstractArity; i++) abstractParamTypes[i] = MetadataType(typeof(object));
                     var mbAbstract = typeBuilder.DefineMethod(
-                        MangleClrIdentifier(m.Method.Name),
+                        MangleClrIdentifier(ToClrOperatorName(m.Method.Name)),
                         MapMethodVisibility(m) | MethodAttributes.HideBySig
                             | MethodAttributes.Virtual | MethodAttributes.NewSlot
                             | MethodAttributes.Abstract,
@@ -476,7 +476,7 @@ internal sealed partial class EmitterImpl
                     ? CallingConventions.Standard
                     : CallingConventions.HasThis;
                 var mb = typeBuilder.DefineMethod(
-                    MangleClrIdentifier(m.Method.Name),
+                    MangleClrIdentifier(ToClrOperatorName(m.Method.Name)),
                     methodAttrs,
                     callingConvention,
                     returnType: MetadataType(typeof(object)),

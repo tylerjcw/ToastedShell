@@ -9,6 +9,7 @@ namespace Tosh.Stdlib.Pipeline;
 [CommandExample("1..10 | window 2 func(a, b) => ($a + $b)", Title = "Pairwise sums")]
 [CommandOutput("Arrays (or transformed results) for each sliding window position.")]
 [PipelineInput(AcceptsScalar = true, AcceptsRecord = true, Description = "Yields overlapping windows of the specified size as the pipeline flows.")]
+[CommandStreaming(StreamingBehavior.Lazy)]
 public sealed class WindowCommand : ShellCommand
 {
     public WindowCommand()

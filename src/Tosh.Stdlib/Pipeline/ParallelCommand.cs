@@ -10,6 +10,7 @@ namespace Tosh.Stdlib.Pipeline;
 [CommandExample("echo 1 2 3 | parallel { echo (_ * 2) }", Title = "Double each item in parallel")]
 [CommandOutput("Returns whatever values the callable or block emits for each input item, in input order.")]
 [PipelineInput(AcceptsScalar = true, AcceptsRecord = true, Description = "Consumes the current pipeline and executes the callable or block in parallel for each input item.")]
+[CommandStreaming(StreamingBehavior.Eager)]
 public sealed class ParallelCommand : ShellCommand
 {
     public ParallelCommand()

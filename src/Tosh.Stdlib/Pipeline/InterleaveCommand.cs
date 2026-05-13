@@ -7,6 +7,7 @@ namespace Tosh.Stdlib.Pipeline;
 [CommandExample("echo 1 2 3 | interleave [a b c]", Title = "Alternate numbers and letters")]
 [CommandOutput("Items from the pipeline and the other sequence in alternating order.")]
 [PipelineInput(AcceptsScalar = true, AcceptsRecord = true, Description = "Alternates items from the pipeline with the other sequence.")]
+[CommandStreaming(StreamingBehavior.Lazy)]
 public sealed class InterleaveCommand : ShellCommand
 {
     public InterleaveCommand()

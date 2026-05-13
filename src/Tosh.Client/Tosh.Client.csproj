@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>Tosh.Client</RootNamespace>
+    <AssemblyName>Tosh.Client</AssemblyName>
+    <IsPackable>true</IsPackable>
+    <PackageId>Tosh.Client</PackageId>
+    <Description>Client-side helpers for programs that talk to TōSh: TSSP frame writer, /dev/tty status and prompt helpers, environment-variable negotiation. Zero dependencies on the rest of the TōSh tree.</Description>
+    <Authors>TōSh contributors</Authors>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Tosh.Tests" />
+  </ItemGroup>
+
+</Project>

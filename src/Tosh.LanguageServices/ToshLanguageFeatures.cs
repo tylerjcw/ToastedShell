@@ -854,6 +854,7 @@ public sealed class ToshLanguageFeatures
         var infoLine = new List<string>();
         infoLine.Add($"Category: {entry.Category}");
         if (entry.SinceVersion is not null) infoLine.Add($"Since: {entry.SinceVersion}");
+        if (entry.Streaming is not null) infoLine.Add($"Streaming: {entry.Streaming}");
         sb.AppendLine($"*{string.Join(" · ", infoLine)}*");
         sb.AppendLine();
 

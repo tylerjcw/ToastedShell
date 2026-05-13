@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/Tosh.Cli/Tosh.Cli.csproj" />
+    <Project Path="src/Tosh.Client/Tosh.Client.csproj" />
     <Project Path="src/Tosh.Runtime/Tosh.Runtime.csproj" />
     <Project Path="src/Tosh.Language/Tosh.Language.csproj" />
     <Project Path="src/Tosh.LanguageServices/Tosh.LanguageServices.csproj" />
@@ -9,6 +10,7 @@
     <Project Path="src/Tosh.Stdlib/Tosh.Stdlib.csproj" />
     <Project Path="src/Tosh.Tui/Tosh.Tui.csproj" />
     <Project Path="src/Tosh.Tome/Tosh.Tome.csproj" />
+    <Project Path="src/Tosh.Crumb/Tosh.Crumb.csproj" />
     <Project Path="src/Tosh.Compiler/Tosh.Compiler.csproj" />
     <Project Path="src/Tosh.Compiler.Runtime/Tosh.Compiler.Runtime.csproj" />
     <Project Path="src/Tosh.Compiler.IR/Tosh.Compiler.IR.csproj" />

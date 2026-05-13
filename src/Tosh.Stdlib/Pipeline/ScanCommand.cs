@@ -9,6 +9,7 @@ namespace Tosh.Stdlib.Pipeline;
 [CommandExample("echo a b c | scan \"\" { $acc + _ }", Title = "Running string concatenation")]
 [CommandOutput("Every intermediate accumulator value (one per input item).")]
 [PipelineInput(AcceptsScalar = true, AcceptsRecord = true, Description = "Folds the pipeline from left to right, yielding each intermediate value.")]
+[CommandStreaming(StreamingBehavior.Lazy)]
 public sealed class ScanCommand : ShellCommand
 {
     public ScanCommand()

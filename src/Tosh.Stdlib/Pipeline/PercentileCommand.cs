@@ -8,6 +8,7 @@ namespace Tosh.Stdlib.Pipeline;
 [CommandExample("echo 1 2 3 4 5 6 7 8 9 10 | percentile 95", Title = "95th percentile")]
 [CommandOutput("The value at the requested percentile using linear interpolation.")]
 [PipelineInput(AcceptsScalar = true, AcceptsRecord = true, Description = "Consumes the pipeline and returns the percentile value.")]
+[CommandStreaming(StreamingBehavior.Eager)]
 public sealed class PercentileCommand : ShellCommand, ICurrentItemMemberPathCommand
 {
     public PercentileCommand()

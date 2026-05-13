@@ -8,6 +8,7 @@ namespace Tosh.Stdlib.Pipeline;
 [CommandExample("echo a b c | enumerate 1", Title = "1-based indexing")]
 [CommandOutput("Two-element arrays [index, item] for each pipeline item.", ClrType = typeof(IAsyncEnumerable<object[]>))]
 [PipelineInput(AcceptsScalar = true, AcceptsRecord = true, Description = "Each item is paired with its index.")]
+[CommandStreaming(StreamingBehavior.Lazy)]
 public sealed class EnumerateCommand : ShellCommand
 {
     public EnumerateCommand()

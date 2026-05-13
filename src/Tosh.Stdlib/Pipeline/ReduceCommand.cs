@@ -9,6 +9,7 @@ namespace Tosh.Stdlib.Pipeline;
 [CommandExample("echo one two three | reduce \"\" { $acc + _.Substring(0, 1) }", Title = "Fold with a block")]
 [CommandOutput("Returns the final accumulator value. On an empty input stream, `reduce` returns the seed unchanged.")]
 [PipelineInput(AcceptsScalar = true, AcceptsRecord = true, Description = "Consumes the current pipeline from left to right and folds it into one final value.")]
+[CommandStreaming(StreamingBehavior.Eager)]
 public sealed class ReduceCommand : ShellCommand
 {
     public ReduceCommand()

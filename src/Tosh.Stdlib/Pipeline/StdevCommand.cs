@@ -7,6 +7,7 @@ namespace Tosh.Stdlib.Pipeline;
 [CommandExample("echo 2 4 4 4 5 5 7 9 | stdev", Title = "Standard deviation")]
 [CommandOutput("The population standard deviation of the pipeline values.")]
 [PipelineInput(AcceptsScalar = true, AcceptsRecord = true, Description = "Consumes the pipeline and returns the standard deviation.")]
+[CommandStreaming(StreamingBehavior.Eager)]
 public sealed class StdevCommand : ShellCommand, ICurrentItemMemberPathCommand
 {
     public StdevCommand(string name = "stdev")

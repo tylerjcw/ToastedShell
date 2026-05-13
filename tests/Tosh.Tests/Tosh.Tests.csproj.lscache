@@ -73,6 +73,12 @@ ConfigCommandTests.cs
 ConsolePagerTests.cs
 ConsoleSerialCollection.cs
 ConstantFoldingTests.cs
+CrumbFormatterResolveTests.cs
+CrumbOptionsTests.cs
+CrumbPacmanFlagsTests.cs
+CrumbPrivilegeTests.cs
+CrumbTsspMetaFrameTests.cs
+CrumbVercmpTests.cs
 DataProcessingCommandTests.cs
 DebugAndProfileTests.cs
 DiagnosticRendererTests.cs
@@ -138,6 +144,7 @@ SpawnCommandTests.cs
 StartupLoaderTests.cs
 StreamCommandTests.cs
 StreamHandleCommandTests.cs
+StreamingContractTests.cs
 StructuredDataCommandTests.cs
 SubcommandTests.cs
 SyntaxHighlighterTests.cs
@@ -162,9 +169,11 @@ _HoverProbe.cs
 [metadataReferences]
 ../../src/
  Tosh.Cli/obj/Debug/net10.0/ref/Tosh.Cli.dll
+ Tosh.Client/obj/Debug/net10.0/ref/Tosh.Client.dll
  Tosh.Compiler.IR/obj/Debug/net10.0/ref/Tosh.Compiler.IR.dll
  Tosh.Compiler.Runtime/obj/Debug/net10.0/ref/Tosh.Compiler.Runtime.dll
  Tosh.Compiler/obj/Debug/net10.0/ref/Tosh.Compiler.dll
+ Tosh.Crumb/obj/Debug/net10.0/ref/crumb.dll
  Tosh.Language/obj/Debug/net10.0/ref/Tosh.Language.dll
  Tosh.LanguageServices/obj/Debug/net10.0/ref/Tosh.LanguageServices.dll
  Tosh.Lsp/obj/Debug/net10.0/ref/Tosh.Lsp.dll

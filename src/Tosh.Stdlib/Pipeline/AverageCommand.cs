@@ -8,6 +8,7 @@ namespace Tosh.Stdlib.Pipeline;
 [CommandExample("ls | average .Length", Title = "Average file sizes")]
 [CommandOutput("The arithmetic mean of the pipeline values. Supports numeric, StorageSize, and TimeSpan types.")]
 [PipelineInput(AcceptsScalar = true, AcceptsRecord = true, Description = "Consumes the pipeline and returns the arithmetic mean.")]
+[CommandStreaming(StreamingBehavior.Eager)]
 public sealed class AverageCommand : ShellCommand, ICurrentItemMemberPathCommand
 {
     public AverageCommand(string name = "average")

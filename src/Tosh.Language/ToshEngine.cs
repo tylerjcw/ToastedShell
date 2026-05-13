@@ -2436,6 +2436,47 @@ public sealed partial class ToshEngine : IShellEvaluator
     {
         var binding = await EvaluateVariableBindingAsync(sourceName, sourceText, assignment.Value, cancellationToken);
 
+        // Path 1 — terminal index access: `$root[..].chain[..]["key"] = value`.
+        // We evaluate the indexer's own target (everything but the final
+        // `[index]`) into an object, then route through SetIndexedValue.
+        if (assignment.Target is IndexAccessArgumentSyntax idx)
+        {
+            var indexedTarget = await EvaluateArgumentAsync(sourceName, sourceText, idx.Target, cancellationToken);
+            var indexValue = await EvaluateArgumentAsync(sourceName, sourceText, idx.Index, cancellationToken);
+            var newValue = binding.Value;
+
+            try
+            {
+                if (assignment.Operator == "??=")
+                {
+                    var currentValue = ShellIndexingUtilities.GetIndexedValue(indexedTarget, indexValue, idx.LookupKind);
+                    if (currentValue is not null)
+                    {
+                        yield break;
+                    }
+                }
+                else if (assignment.Operator != "=")
+                {
+                    var currentValue = ShellIndexingUtilities.GetIndexedValue(indexedTarget, indexValue, idx.LookupKind);
+                    newValue = ApplyCompoundAssignment(currentValue, assignment.Operator, binding.Value);
+                }
+
+                ShellIndexingUtilities.SetIndexedValue(indexedTarget, indexValue, newValue, idx.LookupKind);
+            }
+            catch (Exception exception) when (exception is not ToshDiagnosticException)
+            {
+                throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                    Code: "tosh.runtime.index_assignment_failed",
+                    Title: exception.Message,
+                    SourceName: sourceName,
+                    SourceText: sourceText,
+                    Span: assignment.Target.Span,
+                    Label: "while assigning to this index"));
+            }
+
+            yield break;
+        }
+
         if (!TryDecomposeMemberAssignmentTarget(assignment.Target, out var rootExpression, out var memberPath))
         {
             throw ToshDiagnosticException.Create(new ToshDiagnostic(

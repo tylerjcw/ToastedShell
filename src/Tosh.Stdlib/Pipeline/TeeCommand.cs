@@ -11,6 +11,7 @@ namespace Tosh.Stdlib.Pipeline;
 [CommandExample("ls | tee snapshot.txt | where _.IsDirectory", Title = "Write a copy to a file and keep piping")]
 [CommandExample("ps | tee -v processes | count", Title = "Capture a pipeline into a variable")]
 [CommandOutput("Re-emits each input item unchanged, while also writing it to the configured destination as a side effect.")]
+[CommandStreaming(StreamingBehavior.Lazy)]
 public sealed class TeeCommand : ShellCommand
 {
     public TeeCommand()

@@ -8,6 +8,7 @@ namespace Tosh.Stdlib.Pipeline;
 [CommandExample("ls | first 5", Title = "Get the first five items")]
 [CommandOutput("The first N pipeline objects.")]
 [PipelineInput(AcceptsScalar = true, AcceptsRecord = true, Description = "Yields the first N items then stops consuming.")]
+[CommandStreaming(StreamingBehavior.ShortCircuit)]
 public sealed class FirstCommand : ShellCommand
 {
     public FirstCommand()

@@ -8,6 +8,7 @@ namespace Tosh.Stdlib.Pipeline;
 [CommandExample("ls | flat-map { ls $_.FullName }", Title = "List contents of each subdirectory")]
 [CommandOutput("The flattened results of applying the transform to each pipeline item.")]
 [PipelineInput(AcceptsScalar = true, AcceptsRecord = true, Description = "Transforms each item and flattens the resulting sequences into one stream.")]
+[CommandStreaming(StreamingBehavior.Lazy)]
 public sealed class FlatMapCommand : ShellCommand
 {
     public FlatMapCommand()

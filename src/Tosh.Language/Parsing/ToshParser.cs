@@ -6621,7 +6621,15 @@ public static class ToshParser
                 expression = ApplyQualifiedMemberChain(expression, postfixText, postfixToken.Span, allowMethodCall: false);
             }
 
-            if (expression is not MemberAccessArgumentSyntax)
+            // Allow trailing `[index]` segments — e.g. `$x.config["key"] = …`
+            // or the simpler `$x["key"] = …`. Multiple bracket segments are
+            // supported by looping.
+            while (Current.Kind == SyntaxTokenKind.OpenBracket)
+            {
+                expression = ParseIndexAccess(expression);
+            }
+
+            if (expression is not MemberAccessArgumentSyntax and not IndexAccessArgumentSyntax)
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
                     Code: "tosh.parser.expected_member_assignment_target",
@@ -10291,10 +10299,35 @@ public static class ToshParser
             var offset = 1;
             var hasMemberPath = HasEmbeddedAssignmentMemberPath(Current);
 
-            while (IsPostfixToken(Peek(offset)))
+            while (true)
             {
-                hasMemberPath = true;
-                offset++;
+                if (IsPostfixToken(Peek(offset)))
+                {
+                    hasMemberPath = true;
+                    offset++;
+                    continue;
+                }
+
+                // Allow `[...]` index segments in the LHS chain so
+                // expressions like `$x["key"] = value` are recognised as
+                // member assignment rather than a predicate expression.
+                if (Peek(offset).Kind == SyntaxTokenKind.OpenBracket)
+                {
+                    var depth = 1;
+                    offset++;
+                    while (depth > 0)
+                    {
+                        var tok = Peek(offset);
+                        if (tok.Kind == SyntaxTokenKind.EndOfFile) return false;
+                        if (tok.Kind == SyntaxTokenKind.OpenBracket) depth++;
+                        else if (tok.Kind == SyntaxTokenKind.CloseBracket) depth--;
+                        offset++;
+                    }
+                    hasMemberPath = true;
+                    continue;
+                }
+
+                break;
             }
 
             return hasMemberPath && IsAssignmentOperatorToken(Peek(offset));

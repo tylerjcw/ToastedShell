@@ -9,6 +9,7 @@ namespace Tosh.Stdlib.Pipeline;
 [CommandNote("Inside predicate expressions, bare member access resolves against the current pipeline object.")]
 [CommandOutput("Pipeline objects for which the predicate returned true.")]
 [PipelineInput(AcceptsScalar = true, Description = "Consumes any pipeline objects and tests each against the predicate.")]
+[CommandStreaming(StreamingBehavior.Lazy)]
 public sealed class WhereCommand : ShellCommand
 {
     public WhereCommand()

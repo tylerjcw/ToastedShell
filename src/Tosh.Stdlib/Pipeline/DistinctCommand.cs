@@ -8,6 +8,7 @@ namespace Tosh.Stdlib.Pipeline;
 [CommandExample("ls | distinct .Extension", Title = "Distinct by a member path")]
 [CommandOutput("Pipeline items with duplicate values removed. Order is preserved.")]
 [PipelineInput(AcceptsScalar = true, AcceptsRecord = true, Description = "Yields each pipeline object only the first time its value (or keyed value) is seen.")]
+[CommandStreaming(StreamingBehavior.Lazy)]
 public sealed class DistinctCommand : ShellCommand, ICurrentItemMemberPathCommand
 {
     public DistinctCommand()

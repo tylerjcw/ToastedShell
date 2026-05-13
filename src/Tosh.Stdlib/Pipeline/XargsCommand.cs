@@ -9,6 +9,7 @@ namespace Tosh.Stdlib.Pipeline;
 [CommandExample("echo README.md AGENTS.md | xargs wc -l", Title = "Pass piped words as command arguments")]
 [CommandExample("glob \"*.log\" | xargs -n 1 rm", Title = "Run one invocation per input argument")]
 [CommandOutput("Streams whatever the invoked sub-command produces, once per batch of input arguments.")]
+[CommandStreaming(StreamingBehavior.Eager)]
 public sealed class XargsCommand : ShellCommand
 {
     public XargsCommand()

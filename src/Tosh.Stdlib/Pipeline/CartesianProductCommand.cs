@@ -11,6 +11,7 @@ namespace Tosh.Stdlib.Pipeline;
 [CommandNote("For infinite sources, uses diagonal (Cantor) enumeration so every pair is reached in finite time.")]
 [CommandOutput("All combinations of items from the pipeline and the other sequence.")]
 [PipelineInput(AcceptsScalar = true, AcceptsRecord = true, Description = "First sequence for the Cartesian product.")]
+[CommandStreaming(StreamingBehavior.Eager)]
 public sealed class CartesianProductCommand : ShellCommand
 {
     public CartesianProductCommand()

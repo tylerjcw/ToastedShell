@@ -8,6 +8,7 @@ namespace Tosh.Stdlib.Pipeline;
 [CommandExample("echo a b c | intersperse \"-\"", Title = "Insert dashes")]
 [CommandOutput("The original items with the separator inserted between each pair.")]
 [PipelineInput(AcceptsScalar = true, AcceptsRecord = true, Description = "Items are yielded with the separator between each pair.")]
+[CommandStreaming(StreamingBehavior.Lazy)]
 public sealed class IntersperseCommand : ShellCommand
 {
     public IntersperseCommand()

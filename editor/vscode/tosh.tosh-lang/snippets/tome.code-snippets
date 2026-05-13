@@ -1,0 +1,20 @@
+{
+    "Tome Workspace": {
+        "prefix": "tome-workspace",
+        "body": [
+            "workspace:",
+            "  folder: $1",
+            "  layout: $2"
+        ],
+        "description": "Basic Tome workspace structure"
+    },
+    "Tome Folder": {
+        "prefix": "tome-folder",
+        "body": [
+            "folder:",
+            "  path: $1",
+            "  layout: $2"
+        ],
+        "description": "Tome folder block"
+    }
+}

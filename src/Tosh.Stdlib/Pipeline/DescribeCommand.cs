@@ -9,6 +9,7 @@ namespace Tosh.Stdlib.Pipeline;
 [CommandExample("echo 23 45 12 67 34 89 11 55 | describe", Title = "Summary statistics")]
 [CommandOutput("A table of summary statistics: Count, Mean, Median, StdDev, Min, Max, Q1, Q3.")]
 [PipelineInput(AcceptsScalar = true, AcceptsRecord = true, Description = "Consumes the pipeline and returns descriptive statistics.")]
+[CommandStreaming(StreamingBehavior.Eager)]
 public sealed class DescribeCommand : ShellCommand, ICurrentItemMemberPathCommand
 {
     public DescribeCommand()

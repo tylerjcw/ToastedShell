@@ -9,6 +9,7 @@ namespace Tosh.Stdlib.Pipeline;
 [CommandExample("echo 1 2 3 | get func(x) => ($x * 2)", Title = "Project with a function")]
 [CommandNote("`get` is the column-picker (member values). For row picking by index/range/list, use `row`.")]
 [CommandOutput("The selected member value(s) — one item per requested path, in input order.")]
+[CommandStreaming(StreamingBehavior.Lazy)]
 public sealed class GetCommand : ShellCommand
 {
     public GetCommand(string name = "get")

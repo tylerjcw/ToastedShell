@@ -29,6 +29,7 @@
     <ProjectReference Include="..\..\src\Tosh.Lsp\Tosh.Lsp.csproj" />
     <ProjectReference Include="..\..\src\Tosh.Mcp\Tosh.Mcp.csproj" />
     <ProjectReference Include="..\..\src\Tosh.Compiler\Tosh.Compiler.csproj" />
+    <ProjectReference Include="..\..\src\Tosh.Crumb\Tosh.Crumb.csproj" />
   </ItemGroup>
 
 </Project>

@@ -8,6 +8,7 @@ namespace Tosh.Stdlib.Pipeline;
 [CommandExample("echo a b c | skip", Title = "Skip the first item")]
 [CommandOutput("The remaining pipeline objects after skipping the first N.")]
 [PipelineInput(AcceptsScalar = true, AcceptsRecord = true, Description = "Consumes and discards the first N items, then yields the rest.")]
+[CommandStreaming(StreamingBehavior.Lazy)]
 public sealed class SkipCommand : ShellCommand
 {
     public SkipCommand()

@@ -7,6 +7,7 @@ namespace Tosh.Stdlib.Pipeline;
 [CommandExample("echo red blue red green blue red | frequencies", Title = "Count distinct values")]
 [CommandExample("ls | frequencies Extension", Title = "Count file extensions")]
 [CommandOutput("Records of the form { Value, Count } describing how often each distinct input value occurred.")]
+[CommandStreaming(StreamingBehavior.Eager)]
 public sealed class FrequenciesCommand : ShellCommand, ICurrentItemMemberPathCommand
 {
     public FrequenciesCommand()
