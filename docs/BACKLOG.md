@@ -966,7 +966,7 @@ option in the list carries a literal default. Defaults flow through
 var result = from $p in $products
              where $p.Price > 50
              join $c in $categories on $p.CategoryId == $c.Id
-             orderby $p.Price descending
+             orderby $p Price descending
              select { Name: $p.Name, Category: $c.Name, Price: $p.Price }
 
 var summary = from $sale in $sales
