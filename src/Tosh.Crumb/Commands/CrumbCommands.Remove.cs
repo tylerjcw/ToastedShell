@@ -36,7 +36,7 @@ public static partial class CrumbCommands
             }
         }
         if (rows.Count > 0)
-            UpgradeListFormatter.RenderPlan(rows, "Packages to remove");
+            UpgradeListFormatter.RenderPlan(rows, "Packages to remove", opt.GroupBy);
 
         var args = new List<string> { "pacman", flag };
         if (opt.NoConfirm) args.Add("--noconfirm");

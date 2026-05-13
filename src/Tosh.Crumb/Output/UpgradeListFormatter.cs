@@ -58,7 +58,8 @@ internal static class UpgradeListFormatter
     /// </summary>
     public static void RenderPlan(
         IReadOnlyList<(string Source, string Name, string Version)> rows,
-        string title)
+        string title,
+        string? groupBy = null)
     {
         if (rows.Count == 0) return;
         var truecolor = SupportsTrueColor();
@@ -74,15 +75,41 @@ internal static class UpgradeListFormatter
 
         Confirm.Status(string.Empty);
         Confirm.Status($"{title} ({rows.Count})");
-        Confirm.Status(BuildBorder(widths, "╭", "┬", "╮", color, truecolor));
-        Confirm.Status(BuildPlanHeader(headers, widths, color, truecolor));
-        Confirm.Status(BuildBorder(widths, "├", "┼", "┤", color, truecolor));
-        foreach (var (src, name, ver) in rows)
+        if (!string.IsNullOrEmpty(groupBy))
         {
-            var tint = string.Equals(src, "aur", StringComparison.OrdinalIgnoreCase) ? AurTint : RepoTint;
-            Confirm.Status(BuildPlanRow(src, name, ver, widths, tint, color, truecolor));
+            var grouped = rows.GroupBy(r => groupBy.ToLowerInvariant() switch
+            {
+                "repo" => r.Source,
+                "source" => r.Source,
+                "version" => r.Version,
+                _ => r.Source
+            });
+            foreach (var g in grouped)
+            {
+                Confirm.Status($"[{groupBy}: {g.Key}]");
+                Confirm.Status(BuildBorder(widths, "╭", "┬", "╮", color, truecolor));
+                Confirm.Status(BuildPlanHeader(headers, widths, color, truecolor));
+                Confirm.Status(BuildBorder(widths, "├", "┼", "┤", color, truecolor));
+                foreach (var (src, name, ver) in g)
+                {
+                    var tint = string.Equals(src, "aur", StringComparison.OrdinalIgnoreCase) ? AurTint : RepoTint;
+                    Confirm.Status(BuildPlanRow(src, name, ver, widths, tint, color, truecolor));
+                }
+                Confirm.Status(BuildBorder(widths, "╰", "┴", "╯", color, truecolor));
+            }
         }
-        Confirm.Status(BuildBorder(widths, "╰", "┴", "╯", color, truecolor));
+        else
+        {
+            Confirm.Status(BuildBorder(widths, "╭", "┬", "╮", color, truecolor));
+            Confirm.Status(BuildPlanHeader(headers, widths, color, truecolor));
+            Confirm.Status(BuildBorder(widths, "├", "┼", "┤", color, truecolor));
+            foreach (var (src, name, ver) in rows)
+            {
+                var tint = string.Equals(src, "aur", StringComparison.OrdinalIgnoreCase) ? AurTint : RepoTint;
+                Confirm.Status(BuildPlanRow(src, name, ver, widths, tint, color, truecolor));
+            }
+            Confirm.Status(BuildBorder(widths, "╰", "┴", "╯", color, truecolor));
+        }
     }
 
     private static string BuildPlanHeader(string[] headers, int[] widths, bool color, bool truecolor)

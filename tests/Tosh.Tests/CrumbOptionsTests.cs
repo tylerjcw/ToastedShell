@@ -5,6 +5,15 @@ namespace Tosh.Tests;
 
 public class CrumbOptionsTests
 {
+    [Theory]
+    [InlineData("--group-by", "repo")]
+    [InlineData("--group-by", "source")]
+    [InlineData("--group-by", "version")]
+    public void GroupBy_parses_value(string flag, string value)
+    {
+        var o = CrumbOptions.Parse(new[] { flag, value });
+        Assert.Equal(value, o.GroupBy);
+    }
     [Fact]
     public void Positional_collected_in_order()
     {

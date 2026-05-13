@@ -128,7 +128,7 @@ public static partial class CrumbCommands
 
             if (planRows.Count > 0)
             {
-                UpgradeListFormatter.RenderPlan(planRows, "Packages to install");
+                UpgradeListFormatter.RenderPlan(planRows, "Packages to install", opt.GroupBy);
             }
 
             if (plan is not null && plan.Skipped.Count > 0)
@@ -216,7 +216,7 @@ public static partial class CrumbCommands
                 .Select(n => ("aur", n, plan.AurVersions.TryGetValue(n, out var v) ? v : string.Empty))
                 .ToList();
             if (aurRows.Count > 0)
-                UpgradeListFormatter.RenderPlan(aurRows, "AUR packages to build");
+                UpgradeListFormatter.RenderPlan(aurRows, "AUR packages to build", opt.GroupBy);
 
             if (plan.Skipped.Count > 0)
             {

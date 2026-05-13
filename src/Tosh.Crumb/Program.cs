@@ -139,6 +139,7 @@ internal static class Program
         Console.WriteLine("  -N / --ndjson      one JSON object per line");
         Console.WriteLine("  -T / --tsv         tab-separated values");
         Console.WriteLine("  --format <fmt>     auto | table | json | ndjson | tsv | names");
+        Console.WriteLine("  --group-by <field> group install/remove summary by 'repo', 'source', or 'version'");
         Console.WriteLine();
         Console.WriteLine("scope filters:");
         Console.WriteLine("  --repos / -Sr*     sync repos only");

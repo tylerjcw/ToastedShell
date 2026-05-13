@@ -7,6 +7,7 @@ namespace Tosh.Crumb.Commands;
 /// </summary>
 public sealed class CrumbOptions
 {
+    public string? GroupBy { get; set; }
     public OutputFormat Format { get; set; } = OutputFormat.Auto;
     public bool Verbose { get; set; }
     public bool Quiet { get; set; }       // suppress live build output, log to file instead
@@ -40,7 +41,6 @@ public sealed class CrumbOptions
     public string? NewsFeed { get; set; }
 
     public List<string> Positional { get; } = new();
-
     public static CrumbOptions Parse(IReadOnlyList<string> args)
     {
         var opt = new CrumbOptions();
@@ -56,6 +56,13 @@ public sealed class CrumbOptions
                     break;
                 case var s when s.StartsWith("--format=", StringComparison.Ordinal):
                     opt.Format = ParseFormat(a["--format=".Length..]);
+                    break;
+                case "--group-by":
+                    if (++i >= args.Count) throw new ArgumentException("--group-by requires a value");
+                    opt.GroupBy = args[i];
+                    break;
+                case var s when s.StartsWith("--group-by=", StringComparison.Ordinal):
+                    opt.GroupBy = a["--group-by=".Length..];
                     break;
                 case "--json": opt.Format = OutputFormat.Json; break;
                 case "--ndjson": opt.Format = OutputFormat.Ndjson; break;
