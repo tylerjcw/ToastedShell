@@ -20,4 +20,8 @@
     <ProjectReference Include="..\Tosh.LanguageServices\Tosh.LanguageServices.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="Tosh.Tests" />
+  </ItemGroup>
+
 </Project>

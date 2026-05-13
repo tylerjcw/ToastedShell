@@ -30,12 +30,13 @@ internal static class WorkspaceFile
     public static Workspace Load(string path)
     {
         var text = File.ReadAllText(path);
+        var fullPath = Path.GetFullPath(path);
         // VS Code workspace files are JSON; detect by extension and fall
         // back to native .tome parsing for everything else.
-        var ws = path.EndsWith(".code-workspace", StringComparison.OrdinalIgnoreCase)
-            ? CodeWorkspaceImporter.Parse(text, sourceName: path)
-            : Parse(text, sourceName: path);
-        return ws with { SourcePath = Path.GetFullPath(path) };
+        var ws = fullPath.EndsWith(".code-workspace", StringComparison.OrdinalIgnoreCase)
+            ? CodeWorkspaceImporter.Parse(text, sourceName: fullPath)
+            : Parse(text, sourceName: fullPath);
+        return ResolveLoadedPaths(ws, fullPath);
     }
 
     public static Workspace Parse(string text, string sourceName = "<workspace>")
@@ -86,6 +87,19 @@ internal static class WorkspaceFile
         sb.Append("    }\n");
         sb.Append("}\n");
         return sb.ToString();
+    }
+
+    private static Workspace ResolveLoadedPaths(Workspace ws, string sourcePath)
+    {
+        var baseDir = Path.GetDirectoryName(sourcePath) ?? Environment.CurrentDirectory;
+        var folders = ws.Folders
+            .Select(f =>
+            {
+                var resolved = Path.IsPathRooted(f.Path) ? Path.GetFullPath(f.Path) : Path.GetFullPath(f.Path, baseDir);
+                return f with { Path = resolved };
+            })
+            .ToArray();
+        return ws with { SourcePath = sourcePath, Folders = folders };
     }
 
     private static string Quote(string s)

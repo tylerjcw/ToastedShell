@@ -105,10 +105,21 @@ internal static class Formatter
                 using var sw = p.StandardInput;
                 await sw.WriteAsync(text);
             });
-            var stdout = p.StandardOutput.ReadToEnd();
-            var stderr = p.StandardError.ReadToEnd();
-            writeTask.Wait();
-            p.WaitForExit(10_000);
+            var stdoutTask = p.StandardOutput.ReadToEndAsync();
+            var stderrTask = p.StandardError.ReadToEndAsync();
+            if (!p.WaitForExit(10_000))
+            {
+                try { p.Kill(entireProcessTree: true); }
+                catch { }
+                try { p.WaitForExit(); }
+                catch { }
+                return new Result(false, text, $"format ({exe}): timed out");
+            }
+            try { writeTask.GetAwaiter().GetResult(); }
+            catch (IOException) { }
+            catch (ObjectDisposedException) { }
+            var stdout = stdoutTask.GetAwaiter().GetResult();
+            var stderr = stderrTask.GetAwaiter().GetResult();
 
             if (p.ExitCode != 0)
             {

@@ -419,9 +419,10 @@ internal sealed partial class TomeApp
         var width = Math.Min(80, Math.Max(40, screenWidth - 8));
         var top = Math.Max(1, (screenHeight - height) / 2);
         var left = Math.Max(1, (screenWidth - width) / 2);
-        // Query row is top+1; column = left + len("  » ") + query.Length, clamped.
+        // Paint positions above are one-based ANSI coordinates; ShowCursorAt
+        // wants zero-based row/column.
         var col = Math.Min(left + width - 1, left + 4 + _pickerQuery.Length);
-        return (top + 1, col);
+        return (top, col - 1);
     }
 
     private static string PadOrTrim(string s, int width)

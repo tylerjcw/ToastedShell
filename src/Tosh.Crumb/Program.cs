@@ -58,10 +58,12 @@ internal static class Program
                 "files" or "fl" => CrumbCommands.Files(opt),
                 "owns" or "own" or "o" => CrumbCommands.Owns(opt),
                 "install" or "in" or "add" => await CrumbCommands.InstallAsync(opt, cts.Token),
+                "install-file" or "file-install" or "local-install" => await CrumbCommands.InstallFileAsync(opt, cts.Token),
                 "remove" or "rm" or "uninstall" => await CrumbCommands.RemoveAsync(opt, cts.Token),
                 "sync" or "sy" or "refresh" => await CrumbCommands.SyncAsync(opt, cts.Token),
                 "update" or "up" or "upgrade" => await CrumbCommands.UpdateAsync(opt, cts.Token),
                 "clean" or "purge" => await CrumbCommands.CleanAsync(opt, cts.Token),
+                "logs" or "log" => await CrumbCommands.LogsAsync(opt, cts.Token),
                 "gendb" => await CrumbCommands.GenDbAsync(opt, cts.Token),
                 "news" => await NewsCommand.RunAsync(opt, cts.Token),
                 _ => UnknownCommand(subcommand),
@@ -99,8 +101,11 @@ internal static class Program
         Console.WriteLine();
         Console.WriteLine("common stacked combos:");
         Console.WriteLine("  -S <pkg>      install                          (= install)");
+        Console.WriteLine("  -Sw <pkg>     download repo pkg / fetch AUR     (= install --download-only)");
+        Console.WriteLine("  -U <file>     install local package file        (= install-file)");
         Console.WriteLine("  -Sy           refresh package databases        (= sync)");
         Console.WriteLine("  -Syu          full system update               (= update)");
+        Console.WriteLine("  -Suw          download pending repo upgrades   (= update --download-only)");
         Console.WriteLine("  -Ss <terms>   search repos + AUR                (= search)");
         Console.WriteLine("  -Si <pkg>     info on a repo/AUR pkg            (= info)");
         Console.WriteLine("  -Ssa <terms>  AUR-only search                   (= search --aur-only)");
@@ -125,10 +130,12 @@ internal static class Program
         Console.WriteLine("  files    <pkg>        files owned by an installed package");
         Console.WriteLine("  owns     <path>       which installed package owns a path");
         Console.WriteLine("  install  <pkg...>     repo via pacman, AUR via clone + makepkg -si");
+        Console.WriteLine("  install-file <file...> pacman -U local package file(s)");
         Console.WriteLine("  remove   <pkg...>     pacman -R (with --recursive / --nosave)");
         Console.WriteLine("  sync                  pacman -Sy (refresh databases)");
         Console.WriteLine("  update                pacman -Syu + rebuild stale AUR packages");
         Console.WriteLine("  clean                 wipe the AUR build cache (~/.cache/crumb/aur)");
+        Console.WriteLine("  logs [--pkg N] [--tail] [--clean] [--limit N]  inspect build logs");
         Console.WriteLine("  gendb                 seed the devel-commit cache for installed VCS pkgs");
         Console.WriteLine("  news [--all] [--limit N] [--since DATE]   Arch Linux news headlines");
         Console.WriteLine();
@@ -140,12 +147,16 @@ internal static class Program
         Console.WriteLine("  -T / --tsv         tab-separated values");
         Console.WriteLine("  --format <fmt>     auto | table | json | ndjson | tsv | names");
         Console.WriteLine("  --group-by <field> group install/remove summary by 'repo', 'source', or 'version'");
+        Console.WriteLine("  --download-only    download repo packages / fetch AUR PKGBUILDs without installing");
         Console.WriteLine();
         Console.WriteLine("scope filters:");
         Console.WriteLine("  --repos / -Sr*     sync repos only");
         Console.WriteLine("  --aur   / -Ss*a    AUR only");
         Console.WriteLine("  --by <field>       AUR search field (name-desc, name, maintainer, depends, …)");
         Console.WriteLine("  --limit N          cap results: search trims to N (AUR ranked by votes); news shows N most recent");
+        Console.WriteLine("  --pkg <name>       logs: filter package logs");
+        Console.WriteLine("  --tail             logs: show tail of newest matching log");
+        Console.WriteLine("  --clean            logs: remove matching logs");
         Console.WriteLine();
         Console.WriteLine("default output:");
         Console.WriteLine("  When stdout is a TTY  → pretty coloured table");
@@ -158,10 +169,13 @@ internal static class Program
         Console.WriteLine("  crumb -Qq | wc -l                               # count installed pkgs");
         Console.WriteLine("  crumb -Qo /usr/bin/ls                           # owning package");
         Console.WriteLine("  crumb -S ripgrep                                # install from repos");
+        Console.WriteLine("  crumb -Sw ripgrep                               # download only");
+        Console.WriteLine("  crumb -U ./pkg.pkg.tar.zst                      # install local package file");
         Console.WriteLine("  crumb install yay --review                      # AUR: review PKGBUILD before build");
         Console.WriteLine("  crumb install yay                               # AUR: build without review (default)");
         Console.WriteLine("  crumb -Syu                                      # full system update");
         Console.WriteLine("  crumb update --aur                              # AUR rebuilds only");
+        Console.WriteLine("  crumb logs --pkg yay --tail                     # inspect latest build log");
         Console.WriteLine("  crumb -Rsn old-pkg                              # remove with deps, no backups");
         Console.WriteLine();
         Console.WriteLine("privilege escalation:");

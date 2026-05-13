@@ -13,9 +13,14 @@ public class CrumbPacmanFlagsTests
     [InlineData("-SsN", "search", new[] { "--ndjson" })]
     [InlineData("-Si", "info", new string[0])]
     [InlineData("-S", "install", new string[0])]
+    [InlineData("-Sw", "install", new[] { "--download-only" })]
+    [InlineData("-Syw", "install", new[] { "--refresh", "--download-only" })]
     [InlineData("-Sy", "sync", new[] { "--refresh" })]
     [InlineData("-Su", "update", new[] { "--upgrade" })]
     [InlineData("-Syu", "update", new[] { "--refresh", "--upgrade" })]
+    [InlineData("-Suw", "update", new[] { "--upgrade", "--download-only" })]
+    [InlineData("-Syuw", "update", new[] { "--refresh", "--upgrade", "--download-only" })]
+    [InlineData("-U", "install-file", new string[0])]
     [InlineData("-Q", "list", new string[0])]
     [InlineData("-Qe", "list", new[] { "--explicit" })]
     [InlineData("-Qm", "list", new[] { "--foreign" })]
@@ -56,8 +61,9 @@ public class CrumbPacmanFlagsTests
     [InlineData("-Qx")]                                                    // unknown -Q modifier
     [InlineData("-Fx")]                                                    // unknown -F modifier
     [InlineData("-Rx")]                                                    // unknown -R modifier
+    [InlineData("-Ux")]                                                    // unknown -U modifier
+    [InlineData("-Ssw")]                                                   // download-only cannot combine with search
     [InlineData("-F")]                                                     // -F requires a modifier
-    [InlineData("-U")]                                                     // not implemented
     public void TryExpand_throws_on_invalid_clusters(string token)
     {
         Assert.Throws<ArgumentException>(() => PacmanFlags.TryExpand(token));

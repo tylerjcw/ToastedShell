@@ -54,6 +54,7 @@ internal sealed class TreeSitterColorizer : ISyntaxColorizer, IDisposable
     private IntPtr _tree;
     private string? _lastText;
     private List<List<StyledSpan>> _spansByLine = new();
+    private LineOffsetMap[] _lineMaps = Array.Empty<LineOffsetMap>();
     private bool _disposed;
 
     public TreeSitterColorizer(IntPtr language, string grammarName, Func<string> readText)
@@ -100,23 +101,10 @@ internal sealed class TreeSitterColorizer : ISyntaxColorizer, IDisposable
     private void Rebuild(string text)
     {
         var bytes = Encoding.UTF8.GetBytes(text);
-        var lineCount = CountLines(text);
-        _spansByLine = new List<List<StyledSpan>>(lineCount);
-        for (var i = 0; i < lineCount; i++) _spansByLine.Add(new List<StyledSpan>());
-
-        // Byte-offset → (line, col-in-bytes) table. The renderer expects
-        // byte-offsets within the line, so we walk the UTF-8 buffer once
-        // and remember each line's starting byte offset.
-        var lineStarts = new int[lineCount];
-        var li = 0;
-        for (var i = 0; i < bytes.Length; i++)
-        {
-            if (bytes[i] == (byte)'\n')
-            {
-                li++;
-                if (li < lineCount) lineStarts[li] = i + 1;
-            }
-        }
+        var lineMaps = BuildLineOffsetMaps(text);
+        _lineMaps = lineMaps;
+        _spansByLine = new List<List<StyledSpan>>(lineMaps.Length);
+        for (var i = 0; i < lineMaps.Length; i++) _spansByLine.Add(new List<StyledSpan>());
 
         // Incremental reparse: when we already have a tree and a known
         // previous text, diff the two and tell tree-sitter what changed
@@ -145,7 +133,7 @@ internal sealed class TreeSitterColorizer : ISyntaxColorizer, IDisposable
         var cursor = ts_tree_cursor_new(root);
         try
         {
-            Walk(ref cursor, parentType: null, bytes, lineStarts);
+            Walk(ref cursor, parentType: null, bytes, lineMaps);
         }
         finally
         {
@@ -156,7 +144,7 @@ internal sealed class TreeSitterColorizer : ISyntaxColorizer, IDisposable
             list.Sort(static (a, b) => a.Start.CompareTo(b.Start));
     }
 
-    private void Walk(ref TSTreeCursor cursor, string? parentType, byte[] bytes, int[] lineStarts)
+    private void Walk(ref TSTreeCursor cursor, string? parentType, byte[] bytes, LineOffsetMap[] lineMaps)
     {
         var node = ts_tree_cursor_current_node(ref cursor);
         var type = MarshalUtf8(ts_node_type(node));
@@ -166,7 +154,7 @@ internal sealed class TreeSitterColorizer : ISyntaxColorizer, IDisposable
         if (childCount == 0)
         {
             var category = Classify(type, named, parentType, _grammarName, bytes, node);
-            if (category != null) EmitSpan(node, category, lineStarts);
+            if (category != null) EmitSpan(node, category, lineMaps);
             return;
         }
 
@@ -174,13 +162,13 @@ internal sealed class TreeSitterColorizer : ISyntaxColorizer, IDisposable
         {
             do
             {
-                Walk(ref cursor, type, bytes, lineStarts);
+                Walk(ref cursor, type, bytes, lineMaps);
             } while (ts_tree_cursor_goto_next_sibling(ref cursor));
             ts_tree_cursor_goto_parent(ref cursor);
         }
     }
 
-    private void EmitSpan(TSNode node, string category, int[] lineStarts)
+    private void EmitSpan(TSNode node, string category, LineOffsetMap[] lineMaps)
     {
         if (!Palette.TryGetValue(category, out var ansi)) return;
         var startByte = (int)ts_node_start_byte(node);
@@ -190,12 +178,15 @@ internal sealed class TreeSitterColorizer : ISyntaxColorizer, IDisposable
         var startLine = (int)startPt.Row;
         var endLine = (int)endPt.Row;
         if (startLine < 0 || startLine >= _spansByLine.Count) return;
+        if (startLine >= lineMaps.Length) return;
 
         // Single-line span — common case.
         if (startLine == endLine)
         {
-            var col = startByte - lineStarts[startLine];
-            var len = endByte - startByte;
+            var map = lineMaps[startLine];
+            var col = map.ByteColumnToCharColumn(startByte - map.ByteStart);
+            var endCol = map.ByteColumnToCharColumn(endByte - map.ByteStart);
+            var len = endCol - col;
             if (len > 0) _spansByLine[startLine].Add(new StyledSpan(col, len, ansi));
             return;
         }
@@ -203,19 +194,21 @@ internal sealed class TreeSitterColorizer : ISyntaxColorizer, IDisposable
         // Multi-line: split. First line goes to EOL, intermediate lines
         // are colored end-to-end, last line from start of line up to the
         // node's end column.
-        var firstCol = startByte - lineStarts[startLine];
-        var firstLineEnd = (startLine + 1 < lineStarts.Length ? lineStarts[startLine + 1] - 1 : lineStarts[startLine])
-                           - lineStarts[startLine];
+        var firstMap = lineMaps[startLine];
+        var firstCol = firstMap.ByteColumnToCharColumn(startByte - firstMap.ByteStart);
+        var firstLineEnd = firstMap.CharLength;
         if (firstLineEnd > firstCol)
             _spansByLine[startLine].Add(new StyledSpan(firstCol, firstLineEnd - firstCol, ansi));
         for (var ln = startLine + 1; ln < endLine && ln < _spansByLine.Count; ln++)
         {
-            var lnEnd = (ln + 1 < lineStarts.Length ? lineStarts[ln + 1] - 1 : lineStarts[ln]) - lineStarts[ln];
+            if (ln >= lineMaps.Length) break;
+            var lnEnd = lineMaps[ln].CharLength;
             if (lnEnd > 0) _spansByLine[ln].Add(new StyledSpan(0, lnEnd, ansi));
         }
-        if (endLine < _spansByLine.Count)
+        if (endLine < _spansByLine.Count && endLine < lineMaps.Length)
         {
-            var lastLen = endByte - lineStarts[endLine];
+            var lastMap = lineMaps[endLine];
+            var lastLen = lastMap.ByteColumnToCharColumn(endByte - lastMap.ByteStart);
             if (lastLen > 0) _spansByLine[endLine].Add(new StyledSpan(0, lastLen, ansi));
         }
     }
@@ -328,13 +321,95 @@ internal sealed class TreeSitterColorizer : ISyntaxColorizer, IDisposable
         return Marshal.PtrToStringUTF8(ptr) ?? string.Empty;
     }
 
-    private static int CountLines(string text)
+    private static LineOffsetMap[] BuildLineOffsetMaps(string text)
     {
-        if (string.IsNullOrEmpty(text)) return 1;
-        var count = 1;
-        for (var i = 0; i < text.Length; i++)
-            if (text[i] == '\n') count++;
-        return count;
+        var maps = new List<LineOffsetMap>();
+        var charStart = 0;
+        var byteStart = 0;
+
+        while (true)
+        {
+            var lineEnd = text.IndexOf('\n', charStart);
+            var charLength = lineEnd >= 0 ? lineEnd - charStart : text.Length - charStart;
+            var line = text.Substring(charStart, charLength);
+            var map = LineOffsetMap.Create(line, byteStart);
+            maps.Add(map);
+            byteStart += map.ByteLength;
+
+            if (lineEnd < 0) break;
+            byteStart++; // '\n' is one UTF-8 byte.
+            charStart = lineEnd + 1;
+            if (charStart > text.Length) break;
+        }
+
+        return maps.Count == 0 ? new[] { LineOffsetMap.Empty } : maps.ToArray();
+    }
+
+    private sealed class LineOffsetMap
+    {
+        public static readonly LineOffsetMap Empty = new(0, 0, 0, new[] { 0 }, new[] { 0 });
+
+        private readonly int[] _byteToChar;
+        private readonly int[] _charToByte;
+
+        private LineOffsetMap(int byteStart, int byteLength, int charLength, int[] byteToChar, int[] charToByte)
+        {
+            ByteStart = byteStart;
+            ByteLength = byteLength;
+            CharLength = charLength;
+            _byteToChar = byteToChar;
+            _charToByte = charToByte;
+        }
+
+        public int ByteStart { get; }
+
+        public int ByteLength { get; }
+
+        public int CharLength { get; }
+
+        public static LineOffsetMap Create(string line, int byteStart)
+        {
+            var byteLength = Encoding.UTF8.GetByteCount(line);
+            var byteToChar = new int[byteLength + 1];
+            var charToByte = new int[line.Length + 1];
+            var byteCol = 0;
+
+            for (var charCol = 0; charCol < line.Length;)
+            {
+                var charUnits = char.IsHighSurrogate(line[charCol])
+                    && charCol + 1 < line.Length
+                    && char.IsLowSurrogate(line[charCol + 1])
+                    ? 2
+                    : 1;
+                var charBytes = Encoding.UTF8.GetByteCount(line.AsSpan(charCol, charUnits));
+
+                byteToChar[byteCol] = charCol;
+                charToByte[charCol] = byteCol;
+                if (charUnits == 2) charToByte[charCol + 1] = byteCol;
+                for (var b = 1; b <= charBytes; b++)
+                    byteToChar[byteCol + b] = charCol + charUnits;
+
+                byteCol += charBytes;
+                charCol += charUnits;
+                charToByte[charCol] = byteCol;
+            }
+
+            return new LineOffsetMap(byteStart, byteLength, line.Length, byteToChar, charToByte);
+        }
+
+        public int ByteColumnToCharColumn(int byteColumn)
+        {
+            if (byteColumn <= 0) return 0;
+            if (byteColumn >= _byteToChar.Length) return _byteToChar[^1];
+            return _byteToChar[byteColumn];
+        }
+
+        public int CharColumnToByteColumn(int charColumn)
+        {
+            if (charColumn <= 0) return 0;
+            if (charColumn >= _charToByte.Length) return _charToByte[^1];
+            return _charToByte[charColumn];
+        }
     }
 
     /// <summary>
@@ -406,12 +481,20 @@ internal sealed class TreeSitterColorizer : ISyntaxColorizer, IDisposable
     public (TextLocation start, TextLocation end)? RangeAt(TextLocation location)
     {
         if (_tree == IntPtr.Zero) return null;
+        if (location.Line < 0 || location.Line >= _lineMaps.Length) return null;
         var root = ts_tree_root_node(_tree);
-        var p = new TSPoint { Row = (uint)Math.Max(0, location.Line), Column = (uint)Math.Max(0, location.Column) };
+        var byteColumn = _lineMaps[location.Line].CharColumnToByteColumn(location.Column);
+        var p = new TSPoint { Row = (uint)location.Line, Column = (uint)byteColumn };
         var node = ts_node_named_descendant_for_point_range(root, p, p);
         if (node.Id == IntPtr.Zero) return null;
         var s = ts_node_start_point(node);
         var e = ts_node_end_point(node);
-        return (new TextLocation((int)s.Row, (int)s.Column), new TextLocation((int)e.Row, (int)e.Column));
+        var startLine = (int)s.Row;
+        var endLine = (int)e.Row;
+        if (startLine < 0 || startLine >= _lineMaps.Length || endLine < 0 || endLine >= _lineMaps.Length)
+            return null;
+        var startCol = _lineMaps[startLine].ByteColumnToCharColumn((int)s.Column);
+        var endCol = _lineMaps[endLine].ByteColumnToCharColumn((int)e.Column);
+        return (new TextLocation(startLine, startCol), new TextLocation(endLine, endCol));
     }
 }

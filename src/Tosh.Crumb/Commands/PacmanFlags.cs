@@ -49,7 +49,7 @@ public static class PacmanFlags
             'Q' => ExpandQuery(mods),
             'F' => ExpandFiles(mods),
             'R' => ExpandRemove(mods),
-            'U' => throw new ArgumentException("-U (install from file) is not implemented yet"),
+            'U' => ExpandUpgradeFile(mods),
             _ => throw new ArgumentException($"unknown operation -{op}"),
         };
     }
@@ -61,6 +61,7 @@ public static class PacmanFlags
         // "install"; -Sy refresh, -Su upgrade, -Syu update.
         string? sub = null;
         var flags = new List<string>();
+        var downloadOnly = false;
         foreach (var m in mods)
         {
             switch (m)
@@ -78,17 +79,24 @@ public static class PacmanFlags
                 case 'y': flags.Add("--refresh"); break;
                 case 'u': flags.Add("--upgrade"); break;
                 case 'w':
-                    throw new ArgumentException("-Sw (download only) is not implemented yet");
+                    downloadOnly = true;
+                    flags.Add("--download-only");
+                    break;
                 default:
                     throw new ArgumentException($"unknown -S modifier '-{m}'");
             }
         }
+        if (downloadOnly && sub is not null)
+            throw new ArgumentException("-Sw cannot be combined with -Ss/-Si/-Sl");
+
         // If no read-modifier was chosen, this is an install / sync / upgrade.
         if (sub is null)
         {
             var refresh = flags.Contains("--refresh");
             var upgrade = flags.Contains("--upgrade");
-            if (refresh && !upgrade) sub = "sync";       // -Sy
+            if (downloadOnly && upgrade) sub = "update"; // -Suw / -Syuw
+            else if (downloadOnly) sub = "install";      // -Sw / -Syw
+            else if (refresh && !upgrade) sub = "sync";  // -Sy
             else if (upgrade) sub = "update";     // -Su, -Syu
             else sub = "install";    // bare -S
         }
@@ -170,5 +178,13 @@ public static class PacmanFlags
         }
         if (sub is null) throw new ArgumentException("-F requires a modifier (-Fl files, -Fo owns, …)");
         return new Expansion(sub, flags);
+    }
+
+    private static Expansion ExpandUpgradeFile(List<char> mods)
+    {
+        if (mods.Count == 0) return new Expansion("install-file", Array.Empty<string>());
+        foreach (var m in mods)
+            throw new ArgumentException($"unknown -U modifier '-{m}'");
+        return new Expansion("install-file", Array.Empty<string>());
     }
 }

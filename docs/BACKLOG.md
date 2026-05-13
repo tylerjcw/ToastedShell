@@ -134,46 +134,38 @@ makepkg by default), the project review surfaced the items below as
 the next batch of polish. None block daily use; ordered roughly by
 leverage.
 
-## P1 — quick wins (each ≲1 hr)
+## Resolved quick wins
 
-- **Tests project for `Tosh.Crumb`.** No coverage today; argument
-  parsing is the user-facing surface and the highest-value target.
-  Start with `PacmanFlags.TryExpand` (`-Ss`, `-Qqe`, `-RsN`, edge
-  cases), `CrumbOptions.Parse` (all flags, `=` syntax, errors), and
-  `Vercmp.IsOlder` (known version pairs). Pure functions, no
-  fixtures needed. `Tosh.Crumb.csproj` already has
-  `<InternalsVisibleTo Tosh.Tests>` ready.
-- **De-duplicate `SupportsTrueColor()`.** Same logic lives in
-  [PackageFormatter.cs](../src/Tosh.Crumb/Output/PackageFormatter.cs)
-  and [UpgradeListFormatter.cs](../src/Tosh.Crumb/Output/UpgradeListFormatter.cs).
-  Extract to `Output/ColorSupport.cs` so colour gating + truecolor
-  detection are defined once.
-- **Validate `$HOME` at `Program.Main`.** Currently throws
-  `InvalidOperationException` lazily inside `AurBuilder` property
-  getters. Move the check to startup so unset-`$HOME` users see a
-  clear error instead of a stack trace mid-command.
-- **`--limit N` on `crumb search`.** The aurweb RPC v5 already
-  accepts `limit`; today users have to pipe to `head`. Add
-  `--limit 50` default, wire through `AurClient.SearchAsync`.
+- **Crumb coverage exists.** Focused tests now live in
+  [tests/Tosh.Tests/Crumb*.cs](../tests/Tosh.Tests/), covering
+  pacman-style flag expansion, option parsing (including `--limit`),
+  formatter/TSSP selection, privilege probing, and version comparison.
+- **Colour detection is centralized.**
+  [ColorSupport.cs](../src/Tosh.Crumb/Output/ColorSupport.cs) owns
+  stdout/status colour gating and truecolor detection; formatters route
+  through it.
+- **Startup validates cache prerequisites.**
+  [Program.cs](../src/Tosh.Crumb/Program.cs) now rejects an environment
+  with neither `$HOME` nor `$XDG_CACHE_HOME` before AUR/cache paths are
+  touched.
+- **`--limit N` shipped.** `CrumbOptions.Parse` accepts `--limit` and
+  `--limit=N`; search/news commands trim results accordingly.
 
 ## P2 — medium features
 
-- **Honest stub handling.** `-Sw` (download only) and `-U` (install
-  from file) currently `throw new ArgumentException("not implemented
-  yet")` from `PacmanFlags.cs` / `Program.cs`. Either implement
-  (mostly delegating to pacman) or remove them from the help text so
-  the listed surface is real.
-- **Split `UpdateAsync` and `InstallAsync` into phase methods.**
-  Both sit around 200 lines and mix planning, escalation, build
-  looping, and reporting. Suggested extracts:
-  `UpgradeRepoAsync`, `UpgradeAurAsync`,
-  `ValidateAndPlanInstallAsync`, `ExecuteRepoInstallAsync`,
-  `ExecuteAurBuildsAsync`. Makes the long methods testable and the
-  flow easier to read.
-- **`crumb logs` subcommand.** Build logs already land in
-  `$XDG_CACHE_HOME/crumb/log/` when `--quiet` is in effect; nothing
-  exposes them. Add `crumb logs [--pkg <name>] [--tail] [--clean]
-  [--limit N]`.
+- **Honest stub handling.** ✅ Landed 2026-05-13. `-Sw` now maps to
+  `install --download-only`, using `pacman -Sw` for repo targets and
+  fetching AUR PKGBUILDs without building. `-Suw` / `-Syuw` download
+  pending repo upgrades. `-U <file...>` maps to `install-file` and
+  delegates to `pacman -U`.
+- **Split `UpdateAsync` and `InstallAsync` into phase methods.** ✅
+  Landed 2026-05-13. Install now separates validation/planning,
+  rendering/confirmation, repo execution, and AUR fetch/build phases.
+  Update now separates repo upgrade/download, AUR discovery, review,
+  download-only, and rebuild phases.
+- **`crumb logs` subcommand.** ✅ Landed 2026-05-13. `crumb logs`
+  lists newest build logs from `$XDG_CACHE_HOME/crumb/log/`; supports
+  `--pkg <name>`, `--tail`, `--clean`, `--limit N`, and `--dry-run`.
 - **Config file** (`~/.config/crumb/crumb.toml`). Today everything is
   env vars (`CRUMB_SUDO`, `CRUMB_PAGER`, `CRUMB_REVIEW`,
   `CRUMB_NO_TRUECOLOR`, `CRUMB_NO_COLOR`, `TOSH_TTY`). A TOML config
@@ -1485,4 +1477,3 @@ open work. The archive preserves the full text of each completed item
 (macros, generics, comprehensions, slicing, IL emitter spike, streaming
 display sinks, VS Code extension, MCP tools, AOT performance findings,
 etc.).
-

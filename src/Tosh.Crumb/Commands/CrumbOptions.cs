@@ -33,6 +33,12 @@ public sealed class CrumbOptions
     public bool DryRun { get; set; }
     public bool SudoLoop { get; set; }      // keep sudo ticket fresh during AUR builds
     public bool DiffReview { get; set; }    // show only diff vs last reviewed commit
+    public bool DownloadOnly { get; set; }  // -Sw / --download-only
+
+    // `crumb logs` knobs.
+    public string? LogsPackage { get; set; }
+    public bool LogsTail { get; set; }
+    public bool LogsClean { get; set; }
 
     // `crumb news` knobs.
     public int? Limit { get; set; }
@@ -107,6 +113,17 @@ public sealed class CrumbOptions
                 case "--sudo-loop": opt.SudoLoop = true; break;
                 case "--no-sudo-loop": opt.SudoLoop = false; break;
                 case "--diff": opt.DiffReview = true; break;
+                case "--download-only": opt.DownloadOnly = true; break;
+                case "--pkg":
+                case "--package":
+                    if (++i >= args.Count) throw new ArgumentException("--pkg requires a value");
+                    opt.LogsPackage = args[i]; break;
+                case var s when s.StartsWith("--pkg=", StringComparison.Ordinal):
+                    opt.LogsPackage = a["--pkg=".Length..]; break;
+                case var s when s.StartsWith("--package=", StringComparison.Ordinal):
+                    opt.LogsPackage = a["--package=".Length..]; break;
+                case "--tail": opt.LogsTail = true; break;
+                case "--clean": opt.LogsClean = true; break;
                 case "--all": opt.NewsAll = true; break;
                 case "--limit":
                     if (++i >= args.Count) throw new ArgumentException("--limit requires a value");

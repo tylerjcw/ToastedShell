@@ -160,6 +160,29 @@ public class CrumbOptionsTests
     }
 
     [Fact]
+    public void DownloadOnly_flag()
+    {
+        Assert.True(CrumbOptions.Parse(new[] { "--download-only" }).DownloadOnly);
+    }
+
+    [Fact]
+    public void Logs_options()
+    {
+        var opt = CrumbOptions.Parse(new[] { "--pkg", "yay", "--tail", "--clean", "--limit", "40" });
+        Assert.Equal("yay", opt.LogsPackage);
+        Assert.True(opt.LogsTail);
+        Assert.True(opt.LogsClean);
+        Assert.Equal(40, opt.Limit);
+    }
+
+    [Fact]
+    public void Logs_package_equals_form()
+    {
+        Assert.Equal("paru", CrumbOptions.Parse(new[] { "--pkg=paru" }).LogsPackage);
+        Assert.Equal("paru", CrumbOptions.Parse(new[] { "--package=paru" }).LogsPackage);
+    }
+
+    [Fact]
     public void SearchBy_value()
     {
         Assert.Equal("maintainer", CrumbOptions.Parse(new[] { "--by", "maintainer" }).SearchBy);

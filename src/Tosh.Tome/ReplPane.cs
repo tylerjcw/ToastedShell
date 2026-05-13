@@ -137,6 +137,8 @@ internal sealed class ReplPane
 
     public (int Row, int Col) GetCursorScreenPosition(int topRow, int leftCol, int width, int height)
     {
+        // Coordinates are zero-based here; Render() still receives one-based
+        // ANSI coordinates because it writes escape sequences directly.
         var prompt = _busy ? "… " : "» ";
         var avail = Math.Max(1, width - prompt.Length);
         var hScroll = _cursor > avail - 1 ? _cursor - (avail - 1) : 0;

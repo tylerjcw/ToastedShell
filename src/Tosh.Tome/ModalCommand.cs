@@ -581,9 +581,11 @@ internal sealed partial class TomeApp
             psi.ArgumentList.Add(command);
 
             using var proc = Process.Start(psi)!;
-            stdout = proc.StandardOutput.ReadToEnd();
-            stderr = proc.StandardError.ReadToEnd();
+            var stdoutTask = proc.StandardOutput.ReadToEndAsync();
+            var stderrTask = proc.StandardError.ReadToEndAsync();
             proc.WaitForExit();
+            stdout = stdoutTask.GetAwaiter().GetResult();
+            stderr = stderrTask.GetAwaiter().GetResult();
             exitCode = proc.ExitCode;
         }
         catch (Exception ex)

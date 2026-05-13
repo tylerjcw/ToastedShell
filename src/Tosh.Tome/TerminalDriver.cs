@@ -49,6 +49,7 @@ internal sealed class TerminalDriver : IDisposable
 
     public void Write(string text) => Console.Write(text);
 
+    /// <summary>Moves and shows the hardware cursor. Coordinates are zero-based.</summary>
     public void ShowCursorAt(int row, int column)
     {
         MoveCursor(row, column);

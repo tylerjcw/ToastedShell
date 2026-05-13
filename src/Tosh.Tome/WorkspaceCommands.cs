@@ -173,6 +173,7 @@ internal sealed partial class TomeApp
         var folders = _workspace.Folders.ToList();
         folders.Add(new WorkspaceFolder(resolved, alias));
         _workspace = _workspace with { Folders = folders };
+        _explorer.LoadFromWorkspace(_workspace);
         _message = $"added folder '{resolved}'" + (alias is not null ? $" as '{alias}'" : "");
     }
 

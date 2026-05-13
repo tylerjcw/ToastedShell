@@ -152,6 +152,7 @@ SystemdJsonParserTests.cs
 TerminalControlTests.cs
 TerminalEnvironmentTestSupport.cs
 TimeCommandTests.cs
+TomeWorkspaceTests.cs
 ToshRuntimeFixture.cs
 ToshSdkBuildTests.cs
 TuiCommandTests.cs
@@ -180,6 +181,7 @@ _HoverProbe.cs
  Tosh.Mcp/obj/Debug/net10.0/ref/Tosh.Mcp.dll
  Tosh.Runtime/obj/Debug/net10.0/ref/Tosh.Runtime.dll
  Tosh.Stdlib/obj/Debug/net10.0/ref/Tosh.Stdlib.dll
+ Tosh.Tome/obj/Debug/net10.0/ref/tome.dll
  Tosh.Tui/obj/Debug/net10.0/ref/Tosh.Tui.dll
 <DOTNET>/packs/Microsoft.NETCore.App.Ref/10.0.3/ref/net10.0/
  Microsoft.CSharp.dll

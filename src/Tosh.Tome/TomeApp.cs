@@ -495,7 +495,7 @@ internal sealed partial class TomeApp
         {
             // Park the terminal cursor at the column edge so it doesn't
             // distract; selection is rendered via reverse-video.
-            _terminal.ShowCursorAt(editorTopRow, 1);
+            _terminal.ShowCursorAt(editorTopRow - 1, 0);
         }
         else if (_pickerOpen)
         {
@@ -505,7 +505,7 @@ internal sealed partial class TomeApp
         else if (_focusRepl && _layoutReplHeight > 0)
         {
             var (r, c) = _repl.GetCursorScreenPosition(
-                _layoutReplTopRow + 1, _layoutReplLeftCol + 1, _layoutReplWidth, _layoutReplHeight);
+                _layoutReplTopRow, _layoutReplLeftCol, _layoutReplWidth, _layoutReplHeight);
             _terminal.ShowCursorAt(r, c);
         }
         else
@@ -1446,7 +1446,7 @@ internal sealed partial class TomeApp
         sb.Append("\u001b[").Append(row).Append(";1H\u001b[2K");
         sb.Append(label).Append(value);
         _terminal.Write(sb.ToString());
-        _terminal.ShowCursorAt(row, label.Length + value.Length + 1);
+        _terminal.ShowCursorAt(row - 1, label.Length + value.Length);
         _terminal.Flush();
     }
 

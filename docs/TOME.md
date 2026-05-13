@@ -61,13 +61,13 @@ and `tome` is on `$PATH`.
 Tōme is part of the standard install set. From the repository root:
 
 ```bash
-buildtosh install           # tosh, tosh-lsp, tosh-mcp, tome
+buildtosh install           # tosh, tosh-lsp, tosh-mcp, tome, crumb
 buildtosh install tome      # just the editor
 buildtosh install all       # explicit form, same as the default set
 ```
 
-Both forms produce `/usr/bin/tome` via the Arch `PKGBUILD`. The package
-name is `tome` (not `tosh-tome`) to match the binary.
+The `tome` target produces `/usr/bin/tome` via the Arch `PKGBUILD`. The
+package name is `tome` (not `tosh-tome`) to match the binary.
 
 For local development, `dotnet run --project src/Tosh.Tome` launches the
 editor without installing.
