@@ -417,10 +417,11 @@ internal sealed partial class TomeApp
         var visible = Math.Min(PickerMaxVisible, Math.Max(1, _pickerFiltered.Count));
         var height = visible + 4;
         var width = Math.Min(80, Math.Max(40, screenWidth - 8));
-        var top = Math.Max(1, (screenHeight - height) / 2);
-        var left = Math.Max(1, (screenWidth - width) / 2);
-        // Paint positions above are one-based ANSI coordinates; ShowCursorAt
-        // wants zero-based row/column.
+        var top = Math.Max(1, (screenHeight - height) / 2);   // 1-based ANSI row of the border
+        var left = Math.Max(1, (screenWidth - width) / 2);    // 1-based ANSI column of left edge
+        // The query input row is one below the border: ANSI row top+1.
+        // ShowCursorAt is 0-based (adds 1 internally), so pass (top+1)-1 = top for row
+        // and (col)-1 for column.
         var col = Math.Min(left + width - 1, left + 4 + _pickerQuery.Length);
         return (top, col - 1);
     }

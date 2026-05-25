@@ -40,6 +40,13 @@ internal sealed class GutterRenderer
 {
     private const string DimOpen = "\u001b[2m";
     private const string Reset = "\u001b[0m";
+    private static readonly Role[] DepthRoles =
+    {
+        Role.GutterDepth1, Role.GutterDepth2, Role.GutterDepth3,
+        Role.GutterDepth4, Role.GutterDepth5,
+    };
+    private static string DepthOpen(int col) => TomeTheme.Active.Open(DepthRoles[col % DepthRoles.Length]);
+
     private static string CurrentLineOpen => TomeTheme.Active.Open(Role.GutterCurrentLine);
     private static string DiagErrorOpen => TomeTheme.Active.Open(Role.GutterDiagError);
     private static string DiagWarnOpen => TomeTheme.Active.Open(Role.GutterDiagWarn);
@@ -232,36 +239,21 @@ internal sealed class GutterRenderer
                 chars[joinColumn] = Glyphs.Join;
         }
 
-        // Emit with appropriate styling: diag glyph picks up its own
-        // severity colour; everything else stays dim.
-        if (diagGlyph != '\0' && chars[markerColumn] == diagGlyph)
+        // Emit each cell with its depth-level colour. Diagnostic glyphs
+        // override their column's colour with the severity colour instead.
+        for (var col = 0; col < cells; col++)
         {
-            // Render the bars dim, then the marker in severity colour.
-            if (markerColumn > 0)
+            var c = chars[col];
+            if (c == ' ') { sb.Append(' '); continue; }
+            if (col == markerColumn && diagGlyph != '\0' && c == diagGlyph)
             {
-                sb.Append(DimOpen);
-                sb.Append(chars, 0, markerColumn);
-                sb.Append(Reset);
+                var diagOpen = sev switch { 1 => DiagErrorOpen, 2 => DiagWarnOpen, _ => DiagInfoOpen };
+                sb.Append(diagOpen).Append(c).Append(Reset);
             }
-            var diagOpen = sev switch
+            else
             {
-                1 => DiagErrorOpen,
-                2 => DiagWarnOpen,
-                _ => DiagInfoOpen,
-            };
-            sb.Append(diagOpen).Append(chars[markerColumn]).Append(Reset);
-            if (markerColumn + 1 < cells)
-            {
-                sb.Append(DimOpen);
-                sb.Append(chars, markerColumn + 1, cells - markerColumn - 1);
-                sb.Append(Reset);
+                sb.Append(DepthOpen(col)).Append(c).Append(Reset);
             }
-        }
-        else
-        {
-            sb.Append(DimOpen);
-            sb.Append(chars);
-            sb.Append(Reset);
         }
     }
 

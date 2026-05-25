@@ -35,6 +35,10 @@ internal sealed partial class TomeApp
     private readonly ExplorerPane _explorer = new();
     private bool _focusExplorer;
 
+    // Git status decoration for the explorer (M/U/D badges). Created when a
+    // workspace loads, disposed on close. Null when no workspace is active.
+    private ExplorerGitStatus? _explorerGitStatus;
+
     // Bottom-dock embedded Tōsh REPL. Hidden until `:repl` (or `:repl open`)
     // toggles it on. Focus toggles with Ctrl+R; Esc returns focus to the
     // editor while leaving the pane visible.
@@ -93,11 +97,14 @@ internal sealed partial class TomeApp
     public TomeApp(TerminalDriver terminal, string? filePath, string initialText)
     {
         _terminal = terminal;
+        _formatOnSave = _settings.FormatOnSave;
+        _explorer.Settings = _settings.Explorer;
         var path = filePath ?? string.Empty;
         var tab = new Tab(path, initialText, null);
         tab.Colorizer = ResolveColorizer(tab);
         _tabs.Add(tab);
-        _message = string.IsNullOrEmpty(path) ? "[new file]" : $"opened {path}";
+        _message = _settings.ParseWarning
+            ?? (string.IsNullOrEmpty(path) ? "[new file]" : $"opened {path}");
     }
 
     private Tab Current => _tabs[_active];
@@ -246,11 +253,12 @@ internal sealed partial class TomeApp
         var lineIdx = _buffer.Cursor.Line;
         var col = _buffer.Cursor.Column;
         var line = _buffer.GetLine(lineIdx);
+        var skip = MapStringOrComment(line);
 
         // Prefer char under the cursor; fall back to the char immediately
-        // before. Try forward scan for openers, backward scan for closers.
-        if (col < line.Length && TryStartAt(lineIdx, col, line[col])) return;
-        if (col > 0 && TryStartAt(lineIdx, col - 1, line[col - 1])) return;
+        // before. Skip positions inside strings or comments.
+        if (col < line.Length && !skip[col] && TryStartAt(lineIdx, col, line[col])) return;
+        if (col > 0 && !skip[col - 1] && TryStartAt(lineIdx, col - 1, line[col - 1])) return;
     }
 
     private bool TryStartAt(int lineIdx, int col, char c)
@@ -282,9 +290,11 @@ internal sealed partial class TomeApp
         for (var l = startLine; l < _buffer.LineCount; l++)
         {
             var text = _buffer.GetLine(l);
+            var skip = MapStringOrComment(text);
             var from = l == startLine ? startCol : 0;
             for (var i = from; i < text.Length; i++)
             {
+                if (skip[i]) continue;
                 var ch = text[i];
                 if (ch == open) depth++;
                 else if (ch == close)
@@ -304,9 +314,11 @@ internal sealed partial class TomeApp
         for (var l = startLine; l >= 0; l--)
         {
             var text = _buffer.GetLine(l);
+            var skip = MapStringOrComment(text);
             var from = l == startLine ? startCol : text.Length - 1;
             for (var i = from; i >= 0; i--)
             {
+                if (skip[i]) continue;
                 var ch = text[i];
                 if (ch == close) depth++;
                 else if (ch == open)
@@ -318,6 +330,43 @@ internal sealed partial class TomeApp
         }
         mate = default;
         return false;
+    }
+
+    /// <summary>
+    /// Per-character map: true = inside a string literal or line comment.
+    /// Handles <c>"..."</c> and <c>'...'</c> (with backslash escapes) plus
+    /// <c>#</c> (TōSh/shell/Python) and <c>//</c> (C-family) line comments.
+    /// Multi-line strings are not tracked; each line is classified independently.
+    /// </summary>
+    private static bool[] MapStringOrComment(string line)
+    {
+        var map = new bool[line.Length];
+        var inString = false;
+        var stringChar = '\0';
+        for (var i = 0; i < line.Length; i++)
+        {
+            var ch = line[i];
+            if (inString)
+            {
+                map[i] = true;
+                if (ch == '\\' && i + 1 < line.Length) { map[++i] = true; continue; }
+                if (ch == stringChar) inString = false;
+                continue;
+            }
+            if (ch is '"' or '\'')
+            {
+                map[i] = true;
+                inString = true;
+                stringChar = ch;
+                continue;
+            }
+            if (ch == '#' || (ch == '/' && i + 1 < line.Length && line[i + 1] == '/'))
+            {
+                for (var j = i; j < line.Length; j++) map[j] = true;
+                break;
+            }
+        }
+        return map;
     }
 
     private bool TryAutoPair(char ch)
@@ -381,6 +430,8 @@ internal sealed partial class TomeApp
         var editorTopRow = TabBarHeight + 1;
 
         _explorer.ConsumeChanges();
+        if (_explorerGitStatus is not null)
+            _explorer.SetGitStatus(_explorerGitStatus.GetStatus());
         RefreshDiagnosticsIfStale();
         RecomputeBracketMatch();
         RefreshSignatureHelp();
@@ -487,6 +538,7 @@ internal sealed partial class TomeApp
 
         // Popup overlay last, so it paints on top of the editor body.
         PaintCompletionPopup(sb, leftOffset + gutterWidth, editorTopRow, editorHeight, width);
+        PaintCodeActionsPopup(sb, leftOffset + gutterWidth, editorTopRow, editorHeight);
         PaintFuzzyPicker(sb, width, height);
 
         _terminal.Write(sb.ToString());
@@ -698,8 +750,9 @@ internal sealed partial class TomeApp
 
     private void HandleEditModeKey(ConsoleKeyInfo key)
     {
-        // Completion popup intercepts most navigation / commit keys.
+        // Popup intercepts take priority over all other bindings.
         if (_completionOpen && HandleCompletionKey(key)) return;
+        if (_codeActionsOpen && HandleCodeActionKey(key)) return;
 
         var ctrl = (key.Modifiers & ConsoleModifiers.Control) != 0;
         var shift = (key.Modifiers & ConsoleModifiers.Shift) != 0;
@@ -733,6 +786,7 @@ internal sealed partial class TomeApp
                 case ConsoleKey.G: GotoLine(); return;
                 case ConsoleKey.D: ShowDiagnostics(); return;
                 case ConsoleKey.Spacebar: OpenCompletions(); return;
+                case ConsoleKey.OemPeriod: OpenCodeActions(); return;
             }
         }
 
@@ -788,7 +842,16 @@ internal sealed partial class TomeApp
                 EditAll(b => { if (b.HasSelection) b.DeleteSelection(); b.InsertNewline(); });
                 return;
             case ConsoleKey.Tab:
-                EditAll(b => { if (b.HasSelection) b.DeleteSelection(); b.InsertText("    "); });
+                if (shift)
+                {
+                    if (_buffer.HasSelection) EditAll(b => b.DedentLines());
+                    // Shift+Tab with no selection: no-op (avoid inserting text)
+                }
+                else
+                {
+                    if (_buffer.HasSelection) EditAll(b => b.IndentLines());
+                    else EditAll(b => b.InsertText("    "));
+                }
                 return;
         }
 
@@ -932,18 +995,18 @@ internal sealed partial class TomeApp
 
     private void CloseTab()
     {
-        if (_buffer.IsModified)
+        var tab = Current;
+        if (tab.Buffer.IsModified && !string.IsNullOrEmpty(tab.FilePath))
         {
-            var confirm = PromptText("unsaved changes — close tab? (y/N) ");
-            if (confirm is not { Length: > 0 } || (confirm[0] != 'y' && confirm[0] != 'Y'))
-            {
-                _message = "close cancelled";
-                return;
-            }
+            // Stash dirty content so it can be restored next time the file is
+            // opened — no prompt, VS Code-style.
+            string diskText;
+            try { diskText = File.Exists(tab.FilePath) ? File.ReadAllText(tab.FilePath) : string.Empty; }
+            catch { diskText = string.Empty; }
+            DirtyBufferStore.Save(tab.FilePath, tab.Buffer, diskText);
         }
         if (_tabs.Count == 1)
         {
-            // Replace the last tab with a fresh empty buffer rather than exit.
             _tabs[0] = new Tab(string.Empty, string.Empty, colorizer: null);
             _active = 0;
             _message = "buffer cleared";
@@ -1011,13 +1074,16 @@ internal sealed partial class TomeApp
 
         // Tab bar click — switch to the clicked tab. Press only; ignore
         // release/move on the tab bar.
-        if (evt.Kind == InputEventKind.MousePress && evt.Button == MouseButton.Left
-            && _layoutTabBarRow >= 0 && evt.Row == _layoutTabBarRow)
+        if (evt.Kind == InputEventKind.MousePress && _layoutTabBarRow >= 0
+            && evt.Row == _layoutTabBarRow)
         {
             for (var i = 0; i < _layoutTabRanges.Count; i++)
             {
                 var (s, e) = _layoutTabRanges[i];
-                if (evt.Column >= s && evt.Column < e) { _active = i; return; }
+                if (evt.Column < s || evt.Column >= e) continue;
+                if (evt.Button == MouseButton.Middle) { _active = i; CloseTab(); }
+                else if (evt.Button == MouseButton.Left) _active = i;
+                return;
             }
             return;
         }
@@ -1195,22 +1261,17 @@ internal sealed partial class TomeApp
 
     private void TryQuit()
     {
-        var dirty = _tabs.Any(t => t.Buffer.IsModified);
-        if (!dirty)
+        // Stash dirty tabs before quitting — no prompt needed; reopening the
+        // file restores the unsaved edits automatically.
+        foreach (var tab in _tabs)
         {
-            _quit = true;
-            return;
+            if (!tab.Buffer.IsModified || string.IsNullOrEmpty(tab.FilePath)) continue;
+            string diskText;
+            try { diskText = File.Exists(tab.FilePath) ? File.ReadAllText(tab.FilePath) : string.Empty; }
+            catch { diskText = string.Empty; }
+            DirtyBufferStore.Save(tab.FilePath, tab.Buffer, diskText);
         }
-
-        var response = PromptText("unsaved changes — quit anyway? (y/N) ");
-        if (response is { Length: > 0 } && (response[0] == 'y' || response[0] == 'Y'))
-        {
-            _quit = true;
-        }
-        else
-        {
-            _message = "quit cancelled";
-        }
+        _quit = true;
     }
 
     // ─── Search ──────────────────────────────────────────────────────────
@@ -1480,6 +1541,7 @@ internal sealed partial class TomeApp
             File.WriteAllText(Current.FilePath, _buffer.GetText());
             _buffer.MarkClean();
             PersistentUndoStore.Save(Current.FilePath, _buffer);
+            DirtyBufferStore.TryDelete(Current.FilePath);
             Current.StampFromDisk();
             Current.GitDiff?.Invalidate();
             _message = $"saved {Current.FilePath}";

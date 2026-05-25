@@ -3,9 +3,10 @@ using Tosh.Tui.Editing;
 namespace Tosh.Tome;
 
 /// <summary>
-/// Reload-on-disk-change. Polls the active tab's file mtime + size each
+/// Reload-on-disk-change. Polls every open tab's file mtime + size each
 /// frame (rate-limited). Clean buffers reload silently; dirty buffers
-/// surface a one-shot prompt so unsaved work isn't clobbered.
+/// surface a one-shot warning on the active tab so unsaved work isn't
+/// clobbered.
 /// </summary>
 internal sealed partial class TomeApp
 {
@@ -19,7 +20,12 @@ internal sealed partial class TomeApp
         if (now - _lastDiskPoll < DiskPollInterval) return;
         _lastDiskPoll = now;
 
-        var tab = Current;
+        for (var i = 0; i < _tabs.Count; i++)
+            CheckTabExternalChange(_tabs[i], isActive: i == _active);
+    }
+
+    private void CheckTabExternalChange(Tab tab, bool isActive)
+    {
         var path = tab.FilePath;
         if (string.IsNullOrEmpty(path)) return;
         if (tab.DiskSize < 0) return; // file didn't exist at load time
@@ -43,12 +49,11 @@ internal sealed partial class TomeApp
 
         if (tab.Buffer.IsModified)
         {
-            // Don't clobber unsaved work. Surface a prompt; user picks
-            // :reload to drop changes or :w! / :w to overwrite.
             if (!tab.ExternalChangePending)
             {
                 tab.ExternalChangePending = true;
-                _message = "file changed on disk; buffer is dirty — :reload to discard, :w to overwrite";
+                if (isActive)
+                    _message = "file changed on disk; buffer is dirty — :reload to discard, :w to overwrite";
             }
             // Update stamps so we don't re-warn every poll until disk changes again.
             tab.DiskMTimeUtc = mtime;
@@ -56,21 +61,22 @@ internal sealed partial class TomeApp
             return;
         }
 
-        ReloadFromDisk(silent: false);
+        ReloadTab(tab, silent: !isActive);
     }
 
-    private void ReloadFromDisk(bool silent)
+    private void ReloadFromDisk(bool silent) => ReloadTab(Current, silent);
+
+    private void ReloadTab(Tab tab, bool silent)
     {
-        var tab = Current;
         var path = tab.FilePath;
         if (string.IsNullOrEmpty(path))
         {
-            _message = "reload: no file";
+            if (!silent) _message = "reload: no file";
             return;
         }
         string text;
         try { text = File.Exists(path) ? File.ReadAllText(path) : string.Empty; }
-        catch (Exception ex) { _message = $"reload failed: {ex.Message}"; return; }
+        catch (Exception ex) { if (!silent) _message = $"reload failed: {ex.Message}"; return; }
 
         var savedCursor = tab.Buffer.Cursor;
         tab.Buffer.ReplaceAll(text);

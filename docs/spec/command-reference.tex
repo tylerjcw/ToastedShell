@@ -7321,6 +7321,37 @@ Resolves the editor from \$EDITOR, \$VISUAL, then falls back to `tome`, then `vi
 
 \end{cmdbox}
 
+\subsection{\texttt{eval}}
+\label{ref:eval}
+\icmd{eval}
+
+\textit{Library: \code{Tosh.Stdlib.Shell}}
+
+\begin{cmdbox}{eval}
+Parses and evaluates a string as Tosh source in the current session.
+
+\begin{signature}
+eval <source> [source...]
+\end{signature}
+
+\begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
+\toprule
+\textbf{Argument} & \textbf{Description} \\
+\midrule
+source & Tosh source text to parse and evaluate in the current session. \\
+\bottomrule
+\end{tabular}
+
+\textbf{Output:} Streams whatever values the evaluated source emits.
+
+\begin{lstlisting}
+eval "1 + 2"  # Evaluate a literal expression
+eval $"System.Drawing.Color.{$_}"  # Build and evaluate code at runtime
+read-lines colors.txt | each { eval $"System.Drawing.Color.{$_}" }  # Resolve named members per line
+\end{lstlisting}
+
+\end{cmdbox}
+
 \subsection{\texttt{events}}
 \label{ref:events}
 \icmd{events}

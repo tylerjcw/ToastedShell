@@ -553,6 +553,15 @@ public sealed class DotNetTypeResolver : IImportingTypeResolver
         var fullNames = new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase);
         var simpleNames = new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase);
 
+        // Snapshot the count BEFORE iteration. Any assembly loaded during
+        // (or after) indexing must be rescannable by TryResolveDirect's
+        // fallback loop. Capturing after iteration creates a race where
+        // assemblies loaded mid-build are neither in the index nor in
+        // the rescan range — biting hard in single-file publishes where
+        // System.Drawing.Primitives & friends load lazily as types
+        // referenced by DisplayEngine are touched.
+        var indexedCount = AppDomain.CurrentDomain.GetAssemblies().Length;
+
         foreach (var assembly in EnumerateTrustedPlatformAssemblies())
         {
             foreach (var type in SafeGetTypes(assembly))
@@ -569,9 +578,7 @@ public sealed class DotNetTypeResolver : IImportingTypeResolver
                 .Distinct()
                 .ToArray());
 
-        // Record how many assemblies were present when the index was built so that
-        // TryResolveDirect can skip re-scanning them on subsequent calls.
-        _platformIndexedAssemblyCount = AppDomain.CurrentDomain.GetAssemblies().Length;
+        _platformIndexedAssemblyCount = indexedCount;
 
         return index;
     }

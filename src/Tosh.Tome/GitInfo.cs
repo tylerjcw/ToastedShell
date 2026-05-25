@@ -38,13 +38,56 @@ internal static class GitInfo
         return branch;
     }
 
+    /// <summary>
+    /// Returns the root directory of the git repo containing
+    /// <paramref name="startPath"/> (file or directory), or null if not
+    /// inside any repo.
+    /// </summary>
+    public static string? FindRoot(string? startPath)
+    {
+        try
+        {
+            string start;
+            if (string.IsNullOrEmpty(startPath))
+            {
+                start = Environment.CurrentDirectory;
+            }
+            else
+            {
+                var full = Path.GetFullPath(startPath);
+                start = Directory.Exists(full) ? full
+                      : Path.GetDirectoryName(full) ?? Environment.CurrentDirectory;
+            }
+            return FindRootFrom(start);
+        }
+        catch { return null; }
+    }
+
+    private static string? FindRootFrom(string start)
+    {
+        try
+        {
+            var dir = new DirectoryInfo(start);
+            while (dir is not null)
+            {
+                var gitPath = Path.Combine(dir.FullName, ".git");
+                if (Directory.Exists(gitPath) || File.Exists(gitPath)) return dir.FullName;
+                dir = dir.Parent;
+            }
+        }
+        catch { }
+        return null;
+    }
+
     private static string? ResolveStart(string? filePath)
     {
         try
         {
             if (!string.IsNullOrEmpty(filePath))
             {
-                var dir = Path.GetDirectoryName(Path.GetFullPath(filePath));
+                var full = Path.GetFullPath(filePath);
+                // If it's already a directory start there; otherwise use its parent.
+                var dir = Directory.Exists(full) ? full : Path.GetDirectoryName(full);
                 if (!string.IsNullOrEmpty(dir)) return dir;
             }
             return Environment.CurrentDirectory;
@@ -57,19 +100,9 @@ internal static class GitInfo
 
     private static string? ProbeBranch(string start)
     {
-        try
-        {
-            var dir = new DirectoryInfo(start);
-            while (dir is not null)
-            {
-                var gitPath = Path.Combine(dir.FullName, ".git");
-                if (Directory.Exists(gitPath) || File.Exists(gitPath))
-                    return ReadHead(gitPath);
-                dir = dir.Parent;
-            }
-        }
-        catch { /* permission, missing parents — fall through */ }
-        return null;
+        var root = FindRootFrom(start);
+        if (root is null) return null;
+        return ReadHead(Path.Combine(root, ".git"));
     }
 
     private static string? ReadHead(string gitPath)

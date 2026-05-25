@@ -98,6 +98,11 @@ public sealed partial class ToshEngine : IShellEvaluator
             Runtime.Commands.Register(new SourceCommand(this));
         }
 
+        if (!Runtime.Commands.TryGet("eval", out _))
+        {
+            Runtime.Commands.Register(new EvalCommand(this));
+        }
+
         if (!Runtime.Commands.TryGet("debug", out _))
         {
             Runtime.Commands.Register(new DebugCommand(this));

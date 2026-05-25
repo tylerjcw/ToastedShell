@@ -4,8 +4,11 @@ namespace Tosh.Tome.Workspace;
 /// One folder root in a Tōme workspace. <see cref="Path"/> is stored
 /// absolute on load; <see cref="Alias"/> is an optional short name shown
 /// in the explorer pane in place of the directory's basename.
+/// When <see cref="IsRepo"/> is true the entry was declared with the
+/// <c>repo</c> keyword and the explorer shows a live branch indicator
+/// on the root node.
 /// </summary>
-internal sealed record WorkspaceFolder(string Path, string? Alias = null);
+internal sealed record WorkspaceFolder(string Path, string? Alias = null, bool IsRepo = false);
 
 /// <summary>
 /// UI layout state persisted with the workspace. Keeps the explorer pane's

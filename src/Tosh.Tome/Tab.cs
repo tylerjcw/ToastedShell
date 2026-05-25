@@ -54,7 +54,9 @@ internal sealed class Tab
 
         if (!string.IsNullOrEmpty(filePath))
         {
-            PersistentUndoStore.TryRestore(filePath, Buffer);
+            var restored = DirtyBufferStore.TryRestore(filePath, Buffer);
+            if (!restored)
+                PersistentUndoStore.TryRestore(filePath, Buffer);
             StampFromDisk();
         }
     }

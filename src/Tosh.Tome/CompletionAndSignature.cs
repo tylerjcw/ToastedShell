@@ -332,7 +332,8 @@ internal sealed partial class TomeApp
     private static string TruncateTo(string s, int max)
     {
         if (s.Length <= max) return s;
-        if (max <= 1) return s[..max];
+        if (max <= 0) return string.Empty;
+        if (max == 1) return "…";
         return s[..(max - 1)] + "…";
     }
 

@@ -44,6 +44,13 @@ internal enum Role
     GutterBreakpoint,  // red ● for breakpointed lines
     GutterMultiCaret,  // green '+' for lines with an extra caret
 
+    // Cycling depth-bar colours (wrap after Depth5).
+    GutterDepth1,
+    GutterDepth2,
+    GutterDepth3,
+    GutterDepth4,
+    GutterDepth5,
+
     StatusBarBg,       // explorer banner, status line accents
     PopupBg,           // completion popup default-row bg
     PopupSelectedBg,   // completion popup selected-row bg (uses reverse video)
@@ -172,6 +179,13 @@ internal sealed class TomeTheme
             [Role.GutterSearchHit] = interpolated.Fg(truecolor) + Bold,
             [Role.GutterBreakpoint] = red203.Fg(truecolor) + Bold,
             [Role.GutterMultiCaret] = stringG.Fg(truecolor) + Bold,
+
+            // Depth-bar rainbow: muted so they read as structure, not noise.
+            [Role.GutterDepth1] = new Color(0x5F, 0x87, 0xAF, 67).Fg(truecolor),  // steel blue
+            [Role.GutterDepth2] = new Color(0xAF, 0xAF, 0x5F, 142).Fg(truecolor), // khaki
+            [Role.GutterDepth3] = new Color(0xD7, 0x87, 0x5F, 173).Fg(truecolor), // salmon
+            [Role.GutterDepth4] = new Color(0x5F, 0xAF, 0xAF, 73).Fg(truecolor),  // teal
+            [Role.GutterDepth5] = new Color(0xAF, 0x5F, 0xAF, 133).Fg(truecolor), // orchid
 
             [Role.StatusBarBg] = Bold + bg236.Bg(truecolor),
             [Role.PopupBg] = bg236.Bg(truecolor),

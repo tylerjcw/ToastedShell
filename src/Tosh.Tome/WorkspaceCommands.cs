@@ -39,10 +39,13 @@ internal sealed partial class TomeApp
                 WorkspaceNew(rest);
                 return;
             case "add":
-                WorkspaceAddFolder(rest);
+                WorkspaceAddFolder(rest, isRepo: false);
+                return;
+            case "repo":
+                WorkspaceAddFolder(rest, isRepo: true);
                 return;
             default:
-                _message = $"workspace: unknown subcommand '{sub}' (open|save|close|info|new|add)";
+                _message = $"workspace: unknown subcommand '{sub}' (open|save|close|info|new|add|repo)";
                 return;
         }
     }
@@ -60,6 +63,7 @@ internal sealed partial class TomeApp
 
         _workspace = ws;
         _explorer.LoadFromWorkspace(ws);
+        ResetExplorerGitStatus();
         var restored = RestoreWorkspaceTabs(ws);
         _message = restored > 0
             ? $"workspace '{ws.Name}' loaded ({ws.Folders.Count} folder(s), {restored} tab(s) restored)"
@@ -105,6 +109,7 @@ internal sealed partial class TomeApp
         };
         _workspace = ws;
         _explorer.LoadFromWorkspace(ws);
+        ResetExplorerGitStatus();
         _message = $"workspace '{name}' (unsaved, {resolved})";
     }
 
@@ -135,6 +140,9 @@ internal sealed partial class TomeApp
         var name = _workspace.Name;
         _workspace = null;
         _explorer.Clear();
+        _explorer.SetGitStatus(null);
+        _explorerGitStatus?.Dispose();
+        _explorerGitStatus = null;
         _focusExplorer = false;
         _message = $"workspace '{name}' closed";
     }
@@ -153,10 +161,11 @@ internal sealed partial class TomeApp
         _message = $"new workspace '{name}' (unsaved) — use ':ws add <folder>' then ':ws save'";
     }
 
-    private void WorkspaceAddFolder(string spec)
+    private void WorkspaceAddFolder(string spec, bool isRepo = false)
     {
-        if (_workspace is null) { _message = "workspace add: no workspace loaded"; return; }
-        if (string.IsNullOrEmpty(spec)) { _message = "workspace add: folder path required"; return; }
+        var verb = isRepo ? "repo" : "add";
+        if (_workspace is null) { _message = $"workspace {verb}: no workspace loaded"; return; }
+        if (string.IsNullOrEmpty(spec)) { _message = $"workspace {verb}: path required"; return; }
 
         // Optional "as alias" suffix.
         string folderPath = spec;
@@ -168,13 +177,14 @@ internal sealed partial class TomeApp
             alias = spec[(idx + 4)..].Trim().Trim('"', '\'');
         }
         var resolved = Path.GetFullPath(folderPath);
-        if (!Directory.Exists(resolved)) { _message = $"workspace add: directory '{resolved}' does not exist"; return; }
+        if (!Directory.Exists(resolved)) { _message = $"workspace {verb}: directory '{resolved}' does not exist"; return; }
 
         var folders = _workspace.Folders.ToList();
-        folders.Add(new WorkspaceFolder(resolved, alias));
+        folders.Add(new WorkspaceFolder(resolved, alias, IsRepo: isRepo));
         _workspace = _workspace with { Folders = folders };
         _explorer.LoadFromWorkspace(_workspace);
-        _message = $"added folder '{resolved}'" + (alias is not null ? $" as '{alias}'" : "");
+        ResetExplorerGitStatus();
+        _message = $"added {(isRepo ? "repo" : "folder")} '{resolved}'" + (alias is not null ? $" as '{alias}'" : "");
     }
 
     private void ShowWorkspaceStatus()
@@ -209,6 +219,13 @@ internal sealed partial class TomeApp
         }
         if (added > 0) _active = _tabs.Count - 1;
         return added;
+    }
+
+    private void ResetExplorerGitStatus()
+    {
+        _explorerGitStatus?.Dispose();
+        _explorerGitStatus = _workspace is null ? null
+            : new ExplorerGitStatus(_workspace.Folders.Select(f => f.Path));
     }
 
     // ─── Explorer key routing ────────────────────────────────────────

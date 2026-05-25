@@ -22,8 +22,11 @@ public sealed class TextBuffer
     private const int MaxHistoryDepth = 256;
 
     private readonly List<string> _lines = new() { string.Empty };
-    private readonly Stack<UndoFrame> _undo = new();
-    private readonly Stack<UndoFrame> _redo = new();
+    // LinkedList used as a double-ended deque: Last = top (most recent),
+    // First = bottom (oldest). AddLast/RemoveLast are O(1) push/pop;
+    // RemoveFirst is O(1) trim — no array rebuild when the history cap is hit.
+    private readonly LinkedList<UndoFrame> _undo = new();
+    private readonly LinkedList<UndoFrame> _redo = new();
 
     private TextLocation _cursor;
     private TextLocation? _selectionAnchor;
@@ -219,6 +222,52 @@ public sealed class TextBuffer
         return deleted;
     }
 
+    /// <summary>
+    /// Indents every line touched by the current selection by <paramref name="spaces"/> spaces.
+    /// Preserves the selection spanning the same lines after the operation.
+    /// </summary>
+    public void IndentLines(int spaces = 4)
+    {
+        var sel = Selection;
+        if (sel is null) return;
+        var (start, end) = sel.Value;
+        var pad = new string(' ', spaces);
+        PushUndo();
+        for (var i = start.Line; i <= end.Line; i++)
+            _lines[i] = pad + _lines[i];
+        // Keep selection covering the same lines: anchor at col 0 of first line,
+        // cursor at end of last line.
+        _selectionAnchor = new TextLocation(start.Line, 0);
+        _cursor = new TextLocation(end.Line, _lines[end.Line].Length);
+        _lastEditKind = EditKind.None;
+        IsModified = true;
+    }
+
+    /// <summary>
+    /// Dedents every line touched by the current selection by up to
+    /// <paramref name="spaces"/> leading spaces per line.
+    /// </summary>
+    public void DedentLines(int spaces = 4)
+    {
+        var sel = Selection;
+        if (sel is null) return;
+        var (start, end) = sel.Value;
+        PushUndo();
+        for (var i = start.Line; i <= end.Line; i++)
+        {
+            var line = _lines[i];
+            var removed = 0;
+            while (removed < spaces && removed < line.Length && line[removed] == ' ')
+                removed++;
+            _lines[i] = line[removed..];
+        }
+        // Same anchor convention as IndentLines.
+        _selectionAnchor = new TextLocation(start.Line, 0);
+        _cursor = new TextLocation(end.Line, _lines[end.Line].Length);
+        _lastEditKind = EditKind.None;
+        IsModified = true;
+    }
+
     public string GetLine(int lineIndex) =>
         lineIndex >= 0 && lineIndex < _lines.Count ? _lines[lineIndex] : string.Empty;
 
@@ -349,19 +398,18 @@ public sealed class TextBuffer
 
     public void InsertChar(char ch)
     {
-        if (ch == '\n')
-        {
-            InsertNewline();
-            return;
-        }
+        if (ch == '\n') { InsertNewline(); return; }
 
-        if (_lastEditKind != EditKind.InsertChar)
-            PushUndo();
+        // Break coalescing at word/separator boundaries so undo is word-granular.
+        var kind = IsWordSeparator(ch) ? EditKind.InsertSepChar : EditKind.InsertWordChar;
+        if (_lastEditKind != kind) PushUndo();
+        // Always bump revision so gutter/cache consumers see each keystroke.
+        MarkMutated();
 
         var line = _lines[_cursor.Line];
         _lines[_cursor.Line] = line.Insert(_cursor.Column, ch.ToString());
         _cursor = _cursor with { Column = _cursor.Column + 1 };
-        _lastEditKind = EditKind.InsertChar;
+        _lastEditKind = kind;
         IsModified = true;
     }
 
@@ -393,11 +441,10 @@ public sealed class TextBuffer
 
     public void Backspace()
     {
-        if (_cursor.Line == 0 && _cursor.Column == 0)
-            return;
+        if (_cursor.Line == 0 && _cursor.Column == 0) return;
 
-        if (_lastEditKind != EditKind.DeleteBack)
-            PushUndo();
+        if (_lastEditKind != EditKind.DeleteBack) PushUndo();
+        MarkMutated();
 
         if (_cursor.Column > 0)
         {
@@ -407,7 +454,6 @@ public sealed class TextBuffer
         }
         else
         {
-            // Join with previous line.
             var prev = _lines[_cursor.Line - 1];
             var current = _lines[_cursor.Line];
             _lines[_cursor.Line - 1] = prev + current;
@@ -422,11 +468,10 @@ public sealed class TextBuffer
     public void DeleteForward()
     {
         var lineLen = GetLineLength(_cursor.Line);
-        if (_cursor.Column == lineLen && _cursor.Line == _lines.Count - 1)
-            return;
+        if (_cursor.Column == lineLen && _cursor.Line == _lines.Count - 1) return;
 
-        if (_lastEditKind != EditKind.DeleteForward)
-            PushUndo();
+        if (_lastEditKind != EditKind.DeleteForward) PushUndo();
+        MarkMutated();
 
         if (_cursor.Column < lineLen)
         {
@@ -435,7 +480,6 @@ public sealed class TextBuffer
         }
         else
         {
-            // Join with next line.
             var next = _lines[_cursor.Line + 1];
             _lines[_cursor.Line] = _lines[_cursor.Line] + next;
             _lines.RemoveAt(_cursor.Line + 1);
@@ -447,11 +491,10 @@ public sealed class TextBuffer
 
     public bool Undo()
     {
-        if (_undo.Count == 0)
-            return false;
-
-        var snapshot = _undo.Pop();
-        _redo.Push(CaptureSnapshot());
+        if (_undo.Count == 0) return false;
+        var snapshot = _undo.Last!.Value;
+        _undo.RemoveLast();
+        _redo.AddLast(CaptureSnapshot());
         ApplySnapshot(snapshot);
         _lastEditKind = EditKind.None;
         return true;
@@ -459,11 +502,10 @@ public sealed class TextBuffer
 
     public bool Redo()
     {
-        if (_redo.Count == 0)
-            return false;
-
-        var snapshot = _redo.Pop();
-        _undo.Push(CaptureSnapshot());
+        if (_redo.Count == 0) return false;
+        var snapshot = _redo.Last!.Value;
+        _redo.RemoveLast();
+        _undo.AddLast(CaptureSnapshot());
         ApplySnapshot(snapshot);
         _lastEditKind = EditKind.None;
         return true;
@@ -534,10 +576,11 @@ public sealed class TextBuffer
     }
 
     /// <summary>Undo stack snapshot, bottom (oldest) → top (most recent).</summary>
-    public IReadOnlyList<UndoFrame> ExportUndoStack() => _undo.Reverse().ToArray();
+    // LinkedList enumerates First→Last which is already oldest→newest.
+    public IReadOnlyList<UndoFrame> ExportUndoStack() => _undo.ToArray();
 
     /// <summary>Redo stack snapshot, bottom (oldest) → top (most recent).</summary>
-    public IReadOnlyList<UndoFrame> ExportRedoStack() => _redo.Reverse().ToArray();
+    public IReadOnlyList<UndoFrame> ExportRedoStack() => _redo.ToArray();
 
     /// <summary>
     /// Replace the undo/redo stacks with the supplied frames (bottom → top).
@@ -547,30 +590,36 @@ public sealed class TextBuffer
     {
         _undo.Clear();
         _redo.Clear();
-        foreach (var f in undo) _undo.Push(f);
-        foreach (var f in redo) _redo.Push(f);
+        // Input is oldest→newest; AddLast preserves that order: oldest at First, newest at Last.
+        foreach (var f in undo) _undo.AddLast(f);
+        foreach (var f in redo) _redo.AddLast(f);
         _lastEditKind = EditKind.None;
+    }
+
+    // Called on every content mutation, even coalesced ones, so that Revision
+    // and the brace cache stay fresh for every rendered frame.
+    private void MarkMutated()
+    {
+        Revision++;
+        _braceCache = null;
     }
 
     private void PushUndo()
     {
         if (_inCompoundEdit) return;
-        Revision++;
-        _braceCache = null;
-        _undo.Push(CaptureSnapshot());
+        MarkMutated();
+        _undo.AddLast(CaptureSnapshot());
         _redo.Clear();
+        // O(1) trim: drop the oldest entry from the front of the list.
         if (_undo.Count > MaxHistoryDepth)
-        {
-            // Bounded history: drop the oldest entry. Stack doesn't expose this directly,
-            // so rebuild the bottom-trimmed stack via array copy.
-            var keep = _undo.ToArray();
-            _undo.Clear();
-            for (var i = MaxHistoryDepth - 1; i >= 0; i--)
-                _undo.Push(keep[i]);
-        }
+            _undo.RemoveFirst();
     }
 
-    private enum EditKind { None, InsertChar, DeleteBack, DeleteForward }
+    // Word chars (letters/digits/_) coalesce together; separator chars coalesce
+    // together; but the two groups never coalesce with each other. This gives
+    // VS Code-style word-granular undo: each distinct word or run of punctuation
+    // becomes its own undo step.
+    private enum EditKind { None, InsertWordChar, InsertSepChar, DeleteBack, DeleteForward }
 
     // ─── Brace-depth cache (used by gutter rendering) ────────────────
 

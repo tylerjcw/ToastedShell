@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Text;
+using Tosh.Tome.Settings;
 using Tosh.Tome.Theme;
 using Tosh.Tome.Workspace;
 
@@ -28,6 +29,9 @@ internal sealed class ExplorerPane : IDisposable
     private int _scroll;
 
     private string[] _excludeSegments = Array.Empty<string>();
+    private IReadOnlyDictionary<string, GitFileStatus>? _gitStatus;
+
+    public ExplorerSettings Settings { get; set; } = new();
 
     private readonly List<FileSystemWatcher> _watchers = new();
     private readonly ConcurrentQueue<string> _pendingChanges = new();
@@ -49,7 +53,7 @@ internal sealed class ExplorerPane : IDisposable
         {
             var label = !string.IsNullOrEmpty(folder.Alias) ? folder.Alias : Path.GetFileName(folder.Path);
             if (string.IsNullOrEmpty(label)) label = folder.Path;
-            var root = new Node(folder.Path, label, isDirectory: true, depth: 0);
+            var root = new Node(folder.Path, label, isDirectory: true, depth: 0, isRepo: folder.IsRepo);
             _roots.Add(root);
             _expanded.Add(folder.Path); // roots start expanded
             AttachWatcher(folder.Path);
@@ -72,6 +76,8 @@ internal sealed class ExplorerPane : IDisposable
     }
 
     public bool HasRoots => _roots.Count > 0;
+
+    public void SetGitStatus(IReadOnlyDictionary<string, GitFileStatus>? status) => _gitStatus = status;
 
     // ─── Navigation ───────────────────────────────────────────────────
 
@@ -170,9 +176,20 @@ internal sealed class ExplorerPane : IDisposable
         var chevron = node.IsDirectory ? (_expanded.Contains(node.Path) ? "▾ " : "▸ ") : "  ";
         var icon = node.IsDirectory ? "📁 " : "  ";
         var raw = new string(' ', indent) + chevron + icon + node.Label;
-        var visible = TruncateToWidth(raw, Width);
 
-        var sb = new StringBuilder(visible.Length + 32);
+        // Repo root nodes: append branch glyph + live branch name.
+        if (node.IsRepo)
+        {
+            var branch = GitInfo.GetBranch(node.Path);
+            if (branch is not null)
+                raw += $" {Settings.BranchGlyph} {branch}";
+        }
+
+        var badge = GetNodeStatus(node);
+        var textWidth = badge.HasValue ? Width - 2 : Width;
+        var visible = TruncateToWidth(raw, textWidth);
+
+        var sb = new StringBuilder(visible.Length + 64);
         if (selected)
         {
             if (focused) sb.Append(TomeTheme.Active.Open(Role.ExplorerSelectedFocused));
@@ -183,9 +200,47 @@ internal sealed class ExplorerPane : IDisposable
             sb.Append("\u001b[1m"); // bold for directories
         }
         sb.Append(visible);
-        if (visible.Length < Width) sb.Append(new string(' ', Width - visible.Length));
+        if (visible.Length < textWidth) sb.Append(new string(' ', textWidth - visible.Length));
+
+        if (badge.HasValue)
+        {
+            var s = Settings;
+            var (color, glyph) = badge.Value switch
+            {
+                GitFileStatus.Deleted   => (s.DeletedColor,   s.DeletedGlyph),
+                GitFileStatus.Untracked => (s.UntrackedColor, s.UntrackedGlyph),
+                _                       => (s.ChangedColor,   s.ChangedGlyph),
+            };
+            sb.Append($"\u001b[38;5;{color}m {glyph}");
+        }
+
         sb.Append("\u001b[0m");
         return sb.ToString();
+    }
+
+    private GitFileStatus? GetNodeStatus(Node node)
+    {
+        if (_gitStatus is null || _gitStatus.Count == 0) return null;
+        if (!node.IsDirectory)
+            return _gitStatus.TryGetValue(node.Path, out var s) ? s : null;
+
+        // For directory nodes, find the worst status of any descendant.
+        var prefix = node.Path.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+        GitFileStatus? worst = null;
+        foreach (var (path, status) in _gitStatus)
+        {
+            if (!path.StartsWith(prefix, StringComparison.Ordinal)) continue;
+            worst = worst is null ? status : WorseStatus(worst.Value, status);
+            if (worst == GitFileStatus.Deleted) break; // already worst possible
+        }
+        return worst;
+    }
+
+    private static GitFileStatus WorseStatus(GitFileStatus a, GitFileStatus b)
+    {
+        // Priority: Deleted > Changed > Untracked
+        static int Priority(GitFileStatus s) => s == GitFileStatus.Deleted ? 2 : s == GitFileStatus.Changed ? 1 : 0;
+        return Priority(a) >= Priority(b) ? a : b;
     }
 
     private void EnsureSelectionVisible(int visibleRows)
@@ -348,15 +403,17 @@ internal sealed class ExplorerPane : IDisposable
         public string Path { get; }
         public string Label { get; }
         public bool IsDirectory { get; }
+        public bool IsRepo { get; }
         public int Depth { get; }
         public List<Node> Children { get; } = new();
         public bool ChildrenLoaded { get; set; }
 
-        public Node(string path, string label, bool isDirectory, int depth)
+        public Node(string path, string label, bool isDirectory, int depth, bool isRepo = false)
         {
             Path = path;
             Label = label;
             IsDirectory = isDirectory;
+            IsRepo = isRepo;
             Depth = depth;
         }
     }

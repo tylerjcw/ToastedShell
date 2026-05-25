@@ -70,7 +70,7 @@ Program.cs
  Tosh.Runtime/obj/Debug/net10.0/ref/Tosh.Runtime.dll
  Tosh.Stdlib/obj/Debug/net10.0/ref/Tosh.Stdlib.dll
  Tosh.Tui/obj/Debug/net10.0/ref/Tosh.Tui.dll
-<DOTNET>/packs/Microsoft.NETCore.App.Ref/10.0.3/ref/net10.0/
+<DOTNET>/packs/Microsoft.NETCore.App.Ref/10.0.4/ref/net10.0/
  Microsoft.CSharp.dll
  Microsoft.VisualBasic.Core.dll
  Microsoft.VisualBasic.dll
@@ -268,14 +268,14 @@ Program.cs
  system.management/5.0.0/ref/netstandard2.0/System.Management.dll
 
 [analyzerReferences]
-<DOTNET>/packs/Microsoft.NETCore.App.Ref/10.0.3/analyzers/dotnet/cs/
+<DOTNET>/packs/Microsoft.NETCore.App.Ref/10.0.4/analyzers/dotnet/cs/
  Microsoft.Interop.ComInterfaceGenerator.dll
  Microsoft.Interop.JavaScript.JSImportGenerator.dll
  Microsoft.Interop.LibraryImportGenerator.dll
  Microsoft.Interop.SourceGeneration.dll
  System.Text.Json.SourceGeneration.dll
  System.Text.RegularExpressions.Generator.dll
-<DOTNET>/sdk/10.0.103/Sdks/Microsoft.NET.Sdk/analyzers/
+<DOTNET>/sdk/10.0.104/Sdks/Microsoft.NET.Sdk/analyzers/
  Microsoft.CodeAnalysis.CSharp.NetAnalyzers.dll
  Microsoft.CodeAnalysis.NetAnalyzers.dll
 <NUGET>/microsoft.codeanalysis.analyzers/3.3.3/analyzers/dotnet/cs/
@@ -283,5 +283,5 @@ Program.cs
  Microsoft.CodeAnalysis.CSharp.Analyzers.dll
 
 [analyzerConfigFiles]
-<DOTNET>/sdk/10.0.103/Sdks/Microsoft.NET.Sdk/analyzers/build/config/analysislevel_10_default.globalconfig
+<DOTNET>/sdk/10.0.104/Sdks/Microsoft.NET.Sdk/analyzers/build/config/analysislevel_10_default.globalconfig
 obj/Debug/net10.0/Tosh.Benchmarks.GeneratedMSBuildEditorConfig.editorconfig

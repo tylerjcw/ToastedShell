@@ -27,6 +27,9 @@ internal sealed partial class TomeApp
     {
         var shift = (key.Modifiers & ConsoleModifiers.Shift) != 0;
         var ctrl = (key.Modifiers & ConsoleModifiers.Control) != 0;
+        var alt = (key.Modifiers & ConsoleModifiers.Alt) != 0;
+
+        if (_codeActionsOpen && HandleCodeActionKey(key)) return;
 
         // Universal nav (arrows, Home/End, PgUp/PgDn) keeps working in Command
         // mode — there's no good reason to disable it.
@@ -42,6 +45,8 @@ internal sealed partial class TomeApp
             case ConsoleKey.PageDown: ApplyMove(() => PageBy(_view.ViewportHeight), shift); return;
             case ConsoleKey.Escape: ClearPending(); return; // also clears any pending operator
         }
+
+        if (alt && key.Key == ConsoleKey.OemPeriod) { OpenCodeActions(); return; }
 
         // Ctrl+R = redo (vim convention); Ctrl+S/Q/etc still useful here.
         if (ctrl)
@@ -93,6 +98,7 @@ internal sealed partial class TomeApp
             case '!': OpenCommandPrompt(prefill: "!"); return;
             case '/': StartSearch(); return;
             case 'n': FindNext(); return;
+            case 'K': ShowHover(); return;
         }
     }
 
@@ -247,6 +253,7 @@ internal sealed partial class TomeApp
         "gsub",
         "carets", "cursors",
         "break",
+        "git",
     };
 
     private void DispatchCommand(string command)
@@ -381,6 +388,9 @@ internal sealed partial class TomeApp
             case "e!":
                 ReloadFromDisk(silent: false);
                 return;
+            case "git":
+                HandleGit(arg);
+                return;
             default:
                 // Unknown editor verb → fall through to the shell bridge.
                 // ':ls' just runs the tosh ls builtin.
@@ -513,7 +523,8 @@ internal sealed partial class TomeApp
             case "format-on-save":
             case "fmt-on-save":
                 _formatOnSave = ParseBool(value, _formatOnSave);
-                _message = $"format-on-save = {(_formatOnSave ? "on" : "off")}";
+                _settings.FormatOnSave = _formatOnSave;
+                _message = _settings.Save() ?? $"format-on-save = {(_formatOnSave ? "on" : "off")}";
                 return;
             default:
                 _message = $"set: unknown option '{name}'";

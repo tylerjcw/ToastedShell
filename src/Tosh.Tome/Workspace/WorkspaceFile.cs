@@ -57,7 +57,7 @@ internal static class WorkspaceFile
         sb.Append("workspace ").Append(Quote(ws.Name)).Append(" {\n");
         foreach (var f in ws.Folders)
         {
-            sb.Append("    folder ").Append(Quote(f.Path));
+            sb.Append("    ").Append(f.IsRepo ? "repo" : "folder").Append(' ').Append(Quote(f.Path));
             if (!string.IsNullOrEmpty(f.Alias)) sb.Append(" as ").Append(Quote(f.Alias));
             sb.Append('\n');
         }
@@ -96,7 +96,7 @@ internal static class WorkspaceFile
             .Select(f =>
             {
                 var resolved = Path.IsPathRooted(f.Path) ? Path.GetFullPath(f.Path) : Path.GetFullPath(f.Path, baseDir);
-                return f with { Path = resolved };
+                return f with { Path = resolved }; // IsRepo preserved via record with-expression
             })
             .ToArray();
         return ws with { SourcePath = sourcePath, Folders = folders };
@@ -275,16 +275,18 @@ internal static class WorkspaceFile
                 switch (verb.Text)
                 {
                     case "folder":
+                    case "repo":
                         {
-                            var path = Expect(TokKind.String, "folder path").Text;
+                            var isRepo = verb.Text == "repo";
+                            var path = Expect(TokKind.String, $"{verb.Text} path").Text;
                             string? alias = null;
                             SkipNewlines();
                             if (Peek.Kind == TokKind.Ident && Peek.Text == "as")
                             {
                                 Next();
-                                alias = Expect(TokKind.String, "folder alias").Text;
+                                alias = Expect(TokKind.String, $"{verb.Text} alias").Text;
                             }
-                            folders.Add(new WorkspaceFolder(path, alias));
+                            folders.Add(new WorkspaceFolder(path, alias, IsRepo: isRepo));
                             break;
                         }
                     case "exclude":
@@ -298,7 +300,7 @@ internal static class WorkspaceFile
                         break;
                     default:
                         throw new WorkspaceParseException(
-                            $"{_src}:{verb.Line}:{verb.Col}: unknown item '{verb.Text}' (expected folder/exclude/open/layout)");
+                            $"{_src}:{verb.Line}:{verb.Col}: unknown item '{verb.Text}' (expected repo/folder/exclude/open/layout)");
                 }
             }
 

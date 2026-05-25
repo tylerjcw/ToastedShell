@@ -16,18 +16,25 @@ namespace Tosh.Tome.Settings;
 internal sealed class TomeSettings
 {
     public StatusBarSettings StatusBar { get; init; } = new();
+    public ExplorerSettings Explorer { get; init; } = new();
+
+    // ─── Runtime-toggleable options (persisted by :set) ──────────────────
+
+    /// <summary>When true, :w formats the buffer before writing.</summary>
+    public bool FormatOnSave { get; set; } = false;
+
+    // ─── Load / Save ──────────────────────────────────────────────────────
+
+    /// <summary>Non-null when the settings file existed but could not be parsed.</summary>
+    [JsonIgnore]
+    public string? ParseWarning { get; private init; }
 
     public static TomeSettings Default { get; } = new();
 
     public static TomeSettings Load()
     {
-        var path = Environment.GetEnvironmentVariable("TOME_CONFIG");
-        if (string.IsNullOrEmpty(path))
-        {
-            var home = Environment.GetEnvironmentVariable("HOME");
-            if (string.IsNullOrEmpty(home)) return Default;
-            path = Path.Combine(home, ".config", "tome", "settings.json");
-        }
+        var path = ResolveConfigPath();
+        if (path is null) return Default;
         if (!File.Exists(path)) return Default;
 
         try
@@ -41,13 +48,43 @@ internal sealed class TomeSettings
             };
             return JsonSerializer.Deserialize<TomeSettings>(json, opts) ?? Default;
         }
-        catch
+        catch (Exception ex)
         {
-            // Settings parse failures must never crash the editor. The
-            // user will see defaults; surfacing the error is a future
-            // concern (`:set diag` or similar).
-            return Default;
+            // Settings parse failures must never crash the editor. Defaults
+            // are used and the warning surfaces in the status bar on startup.
+            return new TomeSettings { ParseWarning = $"settings: could not parse {path} — {ex.Message}" };
         }
+    }
+
+    /// <summary>
+    /// Writes the current settings back to the config file.
+    /// Returns a non-null error string on failure, null on success.
+    /// </summary>
+    public string? Save()
+    {
+        var path = ResolveConfigPath();
+        if (path is null) return "settings: cannot resolve config path ($HOME not set)";
+        try
+        {
+            var dir = Path.GetDirectoryName(path);
+            if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+            var opts = new JsonSerializerOptions { WriteIndented = true };
+            File.WriteAllText(path, JsonSerializer.Serialize(this, opts));
+            return null;
+        }
+        catch (Exception ex)
+        {
+            return $"settings: could not save — {ex.Message}";
+        }
+    }
+
+    private static string? ResolveConfigPath()
+    {
+        var path = Environment.GetEnvironmentVariable("TOME_CONFIG");
+        if (!string.IsNullOrEmpty(path)) return path;
+        var home = Environment.GetEnvironmentVariable("HOME");
+        if (string.IsNullOrEmpty(home)) return null;
+        return Path.Combine(home, ".config", "tome", "settings.json");
     }
 }
 
@@ -93,4 +130,43 @@ internal sealed class StatusBarSettings
     public int ModifiedColor { get; init; } = 209; // salmon
     public int ErrorColor { get; init; } = 203;    // red
     public int WarningColor { get; init; } = 215;  // amber
+}
+
+/// <summary>
+/// Explorer-pane configuration: git status glyphs and colors.
+/// </summary>
+/// <remarks>
+/// Defaults use Nerd Fonts icons (JetBrainsMono NF, Iosevka NF, etc.)
+/// for status badges and the PowerlineSymbols branch glyph (U+E0A0).
+/// Override individual glyphs in settings.json with plain-text fallbacks
+/// (e.g. "~" / "?" / "-" / "\u2387") for non-Nerd-Font terminals.
+/// </remarks>
+internal sealed class ExplorerSettings
+{
+    /// <summary>
+    /// Shown before the branch name on repo root nodes.
+    /// Default: ⎇ (U+2387). Powerline alternative: "" ().
+    /// </summary>
+    public string BranchGlyph { get; init; } = "\ue0a0"; //  (PowerlineSymbols U+E0A0)
+
+    /// <summary>Single-char badge for modified (staged or unstaged) files. Default: ~</summary>
+    public string ChangedGlyph { get; init; } = "\uf040"; //  (nf-fa-pencil; plain fallback: ~)
+
+    /// <summary>Single-char badge for untracked files. Default: ?</summary>
+    public string UntrackedGlyph { get; init; } = "\uf055"; //  (nf-fa-plus_circle; plain fallback: ?)
+
+    /// <summary>Single-char badge for deleted files. Default: -</summary>
+    public string DeletedGlyph { get; init; } = "\uf1f8"; //  (nf-fa-trash; plain fallback: -)
+
+    /// <summary>256-colour index for the Changed badge. Default: 215 (amber).</summary>
+    public int ChangedColor { get; init; } = 215;
+
+    /// <summary>256-colour index for the Untracked badge. Default: 114 (green).</summary>
+    public int UntrackedColor { get; init; } = 114;
+
+    /// <summary>256-colour index for the Deleted badge. Default: 203 (red).</summary>
+    public int DeletedColor { get; init; } = 203;
+
+    /// <summary>256-colour index for the branch name on repo roots. Default: 110 (soft blue).</summary>
+    public int BranchColor { get; init; } = 110;
 }
