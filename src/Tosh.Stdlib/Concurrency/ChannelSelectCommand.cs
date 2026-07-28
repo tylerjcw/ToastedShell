@@ -21,29 +21,73 @@ public sealed class ChannelSelectCommand : ShellCommand
 
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(context.CancellationToken);
         var pending = channels
-            .Select((channel, index) => ReceiveResultAsync(index, channel, linkedCts.Token))
+            .Select((channel, index) => WaitForReadinessAsync(index, channel, linkedCts.Token))
             .ToList();
 
-        while (pending.Count > 0)
+        ChannelSelectResult? selected = null;
+
+        try
         {
-            var winnerTask = await Task.WhenAny(pending);
-            pending.Remove(winnerTask);
-            var winner = await winnerTask;
-
-            // Closed/drained channel without a value; continue waiting on the rest.
-            if (!winner.HasValue)
+            while (pending.Count > 0)
             {
-                continue;
-            }
+                context.CancellationToken.ThrowIfCancellationRequested();
 
+                var readinessTask = await Task.WhenAny(pending);
+                pending.Remove(readinessTask);
+                var readiness = await readinessTask;
+
+                // A false readiness result means this channel is closed and drained.
+                if (!readiness.CanRead)
+                {
+                    continue;
+                }
+
+                context.CancellationToken.ThrowIfCancellationRequested();
+
+                // Readiness is advisory when multiple readers are present. Only this
+                // TryReceive commits an item; if another reader won the race, re-arm
+                // this channel without disturbing any of the other queues.
+                if (readiness.Channel.TryReceive(out var value))
+                {
+                    selected = new ChannelSelectResult(
+                        readiness.Index,
+                        readiness.Channel,
+                        value);
+                    break;
+                }
+
+                pending.Add(WaitForReadinessAsync(
+                    readiness.Index,
+                    readiness.Channel,
+                    linkedCts.Token));
+            }
+        }
+        finally
+        {
             linkedCts.Cancel();
+
+            if (pending.Count > 0)
+            {
+                try
+                {
+                    await Task.WhenAll(pending);
+                }
+                catch (OperationCanceledException)
+                {
+                    // Expected when a winner or the caller cancels the remaining
+                    // non-destructive readiness waits.
+                }
+            }
+        }
+
+        if (selected is not null)
+        {
             yield return new Dictionary<string, object?>(StringComparer.Ordinal)
             {
-                ["Index"] = winner.Index,
-                ["Channel"] = winner.Channel,
-                ["Value"] = winner.Value,
+                ["Index"] = selected.Index,
+                ["Channel"] = selected.Channel,
+                ["Value"] = selected.Value,
             };
-            yield break;
         }
     }
 
@@ -86,20 +130,16 @@ public sealed class ChannelSelectCommand : ShellCommand
         return channels;
     }
 
-    private static async Task<ChannelSelectResult> ReceiveResultAsync(int index, ShellChannel channel, CancellationToken cancellationToken)
+    private static async Task<ChannelReadiness> WaitForReadinessAsync(
+        int index,
+        ShellChannel channel,
+        CancellationToken cancellationToken)
     {
-        try
-        {
-            var value = await channel.ReceiveAsync(cancellationToken);
-            return value is null
-                ? new ChannelSelectResult(index, channel, null, HasValue: false)
-                : new ChannelSelectResult(index, channel, value, HasValue: true);
-        }
-        catch (OperationCanceledException)
-        {
-            return new ChannelSelectResult(index, channel, null, HasValue: false);
-        }
+        var canRead = await channel.WaitToReceiveAsync(cancellationToken);
+        return new ChannelReadiness(index, channel, canRead);
     }
 
-    private sealed record ChannelSelectResult(int Index, ShellChannel Channel, object? Value, bool HasValue);
+    private sealed record ChannelReadiness(int Index, ShellChannel Channel, bool CanRead);
+
+    private sealed record ChannelSelectResult(int Index, ShellChannel Channel, object? Value);
 }

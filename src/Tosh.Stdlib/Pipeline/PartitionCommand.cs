@@ -3,7 +3,7 @@ using Tosh.Runtime;
 namespace Tosh.Stdlib.Pipeline;
 
 [CommandCategory("Pipeline")]
-[CommandArgument("callable|block", "A predicate that returns true or false for each item.")]
+[CommandArgument("callable|block", "A predicate evaluated for each item using ToastScript truthiness.")]
 [CommandExample("echo 1 2 3 4 5 | partition { _ > 3 }", Title = "Partition by a condition")]
 [CommandExample("ls | partition { _.Extension == \".cs\" }", Title = "Separate C# files from others")]
 [CommandOutput("A two-element array: [items-where-true, items-where-false].", ClrType = typeof(IAsyncEnumerable<object[]>))]

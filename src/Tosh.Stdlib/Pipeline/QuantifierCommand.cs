@@ -115,7 +115,7 @@ public sealed class QuantifierCommand : ShellCommand
             Usage: Usage,
             Category: "Pipeline",
             Aliases: aliases ?? [],
-            Arguments: [new("callable|block", "A lambda or block predicate that returns boolean values.", Required: true, TypeName: null, Kind: "block")],
+            Arguments: [new("callable|block", "A lambda or block predicate evaluated with ToastScript truthiness.", Required: true, TypeName: null, Kind: "block")],
             Options: [],
             Examples: _kind switch
             {

@@ -24,19 +24,28 @@ public sealed class NewObjectCommand : ShellCommand
         if (context.Runtime.Classes.TryGetValue(typeName, out var runtimeType) &&
             runtimeType is IShellStaticType runtimeShellType)
         {
-            yield return context.Runtime.Invoker.CreateInstance(runtimeShellType, arguments);
+            yield return await context.Runtime.Invoker.CreateInstanceAsync(
+                runtimeShellType,
+                arguments,
+                context.CancellationToken);
             yield break;
         }
 
         if (BuiltInShellTypes.TryResolveStaticType(typeName, context.TypeResolver, out var shellType))
         {
-            yield return context.Runtime.Invoker.CreateInstance(shellType, arguments);
+            yield return await context.Runtime.Invoker.CreateInstanceAsync(
+                shellType,
+                arguments,
+                context.CancellationToken);
             yield break;
         }
 
         var type = context.TypeResolver.Resolve(typeName)
                    ?? throw new InvalidOperationException($"Unable to resolve type '{typeName}'.");
 
-        yield return context.Runtime.Invoker.CreateInstance(type, arguments);
+        yield return await context.Runtime.Invoker.CreateInstanceAsync(
+            type,
+            arguments,
+            context.CancellationToken);
     }
 }

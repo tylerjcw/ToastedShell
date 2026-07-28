@@ -3,11 +3,11 @@ using Tosh.Runtime;
 namespace Tosh.Stdlib.Pipeline;
 
 [CommandCategory("Pipeline")]
-[CommandArgument("callable|block", "A predicate that receives each item. A new group starts when it returns false.")]
+[CommandArgument("callable|block", "A predicate that receives each item. A new group starts when its result is falsy.")]
 [CommandExample("echo 1 1 2 2 3 | group-while { _ == $prev }", Title = "Group equal consecutive values")]
 [CommandExample("echo 1 2 3 10 11 12 | group-while func(x, prev) => ($x - $prev <= 1)", Title = "Group runs of nearly consecutive numbers")]
 [CommandOutput("Arrays of consecutive items grouped while the predicate holds.")]
-[PipelineInput(AcceptsScalar = true, AcceptsRecord = true, Description = "Groups consecutive pipeline items while the predicate returns true.")]
+[PipelineInput(AcceptsScalar = true, AcceptsRecord = true, Description = "Groups consecutive pipeline items while the predicate is truthy.")]
 [CommandStreaming(StreamingBehavior.Lazy)]
 public sealed class GroupWhileCommand : ShellCommand
 {

@@ -3,11 +3,11 @@ using Tosh.Runtime;
 namespace Tosh.Stdlib.Pipeline;
 
 [CommandCategory("Pipeline")]
-[CommandArgument("predicate", "A callable or block evaluated for each item. Stops when it returns true.")]
+[CommandArgument("predicate", "A callable or block evaluated for each item. Stops when its result is truthy.")]
 [CommandExample("echo 1 2 3 4 5 | take-until { _ >= 4 }", Title = "Take until a condition is met")]
 [CommandExample("1..100 | take-until func(x) => ($x > 10)", Title = "Take until value exceeds 10")]
 [CommandOutput("Pipeline items up to (but not including) the first that satisfies the predicate.")]
-[PipelineInput(AcceptsScalar = true, AcceptsRecord = true, Description = "Yields items until the predicate returns true.")]
+[PipelineInput(AcceptsScalar = true, AcceptsRecord = true, Description = "Yields items until the predicate is truthy.")]
 [CommandStreaming(StreamingBehavior.ShortCircuit)]
 public sealed class TakeUntilCommand : ShellCommand
 {

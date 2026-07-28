@@ -3,10 +3,10 @@ using Tosh.Runtime;
 namespace Tosh.Stdlib.Pipeline;
 
 [CommandCategory("Pipeline")]
-[CommandArgument("predicate", "A callable or block evaluated for each item. Starts yielding when it returns true.")]
+[CommandArgument("predicate", "A callable or block evaluated for each item. Starts yielding when its result is truthy.")]
 [CommandExample("echo 1 2 3 4 5 | skip-until { _ >= 3 }", Title = "Skip until a condition is met")]
 [CommandOutput("Pipeline items starting from the first that satisfies the predicate.")]
-[PipelineInput(AcceptsScalar = true, AcceptsRecord = true, Description = "Discards items until the predicate returns true, then yields the rest.")]
+[PipelineInput(AcceptsScalar = true, AcceptsRecord = true, Description = "Discards items until the predicate is truthy, then yields the rest.")]
 [CommandStreaming(StreamingBehavior.Lazy)]
 public sealed class SkipUntilCommand : ShellCommand
 {
