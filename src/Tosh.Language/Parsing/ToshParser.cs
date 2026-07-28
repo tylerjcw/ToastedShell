@@ -6,14 +6,59 @@ namespace Tosh.Language.Parsing;
 
 public static class ToshParser
 {
-    public static ParseResult Parse(string source, string sourceName = "<input>")
+    /// <summary>
+    /// The single source of truth for "can a statement or expression
+    /// begin with this token" (TS-P2-06). Statement-boundary detection
+    /// previously carried its own shorter list that omitted interpolated
+    /// strings, command substitution, process substitution, and function
+    /// references, so a line starting with one of those was not always
+    /// recognised as a new statement. Structural decisions should consult
+    /// this rather than re-enumerating token kinds.
+    /// </summary>
+    internal static bool IsExpressionStartToken(SyntaxTokenKind kind)
+    {
+        return kind switch
+        {
+            SyntaxTokenKind.String or
+            SyntaxTokenKind.Number or
+            SyntaxTokenKind.Boolean or
+            SyntaxTokenKind.Null or
+            SyntaxTokenKind.UnitLiteral or
+            SyntaxTokenKind.InterpolatedString or
+            SyntaxTokenKind.Bareword or
+            SyntaxTokenKind.OpenBrace or
+            SyntaxTokenKind.OpenParen or
+            SyntaxTokenKind.OpenBracket or
+            SyntaxTokenKind.DollarOpenParen or
+            SyntaxTokenKind.LessThanOpenParen or
+            SyntaxTokenKind.Ampersand => true,
+            _ => false,
+        };
+    }
+
+    /// <param name="context">
+    /// What the host knows about commands, modules, and types
+    /// (TS-P2-23). Omitting it parses purely syntactically, which is what
+    /// the formatter, the REPL continuation classifier, and
+    /// interpolation-hole parsing want.
+    /// </param>
+    public static ParseResult Parse(
+        string source,
+        string sourceName = "<input>",
+        ParseContext? context = null)
     {
         try
         {
             var sourceText = source ?? string.Empty;
             var lexer = new ToshLexer(sourceText);
             var tokens = lexer.Lex();
-            var parser = new InternalParser(sourceName, sourceText, tokens, lexer.LineHushDirectives, lexer.LineComments);
+            var parser = new InternalParser(
+                sourceName,
+                sourceText,
+                tokens,
+                lexer.LineHushDirectives,
+                lexer.LineComments,
+                context ?? ParseContext.Empty);
             return parser.Parse();
         }
         catch (ToshLexer.LexerDiagnosticException exception)
@@ -37,6 +82,17 @@ public static class ToshParser
         private readonly IReadOnlyList<LineComment> _lineComments;
         private readonly List<SyntaxDiagnostic> _diagnostics = [];
         private readonly HashSet<string> _userFunctionNames;
+
+        /// <summary>
+        /// Names declared as modules in this source (TS-P2-23). Lets the
+        /// parser decide `Geo.area` from a fact rather than from
+        /// capitalization: a declared module is module dispatch whatever
+        /// its casing, and the spelling heuristic is only consulted for
+        /// names this source never declares.
+        /// </summary>
+        private readonly HashSet<string> _declaredModuleNames;
+        private readonly ParseContext _context;
+
         private int _position;
         private bool _stopRefinementAtEquals;
 
@@ -45,34 +101,114 @@ public static class ToshParser
             string sourceText,
             IReadOnlyList<SyntaxToken> tokens,
             IReadOnlyList<LineHushDirective> lineHushDirectives,
-            IReadOnlyList<LineComment> lineComments)
+            IReadOnlyList<LineComment> lineComments,
+            ParseContext context)
         {
+            _context = context;
             _sourceName = sourceName;
             _sourceText = sourceText;
             _tokens = tokens;
             _lineHushDirectives = lineHushDirectives;
             _lineComments = lineComments;
-            _userFunctionNames = ScanUserFunctionNames(tokens);
+            var declarations = ScanDeclarations(tokens, sourceText);
+            _userFunctionNames = declarations.Functions;
+            _declaredModuleNames = declarations.Modules;
         }
 
-        private static HashSet<string> ScanUserFunctionNames(IReadOnlyList<SyntaxToken> tokens)
+        /// <summary>
+        /// Collects the names this source declares, so later parse
+        /// decisions consult a table instead of guessing from spelling
+        /// (TS-P2-23).
+        ///
+        /// A declaration keyword only counts at a statement start, which
+        /// is what keeps unrelated text from poisoning the scan
+        /// (TS-P2-08): in <c>echo func bar</c> the word <c>func</c> is an
+        /// argument, so <c>bar</c> is not registered as a function.
+        /// </summary>
+        private static (HashSet<string> Functions, HashSet<string> Modules) ScanDeclarations(
+            IReadOnlyList<SyntaxToken> tokens,
+            string sourceText)
         {
-            var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            for (int i = 0; i < tokens.Count - 1; i++)
+            var functions = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var modules = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            for (var i = 0; i < tokens.Count - 1; i++)
             {
-                var t = tokens[i];
-                if (t.Kind == SyntaxTokenKind.Bareword &&
-                    string.Equals(t.Text, "func", StringComparison.OrdinalIgnoreCase))
+                var token = tokens[i];
+                if (token.Kind != SyntaxTokenKind.Bareword)
                 {
-                    var next = tokens[i + 1];
-                    if (next.Kind == SyntaxTokenKind.Bareword && !string.IsNullOrEmpty(next.Text))
-                    {
-                        names.Add(next.Text);
-                    }
+                    continue;
                 }
+
+                var isFunction = string.Equals(token.Text, "func", StringComparison.OrdinalIgnoreCase);
+                var isModule = string.Equals(token.Text, "module", StringComparison.OrdinalIgnoreCase);
+                if (!isFunction && !isModule)
+                {
+                    continue;
+                }
+
+                if (!IsAtDeclarationStart(tokens, i, sourceText))
+                {
+                    continue;
+                }
+
+                var next = tokens[i + 1];
+                if (next.Kind != SyntaxTokenKind.Bareword || string.IsNullOrEmpty(next.Text))
+                {
+                    continue;
+                }
+
+                (isFunction ? functions : modules).Add(next.Text);
             }
-            return names;
+
+            return (functions, modules);
         }
+
+        /// <summary>
+        /// True when the token at <paramref name="index"/> begins a
+        /// statement: it is first in the source, or follows a separator,
+        /// a block brace, a pipe, or a line break. Modifiers that may
+        /// precede a declaration (<c>export</c>, <c>shy</c>, and friends)
+        /// are skipped so <c>export func f()</c> still registers.
+        /// </summary>
+        private static bool IsAtDeclarationStart(
+            IReadOnlyList<SyntaxToken> tokens,
+            int index,
+            string sourceText)
+        {
+            var cursor = index - 1;
+
+            while (cursor >= 0 &&
+                   tokens[cursor].Kind == SyntaxTokenKind.Bareword &&
+                   IsDeclarationModifierWord(tokens[cursor].Text))
+            {
+                cursor--;
+            }
+
+            if (cursor < 0)
+            {
+                return true;
+            }
+
+            var previous = tokens[cursor];
+            if (previous.Kind is SyntaxTokenKind.Semicolon
+                or SyntaxTokenKind.OpenBrace
+                or SyntaxTokenKind.CloseBrace
+                or SyntaxTokenKind.Pipe)
+            {
+                return true;
+            }
+
+            var gapStart = Math.Min(previous.Span.End, sourceText.Length);
+            var gapEnd = Math.Min(tokens[index].Span.Start, sourceText.Length);
+            return gapEnd > gapStart
+                && sourceText.AsSpan(gapStart, gapEnd - gapStart).IndexOf('\n') >= 0;
+        }
+
+        private static bool IsDeclarationModifierWord(string text) => text is
+            "export" or "shy" or "global" or "local" or "shared" or "static"
+            or "sealed" or "hollow" or "hermit" or "strict" or "partial"
+            or "abstract" or "private" or "public" or "proud";
 
         public ParseResult Parse()
         {
@@ -133,6 +269,7 @@ public static class ToshParser
                     continue;
                 }
 
+                var positionBeforeStatement = _position;
                 statements.Add(ParseStatement(stopAtSemicolon: true));
 
                 if (Current.Kind == SyntaxTokenKind.Semicolon)
@@ -158,7 +295,18 @@ public static class ToshParser
                         Title: "Top-level statements must be separated by a newline or ';'.",
                         Span: Current.Span,
                         Label: "insert a newline or ';' between statements"));
-                    SkipToStageBoundary(untilCloseParen: false, untilCloseBrace: false, untilSemicolon: false);
+                    // Only skip when the statement parse made no
+                    // progress, which is what guarantees termination.
+                    // Skipping unconditionally discarded whatever
+                    // followed on the same line: for
+                    // `func f() {…} func g() {…}` the scan ran past `g`
+                    // and the declaration was lost from the tree. When
+                    // the parser has advanced it is already positioned at
+                    // the next construct, so continuing recovers it.
+                    if (_position == positionBeforeStatement)
+                    {
+                        SkipToStageBoundary(untilCloseParen: false, untilCloseBrace: false, untilSemicolon: false);
+                    }
 
                     if (Current.Kind == SyntaxTokenKind.Semicolon)
                     {
@@ -813,7 +961,8 @@ public static class ToshParser
         {
             var nameToken = Current;
             var name = ParseAssignableVariableName();
-            var assignmentToken = ExpectAssignmentOperatorToken("Assignments use '=', '+=', '-=', '*=', '/=', or '%=' between the variable name and the value.");
+            var assignmentToken = ExpectAssignmentOperatorToken(
+                "Assignments use '=', '+=', '-=', '*=', '**=', '/=', '//=', '%=', or '??=' between the variable name and the value.");
             var value = ParsePipeline(
                 untilCloseParen: stopAtCloseParen,
                 untilCloseBrace: stopAtCloseBrace,
@@ -833,7 +982,8 @@ public static class ToshParser
             bool stopAtSemicolon)
         {
             var target = ParseMemberAssignmentTarget();
-            var assignmentToken = ExpectAssignmentOperatorToken("Assignments use '=', '+=', '-=', '*=', '/=', or '%=' between the member path and the value.");
+            var assignmentToken = ExpectAssignmentOperatorToken(
+                "Assignments use '=', '+=', '-=', '*=', '**=', '/=', '//=', '%=', or '??=' between the member path and the value.");
             var value = ParsePipeline(
                 untilCloseParen: stopAtCloseParen,
                 untilCloseBrace: stopAtCloseBrace,
@@ -1983,7 +2133,7 @@ public static class ToshParser
                 if (Current.Kind == SyntaxTokenKind.Bareword && Current.Text == "_")
                 {
                     // Check if this is `_ =>` (wildcard shorthand) — suggest `default` instead.
-                    if (IsFatArrowToken(Peek(1), Peek(2)))
+                    if (IsFatArrow(Peek(1)))
                     {
                         _diagnostics.Add(new SyntaxDiagnostic(
                             Code: "tosh.parser.match_default_keyword_required",
@@ -2042,7 +2192,7 @@ public static class ToshParser
                 }
             }
 
-            if (!IsFatArrowToken(Current, Peek(1)))
+            if (!IsFatArrow(Current))
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
                     Code: "tosh.parser.expected_match_arm_arrow",
@@ -2291,7 +2441,7 @@ public static class ToshParser
         }
 
         private static bool IsSubcommandModifierKeyword(string text) =>
-            text is "eager" or "hidden" or "hollow" or "vital";
+            text is "eager" or "hidden" or "hollow" or "vital" or "default";
 
         private static bool IsSubcommandKeyword(string text) =>
             text is "subcommand" or "subcmd";
@@ -2305,13 +2455,27 @@ public static class ToshParser
                 offset++;
             }
 
-            return Peek(offset).Kind == SyntaxTokenKind.Bareword &&
-                   IsSubcommandKeyword(Peek(offset).Text) &&
-                   Peek(offset + 1).Kind == SyntaxTokenKind.Bareword &&
-                   IsValidCommandName(Peek(offset + 1).Text) &&
-                   (Peek(offset + 2).Kind == SyntaxTokenKind.OpenBrace ||
-                    Peek(offset + 2).Kind == SyntaxTokenKind.OpenParen ||
-                    IsFatArrowToken(Peek(offset + 2), Peek(offset + 3)));
+            if (Peek(offset).Kind != SyntaxTokenKind.Bareword ||
+                !IsSubcommandKeyword(Peek(offset).Text) ||
+                Peek(offset + 1).Kind != SyntaxTokenKind.Bareword)
+            {
+                return false;
+            }
+
+            // Allow the name token to have a trailing ':' or fused ':modifier' for postfix syntax.
+            var nameText = Peek(offset + 1).Text;
+            var colonIdx = nameText.IndexOf(':');
+            var namePart = colonIdx >= 0 ? nameText[..colonIdx] : nameText;
+            if (!IsValidCommandName(namePart))
+            {
+                return false;
+            }
+
+            return Peek(offset + 2).Kind == SyntaxTokenKind.OpenBrace ||
+                   Peek(offset + 2).Kind == SyntaxTokenKind.OpenParen ||
+                   IsFatArrow(Peek(offset + 2)) ||
+                   colonIdx >= 0 ||
+                   (Peek(offset + 2).Kind == SyntaxTokenKind.Bareword && Peek(offset + 2).Text.StartsWith(':'));
         }
 
         private StatementSyntax ParseSubcommandStatement(IReadOnlyList<SyntaxToken>? docTokens = null)
@@ -2340,6 +2504,7 @@ public static class ToshParser
                     "hidden" => SubcommandModifier.Hidden,
                     "hollow" => SubcommandModifier.Hollow,
                     "vital" => SubcommandModifier.Vital,
+                    "default" => SubcommandModifier.Default,
                     _ => SubcommandModifier.None,
                 };
             }
@@ -2355,8 +2520,25 @@ public static class ToshParser
                     Help: "'hollow' forbids a body, but 'eager' requires one to run."));
             }
 
+            if ((modifiers & SubcommandModifier.Default) != 0 &&
+                (modifiers & SubcommandModifier.Hollow) != 0)
+            {
+                _diagnostics.Add(new SyntaxDiagnostic(
+                    Code: "tosh.parser.incompatible_subcommand_modifiers",
+                    Title: "'default' and 'hollow' cannot be combined on a subcommand.",
+                    Span: Current.Span,
+                    Label: "remove one of these modifiers",
+                    Help: "'hollow' subcommands cannot accept arguments, but 'default' subcommands receive the unmatched positional."));
+            }
+
             var keyword = NextToken();
-            if (Current.Kind != SyntaxTokenKind.Bareword || !IsValidCommandName(Current.Text))
+            string nameForValidation = Current.Kind == SyntaxTokenKind.Bareword ? Current.Text : string.Empty;
+            var nameColonIdx = nameForValidation.IndexOf(':');
+            if (nameColonIdx >= 0)
+            {
+                nameForValidation = nameForValidation[..nameColonIdx];
+            }
+            if (Current.Kind != SyntaxTokenKind.Bareword || !IsValidCommandName(nameForValidation))
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
                     Code: "tosh.parser.expected_subcommand_name",
@@ -2373,6 +2555,95 @@ public static class ToshParser
             }
 
             var nameToken = NextToken();
+            var resolvedName = nameToken.Text;
+            string? fusedFirstModifier = null;
+            var sawPostfixColon = false;
+            var postfixColonIdx = resolvedName.IndexOf(':');
+            if (postfixColonIdx >= 0)
+            {
+                sawPostfixColon = true;
+                if (postfixColonIdx + 1 < resolvedName.Length)
+                {
+                    fusedFirstModifier = resolvedName[(postfixColonIdx + 1)..];
+                }
+                resolvedName = resolvedName[..postfixColonIdx];
+            }
+            else if (Current.Kind == SyntaxTokenKind.Bareword && Current.Text.StartsWith(':'))
+            {
+                var colonTok = NextToken();
+                sawPostfixColon = true;
+                if (colonTok.Text.Length > 1)
+                {
+                    fusedFirstModifier = colonTok.Text[1..];
+                }
+            }
+
+            if (sawPostfixColon)
+            {
+                void ApplyPostfixModifier(string text, TextSpan span)
+                {
+                    if (!IsSubcommandModifierKeyword(text))
+                    {
+                        _diagnostics.Add(new SyntaxDiagnostic(
+                            Code: "tosh.parser.unknown_subcommand_modifier",
+                            Title: $"Unknown subcommand modifier '{text}'.",
+                            Span: span,
+                            Label: "expected one of: eager, hidden, hollow, vital, default"));
+                        return;
+                    }
+                    if (!seenModifiers.Add(text))
+                    {
+                        _diagnostics.Add(new SyntaxDiagnostic(
+                            Code: "tosh.parser.duplicate_subcommand_modifier",
+                            Title: $"Subcommand modifier '{text}' is repeated.",
+                            Span: span,
+                            Label: "remove the duplicate modifier"));
+                        return;
+                    }
+                    modifiers |= text switch
+                    {
+                        "eager" => SubcommandModifier.Eager,
+                        "hidden" => SubcommandModifier.Hidden,
+                        "hollow" => SubcommandModifier.Hollow,
+                        "vital" => SubcommandModifier.Vital,
+                        "default" => SubcommandModifier.Default,
+                        _ => SubcommandModifier.None,
+                    };
+                }
+
+                if (fusedFirstModifier is not null)
+                {
+                    ApplyPostfixModifier(fusedFirstModifier, nameToken.Span);
+                }
+
+                while (Current.Kind == SyntaxTokenKind.Bareword && IsValidCommandName(Current.Text))
+                {
+                    var modTok = NextToken();
+                    ApplyPostfixModifier(modTok.Text, modTok.Span);
+                }
+
+                if ((modifiers & SubcommandModifier.Eager) != 0 &&
+                    (modifiers & SubcommandModifier.Hollow) != 0)
+                {
+                    _diagnostics.Add(new SyntaxDiagnostic(
+                        Code: "tosh.parser.incompatible_subcommand_modifiers",
+                        Title: "'eager' and 'hollow' cannot be combined on a subcommand.",
+                        Span: nameToken.Span,
+                        Label: "remove one of these modifiers",
+                        Help: "'hollow' forbids a body, but 'eager' requires one to run."));
+                }
+                if ((modifiers & SubcommandModifier.Default) != 0 &&
+                    (modifiers & SubcommandModifier.Hollow) != 0)
+                {
+                    _diagnostics.Add(new SyntaxDiagnostic(
+                        Code: "tosh.parser.incompatible_subcommand_modifiers",
+                        Title: "'default' and 'hollow' cannot be combined on a subcommand.",
+                        Span: nameToken.Span,
+                        Label: "remove one of these modifiers",
+                        Help: "'hollow' subcommands cannot accept arguments, but 'default' subcommands receive the unmatched positional."));
+                }
+            }
+            nameToken = nameToken with { Text = resolvedName };
 
             IReadOnlyList<FunctionParameterSyntax> parameters = Array.Empty<FunctionParameterSyntax>();
             if (Current.Kind == SyntaxTokenKind.OpenParen)
@@ -2382,7 +2653,7 @@ public static class ToshParser
 
             BlockSyntax body;
 
-            if (IsFatArrowToken(Current, Peek(1)))
+            if (IsFatArrow(Current))
             {
                 var arrowStart = Current.Span.Start;
                 ConsumeFatArrow();
@@ -2465,7 +2736,7 @@ public static class ToshParser
             {
                 parameters = ParseFunctionParameters(skipOpenParen: opNameOpenParenConsumed);
             }
-            else if (!IsFatArrowToken(Current, Peek(1)))
+            else if (!IsFatArrow(Current))
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
                     Code: "tosh.parser.expected_function_signature",
@@ -2549,7 +2820,7 @@ public static class ToshParser
             BlockSyntax body;
             var isCommandWrapper = false;
 
-            if (IsFatArrowToken(Current, Peek(1)))
+            if (IsFatArrow(Current))
             {
                 isCommandWrapper = true;
                 body = ParseFunctionArrowBody(nameToken.Text, allowExpressionStart: true);
@@ -3870,7 +4141,7 @@ public static class ToshParser
             BlockSyntax? setter = null;
             var end = refinement?.Span.End ?? nameToken.Span.End;
 
-            if (IsFatArrowToken(Current, Peek(1)))
+            if (IsFatArrow(Current))
             {
                 getter = ParseArrowStatementBlock("property getter");
                 end = getter.Span.End;
@@ -4353,9 +4624,19 @@ public static class ToshParser
             var arrowStart = Current.Span.Start;
             ConsumeFatArrow();
 
-            var expression = ParseArgument();
+            // The body is a pipeline, exactly as it is for a named
+            // arrow function. Reading a single argument instead meant
+            // `func (x) => $x + 1` bound only `$x`, leaving `+ 1` to the
+            // enclosing expression — so the same body text meant two
+            // different things depending on whether the function had a
+            // name (TS-P2-26).
+            var pipeline = ParsePipeline(
+                untilCloseParen: true,
+                untilCloseBrace: true,
+                untilSemicolon: true,
+                allowExpressionStart: true);
 
-            if (expression is null)
+            if (pipeline.Stages.Count == 0)
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
                     Code: "tosh.parser.expected_anonymous_function_expression",
@@ -4366,9 +4647,7 @@ public static class ToshParser
                 return new BlockSyntax(Array.Empty<StatementSyntax>(), new TextSpan(arrowStart, 0));
             }
 
-            var stage = new ExpressionPipelineStageSyntax(expression, expression.Span);
-            var pipeline = new PipelineSyntax([stage]);
-            var span = TextSpan.FromBounds(arrowStart, expression.Span.End);
+            var span = GetPipelineSpan(pipeline, new TextSpan(arrowStart, 0));
             var statement = new PipelineStatementSyntax(pipeline, span);
             return new BlockSyntax([statement], span);
         }
@@ -4392,7 +4671,7 @@ public static class ToshParser
                     returnTypeName);
             }
 
-            if (IsFatArrowToken(Current, Peek(1)))
+            if (IsFatArrow(Current))
             {
                 var body = ParseAnonymousFunctionArrowBody();
                 return new AnonymousFunctionArgumentSyntax(
@@ -5486,16 +5765,8 @@ public static class ToshParser
 
         private void ConsumeFatArrow()
         {
-            if (Current.Kind == SyntaxTokenKind.Bareword && Current.Text == "=>")
+            if (Current.Kind == SyntaxTokenKind.FatArrow)
             {
-                NextToken();
-                return;
-            }
-
-            if (Current.Kind == SyntaxTokenKind.Bareword && Current.Text == "=" &&
-                Peek(1).Kind == SyntaxTokenKind.GreaterThan)
-            {
-                NextToken();
                 NextToken();
             }
         }
@@ -6115,13 +6386,15 @@ public static class ToshParser
                         Label: "this looks like an accidental double-dot"));
                 }
 
-                return ParseRangeArgument(result, implicitCurrentItem);
+                var range = ParseRangeArgument(result, implicitCurrentItem);
+                ValidateLiteralRangeOperands(range);
+                return range;
             }
 
             return result;
         }
 
-        private ArgumentSyntax ParseRangeArgument(ArgumentSyntax start, bool implicitCurrentItem)
+        private RangeArgumentSyntax ParseRangeArgument(ArgumentSyntax start, bool implicitCurrentItem)
         {
             NextToken(); // consume first ..
 
@@ -6170,6 +6443,42 @@ public static class ToshParser
             // start..end
             var span2 = new TextSpan(start.Span.Start, second.Span.End - start.Span.Start);
             return new RangeArgumentSyntax(start, Step: null, second, span2);
+        }
+
+        private void ValidateLiteralRangeOperands(RangeArgumentSyntax range)
+        {
+            ValidateLiteralRangeOperand(range.Start, "start");
+            ValidateLiteralRangeOperand(range.Step, "step");
+            ValidateLiteralRangeOperand(range.End, "end");
+        }
+
+        private void ValidateLiteralRangeOperand(ArgumentSyntax? operand, string role)
+        {
+            if (operand is not LiteralArgumentSyntax literal ||
+                IsValidRangeIntegerLiteral(literal.Value))
+            {
+                return;
+            }
+
+            _diagnostics.Add(new SyntaxDiagnostic(
+                Code: "tosh.parser.range_requires_integer",
+                Title: "Range bounds and steps must be 32-bit integers.",
+                Span: operand.Span,
+                Label: $"range {role} is not an integer",
+                Help: "use an integer from -2147483648 through 2147483647"));
+        }
+
+        private static bool IsValidRangeIntegerLiteral(object? value)
+        {
+            return value switch
+            {
+                int => true,
+                long number => number is >= int.MinValue and <= int.MaxValue,
+                double number => double.IsFinite(number) &&
+                                 number == Math.Floor(number) &&
+                                 number is >= int.MinValue and <= int.MaxValue,
+                _ => false,
+            };
         }
 
         /// <summary>
@@ -7200,7 +7509,7 @@ public static class ToshParser
             var key = ParseArgument(implicitCurrentItem: implicitCurrentItem)
                       ?? new BarewordArgumentSyntax("_", Current.Span);
 
-            if (!IsFatArrowToken(Current, Peek(1)))
+            if (!IsFatArrow(Current))
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
                     Code: "tosh.parser.expected_fat_arrow",
@@ -7590,7 +7899,7 @@ public static class ToshParser
             // { <expr> => ... }  —  the key can be bareword, string, number, or variable.
             if (first.Kind is SyntaxTokenKind.Bareword or SyntaxTokenKind.String or SyntaxTokenKind.Number)
             {
-                return IsFatArrowToken(Peek(2), Peek(3));
+                return IsFatArrow(Peek(2));
             }
 
             return false;
@@ -7624,7 +7933,7 @@ public static class ToshParser
                     continue;
                 }
 
-                if (!IsFatArrowToken(Current, Peek(1)))
+                if (!IsFatArrow(Current))
                 {
                     _diagnostics.Add(new SyntaxDiagnostic(
                         Code: "tosh.parser.expected_fat_arrow",
@@ -8146,7 +8455,9 @@ public static class ToshParser
             bool allowMethodCall = true,
             bool nullSafe = false)
         {
-            if (allowMethodCall && Current.Kind == SyntaxTokenKind.OpenParen)
+            if (allowMethodCall &&
+                Current.Kind == SyntaxTokenKind.OpenParen &&
+                Current.Span.Start == postfixSpan.End)
             {
                 if (!IsValidIdentifier(postfixText))
                 {
@@ -8784,6 +9095,11 @@ public static class ToshParser
         private ArgumentSyntax? ParseComparisonExpression(int startPosition, bool implicitCurrentItem)
         {
             var left = ParseAdditiveExpression(startPosition, implicitCurrentItem);
+            List<ArgumentSyntax>? chainOperands = null;
+            List<string>? chainOperators = null;
+            List<TextSpan>? chainOperatorSpans = null;
+            var chainIsPure = true;
+            var chainEnd = startPosition;
 
             while (IsComparisonOperatorToken(Current))
             {
@@ -8835,17 +9151,57 @@ public static class ToshParser
 
                 var right = ParseAdditiveExpression(operatorToken.Span.End, implicitCurrentItem: false);
                 var end = right?.Span.End ?? operatorToken.Span.End;
+                var leftOperand = left ?? new BarewordArgumentSyntax(string.Empty, operatorToken.Span);
+                var rightOperand = right ?? new BarewordArgumentSyntax(string.Empty, operatorToken.Span);
+
+                // TS-P1-22: record the run so `a < b < c` can become one
+                // chained comparison. Only relational operators chain;
+                // `is`, `in`, `contains` and friends stay
+                // left-associative, so a mixed run falls back below.
+                if (chainOperands is null)
+                {
+                    chainOperands = [leftOperand];
+                    chainOperators = [];
+                    chainOperatorSpans = [];
+                }
+
+                chainOperands.Add(rightOperand);
+                chainOperators!.Add(normalizedOperator);
+                chainOperatorSpans!.Add(operatorToken.Span);
+                if (!IsChainableComparisonOperator(normalizedOperator))
+                {
+                    chainIsPure = false;
+                }
+
+                chainEnd = end;
 
                 left = new OperatorArgumentSyntax(
-                    left ?? new BarewordArgumentSyntax(string.Empty, operatorToken.Span),
+                    leftOperand,
                     normalizedOperator,
                     operatorToken.Span,
-                    right ?? new BarewordArgumentSyntax(string.Empty, operatorToken.Span),
+                    rightOperand,
                     TextSpan.FromBounds(startPosition, end));
+            }
+
+            if (chainIsPure && chainOperators is { Count: >= 2 })
+            {
+                return new ChainedComparisonArgumentSyntax(
+                    chainOperands!,
+                    chainOperators,
+                    chainOperatorSpans!,
+                    TextSpan.FromBounds(startPosition, chainEnd));
             }
 
             return left;
         }
+
+        /// <summary>
+        /// Operators that participate in chained comparison. Membership
+        /// and type-test operators are deliberately excluded: `a is b is
+        /// c` has no useful chained reading.
+        /// </summary>
+        private static bool IsChainableComparisonOperator(string normalizedOperator)
+            => normalizedOperator is "<" or "<=" or ">" or ">=" or "==" or "!=";
 
         private ArgumentSyntax? ParseAdditiveExpression(int startPosition, bool implicitCurrentItem)
         {
@@ -9318,22 +9674,9 @@ public static class ToshParser
         }
 
         private bool LooksLikeStatementStart(SyntaxToken token)
-        {
-            return token.Kind switch
-            {
-                SyntaxTokenKind.String or
-                SyntaxTokenKind.Number or
-                SyntaxTokenKind.Boolean or
-                SyntaxTokenKind.Null or
-                SyntaxTokenKind.UnitLiteral or
-                SyntaxTokenKind.OpenBrace or
-                SyntaxTokenKind.OpenParen or
-                SyntaxTokenKind.OpenBracket => true,
-                SyntaxTokenKind.Bareword => true,
-                SyntaxTokenKind.DocComment => true,
-                _ => false,
-            };
-        }
+            => token.Kind == SyntaxTokenKind.DocComment || ToshParser.IsExpressionStartToken(token.Kind);
+
+
 
         /// <summary>
         /// If <c>_tokens[startIndex]</c> is a bareword adjacent (no
@@ -9816,7 +10159,7 @@ public static class ToshParser
                    IsValidCommandName(Peek(offset + 1).Text) &&
                    (Peek(offset + 2).Kind == SyntaxTokenKind.OpenParen ||
                     Peek(offset + 2).Kind == SyntaxTokenKind.LessThan ||
-                    IsFatArrowToken(Peek(offset + 2), Peek(offset + 3)));
+                    IsFatArrow(Peek(offset + 2)));
         }
 
         private bool LooksLikeScriptInputDeclaration()
@@ -10346,7 +10689,7 @@ public static class ToshParser
                                             LooksLikeNameOfExpression() ||
                                             LooksLikeNewObjectExpression() ||
                                             LooksLikeStaticMethodCallExpression() ||
-                                            LooksLikeStaticMemberAccessExpression() ||
+                                            LooksLikeStaticMemberAccessExpression(inCommandPosition: true) ||
                                             LooksLikeIntrinsicLiteralExpression(),
                 _ => false,
             };
@@ -10478,9 +10821,26 @@ public static class ToshParser
                 return false;
             }
 
-            if (LooksLikeQualifiedDotNetAccess(Current.Text))
+            if (IsQualifiedDotNetAccess(Current.Text))
             {
                 return true;
+            }
+
+            if (DeclaresModuleNamed(Current.Text))
+            {
+                return false;
+            }
+
+            // TS-P2-23: a name this source declares is not a CLR type,
+            // whatever its capitalization. Without this, `func Foo(x)`
+            // followed by `Foo(1)` was read as a static call on a type
+            // named Foo and failed, while the identical lowercase
+            // `foo(1)` worked — the decision rested on spelling rather
+            // than on the declaration the parser had already seen.
+            if (_userFunctionNames.Contains(Current.Text) ||
+                (_context.IsKnownCommand(Current.Text) && !_context.IsKnownType(Current.Text)))
+            {
+                return false;
             }
 
             if (!LooksLikePotentialClrTypeName(Current.Text))
@@ -10500,10 +10860,73 @@ public static class ToshParser
             return true;
         }
 
-        private bool LooksLikeStaticMemberAccessExpression()
+        private bool LooksLikeStaticMemberAccessExpression(bool inCommandPosition = false)
         {
-            return Current.Kind == SyntaxTokenKind.Bareword &&
-                   LooksLikeQualifiedDotNetAccess(Current.Text);
+            if (Current.Kind != SyntaxTokenKind.Bareword ||
+                !IsQualifiedDotNetAccess(Current.Text))
+            {
+                return false;
+            }
+
+            // TS-P2-16: capitalization alone cannot decide this. The
+            // parser has no module table, so `Geo.area 2` looked like a
+            // static CLR member access and left the `2` with nowhere to
+            // go, while `geo.area 2` dispatched fine. At the start of a
+            // stage, a dotted name followed by a value argument on the
+            // same line is a command invocation; the engine then
+            // resolves it against modules and CLR types alike.
+            //
+            // The check is confined to command position on purpose. In
+            // argument position a following bareword is a *sibling*
+            // argument, so `echo Config.version Config.maxRetries` must
+            // still read both as static member accesses.
+            return !inCommandPosition || !NextTokenStartsCommandArgument();
+        }
+
+        /// <summary>
+        /// True when the token after the current one begins a
+        /// whitespace-separated command argument: a literal, or a
+        /// bareword that is not an operator. Operators are excluded so
+        /// expressions such as <c>Math.PI + 1</c> are not mistaken for a
+        /// command with arguments.
+        /// </summary>
+        private bool NextTokenStartsCommandArgument()
+        {
+            var next = Peek(1);
+
+            if (HasLineBreakBetween(Current.Span.End, next.Span.Start))
+            {
+                return false;
+            }
+
+            switch (next.Kind)
+            {
+                case SyntaxTokenKind.Number:
+                case SyntaxTokenKind.String:
+                case SyntaxTokenKind.InterpolatedString:
+                case SyntaxTokenKind.Boolean:
+                case SyntaxTokenKind.Null:
+                case SyntaxTokenKind.UnitLiteral:
+                    return true;
+                case SyntaxTokenKind.Bareword:
+                    return !IsAnyOperatorToken(next);
+                default:
+                    return false;
+            }
+        }
+
+        private bool IsAnyOperatorToken(SyntaxToken token)
+        {
+            return IsComparisonOperatorToken(token)
+                || IsAdditiveOperatorToken(token)
+                || IsMultiplicativeOperatorToken(token)
+                || IsExponentiationOperatorToken(token)
+                || IsLogicalAndOperatorToken(token)
+                || IsLogicalOrOperatorToken(token)
+                || IsUnaryOperatorToken(token)
+                || IsTernaryQuestionToken(token)
+                || IsTernaryColonToken(token)
+                || IsNullCoalescingOperatorToken(token);
         }
 
         private static bool IsLogicalOrOperatorToken(SyntaxToken token)
@@ -10701,11 +11124,8 @@ public static class ToshParser
             };
         }
 
-        private static bool IsFatArrowToken(SyntaxToken current, SyntaxToken next)
-        {
-            return (current.Kind == SyntaxTokenKind.Bareword && current.Text == "=" && next.Kind == SyntaxTokenKind.GreaterThan) ||
-                   (current.Kind == SyntaxTokenKind.Bareword && current.Text == "=>");
-        }
+        private static bool IsFatArrow(SyntaxToken token) =>
+            token.Kind == SyntaxTokenKind.FatArrow;
 
         private static bool IsFileImportTarget(SyntaxToken token)
         {
@@ -11033,6 +11453,46 @@ public static class ToshParser
             }
 
             return token.Span;
+        }
+
+        /// <summary>
+        /// Table-first form of <see cref="LooksLikeQualifiedDotNetAccess"/>
+        /// (TS-P2-23). When this source declares a module with the leading
+        /// segment's name, the dotted name is module dispatch regardless of
+        /// capitalization, so `Geo.area` and `geo.area` behave alike. Only
+        /// names the source never declares fall back to the spelling
+        /// heuristic, which remains the best available answer for a CLR type
+        /// the parser has no table for.
+        /// </summary>
+        private bool IsQualifiedDotNetAccess(string text)
+        {
+            // Deliberately does NOT exclude declared modules: module
+            // member access (`Lib.greeting`) travels the same qualified
+            // path as CLR static access, and the engine resolves both.
+            // The module table is consulted only where the decision is
+            // genuinely command-versus-expression.
+            return LooksLikeQualifiedDotNetAccess(text);
+        }
+
+        private bool DeclaresModuleNamed(string text)
+        {
+            if (string.IsNullOrEmpty(text))
+            {
+                return false;
+            }
+
+            if (_context.IsKnownModuleQualifier(text))
+            {
+                return true;
+            }
+
+            if (_declaredModuleNames.Count == 0)
+            {
+                return false;
+            }
+
+            var firstSegment = text.Split('.', 2, StringSplitOptions.None)[0];
+            return firstSegment.Length > 0 && _declaredModuleNames.Contains(firstSegment);
         }
 
         private static bool LooksLikeQualifiedDotNetAccess(string text)

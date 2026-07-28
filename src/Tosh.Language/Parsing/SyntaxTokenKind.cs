@@ -58,4 +58,6 @@ public enum SyntaxTokenKind
 
     // Comprehension operator
     LessThanPipe,               // <|
+
+    FatArrow,                   // =>
 }

@@ -108,6 +108,20 @@ public sealed record InputProcessSubstitutionArgumentSyntax(PipelineSyntax Pipel
 
 public sealed record OutputProcessSubstitutionArgumentSyntax(PipelineSyntax Pipeline, TextSpan Span) : ArgumentSyntax(Span);
 
+/// <summary>
+/// A chained comparison such as <c>1 &lt; 2 &lt; 3</c> (TS-P1-22).
+/// <see cref="Operands"/> always holds exactly one more element than
+/// <see cref="Operators"/>. It is a distinct node rather than a
+/// desugaring to <c>and</c> so each interior operand is evaluated once:
+/// rewriting <c>a &lt; b &lt; c</c> as <c>(a &lt; b) and (b &lt; c)</c>
+/// in syntax would evaluate <c>b</c> twice.
+/// </summary>
+public sealed record ChainedComparisonArgumentSyntax(
+    IReadOnlyList<ArgumentSyntax> Operands,
+    IReadOnlyList<string> Operators,
+    IReadOnlyList<TextSpan> OperatorSpans,
+    TextSpan Span) : ArgumentSyntax(Span);
+
 public sealed record OperatorArgumentSyntax(
     ArgumentSyntax Left,
     string Operator,

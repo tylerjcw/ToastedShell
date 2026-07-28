@@ -10,6 +10,21 @@ public sealed class ToshLexer
 {
     private readonly string _source;
     private int _position;
+
+    /// <summary>
+    /// Bracket nesting depth for expression contexts (TS-P2-11). Command
+    /// position must keep greedy barewords so <c>ls -la</c>,
+    /// <c>./script.tosh</c>, and <c>*.txt</c> survive intact, while
+    /// expression position needs operators as real tokens. The lexer
+    /// tracks this itself: the parser cannot drive it, because lexing
+    /// completes before parsing begins and the parser relies on
+    /// arbitrary lookahead over the finished token list.
+    /// </summary>
+    private int _expressionDepth;
+
+    /// <summary>True when the lexer is inside a parenthesised or
+    /// bracketed expression context.</summary>
+    private bool InExpressionContext => _expressionDepth > 0;
     private readonly List<LineHushDirective> _lineHushDirectives = [];
     private readonly List<LineComment> _lineComments = [];
 
@@ -230,6 +245,7 @@ public sealed class ToshLexer
             if (Current == '[')
             {
                 tokens.Add(new SyntaxToken(SyntaxTokenKind.OpenBracket, _position, "["));
+                _expressionDepth++;
                 _position++;
                 continue;
             }
@@ -237,6 +253,7 @@ public sealed class ToshLexer
             if (Current == ']')
             {
                 tokens.Add(new SyntaxToken(SyntaxTokenKind.CloseBracket, _position, "]"));
+                if (_expressionDepth > 0) _expressionDepth--;
                 _position++;
                 continue;
             }
@@ -258,6 +275,7 @@ public sealed class ToshLexer
             if (Current == '(')
             {
                 tokens.Add(new SyntaxToken(SyntaxTokenKind.OpenParen, _position, "("));
+                _expressionDepth++;
                 _position++;
                 continue;
             }
@@ -265,6 +283,7 @@ public sealed class ToshLexer
             if (Current == ')')
             {
                 tokens.Add(new SyntaxToken(SyntaxTokenKind.CloseParen, _position, ")"));
+                if (_expressionDepth > 0) _expressionDepth--;
                 _position++;
                 continue;
             }
@@ -314,6 +333,32 @@ public sealed class ToshLexer
                     _position += 2;
                     continue;
                 }
+            }
+
+            // '=>' is one token in every context. It used to be none:
+            // the bareword reader stopped at '>', so the parser rebuilt
+            // the arrow from a `Bareword "=" + GreaterThan` pair at
+            // roughly twenty sites, each carrying a skewed two-slot
+            // lookahead. Emitting it here lets those become ordinary
+            // single-token checks (TS-P2-25).
+            if (Current == '=' && Peek() == '>')
+            {
+                tokens.Add(new SyntaxToken(SyntaxTokenKind.FatArrow, _position, "=>"));
+                _position += 2;
+                continue;
+            }
+
+            // Standalone '=' inside an expression context, so a named
+            // argument written without spaces (`f(a="z")`) produces the
+            // same tokens as the spaced form (TS-P2-15). Compound
+            // operators keep their own spellings: '==' and '=~' are
+            // comparisons.
+            if (Current == '=' && InExpressionContext
+                && Peek() is not ('=' or '~'))
+            {
+                tokens.Add(new SyntaxToken(SyntaxTokenKind.Bareword, _position, "=", "="));
+                _position++;
+                continue;
             }
 
             if (Current == '"' && Peek() == '"' && Peek(2) == '"')
@@ -446,6 +491,7 @@ public sealed class ToshLexer
 
     private void SkipBlockComment()
     {
+        var start = _position;
         _position += 3; // skip ##{
 
         while (!IsAtEnd)
@@ -459,7 +505,15 @@ public sealed class ToshLexer
             _position++;
         }
 
-        // Unterminated block comment — consume to end of input
+        // An unterminated block comment used to consume the rest of the
+        // file in silence, so every statement after it simply never ran
+        // and nothing said why (TS-P2-06).
+        throw new LexerDiagnosticException(new SyntaxDiagnostic(
+            Code: "tosh.parser.unterminated_block_comment",
+            Title: "Block comments must be closed.",
+            Span: new TextSpan(start, Math.Max(3, _position - start)),
+            Label: "this '##{' comment never closes",
+            Help: "close the comment with '}##'; everything after an unclosed block comment is ignored."));
     }
 
     private SyntaxToken ReadDocComment()
@@ -482,6 +536,7 @@ public sealed class ToshLexer
     private SyntaxToken ReadString()
     {
         var quote = Current;
+        var isRaw = quote == '\'';
         var start = _position;
         _position++;
 
@@ -498,7 +553,7 @@ public sealed class ToshLexer
                 return new SyntaxToken(SyntaxTokenKind.String, start, text, builder.ToString());
             }
 
-            if (current == '\\' && !IsAtEnd)
+            if (!isRaw && current == '\\' && !IsAtEnd)
             {
                 builder.Append(ReadEscapeSequence());
                 continue;
@@ -515,26 +570,26 @@ public sealed class ToshLexer
             Help: "close the string with a matching quote."));
     }
 
-    private char ReadEscapeSequence()
+    private string ReadEscapeSequence()
     {
         var escaped = Current;
         _position++;
 
         return escaped switch
         {
-            '\\' => '\\',
-            '"' => '"',
-            '\'' => '\'',
-            'n' => '\n',
-            'r' => '\r',
-            't' => '\t',
-            'e' or 'E' => '\x1B',
-            'a' => '\a',
-            'b' => '\b',
-            'f' => '\f',
-            'v' => '\v',
-            '0' => '\0',
-            _ => escaped,
+            '\\' => "\\",
+            '"' => "\"",
+            '\'' => "'",
+            'n' => "\n",
+            'r' => "\r",
+            't' => "\t",
+            'e' or 'E' => "\x1B",
+            'a' => "\a",
+            'b' => "\b",
+            'f' => "\f",
+            'v' => "\v",
+            '0' => "\0",
+            _ => $"\\{escaped}",
         };
     }
 
@@ -662,24 +717,24 @@ public sealed class ToshLexer
             Help: "close the string with a matching single quote."));
     }
 
-    private char ReadAnsiCEscapeSequence()
+    private string ReadAnsiCEscapeSequence()
     {
         var escaped = Current;
         _position++;
 
         switch (escaped)
         {
-            case '\\': return '\\';
-            case '\'': return '\'';
-            case '"': return '"';
-            case 'a': return '\a';
-            case 'b': return '\b';
-            case 'e' or 'E': return '\x1B';
-            case 'f': return '\f';
-            case 'n': return '\n';
-            case 'r': return '\r';
-            case 't': return '\t';
-            case 'v': return '\v';
+            case '\\': return "\\";
+            case '\'': return "'";
+            case '"': return "\"";
+            case 'a': return "\a";
+            case 'b': return "\b";
+            case 'e' or 'E': return "\x1B";
+            case 'f': return "\f";
+            case 'n': return "\n";
+            case 'r': return "\r";
+            case 't': return "\t";
+            case 'v': return "\v";
             case '0':
                 {
                     // Octal: \0nnn (up to 3 octal digits after the leading 0)
@@ -689,32 +744,34 @@ public sealed class ToshLexer
                         value = (value * 8) + (Current - '0');
                         _position++;
                     }
-                    return (char)value;
+                    return ((char)value).ToString();
                 }
             case 'x':
                 {
                     // Hex: \xHH (up to 2 hex digits)
                     var value = 0;
-                    for (var i = 0; i < 2 && !IsAtEnd && IsHexDigit(Current); i++)
+                    var digits = 0;
+                    for (; digits < 2 && !IsAtEnd && IsHexDigit(Current); digits++)
                     {
                         value = (value * 16) + HexValue(Current);
                         _position++;
                     }
-                    return (char)value;
+                    return digits == 0 ? "\\x" : ((char)value).ToString();
                 }
             case 'u':
                 {
                     // Unicode: \uHHHH (up to 4 hex digits)
                     var value = 0;
-                    for (var i = 0; i < 4 && !IsAtEnd && IsHexDigit(Current); i++)
+                    var digits = 0;
+                    for (; digits < 4 && !IsAtEnd && IsHexDigit(Current); digits++)
                     {
                         value = (value * 16) + HexValue(Current);
                         _position++;
                     }
-                    return (char)value;
+                    return digits == 0 ? "\\u" : ((char)value).ToString();
                 }
             default:
-                return escaped;
+                return $"\\{escaped}";
         }
     }
 
@@ -1081,10 +1138,45 @@ public sealed class ToshLexer
 
             // Break on '..' range operator when the text so far is numeric,
             // so that '2..10' lexes as Number DotDot Number instead of one bareword.
+            // Signed and floating-point prefixes still split here so the parser can
+            // either form an integer range or issue its range-specific diagnostic.
             // Don't break on '...' (path component) or non-numeric prefixes like '../'.
             if (Current == '.' && Peek() == '.' && Peek(2) != '.'
                 && _position > start
-                && IsNumericText(_source.AsSpan(start, _position - start)))
+                && IsNumericRangePrefix(_source.AsSpan(start, _position - start)))
+            {
+                break;
+            }
+
+            // Fused safe navigation (TS-P2-04): `$x?.Length` must mean the
+            // same thing as `$x ?. Length`. Only break when the text so far
+            // is a variable reference, so nullable forms such as `string?`
+            // and `name?` — and any `?` not followed by `.` — are untouched.
+            if (Current == '?' && Peek() == '.'
+                && _position > start
+                && _source[start] == '$')
+            {
+                break;
+            }
+
+            // Named arguments (TS-P2-15): inside a parenthesised or
+            // bracketed expression, `f(a="z")` must bind like `f(a = "z")`.
+            // Restricted to a bare identifier followed by a single '=', so
+            // option-style command arguments such as `--opt=value` and the
+            // comparison operators keep their greedy behaviour.
+            if (Current == '=' && Peek() != '=' && InExpressionContext
+                && _position > start
+                && IsIdentifierText(_source.AsSpan(start, _position - start)))
+            {
+                break;
+            }
+
+            // '=>' ends a bareword wherever it appears, so the spacing of
+            // an arrow never changes its meaning: `{a=>1}` lexes the same
+            // way as `{a => 1}`. Without this the reader swallowed the
+            // '=' and left a stray '>' behind, and the compact spelling
+            // silently failed to parse as a dict entry.
+            if (Current == '=' && Peek() == '>' && _position > start)
             {
                 break;
             }
@@ -1141,8 +1233,24 @@ public sealed class ToshLexer
             return new SyntaxToken(SyntaxTokenKind.Null, start, text, null);
         }
 
-        // Strip underscore digit separators (e.g. 1_000_000) for numeric parsing.
-        var textForParsing = text.Contains('_') ? text.Replace("_", "", StringComparison.Ordinal) : text;
+        // Digit separators (TS-P2-05). A leading underscore means this is
+        // an identifier such as `_1`, not a number, so separator handling
+        // is skipped entirely and the text falls through to a bareword.
+        // Only numeric-looking text is validated, leaving ordinary
+        // identifiers like `my_var` alone.
+        if (text.Contains('_') && LooksNumeric(text) && !HasValidDigitSeparators(text))
+        {
+            throw new LexerDiagnosticException(new SyntaxDiagnostic(
+                Code: "tosh.parser.invalid_numeric_separator",
+                Title: "Digit separators must sit between digits.",
+                Span: new TextSpan(start, text.Length),
+                Label: "'_' may not lead, trail, or repeat inside a number",
+                Help: "write the number as, for example, 1_000_000."));
+        }
+
+        var textForParsing = text.Contains('_') && LooksNumeric(text)
+            ? text.Replace("_", "", StringComparison.Ordinal)
+            : text;
 
         // Hex: 0x/0X prefix
         if (textForParsing.Length > 2 && textForParsing[0] == '0' && textForParsing[1] is 'x' or 'X')
@@ -1164,6 +1272,10 @@ public sealed class ToshLexer
                 return new SyntaxToken(SyntaxTokenKind.Number, start, text, boxed);
             }
             catch (FormatException) { /* not a valid binary literal */ }
+            catch (OverflowException)
+            {
+                throw CreateNumericOverflowDiagnostic(text, start, "binary");
+            }
         }
 
         // Octal: 0o/0O prefix
@@ -1176,6 +1288,10 @@ public sealed class ToshLexer
                 return new SyntaxToken(SyntaxTokenKind.Number, start, text, boxed);
             }
             catch (FormatException) { /* not a valid octal literal */ }
+            catch (OverflowException)
+            {
+                throw CreateNumericOverflowDiagnostic(text, start, "octal");
+            }
         }
 
         if (long.TryParse(textForParsing, NumberStyles.Integer, CultureInfo.InvariantCulture, out var integerValue))
@@ -1192,6 +1308,68 @@ public sealed class ToshLexer
         }
 
         return new SyntaxToken(SyntaxTokenKind.Bareword, start, text, text);
+    }
+
+    /// <summary>
+    /// True when text is shaped like a number, so digit-separator rules
+    /// apply to it. Identifiers such as <c>my_var</c> and <c>_1</c> are
+    /// excluded: a leading underscore makes it a name, not a literal.
+    /// </summary>
+    private static bool LooksNumeric(string text)
+    {
+        if (text.Length == 0) return false;
+        if (char.IsAsciiDigit(text[0])) return true;
+        return text.Length > 1
+            && text[0] is '-' or '+' or '.'
+            && char.IsAsciiDigit(text[1]);
+    }
+
+    /// <summary>
+    /// Every separator must sit between two digits of the literal's own
+    /// radix, so <c>1_000</c> is accepted while <c>1__2</c>, <c>1_</c>,
+    /// and <c>0x_FF</c> are not.
+    /// </summary>
+    private static bool HasValidDigitSeparators(string text)
+    {
+        var body = text.AsSpan();
+        var offset = 0;
+
+        // Skip a sign and any radix prefix; a separator may not sit
+        // immediately after either.
+        if (body.Length > 0 && (body[0] == '-' || body[0] == '+')) offset = 1;
+        if (body.Length > offset + 1
+            && body[offset] == '0'
+            && char.ToLowerInvariant(body[offset + 1]) is 'x' or 'b' or 'o')
+        {
+            offset += 2;
+        }
+
+        for (var i = offset; i < body.Length; i++)
+        {
+            if (body[i] != '_') continue;
+
+            var hasLeft = i > offset && IsRadixDigit(body[i - 1]);
+            var hasRight = i + 1 < body.Length && IsRadixDigit(body[i + 1]);
+            if (!hasLeft || !hasRight) return false;
+        }
+
+        return true;
+    }
+
+    private static bool IsRadixDigit(char c) =>
+        char.IsAsciiDigit(c) || (char.ToLowerInvariant(c) is >= 'a' and <= 'f');
+
+    private static LexerDiagnosticException CreateNumericOverflowDiagnostic(
+        string text,
+        int start,
+        string radix)
+    {
+        return new LexerDiagnosticException(new SyntaxDiagnostic(
+            Code: "tosh.parser.numeric_literal_overflow",
+            Title: $"This {radix} literal is too large for a 64-bit integer.",
+            Span: new TextSpan(start, text.Length),
+            Label: "the value does not fit in 64 bits",
+            Help: "use a smaller value, or compute it at runtime where a wider numeric type applies."));
     }
 
     private static bool TryParseImaginaryLiteral(string text, out Complex value)
@@ -1270,14 +1448,90 @@ public sealed class ToshLexer
         };
     }
 
-    private static bool IsNumericText(ReadOnlySpan<char> text)
+    /// <summary>
+    /// True for a plain identifier: a letter or underscore followed by
+    /// letters, digits, or underscores. Deliberately excludes hyphens so
+    /// an option-style argument such as <c>--name=value</c> is not split
+    /// at its '='.
+    /// </summary>
+    private static bool IsIdentifierText(ReadOnlySpan<char> text)
     {
         if (text.IsEmpty) return false;
+        if (!char.IsLetter(text[0]) && text[0] != '_') return false;
         foreach (var ch in text)
         {
-            if (!char.IsAsciiDigit(ch)) return false;
+            if (!char.IsLetterOrDigit(ch) && ch != '_') return false;
         }
         return true;
+    }
+
+    private static bool IsNumericRangePrefix(ReadOnlySpan<char> text)
+    {
+        if (text.IsEmpty)
+        {
+            return false;
+        }
+
+        var normalized = text.Contains('_')
+            ? text.ToString().Replace("_", string.Empty, StringComparison.Ordinal)
+            : text.ToString();
+
+        if (long.TryParse(
+                normalized,
+                NumberStyles.Integer,
+                CultureInfo.InvariantCulture,
+                out _))
+        {
+            return true;
+        }
+
+        if (double.TryParse(
+                normalized,
+                NumberStyles.Float | NumberStyles.AllowLeadingSign,
+                CultureInfo.InvariantCulture,
+                out _))
+        {
+            return true;
+        }
+
+        if (normalized.Length <= 2 || normalized[0] != '0')
+        {
+            return false;
+        }
+
+        return normalized[1] switch
+        {
+            'x' or 'X' => long.TryParse(
+                normalized.AsSpan(2),
+                NumberStyles.HexNumber,
+                CultureInfo.InvariantCulture,
+                out _),
+            'b' or 'B' => TryParseRadixInteger(normalized.AsSpan(2), 2),
+            'o' or 'O' => TryParseRadixInteger(normalized.AsSpan(2), 8),
+            _ => false,
+        };
+    }
+
+    private static bool TryParseRadixInteger(ReadOnlySpan<char> digits, int radix)
+    {
+        if (digits.IsEmpty)
+        {
+            return false;
+        }
+
+        try
+        {
+            _ = Convert.ToInt64(digits.ToString(), radix);
+            return true;
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
+        catch (OverflowException)
+        {
+            return false;
+        }
     }
 
     /// <summary>
@@ -1330,7 +1584,8 @@ public sealed class ToshLexer
 
     /// <summary>
     /// Skips a string literal starting at <c>Current</c> (which must be the opening quote).
-    /// Handles both single and double quotes with backslash escaping.
+    /// Double-quoted strings honor backslash escaping; single-quoted
+    /// strings are raw and close at the next single quote.
     /// </summary>
     private void SkipStringLiteralInExpression(char quote)
     {
@@ -1338,7 +1593,7 @@ public sealed class ToshLexer
 
         while (!IsAtEnd)
         {
-            if (Current == '\\' && !IsAtEnd)
+            if (quote == '"' && Current == '\\' && !IsAtEnd)
             {
                 _position += 2; // skip backslash and the escaped character
                 continue;
