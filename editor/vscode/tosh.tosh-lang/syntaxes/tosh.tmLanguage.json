@@ -100,6 +100,9 @@
       "include": "#command-position"
     },
     {
+      "include": "#collection-delimiters"
+    },
+    {
       "include": "#operators"
     },
     {
@@ -707,6 +710,11 @@
           }
         }
       ]
+    },
+    "collection-delimiters": {
+      "comment": "Paired set, record, and dictionary literal delimiters",
+      "match": "\\{[|:%]|[|:%]\\}",
+      "name": "punctuation.section.collection.tosh"
     },
     "operators": {
       "patterns": [

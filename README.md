@@ -22,7 +22,7 @@ ls -la | where _.Type == file | sort-by Size | first 5 | get { Name, Size, Modif
 
 ip addr | where _.State == up | get _.Addresses
 
-ps | group-by User | each { { User: $_.Key, Total: ($_.Value | sum CpuPercent) } }
+ps | group-by User | each { {| User: $_.Key, Total: ($_.Value | sum CpuPercent) |} }
 ```
 
 The same script runs three ways:

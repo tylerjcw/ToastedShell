@@ -13,7 +13,10 @@
 ["alpha", "beta"]
 
 # record-like dynamic objects
-{ Name = "Komrad", Uid = 1000 }
+{| Name = "Komrad", Uid = 1000 |}
+
+# dictionaries with arbitrary keys
+{% "name" => "Komrad", "uid" => 1000 %}
 
 # sets
 {: "alpha", "beta", "alpha" :}
@@ -27,7 +30,8 @@
 Literal & Runtime shape \\
 \midrule
 \texttt{[...]} & array \\
-\texttt{\{ Name = Value \}} & dynamic record \\
+\texttt{\{| Name = Value |\}} & dynamic record \\
+\texttt{\{\% Key => Value \%\}} & dictionary \\
 \texttt{\{: ... :\}} & set with de-duplication \\
 \texttt{(..., ...)} & tuple with \texttt{Item1}, \texttt{Item2}, ... \\
 \bottomrule
@@ -38,7 +42,7 @@ Literal & Runtime shape \\
 new list<int>(10, 20, 30)
 new array<int>(1, 2, 3)
 new dict<string, int>(Alice, 95, Bob, 87)
-new map({ Theme = "dark", TabSize = 4 })
+new map({| Theme = "dark", TabSize = 4 |})
 new hashtable(HOME, "/home/me", SHELL, "/usr/bin/tosh")
 new table(Name, "Toast", Uid, 1000)
 new tuple(alpha, 42)
@@ -62,7 +66,7 @@ echo $pair.Item2
 \end{lstlisting}
 
 \begin{lstlisting}
-var person = { Name = "Komrad", Uid = 1000 }
+var person = {| Name = "Komrad", Uid = 1000 |}
 echo $person.Name
 get-props $person
 has-prop $person Name
@@ -143,7 +147,7 @@ $items | where _.Length > 4 | sort | each { echo _ }
 \begin{lstlisting}
 var report = new list()
 ls -la | where _.Type == file | each {
-    $report.Add({ Name = _.Name, Size = _.Size }) | ignore
+    $report.Add({| Name = _.Name, Size = _.Size |}) | ignore
 }
 $report | sort Size | reverse
 \end{lstlisting}
@@ -247,7 +251,7 @@ rename Name FileName Size Bytes
 \end{lstlisting}
 
 \begin{lstlisting}
-echo { A = 1, B = 2 } { A = 3, B = 4 } | transpose
+echo {| A = 1, B = 2 |} {| A = 3, B = 4 |} | transpose
 \end{lstlisting}
 
 \tighttable{>{\ttfamily\raggedright\arraybackslash}p{0.30\linewidth}X}{

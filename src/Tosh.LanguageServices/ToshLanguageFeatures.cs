@@ -740,7 +740,13 @@ public sealed class ToshLanguageFeatures
                     or SyntaxTokenKind.BangEqual or SyntaxTokenKind.BangTilde
                     or SyntaxTokenKind.Bang
                     or SyntaxTokenKind.QuestionQuestion or SyntaxTokenKind.QuestionDot
-                    or SyntaxTokenKind.DotDot or SyntaxTokenKind.FatArrow:
+                    or SyntaxTokenKind.DotDot or SyntaxTokenKind.FatArrow
+                    // LSP has no standard punctuation semantic-token type. Paired
+                    // collection delimiters use the closest standard category so
+                    // clients color each two-character token as a single unit.
+                    or SyntaxTokenKind.OpenBraceColon or SyntaxTokenKind.ColonCloseBrace
+                    or SyntaxTokenKind.OpenBracePipe or SyntaxTokenKind.PipeCloseBrace
+                    or SyntaxTokenKind.OpenBracePercent or SyntaxTokenKind.PercentCloseBrace:
                     rawTokens.Add((pos.Line, pos.Character, token.Text.Length, 7, 0)); // operator
                     break;
             }

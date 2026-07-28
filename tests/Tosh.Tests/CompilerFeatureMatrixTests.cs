@@ -482,7 +482,7 @@ public sealed class CompilerFeatureMatrixTests : IClassFixture<ToshRuntimeFixtur
         yield return Case(
             "vars.destructuring-record",
             "Variables",
-            "var rec = { \"name\" => \"Alice\" }\nvar { name } = $rec",
+            "var rec = {% \"name\" => \"Alice\" %}\nvar { name } = $rec",
             permissive: true,
             runtime: true,
             pure: true,
@@ -546,7 +546,7 @@ public sealed class CompilerFeatureMatrixTests : IClassFixture<ToshRuntimeFixtur
         yield return Case(
             "expr.dict-literal",
             "Expressions",
-            "var m = { \"k\" => 1 }\necho $m.Count",
+            "var m = {% \"k\" => 1 %}\necho $m.Count",
             permissive: true,
             runtime: true,
             pure: true,
@@ -600,7 +600,7 @@ public sealed class CompilerFeatureMatrixTests : IClassFixture<ToshRuntimeFixtur
         yield return Case(
             "expr.member-access",
             "Expressions",
-            "var p = { \"x\" => 7 }\necho $p[\"x\"]",
+            "var p = {% \"x\" => 7 %}\necho $p[\"x\"]",
             permissive: true,
             runtime: true,
             pure: true,

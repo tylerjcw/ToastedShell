@@ -557,7 +557,7 @@ public sealed class UtilityCommandTests
         });
 
         var engine = new ToshEngine(ToshRuntime.CreateDefault());
-        var results = await engine.ExecuteToListAsync($"http post {server.Url} --json ({{ Name = \"Toast\" }}) --header X-Test alpha --as response");
+        var results = await engine.ExecuteToListAsync($"http post {server.Url} --json ({{| Name = \"Toast\" |}}) --header X-Test alpha --as response");
 
         var response = Assert.IsType<HttpResponseInfo>(Assert.Single(results));
         Assert.Equal(201, response.StatusCode);

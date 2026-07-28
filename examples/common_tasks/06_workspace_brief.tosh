@@ -130,11 +130,11 @@ struct WorkspaceSnapshot(root, files, options, now) {
                     | grep $pattern
                     | first 2
                     | each {
-                        {
+                        {|
                             Path = System.IO.Path.GetRelativePath($root, $file.FullName),
                             LineNumber = $_.LineNumber,
                             Text = $_.Text.Trim()
-                        }
+                        |}
                     }
                 } catch (err) {
                 }

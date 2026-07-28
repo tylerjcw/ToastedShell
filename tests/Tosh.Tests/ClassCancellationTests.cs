@@ -247,7 +247,7 @@ public sealed class ClassCancellationTests
                     prop Value { get => await-cancellation }
                 }
                 var probe = new CancellationProbe()
-                var copy = { ...$probe }
+                var copy = {| ...$probe |}
                 """
             },
         };

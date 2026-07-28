@@ -1180,7 +1180,7 @@ internal sealed partial class EmitterImpl
     }
 
     /// <summary>
-    /// Emits a record literal (<c>{ name: "x", age: 1, ...$rest, [computed]: v }</c>)
+    /// Emits a record literal (<c>{| name: "x", age: 1, ...$rest, [computed]: v |}</c>)
     /// as <c>new Dictionary&lt;string, object?&gt;()</c> with one
     /// indexer-set per field, host-routed merge per spread entry,
     /// and a stringified key for computed-name entries. Order is
@@ -1235,7 +1235,7 @@ internal sealed partial class EmitterImpl
     }
 
     /// <summary>
-    /// Emits a dict literal (<c>{ "k" =&gt; v, ... }</c>) as
+    /// Emits a dict literal (<c>{% "k" =&gt; v, ... %}</c>) as
     /// <c>new Dictionary&lt;object, object?&gt;()</c> populated via
     /// the indexer setter. Keys are evaluated as expressions and
     /// boxed.

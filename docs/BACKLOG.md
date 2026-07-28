@@ -964,11 +964,11 @@ var result = from $p in $products
              where $p.Price > 50
              join $c in $categories on $p.CategoryId == $c.Id
              orderby $p Price descending
-             select { Name: $p.Name, Category: $c.Name, Price: $p.Price }
+             select {| Name: $p.Name, Category: $c.Name, Price: $p.Price |}
 
 var summary = from $sale in $sales
               group $sale by $sale.Region into $g
-              select { Region: $g.Key, Total: ($g | sum _.Amount), Count: ($g | count) }
+              select {| Region: $g.Key, Total: ($g | sum _.Amount), Count: ($g | count) |}
 ```
 
 ### New Pipeline Operators
@@ -981,7 +981,7 @@ var summary = from $sale in $sales
 | `group-join` | `$depts \| group-join $employees on _.Id == _.DeptId` | Hierarchical grouping |
 | `orderby` | `$data \| orderby _.Score descending, _.Name` | Multi-key sort with direction |
 | `distinct-by` | `$items \| distinct-by _.Category` | Keep first per key |
-| `aggregate` | `$data \| aggregate { Sum: (sum _.Val), Avg: (average _.Val) }` | Multi-aggregate |
+| `aggregate` | `$data \| aggregate {| Sum: (sum _.Val), Avg: (average _.Val) |}` | Multi-aggregate |
 | `window-func` | `$rows \| window-func (rank) over (partition-by _.Dept orderby _.Salary)` | SQL window functions |
 | `let` | `$data \| let _.Score = (_.Hits / _.Views * 100) \| where _.Score > 75` | Computed columns |
 | `into` | `... \| into $varName` | Capture mid-pipeline |
@@ -1099,7 +1099,7 @@ tail -f /var/log/app.log
     | parse "{timestamp} {level} {message}"
     | window 5s sliding 1s
     | group-by _.level
-    | summarize { Count: count, Rate: (count / 5) }
+    | summarize {| Count: count, Rate: (count / 5) |}
 ```
 
 ### Priority: P3

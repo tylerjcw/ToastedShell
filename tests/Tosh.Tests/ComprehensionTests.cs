@@ -109,7 +109,7 @@ public sealed class ComprehensionTests
     public async Task Dict_comprehension_basic()
     {
         var engine = new ToshEngine();
-        var results = await engine.ExecuteToListAsync("var d = { $x => $x * 2 <| for x in [1, 2, 3] }; echo $d.Count");
+        var results = await engine.ExecuteToListAsync("var d = {% $x => $x * 2 <| for x in [1, 2, 3] %}; echo $d.Count");
         Assert.Single(results);
         Assert.Equal(3, results[0]);
     }
@@ -118,7 +118,7 @@ public sealed class ComprehensionTests
     public async Task Dict_comprehension_with_where()
     {
         var engine = new ToshEngine();
-        var results = await engine.ExecuteToListAsync("var d = { $x => $x * $x <| for x in [1, 2, 3, 4] where $x > 2 }; echo $d.Count");
+        var results = await engine.ExecuteToListAsync("var d = {% $x => $x * $x <| for x in [1, 2, 3, 4] where $x > 2 %}; echo $d.Count");
         Assert.Single(results);
         Assert.Equal(2, results[0]);
     }

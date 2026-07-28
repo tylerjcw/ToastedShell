@@ -37,7 +37,7 @@ namespace Tosh.Stdlib.Net;
 [CommandOption("--token <token>", "Protect `http serve` with a fixed token. The returned ShareUrl includes it automatically.")]
 [CommandOption("--generate-token", "Generate a random token for `http serve` and return it on the server handle.")]
 [CommandExample("http get https://example.com --as text", Title = "Fetch a text response")]
-[CommandExample("http post https://example.com/api --json { Name = \"Toast\" } --as response", Title = "Send JSON and keep the structured response")]
+[CommandExample("http post https://example.com/api --json {| Name = \"Toast\" |} --as response", Title = "Send JSON and keep the structured response")]
 [CommandExample("http request GET https://example.com | http send --as response", Title = "Build then send a request object")]
 [CommandExample("http serve ./share --browse", Title = "Start a temporary file server with a lightweight share page")]
 [CommandExample("http serve ./share --browse --lan", Title = "Share a directory with other devices on the same network")]

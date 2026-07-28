@@ -59,6 +59,7 @@ silently changing an implementation.
 | `$this` in defaults | A method parameter default may reference `$this`. A constructor default may not: it would observe an instance whose properties are not yet initialised, so it gets a targeted diagnostic instead. | Accepted |
 | Breaking changes | TōSh has two users and no external consumers, so backward compatibility is not a constraint. Where a filed defect is caused by the grammar rather than the implementation, the grammar may change. Each such change lands with its specification, examples, and test updates in the same slice. | Accepted 2026-07-26 |
 | Intrinsic literals | Temporal literals use only the documented exact ISO forms; canonical IPv4 requires four decimal octets. Storage suffixes are typed in expression context but remain strings as raw command arguments. `ToshRange` remains signed 32-bit integer-only. | Accepted |
+| Brace delimiters | In ordinary expression and command-argument grammar, `{ ... }` is a block. Records use `{| ... |}`, dictionaries `{% ... %}`, and sets `{: ... :}`. Grammar-owned structural groups such as member, arm, destructuring, accessor, and projection braces remain plain braces. | Accepted 2026-07-28 |
 
 ### Truthiness policy
 
@@ -311,10 +312,11 @@ each slice's reasoning and validation and is not summarized again here.
 
 **Closed.** Every P0 item. Twelve P1 items — `TS-P1-01`–`TS-P1-06`,
 `TS-P1-14`, `TS-P1-15`, and `TS-P1-20`–`TS-P1-23` — with `TS-P1-17`
-withdrawn as misfiled rather than fixed. Ten P2 items:
-`TS-P2-04`–`TS-P2-08` and `TS-P2-12`–`TS-P2-16`. All three July 26
-semantic decisions (comparison, chained comparison, `$this` in method
-defaults) are implemented.
+withdrawn as misfiled rather than fixed. Eleven P2 items:
+`TS-P2-04`–`TS-P2-08`, `TS-P2-12`–`TS-P2-16`, and `TS-P2-25`. All three
+July 26 semantic decisions (comparison, chained comparison, `$this` in
+method defaults) and the July 28 paired-delimiter decision are
+implemented.
 
 **In progress.**
 
@@ -326,15 +328,11 @@ defaults) are implemented.
   diagnostics as well as values.
 - `TS-P2-11`, `TS-P2-23`, and `TS-P2-24`, the parser architecture. The
   mode-tracking lexer, declaration table, `ParseContext`, and
-  `LiteParser` structural pass are built and validated. Nothing consumes
-  the structural pass yet, which is deliberate: agreement with the
-  current parser is established before the heuristics are retired.
-
-**Blocked on a decision.** `TS-P2-25` gates the remainder of parser step
-2. `{` opens a block, record, dict, set, or predicate, and a
-brace-enclosed statement boundary cannot be resolved structurally until
-that is settled. It is a grammar change, and the July 26 breaking-change
-decision permits one.
+  delimiter-paired `LiteParser` structural pass are built and validated.
+  `TS-P2-25` removed the brace ambiguity: candidates now carry their exact
+  plain-brace owner and can be promoted only for a parser-proven block.
+  The recursive parser does not consume those promoted regions yet; that
+  remains the next `TS-P2-24` integration slice.
 
 **Remaining.**
 
@@ -347,9 +345,9 @@ decision permits one.
 **Sequencing note.** The July 26 duplicated-semantics audit concluded
 that converging `TS-P1-24` is worth more than the next individual P1
 repair, because every remaining semantic item is at risk of the same
-half-landing. The slices that followed went to the parser track instead.
-With `TS-P2-25` now blocking that track pending a decision, `TS-P1-24`
-is the substantial work that does not require one.
+half-landing. The parser track is now unblocked: continue `TS-P2-24`
+from parser-owned boundary promotion, then return to the existing item
+order; `TS-P1-24` remains the parallel semantic-convergence track.
 
 A second review pass on July 25 verified the completed P0 fixes live and
 filed `TS-P0-07`–`TS-P0-08`, `TS-P1-14`–`TS-P1-19`, `TS-P2-12`–`TS-P2-20`,
@@ -391,7 +389,7 @@ closed.
 | `TS-P1-14` | Complete — 2026-07-26 | Cross-type equality and ordering are incoherent: `==` coerces numerically (`1 == "1"` is true) and falls back to case-insensitive `ToString` comparison for mixed types while string-to-string stays case-sensitive; ordered comparison converts right-to-left only, so `"abc" < 5` silently string-compares to `false` while `5 > "abc"` throws; booleans participate in ordering, so `1 < 2 < 3` silently evaluates to `false`. | One documented equality/ordering conversion matrix implemented once and used by every surface (extends the `TS-P1-01`/`TS-P1-03` corpus); conversion is symmetric or produces a structured diagnostic; no silent lexicographic fallback for mixed numeric comparisons; the chained-comparison shape is either supported or diagnosed; interpreted and compiled modes agree. |
 | `TS-P1-15` | Complete — 2026-07-26 | Enum values are not orderable or number-comparable: `E.A < E.C` throws (`ToshEnumValue` cannot be compared) and `E.B == 1` is false, despite the specification's numeric-backed enum examples. | Enum values compare and order canonically against members of the same enum and against their underlying numeric values; diagnostics for genuinely incompatible enum comparisons name the shell-level enum type; the specification's `Permissions : int` examples pass as conformance cases. |
 | `TS-P1-16` | Planned | Float division-by-zero depends on the zero operand's type: `10.0 / 0` throws "Division by zero" while `10.0 / 0.0` returns `Infinity`, exposing a second arithmetic path inside the interpreter. | One documented rule per numeric family (integral, float, decimal) for division and modulo by zero; the zero operand's declared type does not change the outcome; interpreted and compiled modes agree. |
-| `TS-P1-17` | Withdrawn — 2026-07-26 | Filed as "the empty brace literal `{}` evaluates to an internal type-definition object instead of an empty record". Re-examination showed `{}` is already a correct empty record: in expression position `var r = {}` produces an `ExpandoObject`, the same CLR type as `{ a = 1 }`, and spread and member assignment both work. The original observation was `type-of` rendering, now fixed as `TS-P1-23`, plus `{}` in *command-argument* position parsing as a block (`ShellBlock`) rather than a record, which is the brace-overload ambiguity tracked separately. | n/a — not a defect as filed. |
+| `TS-P1-17` | Withdrawn — 2026-07-26 | Filed as "the empty brace literal `{}` evaluates to an internal type-definition object instead of an empty record". Re-examination showed the then-current `{}` was a correct empty record; the observation was `type-of` rendering, fixed as `TS-P1-23`, plus the positional ambiguity later resolved by `TS-P2-25`. Under the accepted paired-delimiter grammar, `{}` is a block and `{||}` is an empty record. | n/a — not a defect as filed. |
 | `TS-P1-18` | Planned | A class that declares both a primary constructor and an explicit constructor of the same arity registers duplicate overloads, so every instantiation fails with a self-ambiguity error (`Multiple constructor overloads matched class 'C' with 1 argument(s): C(x); C(x)`). | A declaration-time rule is documented and enforced (the explicit constructor either replaces the synthesized primary overload or produces a structured declaration diagnostic); instantiation never reports a class as ambiguous with itself; interpreted and compiled construction agree. |
 | `TS-P1-19` | Planned | An infinite generator invoked in command position (`gen \| first 3`) silently produces no output and exits cleanly, while the call form (`gen() \| first 3`) hangs; both diverge from the accepted stream-producer decision (companion to `TS-P1-08`). | Command-position and call-position generator invocations produce identical streams; infinite generators stream promptly and terminate under `first`/`any`; the silent-empty shape is covered by a regression test. |
 | `TS-P1-20` | Complete — 2026-07-26 | A compiled multi-stage pipeline in value context never applied the interpreter's single-value subexpression rule: `var n = ([1, 2, 3] \| count)` produced a one-element `List<object>` rather than `3`, and a pipeline yielding several values returned a list silently where the interpreter raises `tosh.runtime.subexpression_requires_single_value`. Single-stage value pipelines already collapsed through `InvokeValue`, so the two shapes disagreed inside the host itself. Found while validating `TS-P1-05`. | Value-context pipelines collapse identically in both modes (none → `null`, one → the item, several → the shared diagnostic); iteration sources still receive every item; literal, variable, and command seeds behave alike; conformance rows and differential regressions cover each shape. |
@@ -421,15 +419,15 @@ closed.
 | `TS-P2-14` | Complete — 2026-07-25 | Storage-size suffix forms are only recognized as binary-operator operands: `var s = 10kb` fails as unknown command `10kb`, `10kb + 10kb` concatenates to the string `"10kb10kb"`, and `(10kb > 5kb)` silently returns `false` via lexicographic string comparison (the specification says `true`). | Suffix forms lex as typed literals in every expression position (mirroring backtick unit literals), or the suffix syntax is formally deprecated in favor of unit literals with a migration note; the specification's `var small = 10kb` and `(10kb > 5kb)` examples pass as conformance cases; no silent string fallback remains. |
 | `TS-P2-15` | Complete — 2026-07-26 | Named arguments are whitespace-sensitive with silent misbehavior: `f(host = "x")` binds the parameter while `f(host="x")` lexes as one bareword and is silently passed positionally as the literal text `host="x"` (companion to `TS-P1-06`). | `name=value` and `name = value` parse identically inside call argument lists, or the fused form produces a targeted diagnostic; a bareword containing `=` is never silently forwarded as a positional argument. |
 | `TS-P2-16` | Complete — 2026-07-26 | Module-qualified command dispatch is casing-sensitive despite the documented any-casing promise: `geo.area 2` dispatches, while `Geo.area 2` is a parse error because the capitalized form routes into static CLR member parsing (companion to `TS-P2-01`). | Module-qualified dispatch is independent of module-name casing; the corpus covers capitalized, kebab, underscore, and nested module names in both command and expression position. |
-| `TS-P2-17` | Planned | Dictionary-comprehension keys reject operator expressions: `{ $x % 2 => $x <\| for x in 1..4 }` fails with a missing-list-separator parse error. | Key expressions accept the same operator grammar as value expressions, or the diagnostic explicitly says to parenthesize the key; conformance cases cover operator keys, parenthesized keys, and the specification's examples. |
+| `TS-P2-17` | Planned | Dictionary-comprehension keys reject operator expressions: `{% $x % 2 => $x <\| for x in 1..4 %}` fails with a missing-list-separator parse error. | Key expressions accept the same operator grammar as value expressions, or the diagnostic explicitly says to parenthesize the key; conformance cases cover operator keys, parenthesized keys, and the specification's examples. |
 | `TS-P2-18` | Planned | Member diagnostics leak internal implementation types and misdescribe visibility: denied `shy` access reports "Member 'Secret' was not found on type 'Tosh.Language.ToshClassInstance'", and enum comparison failures name `ToshEnumValue`. | Diagnostics name the shell-level type (`S`, the enum's name) and the true cause (private access versus absence); no `Tosh.Language.*` implementation type name appears in user-facing diagnostics. |
 | `TS-P2-19` | Planned | An unparenthesized postfix conditional (`return "big" if $x > 5`) fails with a generic "insert a newline or ';'" error instead of the documented `tosh.parser.expected_postfix_condition` guidance. | Unparenthesized operator conditions after a postfix `if`/`unless` produce a targeted diagnostic that suggests parenthesizing the condition. |
 | `TS-P2-20` | Planned | `nameof($foo.Bar)` returns `"foo"` — the parser strips member access and reports the root identifier. | `nameof` on a member chain returns the final segment (matching C#) or produces a targeted diagnostic; the specification documents the chosen behavior. |
 | `TS-P2-21` | Planned | A `new` expression cannot take named arguments at all: `new D(1, b = 7)` and `new R("w", Qty = 5)` both fail while parsing with `tosh.parser.assignment_in_predicate`, so the runtime binder is never reached. Function and method calls accept the same syntax. This bounds `TS-P1-06`: constructor named-argument validation is unreachable until the parser accepts the form. | `new Type(name = value)` parses as a named argument for classes, records, and structs; the runtime binder's unknown/duplicate diagnostics apply; a genuine assignment mistake keeps a targeted diagnostic rather than the predicate-assignment message. |
 | `TS-P2-22` | Planned | The type checker does not walk class-member annotations, so static checking is materially weaker inside class bodies. `var x: int = "42"` and `func f(x: int)` both report `tosh.type.mismatch`, while the equivalent `prop X: int = "42"`, constructor parameter, method parameter, and property assignment report nothing. Runtime behaviour is consistent (all convert), so this is a static-coverage hole rather than a semantic divergence. | Class property, constructor-parameter, method-parameter, and property-assignment annotations are checked with the same rule and severity as `var` and `func` annotations; a corpus covers matching and mismatching cases in both positions. |
 | `TS-P2-23` | In progress — declaration table 2026-07-26 | Parse-time identity decisions rest on *spelling* rather than on facts the runtime already holds. Two casing tests remain (`char.IsUpper` in `LooksLikeQualifiedDotNetAccess` and `LooksLikePotentialClrTypeName`) deciding whether a dotted name is a CLR type, and 160 hardcoded `Current.Text == "…"` comparisons decide keyword and construct identity. `TS-P2-16` narrowed one such rule but did not remove the guess. The parser cannot do better today because `ToshParser.Parse` receives only source text, while the command, module, and type registries arrive later at `Lowerer.Lower`. | Identity is resolved against a real table rather than inferred from capitalization: either the parser is given the registries, or the decision is deferred to a later phase that has them. Keyword and construct recognition is driven by the generated language-surface registry (`TS-P2-10`) rather than by scattered literal comparisons. A capitalized module and a lowercase CLR type both resolve correctly. |
-| `TS-P2-24` | In progress — pass built and validated 2026-07-26 | Step 2 of the parser roadmap. Structural questions — where a statement ends, where a pipeline stage divides — are answered by heuristics scattered through the recursive-descent parser, each re-deriving the answer with local lookahead. `LiteParser` decides them once over the whole token stream, with bracket depth tracked so a separator inside a nested construct does not split the enclosing statement. | The parser consumes the lite structure instead of re-deriving it; the `LooksLike*`/`HasTopLevel*` helpers that only answered structural questions are removed; structure agrees with today's parser across the corpus, evidenced by differential tests. |
-| `TS-P2-25` | Proposed — options prepared 2026-07-27, needs a decision | `{` is structurally ambiguous and this now blocks the structural pass. A line break inside braces separates statements in a block body but must not split a multi-line record literal, and `{ a = 1 \n b = 2 }` is token-for-token indistinguishable from a two-statement block. `LiteParser.CandidateBoundaries` therefore reports brace-enclosed positions as *candidates* with their depth, leaving a semantic consumer to decide. Every remaining structural decision inherits that dependency. The brace form is overloaded five ways: block, record, dict, set (`{: :}`), and predicate. | A `{` opens exactly one construct decidable from the token stream, or the ambiguity is confined to a form the structural pass can recognise. Landing it includes the specification, examples, cheatsheets, and test corpus in the same change. Breaking syntax is acceptable per the July 26 decision. Options, costs, and a recommendation are in `docs/BRACE_DISAMBIGUATION_RFC.md`. |
+| `TS-P2-24` | In progress — paired ownership ready 2026-07-28 | Step 2 of the parser roadmap. Structural questions — where a statement ends, where a pipeline stage divides — are answered by heuristics scattered through the recursive-descent parser, each re-deriving the answer with local lookahead. `LiteParser` decides them once over the whole token stream, with paired delimiter frames so a separator inside a nested construct does not split the enclosing statement. | The parser consumes the lite structure instead of re-deriving it; the `LooksLike*`/`HasTopLevel*` helpers that only answered structural questions are removed; structure agrees with today's parser across the corpus, evidenced by differential tests. |
+| `TS-P2-25` | Complete — paired delimiters 2026-07-28 | Plain `{` overloaded blocks, records, dictionaries, sets, predicates, and specialized grammar groups. Position and content lookahead could silently change its meaning and prevented `LiteParser` from promoting brace-enclosed boundaries without duplicating parser grammar. | Ordinary `{ ... }` is a block; records use `{| ... |}`, dictionaries `{% ... %}`, and sets `{: ... :}` with six real delimiter tokens. Specialized parser-owned braces stay plain. Literal dispatch uses the opener alone; legacy `LooksLike*` and generic brace collection parsing are removed. Exact-owner boundary promotion, corpus/spec/tooling migration, targeted recovery diagnostics, rebuilt PDFs, and focused tests land together. |
 
 **Implementation note for `TS-P2-11` (July 25 review recommendation).** The
 `TS-P2-01`/`TS-P2-02`/`TS-P2-04`/`TS-P2-12`–`TS-P2-15` family shares one root
@@ -453,6 +451,7 @@ These are intentionally not part of the first repair slice.
 | `TS-P3-05` | Proposed | Uniform thrown-value protocol | Wrap thrown non-exception values so `catch (e)` always exposes `.Message` and a kind discriminator; today `throw "boom"` followed by `$e.Message` is a runtime error. |
 | `TS-P3-06` | Proposed | Interpolation format specifiers | Support `$"{expr:F2}"`-style format clauses; today the clause is lexed into the bareword and attempts to run a command named `$pi:F2`. |
 | `TS-P3-07` | Research | Unify `StorageSize`/`TemporalAmount` with the Quantity unit system | Two systems model the same domains (`10kb` versus `` 10`kB ``, `5s` versus `` 5`s ``) with a promotion bridge; evaluate making suffix literals sugar for Quantities so `TS-P2-14` lands on one system. |
+| `TS-P3-08` | Proposed | Parser-owned typed structural regions | Replace brace-content classification with parser-owned regions (`Block`, member list, arm list, projection, destructuring, accessors, and other grammar roles). Regions retain exact opener/closer ownership, promote only boundaries proven to belong to statement blocks, and are shared with formatters and language services; `LiteParser` must not grow a shadow `ClassifyBrace` grammar. |
 
 ## Test Strategy
 
@@ -577,6 +576,24 @@ These mismatches should be repaired alongside their owning work item:
   token and retaining any cleanup failures as defer metadata.
 - Preserve ordinary body output, discard cleanup output, and suppress
   cleanup-local jumps for compatibility.
+
+### July 28, 2026 — Paired collection delimiters
+
+- In ordinary expression and command-argument grammar, reserve
+  `{ ... }` for blocks. Records use `{| ... |}`, dictionaries
+  `{% ... %}`, and sets `{: ... :}`.
+- Keep grammar-owned structural braces — member and arm lists,
+  destructuring, projections, accessors, and similar forms — as plain
+  braces. The recursive parser, not token content, owns those roles.
+- Emit a distinct token for each paired opener and closer. Remove the
+  old record/dictionary lookahead classifiers and generic brace
+  collection literal rather than carrying compatibility ambiguity.
+- `LiteParser` pairs ordered delimiters and records an exact owning
+  opener for each candidate boundary. Only a parser-proven block opener
+  may promote its candidates; specialized braces remain unpromoted.
+- File `TS-P3-08` for parser-owned typed structural regions shared by
+  parsing, formatting, and language services. Do not evolve the
+  structural pass into a second brace grammar.
 
 ## Progress Log
 
@@ -1997,14 +2014,78 @@ Whether the recent commits regressed it or parallel scheduling had been masking
 it needs a bisect. That bisect must run under a hard memory cap.
 
 **Operational note.** The full suite is not currently usable as a verification
-gate. Until this is fixed, run it — and any bisect of it — inside a bounded
-cgroup, so the test fails instead of the machine:
+gate. Do not invoke `dotnet test` during ordinary stabilization validation while
+this item remains open. If a deliberate reproduction or bisect is explicitly
+needed, run it inside a bounded cgroup so the test fails instead of the machine,
+and disable both post-build targets. Disabling only the specification build is
+insufficient: `ToshParityCheck` otherwise launches a nested `dotnet run`, which
+can fan out additional MSBuild workers even for a filtered test:
 
 ```
-systemd-run --user --scope -p MemoryMax=4G -- dotnet test …
+systemd-run --user --scope -p MemoryMax=4G -- \
+  dotnet test … \
+  -p:DisableToshSpecBuild=true \
+  -p:DisableToshParityCheck=true
 ```
 
 Method note, and the second time in two days: an unfinished measurement was
 reported as a result. At 11 minutes this run looked "well-behaved at 4 GB"; its
 failure mode began at 15. A run that has not finished is not evidence about the
 part that has not run.
+
+### July 28, 2026 — Paired collection delimiters (TS-P2-25)
+
+The RFC's structural principle was accepted with modified spelling.
+Ordinary `{ ... }` is now a block; records use `{| ... |}`,
+dictionaries `{% ... %}`, and sets `{: ... :}`. Grammar-owned plain
+braces such as member lists, match arms, destructuring, projections, and
+accessors retain their existing role.
+
+- **Stage 1 — tokens and lexer.** The six paired open/close delimiters
+  are real tokens. Adjacency is lexical (`|}` wins before `||`), paired
+  openers enter expression mode, and an ordered brace-context stack keeps
+  a nested plain block from prematurely leaving a literal. A malformed
+  spaced closer still restores command-mode tokenization after its plain
+  `}` recovery.
+- **Stage 2 — parser and corpus.** Literal dispatch depends only on the
+  opener. The set/dictionary/record `LooksLike*` classifiers and generic
+  brace collection parser are gone; plain braces take the block path in
+  ordinary expression and argument grammar. New diagnostics name spaced,
+  missing, and mismatched paired closers. Tests, examples, command
+  metadata, compiler comments, README/backlog examples, and generated
+  diagnostic/command-reference surfaces use the accepted syntax.
+- **Stage 3 — structural boundaries.** `LiteParser` now uses ordered
+  delimiter frames. Every candidate inside a plain brace carries its
+  exact `OwnerOpenTokenIndex`; `PromoteBoundariesForBlock` selects only a
+  parser-proven block's candidates, so the structural pass does not
+  recreate the fourteen specialized brace grammars. Nested groups and
+  literals suppress their own candidates while a real nested block can
+  re-enable them. An independent review caught two recovery defects
+  before closure — a deeper exact closer could be lost behind a
+  mismatched frame, and a multiline pipeline stage could be promoted as
+  a statement. Exact-closer-first unwinding and owner-scoped pipeline
+  state now cover both.
+- **Stage 4 — tooling and contract.** CLI/Tome colorizers, LSP semantic
+  tokens, VS Code TextMate/configuration, and GtkSourceView recognize the
+  paired delimiters. The editor audit also found and fixed a pre-existing
+  reversed TōSh/Tome language-configuration mapping in the VS Code
+  manifest. The specification and collection, syntax, and interop
+  cheatsheets document adjacency and empty forms (`{||}`, `{%%}`,
+  `{::}`); their PDFs were rebuilt and visually inspected. The accepted
+  RFC is the decision record, and `TS-P3-08` carries the future
+  parser-owned typed-region design.
+
+Validation was intentionally bounded. The Stage 2 parser/corpus
+selection passed 560 tests; the final Stage 3 `LiteParserTests` passed
+82; the Stage 4 highlighter/semantic-token selection passed 20 and its
+fresh test-project build succeeded. The main specification is 280 A4
+pages, both copies are byte-identical (SHA-256
+`fcb75e11b86cf95df361b99952e3b62c3173e17a2ef3068e49c42b20ec261363`),
+and all affected specification and cheatsheet pages render without
+clipping, overlap, or broken delimiter glyphs.
+
+A later combined filtered `dotnet test` attempt produced no result and
+is not counted: its post-build parity target fanned out nested MSBuild
+workers, and it was cancelled at the user's direction as memory began to
+grow. The full suite was not run, in accordance with the `TS-P1-08`
+operational note above.

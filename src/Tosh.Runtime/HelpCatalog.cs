@@ -1058,7 +1058,7 @@ public static class HelpCatalog
                 Examples:
                 [
                     "var meta = new dict<string, int>(One, 1, Two, 2)",
-                    "var meta = new map({ Name = \"Toast\", Uid = 1000 })",
+                    "var meta = new map({| Name = \"Toast\", Uid = 1000 |})",
                     "echo $meta.Two",
                 ],
                 Notes: "`dict` is the preferred named map type. `map` is an alias. When key/value types are omitted, ToSh defaults to a string-keyed dictionary and infers values where it can."),
@@ -1089,12 +1089,12 @@ public static class HelpCatalog
             ["table"] = new(
                 Category: "Shell Types",
                 Description: "Anonymous dynamic record shape backed by ExpandoObject.",
-                Usage: "{ Field = value, ... } | new table(record-like) | new table(key, value, ...)",
+                Usage: "{| Field = value, ... |} | new table(record-like) | new table(key, value, ...)",
                 Aliases: ["dynamicrecord"],
                 Related: ["record", "dict", "hashtable", "new", "types"],
                 Examples:
                 [
-                    "var person = { Name = \"Toast\", Uid = 1000 }",
+                    "var person = {| Name = \"Toast\", Uid = 1000 |}",
                     "var person = new table(Name, \"Toast\", Uid, 1000)",
                     "echo $person.Name",
                 ],

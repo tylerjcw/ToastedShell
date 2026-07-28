@@ -58,14 +58,29 @@ public sealed class LiteParserTests
     [Theory]
     // A separator inside brackets belongs to the nested construct, so it
     // must not split the enclosing statement. This is the whole reason
-    // the pass tracks depth.
+    // the pass pairs delimiters.
     [InlineData("echo (1 | count)")]
     [InlineData("[1, 2, 3] | where { _ > 1 }")]
+    [InlineData("echo {| output = ls | count |}")]
+    [InlineData("echo {% \"items\" => [1, 2, 3] %}")]
+    [InlineData("echo {: 1, 2, 3 :}")]
     [InlineData("func f() {\n    echo one\n    echo two\n}")]
     [InlineData("if (true) {\n    echo yes\n} else {\n    echo no\n}")]
     public void Nested_separators_do_not_split_the_outer_statement(string source)
     {
         Assert.Single(Lite(source).Statements);
+    }
+
+    [Theory]
+    [InlineData("echo one\n[1, 2]")]
+    [InlineData("echo one\n(1 + 2)")]
+    [InlineData("echo one\n{| value = 2 |}")]
+    [InlineData("echo one\n{% \"value\" => 2 %}")]
+    [InlineData("echo one\n{: 2 :}")]
+    public void An_opening_delimiter_can_begin_a_new_top_level_statement(string source)
+    {
+        Assert.Equal(2, Lite(source).Statements.Count);
+        Assert.Equal(2, ParsedStatementCount(source));
     }
 
     [Fact]
@@ -172,17 +187,15 @@ public sealed class LiteParserTests
         LiteParser.CandidateBoundaries(new ToshLexer(source).Lex(), source);
 
     [Fact]
-    public void Candidates_are_found_inside_block_bodies()
+    public void Parser_proven_block_candidates_are_promoted_by_exact_owner()
     {
         // The top-level pass reports one statement here. Candidate
         // boundaries additionally expose the statements *inside* the
         // block, which is what recovery and boundary detection need.
         const string source = "func f() {\n    echo one\n    echo two\n}";
 
-        var inBlock = Candidates(source).Where(b => b.BraceDepth > 0).ToArray();
-
         Assert.Single(Lite(source).Statements);
-        Assert.Equal(2, inBlock.Length);
+        Assert.Equal(["echo", "echo"], PromotedTokenTexts(source));
     }
 
     [Fact]
@@ -196,62 +209,290 @@ public sealed class LiteParserTests
 
         Assert.Equal(
             function.Body.Statements.Count,
-            Candidates(source).Count(b => b.BraceDepth > 0));
+            PromotedTokenTexts(source).Length);
     }
 
     [Fact]
-    public void Grouping_suppresses_candidates_but_braces_do_not()
+    public void Grouping_suppresses_boundaries_but_blocks_do_not()
     {
         // A line break inside parentheses continues an expression, so it
-        // is never a candidate.
-        Assert.Empty(Candidates("var x = (\n    1 +\n    2\n)")
-            .Where(b => b.Kind == LiteBoundaryKind.LineBreak && b.BraceDepth == 0)
-            .Where(b => b.TokenIndex > 3));
-    }
-
-    [Fact]
-    public void A_multi_line_record_literal_yields_no_statement_candidates()
-    {
-        // TS-P2-25: decidable, not guessed. `{ name = ` can only be a
-        // record, because a bare `name = value` is not a legal statement —
-        // assignment requires `$name`. So the line breaks inside separate
-        // entries, not statements.
-        const string source = "var r = {\n    a = 1\n    b = 2\n}";
-
-        var result = ToshParser.Parse(source, "<lite-test>");
-        Assert.Empty(result.Diagnostics);
-        Assert.Empty(Candidates(source).Where(b => b.BraceDepth > 0));
+        // is never a boundary.
+        Assert.DoesNotContain(
+            Candidates("var x = (\n    1 +\n    2\n)"),
+            b => b.Kind == LiteBoundaryKind.LineBreak &&
+                 b.BraceDepth == 0 &&
+                 b.TokenIndex > 3);
     }
 
     [Theory]
-    [InlineData("var r = { a = 1 }", LiteParser.BraceRole.Literal)]
-    [InlineData("var r = { echo = 5 }", LiteParser.BraceRole.Literal)]
-    [InlineData("var d = { \"k\" => 1 }", LiteParser.BraceRole.Literal)]
-    [InlineData("func f() { echo one }", LiteParser.BraceRole.Block)]
-    [InlineData("if (true) { echo yes }", LiteParser.BraceRole.Block)]
-    [InlineData("[1] | each { _ * 2 }", LiteParser.BraceRole.Block)]
-    public void Braces_are_classified_from_bounded_lookahead(string source, LiteParser.BraceRole expected)
+    [InlineData("var r = {|\n    a = 1\n    b = 2\n|}")]
+    [InlineData("var d = {%\n    \"a\" => 1\n    \"b\" => 2\n%}")]
+    [InlineData("var s = {:\n    1,\n    2\n:}")]
+    public void Multi_line_paired_literals_yield_no_statement_boundaries(string source)
     {
-        var tokens = new ToshLexer(source).Lex();
-        var openBrace = tokens
-            .Select((token, index) => (token, index))
-            .First(pair => pair.token.Kind == SyntaxTokenKind.OpenBrace)
-            .index;
+        var result = ToshParser.Parse(source, "<lite-test>");
+        Assert.Empty(result.Diagnostics);
+        Assert.DoesNotContain(Candidates(source), boundary => boundary.TokenIndex > 0);
+    }
 
-        Assert.Equal(expected, LiteParser.ClassifyBrace(tokens, openBrace));
+    [Theory]
+    [InlineData("var r = {| a = 1; b = 2 |}")]
+    [InlineData("var d = {% \"a\" => 1; \"b\" => 2 %}")]
+    [InlineData("var s = {: 1; 2 :}")]
+    public void Semicolons_inside_paired_literals_are_suppressed(string source)
+    {
+        Assert.Single(Lite(source).Statements);
+        Assert.DoesNotContain(
+            Candidates(source),
+            boundary => boundary.Kind == LiteBoundaryKind.Explicit);
     }
 
     [Fact]
-    public void A_match_arm_list_contributes_no_statement_candidates()
+    public void A_literal_nested_in_a_block_suppresses_only_its_own_boundaries()
     {
-        // Match arms are separated by line breaks too, but they are arms,
-        // not statements. Dict literals and match arms are not
-        // distinguished, and need not be — neither is a block.
-        const string source = "var r = match (1) {\n    1 => \"one\"\n    default => \"other\"\n}";
+        const string source =
+            """
+            func f() {
+                var r = {|
+                    a = 1
+                    b = 2
+                |}
+                echo $r
+            }
+            """;
+
+        Assert.Equal(
+            ["var", "echo"],
+            PromotedTokenTexts(source));
+    }
+
+    [Theory]
+    [InlineData(
+        "var r = {| handler = func() {\n    echo one\n    echo two\n} |}",
+        "echo",
+        "echo")]
+    [InlineData(
+        "echo (func() {\n    echo one\n    echo two\n})",
+        "echo",
+        "echo")]
+    public void A_block_nested_in_a_suppressed_frame_reenables_its_boundaries(
+        string source,
+        params string[] expectedBoundaryTokens)
+    {
+        Assert.Equal(
+            expectedBoundaryTokens,
+            PromotedTokenTexts(source));
+    }
+
+    [Fact]
+    public void A_group_nested_in_a_block_suppresses_only_its_own_boundaries()
+    {
+        const string source =
+            """
+            func f() {
+                var x = (
+                    1 +
+                    2
+                )
+                echo $x
+            }
+            """;
+
+        Assert.Equal(
+            ["var", "echo"],
+            PromotedTokenTexts(source));
+    }
+
+    [Theory]
+    [InlineData("var {\n    Name,\n    Age\n} = $record", 0, "Name", "Age")]
+    [InlineData("ps | get {\n    Name,\n    PID\n}", 0, "Name", "PID")]
+    [InlineData("ps | select {\n    Name,\n    PID\n}", 0, "Name", "PID")]
+    [InlineData("ps | pick {\n    Name,\n    PID\n}", 0, "Name", "PID")]
+    [InlineData("require {\n    Inventory,\n    Orders\n} from \"./models.tosh\"", 0, "Inventory", "Orders")]
+    [InlineData("switch (1) {\n    case 1 { echo one }\n    default { echo other }\n}", 0, "case", "default")]
+    [InlineData("var r = match (1) {\n    1 => \"one\"\n    default => \"other\"\n}", 0, "1", "default")]
+    [InlineData("bind LibC {\n    func first() -> int\n    func second() -> int\n}", 0, "func", "func")]
+    [InlineData("interface I {\n    func first()\n    func second()\n}", 0, "func", "func")]
+    [InlineData("union Result {\n    Ok(value)\n    Err(message)\n}", 0, "Ok", "Err")]
+    [InlineData("enum Color {\n    Red\n    Green\n}", 0, "Red", "Green")]
+    [InlineData("trait Named {\n    prop Name\n    func show()\n}", 0, "prop", "func")]
+    [InlineData("event Build {\n    status = ok\n    duration = 0\n}", 0, "status", "duration")]
+    [InlineData("class C {\n    prop A = 1\n    prop B = 2\n}", 0, "prop", "prop")]
+    [InlineData("struct S {\n    prop A = 1\n    prop B = 2\n}", 0, "prop", "prop")]
+    [InlineData("class C {\n    prop Value {\n        get => 1\n        set => 2\n    }\n}", 1, "get", "set")]
+    [InlineData("type Positive = int {\n    where _ > 0\n    coerce 1\n}", 0, "where", "coerce")]
+    public void Specialized_plain_braces_retain_candidates_with_exact_owner(
+        string source,
+        int plainBraceOrdinal,
+        params string[] expectedOwnedTokens)
+    {
+        var tokens = new ToshLexer(source).Lex();
+        var openBraces = tokens
+            .Select((token, index) => (token, index))
+            .Where(pair => pair.token.Kind == SyntaxTokenKind.OpenBrace)
+            .Select(pair => pair.index)
+            .ToArray();
+        var openBraceIndex = openBraces[plainBraceOrdinal];
+        var owned = LiteParser.CandidateBoundaries(tokens, source)
+            .Where(boundary => boundary.OwnerOpenTokenIndex == openBraceIndex)
+            .ToArray();
+
+        Assert.Equal(
+            expectedOwnedTokens,
+            owned.Select(boundary => tokens[boundary.TokenIndex].Text));
+        Assert.All(
+            owned,
+            boundary => Assert.Equal(openBraceIndex, boundary.OwnerOpenTokenIndex));
+    }
+
+    [Fact]
+    public void Array_destructuring_remains_grouping_and_yields_no_internal_candidates()
+    {
+        const string source = "var [\n    first,\n    second\n] = $values";
+
+        Assert.DoesNotContain(Candidates(source), boundary => boundary.TokenIndex > 0);
+    }
+
+    [Fact]
+    public void Selecting_an_outer_block_does_not_promote_a_nested_specialized_brace()
+    {
+        const string source =
+            """
+            func f() {
+                ps | get {
+                    Name,
+                    PID
+                }
+                echo done
+            }
+            """;
+
+        var openBraces = PlainBraceOpenIndices(source);
+        Assert.Equal(2, openBraces.Length);
+        Assert.Equal(["ps", "echo"], PromotedTokenTexts(source, plainBraceOrdinal: 0));
+
+        var nestedCandidates = Candidates(source)
+            .Where(boundary => boundary.OwnerOpenTokenIndex == openBraces[1])
+            .ToArray();
+        Assert.NotEmpty(nestedCandidates);
+    }
+
+    [Fact]
+    public void Match_arm_semicolons_remain_candidates_owned_by_the_match_brace()
+    {
+        const string source = "var r = match (1) { 1 => \"one\"; default => \"other\" }";
+        var matchOpenBrace = Assert.Single(PlainBraceOpenIndices(source));
+
+        Assert.Contains(
+            Candidates(source),
+            boundary => boundary.Kind == LiteBoundaryKind.Explicit &&
+                        boundary.OwnerOpenTokenIndex == matchOpenBrace);
+    }
+
+    [Fact]
+    public void A_block_match_arm_reenables_boundaries_inside_the_arm_body()
+    {
+        const string source =
+            """
+            var r = match (1) {
+                1 => {
+                    echo one
+                    echo two
+                }
+                default => "other"
+            }
+            """;
+
+        Assert.Equal(
+            ["echo", "echo"],
+            PromotedTokenTexts(source, plainBraceOrdinal: 1));
+    }
+
+    [Fact]
+    public void A_method_block_can_be_promoted_independently_of_its_class_body()
+    {
+        const string source =
+            """
+            class C {
+                func f() {
+                    echo one
+                    echo two
+                }
+                prop Value = 1
+            }
+            """;
+
+        Assert.Equal(
+            ["func", "prop"],
+            PromotedTokenTexts(source, plainBraceOrdinal: 0));
+        Assert.Equal(
+            ["echo", "echo"],
+            PromotedTokenTexts(source, plainBraceOrdinal: 1));
+    }
+
+    [Fact]
+    public void Semicolons_inside_an_ordinary_block_are_promoted()
+    {
+        const string source = "func f() { echo one; echo two }";
+
+        Assert.Equal(
+            ["echo", "echo"],
+            PromotedTokenTexts(source));
+    }
+
+    [Theory]
+    [InlineData("echo {| a = 1 }\necho after")]
+    [InlineData("echo {| a = 1 %}\necho after")]
+    [InlineData("echo {% \"a\" => 1 :}\necho after")]
+    [InlineData("echo {: 1 |}\necho after")]
+    [InlineData("func f() { echo (1 }\necho after")]
+    public void Brace_family_recovery_closers_do_not_leak_nesting_through_eof(string source)
+    {
+        var tokens = new ToshLexer(source).Lex();
+        var candidates = LiteParser.CandidateBoundaries(tokens, source);
+
+        Assert.Equal(2, Lite(source).Statements.Count);
+        Assert.Contains(
+            candidates,
+            boundary => boundary.OwnerOpenTokenIndex is null &&
+                        tokens[boundary.TokenIndex].Text == "echo");
+    }
+
+    [Theory]
+    [InlineData("echo {| handler = func() { echo one |}\necho after")]
+    [InlineData("echo ([1)\necho after")]
+    public void Recovery_prefers_an_exact_closer_below_mismatched_frames(string source)
+    {
+        var tokens = new ToshLexer(source).Lex();
+        var candidates = LiteParser.CandidateBoundaries(tokens, source);
+
+        Assert.Equal(2, Lite(source).Statements.Count);
+
+        var trailingBoundary = Assert.Single(
+            candidates,
+            boundary => boundary.OwnerOpenTokenIndex is null &&
+                        tokens[boundary.TokenIndex].Text == "echo");
+        Assert.Equal(0, trailingBoundary.BraceDepth);
+    }
+
+    [Fact]
+    public void Pipeline_stage_continuation_is_not_promoted_as_a_block_statement()
+    {
+        const string source =
+            """
+            func f() {
+                ls |
+                where { _ }
+                echo done
+            }
+            """;
 
         var result = ToshParser.Parse(source, "<lite-test>");
         Assert.Empty(result.Diagnostics);
-        Assert.Empty(Candidates(source).Where(b => b.BraceDepth > 0));
+        var function = Assert.IsType<FunctionDefinitionStatementSyntax>(result.Statement);
+
+        Assert.Equal(2, function.Body.Statements.Count);
+        Assert.Equal(["ls", "echo"], PromotedTokenTexts(source));
     }
 
     [Fact]
@@ -260,4 +501,29 @@ public sealed class LiteParserTests
         var kinds = Candidates("echo one; echo two").Select(b => b.Kind).ToArray();
         Assert.Contains(LiteBoundaryKind.Explicit, kinds);
     }
+
+    private static string[] PromotedTokenTexts(
+        string source,
+        int plainBraceOrdinal = 0)
+    {
+        var tokens = new ToshLexer(source).Lex();
+        var openBraces = tokens
+            .Select((token, index) => (token, index))
+            .Where(pair => pair.token.Kind == SyntaxTokenKind.OpenBrace)
+            .Select(pair => pair.index)
+            .ToArray();
+        var openBraceIndex = openBraces[plainBraceOrdinal];
+        var candidates = LiteParser.CandidateBoundaries(tokens, source);
+
+        return LiteParser.PromoteBoundariesForBlock(candidates, openBraceIndex)
+            .Select(boundary => tokens[boundary.TokenIndex].Text)
+            .ToArray();
+    }
+
+    private static int[] PlainBraceOpenIndices(string source) =>
+        new ToshLexer(source).Lex()
+            .Select((token, index) => (token, index))
+            .Where(pair => pair.token.Kind == SyntaxTokenKind.OpenBrace)
+            .Select(pair => pair.index)
+            .ToArray();
 }

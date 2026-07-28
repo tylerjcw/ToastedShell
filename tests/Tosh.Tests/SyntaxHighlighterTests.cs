@@ -1,5 +1,7 @@
 using Tosh.Cli;
+using Tosh.LanguageServices;
 using Tosh.Runtime;
+using Tosh.Tome;
 
 namespace Tosh.Tests;
 
@@ -119,6 +121,65 @@ public sealed class SyntaxHighlighterTests
         Assert.Contains("\x1b[95m2026-03-27\x1b[0m", highlighted);
         Assert.Contains("\x1b[95m127.0.0.1\x1b[0m", highlighted);
         Assert.Contains("\x1b[95m::1\x1b[0m", highlighted);
+    }
+
+    [Fact]
+    public void Highlights_paired_collection_delimiters_as_punctuation()
+    {
+        var runtime = ToshRuntime.CreateDefault();
+        runtime.Config.Theme.Syntax.Punctuation.Foreground = "bright-magenta";
+
+        var highlighted = SyntaxHighlighter.Highlight("{||} {%%} {::}", runtime);
+
+        Assert.Contains("\x1b[95m{|\x1b[0m", highlighted);
+        Assert.Contains("\x1b[95m|}\x1b[0m", highlighted);
+        Assert.Contains("\x1b[95m{%\x1b[0m", highlighted);
+        Assert.Contains("\x1b[95m%}\x1b[0m", highlighted);
+        Assert.Contains("\x1b[95m{:\x1b[0m", highlighted);
+        Assert.Contains("\x1b[95m:}\x1b[0m", highlighted);
+    }
+
+    [Fact]
+    public void Tome_colorizer_treats_each_paired_collection_delimiter_as_one_punctuation_span()
+    {
+        const string source = "{||} {%%} {::}";
+        var colorizer = new ToshSyntaxColorizer();
+        var punctuationStyle = Assert.Single(colorizer.Colorize("(", 0)).AnsiOpen;
+
+        var spans = colorizer.Colorize(source, 0);
+
+        var delimiters = spans
+            .Where(span => span.Length == 2)
+            .Select(span => (Text: source.Substring(span.Start, span.Length), span.AnsiOpen))
+            .ToArray();
+        Assert.Equal(["{|", "|}", "{%", "%}", "{:", ":}"], delimiters.Select(item => item.Text));
+        Assert.All(delimiters, item => Assert.Equal(punctuationStyle, item.AnsiOpen));
+    }
+
+    [Fact]
+    public void Semantic_tokens_emit_paired_collection_delimiters_as_whole_operator_tokens()
+    {
+        const string source = "{||} {%%} {::}";
+        var tokens = new ToshLanguageFeatures().GetSemanticTokens(source, "test.tosh");
+        var operatorSpans = new List<string>();
+        var line = 0;
+        var character = 0;
+
+        for (var offset = 0; offset < tokens.Data.Count; offset += 5)
+        {
+            var deltaLine = tokens.Data[offset];
+            line += deltaLine;
+            character = deltaLine == 0
+                ? character + tokens.Data[offset + 1]
+                : tokens.Data[offset + 1];
+
+            if (line == 0 && tokens.Data[offset + 3] == 7)
+            {
+                operatorSpans.Add(source.Substring(character, tokens.Data[offset + 2]));
+            }
+        }
+
+        Assert.Equal(["{|", "|}", "{%", "%}", "{:", ":}"], operatorSpans);
     }
 
     [Fact]

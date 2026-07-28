@@ -215,7 +215,7 @@ public sealed class CompilerOperatorParityTests
                 func probe() {
                     var box = new Box()
                     $box.Value **= 3
-                    var values = { "item" => 7 }
+                    var values = {% "item" => 7 %}
                     $values["item"] //= 2
                     return ($box.Value * 10 + $values["item"])
                 }

@@ -404,6 +404,10 @@
       <match>=&gt;|\.\.|\.\.\.|\|{1,2}|!~|=~|not-in|!=|&gt;=|&lt;=|==|&gt;&gt;|&lt;&lt;&lt;|\+=|-=|\*=|/=|%=|[%&gt;&lt;]=?|=(?!=)|\?</match>
     </context>
 
+    <context id="collection-delimiters" style-ref="punctuation">
+      <match>\{[|:%]|[|:%]\}</match>
+    </context>
+
     <context id="punctuation" style-ref="punctuation">
       <match>[\{\}\[\]\(\),.;:]</match>
     </context>
@@ -437,6 +441,7 @@
         <context ref="builtins"/>
         <context ref="flags"/>
         <context ref="numbers"/>
+        <context ref="collection-delimiters"/>
         <context ref="operators"/>
         <context ref="punctuation"/>
         <context ref="command-position"/>

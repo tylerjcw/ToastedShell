@@ -52,7 +52,7 @@ public sealed class LanguageFeatureTests
     {
         var engine = new ToshEngine(ToshRuntime.CreateDefault());
 
-        await engine.ExecuteToListAsync("var rec = { Name = Alice, Age = 30 }");
+        await engine.ExecuteToListAsync("var rec = {| Name = Alice, Age = 30 |}");
         await engine.ExecuteToListAsync("var { Name, Age } = $rec");
         var results = await engine.ExecuteToListAsync("echo $Name $Age");
 
@@ -65,7 +65,7 @@ public sealed class LanguageFeatureTests
     {
         var engine = new ToshEngine(ToshRuntime.CreateDefault());
 
-        await engine.ExecuteToListAsync("var rec = { X = 1 }");
+        await engine.ExecuteToListAsync("var rec = {| X = 1 |}");
         await engine.ExecuteToListAsync("var { X, Y } = $rec");
 
         var xResult = await engine.ExecuteToListAsync("echo $X");
@@ -107,8 +107,8 @@ public sealed class LanguageFeatureTests
     {
         var engine = new ToshEngine(ToshRuntime.CreateDefault());
 
-        await engine.ExecuteToListAsync("var base = { Name = Tosh, Version = 1 }");
-        var results = await engine.ExecuteToListAsync("{ ...$base, Version = 2 }");
+        await engine.ExecuteToListAsync("var base = {| Name = Tosh, Version = 1 |}");
+        var results = await engine.ExecuteToListAsync("{| ...$base, Version = 2 |}");
 
         var record = Assert.IsAssignableFrom<IDictionary<string, object?>>(results[0]);
         Assert.Equal("Tosh", record["Name"]?.ToString());
@@ -120,9 +120,9 @@ public sealed class LanguageFeatureTests
     {
         var engine = new ToshEngine(ToshRuntime.CreateDefault());
 
-        await engine.ExecuteToListAsync("var a = { X = 1 }");
-        await engine.ExecuteToListAsync("var b = { Y = 2 }");
-        var results = await engine.ExecuteToListAsync("{ ...$a, ...$b }");
+        await engine.ExecuteToListAsync("var a = {| X = 1 |}");
+        await engine.ExecuteToListAsync("var b = {| Y = 2 |}");
+        var results = await engine.ExecuteToListAsync("{| ...$a, ...$b |}");
 
         var record = Assert.IsAssignableFrom<IDictionary<string, object?>>(results[0]);
         Assert.Equal(1L, Convert.ToInt64(record["X"]));
@@ -137,7 +137,7 @@ public sealed class LanguageFeatureTests
         var engine = new ToshEngine(ToshRuntime.CreateDefault());
 
         await engine.ExecuteToListAsync("var key = echo status");
-        var results = await engine.ExecuteToListAsync("{ ($key) = active }");
+        var results = await engine.ExecuteToListAsync("{| ($key) = active |}");
 
         var record = Assert.IsAssignableFrom<IDictionary<string, object?>>(results[0]);
         Assert.Equal("active", record["status"]?.ToString());
@@ -149,7 +149,7 @@ public sealed class LanguageFeatureTests
         var engine = new ToshEngine(ToshRuntime.CreateDefault());
 
         await engine.ExecuteToListAsync("var k = echo color");
-        var results = await engine.ExecuteToListAsync("{ Name = widget, ($k) = blue }");
+        var results = await engine.ExecuteToListAsync("{| Name = widget, ($k) = blue |}");
 
         var record = Assert.IsAssignableFrom<IDictionary<string, object?>>(results[0]);
         Assert.Equal("widget", record["Name"]?.ToString());
@@ -215,7 +215,7 @@ public sealed class LanguageFeatureTests
 
         var results = await engine.ExecuteToListAsync(
             """
-            var rows = [{ Name = alpha }, { Name = beta }]
+            var rows = [{| Name = alpha |}, {| Name = beta |}]
             $rows[1].Name
             """);
 
@@ -243,7 +243,7 @@ public sealed class LanguageFeatureTests
 
         var results = await engine.ExecuteToListAsync(
             """
-            var x = { Name = Tosh, Version = 1 }
+            var x = {| Name = Tosh, Version = 1 |}
             $x["Name"]
             $x["Version",]
             """);
@@ -259,7 +259,7 @@ public sealed class LanguageFeatureTests
 
         var results = await engine.ExecuteToListAsync(
             """
-            var x = { Name = Tosh, Version = 1 }
+            var x = {| Name = Tosh, Version = 1 |}
             $x[,1]
             """);
 

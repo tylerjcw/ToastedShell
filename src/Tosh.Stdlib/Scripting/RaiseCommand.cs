@@ -6,7 +6,7 @@ namespace Tosh.Stdlib.Scripting;
 [CommandArgument("event", "Event object, event factory, or event type to raise. May also be supplied from the pipeline.", Required = false)]
 [CommandArgument("fields", "Optional record of field overrides when raising from an event factory.", Required = false)]
 [CommandExample("$event | raise", Title = "Raise a piped event")]
-[CommandExample("raise $factory { Name: \"deploy\", Status: \"ok\" }", Title = "Raise from an event factory with fields")]
+[CommandExample("raise $factory {| Name: \"deploy\", Status: \"ok\" |}", Title = "Raise from an event factory with fields")]
 [CommandOutput("Never returns normally — throws a diagnostic / runtime error built from its arguments.")]
 public sealed class RaiseCommand : ShellCommand
 {

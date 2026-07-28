@@ -1216,7 +1216,7 @@ public static class Lowerer
     }
 
     /// <summary>
-    /// Lowers <c>fn(x, y) => …</c> / <c>{|x, y| …}</c>. Parameters are
+    /// Lowers an anonymous function such as <c>func(x, y) => …</c>. Parameters are
     /// declared inside a fresh scope with each default lowered
     /// immediately before its parameter binds (TS-P1-05), so defaults
     /// see earlier parameters and capture outer references.

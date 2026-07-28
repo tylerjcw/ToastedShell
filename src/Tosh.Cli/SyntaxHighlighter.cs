@@ -171,6 +171,9 @@ public static class SyntaxHighlighter
             SyntaxTokenKind.OpenParen or SyntaxTokenKind.CloseParen
                 or SyntaxTokenKind.OpenBrace or SyntaxTokenKind.CloseBrace
                 or SyntaxTokenKind.OpenBracket or SyntaxTokenKind.CloseBracket
+                or SyntaxTokenKind.OpenBraceColon or SyntaxTokenKind.ColonCloseBrace
+                or SyntaxTokenKind.OpenBracePipe or SyntaxTokenKind.PipeCloseBrace
+                or SyntaxTokenKind.OpenBracePercent or SyntaxTokenKind.PercentCloseBrace
                 or SyntaxTokenKind.Comma or SyntaxTokenKind.Semicolon => theme.Punctuation,
             SyntaxTokenKind.Bareword => GetBarewordStyle(input, token, runtime),
             _ => null,

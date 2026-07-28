@@ -371,7 +371,7 @@ public sealed class BinderTests : IClassFixture<ToshRuntimeFixture>
     {
         // The binder cannot know record shapes; only the root is checked.
         var parse = ParseSource("""
-            var person = { name: "alice", age: 30 }
+            var person = {| name: "alice", age: 30 |}
             echo $person.notarealfield.namee
             """);
         var diags = Binder.Bind(parse, _runtime.Commands, isExecutableOnPath: _ => false);

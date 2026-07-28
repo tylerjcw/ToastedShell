@@ -4114,7 +4114,7 @@ stop [handle|\allowbreak id ...] & Stop one or more HTTP file servers, or all of
 
 \begin{lstlisting}
 http get https://example.com --as text  # Fetch a text response
-http post https://example.com/api --json { Name = "Toast" } --as response  # Send JSON and keep the structured response
+http post https://example.com/api --json {| Name = "Toast" |} --as response  # Send JSON and keep the structured response
 http request GET https://example.com | http send --as response  # Build then send a request object
 http serve ./share --browse  # Start a temporary file server with a lightweight share page
 http serve ./share --browse --lan  # Share a directory with other devices on the same network
@@ -6032,7 +6032,7 @@ transpose
 \textbf{Output:} Pivoted records where original keys become headers and values become rows.
 
 \begin{lstlisting}
-echo @{a=1; b=2} @{a=3; b=4} | transpose  # Pivot rows into columns
+echo {|a=1, b=2|} {|a=3, b=4|} | transpose  # Pivot rows into columns
 \end{lstlisting}
 
 \end{cmdbox}
@@ -7094,7 +7094,7 @@ fields & Optional record of field overrides when raising from an event factory. 
 
 \begin{lstlisting}
 $event | raise  # Raise a piped event
-raise $factory { Name: "deploy", Status: "ok" }  # Raise from an event factory with fields
+raise $factory {| Name: "deploy", Status: "ok" |}  # Raise from an event factory with fields
 \end{lstlisting}
 
 \end{cmdbox}
@@ -9263,7 +9263,7 @@ text & A template string with \{\{ member.path \}\} placeholders. \\
 
 \begin{lstlisting}
 ls | template "{{Name}} is {{Length}} bytes"  # Format file info
-echo @{name="World"} | template "Hello, {{name}}!"  # Simple template rendering
+echo {|name="World"|} | template "Hello, {{name}}!"  # Simple template rendering
 \end{lstlisting}
 
 \end{cmdbox}

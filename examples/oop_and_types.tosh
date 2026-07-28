@@ -117,12 +117,12 @@ Utilities.banner("Dynamic Records")
 var report = new list()
 
 $items | each {
-    $report.Add({
+    $report.Add({|
         Name = _.Name,
         Category = _.Category,
         Quantity = _.Quantity,
         State = Inv.state_of(_)
-    }) | ignore
+    |}) | ignore
 }
 
 $report | sort Quantity | reverse | each {

@@ -8,11 +8,18 @@ namespace Tosh.Language.Parsing;
 
 public sealed class ToshLexer
 {
+    private enum BraceContextKind
+    {
+        Block,
+        CollectionLiteral,
+    }
+
     private readonly string _source;
     private int _position;
 
     /// <summary>
-    /// Bracket nesting depth for expression contexts (TS-P2-11). Command
+    /// Parenthesis, bracket, and collection-literal nesting depth for
+    /// expression contexts (TS-P2-11). Command
     /// position must keep greedy barewords so <c>ls -la</c>,
     /// <c>./script.tosh</c>, and <c>*.txt</c> survive intact, while
     /// expression position needs operators as real tokens. The lexer
@@ -22,8 +29,17 @@ public sealed class ToshLexer
     /// </summary>
     private int _expressionDepth;
 
-    /// <summary>True when the lexer is inside a parenthesised or
-    /// bracketed expression context.</summary>
+    /// <summary>
+    /// Braces need their own context stack because a plain block may be nested
+    /// inside a collection literal. A plain <c>}</c> closes the nearest brace;
+    /// it leaves expression depth alone for a block, but restores command mode
+    /// when recovering a literal whose sigil was separated from the brace
+    /// (<c>| }</c>, <c>: }</c>, or <c>% }</c>).
+    /// </summary>
+    private readonly Stack<BraceContextKind> _braceContexts = new();
+
+    /// <summary>True when the lexer is inside a parenthesised, bracketed,
+    /// or collection-literal expression context.</summary>
     private bool InExpressionContext => _expressionDepth > 0;
     private readonly List<LineHushDirective> _lineHushDirectives = [];
     private readonly List<LineComment> _lineComments = [];
@@ -131,7 +147,7 @@ public sealed class ToshLexer
                 if (Peek() == '}')
                 {
                     tokens.Add(new SyntaxToken(SyntaxTokenKind.PipeCloseBrace, _position, "|}"));
-                    if (_expressionDepth > 0) _expressionDepth--;
+                    ExitBraceContext();
                     _position += 2;
                     continue;
                 }
@@ -249,15 +265,15 @@ public sealed class ToshLexer
             // The literal openers enter expression context exactly as `(` and `[`
             // do, and that is load-bearing rather than incidental: it makes
             // `{|a=1|}` lex identically to `{| a = 1 |}` instead of collapsing
-            // `a=1` into one bareword. Today's records have that flaw — `{ a=1 }`
-            // is a block while `{ a = 1 }` is a record — and shipping a new
-            // construct with it would repeat TS-P2-04 and TS-P2-15.
+            // `a=1` into one bareword. The removed bare-record form had that
+            // flaw — `{ a=1 }` was a block while `{ a = 1 }` was a record —
+            // and carrying it forward would repeat TS-P2-04 and TS-P2-15.
             if (Current == '{')
             {
                 if (Peek() == ':')
                 {
                     tokens.Add(new SyntaxToken(SyntaxTokenKind.OpenBraceColon, _position, "{:"));
-                    _expressionDepth++;
+                    EnterCollectionLiteral();
                     _position += 2;
                     continue;
                 }
@@ -265,7 +281,7 @@ public sealed class ToshLexer
                 if (Peek() == '|')
                 {
                     tokens.Add(new SyntaxToken(SyntaxTokenKind.OpenBracePipe, _position, "{|"));
-                    _expressionDepth++;
+                    EnterCollectionLiteral();
                     _position += 2;
                     continue;
                 }
@@ -273,12 +289,13 @@ public sealed class ToshLexer
                 if (Peek() == '%')
                 {
                     tokens.Add(new SyntaxToken(SyntaxTokenKind.OpenBracePercent, _position, "{%"));
-                    _expressionDepth++;
+                    EnterCollectionLiteral();
                     _position += 2;
                     continue;
                 }
 
                 tokens.Add(new SyntaxToken(SyntaxTokenKind.OpenBrace, _position, "{"));
+                _braceContexts.Push(BraceContextKind.Block);
                 _position++;
                 continue;
             }
@@ -286,6 +303,7 @@ public sealed class ToshLexer
             if (Current == '}')
             {
                 tokens.Add(new SyntaxToken(SyntaxTokenKind.CloseBrace, _position, "}"));
+                ExitBraceContext();
                 _position++;
                 continue;
             }
@@ -299,7 +317,7 @@ public sealed class ToshLexer
             if (Current == ':' && Peek() == '}')
             {
                 tokens.Add(new SyntaxToken(SyntaxTokenKind.ColonCloseBrace, _position, ":}"));
-                if (_expressionDepth > 0) _expressionDepth--;
+                ExitBraceContext();
                 _position += 2;
                 continue;
             }
@@ -307,7 +325,7 @@ public sealed class ToshLexer
             if (Current == '%' && Peek() == '}')
             {
                 tokens.Add(new SyntaxToken(SyntaxTokenKind.PercentCloseBrace, _position, "%}"));
-                if (_expressionDepth > 0) _expressionDepth--;
+                ExitBraceContext();
                 _position += 2;
                 continue;
             }
@@ -454,6 +472,22 @@ public sealed class ToshLexer
     }
 
     private bool IsAtEnd => _position >= _source.Length;
+
+    private void EnterCollectionLiteral()
+    {
+        _braceContexts.Push(BraceContextKind.CollectionLiteral);
+        _expressionDepth++;
+    }
+
+    private void ExitBraceContext()
+    {
+        if (_braceContexts.TryPop(out var context) &&
+            context == BraceContextKind.CollectionLiteral &&
+            _expressionDepth > 0)
+        {
+            _expressionDepth--;
+        }
+    }
 
     private char Current => IsAtEnd ? '\0' : _source[_position];
 
@@ -1242,8 +1276,8 @@ public sealed class ToshLexer
             }
 
             // '=>' ends a bareword wherever it appears, so the spacing of
-            // an arrow never changes its meaning: `{a=>1}` lexes the same
-            // way as `{a => 1}`. Without this the reader swallowed the
+            // an arrow never changes its meaning: `{%a=>1%}` lexes the same
+            // way as `{% a => 1 %}`. Without this the reader swallowed the
             // '=' and left a stray '>' behind, and the compact spelling
             // silently failed to parse as a dict entry.
             if (Current == '=' && Peek() == '>' && _position > start)

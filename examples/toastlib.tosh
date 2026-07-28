@@ -83,11 +83,11 @@ module Inventory {
 module Reporting {
     func summary_rows(items) {
         $items | flatten | each {
-            {
+            {|
                 Name = _.Name,
                 Category = _.Category,
                 Quantity = _.Quantity
-            }
+            |}
         }
     }
 

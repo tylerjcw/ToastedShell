@@ -701,9 +701,9 @@ public sealed class EngineTests
     }
 
     [Fact]
-    public void Parser_supports_advanced_where_boolean_expressions_and_collection_literals()
+    public void Parser_supports_advanced_where_boolean_expressions_and_array_literals()
     {
-        var result = ToshParser.Parse("ls | where { (_.Type == file) and not (_.Type == dir) and (_.Owner == { root, komrad }) } | get Name");
+        var result = ToshParser.Parse("ls | where { (_.Type == file) and not (_.Type == dir) and (_.Owner == [root, komrad]) } | get Name");
 
         Assert.Empty(result.Diagnostics);
 
@@ -1265,7 +1265,7 @@ public sealed class EngineTests
     {
         var engine = new ToshEngine();
 
-        await engine.ExecuteToListAsync("var kitty = { Name = \"Loki\", Age = \"1y2m\" }");
+        await engine.ExecuteToListAsync("var kitty = {| Name = \"Loki\", Age = \"1y2m\" |}");
         var results = await engine.ExecuteToListAsync("echo $kitty | get { Name, Age }");
 
         var record = Assert.IsAssignableFrom<IDictionary<string, object?>>(Assert.Single(results));
@@ -1296,7 +1296,7 @@ public sealed class EngineTests
             var items = new array(1, 2, 3)
             var tags = new set(one, two, two)
             var meta = new dict(Name, "Toast", Uid, 1000)
-            var mapped = new map({ Name = "Toast", Uid = 2000 })
+            var mapped = new map({| Name = "Toast", Uid = 2000 |})
             var hash = new hashtable(Name, "Toast", Uid, 3000)
             var table = new table(Name, "Toast", Uid, 1000)
             var pair = new tuple(alpha, 42)
@@ -1428,7 +1428,7 @@ public sealed class EngineTests
     {
         var engine = new ToshEngine();
 
-        await engine.ExecuteToListAsync("var person\nvar kitty = { Name = \"Loki\" }\n$person.Pets.Add($kitty)");
+        await engine.ExecuteToListAsync("var person\nvar kitty = {| Name = \"Loki\" |}\n$person.Pets.Add($kitty)");
         var countResults = await engine.ExecuteToListAsync("echo $person.Pets.Count");
         var nameResults = await engine.ExecuteToListAsync("echo $person.Pets | flatten | get Name");
 
@@ -1462,7 +1462,7 @@ public sealed class EngineTests
     {
         var engine = new ToshEngine();
 
-        await engine.ExecuteToListAsync("var person = { Name = \"toast\" }");
+        await engine.ExecuteToListAsync("var person = {| Name = \"toast\" |}");
         var exception = await Assert.ThrowsAsync<ToshDiagnosticException>(() => engine.ExecuteToListAsync("person.Name"));
         var diagnostic = Assert.Single(exception.Diagnostics);
 
@@ -1960,8 +1960,8 @@ public sealed class EngineTests
         var engine = new ToshEngine();
 
         var moduloResults = await engine.ExecuteToListAsync("echo (10 % 3)");
-        var inResults = await engine.ExecuteToListAsync("echo (komrad in { root, komrad })");
-        var notInResults = await engine.ExecuteToListAsync("echo (komrad not in { root, toast })");
+        var inResults = await engine.ExecuteToListAsync("echo (komrad in [root, komrad])");
+        var notInResults = await engine.ExecuteToListAsync("echo (komrad not in [root, toast])");
         var regexResults = await engine.ExecuteToListAsync("echo (README.md =~ \"(?i)\\\\.md$\")");
         var notRegexResults = await engine.ExecuteToListAsync("echo (README.txt !~ \"(?i)\\\\.md$\")");
         var compiledRegexResults = await engine.ExecuteToListAsync("echo (README.md =~ (new regex(\"\\\\.md$\", System.Text.RegularExpressions.RegexOptions.IgnoreCase)))");
@@ -2912,7 +2912,7 @@ public sealed class EngineTests
         var engine = new ToshEngine(runtime);
 
         var results = await engine.ExecuteToListAsync(
-            "ls -la | where { (_.Size >= 1kb) and ((_.Name == { alpha.txt, beta.txt }) or (_.Modified > ((date now) - 2d))) and not (_.Type == dir) } | get Name");
+            "ls -la | where { (_.Size >= 1kb) and ((_.Name == [alpha.txt, beta.txt]) or (_.Modified > ((date now) - 2d))) and not (_.Type == dir) } | get Name");
 
         Assert.Equal(
             new[] { "alpha.txt", "gamma.log" },
@@ -3921,7 +3921,7 @@ $output");
 
         var results = await engine.ExecuteToListAsync(
             """
-            var items = [{ Name = "Bread" }, { Name = "Coffee" }]
+            var items = [{| Name = "Bread" |}, {| Name = "Coffee" |}]
             $items | flatten | get Name
             """);
 
@@ -4538,7 +4538,7 @@ $output");
     {
         var engine = new ToshEngine(ToshRuntime.CreateDefault());
 
-        var results = await engine.ExecuteToListAsync("var obj = { Name = \"toast\" }\nhas-prop $obj Name");
+        var results = await engine.ExecuteToListAsync("var obj = {| Name = \"toast\" |}\nhas-prop $obj Name");
 
         Assert.Equal(true, Assert.Single(results));
     }
@@ -4558,7 +4558,7 @@ $output");
     {
         var engine = new ToshEngine(ToshRuntime.CreateDefault());
 
-        var results = await engine.ExecuteToListAsync("var obj = { Name = \"toast\", Size = 2 }\nget-props $obj");
+        var results = await engine.ExecuteToListAsync("var obj = {| Name = \"toast\", Size = 2 |}\nget-props $obj");
 
         Assert.Equal(["Name", "Size"], results.Select(r => r?.ToString()!).ToArray());
     }
@@ -4631,7 +4631,7 @@ $output");
         var engine = new ToshEngine(ToshRuntime.CreateDefault());
 
         var results = await engine.ExecuteToListAsync(
-            "var obj = { Name = \"toast\", Size = 2 }\nvar prop = \"Name\"\nget-prop $obj $prop");
+            "var obj = {| Name = \"toast\", Size = 2 |}\nvar prop = \"Name\"\nget-prop $obj $prop");
 
         Assert.Equal("toast", Assert.Single(results));
     }
@@ -4652,7 +4652,7 @@ $output");
         var engine = new ToshEngine(ToshRuntime.CreateDefault());
 
         var results = await engine.ExecuteToListAsync(
-            "var obj = { Name = \"toast\" }\nset-prop $obj Size 42\nget-prop $obj Size");
+            "var obj = {| Name = \"toast\" |}\nset-prop $obj Size 42\nget-prop $obj Size");
 
         Assert.Equal(2, results.Count);
         Assert.Equal("42", results[1]?.ToString());
@@ -4664,7 +4664,7 @@ $output");
         var engine = new ToshEngine(ToshRuntime.CreateDefault());
 
         var results = await engine.ExecuteToListAsync(
-            "var obj = { Name = \"toast\" }\nset-prop $obj Name \"bread\" | get-prop Name");
+            "var obj = {| Name = \"toast\" |}\nset-prop $obj Name \"bread\" | get-prop Name");
 
         Assert.Equal("bread", Assert.Single(results));
     }
@@ -4675,7 +4675,7 @@ $output");
         var engine = new ToshEngine(ToshRuntime.CreateDefault());
 
         var results = await engine.ExecuteToListAsync(
-            "var obj = { Name = \"toast\", Size = 2 }\ndel-prop $obj Size | has-prop Size");
+            "var obj = {| Name = \"toast\", Size = 2 |}\ndel-prop $obj Size | has-prop Size");
 
         Assert.Equal(false, Assert.Single(results));
     }
@@ -4706,7 +4706,7 @@ $output");
         var engine = new ToshEngine(ToshRuntime.CreateDefault());
 
         var results = await engine.ExecuteToListAsync(
-            "var obj = { Name = \"toast\" }\nvar copy = (clone $obj)\nvar ignored = (set-prop $copy Name \"bread\")\nget-prop $obj Name");
+            "var obj = {| Name = \"toast\" |}\nvar copy = (clone $obj)\nvar ignored = (set-prop $copy Name \"bread\")\nget-prop $obj Name");
 
         Assert.Equal("toast", Assert.Single(results));
     }
@@ -4717,7 +4717,7 @@ $output");
         var engine = new ToshEngine(ToshRuntime.CreateDefault());
 
         var results = await engine.ExecuteToListAsync(
-            "var obj = { A = 1, B = 2 }\n$obj | clone | get-props");
+            "var obj = {| A = 1, B = 2 |}\n$obj | clone | get-props");
 
         Assert.Equal(["A", "B"], results.Select(r => r?.ToString()!).ToArray());
     }
@@ -4761,7 +4761,7 @@ $output");
 
         // Reproduces the inventory.tosh pattern: set-prop $item Tags ($existing + "," + $tag)
         var results = await engine.ExecuteToListAsync(
-            "var obj = { Name = \"test\" }\n" +
+            "var obj = {| Name = \"test\" |}\n" +
             "var a = \"hello\"\n" +
             "var b = \"world\"\n" +
             "var ignored = (set-prop $obj Name ($a + \",\" + $b))\n" +
@@ -5863,7 +5863,7 @@ $output");
         runtime.CurrentDirectory = tempDirectory.Path;
         var engine = new ToshEngine(runtime);
 
-        await engine.ExecuteToListAsync("$tosh.Config.Shell.Dirs = { myalias = \"" + targetPath.Replace("\\", "\\\\") + "\" }");
+        await engine.ExecuteToListAsync("$tosh.Config.Shell.Dirs = {| myalias = \"" + targetPath.Replace("\\", "\\\\") + "\" |}");
         await engine.ExecuteToListAsync("cd ~myalias");
 
         Assert.Equal(targetPath, runtime.CurrentDirectory);

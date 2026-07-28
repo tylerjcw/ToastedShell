@@ -47,7 +47,7 @@ public sealed class ObjectFormatterTests
         var nested = await engine.ExecuteToListAsync(
             $$"""
             var v = {{literal}}
-            var r = { kind = (type-of $v) }
+            var r = {| kind = (type-of $v) |}
             echo $"{$r}"
             """);
         Assert.Equal($"{{ kind = {expectedName} }}", Assert.Single(nested)?.ToString());

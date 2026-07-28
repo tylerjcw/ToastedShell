@@ -49,7 +49,7 @@ public sealed class BoundUnitEmitterTests : IClassFixture<ToshRuntimeFixture>
     [InlineData("echo ([1, 2, 3] contains 2)", "true")]
     [InlineData("echo ([10] contains 1)", "false")]
     [InlineData("echo ([\"alphabet\"] contains \"pha\")", "false")]
-    [InlineData("var d = { \"name\" => \"Alice\" }\necho ($d contains \"name\")\necho ($d contains \"Alice\")", "true\nfalse")]
+    [InlineData("var d = {% \"name\" => \"Alice\" %}\necho ($d contains \"name\")\necho ($d contains \"Alice\")", "true\nfalse")]
     [InlineData("echo ((1..3) contains 2)", "true")]
     [InlineData("echo (\"Alphabet\" contains \"PHA\")", "false")]
     [InlineData("echo (\"hello\" starts-with \"he\")", "true")]
@@ -152,24 +152,21 @@ public sealed class BoundUnitEmitterTests : IClassFixture<ToshRuntimeFixture>
     [InlineData("class Box { prop Value = null }\nvar b = new Box()\n$b.Value ??= 9\necho $b.Value", "9")]
     [InlineData("class Box { prop Value = 7 }\nvar b = new Box()\n$b.Value ??= (1 / 0)\necho $b.Value", "7")]
     // index assignment
-    [InlineData("var d = { \"x\" => null }\n$d[\"x\"] ??= 9\necho $d[\"x\"]", "9")]
-    [InlineData("var d = { \"x\" => 7 }\n$d[\"x\"] ??= (1 / 0)\necho $d[\"x\"]", "7")]
+    [InlineData("var d = {% \"x\" => null %}\n$d[\"x\"] ??= 9\necho $d[\"x\"]", "9")]
+    [InlineData("var d = {% \"x\" => 7 %}\n$d[\"x\"] ??= (1 / 0)\necho $d[\"x\"]", "7")]
     // destructuring declarations
     [InlineData("var [a, b, c] = [1, 2, 3]\necho $a\necho $b\necho $c", "1\n2\n3")]
-    [InlineData("var rec = { \"Name\" => \"Alice\", \"Age\" => 30 }\nvar { Name, Age } = $rec\necho $Name\necho $Age", "Alice\n30")]
+    [InlineData("var rec = {% \"Name\" => \"Alice\", \"Age\" => 30 %}\nvar { Name, Age } = $rec\necho $Name\necho $Age", "Alice\n30")]
     // list literals
     [InlineData("var xs = [1, 2, 3]\necho $xs.Count", "3")]
     [InlineData("var xs = [\"a\", \"b\", \"c\"]\necho $xs.Count", "3")]
     [InlineData("var xs = [1, 2, 3]\necho $xs[0]", "1")]
     [InlineData("var xs = [10, 20, 30]\necho $xs[2]", "30")]
     [InlineData("echo [1, 2, 3].Count", "3")]
-    // record / dict literals — record `{ name: ... }` syntax has a
-    // pre-existing parser issue (tosh.parser.missing_list_separator)
-    // so the emitter-side tests use the dict `=>` form which parses
-    // cleanly.
-    [InlineData("var m = { \"name\" => \"Alice\", \"age\" => 30 }\necho $m[\"name\"]", "Alice")]
-    [InlineData("var m = { \"x\" => 1, \"y\" => 2 }\necho $m[\"y\"]", "2")]
-    [InlineData("var m = { \"k\" => 42 }\necho $m.Count", "1")]
+    // dict literals use their unambiguous paired delimiters.
+    [InlineData("var m = {% \"name\" => \"Alice\", \"age\" => 30 %}\necho $m[\"name\"]", "Alice")]
+    [InlineData("var m = {% \"x\" => 1, \"y\" => 2 %}\necho $m[\"y\"]", "2")]
+    [InlineData("var m = {% \"k\" => 42 %}\necho $m.Count", "1")]
     // set literals ({: ... :})
     [InlineData("var s = {: 1, 2, 2 :}\necho ($s.Count)", "2")]
     // tuple literals
@@ -437,14 +434,14 @@ public sealed class BoundUnitEmitterTests : IClassFixture<ToshRuntimeFixture>
     [Fact]
     public void Record_literal_with_colon_separator()
     {
-        var output = CompileAndRun("var p = { name: \"Alice\", age: 30 }\necho $p.name\necho $p.age").Trim();
+        var output = CompileAndRun("var p = {| name: \"Alice\", age: 30 |}\necho $p.name\necho $p.age").Trim();
         Assert.Equal("Alice\n30", output.Replace("\r\n", "\n"));
     }
 
     [Fact]
     public void Record_literal_with_equals_separator_still_works()
     {
-        var output = CompileAndRun("var p = { name = \"Alice\", age = 30 }\necho $p.name\necho $p.age").Trim();
+        var output = CompileAndRun("var p = {| name = \"Alice\", age = 30 |}\necho $p.name\necho $p.age").Trim();
         Assert.Equal("Alice\n30", output.Replace("\r\n", "\n"));
     }
 
@@ -1788,8 +1785,8 @@ public sealed class BoundUnitEmitterTests : IClassFixture<ToshRuntimeFixture>
     public void Compiled_record_spread_merges_source_record()
     {
         var output = CompileAndRun(
-            "var base = { name: \"alice\", age: 30 }\n"
-            + "var ext = { ...$base, age: 31, role: \"admin\" }\n"
+            "var base = {| name: \"alice\", age: 30 |}\n"
+            + "var ext = {| ...$base, age: 31, role: \"admin\" |}\n"
             + "echo $ext.name $ext.age $ext.role");
         Assert.Equal("alice 31 admin", output.Trim());
     }
@@ -1799,7 +1796,7 @@ public sealed class BoundUnitEmitterTests : IClassFixture<ToshRuntimeFixture>
     {
         var output = CompileAndRun(
             "var key = \"dynamic\"\n"
-            + "var rec = { ($key): 42 }\n"
+            + "var rec = {| ($key): 42 |}\n"
             + "echo $rec.dynamic");
         Assert.Equal("42", output.Trim());
     }

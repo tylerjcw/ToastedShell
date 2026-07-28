@@ -60,7 +60,7 @@
 				"extensions": [
 					".tosh"
 				],
-				"configuration": "./language-configuration-tome.json",
+				"configuration": "./language-configuration.json",
 				"icon": {
 					"light": "./icons/tosh-light.svg",
 					"dark": "./icons/tosh-dark.svg"
@@ -75,7 +75,7 @@
 				"extensions": [
 					".tome"
 				],
-				"configuration": "./language-configuration.json",
+				"configuration": "./language-configuration-tome.json",
 				"icon": {
 					"light": "./icons/tosh-light.svg",
 					"dark": "./icons/tosh-dark.svg"

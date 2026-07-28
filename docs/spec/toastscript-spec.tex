@@ -741,18 +741,24 @@ Total: {$items | sum Price}
 
 \section{Collection Literals}
 
+Record, dictionary, and set literals use the paired delimiters
+\code{\{|~...~|\}}, \code{\{\%~...~\%\}}, and \code{\{:~...~:\}},
+respectively.  The two characters in each opening or closing delimiter must
+be adjacent.  Their empty spellings are \code{\{||\}}, \code{\{\%\%\}}, and
+\code{\{::\}}.  Plain \code{\{~...~\}} remains block syntax.
+
 \begin{lstlisting}
 # Lists
 [1, 2, 3]
 ["a", "b", "c"]
 
-# Records / dictionaries
-{ name = "Alice", age = 30 }
-{ ($key) = "dynamic" }          # computed property name
-{ ...$base, enabled = true }    # record spread
+# Records
+{| name = "Alice", age = 30 |}
+{| ($key) = "dynamic" |}          # computed property name
+{| ...$base, enabled = true |}    # record spread
 
 # Dictionaries with arbitrary keys
-{ "left" => 1, "right" => 2 }
+{% "left" => 1, "right" => 2 %}
 
 # Sets
 {: 1, 2, 2, 3 :}
@@ -952,7 +958,7 @@ The interface for structured records---produced by commands like \code{ls},
 \code{ps}, \code{stat}, and record literals:
 
 \begin{lstlisting}
-{ name = "Alice", age = 30 }   # Anonymous record
+{| name = "Alice", age = 30 |} # Anonymous record
 ls | first | get-props          # List property names
 \end{lstlisting}
 
@@ -1534,7 +1540,7 @@ echo (5 not in [1, 2, 3])           # true
 echo (5 is not in [1, 2, 3])        # equivalent
 echo ("hello" contains "ell")        # true
 echo ([1, 2, 3] contains 2)          # true
-echo ({"name" => "Ada"} contains "name") # true: keys
+echo ({% "name" => "Ada" %} contains "name") # true: keys
 echo ((1..5) contains 3)             # true
 echo ("hello" starts-with "hel")     # true
 echo ("hello" ends-with "llo")       # true
@@ -1668,7 +1674,7 @@ Operators are listed from highest to lowest precedence:
 var name = "Alice"              # Inferred type
 var age: int = 30               # Explicit type annotation
 var items = [1, 2, 3]           # List
-var config = { debug = true }   # Record
+var config = {| debug = true |} # Record
 \end{lstlisting}
 
 \begin{notebox}
@@ -1702,7 +1708,7 @@ than through a variable lookup.
 \subsection{Record Destructuring}
 
 \begin{lstlisting}
-var person = { name = "Alice", age = 30, city = "Portland" }
+var person = {| name = "Alice", age = 30, city = "Portland" |}
 
 # Destructure specific fields
 var { name, age } = $person
@@ -1746,8 +1752,8 @@ var b = [0, ...$a, 4]    # [0, 1, 2, 3, 4]
 \subsection{Record Spread}
 
 \begin{lstlisting}
-var base = { name = "Alice", role = "user" }
-var admin = { ...$base, role = "admin", level = 5 }
+var base = {| name = "Alice", role = "user" |}
+var admin = {| ...$base, role = "admin", level = 5 |}
 # { name = "Alice", role = "admin", level = 5 }
 \end{lstlisting}
 
@@ -1763,12 +1769,12 @@ some-function ...$args     # Equivalent to some-function 1 2 3
 
 \begin{lstlisting}
 var key = "name"
-var record = { ($key) = "Alice", age = 30 }
+var record = {| ($key) = "Alice", age = 30 |}
 echo ($record.name)        # Alice
 
 # Dynamic key from expression
 var dynkey = "item-count"
-var record2 = { ($dynkey) = 42 }
+var record2 = {| ($dynkey) = 42 |}
 echo ($record2.item-count) # 42
 \end{lstlisting}
 
@@ -3345,11 +3351,11 @@ local event ScopedNotification { Text = "" }
 \textbf{Raising events:}
 
 \begin{lstlisting}
-raise $BuildCompleted ({
+raise $BuildCompleted ({|
     Project  = "MyApp",
     Duration = (timespan 5s),
     Success  = true
-})
+|})
 \end{lstlisting}
 
 \textbf{Subscribing (in any visible scope):}
@@ -3446,7 +3452,7 @@ The opening and closing delimiters determine the output type:
 \midrule
 \code{[body <| clause]} & list (array) & eager \\
 \code{\{: body <| clause :\}} & set (\code{HashSet}) & eager \\
-\code{\{ key => value <| clause \}} & dict & eager \\
+\code{\{\% key => value <| clause \%\}} & dict & eager \\
 \code{(body <| clause)} & \code{LazySequence} & lazy / on demand \\
 \bottomrule
 \end{tabular}
@@ -3459,7 +3465,7 @@ The opening and closing delimiters determine the output type:
 {: $x * $x <| for x in 1..5 :}
 # {1, 4, 9, 16, 25}  -- duplicates removed automatically
 
-{ $x => $x * $x <| for x in 1..5 }
+{% $x => $x * $x <| for x in 1..5 %}
 # {1: 1, 2: 4, 3: 9, 4: 16, 5: 25}
 
 ($x * $x <| for x in 1..) | first 5    # lazy -- safe with infinite source
@@ -3540,11 +3546,12 @@ bind each element to its own variable:
 # [6, 15]
 
 # Pairs produced by 'entries' work too:
-{ $k => $v * 2 <| for (k, v) in ($myDict | entries) }
+{% $k => $v * 2 <| for (k, v) in ($myDict | entries) %}
 \end{lstlisting}
 
-All three forms compose with \code{where}/\code{let} modifiers and work in
-every collection form (\code{[...]}, \code{\{:~:\}}, \code{\{~\}}, \code{(~)}).
+All four forms compose with \code{where}/\code{let} modifiers and work in
+every collection form
+(\code{[...]}, \code{\{:~:\}}, \code{\{\%~\%\}}, \code{(~)}).
 
 \section{Live / Streaming Output}
 \label{sec:streaming-output}
@@ -3864,10 +3871,10 @@ $tosh.Config.Theme.Tables.BoxStyle = "Double"
 User functions, aliases, and event handlers:
 
 \begin{lstlisting}[title={Example profile.tosh}]
-$tosh.Config.Shell.Dirs = {
+$tosh.Config.Shell.Dirs = {|
     projects = "/home/user/projects",
     downloads = "/home/user/Downloads",
-}
+|}
 
 func cls => clear
 func ll => ls -la
@@ -4682,8 +4689,8 @@ discoverable.
 \end{tabular}
 
 \begin{lstlisting}
-var base = { name: "alice", age: 30 }
-var ext  = { ...$base, age: 31, role: "admin" }
+var base = {| name: "alice", age: 30 |}
+var ext  = {| ...$base, age: 31, role: "admin" |}
 echo $ext.name $ext.age $ext.role     # alice 31 admin
 \end{lstlisting}
 
@@ -5111,7 +5118,7 @@ check-services nginx postgresql redis
 var data = read-file api-response.json | from-json
 $data.items
     | where _.status == "active"
-    | map { { name = _.name, created = _.created_at } }
+    | map { {| name = _.name, created = _.created_at |} }
     | sort created
     | to-json --compact
 \end{lstlisting}
@@ -5138,11 +5145,11 @@ report "File Sizes" ($sizes | map { _.Bytes })
 \begin{lstlisting}
 # Group and summarize
 ls | group-by Extension | each {
-    echo {
+    echo {|
         Extension = _.Key,
         Count = (_.Values | count),
         TotalSize = (_.Values | sum Size)
-    }
+    |}
 } | sort TotalSize | reverse
 \end{lstlisting}
 
@@ -5161,7 +5168,7 @@ large-files | by-size | top 10
 \subsection{Memoization with Records}
 
 \begin{lstlisting}
-var cache = {}
+var cache = {||}
 func expensive-calc(key) {
     if (not ($cache | has-prop $key)) {
         set-prop $cache $key (some-slow-operation $key)

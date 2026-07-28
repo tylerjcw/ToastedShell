@@ -323,8 +323,8 @@ public sealed record BoundParameter(
     : BoundNode(Span);
 
 /// <summary>
-/// An anonymous function: <c>{|x, y| $x + $y}</c> or its
-/// <c>fn(x) => …</c> equivalent. Parameters are bound inside a fresh
+/// An anonymous function such as <c>func(x, y) => $x + $y</c>.
+/// Parameters are bound inside a fresh
 /// scope; <see cref="Captures"/> records non-parameter, non-local
 /// names that the body references.
 /// </summary>
@@ -907,7 +907,7 @@ public sealed record BoundComputedRecordField(BoundExpression NameExpression, Bo
 public sealed record BoundRecordSpreadEntry(BoundExpression Value, TextSpan Span)
     : BoundRecordEntry(Span);
 
-/// <summary><c>{ name: "x", age: 1, ...$rest }</c>.</summary>
+/// <summary><c>{| name: "x", age: 1, ...$rest |}</c>.</summary>
 public sealed record BoundRecordLiteral(
     IReadOnlyList<BoundRecordEntry> Fields,
     TextSpan Span,
@@ -920,7 +920,7 @@ public sealed record BoundDictEntry(
     TextSpan Span)
     : BoundNode(Span);
 
-/// <summary><c>{ "k1" => v1, "k2" => v2 }</c>.</summary>
+/// <summary><c>{% "k1" => v1, "k2" => v2 %}</c>.</summary>
 public sealed record BoundDictLiteral(
     IReadOnlyList<BoundDictEntry> Entries,
     TextSpan Span,

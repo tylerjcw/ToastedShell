@@ -48,10 +48,10 @@ var triple = ("alpha", 1, true)
 echo $"Triple: {$triple.Item1}, {$triple.Item2}, {$triple.Item3}"
 
 # --- Dict / record literals ------------------------------------------------
-# { Key = Value, ... } creates an expando record (dict).
+# {| Key = Value, ... |} creates an expando record.
 
 echo "=== Dicts (Records) ==="
-var person = { Name = "Komrad", Uid = 1000, Shell = "tosh" }
+var person = {| Name = "Komrad", Uid = 1000, Shell = "tosh" |}
 echo $"Name: {$person.Name}"
 echo $"Type: {type-of $person | get Name}"
 echo $person | get { Name, Uid, Shell }
@@ -65,10 +65,10 @@ echo $"Bob's score: {$scores.Bob}"
 echo $"Type: {type-of $scores | get Name}"
 
 # --- Maps (from record) ---------------------------------------------------
-# new map({...}) creates a dict from a record literal.
+# new map({|...|}) creates a dict from a record literal.
 
 echo "=== Maps ==="
-var config = new map({ Theme = "dark", TabSize = 4 })
+var config = new map({| Theme = "dark", TabSize = 4 |})
 echo $"Theme: {$config.Theme}"
 echo $"Type: {type-of $config | get Name}"
 

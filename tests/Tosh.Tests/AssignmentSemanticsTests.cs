@@ -227,7 +227,7 @@ public sealed class AssignmentSemanticsTests
 
         var results = await engine.ExecuteToListAsync(
             """
-            var values = { "key" => null }
+            var values = {% "key" => null %}
             var calls = 0
             func make_value() {
                 $calls += 1
@@ -303,7 +303,7 @@ public sealed class AssignmentSemanticsTests
             $holder.Item = new Addend(2)
             $holder.Item += new Addend(3)
 
-            var values = { "item" => new Addend(4) }
+            var values = {% "item" => new Addend(4) %}
             $values["item"] += new Addend(5)
 
             echo $holder.Item
@@ -405,7 +405,7 @@ public sealed class AssignmentSemanticsTests
                 echo $error
             }
 
-            var values = { "item" => new Exploder() }
+            var values = {% "item" => new Exploder() %}
             try {
                 $values["item"] += 1
             } catch (error) {

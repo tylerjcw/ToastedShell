@@ -44,7 +44,7 @@ public sealed class ContainmentSemanticsTests
 
         var values = await engine.ExecuteToListAsync(
             """
-            var person = { "name" => "Alice", "age" => 30 }
+            var person = {% "name" => "Alice", "age" => 30 %}
             echo ($person contains "name")
             echo ($person contains "Alice")
             echo ("name" in $person)

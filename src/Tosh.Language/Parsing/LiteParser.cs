@@ -32,14 +32,19 @@ public enum LiteBoundaryKind
 }
 
 /// <summary>
-/// A position where a statement may begin. Candidates inside braces are
-/// exactly that — candidates — because <c>{</c> is structurally
-/// ambiguous: a newline separates statements inside a block body but must
-/// not split a multi-line record literal, and the two are
-/// indistinguishable without semantics. The consumer, which knows whether
-/// it is reading a block or a literal, decides which candidates are real.
+/// A position where a statement may begin. <see cref="BraceDepth"/> counts
+/// enclosing ordinary <c>{ ... }</c> pairs.
+/// <see cref="OwnerOpenTokenIndex"/> identifies the innermost plain brace
+/// that owns the candidate, or is <see langword="null"/> at top level.
+/// LiteParser deliberately does not decide whether that brace is a block or
+/// a specialized entry list; a parser consumer promotes candidates only
+/// after it has established the opener's grammar role.
 /// </summary>
-public sealed record LiteBoundary(int TokenIndex, LiteBoundaryKind Kind, int BraceDepth);
+public sealed record LiteBoundary(
+    int TokenIndex,
+    LiteBoundaryKind Kind,
+    int BraceDepth,
+    int? OwnerOpenTokenIndex = null);
 
 /// <summary>
 /// A structural pre-pass over the token stream (step 2 of the parser
@@ -54,10 +59,10 @@ public sealed record LiteBoundary(int TokenIndex, LiteBoundaryKind Kind, int Bra
 /// with the whole token stream in hand, is what lets those heuristics be
 /// retired.
 ///
-/// Bracket depth is tracked so a <c>|</c> inside a subexpression, list,
-/// or block belongs to that nested construct rather than splitting the
-/// enclosing statement. Nested content is left intact; recursion into it
-/// is the parser's job.
+/// Delimiters are paired so a <c>|</c> inside a subexpression, list, block,
+/// or paired collection literal belongs to that nested construct rather
+/// than splitting the enclosing statement. Nested content is left intact;
+/// recursion into it is the parser's job.
 /// </summary>
 public static class LiteParser
 {
@@ -69,7 +74,7 @@ public static class LiteParser
         var statements = new List<LiteStatement>();
         var stages = new List<LiteStage>();
 
-        var depth = 0;
+        var delimiters = new Stack<SyntaxTokenKind>();
         var statementStart = -1;
         var stageStart = -1;
 
@@ -82,20 +87,11 @@ public static class LiteParser
                 break;
             }
 
-            if (IsOpeningBracket(token.Kind))
-            {
-                depth++;
-            }
-            else if (IsClosingBracket(token.Kind))
-            {
-                if (depth > 0)
-                {
-                    depth--;
-                }
-            }
-
-            // A separator only divides structure at the outermost level.
-            if (depth == 0)
+            // Test the boundary before pushing the current token. An opener
+            // can itself begin a new statement after a line break (`echo x`
+            // followed by `[1, 2]`, `(...)`, or a collection literal).
+            // Mutating depth first silently joined those statements.
+            if (delimiters.Count == 0)
             {
                 if (token.Kind == SyntaxTokenKind.Semicolon)
                 {
@@ -122,6 +118,15 @@ public static class LiteParser
                     CloseStage(stages, ref stageStart, index, tokens);
                     CloseStatement(statements, stages, ref statementStart, index, tokens);
                 }
+            }
+
+            if (TryGetClosingDelimiter(token.Kind, out var closingKind))
+            {
+                delimiters.Push(closingKind);
+            }
+            else if (IsClosingDelimiter(token.Kind))
+            {
+                TryCloseDelimiter(delimiters, token.Kind);
             }
 
             if (statementStart < 0)
@@ -208,114 +213,26 @@ public static class LiteParser
         return sourceText.AsSpan(start, end - start).IndexOfAny('\n', '\r') >= 0;
     }
 
-    private static bool IsOpeningBracket(SyntaxTokenKind kind) => kind
-        is SyntaxTokenKind.OpenParen
-        or SyntaxTokenKind.OpenBrace
-        or SyntaxTokenKind.OpenBracket
-        or SyntaxTokenKind.DollarOpenParen
-        or SyntaxTokenKind.LessThanOpenParen;
-
-    /// <summary>
-    /// What a <c>{</c> opens.
-    /// </summary>
-    public enum BraceRole
+    private enum BoundaryFrameRole
     {
-        /// <summary>A block: line breaks inside separate statements.</summary>
-        Block,
-
-        /// <summary>A record, dict, set, or match-arm list: line breaks
-        /// separate entries or arms, never statements.</summary>
+        Grouping,
         Literal,
+        PlainBrace,
     }
 
-    /// <summary>
-    /// Decides what the <c>{</c> at <paramref name="openBraceIndex"/>
-    /// opens, using bounded lookahead (TS-P2-25).
-    ///
-    /// This is decidable rather than a guess. A record literal begins
-    /// <c>{ name = </c>, and no block can start that way: a bare
-    /// <c>name = value</c> is not a legal statement, because assignment
-    /// requires <c>$name</c>. `{ echo = 5 }` is a record for the same
-    /// reason — `echo = 5` is rejected as a statement.
-    ///
-    /// A top-level <c>=&gt;</c> marks a dict literal or a list of match
-    /// arms. The two are not distinguished, and need not be: neither
-    /// separates *statements* by line break, which is the only question
-    /// the structural pass asks.
-    /// </summary>
-    public static BraceRole ClassifyBrace(IReadOnlyList<SyntaxToken> tokens, int openBraceIndex)
-    {
-        ArgumentNullException.ThrowIfNull(tokens);
-
-        if (openBraceIndex < 0 || openBraceIndex >= tokens.Count)
-        {
-            return BraceRole.Block;
-        }
-
-        var first = openBraceIndex + 1;
-        if (first >= tokens.Count)
-        {
-            return BraceRole.Block;
-        }
-
-        // `{ name = ` or `{ "name" = ` — a record key. `==` is a
-        // comparison and does not count.
-        if (tokens[first].Kind is SyntaxTokenKind.Bareword or SyntaxTokenKind.String &&
-            first + 1 < tokens.Count &&
-            IsSingleEquals(tokens[first + 1]))
-        {
-            return BraceRole.Literal;
-        }
-
-        // A `=>` at this brace's own level: dict entries or match arms.
-        var depth = 0;
-        for (var index = first; index < tokens.Count; index++)
-        {
-            var kind = tokens[index].Kind;
-
-            if (IsOpeningBracket(kind))
-            {
-                depth++;
-                continue;
-            }
-
-            if (IsClosingBracket(kind))
-            {
-                if (depth == 0)
-                {
-                    break;
-                }
-
-                depth--;
-                continue;
-            }
-
-            if (depth == 0 && IsFatArrow(tokens[index]))
-            {
-                return BraceRole.Literal;
-            }
-        }
-
-        return BraceRole.Block;
-    }
-
-    private static bool IsSingleEquals(SyntaxToken token) =>
-        token.Kind == SyntaxTokenKind.Bareword && token.Text == "=";
-
-    private static bool IsFatArrow(SyntaxToken token) =>
-        token.Kind == SyntaxTokenKind.FatArrow;
+    private readonly record struct BoundaryFrame(
+        SyntaxTokenKind ClosingKind,
+        BoundaryFrameRole Role,
+        int OpenTokenIndex);
 
     /// <summary>
-    /// Every position where a statement could begin, at any brace depth.
-    /// Grouping suppression still applies inside parentheses and
-    /// brackets, where a line break continues an expression rather than
-    /// ending a statement.
-    ///
-    /// Brace depth is reported rather than filtered, because a candidate
-    /// inside braces is only a real boundary when those braces delimit a
-    /// block. Deciding that requires knowing whether the <c>{</c> opened
-    /// a block or a record, set, or dict literal, which is a semantic
-    /// question the structural pass cannot answer.
+    /// Every structural boundary candidate, at any ordinary-brace depth.
+    /// Ordered frames let the innermost construct decide whether candidates
+    /// can exist: a plain brace re-enables candidates inside an outer group
+    /// or literal, while a nested group or paired literal suppresses them.
+    /// Plain-brace roles remain parser-owned; use
+    /// <see cref="PromoteBoundariesForBlock"/> only after the parser has
+    /// established that a particular opener begins a block.
     /// </summary>
     public static IReadOnlyList<LiteBoundary> CandidateBoundaries(
         IReadOnlyList<SyntaxToken> tokens,
@@ -325,11 +242,10 @@ public static class LiteParser
         sourceText ??= string.Empty;
 
         var boundaries = new List<LiteBoundary>();
-        var groupingDepth = 0;
         var braceDepth = 0;
-        // What each enclosing brace opened. Line breaks inside a literal
-        // separate entries, not statements, so they yield no candidates.
-        var braceRoles = new Stack<BraceRole>();
+        var frames = new Stack<BoundaryFrame>();
+        var hasPendingPipelineStage = false;
+        int? pendingPipelineOwnerOpenTokenIndex = null;
 
         for (var index = 0; index < tokens.Count; index++)
         {
@@ -339,73 +255,256 @@ public static class LiteParser
                 break;
             }
 
-            switch (token.Kind)
+            // As in Parse, classify a boundary against the frames that
+            // enclose the current token before pushing the token itself.
+            // This matters when an opener begins a statement.
+            var boundariesEnabled = frames.Count == 0 ||
+                                    frames.Peek().Role == BoundaryFrameRole.PlainBrace;
+            var ownerOpenTokenIndex =
+                frames.TryPeek(out var ownerFrame) &&
+                ownerFrame.Role == BoundaryFrameRole.PlainBrace
+                    ? ownerFrame.OpenTokenIndex
+                    : (int?)null;
+            var continuesPipeline =
+                hasPendingPipelineStage &&
+                pendingPipelineOwnerOpenTokenIndex == ownerOpenTokenIndex;
+
+            if (boundariesEnabled &&
+                token.Kind == SyntaxTokenKind.Semicolon &&
+                index + 1 < tokens.Count)
             {
-                case SyntaxTokenKind.OpenParen:
-                case SyntaxTokenKind.OpenBracket:
-                case SyntaxTokenKind.DollarOpenParen:
-                case SyntaxTokenKind.LessThanOpenParen:
-                    groupingDepth++;
-                    continue;
-                case SyntaxTokenKind.CloseParen:
-                case SyntaxTokenKind.CloseBracket:
-                    if (groupingDepth > 0) groupingDepth--;
-                    continue;
-                case SyntaxTokenKind.OpenBrace:
+                AddCandidate(
+                    boundaries,
+                    tokens,
+                    index + 1,
+                    LiteBoundaryKind.Explicit,
+                    braceDepth,
+                    ownerOpenTokenIndex);
+            }
+            else if (boundariesEnabled &&
+                     !continuesPipeline &&
+                     index > 0 &&
+                     HasLineBreakBetween(sourceText, tokens[index - 1].Span.End, token.Span.Start) &&
+                     (ToshParser.IsExpressionStartToken(token.Kind) ||
+                      token.Kind == SyntaxTokenKind.DocComment))
+            {
+                AddCandidate(
+                    boundaries,
+                    tokens,
+                    index,
+                    LiteBoundaryKind.LineBreak,
+                    braceDepth,
+                    ownerOpenTokenIndex);
+            }
+
+            if (boundariesEnabled)
+            {
+                if (token.Kind == SyntaxTokenKind.Pipe)
+                {
+                    // A line break after `|` starts the next stage, not a
+                    // statement. Tie the pending stage to its exact plain-
+                    // brace owner so nested braces retain independent state.
+                    hasPendingPipelineStage = true;
+                    pendingPipelineOwnerOpenTokenIndex = ownerOpenTokenIndex;
+                }
+                else if (continuesPipeline || token.Kind == SyntaxTokenKind.Semicolon)
+                {
+                    hasPendingPipelineStage = false;
+                    pendingPipelineOwnerOpenTokenIndex = null;
+                }
+            }
+
+            if (TryCreateBoundaryFrame(tokens, index, out var frame))
+            {
+                if (token.Kind == SyntaxTokenKind.OpenBrace)
+                {
                     braceDepth++;
-                    // Only a block's contents are statements. A record,
-                    // dict, set, or match-arm list separates entries, not
-                    // statements, so it contributes no candidates
-                    // (TS-P2-25).
-                    var role = ClassifyBrace(tokens, index);
-                    braceRoles.Push(role);
-                    if (groupingDepth == 0 &&
-                        index + 1 < tokens.Count &&
-                        role == BraceRole.Block)
-                    {
-                        AddCandidate(boundaries, tokens, index + 1, LiteBoundaryKind.LineBreak, braceDepth);
-                    }
-                    continue;
-                case SyntaxTokenKind.CloseBrace:
-                    if (braceDepth > 0) braceDepth--;
-                    if (braceRoles.Count > 0) braceRoles.Pop();
-                    continue;
-            }
+                }
 
-            if (groupingDepth > 0)
-            {
+                frames.Push(frame);
+
+                if (frame.Role == BoundaryFrameRole.PlainBrace && index + 1 < tokens.Count)
+                {
+                    AddCandidate(
+                        boundaries,
+                        tokens,
+                        index + 1,
+                        LiteBoundaryKind.LineBreak,
+                        braceDepth,
+                        index);
+                }
+
                 continue;
             }
 
-            if (token.Kind == SyntaxTokenKind.Semicolon && index + 1 < tokens.Count)
+            if (IsClosingDelimiter(token.Kind) &&
+                TryCloseBoundaryFrame(frames, token.Kind, out var poppedPlainBraceCount))
             {
-                AddCandidate(boundaries, tokens, index + 1, LiteBoundaryKind.Explicit, braceDepth);
-                continue;
-            }
-
-            if (braceRoles.Count > 0 && braceRoles.Peek() == BraceRole.Literal)
-            {
-                continue;
-            }
-
-            if (index > 0 &&
-                HasLineBreakBetween(sourceText, tokens[index - 1].Span.End, token.Span.Start) &&
-                (ToshParser.IsExpressionStartToken(token.Kind) ||
-                 token.Kind == SyntaxTokenKind.DocComment))
-            {
-                AddCandidate(boundaries, tokens, index, LiteBoundaryKind.LineBreak, braceDepth);
+                braceDepth = Math.Max(0, braceDepth - poppedPlainBraceCount);
             }
         }
 
         return boundaries;
     }
 
+    private static bool TryCreateBoundaryFrame(
+        IReadOnlyList<SyntaxToken> tokens,
+        int tokenIndex,
+        out BoundaryFrame frame)
+    {
+        var token = tokens[tokenIndex];
+
+        if (!TryGetClosingDelimiter(token.Kind, out var closingKind))
+        {
+            frame = default;
+            return false;
+        }
+
+        var role = token.Kind switch
+        {
+            SyntaxTokenKind.OpenBrace => BoundaryFrameRole.PlainBrace,
+            SyntaxTokenKind.OpenBraceColon or
+            SyntaxTokenKind.OpenBracePipe or
+            SyntaxTokenKind.OpenBracePercent => BoundaryFrameRole.Literal,
+            _ => BoundaryFrameRole.Grouping,
+        };
+
+        frame = new BoundaryFrame(closingKind, role, tokenIndex);
+        return true;
+    }
+
+    /// <summary>
+    /// Promotes only the candidates owned directly by a plain-brace opener
+    /// that the caller has already parsed as a real block. Candidates owned
+    /// by nested braces are intentionally excluded and must be promoted
+    /// independently when their own opener is proven to be a block.
+    /// </summary>
+    public static IReadOnlyList<LiteBoundary> PromoteBoundariesForBlock(
+        IReadOnlyList<LiteBoundary> candidates,
+        int blockOpenTokenIndex)
+    {
+        ArgumentNullException.ThrowIfNull(candidates);
+        ArgumentOutOfRangeException.ThrowIfNegative(blockOpenTokenIndex);
+
+        return candidates
+            .Where(boundary => boundary.OwnerOpenTokenIndex == blockOpenTokenIndex)
+            .ToArray();
+    }
+
+    private static bool TryCloseDelimiter(
+        Stack<SyntaxTokenKind> delimiters,
+        SyntaxTokenKind closingKind)
+    {
+        // Prefer the nearest exact frame anywhere in the stack. A closer
+        // often arrives after an inner malformed group: `([1)` must unwind
+        // the unmatched `[` and close its exact `(`, and `|}` must close an
+        // outer record even when an inner plain block forgot `}`.
+        var hasExactMatch = delimiters.Contains(closingKind);
+
+        // With no exact match, a brace-family closer remains a recovery
+        // closer for the nearest brace-family frame. This preserves the
+        // parser's acceptance of plain `}` after an unterminated paired
+        // literal without letting that malformed frame leak through EOF.
+        if (!hasExactMatch &&
+            (!IsBraceClosingDelimiter(closingKind) ||
+             !delimiters.Any(IsBraceClosingDelimiter)))
+        {
+            return false;
+        }
+
+        while (delimiters.Count > 0)
+        {
+            var expected = delimiters.Pop();
+            if (hasExactMatch
+                    ? expected == closingKind
+                    : IsBraceClosingDelimiter(expected))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool TryCloseBoundaryFrame(
+        Stack<BoundaryFrame> frames,
+        SyntaxTokenKind closingKind,
+        out int poppedPlainBraceCount)
+    {
+        var hasExactMatch = frames.Any(frame => frame.ClosingKind == closingKind);
+
+        if (!hasExactMatch &&
+            (!IsBraceClosingDelimiter(closingKind) ||
+             !frames.Any(frame => IsBraceClosingDelimiter(frame.ClosingKind))))
+        {
+            poppedPlainBraceCount = 0;
+            return false;
+        }
+
+        poppedPlainBraceCount = 0;
+
+        while (frames.Count > 0)
+        {
+            var frame = frames.Pop();
+
+            if (frame.Role == BoundaryFrameRole.PlainBrace)
+            {
+                poppedPlainBraceCount++;
+            }
+
+            if (hasExactMatch
+                    ? frame.ClosingKind == closingKind
+                    : IsBraceClosingDelimiter(frame.ClosingKind))
+            {
+                return true;
+            }
+        }
+
+        poppedPlainBraceCount = 0;
+        return false;
+    }
+
+    private static bool TryGetClosingDelimiter(
+        SyntaxTokenKind openingKind,
+        out SyntaxTokenKind closingKind)
+    {
+        closingKind = openingKind switch
+        {
+            SyntaxTokenKind.OpenParen => SyntaxTokenKind.CloseParen,
+            SyntaxTokenKind.DollarOpenParen => SyntaxTokenKind.CloseParen,
+            SyntaxTokenKind.LessThanOpenParen => SyntaxTokenKind.CloseParen,
+            SyntaxTokenKind.OpenBracket => SyntaxTokenKind.CloseBracket,
+            SyntaxTokenKind.OpenBrace => SyntaxTokenKind.CloseBrace,
+            SyntaxTokenKind.OpenBraceColon => SyntaxTokenKind.ColonCloseBrace,
+            SyntaxTokenKind.OpenBracePipe => SyntaxTokenKind.PipeCloseBrace,
+            SyntaxTokenKind.OpenBracePercent => SyntaxTokenKind.PercentCloseBrace,
+            _ => SyntaxTokenKind.EndOfFile,
+        };
+
+        return closingKind != SyntaxTokenKind.EndOfFile;
+    }
+
+    private static bool IsClosingDelimiter(SyntaxTokenKind kind) => kind
+        is SyntaxTokenKind.CloseParen
+        or SyntaxTokenKind.CloseBrace
+        or SyntaxTokenKind.CloseBracket
+        or SyntaxTokenKind.ColonCloseBrace
+        or SyntaxTokenKind.PipeCloseBrace
+        or SyntaxTokenKind.PercentCloseBrace;
+
+    private static bool IsBraceClosingDelimiter(SyntaxTokenKind kind) => kind
+        is SyntaxTokenKind.CloseBrace
+        or SyntaxTokenKind.ColonCloseBrace
+        or SyntaxTokenKind.PipeCloseBrace
+        or SyntaxTokenKind.PercentCloseBrace;
+
     private static void AddCandidate(
         List<LiteBoundary> boundaries,
         IReadOnlyList<SyntaxToken> tokens,
         int index,
         LiteBoundaryKind kind,
-        int braceDepth)
+        int braceDepth,
+        int? ownerOpenTokenIndex)
     {
         if (index >= tokens.Count)
         {
@@ -414,7 +513,8 @@ public static class LiteParser
 
         var token = tokens[index];
         if (token.Kind == SyntaxTokenKind.EndOfFile ||
-            token.Kind == SyntaxTokenKind.CloseBrace)
+            token.Kind == SyntaxTokenKind.Semicolon ||
+            IsClosingDelimiter(token.Kind))
         {
             return;
         }
@@ -424,11 +524,10 @@ public static class LiteParser
             return;
         }
 
-        boundaries.Add(new LiteBoundary(index, kind, braceDepth));
+        boundaries.Add(new LiteBoundary(
+            index,
+            kind,
+            braceDepth,
+            ownerOpenTokenIndex));
     }
-
-    private static bool IsClosingBracket(SyntaxTokenKind kind) => kind
-        is SyntaxTokenKind.CloseParen
-        or SyntaxTokenKind.CloseBrace
-        or SyntaxTokenKind.CloseBracket;
 }

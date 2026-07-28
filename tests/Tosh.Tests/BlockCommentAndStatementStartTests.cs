@@ -39,6 +39,9 @@ public sealed class BlockCommentAndStatementStartTests
     [InlineData(SyntaxTokenKind.InterpolatedString)]
     [InlineData(SyntaxTokenKind.Bareword)]
     [InlineData(SyntaxTokenKind.OpenBrace)]
+    [InlineData(SyntaxTokenKind.OpenBraceColon)]
+    [InlineData(SyntaxTokenKind.OpenBracePipe)]
+    [InlineData(SyntaxTokenKind.OpenBracePercent)]
     [InlineData(SyntaxTokenKind.OpenParen)]
     [InlineData(SyntaxTokenKind.OpenBracket)]
     [InlineData(SyntaxTokenKind.DollarOpenParen)]
@@ -54,6 +57,9 @@ public sealed class BlockCommentAndStatementStartTests
     [InlineData(SyntaxTokenKind.Semicolon)]
     [InlineData(SyntaxTokenKind.CloseParen)]
     [InlineData(SyntaxTokenKind.CloseBrace)]
+    [InlineData(SyntaxTokenKind.ColonCloseBrace)]
+    [InlineData(SyntaxTokenKind.PipeCloseBrace)]
+    [InlineData(SyntaxTokenKind.PercentCloseBrace)]
     [InlineData(SyntaxTokenKind.EndOfFile)]
     public void Non_expression_kinds_are_rejected(SyntaxTokenKind kind)
     {

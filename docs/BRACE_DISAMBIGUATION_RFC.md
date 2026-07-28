@@ -1,8 +1,56 @@
 # RFC: Brace Disambiguation (`TS-P2-25`)
 
-**Status:** Proposed — needs a decision
+**Status:** Accepted with modification — July 28, 2026
 **Owning item:** `TS-P2-25`, gating the remainder of parser step 2 (`TS-P2-24`)
 **Prepared:** July 27, 2026
+
+## Accepted decision
+
+ToastScript assigns one ordinary expression construct to each brace
+delimiter:
+
+```tosh
+{ echo "block" }                 ## block
+{| name: "Ada", active: true |}  ## record
+{% "name" => "Ada" %}            ## dictionary
+{: "red", "green" :}             ## set
+```
+
+The lexer emits six paired-literal tokens — `{:`, `:}`, `{|`, `|}`, `{%`,
+and `%}` — so the construct is known from its opening token and recovery
+can name the required closing token. Empty values are `{::}`, `{||}`, and
+`{%%}`.
+
+In ordinary expression and command-argument parsing, a plain `{` starts a
+block. Plain braces that belong to a more specific grammar production
+remain plain braces: class and member bodies, switch and match arms,
+destructuring, import lists, projections, property accessors, and the
+other parser-owned structural groups are not collection literals and are
+not changed by this decision.
+
+This accepts Option B's structural principle but modifies its spelling.
+Separate paired delimiters were chosen over the historical `@{ ... }`
+proposal because they:
+
+- distinguish record, dictionary, and set without content lookahead;
+- identify the construct at both boundaries, improving diagnostics and
+  structural recovery; and
+- leave no record-versus-dictionary classifier for `LiteParser` or the
+  recursive-descent parser to keep synchronized.
+
+The old unpaired record/dictionary forms and the generic brace collection
+form are removed rather than retained as compatibility syntax. The
+pre-decision measurements and options below are preserved as the design
+record; references there to `@{ ... }` are historical and superseded by
+this section.
+
+`LiteParser` pairs these delimiters without assigning semantic roles to
+plain braces. Each candidate boundary records the exact plain-brace
+opener that owns it; `PromoteBoundariesForBlock` accepts an opener the
+recursive parser has already proven is a block. This preserves candidates
+inside specialized brace groups without pretending they are statements.
+The fuller typed-region model for parsers, formatters, and language
+services is filed separately as `TS-P3-08`.
 
 `TS-P2-25` is filed as "`{` is structurally ambiguous and this now blocks
 the structural pass." Before choosing a fix, the current behaviour was
@@ -114,7 +162,7 @@ position? This is a language-contract question and is independent of Q1.
 The item conflates them. Q1 has a cheap answer that needs no grammar
 change; Q2 is where the real design choice is.
 
-## 3. Options
+## 3. Historical options
 
 ### Option A — Bounded classification in the structural pass
 
@@ -174,7 +222,7 @@ Formalize the contract, then let the shared classifier implement it.
 Cheapest path that closes the item. Accepts that `{` stays overloaded and
 that §1.4 keeps its silent misparse unless separately diagnosed.
 
-## 4. Recommendation
+## 4. Historical recommendation
 
 **Option B**, on three grounds.
 
@@ -198,7 +246,7 @@ I would not recommend Option A alone. It unblocks step 2 while leaving
 both language-level defects in place, and those are the parts a user
 actually encounters.
 
-## 5. What landing Option B entails
+## 5. Historical Option B landing sketch
 
 Per the item, specification, examples, cheatsheets, and test corpus change
 in the same slice.
@@ -218,7 +266,7 @@ in the same slice.
    pinned to today's brace behaviour move groups in the same commit.
 6. Decision-log entry recording the choice and this RFC.
 
-## 6. Choosing the sigil
+## 6. Historical sigil analysis
 
 `@{` is proposed. The candidates were checked against the lexer rather
 than chosen by taste.

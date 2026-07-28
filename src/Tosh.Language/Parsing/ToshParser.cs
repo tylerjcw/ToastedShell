@@ -27,6 +27,9 @@ public static class ToshParser
             SyntaxTokenKind.InterpolatedString or
             SyntaxTokenKind.Bareword or
             SyntaxTokenKind.OpenBrace or
+            SyntaxTokenKind.OpenBraceColon or
+            SyntaxTokenKind.OpenBracePipe or
+            SyntaxTokenKind.OpenBracePercent or
             SyntaxTokenKind.OpenParen or
             SyntaxTokenKind.OpenBracket or
             SyntaxTokenKind.DollarOpenParen or
@@ -6042,17 +6045,16 @@ public static class ToshParser
                 return arguments;
             }
 
+            if (IsLiteralOpenDelimiter(Current))
+            {
+                arguments.Add(WrapExpressionInBlockArgument(
+                    ParseBraceLiteralArgument(implicitCurrentItem: true)));
+                return arguments;
+            }
+
             if (Current.Kind == SyntaxTokenKind.OpenBrace)
             {
-                if (Peek(1).Kind != SyntaxTokenKind.CloseBrace && LooksLikeRecordLiteral())
-                {
-                    arguments.Add(WrapExpressionInBlockArgument(ParseBraceLiteralArgument(implicitCurrentItem: true)));
-                }
-                else
-                {
-                    arguments.Add(ParseMemberProjectionArgument());
-                }
-
+                arguments.Add(ParseMemberProjectionArgument());
                 return arguments;
             }
 
@@ -6513,6 +6515,9 @@ public static class ToshParser
                 SyntaxTokenKind.OpenParen => true,
                 SyntaxTokenKind.OpenBracket => true,
                 SyntaxTokenKind.OpenBrace => true,
+                SyntaxTokenKind.OpenBraceColon => true,
+                SyntaxTokenKind.OpenBracePipe => true,
+                SyntaxTokenKind.OpenBracePercent => true,
                 SyntaxTokenKind.DollarOpenParen => true,
                 SyntaxTokenKind.LessThanOpenParen => true,
                 SyntaxTokenKind.Ampersand => true,
@@ -6644,23 +6649,15 @@ public static class ToshParser
                 case SyntaxTokenKind.OpenBracket:
                     return ParsePostfixChain(ParseArrayLiteralArgument(implicitCurrentItem), implicitCurrentItem);
 
+                case SyntaxTokenKind.OpenBraceColon:
+                case SyntaxTokenKind.OpenBracePipe:
+                case SyntaxTokenKind.OpenBracePercent:
+                    return ParsePostfixChain(
+                        ParseBraceLiteralArgument(implicitCurrentItem),
+                        implicitCurrentItem);
+
                 case SyntaxTokenKind.OpenBrace:
-                    if (string.Equals(commandName, "where", StringComparison.OrdinalIgnoreCase))
-                    {
-                        return ParsePredicateBlockArgument();
-                    }
-
-                    if (commandName is not null && (LooksLikeSetLiteral() || LooksLikeDictLiteral()))
-                    {
-                        return ParsePostfixChain(ParseBraceLiteralArgument(implicitCurrentItem), implicitCurrentItem);
-                    }
-
-                    if (commandName is not null)
-                    {
-                        return ParseBlockArgument();
-                    }
-
-                    return ParsePostfixChain(ParseBraceLiteralArgument(implicitCurrentItem), implicitCurrentItem);
+                    return ParseBlockArgument();
 
                 case SyntaxTokenKind.Ampersand when Peek(1).Kind == SyntaxTokenKind.Bareword && IsValidCommandName(Peek(1).Text) && Current.Span.End == Peek(1).Span.Start:
                     {
@@ -7362,12 +7359,18 @@ public static class ToshParser
                     case SyntaxTokenKind.OpenParen:
                     case SyntaxTokenKind.OpenBrace:
                     case SyntaxTokenKind.OpenBracket:
+                    case SyntaxTokenKind.OpenBraceColon:
+                    case SyntaxTokenKind.OpenBracePipe:
+                    case SyntaxTokenKind.OpenBracePercent:
                         depth++;
                         break;
 
                     case SyntaxTokenKind.CloseParen:
                     case SyntaxTokenKind.CloseBrace:
                     case SyntaxTokenKind.CloseBracket:
+                    case SyntaxTokenKind.ColonCloseBrace:
+                    case SyntaxTokenKind.PipeCloseBrace:
+                    case SyntaxTokenKind.PercentCloseBrace:
                         if (token.Kind == closeKind && depth == 0) return false;
                         if (depth > 0) depth--;
                         else return false;
@@ -7480,28 +7483,39 @@ public static class ToshParser
             NextToken(); // consume '<|'
             var clause = ParseComprehensionClause();
 
-            // Expect closing ':' before '}'
-            if (Current.Kind == SyntaxTokenKind.Bareword &&
-                string.Equals(Current.Text, ":", StringComparison.Ordinal))
+            if (Current.Kind == SyntaxTokenKind.ColonCloseBrace)
             {
-                NextToken();
+                var closeBrace = NextToken();
+                return new SetComprehensionArgumentSyntax(
+                    body,
+                    clause,
+                    TextSpan.FromBounds(openBrace.Span.Start, closeBrace.Span.End));
             }
 
-            if (Current.Kind != SyntaxTokenKind.CloseBrace)
+            if (TryReportSpacedLiteralCloser(":}", out var spacedCloseSpan))
             {
-                _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh.parser.missing_closing_brace",
-                    Title: "A closing ':}' is required after set comprehension.",
-                    Span: openBrace.Span,
-                    Label: "this set comprehension never closes"));
-                return new SetComprehensionArgumentSyntax(body, clause, openBrace.Span);
+                return new SetComprehensionArgumentSyntax(
+                    body,
+                    clause,
+                    TextSpan.FromBounds(openBrace.Span.Start, spacedCloseSpan.End));
             }
 
-            var closeBrace = NextToken();
-            return new SetComprehensionArgumentSyntax(
-                body,
-                clause,
-                TextSpan.FromBounds(openBrace.Span.Start, closeBrace.Span.End));
+            _diagnostics.Add(new SyntaxDiagnostic(
+                Code: "tosh.parser.missing_set_closing_delimiter",
+                Title: "A closing ':}' is required after set comprehension.",
+                Span: Current.Kind == SyntaxTokenKind.CloseBrace ? Current.Span : openBrace.Span,
+                Label: "this set comprehension never closes"));
+
+            if (Current.Kind == SyntaxTokenKind.CloseBrace)
+            {
+                var recoveryClose = NextToken();
+                return new SetComprehensionArgumentSyntax(
+                    body,
+                    clause,
+                    TextSpan.FromBounds(openBrace.Span.Start, recoveryClose.Span.End));
+            }
+
+            return new SetComprehensionArgumentSyntax(body, clause, openBrace.Span);
         }
 
         private ArgumentSyntax ParseDictComprehension(SyntaxToken openBrace, bool implicitCurrentItem)
@@ -7538,22 +7552,42 @@ public static class ToshParser
             NextToken(); // consume '<|'
             var clause = ParseComprehensionClause();
 
-            if (Current.Kind != SyntaxTokenKind.CloseBrace)
+            if (Current.Kind == SyntaxTokenKind.PercentCloseBrace)
             {
-                _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh.parser.missing_closing_brace",
-                    Title: "A closing '}' is required after dict comprehension.",
-                    Span: openBrace.Span,
-                    Label: "this dict comprehension never closes"));
-                return new DictComprehensionArgumentSyntax(key, value, clause, openBrace.Span);
+                var closeBrace = NextToken();
+                return new DictComprehensionArgumentSyntax(
+                    key,
+                    value,
+                    clause,
+                    TextSpan.FromBounds(openBrace.Span.Start, closeBrace.Span.End));
             }
 
-            var closeBrace = NextToken();
-            return new DictComprehensionArgumentSyntax(
-                key,
-                value,
-                clause,
-                TextSpan.FromBounds(openBrace.Span.Start, closeBrace.Span.End));
+            if (TryReportSpacedLiteralCloser("%}", out var spacedCloseSpan))
+            {
+                return new DictComprehensionArgumentSyntax(
+                    key,
+                    value,
+                    clause,
+                    TextSpan.FromBounds(openBrace.Span.Start, spacedCloseSpan.End));
+            }
+
+            _diagnostics.Add(new SyntaxDiagnostic(
+                Code: "tosh.parser.missing_dict_closing_delimiter",
+                Title: "A closing '%}' is required after dict comprehension.",
+                Span: Current.Kind == SyntaxTokenKind.CloseBrace ? Current.Span : openBrace.Span,
+                Label: "this dict comprehension never closes"));
+
+            if (Current.Kind == SyntaxTokenKind.CloseBrace)
+            {
+                var recoveryClose = NextToken();
+                return new DictComprehensionArgumentSyntax(
+                    key,
+                    value,
+                    clause,
+                    TextSpan.FromBounds(openBrace.Span.Start, recoveryClose.Span.End));
+            }
+
+            return new DictComprehensionArgumentSyntax(key, value, clause, openBrace.Span);
         }
 
         private bool HasTopLevelOperatorBeforeComprehension()
@@ -7569,12 +7603,18 @@ public static class ToshParser
                     case SyntaxTokenKind.OpenParen:
                     case SyntaxTokenKind.OpenBrace:
                     case SyntaxTokenKind.OpenBracket:
+                    case SyntaxTokenKind.OpenBraceColon:
+                    case SyntaxTokenKind.OpenBracePipe:
+                    case SyntaxTokenKind.OpenBracePercent:
                         depth++;
                         break;
 
                     case SyntaxTokenKind.CloseParen:
                     case SyntaxTokenKind.CloseBrace:
                     case SyntaxTokenKind.CloseBracket:
+                    case SyntaxTokenKind.ColonCloseBrace:
+                    case SyntaxTokenKind.PipeCloseBrace:
+                    case SyntaxTokenKind.PercentCloseBrace:
                         if (depth > 0) depth--;
                         else return false;
                         break;
@@ -7616,12 +7656,18 @@ public static class ToshParser
                     case SyntaxTokenKind.OpenParen:
                     case SyntaxTokenKind.OpenBrace:
                     case SyntaxTokenKind.OpenBracket:
+                    case SyntaxTokenKind.OpenBraceColon:
+                    case SyntaxTokenKind.OpenBracePipe:
+                    case SyntaxTokenKind.OpenBracePercent:
                         depth++;
                         break;
 
                     case SyntaxTokenKind.CloseParen:
                     case SyntaxTokenKind.CloseBrace:
                     case SyntaxTokenKind.CloseBracket:
+                    case SyntaxTokenKind.ColonCloseBrace:
+                    case SyntaxTokenKind.PipeCloseBrace:
+                    case SyntaxTokenKind.PercentCloseBrace:
                         if (depth > 0) depth--;
                         else return false;
                         break;
@@ -7741,77 +7787,93 @@ public static class ToshParser
             return new ArrayLiteralArgumentSyntax(items, TextSpan.FromBounds(openBracket.Span.Start, closeBracket.Span.End));
         }
 
+        /// <summary>
+        /// Dispatches on the opening delimiter alone (<c>TS-P2-25</c>). The
+        /// <c>LooksLikeSetLiteral</c>/<c>LooksLikeDictLiteral</c>/<c>LooksLikeRecordLiteral</c>
+        /// trio this replaced inspected up to two tokens past a bare <c>{</c> to
+        /// guess which construct was opening; each literal now says so itself.
+        /// </summary>
         private ArgumentSyntax ParseBraceLiteralArgument(bool implicitCurrentItem = false)
         {
-            if (LooksLikeSetLiteral())
+            return Current.Kind switch
             {
-                return ParseSetLiteralArgument(implicitCurrentItem);
-            }
-
-            if (LooksLikeDictLiteral())
-            {
-                return ParseDictLiteralArgument(implicitCurrentItem);
-            }
-
-            return LooksLikeRecordLiteral()
-                ? ParseRecordLiteralArgument(implicitCurrentItem)
-                : ParseBraceCollectionLiteralArgument(implicitCurrentItem);
+                SyntaxTokenKind.OpenBraceColon => ParseSetLiteralArgument(implicitCurrentItem),
+                SyntaxTokenKind.OpenBracePipe => ParseRecordLiteralArgument(implicitCurrentItem),
+                SyntaxTokenKind.OpenBracePercent => ParseDictLiteralArgument(implicitCurrentItem),
+                _ => ParseUnexpectedBraceLiteralArgument(),
+            };
         }
 
-        private bool LooksLikeSetLiteral()
+        private ArgumentSyntax ParseUnexpectedBraceLiteralArgument()
         {
-            if (Current.Kind != SyntaxTokenKind.OpenBrace)
+            var token = NextToken();
+            _diagnostics.Add(new SyntaxDiagnostic(
+                Code: "tosh.parser.unexpected_token",
+                Title: $"Unexpected token '{token.Text}'.",
+                Span: token.Span,
+                Label: "expected a collection-literal opener: '{:', '{|', or '{%'"));
+            return new BarewordArgumentSyntax(token.Text, token.Span);
+        }
+
+        private static bool IsLiteralOpenDelimiter(SyntaxToken token)
+            => token.Kind is SyntaxTokenKind.OpenBraceColon
+                or SyntaxTokenKind.OpenBracePipe
+                or SyntaxTokenKind.OpenBracePercent;
+
+        /// <summary>
+        /// A collection-literal delimiter is a single token, so the spaced form
+        /// (<c>: }</c> rather than <c>:}</c>) is not a delimiter at all. Left
+        /// unhandled it surfaces as a confusing generic error, so it gets a
+        /// diagnostic naming the delimiter and consumes both tokens to keep
+        /// recovery clean (<c>TS-P2-25</c>).
+        /// </summary>
+        private bool TryReportSpacedLiteralCloser(string delimiter, out TextSpan closeSpan)
+        {
+            closeSpan = default;
+
+            var isSpacedForm = delimiter switch
+            {
+                ":}" => Current.Kind == SyntaxTokenKind.Bareword && string.Equals(Current.Text, ":", StringComparison.Ordinal),
+                "|}" => Current.Kind == SyntaxTokenKind.Pipe,
+                "%}" => Current.Kind == SyntaxTokenKind.Bareword && string.Equals(Current.Text, "%", StringComparison.Ordinal),
+                _ => false,
+            };
+
+            if (!isSpacedForm || Peek(1).Kind != SyntaxTokenKind.CloseBrace)
             {
                 return false;
             }
 
-            var next = Peek(1);
+            closeSpan = TextSpan.FromBounds(Current.Span.Start, Peek(1).Span.End);
 
-            if (next.Kind != SyntaxTokenKind.Bareword)
-            {
-                return false;
-            }
+            _diagnostics.Add(new SyntaxDiagnostic(
+                Code: "tosh.parser.spaced_literal_delimiter",
+                Title: $"'{delimiter}' must be written without a space.",
+                Span: closeSpan,
+                Label: $"write '{delimiter}' here",
+                Help: "collection literal delimiters are single tokens; remove the space between them."));
 
-            // {::} — empty set
-            if (string.Equals(next.Text, "::", StringComparison.Ordinal) && Peek(2).Kind == SyntaxTokenKind.CloseBrace)
-            {
-                return true;
-            }
-
-            // {: ... :} — set with items
-            return string.Equals(next.Text, ":", StringComparison.Ordinal);
+            NextToken();
+            NextToken();
+            return true;
         }
 
         private ArgumentSyntax ParseSetLiteralArgument(bool implicitCurrentItem)
         {
             var openBrace = NextToken();
 
-            // {::} — empty set
-            if (Current.Kind == SyntaxTokenKind.Bareword &&
-                string.Equals(Current.Text, "::", StringComparison.Ordinal) &&
-                Peek(1).Kind == SyntaxTokenKind.CloseBrace)
-            {
-                NextToken(); // consume ::
-                var emptyCloseBrace = NextToken(); // consume }
-                return new SetLiteralArgumentSyntax(
-                    Array.Empty<ArgumentSyntax>(),
-                    TextSpan.FromBounds(openBrace.Span.Start, emptyCloseBrace.Span.End));
-            }
-
-            // Consume opening ':'
-            NextToken();
-
             // Check for set comprehension: {: body <| for $x in source ... :}
-            if (HasTopLevelComprehensionBeforeClose(SyntaxTokenKind.CloseBrace))
+            if (HasTopLevelComprehensionBeforeClose(SyntaxTokenKind.ColonCloseBrace))
             {
                 return ParseSetComprehension(openBrace);
             }
 
             var items = new List<ArgumentSyntax>();
 
-            while (Current.Kind != SyntaxTokenKind.EndOfFile && Current.Kind != SyntaxTokenKind.CloseBrace)
+            while (Current.Kind is not SyntaxTokenKind.EndOfFile
+                   and not SyntaxTokenKind.ColonCloseBrace
+                   and not SyntaxTokenKind.CloseBrace)
             {
-                // Check for closing ':' delimiter
                 if (Current.Kind == SyntaxTokenKind.Bareword &&
                     string.Equals(Current.Text, ":", StringComparison.Ordinal) &&
                     Peek(1).Kind == SyntaxTokenKind.CloseBrace)
@@ -7838,8 +7900,11 @@ public static class ToshParser
                     continue;
                 }
 
-                if (Current.Kind is not SyntaxTokenKind.CloseBrace and not SyntaxTokenKind.EndOfFile &&
-                    !(Current.Kind == SyntaxTokenKind.Bareword && string.Equals(Current.Text, ":", StringComparison.Ordinal)))
+                if (Current.Kind is not SyntaxTokenKind.ColonCloseBrace
+                    and not SyntaxTokenKind.CloseBrace
+                    and not SyntaxTokenKind.EndOfFile
+                    && !(Current.Kind == SyntaxTokenKind.Bareword
+                         && string.Equals(Current.Text, ":", StringComparison.Ordinal)))
                 {
                     _diagnostics.Add(new SyntaxDiagnostic(
                         Code: "tosh.parser.missing_set_separator",
@@ -7849,76 +7914,62 @@ public static class ToshParser
                 }
             }
 
-            // Expect closing ':' before '}'
-            if (Current.Kind == SyntaxTokenKind.Bareword &&
-                string.Equals(Current.Text, ":", StringComparison.Ordinal))
+            if (Current.Kind == SyntaxTokenKind.ColonCloseBrace)
             {
-                NextToken(); // consume closing ':'
-            }
-            else
-            {
-                _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh.parser.missing_set_closing_colon",
-                    Title: "A closing ':' is required before '}'.",
-                    Span: Current.Span,
-                    Label: "set literals use '{: ... :}' syntax"));
+                var closeBrace = NextToken();
+                return new SetLiteralArgumentSyntax(
+                    items,
+                    TextSpan.FromBounds(openBrace.Span.Start, closeBrace.Span.End));
             }
 
-            if (Current.Kind != SyntaxTokenKind.CloseBrace)
+            if (TryReportSpacedLiteralCloser(":}", out var spacedCloseSpan))
             {
-                _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh.parser.missing_closing_brace",
-                    Title: "A closing '}' is required here.",
-                    Span: openBrace.Span,
-                    Label: "this set literal never closes",
-                    Help: "close the set literal with ':}' after the last item."));
-                return new SetLiteralArgumentSyntax(items, openBrace.Span);
+                return new SetLiteralArgumentSyntax(
+                    items,
+                    TextSpan.FromBounds(openBrace.Span.Start, spacedCloseSpan.End));
             }
 
-            var closeBrace = NextToken();
-            return new SetLiteralArgumentSyntax(
-                items,
-                TextSpan.FromBounds(openBrace.Span.Start, closeBrace.Span.End));
-        }
+            _diagnostics.Add(new SyntaxDiagnostic(
+                Code: "tosh.parser.missing_set_closing_delimiter",
+                Title: "A closing ':}' is required here.",
+                Span: Current.Kind == SyntaxTokenKind.CloseBrace ? Current.Span : openBrace.Span,
+                Label: "this set literal never closes",
+                Help: "close the set literal with ':}' after the last item."));
 
-        private bool LooksLikeDictLiteral()
-        {
-            if (Current.Kind != SyntaxTokenKind.OpenBrace)
+            if (Current.Kind == SyntaxTokenKind.CloseBrace)
             {
-                return false;
+                var recoveryClose = NextToken();
+                return new SetLiteralArgumentSyntax(
+                    items,
+                    TextSpan.FromBounds(openBrace.Span.Start, recoveryClose.Span.End));
             }
 
-            var first = Peek(1);
-
-            // Empty braces are a record, not a dict.
-            if (first.Kind == SyntaxTokenKind.CloseBrace)
-            {
-                return false;
-            }
-
-            // { <expr> => ... }  —  the key can be bareword, string, number, or variable.
-            if (first.Kind is SyntaxTokenKind.Bareword or SyntaxTokenKind.String or SyntaxTokenKind.Number)
-            {
-                return IsFatArrow(Peek(2));
-            }
-
-            return false;
+            return new SetLiteralArgumentSyntax(items, openBrace.Span);
         }
 
         private ArgumentSyntax ParseDictLiteralArgument(bool implicitCurrentItem = false)
         {
             var openBrace = NextToken();
 
-            // Check for dict comprehension: { key => value <| for $x in source ... }
-            if (HasTopLevelComprehensionBeforeClose(SyntaxTokenKind.CloseBrace))
+            // Check for dict comprehension: {% key => value <| for $x in source ... %}
+            if (HasTopLevelComprehensionBeforeClose(SyntaxTokenKind.PercentCloseBrace))
             {
                 return ParseDictComprehension(openBrace, implicitCurrentItem);
             }
 
             var entries = new List<DictEntrySyntax>();
 
-            while (Current.Kind != SyntaxTokenKind.EndOfFile && Current.Kind != SyntaxTokenKind.CloseBrace)
+            while (Current.Kind is not SyntaxTokenKind.EndOfFile
+                   and not SyntaxTokenKind.PercentCloseBrace
+                   and not SyntaxTokenKind.CloseBrace)
             {
+                if (Current.Kind == SyntaxTokenKind.Bareword &&
+                    string.Equals(Current.Text, "%", StringComparison.Ordinal) &&
+                    Peek(1).Kind == SyntaxTokenKind.CloseBrace)
+                {
+                    break;
+                }
+
                 if (Current.Kind == SyntaxTokenKind.Comma)
                 {
                     NextToken();
@@ -7966,7 +8017,11 @@ public static class ToshParser
                     continue;
                 }
 
-                if (Current.Kind is not SyntaxTokenKind.CloseBrace and not SyntaxTokenKind.EndOfFile)
+                if (Current.Kind is not SyntaxTokenKind.PercentCloseBrace
+                    and not SyntaxTokenKind.CloseBrace
+                    and not SyntaxTokenKind.EndOfFile
+                    && !(Current.Kind == SyntaxTokenKind.Bareword
+                         && string.Equals(Current.Text, "%", StringComparison.Ordinal)))
                 {
                     _diagnostics.Add(new SyntaxDiagnostic(
                         Code: "tosh.parser.missing_dict_entry_separator",
@@ -7976,75 +8031,37 @@ public static class ToshParser
                 }
             }
 
-            if (Current.Kind != SyntaxTokenKind.CloseBrace)
+            if (Current.Kind == SyntaxTokenKind.PercentCloseBrace)
             {
-                _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh.parser.missing_dict_closing_brace",
-                    Title: "A closing '}' is required here.",
-                    Span: openBrace.Span,
-                    Label: "this dict literal never closes",
-                    Help: "close the dict literal with '}' after the last entry."));
-                return new DictLiteralArgumentSyntax(entries, openBrace.Span);
+                var closeBrace = NextToken();
+                return new DictLiteralArgumentSyntax(
+                    entries,
+                    TextSpan.FromBounds(openBrace.Span.Start, closeBrace.Span.End));
             }
 
-            var closeBrace = NextToken();
-            return new DictLiteralArgumentSyntax(entries, TextSpan.FromBounds(openBrace.Span.Start, closeBrace.Span.End));
-        }
-
-        private ArgumentSyntax ParseBraceCollectionLiteralArgument(bool implicitCurrentItem = false)
-        {
-            var openBrace = NextToken();
-            var items = new List<ArgumentSyntax>();
-
-            while (Current.Kind != SyntaxTokenKind.EndOfFile && Current.Kind != SyntaxTokenKind.CloseBrace)
+            if (TryReportSpacedLiteralCloser("%}", out var spacedCloseSpan))
             {
-                if (Current.Kind == SyntaxTokenKind.Comma)
-                {
-                    _diagnostics.Add(new SyntaxDiagnostic(
-                        Code: "tosh.parser.unexpected_list_separator",
-                        Title: "A collection item is required between commas.",
-                        Span: Current.Span,
-                        Label: "remove this comma or add a collection item here"));
-                    NextToken();
-                    continue;
-                }
-
-                var item = ParseArgument(implicitCurrentItem: implicitCurrentItem);
-
-                if (item is not null)
-                {
-                    items.Add(item);
-                }
-
-                if (Current.Kind == SyntaxTokenKind.Comma)
-                {
-                    NextToken();
-                    continue;
-                }
-
-                if (Current.Kind is not SyntaxTokenKind.CloseBrace and not SyntaxTokenKind.EndOfFile)
-                {
-                    _diagnostics.Add(new SyntaxDiagnostic(
-                        Code: "tosh.parser.missing_list_separator",
-                        Title: "Collection items must be separated by ','.",
-                        Span: Current.Span,
-                        Label: "insert ',' between collection items"));
-                }
+                return new DictLiteralArgumentSyntax(
+                    entries,
+                    TextSpan.FromBounds(openBrace.Span.Start, spacedCloseSpan.End));
             }
 
-            if (Current.Kind != SyntaxTokenKind.CloseBrace)
+            _diagnostics.Add(new SyntaxDiagnostic(
+                Code: "tosh.parser.missing_dict_closing_delimiter",
+                Title: "A closing '%}' is required here.",
+                Span: Current.Kind == SyntaxTokenKind.CloseBrace ? Current.Span : openBrace.Span,
+                Label: "this dict literal never closes",
+                Help: "close the dict literal with '%}' after the last entry."));
+
+            if (Current.Kind == SyntaxTokenKind.CloseBrace)
             {
-                _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh.parser.missing_closing_brace",
-                    Title: "A closing '}' is required here.",
-                    Span: openBrace.Span,
-                    Label: "this collection literal never closes",
-                    Help: "close the collection literal with '}' after the last item."));
-                return new ArrayLiteralArgumentSyntax(items, openBrace.Span);
+                var recoveryClose = NextToken();
+                return new DictLiteralArgumentSyntax(
+                    entries,
+                    TextSpan.FromBounds(openBrace.Span.Start, recoveryClose.Span.End));
             }
 
-            var closeBrace = NextToken();
-            return new ArrayLiteralArgumentSyntax(items, TextSpan.FromBounds(openBrace.Span.Start, closeBrace.Span.End));
+            return new DictLiteralArgumentSyntax(entries, openBrace.Span);
         }
 
         private ArgumentSyntax ParseRecordLiteralArgument(bool implicitCurrentItem = false)
@@ -8052,15 +8069,23 @@ public static class ToshParser
             var openBrace = NextToken();
             var fields = new List<RecordEntrySyntax>();
 
-            while (Current.Kind != SyntaxTokenKind.EndOfFile && Current.Kind != SyntaxTokenKind.CloseBrace)
+            while (Current.Kind is not SyntaxTokenKind.EndOfFile
+                   and not SyntaxTokenKind.PipeCloseBrace
+                   and not SyntaxTokenKind.CloseBrace)
             {
+                if (Current.Kind == SyntaxTokenKind.Pipe &&
+                    Peek(1).Kind == SyntaxTokenKind.CloseBrace)
+                {
+                    break;
+                }
+
                 if (Current.Kind == SyntaxTokenKind.Comma)
                 {
                     NextToken();
                     continue;
                 }
 
-                // Spread entry: { ...$a, ...$b }
+                // Spread entry: {| ...$a, ...$b |}
                 if (LooksLikeSpreadElement())
                 {
                     var spread = ParseSpreadElement();
@@ -8078,7 +8103,7 @@ public static class ToshParser
                     continue;
                 }
 
-                // Computed property: { ($expr) = value }
+                // Computed property: {| ($expr) = value |}
                 if (Current.Kind == SyntaxTokenKind.OpenParen)
                 {
                     var openParen = NextToken();
@@ -8181,7 +8206,11 @@ public static class ToshParser
                     continue;
                 }
 
-                if (Current.Kind is not SyntaxTokenKind.CloseBrace and not SyntaxTokenKind.EndOfFile)
+                if (Current.Kind is not SyntaxTokenKind.PipeCloseBrace
+                    and not SyntaxTokenKind.CloseBrace
+                    and not SyntaxTokenKind.EndOfFile
+                    && !(Current.Kind == SyntaxTokenKind.Pipe
+                         && Peek(1).Kind == SyntaxTokenKind.CloseBrace))
                 {
                     _diagnostics.Add(new SyntaxDiagnostic(
                         Code: "tosh.parser.missing_record_field_separator",
@@ -8191,19 +8220,37 @@ public static class ToshParser
                 }
             }
 
-            if (Current.Kind != SyntaxTokenKind.CloseBrace)
+            if (Current.Kind == SyntaxTokenKind.PipeCloseBrace)
             {
-                _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh.parser.missing_record_closing_brace",
-                    Title: "A closing '}' is required here.",
-                    Span: openBrace.Span,
-                    Label: "this record literal never closes",
-                    Help: "close the record literal with '}' after the last field."));
-                return new RecordLiteralArgumentSyntax(fields, openBrace.Span);
+                var closeBrace = NextToken();
+                return new RecordLiteralArgumentSyntax(
+                    fields,
+                    TextSpan.FromBounds(openBrace.Span.Start, closeBrace.Span.End));
             }
 
-            var closeBrace = NextToken();
-            return new RecordLiteralArgumentSyntax(fields, TextSpan.FromBounds(openBrace.Span.Start, closeBrace.Span.End));
+            if (TryReportSpacedLiteralCloser("|}", out var spacedCloseSpan))
+            {
+                return new RecordLiteralArgumentSyntax(
+                    fields,
+                    TextSpan.FromBounds(openBrace.Span.Start, spacedCloseSpan.End));
+            }
+
+            _diagnostics.Add(new SyntaxDiagnostic(
+                Code: "tosh.parser.missing_record_closing_delimiter",
+                Title: "A closing '|}' is required here.",
+                Span: Current.Kind == SyntaxTokenKind.CloseBrace ? Current.Span : openBrace.Span,
+                Label: "this record literal never closes",
+                Help: "close the record literal with '|}' after the last field."));
+
+            if (Current.Kind == SyntaxTokenKind.CloseBrace)
+            {
+                var recoveryClose = NextToken();
+                return new RecordLiteralArgumentSyntax(
+                    fields,
+                    TextSpan.FromBounds(openBrace.Span.Start, recoveryClose.Span.End));
+            }
+
+            return new RecordLiteralArgumentSyntax(fields, openBrace.Span);
         }
 
         private ArgumentSyntax ParseNewObjectArgument(bool implicitCurrentItem = false)
@@ -8724,6 +8771,9 @@ public static class ToshParser
                 or SyntaxTokenKind.OpenParen
                 or SyntaxTokenKind.OpenBracket
                 or SyntaxTokenKind.OpenBrace
+                or SyntaxTokenKind.OpenBraceColon
+                or SyntaxTokenKind.OpenBracePipe
+                or SyntaxTokenKind.OpenBracePercent
                 or SyntaxTokenKind.DollarOpenParen
                 or SyntaxTokenKind.LessThanOpenParen
                 or SyntaxTokenKind.Ampersand
@@ -9017,6 +9067,9 @@ public static class ToshParser
                 ArgumentSyntax? value = null;
                 if (!IsTernaryColonToken(Current) && Current.Kind != SyntaxTokenKind.CloseParen &&
                     Current.Kind != SyntaxTokenKind.CloseBrace && Current.Kind != SyntaxTokenKind.CloseBracket &&
+                    Current.Kind != SyntaxTokenKind.ColonCloseBrace &&
+                    Current.Kind != SyntaxTokenKind.PipeCloseBrace &&
+                    Current.Kind != SyntaxTokenKind.PercentCloseBrace &&
                     Current.Kind != SyntaxTokenKind.Semicolon && Current.Kind != SyntaxTokenKind.EndOfFile &&
                     Current.Kind != SyntaxTokenKind.Pipe)
                 {
@@ -9291,7 +9344,12 @@ public static class ToshParser
 
         private ArgumentSyntax? ParseArgumentOperand(bool implicitCurrentItem = false)
         {
-            if (Current.Kind is SyntaxTokenKind.CloseParen or SyntaxTokenKind.CloseBrace)
+            if (Current.Kind is SyntaxTokenKind.CloseParen
+                or SyntaxTokenKind.CloseBrace
+                or SyntaxTokenKind.CloseBracket
+                or SyntaxTokenKind.ColonCloseBrace
+                or SyntaxTokenKind.PipeCloseBrace
+                or SyntaxTokenKind.PercentCloseBrace)
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
                     Code: "tosh.parser.expected_operand",
@@ -9748,6 +9806,9 @@ public static class ToshParser
                     case SyntaxTokenKind.OpenParen:
                     case SyntaxTokenKind.OpenBrace:
                     case SyntaxTokenKind.OpenBracket:
+                    case SyntaxTokenKind.OpenBraceColon:
+                    case SyntaxTokenKind.OpenBracePipe:
+                    case SyntaxTokenKind.OpenBracePercent:
                         depth++;
                         break;
 
@@ -9762,6 +9823,9 @@ public static class ToshParser
 
                     case SyntaxTokenKind.CloseBrace:
                     case SyntaxTokenKind.CloseBracket:
+                    case SyntaxTokenKind.ColonCloseBrace:
+                    case SyntaxTokenKind.PipeCloseBrace:
+                    case SyntaxTokenKind.PercentCloseBrace:
                         if (depth > 0)
                         {
                             depth--;
@@ -9793,6 +9857,9 @@ public static class ToshParser
                     case SyntaxTokenKind.OpenParen:
                     case SyntaxTokenKind.OpenBrace:
                     case SyntaxTokenKind.OpenBracket:
+                    case SyntaxTokenKind.OpenBraceColon:
+                    case SyntaxTokenKind.OpenBracePipe:
+                    case SyntaxTokenKind.OpenBracePercent:
                         depth++;
                         break;
 
@@ -9807,6 +9874,9 @@ public static class ToshParser
 
                     case SyntaxTokenKind.CloseBrace:
                     case SyntaxTokenKind.CloseBracket:
+                    case SyntaxTokenKind.ColonCloseBrace:
+                    case SyntaxTokenKind.PipeCloseBrace:
+                    case SyntaxTokenKind.PercentCloseBrace:
                         if (depth > 0)
                         {
                             depth--;
@@ -9869,6 +9939,9 @@ public static class ToshParser
                     case SyntaxTokenKind.OpenParen:
                     case SyntaxTokenKind.OpenBrace:
                     case SyntaxTokenKind.OpenBracket:
+                    case SyntaxTokenKind.OpenBraceColon:
+                    case SyntaxTokenKind.OpenBracePipe:
+                    case SyntaxTokenKind.OpenBracePercent:
                         depth++;
                         break;
 
@@ -9901,6 +9974,9 @@ public static class ToshParser
                         break;
 
                     case SyntaxTokenKind.CloseBracket:
+                    case SyntaxTokenKind.ColonCloseBrace:
+                    case SyntaxTokenKind.PipeCloseBrace:
+                    case SyntaxTokenKind.PercentCloseBrace:
                         if (depth > 0)
                         {
                             depth--;
@@ -9965,6 +10041,9 @@ public static class ToshParser
                     case SyntaxTokenKind.OpenParen:
                     case SyntaxTokenKind.OpenBrace:
                     case SyntaxTokenKind.OpenBracket:
+                    case SyntaxTokenKind.OpenBraceColon:
+                    case SyntaxTokenKind.OpenBracePipe:
+                    case SyntaxTokenKind.OpenBracePercent:
                         depth++;
                         break;
 
@@ -9979,6 +10058,9 @@ public static class ToshParser
 
                     case SyntaxTokenKind.CloseBrace:
                     case SyntaxTokenKind.CloseBracket:
+                    case SyntaxTokenKind.ColonCloseBrace:
+                    case SyntaxTokenKind.PipeCloseBrace:
+                    case SyntaxTokenKind.PercentCloseBrace:
                         if (depth > 0)
                         {
                             depth--;
@@ -10025,6 +10107,10 @@ public static class ToshParser
                 {
                     case SyntaxTokenKind.OpenParen:
                     case SyntaxTokenKind.OpenBrace:
+                    case SyntaxTokenKind.OpenBracket:
+                    case SyntaxTokenKind.OpenBraceColon:
+                    case SyntaxTokenKind.OpenBracePipe:
+                    case SyntaxTokenKind.OpenBracePercent:
                         depth++;
                         break;
 
@@ -10038,6 +10124,10 @@ public static class ToshParser
                         break;
 
                     case SyntaxTokenKind.CloseBrace:
+                    case SyntaxTokenKind.CloseBracket:
+                    case SyntaxTokenKind.ColonCloseBrace:
+                    case SyntaxTokenKind.PipeCloseBrace:
+                    case SyntaxTokenKind.PercentCloseBrace:
                         if (depth > 0)
                         {
                             depth--;
@@ -10680,7 +10770,20 @@ public static class ToshParser
         {
             return Current.Kind switch
             {
-                SyntaxTokenKind.String or SyntaxTokenKind.Number or SyntaxTokenKind.Boolean or SyntaxTokenKind.Null or SyntaxTokenKind.UnitLiteral or SyntaxTokenKind.OpenParen or SyntaxTokenKind.DollarOpenParen or SyntaxTokenKind.LessThanOpenParen or SyntaxTokenKind.OpenBracket or SyntaxTokenKind.OpenBrace or SyntaxTokenKind.InterpolatedString => true,
+                SyntaxTokenKind.String or
+                SyntaxTokenKind.Number or
+                SyntaxTokenKind.Boolean or
+                SyntaxTokenKind.Null or
+                SyntaxTokenKind.UnitLiteral or
+                SyntaxTokenKind.OpenParen or
+                SyntaxTokenKind.DollarOpenParen or
+                SyntaxTokenKind.LessThanOpenParen or
+                SyntaxTokenKind.OpenBracket or
+                SyntaxTokenKind.OpenBrace or
+                SyntaxTokenKind.OpenBraceColon or
+                SyntaxTokenKind.OpenBracePipe or
+                SyntaxTokenKind.OpenBracePercent or
+                SyntaxTokenKind.InterpolatedString => true,
                 SyntaxTokenKind.Ampersand => Peek(1).Kind == SyntaxTokenKind.Bareword && IsValidCommandName(Peek(1).Text),
                 SyntaxTokenKind.Bareword => IsVariableReferenceLikeToken(Current) ||
                                             LooksLikeAnonymousFunctionExpression() ||
@@ -11042,53 +11145,6 @@ public static class ToshParser
                     or SyntaxTokenKind.BangEqual or SyntaxTokenKind.BangTilde
                 || (token.Kind == SyntaxTokenKind.Bareword && token.Text is
                     "==" or "=" or "=~" or "in" or "contains" or "starts-with" or "ends-with");
-        }
-
-        private bool LooksLikeRecordLiteral()
-        {
-            if (Current.Kind != SyntaxTokenKind.OpenBrace)
-            {
-                return false;
-            }
-
-            var next = Peek(1);
-
-            if (next.Kind == SyntaxTokenKind.CloseBrace)
-            {
-                return true;
-            }
-
-            // Computed property: { ($expr) = value }
-            if (next.Kind == SyntaxTokenKind.OpenParen)
-            {
-                return true;
-            }
-
-            // Spread entry: { ...$var }
-            if (next.Kind == SyntaxTokenKind.Bareword &&
-                next.Text.StartsWith("...", StringComparison.Ordinal) &&
-                next.Text.Length > 3)
-            {
-                return true;
-            }
-
-            if (next.Kind is not SyntaxTokenKind.Bareword and not SyntaxTokenKind.String)
-            {
-                return false;
-            }
-
-            // `{ name: value }` — the lexer keeps `name:` as a single
-            // bareword; treat that as a record key shorthand.
-            if (next.Kind == SyntaxTokenKind.Bareword &&
-                next.Text.Length > 1 &&
-                next.Text.EndsWith(':') &&
-                !next.Text.EndsWith("::") &&
-                !next.Text.StartsWith(':'))
-            {
-                return true;
-            }
-
-            return IsEqualsToken(Peek(2)) || IsColonToken(Peek(2));
         }
 
         private static bool IsEqualsToken(SyntaxToken token)

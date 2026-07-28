@@ -250,7 +250,7 @@ constructors MyCompany.Tools.Widget
 
 \section{Object Mutation Tools}
 \begin{lstlisting}
-var original = { Name = "Bread", Qty = 2 }
+var original = {| Name = "Bread", Qty = 2 |}
 var copy = (clone $original)
 set-prop $copy Qty 5 | ignore
 get-prop $copy Qty

@@ -46,13 +46,13 @@ $name ??= "guest"
 
 \begin{lstlisting}
 var [first, second] = [10, 20, 30]
-var { Name, Uid } = { Name = "toast", Uid = 1000 }
+var { Name, Uid } = {| Name = "toast", Uid = 1000 |}
 
-var base = { Name = "Alice", Role = "user" }
-var admin = { ...$base, Role = "admin" }
+var base = {| Name = "Alice", Role = "user" |}
+var admin = {| ...$base, Role = "admin" |}
 \end{lstlisting}
 
-\note{Variables must be declared with \texttt{var} before use. Assignment targets use the \texttt{\$name} form.}
+\note{Variables must be declared with \texttt{var} before use. Assignment targets use the \texttt{\$name} form. Records use paired \texttt{\{| ... |\}} delimiters; plain braces remain blocks and destructuring patterns.}
 
 \section{Operators}
 \tighttable{>{\ttfamily\raggedright\arraybackslash}p{0.24\linewidth}X}{
@@ -191,7 +191,7 @@ Operator & Meaning \\
 
 \section{Destructuring And Spread}
 \begin{lstlisting}
-var person = { name = "Alice", age = 30 }
+var person = {| name = "Alice", age = 30 |}
 var { name, age } = $person
 
 var items = [10, 20, 30, 40]
@@ -203,8 +203,8 @@ var [_, _, third] = $items
 var a = [1, 2, 3]
 var b = [0, ...$a, 4]
 
-var base = { role = "user" }
-var admin = { ...$base, role = "admin" }
+var base = {| role = "user" |}
+var admin = {| ...$base, role = "admin" |}
 
 dotnet ...$publish_args
 \end{lstlisting}
@@ -212,7 +212,7 @@ dotnet ...$publish_args
 \section{Computed Keys}
 \begin{lstlisting}
 var key = "name"
-var record = { ($key) = "Alice", age = 30 }
+var record = {| ($key) = "Alice", age = 30 |}
 echo $record.name
 \end{lstlisting}
 

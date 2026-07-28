@@ -90,6 +90,37 @@ public sealed class LexerCharacterizationTests
         Assert.Equal(expected, Render(source));
     }
 
+    [Fact]
+    public void Plain_block_nested_in_literal_does_not_exit_expression_context()
+    {
+        // The inner `}` closes a block, not the record. `inner=1` must
+        // therefore keep expression tokenization, while the command argument
+        // after the real `|}` returns to greedy command-position tokenization.
+        Assert.Equal(
+            "OpenBracePipe:{| Bareword:handler Bareword:= Bareword:func OpenParen:( CloseParen:) OpenBrace:{ Bareword:echo Bareword:hi CloseBrace:} Comma:, Bareword:inner Bareword:= Number:1 PipeCloseBrace:|} Bareword:echo Bareword:x=y",
+            Render("{| handler = func() { echo hi }, inner=1 |} echo x=y"));
+    }
+
+    [Theory]
+    [InlineData(
+        "{| a = 1 | } echo x=y",
+        "OpenBracePipe:{| Bareword:a Bareword:= Number:1 Pipe:| CloseBrace:} Bareword:echo Bareword:x=y")]
+    [InlineData(
+        "{: 1 : } echo x=y",
+        "OpenBraceColon:{: Number:1 Bareword:: CloseBrace:} Bareword:echo Bareword:x=y")]
+    [InlineData(
+        "{% k => 1 % } echo x=y",
+        "OpenBracePercent:{% Bareword:k FatArrow:=> Number:1 Bareword:% CloseBrace:} Bareword:echo Bareword:x=y")]
+    public void Spaced_literal_closer_recovers_command_position(
+        string source,
+        string expected)
+    {
+        // The parser diagnoses the separated closer. The lexer still has to
+        // restore command mode at the plain `}` so one typo does not change
+        // how the following statement tokenizes.
+        Assert.Equal(expected, Render(source));
+    }
+
     [Theory]
     // ---- shapes whose tokenization is the root cause of a filed defect ----
 
@@ -133,9 +164,9 @@ public sealed class LexerCharacterizationTests
 
         // TS-P2-25. Record literals join the list: the literal openers enter
         // expression context, so `a=1` splits inside them. Under a bare `{`
-        // it does not — `{ a=1 }` is one bareword and therefore a block,
-        // while `{ a = 1 }` was a record. That inconsistency is what the
-        // paired delimiters remove.
+        // it does not — under the removed grammar `{ a=1 }` was one
+        // bareword and therefore a block, while `{ a = 1 }` was a record.
+        // That inconsistency is what the paired delimiters remove.
         Assert.Equal(Render("{|a=1|}"), Render("{| a = 1 |}"));
     }
 
@@ -151,8 +182,8 @@ public sealed class LexerCharacterizationTests
             "1=>\"one\"",
             "func f(x) => $x",
             "func f(x)=>$x",
-            "{ \"k\" => 1 }",
-            "{k=>1}",
+            "{% \"k\" => 1 %}",
+            "{%k=>1%}",
             "match (1) {\n    1 => \"one\"\n    default => \"other\"\n}",
             "[1] | each { _ => _ * 2 }",
             "class C { func d(x) => $x * 2 }",
