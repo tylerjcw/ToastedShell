@@ -279,7 +279,7 @@ public sealed class ToshMcpServer
             new { kind = "binary", name = "is not in", description = "Negated membership form of `is not`. Write as three words.", example = "4 is not in [1,2,3]" },
 
             // String operators
-            new { kind = "binary", name = "contains",    description = "Returns `true` if the string contains the substring, or if the collection contains the value.", example = "\"hello\" contains \"ell\"" },
+            new { kind = "binary", name = "contains",    description = "Ordinal substring or collection membership; dictionaries search keys and other collections use canonical equality.", example = "\"hello\" contains \"ell\"" },
             new { kind = "binary", name = "starts-with", description = "Returns `true` if the string starts with the given prefix.", example = "\"hello\" starts-with \"he\"" },
             new { kind = "binary", name = "ends-with",   description = "Returns `true` if the string ends with the given suffix.", example = "\"hello\" ends-with \"lo\"" },
 

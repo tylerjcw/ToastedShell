@@ -97,7 +97,7 @@ public sealed class ToshLanguageFeatures
         ["is-not"] = "Negated type-check operator. Returns `true` if the value does not match the named type. Example: `5 is-not string`. The two-word form `is not` is equivalent.",
         ["is-in"] = "Membership form of `is`. Written as `is in` (two words): `3 is in [1,2,3]` → `true`. The normalized form `is-in` is produced internally by the parser.",
         ["is-not-in"] = "Negated membership form of `is not`. Written as `is not in` (three words): `4 is not in [1,2,3]` → `true`. The normalized form `is-not-in` is produced internally by the parser.",
-        ["contains"] = "Substring/membership operator. Returns `true` if a string contains the substring, or if a collection contains the value. Example: `\"hello\" contains \"ell\"`.",
+        ["contains"] = "Ordinal substring or collection-membership operator. Dictionaries search keys; other collections use canonical equality. Example: `\"hello\" contains \"ell\"`.",
         ["starts-with"] = "String prefix operator. Returns `true` if the string starts with the given prefix. Example: `\"hello\" starts-with \"he\"`.",
         ["ends-with"] = "String suffix operator. Returns `true` if the string ends with the given suffix. Example: `\"hello\" ends-with \"lo\"`.",
         ["where"] = "Filter clause in a list comprehension or query expression. Example: `[for x in $items where { $x > 5 }]`.",
@@ -740,7 +740,7 @@ public sealed class ToshLanguageFeatures
                     or SyntaxTokenKind.BangEqual or SyntaxTokenKind.BangTilde
                     or SyntaxTokenKind.Bang
                     or SyntaxTokenKind.QuestionQuestion or SyntaxTokenKind.QuestionDot
-                    or SyntaxTokenKind.DotDot:
+                    or SyntaxTokenKind.DotDot or SyntaxTokenKind.FatArrow:
                     rawTokens.Add((pos.Line, pos.Character, token.Text.Length, 7, 0)); // operator
                     break;
             }

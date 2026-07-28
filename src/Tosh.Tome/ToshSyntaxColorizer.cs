@@ -131,6 +131,7 @@ internal sealed class ToshSyntaxColorizer : ISyntaxColorizer
                 or SyntaxTokenKind.LessThanLessThanLessThan
                 or SyntaxTokenKind.QuestionQuestion or SyntaxTokenKind.QuestionDot
                 or SyntaxTokenKind.DollarOpenParen or SyntaxTokenKind.LessThanOpenParen
+                or SyntaxTokenKind.FatArrow
                 => Operator,
             SyntaxTokenKind.OpenParen or SyntaxTokenKind.CloseParen
                 or SyntaxTokenKind.OpenBrace or SyntaxTokenKind.CloseBrace

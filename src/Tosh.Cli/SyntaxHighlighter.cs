@@ -162,7 +162,8 @@ public static class SyntaxHighlighter
                 or SyntaxTokenKind.BangEqual or SyntaxTokenKind.BangTilde
                 or SyntaxTokenKind.Bang => theme.Operator,
             SyntaxTokenKind.GreaterThanGreaterThan
-                or SyntaxTokenKind.LessThanLessThanLessThan => theme.Operator,
+                or SyntaxTokenKind.LessThanLessThanLessThan
+                or SyntaxTokenKind.FatArrow => theme.Operator,
             SyntaxTokenKind.DollarOpenParen
                 or SyntaxTokenKind.LessThanOpenParen => theme.Subexpression,
             SyntaxTokenKind.QuestionQuestion

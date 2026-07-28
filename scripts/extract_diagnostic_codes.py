@@ -278,6 +278,7 @@ def emit_latex(entries: dict[str, CodeEntry]) -> str:
         # layout. `style=nextline` (enumitem) places the description on the line
         # following the label rather than wrapping awkwardly to the right of it.
         out.append("\\begin{description}[style=nextline,leftmargin=0pt,labelindent=0pt,"
+                   "labelsep=0pt,labelwidth=0pt,"
                    "itemsep=0.35em,parsep=0pt,topsep=0.4em]")
         for entry in by_ns[ns]:
             code = _tex_escape(entry.code)

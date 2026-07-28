@@ -2,6 +2,7 @@ using Tosh.Runtime;
 using Tosh.Language;
 using Tosh.Cli.Tui;
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 
 namespace Tosh.Cli;
 
@@ -13,6 +14,7 @@ public sealed class ToshRepl
     private readonly ToshEngine _engine;
     private readonly ReplLineEditor _lineEditor;
     private readonly ToshRuntime _runtime;
+    private CancellationTokenSource? _activeExecutionCancellation;
 
     public ToshRepl(ToshEngine engine)
     {
@@ -60,7 +62,7 @@ public sealed class ToshRepl
             try
             {
                 source = _lineEditor.ReadLine(
-                    BuildPrompt(),
+                    await BuildPromptAsync(),
                     cachedHistory ?? Array.Empty<string>(),
                     (text, cursor) => _completionEngine.GetCompletions(text, cursor),
                     initialText: initialText,
@@ -129,9 +131,17 @@ public sealed class ToshRepl
 
                 try
                 {
-                    await ExecuteAndPrintAsync(source, sourceName);
-                    // Successful command — clear any prior diagnostic so $tosh.Last.HasError reflects reality.
-                    _runtime.SetLastDiagnostic(null, null);
+                    if (await ExecuteAndPrintInterruptiblyAsync(source, sourceName))
+                    {
+                        // Successful command — clear any prior diagnostic so $tosh.Last.HasError reflects reality.
+                        _runtime.SetLastDiagnostic(null, null);
+                    }
+                    else
+                    {
+                        _runtime.SetLastExitCode(130);
+                        _runtime.SetLastDiagnostic(null, null);
+                        await Console.Out.WriteLineAsync("^C");
+                    }
                 }
                 finally
                 {
@@ -153,22 +163,109 @@ public sealed class ToshRepl
         }
     }
 
-    private async Task ExecuteAndPrintAsync(string source, string sourceName)
+    internal async Task<bool> ExecuteAndPrintInterruptiblyAsync(string source, string sourceName)
     {
-        await using var sink = new AutoDisplaySink(_runtime, renderTuiOutcome: true);
-        await foreach (var value in _engine.EvaluateAsync(source, sourceName))
+        using var cancellation = new CancellationTokenSource();
+        if (Interlocked.CompareExchange(ref _activeExecutionCancellation, cancellation, null) is not null)
         {
-            await sink.EmitAsync(value);
+            throw new InvalidOperationException("A REPL command is already executing.");
+        }
+
+        IDisposable? interruptRegistration = null;
+
+        try
+        {
+            interruptRegistration = RegisterExecutionInterrupt();
+            await ExecuteAndPrintAsync(source, sourceName, cancellation.Token);
+            return true;
+        }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+        {
+            return false;
+        }
+        finally
+        {
+            Interlocked.CompareExchange(ref _activeExecutionCancellation, null, cancellation);
+            interruptRegistration?.Dispose();
         }
     }
 
-    private string BuildPrompt()
+    internal bool TryInterruptCurrentExecution()
+    {
+        var cancellation = Volatile.Read(ref _activeExecutionCancellation);
+        if (cancellation is null)
+        {
+            return false;
+        }
+
+        try
+        {
+            cancellation.Cancel();
+            return true;
+        }
+        catch (ObjectDisposedException)
+        {
+            return false;
+        }
+        catch (AggregateException)
+        {
+            // Cancellation callbacks belong to the running command. An
+            // interrupt must still return control to the REPL even if one
+            // callback is faulty.
+            return true;
+        }
+    }
+
+    private IDisposable RegisterExecutionInterrupt()
+    {
+        if (OperatingSystem.IsLinux() || OperatingSystem.IsMacOS() || OperatingSystem.IsFreeBSD())
+        {
+            return PosixSignalRegistration.Create(PosixSignal.SIGINT, context =>
+            {
+                context.Cancel = true;
+                TryInterruptCurrentExecution();
+            });
+        }
+
+        ConsoleCancelEventHandler handler = (_, eventArgs) =>
+        {
+            eventArgs.Cancel = true;
+            TryInterruptCurrentExecution();
+        };
+        Console.CancelKeyPress += handler;
+        return new CallbackDisposable(() => Console.CancelKeyPress -= handler);
+    }
+
+    private async Task ExecuteAndPrintAsync(
+        string source,
+        string sourceName,
+        CancellationToken cancellationToken)
+    {
+        await using var sink = new AutoDisplaySink(_runtime, renderTuiOutcome: true);
+        await foreach (var value in _engine.EvaluateAsync(source, sourceName, cancellationToken)
+                           .WithCancellation(cancellationToken))
+        {
+            await sink.EmitAsync(value, cancellationToken);
+        }
+    }
+
+    private sealed class CallbackDisposable(Action callback) : IDisposable
+    {
+        private Action? _callback = callback;
+
+        public void Dispose()
+        {
+            Interlocked.Exchange(ref _callback, null)?.Invoke();
+        }
+    }
+
+    private async Task<string> BuildPromptAsync()
     {
         if (_runtime.Commands.TryGet("prompt", out _))
         {
             try
             {
-                var results = _engine.ExecuteToListAsync("prompt", "<prompt>").GetAwaiter().GetResult();
+                var results = await _engine.ExecuteToListAsync("prompt", "<prompt>");
 
                 if (results.Count > 0)
                 {
