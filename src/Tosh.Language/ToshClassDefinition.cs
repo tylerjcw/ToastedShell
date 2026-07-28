@@ -226,7 +226,18 @@ public sealed class ToshClassDefinition : IShellNamedType
 
     public object CreateInstance(IReadOnlyList<object?> arguments)
     {
-        return CreateInstanceCore(arguments, typeArgumentBindings: null);
+        return CreateInstanceAsync(arguments, CancellationToken.None)
+            .AsTask()
+            .GetAwaiter()
+            .GetResult();
+    }
+
+    public ValueTask<object> CreateInstanceAsync(
+        IReadOnlyList<object?> arguments,
+        CancellationToken cancellationToken)
+    {
+        return new ValueTask<object>(
+            CreateInstanceCoreAsync(arguments, typeArgumentBindings: null, cancellationToken));
     }
 
     /// <summary>
@@ -243,6 +254,22 @@ public sealed class ToshClassDefinition : IShellNamedType
         IReadOnlyList<string> typeArgumentDisplay,
         IReadOnlyList<object?> arguments)
     {
+        return CreateGenericInstanceAsync(
+                resolvedTypeArguments,
+                typeArgumentDisplay,
+                arguments,
+                CancellationToken.None)
+            .AsTask()
+            .GetAwaiter()
+            .GetResult();
+    }
+
+    public async ValueTask<object> CreateGenericInstanceAsync(
+        IReadOnlyList<Type?> resolvedTypeArguments,
+        IReadOnlyList<string> typeArgumentDisplay,
+        IReadOnlyList<object?> arguments,
+        CancellationToken cancellationToken)
+    {
         if (resolvedTypeArguments.Count != TypeParameterNames.Count)
         {
             throw new InvalidOperationException(
@@ -258,7 +285,7 @@ public sealed class ToshClassDefinition : IShellNamedType
 
         ValidateTypeParameterConstraints(bindings, typeArgumentDisplay);
 
-        return CreateInstanceCore(arguments, bindings);
+        return await CreateInstanceCoreAsync(arguments, bindings, cancellationToken);
     }
 
     private void ValidateTypeParameterConstraints(
@@ -410,10 +437,13 @@ public sealed class ToshClassDefinition : IShellNamedType
         return false;
     }
 
-    private object CreateInstanceCore(
+    private async Task<object> CreateInstanceCoreAsync(
         IReadOnlyList<object?> arguments,
-        IReadOnlyDictionary<string, Type?>? typeArgumentBindings)
+        IReadOnlyDictionary<string, Type?>? typeArgumentBindings,
+        CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+
         if (IsAbstract)
         {
             throw new InvalidOperationException($"Cannot create an instance of hollow class '{Name}'. Extend it with a concrete subclass first.");
@@ -431,10 +461,9 @@ public sealed class ToshClassDefinition : IShellNamedType
                 $"'new {Name}<{string.Join(", ", TypeParameterNames)}>(…)'.");
         }
 
-        var constructor = SelectConstructor(arguments, out var locals);
         var instance = new ToshClassInstance(this, typeArgumentBindings);
-        ValidateConstructorTypeArguments(constructor!, locals, instance);
-        instance.Initialize(locals, constructor);
+        await ConstructOnInstanceAsync(instance, arguments, cancellationToken);
+        instance.CompleteInitialization();
 
         // Validate that all vital (required) properties have been set to non-null values
         foreach (var property in Properties.Where(p => p.IsVital && !p.IsStatic && !p.IsComputed))
@@ -452,6 +481,19 @@ public sealed class ToshClassDefinition : IShellNamedType
 
     public InvocationResult InvokeStaticMethod(string methodName, IReadOnlyList<object?> arguments)
     {
+        return InvokeStaticMethodAsync(methodName, arguments, CancellationToken.None)
+            .AsTask()
+            .GetAwaiter()
+            .GetResult();
+    }
+
+    public async ValueTask<InvocationResult> InvokeStaticMethodAsync(
+        string methodName,
+        IReadOnlyList<object?> arguments,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
         if (!_methodsByName.TryGetValue(methodName, out var candidates))
         {
             throw new InvalidOperationException($"Static method '{methodName}' was not found on class '{Name}'.");
@@ -464,8 +506,11 @@ public sealed class ToshClassDefinition : IShellNamedType
             throw new InvalidOperationException($"'{methodName}' is an instance method on class '{Name}' and cannot be called statically. Create an instance first: var obj = new {Name}(); $obj.{methodName}(...)");
         }
 
-        var method = SelectMethod(staticCandidates, arguments, out var locals);
-        var values = ExecuteMethodBlock(method, locals, instance: null);
+        var (method, locals) = await SelectMethodAsync(
+            staticCandidates,
+            arguments,
+            cancellationToken);
+        var values = await ExecuteMethodBlockAsync(method, locals, instance: null, cancellationToken);
         return new InvocationResult(FlattenCallResult(values), ReturnedVoid: false);
     }
 
@@ -612,12 +657,12 @@ public sealed class ToshClassDefinition : IShellNamedType
                 return true;
             }
 
-            // Lazy property: evaluate initializer on first access
-            if (property.IsLazy && !instance.IsLazyInitialized(property.Name))
+            // Lazy property: evaluate the initializer once, sharing the result
+            // with concurrent readers while rejecting true recursive reads.
+            if (property.IsLazy)
             {
-                instance.MarkLazyInitialized(property.Name);
-                var lazyValue = GetInitialPropertyValue(instance, property, new Dictionary<string, object?>(StringComparer.Ordinal));
-                instance.SetStoredValue(property.Name, lazyValue);
+                value = GetOrInitializeLazyProperty(instance, property);
+                return true;
             }
 
             return instance.TryGetStoredValue(property.Name, out value);
@@ -640,6 +685,153 @@ public sealed class ToshClassDefinition : IShellNamedType
 
         value = null;
         return false;
+    }
+
+    internal async ValueTask<(bool Found, object? Value)> TryGetInstanceMemberAsync(
+        ToshClassInstance instance,
+        string name,
+        bool includeHidden,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (_propertiesByName.TryGetValue(name, out var property) &&
+            !property.IsStatic &&
+            (!property.IsShy || includeHidden) &&
+            (!property.IsGuarded || includeHidden) &&
+            (!property.IsLocal || includeHidden))
+        {
+            if (property.IsFading)
+            {
+                _engine.WriteWarning(
+                    code: "tosh.runtime.fading_member",
+                    title: $"Property '{property.Name}' on class '{Name}' is fading (deprecated).",
+                    help: "Use a non-fading replacement, or hush this code: hush tosh.runtime.fading_member",
+                    category: Tosh.Runtime.ToshDiagnosticCategory.Deprecation);
+            }
+
+            if (property.GetterBody is not null)
+            {
+                return (true, await EvaluatePropertyGetterAsync(instance, property, cancellationToken));
+            }
+
+            if (property.IsLazy)
+            {
+                return (true, await GetOrInitializeLazyPropertyAsync(
+                    instance,
+                    property,
+                    cancellationToken));
+            }
+
+            return instance.TryGetStoredValue(property.Name, out var value)
+                ? (true, value)
+                : (false, null);
+        }
+
+        if (BaseClass is not null)
+        {
+            return await BaseClass.TryGetInstanceMemberAsync(
+                instance,
+                name,
+                includeHidden,
+                cancellationToken);
+        }
+
+        if (ClrBaseType is not null && instance.ClrBaseObject is not null)
+        {
+            try
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                return (true, _engine.Runtime.ObjectAccessor.GetValue(instance.ClrBaseObject, name));
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch
+            {
+                // Member not found on the CLR base.
+            }
+        }
+
+        return (false, null);
+    }
+
+    private object? GetOrInitializeLazyProperty(
+        ToshClassInstance instance,
+        ToshClassPropertyDefinition property)
+    {
+        ThrowIfRecursiveLazyInitialization(instance, property);
+        var initialization = instance.GetOrCreateLazyInitialization(property.Name);
+        if (!initialization.IsOwner)
+        {
+            return initialization.Completion.GetAwaiter().GetResult();
+        }
+
+        var previous = instance.EnterLazyInitializationContext(property.Name);
+        try
+        {
+            var value = GetInitialPropertyValue(
+                instance,
+                property,
+                new Dictionary<string, object?>(StringComparer.Ordinal));
+            instance.CompleteLazyInitialization(property.Name, value);
+            return value;
+        }
+        catch (Exception exception)
+        {
+            instance.FailLazyInitialization(property.Name, exception);
+            throw;
+        }
+        finally
+        {
+            instance.ExitLazyInitializationContext(previous);
+        }
+    }
+
+    private async ValueTask<object?> GetOrInitializeLazyPropertyAsync(
+        ToshClassInstance instance,
+        ToshClassPropertyDefinition property,
+        CancellationToken cancellationToken)
+    {
+        ThrowIfRecursiveLazyInitialization(instance, property);
+        var initialization = instance.GetOrCreateLazyInitialization(property.Name);
+        if (!initialization.IsOwner)
+        {
+            return await initialization.Completion.WaitAsync(cancellationToken);
+        }
+
+        var previous = instance.EnterLazyInitializationContext(property.Name);
+        try
+        {
+            var value = await GetInitialPropertyValueAsync(
+                instance,
+                property,
+                new Dictionary<string, object?>(StringComparer.Ordinal),
+                cancellationToken);
+            instance.CompleteLazyInitialization(property.Name, value);
+            return value;
+        }
+        catch (Exception exception)
+        {
+            instance.FailLazyInitialization(property.Name, exception);
+            throw;
+        }
+        finally
+        {
+            instance.ExitLazyInitializationContext(previous);
+        }
+    }
+
+    private void ThrowIfRecursiveLazyInitialization(
+        ToshClassInstance instance,
+        ToshClassPropertyDefinition property)
+    {
+        if (instance.IsLazyInitializationActiveInCurrentContext(property.Name))
+        {
+            throw new InvalidOperationException(
+                $"Lazy property '{property.Name}' on class '{Name}' recursively reads itself while initializing.");
+        }
     }
 
     internal bool TrySetInstanceMember(ToshClassInstance instance, string name, object? value, bool includeHidden)
@@ -688,6 +880,78 @@ public sealed class ToshClassDefinition : IShellNamedType
         return true;
     }
 
+    internal async ValueTask<bool> TrySetInstanceMemberAsync(
+        ToshClassInstance instance,
+        string name,
+        object? value,
+        bool includeHidden,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (!_propertiesByName.TryGetValue(name, out var property) ||
+            property.IsStatic ||
+            (property.IsShy && !includeHidden) ||
+            (property.IsGuarded && !includeHidden) ||
+            (property.IsLocal && !includeHidden))
+        {
+            if (BaseClass is not null)
+            {
+                return await BaseClass.TrySetInstanceMemberAsync(
+                    instance,
+                    name,
+                    value,
+                    includeHidden,
+                    cancellationToken);
+            }
+
+            if (ClrBaseType is not null && instance.ClrBaseObject is not null)
+            {
+                try
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    _engine.Runtime.ObjectAccessor.SetValue(instance.ClrBaseObject, name, value);
+                    return true;
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
+                catch
+                {
+                    // Member not found or read-only on the CLR base.
+                }
+            }
+
+            return false;
+        }
+
+        if (property.SetterBody is not null)
+        {
+            await ExecutePropertySetterAsync(instance, property, value, cancellationToken);
+            return true;
+        }
+
+        if (property.GetterBody is not null)
+        {
+            throw new InvalidOperationException($"Property '{property.Name}' on class '{Name}' is read-only.");
+        }
+
+        if (property.IsFixed && !instance.IsInitializing)
+        {
+            throw new InvalidOperationException($"Property '{property.Name}' on class '{Name}' is fixed and cannot be reassigned after initialization.");
+        }
+
+        instance.SetStoredValue(
+            property.Name,
+            await ConvertPropertyValueAsync(
+                instance,
+                property,
+                value,
+                cancellationToken));
+        return true;
+    }
+
     internal IReadOnlyList<KeyValuePair<string, object?>> GetInstanceMembers(ToshClassInstance instance, bool includeHidden)
     {
         var members = new List<KeyValuePair<string, object?>>();
@@ -729,48 +993,320 @@ public sealed class ToshClassDefinition : IShellNamedType
         return members;
     }
 
-    internal void InvokeConstructorOnInstance(ToshClassInstance instance, IReadOnlyList<object?> arguments)
+    internal async ValueTask<IReadOnlyList<KeyValuePair<string, object?>>> GetInstanceMembersAsync(
+        ToshClassInstance instance,
+        bool includeHidden,
+        CancellationToken cancellationToken)
     {
-        var constructor = SelectConstructor(arguments, out var ctorLocals);
-        if (constructor is not null)
+        cancellationToken.ThrowIfCancellationRequested();
+        var members = new List<KeyValuePair<string, object?>>();
+
+        if (BaseClass is not null)
         {
-            RunConstructor(instance, constructor, ctorLocals);
+            members.AddRange(await BaseClass.GetInstanceMembersAsync(
+                instance,
+                includeHidden,
+                cancellationToken));
+        }
+        else if (ClrBaseType is not null && instance.ClrBaseObject is not null)
+        {
+            foreach (var property in ClrBaseType.GetProperties(
+                         System.Reflection.BindingFlags.Public |
+                         System.Reflection.BindingFlags.Instance))
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                try
+                {
+                    members.Add(new KeyValuePair<string, object?>(
+                        property.Name,
+                        property.GetValue(instance.ClrBaseObject)));
+                }
+                catch
+                {
+                    members.Add(new KeyValuePair<string, object?>(
+                        property.Name,
+                        null));
+                }
+            }
+        }
+
+        foreach (var property in Properties)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if ((property.IsShy || property.IsGuarded) && !includeHidden)
+            {
+                continue;
+            }
+
+            if (members.Any(member =>
+                    string.Equals(
+                        member.Key,
+                        property.Name,
+                        StringComparison.OrdinalIgnoreCase)))
+            {
+                continue;
+            }
+
+            var lookup = await TryGetInstanceMemberAsync(
+                instance,
+                property.Name,
+                includeHidden,
+                cancellationToken);
+            members.Add(new KeyValuePair<string, object?>(
+                property.Name,
+                lookup.Found ? lookup.Value : null));
+        }
+
+        return members;
+    }
+
+    internal void InvokeConstructorOnInstance(
+        ToshClassInstance instance,
+        IReadOnlyList<object?> arguments) =>
+        InvokeConstructorOnInstanceAsync(instance, arguments, CancellationToken.None)
+            .GetAwaiter()
+            .GetResult();
+
+    internal Task InvokeConstructorOnInstanceAsync(
+        ToshClassInstance instance,
+        IReadOnlyList<object?> arguments,
+        CancellationToken cancellationToken) =>
+        ConstructOnInstanceAsync(instance, arguments, cancellationToken);
+
+    private async Task ConstructOnInstanceAsync(
+        ToshClassInstance instance,
+        IReadOnlyList<object?> arguments,
+        CancellationToken cancellationToken,
+        bool isImplicitBaseCall = false,
+        ToshClassDefinition? requestedBy = null)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (instance.IsConstructionLayerComplete(this))
+        {
+            throw CreateConstructionDiagnostic(
+                code: "tosh.runtime.base_constructor_already_initialized",
+                title: $"Base class '{Name}' has already been initialized for this instance.",
+                span: requestedBy?.Span ?? Span,
+                label: "each class layer can be constructed only once",
+                sourceName: requestedBy?.SourceName,
+                sourceText: requestedBy?.SourceText);
+        }
+
+        if (!instance.TryBeginConstructionLayer(this))
+        {
+            throw CreateConstructionDiagnostic(
+                code: "tosh.runtime.constructor_cycle",
+                title: $"Constructor cycle detected while initializing class '{Name}'.",
+                span: requestedBy?.Span ?? Span,
+                label: "this class layer is already being initialized",
+                sourceName: requestedBy?.SourceName,
+                sourceText: requestedBy?.SourceText);
+        }
+
+        try
+        {
+            ToshClassConstructorDefinition constructor;
+            Dictionary<string, object?> constructorLocals;
+
+            try
+            {
+                (constructor, constructorLocals) = await SelectConstructorAsync(
+                    arguments,
+                    cancellationToken);
+            }
+            catch (InvalidOperationException) when (isImplicitBaseCall && requestedBy is not null)
+            {
+                throw requestedBy.CreateConstructionDiagnostic(
+                    code: "tosh.runtime.missing_base_constructor_initializer",
+                    title: $"Class '{requestedBy.Name}' must initialize base class '{Name}' with constructor arguments.",
+                    span: requestedBy.Span,
+                    label: $"add 'extends {Name}(...)' or a leading '$super(...)'",
+                    help: $"'{Name}' has no constructor that can be called without arguments.");
+            }
+
+            ValidateConstructorTypeArguments(constructor, constructorLocals, instance);
+
+            var (superInitializer, constructorBody) =
+                SplitConstructorInitializer(constructor);
+
+            if (BaseConstructorArgs is not null && superInitializer is not null)
+            {
+                throw CreateConstructionDiagnostic(
+                    code: "tosh.runtime.duplicate_base_constructor_initializer",
+                    title: $"Class '{Name}' initializes its base class more than once.",
+                    span: superInitializer.Span,
+                    label: "remove this '$super(...)' call or remove the 'extends Base(...)' arguments",
+                    help: "Use exactly one base-constructor initializer.");
+            }
+
+            if (BaseClass is not null)
+            {
+                if (BaseConstructorArgs is not null)
+                {
+                    var baseArguments = await EvaluateBaseConstructorArgsAsync(
+                        constructorLocals,
+                        cancellationToken);
+                    await BaseClass.ConstructOnInstanceAsync(
+                        instance,
+                        baseArguments,
+                        cancellationToken);
+                }
+                else if (superInitializer is not null)
+                {
+                    await RunConstructorInitializerAsync(
+                        instance,
+                        constructor,
+                        constructorLocals,
+                        superInitializer,
+                        cancellationToken);
+                }
+                else
+                {
+                    await BaseClass.ConstructOnInstanceAsync(
+                        instance,
+                        Array.Empty<object?>(),
+                        cancellationToken,
+                        isImplicitBaseCall: true,
+                        requestedBy: this);
+                }
+            }
+            else if (ClrBaseType is not null)
+            {
+                if (BaseConstructorArgs is not null)
+                {
+                    var baseArguments = await EvaluateBaseConstructorArgsAsync(
+                        constructorLocals,
+                        cancellationToken);
+                    await InitializeClrBaseAsync(instance, baseArguments, cancellationToken);
+                }
+                else if (superInitializer is not null)
+                {
+                    await RunConstructorInitializerAsync(
+                        instance,
+                        constructor,
+                        constructorLocals,
+                        superInitializer,
+                        cancellationToken);
+                }
+                else
+                {
+                    try
+                    {
+                        await InitializeClrBaseAsync(
+                            instance,
+                            Array.Empty<object?>(),
+                            cancellationToken);
+                    }
+                    catch (Exception exception) when (
+                        exception is not ToshDiagnosticException and not OperationCanceledException)
+                    {
+                        throw CreateConstructionDiagnostic(
+                            code: "tosh.runtime.missing_base_constructor_initializer",
+                            title: $"Class '{Name}' must initialize CLR base class '{ClrBaseType.FullName}' with constructor arguments.",
+                            span: Span,
+                            label: $"add 'extends {ClrBaseType.Name}(...)' or a leading '$super(...)'",
+                            help: exception.Message);
+                    }
+                }
+            }
+            else if (superInitializer is not null)
+            {
+                throw CreateConstructionDiagnostic(
+                    code: "tosh.runtime.super_without_base_class",
+                    title: $"Class '{Name}' cannot call '$super(...)' because it has no base class.",
+                    span: superInitializer.Span,
+                    label: "remove this base-constructor initializer");
+            }
+
+            foreach (var property in Properties)
+            {
+                if (property.IsComputed || property.IsStatic || property.IsLazy || property.IsAbstract)
+                {
+                    continue;
+                }
+
+                var initialValue = await GetInitialPropertyValueAsync(
+                    instance,
+                    property,
+                    constructorLocals,
+                    cancellationToken);
+                instance.SetStoredValue(property.Name, initialValue);
+            }
+
+            await RunConstructorAsync(
+                instance,
+                constructor with { Body = constructorBody },
+                constructorLocals,
+                cancellationToken);
+            instance.CompleteConstructionLayer(this);
+        }
+        catch
+        {
+            instance.AbortConstructionLayer(this);
+            throw;
         }
     }
 
     internal InvocationResult InvokeInstanceMethod(ToshClassInstance instance, string methodName, IReadOnlyList<object?> arguments, bool includeHidden)
     {
+        return InvokeInstanceMethodAsync(
+                instance,
+                methodName,
+                arguments,
+                includeHidden,
+                CancellationToken.None)
+            .AsTask()
+            .GetAwaiter()
+            .GetResult();
+    }
+
+    internal async ValueTask<InvocationResult> InvokeInstanceMethodAsync(
+        ToshClassInstance instance,
+        string methodName,
+        IReadOnlyList<object?> arguments,
+        bool includeHidden,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
         if (!_methodsByName.TryGetValue(methodName, out var candidates))
         {
             // Allow calling the constructor by class name (e.g. $super.BaseClass(args))
             if (string.Equals(methodName, Name, StringComparison.OrdinalIgnoreCase))
             {
-                var constructor = SelectConstructor(arguments, out var ctorLocals);
-                if (constructor is not null)
-                {
-                    RunConstructor(instance, constructor, ctorLocals);
-                }
+                await ConstructOnInstanceAsync(instance, arguments, cancellationToken);
                 return new InvocationResult(null, ReturnedVoid: true);
             }
 
             if (BaseClass is not null)
             {
-                return BaseClass.InvokeInstanceMethod(instance, methodName, arguments, includeHidden);
+                return await BaseClass.InvokeInstanceMethodAsync(
+                    instance,
+                    methodName,
+                    arguments,
+                    includeHidden,
+                    cancellationToken);
             }
 
             if (ClrBaseType is not null && instance.ClrBaseObject is not null)
             {
-                var result = _engine.Runtime.Invoker.InvokeInstance(instance.ClrBaseObject, methodName, arguments);
-                return new InvocationResult(result, ReturnedVoid: false);
+                return await _engine.Runtime.Invoker.InvokeInstanceMethodAsync(
+                    instance.ClrBaseObject,
+                    methodName,
+                    arguments,
+                    cancellationToken);
             }
 
             throw new InvalidOperationException($"Method '{methodName}' was not found on class '{Name}'.");
         }
 
-        var method = SelectMethod(
+        var (method, locals) = await SelectMethodAsync(
             candidates.Where(candidate => !candidate.IsStatic && (includeHidden || (!candidate.IsShy && !candidate.IsGuarded && !candidate.IsLocal))).ToArray(),
             arguments,
-            out var locals);
+            cancellationToken,
+            instance);
 
         // Emit deprecation warning for fading methods
         if (method.IsFading)
@@ -782,7 +1318,7 @@ public sealed class ToshClassDefinition : IShellNamedType
                 category: Tosh.Runtime.ToshDiagnosticCategory.Deprecation);
         }
 
-        var values = ExecuteMethodBlock(method, locals, instance);
+        var values = await ExecuteMethodBlockAsync(method, locals, instance, cancellationToken);
         return new InvocationResult(FlattenCallResult(values), ReturnedVoid: false);
     }
 
@@ -806,6 +1342,35 @@ public sealed class ToshClassDefinition : IShellNamedType
         yield return instance;
     }
 
+    internal bool HasEnumerator =>
+        HasSpecialInstanceMethod("enumerate", Array.Empty<object?>()) ||
+        HasSpecialInstanceMethod("GetEnumerator", Array.Empty<object?>());
+
+    internal async IAsyncEnumerable<object?> EnumerateItemsAsync(
+        ToshClassInstance instance,
+        [System.Runtime.CompilerServices.EnumeratorCancellation]
+        CancellationToken cancellationToken)
+    {
+        var enumeration = await TryInvokeEnumeratorAsync(instance, cancellationToken);
+        if (enumeration.Matched)
+        {
+            if (enumeration.Value is null)
+            {
+                yield break;
+            }
+
+            foreach (var item in ShellIterationUtilities.ExpandCollectionLikeValue(enumeration.Value))
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                yield return item;
+            }
+
+            yield break;
+        }
+
+        yield return instance;
+    }
+
     internal bool HasSpecialInstanceMethod(string methodName, IReadOnlyList<object?> arguments)
     {
         return TrySelectSpecialInstanceMethod(methodName, arguments, out _, out _);
@@ -815,7 +1380,7 @@ public sealed class ToshClassDefinition : IShellNamedType
     {
         value = null;
 
-        if (!TrySelectSpecialInstanceMethod(methodName, arguments, out var method, out var locals))
+        if (!TrySelectSpecialInstanceMethod(methodName, arguments, out var method, out var locals, instance))
         {
             return false;
         }
@@ -823,6 +1388,32 @@ public sealed class ToshClassDefinition : IShellNamedType
         var values = ExecuteMethodBlock(method, locals, instance);
         value = FlattenCallResult(values);
         return true;
+    }
+
+    internal async ValueTask<(bool Matched, object? Value)> TryInvokeSpecialInstanceMethodAsync(
+        ToshClassInstance instance,
+        string methodName,
+        IReadOnlyList<object?> arguments,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var selection = await TrySelectSpecialInstanceMethodAsync(
+            methodName,
+            arguments,
+            cancellationToken,
+            instance);
+        if (!selection.Matched)
+        {
+            return (false, null);
+        }
+
+        var values = await ExecuteMethodBlockAsync(
+            selection.Method!,
+            selection.Locals!,
+            instance,
+            cancellationToken);
+        return (true, FlattenCallResult(values));
     }
 
     internal object? GetInitialPropertyValue(ToshClassInstance instance, ToshClassPropertyDefinition property, IReadOnlyDictionary<string, object?> constructorLocals)
@@ -837,13 +1428,188 @@ public sealed class ToshClassDefinition : IShellNamedType
         return ConvertPropertyValue(instance, property, value);
     }
 
-    internal void RunConstructor(ToshClassInstance instance, ToshClassConstructorDefinition constructor, IReadOnlyDictionary<string, object?> constructorLocals)
+    internal async ValueTask<object?> GetInitialPropertyValueAsync(
+        ToshClassInstance instance,
+        ToshClassPropertyDefinition property,
+        IReadOnlyDictionary<string, object?> constructorLocals,
+        CancellationToken cancellationToken)
     {
+        if (property.Initializer is null)
+        {
+            return null;
+        }
+
         var locals = CreateLocals(instance, constructorLocals);
-        _engine.ExecuteClassBlockSync(constructor.SourceName, constructor.SourceText, constructor.Body, locals, constructor.CapturedScopes, $"{Name}()");
+        var value = await _engine.EvaluateClassPipelineValueAsync(
+            SourceName,
+            SourceText,
+            property.Initializer,
+            locals,
+            CapturedScopes,
+            cancellationToken);
+        return await ConvertPropertyValueAsync(
+            instance,
+            property,
+            value,
+            cancellationToken);
     }
 
-    internal IReadOnlyList<object?> EvaluateBaseConstructorArgs(IReadOnlyDictionary<string, object?> constructorLocals)
+
+    internal async Task RunConstructorAsync(
+        ToshClassInstance instance,
+        ToshClassConstructorDefinition constructor,
+        IReadOnlyDictionary<string, object?> constructorLocals,
+        CancellationToken cancellationToken)
+    {
+        var locals = CreateLocals(instance, constructorLocals);
+        await _engine.ExecuteClassBlockAsync(
+            constructor.SourceName,
+            constructor.SourceText,
+            constructor.Body,
+            locals,
+            constructor.CapturedScopes,
+            $"{Name}()",
+            cancellationToken);
+    }
+
+    private (PipelineStatementSyntax? Initializer, BlockSyntax Body)
+        SplitConstructorInitializer(ToshClassConstructorDefinition constructor)
+    {
+        var initializerIndices = constructor.Body.Statements
+            .Select((statement, index) => (statement, index))
+            .Where(pair => IsDirectSuperConstructorCall(pair.statement))
+            .ToArray();
+
+        if (initializerIndices.Length > 1)
+        {
+            throw CreateConstructionDiagnostic(
+                code: "tosh.runtime.duplicate_base_constructor_initializer",
+                title: $"Constructor '{Name}()' calls '$super(...)' more than once.",
+                span: initializerIndices[1].statement.Span,
+                label: "remove this duplicate base-constructor initializer",
+                sourceName: constructor.SourceName,
+                sourceText: constructor.SourceText);
+        }
+
+        if (initializerIndices.Length == 0)
+        {
+            return (null, constructor.Body);
+        }
+
+        var (statement, index) = initializerIndices[0];
+        if (index != 0)
+        {
+            throw CreateConstructionDiagnostic(
+                code: "tosh.runtime.super_initializer_must_be_first",
+                title: "'$super(...)' must be the first executable statement in a constructor.",
+                span: statement.Span,
+                label: "move this call to the start of the constructor",
+                sourceName: constructor.SourceName,
+                sourceText: constructor.SourceText);
+        }
+
+        var initializer = (PipelineStatementSyntax)statement;
+        var body = new BlockSyntax(
+            constructor.Body.Statements.Skip(1).ToArray(),
+            constructor.Body.Span);
+        return (initializer, body);
+    }
+
+    private static bool IsDirectSuperConstructorCall(StatementSyntax statement)
+    {
+        if (statement is not PipelineStatementSyntax
+            {
+                Pipeline:
+                {
+                    Stages:
+                    [
+                        ExpressionPipelineStageSyntax
+                        {
+                            Expression: CallableInvocationArgumentSyntax
+                            {
+                                Target: VariableReferenceArgumentSyntax { Name: var name },
+                            },
+                        },
+                    ],
+                    IsBackground: false,
+                },
+            } pipelineStatement)
+        {
+            return false;
+        }
+
+        if (pipelineStatement.Pipeline.Redirections is { Count: > 0 }
+            || pipelineStatement.Pipeline.InputRedirection is not null)
+        {
+            return false;
+        }
+
+        return string.Equals(name, "super", StringComparison.OrdinalIgnoreCase);
+    }
+
+
+    private async Task RunConstructorInitializerAsync(
+        ToshClassInstance instance,
+        ToshClassConstructorDefinition constructor,
+        IReadOnlyDictionary<string, object?> constructorLocals,
+        PipelineStatementSyntax initializer,
+        CancellationToken cancellationToken)
+    {
+        var locals = CreateLocals(instance, constructorLocals);
+        var block = new BlockSyntax([initializer], initializer.Span);
+        await _engine.ExecuteClassBlockAsync(
+            constructor.SourceName,
+            constructor.SourceText,
+            block,
+            locals,
+            constructor.CapturedScopes,
+            $"{Name}.base()",
+            cancellationToken);
+    }
+
+
+    private async Task InitializeClrBaseAsync(
+        ToshClassInstance instance,
+        IReadOnlyList<object?> arguments,
+        CancellationToken cancellationToken)
+    {
+        var clrObject = await _engine.Runtime.Invoker.CreateInstanceAsync(
+            ClrBaseType!,
+            arguments,
+            cancellationToken);
+        if (instance.TryInitializeClrBase(clrObject))
+        {
+            return;
+        }
+
+        throw CreateConstructionDiagnostic(
+            code: "tosh.runtime.base_constructor_already_initialized",
+            title: $"CLR base class '{ClrBaseType!.FullName}' has already been initialized for this instance.",
+            span: Span,
+            label: "each base class can be constructed only once");
+    }
+
+    private ToshDiagnosticException CreateConstructionDiagnostic(
+        string code,
+        string title,
+        TextSpan span,
+        string label,
+        string? help = null,
+        string? sourceName = null,
+        string? sourceText = null) =>
+        ToshDiagnosticException.Create(new ToshDiagnostic(
+            Code: code,
+            Title: title,
+            SourceName: sourceName ?? SourceName,
+            SourceText: sourceText ?? SourceText,
+            Span: span,
+            Label: label,
+            Help: help));
+
+
+    internal async Task<IReadOnlyList<object?>> EvaluateBaseConstructorArgsAsync(
+        IReadOnlyDictionary<string, object?> constructorLocals,
+        CancellationToken cancellationToken)
     {
         if (BaseConstructorArgs is null or { Count: 0 })
         {
@@ -853,9 +1619,17 @@ public sealed class ToshClassDefinition : IShellNamedType
         var args = new List<object?>();
         foreach (var argPipeline in BaseConstructorArgs)
         {
-            var value = _engine.EvaluateClassPipelineValueSync(SourceName, SourceText, argPipeline, constructorLocals, CapturedScopes);
+            cancellationToken.ThrowIfCancellationRequested();
+            var value = await _engine.EvaluateClassPipelineValueAsync(
+                SourceName,
+                SourceText,
+                argPipeline,
+                constructorLocals,
+                CapturedScopes,
+                cancellationToken);
             args.Add(value);
         }
+
         return args;
     }
 
@@ -866,6 +1640,23 @@ public sealed class ToshClassDefinition : IShellNamedType
         return FlattenCallResult(values);
     }
 
+    private async ValueTask<object?> EvaluatePropertyGetterAsync(
+        ToshClassInstance instance,
+        ToshClassPropertyDefinition property,
+        CancellationToken cancellationToken)
+    {
+        var locals = CreateLocals(instance, new Dictionary<string, object?>(StringComparer.Ordinal));
+        var values = await _engine.ExecuteClassBlockAsync(
+            SourceName,
+            SourceText,
+            property.GetterBody!,
+            locals,
+            CapturedScopes,
+            $"{Name}.{property.Name}.get",
+            cancellationToken);
+        return FlattenCallResult(values);
+    }
+
     private void ExecutePropertySetter(ToshClassInstance instance, ToshClassPropertyDefinition property, object? value)
     {
         var locals = CreateLocals(instance, new Dictionary<string, object?>(StringComparer.Ordinal)
@@ -873,6 +1664,26 @@ public sealed class ToshClassDefinition : IShellNamedType
             ["value"] = value,
         });
         _engine.ExecuteClassBlockSync(SourceName, SourceText, property.SetterBody!, locals, CapturedScopes, $"{Name}.{property.Name}.set");
+    }
+
+    private async ValueTask ExecutePropertySetterAsync(
+        ToshClassInstance instance,
+        ToshClassPropertyDefinition property,
+        object? value,
+        CancellationToken cancellationToken)
+    {
+        var locals = CreateLocals(instance, new Dictionary<string, object?>(StringComparer.Ordinal)
+        {
+            ["value"] = value,
+        });
+        await _engine.ExecuteClassBlockAsync(
+            SourceName,
+            SourceText,
+            property.SetterBody!,
+            locals,
+            CapturedScopes,
+            $"{Name}.{property.Name}.set",
+            cancellationToken);
     }
 
     private object? ConvertPropertyValue(ToshClassInstance? instance, ToshClassPropertyDefinition property, object? value)
@@ -922,8 +1733,66 @@ public sealed class ToshClassDefinition : IShellNamedType
             $"{Name}.{property.Name}");
     }
 
+    private async ValueTask<object?> ConvertPropertyValueAsync(
+        ToshClassInstance? instance,
+        ToshClassPropertyDefinition property,
+        object? value,
+        CancellationToken cancellationToken)
+    {
+        if (property.TypeName is null)
+        {
+            return value;
+        }
+
+        if (instance is not null)
+        {
+            var bindings = instance.GetBindingsFor(this);
+            if (bindings is not null &&
+                bindings.TryGetValue(property.TypeName, out var boundType))
+            {
+                if (boundType is null)
+                {
+                    return value;
+                }
+
+                EnforceStrictBinding(
+                    boundType,
+                    value,
+                    property.Span,
+                    SourceName,
+                    SourceText,
+                    $"{Name}.{property.Name}");
+                return value;
+            }
+        }
+
+        return await _engine.ConvertAnnotatedValueAsync(
+            property.TypeName,
+            property.Refinement,
+            value,
+            property.Span,
+            SourceName,
+            SourceText,
+            $"{Name}.{property.Name}",
+            cancellationToken);
+    }
+
     private IReadOnlyList<object?> ExecuteMethodBlock(ToshClassMethodDefinition method, IReadOnlyDictionary<string, object?> boundLocals, ToshClassInstance? instance)
     {
+        return ExecuteMethodBlockAsync(method, boundLocals, instance, CancellationToken.None)
+            .AsTask()
+            .GetAwaiter()
+            .GetResult();
+    }
+
+    private async ValueTask<IReadOnlyList<object?>> ExecuteMethodBlockAsync(
+        ToshClassMethodDefinition method,
+        IReadOnlyDictionary<string, object?> boundLocals,
+        ToshClassInstance? instance,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
         // Phase 3.4 — method-level generic inference.
         // For methods that declare their own type parameters
         // (`func describe<U>(label: U) -> U`), unify each argument
@@ -954,7 +1823,7 @@ public sealed class ToshClassDefinition : IShellNamedType
                 Runtime: _engine.Runtime,
                 Input: System.Linq.AsyncEnumerable.Empty<object?>(),
                 Arguments: argumentValues,
-                CancellationToken: System.Threading.CancellationToken.None,
+                CancellationToken: cancellationToken,
                 Invocation: syntheticInvocation);
 
             methodBindings = _engine.InferMethodTypeBindings(
@@ -1030,7 +1899,14 @@ public sealed class ToshClassDefinition : IShellNamedType
         }
 
         var locals = CreateLocals(instance, boundLocals);
-        var values = _engine.ExecuteClassBlockSync(method.SourceName, method.SourceText, method.Body, locals, method.CapturedScopes, $"{Name}.{method.Name}");
+        var values = await _engine.ExecuteClassBlockAsync(
+            method.SourceName,
+            method.SourceText,
+            method.Body,
+            locals,
+            method.CapturedScopes,
+            $"{Name}.{method.Name}",
+            cancellationToken);
 
         // Resolve the effective return-type annotation: prefer the un-erased
         // RawReturnTypeName when it names a bound class type-parameter,
@@ -1083,11 +1959,27 @@ public sealed class ToshClassDefinition : IShellNamedType
             return unwrapped;
         }
 
-        return effectiveReturnType is null
-            ? UnwrapValues(values)
-            : UnwrapValues(values)
-                .Select(value => _engine.ConvertAnnotatedValue(effectiveReturnType, value, method.Span, method.SourceName, method.SourceText, $"{Name}.{method.Name}"))
-                .ToArray();
+        var returnValues = UnwrapValues(values);
+        if (effectiveReturnType is null)
+        {
+            return returnValues;
+        }
+
+        var convertedReturnValues = new object?[returnValues.Count];
+        for (var index = 0; index < returnValues.Count; index++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            convertedReturnValues[index] = await _engine.ConvertAnnotatedValueAsync(
+                effectiveReturnType,
+                returnValues[index],
+                method.Span,
+                method.SourceName,
+                method.SourceText,
+                $"{Name}.{method.Name}",
+                cancellationToken);
+        }
+
+        return convertedReturnValues;
     }
 
     private IReadOnlyDictionary<string, object?> CreateLocals(ToshClassInstance? instance, IReadOnlyDictionary<string, object?> locals)
@@ -1114,16 +2006,58 @@ public sealed class ToshClassDefinition : IShellNamedType
         return result;
     }
 
-    private ToshClassConstructorDefinition? SelectConstructor(IReadOnlyList<object?> arguments, out Dictionary<string, object?> locals)
+    /// <summary>
+    /// The `this`/`super` bindings an instance member sees. Used to make
+    /// them visible inside method parameter defaults (TS-P1-21).
+    /// Returns null for static members and for constructors, where the
+    /// instance is not yet initialised.
+    /// </summary>
+    private IReadOnlyDictionary<string, object?>? CreateSelfBindings(ToshClassInstance? instance)
+    {
+        if (instance is null)
+        {
+            return null;
+        }
+
+        var bindings = new Dictionary<string, object?>(StringComparer.Ordinal)
+        {
+            ["this"] = new ToshClassSelfReference(instance),
+        };
+
+        if (BaseClass is not null)
+        {
+            bindings["super"] = new ToshClassSuperReference(instance, BaseClass);
+        }
+        else if (ClrBaseType is not null)
+        {
+            bindings["super"] = new ToshClassClrSuperReference(instance, ClrBaseType, _engine);
+        }
+
+        return bindings;
+    }
+
+
+    private async ValueTask<(
+        ToshClassConstructorDefinition Constructor,
+        Dictionary<string, object?> Locals)> SelectConstructorAsync(
+        IReadOnlyList<object?> arguments,
+        CancellationToken cancellationToken)
     {
         var constructors = GetConstructorDefinitions();
-        var matches = _engine.SelectBestCallableMatches(constructors, static candidate => candidate.Parameters, arguments);
+        var matches = await _engine.SelectBestCallableMatchesAsync(
+            constructors,
+            static candidate => candidate.Parameters,
+            arguments,
+            cancellationToken);
 
         if (matches.Count == 0)
         {
             if (constructors.Count == 1)
             {
-                ThrowDetailedSingleConstructorMismatch(constructors[0], arguments);
+                await ThrowDetailedSingleConstructorMismatchAsync(
+                    constructors[0],
+                    arguments,
+                    cancellationToken);
             }
 
             throw new InvalidOperationException($"No constructor matched class '{Name}' with {arguments.Count} argument(s).");
@@ -1138,8 +2072,20 @@ public sealed class ToshClassDefinition : IShellNamedType
                 $"Multiple constructor overloads matched class '{Name}' with {arguments.Count} argument(s): {signatures}.");
         }
 
-        locals = matches[0].Locals;
-        return matches[0].Candidate;
+        var winner = matches[0].Candidate;
+        var locals = matches[0].Locals;
+        await _engine.ApplyPendingParameterDefaultsAsync(
+            winner.Parameters,
+            locals,
+            matches[0].PendingDefaults,
+            winner.SourceName,
+            winner.SourceText,
+            winner.CapturedScopes,
+            $"{Name}()",
+            cancellationToken,
+            ambient: null,
+            selfUnavailable: true);
+        return (winner, locals);
     }
 
     private void ThrowDetailedSingleConstructorMismatch(ToshClassConstructorDefinition constructor, IReadOnlyList<object?> arguments)
@@ -1200,6 +2146,84 @@ public sealed class ToshClassDefinition : IShellNamedType
         }
     }
 
+    private async Task ThrowDetailedSingleConstructorMismatchAsync(
+        ToshClassConstructorDefinition constructor,
+        IReadOnlyList<object?> arguments,
+        CancellationToken cancellationToken)
+    {
+        var parameters = constructor.Parameters;
+        var hasRestParameter = parameters.Count > 0 && parameters[^1].IsRest;
+        var positionalCount = hasRestParameter ? parameters.Count - 1 : parameters.Count;
+        var namedArgs = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+        var positionalArgs = new List<object?>();
+
+        foreach (var argument in arguments)
+        {
+            if (argument is NamedArgument named)
+            {
+                namedArgs[named.Name] = named.Value;
+            }
+            else
+            {
+                positionalArgs.Add(argument);
+            }
+        }
+
+        var requiredCount = parameters.Count(parameter =>
+            !parameter.IsOptional &&
+            !parameter.IsRest &&
+            parameter.DefaultValue is null &&
+            !namedArgs.ContainsKey(parameter.Name));
+
+        if (positionalArgs.Count < requiredCount ||
+            (!hasRestParameter && positionalArgs.Count > positionalCount - namedArgs.Count))
+        {
+            return;
+        }
+
+        var positionalIndex = 0;
+        for (var index = 0; index < positionalCount; index++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var parameter = parameters[index];
+
+            if (namedArgs.TryGetValue(parameter.Name, out var namedValue))
+            {
+                await ConvertConstructorParameterValueAsync(
+                    constructor,
+                    parameter,
+                    namedValue,
+                    cancellationToken);
+                continue;
+            }
+
+            if (positionalIndex >= positionalArgs.Count)
+            {
+                continue;
+            }
+
+            await ConvertConstructorParameterValueAsync(
+                constructor,
+                parameter,
+                positionalArgs[positionalIndex++],
+                cancellationToken);
+        }
+
+        if (hasRestParameter)
+        {
+            var restParameter = parameters[^1];
+            for (var index = positionalCount; index < arguments.Count; index++)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                await ConvertConstructorParameterValueAsync(
+                    constructor,
+                    restParameter,
+                    arguments[index],
+                    cancellationToken);
+            }
+        }
+    }
+
     private object? ConvertConstructorParameterValue(
         ToshClassConstructorDefinition constructor,
         FunctionParameterDefinition parameter,
@@ -1222,6 +2246,49 @@ public sealed class ToshClassDefinition : IShellNamedType
                 string.Equals(diagnostic.Code, "tosh.runtime.annotation_unknown_type", StringComparison.Ordinal) ||
                 string.Equals(diagnostic.Code, "tosh.runtime.refinement_failed", StringComparison.Ordinal) ||
                 string.Equals(diagnostic.Code, "tosh.runtime.expression_failed", StringComparison.Ordinal)))
+            {
+                throw;
+            }
+
+            if (parameter.Refinement is not null)
+            {
+                throw;
+            }
+
+            throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                Code: "tosh.runtime.constructor_parameter_type_conversion_failed",
+                Title: $"Constructor argument '{parameter.Name}' could not be converted to '{parameter.TypeName}'.",
+                SourceName: constructor.SourceName,
+                SourceText: constructor.SourceText,
+                Span: parameter.Span,
+                Label: $"'{parameter.Name}' expects {parameter.TypeName}"));
+        }
+    }
+
+    private async ValueTask<object?> ConvertConstructorParameterValueAsync(
+        ToshClassConstructorDefinition constructor,
+        FunctionParameterDefinition parameter,
+        object? value,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await _engine.ConvertAnnotatedValueAsync(
+                parameter.TypeName,
+                parameter.Refinement,
+                value,
+                parameter.Span,
+                constructor.SourceName,
+                constructor.SourceText,
+                $"{Name}.{parameter.Name}",
+                cancellationToken);
+        }
+        catch (ToshDiagnosticException exception)
+        {
+            if (exception.Diagnostics.Any(diagnostic =>
+                    string.Equals(diagnostic.Code, "tosh.runtime.annotation_unknown_type", StringComparison.Ordinal) ||
+                    string.Equals(diagnostic.Code, "tosh.runtime.refinement_failed", StringComparison.Ordinal) ||
+                    string.Equals(diagnostic.Code, "tosh.runtime.expression_failed", StringComparison.Ordinal)))
             {
                 throw;
             }
@@ -1353,19 +2420,35 @@ public sealed class ToshClassDefinition : IShellNamedType
             Label: $"the value does not match '{typeName}'"));
     }
 
-    private ToshClassMethodDefinition SelectMethod(IReadOnlyList<ToshClassMethodDefinition> candidates, IReadOnlyList<object?> arguments, out Dictionary<string, object?> locals)
+
+    private async ValueTask<(
+        ToshClassMethodDefinition Method,
+        Dictionary<string, object?> Locals)> SelectMethodAsync(
+        IReadOnlyList<ToshClassMethodDefinition> candidates,
+        IReadOnlyList<object?> arguments,
+        CancellationToken cancellationToken,
+        ToshClassInstance? instance = null)
     {
-        var matches = _engine.SelectBestCallableMatches(candidates, static candidate => candidate.Parameters, arguments);
+        var matches = await _engine.SelectBestCallableMatchesAsync(
+            candidates,
+            static candidate => candidate.Parameters,
+            arguments,
+            cancellationToken);
 
         if (matches.Count == 0)
         {
-            var methodDisplayName = candidates.Count > 0 ? $"'{Name}.{candidates[0].Name}'" : $"'{Name}'";
-            throw new InvalidOperationException($"No overload matched {methodDisplayName} with {arguments.Count} argument(s).");
+            var methodDisplayName = candidates.Count > 0
+                ? $"'{Name}.{candidates[0].Name}'"
+                : $"'{Name}'";
+            throw new InvalidOperationException(
+                $"No overload matched {methodDisplayName} with {arguments.Count} argument(s).");
         }
 
         if (matches.Count > 1)
         {
-            var methodDisplayName = candidates.Count > 0 ? $"{Name}.{candidates[0].Name}" : Name;
+            var methodDisplayName = candidates.Count > 0
+                ? $"{Name}.{candidates[0].Name}"
+                : Name;
             var signatures = string.Join(
                 "; ",
                 matches.Select(match => FormatMethodSignature(match.Candidate)));
@@ -1373,8 +2456,19 @@ public sealed class ToshClassDefinition : IShellNamedType
                 $"Multiple overloads matched method '{methodDisplayName}' with {arguments.Count} argument(s): {signatures}.");
         }
 
-        locals = matches[0].Locals;
-        return matches[0].Candidate;
+        var winner = matches[0].Candidate;
+        var locals = matches[0].Locals;
+        await _engine.ApplyPendingParameterDefaultsAsync(
+            winner.Parameters,
+            locals,
+            matches[0].PendingDefaults,
+            winner.SourceName,
+            winner.SourceText,
+            winner.CapturedScopes,
+            $"{Name}.{winner.Name}",
+            cancellationToken,
+            ambient: CreateSelfBindings(instance));
+        return (winner, locals);
     }
 
     private bool TryInvokeEnumerator(ToshClassInstance instance, out object? value)
@@ -1393,17 +2487,38 @@ public sealed class ToshClassDefinition : IShellNamedType
         return false;
     }
 
+    private async ValueTask<(bool Matched, object? Value)> TryInvokeEnumeratorAsync(
+        ToshClassInstance instance,
+        CancellationToken cancellationToken)
+    {
+        foreach (var methodName in new[] { "enumerate", "GetEnumerator" })
+        {
+            var invocation = await TryInvokeSpecialInstanceMethodAsync(
+                instance,
+                methodName,
+                Array.Empty<object?>(),
+                cancellationToken);
+            if (invocation.Matched)
+            {
+                return invocation;
+            }
+        }
+
+        return (false, null);
+    }
+
     private bool TrySelectSpecialInstanceMethod(
         string methodName,
         IReadOnlyList<object?> arguments,
         out ToshClassMethodDefinition method,
-        out Dictionary<string, object?> locals)
+        out Dictionary<string, object?> locals,
+        ToshClassInstance? instance = null)
     {
         if (!_methodsByName.TryGetValue(methodName, out var candidates))
         {
             if (BaseClass is not null)
             {
-                return BaseClass.TrySelectSpecialInstanceMethod(methodName, arguments, out method, out locals);
+                return BaseClass.TrySelectSpecialInstanceMethod(methodName, arguments, out method, out locals, instance);
             }
 
             method = null!;
@@ -1434,7 +2549,74 @@ public sealed class ToshClassDefinition : IShellNamedType
 
         method = matches[0].Candidate;
         locals = matches[0].Locals;
+        _engine.ApplyPendingParameterDefaults(
+            method.Parameters,
+            locals,
+            matches[0].PendingDefaults,
+            method.SourceName,
+            method.SourceText,
+            method.CapturedScopes,
+            $"{Name}.{method.Name}",
+            ambient: CreateSelfBindings(instance));
         return true;
+    }
+
+    private async ValueTask<(
+        bool Matched,
+        ToshClassMethodDefinition? Method,
+        Dictionary<string, object?>? Locals)> TrySelectSpecialInstanceMethodAsync(
+        string methodName,
+        IReadOnlyList<object?> arguments,
+        CancellationToken cancellationToken,
+        ToshClassInstance? instance = null)
+    {
+        if (!_methodsByName.TryGetValue(methodName, out var candidates))
+        {
+            if (BaseClass is not null)
+            {
+                return await BaseClass.TrySelectSpecialInstanceMethodAsync(
+                    methodName,
+                    arguments,
+                    cancellationToken,
+                    instance);
+            }
+
+            return (false, null, null);
+        }
+
+        var matches = await _engine.SelectBestCallableMatchesAsync(
+            candidates.Where(candidate => !candidate.IsStatic),
+            static candidate => candidate.Parameters,
+            arguments,
+            cancellationToken);
+
+        if (matches.Count == 0)
+        {
+            return (false, null, null);
+        }
+
+        if (matches.Count > 1)
+        {
+            var signatures = string.Join(
+                "; ",
+                matches.Select(match => FormatMethodSignature(match.Candidate)));
+            throw new InvalidOperationException(
+                $"Multiple overloads matched special method '{Name}.{methodName}' with {arguments.Count} argument(s): {signatures}.");
+        }
+
+        var winner = matches[0].Candidate;
+        var locals = matches[0].Locals;
+        await _engine.ApplyPendingParameterDefaultsAsync(
+            winner.Parameters,
+            locals,
+            matches[0].PendingDefaults,
+            winner.SourceName,
+            winner.SourceText,
+            winner.CapturedScopes,
+            $"{Name}.{winner.Name}",
+            cancellationToken,
+            ambient: CreateSelfBindings(instance));
+        return (true, winner, locals);
     }
 
     private static IReadOnlyList<object?> UnwrapValues(IReadOnlyList<object?> values)

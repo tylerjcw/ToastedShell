@@ -3,12 +3,21 @@ using System.Runtime.CompilerServices;
 
 namespace Tosh.Language;
 
-public sealed class ToshClassInstance : IShellRecordObject, IShellInvocableObject, IShellTypedObject, IShellEnumerableObject
+public sealed class ToshClassInstance : IShellRecordObject, IShellInvocableObject, IShellTypedObject, IShellEnumerableObject,
+    IShellBinaryOperatorObject
     , ICloneable, IShellTypeCheckable
 {
     private readonly Dictionary<string, object?> _values = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _lazyInitialized = new(StringComparer.OrdinalIgnoreCase);
-    private bool _superWasCalled;
+    private readonly object _lazyInitializationLock = new();
+    private readonly Dictionary<string, TaskCompletionSource<object?>> _lazyInitializations =
+        new(StringComparer.OrdinalIgnoreCase);
+    private readonly AsyncLocal<IReadOnlySet<string>?> _activeLazyInitializers = new();
+    private readonly HashSet<ToshClassDefinition> _constructingLayers =
+        new(ReferenceEqualityComparer.Instance);
+    private readonly HashSet<ToshClassDefinition> _constructedLayers =
+        new(ReferenceEqualityComparer.Instance);
+    private bool _clrBaseInitialized;
 
     public ToshClassInstance(ToshClassDefinition definition)
     {
@@ -75,7 +84,13 @@ public sealed class ToshClassInstance : IShellRecordObject, IShellInvocableObjec
             // resolve currentDef.BaseTypeArguments[i] using currentBindings.
             if (parent.TypeParameterNames.Count == 0)
             {
-                break;
+                var emptyBindings =
+                    (IReadOnlyDictionary<string, Type?>)new Dictionary<string, Type?>(
+                        StringComparer.OrdinalIgnoreCase);
+                chain[parent] = emptyBindings;
+                currentDef = parent;
+                currentBindings = emptyBindings;
+                continue;
             }
 
             var baseArgs = currentDef.BaseTypeArguments;
@@ -126,9 +141,36 @@ public sealed class ToshClassInstance : IShellRecordObject, IShellInvocableObjec
 
     internal bool IsInitializing { get; private set; } = true;
 
-    internal void MarkSuperCalled() => _superWasCalled = true;
+    internal object? ClrBaseObject { get; private set; }
 
-    internal object? ClrBaseObject { get; set; }
+    internal bool IsConstructionLayerComplete(ToshClassDefinition definition) =>
+        _constructedLayers.Contains(definition);
+
+    internal bool TryBeginConstructionLayer(ToshClassDefinition definition) =>
+        _constructingLayers.Add(definition);
+
+    internal void CompleteConstructionLayer(ToshClassDefinition definition)
+    {
+        _constructingLayers.Remove(definition);
+        _constructedLayers.Add(definition);
+    }
+
+    internal void AbortConstructionLayer(ToshClassDefinition definition) =>
+        _constructingLayers.Remove(definition);
+
+    internal bool TryInitializeClrBase(object clrBaseObject)
+    {
+        if (_clrBaseInitialized)
+        {
+            return false;
+        }
+
+        ClrBaseObject = clrBaseObject;
+        _clrBaseInitialized = true;
+        return true;
+    }
+
+    internal void CompleteInitialization() => IsInitializing = false;
 
     public IShellTypeDescriptor ShellTypeDescriptor => TypeArguments is { Count: > 0 }
         ? new BoundGenericTypeDescriptor(Definition, TypeArguments)
@@ -151,14 +193,74 @@ public sealed class ToshClassInstance : IShellRecordObject, IShellInvocableObjec
         return Definition.GetInstanceMembers(this, includeHidden);
     }
 
+    public ValueTask<IReadOnlyList<KeyValuePair<string, object?>>> GetMembersAsync(
+        bool includeHidden,
+        CancellationToken cancellationToken) =>
+        Definition.GetInstanceMembersAsync(this, includeHidden, cancellationToken);
+
     public InvocationResult InvokeInstanceMethod(string methodName, IReadOnlyList<object?> arguments)
     {
         return Definition.InvokeInstanceMethod(this, methodName, arguments, includeHidden: false);
     }
 
+    public ValueTask<InvocationResult> InvokeInstanceMethodAsync(
+        string methodName,
+        IReadOnlyList<object?> arguments,
+        CancellationToken cancellationToken)
+    {
+        return Definition.InvokeInstanceMethodAsync(
+            this,
+            methodName,
+            arguments,
+            includeHidden: false,
+            cancellationToken);
+    }
+
+    bool IShellBinaryOperatorObject.TryEvaluateBinaryOperator(
+        string operatorName,
+        object? other,
+        out object? value) =>
+        Definition.TryInvokeSpecialInstanceMethod(
+            this,
+            operatorName,
+            [other],
+            out value);
+
+    public ValueTask<(bool Found, object? Value)> TryGetMemberAsync(
+        string name,
+        bool includeHidden,
+        CancellationToken cancellationToken) =>
+        Definition.TryGetInstanceMemberAsync(this, name, includeHidden, cancellationToken);
+
+    public ValueTask<bool> TrySetMemberAsync(
+        string name,
+        object? value,
+        CancellationToken cancellationToken) =>
+        Definition.TrySetInstanceMemberAsync(
+            this,
+            name,
+            value,
+            includeHidden: false,
+            cancellationToken);
+
+    internal ValueTask<bool> TrySetMemberAsync(
+        string name,
+        object? value,
+        bool includeHidden,
+        CancellationToken cancellationToken) =>
+        Definition.TrySetInstanceMemberAsync(this, name, value, includeHidden, cancellationToken);
+
+    public bool HasShellItems => Definition.HasEnumerator;
+
     public IEnumerable<object?> EnumerateShellItems()
     {
         return Definition.EnumerateItems(this);
+    }
+
+    public IAsyncEnumerable<object?> EnumerateShellItemsAsync(
+        CancellationToken cancellationToken)
+    {
+        return Definition.EnumerateItemsAsync(this, cancellationToken);
     }
 
     public override string ToString()
@@ -218,74 +320,87 @@ public sealed class ToshClassInstance : IShellRecordObject, IShellInvocableObjec
         return clone;
     }
 
-    internal void Initialize(IReadOnlyDictionary<string, object?> constructorLocals, ToshClassConstructorDefinition? constructor)
-    {
-        // Initialize base class properties first
-        InitializeBaseClassProperties(Definition.BaseClass, constructorLocals);
-
-        foreach (var property in Definition.Properties)
-        {
-            if (property.IsComputed || property.IsStatic || property.IsLazy || property.IsAbstract)
-            {
-                continue;
-            }
-
-            var initialValue = Definition.GetInitialPropertyValue(this, property, constructorLocals);
-            _values[property.Name] = initialValue;
-        }
-
-        // Auto-call parent constructor with extends clause args if present
-        if (Definition.BaseConstructorArgs is { Count: > 0 } && Definition.BaseClass is not null)
-        {
-            var args = Definition.EvaluateBaseConstructorArgs(constructorLocals);
-            Definition.BaseClass.InvokeConstructorOnInstance(this, args);
-            _superWasCalled = true;
-        }
-
-        if (constructor is not null)
-        {
-            Definition.RunConstructor(this, constructor, constructorLocals);
-        }
-
-        // Validate that $super() was called if the parent has a primary constructor and no extends clause args
-        if (Definition.BaseClass is not null &&
-            Definition.BaseConstructorArgs is null or { Count: 0 } &&
-            Definition.BaseClass.HasPrimaryConstructor &&
-            !_superWasCalled)
-        {
-            throw new InvalidOperationException(
-                $"Class '{Definition.Name}' extends '{Definition.BaseClass.Name}' which has a primary constructor, " +
-                $"but $super() was never called. Either provide arguments in the extends clause " +
-                $"(e.g., 'extends {Definition.BaseClass.Name}(args)') or call $super(args) in the constructor body.");
-        }
-
-        IsInitializing = false;
-    }
-
-    private void InitializeBaseClassProperties(ToshClassDefinition? baseClass, IReadOnlyDictionary<string, object?> constructorLocals)
-    {
-        if (baseClass is null) return;
-
-        // Recurse up first so root properties init first
-        InitializeBaseClassProperties(baseClass.BaseClass, constructorLocals);
-
-        foreach (var property in baseClass.Properties)
-        {
-            if (property.IsComputed || property.IsStatic || property.IsLazy || property.IsAbstract) continue;
-            if (_values.ContainsKey(property.Name)) continue;
-
-            var initialValue = baseClass.GetInitialPropertyValue(this, property, constructorLocals);
-            _values[property.Name] = initialValue;
-        }
-    }
-
     internal bool TryGetStoredValue(string name, out object? value) => _values.TryGetValue(name, out value);
 
     internal void SetStoredValue(string name, object? value) => _values[name] = value;
 
-    internal bool IsLazyInitialized(string name) => _lazyInitialized.Contains(name);
+    internal bool IsLazyInitializationActiveInCurrentContext(string name) =>
+        _activeLazyInitializers.Value?.Contains(name) == true;
 
-    internal void MarkLazyInitialized(string name) => _lazyInitialized.Add(name);
+    internal IReadOnlySet<string>? EnterLazyInitializationContext(string name)
+    {
+        var previous = _activeLazyInitializers.Value;
+        var active = previous is null
+            ? new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            : new HashSet<string>(previous, StringComparer.OrdinalIgnoreCase);
+        active.Add(name);
+        _activeLazyInitializers.Value = active;
+        return previous;
+    }
+
+    internal void ExitLazyInitializationContext(IReadOnlySet<string>? previous) =>
+        _activeLazyInitializers.Value = previous;
+
+    internal (bool IsOwner, Task<object?> Completion) GetOrCreateLazyInitialization(string name)
+    {
+        lock (_lazyInitializationLock)
+        {
+            if (_lazyInitialized.Contains(name))
+            {
+                _values.TryGetValue(name, out var value);
+                return (false, Task.FromResult(value));
+            }
+
+            if (_lazyInitializations.TryGetValue(name, out var existing))
+            {
+                return (false, existing.Task);
+            }
+
+            var created = new TaskCompletionSource<object?>(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+            _lazyInitializations[name] = created;
+            return (true, created.Task);
+        }
+    }
+
+    internal void CompleteLazyInitialization(string name, object? value)
+    {
+        TaskCompletionSource<object?> completion;
+
+        lock (_lazyInitializationLock)
+        {
+            completion = _lazyInitializations[name];
+            _values[name] = value;
+            _lazyInitialized.Add(name);
+            _lazyInitializations.Remove(name);
+        }
+
+        completion.TrySetResult(value);
+    }
+
+    internal void FailLazyInitialization(string name, Exception exception)
+    {
+        TaskCompletionSource<object?>? completion;
+
+        lock (_lazyInitializationLock)
+        {
+            _lazyInitializations.Remove(name, out completion);
+        }
+
+        if (completion is null)
+        {
+            return;
+        }
+
+        if (exception is OperationCanceledException canceled)
+        {
+            completion.TrySetCanceled(canceled.CancellationToken);
+            return;
+        }
+
+        completion.TrySetException(exception);
+        _ = completion.Task.Exception;
+    }
 
     public bool IsInstanceOf(string typeName)
     {

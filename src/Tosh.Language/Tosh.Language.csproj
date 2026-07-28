@@ -12,6 +12,14 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <ItemGroup>
+    <!-- Lets the test project assert on internal semantic primitives —
+         notably the annotated-conversion drift guard, which runs one
+         corpus through both the sync and async conversion paths
+         (TS-P1-24). Matches Tosh.Client / Tosh.Cli / Tosh.Crumb. -->
+    <InternalsVisibleTo Include="Tosh.Tests" />
+  </ItemGroup>
+
   <PropertyGroup>
     <IsPackable>true</IsPackable>
     <PackageId>Tosh.Language</PackageId>

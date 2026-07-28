@@ -184,12 +184,7 @@ public static class Lowerer
             LowerVariableDeclaration(decl, ctx),
 
         VariableAssignmentStatementSyntax assign =>
-            new BoundVariableAssignment(
-                Name: assign.Name,
-                Symbol: ctx.LookupSymbol(assign.Name),
-                Operator: assign.Operator,
-                Value: LowerPipeline(assign.Value, ctx),
-                Span: assign.Span),
+            LowerVariableAssignment(assign, ctx),
 
         IfStatementSyntax ifStmt =>
             LowerIfStatement(ifStmt, ctx),
@@ -252,10 +247,7 @@ public static class Lowerer
             new BoundUsingStatement(usingStmt.Target, usingStmt.Alias, usingStmt.Modifier, usingStmt.Span),
 
         TupleAssignmentStatementSyntax tupleAssign =>
-            new BoundTupleAssignment(
-                Names: tupleAssign.LeftNames,
-                Value: LowerPipeline(tupleAssign.Value, ctx),
-                Span: tupleAssign.Span),
+            LowerTupleAssignment(tupleAssign, ctx),
 
         DestructuringDeclarationStatementSyntax destruct =>
             LowerDestructuringDeclaration(destruct, ctx),
@@ -373,7 +365,11 @@ public static class Lowerer
                 ? BoundType.Dynamic
                 : TypeInferrer.InferPipelineValue(value);
         }
-        var symbol = ctx.DeclareLocal(decl.Name, declaredType);
+        var symbol = ctx.DeclareLocal(
+            decl.Name,
+            declaredType,
+            decl.IsConst,
+            decl.TypeName);
 
         return new BoundVariableDeclaration(
             Symbol: symbol,
@@ -383,7 +379,51 @@ public static class Lowerer
             Span: decl.Span)
         {
             AnnotatedDynamic = annotatedDynamic,
+            HasExplicitTypeAnnotation = !string.IsNullOrEmpty(decl.TypeName),
         };
+    }
+
+    private static BoundVariableAssignment LowerVariableAssignment(
+        VariableAssignmentStatementSyntax assignment,
+        LowerContext ctx)
+    {
+        var symbol = ctx.LookupSymbol(assignment.Name);
+        if (symbol is not null)
+        {
+            // An assignment target is a use of the binding even when the RHS
+            // does not reference it (notably `$x = 1` and `$x ??= 1`).
+            // Record it so closure lowering allocates the capture field.
+            ctx.RecordPotentialCapture(symbol);
+        }
+
+        return new BoundVariableAssignment(
+            Name: assignment.Name,
+            Symbol: symbol,
+            Operator: assignment.Operator,
+            Value: LowerPipeline(assignment.Value, ctx),
+            Span: assignment.Span);
+    }
+
+    private static BoundTupleAssignment LowerTupleAssignment(
+        TupleAssignmentStatementSyntax assignment,
+        LowerContext ctx)
+    {
+        var symbols = new BoundSymbol?[assignment.LeftNames.Count];
+        for (var index = 0; index < assignment.LeftNames.Count; index++)
+        {
+            var symbol = ctx.LookupSymbol(assignment.LeftNames[index]);
+            symbols[index] = symbol;
+            if (symbol is not null)
+            {
+                ctx.RecordPotentialCapture(symbol);
+            }
+        }
+
+        return new BoundTupleAssignment(
+            Names: assignment.LeftNames,
+            Symbols: symbols,
+            Value: LowerPipeline(assignment.Value, ctx),
+            Span: assignment.Span);
     }
 
     /// <summary>
@@ -792,6 +832,8 @@ public static class Lowerer
 
         OperatorArgumentSyntax binary => BuildBinary(binary, ctx),
 
+        ChainedComparisonArgumentSyntax chain => BuildChainedComparison(chain, ctx),
+
         UnaryOperatorArgumentSyntax unary => BuildUnary(unary, ctx),
 
         RangeArgumentSyntax range => BuildRange(range, ctx),
@@ -970,6 +1012,29 @@ public static class Lowerer
         // reference so callers downstream see propagated typing.
         var type = symbol?.DeclaredType ?? BoundType.Dynamic;
         return new BoundVariableReference(varRef.Name, symbol, varRef.Span, type);
+    }
+
+    /// <summary>
+    /// Lowers `a &lt; b &lt; c` (TS-P1-22). The chain is preserved as its
+    /// own bound node so the emitter can hold each operand in a local
+    /// and evaluate it once; desugaring here into `and` would duplicate
+    /// the interior operands.
+    /// </summary>
+    private static BoundExpression BuildChainedComparison(
+        ChainedComparisonArgumentSyntax chain,
+        LowerContext ctx)
+    {
+        var operands = new List<BoundExpression>(chain.Operands.Count);
+        foreach (var operand in chain.Operands)
+        {
+            operands.Add(LowerExpression(operand, ctx));
+        }
+
+        return new BoundChainedComparison(
+            operands,
+            chain.Operators,
+            chain.Span,
+            BoundType.FromClr(typeof(bool)));
     }
 
     private static BoundExpression BuildBinary(OperatorArgumentSyntax binary, LowerContext ctx)
@@ -1151,45 +1216,20 @@ public static class Lowerer
     }
 
     /// <summary>
-    /// Lowers <c>fn(x, y) => …</c> / <c>{|x, y| …}</c>. Defaults are
-    /// lowered in the *outer* scope (so they can capture but not
-    /// shadow), then a fresh scope is pushed and parameters are
-    /// declared inside it before the body lowers.
+    /// Lowers <c>fn(x, y) => …</c> / <c>{|x, y| …}</c>. Parameters are
+    /// declared inside a fresh scope with each default lowered
+    /// immediately before its parameter binds (TS-P1-05), so defaults
+    /// see earlier parameters and capture outer references.
     /// </summary>
     private static BoundLambda BuildLambda(AnonymousFunctionArgumentSyntax lambda, LowerContext ctx)
     {
-        // Lower default-value pipelines in the outer scope first.
-        var pendingDefaults = new BoundPipeline?[lambda.Parameters.Count];
-        for (var i = 0; i < lambda.Parameters.Count; i++)
-        {
-            var param = lambda.Parameters[i];
-            pendingDefaults[i] = param.DefaultValue is null
-                ? null
-                : LowerPipeline(param.DefaultValue, ctx);
-        }
-
         var captures = ctx.EnterLambda();
         try
         {
             ctx.PushScope();
             try
             {
-                var bound = new List<BoundParameter>(lambda.Parameters.Count);
-                for (var i = 0; i < lambda.Parameters.Count; i++)
-                {
-                    var param = lambda.Parameters[i];
-                    var symbol = ctx.DeclareLocal(
-                        param.Name,
-                        BoundSymbolKind.Parameter,
-                        BoundType.Dynamic);
-                    bound.Add(new BoundParameter(
-                        Name: param.Name,
-                        Symbol: symbol,
-                        Default: pendingDefaults[i],
-                        IsOptional: param.IsOptional,
-                        IsRest: param.IsRest,
-                        Span: param.Span));
-                }
+                var bound = DeclareParameters(lambda.Parameters, ctx);
 
                 // Lower body statements directly (we already have the
                 // outer scope pushed by EnterLambda → PushScope, so a
@@ -1383,38 +1423,26 @@ public static class Lowerer
     }
 
     /// <summary>
-    /// Lowers a parameter list for use inside a function/lambda
-    /// declaration. Defaults are lowered in the *outer* scope before
-    /// any parameter is bound (matches lambda semantics).
-    /// </summary>
-    private static (IReadOnlyList<BoundParameter> Bound, BoundPipeline?[] Defaults) LowerParameterDefaults(
-        IReadOnlyList<FunctionParameterSyntax> parameters,
-        LowerContext ctx)
-    {
-        var defaults = new BoundPipeline?[parameters.Count];
-        for (var i = 0; i < parameters.Count; i++)
-        {
-            defaults[i] = parameters[i].DefaultValue is null
-                ? null
-                : LowerPipeline(parameters[i].DefaultValue!, ctx);
-        }
-        return (Array.Empty<BoundParameter>(), defaults);
-    }
-
-    /// <summary>
     /// Declares the parameter symbols and produces the BoundParameter
-    /// list. Caller is responsible for having opened a scope before
-    /// calling this.
+    /// list, lowering each default expression *inside* the callable's
+    /// scope immediately before its parameter is declared (TS-P1-05).
+    /// A default therefore sees earlier parameters and — when the
+    /// caller has opened a lambda frame — records outer references as
+    /// captures; it can never see its own or a later parameter.
+    /// Caller is responsible for having opened a scope before calling
+    /// this.
     /// </summary>
     private static IReadOnlyList<BoundParameter> DeclareParameters(
         IReadOnlyList<FunctionParameterSyntax> parameters,
-        BoundPipeline?[] defaults,
         LowerContext ctx)
     {
         var bound = new List<BoundParameter>(parameters.Count);
         for (var i = 0; i < parameters.Count; i++)
         {
             var param = parameters[i];
+            var loweredDefault = param.DefaultValue is null
+                ? null
+                : LowerPipeline(param.DefaultValue, ctx);
             // Resolve the parameter's annotation through the
             // shared TypeNameResolver. Primitives, list/dict/set
             // shorthands, nullables, arrays, tuples, and any
@@ -1426,7 +1454,7 @@ public static class Lowerer
             bound.Add(new BoundParameter(
                 Name: param.Name,
                 Symbol: symbol,
-                Default: defaults[i],
+                Default: loweredDefault,
                 IsOptional: param.IsOptional,
                 IsRest: param.IsRest,
                 Span: param.Span,
@@ -1443,15 +1471,13 @@ public static class Lowerer
         // references inside the body can resolve to this symbol.
         var funcSymbol = ctx.DeclareLocal(funcDef.Name, BoundSymbolKind.LocalVariable, BoundType.Dynamic);
 
-        var (_, defaults) = LowerParameterDefaults(funcDef.Parameters, ctx);
-
         var captures = ctx.EnterLambda();
         try
         {
             ctx.PushScope();
             try
             {
-                var bound = DeclareParameters(funcDef.Parameters, defaults, ctx);
+                var bound = DeclareParameters(funcDef.Parameters, ctx);
                 var statements = new List<BoundStatement>(funcDef.Body.Statements.Count);
                 foreach (var inner in funcDef.Body.Statements)
                 {
@@ -1487,7 +1513,6 @@ public static class Lowerer
         LowerContext ctx)
     {
         var runeSymbol = ctx.DeclareLocal(runeDef.Name, BoundSymbolKind.LocalVariable, BoundType.Dynamic);
-        var (_, defaults) = LowerParameterDefaults(runeDef.Parameters, ctx);
 
         var captures = ctx.EnterLambda();
         try
@@ -1495,7 +1520,7 @@ public static class Lowerer
             ctx.PushScope();
             try
             {
-                var bound = DeclareParameters(runeDef.Parameters, defaults, ctx);
+                var bound = DeclareParameters(runeDef.Parameters, ctx);
                 var statements = new List<BoundStatement>(runeDef.Body.Statements.Count);
                 foreach (var inner in runeDef.Body.Statements)
                 {
@@ -1571,11 +1596,10 @@ public static class Lowerer
 
             case ClassConstructorMemberSyntax ctor:
                 {
-                    var (_, defaults) = LowerParameterDefaults(ctor.Parameters, ctx);
                     ctx.PushScope();
                     try
                     {
-                        var bound = DeclareParameters(ctor.Parameters, defaults, ctx);
+                        var bound = DeclareParameters(ctor.Parameters, ctx);
                         var statements = new List<BoundStatement>(ctor.Body.Statements.Count);
                         foreach (var inner in ctor.Body.Statements)
                         {
@@ -1602,8 +1626,6 @@ public static class Lowerer
         ClassDefinitionStatementSyntax classDef,
         LowerContext ctx)
     {
-        var (_, ctorDefaults) = LowerParameterDefaults(classDef.PrimaryConstructorParameters, ctx);
-
         BoundParameter[] primaryCtorParams;
         IReadOnlyList<BoundClassMember> members;
         IReadOnlyList<BoundPipeline>? baseArgs = null;
@@ -1611,7 +1633,7 @@ public static class Lowerer
         ctx.PushScope();
         try
         {
-            primaryCtorParams = DeclareParameters(classDef.PrimaryConstructorParameters, ctorDefaults, ctx).ToArray();
+            primaryCtorParams = DeclareParameters(classDef.PrimaryConstructorParameters, ctx).ToArray();
 
             if (classDef.BaseConstructorArgs is not null)
             {
@@ -1660,11 +1682,10 @@ public static class Lowerer
         var methods = new List<BoundInterfaceMethodSignature>(ifaceDef.Methods.Count);
         foreach (var raw in ifaceDef.Methods)
         {
-            var (_, defaults) = LowerParameterDefaults(raw.Parameters, ctx);
             ctx.PushScope();
             try
             {
-                var bound = DeclareParameters(raw.Parameters, defaults, ctx);
+                var bound = DeclareParameters(raw.Parameters, ctx);
                 methods.Add(new BoundInterfaceMethodSignature(
                     Name: raw.Name,
                     Parameters: bound,
@@ -1691,11 +1712,10 @@ public static class Lowerer
         var variants = new List<BoundUnionVariant>(unionDef.Variants.Count);
         foreach (var variant in unionDef.Variants)
         {
-            var (_, defaults) = LowerParameterDefaults(variant.Fields, ctx);
             ctx.PushScope();
             try
             {
-                var bound = DeclareParameters(variant.Fields, defaults, ctx);
+                var bound = DeclareParameters(variant.Fields, ctx);
                 variants.Add(new BoundUnionVariant(variant.Name, bound, variant.Span));
             }
             finally
@@ -1798,11 +1818,10 @@ public static class Lowerer
         var methods = new List<BoundTraitMethodSignature>(traitDef.Methods.Count);
         foreach (var raw in traitDef.Methods)
         {
-            var (_, defaults) = LowerParameterDefaults(raw.Parameters, ctx);
             ctx.PushScope();
             try
             {
-                var bound = DeclareParameters(raw.Parameters, defaults, ctx);
+                var bound = DeclareParameters(raw.Parameters, ctx);
                 var defaultBody = raw.DefaultBody is null ? null : LowerBlock(raw.DefaultBody, ctx);
                 methods.Add(new BoundTraitMethodSignature(
                     Name: raw.Name,
@@ -1862,10 +1881,10 @@ public static class Lowerer
         ScriptInputStatementSyntax scriptInput,
         LowerContext ctx)
     {
-        var (_, defaults) = LowerParameterDefaults(scriptInput.Parameters, ctx);
         // Script inputs are visible at file scope, so we declare them
-        // there rather than in a fresh scope.
-        var bound = DeclareParameters(scriptInput.Parameters, defaults, ctx);
+        // there rather than in a fresh scope. Defaults are lowered
+        // in the same scope, immediately before their parameter binds.
+        var bound = DeclareParameters(scriptInput.Parameters, ctx);
         return new BoundScriptInputStatement(scriptInput.Kind, bound, scriptInput.Span);
     }
 
@@ -1996,13 +2015,19 @@ public static class Lowerer
             _scopes.RemoveAt(_scopes.Count - 1);
         }
 
-        public BoundSymbol DeclareLocal(string name, BoundType declaredType)
+        public BoundSymbol DeclareLocal(
+            string name,
+            BoundType declaredType,
+            bool isConst = false,
+            string? declaredTypeName = null)
         {
             var symbol = new BoundSymbol(
                 Name: name,
                 Kind: BoundSymbolKind.LocalVariable,
                 ScopeDepth: _scopes.Count - 1,
-                DeclaredType: declaredType);
+                DeclaredType: declaredType,
+                IsConst: isConst,
+                DeclaredTypeName: declaredTypeName);
 
             // Shadowing is permitted — the innermost binding wins.
             _scopes[^1][name] = symbol;

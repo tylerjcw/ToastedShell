@@ -447,6 +447,20 @@ public static class VariableBinder
                 VisitArgument(oper.Right, ctx);
                 break;
 
+            case ComparisonPatternSyntax comparisonPattern:
+                // A match arm's pattern operand can hold variable
+                // references (`_ > $limit`), so it must be walked like any
+                // other child (TS-P2-07).
+                VisitArgument(comparisonPattern.Operand, ctx);
+                break;
+
+            case ChainedComparisonArgumentSyntax chain:
+                foreach (var operand in chain.Operands)
+                {
+                    VisitArgument(operand, ctx);
+                }
+                break;
+
             case UnaryOperatorArgumentSyntax un:
                 VisitArgument(un.Operand, ctx);
                 break;

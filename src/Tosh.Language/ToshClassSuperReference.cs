@@ -23,8 +23,10 @@ internal sealed class ToshClassSuperReference : IShellRecordObject, IShellInvoca
 
     public async IAsyncEnumerable<object?> InvokeAsync(CommandContext context)
     {
-        _baseClass.InvokeConstructorOnInstance(_instance, context.Arguments);
-        _instance.MarkSuperCalled();
+        await _baseClass.InvokeConstructorOnInstanceAsync(
+            _instance,
+            context.Arguments,
+            context.CancellationToken);
         yield break;
     }
 
@@ -43,8 +45,50 @@ internal sealed class ToshClassSuperReference : IShellRecordObject, IShellInvoca
         return _baseClass.GetInstanceMembers(_instance, includeHidden: true);
     }
 
+    public ValueTask<IReadOnlyList<KeyValuePair<string, object?>>> GetMembersAsync(
+        bool includeHidden,
+        CancellationToken cancellationToken) =>
+        _baseClass.GetInstanceMembersAsync(
+            _instance,
+            includeHidden: true,
+            cancellationToken);
+
     public InvocationResult InvokeInstanceMethod(string methodName, IReadOnlyList<object?> arguments)
     {
         return _baseClass.InvokeInstanceMethod(_instance, methodName, arguments, includeHidden: true);
     }
+
+    public ValueTask<InvocationResult> InvokeInstanceMethodAsync(
+        string methodName,
+        IReadOnlyList<object?> arguments,
+        CancellationToken cancellationToken)
+    {
+        return _baseClass.InvokeInstanceMethodAsync(
+            _instance,
+            methodName,
+            arguments,
+            includeHidden: true,
+            cancellationToken);
+    }
+
+    public ValueTask<(bool Found, object? Value)> TryGetMemberAsync(
+        string name,
+        bool includeHidden,
+        CancellationToken cancellationToken) =>
+        _baseClass.TryGetInstanceMemberAsync(
+            _instance,
+            name,
+            includeHidden: true,
+            cancellationToken);
+
+    public ValueTask<bool> TrySetMemberAsync(
+        string name,
+        object? value,
+        CancellationToken cancellationToken) =>
+        _baseClass.TrySetInstanceMemberAsync(
+            _instance,
+            name,
+            value,
+            includeHidden: true,
+            cancellationToken);
 }

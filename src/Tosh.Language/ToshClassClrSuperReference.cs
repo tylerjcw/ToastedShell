@@ -25,8 +25,15 @@ internal sealed class ToshClassClrSuperReference : IShellRecordObject, IShellInv
 
     public async IAsyncEnumerable<object?> InvokeAsync(CommandContext context)
     {
-        var clrObject = _engine.Runtime.Invoker.CreateInstance(_clrBaseType, context.Arguments);
-        _instance.ClrBaseObject = clrObject;
+        var clrObject = await _engine.Runtime.Invoker.CreateInstanceAsync(
+            _clrBaseType,
+            context.Arguments,
+            context.CancellationToken);
+        if (!_instance.TryInitializeClrBase(clrObject))
+        {
+            throw new InvalidOperationException(
+                $"CLR base class '{_clrBaseType.FullName}' has already been initialized for this instance.");
+        }
         yield break;
     }
 
@@ -83,6 +90,23 @@ internal sealed class ToshClassClrSuperReference : IShellRecordObject, IShellInv
         {
             var result = _engine.Runtime.Invoker.InvokeInstance(_instance.ClrBaseObject, methodName, arguments);
             return new InvocationResult(result, ReturnedVoid: false);
+        }
+
+        throw new InvalidOperationException($"CLR base object has not been initialized. Call $super(...) first.");
+    }
+
+    public async ValueTask<InvocationResult> InvokeInstanceMethodAsync(
+        string methodName,
+        IReadOnlyList<object?> arguments,
+        CancellationToken cancellationToken)
+    {
+        if (_instance.ClrBaseObject is not null)
+        {
+            return await _engine.Runtime.Invoker.InvokeInstanceMethodAsync(
+                _instance.ClrBaseObject,
+                methodName,
+                arguments,
+                cancellationToken);
         }
 
         throw new InvalidOperationException($"CLR base object has not been initialized. Call $super(...) first.");

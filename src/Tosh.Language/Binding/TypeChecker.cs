@@ -427,22 +427,6 @@ public static class TypeChecker
     private static void CheckCondition(BoundExpression condition, TextSpan span, string context, CheckContext ctx)
     {
         WalkExpression(condition, ctx);
-        var condType = condition.Type;
-        var boolType = BoundType.FromClr(typeof(bool));
-        if (condType.IsDynamic) return;
-        if (!IsAssignable(condType, boolType, out var reason))
-        {
-            ctx.Diagnostics.Add(new ToshDiagnostic(
-                Code: "tosh.type.condition",
-                Title: $"{context} condition expects 'bool' but received '{condType.DisplayName}'.",
-                SourceName: ctx.SourceName,
-                SourceText: ctx.SourceText,
-                Span: span,
-                Help: reason,
-                Severity: ToshDiagnosticSeverity.Warning,
-                Category: ToshDiagnosticCategory.Type,
-                Lifecycle: ToshDiagnosticLifecycle.Preview));
-        }
     }
 
     private static void WalkExpression(BoundExpression expression, CheckContext ctx)
@@ -1128,7 +1112,6 @@ public static class TypeChecker
         if (left.IsDynamic || right.IsDynamic) return;
 
         bool isNumeric(BoundType t) => t.ClrType is { } c && NumericRank(c) > 0;
-        bool isBool(BoundType t) => t.ClrType == typeof(bool);
         bool isString(BoundType t) => t.ClrType == typeof(string);
 
         // If either operand isn't a built-in scalar, skip the check —
@@ -1148,8 +1131,18 @@ public static class TypeChecker
         {
             "+" => (isNumeric(left) && isNumeric(right)) || (isString(left) || isString(right)),
             "-" or "*" or "/" or "%" or "**" => isNumeric(left) && isNumeric(right),
-            "&&" or "||" or "and" or "or" => isBool(left) && isBool(right),
-            "<" or "<=" or ">" or ">=" => isNumeric(left) && isNumeric(right),
+            "&&" or "||" or "and" or "or" => true,
+            // TS-P1-14: mirror the runtime ordering rule exactly —
+            // booleans are unordered and a string orders only against a
+            // string. Everything else (numerics, chars, dates, and any
+            // other IComparable pair) is left to the runtime, which
+            // decides by convertibility. Requiring both operands to be
+            // numeric here previously made `"a" < "b"` a compile error
+            // even though it is valid and specified.
+            "<" or "<=" or ">" or ">=" =>
+                left.ClrType != typeof(bool)
+                && right.ClrType != typeof(bool)
+                && isString(left) == isString(right),
             "==" or "!=" => true,
             _ => true,
         };
@@ -1176,7 +1169,7 @@ public static class TypeChecker
         var ok = unary.Operator switch
         {
             "-" or "+" => operand.ClrType is { } c && NumericRank(c) > 0,
-            "!" or "not" => operand.ClrType == typeof(bool),
+            "!" or "not" => true,
             _ => true,
         };
 

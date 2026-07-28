@@ -468,6 +468,30 @@ public sealed partial class ToshEngine
                 continue;
             }
 
+            // No explicit child matched. If the current leaf declares a child with the
+            // `default` modifier and no positionals have been taken yet, route into that
+            // child and reinterpret the current token as its first positional.
+            if (parseOptions &&
+                leaf.PositionalValues.Count == 0)
+            {
+                SubcommandNode? defaultChild = null;
+                foreach (var kv in leaf.Node.Children)
+                {
+                    if ((kv.Value.Modifiers & SubcommandModifier.Default) != 0)
+                    {
+                        defaultChild = kv.Value;
+                        break;
+                    }
+                }
+                if (defaultChild is not null)
+                {
+                    var defaultFrame = new DispatchFrame { Node = defaultChild };
+                    defaultFrame.PositionalValues.Add(new ScriptArgumentValue(raw, i));
+                    path.Add(defaultFrame);
+                    continue;
+                }
+            }
+
             leaf.PositionalValues.Add(new ScriptArgumentValue(raw, i));
         }
 

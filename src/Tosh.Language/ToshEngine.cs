@@ -236,9 +236,32 @@ public sealed partial class ToshEngine : IShellEvaluator
 
     public ParseResult Parse(string source, string sourceName = "<input>")
     {
-        var result = ToshParser.Parse(source, sourceName);
+        var result = ToshParser.Parse(source, sourceName, CreateParseContext());
         RegisterLineHushDirectives(sourceName, result.LineHushDirectives);
         return result;
+    }
+
+    /// <summary>
+    /// Hands the parser what this engine already knows (TS-P2-23), so
+    /// identity decisions consult a table rather than inferring from
+    /// capitalization. Modules come from the live scope chain, which is
+    /// how an *imported* module is recognised — the source being parsed
+    /// never declares it.
+    /// </summary>
+    private ParseContext CreateParseContext()
+    {
+        var moduleNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var scope in _scopes)
+        {
+            foreach (var name in scope.Modules.Keys)
+            {
+                moduleNames.Add(name);
+            }
+        }
+
+        return ParseContext.Create(
+            commandNames: Runtime.Commands.AllNames,
+            moduleNames: moduleNames);
     }
 
     /// <summary>
@@ -535,6 +558,14 @@ public sealed partial class ToshEngine : IShellEvaluator
         ParseResult parseResult,
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+        using var executionFrame = ToshExecutionDepthGuard.Enter(
+            Runtime.Config.Shell.MaxRecursionDepth,
+            $"script {parseResult.SourceName}",
+            parseResult.SourceName,
+            parseResult.SourceText,
+            parseResult.Statement.Span);
+
         var isTopLevel = _commandEventDepth == 0;
         var values = new List<object?>();
         var stopwatch = isTopLevel ? System.Diagnostics.Stopwatch.StartNew() : null;
@@ -572,6 +603,7 @@ public sealed partial class ToshEngine : IShellEvaluator
         // try (C# forbids yield in try/catch). They're flushed below
         // after the outer try/finally has run.
         IReadOnlyList<object?>? pendingReturnValues = null;
+        Exception? pendingThrownValue = null;
 
         // Drive the inner enumerator manually so we can yield values as they arrive.
         // C# allows yield return inside try-finally but not try-catch; the inner
@@ -616,23 +648,43 @@ public sealed partial class ToshEngine : IShellEvaluator
                     title: "'continue' can only be used inside 'for', 'while', or 'each' blocks."));
             enumerator = EmptyAsyncEnumerable().GetAsyncEnumerator(cancellationToken);
         }
-        catch (ThrowSignalException signal)
+        catch (Exception failure) when (
+            failure is not OperationCanceledException &&
+            ToshDeferFailures.IsDeferFailure(failure))
         {
             exitCode = 1;
             pendingException = System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(
-                CreateThrownValueDiagnostic(parseResult.SourceName, parseResult.SourceText, signal));
+                ToshDeferFailures.ToDiagnosticException(
+                    failure,
+                    parseResult.SourceName,
+                    parseResult.SourceText));
+            enumerator = EmptyAsyncEnumerable().GetAsyncEnumerator(cancellationToken);
+        }
+        catch (ThrowSignalException signal)
+        {
+            exitCode = 1;
+            pendingThrownValue = signal;
             enumerator = EmptyAsyncEnumerable().GetAsyncEnumerator(cancellationToken);
         }
         catch (Exception thrown) when (IsToshThrown(thrown))
         {
             exitCode = 1;
-            pendingException = System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(
-                CreateThrownValueDiagnostic(parseResult.SourceName, parseResult.SourceText, thrown));
+            pendingThrownValue = thrown;
             enumerator = EmptyAsyncEnumerable().GetAsyncEnumerator(cancellationToken);
         }
 
         try // outer: ensures cleanup + CommandCompleted event
         {
+            if (pendingThrownValue is not null)
+            {
+                pendingException = System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(
+                    await CreateThrownValueDiagnosticAsync(
+                        parseResult.SourceName,
+                        parseResult.SourceText,
+                        pendingThrownValue,
+                        cancellationToken));
+            }
+
             try // inner: ensures enumerator disposal
             {
                 while (true)
@@ -673,11 +725,27 @@ public sealed partial class ToshEngine : IShellEvaluator
                                 title: "'continue' can only be used inside 'for', 'while', or 'each' blocks."));
                         break;
                     }
+                    catch (Exception failure) when (
+                        failure is not OperationCanceledException &&
+                        ToshDeferFailures.IsDeferFailure(failure))
+                    {
+                        exitCode = 1;
+                        pendingException = System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(
+                            ToshDeferFailures.ToDiagnosticException(
+                                failure,
+                                parseResult.SourceName,
+                                parseResult.SourceText));
+                        break;
+                    }
                     catch (ThrowSignalException signal)
                     {
                         exitCode = 1;
                         pendingException = System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(
-                            CreateThrownValueDiagnostic(parseResult.SourceName, parseResult.SourceText, signal));
+                            await CreateThrownValueDiagnosticAsync(
+                                parseResult.SourceName,
+                                parseResult.SourceText,
+                                signal,
+                                cancellationToken));
                         break;
                     }
                     catch (Exception thrown) when (IsToshThrown(thrown))
@@ -689,7 +757,11 @@ public sealed partial class ToshEngine : IShellEvaluator
                         // a span, label, and source snippet.
                         exitCode = 1;
                         pendingException = System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(
-                            CreateThrownValueDiagnostic(parseResult.SourceName, parseResult.SourceText, thrown));
+                            await CreateThrownValueDiagnosticAsync(
+                                parseResult.SourceName,
+                                parseResult.SourceText,
+                                thrown,
+                                cancellationToken));
                         break;
                     }
                     catch (Exception) when (exitCode == 0)
@@ -832,13 +904,39 @@ public sealed partial class ToshEngine : IShellEvaluator
             unpacked = values;
         }
 
-        // Assign each value to the corresponding variable
+        // Prepare every target before mutating any of them. Tuple assignment
+        // is simultaneous: an unknown/const target or failed annotation
+        // conversion must not leave earlier targets partially updated.
+        var preparedAssignments = new List<(string Name, VariableBinding Binding)>(tupleAssign.LeftNames.Count);
+        var valueSpan = GetPipelineSpan(tupleAssign.Value) ?? tupleAssign.Span;
+
         for (int i = 0; i < tupleAssign.LeftNames.Count; i++)
         {
             var name = tupleAssign.LeftNames[i];
-            var value = i < unpacked.Count ? unpacked[i] : null;
-            DeclareVariable(name, new VariableBinding(value, ReplayAsPipeline: false, IsAllocatedOnly: false), DeclarationModifier.Default);
+            var assignedValue = i < unpacked.Count ? unpacked[i] : null;
+
+            EnsureBindingNameIsNotReserved(sourceName, sourceText, name, tupleAssign.Span, "reserved runtime namespace");
+            var existingBinding = RequireMutableVariableBinding(
+                sourceName,
+                sourceText,
+                name,
+                tupleAssign.Span);
+            preparedAssignments.Add((
+                name,
+                CreateAssignedVariableBinding(
+                    sourceName,
+                    sourceText,
+                    name,
+                    valueSpan,
+                    existingBinding,
+                    CloneStructAssignmentValue(assignedValue))));
         }
+
+        foreach (var (name, binding) in preparedAssignments)
+        {
+            AssignExistingVariableBinding(sourceName, sourceText, name, tupleAssign.Span, binding);
+        }
+
         yield break;
     }
 
@@ -1333,34 +1431,7 @@ public sealed partial class ToshEngine : IShellEvaluator
         return ResolveTypeName(typeName) == typeof(bool);
     }
 
-    private static string GetPrimaryScriptOptionName(string parameterName)
-    {
-        var builder = new StringBuilder(parameterName.Length + 4);
-
-        for (var index = 0; index < parameterName.Length; index++)
-        {
-            var character = parameterName[index];
-
-            if (character == '_')
-            {
-                builder.Append('-');
-                continue;
-            }
-
-            if (char.IsUpper(character) &&
-                index > 0 &&
-                builder.Length > 0 &&
-                builder[^1] != '-' &&
-                (char.IsLower(parameterName[index - 1]) || char.IsDigit(parameterName[index - 1])))
-            {
-                builder.Append('-');
-            }
-
-            builder.Append(char.ToLowerInvariant(character));
-        }
-
-        return builder.ToString();
-    }
+    private static string GetPrimaryScriptOptionName(string parameterName) => parameterName;
 
     private static string FormatScriptArgumentForDiagnostic(object? value)
     {
@@ -1622,12 +1693,25 @@ public sealed partial class ToshEngine : IShellEvaluator
 
             case RecordDestructuringPatternSyntax recordPattern:
                 {
-                    IDictionary<string, object?>? dict = value switch
+                    IDictionary<string, object?>? dict;
+                    if (value is IDictionary<string, object?> dictionary)
                     {
-                        IDictionary<string, object?> d => d,
-                        IShellRecordObject record => record.GetMembers().ToDictionary(m => m.Key, m => m.Value, StringComparer.OrdinalIgnoreCase),
-                        _ => null,
-                    };
+                        dict = dictionary;
+                    }
+                    else if (value is IShellRecordObject record)
+                    {
+                        dict = (await record.GetMembersAsync(
+                                includeHidden: false,
+                                cancellationToken))
+                            .ToDictionary(
+                                member => member.Key,
+                                member => member.Value,
+                                StringComparer.OrdinalIgnoreCase);
+                    }
+                    else
+                    {
+                        dict = null;
+                    }
 
                     if (dict is null)
                     {
@@ -2143,6 +2227,10 @@ public sealed partial class ToshEngine : IShellEvaluator
         {
             throw;
         }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
         catch (Exception exception)
         {
             throw ToshDiagnosticException.Create(new ToshDiagnostic(
@@ -2319,7 +2407,7 @@ public sealed partial class ToshEngine : IShellEvaluator
             };
         }
 
-        RaiseThrownValue(statement.Span, value);
+        await RaiseThrownValueAsync(statement.Span, value, cancellationToken);
 #pragma warning disable CS0162
         yield break;
 #pragma warning restore CS0162
@@ -2343,48 +2431,39 @@ public sealed partial class ToshEngine : IShellEvaluator
     {
         EnsureBindingNameIsNotReserved(sourceName, sourceText, assignment.Name, assignment.Span, "reserved runtime namespace");
 
-        var value = await EvaluateVariableBindingAsync(sourceName, sourceText, assignment.Value, cancellationToken);
-
-        // Struct copy-on-assign: clone struct instances to enforce value-type semantics
-        if (value.Value is ToshStructInstance structInstance)
-        {
-            value = value with { Value = structInstance.Clone() };
-        }
-
-        if (!TryGetVariableBinding(assignment.Name, out var existingBinding))
-        {
-            throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                Code: "tosh.runtime.unknown_variable",
-                Title: $"Variable '{assignment.Name}' has not been declared.",
-                SourceName: sourceName,
-                SourceText: sourceText,
-                Span: assignment.Span,
-                Label: $"declare '{assignment.Name}' with 'var' before assigning to it",
-                Help: $"try 'var {assignment.Name} = ...' the first time you bind this variable."));
-        }
-
-        if (existingBinding.IsConst)
-        {
-            throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                Code: "tosh.runtime.const_reassignment",
-                Title: $"Cannot reassign constant '{assignment.Name}'.",
-                SourceName: sourceName,
-                SourceText: sourceText,
-                Span: assignment.Span,
-                Label: $"'{assignment.Name}' was declared with 'const' and cannot be modified",
-                Help: "use 'var' instead of 'const' if you need to reassign this variable."));
-        }
-
+        VariableBinding existingBinding;
+        VariableBinding value;
         if (assignment.Operator == "??=")
         {
+            existingBinding = RequireMutableVariableBinding(
+                sourceName,
+                sourceText,
+                assignment.Name,
+                assignment.Span);
+
             if (!existingBinding.IsAllocatedOnly && existingBinding.Value is not null)
             {
                 return;
             }
+
+            value = await EvaluateVariableBindingAsync(sourceName, sourceText, assignment.Value, cancellationToken);
+        }
+        else
+        {
+            // Preserve the established order for every other assignment:
+            // evaluate the RHS before resolving the mutable target.
+            value = await EvaluateVariableBindingAsync(sourceName, sourceText, assignment.Value, cancellationToken);
+            existingBinding = RequireMutableVariableBinding(
+                sourceName,
+                sourceText,
+                assignment.Name,
+                assignment.Span);
         }
 
-        object? assignedValue = value.Value;
-        if (assignment.Operator != "=")
+        var incomingValue = CloneStructAssignmentValue(value.Value);
+        object? assignedValue = incomingValue;
+
+        if (assignment.Operator is not "=" and not "??=")
         {
             if (existingBinding.IsAllocatedOnly)
             {
@@ -2397,40 +2476,29 @@ public sealed partial class ToshEngine : IShellEvaluator
                     Label: $"assign '{assignment.Name}' before using '{assignment.Operator}'"));
             }
 
-            assignedValue = ApplyCompoundAssignment(existingBinding.Value, assignment.Operator, value.Value);
-        }
-
-        if (existingBinding.DeclaredTypeName is not null)
-        {
-            var valueSpan = GetPipelineSpan(assignment.Value) ?? assignment.Span;
-            assignedValue = ConvertAnnotatedValue(
-                existingBinding.DeclaredTypeName,
-                existingBinding.DeclaredRefinement,
-                assignedValue,
-                valueSpan,
+            assignedValue = await ApplyCompoundAssignmentAsync(
                 sourceName,
                 sourceText,
-                assignment.Name);
+                assignment.Span,
+                existingBinding.Value,
+                assignment.Operator,
+                incomingValue,
+                cancellationToken);
         }
 
-        value = existingBinding with
-        {
-            Value = assignedValue,
-            ReplayAsPipeline = ShouldReplayAsPipeline(assignedValue),
-            IsAllocatedOnly = false,
-        };
-
-        if (!TryAssignVariable(assignment.Name, value))
-        {
-            throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                Code: "tosh.runtime.unknown_variable",
-                Title: $"Variable '{assignment.Name}' has not been declared.",
-                SourceName: sourceName,
-                SourceText: sourceText,
-                Span: assignment.Span,
-                Label: $"declare '{assignment.Name}' with 'var' before assigning to it",
-                    Help: $"try 'var {assignment.Name} = ...' the first time you bind this variable."));
-        }
+        var assignedBinding = CreateAssignedVariableBinding(
+            sourceName,
+            sourceText,
+            assignment.Name,
+            GetPipelineSpan(assignment.Value) ?? assignment.Span,
+            existingBinding,
+            assignedValue);
+        AssignExistingVariableBinding(
+            sourceName,
+            sourceText,
+            assignment.Name,
+            assignment.Span,
+            assignedBinding);
     }
 
     private async IAsyncEnumerable<object?> EvaluateMemberAssignmentAsync(
@@ -2439,7 +2507,14 @@ public sealed partial class ToshEngine : IShellEvaluator
         MemberAssignmentStatementSyntax assignment,
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        var binding = await EvaluateVariableBindingAsync(sourceName, sourceText, assignment.Value, cancellationToken);
+        // Preserve the established RHS-first order for ordinary assignment,
+        // but defer a null-coalescing RHS until the existing target value has
+        // actually been observed as null.
+        VariableBinding? binding = null;
+        if (assignment.Operator != "??=")
+        {
+            binding = await EvaluateVariableBindingAsync(sourceName, sourceText, assignment.Value, cancellationToken);
+        }
 
         // Path 1 — terminal index access: `$root[..].chain[..]["key"] = value`.
         // We evaluate the indexer's own target (everything but the final
@@ -2448,27 +2523,89 @@ public sealed partial class ToshEngine : IShellEvaluator
         {
             var indexedTarget = await EvaluateArgumentAsync(sourceName, sourceText, idx.Target, cancellationToken);
             var indexValue = await EvaluateArgumentAsync(sourceName, sourceText, idx.Index, cancellationToken);
-            var newValue = binding.Value;
 
-            try
+            if (assignment.Operator == "??=")
             {
-                if (assignment.Operator == "??=")
+                try
                 {
-                    var currentValue = ShellIndexingUtilities.GetIndexedValue(indexedTarget, indexValue, idx.LookupKind);
+                    var currentValue = await ShellIndexingUtilities.GetIndexedValueAsync(
+                        indexedTarget,
+                        indexValue,
+                        idx.LookupKind,
+                        cancellationToken);
                     if (currentValue is not null)
                     {
                         yield break;
                     }
                 }
-                else if (assignment.Operator != "=")
+                catch (Exception exception) when (ShouldWrapAssignmentFailure(exception))
                 {
-                    var currentValue = ShellIndexingUtilities.GetIndexedValue(indexedTarget, indexValue, idx.LookupKind);
-                    newValue = ApplyCompoundAssignment(currentValue, assignment.Operator, binding.Value);
+                    throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                        Code: "tosh.runtime.index_assignment_failed",
+                        Title: exception.Message,
+                        SourceName: sourceName,
+                        SourceText: sourceText,
+                        Span: assignment.Target.Span,
+                        Label: "while reading this index for null-coalescing assignment"));
                 }
 
-                ShellIndexingUtilities.SetIndexedValue(indexedTarget, indexValue, newValue, idx.LookupKind);
+                var coalescedBinding = await EvaluateVariableBindingAsync(
+                    sourceName,
+                    sourceText,
+                    assignment.Value,
+                    cancellationToken);
+
+                try
+                {
+                    await ShellIndexingUtilities.SetIndexedValueAsync(
+                        indexedTarget,
+                        indexValue,
+                        coalescedBinding.Value,
+                        idx.LookupKind,
+                        cancellationToken);
+                }
+                catch (Exception exception) when (ShouldWrapAssignmentFailure(exception))
+                {
+                    throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                        Code: "tosh.runtime.index_assignment_failed",
+                        Title: exception.Message,
+                        SourceName: sourceName,
+                        SourceText: sourceText,
+                        Span: assignment.Target.Span,
+                        Label: "while assigning to this index"));
+                }
+
+                yield break;
             }
-            catch (Exception exception) when (exception is not ToshDiagnosticException)
+
+            var newValue = binding!.Value;
+            try
+            {
+                if (assignment.Operator != "=")
+                {
+                    var currentValue = await ShellIndexingUtilities.GetIndexedValueAsync(
+                        indexedTarget,
+                        indexValue,
+                        idx.LookupKind,
+                        cancellationToken);
+                    newValue = await ApplyCompoundAssignmentAsync(
+                        sourceName,
+                        sourceText,
+                        assignment.Span,
+                        currentValue,
+                        assignment.Operator,
+                        binding.Value,
+                        cancellationToken);
+                }
+
+                await ShellIndexingUtilities.SetIndexedValueAsync(
+                    indexedTarget,
+                    indexValue,
+                    newValue,
+                    idx.LookupKind,
+                    cancellationToken);
+            }
+            catch (Exception exception) when (ShouldWrapAssignmentFailure(exception))
             {
                 throw ToshDiagnosticException.Create(new ToshDiagnostic(
                     Code: "tosh.runtime.index_assignment_failed",
@@ -2494,27 +2631,85 @@ public sealed partial class ToshEngine : IShellEvaluator
         }
 
         var target = await EvaluateOrMaterializeRootTargetAsync(sourceName, sourceText, rootExpression, cancellationToken);
-        var valueToAssign = binding.Value;
 
-        try
+        if (assignment.Operator == "??=")
         {
-            if (assignment.Operator == "??=")
+            try
             {
-                var currentValue = Runtime.ObjectAccessor.GetValue(target, memberPath);
+                var currentValue = await Runtime.ObjectAccessor.GetValueAsync(
+                    target,
+                    memberPath,
+                    cancellationToken);
                 if (currentValue is not null)
                 {
                     yield break;
                 }
             }
-            else if (assignment.Operator != "=")
+            catch (Exception exception) when (ShouldWrapAssignmentFailure(exception))
             {
-                var currentValue = Runtime.ObjectAccessor.GetValue(target, memberPath);
-                valueToAssign = ApplyCompoundAssignment(currentValue, assignment.Operator, binding.Value);
+                throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                    Code: "tosh.runtime.member_assignment_failed",
+                    Title: exception.Message,
+                    SourceName: sourceName,
+                    SourceText: sourceText,
+                    Span: assignment.Target.Span,
+                    Label: "while reading this member for null-coalescing assignment"));
             }
 
-            Runtime.ObjectAccessor.SetValue(target, memberPath, valueToAssign);
+            var coalescedBinding = await EvaluateVariableBindingAsync(
+                sourceName,
+                sourceText,
+                assignment.Value,
+                cancellationToken);
+
+            try
+            {
+                await Runtime.ObjectAccessor.SetValueAsync(
+                    target,
+                    memberPath,
+                    coalescedBinding.Value,
+                    cancellationToken);
+            }
+            catch (Exception exception) when (ShouldWrapAssignmentFailure(exception))
+            {
+                throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                    Code: "tosh.runtime.member_assignment_failed",
+                    Title: exception.Message,
+                    SourceName: sourceName,
+                    SourceText: sourceText,
+                    Span: assignment.Target.Span,
+                    Label: "while assigning to this member"));
+            }
+
+            yield break;
         }
-        catch (Exception exception) when (exception is not ToshDiagnosticException)
+
+        var valueToAssign = binding!.Value;
+        try
+        {
+            if (assignment.Operator != "=")
+            {
+                var currentValue = await Runtime.ObjectAccessor.GetValueAsync(
+                    target,
+                    memberPath,
+                    cancellationToken);
+                valueToAssign = await ApplyCompoundAssignmentAsync(
+                    sourceName,
+                    sourceText,
+                    assignment.Span,
+                    currentValue,
+                    assignment.Operator,
+                    binding.Value,
+                    cancellationToken);
+            }
+
+            await Runtime.ObjectAccessor.SetValueAsync(
+                target,
+                memberPath,
+                valueToAssign,
+                cancellationToken);
+        }
+        catch (Exception exception) when (ShouldWrapAssignmentFailure(exception))
         {
             throw ToshDiagnosticException.Create(new ToshDiagnostic(
                 Code: "tosh.runtime.member_assignment_failed",
@@ -2909,7 +3104,7 @@ public sealed partial class ToshEngine : IShellEvaluator
                 lastValue = value;
             }
 
-            return IsTruthyValue(lastValue);
+            return ToshTruthiness.IsTruthy(lastValue);
         }
         finally
         {
@@ -2923,21 +3118,6 @@ public sealed partial class ToshEngine : IShellEvaluator
                 }
             }
         }
-    }
-
-    private static bool IsTruthyValue(object? value)
-    {
-        if (value is null)
-        {
-            return false;
-        }
-
-        if (TypeConversion.TryConvert(value, typeof(bool), out var converted) && converted is bool boolean)
-        {
-            return boolean;
-        }
-
-        return true;
     }
 
     private static async IAsyncEnumerable<object?> EmptyAsyncEnumerable()
@@ -3141,6 +3321,14 @@ public sealed partial class ToshEngine : IShellEvaluator
         // Resolve base class
         if (@class.BaseClassName is not null)
         {
+            // Preserve the distinction between no constructor initializer and
+            // an explicitly empty `extends Base()` initializer for both TōSh
+            // and CLR base classes.
+            if (@class.BaseConstructorArgs is not null)
+            {
+                definition.BaseConstructorArgs = @class.BaseConstructorArgs;
+            }
+
             if (TryGetNamedType(@class.BaseClassName, out var baseType) && baseType is ToshClassDefinition baseClassDef)
             {
                 if (baseClassDef.IsSealed)
@@ -3155,12 +3343,6 @@ public sealed partial class ToshEngine : IShellEvaluator
                 }
 
                 definition.BaseClass = baseClassDef;
-
-                // Store extends clause constructor args if present
-                if (@class.BaseConstructorArgs is { Count: > 0 })
-                {
-                    definition.BaseConstructorArgs = @class.BaseConstructorArgs;
-                }
 
                 // Store extends clause type-arguments and validate arity
                 if (@class.BaseTypeArguments is not null)
@@ -4070,7 +4252,9 @@ public sealed partial class ToshEngine : IShellEvaluator
         await foreach (var item in EvaluatePipelineAsync(sourceName, sourceText, statement.Source, cancellationToken)
                            .WithCancellation(cancellationToken))
         {
-            foreach (var current in ShellIterationUtilities.ExpandIterationItems(item))
+            await foreach (var current in ShellIterationUtilities
+                               .ExpandIterationItemsAsync(item, cancellationToken)
+                               .WithCancellation(cancellationToken))
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
@@ -4381,17 +4565,692 @@ public sealed partial class ToshEngine : IShellEvaluator
     /// The left operand's class is tried first; the operator method receives <paramref name="other"/>
     /// as its single argument.
     /// </summary>
-    private static bool TryInvokeClassBinaryOperator(ToshClassInstance instance, string @operator, object? other, out object? result)
+    private static ValueTask<(bool Matched, object? Value)> TryInvokeClassBinaryOperatorAsync(
+        ToshClassInstance instance,
+        string @operator,
+        object? other,
+        CancellationToken cancellationToken)
     {
-        return instance.Definition.TryInvokeSpecialInstanceMethod(instance, @operator, new object?[] { other }, out result);
+        return instance.Definition.TryInvokeSpecialInstanceMethodAsync(
+            instance,
+            @operator,
+            new object?[] { other },
+            cancellationToken);
+    }
+
+    /// <summary>
+    /// Evaluates an eager binary operator through ToastScript's asynchronous
+    /// class protocol before falling back to the shared CLR/runtime semantics.
+    /// Ordinary expressions and compound assignments both use this boundary so
+    /// overload order, cancellation, user throws, and structured diagnostics do
+    /// not depend on the syntax that reached the operator.
+    /// </summary>
+    private async ValueTask<object?> EvaluateBinaryOperatorAsync(
+        string sourceName,
+        string sourceText,
+        TextSpan span,
+        object? left,
+        string @operator,
+        object? right,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            // Symmetric operator overloading is intentionally left-biased:
+            // consult the right operand only when the left has no matching
+            // overload, preserving the established ToastScript protocol.
+            if (left is ToshClassInstance leftInstance)
+            {
+                var leftOverload = await TryInvokeClassBinaryOperatorAsync(
+                    leftInstance,
+                    @operator,
+                    right,
+                    cancellationToken);
+                if (leftOverload.Matched)
+                {
+                    return leftOverload.Value;
+                }
+            }
+
+            if (right is ToshClassInstance rightInstance)
+            {
+                var rightOverload = await TryInvokeClassBinaryOperatorAsync(
+                    rightInstance,
+                    @operator,
+                    left,
+                    cancellationToken);
+                if (rightOverload.Matched)
+                {
+                    return rightOverload.Value;
+                }
+            }
+
+            return await EvaluateFallbackBinaryOperatorAsync(
+                left,
+                @operator,
+                right,
+                cancellationToken);
+        }
+        catch (ToshDiagnosticException)
+        {
+            throw;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (ShellControlFlowException)
+        {
+            throw;
+        }
+        catch (Exception exception) when (IsToshThrown(exception))
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            throw CreateExpressionDiagnostic(
+                sourceName,
+                sourceText,
+                span,
+                exception);
+        }
+    }
+
+    private async ValueTask<object?> EvaluateFallbackBinaryOperatorAsync(
+        object? left,
+        string @operator,
+        object? right,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (left is ShellTextLine leftLine)
+        {
+            left = leftLine.Text;
+        }
+        if (right is ShellTextLine rightLine)
+        {
+            right = rightLine.Text;
+        }
+
+        return @operator switch
+        {
+            "==" => await AreEqualAsync(left, right, cancellationToken),
+            "!=" => !await AreEqualAsync(left, right, cancellationToken),
+            "in" or "is-in" => await IsInAsync(left, right, cancellationToken),
+            "not-in" or "is-not-in" => !await IsInAsync(left, right, cancellationToken),
+            "=~" => await RegexMatchAsync(left, right, cancellationToken),
+            "!~" => !await RegexMatchAsync(left, right, cancellationToken),
+            "contains" => await ContainsAsync(left, right, cancellationToken),
+            "starts-with" => await StartsWithAsync(left, right, cancellationToken),
+            "ends-with" => await EndsWithAsync(left, right, cancellationToken),
+            "+" when left is string => (string)left
+                + await ToOperatorStringAsync(right, cancellationToken),
+            "+" when right is string => await ToOperatorStringAsync(left, cancellationToken)
+                + (string)right,
+            _ => await EvaluateClrFallbackOperatorAsync(
+                left,
+                @operator,
+                right,
+                cancellationToken),
+        };
+    }
+
+    private async ValueTask<object?> EvaluateClrFallbackOperatorAsync(
+        object? left,
+        string @operator,
+        object? right,
+        CancellationToken cancellationToken)
+    {
+        // OperatorEvaluator performs string conversions synchronously. Keep
+        // explicit CLR operators as the compatibility boundary, but never let
+        // that fallback synchronously re-enter a ToastScript ToString body.
+        if (@operator is not ("is" or "is-not" or "as") &&
+            left is string && right is ToshClassInstance)
+        {
+            right = await ToOperatorStringAsync(right, cancellationToken);
+        }
+        else if (@operator is not ("is" or "is-not" or "as") &&
+                 right is string && left is ToshClassInstance)
+        {
+            left = await ToOperatorStringAsync(left, cancellationToken);
+        }
+        else if (@operator is "is" or "is-not" or "as" &&
+                 right is ToshClassInstance)
+        {
+            right = await ToOperatorStringAsync(right, cancellationToken);
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+        return OperatorEvaluator.EvaluateBinary(left, @operator, right);
+    }
+
+    private async ValueTask<bool> MatchesOperatorAsync(
+        object? actual,
+        string @operator,
+        object? expected,
+        bool nullable,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (actual is ShellTextLine actualLine)
+        {
+            actual = actualLine.Text;
+        }
+        if (expected is ShellTextLine expectedLine)
+        {
+            expected = expectedLine.Text;
+        }
+
+        switch (@operator)
+        {
+            case "==":
+                return await AreEqualAsync(actual, expected, cancellationToken);
+            case "!=":
+                return !await AreEqualAsync(actual, expected, cancellationToken);
+            case "in":
+                return await IsInAsync(actual, expected, cancellationToken);
+            case "not-in":
+                return !await IsInAsync(actual, expected, cancellationToken);
+            case "=~":
+                return await RegexMatchAsync(actual, expected, cancellationToken);
+            case "!~":
+                return !await RegexMatchAsync(actual, expected, cancellationToken);
+            case "contains":
+                return await ContainsAsync(actual, expected, cancellationToken);
+            case "starts-with":
+                return await StartsWithAsync(actual, expected, cancellationToken);
+            case "ends-with":
+                return await EndsWithAsync(actual, expected, cancellationToken);
+        }
+
+        if (@operator is not ("is" or "is-not") &&
+            actual is string && expected is ToshClassInstance)
+        {
+            expected = await ToOperatorStringAsync(expected, cancellationToken);
+        }
+        else if (@operator is not ("is" or "is-not") &&
+                 expected is string && actual is ToshClassInstance)
+        {
+            actual = await ToOperatorStringAsync(actual, cancellationToken);
+        }
+        else if (@operator is "is" or "is-not" &&
+                 expected is ToshClassInstance)
+        {
+            expected = await ToOperatorStringAsync(expected, cancellationToken);
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+        return OperatorEvaluator.Matches(actual, @operator, expected, nullable);
+    }
+
+    private async ValueTask<bool> AreEqualAsync(
+        object? actual,
+        object? expected,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        // Preserve OperatorEvaluator's collection-first semantics, including
+        // recursive element comparison and ordered enumeration.
+        if (actual is IEnumerable actualCollection && actual is not string &&
+            expected is IEnumerable expectedCollection && expected is not string)
+        {
+            var actualEnumerator = actualCollection.GetEnumerator();
+            var expectedEnumerator = expectedCollection.GetEnumerator();
+
+            try
+            {
+                while (true)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+
+                    var actualHasNext = actualEnumerator.MoveNext();
+                    var expectedHasNext = expectedEnumerator.MoveNext();
+
+                    if (!actualHasNext && !expectedHasNext)
+                    {
+                        return true;
+                    }
+
+                    if (actualHasNext != expectedHasNext)
+                    {
+                        return false;
+                    }
+
+                    if (!await AreEqualAsync(
+                            actualEnumerator.Current,
+                            expectedEnumerator.Current,
+                            cancellationToken))
+                    {
+                        return false;
+                    }
+                }
+            }
+            finally
+            {
+                (actualEnumerator as IDisposable)?.Dispose();
+                (expectedEnumerator as IDisposable)?.Dispose();
+            }
+        }
+
+        if (actual is null || expected is null)
+        {
+            return actual is null && expected is null;
+        }
+
+        // TS-P1-15: an enum member equals another member of the same
+        // enum and equals its own backing value. Kept in step with
+        // OperatorEvaluator.AreEqual so both surfaces agree.
+        if ((actual is IShellEnumValue || expected is IShellEnumValue) &&
+            actual is not string && expected is not string &&
+            ShellEnumComparison.AreEquivalent(actual, expected))
+        {
+            return true;
+        }
+
+        var convertedExpected = await TryConvertForEqualityAsync(
+            expected,
+            actual.GetType(),
+            cancellationToken);
+        if (convertedExpected.Converted)
+        {
+            return await ObjectEqualsAsync(
+                actual,
+                convertedExpected.Value,
+                cancellationToken);
+        }
+
+        var convertedActual = await TryConvertForEqualityAsync(
+            actual,
+            expected.GetType(),
+            cancellationToken);
+        if (convertedActual.Converted)
+        {
+            return await ObjectEqualsAsync(
+                convertedActual.Value,
+                expected,
+                cancellationToken);
+        }
+
+        // TS-P1-14: no case-insensitive ToString fallback here either.
+        // This mirrors OperatorEvaluator.AreEqual so the interpreter and
+        // the shared runtime dispatcher agree on what equality means.
+        return await ObjectEqualsAsync(actual, expected, cancellationToken);
+    }
+
+    private async ValueTask<(bool Converted, object? Value)> TryConvertForEqualityAsync(
+        object? value,
+        Type targetType,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var effectiveType = Nullable.GetUnderlyingType(targetType) ?? targetType;
+        if (effectiveType == typeof(string) && value is ToshClassInstance)
+        {
+            return (
+                true,
+                await ToOperatorStringAsync(value, cancellationToken));
+        }
+
+        return TypeConversion.TryConvert(value, targetType, out var converted)
+            ? (true, converted)
+            : (false, null);
+    }
+
+    private async ValueTask<bool> ObjectEqualsAsync(
+        object? actual,
+        object? expected,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (ReferenceEquals(actual, expected))
+        {
+            return true;
+        }
+        if (actual is null || expected is null)
+        {
+            return false;
+        }
+
+        if (actual is ToshClassInstance classInstance)
+        {
+            var invocation = await classInstance.Definition.TryInvokeSpecialInstanceMethodAsync(
+                classInstance,
+                nameof(Equals),
+                new object?[] { expected },
+                cancellationToken);
+            return invocation.Matched && OperatorEvaluator.ToBoolean(invocation.Value);
+        }
+
+        if (actual is ToshRecordInstance record)
+        {
+            if (expected is not ToshRecordInstance otherRecord ||
+                !ReferenceEquals(record.Definition, otherRecord.Definition))
+            {
+                return false;
+            }
+
+            foreach (var field in record.Definition.Fields)
+            {
+                record.TryGetMember(field.Name, out var leftValue);
+                otherRecord.TryGetMember(field.Name, out var rightValue);
+                if (!await AreEqualAsync(leftValue, rightValue, cancellationToken))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        if (actual is ToshStructInstance @struct)
+        {
+            if (expected is not ToshStructInstance otherStruct ||
+                !ReferenceEquals(@struct.Definition, otherStruct.Definition))
+            {
+                return false;
+            }
+
+            foreach (var field in @struct.Definition.Fields)
+            {
+                @struct.TryGetMember(field.Name, out var leftValue);
+                otherStruct.TryGetMember(field.Name, out var rightValue);
+                if (!await AreEqualAsync(leftValue, rightValue, cancellationToken))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        if (actual is ToshUnionVariantInstance union)
+        {
+            if (expected is not ToshUnionVariantInstance otherUnion ||
+                !string.Equals(
+                    union.UnionDefinition.Name,
+                    otherUnion.UnionDefinition.Name,
+                    StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(
+                    union.VariantName,
+                    otherUnion.VariantName,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            var fields = union.GetMembers()
+                .Where(member => !string.Equals(
+                    member.Key,
+                    "Variant",
+                    StringComparison.OrdinalIgnoreCase))
+                .ToArray();
+            var otherFields = otherUnion.GetMembers()
+                .Where(member => !string.Equals(
+                    member.Key,
+                    "Variant",
+                    StringComparison.OrdinalIgnoreCase))
+                .ToDictionary(
+                    member => member.Key,
+                    member => member.Value,
+                    StringComparer.OrdinalIgnoreCase);
+            if (fields.Length != otherFields.Count)
+            {
+                return false;
+            }
+
+            foreach (var field in fields)
+            {
+                if (!otherFields.TryGetValue(field.Key, out var rightValue) ||
+                    !await ObjectEqualsAsync(field.Value, rightValue, cancellationToken))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        if (actual is DictionaryEntry entry)
+        {
+            return expected is DictionaryEntry otherEntry
+                && await ObjectEqualsAsync(entry.Key, otherEntry.Key, cancellationToken)
+                && await ObjectEqualsAsync(entry.Value, otherEntry.Value, cancellationToken);
+        }
+
+        var actualType = actual.GetType();
+        if (actualType.IsGenericType &&
+            actualType.GetGenericTypeDefinition() == typeof(KeyValuePair<,>))
+        {
+            if (expected.GetType() != actualType)
+            {
+                return false;
+            }
+
+            var keyProperty = actualType.GetProperty(nameof(KeyValuePair<object, object>.Key))!;
+            var valueProperty = actualType.GetProperty(nameof(KeyValuePair<object, object>.Value))!;
+            return await ObjectEqualsAsync(
+                    keyProperty.GetValue(actual),
+                    keyProperty.GetValue(expected),
+                    cancellationToken)
+                && await ObjectEqualsAsync(
+                    valueProperty.GetValue(actual),
+                    valueProperty.GetValue(expected),
+                    cancellationToken);
+        }
+
+        // Arbitrary CLR Equals implementations are intentionally synchronous;
+        // they are a host protocol boundary rather than ToastScript execution.
+        return actual.Equals(expected);
+    }
+
+    private async ValueTask<bool> IsInAsync(
+        object? value,
+        object? candidates,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (candidates is null)
+        {
+            return false;
+        }
+
+        if (candidates is IDictionary dictionary)
+        {
+            foreach (DictionaryEntry entry in dictionary)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (await AreEqualAsync(value, entry.Key, cancellationToken))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        if (candidates is IShellEnumerableObject { HasShellItems: true } shellEnumerable)
+        {
+            await foreach (var candidate in shellEnumerable
+                               .EnumerateShellItemsAsync(cancellationToken)
+                               .WithCancellation(cancellationToken))
+            {
+                if (await AreEqualAsync(value, candidate, cancellationToken))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        if (candidates is IEnumerable enumerable && candidates is not string)
+        {
+            foreach (var candidate in enumerable)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (await AreEqualAsync(value, candidate, cancellationToken))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        if (candidates is string text)
+        {
+            return text.Contains(
+                await ToOperatorStringAsync(value, cancellationToken),
+                StringComparison.Ordinal);
+        }
+
+        return await AreEqualAsync(value, candidates, cancellationToken);
+    }
+
+    private async ValueTask<bool> RegexMatchAsync(
+        object? actual,
+        object? expected,
+        CancellationToken cancellationToken)
+    {
+        var input = await ToOperatorStringAsync(actual, cancellationToken);
+        if (expected is Regex regex)
+        {
+            return regex.IsMatch(input);
+        }
+
+        var pattern = await ToOperatorStringAsync(expected, cancellationToken);
+        return Regex.IsMatch(input, pattern);
+    }
+
+    private async ValueTask<bool> ContainsAsync(
+        object? actual,
+        object? expected,
+        CancellationToken cancellationToken)
+    {
+        if (actual is null)
+        {
+            return false;
+        }
+
+        if (actual is string text)
+        {
+            return text.Contains(
+                await ToOperatorStringAsync(expected, cancellationToken),
+                StringComparison.Ordinal);
+        }
+
+        if (actual is IDictionary ||
+            actual is IShellEnumerableObject { HasShellItems: true } ||
+            actual is IEnumerable)
+        {
+            return await IsInAsync(expected, actual, cancellationToken);
+        }
+
+        return false;
+    }
+
+    private async ValueTask<bool> StartsWithAsync(
+        object? actual,
+        object? expected,
+        CancellationToken cancellationToken)
+    {
+        if (actual is null)
+        {
+            return false;
+        }
+
+        return (await ToOperatorStringAsync(actual, cancellationToken)).StartsWith(
+            await ToOperatorStringAsync(expected, cancellationToken),
+            StringComparison.Ordinal);
+    }
+
+    private async ValueTask<bool> EndsWithAsync(
+        object? actual,
+        object? expected,
+        CancellationToken cancellationToken)
+    {
+        if (actual is null)
+        {
+            return false;
+        }
+
+        return (await ToOperatorStringAsync(actual, cancellationToken)).EndsWith(
+            await ToOperatorStringAsync(expected, cancellationToken),
+            StringComparison.Ordinal);
+    }
+
+    private async ValueTask<string> ToOperatorStringAsync(
+        object? value,
+        CancellationToken cancellationToken) =>
+        await ToOperatorStringAsync(
+            value,
+            cancellationToken,
+            new HashSet<ToshClassInstance>(ReferenceEqualityComparer.Instance));
+
+    private async ValueTask<string> ToOperatorStringAsync(
+        object? value,
+        CancellationToken cancellationToken,
+        HashSet<ToshClassInstance> activeInstances)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (value is not ToshClassInstance instance)
+        {
+            return value?.ToString() ?? string.Empty;
+        }
+
+        if (!activeInstances.Add(instance))
+        {
+            return instance.Definition.Name;
+        }
+
+        try
+        {
+            var invocation = await instance.Definition.TryInvokeSpecialInstanceMethodAsync(
+                instance,
+                nameof(ToString),
+                Array.Empty<object?>(),
+                cancellationToken);
+            if (!invocation.Matched)
+            {
+                return instance.Definition.Name;
+            }
+
+            return invocation.Value is ToshClassInstance nested
+                ? await ToOperatorStringAsync(
+                    nested,
+                    cancellationToken,
+                    activeInstances)
+                : invocation.Value?.ToString() ?? string.Empty;
+        }
+        finally
+        {
+            activeInstances.Remove(instance);
+        }
     }
 
     /// <summary>
     /// Tries to invoke a zero-argument user-defined unary operator method on <paramref name="instance"/>.
     /// </summary>
-    private static bool TryInvokeClassUnaryOperator(ToshClassInstance instance, string @operator, out object? result)
+    private static ValueTask<(bool Matched, object? Value)> TryInvokeClassUnaryOperatorAsync(
+        ToshClassInstance instance,
+        string @operator,
+        CancellationToken cancellationToken)
     {
-        return instance.Definition.TryInvokeSpecialInstanceMethod(instance, @operator, Array.Empty<object?>(), out result);
+        return instance.Definition.TryInvokeSpecialInstanceMethodAsync(
+            instance,
+            @operator,
+            Array.Empty<object?>(),
+            cancellationToken);
     }
 
     private async Task<bool> MatchesPatternAsync(
@@ -4406,7 +5265,12 @@ public sealed partial class ToshEngine : IShellEvaluator
             case ComparisonPatternSyntax cp:
                 {
                     var operand = await EvaluateArgumentAsync(sourceName, sourceText, cp.Operand, cancellationToken);
-                    return OperatorEvaluator.Matches(switchValue, cp.Operator, operand, nullable: false);
+                    return await MatchesOperatorAsync(
+                        switchValue,
+                        cp.Operator,
+                        operand,
+                        nullable: false,
+                        cancellationToken);
                 }
 
             case RangeArgumentSyntax range:
@@ -4415,17 +5279,32 @@ public sealed partial class ToshEngine : IShellEvaluator
                     if (range.End is null)
                     {
                         // Infinite range in match: only check lower bound
-                        return OperatorEvaluator.Matches(switchValue, ">=", startValue, nullable: false);
+                        return await MatchesOperatorAsync(
+                            switchValue,
+                            ">=",
+                            startValue,
+                            nullable: false,
+                            cancellationToken);
                     }
                     var endValue = await EvaluateArgumentAsync(sourceName, sourceText, range.End, cancellationToken);
-                    return OperatorEvaluator.Matches(switchValue, ">=", startValue, nullable: false)
-                        && OperatorEvaluator.Matches(switchValue, "<=", endValue, nullable: false);
+                    return await MatchesOperatorAsync(
+                            switchValue,
+                            ">=",
+                            startValue,
+                            nullable: false,
+                            cancellationToken)
+                        && await MatchesOperatorAsync(
+                            switchValue,
+                            "<=",
+                            endValue,
+                            nullable: false,
+                            cancellationToken);
                 }
 
             default:
                 {
                     var patternValue = await EvaluateArgumentAsync(sourceName, sourceText, pattern, cancellationToken);
-                    return OperatorEvaluator.AreEqual(switchValue, patternValue);
+                    return await AreEqualAsync(switchValue, patternValue, cancellationToken);
                 }
         }
     }
@@ -5061,6 +5940,10 @@ public sealed partial class ToshEngine : IShellEvaluator
         {
             throw;
         }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
         catch (Exception exception) when (IsToshThrown(exception))
         {
             throw;
@@ -5196,6 +6079,10 @@ public sealed partial class ToshEngine : IShellEvaluator
         {
             throw;
         }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
         catch (Exception exception)
         {
             throw CreateCommandDiagnostic(sourceName, sourceText, commandSyntax, exception);
@@ -5255,6 +6142,14 @@ public sealed partial class ToshEngine : IShellEvaluator
             }
             catch (ThrowSignalException)
             {
+                throw;
+            }
+            catch (OperationCanceledException)
+            {
+                // Cancellation is an execution outcome, not a command
+                // failure diagnostic. In particular, a surrounding defer
+                // scope must be able to retain it as the primary exit while
+                // cleanup runs with its shielded token.
                 throw;
             }
             catch (Exception exception) when (IsToshThrown(exception))
@@ -5490,6 +6385,12 @@ public sealed partial class ToshEngine : IShellEvaluator
         if (Runtime.Commands.TryGet(commandSyntax.Name, out var command))
         {
             return command;
+        }
+
+        if (commandSyntax.Name.Contains('.') &&
+            TryResolveModuleQualifiedCommand(commandSyntax.Name, out var moduleCommand))
+        {
+            return moduleCommand;
         }
 
         var external = ExternalCommandResolver.Resolve(Runtime.CurrentDirectory, commandSyntax.Name);
@@ -5743,7 +6644,9 @@ public sealed partial class ToshEngine : IShellEvaluator
                                             $"Class '{bareName}' is not generic and does not accept type arguments.");
                                     }
 
-                                    return classDef.CreateInstance(constructorArguments);
+                                    return await classDef.CreateInstanceAsync(
+                                        constructorArguments,
+                                        cancellationToken);
                                 }
 
                                 // Generic class — must have matching type-arg list
@@ -5756,7 +6659,11 @@ public sealed partial class ToshEngine : IShellEvaluator
                                             out var inferredResolved,
                                             out var inferredDisplay))
                                     {
-                                        return classDef.CreateGenericInstance(inferredResolved, inferredDisplay, constructorArguments);
+                                        return await classDef.CreateGenericInstanceAsync(
+                                            inferredResolved,
+                                            inferredDisplay,
+                                            constructorArguments,
+                                            cancellationToken);
                                     }
 
                                     throw new InvalidOperationException(
@@ -5775,7 +6682,11 @@ public sealed partial class ToshEngine : IShellEvaluator
                                 {
                                     resolved[i] = ResolveTypeName(typeArgList[i]);
                                 }
-                                return classDef.CreateGenericInstance(resolved, typeArgList, constructorArguments);
+                                return await classDef.CreateGenericInstanceAsync(
+                                    resolved,
+                                    typeArgList,
+                                    constructorArguments,
+                                    cancellationToken);
                             }
 
                             if (shellType is ToshRecordDefinition recordDef)
@@ -5829,7 +6740,10 @@ public sealed partial class ToshEngine : IShellEvaluator
                             // arguments cosmetically and infer
                             // element types from the constructor
                             // arguments. Forward as-is.
-                            return Runtime.Invoker.CreateInstance(shellType, constructorArguments);
+                            return await Runtime.Invoker.CreateInstanceAsync(
+                                shellType,
+                                constructorArguments,
+                                cancellationToken);
                         }
 
                         // Fall back to CLR resolution — pass the original
@@ -5838,13 +6752,19 @@ public sealed partial class ToshEngine : IShellEvaluator
                         var lookupName = newObject.TypeName;
                         var type = ResolveTypeName(lookupName)
                                    ?? throw new InvalidOperationException($"Unable to resolve type '{lookupName}'.");
-                        return Runtime.Invoker.CreateInstance(type, constructorArguments);
+                        return await Runtime.Invoker.CreateInstanceAsync(
+                            type,
+                            constructorArguments,
+                            cancellationToken);
                     }
 
                 case StaticMethodCallArgumentSyntax staticMethodCall:
                     {
                         var methodArguments = await EvaluateArgumentsAsync(sourceName, sourceText, staticMethodCall.Arguments, cancellationToken);
-                        return InvokeQualifiedMethod(staticMethodCall.Path, methodArguments);
+                        return await InvokeQualifiedMethodAsync(
+                            staticMethodCall.Path,
+                            methodArguments,
+                            cancellationToken);
                     }
 
                 case StaticMemberAccessArgumentSyntax staticMemberAccess:
@@ -5940,7 +6860,9 @@ public sealed partial class ToshEngine : IShellEvaluator
                                         }
                                         else if (spreadValue is IShellRecordObject shellRecord)
                                         {
-                                            foreach (var member in shellRecord.GetMembers())
+                                            foreach (var member in await shellRecord.GetMembersAsync(
+                                                         includeHidden: false,
+                                                         cancellationToken))
                                             {
                                                 record[member.Key] = member.Value;
                                             }
@@ -6098,14 +7020,21 @@ public sealed partial class ToshEngine : IShellEvaluator
                             return null;
                         }
 
-                        return Runtime.ObjectAccessor.GetValue(target, memberAccess.MemberPath);
+                        return await Runtime.ObjectAccessor.GetValueAsync(
+                            target,
+                            memberAccess.MemberPath,
+                            cancellationToken);
                     }
 
                 case IndexAccessArgumentSyntax indexAccess:
                     {
                         var target = await EvaluateArgumentAsync(sourceName, sourceText, indexAccess.Target, cancellationToken);
                         var index = await EvaluateArgumentAsync(sourceName, sourceText, indexAccess.Index, cancellationToken);
-                        return ShellIndexingUtilities.GetIndexedValue(target, index, indexAccess.LookupKind);
+                        return await ShellIndexingUtilities.GetIndexedValueAsync(
+                            target,
+                            index,
+                            indexAccess.LookupKind,
+                            cancellationToken);
                     }
 
                 case MethodCallArgumentSyntax methodCall:
@@ -6128,7 +7057,11 @@ public sealed partial class ToshEngine : IShellEvaluator
                         }
 
                         var methodArguments = await EvaluateArgumentsAsync(sourceName, sourceText, methodCall.Arguments, cancellationToken);
-                        var invocation = Runtime.Invoker.InvokeInstance(target, methodCall.MethodName, methodArguments);
+                        var invocation = await Runtime.Invoker.InvokeInstanceMethodAsync(
+                            target,
+                            methodCall.MethodName,
+                            methodArguments,
+                            cancellationToken);
                         return invocation.ReturnedVoid ? target : invocation.Value;
                     }
 
@@ -6265,6 +7198,41 @@ public sealed partial class ToshEngine : IShellEvaluator
                         return await PipelineFileMaterializer.MaterializeAsync("text", results, cancellationToken);
                     }
 
+                case ChainedComparisonArgumentSyntax chain:
+                    {
+                        // TS-P1-22: `a < b < c` means `(a < b) and (b < c)`
+                        // with each operand evaluated exactly once and
+                        // short-circuit preserved, so a failing earlier
+                        // comparison never evaluates later operands.
+                        var current = await EvaluateArgumentAsync(
+                            sourceName, sourceText, chain.Operands[0], cancellationToken);
+
+                        for (var i = 0; i < chain.Operators.Count; i++)
+                        {
+                            cancellationToken.ThrowIfCancellationRequested();
+                            var next = await EvaluateArgumentAsync(
+                                sourceName, sourceText, chain.Operands[i + 1], cancellationToken);
+
+                            var comparison = await EvaluateBinaryOperatorAsync(
+                                sourceName,
+                                sourceText,
+                                chain.OperatorSpans[i],
+                                current,
+                                chain.Operators[i],
+                                next,
+                                cancellationToken);
+
+                            if (!OperatorEvaluator.ToBoolean(comparison))
+                            {
+                                return false;
+                            }
+
+                            current = next;
+                        }
+
+                        return true;
+                    }
+
                 case OperatorArgumentSyntax operation:
                     {
                         // Constant-folded by the lowering pass: skip both
@@ -6296,20 +7264,14 @@ public sealed partial class ToshEngine : IShellEvaluator
 
                         var right = await EvaluateArgumentAsync(sourceName, sourceText, operation.Right, cancellationToken);
 
-                        // Symmetric operator overloading: check both operands for overloads.
-                        object? opResult;
-                        bool leftTried = false, rightTried = false;
-                        if (left is ToshClassInstance leftInst)
-                        {
-                            leftTried = TryInvokeClassBinaryOperator(leftInst, operation.Operator, right, out opResult);
-                            if (leftTried) return opResult;
-                        }
-                        if (right is ToshClassInstance rightInst)
-                        {
-                            rightTried = TryInvokeClassBinaryOperator(rightInst, operation.Operator, left, out opResult);
-                            if (rightTried) return opResult;
-                        }
-                        return OperatorEvaluator.EvaluateBinary(left, operation.Operator, right);
+                        return await EvaluateBinaryOperatorAsync(
+                            sourceName,
+                            sourceText,
+                            operation.Span,
+                            left,
+                            operation.Operator,
+                            right,
+                            cancellationToken);
                     }
 
                 case ConditionalArgumentSyntax conditional:
@@ -6331,7 +7293,7 @@ public sealed partial class ToshEngine : IShellEvaluator
                         {
                             raised = await EvaluateArgumentAsync(sourceName, sourceText, throwArg.Value, cancellationToken);
                         }
-                        RaiseThrownValue(throwArg.Span, raised);
+                        await RaiseThrownValueAsync(throwArg.Span, raised, cancellationToken);
                         return null; // unreachable; satisfies the compiler
                     }
 
@@ -6367,9 +7329,17 @@ public sealed partial class ToshEngine : IShellEvaluator
 
                         var operand = await EvaluateArgumentAsync(sourceName, sourceText, unaryOperation.Operand, cancellationToken);
 
-                        if (operand is ToshClassInstance unaryInst &&
-                            TryInvokeClassUnaryOperator(unaryInst, unaryOperation.Operator, out var unaryResult))
-                            return unaryResult;
+                        if (operand is ToshClassInstance unaryInst)
+                        {
+                            var unaryOverload = await TryInvokeClassUnaryOperatorAsync(
+                                unaryInst,
+                                unaryOperation.Operator,
+                                cancellationToken);
+                            if (unaryOverload.Matched)
+                            {
+                                return unaryOverload.Value;
+                            }
+                        }
 
                         return OperatorEvaluator.EvaluateUnary(unaryOperation.Operator, operand);
                     }
@@ -6394,11 +7364,22 @@ public sealed partial class ToshEngine : IShellEvaluator
 
                                         if (results.Count == 1)
                                         {
-                                            builder.Append(FormatInterpolatedValue(results[0]));
+                                            builder.Append(
+                                                await FormatInterpolatedValueAsync(
+                                                    results[0],
+                                                    cancellationToken));
                                         }
                                         else if (results.Count > 1)
                                         {
-                                            builder.Append(string.Join(" ", results.Select(FormatInterpolatedValue)));
+                                            var formatted = new string[results.Count];
+                                            for (var index = 0; index < results.Count; index++)
+                                            {
+                                                formatted[index] = await FormatInterpolatedValueAsync(
+                                                    results[index],
+                                                    cancellationToken);
+                                            }
+
+                                            builder.Append(string.Join(" ", formatted));
                                         }
 
                                         break;
@@ -6636,14 +7617,18 @@ public sealed partial class ToshEngine : IShellEvaluator
 
         try
         {
-            var existingTarget = Runtime.ObjectAccessor.GetValue(rootTarget, memberPath);
+            var existingTarget = await Runtime.ObjectAccessor.GetValueAsync(
+                rootTarget,
+                memberPath,
+                cancellationToken);
 
             if (existingTarget is not null)
             {
                 return existingTarget;
             }
         }
-        catch (Exception exception) when (exception is not ToshDiagnosticException)
+        catch (Exception exception) when (
+            exception is not ToshDiagnosticException and not OperationCanceledException)
         {
         }
 
@@ -6651,10 +7636,15 @@ public sealed partial class ToshEngine : IShellEvaluator
 
         try
         {
-            Runtime.ObjectAccessor.SetValue(rootTarget, memberPath, materializedList);
+            await Runtime.ObjectAccessor.SetValueAsync(
+                rootTarget,
+                memberPath,
+                materializedList,
+                cancellationToken);
             return materializedList;
         }
-        catch (Exception exception) when (exception is not ToshDiagnosticException)
+        catch (Exception exception) when (
+            exception is not ToshDiagnosticException and not OperationCanceledException)
         {
             throw ToshDiagnosticException.Create(new ToshDiagnostic(
                 Code: "tosh.runtime.list_materialization_failed",
@@ -6897,6 +7887,17 @@ public sealed partial class ToshEngine : IShellEvaluator
         string sourceText,
         ArgumentSyntax argument,
         Exception exception)
+        => CreateExpressionDiagnostic(
+            sourceName,
+            sourceText,
+            argument.Span,
+            exception);
+
+    private static ToshDiagnosticException CreateExpressionDiagnostic(
+        string sourceName,
+        string sourceText,
+        TextSpan span,
+        Exception exception)
     {
         return ToshDiagnosticException.Create(new ToshDiagnostic(
             Code: exception is InvalidOperationException
@@ -6905,7 +7906,7 @@ public sealed partial class ToshEngine : IShellEvaluator
             Title: exception.Message,
             SourceName: sourceName,
             SourceText: sourceText,
-            Span: argument.Span,
+            Span: span,
             Label: "while evaluating this expression"));
     }
 
@@ -6992,6 +7993,76 @@ public sealed partial class ToshEngine : IShellEvaluator
         throw new InvalidOperationException($"Unable to resolve .NET access path '{path}'.");
     }
 
+    private async ValueTask<object?> InvokeQualifiedMethodAsync(
+        string path,
+        IReadOnlyList<object?> arguments,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (TryResolveShellStaticType(path, out _))
+        {
+            throw new InvalidOperationException($"Construct instances with 'new {path}(...)'.");
+        }
+
+        var shellInvocation = await TryInvokeShellSymbolAsync(
+            path,
+            arguments,
+            cancellationToken);
+        if (shellInvocation.Matched)
+        {
+            return shellInvocation.Value;
+        }
+
+        var directType = ResolveTypeName(path);
+
+        if (directType is not null)
+        {
+            throw new InvalidOperationException($"Construct instances with 'new {path}(...)'.");
+        }
+
+        var segments = SplitQualifiedPath(path);
+
+        for (var prefixLength = segments.Length - 1; prefixLength >= 1; prefixLength--)
+        {
+            var type = ResolveTypeName(string.Join('.', segments.Take(prefixLength)));
+
+            if (type is null)
+            {
+                continue;
+            }
+
+            if (prefixLength == segments.Length - 1)
+            {
+                var invocation = await Runtime.Invoker.InvokeStaticMethodAsync(
+                    type,
+                    segments[^1],
+                    arguments,
+                    cancellationToken);
+                return invocation.ReturnedVoid ? null : invocation.Value;
+            }
+
+            var target = await ResolveQualifiedMemberChainAsync(
+                type,
+                segments[prefixLength..^1],
+                cancellationToken);
+
+            if (target is null)
+            {
+                throw new InvalidOperationException("Cannot invoke an instance method on null.");
+            }
+
+            var instanceInvocation = await Runtime.Invoker.InvokeInstanceMethodAsync(
+                target,
+                segments[^1],
+                arguments,
+                cancellationToken);
+            return instanceInvocation.ReturnedVoid ? target : instanceInvocation.Value;
+        }
+
+        throw new InvalidOperationException($"Unable to resolve .NET access path '{path}'.");
+    }
+
     private bool TryResolveQualifiedAccess(string path, out object? value, out bool matchedType)
     {
         if (TryResolveShellSymbolAccess(path, out value))
@@ -7062,6 +8133,49 @@ public sealed partial class ToshEngine : IShellEvaluator
         return false;
     }
 
+    private async ValueTask<(bool Matched, object? Value)> TryInvokeShellSymbolAsync(
+        string path,
+        IReadOnlyList<object?> arguments,
+        CancellationToken cancellationToken)
+    {
+        var segments = SplitQualifiedPath(path);
+
+        if (segments.Length >= 2 &&
+            TryGetModule(segments[0], out var module))
+        {
+            object target = module;
+
+            if (segments.Length > 2)
+            {
+                target = await Runtime.ObjectAccessor.GetValueAsync(
+                             module,
+                             string.Join('.', segments[1..^1]),
+                             cancellationToken)
+                         ?? throw new InvalidOperationException($"Cannot invoke '{segments[^1]}' on null.");
+            }
+
+            var invocation = await Runtime.Invoker.InvokeInstanceMethodAsync(
+                target,
+                segments[^1],
+                arguments,
+                cancellationToken);
+            return (true, invocation.ReturnedVoid ? target : invocation.Value);
+        }
+
+        if (segments.Length == 2 &&
+            TryResolveShellStaticType(segments[0], out var shellType))
+        {
+            var invocation = await Runtime.Invoker.InvokeStaticMethodAsync(
+                shellType,
+                segments[1],
+                arguments,
+                cancellationToken);
+            return (true, invocation.ReturnedVoid ? null : invocation.Value);
+        }
+
+        return (false, null);
+    }
+
     private bool TryResolveShellSymbolAccess(string path, out object? value)
     {
         if (TryGetNamedType(path, out var directType))
@@ -7104,6 +8218,29 @@ public sealed partial class ToshEngine : IShellEvaluator
         for (var index = 1; index < memberSegments.Count; index++)
         {
             current = Runtime.ObjectAccessor.GetValue(current, memberSegments[index]);
+        }
+
+        return current;
+    }
+
+    private async ValueTask<object?> ResolveQualifiedMemberChainAsync(
+        Type type,
+        IReadOnlyList<string> memberSegments,
+        CancellationToken cancellationToken)
+    {
+        if (memberSegments.Count == 0)
+        {
+            throw new InvalidOperationException($"No member path was provided for type '{type.FullName}'.");
+        }
+
+        object? current = Runtime.Invoker.GetStaticMember(type, memberSegments[0]);
+
+        for (var index = 1; index < memberSegments.Count; index++)
+        {
+            current = await Runtime.ObjectAccessor.GetValueAsync(
+                current,
+                memberSegments[index],
+                cancellationToken);
         }
 
         return current;
@@ -7190,6 +8327,94 @@ public sealed partial class ToshEngine : IShellEvaluator
         return false;
     }
 
+    private VariableBinding RequireMutableVariableBinding(
+        string sourceName,
+        string sourceText,
+        string name,
+        TextSpan span)
+    {
+        if (!TryGetVariableBinding(name, out var binding))
+        {
+            throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                Code: "tosh.runtime.unknown_variable",
+                Title: $"Variable '{name}' has not been declared.",
+                SourceName: sourceName,
+                SourceText: sourceText,
+                Span: span,
+                Label: $"declare '{name}' with 'var' before assigning to it",
+                Help: $"try 'var {name} = ...' the first time you bind this variable."));
+        }
+
+        if (binding.IsConst)
+        {
+            throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                Code: "tosh.runtime.const_reassignment",
+                Title: $"Cannot reassign constant '{name}'.",
+                SourceName: sourceName,
+                SourceText: sourceText,
+                Span: span,
+                Label: $"'{name}' was declared with 'const' and cannot be modified",
+                Help: "use 'var' instead of 'const' if you need to reassign this variable."));
+        }
+
+        return binding;
+    }
+
+    private VariableBinding CreateAssignedVariableBinding(
+        string sourceName,
+        string sourceText,
+        string name,
+        TextSpan valueSpan,
+        VariableBinding existingBinding,
+        object? assignedValue)
+    {
+        if (existingBinding.DeclaredTypeName is not null)
+        {
+            assignedValue = ConvertAnnotatedValue(
+                existingBinding.DeclaredTypeName,
+                existingBinding.DeclaredRefinement,
+                assignedValue,
+                valueSpan,
+                sourceName,
+                sourceText,
+                name);
+        }
+
+        return existingBinding with
+        {
+            Value = assignedValue,
+            ReplayAsPipeline = ShouldReplayAsPipeline(assignedValue),
+            IsAllocatedOnly = false,
+        };
+    }
+
+    private static object? CloneStructAssignmentValue(object? value) =>
+        value is ToshStructInstance structInstance
+            ? structInstance.Clone()
+            : value;
+
+    private void AssignExistingVariableBinding(
+        string sourceName,
+        string sourceText,
+        string name,
+        TextSpan span,
+        VariableBinding binding)
+    {
+        if (TryAssignVariable(name, binding))
+        {
+            return;
+        }
+
+        throw ToshDiagnosticException.Create(new ToshDiagnostic(
+            Code: "tosh.runtime.unknown_variable",
+            Title: $"Variable '{name}' has not been declared.",
+            SourceName: sourceName,
+            SourceText: sourceText,
+            Span: span,
+            Label: $"declare '{name}' with 'var' before assigning to it",
+            Help: $"try 'var {name} = ...' the first time you bind this variable."));
+    }
+
     private static void EnsureBindingNameIsNotReserved(string sourceName, string sourceText, string name, TextSpan span, string titleSuffix)
     {
         if (!RuntimeNamespaceUtilities.IsReservedRuntimeNamespaceName(name))
@@ -7206,11 +8431,14 @@ public sealed partial class ToshEngine : IShellEvaluator
             Label: $"choose a different name than '{name}'"));
     }
 
-    private string FormatInterpolatedValue(object? value)
+
+    private async ValueTask<string> FormatInterpolatedValueAsync(
+        object? value,
+        CancellationToken cancellationToken)
     {
         if (value is ToshClassInstance classInstance && classInstance.HasCustomToString())
         {
-            return classInstance.ToString();
+            return await ToOperatorStringAsync(classInstance, cancellationToken);
         }
 
         return Runtime.Formatter.Format(value);
@@ -7407,13 +8635,15 @@ public sealed partial class ToshEngine : IShellEvaluator
         };
     }
 
-    private static object? ApplyCompoundAssignment(object? currentValue, string assignmentOperator, object? incomingValue)
+    private ValueTask<object?> ApplyCompoundAssignmentAsync(
+        string sourceName,
+        string sourceText,
+        TextSpan span,
+        object? currentValue,
+        string assignmentOperator,
+        object? incomingValue,
+        CancellationToken cancellationToken)
     {
-        if (currentValue is null)
-        {
-            throw new InvalidOperationException($"The '{assignmentOperator}' operator requires an existing value.");
-        }
-
         var binaryOperator = assignmentOperator switch
         {
             "+=" => "+",
@@ -7426,8 +8656,21 @@ public sealed partial class ToshEngine : IShellEvaluator
             _ => throw new InvalidOperationException($"Unsupported assignment operator '{assignmentOperator}'."),
         };
 
-        return OperatorEvaluator.EvaluateBinary(currentValue, binaryOperator, incomingValue);
+        return EvaluateBinaryOperatorAsync(
+            sourceName,
+            sourceText,
+            span,
+            currentValue,
+            binaryOperator,
+            incomingValue,
+            cancellationToken);
     }
+
+    private static bool ShouldWrapAssignmentFailure(Exception exception) =>
+        exception is not ToshDiagnosticException and
+        not OperationCanceledException and
+        not ShellControlFlowException &&
+        !IsToshThrown(exception);
 
     private static object? CreateCaughtErrorValue(Exception exception)
     {
@@ -7435,7 +8678,7 @@ public sealed partial class ToshEngine : IShellEvaluator
         {
             ThrowSignalException thrown => thrown.Value,
             // A ToshError wrapping a ToshClassInstance was synthesized
-            // by RaiseThrownValue when the user threw an instance of
+            // by RaiseThrownValueAsync when the user threw an instance of
             // `class FooError extends Error`. Inside tosh `catch (err)`
             // the user expects to see the original instance (so
             // `$err is FooError` works); the ToshError wrapper only
@@ -7460,9 +8703,13 @@ public sealed partial class ToshEngine : IShellEvaluator
     /// payloads and are wrapped into <see cref="ThrowSignalException"/>
     /// rather than rethrown as control flow.
     /// </summary>
-    [System.Diagnostics.CodeAnalysis.DoesNotReturn]
-    private static void RaiseThrownValue(TextSpan span, object? value)
+    private async ValueTask RaiseThrownValueAsync(
+        TextSpan span,
+        object? value,
+        CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+
         // A tosh user class declared as `class FooError extends Error`
         // surfaces at runtime as a sealed ToshClassInstance whose
         // definition's ClrBaseType points at ToshError (or another
@@ -7472,7 +8719,8 @@ public sealed partial class ToshEngine : IShellEvaluator
         // name preserved on the wrapper for diagnostic-code routing.
         if (value is ToshClassInstance instance && DefinitionExtendsException(instance.Definition))
         {
-            var message = TryGetInstanceMessage(instance) ?? instance.Definition.Name;
+            var message = await TryGetInstanceMessageAsync(instance, cancellationToken)
+                ?? instance.Definition.Name;
             var wrapper = new ToshError(message, span, cause: instance);
             wrapper.Data["tosh.thrown"] = true;
             wrapper.Data["tosh.user.type"] = instance.Definition.Name;
@@ -7520,10 +8768,28 @@ public sealed partial class ToshEngine : IShellEvaluator
     /// <see cref="ToshError.Message"/> when a user throws an instance
     /// of a class that extends <c>Error</c>.
     /// </summary>
-    private static string? TryGetInstanceMessage(ToshClassInstance instance)
+    private async ValueTask<string?> TryGetInstanceMessageAsync(
+        ToshClassInstance instance,
+        CancellationToken cancellationToken)
     {
-        if (instance.TryGetMember("Message", out var msg) && msg is not null) return msg.ToString();
-        if (instance.TryGetMember("message", out var msg2) && msg2 is not null) return msg2.ToString();
+        var message = await instance.TryGetMemberAsync(
+            "Message",
+            includeHidden: false,
+            cancellationToken);
+        if (message is { Found: true, Value: not null })
+        {
+            return await FormatThrownDiagnosticValueAsync(message.Value, cancellationToken);
+        }
+
+        var lowerMessage = await instance.TryGetMemberAsync(
+            "message",
+            includeHidden: false,
+            cancellationToken);
+        if (lowerMessage is { Found: true, Value: not null })
+        {
+            return await FormatThrownDiagnosticValueAsync(lowerMessage.Value, cancellationToken);
+        }
+
         return null;
     }
 
@@ -7531,10 +8797,12 @@ public sealed partial class ToshEngine : IShellEvaluator
     /// True when <paramref name="exception"/> originated from a tosh
     /// <c>throw</c> statement (either a wrapped <see cref="ThrowSignalException"/>
     /// or a directly raised <see cref="Exception"/> stamped by
-    /// <see cref="RaiseThrownValue"/>).
+    /// <see cref="RaiseThrownValueAsync"/>).
     /// </summary>
     private static bool IsToshThrown(Exception exception)
         => exception is ThrowSignalException
+           || (exception is not OperationCanceledException
+               && ToshDeferFailures.IsDeferFailure(exception))
            || (exception is not ShellControlFlowException
                && exception.Data.Contains("tosh.thrown"));
 
@@ -8588,6 +9856,37 @@ public sealed partial class ToshEngine : IShellEvaluator
         return false;
     }
 
+    private bool TryResolveModuleQualifiedCommand(string qualifiedName, out IShellCommand command)
+    {
+        var segments = qualifiedName.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (segments.Length < 2 || !TryGetModule(segments[0], out var module))
+        {
+            command = null!;
+            return false;
+        }
+
+        for (var index = 1; index < segments.Length - 1; index++)
+        {
+            if (!module.ExportTable.Modules.TryGetValue(segments[index], out var nested) ||
+                nested is not ToshModuleObject nestedModule)
+            {
+                command = null!;
+                return false;
+            }
+
+            module = nestedModule;
+        }
+
+        if (module.ExportTable.Commands.TryGetValue(segments[^1], out var resolved))
+        {
+            command = resolved;
+            return true;
+        }
+
+        command = null!;
+        return false;
+    }
+
     private bool TryGetNearestModuleScope(out LexicalScope moduleScope)
     {
         foreach (var scope in _scopes)
@@ -8822,14 +10121,86 @@ public sealed partial class ToshEngine : IShellEvaluator
         return false;
     }
 
+    /// <summary>
+    /// Rejects a call that supplies the same parameter name twice
+    /// (TS-P1-06). A duplicate is invalid for every candidate, so it is
+    /// diagnosed once at the call site rather than being treated as an
+    /// overload mismatch — otherwise the caller would see a misleading
+    /// "no overload matched" failure.
+    /// </summary>
+    internal static void ValidateNamedArgumentUniqueness(
+        IReadOnlyList<object?> arguments,
+        string calleeLabel)
+    {
+        HashSet<string>? seen = null;
+
+        foreach (var argument in arguments)
+        {
+            if (argument is not NamedArgument named)
+            {
+                continue;
+            }
+
+            seen ??= new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (!seen.Add(named.Name))
+            {
+                throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                    Code: "tosh.runtime.duplicate_named_argument",
+                    Title: $"Named argument '{named.Name}' was supplied more than once to {calleeLabel}.",
+                    Label: $"'{named.Name}' is already bound by an earlier named argument",
+                    Help: "each parameter may be bound by at most one named argument."));
+            }
+        }
+    }
+
+    /// <summary>
+    /// True when every named argument matches a declared parameter.
+    /// Used by overload selection, where an unmatched name must make the
+    /// candidate lose rather than fail the whole call (TS-P1-06): a
+    /// sibling overload may well declare that parameter.
+    /// </summary>
+    private static bool AllNamedArgumentsMatchParameters(
+        IReadOnlyList<FunctionParameterDefinition> parameters,
+        IReadOnlyDictionary<string, object?> namedArgs)
+    {
+        foreach (var name in namedArgs.Keys)
+        {
+            var matched = false;
+            foreach (var parameter in parameters)
+            {
+                if (string.Equals(parameter.Name, name, StringComparison.OrdinalIgnoreCase))
+                {
+                    matched = true;
+                    break;
+                }
+            }
+
+            if (!matched)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     internal bool TryBindCallableParameters(
         IReadOnlyList<FunctionParameterDefinition> parameters,
         IReadOnlyList<object?> arguments,
         out Dictionary<string, object?> locals,
         out int score)
+        => TryBindCallableParameters(parameters, arguments, out locals, out score, out _);
+
+    internal bool TryBindCallableParameters(
+        IReadOnlyList<FunctionParameterDefinition> parameters,
+        IReadOnlyList<object?> arguments,
+        out Dictionary<string, object?> locals,
+        out int score,
+        out List<FunctionParameterDefinition>? pendingDefaults)
     {
         locals = new Dictionary<string, object?>(StringComparer.Ordinal);
         score = 0;
+        pendingDefaults = null;
 
         var hasRestParameter = parameters.Count > 0 && parameters[^1].IsRest;
         var positionalCount = hasRestParameter ? parameters.Count - 1 : parameters.Count;
@@ -8848,6 +10219,11 @@ public sealed partial class ToshEngine : IShellEvaluator
             {
                 positionalArgs.Add(arg);
             }
+        }
+
+        if (!AllNamedArgumentsMatchParameters(parameters, namedArgs))
+        {
+            return false;
         }
 
         var requiredCount = parameters.Count(parameter =>
@@ -8886,7 +10262,15 @@ public sealed partial class ToshEngine : IShellEvaluator
 
             if (positionalIndex >= positionalArgs.Count)
             {
+                // Defaults are not evaluated during overload scoring: a
+                // losing candidate must never run default side effects.
+                // The winner's pending defaults are applied afterwards by
+                // ApplyPendingParameterDefaults(Async).
                 locals[parameter.Name] = null;
+                if (parameter.DefaultValue is not null)
+                {
+                    (pendingDefaults ??= new List<FunctionParameterDefinition>()).Add(parameter);
+                }
                 score += parameter.DefaultValue is not null ? 1 : 4;
                 continue;
             }
@@ -8962,26 +10346,211 @@ public sealed partial class ToshEngine : IShellEvaluator
         return TryApplyRefinementWithOptionalCoercion(parameter.Refinement, converted, out converted, out failure);
     }
 
+    private async ValueTask<(
+        bool Success,
+        object? Converted,
+        ToshDiagnosticException? Failure)> TryConvertParameterValueAsync(
+        FunctionParameterDefinition parameter,
+        object? value,
+        CancellationToken cancellationToken)
+    {
+        object? converted = value;
+
+        if (parameter.TypeName is not null)
+        {
+            var typeConversion = await TryConvertAnnotatedValueAsync(
+                parameter.TypeName,
+                value,
+                cancellationToken);
+            converted = typeConversion.Converted;
+            if (!typeConversion.Success)
+            {
+                return (
+                    false,
+                    converted,
+                    converted is AnnotationRefinementError refinementError
+                        ? refinementError.Exception
+                        : null);
+            }
+        }
+
+        var refinement = await TryApplyRefinementWithOptionalCoercionAsync(
+            parameter.Refinement,
+            converted,
+            cancellationToken);
+        return (refinement.Success, refinement.RefinedValue, refinement.Failure);
+    }
+
+    internal async ValueTask<(
+        bool Success,
+        Dictionary<string, object?> Locals,
+        int Score,
+        List<FunctionParameterDefinition>? PendingDefaults)> TryBindCallableParametersAsync(
+        IReadOnlyList<FunctionParameterDefinition> parameters,
+        IReadOnlyList<object?> arguments,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var locals = new Dictionary<string, object?>(StringComparer.Ordinal);
+        var score = 0;
+        List<FunctionParameterDefinition>? pendingDefaults = null;
+        var hasRestParameter = parameters.Count > 0 && parameters[^1].IsRest;
+        var positionalCount = hasRestParameter ? parameters.Count - 1 : parameters.Count;
+        var namedArgs = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+        var positionalArgs = new List<object?>();
+
+        foreach (var argument in arguments)
+        {
+            if (argument is NamedArgument named)
+            {
+                namedArgs[named.Name] = named.Value;
+            }
+            else
+            {
+                positionalArgs.Add(argument);
+            }
+        }
+
+        if (!AllNamedArgumentsMatchParameters(parameters, namedArgs))
+        {
+            return (false, new Dictionary<string, object?>(StringComparer.Ordinal), 0, null);
+        }
+
+        var requiredCount = parameters.Count(parameter =>
+            !parameter.IsOptional &&
+            !parameter.IsRest &&
+            parameter.DefaultValue is null &&
+            !namedArgs.ContainsKey(parameter.Name));
+
+        if (positionalArgs.Count < requiredCount ||
+            (!hasRestParameter && positionalArgs.Count > positionalCount - namedArgs.Count))
+        {
+            return (false, new Dictionary<string, object?>(StringComparer.Ordinal), 0, null);
+        }
+
+        locals["args"] = arguments.ToArray();
+        var positionalIndex = 0;
+
+        for (var index = 0; index < positionalCount; index++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var parameter = parameters[index];
+
+            if (namedArgs.TryGetValue(parameter.Name, out var namedValue))
+            {
+                var namedConversion = await TryConvertParameterValueAsync(
+                    parameter,
+                    namedValue,
+                    cancellationToken);
+                if (!namedConversion.Success)
+                {
+                    if (namedConversion.Failure is not null)
+                    {
+                        throw namedConversion.Failure;
+                    }
+
+                    return (false, new Dictionary<string, object?>(StringComparer.Ordinal), 0, null);
+                }
+
+                locals[parameter.Name] = namedConversion.Converted;
+                continue;
+            }
+
+            if (positionalIndex >= positionalArgs.Count)
+            {
+                // Defaults are not evaluated during overload scoring: a
+                // losing candidate must never run default side effects.
+                // The winner's pending defaults are applied afterwards by
+                // ApplyPendingParameterDefaults(Async).
+                locals[parameter.Name] = null;
+                if (parameter.DefaultValue is not null)
+                {
+                    (pendingDefaults ??= new List<FunctionParameterDefinition>()).Add(parameter);
+                }
+                score += parameter.DefaultValue is not null ? 1 : 4;
+                continue;
+            }
+
+            var value = positionalArgs[positionalIndex++];
+            var positionalConversion = await TryConvertParameterValueAsync(
+                parameter,
+                value,
+                cancellationToken);
+            if (!positionalConversion.Success)
+            {
+                if (positionalConversion.Failure is not null)
+                {
+                    throw positionalConversion.Failure;
+                }
+
+                return (false, new Dictionary<string, object?>(StringComparer.Ordinal), 0, null);
+            }
+
+            if (!ReferenceEquals(positionalConversion.Converted, value))
+            {
+                score++;
+            }
+
+            locals[parameter.Name] = positionalConversion.Converted;
+        }
+
+        if (hasRestParameter)
+        {
+            var restParameter = parameters[^1];
+            var restArguments = new List<object?>();
+            for (var index = positionalCount; index < arguments.Count; index++)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var restConversion = await TryConvertParameterValueAsync(
+                    restParameter,
+                    arguments[index],
+                    cancellationToken);
+                if (!restConversion.Success)
+                {
+                    if (restConversion.Failure is not null)
+                    {
+                        throw restConversion.Failure;
+                    }
+
+                    return (false, new Dictionary<string, object?>(StringComparer.Ordinal), 0, null);
+                }
+
+                restArguments.Add(restConversion.Converted);
+            }
+
+            locals[restParameter.Name] = restArguments;
+        }
+
+        return (true, locals, score, pendingDefaults);
+    }
+
     internal IReadOnlyList<CallableBindingMatch<TCandidate>> SelectBestCallableMatches<TCandidate>(
         IEnumerable<TCandidate> candidates,
         Func<TCandidate, IReadOnlyList<FunctionParameterDefinition>> parameterSelector,
         IReadOnlyList<object?> arguments)
     {
+        ValidateNamedArgumentUniqueness(arguments, "this call");
         var bestMatches = new List<CallableBindingMatch<TCandidate>>();
         var bestScore = int.MaxValue;
+        var candidateParameters = new List<IReadOnlyList<FunctionParameterDefinition>>();
 
         foreach (var candidate in candidates)
         {
+            var parameters = parameterSelector(candidate);
+            candidateParameters.Add(parameters);
+
             if (!TryBindCallableParameters(
-                    parameterSelector(candidate),
+                    parameters,
                     arguments,
                     out var locals,
-                    out var score))
+                    out var score,
+                    out var pendingDefaults))
             {
                 continue;
             }
 
-            var match = new CallableBindingMatch<TCandidate>(candidate, locals, score);
+            var match = new CallableBindingMatch<TCandidate>(candidate, locals, score, pendingDefaults);
 
             if (score < bestScore)
             {
@@ -8995,7 +10564,348 @@ public sealed partial class ToshEngine : IShellEvaluator
             }
         }
 
+        if (bestMatches.Count == 0)
+        {
+            ThrowIfNamedArgumentMatchesNoCandidate(candidateParameters, arguments);
+        }
+
         return bestMatches.ToArray();
+    }
+
+    /// <summary>
+    /// When no candidate bound, a named argument that matches no
+    /// parameter of any candidate is definitively wrong, so it gets a
+    /// precise diagnostic instead of the caller's generic "no overload
+    /// matched" message (TS-P1-06).
+    /// </summary>
+    private static void ThrowIfNamedArgumentMatchesNoCandidate(
+        IReadOnlyList<IReadOnlyList<FunctionParameterDefinition>> candidateParameters,
+        IReadOnlyList<object?> arguments)
+    {
+        if (candidateParameters.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var argument in arguments)
+        {
+            if (argument is not NamedArgument named)
+            {
+                continue;
+            }
+
+            var matchedAnywhere = false;
+            foreach (var parameters in candidateParameters)
+            {
+                foreach (var parameter in parameters)
+                {
+                    if (string.Equals(parameter.Name, named.Name, StringComparison.OrdinalIgnoreCase))
+                    {
+                        matchedAnywhere = true;
+                        break;
+                    }
+                }
+
+                if (matchedAnywhere)
+                {
+                    break;
+                }
+            }
+
+            if (matchedAnywhere)
+            {
+                continue;
+            }
+
+            var declaredNames = candidateParameters
+                .SelectMany(parameters => parameters.Select(parameter => parameter.Name))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            var declared = declaredNames.Length == 0
+                ? "no parameters are declared"
+                : $"declared parameters: {string.Join(", ", declaredNames)}";
+
+            throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                Code: "tosh.runtime.unknown_named_argument",
+                Title: $"There is no parameter named '{named.Name}'.",
+                Label: $"'{named.Name}' does not match a parameter",
+                Help: $"{declared}."));
+        }
+    }
+
+    internal async ValueTask<IReadOnlyList<CallableBindingMatch<TCandidate>>> SelectBestCallableMatchesAsync<TCandidate>(
+        IEnumerable<TCandidate> candidates,
+        Func<TCandidate, IReadOnlyList<FunctionParameterDefinition>> parameterSelector,
+        IReadOnlyList<object?> arguments,
+        CancellationToken cancellationToken)
+    {
+        ValidateNamedArgumentUniqueness(arguments, "this call");
+        var bestMatches = new List<CallableBindingMatch<TCandidate>>();
+        var bestScore = int.MaxValue;
+        var candidateParameters = new List<IReadOnlyList<FunctionParameterDefinition>>();
+
+        foreach (var candidate in candidates)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var parameters = parameterSelector(candidate);
+            candidateParameters.Add(parameters);
+            var binding = await TryBindCallableParametersAsync(
+                parameters,
+                arguments,
+                cancellationToken);
+            if (!binding.Success)
+            {
+                continue;
+            }
+
+            var match = new CallableBindingMatch<TCandidate>(
+                candidate,
+                binding.Locals,
+                binding.Score,
+                binding.PendingDefaults);
+
+            if (binding.Score < bestScore)
+            {
+                bestMatches.Clear();
+                bestMatches.Add(match);
+                bestScore = binding.Score;
+            }
+            else if (binding.Score == bestScore)
+            {
+                bestMatches.Add(match);
+            }
+        }
+
+        if (bestMatches.Count == 0)
+        {
+            ThrowIfNamedArgumentMatchesNoCandidate(candidateParameters, arguments);
+        }
+
+        return bestMatches.ToArray();
+    }
+
+    /// <summary>
+    /// Evaluates the pending parameter defaults recorded by the callable
+    /// binder for a winning overload (TS-P1-05). Defaults run at call
+    /// time in the callable's lexical environment, left-to-right, with
+    /// earlier bound parameters visible; later parameters are not in
+    /// scope. Losing overload candidates never evaluate their defaults.
+    /// The evaluated value passes through the same annotation/refinement
+    /// conversion as an explicitly supplied argument.
+    /// </summary>
+    internal void ApplyPendingParameterDefaults(
+        IReadOnlyList<FunctionParameterDefinition> parameters,
+        Dictionary<string, object?> locals,
+        IReadOnlyList<FunctionParameterDefinition>? pendingDefaults,
+        string sourceName,
+        string sourceText,
+        IReadOnlyList<LexicalScope>? capturedScopes,
+        string callName,
+        IReadOnlyDictionary<string, object?>? ambient = null,
+        bool selfUnavailable = false)
+    {
+        if (pendingDefaults is null || pendingDefaults.Count == 0)
+        {
+            return;
+        }
+
+        var pendingNames = CollectPendingDefaultNames(pendingDefaults);
+        var visible = SeedDefaultScope(ambient);
+
+        foreach (var parameter in parameters)
+        {
+            if (parameter.IsRest)
+            {
+                continue;
+            }
+
+            if (!pendingNames.Contains(parameter.Name))
+            {
+                if (locals.TryGetValue(parameter.Name, out var boundValue))
+                {
+                    visible[parameter.Name] = boundValue;
+                }
+
+                continue;
+            }
+
+            object? value;
+            try
+            {
+                value = EvaluateClassPipelineValueSync(
+                    sourceName,
+                    sourceText,
+                    parameter.DefaultValue!,
+                    visible,
+                    capturedScopes,
+                    callName);
+            }
+            catch (ToshDiagnosticException selfFailure) when (selfUnavailable && ReferencesUnavailableSelf(selfFailure))
+            {
+                throw CreateSelfUnavailableInDefaultDiagnostic(parameter, sourceName, sourceText);
+            }
+
+            if (!TryConvertParameterValue(parameter, value, out var converted, out var failure))
+            {
+                throw failure ?? CreateParameterDefaultConversionDiagnostic(parameter, sourceName, sourceText);
+            }
+
+            locals[parameter.Name] = converted;
+            visible[parameter.Name] = converted;
+        }
+    }
+
+    /// <inheritdoc cref="ApplyPendingParameterDefaults"/>
+    internal async ValueTask ApplyPendingParameterDefaultsAsync(
+        IReadOnlyList<FunctionParameterDefinition> parameters,
+        Dictionary<string, object?> locals,
+        IReadOnlyList<FunctionParameterDefinition>? pendingDefaults,
+        string sourceName,
+        string sourceText,
+        IReadOnlyList<LexicalScope>? capturedScopes,
+        string callName,
+        CancellationToken cancellationToken,
+        IReadOnlyDictionary<string, object?>? ambient = null,
+        bool selfUnavailable = false)
+    {
+        if (pendingDefaults is null || pendingDefaults.Count == 0)
+        {
+            return;
+        }
+
+        var pendingNames = CollectPendingDefaultNames(pendingDefaults);
+        var visible = SeedDefaultScope(ambient);
+
+        foreach (var parameter in parameters)
+        {
+            if (parameter.IsRest)
+            {
+                continue;
+            }
+
+            if (!pendingNames.Contains(parameter.Name))
+            {
+                if (locals.TryGetValue(parameter.Name, out var boundValue))
+                {
+                    visible[parameter.Name] = boundValue;
+                }
+
+                continue;
+            }
+
+            cancellationToken.ThrowIfCancellationRequested();
+            object? value;
+            try
+            {
+                value = await EvaluateClassPipelineValueAsync(
+                    sourceName,
+                    sourceText,
+                    parameter.DefaultValue!,
+                    visible,
+                    capturedScopes,
+                    cancellationToken,
+                    callName);
+            }
+            catch (ToshDiagnosticException failure) when (selfUnavailable && ReferencesUnavailableSelf(failure))
+            {
+                throw CreateSelfUnavailableInDefaultDiagnostic(parameter, sourceName, sourceText);
+            }
+
+            var conversion = await TryConvertParameterValueAsync(parameter, value, cancellationToken);
+            if (!conversion.Success)
+            {
+                throw conversion.Failure ?? CreateParameterDefaultConversionDiagnostic(parameter, sourceName, sourceText);
+            }
+
+            locals[parameter.Name] = conversion.Converted;
+            visible[parameter.Name] = conversion.Converted;
+        }
+    }
+
+    /// <summary>
+    /// Starts a default-value scope. Ambient bindings — `this` and
+    /// `super` for an instance method — are visible to every default
+    /// (TS-P1-21); parameters are added as they bind.
+    /// </summary>
+    private static Dictionary<string, object?> SeedDefaultScope(
+        IReadOnlyDictionary<string, object?>? ambient)
+    {
+        var scope = new Dictionary<string, object?>(StringComparer.Ordinal);
+        if (ambient is not null)
+        {
+            foreach (var (name, value) in ambient)
+            {
+                scope[name] = value;
+            }
+        }
+
+        return scope;
+    }
+
+    /// <summary>
+    /// True when a default failed purely because it referenced `$this`
+    /// or `$super` where no instance is in scope. Matched on the
+    /// unknown-variable diagnostic the evaluator raises; the
+    /// constructor-default regression test locks this coupling so a
+    /// change to that diagnostic surfaces loudly.
+    /// </summary>
+    private static bool ReferencesUnavailableSelf(ToshDiagnosticException failure)
+    {
+        if (failure.Diagnostics.Count == 0)
+        {
+            return false;
+        }
+
+        var diagnostic = failure.Diagnostics[0];
+        if (!string.Equals(diagnostic.Code, "tosh.runtime.unknown_variable", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        return diagnostic.Title.Contains("'this'", StringComparison.Ordinal)
+            || diagnostic.Title.Contains("'super'", StringComparison.Ordinal);
+    }
+
+    private static ToshDiagnosticException CreateSelfUnavailableInDefaultDiagnostic(
+        FunctionParameterDefinition parameter,
+        string sourceName,
+        string sourceText)
+    {
+        return ToshDiagnosticException.Create(new ToshDiagnostic(
+            Code: "tosh.runtime.self_unavailable_in_constructor_default",
+            Title: $"The default for parameter '{parameter.Name}' cannot use '$this'.",
+            SourceName: sourceName,
+            SourceText: sourceText,
+            Span: parameter.Span,
+            Label: "'$this' is not available while the instance is still being constructed",
+            Help: "constructor defaults bind before this layer's properties are initialised; move the logic into the constructor body, or give the parameter a value that does not depend on the instance."));
+    }
+
+    private static HashSet<string> CollectPendingDefaultNames(
+        IReadOnlyList<FunctionParameterDefinition> pendingDefaults)
+    {
+        var names = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var pending in pendingDefaults)
+        {
+            names.Add(pending.Name);
+        }
+
+        return names;
+    }
+
+    private static ToshDiagnosticException CreateParameterDefaultConversionDiagnostic(
+        FunctionParameterDefinition parameter,
+        string sourceName,
+        string sourceText)
+    {
+        return ToshDiagnosticException.Create(new ToshDiagnostic(
+            Code: "tosh.runtime.parameter_default_conversion_failed",
+            Title: $"The default value for parameter '{parameter.Name}' could not be converted to '{parameter.TypeName}'.",
+            SourceName: sourceName,
+            SourceText: sourceText,
+            Span: parameter.Span,
+            Label: $"this default does not satisfy ': {parameter.TypeName}'",
+            Help: "change the default expression or loosen the parameter's annotation."));
     }
 
     internal bool TryConvertAnnotatedValue(string typeName, object? value, out object? converted)
@@ -9278,6 +11188,272 @@ public sealed partial class ToshEngine : IShellEvaluator
                 Label: $"the value does not match '{typeName}'"));
     }
 
+    internal async ValueTask<object?> ConvertAnnotatedValueAsync(
+        string? typeName,
+        RefinementAnnotation? refinement,
+        object? value,
+        TextSpan span,
+        string sourceName,
+        string sourceText,
+        string owner,
+        CancellationToken cancellationToken)
+    {
+        object? converted = value;
+
+        if (typeName is not null)
+        {
+            ThrowIfUnknownAnnotatedType(typeName, span, sourceName, sourceText, owner);
+
+            var conversion = await TryConvertAnnotatedValueAsync(
+                typeName,
+                value,
+                cancellationToken);
+            converted = conversion.Converted;
+
+            if (!conversion.Success)
+            {
+                if (converted is AnnotationRefinementFailure refinementFailure)
+                {
+                    return await EnsureRefinementSatisfiedAsync(
+                        refinementFailure.Refinement,
+                        refinementFailure.Value,
+                        span,
+                        sourceName,
+                        sourceText,
+                        owner,
+                        cancellationToken);
+                }
+
+                if (converted is AnnotationRefinementError refinementError)
+                {
+                    throw refinementError.Exception;
+                }
+
+                throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                    Code: "tosh.runtime.annotation_conversion_failed",
+                    Title: $"'{owner}' produced a value that could not be converted to '{typeName}'.",
+                    SourceName: sourceName,
+                    SourceText: sourceText,
+                    Span: span,
+                    Label: $"the value does not match '{typeName}'"));
+            }
+        }
+
+        return await EnsureRefinementSatisfiedAsync(
+            refinement,
+            converted,
+            span,
+            sourceName,
+            sourceText,
+            owner,
+            cancellationToken);
+    }
+
+    internal async ValueTask<object?> ConvertAnnotatedValueAsync(
+        string typeName,
+        object? value,
+        TextSpan span,
+        string sourceName,
+        string sourceText,
+        string owner,
+        CancellationToken cancellationToken)
+    {
+        ThrowIfUnknownAnnotatedType(typeName, span, sourceName, sourceText, owner);
+
+        var conversion = await TryConvertAnnotatedValueAsync(
+            typeName,
+            value,
+            cancellationToken);
+        if (conversion.Success)
+        {
+            return conversion.Converted;
+        }
+
+        if (conversion.Converted is AnnotationRefinementFailure refinementFailure)
+        {
+            return await EnsureRefinementSatisfiedAsync(
+                refinementFailure.Refinement,
+                refinementFailure.Value,
+                span,
+                sourceName,
+                sourceText,
+                owner,
+                cancellationToken);
+        }
+
+        if (conversion.Converted is AnnotationRefinementError refinementError)
+        {
+            throw refinementError.Exception;
+        }
+
+        throw ToshDiagnosticException.Create(new ToshDiagnostic(
+            Code: "tosh.runtime.annotation_conversion_failed",
+            Title: $"'{owner}' produced a value that could not be converted to '{typeName}'.",
+            SourceName: sourceName,
+            SourceText: sourceText,
+            Span: span,
+            Label: $"the value does not match '{typeName}'"));
+    }
+
+    /// <summary>
+    /// Internal rather than private so the annotated-conversion drift
+    /// guard can run one corpus through both this and the synchronous
+    /// <see cref="TryConvertAnnotatedValue(string, object?, out object?)"/>
+    /// and assert they agree (TS-P1-24).
+    /// </summary>
+    internal ValueTask<(bool Success, object? Converted)> TryConvertAnnotatedValueAsync(
+        string typeName,
+        object? value,
+        CancellationToken cancellationToken) =>
+        TryConvertAnnotatedValueAsync(
+            typeName,
+            value,
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase),
+            cancellationToken);
+
+    private async ValueTask<(bool Success, object? Converted)> TryConvertAnnotatedValueAsync(
+        string typeName,
+        object? value,
+        HashSet<string> activeRefinements,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var allowsNull = typeName.EndsWith("?", StringComparison.Ordinal);
+        var normalizedTypeName = allowsNull ? typeName[..^1] : typeName;
+
+        if (value is ToshClassSelfReference selfReference)
+        {
+            value = selfReference.Unwrap();
+        }
+
+        if (value is null)
+        {
+            return (allowsNull, null);
+        }
+
+        if (!TryResolveRefinementTypeForAnnotation(normalizedTypeName, out var refinementType))
+        {
+            return TryConvertAnnotatedValue(
+                    typeName,
+                    value,
+                    out var converted,
+                    activeRefinements)
+                ? (true, converted)
+                : (false, converted);
+        }
+
+        if (!activeRefinements.Add(refinementType.Name))
+        {
+            return (false, null);
+        }
+
+        try
+        {
+            var baseConversion = await TryConvertAnnotatedValueAsync(
+                refinementType.BaseTypeName,
+                value,
+                activeRefinements,
+                cancellationToken);
+            if (!baseConversion.Success)
+            {
+                return baseConversion;
+            }
+
+            var refinement = await TryApplyRefinementWithOptionalCoercionAsync(
+                refinementType.Refinement,
+                baseConversion.Converted,
+                cancellationToken);
+            if (!refinement.Success)
+            {
+                return (
+                    false,
+                    refinement.Failure is not null
+                        ? new AnnotationRefinementError(refinement.Failure)
+                        : new AnnotationRefinementFailure(
+                            baseConversion.Converted,
+                            refinementType.Refinement));
+            }
+
+            return (true, refinement.RefinedValue);
+        }
+        finally
+        {
+            activeRefinements.Remove(refinementType.Name);
+        }
+    }
+
+    private async ValueTask<object?> EnsureRefinementSatisfiedAsync(
+        RefinementAnnotation? refinement,
+        object? value,
+        TextSpan span,
+        string sourceName,
+        string sourceText,
+        string owner,
+        CancellationToken cancellationToken)
+    {
+        if (refinement is null)
+        {
+            return value;
+        }
+
+        var result = await TryApplyRefinementWithOptionalCoercionAsync(
+            refinement,
+            value,
+            cancellationToken);
+        if (result.Failure is not null)
+        {
+            throw result.Failure;
+        }
+
+        if (result.Success)
+        {
+            return result.RefinedValue;
+        }
+
+        var helpLines = new List<string>();
+        foreach (var clause in refinement.Clauses)
+        {
+            switch (clause)
+            {
+                case RefinementWhereClause whereClause
+                    when TryGetRefinementSnippet(
+                        refinement.SourceText,
+                        whereClause.Predicate.Span,
+                        out var predicateText):
+                    helpLines.Add($"where: {predicateText}");
+                    break;
+                case RefinementCoerceClause { Guard: { } guard, Coercer: var coercer }
+                    when TryGetRefinementSnippet(
+                             refinement.SourceText,
+                             guard.Span,
+                             out var guardText) &&
+                         TryGetRefinementSnippet(
+                             refinement.SourceText,
+                             coercer.Span,
+                             out var guardedCoerceText):
+                    helpLines.Add($"if {guardText} coerce: {guardedCoerceText}");
+                    break;
+                case RefinementCoerceClause { Guard: null, Coercer: var coercer }
+                    when TryGetRefinementSnippet(
+                        refinement.SourceText,
+                        coercer.Span,
+                        out var coerceText):
+                    helpLines.Add($"coerce: {coerceText}");
+                    break;
+            }
+        }
+
+        throw ToshDiagnosticException.Create(new ToshDiagnostic(
+            Code: "tosh.runtime.refinement_failed",
+            Title: $"Value for '{owner}' does not satisfy its refinement.",
+            SourceName: sourceName,
+            SourceText: sourceText,
+            Span: span,
+            Label: "this value failed its 'where' predicate",
+            Help: helpLines.Count > 0 ? string.Join("\n", helpLines) : null));
+    }
+
     private void ThrowIfUnknownAnnotatedType(
         string typeName,
         TextSpan span,
@@ -9532,6 +11708,293 @@ public sealed partial class ToshEngine : IShellEvaluator
         return satisfied;
     }
 
+    private async ValueTask<(
+        bool Success,
+        object? RefinedValue,
+        ToshDiagnosticException? Failure)> TryApplyRefinementWithOptionalCoercionAsync(
+        RefinementAnnotation? refinement,
+        object? value,
+        CancellationToken cancellationToken)
+    {
+        if (refinement is null)
+        {
+            return (true, value, null);
+        }
+
+        object? currentValue = value;
+        var guarded = await TryApplyGuardedRefinementCoercionAsync(
+            refinement,
+            currentValue,
+            cancellationToken);
+        if (!guarded.Success)
+        {
+            return (false, guarded.RefinedValue, guarded.Failure);
+        }
+
+        currentValue = guarded.RefinedValue;
+        var predicate = await TryEvaluateRefinementPredicateAsync(
+            refinement,
+            currentValue,
+            cancellationToken);
+        if (!predicate.Completed)
+        {
+            return (false, currentValue, predicate.Failure);
+        }
+
+        if (predicate.Satisfied)
+        {
+            return (true, currentValue, null);
+        }
+
+        var fallbackClause = refinement.Clauses
+            .OfType<RefinementCoerceClause>()
+            .FirstOrDefault(static clause => clause.Guard is null);
+        if (fallbackClause is null)
+        {
+            return (false, currentValue, null);
+        }
+
+        object? coerced;
+        try
+        {
+            coerced = await EvaluateRefinementCoercerAsync(
+                refinement,
+                fallbackClause,
+                currentValue,
+                cancellationToken);
+        }
+        catch (ToshDiagnosticException exception)
+        {
+            return (false, currentValue, exception);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            return (
+                false,
+                currentValue,
+                CreateExpressionDiagnostic(
+                    refinement.SourceName,
+                    refinement.SourceText,
+                    fallbackClause.Coercer,
+                    exception));
+        }
+
+        predicate = await TryEvaluateRefinementPredicateAsync(
+            refinement,
+            coerced,
+            cancellationToken);
+        if (!predicate.Completed)
+        {
+            return (false, coerced, predicate.Failure);
+        }
+
+        return (predicate.Satisfied, coerced, null);
+    }
+
+    private async ValueTask<(
+        bool Success,
+        object? RefinedValue,
+        ToshDiagnosticException? Failure)> TryApplyGuardedRefinementCoercionAsync(
+        RefinementAnnotation refinement,
+        object? value,
+        CancellationToken cancellationToken)
+    {
+        object? refinedValue = value;
+
+        foreach (var clause in refinement.Clauses
+                     .OfType<RefinementCoerceClause>()
+                     .Where(static clause => clause.Guard is not null))
+        {
+            try
+            {
+                if (!await EvaluateRefinementBooleanExpressionAsync(
+                        refinement,
+                        clause.Guard!,
+                        refinedValue,
+                        clause.Span,
+                        "Refinement coercion guards",
+                        cancellationToken,
+                        useTruthiness: true))
+                {
+                    continue;
+                }
+            }
+            catch (ToshDiagnosticException exception)
+            {
+                return (false, refinedValue, exception);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception exception)
+            {
+                return (
+                    false,
+                    refinedValue,
+                    CreateExpressionDiagnostic(
+                        refinement.SourceName,
+                        refinement.SourceText,
+                        clause.Guard!,
+                        exception));
+            }
+
+            try
+            {
+                refinedValue = await EvaluateRefinementCoercerAsync(
+                    refinement,
+                    clause,
+                    refinedValue,
+                    cancellationToken);
+            }
+            catch (ToshDiagnosticException exception)
+            {
+                return (false, refinedValue, exception);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception exception)
+            {
+                return (
+                    false,
+                    refinedValue,
+                    CreateExpressionDiagnostic(
+                        refinement.SourceName,
+                        refinement.SourceText,
+                        clause.Coercer,
+                        exception));
+            }
+        }
+
+        return (true, refinedValue, null);
+    }
+
+    private async ValueTask<(
+        bool Completed,
+        bool Satisfied,
+        ToshDiagnosticException? Failure)> TryEvaluateRefinementPredicateAsync(
+        RefinementAnnotation refinement,
+        object? value,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return (
+                true,
+                await EvaluateRefinementPredicateAsync(
+                    refinement,
+                    value,
+                    cancellationToken),
+                null);
+        }
+        catch (ToshDiagnosticException exception)
+        {
+            return (false, false, exception);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            return (
+                false,
+                false,
+                CreateExpressionDiagnostic(
+                    refinement.SourceName,
+                    refinement.SourceText,
+                    GetPrimaryRefinementPredicate(refinement),
+                    exception));
+        }
+    }
+
+    private async ValueTask<object?> EvaluateRefinementCoercerAsync(
+        RefinementAnnotation refinement,
+        RefinementCoerceClause clause,
+        object? value,
+        CancellationToken cancellationToken)
+    {
+        using var captured = PushCapturedScopes(refinement.CapturedScopes);
+        using var currentValueScope = PushScope(new Dictionary<string, object?>(StringComparer.Ordinal)
+        {
+            ["_"] = value,
+        });
+
+        return await EvaluateArgumentAsync(
+            refinement.SourceName,
+            refinement.SourceText,
+            clause.Coercer,
+            cancellationToken);
+    }
+
+    private async ValueTask<bool> EvaluateRefinementPredicateAsync(
+        RefinementAnnotation refinement,
+        object? value,
+        CancellationToken cancellationToken)
+    {
+        foreach (var clause in refinement.Clauses.OfType<RefinementWhereClause>())
+        {
+            if (!await EvaluateRefinementBooleanExpressionAsync(
+                    refinement,
+                    clause.Predicate,
+                    value,
+                    clause.Span,
+                    "Refinement predicates",
+                    cancellationToken))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private async ValueTask<bool> EvaluateRefinementBooleanExpressionAsync(
+        RefinementAnnotation refinement,
+        ArgumentSyntax expression,
+        object? value,
+        TextSpan span,
+        string title,
+        CancellationToken cancellationToken,
+        bool useTruthiness = false)
+    {
+        using var captured = PushCapturedScopes(refinement.CapturedScopes);
+        using var currentValueScope = PushScope(new Dictionary<string, object?>(StringComparer.Ordinal)
+        {
+            ["_"] = value,
+        });
+
+        var predicateValue = await EvaluateArgumentAsync(
+            refinement.SourceName,
+            refinement.SourceText,
+            expression,
+            cancellationToken);
+
+        if (useTruthiness)
+        {
+            return ToshTruthiness.IsTruthy(predicateValue);
+        }
+
+        if (predicateValue is not bool boolean)
+        {
+            throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                Code: "tosh.runtime.refinement_requires_boolean",
+                Title: $"{title} must evaluate to boolean values.",
+                SourceName: refinement.SourceName,
+                SourceText: refinement.SourceText,
+                Span: span,
+                Label: "this refinement did not evaluate to true or false"));
+        }
+
+        return boolean;
+    }
+
     private object? EnsureRefinementSatisfied(
         RefinementAnnotation? refinement,
         object? value,
@@ -9661,7 +12124,13 @@ public sealed partial class ToshEngine : IShellEvaluator
         {
             try
             {
-                if (!EvaluateRefinementBooleanExpression(refinement, clause.Guard!, refinedValue, clause.Span, "Refinement coercion guards"))
+                if (!EvaluateRefinementBooleanExpression(
+                        refinement,
+                        clause.Guard!,
+                        refinedValue,
+                        clause.Span,
+                        "Refinement coercion guards",
+                        useTruthiness: true))
                 {
                     continue;
                 }
@@ -10095,7 +12564,8 @@ public sealed partial class ToshEngine : IShellEvaluator
         ArgumentSyntax expression,
         object? value,
         TextSpan span,
-        string title)
+        string title,
+        bool useTruthiness = false)
     {
         using var captured = PushCapturedScopes(refinement.CapturedScopes);
         using var currentValueScope = PushScope(new Dictionary<string, object?>(StringComparer.Ordinal)
@@ -10111,8 +12581,12 @@ public sealed partial class ToshEngine : IShellEvaluator
             .GetAwaiter()
             .GetResult();
 
-        if (!TypeConversion.TryConvert(predicateValue, typeof(bool), out var converted) ||
-            converted is not bool boolean)
+        if (useTruthiness)
+        {
+            return ToshTruthiness.IsTruthy(predicateValue);
+        }
+
+        if (predicateValue is not bool boolean)
         {
             throw ToshDiagnosticException.Create(new ToshDiagnostic(
                 Code: "tosh.runtime.refinement_requires_boolean",
@@ -10146,6 +12620,12 @@ public sealed partial class ToshEngine : IShellEvaluator
         IReadOnlyList<LexicalScope>? capturedScopes,
         string callName)
     {
+        using var executionFrame = ToshExecutionDepthGuard.Enter(
+            Runtime.Config.Shell.MaxRecursionDepth,
+            callName,
+            sourceName,
+            sourceText,
+            block.Span);
         using var captured = PushCapturedScopes(capturedScopes);
         _functionCallStack.Push(callName);
 
@@ -10171,12 +12651,53 @@ public sealed partial class ToshEngine : IShellEvaluator
         }
     }
 
+    internal async Task<IReadOnlyList<object?>> ExecuteClassBlockAsync(
+        string sourceName,
+        string sourceText,
+        BlockSyntax block,
+        IReadOnlyDictionary<string, object?> locals,
+        IReadOnlyList<LexicalScope>? capturedScopes,
+        string callName,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        using var executionFrame = ToshExecutionDepthGuard.Enter(
+            Runtime.Config.Shell.MaxRecursionDepth,
+            callName,
+            sourceName,
+            sourceText,
+            block.Span);
+        using var captured = PushCapturedScopes(capturedScopes);
+        _functionCallStack.Push(callName);
+
+        try
+        {
+            return await AsyncEnumerableExtensions.ToListAsync(
+                ExecuteBlockAsync(
+                    sourceName,
+                    sourceText,
+                    block,
+                    cancellationToken,
+                    locals),
+                cancellationToken);
+        }
+        catch (ReturnSignalException signal)
+        {
+            return signal.Values;
+        }
+        finally
+        {
+            _functionCallStack.Pop();
+        }
+    }
+
     internal object? EvaluateClassPipelineValueSync(
         string sourceName,
         string sourceText,
         PipelineSyntax pipeline,
         IReadOnlyDictionary<string, object?> locals,
-        IReadOnlyList<LexicalScope>? capturedScopes)
+        IReadOnlyList<LexicalScope>? capturedScopes,
+        string callName = "<class>")
     {
         if (TryEvaluateShorthandLocalPipeline(pipeline, locals, out var shorthandValue))
         {
@@ -10187,7 +12708,44 @@ public sealed partial class ToshEngine : IShellEvaluator
             ? default
             : TextSpan.FromBounds(pipeline.Stages[0].Span.Start, pipeline.Stages[^1].Span.End);
         var block = new BlockSyntax([new PipelineStatementSyntax(pipeline, span)], span);
-        var values = ExecuteClassBlockSync(sourceName, sourceText, block, locals, capturedScopes, "<class>");
+        var values = ExecuteClassBlockSync(sourceName, sourceText, block, locals, capturedScopes, callName);
+
+        return values.Count switch
+        {
+            0 => null,
+            1 => values[0] is ToshClassSelfReference selfReference ? selfReference.Unwrap() : values[0],
+            _ => values
+                .Select(value => value is ToshClassSelfReference self ? self.Unwrap() : value)
+                .ToArray(),
+        };
+    }
+
+    internal async ValueTask<object?> EvaluateClassPipelineValueAsync(
+        string sourceName,
+        string sourceText,
+        PipelineSyntax pipeline,
+        IReadOnlyDictionary<string, object?> locals,
+        IReadOnlyList<LexicalScope>? capturedScopes,
+        CancellationToken cancellationToken,
+        string callName = "<class>")
+    {
+        if (TryEvaluateShorthandLocalPipeline(pipeline, locals, out var shorthandValue))
+        {
+            return shorthandValue;
+        }
+
+        var span = pipeline.Stages.Count == 0
+            ? default
+            : TextSpan.FromBounds(pipeline.Stages[0].Span.Start, pipeline.Stages[^1].Span.End);
+        var block = new BlockSyntax([new PipelineStatementSyntax(pipeline, span)], span);
+        var values = await ExecuteClassBlockAsync(
+            sourceName,
+            sourceText,
+            block,
+            locals,
+            capturedScopes,
+            callName,
+            cancellationToken);
 
         return values.Count switch
         {
@@ -10226,11 +12784,23 @@ public sealed partial class ToshEngine : IShellEvaluator
         FunctionDefinition definition,
         CommandContext context)
     {
+        context.CancellationToken.ThrowIfCancellationRequested();
+        using var executionFrame = ToshExecutionDepthGuard.Enter(
+            Runtime.Config.Shell.MaxRecursionDepth,
+            definition.Name,
+            context.Invocation?.SourceName ?? definition.SourceName,
+            context.Invocation?.SourceText ?? definition.SourceText,
+            context.Invocation?.CommandSpan ?? definition.Span);
         using var capturedScopes = PushCapturedScopes(definition.CapturedScopes);
         var inputItems = await AsyncEnumerableExtensions.ToListAsync(context.Input, context.CancellationToken);
         var (locals, typeBindings) = BindFunctionParameters(definition, context, inputItems);
 
-        // Evaluate default values for parameters that were not provided
+        // Collect parameters whose defaults must be evaluated because the
+        // caller supplied neither a named nor a positional argument, then
+        // apply them through the shared callable default binder so free
+        // functions, methods, and constructors share one protocol
+        // (TS-P1-05): call time, lexical scope, left-to-right, earlier
+        // bound parameters visible.
         var namedArgNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var positionalArgCount = 0;
         foreach (var arg in context.Arguments)
@@ -10241,6 +12811,7 @@ public sealed partial class ToshEngine : IShellEvaluator
                 positionalArgCount++;
         }
 
+        List<FunctionParameterDefinition>? pendingDefaults = null;
         var posIdx = 0;
         for (var i = 0; i < definition.Parameters.Count; i++)
         {
@@ -10253,14 +12824,21 @@ public sealed partial class ToshEngine : IShellEvaluator
 
             if (param.DefaultValue is not null && !wasProvidedByName && !wasProvidedByPosition)
             {
-                var defaultResult = await EvaluatePipelineAsync(
-                    definition.SourceName,
-                    definition.SourceText,
-                    param.DefaultValue,
-                    context.CancellationToken).FirstOrDefaultAsync(context.CancellationToken);
-                locals[param.Name] = ConvertFunctionParameterValue(definition, context, param, defaultResult, i);
+                (pendingDefaults ??= new List<FunctionParameterDefinition>()).Add(param);
             }
         }
+
+        // The definition's captured scopes are already pushed above, so
+        // the defaults see the same lexical environment the body will.
+        await ApplyPendingParameterDefaultsAsync(
+            definition.Parameters,
+            locals,
+            pendingDefaults,
+            definition.SourceName,
+            definition.SourceText,
+            capturedScopes: null,
+            callName: definition.Name,
+            context.CancellationToken);
 
         // Only seed the function body with an "initial input" enumerable when
         // the caller actually piped data in (or the call site is inside a
@@ -10453,7 +13031,8 @@ public sealed partial class ToshEngine : IShellEvaluator
         {
             var deferredBlocks = new List<BlockSyntax>();
             var outputValues = new List<object?>();
-            Exception? pendingException = null;
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo? pendingException = null;
+            var deferFailures = new ToshDeferFailureState();
 
             try
             {
@@ -10465,18 +13044,30 @@ public sealed partial class ToshEngine : IShellEvaluator
                     outputValues.Add(value);
                 }
             }
+            catch (ShellControlFlowException ex)
+            {
+                // Return/break/continue are pending exits, not body failures.
+                // A cleanup failure still supersedes the pending jump below.
+                pendingException = System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(ex);
+            }
             catch (Exception ex)
             {
-                pendingException = ex;
+                pendingException = System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(ex);
+                ToshDeferFailures.AttachSourceContext(ex, sourceName, sourceText);
+                deferFailures.CaptureBodyFailure(ex);
             }
 
             for (var i = deferredBlocks.Count - 1; i >= 0; i--)
             {
                 try
                 {
+                    // Cleanup is shielded from the token that caused the
+                    // enclosing scope to exit. This ensures every reached
+                    // defer gets one chance to run; cancellation is resumed
+                    // after cleanup has completed.
                     await foreach (var value in ExecuteBlockAsync(
-                        sourceName, sourceText, deferredBlocks[i], cancellationToken)
-                        .WithCancellation(cancellationToken))
+                        sourceName, sourceText, deferredBlocks[i], CancellationToken.None)
+                        .WithCancellation(CancellationToken.None))
                     {
                         // Deferred blocks execute for side effects only; output is discarded.
                     }
@@ -10485,17 +13076,32 @@ public sealed partial class ToshEngine : IShellEvaluator
                 {
                     // Control flow signals from deferred blocks are suppressed.
                 }
+                catch (Exception cleanupFailure)
+                {
+                    // A failed cleanup must not prevent any earlier cleanup
+                    // from running. The shared state retains the original
+                    // exception instances and their deterministic LIFO order.
+                    ToshDeferFailures.AttachSourceContext(
+                        cleanupFailure,
+                        sourceName,
+                        sourceText);
+                    deferFailures.CaptureCleanupFailure(cleanupFailure);
+                }
             }
 
-            if (pendingException is not null)
-            {
-                System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(pendingException).Throw();
-            }
-
+            // Match the ordinary streaming path: values produced before an
+            // exit remain visible, even though defer requires buffering them
+            // until cleanup has run.
             foreach (var value in outputValues)
             {
                 yield return value;
             }
+
+            // Cleanup failures supersede a pending return/break/continue. If
+            // there is also a body failure, the helper throws the documented
+            // ordered aggregate (or preserves cancellation as cancellation).
+            deferFailures.ThrowIfCleanupFailed();
+            pendingException?.Throw();
         }
         else
         {
@@ -10709,6 +13315,10 @@ public sealed partial class ToshEngine : IShellEvaluator
         var namedArgs = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
         var positionalArgs = new List<object?>();
 
+        // A duplicate name is invalid regardless of the parameter list,
+        // so it is reported before any binding decision (TS-P1-06).
+        ValidateNamedArgumentUniqueness(context.Arguments, $"function '{definition.Name}'");
+
         foreach (var arg in context.Arguments)
         {
             if (arg is NamedArgument named)
@@ -10719,6 +13329,25 @@ public sealed partial class ToshEngine : IShellEvaluator
             {
                 positionalArgs.Add(arg);
             }
+        }
+
+        // This binder serves one concrete definition, so an unmatched
+        // name cannot be another overload's parameter: report it instead
+        // of silently dropping the argument (TS-P1-06).
+        if (!allowsImplicitWrapperArguments && !AllNamedArgumentsMatchParameters(definition.Parameters, namedArgs))
+        {
+            var unknown = namedArgs.Keys.First(name =>
+                !definition.Parameters.Any(parameter =>
+                    string.Equals(parameter.Name, name, StringComparison.OrdinalIgnoreCase)));
+            var declared = definition.Parameters.Count == 0
+                ? "it declares no parameters"
+                : $"declared parameters: {string.Join(", ", definition.Parameters.Select(parameter => parameter.Name))}";
+
+            throw context.CreateDiagnostic(
+                code: "tosh.runtime.unknown_named_argument",
+                title: $"Function '{definition.Name}' has no parameter named '{unknown}'.",
+                label: $"'{unknown}' does not match a parameter",
+                help: $"{declared}.");
         }
 
         var requiredCount = definition.Parameters.Count(p =>
@@ -11441,19 +14070,7 @@ public sealed partial class ToshEngine : IShellEvaluator
             throw CreateExpressionDiagnostic(sourceName, sourceText, condition, exception);
         }
 
-        if (!TypeConversion.TryConvert(conditionValue, typeof(bool), out var converted) || converted is not bool boolean)
-        {
-            throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                Code: "tosh.runtime.condition_requires_boolean",
-                Title: "Conditions must evaluate to a boolean value.",
-                SourceName: sourceName,
-                SourceText: sourceText,
-                Span: condition.Span,
-                Label: "this condition did not evaluate to true or false",
-                Help: "return a boolean, for example with '==', 'Contains(...)', or another predicate."));
-        }
-
-        return boolean;
+        return ToshTruthiness.IsTruthy(conditionValue);
     }
 
     private static ToshDiagnosticException CreateCommandDiagnostic(
@@ -12043,11 +14660,17 @@ public sealed partial class ToshEngine : IShellEvaluator
             Label: $"'{keyword}' does not have an enclosing loop to control"));
     }
 
-    private ToshDiagnosticException CreateThrownValueDiagnostic(
+    private ValueTask<ToshDiagnosticException> CreateThrownValueDiagnosticAsync(
         string sourceName,
         string sourceText,
-        ThrowSignalException signal)
-        => CreateThrownValueDiagnostic(sourceName, sourceText, signal.Span, signal.Value, signal);
+        ThrowSignalException signal,
+        CancellationToken cancellationToken) =>
+        CreateThrownValueDiagnosticAsync(
+            sourceName,
+            sourceText,
+            signal.Span,
+            signal.Value,
+            cancellationToken);
 
     /// <summary>
     /// Pretty-format any tosh-thrown <see cref="Exception"/> (raised
@@ -12058,29 +14681,44 @@ public sealed partial class ToshEngine : IShellEvaluator
     /// contexts (e.g. unhandled <see cref="ToshError"/> escaping a
     /// pipeline) should use this overload directly.
     /// </summary>
-    private ToshDiagnosticException CreateThrownValueDiagnostic(
+    private ValueTask<ToshDiagnosticException> CreateThrownValueDiagnosticAsync(
         string sourceName,
         string sourceText,
-        Exception exception)
+        Exception exception,
+        CancellationToken cancellationToken)
     {
-        switch (exception)
+        return exception switch
         {
-            case ThrowSignalException signal:
-                return CreateThrownValueDiagnostic(sourceName, sourceText, signal.Span, signal.Value, signal);
-            case ToshError tosh:
-                return CreateThrownValueDiagnostic(sourceName, sourceText, tosh.Span, tosh, tosh);
-            default:
-                return CreateThrownValueDiagnostic(sourceName, sourceText, default, exception, exception);
-        }
+            ThrowSignalException signal => CreateThrownValueDiagnosticAsync(
+                sourceName,
+                sourceText,
+                signal.Span,
+                signal.Value,
+                cancellationToken),
+            ToshError tosh => CreateThrownValueDiagnosticAsync(
+                sourceName,
+                sourceText,
+                tosh.Span,
+                tosh,
+                cancellationToken),
+            _ => CreateThrownValueDiagnosticAsync(
+                sourceName,
+                sourceText,
+                default,
+                exception,
+                cancellationToken),
+        };
     }
 
-    private ToshDiagnosticException CreateThrownValueDiagnostic(
+    private async ValueTask<ToshDiagnosticException> CreateThrownValueDiagnosticAsync(
         string sourceName,
         string sourceText,
         TextSpan span,
         object? value,
-        Exception originalException)
+        CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+
         // If the thrown value is itself a diagnostic (the common `throw $err`
         // re-raise pattern from a catch block), preserve its original source,
         // span, and snippet so the renderer still points at the underlying
@@ -12099,14 +14737,19 @@ public sealed partial class ToshEngine : IShellEvaluator
 
         var userErrorInstance = TryGetUserErrorInstance(value);
 
-        var title = TryGetUserErrorDiagnosticString(userErrorInstance, "DiagnosticTitle", "Message", "Title")
-            ?? (value switch
-            {
-                null => "An error was thrown.",
-                ICommandResult result => result.Message,
-                Exception exception => exception.Message,
-                _ => Runtime.Formatter.Format(value),
-            });
+        var title = await TryGetUserErrorDiagnosticStringAsync(
+            userErrorInstance,
+            cancellationToken,
+            "DiagnosticTitle",
+            "Message",
+            "Title");
+        title ??= value switch
+        {
+            null => "An error was thrown.",
+            ICommandResult result => result.Message,
+            Exception exception => exception.Message,
+            _ => await FormatThrownDiagnosticValueAsync(value, cancellationToken),
+        };
 
         // For ToshError-derived types, surface the user's class name as
         // the diagnostic code so the renderer's tail tag reads
@@ -12120,30 +14763,48 @@ public sealed partial class ToshEngine : IShellEvaluator
         //     full CLR type name, e.g. `System.ArgumentException`.
         //   • everything else (raw strings/records/numbers, ToshError
         //     without a user type) → generic `tosh.runtime.throw`.
-        var code = TryGetUserErrorDiagnosticString(userErrorInstance, "Code", "DiagnosticCode")
-            ?? (value switch
-            {
-                ToshError tosh when tosh.Data["tosh.user.type"] is string userType
-                    => userType,
-                ToshError tosh when tosh.GetType() != typeof(ToshError)
-                    => tosh.GetType().FullName ?? tosh.GetType().Name,
-                ToshClassInstance instance when DefinitionExtendsException(instance.Definition)
-                    => instance.Definition.Name,
-                ToshError => "tosh.runtime.throw",
-                Exception ex => ex.GetType().FullName ?? ex.GetType().Name,
-                _ => "tosh.runtime.throw",
-            });
+        var code = await TryGetUserErrorDiagnosticStringAsync(
+            userErrorInstance,
+            cancellationToken,
+            "Code",
+            "DiagnosticCode");
+        code ??= value switch
+        {
+            ToshError tosh when tosh.Data["tosh.user.type"] is string userType
+                => userType,
+            ToshError tosh when tosh.GetType() != typeof(ToshError)
+                => tosh.GetType().FullName ?? tosh.GetType().Name,
+            ToshClassInstance instance when DefinitionExtendsException(instance.Definition)
+                => instance.Definition.Name,
+            ToshError => "tosh.runtime.throw",
+            Exception ex => ex.GetType().FullName ?? ex.GetType().Name,
+            _ => "tosh.runtime.throw",
+        };
 
-        var label = TryGetUserErrorDiagnosticString(userErrorInstance, "Label")
-            ?? (value switch
-            {
-                Exception => "an error escaped here",
-                ToshClassInstance instance when DefinitionExtendsException(instance.Definition)
-                    => "an error escaped here",
-                _ => "an unhandled value was thrown here",
-            });
-        var help = TryGetUserErrorDiagnosticString(userErrorInstance, "Help", "Tip", "Hint");
-        var footerInfo = TryGetUserErrorDiagnosticString(userErrorInstance, "Info", "Information", "Context", "Details");
+        var label = await TryGetUserErrorDiagnosticStringAsync(
+            userErrorInstance,
+            cancellationToken,
+            "Label");
+        label ??= value switch
+        {
+            Exception => "an error escaped here",
+            ToshClassInstance instance when DefinitionExtendsException(instance.Definition)
+                => "an error escaped here",
+            _ => "an unhandled value was thrown here",
+        };
+        var help = await TryGetUserErrorDiagnosticStringAsync(
+            userErrorInstance,
+            cancellationToken,
+            "Help",
+            "Tip",
+            "Hint");
+        var footerInfo = await TryGetUserErrorDiagnosticStringAsync(
+            userErrorInstance,
+            cancellationToken,
+            "Info",
+            "Information",
+            "Context",
+            "Details");
 
         return ToshDiagnosticException.Create(new ToshDiagnostic(
             Code: code,
@@ -12166,26 +14827,40 @@ public sealed partial class ToshEngine : IShellEvaluator
         };
     }
 
-    private string? TryGetUserErrorDiagnosticString(ToshClassInstance? instance, params string[] memberNames)
+    private async ValueTask<string?> TryGetUserErrorDiagnosticStringAsync(
+        ToshClassInstance? instance,
+        CancellationToken cancellationToken,
+        params string[] memberNames)
     {
-        if (instance is null) return null;
+        if (instance is null)
+        {
+            return null;
+        }
 
         foreach (var memberName in memberNames)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
             object? value;
             try
             {
-                if (!instance.TryGetMember(memberName, out value) || value is null)
+                var member = await instance.TryGetMemberAsync(
+                    memberName,
+                    includeHidden: false,
+                    cancellationToken);
+                if (!member.Found || member.Value is null)
                 {
                     continue;
                 }
+
+                value = member.Value;
             }
-            catch
+            catch (Exception failure) when (failure is not OperationCanceledException)
             {
                 continue;
             }
 
-            var text = value is string s ? s : Runtime.Formatter.Format(value);
+            var text = await FormatThrownDiagnosticValueAsync(value, cancellationToken);
             if (!string.IsNullOrWhiteSpace(text))
             {
                 return text;
@@ -12193,6 +14868,25 @@ public sealed partial class ToshEngine : IShellEvaluator
         }
 
         return null;
+    }
+
+    private async ValueTask<string> FormatThrownDiagnosticValueAsync(
+        object? value,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (value is string text)
+        {
+            return text;
+        }
+
+        if (value is ToshClassInstance instance)
+        {
+            return await ToOperatorStringAsync(instance, cancellationToken);
+        }
+
+        return Runtime.Formatter.Format(value);
     }
 
     private static string ExtractSourceText(string sourceText, int start, int end)
