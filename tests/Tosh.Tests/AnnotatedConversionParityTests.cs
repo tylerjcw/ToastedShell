@@ -117,6 +117,101 @@ public sealed class AnnotatedConversionParityTests
         }
     }
 
+    [Fact]
+    public async Task Post_coercion_predicate_failure_blames_the_same_span_on_both_paths()
+    {
+        // The tests above compare converted *values*; this one compares the
+        // *diagnostic*, which is the axis on which the two implementations of
+        // this cluster were found to differ. The predicate succeeds on the
+        // original value (returning false) and then throws a non-diagnostic CLR
+        // exception on the coerced one: "no".Substring(0, 2) is "no", but
+        // "x".Substring(0, 2) is out of range.
+        //
+        // Scope note, established by running this test against the
+        // pre-convergence engine, where it also passed: the sync/async copies
+        // did attribute a post-coercion predicate failure to different spans —
+        // the coercer's and the predicate's respectively — but the sync copy
+        // that carried the odd one out sat behind a re-run that only happens
+        // after the sequence has already completed without throwing. A
+        // deterministic predicate cannot throw on the second pass having not
+        // thrown on the first, so the difference was unreachable without a
+        // side-effecting predicate. It was latent, not live. This test therefore
+        // guards diagnostic agreement going forward rather than reproducing a
+        // historical failure.
+        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        await engine.ExecuteToListAsync(
+            """
+            type Fussy = string where (_.Substring(0, 2) == "ok") coerce "x"
+            """);
+
+        var syncSignature = DescribeFailure(
+            () =>
+            {
+                engine.TryConvertAnnotatedValue("Fussy", "no", out var converted);
+                return converted;
+            });
+
+        var asyncSignature = DescribeFailure(
+            () => engine
+                .TryConvertAnnotatedValueAsync("Fussy", "no", CancellationToken.None)
+                .AsTask()
+                .GetAwaiter()
+                .GetResult()
+                .Converted);
+
+        Assert.Equal(syncSignature, asyncSignature);
+
+        // Pin the direction as well as the agreement: a change that made both
+        // paths blame the coercer would keep them equal and still be wrong.
+        Assert.Contains("Substring", syncSignature, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Reduces a refinement failure to <c>code@start+length</c> plus the source
+    /// text the span covers, whether it arrived as a thrown exception or inside a
+    /// failure wrapper. Reflection is used because the wrappers are private
+    /// records; the alternative is widening their visibility purely for a test.
+    /// </summary>
+    private static string DescribeFailure(Func<object?> convert)
+    {
+        ToshDiagnosticException? exception = null;
+        object? converted = null;
+
+        try
+        {
+            converted = convert();
+        }
+        catch (ToshDiagnosticException thrown)
+        {
+            exception = thrown;
+        }
+
+        exception ??= converted?
+            .GetType()
+            .GetProperties()
+            .Select(property => property.GetValue(converted))
+            .OfType<ToshDiagnosticException>()
+            .FirstOrDefault();
+
+        if (exception is null)
+        {
+            return $"no-diagnostic:{Describe(converted)}";
+        }
+
+        var diagnostic = exception.Diagnostics[0];
+        if (diagnostic.Span is not { } span)
+        {
+            return $"{diagnostic.Code}@<no-span>";
+        }
+
+        var sourceText = diagnostic.SourceText ?? string.Empty;
+        var snippet = span.Start >= 0 && span.Start + span.Length <= sourceText.Length
+            ? sourceText.Substring(span.Start, span.Length)
+            : "<out-of-range>";
+
+        return $"{diagnostic.Code}@{span.Start}+{span.Length}:{snippet}";
+    }
+
     /// <summary>
     /// Compares by shape rather than reference so the failure wrappers
     /// (<c>AnnotationRefinementError</c> / <c>AnnotationRefinementFailure</c>)

@@ -11411,6 +11411,22 @@ public sealed partial class ToshEngine : IShellEvaluator
             return result.RefinedValue;
         }
 
+        throw CreateRefinementFailedDiagnostic(refinement, span, sourceName, sourceText, owner);
+    }
+
+    /// <summary>
+    /// Builds the <c>tosh.runtime.refinement_failed</c> diagnostic, including the
+    /// clause summary shown as help.  Extracted from
+    /// <see cref="EnsureRefinementSatisfiedAsync"/> when the synchronous copy of
+    /// that method was removed (<c>TS-P1-24</c>).
+    /// </summary>
+    private static ToshDiagnosticException CreateRefinementFailedDiagnostic(
+        RefinementAnnotation refinement,
+        TextSpan span,
+        string sourceName,
+        string sourceText,
+        string owner)
+    {
         var helpLines = new List<string>();
         foreach (var clause in refinement.Clauses)
         {
@@ -11444,7 +11460,7 @@ public sealed partial class ToshEngine : IShellEvaluator
             }
         }
 
-        throw ToshDiagnosticException.Create(new ToshDiagnostic(
+        return ToshDiagnosticException.Create(new ToshDiagnostic(
             Code: "tosh.runtime.refinement_failed",
             Title: $"Value for '{owner}' does not satisfy its refinement.",
             SourceName: sourceName,
@@ -11640,72 +11656,33 @@ public sealed partial class ToshEngine : IShellEvaluator
             : null;
     }
 
+    /// <summary>
+    /// Synchronous adapter over
+    /// <see cref="TryApplyRefinementWithOptionalCoercionAsync"/> for the conversion
+    /// callers that are not asynchronous.  The guard, predicate, and fallback-coercion
+    /// sequence exists only in the asynchronous implementation (<c>TS-P1-24</c>);
+    /// this method previously carried a second copy of it, and the whole synchronous
+    /// sub-chain it drove — <c>TryApplyGuardedRefinementCoercion</c>,
+    /// <c>TryEvaluateRefinementPredicate</c>, and the three leaf evaluators — has
+    /// been removed with it.
+    /// </summary>
     private bool TryApplyRefinementWithOptionalCoercion(
         RefinementAnnotation? refinement,
         object? value,
         out object? refinedValue,
         out ToshDiagnosticException? failure)
     {
-        refinedValue = value;
-        failure = null;
+        var (success, refined, applyFailure) = TryApplyRefinementWithOptionalCoercionAsync(
+                refinement,
+                value,
+                CancellationToken.None)
+            .AsTask()
+            .GetAwaiter()
+            .GetResult();
 
-        if (refinement is null)
-        {
-            return true;
-        }
-
-        object? currentValue = value;
-        if (!TryApplyGuardedRefinementCoercion(refinement, currentValue, out currentValue, out failure))
-        {
-            refinedValue = currentValue;
-            return false;
-        }
-
-        if (!TryEvaluateRefinementPredicate(refinement, currentValue, out var satisfied, out failure))
-        {
-            refinedValue = currentValue;
-            return false;
-        }
-
-        if (satisfied)
-        {
-            refinedValue = currentValue;
-            return true;
-        }
-
-        var fallbackClause = refinement.Clauses.OfType<RefinementCoerceClause>().FirstOrDefault(static clause => clause.Guard is null);
-        if (fallbackClause is null)
-        {
-            refinedValue = currentValue;
-            return false;
-        }
-
-        object? coerced;
-        try
-        {
-            coerced = EvaluateRefinementCoercer(refinement, fallbackClause, currentValue);
-        }
-        catch (ToshDiagnosticException exception)
-        {
-            failure = exception;
-            refinedValue = currentValue;
-            return false;
-        }
-        catch (Exception exception)
-        {
-            failure = CreateExpressionDiagnostic(refinement.SourceName, refinement.SourceText, fallbackClause.Coercer, exception);
-            refinedValue = currentValue;
-            return false;
-        }
-
-        if (!TryEvaluateRefinementPredicate(refinement, coerced, out satisfied, out failure))
-        {
-            refinedValue = coerced;
-            return false;
-        }
-
-        refinedValue = coerced;
-        return satisfied;
+        refinedValue = refined;
+        failure = applyFailure;
+        return success;
     }
 
     private async ValueTask<(
@@ -11805,6 +11782,15 @@ public sealed partial class ToshEngine : IShellEvaluator
     {
         object? refinedValue = value;
 
+        // Run every guarded `if … coerce` clause in order, threading the coerced
+        // value forward so subsequent guards see the result of earlier coercions.
+        // For example, given:
+        //
+        //   if (not (_ is int)) coerce ((round (Double.Parse(_)) 0) as int)
+        //   if (_ < 0)          coerce (Math.Abs(_))
+        //
+        // an input of "-4.25" becomes -4 (first clause), then 4 (second clause).
+        // (Stopping after the first match would skip the negativity fix-up.)
         foreach (var clause in refinement.Clauses
                      .OfType<RefinementCoerceClause>()
                      .Where(static clause => clause.Guard is not null))
@@ -11995,6 +11981,17 @@ public sealed partial class ToshEngine : IShellEvaluator
         return boolean;
     }
 
+    /// <summary>
+    /// Synchronous adapter over <see cref="EnsureRefinementSatisfiedAsync"/>.
+    /// </summary>
+    /// <remarks>
+    /// This method used to inline its own copy of the guard/predicate/coerce
+    /// sequence, and the copy had drifted: a non-diagnostic exception raised by the
+    /// predicate <em>after</em> fallback coercion was reported against the coercer's
+    /// span here and against the predicate's span on the asynchronous path. The
+    /// asynchronous behaviour is canonical, so converging on it moved the
+    /// synchronous span to the predicate (<c>TS-P1-24</c>).
+    /// </remarks>
     private object? EnsureRefinementSatisfied(
         RefinementAnnotation? refinement,
         object? value,
@@ -12002,185 +11999,17 @@ public sealed partial class ToshEngine : IShellEvaluator
         string sourceName,
         string sourceText,
         string owner)
-    {
-        if (refinement is null)
-        {
-            return value;
-        }
-
-        bool satisfied;
-        object? currentValue = value;
-
-        if (!TryApplyGuardedRefinementCoercion(refinement, currentValue, out currentValue, out var guardedFailure))
-        {
-            throw guardedFailure!;
-        }
-
-        try
-        {
-            satisfied = EvaluateRefinementPredicate(refinement, currentValue);
-        }
-        catch (ToshDiagnosticException)
-        {
-            throw;
-        }
-        catch (Exception exception)
-        {
-            throw CreateExpressionDiagnostic(refinement.SourceName, refinement.SourceText, GetPrimaryRefinementPredicate(refinement), exception);
-        }
-
-        if (!satisfied)
-        {
-            var fallbackClause = refinement.Clauses.OfType<RefinementCoerceClause>().FirstOrDefault(static clause => clause.Guard is null);
-            if (fallbackClause is not null)
-            {
-                object? coerced;
-                try
-                {
-                    coerced = EvaluateRefinementCoercer(refinement, fallbackClause, currentValue);
-                }
-                catch (ToshDiagnosticException)
-                {
-                    throw;
-                }
-                catch (Exception exception)
-                {
-                    throw CreateExpressionDiagnostic(refinement.SourceName, refinement.SourceText, fallbackClause.Coercer, exception);
-                }
-
-                try
-                {
-                    satisfied = EvaluateRefinementPredicate(refinement, coerced);
-                }
-                catch (ToshDiagnosticException)
-                {
-                    throw;
-                }
-                catch (Exception exception)
-                {
-                    throw CreateExpressionDiagnostic(refinement.SourceName, refinement.SourceText, fallbackClause.Coercer, exception);
-                }
-
-                if (satisfied)
-                {
-                    return coerced;
-                }
-            }
-        }
-
-        if (!satisfied)
-        {
-            var helpLines = new List<string>();
-            foreach (var clause in refinement.Clauses)
-            {
-                switch (clause)
-                {
-                    case RefinementWhereClause whereClause when TryGetRefinementSnippet(refinement.SourceText, whereClause.Predicate.Span, out var predicateText):
-                        helpLines.Add($"where: {predicateText}");
-                        break;
-                    case RefinementCoerceClause { Guard: { } guard, Coercer: var coercer } when TryGetRefinementSnippet(refinement.SourceText, guard.Span, out var guardText) && TryGetRefinementSnippet(refinement.SourceText, coercer.Span, out var guardedCoerceText):
-                        helpLines.Add($"if {guardText} coerce: {guardedCoerceText}");
-                        break;
-                    case RefinementCoerceClause { Guard: null, Coercer: var coercer } when TryGetRefinementSnippet(refinement.SourceText, coercer.Span, out var coerceText):
-                        helpLines.Add($"coerce: {coerceText}");
-                        break;
-                }
-            }
-
-            var help = helpLines.Count > 0 ? string.Join("\n", helpLines) : null;
-
-            throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                Code: "tosh.runtime.refinement_failed",
-                Title: $"Value for '{owner}' does not satisfy its refinement.",
-                SourceName: sourceName,
-                SourceText: sourceText,
-                Span: span,
-                Label: "this value failed its 'where' predicate",
-                Help: help));
-        }
-
-        return currentValue;
-    }
-
-    private bool TryApplyGuardedRefinementCoercion(
-        RefinementAnnotation refinement,
-        object? value,
-        out object? refinedValue,
-        out ToshDiagnosticException? failure)
-    {
-        refinedValue = value;
-        failure = null;
-
-        // Run every guarded `if … coerce` clause in order, threading the coerced
-        // value forward so subsequent guards see the result of earlier coercions.
-        // For example, given:
-        //
-        //   if (not (_ is int)) coerce ((round (Double.Parse(_)) 0) as int)
-        //   if (_ < 0)          coerce (Math.Abs(_))
-        //
-        // an input of "-4.25" becomes -4 (first clause), then 4 (second clause).
-        // (Stopping after the first match would skip the negativity fix-up.)
-        foreach (var clause in refinement.Clauses.OfType<RefinementCoerceClause>().Where(static clause => clause.Guard is not null))
-        {
-            try
-            {
-                if (!EvaluateRefinementBooleanExpression(
-                        refinement,
-                        clause.Guard!,
-                        refinedValue,
-                        clause.Span,
-                        "Refinement coercion guards",
-                        useTruthiness: true))
-                {
-                    continue;
-                }
-            }
-            catch (ToshDiagnosticException exception)
-            {
-                failure = exception;
-                return false;
-            }
-            catch (Exception exception)
-            {
-                failure = CreateExpressionDiagnostic(refinement.SourceName, refinement.SourceText, clause.Guard!, exception);
-                return false;
-            }
-
-            try
-            {
-                refinedValue = EvaluateRefinementCoercer(refinement, clause, refinedValue);
-            }
-            catch (ToshDiagnosticException exception)
-            {
-                failure = exception;
-                return false;
-            }
-            catch (Exception exception)
-            {
-                failure = CreateExpressionDiagnostic(refinement.SourceName, refinement.SourceText, clause.Coercer, exception);
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    private object? EvaluateRefinementCoercer(RefinementAnnotation refinement, RefinementCoerceClause clause, object? value)
-    {
-        using var captured = PushCapturedScopes(refinement.CapturedScopes);
-        using var currentValueScope = PushScope(new Dictionary<string, object?>(StringComparer.Ordinal)
-        {
-            ["_"] = value,
-        });
-
-        return EvaluateArgumentAsync(
-                refinement.SourceName,
-                refinement.SourceText,
-            clause.Coercer,
+        => EnsureRefinementSatisfiedAsync(
+                refinement,
+                value,
+                span,
+                sourceName,
+                sourceText,
+                owner,
                 CancellationToken.None)
+            .AsTask()
             .GetAwaiter()
             .GetResult();
-    }
 
     private bool TryResolveRefinementTypeForAnnotation(string typeName, out RefinementTypeDefinition definition)
     {
@@ -12458,32 +12287,6 @@ public sealed partial class ToshEngine : IShellEvaluator
         return result;
     }
 
-    private bool TryEvaluateRefinementPredicate(
-        RefinementAnnotation refinement,
-        object? value,
-        out bool satisfied,
-        out ToshDiagnosticException? failure)
-    {
-        try
-        {
-            satisfied = EvaluateRefinementPredicate(refinement, value);
-            failure = null;
-            return true;
-        }
-        catch (ToshDiagnosticException exception)
-        {
-            satisfied = false;
-            failure = exception;
-            return false;
-        }
-        catch (Exception exception)
-        {
-            satisfied = false;
-            failure = CreateExpressionDiagnostic(refinement.SourceName, refinement.SourceText, GetPrimaryRefinementPredicate(refinement), exception);
-            return false;
-        }
-    }
-
     private static ArgumentSyntax GetPrimaryRefinementPredicate(RefinementAnnotation refinement)
         => refinement.Clauses.OfType<RefinementWhereClause>().First().Predicate;
 
@@ -12544,60 +12347,6 @@ public sealed partial class ToshEngine : IShellEvaluator
         }
 
         return arguments;
-    }
-
-    private bool EvaluateRefinementPredicate(RefinementAnnotation refinement, object? value)
-    {
-        foreach (var clause in refinement.Clauses.OfType<RefinementWhereClause>())
-        {
-            if (!EvaluateRefinementBooleanExpression(refinement, clause.Predicate, value, clause.Span, "Refinement predicates"))
-            {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    private bool EvaluateRefinementBooleanExpression(
-        RefinementAnnotation refinement,
-        ArgumentSyntax expression,
-        object? value,
-        TextSpan span,
-        string title,
-        bool useTruthiness = false)
-    {
-        using var captured = PushCapturedScopes(refinement.CapturedScopes);
-        using var currentValueScope = PushScope(new Dictionary<string, object?>(StringComparer.Ordinal)
-        {
-            ["_"] = value,
-        });
-
-        var predicateValue = EvaluateArgumentAsync(
-                refinement.SourceName,
-                refinement.SourceText,
-            expression,
-                CancellationToken.None)
-            .GetAwaiter()
-            .GetResult();
-
-        if (useTruthiness)
-        {
-            return ToshTruthiness.IsTruthy(predicateValue);
-        }
-
-        if (predicateValue is not bool boolean)
-        {
-            throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                Code: "tosh.runtime.refinement_requires_boolean",
-                Title: $"{title} must evaluate to boolean values.",
-                SourceName: refinement.SourceName,
-                SourceText: refinement.SourceText,
-                Span: span,
-                Label: "this refinement did not evaluate to true or false"));
-        }
-
-        return boolean;
     }
 
     private static bool TryGetRefinementSnippet(string sourceText, TextSpan span, out string snippet)

@@ -319,9 +319,11 @@ defaults) are implemented.
 **In progress.**
 
 - `TS-P1-24`, duplicated sync/async semantics. Five dead parallel copies
-  removed; eighteen live pairs remain, led by the refinement cluster.
-  The `AnnotatedConversionParityTests` drift guard is in place and
-  passing, so the two conversion paths agree today.
+  removed, then the refinement cluster — the largest — converged onto a
+  single asynchronous implementation. Thirteen live pairs remain, led by
+  `ThrowDetailedSingleConstructorMismatch` and `TryGetInstanceMember`.
+  The `AnnotatedConversionParityTests` drift guard now compares
+  diagnostics as well as values.
 - `TS-P2-11`, `TS-P2-23`, and `TS-P2-24`, the parser architecture. The
   mode-tracking lexer, declaration table, `ParseContext`, and
   `LiteParser` structural pass are built and validated. Nothing consumes
@@ -396,7 +398,7 @@ closed.
 | `TS-P1-21` | Complete — 2026-07-26 | A parameter default on a class method or constructor cannot reference `$this`: `func m(a, b = $this.V)` fails with `tosh.runtime.unknown_variable` because defaults are evaluated during callable binding, before the `this`/`super` bindings are seeded. `TS-P1-05` made this an explicit failure rather than the previous silent null. Needs a recorded decision, not just a fix: an instance method default may clearly see `$this`, but a **constructor** default would observe a partially-constructed instance whose properties have not been initialized yet (base-to-leaf construction binds arguments first), so allowing it exposes uninitialized state while rejecting it makes methods and constructors inconsistent. | A decision-log entry states whether `$this` is in scope for method defaults, constructor defaults, or both; the callable default binder seeds the agreed bindings; the rejected case keeps a targeted diagnostic naming `$this` rather than the generic unknown-variable help; interpreted and compiled modes agree; the specification's default-value semantics section records the rule. |
 | `TS-P1-22` | Complete — 2026-07-26 | `a < b < c` parses left-associatively, so `1 < 2 < 3` compares `true < 3` and silently answers `false`. The accepted decision is real chaining. | `a < b < c` evaluates as `(a < b) and (b < c)` with each operand evaluated once and short-circuit preserved, in interpreted and compiled modes; the parser, binder traversal, type checker, and emitter all handle the new shape; precedence and formatting round-trip. |
 | `TS-P1-23` | Complete — 2026-07-26 | `type-of` yields a shell type descriptor for shell-typed values, but the descriptor rendered as its own CLR class name, so `type-of [1, 2]` reported `Tosh.Runtime.BuiltInShellTypes+BuiltInShellTypeDefinition` instead of the type being asked about. | Displaying a built-in shell type descriptor shows the shell type name; `type-of` reports usable names for lists, records, and other shell-typed values; CLR values are unaffected. |
-| `TS-P1-24` | In progress — dead copies removed 2026-07-26 | The interpreter carries sync/async twin methods that are *parallel implementations* rather than delegations, so a semantic fix can land on one surface and silently miss the other. This has happened twice: `OperatorEvaluator.AreEqual` versus `ToshEngine.AreEqualAsync` (`TS-P1-14`/`TS-P1-15`) and `ToshHost.DrainValue` versus `InvokeValue` (`TS-P1-20`). A corrected audit on 2026-07-26 counts 23 truly parallel pairs against 6 that delegate. Largest genuine duplications: the refinement cluster — `EnsureRefinementSatisfied` (98 lines), `EvaluateRefinementBooleanExpression` (32), `EvaluateRefinementCoercer` (14), `EvaluateRefinementPredicate` (10) — then `ThrowDetailedSingleConstructorMismatch` (55), `TryGetInstanceMember` (51), `ApplyPendingParameterDefaults` (50), `InvokeQualifiedMethod` (47), `ConvertPropertyValue` (44), `TrySetInstanceMember` (43), `SelectBestCallableMatches` (41), `GetInstanceMembers` (38), `ConvertConstructorParameterValue` (35). | Each pair either delegates to one implementation or is removed; a test or analyzer fails when a new parallel sync/async pair is introduced; behaviour is unchanged, evidenced by the existing suite plus the annotated-conversion drift guard. |
+| `TS-P1-24` | In progress — refinement cluster converged 2026-07-27 | The interpreter carries sync/async twin methods that are *parallel implementations* rather than delegations, so a semantic fix can land on one surface and silently miss the other. This has happened twice: `OperatorEvaluator.AreEqual` versus `ToshEngine.AreEqualAsync` (`TS-P1-14`/`TS-P1-15`) and `ToshHost.DrainValue` versus `InvokeValue` (`TS-P1-20`). A corrected audit on 2026-07-26 counted 23 truly parallel pairs against 6 that delegate. The refinement cluster, the largest, is now converged. Remaining largest duplications: `ThrowDetailedSingleConstructorMismatch` (55 lines), `TryGetInstanceMember` (51), `ApplyPendingParameterDefaults` (50), `InvokeQualifiedMethod` (47), `ConvertPropertyValue` (44), `TrySetInstanceMember` (43), `SelectBestCallableMatches` (41), `GetInstanceMembers` (38), `ConvertConstructorParameterValue` (35). | Each pair either delegates to one implementation or is removed; a test or analyzer fails when a new parallel sync/async pair is introduced; behaviour is unchanged, evidenced by the existing suite plus the annotated-conversion drift guard. |
 | `TS-P1-25` | Planned | (Filed 2026-07-26 under a duplicate `TS-P1-20`; renumbered 2026-07-27.) The pure compiler profile can report a Tier-1-clean artifact while emitted IL still unconditionally calls `ToshHost.Initialize`/`RegisterCompiledAssembly` from `Main` and `ToshHost.EnterExecutionFrame` from functions, methods, lambdas, and blocks. | A pure artifact contains no metadata references or calls to `Tosh.Compiler.Runtime`, `ToshHost`, or `ToshEngine`; bootstrap is omitted or conditional; recursion guarding uses a stable `Tosh.Runtime` primitive; and a post-emit IL dependency audit fails independently of `RequireTier` diagnostics. |
 
 ## P2 — Parser, Binder, Diagnostics, and Surface Generation
@@ -1756,3 +1758,67 @@ earlier slices held to; the `Tosh.DevCompanion` SQLite advisory
 (`NU1903`) is still the solution build's only other warning; and
 `scripts/build.tosh` carries an unrelated one-line doc-comment change
 left uncommitted.
+
+### July 27, 2026 — Converging the refinement cluster (TS-P1-24)
+
+The largest genuine duplication in the audit, now reduced to one
+implementation. `ToshEngine.cs` loses 251 lines net.
+
+- The synchronous cluster is gone: `TryApplyGuardedRefinementCoercion`,
+  `TryEvaluateRefinementPredicate`, `EvaluateRefinementPredicate`,
+  `EvaluateRefinementCoercer`, and `EvaluateRefinementBooleanExpression`
+  are deleted, and `EnsureRefinementSatisfied` and
+  `TryApplyRefinementWithOptionalCoercion` are now thin adapters over
+  their asynchronous twins. The guard, predicate, and coercion semantics
+  exist once.
+- No new blocking was introduced. Each deleted leaf already ended in
+  `EvaluateArgumentAsync(...).GetAwaiter().GetResult()` with
+  `CancellationToken.None`; the bridge moved from inside five bodies to
+  two delegation points. `_scopes` is a plain instance stack rather than
+  an `AsyncLocal`, so pushing the refinement scope inside the async
+  method rather than outside it is not observable.
+- `CreateRefinementFailedDiagnostic` is extracted so the
+  `refinement_failed` help text is built once, and the comment
+  explaining why guarded `coerce` clauses thread their value forward
+  moved to the surviving asynchronous method rather than being deleted
+  with the copy that carried it.
+
+The interesting part is a claim that did not survive its own check.
+
+- Reading the two copies showed a real difference: a non-diagnostic
+  exception raised by the predicate *after* fallback coercion was
+  attributed to the coercer's span in `EnsureRefinementSatisfied` and to
+  the predicate's span everywhere else. That was reported here as a live
+  divergence.
+- Running the new regression against the pre-convergence engine
+  contradicted it: the test passed. `ConvertAnnotatedValue` only reaches
+  `EnsureRefinementSatisfied` after `TryConvertAnnotatedValue` has
+  already completed the sequence *without* throwing and returned an
+  unsatisfied result. A deterministic predicate cannot throw on the
+  re-run having not thrown on the first pass, so the diverging line was
+  unreachable without a side-effecting predicate. The audit's original
+  reading — latent risk, not present breakage — was right, and the live
+  claim was wrong.
+- The convergence stands on its own merits regardless: the difference
+  can no longer be reached by any future change that makes a predicate
+  non-deterministic, and there is one implementation to fix instead of
+  two.
+- Method note, and the second time this programme has earned it: the
+  negative control is what produced the correct answer. Reading two
+  implementations tells you they differ; only executing the old one
+  tells you whether anything could observe the difference. The earlier
+  `TryConvertAnnotatedValue` mistake and this one share a shape —
+  a difference confirmed by inspection and its reachability assumed.
+
+Coverage: `AnnotatedConversionParityTests` gains
+`Post_coercion_predicate_failure_blames_the_same_span_on_both_paths`,
+the first case in that guard to compare diagnostics rather than
+converted values, asserting both that the two paths agree and that they
+agree on the predicate rather than the coercer. Its scope limitation is
+recorded in the test itself.
+
+Validation: refinement, conversion, type-checker, truthiness,
+class-cancellation, and compiler-feature-matrix selection 283 passed,
+zero failed; `Tosh.Language` builds with zero warnings. The full suite
+was not run in this session — an earlier attempt exhausted the editor's
+memory — so it remains outstanding for this slice.
