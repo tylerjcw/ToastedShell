@@ -36,11 +36,13 @@ docs/spec/ToastScript.pdf
 !docs/cheatsheets/units/units.pdf
 !docs/ARCHITECTURE.md
 !docs/BACKLOG.md
+!docs/CLR_ABI_v1.md
 !docs/CONFIGURATION.md
 !docs/EDITOR_SUPPORT.md
 !docs/INDEX.md
 !docs/LINE_EDITOR_RFC.md
 !docs/ROADMAP.md
+!docs/TOASTSCRIPT_STABILIZATION.md
 !docs/RUNTIME_NAMESPACES.md
 !docs/TUI_ARCHITECTURE.md
 !docs/TOME.md

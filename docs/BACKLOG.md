@@ -4,6 +4,11 @@ Open work items by area, roughly ordered by priority within each section.
 Completed items prior to 2026-05-07 live in
 [BACKLOG-archive.md](BACKLOG-archive.md).
 
+> **Active language stabilization:** The prioritized ToastScript repair
+> program, semantic decisions, and acceptance gates live in
+> [TOASTSCRIPT_STABILIZATION.md](TOASTSCRIPT_STABILIZATION.md). Update that
+> document rather than duplicating its item statuses here.
+
 Last updated: May 7, 2026. Lambda return-type annotations, postfix
 `if`/`unless` on `return`/`break`/`continue`/`throw`/`yield`, lazy
 parenthesised generator comprehensions `(body <| for ...)`, the rune

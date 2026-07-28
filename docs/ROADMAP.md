@@ -2,6 +2,11 @@
 
 For open work items by area, see [BACKLOG.md](BACKLOG.md).
 
+The active language-semantics program is tracked in
+[TOASTSCRIPT_STABILIZATION.md](TOASTSCRIPT_STABILIZATION.md). It is the
+source of truth for interpreter/compiler convergence, parser hardening,
+and the safety fixes opened by the July 2026 ToastScript review.
+
 ## Vision
 
 `tosh` should grow into a shell, REPL, and scripting language with these end goals:
