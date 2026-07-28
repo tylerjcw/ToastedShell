@@ -60,4 +60,18 @@ public enum SyntaxTokenKind
     LessThanPipe,               // <|
 
     FatArrow,                   // =>
+
+    // Paired collection-literal delimiters (TS-P2-25).
+    //
+    // `{` opens a block and nothing else; each literal kind carries its own
+    // pair, so the opening token alone identifies the construct and the
+    // structural pass needs no lookahead. Both characters must be adjacent —
+    // `{ |` is not an opener and `| }` is not a closer — which is what lets an
+    // interior pipeline or modulo keep its ordinary meaning.
+    OpenBraceColon,             // {:  set
+    ColonCloseBrace,            // :}
+    OpenBracePipe,              // {|  record
+    PipeCloseBrace,             // |}
+    OpenBracePercent,           // {%  dict
+    PercentCloseBrace,          // %}
 }

@@ -121,6 +121,21 @@ public sealed class ToshLexer
             // || , |
             if (Current == '|')
             {
+                // `|}` closes a record literal and must be tested before `||`
+                // (TS-P2-25). In `{||}` the `{|` opener has already consumed the
+                // first `|`, so this branch only ever sees the closer. A trailing
+                // pipe before a brace is never valid ToastScript, which is why
+                // claiming the adjacent pair costs nothing: the interior pipe in
+                // `{| a = ls | count |}` is not adjacent to the brace and keeps
+                // its ordinary meaning.
+                if (Peek() == '}')
+                {
+                    tokens.Add(new SyntaxToken(SyntaxTokenKind.PipeCloseBrace, _position, "|}"));
+                    if (_expressionDepth > 0) _expressionDepth--;
+                    _position += 2;
+                    continue;
+                }
+
                 if (Peek() == '|')
                 {
                     tokens.Add(new SyntaxToken(SyntaxTokenKind.DoublePipe, _position, "||"));
@@ -228,8 +243,41 @@ public sealed class ToshLexer
                 continue;
             }
 
+            // Paired collection-literal delimiters (TS-P2-25). `{` opens a block
+            // and nothing else; each literal kind carries its own pair.
+            //
+            // The literal openers enter expression context exactly as `(` and `[`
+            // do, and that is load-bearing rather than incidental: it makes
+            // `{|a=1|}` lex identically to `{| a = 1 |}` instead of collapsing
+            // `a=1` into one bareword. Today's records have that flaw — `{ a=1 }`
+            // is a block while `{ a = 1 }` is a record — and shipping a new
+            // construct with it would repeat TS-P2-04 and TS-P2-15.
             if (Current == '{')
             {
+                if (Peek() == ':')
+                {
+                    tokens.Add(new SyntaxToken(SyntaxTokenKind.OpenBraceColon, _position, "{:"));
+                    _expressionDepth++;
+                    _position += 2;
+                    continue;
+                }
+
+                if (Peek() == '|')
+                {
+                    tokens.Add(new SyntaxToken(SyntaxTokenKind.OpenBracePipe, _position, "{|"));
+                    _expressionDepth++;
+                    _position += 2;
+                    continue;
+                }
+
+                if (Peek() == '%')
+                {
+                    tokens.Add(new SyntaxToken(SyntaxTokenKind.OpenBracePercent, _position, "{%"));
+                    _expressionDepth++;
+                    _position += 2;
+                    continue;
+                }
+
                 tokens.Add(new SyntaxToken(SyntaxTokenKind.OpenBrace, _position, "{"));
                 _position++;
                 continue;
@@ -239,6 +287,28 @@ public sealed class ToshLexer
             {
                 tokens.Add(new SyntaxToken(SyntaxTokenKind.CloseBrace, _position, "}"));
                 _position++;
+                continue;
+            }
+
+            // `:}` and `%}` close set and dict literals. Adjacency is what keeps
+            // a record shorthand key (`{| a: 1 |}`) and a modulo expression
+            // (`{% "k" => $a % $b %}`) intact — neither puts its `:` or `%`
+            // immediately before the brace. Without these branches both would be
+            // read as barewords, which is how `{: :}` was matched before it had
+            // real tokens.
+            if (Current == ':' && Peek() == '}')
+            {
+                tokens.Add(new SyntaxToken(SyntaxTokenKind.ColonCloseBrace, _position, ":}"));
+                if (_expressionDepth > 0) _expressionDepth--;
+                _position += 2;
+                continue;
+            }
+
+            if (Current == '%' && Peek() == '}')
+            {
+                tokens.Add(new SyntaxToken(SyntaxTokenKind.PercentCloseBrace, _position, "%}"));
+                if (_expressionDepth > 0) _expressionDepth--;
+                _position += 2;
                 continue;
             }
 
@@ -1185,6 +1255,18 @@ public sealed class ToshLexer
             // 'string?' and 'name?' keep lexing as a single token. The dedicated
             // '??' and '?.' tokens are already handled before we reach this path.
             if (Current is '|' or '#' or '(' or ')' or '{' or '}' or '[' or ']' or ';' or ',' or '>' or '<' or '&' or '!')
+            {
+                break;
+            }
+
+            // A collection-literal closer ends the bareword (TS-P2-25). `|` is
+            // already a terminator above, which is why `{|a=1|}` works, but `:`
+            // and `%` are ordinary bareword characters — without this, `{%a=>1%}`
+            // reads `1%` as one word and the literal never closes. The lookahead
+            // keeps the adjacency rule honest in the other direction too: a lone
+            // `:` or `%` not followed by `}` stays part of the word, so record
+            // shorthand keys and modulo expressions are untouched.
+            if (Current is ':' or '%' && Peek() == '}')
             {
                 break;
             }

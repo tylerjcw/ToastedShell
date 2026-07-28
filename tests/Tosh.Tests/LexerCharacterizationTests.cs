@@ -51,9 +51,11 @@ public sealed class LexerCharacterizationTests
     // TS-P2-15, fixed 2026-07-26: a named argument binds with or without
     // surrounding spaces.
     [InlineData("f(a=\"z\")", "Bareword:f OpenParen:( Bareword:a Bareword:= String:\"z\" CloseParen:)")]
-    // TS-P2-25, fixed 2026-07-26: `=>` is one token. It used to be none —
-    // the bareword reader stopped at '>', leaving a `Bareword "="` and a
-    // stray `GreaterThan` that every arrow site had to reassemble.
+    // Fixed 2026-07-26: `=>` is one token. It used to be none — the
+    // bareword reader stopped at '>', leaving a `Bareword "="` and a stray
+    // `GreaterThan` that every arrow site had to reassemble. (This was
+    // labelled `TS-P2-25` here, which is a different item — the brace
+    // disambiguation — so the ID has been dropped rather than guessed at.)
     [InlineData("1 => \"one\"", "Number:1 FatArrow:=> String:\"one\"")]
     [InlineData("1=>\"one\"", "Number:1 FatArrow:=> String:\"one\"")]
     [InlineData("default => 2", "Bareword:default FatArrow:=> Number:2")]
@@ -62,6 +64,27 @@ public sealed class LexerCharacterizationTests
     [InlineData("a == b", "Bareword:a Bareword:== Bareword:b")]
     [InlineData("echo hi > f.txt", "Bareword:echo Bareword:hi GreaterThan:> Bareword:f.txt")]
     [InlineData("--opt=value", "Bareword:--opt=value")]
+    // TS-P2-25: paired collection-literal delimiters. `{` is a block and
+    // nothing else; each literal announces itself with its own opener.
+    [InlineData("{| a = 1 |}", "OpenBracePipe:{| Bareword:a Bareword:= Number:1 PipeCloseBrace:|}")]
+    [InlineData("{: 1, 2 :}", "OpenBraceColon:{: Number:1 Comma:, Number:2 ColonCloseBrace::}")]
+    [InlineData("{% \"k\" => 1 %}", "OpenBracePercent:{% String:\"k\" FatArrow:=> Number:1 PercentCloseBrace:%}")]
+    // Empty forms need no special case: the two tokens simply abut.
+    [InlineData("{||}", "OpenBracePipe:{| PipeCloseBrace:|}")]
+    [InlineData("{::}", "OpenBraceColon:{: ColonCloseBrace::}")]
+    [InlineData("{%%}", "OpenBracePercent:{% PercentCloseBrace:%}")]
+    // A plain brace stays a plain brace.
+    [InlineData("{ echo hi }", "OpenBrace:{ Bareword:echo Bareword:hi CloseBrace:}")]
+    // Adjacency is the whole rule: a spaced form is not a delimiter, and is
+    // diagnosed by the parser rather than silently reinterpreted.
+    [InlineData("{ | a = 1 | }", "OpenBrace:{ Pipe:| Bareword:a Bareword:= Number:1 Pipe:| CloseBrace:}")]
+    // An interior pipe keeps its meaning, because it is not adjacent to the
+    // brace. This is the case that makes `|}` safe to claim.
+    [InlineData("{| a = ls | count |}", "OpenBracePipe:{| Bareword:a Bareword:= Bareword:ls Pipe:| Bareword:count PipeCloseBrace:|}")]
+    // Likewise an interior modulo against `%}`.
+    [InlineData("{% \"k\" => $a % $b %}", "OpenBracePercent:{% String:\"k\" FatArrow:=> Bareword:$a Bareword:% Bareword:$b PercentCloseBrace:%}")]
+    // `||` still wins where it should: the opener consumed the first pipe.
+    [InlineData("$a || $b", "Bareword:$a DoublePipe:|| Bareword:$b")]
     public void Known_good_tokenization_is_pinned(string source, string expected)
     {
         Assert.Equal(expected, Render(source));
@@ -106,7 +129,14 @@ public sealed class LexerCharacterizationTests
         // changes what these expressions mean.
         Assert.Equal(Render("$x?.Length"), Render("$x ?. Length"));
         Assert.Equal(Render("f(a=1)"), Render("f(a = 1)"));
-        Assert.Equal(Render("{a=>1}"), Render("{ a => 1 }"));
+        Assert.Equal(Render("{%a=>1%}"), Render("{% a => 1 %}"));
+
+        // TS-P2-25. Record literals join the list: the literal openers enter
+        // expression context, so `a=1` splits inside them. Under a bare `{`
+        // it does not — `{ a=1 }` is one bareword and therefore a block,
+        // while `{ a = 1 }` was a record. That inconsistency is what the
+        // paired delimiters remove.
+        Assert.Equal(Render("{|a=1|}"), Render("{| a = 1 |}"));
     }
 
     [Fact]
