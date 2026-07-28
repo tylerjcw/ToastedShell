@@ -85,6 +85,8 @@ public static class ToshParser
         private readonly IReadOnlyList<LineComment> _lineComments;
         private readonly List<SyntaxDiagnostic> _diagnostics = [];
         private readonly HashSet<string> _userFunctionNames;
+        private readonly IReadOnlyDictionary<int, LiteBoundary> _liteBoundariesByTokenIndex;
+        private readonly Stack<int> _statementBlockOpenTokenIndices = [];
 
         /// <summary>
         /// Names declared as modules in this source (TS-P2-23). Lets the
@@ -113,6 +115,9 @@ public static class ToshParser
             _tokens = tokens;
             _lineHushDirectives = lineHushDirectives;
             _lineComments = lineComments;
+            _liteBoundariesByTokenIndex = LiteParser
+                .CandidateBoundaries(tokens, sourceText)
+                .ToDictionary(boundary => boundary.TokenIndex);
             var declarations = ScanDeclarations(tokens, sourceText);
             _userFunctionNames = declarations.Functions;
             _declaredModuleNames = declarations.Modules;
@@ -7104,60 +7109,80 @@ public static class ToshParser
 
         private BlockSyntax ParseBlock()
         {
+            var openBraceTokenIndex = _position;
             var openBrace = NextToken();
-            var statements = new List<StatementSyntax>();
+            _statementBlockOpenTokenIndices.Push(openBraceTokenIndex);
 
-            while (Current.Kind != SyntaxTokenKind.EndOfFile && Current.Kind != SyntaxTokenKind.CloseBrace)
+            try
             {
-                if (Current.Kind == SyntaxTokenKind.Semicolon)
+                var statements = new List<StatementSyntax>();
+
+                while (Current.Kind != SyntaxTokenKind.EndOfFile && Current.Kind != SyntaxTokenKind.CloseBrace)
                 {
-                    NextToken();
-                    continue;
+                    if (Current.Kind == SyntaxTokenKind.Semicolon)
+                    {
+                        NextToken();
+                        continue;
+                    }
+
+                    var positionBeforeStatement = _position;
+                    var statement = ParseStatement(stopAtCloseBrace: true, stopAtSemicolon: true);
+                    statements.Add(statement);
+
+                    if (Current.Kind == SyntaxTokenKind.Semicolon)
+                    {
+                        NextToken();
+                        continue;
+                    }
+
+                    if (IsExplicitBackgroundStatementBoundary(statement))
+                    {
+                        continue;
+                    }
+
+                    if (IsCurrentPromotedStatementBlockBoundary())
+                    {
+                        continue;
+                    }
+
+                    if (Current.Kind is not SyntaxTokenKind.CloseBrace and not SyntaxTokenKind.EndOfFile)
+                    {
+                        _diagnostics.Add(new SyntaxDiagnostic(
+                            Code: "tosh.parser.missing_block_separator",
+                            Title: "Block statements must be separated by a newline or ';'.",
+                            Span: Current.Span,
+                            Label: "insert a newline or ';' between block statements"));
+
+                        // As at top level, an already-advanced parser is
+                        // positioned at the next construct. Only scan when
+                        // ParseStatement made no progress; otherwise a
+                        // same-line declaration such as `func a() {} func
+                        // b() {}` would be discarded during recovery.
+                        if (_position == positionBeforeStatement)
+                        {
+                            SkipToCurrentStatementBlockBoundary();
+                        }
+                    }
                 }
 
-                var statement = ParseStatement(stopAtCloseBrace: true, stopAtSemicolon: true);
-                statements.Add(statement);
-
-                if (Current.Kind == SyntaxTokenKind.Semicolon)
-                {
-                    NextToken();
-                    continue;
-                }
-
-                if (IsExplicitBackgroundStatementBoundary(statement))
-                {
-                    continue;
-                }
-
-                if (HasImplicitStatementBoundaryAfter(statement.Span.End))
-                {
-                    continue;
-                }
-
-                if (Current.Kind is not SyntaxTokenKind.CloseBrace and not SyntaxTokenKind.EndOfFile)
+                if (Current.Kind != SyntaxTokenKind.CloseBrace)
                 {
                     _diagnostics.Add(new SyntaxDiagnostic(
-                        Code: "tosh.parser.missing_block_separator",
-                        Title: "Block statements must be separated by a newline or ';'.",
-                        Span: Current.Span,
-                        Label: "insert a newline or ';' between block statements"));
-                    SkipToBlockBoundary();
+                        Code: "tosh.parser.missing_closing_brace",
+                        Title: "A closing '}' is required here.",
+                        Span: openBrace.Span,
+                        Label: "this block never closes",
+                        Help: "close the block with '}' after the last statement."));
+                    return new BlockSyntax(statements, openBrace.Span);
                 }
-            }
 
-            if (Current.Kind != SyntaxTokenKind.CloseBrace)
+                var closeBrace = NextToken();
+                return new BlockSyntax(statements, TextSpan.FromBounds(openBrace.Span.Start, closeBrace.Span.End));
+            }
+            finally
             {
-                _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh.parser.missing_closing_brace",
-                    Title: "A closing '}' is required here.",
-                    Span: openBrace.Span,
-                    Label: "this block never closes",
-                    Help: "close the block with '}' after the last statement."));
-                return new BlockSyntax(statements, openBrace.Span);
+                _statementBlockOpenTokenIndices.Pop();
             }
-
-            var closeBrace = NextToken();
-            return new BlockSyntax(statements, TextSpan.FromBounds(openBrace.Span.Start, closeBrace.Span.End));
         }
 
         // ── Comprehension clause parsing ──
@@ -9542,6 +9567,12 @@ public static class ToshParser
                         {
                             stages.Add(nextStage);
                         }
+
+                        if (nextStage is not null &&
+                            HasImplicitStatementBoundaryAfter(nextStage.Span.End))
+                        {
+                            break;
+                        }
                     }
 
                     continue;
@@ -9628,6 +9659,12 @@ public static class ToshParser
                         {
                             stages.Add(nextStage);
                         }
+
+                        if (nextStage is not null &&
+                            HasImplicitStatementBoundaryAfter(nextStage.Span.End))
+                        {
+                            break;
+                        }
                     }
 
                     continue;
@@ -9702,6 +9739,36 @@ public static class ToshParser
             {
                 NextToken();
             }
+        }
+
+        private void SkipToCurrentStatementBlockBoundary()
+        {
+            if (Current.Kind is SyntaxTokenKind.EndOfFile
+                or SyntaxTokenKind.Semicolon
+                or SyntaxTokenKind.CloseBrace)
+            {
+                return;
+            }
+
+            // The caller invokes this only after ParseStatement made no
+            // progress. Consume the offending token before looking for a
+            // promoted boundary so recovery itself always advances.
+            NextToken();
+
+            while (Current.Kind != SyntaxTokenKind.EndOfFile &&
+                   Current.Kind != SyntaxTokenKind.Semicolon &&
+                   Current.Kind != SyntaxTokenKind.CloseBrace &&
+                   !IsCurrentPromotedStatementBlockBoundary())
+            {
+                NextToken();
+            }
+        }
+
+        private bool IsCurrentPromotedStatementBlockBoundary()
+        {
+            return _statementBlockOpenTokenIndices.TryPeek(out var blockOpenTokenIndex) &&
+                   _liteBoundariesByTokenIndex.TryGetValue(_position, out var boundary) &&
+                   LiteParser.IsBoundaryOwnedByBlock(boundary, blockOpenTokenIndex);
         }
 
         private bool HasImplicitStatementBoundaryAfter(int previousEnd)

@@ -75,6 +75,8 @@ public static class LiteParser
         var stages = new List<LiteStage>();
 
         var delimiters = new Stack<SyntaxTokenKind>();
+        var delimiterCounts = new Dictionary<SyntaxTokenKind, int>();
+        var braceDelimiterCount = 0;
         var statementStart = -1;
         var stageStart = -1;
 
@@ -93,6 +95,18 @@ public static class LiteParser
             // Mutating depth first silently joined those statements.
             if (delimiters.Count == 0)
             {
+                // `|>` is lexed as two adjacent tokens. The pipe already
+                // closed the preceding lite stage; its adjacent `>` is the
+                // second half of that separator, not the beginning of a new
+                // stage or statement.
+                if (token.Kind == SyntaxTokenKind.GreaterThan &&
+                    index > 0 &&
+                    tokens[index - 1].Kind == SyntaxTokenKind.Pipe &&
+                    tokens[index - 1].Span.End == token.Span.Start)
+                {
+                    continue;
+                }
+
                 if (token.Kind == SyntaxTokenKind.Semicolon)
                 {
                     CloseStage(stages, ref stageStart, index, tokens);
@@ -123,10 +137,19 @@ public static class LiteParser
             if (TryGetClosingDelimiter(token.Kind, out var closingKind))
             {
                 delimiters.Push(closingKind);
+                IncrementClosingCount(delimiterCounts, closingKind);
+                if (IsBraceClosingDelimiter(closingKind))
+                {
+                    braceDelimiterCount++;
+                }
             }
             else if (IsClosingDelimiter(token.Kind))
             {
-                TryCloseDelimiter(delimiters, token.Kind);
+                TryCloseDelimiter(
+                    delimiters,
+                    delimiterCounts,
+                    ref braceDelimiterCount,
+                    token.Kind);
             }
 
             if (statementStart < 0)
@@ -244,6 +267,8 @@ public static class LiteParser
         var boundaries = new List<LiteBoundary>();
         var braceDepth = 0;
         var frames = new Stack<BoundaryFrame>();
+        var frameClosingCounts = new Dictionary<SyntaxTokenKind, int>();
+        var braceFrameCount = 0;
         var hasPendingPipelineStage = false;
         int? pendingPipelineOwnerOpenTokenIndex = null;
 
@@ -268,6 +293,12 @@ public static class LiteParser
             var continuesPipeline =
                 hasPendingPipelineStage &&
                 pendingPipelineOwnerOpenTokenIndex == ownerOpenTokenIndex;
+            var isPipeForwardTail =
+                continuesPipeline &&
+                token.Kind == SyntaxTokenKind.GreaterThan &&
+                index > 0 &&
+                tokens[index - 1].Kind == SyntaxTokenKind.Pipe &&
+                tokens[index - 1].Span.End == token.Span.Start;
 
             if (boundariesEnabled &&
                 token.Kind == SyntaxTokenKind.Semicolon &&
@@ -307,7 +338,12 @@ public static class LiteParser
                     hasPendingPipelineStage = true;
                     pendingPipelineOwnerOpenTokenIndex = ownerOpenTokenIndex;
                 }
-                else if (continuesPipeline || token.Kind == SyntaxTokenKind.Semicolon)
+                // The adjacent `>` in `|>` is part of the separator, not
+                // the next stage. Keep the pending state through it so a
+                // stage beginning on the following line is not promoted as
+                // a statement.
+                else if (!isPipeForwardTail &&
+                         (continuesPipeline || token.Kind == SyntaxTokenKind.Semicolon))
                 {
                     hasPendingPipelineStage = false;
                     pendingPipelineOwnerOpenTokenIndex = null;
@@ -322,6 +358,11 @@ public static class LiteParser
                 }
 
                 frames.Push(frame);
+                IncrementClosingCount(frameClosingCounts, frame.ClosingKind);
+                if (IsBraceClosingDelimiter(frame.ClosingKind))
+                {
+                    braceFrameCount++;
+                }
 
                 if (frame.Role == BoundaryFrameRole.PlainBrace && index + 1 < tokens.Count)
                 {
@@ -338,7 +379,12 @@ public static class LiteParser
             }
 
             if (IsClosingDelimiter(token.Kind) &&
-                TryCloseBoundaryFrame(frames, token.Kind, out var poppedPlainBraceCount))
+                TryCloseBoundaryFrame(
+                    frames,
+                    frameClosingCounts,
+                    ref braceFrameCount,
+                    token.Kind,
+                    out var poppedPlainBraceCount))
             {
                 braceDepth = Math.Max(0, braceDepth - poppedPlainBraceCount);
             }
@@ -387,37 +433,66 @@ public static class LiteParser
         ArgumentOutOfRangeException.ThrowIfNegative(blockOpenTokenIndex);
 
         return candidates
-            .Where(boundary => boundary.OwnerOpenTokenIndex == blockOpenTokenIndex)
+            .Where(boundary => IsBoundaryOwnedByBlock(boundary, blockOpenTokenIndex))
             .ToArray();
+    }
+
+    /// <summary>
+    /// Tests the exact-owner relation used when a parser-proven block promotes
+    /// a candidate. The recursive parser uses the same predicate against its
+    /// token-index lookup so it does not repeatedly scan every candidate for
+    /// every nested block.
+    /// </summary>
+    internal static bool IsBoundaryOwnedByBlock(
+        LiteBoundary boundary,
+        int blockOpenTokenIndex)
+    {
+        ArgumentNullException.ThrowIfNull(boundary);
+        ArgumentOutOfRangeException.ThrowIfNegative(blockOpenTokenIndex);
+        return boundary.OwnerOpenTokenIndex == blockOpenTokenIndex;
     }
 
     private static bool TryCloseDelimiter(
         Stack<SyntaxTokenKind> delimiters,
+        Dictionary<SyntaxTokenKind, int> delimiterCounts,
+        ref int braceDelimiterCount,
         SyntaxTokenKind closingKind)
     {
-        // Prefer the nearest exact frame anywhere in the stack. A closer
-        // often arrives after an inner malformed group: `([1)` must unwind
-        // the unmatched `[` and close its exact `(`, and `|}` must close an
-        // outer record even when an inner plain block forgot `}`.
-        var hasExactMatch = delimiters.Contains(closingKind);
+        // Paired closers prefer an exact frame anywhere in the stack. A
+        // closer often arrives after an inner malformed group: `([1)` must
+        // unwind the unmatched `[` and close its exact `(`, and `|}` must
+        // close an outer record even when an inner plain block forgot `}`.
+        var hasExactMatch =
+            delimiterCounts.TryGetValue(closingKind, out var exactCount) &&
+            exactCount > 0;
 
-        // With no exact match, a brace-family closer remains a recovery
-        // closer for the nearest brace-family frame. This preserves the
-        // parser's acceptance of plain `}` after an unterminated paired
-        // literal without letting that malformed frame leak through EOF.
-        if (!hasExactMatch &&
-            (!IsBraceClosingDelimiter(closingKind) ||
-             !delimiters.Any(IsBraceClosingDelimiter)))
+        // Plain `}` is also the parser's diagnosed recovery terminator for
+        // an unterminated paired literal. It may therefore close the nearest
+        // brace-family frame even when a deeper ordinary block is an exact
+        // match. A mismatched paired closer never closes an unrelated brace
+        // frame merely because both belong to the brace family.
+        var canRecoverNearestBrace =
+            closingKind == SyntaxTokenKind.CloseBrace &&
+            braceDelimiterCount > 0;
+        if (!hasExactMatch && !canRecoverNearestBrace)
         {
             return false;
         }
 
+        var closeNearestBraceFamily = closingKind == SyntaxTokenKind.CloseBrace;
+
         while (delimiters.Count > 0)
         {
             var expected = delimiters.Pop();
-            if (hasExactMatch
-                    ? expected == closingKind
-                    : IsBraceClosingDelimiter(expected))
+            DecrementClosingCount(delimiterCounts, expected);
+            if (IsBraceClosingDelimiter(expected))
+            {
+                braceDelimiterCount--;
+            }
+
+            if (closeNearestBraceFamily
+                    ? IsBraceClosingDelimiter(expected)
+                    : expected == closingKind)
             {
                 return true;
             }
@@ -428,33 +503,44 @@ public static class LiteParser
 
     private static bool TryCloseBoundaryFrame(
         Stack<BoundaryFrame> frames,
+        Dictionary<SyntaxTokenKind, int> frameClosingCounts,
+        ref int braceFrameCount,
         SyntaxTokenKind closingKind,
         out int poppedPlainBraceCount)
     {
-        var hasExactMatch = frames.Any(frame => frame.ClosingKind == closingKind);
+        var hasExactMatch =
+            frameClosingCounts.TryGetValue(closingKind, out var exactCount) &&
+            exactCount > 0;
 
-        if (!hasExactMatch &&
-            (!IsBraceClosingDelimiter(closingKind) ||
-             !frames.Any(frame => IsBraceClosingDelimiter(frame.ClosingKind))))
+        var canRecoverNearestBrace =
+            closingKind == SyntaxTokenKind.CloseBrace &&
+            braceFrameCount > 0;
+        if (!hasExactMatch && !canRecoverNearestBrace)
         {
             poppedPlainBraceCount = 0;
             return false;
         }
 
         poppedPlainBraceCount = 0;
+        var closeNearestBraceFamily = closingKind == SyntaxTokenKind.CloseBrace;
 
         while (frames.Count > 0)
         {
             var frame = frames.Pop();
+            DecrementClosingCount(frameClosingCounts, frame.ClosingKind);
+            if (IsBraceClosingDelimiter(frame.ClosingKind))
+            {
+                braceFrameCount--;
+            }
 
             if (frame.Role == BoundaryFrameRole.PlainBrace)
             {
                 poppedPlainBraceCount++;
             }
 
-            if (hasExactMatch
-                    ? frame.ClosingKind == closingKind
-                    : IsBraceClosingDelimiter(frame.ClosingKind))
+            if (closeNearestBraceFamily
+                    ? IsBraceClosingDelimiter(frame.ClosingKind)
+                    : frame.ClosingKind == closingKind)
             {
                 return true;
             }
@@ -462,6 +548,32 @@ public static class LiteParser
 
         poppedPlainBraceCount = 0;
         return false;
+    }
+
+    private static void IncrementClosingCount(
+        Dictionary<SyntaxTokenKind, int> closingCounts,
+        SyntaxTokenKind closingKind)
+    {
+        closingCounts.TryGetValue(closingKind, out var count);
+        closingCounts[closingKind] = count + 1;
+    }
+
+    private static void DecrementClosingCount(
+        Dictionary<SyntaxTokenKind, int> closingCounts,
+        SyntaxTokenKind closingKind)
+    {
+        if (!closingCounts.TryGetValue(closingKind, out var count))
+        {
+            return;
+        }
+
+        if (count <= 1)
+        {
+            closingCounts.Remove(closingKind);
+            return;
+        }
+
+        closingCounts[closingKind] = count - 1;
     }
 
     private static bool TryGetClosingDelimiter(

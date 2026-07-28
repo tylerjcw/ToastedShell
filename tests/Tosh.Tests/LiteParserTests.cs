@@ -442,11 +442,8 @@ public sealed class LiteParserTests
 
     [Theory]
     [InlineData("echo {| a = 1 }\necho after")]
-    [InlineData("echo {| a = 1 %}\necho after")]
-    [InlineData("echo {% \"a\" => 1 :}\necho after")]
-    [InlineData("echo {: 1 |}\necho after")]
     [InlineData("func f() { echo (1 }\necho after")]
-    public void Brace_family_recovery_closers_do_not_leak_nesting_through_eof(string source)
+    public void Plain_brace_recovery_does_not_leak_nesting_through_eof(string source)
     {
         var tokens = new ToshLexer(source).Lex();
         var candidates = LiteParser.CandidateBoundaries(tokens, source);
@@ -456,6 +453,69 @@ public sealed class LiteParserTests
             candidates,
             boundary => boundary.OwnerOpenTokenIndex is null &&
                         tokens[boundary.TokenIndex].Text == "echo");
+    }
+
+    [Theory]
+    [InlineData("echo {| a = 1 %}\necho after")]
+    [InlineData("echo {% \"a\" => 1 :}\necho after")]
+    [InlineData("echo {: 1 |}\necho after")]
+    public void Mismatched_paired_closer_does_not_close_an_unrelated_literal(string source)
+    {
+        var tokens = new ToshLexer(source).Lex();
+        var candidates = LiteParser.CandidateBoundaries(tokens, source);
+
+        Assert.Single(Lite(source).Statements);
+        Assert.DoesNotContain(
+            candidates,
+            boundary => boundary.OwnerOpenTokenIndex is null &&
+                        tokens[boundary.TokenIndex].Text == "echo");
+    }
+
+    [Fact]
+    public void Plain_brace_recovers_the_nearest_literal_without_closing_its_parent_block()
+    {
+        const string source =
+            """
+            func f() {
+                echo {| value = 1 }
+                echo kept
+            }
+            """;
+        var tokens = new ToshLexer(source).Lex();
+        var outerBlockOpen = PlainBraceOpenIndices(source)[0];
+
+        var ownedEchoStarts = LiteParser
+            .CandidateBoundaries(tokens, source)
+            .Where(boundary => boundary.OwnerOpenTokenIndex == outerBlockOpen &&
+                               tokens[boundary.TokenIndex].Text == "echo")
+            .Select(boundary => tokens[boundary.TokenIndex].Span.Start)
+            .ToArray();
+        Assert.Equal(
+            new[]
+            {
+                source.IndexOf("echo", StringComparison.Ordinal),
+                source.LastIndexOf("echo", StringComparison.Ordinal),
+            },
+            ownedEchoStarts);
+
+        var result = ToshParser.Parse(source, "<lite-recovery-test>");
+        Assert.Contains(
+            result.Diagnostics,
+            diagnostic => diagnostic.Code == "tosh.parser.missing_record_closing_delimiter");
+        Assert.DoesNotContain(
+            result.Diagnostics,
+            diagnostic => diagnostic.Code == "tosh.parser.missing_block_separator");
+
+        var function = Assert.IsType<FunctionDefinitionStatementSyntax>(result.Statement);
+        Assert.Collection(
+            function.Body.Statements,
+            statement => Assert.IsType<PipelineStatementSyntax>(statement),
+            statement =>
+            {
+                var pipeline = Assert.IsType<PipelineStatementSyntax>(statement);
+                var stage = Assert.Single(pipeline.Pipeline.Stages);
+                Assert.Equal("echo", Assert.IsType<CommandSyntax>(stage).Name);
+            });
     }
 
     [Theory]
@@ -492,7 +552,240 @@ public sealed class LiteParserTests
         var function = Assert.IsType<FunctionDefinitionStatementSyntax>(result.Statement);
 
         Assert.Equal(2, function.Body.Statements.Count);
+
+        var firstStatement = Assert.IsType<PipelineStatementSyntax>(function.Body.Statements[0]);
+        Assert.Collection(
+            firstStatement.Pipeline.Stages,
+            stage => Assert.Equal("ls", Assert.IsType<CommandSyntax>(stage).Name),
+            stage => Assert.Equal("where", Assert.IsType<CommandSyntax>(stage).Name));
+
+        var secondStatement = Assert.IsType<PipelineStatementSyntax>(function.Body.Statements[1]);
+        var echo = Assert.Single(secondStatement.Pipeline.Stages);
+        Assert.Equal("echo", Assert.IsType<CommandSyntax>(echo).Name);
+
         Assert.Equal(["ls", "echo"], PromotedTokenTexts(source));
+    }
+
+    [Fact]
+    public void Pipe_forward_stage_continuation_is_not_promoted_as_a_block_statement()
+    {
+        const string source =
+            """
+            func f() {
+                echo one |>
+                where { _ }
+                echo done
+            }
+            """;
+
+        var result = ToshParser.Parse(source, "<lite-test>");
+        Assert.Empty(result.Diagnostics);
+        var function = Assert.IsType<FunctionDefinitionStatementSyntax>(result.Statement);
+        Assert.Equal(2, function.Body.Statements.Count);
+
+        var firstStatement = Assert.IsType<PipelineStatementSyntax>(function.Body.Statements[0]);
+        Assert.Collection(
+            firstStatement.Pipeline.Stages,
+            stage => Assert.Equal("echo", Assert.IsType<CommandSyntax>(stage).Name),
+            stage => Assert.Equal(
+                "where",
+                Assert.IsType<PipeForwardStageSyntax>(stage).Command.Name));
+
+        Assert.Equal(["echo", "echo"], PromotedTokenTexts(source));
+
+        const string topLevelSource =
+            """
+            echo one |>
+            where { _ }
+            echo done
+            """;
+        var lite = Lite(topLevelSource);
+        Assert.Equal(2, lite.Statements.Count);
+        Assert.Equal(2, lite.Statements[0].Stages.Count);
+
+        var topLevelResult = ToshParser.Parse(topLevelSource, "<lite-test>");
+        Assert.Empty(topLevelResult.Diagnostics);
+        var script = Assert.IsType<ScriptStatementSyntax>(topLevelResult.Statement);
+        Assert.Equal(2, script.Statements.Count);
+        Assert.Equal(
+            2,
+            Assert.IsType<PipelineStatementSyntax>(script.Statements[0]).Pipeline.Stages.Count);
+
+        const string chainedSource =
+            """
+            echo one |> where { _ } |>
+            first 1
+            echo done
+            """;
+        var chainedLite = Lite(chainedSource);
+        Assert.Equal(2, chainedLite.Statements.Count);
+        Assert.Equal(3, chainedLite.Statements[0].Stages.Count);
+
+        var chainedResult = ToshParser.Parse(chainedSource, "<lite-test>");
+        Assert.Empty(chainedResult.Diagnostics);
+        var chainedScript = Assert.IsType<ScriptStatementSyntax>(chainedResult.Statement);
+        Assert.Equal(2, chainedScript.Statements.Count);
+        var chainedPipeline =
+            Assert.IsType<PipelineStatementSyntax>(chainedScript.Statements[0]).Pipeline;
+        Assert.Equal(3, chainedPipeline.Stages.Count);
+        Assert.Equal(
+            "first",
+            Assert.IsType<PipeForwardStageSyntax>(chainedPipeline.Stages[^1]).Command.Name);
+    }
+
+    [Fact]
+    public void Parser_block_statement_starts_match_exact_owner_promotions()
+    {
+        const string source =
+            """
+            func f() {
+                echo one
+                echo two; echo three
+            }
+            """;
+
+        var tokens = new ToshLexer(source).Lex();
+        var openBraceIndex = Assert.Single(PlainBraceOpenIndices(source));
+        var promotedStarts = LiteParser
+            .PromoteBoundariesForBlock(
+                LiteParser.CandidateBoundaries(tokens, source),
+                openBraceIndex)
+            .Select(boundary => tokens[boundary.TokenIndex].Span.Start)
+            .ToArray();
+
+        var result = ToshParser.Parse(source, "<lite-consumer-test>");
+        Assert.Empty(result.Diagnostics);
+        var function = Assert.IsType<FunctionDefinitionStatementSyntax>(result.Statement);
+
+        Assert.Equal(
+            promotedStarts,
+            function.Body.Statements.Select(statement => statement.Span.Start).ToArray());
+    }
+
+    [Fact]
+    public void Nested_parser_blocks_consume_boundaries_from_their_own_owner()
+    {
+        const string source =
+            """
+            func outer() {
+                if (true) {
+                    echo inner-one
+                    echo inner-two
+                }
+                echo outer
+            }
+            """;
+
+        var result = ToshParser.Parse(source, "<lite-consumer-test>");
+        Assert.Empty(result.Diagnostics);
+        var function = Assert.IsType<FunctionDefinitionStatementSyntax>(result.Statement);
+        Assert.Equal(2, function.Body.Statements.Count);
+        Assert.Equal(
+            PromotedTokenStarts(source, plainBraceOrdinal: 0),
+            function.Body.Statements.Select(statement => statement.Span.Start).ToArray());
+
+        var conditional = Assert.IsType<IfStatementSyntax>(function.Body.Statements[0]);
+        Assert.Equal(2, conditional.ThenBlock.Statements.Count);
+        Assert.Equal(
+            PromotedTokenStarts(source, plainBraceOrdinal: 1),
+            conditional.ThenBlock.Statements.Select(statement => statement.Span.Start).ToArray());
+    }
+
+    [Fact]
+    public void Specialized_brace_separators_still_work_inside_a_parser_block()
+    {
+        const string source =
+            """
+            func outer() {
+                class C {
+                    prop A = 1
+                    prop B = 2
+                }
+                echo done
+            }
+            """;
+
+        var result = ToshParser.Parse(source, "<lite-consumer-test>");
+        Assert.Empty(result.Diagnostics);
+        var function = Assert.IsType<FunctionDefinitionStatementSyntax>(result.Statement);
+        Assert.Equal(2, function.Body.Statements.Count);
+
+        var definition = Assert.IsType<ClassDefinitionStatementSyntax>(function.Body.Statements[0]);
+        Assert.Equal(2, definition.Members.Count);
+    }
+
+    [Fact]
+    public void Same_line_block_recovery_preserves_the_next_declaration()
+    {
+        const string source =
+            """
+            func outer() {
+                func a() { return 1 } func b() { return 2 }
+                echo done
+            }
+            """;
+
+        var result = ToshParser.Parse(source, "<lite-consumer-test>");
+
+        var diagnostic = Assert.Single(result.Diagnostics);
+        Assert.Equal("tosh.parser.missing_block_separator", diagnostic.Code);
+
+        var function = Assert.IsType<FunctionDefinitionStatementSyntax>(result.Statement);
+        Assert.Collection(
+            function.Body.Statements,
+            statement => Assert.Equal("a", Assert.IsType<FunctionDefinitionStatementSyntax>(statement).Name),
+            statement => Assert.Equal("b", Assert.IsType<FunctionDefinitionStatementSyntax>(statement).Name),
+            statement => Assert.IsType<PipelineStatementSyntax>(statement));
+    }
+
+    [Fact]
+    public void Doc_comment_led_statements_are_exact_owner_boundaries()
+    {
+        const string source =
+            """
+            func outer() {
+                echo one
+                ## @summary Nested helper
+                func nested() { return 1 }
+            }
+            """;
+
+        var result = ToshParser.Parse(source, "<lite-consumer-test>");
+        Assert.Empty(result.Diagnostics);
+        var function = Assert.IsType<FunctionDefinitionStatementSyntax>(result.Statement);
+
+        Assert.Collection(
+            function.Body.Statements,
+            statement => Assert.IsType<PipelineStatementSyntax>(statement),
+            statement => Assert.Equal(
+                "nested",
+                Assert.IsType<FunctionDefinitionStatementSyntax>(statement).Name));
+
+        var tokens = new ToshLexer(source).Lex();
+        var boundaries = LiteParser.PromoteBoundariesForBlock(
+            LiteParser.CandidateBoundaries(tokens, source),
+            PlainBraceOpenIndices(source)[0]);
+        Assert.Contains(
+            boundaries,
+            boundary => tokens[boundary.TokenIndex].Kind == SyntaxTokenKind.DocComment);
+    }
+
+    [Fact]
+    public void Repeated_unmatched_closer_recovery_stress_preserves_following_structure()
+    {
+        const int depth = 4096;
+        var source =
+            "func f() {" +
+            new string('(', depth) +
+            new string(']', depth) +
+            "}\necho after";
+        var tokens = new ToshLexer(source).Lex();
+
+        Assert.Equal(2, LiteParser.Parse(tokens, source).Statements.Count);
+        Assert.Contains(
+            LiteParser.CandidateBoundaries(tokens, source),
+            boundary => boundary.OwnerOpenTokenIndex is null &&
+                        tokens[boundary.TokenIndex].Text == "echo");
     }
 
     [Fact]
@@ -517,6 +810,21 @@ public sealed class LiteParserTests
 
         return LiteParser.PromoteBoundariesForBlock(candidates, openBraceIndex)
             .Select(boundary => tokens[boundary.TokenIndex].Text)
+            .ToArray();
+    }
+
+    private static int[] PromotedTokenStarts(
+        string source,
+        int plainBraceOrdinal = 0)
+    {
+        var tokens = new ToshLexer(source).Lex();
+        var openBraceIndex = PlainBraceOpenIndices(source)[plainBraceOrdinal];
+
+        return LiteParser
+            .PromoteBoundariesForBlock(
+                LiteParser.CandidateBoundaries(tokens, source),
+                openBraceIndex)
+            .Select(boundary => tokens[boundary.TokenIndex].Span.Start)
             .ToArray();
     }
 

@@ -331,8 +331,10 @@ implemented.
   delimiter-paired `LiteParser` structural pass are built and validated.
   `TS-P2-25` removed the brace ambiguity: candidates now carry their exact
   plain-brace owner and can be promoted only for a parser-proven block.
-  The recursive parser does not consume those promoted regions yet; that
-  remains the next `TS-P2-24` integration slice.
+  The recursive parser now consumes those exact-owner candidates for
+  ordinary block statement boundaries. Top-level statement and pipeline
+  stage consumption, followed by structural-helper deletion, remain the
+  next `TS-P2-24` integration slices.
 
 **Remaining.**
 
@@ -426,7 +428,7 @@ closed.
 | `TS-P2-21` | Planned | A `new` expression cannot take named arguments at all: `new D(1, b = 7)` and `new R("w", Qty = 5)` both fail while parsing with `tosh.parser.assignment_in_predicate`, so the runtime binder is never reached. Function and method calls accept the same syntax. This bounds `TS-P1-06`: constructor named-argument validation is unreachable until the parser accepts the form. | `new Type(name = value)` parses as a named argument for classes, records, and structs; the runtime binder's unknown/duplicate diagnostics apply; a genuine assignment mistake keeps a targeted diagnostic rather than the predicate-assignment message. |
 | `TS-P2-22` | Planned | The type checker does not walk class-member annotations, so static checking is materially weaker inside class bodies. `var x: int = "42"` and `func f(x: int)` both report `tosh.type.mismatch`, while the equivalent `prop X: int = "42"`, constructor parameter, method parameter, and property assignment report nothing. Runtime behaviour is consistent (all convert), so this is a static-coverage hole rather than a semantic divergence. | Class property, constructor-parameter, method-parameter, and property-assignment annotations are checked with the same rule and severity as `var` and `func` annotations; a corpus covers matching and mismatching cases in both positions. |
 | `TS-P2-23` | In progress — declaration table 2026-07-26 | Parse-time identity decisions rest on *spelling* rather than on facts the runtime already holds. Two casing tests remain (`char.IsUpper` in `LooksLikeQualifiedDotNetAccess` and `LooksLikePotentialClrTypeName`) deciding whether a dotted name is a CLR type, and 160 hardcoded `Current.Text == "…"` comparisons decide keyword and construct identity. `TS-P2-16` narrowed one such rule but did not remove the guess. The parser cannot do better today because `ToshParser.Parse` receives only source text, while the command, module, and type registries arrive later at `Lowerer.Lower`. | Identity is resolved against a real table rather than inferred from capitalization: either the parser is given the registries, or the decision is deferred to a later phase that has them. Keyword and construct recognition is driven by the generated language-surface registry (`TS-P2-10`) rather than by scattered literal comparisons. A capitalized module and a lowercase CLR type both resolve correctly. |
-| `TS-P2-24` | In progress — paired ownership ready 2026-07-28 | Step 2 of the parser roadmap. Structural questions — where a statement ends, where a pipeline stage divides — are answered by heuristics scattered through the recursive-descent parser, each re-deriving the answer with local lookahead. `LiteParser` decides them once over the whole token stream, with paired delimiter frames so a separator inside a nested construct does not split the enclosing statement. | The parser consumes the lite structure instead of re-deriving it; the `LooksLike*`/`HasTopLevel*` helpers that only answered structural questions are removed; structure agrees with today's parser across the corpus, evidenced by differential tests. |
+| `TS-P2-24` | In progress — exact-owner block consumer 2026-07-28 | Step 2 of the parser roadmap. Structural questions — where a statement ends, where a pipeline stage divides — are answered by heuristics scattered through the recursive-descent parser, each re-deriving the answer with local lookahead. `LiteParser` decides them once over the whole token stream, with paired delimiter frames so a separator inside a nested construct does not split the enclosing statement. Ordinary `ParseBlock` statement paths now consume exact-owner promoted candidates; top-level and stage integration remain. | The parser consumes the lite structure instead of re-deriving it; the `LooksLike*`/`HasTopLevel*` helpers that only answered structural questions are removed; structure agrees with today's parser across the corpus, evidenced by differential tests. |
 | `TS-P2-25` | Complete — paired delimiters 2026-07-28 | Plain `{` overloaded blocks, records, dictionaries, sets, predicates, and specialized grammar groups. Position and content lookahead could silently change its meaning and prevented `LiteParser` from promoting brace-enclosed boundaries without duplicating parser grammar. | Ordinary `{ ... }` is a block; records use `{| ... |}`, dictionaries `{% ... %}`, and sets `{: ... :}` with six real delimiter tokens. Specialized parser-owned braces stay plain. Literal dispatch uses the opener alone; legacy `LooksLike*` and generic brace collection parsing are removed. Exact-owner boundary promotion, corpus/spec/tooling migration, targeted recovery diagnostics, rebuilt PDFs, and focused tests land together. |
 
 **Implementation note for `TS-P2-11` (July 25 review recommendation).** The
@@ -591,6 +593,12 @@ These mismatches should be repaired alongside their owning work item:
 - `LiteParser` pairs ordered delimiters and records an exact owning
   opener for each candidate boundary. Only a parser-proven block opener
   may promote its candidates; specialized braces remain unpromoted.
+- Delimiter recovery is directional, not family-interchangeable. A paired
+  closer may unwind malformed inner frames only to reach its own exact
+  opener. Plain `}` may terminate the nearest paired literal as a
+  diagnosed recovery substitution, matching the recursive parser, but
+  must not skip that literal to close a deeper ordinary block. A
+  mismatched paired closer never closes an unrelated literal.
 - File `TS-P3-08` for parser-owned typed structural regions shared by
   parsing, formatting, and language services. Do not evolve the
   structural pass into a second brace grammar.
@@ -2063,8 +2071,9 @@ accessors retain their existing role.
   re-enable them. An independent review caught two recovery defects
   before closure — a deeper exact closer could be lost behind a
   mismatched frame, and a multiline pipeline stage could be promoted as
-  a statement. Exact-closer-first unwinding and owner-scoped pipeline
-  state now cover both.
+  a statement. Paired-exact-closer-first unwinding and owner-scoped
+  pipeline state now cover both; the plain-`}` recovery exception is
+  refined in the `TS-P2-24` entry below.
 - **Stage 4 — tooling and contract.** CLI/Tome colorizers, LSP semantic
   tokens, VS Code TextMate/configuration, and GtkSourceView recognize the
   paired delimiters. The editor audit also found and fixed a pre-existing
@@ -2089,3 +2098,50 @@ is not counted: its post-build parity target fanned out nested MSBuild
 workers, and it was cancelled at the user's direction as memory began to
 grow. The full suite was not run, in accordance with the `TS-P1-08`
 operational note above.
+
+### July 28, 2026 — Exact-owner block boundary consumption (TS-P2-24)
+
+The completed paired-delimiter work was first checkpointed as commit
+`48499e3`. The next parser-roadmap slice then connected the recursive
+parser to the structural candidates prepared by `LiteParser`.
+
+- `InternalParser` computes candidate boundaries once and indexes them by
+  token position. `ParseBlock` captures the exact opening-brace token
+  before consuming it and maintains a nested owner stack.
+- The `ParseBlock` separator and recovery paths accept a structural
+  boundary only when its `OwnerOpenTokenIndex` matches the active block.
+  Grammar-local command, pipeline, grouping, literal, and specialized
+  brace separators deliberately retain their existing rules in this
+  slice; making them inherit an outer block owner changed nested command
+  substitution behavior and was rejected during review.
+- Block recovery now mirrors top-level recovery: it scans only when
+  statement parsing made no progress, and any structural recovery scan
+  consumes the offending token before stopping at the next promoted
+  boundary. This preserves a later same-line declaration instead of
+  discarding it.
+- Review found four defects before integration: multiline pipe-forward
+  (`|>`) cleared structural pending-stage state at its adjacent `>` token;
+  both recursive-parser pipe-forward branches skipped their post-stage
+  statement-boundary check; `LiteParser.Parse` treated `>` as a stage
+  opener; and repeated unmatched closers rescanned the entire delimiter
+  stack quadratically. Pipe-forward is now one structural separator and
+  observes the following statement boundary in both parser paths.
+  Closing-kind counts make unsuccessful recovery lookup constant-time
+  while successful unwinding remains amortized linear.
+- A further recovery review rejected brace-family interchangeability.
+  Exact paired closers no longer close unrelated literals. Plain `}` is
+  the sole substitution: it recovers the nearest brace region, so
+  `{| value = 1 }` can be diagnosed and resumed without also popping an
+  enclosing function block.
+- Differential coverage pins newline and explicit boundaries, ordinary
+  and pipe-forward continuation, independent nested owners, doc-comment
+  starts, specialized class-member separators inside a function,
+  same-line declaration recovery, and the repeated-unmatched-closer path.
+
+Validation remains bounded by the `TS-P1-08` operational note. A
+single-worker, 2 GB-capped compile of `Tosh.Language` succeeded with zero
+warnings and errors; the test project then compiled with project
+reference builds and all post-build fan-out disabled, also with zero
+warnings and errors. No tests were executed. Next: consume top-level
+`LiteScript` statement/stage ranges, then retire only the structural
+lookahead helpers proven redundant by the differential corpus.
