@@ -1,3 +1,4 @@
+using Tosh.Language;
 using Tosh.Runtime;
 using System.Globalization;
 using System.Numerics;
@@ -14,6 +15,60 @@ public sealed class ObjectFormatterTests
         Assert.Equal("true", ToshValueFormatter.Format(true));
         Assert.Equal("Object[] [ 1, 2 ]", ToshValueFormatter.Format(new object?[] { 1, 2 }));
         Assert.Equal("ToastColor.Green", ToshValueFormatter.Format(ToastColor.Green));
+    }
+
+    [Theory]
+    [InlineData("[1, 2]", "array<int>")]
+    [InlineData("{: 1, 2 :}", "set")]
+    [InlineData("(1, 2)", "tuple")]
+    public async Task Shell_type_descriptors_display_as_their_shell_type_name(
+        string literal,
+        string expectedName)
+    {
+        // TS-P1-23. Giving BuiltInShellTypeDefinition a ToString fixed the paths
+        // that stringify a descriptor — concatenation, the table header — but not
+        // the structural ones. A descriptor exposes Name, FullName, Namespace and
+        // the rest as ordinary readable properties, so the formatter's
+        // record-field branch claimed it first and interpolation rendered
+        // `{ Name = "array<int>", FullName = ..., ... }` instead of `array<int>`.
+        //
+        // Interpolation is the path most likely to be used to show a type, so it
+        // is asserted alongside the nested cases rather than the root one.
+        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+
+        var direct = await engine.ExecuteToListAsync(
+            $$"""
+            var v = {{literal}}
+            var t = type-of $v
+            echo $"{$t}"
+            """);
+        Assert.Equal(expectedName, Assert.Single(direct)?.ToString());
+
+        var nested = await engine.ExecuteToListAsync(
+            $$"""
+            var v = {{literal}}
+            var r = { kind = (type-of $v) }
+            echo $"{$r}"
+            """);
+        Assert.Equal($"{{ kind = {expectedName} }}", Assert.Single(nested)?.ToString());
+    }
+
+    [Fact]
+    public async Task Clr_type_values_are_unaffected_by_the_shell_descriptor_rule()
+    {
+        // The other half of the TS-P1-23 acceptance: a CLR value still reports its
+        // CLR type, so the descriptor rule must not capture System.Type.
+        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+
+        var results = await engine.ExecuteToListAsync(
+            """
+            echo $"{(type-of 5)}"
+            echo $"{(type-of "s")}"
+            """);
+
+        Assert.Equal(
+            ["System.Int32", "System.String"],
+            results.Select(value => value?.ToString()));
     }
 
     [Fact]

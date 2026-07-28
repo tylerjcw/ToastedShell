@@ -397,7 +397,7 @@ closed.
 | `TS-P1-20` | Complete — 2026-07-26 | A compiled multi-stage pipeline in value context never applied the interpreter's single-value subexpression rule: `var n = ([1, 2, 3] \| count)` produced a one-element `List<object>` rather than `3`, and a pipeline yielding several values returned a list silently where the interpreter raises `tosh.runtime.subexpression_requires_single_value`. Single-stage value pipelines already collapsed through `InvokeValue`, so the two shapes disagreed inside the host itself. Found while validating `TS-P1-05`. | Value-context pipelines collapse identically in both modes (none → `null`, one → the item, several → the shared diagnostic); iteration sources still receive every item; literal, variable, and command seeds behave alike; conformance rows and differential regressions cover each shape. |
 | `TS-P1-21` | Complete — 2026-07-26 | A parameter default on a class method or constructor cannot reference `$this`: `func m(a, b = $this.V)` fails with `tosh.runtime.unknown_variable` because defaults are evaluated during callable binding, before the `this`/`super` bindings are seeded. `TS-P1-05` made this an explicit failure rather than the previous silent null. Needs a recorded decision, not just a fix: an instance method default may clearly see `$this`, but a **constructor** default would observe a partially-constructed instance whose properties have not been initialized yet (base-to-leaf construction binds arguments first), so allowing it exposes uninitialized state while rejecting it makes methods and constructors inconsistent. | A decision-log entry states whether `$this` is in scope for method defaults, constructor defaults, or both; the callable default binder seeds the agreed bindings; the rejected case keeps a targeted diagnostic naming `$this` rather than the generic unknown-variable help; interpreted and compiled modes agree; the specification's default-value semantics section records the rule. |
 | `TS-P1-22` | Complete — 2026-07-26 | `a < b < c` parses left-associatively, so `1 < 2 < 3` compares `true < 3` and silently answers `false`. The accepted decision is real chaining. | `a < b < c` evaluates as `(a < b) and (b < c)` with each operand evaluated once and short-circuit preserved, in interpreted and compiled modes; the parser, binder traversal, type checker, and emitter all handle the new shape; precedence and formatting round-trip. |
-| `TS-P1-23` | Complete — 2026-07-26 | `type-of` yields a shell type descriptor for shell-typed values, but the descriptor rendered as its own CLR class name, so `type-of [1, 2]` reported `Tosh.Runtime.BuiltInShellTypes+BuiltInShellTypeDefinition` instead of the type being asked about. | Displaying a built-in shell type descriptor shows the shell type name; `type-of` reports usable names for lists, records, and other shell-typed values; CLR values are unaffected. |
+| `TS-P1-23` | Complete — 2026-07-26; structural display paths 2026-07-27 | `type-of` yields a shell type descriptor for shell-typed values, but the descriptor rendered as its own CLR class name, so `type-of [1, 2]` reported `Tosh.Runtime.BuiltInShellTypes+BuiltInShellTypeDefinition` instead of the type being asked about. | Displaying a built-in shell type descriptor shows the shell type name; `type-of` reports usable names for lists, records, and other shell-typed values; CLR values are unaffected. |
 | `TS-P1-24` | In progress — refinement cluster converged 2026-07-27 | The interpreter carries sync/async twin methods that are *parallel implementations* rather than delegations, so a semantic fix can land on one surface and silently miss the other. This has happened twice: `OperatorEvaluator.AreEqual` versus `ToshEngine.AreEqualAsync` (`TS-P1-14`/`TS-P1-15`) and `ToshHost.DrainValue` versus `InvokeValue` (`TS-P1-20`). A corrected audit on 2026-07-26 counted 23 truly parallel pairs against 6 that delegate. The refinement cluster, the largest, is now converged. Remaining largest duplications: `ThrowDetailedSingleConstructorMismatch` (55 lines), `TryGetInstanceMember` (51), `ApplyPendingParameterDefaults` (50), `InvokeQualifiedMethod` (47), `ConvertPropertyValue` (44), `TrySetInstanceMember` (43), `SelectBestCallableMatches` (41), `GetInstanceMembers` (38), `ConvertConstructorParameterValue` (35). | Each pair either delegates to one implementation or is removed; a test or analyzer fails when a new parallel sync/async pair is introduced; behaviour is unchanged, evidenced by the existing suite plus the annotated-conversion drift guard. |
 | `TS-P1-25` | Planned | (Filed 2026-07-26 under a duplicate `TS-P1-20`; renumbered 2026-07-27.) The pure compiler profile can report a Tier-1-clean artifact while emitted IL still unconditionally calls `ToshHost.Initialize`/`RegisterCompiledAssembly` from `Main` and `ToshHost.EnterExecutionFrame` from functions, methods, lambdas, and blocks. | A pure artifact contains no metadata references or calls to `Tosh.Compiler.Runtime`, `ToshHost`, or `ToshEngine`; bootstrap is omitted or conditional; recursion guarding uses a stable `Tosh.Runtime` primitive; and a post-emit IL dependency audit fails independently of `RequireTier` diagnostics. |
 
@@ -1822,3 +1822,54 @@ class-cancellation, and compiler-feature-matrix selection 283 passed,
 zero failed; `Tosh.Language` builds with zero warnings. The full suite
 was not run in this session — an earlier attempt exhausted the editor's
 memory — so it remains outstanding for this slice.
+
+### July 27, 2026 — Re-verifying TS-P1-23 across every display path
+
+Asked to confirm the July 26 fix held everywhere rather than only for
+`type-of`, it did not. The item is now genuinely closed.
+
+- What the original fix covered: `BuiltInShellTypeDefinition` gained a
+  `ToString`, which corrected every path that *stringifies* a
+  descriptor — string concatenation, the table header, property access.
+  The `Tosh.Runtime.BuiltInShellTypes+BuiltInShellTypeDefinition` leak
+  the item was filed for was gone from all of them.
+- What it missed: the paths that render *structurally*. A descriptor
+  exposes `Name`, `FullName`, `Namespace` and the rest as ordinary
+  readable properties, so `ObjectFormatter`'s record-field branch
+  claimed it before the `Type` branch could. Interpolation —
+  `echo $"{$t}"`, plausibly the most common way to display a type —
+  produced `{ Name = "array<int>", FullName = "ToSh.array<int>",
+  Namespace = "ToSh", ... }` instead of `array<int>`, as did a
+  descriptor nested in a list or record.
+- Fix: `FormatValue` recognises `IShellNamedType` above the record-field
+  check and renders it as its shell type name, which is the rule the CLR
+  `Type` branch immediately below already applied. CLR values are
+  untouched — `type-of 5` still reports `System.Int32` — because
+  `System.Type` does not implement the shell interface.
+- Verified across list, set, tuple, dict, record, and CLR values in
+  direct, interpolated, nested-in-list, nested-in-record, concatenated,
+  and property-access positions.
+- Method note: the original close was evidenced by `type-of` printing
+  the right thing. One correct output was taken for the whole class of
+  outputs, and the acceptance criterion — "displaying a built-in shell
+  type descriptor shows the shell type name" — was read as satisfied by
+  one display. Enumerating the display paths first would have caught it,
+  and the same habit is what the July 26 note about a filed symptom not
+  being a diagnosis was pointing at.
+
+Coverage: `ObjectFormatterTests` gains
+`Shell_type_descriptors_display_as_their_shell_type_name`, a theory over
+list, set, and tuple asserting both interpolated and nested-in-record
+rendering, and `Clr_type_values_are_unaffected_by_the_shell_descriptor_rule`
+for the other half of the acceptance. Run against the unfixed formatter,
+three of the four cases fail and the CLR case passes, which is the
+expected shape.
+
+Observation for a separate item: `type-of` on a record literal
+(`{ a = 1 }`) reports `table`. That may be intentional, since records
+and single-row tables share a representation, but it reads oddly next to
+`array<int>` and `dict<object, object>`. Not changed here.
+
+Validation: formatter, class, display, type-name, introspection, and
+generic selection 442 passed, zero failed; formatter selection 24
+passed. Full suite still outstanding for this session.

@@ -94,6 +94,21 @@ public sealed class ObjectFormatter
             return FormatFileSystemInfo(fileSystemInfo, options);
         }
 
+        // A shell type descriptor names a type, so displaying one shows that
+        // name — the same rule the CLR `Type` case below applies. This must sit
+        // above the record-field check: a descriptor exposes Name, FullName,
+        // Namespace and friends as ordinary readable properties, so it would
+        // otherwise render as a record dump. Giving the descriptor a `ToString`
+        // fixed the paths that stringify, but not the structural ones, which is
+        // where interpolation and nested rendering go (TS-P1-23).
+        // The cast picks IShellStaticType's ShellTypeName: IShellNamedType
+        // inherits the name from both of its bases, so the reference is
+        // otherwise ambiguous.
+        if (value is IShellNamedType shellType)
+        {
+            return ((IShellStaticType)shellType).ShellTypeName;
+        }
+
         if (ShellRecordUtilities.TryGetFields(value, out var recordFields))
         {
             return FormatRecordFields(recordFields, options, depth, visited);
