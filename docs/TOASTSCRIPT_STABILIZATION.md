@@ -382,7 +382,7 @@ closed.
 | `TS-P1-05` | Complete — 2026-07-26 | Constructor/method defaults become null; free defaults and compiled captures use incompatible scopes. | One callable binder evaluates defaults according to the working decision for functions, methods, and constructors in both execution modes. |
 | `TS-P1-06` | Complete — 2026-07-26 | Unknown/duplicate named arguments are accepted and mixed named/rest calls can drop or wrap positional arguments incorrectly. | Unknown and duplicate names are diagnosed; rest contains only unconsumed positional values in source order. |
 | `TS-P1-07` | Partially complete — defer case 2026-07-25 | The defer-specific loss of values emitted before `return` is addressed; other nested control-flow shapes can still materialize or change streaming behavior. | Previously emitted values stream unchanged; optional return value is final; nested control flow does not alter output semantics or introduce unnecessary materialization. |
-| `TS-P1-08` | Planned | Nested generator statements materialize output, while short-circuit consumers peek a second upstream item. | Nested `yield` streams promptly; `first`/`any` do not evaluate an unnecessary next item; infinite-source tests complete. |
+| `TS-P1-08` | Planned — **severity re-rating proposed: P0** 2026-07-28 | Nested generator statements materialize output, while short-circuit consumers peek a second upstream item. **`take-while` does not short-circuit an infinite generator at all.** `recur (0, 1) func(a, b) => ($a + $b) \| take-while { _ < 100 }` (`LazySequenceTests.Recur_fibonacci_take_while`) should stop at 89; instead it generates Fibonacci without bound. Because the values are arbitrary-precision integers whose digit count grows linearly, total memory grows quadratically: an instrumented run reached **104,741 MB in 57 seconds** and exhausted a 128 GB machine. The sibling `iterate 1 func(x) => ($x * 2) \| take-while { _ <= 64 }` fails instead with `'iterate' operations must produce exactly one value per input item`. | Nested `yield` streams promptly; `first`/`any` do not evaluate an unnecessary next item; **`take-while`/`skip-while` short-circuit without materializing an unbounded upstream**; infinite-source tests complete under a bounded memory cap. |
 | `TS-P1-09` | Planned | Class hierarchy lookup loses generic bindings, inherited overloads, `vital` validation, and private visibility rules. | Recursive hierarchy test matrix covers generic intermediaries, overload sets, required members, private/protected access, and partial statics. |
 | `TS-P1-10` | Planned | Anonymous-record equality depends on dictionary insertion order. | Records with the same names and canonically equal values compare equal regardless of insertion order. |
 | `TS-P1-11` | Planned | `_` in destructuring is bound and overwritten instead of discarding the matched value. | Every `_` target skips without creating or modifying a binding; nested/rest patterns are covered. |
@@ -1957,3 +1957,54 @@ begins a comment, so `#{ a = 1 }` would have lexed as a line comment and
 silently deleted the record. `@{` was then checked against the lexer
 before being proposed — `@(` is already special-cased, and `@` occurs in
 the corpus only inside doc comments.
+
+### July 28, 2026 — `take-while` exhausts system memory (TS-P1-08 reproduction)
+
+Two full-suite runs took down a 128 GB desktop. The first was recorded as an
+environment limit and worked around; that was wrong, and treating it as evidence
+of a defect instead found one immediately.
+
+- Method: full suite serialised (`xUnit.MaxParallelThreads=1`,
+  `ParallelizeTestCollections=false`) with total RSS across dotnet processes
+  sampled every second, so a peak attributes to one test rather than to whatever
+  collections happened to be co-resident.
+- Result: flat at **3,867 MB for 900 seconds** across 597 passing tests, then a
+  steady climb beginning one second after the last test output, reaching
+  **104,741 MB in 57 seconds**. No further test ever reported.
+- Attribution: the last completed test was
+  `LazySequenceTests.Iterate_with_take_while`; the next by source order is
+  `Recur_fibonacci_take_while`,
+  `recur (0, 1) func(a, b) => ($a + $b) | take-while { _ < 100 }`.
+- Mechanism: `take-while` never short-circuits the infinite `recur`. It should
+  stop at 89. Because Fibonacci values are arbitrary-precision integers whose
+  digit count grows linearly, total allocation grows quadratically — which is
+  the curve observed.
+- Corroboration: `Iterate_with_take_while` pairs the same `take-while` with
+  `iterate` and fails rather than hangs, reporting `'iterate' operations must
+  produce exactly one value per input item`. Two failure modes, one common
+  factor.
+
+**Severity.** `TS-P1-08` is filed as a streaming-efficiency concern — "`first`/
+`any` do not evaluate an unnecessary next item". It is not. It exhausts system
+memory and takes the machine down, which is the severity class of `TS-P0-07`
+(stack overflow killing the process), and that was P0. A re-rating to P0 is
+proposed on the item rather than applied, since moving an item between priority
+tables is a judgement call for the programme owner.
+
+**Open question, deliberately not answered here.** The suite was recorded green
+at 3,197 on July 26, so `Iterate_with_take_while` passed then and fails now.
+Whether the recent commits regressed it or parallel scheduling had been masking
+it needs a bisect. That bisect must run under a hard memory cap.
+
+**Operational note.** The full suite is not currently usable as a verification
+gate. Until this is fixed, run it — and any bisect of it — inside a bounded
+cgroup, so the test fails instead of the machine:
+
+```
+systemd-run --user --scope -p MemoryMax=4G -- dotnet test …
+```
+
+Method note, and the second time in two days: an unfinished measurement was
+reported as a result. At 11 minutes this run looked "well-behaved at 4 GB"; its
+failure mode began at 15. A run that has not finished is not evidence about the
+part that has not run.
