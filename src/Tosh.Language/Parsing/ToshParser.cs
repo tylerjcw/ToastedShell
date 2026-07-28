@@ -39,6 +39,47 @@ public static class ToshParser
         };
     }
 
+    /// <summary>
+    /// Shared command/function-reference name predicate. Structural passes
+    /// use this same rule so an adjacent <c>&amp;name</c> is not classified
+    /// differently from the recursive parser.
+    /// </summary>
+    internal static bool IsValidCommandName(string text)
+    {
+        if (string.IsNullOrEmpty(text))
+        {
+            return false;
+        }
+
+        if (!(char.IsLetter(text[0]) || text[0] == '_'))
+        {
+            return false;
+        }
+
+        for (var index = 1; index < text.Length; index++)
+        {
+            var character = text[index];
+
+            if (character == '-')
+            {
+                // No trailing hyphen, no consecutive hyphens.
+                if (index == text.Length - 1 || text[index + 1] == '-')
+                {
+                    return false;
+                }
+
+                continue;
+            }
+
+            if (!(char.IsLetterOrDigit(character) || character == '_'))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     /// <param name="context">
     /// What the host knows about commands, modules, and types
     /// (TS-P2-23). Omitting it parses purely syntactically, which is what
@@ -78,6 +119,13 @@ public static class ToshParser
 
     private sealed class InternalParser
     {
+        private enum PendingPipelineSeparator
+        {
+            None,
+            Pipe,
+            PipeForward,
+        }
+
         private readonly string _sourceName;
         private readonly string _sourceText;
         private readonly IReadOnlyList<SyntaxToken> _tokens;
@@ -86,6 +134,8 @@ public static class ToshParser
         private readonly List<SyntaxDiagnostic> _diagnostics = [];
         private readonly HashSet<string> _userFunctionNames;
         private readonly IReadOnlyDictionary<int, LiteBoundary> _liteBoundariesByTokenIndex;
+        private readonly HashSet<int> _liteTopLevelStatementStartTokenIndices;
+        private readonly IReadOnlyDictionary<int, LiteSeparatorKind> _liteTopLevelSeparatorsByEndTokenIndex;
         private readonly Stack<int> _statementBlockOpenTokenIndices = [];
 
         /// <summary>
@@ -99,6 +149,7 @@ public static class ToshParser
         private readonly ParseContext _context;
 
         private int _position;
+        private bool _isParsingTopLevelStatement;
         private bool _stopRefinementAtEquals;
 
         public InternalParser(
@@ -118,6 +169,16 @@ public static class ToshParser
             _liteBoundariesByTokenIndex = LiteParser
                 .CandidateBoundaries(tokens, sourceText)
                 .ToDictionary(boundary => boundary.TokenIndex);
+            var liteScript = LiteParser.Parse(tokens, sourceText);
+            _liteTopLevelStatementStartTokenIndices = liteScript
+                .Statements
+                .Where(statement => statement.StartIndex >= 0)
+                .Select(statement => statement.StartIndex)
+                .ToHashSet();
+            _liteTopLevelSeparatorsByEndTokenIndex = liteScript
+                .Statements
+                .SelectMany(statement => statement.Stages)
+                .ToDictionary(stage => stage.EndIndex, stage => stage.Separator);
             var declarations = ScanDeclarations(tokens, sourceText);
             _userFunctionNames = declarations.Functions;
             _declaredModuleNames = declarations.Modules;
@@ -278,7 +339,18 @@ public static class ToshParser
                 }
 
                 var positionBeforeStatement = _position;
-                statements.Add(ParseStatement(stopAtSemicolon: true));
+                StatementSyntax statement;
+                _isParsingTopLevelStatement = true;
+                try
+                {
+                    statement = ParseStatement(stopAtSemicolon: true);
+                }
+                finally
+                {
+                    _isParsingTopLevelStatement = false;
+                }
+
+                statements.Add(statement);
 
                 if (Current.Kind == SyntaxTokenKind.Semicolon)
                 {
@@ -291,7 +363,8 @@ public static class ToshParser
                     continue;
                 }
 
-                if (HasImplicitStatementBoundaryAfter(statements[^1].Span.End))
+                if (_position != positionBeforeStatement &&
+                    IsCurrentTopLevelLiteStatementStart())
                 {
                     continue;
                 }
@@ -1277,7 +1350,7 @@ public static class ToshParser
                     continue;
                 }
 
-                if (HasImplicitStatementBoundaryAfter(function.Span.End))
+                if (HasStatementBoundaryAfter(function.Span.End))
                 {
                     continue;
                 }
@@ -1623,7 +1696,7 @@ public static class ToshParser
 
             if (IsPipelineTerminator(Current.Kind, stopAtCloseParen, stopAtCloseBrace, stopAtSemicolon) ||
                 Current.Kind == SyntaxTokenKind.Pipe ||
-                HasImplicitStatementBoundaryAfter(throwToken.Span.End))
+                HasStatementBoundaryAfter(throwToken.Span.End))
             {
                 return TryWrapPostfixConditional(new ThrowStatementSyntax(null, throwToken.Span));
             }
@@ -2016,7 +2089,7 @@ public static class ToshParser
                     continue;
                 }
 
-                if (HasImplicitStatementBoundaryAfter(arm.Span.End))
+                if (HasStatementBoundaryAfter(arm.Span.End))
                 {
                     continue;
                 }
@@ -2300,7 +2373,7 @@ public static class ToshParser
 
             if (IsPipelineTerminator(Current.Kind, stopAtCloseParen, stopAtCloseBrace, stopAtSemicolon) ||
                 Current.Kind == SyntaxTokenKind.Pipe ||
-                HasImplicitStatementBoundaryAfter(returnToken.Span.End))
+                HasStatementBoundaryAfter(returnToken.Span.End))
             {
                 return TryWrapPostfixConditional(new ReturnStatementSyntax(null, returnToken.Span));
             }
@@ -2326,7 +2399,7 @@ public static class ToshParser
 
             if (IsPipelineTerminator(Current.Kind, stopAtCloseParen, stopAtCloseBrace, stopAtSemicolon) ||
                 Current.Kind == SyntaxTokenKind.Pipe ||
-                HasImplicitStatementBoundaryAfter(yieldToken.Span.End))
+                HasStatementBoundaryAfter(yieldToken.Span.End))
             {
                 return TryWrapPostfixConditional(new YieldStatementSyntax(null, yieldToken.Span));
             }
@@ -2374,7 +2447,7 @@ public static class ToshParser
                 return inner;
             }
 
-            if (HasImplicitStatementBoundaryAfter(inner.Span.End))
+            if (HasStatementBoundaryAfter(inner.Span.End))
             {
                 return inner;
             }
@@ -3385,7 +3458,7 @@ public static class ToshParser
                     continue;
                 }
 
-                if (HasImplicitStatementBoundaryAfter(memberEnd))
+                if (HasStatementBoundaryAfter(memberEnd))
                 {
                     continue;
                 }
@@ -3955,7 +4028,7 @@ public static class ToshParser
                     continue;
                 }
 
-                if (HasImplicitStatementBoundaryAfter(member.Span.End))
+                if (HasStatementBoundaryAfter(member.Span.End))
                 {
                     continue;
                 }
@@ -5904,7 +5977,7 @@ public static class ToshParser
                        !LooksLikeRedirectionOperator() &&
                        !LooksLikeInputRedirection())
                 {
-                    if (HasImplicitStatementBoundaryAfter(lastConsumedEnd))
+                    if (HasStatementBoundaryAfter(lastConsumedEnd))
                     {
                         break;
                     }
@@ -6077,7 +6150,7 @@ public static class ToshParser
                     Current.Kind != SyntaxTokenKind.Ampersand &&
                     !LooksLikeRedirectionOperator() &&
                     !LooksLikeInputRedirection() &&
-                    !(expressionArgument is not null && HasImplicitStatementBoundaryAfter(expressionArgument.Span.End)))
+                    !(expressionArgument is not null && HasStatementBoundaryAfter(expressionArgument.Span.End)))
                 {
                     _diagnostics.Add(new SyntaxDiagnostic(
                         Code: "tosh.parser.unexpected_get_expression_tokens",
@@ -6096,7 +6169,7 @@ public static class ToshParser
                    !LooksLikeRedirectionOperator() &&
                    !LooksLikeInputRedirection())
             {
-                if (HasImplicitStatementBoundaryAfter(lastConsumedEnd))
+                if (HasStatementBoundaryAfter(lastConsumedEnd))
                 {
                     break;
                 }
@@ -6133,7 +6206,7 @@ public static class ToshParser
             while (arguments.Count < expressionArgumentIndex &&
                    !IsCurrentItemExpressionCommandBoundary(stopAtCloseParen, stopAtCloseBrace, stopAtSemicolon))
             {
-                if (HasImplicitStatementBoundaryAfter(lastConsumedEnd))
+                if (HasStatementBoundaryAfter(lastConsumedEnd))
                 {
                     break;
                 }
@@ -6169,7 +6242,7 @@ public static class ToshParser
                 // `assert <block> <message>` accepts an optional trailing message argument.
                 if (string.Equals(commandName, "assert", StringComparison.OrdinalIgnoreCase) &&
                     !IsCurrentItemExpressionCommandBoundary(stopAtCloseParen, stopAtCloseBrace, stopAtSemicolon) &&
-                    !HasImplicitStatementBoundaryAfter(blockArgument.Span.End))
+                    !HasStatementBoundaryAfter(blockArgument.Span.End))
                 {
                     var messageArgument = ParseArgument(commandName);
                     if (messageArgument is not null)
@@ -6179,7 +6252,7 @@ public static class ToshParser
                 }
 
                 if (!IsCurrentItemExpressionCommandBoundary(stopAtCloseParen, stopAtCloseBrace, stopAtSemicolon) &&
-                    !HasImplicitStatementBoundaryAfter(arguments[^1].Span.End))
+                    !HasStatementBoundaryAfter(arguments[^1].Span.End))
                 {
                     AddUnexpectedCurrentItemExpressionTokensDiagnostic(commandName, Current.Span);
                     SkipToStageBoundary(stopAtCloseParen, stopAtCloseBrace, stopAtSemicolon);
@@ -6199,7 +6272,7 @@ public static class ToshParser
             if (string.Equals(commandName, "assert", StringComparison.OrdinalIgnoreCase) &&
                 expressionArgument is not null &&
                 !IsCurrentItemExpressionCommandBoundary(stopAtCloseParen, stopAtCloseBrace, stopAtSemicolon) &&
-                !HasImplicitStatementBoundaryAfter(expressionArgument.Span.End))
+                !HasStatementBoundaryAfter(expressionArgument.Span.End))
             {
                 var messageArgument = ParseArgument(commandName);
                 if (messageArgument is not null)
@@ -6209,7 +6282,7 @@ public static class ToshParser
             }
 
             if (!IsCurrentItemExpressionCommandBoundary(stopAtCloseParen, stopAtCloseBrace, stopAtSemicolon) &&
-                !(arguments.Count > 0 && HasImplicitStatementBoundaryAfter(arguments[^1].Span.End)))
+                !(arguments.Count > 0 && HasStatementBoundaryAfter(arguments[^1].Span.End)))
             {
                 AddUnexpectedCurrentItemExpressionTokensDiagnostic(commandName, Current.Span);
                 SkipToStageBoundary(stopAtCloseParen, stopAtCloseBrace, stopAtSemicolon);
@@ -8037,7 +8110,7 @@ public static class ToshParser
                     continue;
                 }
 
-                if (value is not null && HasImplicitStatementBoundaryAfter(value.Span.End))
+                if (value is not null && HasStatementBoundaryAfter(value.Span.End))
                 {
                     continue;
                 }
@@ -8120,7 +8193,7 @@ public static class ToshParser
                     {
                         NextToken();
                     }
-                    else if (HasImplicitStatementBoundaryAfter(spread.Span.End))
+                    else if (HasStatementBoundaryAfter(spread.Span.End))
                     {
                         // newline separator
                     }
@@ -8162,7 +8235,7 @@ public static class ToshParser
                     {
                         NextToken();
                     }
-                    else if (compValue is not null && HasImplicitStatementBoundaryAfter(compValue.Span.End))
+                    else if (compValue is not null && HasStatementBoundaryAfter(compValue.Span.End))
                     {
                         // newline separator
                     }
@@ -8226,7 +8299,7 @@ public static class ToshParser
                     continue;
                 }
 
-                if (value is not null && HasImplicitStatementBoundaryAfter(value.Span.End))
+                if (value is not null && HasStatementBoundaryAfter(value.Span.End))
                 {
                     continue;
                 }
@@ -9442,7 +9515,7 @@ public static class ToshParser
                     continue;
                 }
 
-                if (expression is not null && HasImplicitStatementBoundaryAfter(expression.Span.End))
+                if (expression is not null && HasStatementBoundaryAfter(expression.Span.End))
                 {
                     continue;
                 }
@@ -9492,14 +9565,83 @@ public static class ToshParser
             List<RedirectionSyntax>? redirections = null;
             InputRedirectionSyntax? inputRedirection = null;
             var isBackground = false;
+            var pipelineStartPosition = _position;
+            var pendingSeparator = PendingPipelineSeparator.None;
+            SyntaxToken? pendingSeparatorToken = null;
 
             while (!IsPipelineTerminator(Current.Kind, untilCloseParen, untilCloseBrace, untilSemicolon, untilOpenBrace))
             {
+                // A LiteScript boundary is a candidate until the recursive
+                // grammar has made progress. This guard therefore cannot
+                // split a required operand or parser-owned continuation at
+                // the pipeline's first token, but it does stop a malformed
+                // stage from consuming the next proven top-level statement.
+                if (_isParsingTopLevelStatement &&
+                    _position != pipelineStartPosition &&
+                    IsCurrentTopLevelLiteStatementStart())
+                {
+                    break;
+                }
+
+                // A separator that reaches the top of the loop has no stage
+                // before it (leading or consecutive). Consume `|>` as one
+                // structural unit and keep at most the newest separator as
+                // recovery state for the following valid command.
+                if (Current.Kind == SyntaxTokenKind.Pipe)
+                {
+                    var isPipeForward = IsCurrentPipeForwardSeparator();
+                    var separatorToken = NextToken();
+                    if (isPipeForward)
+                    {
+                        NextToken(); // consume the adjacent >
+                    }
+
+                    if (pendingSeparator != PendingPipelineSeparator.None)
+                    {
+                        AddMissingPipelineStageDiagnostic(
+                            pendingSeparator,
+                            pendingSeparatorToken!);
+                    }
+                    else
+                    {
+                        _diagnostics.Add(new SyntaxDiagnostic(
+                            Code: "tosh.parser.unexpected_pipeline_separator",
+                            Title: "Unexpected pipeline separator.",
+                            Span: separatorToken.Span,
+                            Label: "remove this separator or put a stage before it"));
+                    }
+
+                    if (stages.Count > 0)
+                    {
+                        pendingSeparator = isPipeForward
+                            ? PendingPipelineSeparator.PipeForward
+                            : PendingPipelineSeparator.Pipe;
+                        pendingSeparatorToken = separatorToken;
+                    }
+                    else
+                    {
+                        pendingSeparator = PendingPipelineSeparator.None;
+                        pendingSeparatorToken = null;
+                    }
+
+                    continue;
+                }
+
                 if (Current.Kind == SyntaxTokenKind.Ampersand)
                 {
+                    if (pendingSeparator != PendingPipelineSeparator.None)
+                    {
+                        AddMissingPipelineStageDiagnostic(
+                            pendingSeparator,
+                            pendingSeparatorToken!);
+                        pendingSeparator = PendingPipelineSeparator.None;
+                        pendingSeparatorToken = null;
+                    }
+
                     // &name at the start of a pipeline is a function reference expression, not background.
-                    if (stages.Count == 0 && allowExpressionStart &&
-                        Peek(1).Kind == SyntaxTokenKind.Bareword && IsValidCommandName(Peek(1).Text))
+                    if (stages.Count == 0 &&
+                        allowExpressionStart &&
+                        LooksLikeFunctionReferenceArgument())
                     {
                         // Fall through to let ParsePipelineStage handle it as an expression.
                     }
@@ -9522,62 +9664,6 @@ public static class ToshParser
                     }
                 }
 
-                if (Current.Kind == SyntaxTokenKind.Pipe &&
-                    !(Peek(1).Kind == SyntaxTokenKind.GreaterThan && Current.Span.End == Peek(1).Span.Start))
-                {
-                    _diagnostics.Add(new SyntaxDiagnostic(
-                        Code: "tosh.parser.unexpected_pipeline_separator",
-                        Title: "Unexpected pipeline separator.",
-                        Span: Current.Span,
-                        Label: "remove this '|' or put a stage before it"));
-                    NextToken();
-                    continue;
-                }
-
-                // |> pipe-forward at the top of the loop (for chained |> operators)
-                if (stages.Count > 0 && Current.Kind == SyntaxTokenKind.Pipe &&
-                    Peek(1).Kind == SyntaxTokenKind.GreaterThan &&
-                    Current.Span.End == Peek(1).Span.Start)
-                {
-                    var pipeToken = NextToken();
-                    NextToken(); // consume >
-
-                    if (IsPipelineTerminator(Current.Kind, untilCloseParen, untilCloseBrace, untilSemicolon))
-                    {
-                        _diagnostics.Add(new SyntaxDiagnostic(
-                            Code: "tosh.parser.missing_command_after_pipe_forward",
-                            Title: "A command is required after '|>'.",
-                            Span: pipeToken.Span,
-                            Label: "a pipeline cannot end here",
-                            Help: "add a command after '|>'."));
-                    }
-                    else
-                    {
-                        var nextStage = ParsePipelineStage(
-                            allowExpressionStage: false,
-                            stopAtCloseParen: untilCloseParen,
-                            stopAtCloseBrace: untilCloseBrace,
-                            stopAtSemicolon: untilSemicolon);
-
-                        if (nextStage is CommandSyntax cmd)
-                        {
-                            stages.Add(new PipeForwardStageSyntax(cmd, cmd.Span));
-                        }
-                        else if (nextStage is not null)
-                        {
-                            stages.Add(nextStage);
-                        }
-
-                        if (nextStage is not null &&
-                            HasImplicitStatementBoundaryAfter(nextStage.Span.End))
-                        {
-                            break;
-                        }
-                    }
-
-                    continue;
-                }
-
                 var stage = ParsePipelineStage(
                     allowExpressionStage: allowExpressionStart && stages.Count == 0,
                     stopAtCloseParen: untilCloseParen,
@@ -9586,7 +9672,13 @@ public static class ToshParser
 
                 if (stage is not null)
                 {
-                    stages.Add(stage);
+                    stages.Add(
+                        pendingSeparator == PendingPipelineSeparator.PipeForward &&
+                        stage is CommandSyntax command
+                            ? new PipeForwardStageSyntax(command, command.Span)
+                            : stage);
+                    pendingSeparator = PendingPipelineSeparator.None;
+                    pendingSeparatorToken = null;
                 }
 
                 // Check for redirection operators after a pipeline stage
@@ -9622,72 +9714,43 @@ public static class ToshParser
 
                 if (Current.Kind == SyntaxTokenKind.Ampersand)
                 {
+                    if (pendingSeparator != PendingPipelineSeparator.None)
+                    {
+                        AddMissingPipelineStageDiagnostic(
+                            pendingSeparator,
+                            pendingSeparatorToken!);
+                        pendingSeparator = PendingPipelineSeparator.None;
+                        pendingSeparatorToken = null;
+                    }
+
                     NextToken();
                     isBackground = true;
                     break;
                 }
 
-                // |> pipe-forward operator — passes previous value as first argument
-                if (Current.Kind == SyntaxTokenKind.Pipe && Peek(1).Kind == SyntaxTokenKind.GreaterThan &&
-                    Current.Span.End == Peek(1).Span.Start)
-                {
-                    var pipeToken = NextToken();
-                    NextToken(); // consume >
-
-                    if (IsPipelineTerminator(Current.Kind, untilCloseParen, untilCloseBrace, untilSemicolon))
-                    {
-                        _diagnostics.Add(new SyntaxDiagnostic(
-                            Code: "tosh.parser.missing_command_after_pipe_forward",
-                            Title: "A command is required after '|>'.",
-                            Span: pipeToken.Span,
-                            Label: "a pipeline cannot end here",
-                            Help: "add a command after '|>'."));
-                    }
-                    else
-                    {
-                        var nextStage = ParsePipelineStage(
-                            allowExpressionStage: false,
-                            stopAtCloseParen: untilCloseParen,
-                            stopAtCloseBrace: untilCloseBrace,
-                            stopAtSemicolon: untilSemicolon);
-
-                        if (nextStage is CommandSyntax cmd)
-                        {
-                            stages.Add(new PipeForwardStageSyntax(cmd, cmd.Span));
-                        }
-                        else if (nextStage is not null)
-                        {
-                            stages.Add(nextStage);
-                        }
-
-                        if (nextStage is not null &&
-                            HasImplicitStatementBoundaryAfter(nextStage.Span.End))
-                        {
-                            break;
-                        }
-                    }
-
-                    continue;
-                }
-
                 if (Current.Kind == SyntaxTokenKind.Pipe)
                 {
-                    var pipe = NextToken();
-
-                    if (IsPipelineTerminator(Current.Kind, untilCloseParen, untilCloseBrace, untilSemicolon))
+                    if (pendingSeparator != PendingPipelineSeparator.None)
                     {
-                        _diagnostics.Add(new SyntaxDiagnostic(
-                            Code: "tosh.parser.missing_command_after_pipe",
-                            Title: "A command is required after '|'.",
-                            Span: pipe.Span,
-                            Label: "a pipeline cannot end here",
-                            Help: "add another command after the pipe."));
+                        AddMissingPipelineStageDiagnostic(
+                            pendingSeparator,
+                            pendingSeparatorToken!);
                     }
 
+                    var isPipeForward = IsCurrentPipeForwardSeparator();
+                    pendingSeparatorToken = NextToken();
+                    if (isPipeForward)
+                    {
+                        NextToken(); // consume the adjacent >
+                    }
+
+                    pendingSeparator = isPipeForward
+                        ? PendingPipelineSeparator.PipeForward
+                        : PendingPipelineSeparator.Pipe;
                     continue;
                 }
 
-                if (stage is not null && HasImplicitStatementBoundaryAfter(stage.Span.End))
+                if (stage is not null && HasStatementBoundaryAfter(stage.Span.End))
                 {
                     break;
                 }
@@ -9718,7 +9781,33 @@ public static class ToshParser
                 }
             }
 
+            if (pendingSeparator != PendingPipelineSeparator.None)
+            {
+                AddMissingPipelineStageDiagnostic(
+                    pendingSeparator,
+                    pendingSeparatorToken!);
+            }
+
             return new PipelineSyntax(stages, redirections, inputRedirection, isBackground);
+        }
+
+        private void AddMissingPipelineStageDiagnostic(
+            PendingPipelineSeparator separator,
+            SyntaxToken separatorToken)
+        {
+            var isPipeForward = separator == PendingPipelineSeparator.PipeForward;
+            _diagnostics.Add(new SyntaxDiagnostic(
+                Code: isPipeForward
+                    ? "tosh.parser.missing_command_after_pipe_forward"
+                    : "tosh.parser.missing_command_after_pipe",
+                Title: isPipeForward
+                    ? "A command is required after '|>'."
+                    : "A command is required after '|'.",
+                Span: separatorToken.Span,
+                Label: "a pipeline cannot end here",
+                Help: isPipeForward
+                    ? "add a command after '|>'."
+                    : "add another command after the pipe."));
         }
 
         private void SkipToStageBoundary(bool untilCloseParen, bool untilCloseBrace, bool untilSemicolon)
@@ -9771,11 +9860,70 @@ public static class ToshParser
                    LiteParser.IsBoundaryOwnedByBlock(boundary, blockOpenTokenIndex);
         }
 
-        private bool HasImplicitStatementBoundaryAfter(int previousEnd)
+        private bool IsCurrentTopLevelLiteStatementStart()
         {
+            return _liteTopLevelStatementStartTokenIndices.Contains(_position);
+        }
+
+        private bool TryGetCurrentTopLevelLiteSeparator(
+            out LiteSeparatorKind separator)
+        {
+            // Assigned up front because the `&&` short-circuits: when this is not
+            // a top-level statement, TryGetValue never runs. `EndOfInput` is a
+            // real member rather than a sentinel, so it must not be read unless
+            // this returns true — both call sites guard on the result.
+            separator = default;
+
+            return _isParsingTopLevelStatement &&
+                   _liteTopLevelSeparatorsByEndTokenIndex.TryGetValue(
+                       _position,
+                       out separator);
+        }
+
+        private static bool IsLiteStatementEndingSeparator(
+            LiteSeparatorKind separator)
+        {
+            return separator is LiteSeparatorKind.LineBreak
+                or LiteSeparatorKind.Semicolon
+                or LiteSeparatorKind.Background
+                or LiteSeparatorKind.EndOfInput;
+        }
+
+        private bool IsCurrentPipeForwardSeparator()
+        {
+            if (Current.Kind != SyntaxTokenKind.Pipe)
+            {
+                return false;
+            }
+
+            if (TryGetCurrentTopLevelLiteSeparator(out var separator))
+            {
+                return separator == LiteSeparatorKind.PipeForward;
+            }
+
+            return Peek(1).Kind == SyntaxTokenKind.GreaterThan &&
+                   Current.Span.End == Peek(1).Span.Start;
+        }
+
+        private bool HasStatementBoundaryAfter(int previousEnd)
+        {
+            // Top-level structural ranges are candidates rather than a
+            // one-to-one semantic parse. Only consult them while the
+            // recursive parser is actively consuming a top-level
+            // statement; grammar-owned continuations that it has already
+            // consumed are necessarily behind Current.
+            if (_isParsingTopLevelStatement &&
+                (IsCurrentTopLevelLiteStatementStart() ||
+                 (TryGetCurrentTopLevelLiteSeparator(out var separator) &&
+                  IsLiteStatementEndingSeparator(separator))))
+            {
+                return true;
+            }
+
             return Current.Kind != SyntaxTokenKind.EndOfFile &&
                    HasLineBreakBetween(previousEnd, Current.Span.Start) &&
-                   LooksLikeStatementStart(Current);
+                   (Current.Kind == SyntaxTokenKind.DocComment ||
+                    ToshParser.IsExpressionStartToken(Current.Kind));
         }
 
         private bool HasLineBreakBetween(int start, int end)
@@ -9797,11 +9945,6 @@ public static class ToshParser
 
             return false;
         }
-
-        private bool LooksLikeStatementStart(SyntaxToken token)
-            => token.Kind == SyntaxTokenKind.DocComment || ToshParser.IsExpressionStartToken(token.Kind);
-
-
 
         /// <summary>
         /// If <c>_tokens[startIndex]</c> is a bareword adjacent (no
@@ -10851,7 +10994,7 @@ public static class ToshParser
                 SyntaxTokenKind.OpenBracePipe or
                 SyntaxTokenKind.OpenBracePercent or
                 SyntaxTokenKind.InterpolatedString => true,
-                SyntaxTokenKind.Ampersand => Peek(1).Kind == SyntaxTokenKind.Bareword && IsValidCommandName(Peek(1).Text),
+                SyntaxTokenKind.Ampersand => LooksLikeFunctionReferenceArgument(),
                 SyntaxTokenKind.Bareword => IsVariableReferenceLikeToken(Current) ||
                                             LooksLikeAnonymousFunctionExpression() ||
                                             LooksLikeMatchExpression() ||
@@ -11405,7 +11548,7 @@ public static class ToshParser
         private bool IsDeclarationBoundary(int previousEnd, bool untilCloseParen, bool untilCloseBrace, bool untilSemicolon)
         {
             return IsPipelineTerminator(Current.Kind, untilCloseParen, untilCloseBrace, untilSemicolon) ||
-                   HasImplicitStatementBoundaryAfter(previousEnd);
+                   HasStatementBoundaryAfter(previousEnd);
         }
 
         private bool TryConsumePostfixToken(int previousExpressionEnd, out SyntaxToken token, out string postfixText, out bool nullSafe)
@@ -11738,41 +11881,8 @@ public static class ToshParser
             return true;
         }
 
-        private static bool IsValidCommandName(string text)
-        {
-            if (string.IsNullOrEmpty(text))
-            {
-                return false;
-            }
-
-            if (!(char.IsLetter(text[0]) || text[0] == '_'))
-            {
-                return false;
-            }
-
-            for (var index = 1; index < text.Length; index++)
-            {
-                var character = text[index];
-
-                if (character == '-')
-                {
-                    // No trailing hyphen, no consecutive hyphens
-                    if (index == text.Length - 1 || text[index + 1] == '-')
-                    {
-                        return false;
-                    }
-
-                    continue;
-                }
-
-                if (!(char.IsLetterOrDigit(character) || character == '_'))
-                {
-                    return false;
-                }
-            }
-
-            return true;
-        }
+        private static bool IsValidCommandName(string text) =>
+            ToshParser.IsValidCommandName(text);
 
         private static bool IsPositionalParameter(string name)
         {

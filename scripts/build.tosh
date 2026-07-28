@@ -450,6 +450,7 @@ func group_filter_pattern(group: string) -> string? {
     }
 }
 
+## @summary Open the TōSh workspace in Tōme
 subcommand edit {
     tome /home/komrad/projects/tosh/ToSh.tome
 }

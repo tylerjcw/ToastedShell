@@ -2145,3 +2145,34 @@ reference builds and all post-build fan-out disabled, also with zero
 warnings and errors. No tests were executed. Next: consume top-level
 `LiteScript` statement/stage ranges, then retire only the structural
 lookahead helpers proven redundant by the differential corpus.
+
+### July 28, 2026 — Correcting the `take-while` attribution
+
+A capped re-run (`MemoryMax=12G`, swap disabled) narrows and partly contradicts
+the entry above. The cap did its job: the suite reported
+`System.OutOfMemoryException` instead of taking the machine down, which is the
+configuration any future run of this suite should use.
+
+- The entry above concluded "two failure modes, one common factor" and named
+  `take-while`. That is not established. Under the cap, `first`-based cases fail
+  too — `Iterate_powers_of_2` (`iterate … | first 8`), `Recur_fibonacci`
+  (`recur … | first 10`), and `Recur_single_seed` (`recur … | first 5`).
+- But cause and collateral are *not* separated by this run. All tests share one
+  process, so once any test exhausts the cap every later allocation fails with
+  `OutOfMemoryException` as well. `EngineTests.Parser_supports_anonymous_function_arguments`,
+  `FormatterTests.Lambda_arrow_form_in_assignment_round_trips`, and three
+  `HelpBrowserScreenTests` appear in the failure list and are almost certainly
+  victims rather than causes.
+- One hypothesis was checked and rejected: every failing `LazySequenceTests` case
+  uses `func(x) => …` while `Recur_with_block` (block form) passes, which
+  suggested the brace/lexer work had broken anonymous-function parsing. It has
+  not — `var f = func(x) => ($x * 2)` still yields a `ToshLambda`.
+- What remains true and load-bearing: an infinite generator (`iterate`/`recur`)
+  combined with a bounded consumer allocates without limit. Whether `first` is
+  independently affected or merely downstream of the first exhaustion needs each
+  test run in its own process.
+
+Next diagnostic, deliberately not run here: execute each `LazySequenceTests`
+case in a separate capped process to separate the originating failure from the
+collateral. Until that is done, `TS-P1-08`'s scope should be read as "bounded
+consumers over infinite generators" rather than as `take-while` specifically.

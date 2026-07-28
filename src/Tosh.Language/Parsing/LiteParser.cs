@@ -2,10 +2,37 @@ using Tosh.Runtime;
 
 namespace Tosh.Language.Parsing;
 
+/// <summary>What structurally follows a lite pipeline stage.</summary>
+public enum LiteSeparatorKind
+{
+    /// <summary>The token stream ended.</summary>
+    EndOfInput,
+
+    /// <summary>A line break began the next statement.</summary>
+    LineBreak,
+
+    /// <summary>An explicit <c>;</c> ended the statement.</summary>
+    Semicolon,
+
+    /// <summary>An ordinary <c>|</c> began the next stage.</summary>
+    Pipe,
+
+    /// <summary>A <c>|&gt;</c> began the next pipe-forward stage.</summary>
+    PipeForward,
+
+    /// <summary>A non-adjacent <c>&amp;</c> backgrounded the statement.</summary>
+    Background,
+}
+
 /// <summary>
-/// One stage of a lite pipeline: a half-open range of token indices.
+/// One stage of a lite pipeline: a half-open range of token indices plus
+/// the structural separator that follows it.
 /// </summary>
-public sealed record LiteStage(int StartIndex, int EndIndex, TextSpan Span)
+public sealed record LiteStage(
+    int StartIndex,
+    int EndIndex,
+    TextSpan Span,
+    LiteSeparatorKind Separator = LiteSeparatorKind.EndOfInput)
 {
     /// <summary>Number of tokens in this stage.</summary>
     public int TokenCount => EndIndex - StartIndex;
@@ -14,7 +41,18 @@ public sealed record LiteStage(int StartIndex, int EndIndex, TextSpan Span)
 /// <summary>
 /// One lite statement: the stages a top-level <c>|</c> separates.
 /// </summary>
-public sealed record LiteStatement(IReadOnlyList<LiteStage> Stages, TextSpan Span);
+public sealed record LiteStatement(IReadOnlyList<LiteStage> Stages, TextSpan Span)
+{
+    /// <summary>First token in the statement, or <c>-1</c> when empty.</summary>
+    public int StartIndex => Stages.Count == 0 ? -1 : Stages[0].StartIndex;
+
+    /// <summary>Exclusive token bound of the statement's final stage.</summary>
+    public int EndIndex => Stages.Count == 0 ? -1 : Stages[^1].EndIndex;
+
+    /// <summary>The separator that follows the statement.</summary>
+    public LiteSeparatorKind Separator =>
+        Stages.Count == 0 ? LiteSeparatorKind.EndOfInput : Stages[^1].Separator;
+}
 
 /// <summary>
 /// The structural shape of a source: its statements and their stages.
@@ -26,6 +64,9 @@ public enum LiteBoundaryKind
 {
     /// <summary>An explicit <c>;</c> separator.</summary>
     Explicit,
+
+    /// <summary>A non-adjacent <c>&amp;</c> background separator.</summary>
+    Background,
 
     /// <summary>A line break followed by a token that can start a statement.</summary>
     LineBreak,
@@ -79,6 +120,7 @@ public static class LiteParser
         var braceDelimiterCount = 0;
         var statementStart = -1;
         var stageStart = -1;
+        var finalEndIndex = tokens.Count;
 
         for (var index = 0; index < tokens.Count; index++)
         {
@@ -86,6 +128,9 @@ public static class LiteParser
 
             if (token.Kind == SyntaxTokenKind.EndOfFile)
             {
+                // Lite ranges are half-open token ranges. The EOF token is
+                // the exclusive bound, not part of the final stage.
+                finalEndIndex = index;
                 break;
             }
 
@@ -109,14 +154,42 @@ public static class LiteParser
 
                 if (token.Kind == SyntaxTokenKind.Semicolon)
                 {
-                    CloseStage(stages, ref stageStart, index, tokens);
+                    CloseStage(
+                        stages,
+                        ref stageStart,
+                        index,
+                        tokens,
+                        LiteSeparatorKind.Semicolon);
                     CloseStatement(statements, stages, ref statementStart, index, tokens);
                     continue;
                 }
 
                 if (token.Kind == SyntaxTokenKind.Pipe)
                 {
-                    CloseStage(stages, ref stageStart, index, tokens);
+                    CloseStage(
+                        stages,
+                        ref stageStart,
+                        index,
+                        tokens,
+                        IsPipeForward(tokens, index)
+                            ? LiteSeparatorKind.PipeForward
+                            : LiteSeparatorKind.Pipe);
+                    continue;
+                }
+
+                var isFunctionReference =
+                    IsAdjacentFunctionReference(tokens, index) &&
+                    (stageStart >= 0 || stages.Count == 0);
+                if (token.Kind == SyntaxTokenKind.Ampersand &&
+                    !isFunctionReference)
+                {
+                    CloseStage(
+                        stages,
+                        ref stageStart,
+                        index,
+                        tokens,
+                        LiteSeparatorKind.Background);
+                    CloseStatement(statements, stages, ref statementStart, index, tokens);
                     continue;
                 }
 
@@ -126,10 +199,14 @@ public static class LiteParser
                 // parser rather than keeping a second list (TS-P2-06).
                 if (stageStart >= 0 &&
                     HasLineBreakBetween(sourceText, tokens[index - 1].Span.End, token.Span.Start) &&
-                    (ToshParser.IsExpressionStartToken(token.Kind) ||
-                     token.Kind == SyntaxTokenKind.DocComment))
+                    CanStartImplicitStatement(tokens, index))
                 {
-                    CloseStage(stages, ref stageStart, index, tokens);
+                    CloseStage(
+                        stages,
+                        ref stageStart,
+                        index,
+                        tokens,
+                        LiteSeparatorKind.LineBreak);
                     CloseStatement(statements, stages, ref statementStart, index, tokens);
                 }
             }
@@ -163,8 +240,13 @@ public static class LiteParser
             }
         }
 
-        CloseStage(stages, ref stageStart, tokens.Count, tokens);
-        CloseStatement(statements, stages, ref statementStart, tokens.Count, tokens);
+        CloseStage(
+            stages,
+            ref stageStart,
+            finalEndIndex,
+            tokens,
+            LiteSeparatorKind.EndOfInput);
+        CloseStatement(statements, stages, ref statementStart, finalEndIndex, tokens);
 
         return new LiteScript(statements);
     }
@@ -173,7 +255,8 @@ public static class LiteParser
         List<LiteStage> stages,
         ref int stageStart,
         int endExclusive,
-        IReadOnlyList<SyntaxToken> tokens)
+        IReadOnlyList<SyntaxToken> tokens,
+        LiteSeparatorKind separator)
     {
         if (stageStart < 0 || endExclusive <= stageStart)
         {
@@ -184,7 +267,8 @@ public static class LiteParser
         stages.Add(new LiteStage(
             stageStart,
             endExclusive,
-            SpanOf(tokens, stageStart, endExclusive)));
+            SpanOf(tokens, stageStart, endExclusive),
+            separator));
         stageStart = -1;
     }
 
@@ -234,6 +318,48 @@ public static class LiteParser
         }
 
         return sourceText.AsSpan(start, end - start).IndexOfAny('\n', '\r') >= 0;
+    }
+
+    private static bool CanStartImplicitStatement(
+        IReadOnlyList<SyntaxToken> tokens,
+        int tokenIndex)
+    {
+        var token = tokens[tokenIndex];
+        var previousIsDocComment =
+            tokenIndex > 0 &&
+            tokens[tokenIndex - 1].Kind == SyntaxTokenKind.DocComment;
+
+        // A doc-comment run and the declaration it documents are one
+        // semantic statement. The first doc token can begin a statement;
+        // later doc tokens and the declaration immediately following the
+        // run stay attached to it.
+        if (token.Kind == SyntaxTokenKind.DocComment)
+        {
+            return !previousIsDocComment;
+        }
+
+        return !previousIsDocComment &&
+               ToshParser.IsExpressionStartToken(token.Kind);
+    }
+
+    private static bool IsPipeForward(
+        IReadOnlyList<SyntaxToken> tokens,
+        int pipeTokenIndex)
+    {
+        return pipeTokenIndex + 1 < tokens.Count &&
+               tokens[pipeTokenIndex + 1].Kind == SyntaxTokenKind.GreaterThan &&
+               tokens[pipeTokenIndex].Span.End == tokens[pipeTokenIndex + 1].Span.Start;
+    }
+
+    private static bool IsAdjacentFunctionReference(
+        IReadOnlyList<SyntaxToken> tokens,
+        int ampersandTokenIndex)
+    {
+        return ampersandTokenIndex + 1 < tokens.Count &&
+               tokens[ampersandTokenIndex + 1].Kind == SyntaxTokenKind.Bareword &&
+               ToshParser.IsValidCommandName(tokens[ampersandTokenIndex + 1].Text) &&
+               tokens[ampersandTokenIndex].Span.End ==
+               tokens[ampersandTokenIndex + 1].Span.Start;
     }
 
     private enum BoundaryFrameRole
@@ -313,11 +439,24 @@ public static class LiteParser
                     ownerOpenTokenIndex);
             }
             else if (boundariesEnabled &&
+                     token.Kind == SyntaxTokenKind.Ampersand &&
+                     !(IsAdjacentFunctionReference(tokens, index) &&
+                       !continuesPipeline) &&
+                     index + 1 < tokens.Count)
+            {
+                AddCandidate(
+                    boundaries,
+                    tokens,
+                    index + 1,
+                    LiteBoundaryKind.Background,
+                    braceDepth,
+                    ownerOpenTokenIndex);
+            }
+            else if (boundariesEnabled &&
                      !continuesPipeline &&
                      index > 0 &&
                      HasLineBreakBetween(sourceText, tokens[index - 1].Span.End, token.Span.Start) &&
-                     (ToshParser.IsExpressionStartToken(token.Kind) ||
-                      token.Kind == SyntaxTokenKind.DocComment))
+                     CanStartImplicitStatement(tokens, index))
             {
                 AddCandidate(
                     boundaries,

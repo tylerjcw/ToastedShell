@@ -130,6 +130,107 @@ public sealed class LiteParserTests
         Assert.Equal("count", source.Substring(stages[1].Span.Start, stages[1].Span.Length).Trim());
     }
 
+    [Fact]
+    public void Final_stage_range_excludes_the_eof_token()
+    {
+        const string source = "echo one";
+        var tokens = new ToshLexer(source).Lex();
+        var stage = Assert.Single(LiteParser.Parse(tokens, source).Statements).Stages.Single();
+        var eofIndex = Assert.Single(
+            tokens
+                .Select((token, index) => (token, index))
+                .Where(pair => pair.token.Kind == SyntaxTokenKind.EndOfFile)).index;
+
+        Assert.Equal(eofIndex, stage.EndIndex);
+        Assert.Equal(eofIndex, LiteParser.Parse(tokens, source).Statements[0].EndIndex);
+        Assert.Equal(2, stage.TokenCount);
+        Assert.Equal(LiteSeparatorKind.EndOfInput, stage.Separator);
+    }
+
+    [Theory]
+    [InlineData("echo one | count", LiteSeparatorKind.Pipe)]
+    [InlineData("echo one |> count", LiteSeparatorKind.PipeForward)]
+    public void Lite_stages_record_the_separator_that_follows_them(
+        string source,
+        LiteSeparatorKind expected)
+    {
+        var stages = Lite(source).Statements[0].Stages;
+
+        Assert.Equal(2, stages.Count);
+        Assert.Equal(expected, stages[0].Separator);
+        Assert.Equal(LiteSeparatorKind.EndOfInput, stages[1].Separator);
+    }
+
+    [Fact]
+    public void Background_ampersand_splits_statements_but_adjacent_function_reference_does_not()
+    {
+        const string backgroundSource = "echo first & echo second";
+        var background = Lite(backgroundSource);
+
+        Assert.Equal(2, background.Statements.Count);
+        Assert.Equal(LiteSeparatorKind.Background, background.Statements[0].Separator);
+        Assert.Contains(
+            Candidates(backgroundSource),
+            boundary => boundary.Kind == LiteBoundaryKind.Background);
+
+        var parsedBackground = ToshParser.Parse(backgroundSource, "<lite-consumer-test>");
+        Assert.Empty(parsedBackground.Diagnostics);
+        var backgroundScript = Assert.IsType<ScriptStatementSyntax>(parsedBackground.Statement);
+        Assert.Collection(
+            backgroundScript.Statements,
+            statement => Assert.True(
+                Assert.IsType<PipelineStatementSyntax>(statement).Pipeline.IsBackground),
+            statement => Assert.False(
+                Assert.IsType<PipelineStatementSyntax>(statement).Pipeline.IsBackground));
+
+        const string commandReferenceSource = "echo &handler";
+        var functionReference = Lite(commandReferenceSource);
+        Assert.Single(functionReference.Statements);
+        Assert.Equal(LiteSeparatorKind.EndOfInput, functionReference.Statements[0].Separator);
+
+        var parsedCommandReference = ToshParser.Parse(
+            commandReferenceSource,
+            "<lite-consumer-test>");
+        Assert.Empty(parsedCommandReference.Diagnostics);
+        var echo = Assert.IsType<CommandSyntax>(
+            Assert.Single(parsedCommandReference.Pipeline.Stages));
+        Assert.IsType<FunctionReferenceArgumentSyntax>(Assert.Single(echo.Arguments));
+
+        var parsedRootReference = ToshParser.Parse("&handler", "<lite-consumer-test>");
+        Assert.Empty(parsedRootReference.Diagnostics);
+        var rootStage = Assert.IsType<ExpressionPipelineStageSyntax>(
+            Assert.Single(parsedRootReference.Pipeline.Stages));
+        Assert.IsType<FunctionReferenceArgumentSyntax>(rootStage.Expression);
+
+        Assert.Equal(2, Lite("echo & handler").Statements.Count);
+        Assert.Equal(2, Lite("echo &bad-").Statements.Count);
+        Assert.Equal(2, Lite("echo | &handler").Statements.Count);
+    }
+
+    [Fact]
+    public void Attached_doc_comment_run_stays_with_its_declaration()
+    {
+        const string source =
+            """
+            ## Summary
+            ## @returns A value.
+            func f() { return 1 }
+            echo after
+            """;
+
+        var lite = Lite(source);
+        Assert.Equal(2, lite.Statements.Count);
+
+        var result = ToshParser.Parse(source, "<lite-consumer-test>");
+        Assert.Empty(result.Diagnostics);
+        var script = Assert.IsType<ScriptStatementSyntax>(result.Statement);
+        Assert.Collection(
+            script.Statements,
+            statement => Assert.NotNull(
+                Assert.IsType<FunctionDefinitionStatementSyntax>(statement).DocComment),
+            statement => Assert.IsType<PipelineStatementSyntax>(statement));
+    }
+
     [Theory]
     // A representative sweep: whatever the construct, the lite pass and
     // the parser must agree on how many top-level statements there are.
@@ -181,6 +282,98 @@ public sealed class LiteParserTests
         Assert.All(
             result.Diagnostics,
             d => Assert.Equal("tosh.parser.missing_statement_separator", d.Code));
+    }
+
+    [Theory]
+    [InlineData(
+        """
+        func f()
+        {
+            echo one
+        }
+        echo after
+        """)]
+    [InlineData(
+        """
+        if (true) {
+            echo yes
+        }
+        else {
+            echo no
+        }
+        echo after
+        """)]
+    [InlineData(
+        """
+        try {
+            echo body
+        }
+        catch (err) {
+            echo caught
+        }
+        finally {
+            echo cleanup
+        }
+        echo after
+        """)]
+    public void Parser_owned_top_level_continuations_are_not_split(
+        string source)
+    {
+        var result = ToshParser.Parse(source, "<lite-consumer-test>");
+
+        Assert.Empty(result.Diagnostics);
+        var script = Assert.IsType<ScriptStatementSyntax>(result.Statement);
+        Assert.Equal(2, script.Statements.Count);
+        Assert.IsType<PipelineStatementSyntax>(script.Statements[1]);
+    }
+
+    [Fact]
+    public void Required_operand_continuations_are_consumed_before_lite_candidates()
+    {
+        const string source =
+            """
+            var x =
+                (1 + 2)
+            var y = 1 +
+                2
+            echo done
+            """;
+
+        var result = ToshParser.Parse(source, "<lite-consumer-test>");
+
+        Assert.Empty(result.Diagnostics);
+        var script = Assert.IsType<ScriptStatementSyntax>(result.Statement);
+        Assert.Collection(
+            script.Statements,
+            statement => Assert.Equal(
+                "x",
+                Assert.IsType<VariableDeclarationStatementSyntax>(statement).Name),
+            statement => Assert.Equal(
+                "y",
+                Assert.IsType<VariableDeclarationStatementSyntax>(statement).Name),
+            statement => Assert.IsType<PipelineStatementSyntax>(statement));
+    }
+
+    [Fact]
+    public void Malformed_stage_stops_before_the_next_lite_statement()
+    {
+        const string source =
+            """
+            )
+            echo after
+            """;
+
+        var result = ToshParser.Parse(source, "<lite-consumer-test>");
+
+        Assert.Contains(
+            result.Diagnostics,
+            diagnostic => diagnostic.Code == "tosh.parser.expected_command_name");
+        var script = Assert.IsType<ScriptStatementSyntax>(result.Statement);
+        Assert.Equal(2, script.Statements.Count);
+        var trailing = Assert.IsType<PipelineStatementSyntax>(script.Statements[1]);
+        Assert.Equal(
+            "echo",
+            Assert.IsType<CommandSyntax>(Assert.Single(trailing.Pipeline.Stages)).Name);
     }
 
     private static IReadOnlyList<LiteBoundary> Candidates(string source) =>
@@ -631,6 +824,51 @@ public sealed class LiteParserTests
         Assert.Equal(
             "first",
             Assert.IsType<PipeForwardStageSyntax>(chainedPipeline.Stages[^1]).Command.Name);
+    }
+
+    [Fact]
+    public void Pipe_forward_targets_share_ordinary_post_stage_handling()
+    {
+        const string mixedSource = "echo one |> where { _ } | count";
+        var mixed = ToshParser.Parse(mixedSource, "<lite-consumer-test>");
+
+        Assert.Empty(mixed.Diagnostics);
+        Assert.Collection(
+            mixed.Pipeline.Stages,
+            stage => Assert.Equal("echo", Assert.IsType<CommandSyntax>(stage).Name),
+            stage => Assert.Equal(
+                "where",
+                Assert.IsType<PipeForwardStageSyntax>(stage).Command.Name),
+            stage => Assert.Equal("count", Assert.IsType<CommandSyntax>(stage).Name));
+
+        const string redirectedSource = "echo one |> cat out> \"x\" | count";
+        var redirected = ToshParser.Parse(redirectedSource, "<lite-consumer-test>");
+
+        Assert.Empty(redirected.Diagnostics);
+        Assert.Collection(
+            redirected.Pipeline.Stages,
+            stage => Assert.Equal("echo", Assert.IsType<CommandSyntax>(stage).Name),
+            stage => Assert.Equal(
+                "cat",
+                Assert.IsType<PipeForwardStageSyntax>(stage).Command.Name),
+            stage => Assert.Equal("count", Assert.IsType<CommandSyntax>(stage).Name));
+        Assert.Single(redirected.Pipeline.Redirections!);
+    }
+
+    [Fact]
+    public void Nested_pipeline_stages_remain_owned_by_the_nested_parser_region()
+    {
+        const string source = "echo $(ls | count) | first";
+        var result = ToshParser.Parse(source, "<lite-consumer-test>");
+
+        Assert.Empty(result.Diagnostics);
+        Assert.Equal(2, result.Pipeline.Stages.Count);
+
+        var echo = Assert.IsType<CommandSyntax>(result.Pipeline.Stages[0]);
+        var substitution = Assert.IsType<CommandSubstitutionArgumentSyntax>(
+            Assert.Single(echo.Arguments));
+        Assert.Equal(2, substitution.Pipeline.Stages.Count);
+        Assert.Equal("first", Assert.IsType<CommandSyntax>(result.Pipeline.Stages[1]).Name);
     }
 
     [Fact]
