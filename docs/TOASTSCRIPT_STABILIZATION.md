@@ -2176,3 +2176,38 @@ Next diagnostic, deliberately not run here: execute each `LazySequenceTests`
 case in a separate capped process to separate the originating failure from the
 collateral. Until that is done, `TS-P1-08`'s scope should be read as "bounded
 consumers over infinite generators" rather than as `take-while` specifically.
+
+### July 28, 2026 — Capped full-suite result, and where the generator defect sits
+
+The capped run completed, which supersedes the claim that the suite is
+unusable. It is usable — under a cap.
+
+- **3,319 passed, 12 failed, 0 skipped of 3,331 in 3m06s**
+  (`MemoryMax=12G`, `MemorySwapMax=0`). The suite has grown from 3,197 on
+  July 26 as the parser work added coverage.
+- Failures: six `LazySequenceTests` (`Iterate_powers_of_2`,
+  `Iterate_with_take_while`, `Recur_fibonacci`, `Recur_fibonacci_take_while`,
+  `Recur_single_seed`, `Recur_tribonacci`),
+  `IteratorCommandTests.Repeatedly_evaluates_each_time`,
+  `EngineTests.Parser_supports_anonymous_function_arguments`,
+  `FormatterTests.Lambda_arrow_form_in_assignment_round_trips`, and three
+  `HelpBrowserScreenTests`.
+- Eight report `OutOfMemoryException`. Two carry the diagnostic that actually
+  localises the defect: `'iterate' operations must produce exactly one value
+  per input item` and the same for `'recur'`. Two are ordinary assertion
+  failures (`Strings differ`, `Collection was not empty`).
+
+Narrowing, with one more hypothesis rejected. The generator lambda is not at
+fault: `[1,2] | map (func(x) => ($x * 2))` yields exactly one value per input
+and the correct values. An earlier check here was too weak — it confirmed
+`func(x) => …` *parses* to a `ToshLambda` without confirming what invoking it
+yields, and those are different claims.
+
+So the defect sits in how `IterateCommand` and `RecurCommand` invoke the
+generator and count its results, not in lambdas, `take-while`, or `first`.
+`FunctionalCommandUtilities.RequireSingleResultAsync` is where the
+"exactly one value" contract is enforced and is the place to start.
+
+Remaining before the suite is green: that generator-invocation defect, and
+the two assertion failures around anonymous-function formatting, which have
+not been examined and may be unrelated.
