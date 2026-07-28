@@ -297,64 +297,64 @@ An item is closed only when all applicable conditions hold:
 - diagnostics use a stable `tosh.*` code rather than leaking raw CLR
   exceptions;
 - the specification and generated/user-facing metadata agree;
-- focused tests and the full solution test suite pass; and
-- this document's status and evidence are updated.
+- focused tests and the full solution test suite pass;
+- this document's status and evidence are updated; and
+- the work is committed. Validated work that exists only in the working
+  tree is one command from loss, which no amount of test coverage
+  protects against.
 
 ## Active Work
 
-The first implementation slice closed `TS-P0-01`, `TS-P0-02`, and
-`TS-P0-04`. The second closed recursive class construction
-(`TS-P0-03`). The third closed exhaustive defer unwinding
-(`TS-P0-05`) with shared interpreter/compiler semantics, ordered failure
-retention, cancellation shielding, stable diagnostics, and public CLR
-inspection support.
+This section is derived from the item tables below. When a status
+changes there, change it here in the same edit; the Progress Log records
+each slice's reasoning and validation and is not summarized again here.
 
-The fourth implementation slice removed sync-over-async interpreted
-class invocation (`TS-P0-06`). The fifth completed the shared structured
-recursion-depth guard (`TS-P0-07`). The sixth completed plain channel
-receive semantics (`TS-P0-08`). The seventh completed the canonical
-truthiness protocol (`TS-P1-01`). The eighth completed the short
-literal-repair cluster: string escapes (`TS-P2-12`), exact temporal/IP
-and range recognition (`TS-P2-13`), and typed storage suffixes
-(`TS-P2-14`). The ninth completed canonical collection containment
-semantics (`TS-P1-02`). The tenth completed eager interpreter/compiler
-operator parity (`TS-P1-03`) through one canonical runtime dispatcher
-and differential typed-value, stdout, and diagnostic coverage. The
-eleventh completed compound-assignment parity (`TS-P1-04`) for
-variable, captured, member, and index targets. The twelfth completed
-callable default binding (`TS-P1-05`) with one shared default-binding
-protocol across free functions, lambdas, class methods, and
-constructors in both execution modes.
+**Closed.** Every P0 item. Twelve P1 items — `TS-P1-01`–`TS-P1-06`,
+`TS-P1-14`, `TS-P1-15`, and `TS-P1-20`–`TS-P1-23` — with `TS-P1-17`
+withdrawn as misfiled rather than fixed. Ten P2 items:
+`TS-P2-04`–`TS-P2-08` and `TS-P2-12`–`TS-P2-16`. All three July 26
+semantic decisions (comparison, chained comparison, `$this` in method
+defaults) are implemented.
 
-The thirteenth completed compiled value-context pipeline semantics
-(`TS-P1-20`). The fourteenth completed named-argument validation
-(`TS-P1-06`).
+**In progress.**
 
-The fifteenth completed strict, symmetric comparison semantics
-(`TS-P1-14`), including the type-checker rule that had made string
-ordering uncompilable.
+- `TS-P1-24`, duplicated sync/async semantics. Five dead parallel copies
+  removed; eighteen live pairs remain, led by the refinement cluster.
+  The `AnnotatedConversionParityTests` drift guard is in place and
+  passing, so the two conversion paths agree today.
+- `TS-P2-11`, `TS-P2-23`, and `TS-P2-24`, the parser architecture. The
+  mode-tracking lexer, declaration table, `ParseContext`, and
+  `LiteParser` structural pass are built and validated. Nothing consumes
+  the structural pass yet, which is deliberate: agreement with the
+  current parser is established before the heuristics are retired.
 
-The sixteenth completed enum comparability (`TS-P1-15`).
+**Blocked on a decision.** `TS-P2-25` gates the remainder of parser step
+2. `{` opens a block, record, dict, set, or predicate, and a
+brace-enclosed statement boundary cannot be resolved structurally until
+that is settled. It is a grammar change, and the July 26 breaking-change
+decision permits one.
 
-The seventeenth withdrew `TS-P1-17` as misfiled and closed the accurate
-defect behind it, shell type descriptor rendering (`TS-P1-23`).
+**Remaining.**
 
-The eighteenth completed `$this` in method parameter defaults
-(`TS-P1-21`).
+- P1: `TS-P1-07` (partial — the defer case is closed, other nested
+  control-flow shapes are not), `TS-P1-08`–`TS-P1-13`, `TS-P1-16`,
+  `TS-P1-18`, `TS-P1-19`, and `TS-P1-25`.
+- P2: `TS-P2-01`–`TS-P2-03`, `TS-P2-09`, `TS-P2-10`, and
+  `TS-P2-17`–`TS-P2-22`.
 
-The nineteenth completed chained comparison (`TS-P1-22`), the last of
-the July 26 decisions.
-
-All three July 26 decisions are now implemented. The remaining P1 work
-is `TS-P1-07`–`TS-P1-13` and `TS-P1-16`–`TS-P1-19`; the parser cluster
-(`TS-P2-*`) is otherwise the largest open area.
+**Sequencing note.** The July 26 duplicated-semantics audit concluded
+that converging `TS-P1-24` is worth more than the next individual P1
+repair, because every remaining semantic item is at risk of the same
+half-landing. The slices that followed went to the parser track instead.
+With `TS-P2-25` now blocking that track pending a decision, `TS-P1-24`
+is the substantial work that does not require one.
 
 A second review pass on July 25 verified the completed P0 fixes live and
 filed `TS-P0-07`–`TS-P0-08`, `TS-P1-14`–`TS-P1-19`, `TS-P2-12`–`TS-P2-20`,
-and `TS-P3-05`–`TS-P3-07`. The highest-impact new items are the
-process-killing recursion overflow (`TS-P0-07`) and the silent
-wrong-answer cluster in string escapes, literal coercion, and storage
-suffixes (`TS-P2-12`–`TS-P2-14`).
+and `TS-P3-05`–`TS-P3-07`. Every item it called highest-impact — the
+process-killing recursion overflow and the silent wrong-answer cluster
+in string escapes, literal coercion, and storage suffixes — is now
+closed.
 
 ## P0 — Safety, Data, and Binding Invariants
 
@@ -390,15 +390,14 @@ suffixes (`TS-P2-12`–`TS-P2-14`).
 | `TS-P1-15` | Complete — 2026-07-26 | Enum values are not orderable or number-comparable: `E.A < E.C` throws (`ToshEnumValue` cannot be compared) and `E.B == 1` is false, despite the specification's numeric-backed enum examples. | Enum values compare and order canonically against members of the same enum and against their underlying numeric values; diagnostics for genuinely incompatible enum comparisons name the shell-level enum type; the specification's `Permissions : int` examples pass as conformance cases. |
 | `TS-P1-16` | Planned | Float division-by-zero depends on the zero operand's type: `10.0 / 0` throws "Division by zero" while `10.0 / 0.0` returns `Infinity`, exposing a second arithmetic path inside the interpreter. | One documented rule per numeric family (integral, float, decimal) for division and modulo by zero; the zero operand's declared type does not change the outcome; interpreted and compiled modes agree. |
 | `TS-P1-17` | Withdrawn — 2026-07-26 | Filed as "the empty brace literal `{}` evaluates to an internal type-definition object instead of an empty record". Re-examination showed `{}` is already a correct empty record: in expression position `var r = {}` produces an `ExpandoObject`, the same CLR type as `{ a = 1 }`, and spread and member assignment both work. The original observation was `type-of` rendering, now fixed as `TS-P1-23`, plus `{}` in *command-argument* position parsing as a block (`ShellBlock`) rather than a record, which is the brace-overload ambiguity tracked separately. | n/a — not a defect as filed. |
-| `TS-P1-23` | Complete — 2026-07-26 | `type-of` yields a shell type descriptor for shell-typed values, but the descriptor rendered as its own CLR class name, so `type-of [1, 2]` reported `Tosh.Runtime.BuiltInShellTypes+BuiltInShellTypeDefinition` instead of the type being asked about. | Displaying a built-in shell type descriptor shows the shell type name; `type-of` reports usable names for lists, records, and other shell-typed values; CLR values are unaffected. |
 | `TS-P1-18` | Planned | A class that declares both a primary constructor and an explicit constructor of the same arity registers duplicate overloads, so every instantiation fails with a self-ambiguity error (`Multiple constructor overloads matched class 'C' with 1 argument(s): C(x); C(x)`). | A declaration-time rule is documented and enforced (the explicit constructor either replaces the synthesized primary overload or produces a structured declaration diagnostic); instantiation never reports a class as ambiguous with itself; interpreted and compiled construction agree. |
 | `TS-P1-19` | Planned | An infinite generator invoked in command position (`gen \| first 3`) silently produces no output and exits cleanly, while the call form (`gen() \| first 3`) hangs; both diverge from the accepted stream-producer decision (companion to `TS-P1-08`). | Command-position and call-position generator invocations produce identical streams; infinite generators stream promptly and terminate under `first`/`any`; the silent-empty shape is covered by a regression test. |
 | `TS-P1-20` | Complete — 2026-07-26 | A compiled multi-stage pipeline in value context never applied the interpreter's single-value subexpression rule: `var n = ([1, 2, 3] \| count)` produced a one-element `List<object>` rather than `3`, and a pipeline yielding several values returned a list silently where the interpreter raises `tosh.runtime.subexpression_requires_single_value`. Single-stage value pipelines already collapsed through `InvokeValue`, so the two shapes disagreed inside the host itself. Found while validating `TS-P1-05`. | Value-context pipelines collapse identically in both modes (none → `null`, one → the item, several → the shared diagnostic); iteration sources still receive every item; literal, variable, and command seeds behave alike; conformance rows and differential regressions cover each shape. |
-| `TS-P1-24` | In progress — dead copies removed 2026-07-26 | The interpreter carries sync/async twin methods that are *parallel implementations* rather than delegations, so a semantic fix can land on one surface and silently miss the other. This has happened twice: `OperatorEvaluator.AreEqual` versus `ToshEngine.AreEqualAsync` (`TS-P1-14`/`TS-P1-15`) and `ToshHost.DrainValue` versus `InvokeValue` (`TS-P1-20`). A corrected audit on 2026-07-26 counts 23 truly parallel pairs against 6 that delegate. Largest genuine duplications: the refinement cluster — `EnsureRefinementSatisfied` (98 lines), `EvaluateRefinementBooleanExpression` (32), `EvaluateRefinementCoercer` (14), `EvaluateRefinementPredicate` (10) — then `ThrowDetailedSingleConstructorMismatch` (55), `TryGetInstanceMember` (51), `ApplyPendingParameterDefaults` (50), `InvokeQualifiedMethod` (47), `ConvertPropertyValue` (44), `TrySetInstanceMember` (43), `SelectBestCallableMatches` (41), `GetInstanceMembers` (38), `ConvertConstructorParameterValue` (35). | Each pair either delegates to one implementation or is removed; a test or analyzer fails when a new parallel sync/async pair is introduced; behaviour is unchanged, evidenced by the existing suite plus the annotated-conversion drift guard. |
-| `TS-P2-22` | Planned | The type checker does not walk class-member annotations, so static checking is materially weaker inside class bodies. `var x: int = "42"` and `func f(x: int)` both report `tosh.type.mismatch`, while the equivalent `prop X: int = "42"`, constructor parameter, method parameter, and property assignment report nothing. Runtime behaviour is consistent (all convert), so this is a static-coverage hole rather than a semantic divergence. | Class property, constructor-parameter, method-parameter, and property-assignment annotations are checked with the same rule and severity as `var` and `func` annotations; a corpus covers matching and mismatching cases in both positions. |
-| `TS-P1-22` | Complete — 2026-07-26 | `a < b < c` parses left-associatively, so `1 < 2 < 3` compares `true < 3` and silently answers `false`. The accepted decision is real chaining. | `a < b < c` evaluates as `(a < b) and (b < c)` with each operand evaluated once and short-circuit preserved, in interpreted and compiled modes; the parser, binder traversal, type checker, and emitter all handle the new shape; precedence and formatting round-trip. |
 | `TS-P1-21` | Complete — 2026-07-26 | A parameter default on a class method or constructor cannot reference `$this`: `func m(a, b = $this.V)` fails with `tosh.runtime.unknown_variable` because defaults are evaluated during callable binding, before the `this`/`super` bindings are seeded. `TS-P1-05` made this an explicit failure rather than the previous silent null. Needs a recorded decision, not just a fix: an instance method default may clearly see `$this`, but a **constructor** default would observe a partially-constructed instance whose properties have not been initialized yet (base-to-leaf construction binds arguments first), so allowing it exposes uninitialized state while rejecting it makes methods and constructors inconsistent. | A decision-log entry states whether `$this` is in scope for method defaults, constructor defaults, or both; the callable default binder seeds the agreed bindings; the rejected case keeps a targeted diagnostic naming `$this` rather than the generic unknown-variable help; interpreted and compiled modes agree; the specification's default-value semantics section records the rule. |
-| `TS-P1-20` | Planned | The pure compiler profile can report a Tier-1-clean artifact while emitted IL still unconditionally calls `ToshHost.Initialize`/`RegisterCompiledAssembly` from `Main` and `ToshHost.EnterExecutionFrame` from functions, methods, lambdas, and blocks. | A pure artifact contains no metadata references or calls to `Tosh.Compiler.Runtime`, `ToshHost`, or `ToshEngine`; bootstrap is omitted or conditional; recursion guarding uses a stable `Tosh.Runtime` primitive; and a post-emit IL dependency audit fails independently of `RequireTier` diagnostics. |
+| `TS-P1-22` | Complete — 2026-07-26 | `a < b < c` parses left-associatively, so `1 < 2 < 3` compares `true < 3` and silently answers `false`. The accepted decision is real chaining. | `a < b < c` evaluates as `(a < b) and (b < c)` with each operand evaluated once and short-circuit preserved, in interpreted and compiled modes; the parser, binder traversal, type checker, and emitter all handle the new shape; precedence and formatting round-trip. |
+| `TS-P1-23` | Complete — 2026-07-26 | `type-of` yields a shell type descriptor for shell-typed values, but the descriptor rendered as its own CLR class name, so `type-of [1, 2]` reported `Tosh.Runtime.BuiltInShellTypes+BuiltInShellTypeDefinition` instead of the type being asked about. | Displaying a built-in shell type descriptor shows the shell type name; `type-of` reports usable names for lists, records, and other shell-typed values; CLR values are unaffected. |
+| `TS-P1-24` | In progress — dead copies removed 2026-07-26 | The interpreter carries sync/async twin methods that are *parallel implementations* rather than delegations, so a semantic fix can land on one surface and silently miss the other. This has happened twice: `OperatorEvaluator.AreEqual` versus `ToshEngine.AreEqualAsync` (`TS-P1-14`/`TS-P1-15`) and `ToshHost.DrainValue` versus `InvokeValue` (`TS-P1-20`). A corrected audit on 2026-07-26 counts 23 truly parallel pairs against 6 that delegate. Largest genuine duplications: the refinement cluster — `EnsureRefinementSatisfied` (98 lines), `EvaluateRefinementBooleanExpression` (32), `EvaluateRefinementCoercer` (14), `EvaluateRefinementPredicate` (10) — then `ThrowDetailedSingleConstructorMismatch` (55), `TryGetInstanceMember` (51), `ApplyPendingParameterDefaults` (50), `InvokeQualifiedMethod` (47), `ConvertPropertyValue` (44), `TrySetInstanceMember` (43), `SelectBestCallableMatches` (41), `GetInstanceMembers` (38), `ConvertConstructorParameterValue` (35). | Each pair either delegates to one implementation or is removed; a test or analyzer fails when a new parallel sync/async pair is introduced; behaviour is unchanged, evidenced by the existing suite plus the annotated-conversion drift guard. |
+| `TS-P1-25` | Planned | (Filed 2026-07-26 under a duplicate `TS-P1-20`; renumbered 2026-07-27.) The pure compiler profile can report a Tier-1-clean artifact while emitted IL still unconditionally calls `ToshHost.Initialize`/`RegisterCompiledAssembly` from `Main` and `ToshHost.EnterExecutionFrame` from functions, methods, lambdas, and blocks. | A pure artifact contains no metadata references or calls to `Tosh.Compiler.Runtime`, `ToshHost`, or `ToshEngine`; bootstrap is omitted or conditional; recursion guarding uses a stable `Tosh.Runtime` primitive; and a post-emit IL dependency audit fails independently of `RequireTier` diagnostics. |
 
 ## P2 — Parser, Binder, Diagnostics, and Surface Generation
 
@@ -424,13 +423,10 @@ suffixes (`TS-P2-12`–`TS-P2-14`).
 | `TS-P2-18` | Planned | Member diagnostics leak internal implementation types and misdescribe visibility: denied `shy` access reports "Member 'Secret' was not found on type 'Tosh.Language.ToshClassInstance'", and enum comparison failures name `ToshEnumValue`. | Diagnostics name the shell-level type (`S`, the enum's name) and the true cause (private access versus absence); no `Tosh.Language.*` implementation type name appears in user-facing diagnostics. |
 | `TS-P2-19` | Planned | An unparenthesized postfix conditional (`return "big" if $x > 5`) fails with a generic "insert a newline or ';'" error instead of the documented `tosh.parser.expected_postfix_condition` guidance. | Unparenthesized operator conditions after a postfix `if`/`unless` produce a targeted diagnostic that suggests parenthesizing the condition. |
 | `TS-P2-20` | Planned | `nameof($foo.Bar)` returns `"foo"` — the parser strips member access and reports the root identifier. | `nameof` on a member chain returns the final segment (matching C#) or produces a targeted diagnostic; the specification documents the chosen behavior. |
-
 | `TS-P2-21` | Planned | A `new` expression cannot take named arguments at all: `new D(1, b = 7)` and `new R("w", Qty = 5)` both fail while parsing with `tosh.parser.assignment_in_predicate`, so the runtime binder is never reached. Function and method calls accept the same syntax. This bounds `TS-P1-06`: constructor named-argument validation is unreachable until the parser accepts the form. | `new Type(name = value)` parses as a named argument for classes, records, and structs; the runtime binder's unknown/duplicate diagnostics apply; a genuine assignment mistake keeps a targeted diagnostic rather than the predicate-assignment message. |
-
+| `TS-P2-22` | Planned | The type checker does not walk class-member annotations, so static checking is materially weaker inside class bodies. `var x: int = "42"` and `func f(x: int)` both report `tosh.type.mismatch`, while the equivalent `prop X: int = "42"`, constructor parameter, method parameter, and property assignment report nothing. Runtime behaviour is consistent (all convert), so this is a static-coverage hole rather than a semantic divergence. | Class property, constructor-parameter, method-parameter, and property-assignment annotations are checked with the same rule and severity as `var` and `func` annotations; a corpus covers matching and mismatching cases in both positions. |
 | `TS-P2-23` | In progress — declaration table 2026-07-26 | Parse-time identity decisions rest on *spelling* rather than on facts the runtime already holds. Two casing tests remain (`char.IsUpper` in `LooksLikeQualifiedDotNetAccess` and `LooksLikePotentialClrTypeName`) deciding whether a dotted name is a CLR type, and 160 hardcoded `Current.Text == "…"` comparisons decide keyword and construct identity. `TS-P2-16` narrowed one such rule but did not remove the guess. The parser cannot do better today because `ToshParser.Parse` receives only source text, while the command, module, and type registries arrive later at `Lowerer.Lower`. | Identity is resolved against a real table rather than inferred from capitalization: either the parser is given the registries, or the decision is deferred to a later phase that has them. Keyword and construct recognition is driven by the generated language-surface registry (`TS-P2-10`) rather than by scattered literal comparisons. A capitalized module and a lowercase CLR type both resolve correctly. |
-
 | `TS-P2-24` | In progress — pass built and validated 2026-07-26 | Step 2 of the parser roadmap. Structural questions — where a statement ends, where a pipeline stage divides — are answered by heuristics scattered through the recursive-descent parser, each re-deriving the answer with local lookahead. `LiteParser` decides them once over the whole token stream, with bracket depth tracked so a separator inside a nested construct does not split the enclosing statement. | The parser consumes the lite structure instead of re-deriving it; the `LooksLike*`/`HasTopLevel*` helpers that only answered structural questions are removed; structure agrees with today's parser across the corpus, evidenced by differential tests. |
-
 | `TS-P2-25` | Proposed — needs a decision | `{` is structurally ambiguous and this now blocks the structural pass. A line break inside braces separates statements in a block body but must not split a multi-line record literal, and `{ a = 1 \n b = 2 }` is token-for-token indistinguishable from a two-statement block. `LiteParser.CandidateBoundaries` therefore reports brace-enclosed positions as *candidates* with their depth, leaving a semantic consumer to decide. Every remaining structural decision inherits that dependency. The brace form is overloaded five ways: block, record, dict, set (`{: :}`), and predicate. | A `{` opens exactly one construct decidable from the token stream, or the ambiguity is confined to a form the structural pass can recognise. Landing it includes the specification, examples, cheatsheets, and test corpus in the same change. Breaking syntax is acceptable per the July 26 decision. |
 
 **Implementation note for `TS-P2-11` (July 25 review recommendation).** The
@@ -1701,3 +1697,62 @@ skipped.
   is a grammar change and needs a decision before implementation.
 - Validation: lite selection 34 passed; full solution run 3,197 passed,
   zero failed, zero skipped in 2m34s.
+
+### July 27, 2026 — Committing the program, and item bookkeeping
+
+The whole stabilization program existed only as uncommitted working-tree
+changes: the last commit predated it by two months, and every slice from
+`TS-P0-01` onward sat in a single snapshot. One `git checkout` would have
+cost all of it. Committed to `stabilization/july-2026` as ten
+subsystem-ordered commits.
+
+- Exact per-slice commits were not recoverable. A snapshot no longer
+  records which slice changed what, and the files that matter most span
+  many slices — `ToshEngine.cs` alone is +6,435/−3,741 across roughly
+  thirteen. Splitting it by hunk would have produced commits that do not
+  compile. The commits are therefore grouped by subsystem in dependency
+  order, each message carrying the relevant slice narrative from this
+  log. The solution build is verified clean at the final commit;
+  intermediate commits are review units, not build points. The suite was
+  last recorded green at 3,197 on July 26 and was not re-run here — a
+  full run exhausted the editor's memory — so that figure is carried
+  forward rather than reconfirmed.
+- Recorded so the Definition of Done can absorb it: an item is not
+  durable until it is committed. Twenty-one slices of validated work
+  were one command away from loss for two months, which no amount of
+  test coverage protects against.
+- `examples/point_custom_error.tosh` was not stabilization work. It had
+  been overwritten on 2026-07-25 by a 3.3 MB ImageMagick PostScript
+  dump — 42,768 of the working tree's 56,487 insertions, with no
+  ToastScript content left. Restored from `HEAD`; the stray PostScript
+  was set aside rather than discarded.
+
+Item bookkeeping, all of it clerical rather than semantic:
+
+- `TS-P1-20` had been assigned twice: to the closed compiled
+  pipeline-value item and, separately, to an open item recording that
+  the pure compiler profile can report a Tier-1-clean artifact while
+  emitted IL still calls into `ToshHost`. The second is renumbered
+  `TS-P1-25`. It was effectively invisible — the previous Active Work
+  summary listed remaining P1 work as `TS-P1-07`–`TS-P1-13` and
+  `TS-P1-16`–`TS-P1-19`, excluding it along with `TS-P1-24`. Verified
+  still live before renumbering: `EmitExecutionFrameEntry` calls
+  `ToshHost.EnterExecutionFrame` and `Main` calls
+  `RegisterCompiledAssembly`, neither guarded by profile.
+- `TS-P2-22` was filed in the P1 table; moved to the P2 table.
+- Blank lines had split `TS-P2-21`, `-23`, `-24`, and `-25` into four
+  separate one-row tables that render without headers. Rejoined.
+- Both tables are now sorted by item number; they previously ran
+  ...14, 15, 16, 17, 23, 18, 19, 20, 24, P2-22, 22, 21, 20. Row content
+  is unchanged: 50 rows before and after, differing only in the
+  renumbered ID.
+- Active Work is regenerated from the tables and now states what it is
+  derived from, so the next drift is a visible inconsistency rather than
+  stale prose.
+
+Three loose ends noted, not addressed: `LiteParserTests` raises three
+`xUnit2029` analyzer warnings against the zero-warning standard the
+earlier slices held to; the `Tosh.DevCompanion` SQLite advisory
+(`NU1903`) is still the solution build's only other warning; and
+`scripts/build.tosh` carries an unrelated one-line doc-comment change
+left uncommitted.
