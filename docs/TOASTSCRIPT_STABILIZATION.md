@@ -399,7 +399,7 @@ closed.
 | `TS-P1-22` | Complete — 2026-07-26 | `a < b < c` parses left-associatively, so `1 < 2 < 3` compares `true < 3` and silently answers `false`. The accepted decision is real chaining. | `a < b < c` evaluates as `(a < b) and (b < c)` with each operand evaluated once and short-circuit preserved, in interpreted and compiled modes; the parser, binder traversal, type checker, and emitter all handle the new shape; precedence and formatting round-trip. |
 | `TS-P1-23` | Complete — 2026-07-26; structural display paths 2026-07-27 | `type-of` yields a shell type descriptor for shell-typed values, but the descriptor rendered as its own CLR class name, so `type-of [1, 2]` reported `Tosh.Runtime.BuiltInShellTypes+BuiltInShellTypeDefinition` instead of the type being asked about. | Displaying a built-in shell type descriptor shows the shell type name; `type-of` reports usable names for lists, records, and other shell-typed values; CLR values are unaffected. |
 | `TS-P1-24` | In progress — refinement cluster converged 2026-07-27 | The interpreter carries sync/async twin methods that are *parallel implementations* rather than delegations, so a semantic fix can land on one surface and silently miss the other. This has happened twice: `OperatorEvaluator.AreEqual` versus `ToshEngine.AreEqualAsync` (`TS-P1-14`/`TS-P1-15`) and `ToshHost.DrainValue` versus `InvokeValue` (`TS-P1-20`). A corrected audit on 2026-07-26 counted 23 truly parallel pairs against 6 that delegate. The refinement cluster, the largest, is now converged. Remaining largest duplications: `ThrowDetailedSingleConstructorMismatch` (55 lines), `TryGetInstanceMember` (51), `ApplyPendingParameterDefaults` (50), `InvokeQualifiedMethod` (47), `ConvertPropertyValue` (44), `TrySetInstanceMember` (43), `SelectBestCallableMatches` (41), `GetInstanceMembers` (38), `ConvertConstructorParameterValue` (35). | Each pair either delegates to one implementation or is removed; a test or analyzer fails when a new parallel sync/async pair is introduced; behaviour is unchanged, evidenced by the existing suite plus the annotated-conversion drift guard. |
-| `TS-P1-25` | Planned | (Filed 2026-07-26 under a duplicate `TS-P1-20`; renumbered 2026-07-27.) The pure compiler profile can report a Tier-1-clean artifact while emitted IL still unconditionally calls `ToshHost.Initialize`/`RegisterCompiledAssembly` from `Main` and `ToshHost.EnterExecutionFrame` from functions, methods, lambdas, and blocks. | A pure artifact contains no metadata references or calls to `Tosh.Compiler.Runtime`, `ToshHost`, or `ToshEngine`; bootstrap is omitted or conditional; recursion guarding uses a stable `Tosh.Runtime` primitive; and a post-emit IL dependency audit fails independently of `RequireTier` diagnostics. |
+| `TS-P1-25` | In progress — audit built 2026-07-27 | (Filed 2026-07-26 under a duplicate `TS-P1-20`; renumbered 2026-07-27.) The pure compiler profile can report a Tier-1-clean artifact while emitted IL still unconditionally calls `ToshHost.Initialize`/`RegisterCompiledAssembly` from `Main` and `ToshHost.EnterExecutionFrame` from functions, methods, lambdas, and blocks. | A pure artifact contains no metadata references or calls to `Tosh.Compiler.Runtime`, `ToshHost`, or `ToshEngine`; bootstrap is omitted or conditional; recursion guarding uses a stable `Tosh.Runtime` primitive; and a post-emit IL dependency audit fails independently of `RequireTier` diagnostics. Verified 2026-07-27: the emitted IL references exactly `System.Console`, `System.Private.CoreLib`, `Tosh.Compiler.Runtime`, and `Tosh.Runtime`, so only the three unconditional `ToshHost` members stand between the artifact and purity; the over-declared `deps.json` is a separate packaging concern. |
 
 ## P2 — Parser, Binder, Diagnostics, and Surface Generation
 
@@ -1873,3 +1873,46 @@ and single-row tables share a representation, but it reads oddly next to
 Validation: formatter, class, display, type-name, introspection, and
 generic selection 442 passed, zero failed; formatter selection 24
 passed. Full suite still outstanding for this session.
+
+### July 27, 2026 — Pure-profile dependency audit (TS-P1-25, first slice)
+
+The acceptance asks for an audit that fails independently of `RequireTier`.
+Building it first turns an invisible defect into a visible one and
+establishes exactly how much work the fix is.
+
+- The premise, now asserted: a program of only tier-1 shapes
+  (`func add(a: int, b: int) -> int`) emits clean under the pure profile.
+  `RequireTier` reasons about the shapes present in the *source*, so it
+  cannot see what the emitter unconditionally writes into every artifact.
+  Nothing in the profile's own gate was ever going to catch this.
+- `PureProfileDependencyAuditTests` reads the emitted PE metadata rather
+  than trusting the emit result — `AssemblyReferences` for the coarse
+  question and `MemberReferences` for which host entry points are called.
+- Measured rather than assumed, which narrowed the item usefully. The
+  emitted IL references exactly four assemblies: `System.Console`,
+  `System.Private.CoreLib`, `Tosh.Compiler.Runtime`, and `Tosh.Runtime`.
+  `Tosh.Language` is *not* among them. Only three unconditional
+  `ToshHost` members — `Initialize` and `RegisterCompiledAssembly` from
+  `Main`, `EnterExecutionFrame` from every function, method, lambda, and
+  block — stand between the artifact and purity. `Tosh.Runtime` is
+  permitted by the acceptance, which is where the recursion guard is
+  expected to move.
+- A separate problem surfaced and is *not* part of this item: the
+  generated `deps.json` declares `Tosh.Compiler.IR`, `Tosh.Compiler.Runtime`,
+  `Tosh.Language`, `Tosh.Runtime`, `Tosh.Stdlib`, and `Tosh.Tui` — the
+  toolchain's own closure rather than the artifact's actual needs. A pure
+  artifact would still ship alongside the interpreter even once its IL is
+  clean. Worth its own item once the IL half lands.
+- The four tests are characterizations, following `LexerCharacterizationTests`:
+  they assert the defect and name this item, so the expectations invert in
+  the same commit as the fix. One of them is a negative control on the
+  audit itself — pure and permissive currently emit identical reference
+  sets, and that equality is both the finding and the thing the fix must
+  change.
+
+Remaining under `TS-P1-25`: make bootstrap conditional or omit it, move
+recursion guarding to a `Tosh.Runtime` primitive, and invert the four
+characterizations.
+
+Validation: audit selection 4 passed. Full suite still outstanding for
+this session.
