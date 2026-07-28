@@ -429,7 +429,7 @@ closed.
 | `TS-P2-22` | Planned | The type checker does not walk class-member annotations, so static checking is materially weaker inside class bodies. `var x: int = "42"` and `func f(x: int)` both report `tosh.type.mismatch`, while the equivalent `prop X: int = "42"`, constructor parameter, method parameter, and property assignment report nothing. Runtime behaviour is consistent (all convert), so this is a static-coverage hole rather than a semantic divergence. | Class property, constructor-parameter, method-parameter, and property-assignment annotations are checked with the same rule and severity as `var` and `func` annotations; a corpus covers matching and mismatching cases in both positions. |
 | `TS-P2-23` | In progress — declaration table 2026-07-26 | Parse-time identity decisions rest on *spelling* rather than on facts the runtime already holds. Two casing tests remain (`char.IsUpper` in `LooksLikeQualifiedDotNetAccess` and `LooksLikePotentialClrTypeName`) deciding whether a dotted name is a CLR type, and 160 hardcoded `Current.Text == "…"` comparisons decide keyword and construct identity. `TS-P2-16` narrowed one such rule but did not remove the guess. The parser cannot do better today because `ToshParser.Parse` receives only source text, while the command, module, and type registries arrive later at `Lowerer.Lower`. | Identity is resolved against a real table rather than inferred from capitalization: either the parser is given the registries, or the decision is deferred to a later phase that has them. Keyword and construct recognition is driven by the generated language-surface registry (`TS-P2-10`) rather than by scattered literal comparisons. A capitalized module and a lowercase CLR type both resolve correctly. |
 | `TS-P2-24` | In progress — pass built and validated 2026-07-26 | Step 2 of the parser roadmap. Structural questions — where a statement ends, where a pipeline stage divides — are answered by heuristics scattered through the recursive-descent parser, each re-deriving the answer with local lookahead. `LiteParser` decides them once over the whole token stream, with bracket depth tracked so a separator inside a nested construct does not split the enclosing statement. | The parser consumes the lite structure instead of re-deriving it; the `LooksLike*`/`HasTopLevel*` helpers that only answered structural questions are removed; structure agrees with today's parser across the corpus, evidenced by differential tests. |
-| `TS-P2-25` | Proposed — needs a decision | `{` is structurally ambiguous and this now blocks the structural pass. A line break inside braces separates statements in a block body but must not split a multi-line record literal, and `{ a = 1 \n b = 2 }` is token-for-token indistinguishable from a two-statement block. `LiteParser.CandidateBoundaries` therefore reports brace-enclosed positions as *candidates* with their depth, leaving a semantic consumer to decide. Every remaining structural decision inherits that dependency. The brace form is overloaded five ways: block, record, dict, set (`{: :}`), and predicate. | A `{` opens exactly one construct decidable from the token stream, or the ambiguity is confined to a form the structural pass can recognise. Landing it includes the specification, examples, cheatsheets, and test corpus in the same change. Breaking syntax is acceptable per the July 26 decision. |
+| `TS-P2-25` | Proposed — options prepared 2026-07-27, needs a decision | `{` is structurally ambiguous and this now blocks the structural pass. A line break inside braces separates statements in a block body but must not split a multi-line record literal, and `{ a = 1 \n b = 2 }` is token-for-token indistinguishable from a two-statement block. `LiteParser.CandidateBoundaries` therefore reports brace-enclosed positions as *candidates* with their depth, leaving a semantic consumer to decide. Every remaining structural decision inherits that dependency. The brace form is overloaded five ways: block, record, dict, set (`{: :}`), and predicate. | A `{` opens exactly one construct decidable from the token stream, or the ambiguity is confined to a form the structural pass can recognise. Landing it includes the specification, examples, cheatsheets, and test corpus in the same change. Breaking syntax is acceptable per the July 26 decision. Options, costs, and a recommendation are in `docs/BRACE_DISAMBIGUATION_RFC.md`. |
 
 **Implementation note for `TS-P2-11` (July 25 review recommendation).** The
 `TS-P2-01`/`TS-P2-02`/`TS-P2-04`/`TS-P2-12`–`TS-P2-15` family shares one root
@@ -1916,3 +1916,44 @@ characterizations.
 
 Validation: audit selection 4 passed. Full suite still outstanding for
 this session.
+
+### July 27, 2026 — Brace disambiguation options (TS-P2-25)
+
+`docs/BRACE_DISAMBIGUATION_RFC.md` records the options, their costs, and a
+recommendation. Measuring the current behaviour contradicted the item as
+filed in three ways worth carrying back here.
+
+- **Four forms, not five.** A predicate is not a distinct parse — it is a
+  block a command consumes as one, separated only by a hardcoded
+  `commandName == "where"` test in `ParseCommandArgument`. `filter { … }`
+  reaches the ordinary block path and behaves identically, so the special
+  case is not load-bearing.
+- **Position already decides, totally.** In expression position `{` is
+  always a literal and a block does not parse at all
+  (`var b = { echo hi }` is a syntax error). In command-argument position
+  `{` is always a block unless it is set- or dict-shaped, so a record is
+  unreachable there — `echo (type-of { a = 1 })` fails. The two contexts
+  are disjoint today; the defect is that `{ a = 1 }` means different
+  things in each.
+- **The claimed indistinguishable case is not the real one.** The item
+  cites `{ a = 1 \n b = 2 }` as token-identical to a two-statement block,
+  but assignment targets require `$`, so a block is `$a = 1 \n $b = 2`.
+  The genuine ambiguity is that shape: `var b = { $x = 1 }` yields a
+  *record* keyed by `$x`, because `$x` lexes as a bareword and satisfies
+  the record rule at `Peek(2)`. It is a live silent misparse, not a
+  theoretical one.
+
+Consequently the decision splits in two: how the structural pass decides
+(cheap, no grammar change needed) and whether `{` should keep meaning two
+things (the actual design choice). Recommendation is Option B — `{`
+becomes block-only and literals take an `@{` sigil — on the grounds that
+the migration is ~57 grep-findable sites, it is the only option meeting
+the item's first acceptance clause, and it leaves the structural pass
+needing no lookahead at all.
+
+Method note: the RFC's first draft proposed `#{` for literals. Reading
+the lexer rather than borrowing from other languages caught that any `#`
+begins a comment, so `#{ a = 1 }` would have lexed as a line comment and
+silently deleted the record. `@{` was then checked against the lexer
+before being proposed — `@(` is already special-cased, and `@` occurs in
+the corpus only inside doc comments.

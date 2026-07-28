@@ -36,6 +36,7 @@ docs/spec/ToastScript.pdf
 !docs/cheatsheets/units/units.pdf
 !docs/ARCHITECTURE.md
 !docs/BACKLOG.md
+!docs/BRACE_DISAMBIGUATION_RFC.md
 !docs/CLR_ABI_v1.md
 !docs/CONFIGURATION.md
 !docs/EDITOR_SUPPORT.md
