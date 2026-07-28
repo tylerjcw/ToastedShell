@@ -3,6 +3,13 @@ using System.Threading.Channels;
 namespace Tosh.Runtime;
 
 /// <summary>
+/// The outcome of receiving one value from a <see cref="ShellChannel"/>.
+/// <see cref="HasValue"/> distinguishes a valid <see langword="null"/>
+/// payload from a channel that is closed and drained.
+/// </summary>
+public readonly record struct ShellChannelReceiveResult(bool HasValue, object? Value);
+
+/// <summary>
 /// A typed channel that carries arbitrary shell values between producers and consumers.
 /// Wraps <see cref="System.Threading.Channels.Channel{T}"/> with a convenient shell-facing API.
 /// </summary>
@@ -41,15 +48,70 @@ public sealed class ShellChannel
 
     /// <summary>
     /// Reads the next value from the channel.
-    /// Returns <c>null</c> when the channel is closed and drained.
+    /// A returned <see langword="null"/> is always a payload.
     /// </summary>
+    /// <exception cref="ChannelClosedException">
+    /// The channel is closed and drained.
+    /// </exception>
     public ValueTask<object?> ReceiveAsync(CancellationToken cancellationToken = default)
-        => ReadSingleAsync(cancellationToken);
+        => ReadSingleValueAsync(cancellationToken);
 
-    private async ValueTask<object?> ReadSingleAsync(CancellationToken cancellationToken)
+    /// <summary>
+    /// Reads one value while explicitly distinguishing a valid
+    /// <see langword="null"/> payload from closed-and-drained.
+    /// </summary>
+    public ValueTask<ShellChannelReceiveResult> ReceiveResultAsync(
+        CancellationToken cancellationToken = default)
+        => ReadSingleResultAsync(cancellationToken);
+
+    /// <summary>
+    /// Waits until a receive may succeed without consuming an item.
+    /// A <see langword="false"/> result means the channel is closed and drained.
+    /// Because channels support multiple readers, callers must still use
+    /// <see cref="TryReceive"/> to atomically commit the receive.
+    /// </summary>
+    internal ValueTask<bool> WaitToReceiveAsync(CancellationToken cancellationToken = default)
+        => _channel.Reader.WaitToReadAsync(cancellationToken);
+
+    /// <summary>
+    /// Atomically attempts to receive one item. The Boolean result distinguishes
+    /// an unavailable item from a valid <see langword="null"/> payload.
+    /// </summary>
+    internal bool TryReceive(out object? value)
+        => _channel.Reader.TryRead(out value);
+
+    private async ValueTask<object?> ReadSingleValueAsync(
+        CancellationToken cancellationToken)
     {
-        await _channel.Reader.WaitToReadAsync(cancellationToken);
-        return _channel.Reader.TryRead(out var item) ? item : null;
+        var result = await ReadSingleResultAsync(cancellationToken).ConfigureAwait(false);
+        if (!result.HasValue)
+        {
+            throw new ChannelClosedException();
+        }
+
+        return result.Value;
+    }
+
+    private async ValueTask<ShellChannelReceiveResult> ReadSingleResultAsync(
+        CancellationToken cancellationToken)
+    {
+        while (await _channel.Reader
+                   .WaitToReadAsync(cancellationToken)
+                   .ConfigureAwait(false))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (_channel.Reader.TryRead(out var item))
+            {
+                return new ShellChannelReceiveResult(HasValue: true, item);
+            }
+
+            // Readiness is advisory with multiple readers. Another receiver
+            // committed the available item, so wait again instead of
+            // reporting a fabricated null or completion.
+        }
+
+        return new ShellChannelReceiveResult(HasValue: false, Value: null);
     }
 
     /// <summary>

@@ -1,6 +1,8 @@
 using System.Collections;
 using System.Globalization;
 using System.Numerics;
+using System.Reflection;
+using System.Runtime.ExceptionServices;
 using System.Text.RegularExpressions;
 using Tosh.Runtime.Units;
 
@@ -21,13 +23,23 @@ public static class OperatorEvaluator
     {
         return @operator switch
         {
-            "not" => !ToBoolean(operand),
+            "!" or "not" => !ToBoolean(operand),
             _ => throw new InvalidOperationException($"Unsupported unary operator '{@operator}'."),
         };
     }
 
     public static object? EvaluateBinary(object? left, string @operator, object? right)
     {
+        if (TryInvokeShellBinaryOperator(left, @operator, right, out var leftResult))
+        {
+            return leftResult;
+        }
+
+        if (TryInvokeShellBinaryOperator(right, @operator, left, out var rightResult))
+        {
+            return rightResult;
+        }
+
         // Auto-unwrap ShellTextLine so operators work transparently on text content.
         if (left is ShellTextLine leftLine) left = leftLine.Text;
         if (right is ShellTextLine rightLine) right = rightLine.Text;
@@ -64,6 +76,177 @@ public static class OperatorEvaluator
             "=" => throw new InvalidOperationException("Assignment operations require a variable."),
             _ => throw new InvalidOperationException($"Unsupported operator '{@operator}'."),
         };
+    }
+
+    /// <summary>
+    /// Evaluates an eager binary expression and attaches the canonical
+    /// structured source diagnostic to ordinary operator failures. User
+    /// throws, cancellation, control flow, defer failures, and diagnostics
+    /// preserve their identity.
+    /// </summary>
+    public static object? EvaluateBinaryWithDiagnostics(
+        object? left,
+        string @operator,
+        object? right,
+        string sourceName,
+        string sourceText,
+        int spanStart,
+        int spanLength)
+    {
+        try
+        {
+            return EvaluateBinary(left, @operator, right);
+        }
+        catch (Exception exception) when (MustPreserveExpressionFailure(exception))
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                Code: exception is InvalidOperationException
+                    ? "tosh.runtime.expression_failed"
+                    : "tosh.runtime.unexpected_exception",
+                Title: exception.Message,
+                SourceName: sourceName,
+                SourceText: sourceText,
+                Span: new TextSpan(spanStart, spanLength),
+                Label: "while evaluating this expression"));
+        }
+    }
+
+    private static bool TryInvokeShellBinaryOperator(
+        object? instance,
+        string @operator,
+        object? other,
+        out object? result)
+    {
+        result = null;
+        if (instance is IShellBinaryOperatorObject shellOperator)
+        {
+            return shellOperator.TryEvaluateBinaryOperator(
+                @operator,
+                other,
+                out result);
+        }
+
+        return TryInvokeCompiledSpecialMethod(
+            instance,
+            @operator,
+            [other],
+            out result);
+    }
+
+    private static bool TryInvokeCompiledSpecialMethod(
+        object? instance,
+        string methodName,
+        object?[] arguments,
+        out object? result)
+    {
+        result = null;
+        if (instance is null ||
+            instance.GetType().GetCustomAttribute<ToshTypeAttribute>() is null)
+        {
+            return false;
+        }
+
+        MethodInfo? method = null;
+        for (var current = instance.GetType();
+             current is not null &&
+             current.GetCustomAttribute<ToshTypeAttribute>() is not null;
+             current = current.BaseType)
+        {
+            method = current
+                .GetMethods(
+                    BindingFlags.Instance |
+                    BindingFlags.Public |
+                    BindingFlags.NonPublic |
+                    BindingFlags.DeclaredOnly)
+                .FirstOrDefault(candidate =>
+                    candidate.GetParameters().Length == arguments.Length &&
+                    string.Equals(
+                        candidate
+                            .GetCustomAttribute<ToshOriginalNameAttribute>()
+                            ?.OriginalName ?? candidate.Name,
+                        methodName,
+                        StringComparison.Ordinal));
+            if (method is not null)
+            {
+                break;
+            }
+        }
+
+        if (method is null)
+        {
+            return false;
+        }
+
+        try
+        {
+            result = method.Invoke(instance, arguments);
+            return true;
+        }
+        catch (TargetInvocationException exception)
+            when (exception.InnerException is not null)
+        {
+            ExceptionDispatchInfo.Capture(exception.InnerException).Throw();
+            throw;
+        }
+    }
+
+    private static bool MustPreserveExpressionFailure(Exception exception) =>
+        exception is ToshDiagnosticException or
+            OperationCanceledException or
+            ShellControlFlowException or
+            ThrowSignalException ||
+        ToshDeferFailures.IsDeferFailure(exception) ||
+        exception.Data.Contains("tosh.thrown");
+
+    private static string ToOperatorString(object? value) =>
+        ToOperatorString(
+            value,
+            new HashSet<object>(ReferenceEqualityComparer.Instance));
+
+    private static string ToOperatorString(
+        object? value,
+        HashSet<object> activeValues)
+    {
+        if (value is null)
+        {
+            return string.Empty;
+        }
+
+        var type = value.GetType();
+        if (type.GetCustomAttribute<ToshTypeAttribute>() is null)
+        {
+            return value.ToString() ?? string.Empty;
+        }
+
+        var fallbackName =
+            type.GetCustomAttribute<ToshOriginalNameAttribute>()?.OriginalName
+            ?? type.Name;
+        if (!activeValues.Add(value))
+        {
+            return fallbackName;
+        }
+
+        try
+        {
+            if (TryInvokeCompiledSpecialMethod(
+                    value,
+                    nameof(ToString),
+                    Array.Empty<object?>(),
+                    out var converted))
+            {
+                return ToOperatorString(converted, activeValues);
+            }
+
+            return fallbackName;
+        }
+        finally
+        {
+            activeValues.Remove(value);
+        }
     }
 
     public static bool Matches(object? actual, string @operator, object? expected, bool nullable)
@@ -136,29 +319,78 @@ public static class OperatorEvaluator
             return Equals(actual, expected);
         }
 
+        // TS-P1-15: an enum member equals another member of the same
+        // enum, and equals its own backing value, so `E.Mid == 1` holds
+        // for a numeric-backed enum. Member-name comparison against a
+        // string still flows through the ordinary conversion path below.
+        if ((actual is IShellEnumValue || expected is IShellEnumValue) &&
+            actual is not string && expected is not string &&
+            ShellEnumComparison.AreEquivalent(actual, expected))
+        {
+            return true;
+        }
+
         if (TypeConversion.TryConvert(expected, actual.GetType(), out var convertedExpected))
         {
-            return Equals(actual, convertedExpected);
+            return ObjectEquals(actual, convertedExpected);
         }
 
         if (TypeConversion.TryConvert(actual, expected.GetType(), out var convertedActual))
         {
-            return Equals(convertedActual, expected);
+            return ObjectEquals(convertedActual, expected);
         }
 
-        if (expected is string expectedText &&
-            string.Equals(actual.ToString(), expectedText, StringComparison.OrdinalIgnoreCase))
+        // TS-P1-14: no ToString()-based fallback. It previously made
+        // mixed-type equality case-insensitive while string-to-string
+        // equality stayed case-sensitive, so `E.Low == "LOW"` was true
+        // while `"ABC" == "abc"` was false. Values with no convertible
+        // shared representation are simply unequal; compare a value's
+        // text form explicitly when that is the intent.
+        return ObjectEquals(actual, expected);
+    }
+
+    private static bool ObjectEquals(object? actual, object? expected)
+    {
+        if (ReferenceEquals(actual, expected))
         {
             return true;
         }
-
-        if (actual is string actualText &&
-            string.Equals(actualText, expected.ToString(), StringComparison.OrdinalIgnoreCase))
+        if (actual is null || expected is null)
         {
+            return false;
+        }
+
+        if (TryInvokeCompiledSpecialMethod(
+                actual,
+                nameof(Equals),
+                [expected],
+                out var equality))
+        {
+            return ToBoolean(equality);
+        }
+
+        var type = actual.GetType();
+        var toshType = type.GetCustomAttribute<ToshTypeAttribute>();
+        if (toshType is not null &&
+            string.Equals(toshType.Kind, "record", StringComparison.Ordinal) &&
+            expected.GetType() == type)
+        {
+            foreach (var field in type.GetFields(
+                         BindingFlags.Instance |
+                         BindingFlags.Public |
+                         BindingFlags.NonPublic |
+                         BindingFlags.DeclaredOnly))
+            {
+                if (!AreEqual(field.GetValue(actual), field.GetValue(expected)))
+                {
+                    return false;
+                }
+            }
+
             return true;
         }
 
-        return Equals(actual, expected);
+        return actual.Equals(expected);
     }
 
     public static bool EvaluateOrderedComparison(object? actual, object? expected, bool nullable, Func<int, bool> predicate)
@@ -173,30 +405,90 @@ public static class OperatorEvaluator
             throw new InvalidOperationException("Ordered comparisons require non-null values.");
         }
 
+        // TS-P1-14: ordering is strict and symmetric. Booleans have no
+        // meaningful order, and a string orders only against another
+        // string — otherwise `"10" < 9` would silently pick lexicographic
+        // ordering and answer true.
+        if (actual is bool || expected is bool)
+        {
+            throw new InvalidOperationException(
+                $"Values of type '{DescribeOperandType(actual)}' and '{DescribeOperandType(expected)}' cannot be ordered. Booleans have no ordering; compare them with '==' or use 'and'/'or'.");
+        }
+
+        if (actual is string != expected is string)
+        {
+            throw new InvalidOperationException(
+                $"Values of type '{DescribeOperandType(actual)}' and '{DescribeOperandType(expected)}' cannot be ordered. Convert one operand explicitly, for example with 'cast'.");
+        }
+
+        // TS-P1-15: enum members order by their backing value, both
+        // against each other and against a plain number. Two different
+        // enums are not one ordered domain, though — members of `E` and
+        // `F` both starting at 0 must not silently rank against each
+        // other.
+        if (actual is IShellEnumValue || expected is IShellEnumValue)
+        {
+            if (actual is IShellEnumValue leftEnum &&
+                expected is IShellEnumValue rightEnum &&
+                !string.Equals(leftEnum.EnumTypeName, rightEnum.EnumTypeName, StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException(
+                    $"Enum members of '{leftEnum.EnumTypeName}' and '{rightEnum.EnumTypeName}' cannot be ordered against each other.");
+            }
+
+            return predicate(ShellEnumComparison.CompareUnderlying(actual, expected));
+        }
+
+        // Convert in either direction so the same operand pair behaves
+        // identically however it is written: `a < b` and `b > a` must
+        // agree instead of one succeeding and the other failing.
         if (actual is IComparable comparable &&
             TypeConversion.TryConvert(expected, actual.GetType(), out var convertedExpected))
         {
             return predicate(comparable.CompareTo(convertedExpected));
         }
 
-        throw new InvalidOperationException($"Values of type '{actual.GetType().FullName}' cannot be compared with '{expected.GetType().FullName}'.");
+        if (expected is IComparable &&
+            TypeConversion.TryConvert(actual, expected.GetType(), out var convertedActual) &&
+            convertedActual is IComparable comparableActual)
+        {
+            return predicate(comparableActual.CompareTo(expected));
+        }
+
+        throw new InvalidOperationException(
+            $"Values of type '{DescribeOperandType(actual)}' cannot be compared with '{DescribeOperandType(expected)}'.");
     }
+
+    private static string DescribeOperandType(object? value)
+        => value is null ? "null" : value.GetType().FullName ?? value.GetType().Name;
 
     private static bool Contains(object? actual, object? expected)
     {
-        return actual?.ToString()?.Contains(expected?.ToString() ?? string.Empty, StringComparison.Ordinal) == true;
+        if (actual is string text)
+        {
+            return text.Contains(ToOperatorString(expected), StringComparison.Ordinal);
+        }
+
+        if (actual is IDictionary ||
+            actual is IShellEnumerableObject { HasShellItems: true } ||
+            actual is IEnumerable)
+        {
+            return IsIn(expected, actual);
+        }
+
+        return false;
     }
 
     private static bool RegexMatch(object? actual, object? expected)
     {
-        var input = actual?.ToString() ?? string.Empty;
+        var input = ToOperatorString(actual);
 
         if (expected is Regex regex)
         {
             return regex.IsMatch(input);
         }
 
-        var pattern = expected?.ToString() ?? string.Empty;
+        var pattern = ToOperatorString(expected);
         return Regex.IsMatch(input, pattern);
     }
 
@@ -220,6 +512,19 @@ public static class OperatorEvaluator
             return false;
         }
 
+        if (candidates is IShellEnumerableObject { HasShellItems: true } shellEnumerable)
+        {
+            foreach (var candidate in shellEnumerable.EnumerateShellItems())
+            {
+                if (AreEqual(value, candidate))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
         if (candidates is IEnumerable enumerable && candidates is not string)
         {
             foreach (var candidate in enumerable)
@@ -235,7 +540,7 @@ public static class OperatorEvaluator
 
         if (candidates is string text)
         {
-            return text.Contains(value?.ToString() ?? string.Empty, StringComparison.Ordinal);
+            return text.Contains(ToOperatorString(value), StringComparison.Ordinal);
         }
 
         return AreEqual(value, candidates);
@@ -243,12 +548,18 @@ public static class OperatorEvaluator
 
     private static bool StartsWith(object? actual, object? expected)
     {
-        return actual?.ToString()?.StartsWith(expected?.ToString() ?? string.Empty, StringComparison.Ordinal) == true;
+        return actual is not null &&
+               ToOperatorString(actual).StartsWith(
+                   ToOperatorString(expected),
+                   StringComparison.Ordinal);
     }
 
     private static bool EndsWith(object? actual, object? expected)
     {
-        return actual?.ToString()?.EndsWith(expected?.ToString() ?? string.Empty, StringComparison.Ordinal) == true;
+        return actual is not null &&
+               ToOperatorString(actual).EndsWith(
+                   ToOperatorString(expected),
+                   StringComparison.Ordinal);
     }
 
     private static object? CastAs(object? value, object? typeSpecifier)
@@ -258,7 +569,7 @@ public static class OperatorEvaluator
             return null;
         }
 
-        var typeName = typeSpecifier?.ToString();
+        var typeName = ToOperatorString(typeSpecifier);
         if (string.IsNullOrEmpty(typeName))
         {
             throw new InvalidOperationException("The 'as' operator requires a type name on the right-hand side.");
@@ -333,7 +644,7 @@ public static class OperatorEvaluator
             return type.IsInstanceOfType(value);
         }
 
-        var typeName = typeSpecifier.ToString();
+        var typeName = ToOperatorString(typeSpecifier);
         if (string.IsNullOrEmpty(typeName))
         {
             return false;
@@ -437,7 +748,7 @@ public static class OperatorEvaluator
 
         if (left is string leftText)
         {
-            return leftText + (right.ToString() ?? string.Empty);
+            return leftText + ToOperatorString(right);
         }
 
         if (left is DateTimeOffset dateTimeOffset && TypeConversion.TryConvert(right, typeof(TimeSpan), out var offsetSpan))
@@ -499,7 +810,7 @@ public static class OperatorEvaluator
 
         if (right is string rightText)
         {
-            return (left.ToString() ?? string.Empty) + rightText;
+            return ToOperatorString(left) + rightText;
         }
 
         return EvaluateNumeric(left, right, (lhs, rhs) => lhs + rhs, (lhs, rhs) => lhs + rhs, (lhs, rhs) => lhs + rhs);
@@ -856,34 +1167,7 @@ public static class OperatorEvaluator
         return result;
     }
 
-    public static bool ToBoolean(object? value)
-    {
-        switch (value)
-        {
-            case null: return false;
-            case bool b: return b;
-            case int i: return i != 0;
-            case long l: return l != 0L;
-            case double d: return d != 0.0;
-            case decimal m: return m != 0m;
-            case float f: return f != 0f;
-            case byte b: return b != 0;
-            case sbyte s: return s != 0;
-            case short s: return s != 0;
-            case ushort u: return u != 0;
-            case uint u: return u != 0U;
-            case ulong u: return u != 0UL;
-            case BigInteger integer: return integer != BigInteger.Zero;
-            case Complex complex: return complex != Complex.Zero;
-            case string s: return s.Length > 0;
-            case ICollection c: return c.Count > 0;
-            case IEnumerable e:
-                var enumerator = e.GetEnumerator();
-                try { return enumerator.MoveNext(); }
-                finally { (enumerator as IDisposable)?.Dispose(); }
-            default: return true;
-        }
-    }
+    public static bool ToBoolean(object? value) => ToshTruthiness.IsTruthy(value);
 
     private static bool IsIntegral(object value)
     {

@@ -34,6 +34,18 @@ public sealed class ReflectionInvoker
         throw new InvalidOperationException($"No constructor matched '{type.FullName}' with {arguments.Count} argument(s).");
     }
 
+    public ValueTask<object> CreateInstanceAsync(
+        Type type,
+        IReadOnlyList<object?> arguments,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(type);
+        ArgumentNullException.ThrowIfNull(arguments);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        return ValueTask.FromResult(CreateInstance(type, arguments));
+    }
+
     public InvocationResult InvokeInstance(object target, string methodName, IReadOnlyList<object?> arguments)
     {
         ArgumentNullException.ThrowIfNull(target);
@@ -63,6 +75,41 @@ public sealed class ReflectionInvoker
             $"instance method '{methodName}' on '{target.GetType().FullName}'");
     }
 
+    public ValueTask<InvocationResult> InvokeInstanceMethodAsync(
+        object target,
+        string methodName,
+        IReadOnlyList<object?> arguments,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        ArgumentException.ThrowIfNullOrWhiteSpace(methodName);
+        ArgumentNullException.ThrowIfNull(arguments);
+
+        if (target is IShellInvocableObject shellInvocable)
+        {
+            return shellInvocable.InvokeInstanceMethodAsync(methodName, arguments, cancellationToken);
+        }
+
+        if (target is IShellStaticType shellStaticType)
+        {
+            return shellStaticType.InvokeStaticMethodAsync(methodName, arguments, cancellationToken);
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (target is Type staticType)
+        {
+            return ValueTask.FromResult(InvokeStatic(staticType, methodName, arguments));
+        }
+
+        return ValueTask.FromResult(Invoke(
+            target.GetType().GetMethods(BindingFlags.Instance | BindingFlags.Public),
+            target,
+            methodName,
+            arguments,
+            $"instance method '{methodName}' on '{target.GetType().FullName}'"));
+    }
+
     public InvocationResult InvokeStatic(Type type, string methodName, IReadOnlyList<object?> arguments)
     {
         ArgumentNullException.ThrowIfNull(type);
@@ -75,6 +122,20 @@ public sealed class ReflectionInvoker
             methodName,
             arguments,
             $"static method '{methodName}' on '{type.FullName}'");
+    }
+
+    public ValueTask<InvocationResult> InvokeStaticMethodAsync(
+        Type type,
+        string methodName,
+        IReadOnlyList<object?> arguments,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(type);
+        ArgumentException.ThrowIfNullOrWhiteSpace(methodName);
+        ArgumentNullException.ThrowIfNull(arguments);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        return ValueTask.FromResult(InvokeStatic(type, methodName, arguments));
     }
 
     public object? GetStaticMember(Type type, string memberName)
@@ -109,12 +170,36 @@ public sealed class ReflectionInvoker
         return type.InvokeStaticMethod(methodName, arguments);
     }
 
+    public ValueTask<InvocationResult> InvokeStaticMethodAsync(
+        IShellStaticType type,
+        string methodName,
+        IReadOnlyList<object?> arguments,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(type);
+        ArgumentException.ThrowIfNullOrWhiteSpace(methodName);
+        ArgumentNullException.ThrowIfNull(arguments);
+
+        return type.InvokeStaticMethodAsync(methodName, arguments, cancellationToken);
+    }
+
     public object CreateInstance(IShellStaticType type, IReadOnlyList<object?> arguments)
     {
         ArgumentNullException.ThrowIfNull(type);
         ArgumentNullException.ThrowIfNull(arguments);
 
         return type.CreateInstance(arguments);
+    }
+
+    public ValueTask<object> CreateInstanceAsync(
+        IShellStaticType type,
+        IReadOnlyList<object?> arguments,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(type);
+        ArgumentNullException.ThrowIfNull(arguments);
+
+        return type.CreateInstanceAsync(arguments, cancellationToken);
     }
 
     public object? GetStaticMember(IShellStaticType type, string memberName)

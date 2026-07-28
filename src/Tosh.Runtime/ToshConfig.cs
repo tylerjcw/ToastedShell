@@ -70,6 +70,8 @@ public sealed class ToshConfig : IResettableShellConfig
 
 public sealed class ToshShellConfig : IResettableShellConfig
 {
+    private int _maxRecursionDepth = ToshExecutionDepthGuard.DefaultMaximumDepth;
+
     public bool Pipefail { get; set; }
 
     public bool ExitOnError { get; set; }
@@ -79,6 +81,16 @@ public sealed class ToshShellConfig : IResettableShellConfig
     public bool ScriptTrace { get; set; }
 
     public bool AutoCd { get; set; }
+
+    public int MaxRecursionDepth
+    {
+        get => _maxRecursionDepth;
+        set
+        {
+            ToshExecutionDepthGuard.ValidateMaximumDepth(value);
+            _maxRecursionDepth = value;
+        }
+    }
 
     public ToshDirectoryAliasConfig Dirs { get; } = new();
 
@@ -91,6 +103,7 @@ public sealed class ToshShellConfig : IResettableShellConfig
         Trace = false;
         ScriptTrace = false;
         AutoCd = false;
+        MaxRecursionDepth = ToshExecutionDepthGuard.DefaultMaximumDepth;
         Dirs.Reset();
         Usings.Reset();
     }

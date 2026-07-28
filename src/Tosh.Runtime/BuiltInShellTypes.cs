@@ -667,6 +667,16 @@ public static class BuiltInShellTypes
 
         public string ShellTypeName => Name;
 
+        /// <summary>
+        /// Renders as the shell type's name. Without this, displaying a
+        /// descriptor — which is what <c>type-of</c> yields for shell
+        /// types — printed this class's own CLR name, so
+        /// <c>type-of [1, 2]</c> reported
+        /// <c>Tosh.Runtime.BuiltInShellTypes+BuiltInShellTypeDefinition</c>
+        /// instead of the type the user asked about.
+        /// </summary>
+        public override string ToString() => Name;
+
         public string ShellFullName { get; }
 
         public string? ShellNamespace { get; }

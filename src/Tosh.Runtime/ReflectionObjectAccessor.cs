@@ -30,6 +30,36 @@ public sealed class ReflectionObjectAccessor : IObjectAccessor
         return current;
     }
 
+    public async ValueTask<object?> GetValueAsync(
+        object? target,
+        string memberPath,
+        CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(memberPath);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (target is null)
+        {
+            return null;
+        }
+
+        object? current = target;
+
+        foreach (var segment in MemberPath.Parse(memberPath).Segments)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (current is null)
+            {
+                return null;
+            }
+
+            current = await ResolveSegmentAsync(current, segment.Name, cancellationToken);
+        }
+
+        return current;
+    }
+
     public void SetValue(object? target, string memberPath, object? value)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(memberPath);
@@ -64,6 +94,52 @@ public sealed class ReflectionObjectAccessor : IObjectAccessor
         }
 
         AssignSegment(current, segments[^1].Name, value);
+    }
+
+    public async ValueTask SetValueAsync(
+        object? target,
+        string memberPath,
+        object? value,
+        CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(memberPath);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (target is null)
+        {
+            throw new InvalidOperationException("Cannot assign a member on null.");
+        }
+
+        var segments = MemberPath.Parse(memberPath).Segments;
+
+        if (segments.Count == 0)
+        {
+            throw new InvalidOperationException("A member path is required for assignment.");
+        }
+
+        object? current = target;
+
+        for (var index = 0; index < segments.Count - 1; index++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (current is null)
+            {
+                throw new InvalidOperationException($"Cannot resolve '{segments[index].Name}' on null.");
+            }
+
+            current = await ResolveOrMaterializeSegmentAsync(
+                current,
+                segments[index].Name,
+                cancellationToken);
+        }
+
+        if (current is null)
+        {
+            throw new InvalidOperationException("Cannot assign a member on null.");
+        }
+
+        await AssignSegmentAsync(current, segments[^1].Name, value, cancellationToken);
     }
 
     public bool IsNullablePath(Type targetType, string memberPath)
@@ -109,7 +185,10 @@ public sealed class ReflectionObjectAccessor : IObjectAccessor
         return pathIsNullable;
     }
 
-    private static object? ResolveSegment(object target, string segment)
+    private static object? ResolveSegment(
+        object target,
+        string segment,
+        bool includeShellRecord = true)
     {
         if (target is ShellTextLine textLine)
         {
@@ -145,7 +224,8 @@ public sealed class ReflectionObjectAccessor : IObjectAccessor
             }
         }
 
-        if (ShellRecordUtilities.TryGetValue(target, segment, out var recordValue))
+        if (includeShellRecord &&
+            ShellRecordUtilities.TryGetValue(target, segment, out var recordValue))
         {
             return recordValue;
         }
@@ -166,9 +246,36 @@ public sealed class ReflectionObjectAccessor : IObjectAccessor
         };
     }
 
-    private static object? ResolveOrMaterializeSegment(object target, string segment)
+    private static async ValueTask<object?> ResolveSegmentAsync(
+        object target,
+        string segment,
+        CancellationToken cancellationToken)
     {
-        if (ShellRecordUtilities.TryGetValue(target, segment, out var existingValue))
+        if (target is IShellRecordObject shellRecord)
+        {
+            var lookup = await shellRecord.TryGetMemberAsync(
+                segment,
+                includeHidden: false,
+                cancellationToken);
+            if (lookup.Found)
+            {
+                return lookup.Value;
+            }
+        }
+
+        return ResolveSegment(
+            target,
+            segment,
+            includeShellRecord: target is not IShellRecordObject);
+    }
+
+    private static object? ResolveOrMaterializeSegment(
+        object target,
+        string segment,
+        bool includeShellRecord = true)
+    {
+        if (includeShellRecord &&
+            ShellRecordUtilities.TryGetValue(target, segment, out var existingValue))
         {
             if (existingValue is null)
             {
@@ -187,17 +294,54 @@ public sealed class ReflectionObjectAccessor : IObjectAccessor
             return created;
         }
 
-        return ResolveSegment(target, segment);
+        return ResolveSegment(target, segment, includeShellRecord);
     }
 
-    private static void AssignSegment(object target, string segment, object? value)
+    private static async ValueTask<object?> ResolveOrMaterializeSegmentAsync(
+        object target,
+        string segment,
+        CancellationToken cancellationToken)
+    {
+        if (target is IShellRecordObject shellRecord)
+        {
+            var lookup = await shellRecord.TryGetMemberAsync(
+                segment,
+                includeHidden: false,
+                cancellationToken);
+
+            if (lookup.Found)
+            {
+                if (lookup.Value is not null)
+                {
+                    return lookup.Value;
+                }
+
+                IDictionary<string, object?> created = new System.Dynamic.ExpandoObject();
+                if (await shellRecord.TrySetMemberAsync(segment, created, cancellationToken))
+                {
+                    return created;
+                }
+            }
+        }
+
+        return ResolveOrMaterializeSegment(
+            target,
+            segment,
+            includeShellRecord: target is not IShellRecordObject);
+    }
+
+    private static void AssignSegment(
+        object target,
+        string segment,
+        object? value,
+        bool includeShellRecord = true)
     {
         if (target is ShellTextLine)
         {
             throw new InvalidOperationException("Shell text values are read-only.");
         }
 
-        if (target is IShellRecordObject shellRecord)
+        if (includeShellRecord && target is IShellRecordObject shellRecord)
         {
             if (shellRecord.TrySetMember(segment, value))
             {
@@ -212,7 +356,8 @@ public sealed class ReflectionObjectAccessor : IObjectAccessor
             }
         }
 
-        if (ShellRecordUtilities.TrySetValue(target, segment, value))
+        if ((includeShellRecord || target is not IShellRecordObject) &&
+            ShellRecordUtilities.TrySetValue(target, segment, value))
         {
             return;
         }
@@ -255,6 +400,32 @@ public sealed class ReflectionObjectAccessor : IObjectAccessor
                     return;
                 }
         }
+    }
+
+    private static async ValueTask AssignSegmentAsync(
+        object target,
+        string segment,
+        object? value,
+        CancellationToken cancellationToken)
+    {
+        if (target is IShellRecordObject shellRecord &&
+            await shellRecord.TrySetMemberAsync(segment, value, cancellationToken))
+        {
+            return;
+        }
+
+        if (target is ShellEnvironmentNamespace)
+        {
+            throw new InvalidOperationException(
+                $"Cannot assign to '$env.{segment}' directly. The $env namespace is read-only. "
+                + $"Use: export {segment} = \"value\"");
+        }
+
+        AssignSegment(
+            target,
+            segment,
+            value,
+            includeShellRecord: target is not IShellRecordObject);
     }
 
     private static MemberInfo ResolveMember(Type targetType, string segment)

@@ -139,6 +139,7 @@ public static class ConfigStartupUtilities
             # $tosh.Config.Prompt.IndicatorText = " >> "
             # $tosh.Config.Repl.ContinuationPrompt = "..> "
             # $tosh.Config.Repl.CompletionMaxVisible = 10
+            # $tosh.Config.Shell.MaxRecursionDepth = 128
             # $tosh.Config.Display.Style = "Compact"
             # $tosh.Config.Display.DateTime.TableMode = "Relative"
             # $tosh.Config.History.MaxEntries = 5000

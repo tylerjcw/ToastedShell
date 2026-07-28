@@ -149,7 +149,12 @@ internal static class ReflectionMetadataUtilities
     {
         ArgumentNullException.ThrowIfNull(value);
 
-        var typeName = GetDisplayName(value.GetType());
+        var runtimeType = value.GetType();
+        var toshType = runtimeType.GetCustomAttribute<ToshTypeAttribute>();
+        var typeName = string.Equals(toshType?.Kind, "enum", StringComparison.Ordinal)
+            ? runtimeType.GetCustomAttribute<ToshOriginalNameAttribute>()?.OriginalName
+                ?? runtimeType.Name
+            : GetDisplayName(runtimeType);
         var names = GetEnumNames(value);
 
         if (names.Count == 0)

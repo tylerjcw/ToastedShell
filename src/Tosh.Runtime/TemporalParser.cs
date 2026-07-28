@@ -4,30 +4,76 @@ namespace Tosh.Runtime;
 
 public static class TemporalParser
 {
-    private static readonly string[] DateTimeOffsetFormats =
+    private static readonly string[] DateTimeOffsetLiteralFormats =
     [
         "O",
         "yyyy-MM-dd'T'HH:mm:ss.FFFFFFFK",
         "yyyy-MM-dd'T'HH:mm:ssK",
         "yyyy-MM-dd'T'HH:mmK",
-        "yyyy-MM-dd HH:mm:ss.FFFFFFFK",
-        "yyyy-MM-dd HH:mm:ssK",
-        "yyyy-MM-dd HH:mmK",
     ];
 
-    private static readonly string[] DateTimeFormats =
+    private static readonly string[] DateTimeLiteralFormats =
     [
         "O",
         "yyyy-MM-dd'T'HH:mm:ss.FFFFFFF",
         "yyyy-MM-dd'T'HH:mm:ss",
         "yyyy-MM-dd'T'HH:mm",
-        "yyyy-MM-dd HH:mm:ss.FFFFFFF",
-        "yyyy-MM-dd HH:mm:ss",
-        "yyyy-MM-dd HH:mm",
         "yyyy-MM-dd",
     ];
 
     public static bool TryParseDateTimeOffset(string? text, out DateTimeOffset value)
+    {
+        if (TryParseDateTimeOffsetLiteral(text, out value))
+        {
+            return true;
+        }
+
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            value = default;
+            return false;
+        }
+
+        var trimmed = text.Trim();
+
+        if (DateTimeOffset.TryParse(
+                trimmed,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.AllowWhiteSpaces | DateTimeStyles.AssumeLocal,
+                out value))
+        {
+            return true;
+        }
+
+        if (DateTime.TryParse(
+                trimmed,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.AllowWhiteSpaces | DateTimeStyles.AssumeLocal,
+                out var dateTime))
+        {
+            value = dateTime.Kind == DateTimeKind.Unspecified
+                ? new DateTimeOffset(DateTime.SpecifyKind(dateTime, DateTimeKind.Local))
+                : new DateTimeOffset(dateTime);
+            return true;
+        }
+
+        if (TryParseSystemdLocalTimestamp(trimmed, out value))
+        {
+            return true;
+        }
+
+        value = default;
+        return false;
+    }
+
+    /// <summary>
+    /// Parses only the ISO-style forms that ToastScript recognizes as intrinsic
+    /// temporal literals. Unlike <see cref="TryParseDateTimeOffset"/>, this
+    /// method deliberately has no culture-based fallback: dotted numbers and
+    /// other command-friendly date spellings must remain ordinary barewords in
+    /// expression position.
+    /// </summary>
+    public static bool TryParseDateTimeOffsetLiteral(string? text, out DateTimeOffset value)
     {
         if (string.IsNullOrWhiteSpace(text))
         {
@@ -39,16 +85,7 @@ public static class TemporalParser
 
         if (DateTimeOffset.TryParseExact(
                 trimmed,
-                DateTimeOffsetFormats,
-                CultureInfo.InvariantCulture,
-                DateTimeStyles.AllowWhiteSpaces | DateTimeStyles.AssumeLocal,
-                out value))
-        {
-            return true;
-        }
-
-        if (DateTimeOffset.TryParse(
-                trimmed,
+                DateTimeOffsetLiteralFormats,
                 CultureInfo.InvariantCulture,
                 DateTimeStyles.AllowWhiteSpaces | DateTimeStyles.AssumeLocal,
                 out value))
@@ -58,7 +95,7 @@ public static class TemporalParser
 
         if (DateTime.TryParseExact(
                 trimmed,
-                DateTimeFormats,
+                DateTimeLiteralFormats,
                 CultureInfo.InvariantCulture,
                 DateTimeStyles.AllowWhiteSpaces | DateTimeStyles.AssumeLocal,
                 out var dateTime))
@@ -66,23 +103,6 @@ public static class TemporalParser
             value = dateTime.Kind == DateTimeKind.Unspecified
                 ? new DateTimeOffset(DateTime.SpecifyKind(dateTime, DateTimeKind.Local))
                 : new DateTimeOffset(dateTime);
-            return true;
-        }
-
-        if (DateTime.TryParse(
-                trimmed,
-                CultureInfo.InvariantCulture,
-                DateTimeStyles.AllowWhiteSpaces | DateTimeStyles.AssumeLocal,
-                out dateTime))
-        {
-            value = dateTime.Kind == DateTimeKind.Unspecified
-                ? new DateTimeOffset(DateTime.SpecifyKind(dateTime, DateTimeKind.Local))
-                : new DateTimeOffset(dateTime);
-            return true;
-        }
-
-        if (TryParseSystemdLocalTimestamp(trimmed, out value))
-        {
             return true;
         }
 

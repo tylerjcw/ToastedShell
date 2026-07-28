@@ -36,7 +36,18 @@ public readonly record struct StorageSize(long Bytes) : IComparable, IComparable
 
     public override string ToString() => $"{Bytes.ToString(CultureInfo.InvariantCulture)} B";
 
-    public static bool TryParse(string? text, out StorageSize size)
+    public static bool TryParse(string? text, out StorageSize size) =>
+        TryParseCore(text, requireSuffix: false, out size);
+
+    /// <summary>
+    /// Parses a ToastScript storage-size literal. A recognized suffix is
+    /// mandatory so ordinary numeric literals remain numeric, and whitespace
+    /// is rejected because a literal is one lexical token.
+    /// </summary>
+    public static bool TryParseLiteral(string? text, out StorageSize size) =>
+        TryParseCore(text, requireSuffix: true, out size);
+
+    private static bool TryParseCore(string? text, bool requireSuffix, out StorageSize size)
     {
         if (string.IsNullOrWhiteSpace(text))
         {
@@ -45,15 +56,20 @@ public readonly record struct StorageSize(long Bytes) : IComparable, IComparable
         }
 
         var trimmed = text.Trim();
-        var splitIndex = 0;
 
-        while (splitIndex < trimmed.Length &&
-               (char.IsDigit(trimmed[splitIndex]) || trimmed[splitIndex] is '.' or '+' or '-'))
+        if (requireSuffix && trimmed.Any(char.IsWhiteSpace))
         {
-            splitIndex++;
+            size = default;
+            return false;
         }
 
-        if (splitIndex == 0)
+        var splitIndex = trimmed.Length;
+        while (splitIndex > 0 && char.IsAsciiLetter(trimmed[splitIndex - 1]))
+        {
+            splitIndex--;
+        }
+
+        if (splitIndex == 0 || (requireSuffix && splitIndex == trimmed.Length))
         {
             size = default;
             return false;
@@ -74,7 +90,16 @@ public readonly record struct StorageSize(long Bytes) : IComparable, IComparable
             return false;
         }
 
-        var bytes = decimal.Round(value * factor, 0, MidpointRounding.AwayFromZero);
+        decimal bytes;
+        try
+        {
+            bytes = decimal.Round(value * factor, 0, MidpointRounding.AwayFromZero);
+        }
+        catch (OverflowException)
+        {
+            size = default;
+            return false;
+        }
 
         if (bytes < long.MinValue || bytes > long.MaxValue)
         {

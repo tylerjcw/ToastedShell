@@ -168,18 +168,9 @@ internal static class FunctionalCommandUtilities
 
         foreach (var output in results)
         {
-            if (!TypeConversion.TryConvert(output, typeof(bool), out var converted) || converted is not bool value)
-            {
-                throw context.CreateDiagnostic(
-                    code: CreateDiagnosticCode(context, "predicate_requires_boolean"),
-                    title: $"'{GetCommandName(context)}' predicates must return boolean values.",
-                    label: "this predicate did not evaluate to true or false",
-                    help: "return booleans, for example with '==', 'Contains(...)', or another predicate.");
-            }
-
             hasValue = true;
 
-            if (!value)
+            if (!ToshTruthiness.IsTruthy(output))
             {
                 return false;
             }

@@ -21,19 +21,9 @@ internal static class PredicateBlockEvaluator
                            context.CancellationToken)
                            .WithCancellation(context.CancellationToken))
         {
-            if (!TypeConversion.TryConvert(output, typeof(bool), out var converted) || converted is not bool value)
-            {
-                throw context.CreateDiagnostic(
-                    code: "tosh.runtime.predicate_requires_boolean",
-                    title: "Predicate expressions must return boolean values.",
-                    argumentIndex: 0,
-                    label: "this predicate did not evaluate to true or false",
-                    help: "return booleans, for example with 'Contains(...)', '==', '&&', or '!'.");
-            }
-
             hasValue = true;
 
-            if (!value)
+            if (!ToshTruthiness.IsTruthy(output))
             {
                 return false;
             }

@@ -625,35 +625,50 @@ public sealed class ToshRuntime
         return runtime;
     }
 
-    private static int _stdlibLoadAttempted;
+    private static readonly object s_stdlibLoadGate = new();
+    private static int _stdlibLoadCompleted;
 
     /// <summary>
     /// Forces the Tosh.Stdlib assembly to load so its [ModuleInitializer] runs and
     /// installs the default command/profile registrars. Project references alone
     /// don't guarantee load — the runtime only resolves an assembly when IL
     /// references a type from it, and Tosh.Runtime deliberately doesn't reference any
-    /// stdlib types. Tries once per process; safe if Tosh.Stdlib isn't deployed
-    /// (embedding scenarios that bring their own command set).
+    /// stdlib types. Tries once per process; concurrent callers wait until the
+    /// module initializer has installed its registrars before proceeding. Safe
+    /// if Tosh.Stdlib isn't deployed (embedding scenarios that bring their own
+    /// command set).
     /// </summary>
     internal static void EnsureStdlibLoaded()
     {
-        if (System.Threading.Interlocked.Exchange(ref _stdlibLoadAttempted, 1) != 0)
+        if (Volatile.Read(ref _stdlibLoadCompleted) != 0)
         {
             return;
         }
 
-        try
+        lock (s_stdlibLoadGate)
         {
-            var assembly = System.Reflection.Assembly.Load(new System.Reflection.AssemblyName("Tosh.Stdlib"));
-            // Assembly.Load only loads metadata; module initializers don't run until
-            // a type from the module is first accessed. Force the [ModuleInitializer]
-            // to fire so DefaultCommandRegistrar/DefaultProfileRegistrar get installed.
-            System.Runtime.CompilerServices.RuntimeHelpers.RunModuleConstructor(
-                assembly.ManifestModule.ModuleHandle);
-        }
-        catch (System.IO.FileNotFoundException)
-        {
-            // Tosh.Stdlib not deployed — caller registers via DefaultCommandRegistrar.
+            if (Volatile.Read(ref _stdlibLoadCompleted) != 0)
+            {
+                return;
+            }
+
+            try
+            {
+                var assembly = System.Reflection.Assembly.Load(new System.Reflection.AssemblyName("Tosh.Stdlib"));
+                // Assembly.Load only loads metadata; module initializers don't run until
+                // a type from the module is first accessed. Force the [ModuleInitializer]
+                // to fire so DefaultCommandRegistrar/DefaultProfileRegistrar get installed.
+                System.Runtime.CompilerServices.RuntimeHelpers.RunModuleConstructor(
+                    assembly.ManifestModule.ModuleHandle);
+            }
+            catch (System.IO.FileNotFoundException)
+            {
+                // Tosh.Stdlib not deployed — caller registers via DefaultCommandRegistrar.
+            }
+            finally
+            {
+                Volatile.Write(ref _stdlibLoadCompleted, 1);
+            }
         }
     }
 

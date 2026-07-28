@@ -809,7 +809,7 @@ public static class HelpCatalog
                     "\"ell\" in \"hello\"",
                     "\"foo\" in (echo foo bar baz)",
                 ],
-                Notes: "`in` is operand-reversed relative to `contains`: `3 in $list` is the same as `$list contains 3`. Also a loop keyword in `for x in ...`; see `for`."),
+                Notes: "`in` is operand-reversed relative to `contains`: `3 in $list` is the same as `$list contains 3`. Dictionaries search keys, and other collections compare elements with canonical equality. String matching is ordinal (case-sensitive). Also a loop keyword in `for x in ...`; see `for`."),
             ["not in"] = new(
                 Category: "Operators",
                 Description: "Negated membership operator. Returns true if the value is NOT found in the collection.",
@@ -835,7 +835,7 @@ public static class HelpCatalog
                     "[1, 2, 3] contains 2",
                     "(ls) | where Name contains \"lib\"",
                 ],
-                Notes: "String containment is case-insensitive. Operand-reversed alternative: `value in collection`."),
+                Notes: "String containment is ordinal (case-sensitive). Dictionaries search keys, not values; other collections compare elements with canonical equality. Operand-reversed alternative: `value in collection`."),
             ["starts-with"] = new(
                 Category: "Operators",
                 Description: "Returns true if the string starts with the given prefix.",
@@ -848,7 +848,7 @@ public static class HelpCatalog
                     "(ls) | where Name starts-with \"lib\"",
                     "(ls) | where Name starts-with \".\"",
                 ],
-                Notes: "String comparison is case-insensitive."),
+                Notes: "String comparison is ordinal (case-sensitive)."),
             ["ends-with"] = new(
                 Category: "Operators",
                 Description: "Returns true if the string ends with the given suffix.",
@@ -861,7 +861,7 @@ public static class HelpCatalog
                     "(ls) | where Name ends-with \".rs\"",
                     "(ls) | where Name ends-with \".cs\"",
                 ],
-                Notes: "String comparison is case-insensitive."),
+                Notes: "String comparison is ordinal (case-sensitive)."),
             ["=~"] = new(
                 Category: "Operators",
                 Description: "Regex match operator. Returns true if the left string matches the .NET regex pattern on the right.",

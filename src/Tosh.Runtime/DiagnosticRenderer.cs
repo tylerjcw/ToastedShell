@@ -49,6 +49,11 @@ public sealed class DiagnosticRenderer
             return Render(diagnosticException);
         }
 
+        if (ToshDeferFailures.IsDeferFailure(exception))
+        {
+            return Render(ToshDeferFailures.ToDiagnosticException(exception));
+        }
+
         return Render(ToshDiagnosticException.Create(new ToshDiagnostic(
             Code: "tosh.runtime.error",
             Title: exception.Message)));

@@ -23,6 +23,29 @@ public static class ShellIterationUtilities
         }
     }
 
+    public static async IAsyncEnumerable<object?> ExpandIterationItemsAsync(
+        object? item,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        if (item is IShellEnumerableObject shellEnumerable)
+        {
+            await foreach (var element in shellEnumerable
+                               .EnumerateShellItemsAsync(cancellationToken)
+                               .WithCancellation(cancellationToken))
+            {
+                yield return element;
+            }
+
+            yield break;
+        }
+
+        foreach (var element in ExpandCollectionLikeValue(item))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            yield return element;
+        }
+    }
+
     public static IEnumerable<object?> ExpandCollectionLikeValue(object? value)
     {
         if (value is null || value is string || ShellRecordUtilities.IsRecordLike(value))
@@ -78,8 +101,7 @@ public static class ShellIterationUtilities
         if (!hasMore)
         {
             await enumerator.DisposeAsync();
-            var expanded = ExpandIterationItems(first);
-            return (null, WrapSync(expanded));
+            return (null, ExpandIterationItemsAsync(first, cancellationToken));
         }
 
         var replayed = ReplayAsync(first, enumerator.Current, enumerator, cancellationToken);
@@ -90,16 +112,6 @@ public static class ShellIterationUtilities
     {
         await Task.CompletedTask;
         yield break;
-    }
-
-    private static async IAsyncEnumerable<object?> WrapSync(IEnumerable<object?> items)
-    {
-        foreach (var item in items)
-        {
-            yield return item;
-        }
-
-        await Task.CompletedTask;
     }
 
     private static async IAsyncEnumerable<object?> ReplayAsync(
@@ -135,9 +147,9 @@ public static class ShellIterationUtilities
 
         if (!await enumerator.MoveNextAsync())
         {
-            foreach (var element in ExpandIterationItems(first))
+            await foreach (var element in ExpandIterationItemsAsync(first, cancellationToken)
+                               .WithCancellation(cancellationToken))
             {
-                cancellationToken.ThrowIfCancellationRequested();
                 yield return element;
             }
 

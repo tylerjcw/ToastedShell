@@ -92,6 +92,120 @@ public static class ShellIndexingUtilities
             $"Type '{target.GetType().FullName}' does not support index access with '{index?.GetType().FullName ?? "null"}'.");
     }
 
+    public static async ValueTask<object?> GetIndexedValueAsync(
+        object? target,
+        object? index,
+        IndexLookupKind lookupKind,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (target is null)
+        {
+            throw new InvalidOperationException("Cannot index into null.");
+        }
+
+        if (lookupKind != IndexLookupKind.ByValue && index is ToshRange range)
+        {
+            return GetSlice(target, range);
+        }
+
+        if (lookupKind != IndexLookupKind.ByValue && TryGetIntegerIndex(index, out var numericIndex))
+        {
+            if (numericIndex < 0)
+            {
+                throw new InvalidOperationException("Indexes must be zero or greater.");
+            }
+
+            if (target is string text)
+            {
+                if (numericIndex >= text.Length)
+                {
+                    throw new InvalidOperationException($"Index {numericIndex} is out of range for string length {text.Length}.");
+                }
+
+                return text[numericIndex];
+            }
+
+            if (target is Array array)
+            {
+                if (numericIndex >= array.Length)
+                {
+                    throw new InvalidOperationException($"Index {numericIndex} is out of range for array length {array.Length}.");
+                }
+
+                return array.GetValue(numericIndex);
+            }
+
+            if (target is IList list)
+            {
+                if (numericIndex >= list.Count)
+                {
+                    throw new InvalidOperationException($"Index {numericIndex} is out of range for list length {list.Count}.");
+                }
+
+                return list[numericIndex];
+            }
+
+            if (TryGetEnumerableValue(target, numericIndex, out var enumeratedValue))
+            {
+                return enumeratedValue;
+            }
+        }
+
+        if (lookupKind != IndexLookupKind.ByValue && index is string keyText)
+        {
+            if (target is IShellRecordObject shellRecord)
+            {
+                var lookup = await shellRecord.TryGetMemberAsync(
+                    keyText,
+                    includeHidden: false,
+                    cancellationToken);
+                if (lookup.Found)
+                {
+                    return lookup.Value;
+                }
+
+                // ShellRecordUtilities would dispatch to the record a second
+                // time. Preserve any separate generic-dictionary behavior
+                // without re-entering the synchronous record API.
+                if (target is not IDictionary &&
+                    TryGetGenericDictionaryValue(target, keyText, out var genericDictionaryValue))
+                {
+                    return genericDictionaryValue;
+                }
+            }
+            else if (ShellRecordUtilities.TryGetValue(target, keyText, out var recordValue))
+            {
+                return recordValue;
+            }
+        }
+
+        if (lookupKind == IndexLookupKind.ByValue &&
+            TryGetRecordFieldByValue(target, index, out var recordFieldName))
+        {
+            return recordFieldName;
+        }
+
+        if (TryGetDictionaryValue(target, index, lookupKind, out var dictionaryValue))
+        {
+            return dictionaryValue;
+        }
+
+        if (lookupKind == IndexLookupKind.ByValue)
+        {
+            throw new InvalidOperationException($"Type '{target.GetType().FullName}' does not support value-based lookup.");
+        }
+
+        if (TryGetIndexerPropertyValue(target, index, out var indexedPropertyValue))
+        {
+            return indexedPropertyValue;
+        }
+
+        throw new InvalidOperationException(
+            $"Type '{target.GetType().FullName}' does not support index access with '{index?.GetType().FullName ?? "null"}'.");
+    }
+
     private static object GetSlice(object target, ToshRange range)
     {
         if (range.IsInfinite)
@@ -247,6 +361,36 @@ public static class ShellIndexingUtilities
         return false;
     }
 
+    private static bool TryGetGenericDictionaryValue(object target, string key, out object? value)
+    {
+        if (target is IReadOnlyDictionary<string, object?> readOnlyDictionary)
+        {
+            foreach (var entry in readOnlyDictionary)
+            {
+                if (string.Equals(entry.Key, key, StringComparison.OrdinalIgnoreCase))
+                {
+                    value = entry.Value;
+                    return true;
+                }
+            }
+        }
+
+        if (target is IDictionary<string, object?> dictionary)
+        {
+            foreach (var entry in dictionary)
+            {
+                if (string.Equals(entry.Key, key, StringComparison.OrdinalIgnoreCase))
+                {
+                    value = entry.Value;
+                    return true;
+                }
+            }
+        }
+
+        value = null;
+        return false;
+    }
+
     private static bool TryGetRecordFieldByValue(object target, object? expectedValue, out object? fieldName)
     {
         if (ShellRecordUtilities.TryGetFields(target, out var fields))
@@ -328,6 +472,91 @@ public static class ShellIndexingUtilities
             }
 
             if (ShellRecordUtilities.TrySetValue(target, keyText, value))
+            {
+                return;
+            }
+        }
+
+        if (TryGetIntegerIndex(index, out var numericIndex))
+        {
+            if (target is Array array)
+            {
+                if (numericIndex < 0 || numericIndex >= array.Length)
+                {
+                    throw new InvalidOperationException($"Index {numericIndex} is out of range for array length {array.Length}.");
+                }
+
+                array.SetValue(value, numericIndex);
+                return;
+            }
+
+            if (target is IList list)
+            {
+                if (numericIndex < 0 || numericIndex >= list.Count)
+                {
+                    throw new InvalidOperationException($"Index {numericIndex} is out of range for list length {list.Count}.");
+                }
+
+                list[numericIndex] = value;
+                return;
+            }
+        }
+
+        if (target is IDictionary dictionary)
+        {
+            object? dictKey = index;
+
+            if (index is string textKey)
+            {
+                foreach (DictionaryEntry entry in dictionary)
+                {
+                    if (string.Equals(entry.Key?.ToString(), textKey, StringComparison.OrdinalIgnoreCase))
+                    {
+                        dictKey = entry.Key;
+                        break;
+                    }
+                }
+            }
+
+            dictionary[dictKey!] = value;
+            return;
+        }
+
+        if (TrySetIndexerProperty(target, index, value))
+        {
+            return;
+        }
+
+        throw new InvalidOperationException(
+            $"Type '{target.GetType().FullName}' does not support index assignment with '{index?.GetType().FullName ?? "null"}'.");
+    }
+
+    public static async ValueTask SetIndexedValueAsync(
+        object? target,
+        object? index,
+        object? value,
+        IndexLookupKind lookupKind,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (target is null)
+        {
+            throw new InvalidOperationException("Cannot assign to an index on null.");
+        }
+
+        // Do not fall back through ShellRecordUtilities after an async record
+        // miss: that would invoke the same record setter synchronously.
+        if (index is string keyText)
+        {
+            if (target is IShellRecordObject record)
+            {
+                if (await record.TrySetMemberAsync(keyText, value, cancellationToken))
+                {
+                    return;
+                }
+            }
+            else if (ShellRecordUtilities.TrySetValue(target, keyText, value))
             {
                 return;
             }
