@@ -382,7 +382,7 @@ closed.
 | `TS-P1-05` | Complete — 2026-07-26 | Constructor/method defaults become null; free defaults and compiled captures use incompatible scopes. | One callable binder evaluates defaults according to the working decision for functions, methods, and constructors in both execution modes. |
 | `TS-P1-06` | Complete — 2026-07-26 | Unknown/duplicate named arguments are accepted and mixed named/rest calls can drop or wrap positional arguments incorrectly. | Unknown and duplicate names are diagnosed; rest contains only unconsumed positional values in source order. |
 | `TS-P1-07` | Partially complete — defer case 2026-07-25 | The defer-specific loss of values emitted before `return` is addressed; other nested control-flow shapes can still materialize or change streaming behavior. | Previously emitted values stream unchanged; optional return value is final; nested control flow does not alter output semantics or introduce unnecessary materialization. |
-| `TS-P1-08` | Planned — **severity re-rating proposed: P0** 2026-07-28 | Nested generator statements materialize output, while short-circuit consumers peek a second upstream item. **`take-while` does not short-circuit an infinite generator at all.** `recur (0, 1) func(a, b) => ($a + $b) \| take-while { _ < 100 }` (`LazySequenceTests.Recur_fibonacci_take_while`) should stop at 89; instead it generates Fibonacci without bound. Because the values are arbitrary-precision integers whose digit count grows linearly, total memory grows quadratically: an instrumented run reached **104,741 MB in 57 seconds** and exhausted a 128 GB machine. The sibling `iterate 1 func(x) => ($x * 2) \| take-while { _ <= 64 }` fails instead with `'iterate' operations must produce exactly one value per input item`. | Nested `yield` streams promptly; `first`/`any` do not evaluate an unnecessary next item; **`take-while`/`skip-while` short-circuit without materializing an unbounded upstream**; infinite-source tests complete under a bounded memory cap. |
+| `TS-P1-08` | Planned — re-rating proposal **withdrawn** 2026-07-28; the evidence was misattributed | Nested generator statements materialize output, while short-circuit consumers peek a second upstream item. **`take-while` does not short-circuit an infinite generator at all.** `recur (0, 1) func(a, b) => ($a + $b) \| take-while { _ < 100 }` (`LazySequenceTests.Recur_fibonacci_take_while`) should stop at 89; instead it generates Fibonacci without bound. Because the values are arbitrary-precision integers whose digit count grows linearly, total memory grows quadratically: an instrumented run reached **104,741 MB in 57 seconds** and exhausted a 128 GB machine. The sibling `iterate 1 func(x) => ($x * 2) \| take-while { _ <= 64 }` fails instead with `'iterate' operations must produce exactly one value per input item`. | Nested `yield` streams promptly; `first`/`any` do not evaluate an unnecessary next item; **`take-while`/`skip-while` short-circuit without materializing an unbounded upstream**; infinite-source tests complete under a bounded memory cap. |
 | `TS-P1-09` | Planned | Class hierarchy lookup loses generic bindings, inherited overloads, `vital` validation, and private visibility rules. | Recursive hierarchy test matrix covers generic intermediaries, overload sets, required members, private/protected access, and partial statics. |
 | `TS-P1-10` | Planned | Anonymous-record equality depends on dictionary insertion order. | Records with the same names and canonically equal values compare equal regardless of insertion order. |
 | `TS-P1-11` | Planned | `_` in destructuring is bound and overwritten instead of discarding the matched value. | Every `_` target skips without creating or modifying a binding; nested/rest patterns are covered. |
@@ -2211,3 +2211,56 @@ generator and count its results, not in lambdas, `take-while`, or `first`.
 Remaining before the suite is green: that generator-invocation defect, and
 the two assertion failures around anonymous-function formatting, which have
 not been examined and may be unrelated.
+
+### July 28, 2026 — The memory exhaustion was a parser regression, not `TS-P1-08`
+
+The suite is green: **3,331 passed, 0 failed, 0 skipped in 2m36s** under
+`MemoryMax=12G`. Getting there overturned the diagnosis filed earlier today,
+and the proposed P0 re-rating of `TS-P1-08` is withdrawn with it.
+
+Root cause. `ParseAnonymousFunctionArrowBody` parsed the body of an
+argument-position `=>` lambda as a full pipeline. That was a deliberate widening
+under `TS-P2-26`, made so `func (x) => $x + 1` would bind the whole operator
+expression rather than just `$x`. It over-corrected: the body then also consumed
+whatever followed it.
+
+```
+$xs | map func(x) => ($x * 2) | count     → 1, 1, 1   (should be 3)
+```
+
+The `| count` was parsed *into* the lambda, so each invocation counted its own
+single value and the enclosing stage never ran. Applied to
+`iterate 1 func(x) => ($x * 2) | first 8`, the `| first 8` vanished into the
+body — leaving the generator unbounded. That is where 104 GB came from. Nothing
+was wrong with `take-while`, with `first`, or with streaming.
+
+Fix. `ParsePipeline` gained a `singleExpressionBody` flag. An argument-position
+`=>` body parses exactly one stage and stops, so a following `|` or a following
+argument belongs to the enclosing command. `TS-P2-26`'s operator-expression
+behaviour is preserved — verified directly, `map func(x) => $x + 1` still binds
+the whole expression.
+
+A second, smaller regression from the same widening: the body's span started at
+the body expression rather than at the `=>`, and the formatter identifies this
+form by checking that the body begins with `=>`. So
+`$f = func(x) => ($x + 1)` round-tripped as a block body. The span now includes
+the arrow.
+
+Two of the twelve failures were therefore real and ten were collateral — the
+three `HelpBrowserScreenTests` and the rest simply allocated after the cap was
+already exhausted, exactly as suspected but not proven earlier.
+
+Method note, and the one worth keeping from this whole sequence. Three
+successive diagnoses were wrong — `take-while`, then lambdas generally, then
+`TS-P1-08` — and each was corrected only by executing something rather than
+reading it. The memory cap is what made executing safe: it converted a defect
+that killed the machine into a test failure with a stack trace. It should be
+standard for this suite regardless of this fix:
+
+```
+systemd-run --user --scope -p MemoryMax=12G -p MemorySwapMax=0 -- dotnet test …
+```
+
+`TS-P1-08` remains open and P1 on its original grounds — nested generator
+materialization and short-circuit consumers peeking an extra item. It simply had
+nothing to do with this.

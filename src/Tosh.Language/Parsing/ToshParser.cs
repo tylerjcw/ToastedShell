@@ -4711,11 +4711,17 @@ public static class ToshParser
             // enclosing expression — so the same body text meant two
             // different things depending on whether the function had a
             // name (TS-P2-26).
+            //
+            // It stops at a top-level `|` though, because this form only ever
+            // appears as an argument, where the pipe separates the enclosing
+            // pipeline's stages. Parenthesise the body to give it a pipeline of
+            // its own: `func(x) => (ls | count)`.
             var pipeline = ParsePipeline(
                 untilCloseParen: true,
                 untilCloseBrace: true,
                 untilSemicolon: true,
-                allowExpressionStart: true);
+                allowExpressionStart: true,
+                singleExpressionBody: true);
 
             if (pipeline.Stages.Count == 0)
             {
@@ -4728,7 +4734,13 @@ public static class ToshParser
                 return new BlockSyntax(Array.Empty<StatementSyntax>(), new TextSpan(arrowStart, 0));
             }
 
-            var span = GetPipelineSpan(pipeline, new TextSpan(arrowStart, 0));
+            // The body span starts at the `=>`, not at the body expression.
+            // GetPipelineSpan alone returns the stages' extent, which excludes the
+            // arrow — and the formatter identifies this form by checking that the
+            // body begins with `=>`, so without the arrow in the span it
+            // round-trips `func(x) => ($x + 1)` as a block body instead.
+            var pipelineSpan = GetPipelineSpan(pipeline, new TextSpan(arrowStart, 0));
+            var span = TextSpan.FromBounds(arrowStart, pipelineSpan.End);
             var statement = new PipelineStatementSyntax(pipeline, span);
             return new BlockSyntax([statement], span);
         }
@@ -9554,12 +9566,20 @@ public static class ToshParser
             return new BlockArgumentSyntax(block, block.Span);
         }
 
+        /// <param name="singleExpressionBody">
+        /// Parses exactly one stage and stops, rather than continuing across
+        /// stage separators. Used by an argument-position <c>=&gt;</c> body, where
+        /// everything after the body's expression — a <c>|</c> or a following
+        /// argument — belongs to the enclosing command, not to the body
+        /// (<c>TS-P2-26</c>).
+        /// </param>
         private PipelineSyntax ParsePipeline(
             bool untilCloseParen,
             bool untilCloseBrace,
             bool untilSemicolon,
             bool allowExpressionStart,
-            bool untilOpenBrace = false)
+            bool untilOpenBrace = false,
+            bool singleExpressionBody = false)
         {
             var stages = new List<PipelineStageSyntax>();
             List<RedirectionSyntax>? redirections = null;
@@ -9730,6 +9750,17 @@ public static class ToshParser
 
                 if (Current.Kind == SyntaxTokenKind.Pipe)
                 {
+                    // An argument-position `=>` body ends here: the pipe is the
+                    // enclosing pipeline's separator, not part of the body. Without
+                    // this, `map func(x) => ($x * 2) | count` parsed `| count` into
+                    // the lambda, so each invocation counted its own single value
+                    // and the outer stage never ran — which left `iterate`/`recur`
+                    // unbounded and exhausted memory (TS-P2-26).
+                    if (singleExpressionBody)
+                    {
+                        break;
+                    }
+
                     if (pendingSeparator != PendingPipelineSeparator.None)
                     {
                         AddMissingPipelineStageDiagnostic(
@@ -9762,6 +9793,16 @@ public static class ToshParser
 
                 if (stage is ExpressionPipelineStageSyntax)
                 {
+                    // An argument-position `=>` body is one expression. Whatever
+                    // follows belongs to the enclosing command — in
+                    // `invoke func(x) => ($x * 2) 21` the `21` is `invoke`'s second
+                    // argument, not a second stage of the body — so break rather
+                    // than reporting a missing separator.
+                    if (singleExpressionBody)
+                    {
+                        break;
+                    }
+
                     // Allow `<expr> if <cond>` / `<expr> unless <cond>` postfix
                     // conditionals to fall back to the outer statement parser.
                     if (Current.Kind == SyntaxTokenKind.Bareword &&
