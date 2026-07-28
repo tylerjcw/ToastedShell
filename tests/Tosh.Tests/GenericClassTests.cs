@@ -133,7 +133,7 @@ public sealed class GenericClassTests
             }
 
             class IntChild extends Base<int>($value) {
-                IntChild(value) { $super($value) }
+                IntChild(value) { }
             }
 
             var c = new IntChild(99)
@@ -158,7 +158,7 @@ public sealed class GenericClassTests
                     prop b: B = $b
                 }
                 class Bad extends Base<int>(1, 2) {
-                    Bad() { $super(1, 2) }
+                    Bad() { }
                 }
                 var x = new Bad()
                 """));

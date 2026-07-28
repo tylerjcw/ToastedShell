@@ -55,6 +55,104 @@ public sealed class SubcommandTests
     }
 
     [Fact]
+    public void Parser_accepts_default_modifier()
+    {
+        var result = ToshParser.Parse("default subcommand launch { arg name: string }");
+        Assert.Empty(result.Diagnostics);
+        var script = Assert.IsType<ScriptStatementSyntax>(result.Statement);
+        var sub = Assert.IsType<SubcommandStatementSyntax>(Assert.Single(script.Statements));
+        Assert.Equal("launch", sub.Name);
+        Assert.Equal(SubcommandModifier.Default, sub.Modifiers);
+    }
+
+    [Fact]
+    public void Parser_rejects_default_plus_hollow()
+    {
+        var result = ToshParser.Parse("default hollow subcommand x { }");
+        Assert.Contains(result.Diagnostics, d => d.Code == "tosh.parser.incompatible_subcommand_modifiers");
+    }
+
+    [Fact]
+    public void Parser_accepts_postfix_colon_modifier()
+    {
+        var result = ToshParser.Parse("subcommand launch: default { arg name: string }");
+        Assert.Empty(result.Diagnostics);
+        var script = Assert.IsType<ScriptStatementSyntax>(result.Statement);
+        var sub = Assert.IsType<SubcommandStatementSyntax>(Assert.Single(script.Statements));
+        Assert.Equal("launch", sub.Name);
+        Assert.Equal(SubcommandModifier.Default, sub.Modifiers);
+    }
+
+    [Fact]
+    public void Parser_accepts_postfix_colon_modifier_fused()
+    {
+        var result = ToshParser.Parse("subcommand launch:default { arg name: string }");
+        Assert.Empty(result.Diagnostics);
+        var script = Assert.IsType<ScriptStatementSyntax>(result.Statement);
+        var sub = Assert.IsType<SubcommandStatementSyntax>(Assert.Single(script.Statements));
+        Assert.Equal("launch", sub.Name);
+        Assert.Equal(SubcommandModifier.Default, sub.Modifiers);
+    }
+
+    [Fact]
+    public void Parser_accepts_postfix_colon_multiple_modifiers()
+    {
+        var result = ToshParser.Parse("subcommand foo: eager hidden vital { writeline \"x\" }");
+        Assert.Empty(result.Diagnostics);
+        var script = Assert.IsType<ScriptStatementSyntax>(result.Statement);
+        var sub = Assert.IsType<SubcommandStatementSyntax>(Assert.Single(script.Statements));
+        Assert.Equal("foo", sub.Name);
+        Assert.Equal(SubcommandModifier.Eager | SubcommandModifier.Hidden | SubcommandModifier.Vital, sub.Modifiers);
+    }
+
+    [Fact]
+    public void Parser_rejects_unknown_postfix_modifier()
+    {
+        var result = ToshParser.Parse("subcommand foo: bogus { }");
+        Assert.Contains(result.Diagnostics, d => d.Code == "tosh.parser.unknown_subcommand_modifier");
+    }
+
+    [Fact]
+    public async Task Default_subcommand_catches_unmatched_positional()
+    {
+        using var output = new StringWriter();
+        var runtime = ToshRuntime.CreateDefault(output, TextWriter.Null);
+        runtime.InvocationArguments = ["witcher3"];
+        var engine = new ToshEngine(runtime);
+
+        await engine.ExecuteToListAsync(
+            """
+            default subcommand launch {
+                arg alias: string
+                writeline $"launch-{$alias}"
+            }
+            subcommand list { writeline "list" }
+            """);
+
+        Assert.Equal($"launch-witcher3{Environment.NewLine}", output.ToString());
+    }
+
+    [Fact]
+    public async Task Default_subcommand_yields_to_explicit_child_match()
+    {
+        using var output = new StringWriter();
+        var runtime = ToshRuntime.CreateDefault(output, TextWriter.Null);
+        runtime.InvocationArguments = ["list"];
+        var engine = new ToshEngine(runtime);
+
+        await engine.ExecuteToListAsync(
+            """
+            default subcommand launch {
+                arg alias: string
+                writeline $"launch-{$alias}"
+            }
+            subcommand list { writeline "list" }
+            """);
+
+        Assert.Equal($"list{Environment.NewLine}", output.ToString());
+    }
+
+    [Fact]
     public void Parser_rejects_hollow_body_with_non_subcommand_statements()
     {
         var result = ToshParser.Parse(

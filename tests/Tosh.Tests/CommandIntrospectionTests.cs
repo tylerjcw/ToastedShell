@@ -830,7 +830,7 @@ public sealed class CommandIntrospectionTests
         Assert.Equal("predicate", meta.Arguments[0].Name);
         Assert.NotEmpty(meta.Examples);
         Assert.NotNull(meta.PipelineInput);
-        Assert.Equal("Pipeline objects for which the predicate returned true.", meta.Output);
+        Assert.Equal("Pipeline objects for which the predicate result was truthy.", meta.Output);
     }
 
     [Fact]

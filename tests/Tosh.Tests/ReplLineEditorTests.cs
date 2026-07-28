@@ -1,4 +1,7 @@
 using Tosh.Cli;
+using Tosh.Language;
+using Tosh.Runtime;
+using System.Diagnostics;
 using System.Text.RegularExpressions;
 
 namespace Tosh.Tests;
@@ -977,5 +980,92 @@ public sealed class ReplLineEditorTests
 
         // Alt+Down at -1: nothing left
         Assert.False(history.TryNext(out _));
+    }
+}
+
+public sealed class ToshReplCancellationTests
+{
+    [Fact]
+    public async Task Recursion_limit_diagnostic_leaves_the_repl_usable()
+    {
+        var runtime = ToshRuntime.CreateDefault();
+        runtime.Config.Shell.MaxRecursionDepth = 8;
+        var engine = new ToshEngine(runtime);
+        var repl = new ToshRepl(engine);
+
+        var exception = await Assert.ThrowsAsync<ToshDiagnosticException>(
+            () => repl.ExecuteAndPrintInterruptiblyAsync(
+                """
+                func recurse(n) {
+                    return (recurse ($n + 1))
+                }
+                recurse 0
+                """,
+                "<repl-recursion-test>"));
+
+        Assert.Equal(
+            "tosh.runtime.recursion_limit_exceeded",
+            Assert.Single(exception.Diagnostics).Code);
+        Assert.Equal(0, ToshExecutionDepthGuard.CurrentDepth);
+        Assert.True(await repl.ExecuteAndPrintInterruptiblyAsync(
+            "var command_after_recursion = 42",
+            "<repl-after-recursion-test>"));
+    }
+
+    [Fact]
+    public async Task Execution_interrupt_cancels_only_the_active_command_and_rearms_the_repl()
+    {
+        var gate = new AwaitReplCancellationCommand();
+        var runtime = ToshRuntime.CreateDefault();
+        runtime.Commands.Register(gate);
+        var engine = new ToshEngine(runtime);
+        var repl = new ToshRepl(engine);
+
+        Assert.False(repl.TryInterruptCurrentExecution());
+
+        var execution = repl.ExecuteAndPrintInterruptiblyAsync(
+            "await-repl-cancellation",
+            "<repl-cancellation-test>");
+
+        await gate.Started.WaitAsync(TimeSpan.FromSeconds(2));
+
+        var stopwatch = Stopwatch.StartNew();
+        Assert.True(repl.TryInterruptCurrentExecution());
+        Assert.False(await execution.WaitAsync(TimeSpan.FromSeconds(2)));
+
+        Assert.True(
+            stopwatch.Elapsed < TimeSpan.FromSeconds(1),
+            $"REPL interrupt took {stopwatch.Elapsed} to cancel the active command.");
+        Assert.True(gate.ObservedToken.IsCancellationRequested);
+        Assert.False(repl.TryInterruptCurrentExecution());
+
+        Assert.True(await repl.ExecuteAndPrintInterruptiblyAsync(
+            "var command_after_interrupt = 42",
+            "<repl-after-cancellation-test>"));
+        Assert.False(repl.TryInterruptCurrentExecution());
+    }
+
+    private sealed class AwaitReplCancellationCommand : IShellCommand
+    {
+        private readonly TaskCompletionSource _started =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public string Name => "await-repl-cancellation";
+
+        public string Description => "Waits for a REPL execution interrupt.";
+
+        public string Usage => Name;
+
+        public Task Started => _started.Task;
+
+        public CancellationToken ObservedToken { get; private set; }
+
+        public async IAsyncEnumerable<object?> ExecuteAsync(CommandContext context)
+        {
+            ObservedToken = context.CancellationToken;
+            _started.TrySetResult();
+            await Task.Delay(Timeout.InfiniteTimeSpan, context.CancellationToken);
+            yield break;
+        }
     }
 }

@@ -8,6 +8,15 @@ namespace Tosh.Tests;
 public sealed class ObjectFormatterTests
 {
     [Fact]
+    public void Default_value_formatter_uses_canonical_scalar_and_collection_text()
+    {
+        Assert.Equal("null", ToshValueFormatter.Format(null));
+        Assert.Equal("true", ToshValueFormatter.Format(true));
+        Assert.Equal("Object[] [ 1, 2 ]", ToshValueFormatter.Format(new object?[] { 1, 2 }));
+        Assert.Equal("ToastColor.Green", ToshValueFormatter.Format(ToastColor.Green));
+    }
+
+    [Fact]
     public void Formatter_renders_shell_command_descriptors_readably()
     {
         var formatter = new ObjectFormatter();
@@ -299,6 +308,12 @@ public sealed class ObjectFormatterTests
     }
 
     private sealed record DemoObject(string Name, int Count);
+
+    [ToshType("enum", 0, 0)]
+    private enum ToastColor
+    {
+        Green,
+    }
 
     private sealed class TemporaryDirectory : IDisposable
     {

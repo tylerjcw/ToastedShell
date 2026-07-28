@@ -169,17 +169,20 @@ public sealed class TypeCheckerTests : IClassFixture<ToshRuntimeFixture>
     }
 
     [Fact]
-    public void Reports_non_boolean_if_condition()
+    public void Allows_truthy_if_and_while_conditions()
     {
-        var diags = Check("if 42 { echo 1 }");
-        Assert.Contains(diags, d => d.Code == "tosh.type.condition");
+        var diags = Check("if 42 { echo 1 }; while \"nope\" { break }");
+        Assert.Empty(diags);
     }
 
-    [Fact]
-    public void Reports_non_boolean_while_condition()
+    [Theory]
+    [InlineData("var value = (1 and \"yes\")")]
+    [InlineData("var value = (0 or \"yes\")")]
+    [InlineData("var value = (not \"\")")]
+    public void Allows_truthy_logical_and_not_operands(string source)
     {
-        var diags = Check("while \"nope\" { echo 1; break }");
-        Assert.Contains(diags, d => d.Code == "tosh.type.condition");
+        var diags = Check(source);
+        Assert.DoesNotContain(diags, d => d.Code == "tosh.type.operator");
     }
 
     [Fact]

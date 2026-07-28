@@ -1,6 +1,8 @@
 using System.Diagnostics;
+using System.Threading.Channels;
 using Tosh.Runtime;
 using Tosh.Language;
+using Tosh.Stdlib.Concurrency;
 
 namespace Tosh.Tests;
 
@@ -209,5 +211,213 @@ public sealed class ConcurrencyCommandTests
 
         Assert.Single(results);
         Assert.Equal("fast", results[0]);
+    }
+
+    [Fact]
+    public async Task Channel_select_preserves_non_winning_buffered_item()
+    {
+        var first = ShellChannel.CreateUnbounded();
+        var second = ShellChannel.CreateUnbounded();
+        await first.SendAsync("first");
+        await second.SendAsync("second");
+        first.Close();
+        second.Close();
+
+        var context = new CommandContext(
+            ToshRuntime.CreateDefault(),
+            AsyncEnumerableExtensions.Empty<object?>(),
+            [first, second],
+            CancellationToken.None);
+
+        var results = await Tosh.Runtime.AsyncEnumerableExtensions.ToListAsync(
+            new ChannelSelectCommand().ExecuteAsync(context));
+
+        var selected = Assert.IsType<Dictionary<string, object?>>(Assert.Single(results));
+        var selectedIndex = Assert.IsType<int>(selected["Index"]);
+        Assert.InRange(selectedIndex, 0, 1);
+
+        var losingChannel = selectedIndex == 0 ? second : first;
+        Assert.True(losingChannel.TryReceive(out var losingValue));
+
+        Assert.Equal(selectedIndex == 0 ? "first" : "second", selected["Value"]);
+        Assert.Equal(selectedIndex == 0 ? "second" : "first", losingValue);
+    }
+
+    [Fact]
+    public async Task Channel_select_accepts_null_payload()
+    {
+        var withNull = ShellChannel.CreateUnbounded();
+        var closed = ShellChannel.CreateUnbounded();
+        await withNull.SendAsync(null);
+        withNull.Close();
+        closed.Close();
+
+        var context = new CommandContext(
+            ToshRuntime.CreateDefault(),
+            AsyncEnumerableExtensions.Empty<object?>(),
+            [withNull, closed],
+            CancellationToken.None);
+
+        var results = await Tosh.Runtime.AsyncEnumerableExtensions.ToListAsync(
+            new ChannelSelectCommand().ExecuteAsync(context));
+
+        var selected = Assert.IsType<Dictionary<string, object?>>(Assert.Single(results));
+        Assert.Equal(0, Assert.IsType<int>(selected["Index"]));
+        Assert.True(selected.ContainsKey("Value"));
+        Assert.Null(selected["Value"]);
+    }
+
+    [Fact]
+    public async Task Channel_select_cancellation_leaves_channels_usable()
+    {
+        var first = ShellChannel.CreateUnbounded();
+        var second = ShellChannel.CreateUnbounded();
+        using var cancellation = new CancellationTokenSource();
+        var context = new CommandContext(
+            ToshRuntime.CreateDefault(),
+            AsyncEnumerableExtensions.Empty<object?>(),
+            [first, second],
+            cancellation.Token);
+
+        var selection = Tosh.Runtime.AsyncEnumerableExtensions.ToListAsync(
+            new ChannelSelectCommand().ExecuteAsync(context));
+
+        cancellation.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => selection.WaitAsync(TimeSpan.FromSeconds(2)));
+
+        await first.SendAsync("first");
+        await second.SendAsync("second");
+        Assert.True(first.TryReceive(out var firstValue));
+        Assert.True(second.TryReceive(out var secondValue));
+        Assert.Equal("first", firstValue);
+        Assert.Equal("second", secondValue);
+
+        first.Close();
+        second.Close();
+    }
+
+    [Fact]
+    public async Task Channel_single_receive_distinguishes_null_from_closed_and_drained()
+    {
+        var channel = ShellChannel.CreateUnbounded();
+        await channel.SendAsync(null);
+        channel.Close();
+
+        var value = await channel.ReceiveResultAsync();
+        var completed = await channel.ReceiveResultAsync();
+
+        Assert.True(value.HasValue);
+        Assert.Null(value.Value);
+        Assert.False(completed.HasValue);
+        Assert.Null(completed.Value);
+    }
+
+    [Fact]
+    public async Task Legacy_channel_receive_returns_null_payload_and_throws_at_completion()
+    {
+        var channel = ShellChannel.CreateUnbounded();
+        await channel.SendAsync(null);
+        channel.Close();
+
+        Assert.Null(await channel.ReceiveAsync());
+        await Assert.ThrowsAsync<ChannelClosedException>(
+            () => channel.ReceiveAsync().AsTask());
+    }
+
+    [Fact]
+    public async Task Concurrent_single_receivers_do_not_report_spurious_completion()
+    {
+        var channel = ShellChannel.CreateUnbounded();
+        var receivers = Enumerable
+            .Range(0, 64)
+            .Select(_ => channel.ReceiveResultAsync().AsTask())
+            .ToArray();
+
+        await Task.Delay(20);
+        await channel.SendAsync("only-item");
+
+        var firstCompleted = await Task
+            .WhenAny(receivers)
+            .WaitAsync(TimeSpan.FromSeconds(2));
+        var firstResult = await firstCompleted;
+
+        Assert.True(firstResult.HasValue);
+        Assert.Equal("only-item", firstResult.Value);
+
+        await Task.Delay(50);
+        Assert.Equal(1, receivers.Count(static task => task.IsCompleted));
+
+        channel.Close();
+        var results = await Task
+            .WhenAll(receivers)
+            .WaitAsync(TimeSpan.FromSeconds(2));
+
+        Assert.Single(results, static result => result.HasValue);
+        Assert.Equal(63, results.Count(static result => !result.HasValue));
+    }
+
+    [Fact]
+    public async Task Concurrent_legacy_receivers_wait_for_distinct_values()
+    {
+        var channel = ShellChannel.CreateUnbounded();
+        var first = channel.ReceiveAsync().AsTask();
+        var second = channel.ReceiveAsync().AsTask();
+
+        await Task.Delay(20);
+        await channel.SendAsync("first");
+
+        var winner = await Task
+            .WhenAny(first, second)
+            .WaitAsync(TimeSpan.FromSeconds(2));
+        Assert.Equal("first", await winner);
+
+        var remaining = ReferenceEquals(winner, first) ? second : first;
+        await Task.Delay(50);
+        Assert.False(remaining.IsCompleted);
+
+        await channel.SendAsync("second");
+        Assert.Equal(
+            "second",
+            await remaining.WaitAsync(TimeSpan.FromSeconds(2)));
+        channel.Close();
+    }
+
+    [Fact]
+    public async Task Cancelled_single_receive_leaves_the_channel_usable()
+    {
+        var channel = ShellChannel.CreateUnbounded();
+        using var cancellation = new CancellationTokenSource();
+        var pending = channel.ReceiveResultAsync(cancellation.Token).AsTask();
+
+        cancellation.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => pending.WaitAsync(TimeSpan.FromSeconds(2)));
+
+        await channel.SendAsync("after-cancellation");
+        var result = await channel.ReceiveResultAsync();
+
+        Assert.True(result.HasValue);
+        Assert.Equal("after-cancellation", result.Value);
+        channel.Close();
+    }
+
+    [Fact]
+    public async Task Channel_recv_streams_null_payload_but_no_value_for_completion()
+    {
+        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+
+        var results = await engine.ExecuteToListAsync(
+            """
+            var ch = channel
+            channel-send $ch null
+            channel-close $ch
+            channel-recv $ch
+            """);
+
+        Assert.Single(results);
+        Assert.Null(results[0]);
     }
 }

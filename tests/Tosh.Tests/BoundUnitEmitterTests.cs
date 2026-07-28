@@ -28,7 +28,7 @@ public sealed class BoundUnitEmitterTests : IClassFixture<ToshRuntimeFixture>
     [Theory]
     [InlineData("echo 42", "42")]
     [InlineData("echo hello", "hello")]
-    [InlineData("echo true", "True")]
+    [InlineData("echo true", "true")]
     [InlineData("echo \"hi\" \"world\"", "hi world")]
     [InlineData("echo 1 2 3", "1 2 3")]
     [InlineData("var x = 42\necho $x", "42")]
@@ -39,28 +39,34 @@ public sealed class BoundUnitEmitterTests : IClassFixture<ToshRuntimeFixture>
     [InlineData("echo (10 % 3)", "1")]
     [InlineData("echo (1 + 2 + 3)", "6")]
     [InlineData("echo (-7)", "-7")]
-    [InlineData("echo (1 == 1)", "True")]
-    [InlineData("echo (1 < 2)", "True")]
+    [InlineData("echo (1 == 1)", "true")]
+    [InlineData("echo (1 < 2)", "true")]
     [InlineData("echo (\"a\" + \"b\")", "ab")]
     // operators routed through OperatorEvaluator runtime fallback
     [InlineData("echo (2 ** 8)", "256")]
     [InlineData("echo (10 // 3)", "3")]
-    [InlineData("echo (3 in [1, 2, 3])", "True")]
-    [InlineData("echo (\"hello\" starts-with \"he\")", "True")]
-    [InlineData("echo (\"hello\" ends-with \"lo\")", "True")]
-    [InlineData("echo (1 is int)", "True")]
+    [InlineData("echo (3 in [1, 2, 3])", "true")]
+    [InlineData("echo ([1, 2, 3] contains 2)", "true")]
+    [InlineData("echo ([10] contains 1)", "false")]
+    [InlineData("echo ([\"alphabet\"] contains \"pha\")", "false")]
+    [InlineData("var d = { \"name\" => \"Alice\" }\necho ($d contains \"name\")\necho ($d contains \"Alice\")", "true\nfalse")]
+    [InlineData("echo ((1..3) contains 2)", "true")]
+    [InlineData("echo (\"Alphabet\" contains \"PHA\")", "false")]
+    [InlineData("echo (\"hello\" starts-with \"he\")", "true")]
+    [InlineData("echo (\"hello\" ends-with \"lo\")", "true")]
+    [InlineData("echo (1 is int)", "true")]
     // null-coalesce
     [InlineData("var x = null\necho ($x ?? 5)", "5")]
     [InlineData("var x = 7\necho ($x ?? 5)", "7")]
     // short-circuit and / or
-    [InlineData("echo (true and 1 == 1)", "True")]
-    [InlineData("echo (false or 2 == 2)", "True")]
-    [InlineData("echo (false and \"unused\")", "False")]
-    [InlineData("echo (true or \"unused\")", "True")]
-    [InlineData("echo ((1 == 1) and (2 == 2 or 3 == 4))", "True")]
+    [InlineData("echo (true and 1 == 1)", "true")]
+    [InlineData("echo (false or 2 == 2)", "true")]
+    [InlineData("echo (false and \"unused\")", "false")]
+    [InlineData("echo (true or \"unused\")", "true")]
+    [InlineData("echo ((1 == 1) and (2 == 2 or 3 == 4))", "true")]
     // unary not
-    [InlineData("echo (not true)", "False")]
-    [InlineData("echo (not false)", "True")]
+    [InlineData("echo (not true)", "false")]
+    [InlineData("echo (not false)", "true")]
     [InlineData("echo $\"plain text\"", "plain text")]
     [InlineData("var n = 7\necho $\"value={$n}\"", "value=7")]
     [InlineData("var n = 7\necho $\"x={$n + 1}\"", "x=8")]
@@ -70,9 +76,29 @@ public sealed class BoundUnitEmitterTests : IClassFixture<ToshRuntimeFixture>
     [InlineData("if (1 > 2) { echo yes } else { echo no }", "no")]
     [InlineData("var x = 5\nif ($x == 5) { echo five }", "five")]
     [InlineData("if (false) { echo a }", "")]
+    [InlineData("if (1) { echo yes } else { echo no }", "yes")]
+    [InlineData("if (0) { echo yes } else { echo no }", "no")]
+    [InlineData("if (\"\") { echo yes } else { echo no }", "no")]
+    [InlineData("if (\"set\") { echo yes } else { echo no }", "yes")]
+    [InlineData("if ([1]) { echo yes } else { echo no }", "yes")]
+    [InlineData("if ([]) { echo yes } else { echo no }", "no")]
     // while
     [InlineData("var i = 0\nwhile ($i < 3) { echo $i\n$i = $i + 1 }", "0\n1\n2")]
     [InlineData("var i = 3\nwhile ($i > 0) { $i = $i - 1 }\necho $i", "0")]
+    [InlineData("while (1) { echo once\n break }", "once")]
+    [InlineData("while (0) { echo never }\necho done", "done")]
+    [InlineData("until (\"\") { echo once\n break }", "once")]
+    // broad logical and unary truthiness
+    [InlineData("echo (1 and \"set\")", "true")]
+    [InlineData("echo (0 or \"set\")", "true")]
+    [InlineData("echo (not 0)\necho (not \"\")", "true\ntrue")]
+    // string quoting and escape semantics
+    [InlineData("var s = 'line\\nnext'\necho $s.Length", "10")]
+    [InlineData("echo \"\\d+\"", "\\d+")]
+    [InlineData("echo (\"a1\" =~ \"\\d\")", "true")]
+    [InlineData("var small = 10kb\necho $small.Bytes", "10000")]
+    [InlineData("echo (10kb > 5kb)", "true")]
+    [InlineData("var total = (10kb + 10kb)\necho $total.Bytes", "20000")]
     // user functions
     [InlineData("func hello => echo hi\nhello", "hi")]
     [InlineData("func say(msg) => echo $msg\nsay hello", "hello")]
@@ -102,6 +128,7 @@ public sealed class BoundUnitEmitterTests : IClassFixture<ToshRuntimeFixture>
     [InlineData("func count_down(n) { if ($n > 0) { echo $n\ncount_down ($n - 1) } }\ncount_down 3", "3\n2\n1")]
     // for loops over ranges
     [InlineData("for i in (1..3) { echo $i }", "1\n2\n3")]
+    [InlineData("for i in (-1..1) { echo $i }", "-1\n0\n1")]
     [InlineData("for i in (0..2) { echo $i }", "0\n1\n2")]
     [InlineData("var sum = 0\nfor i in (1..5) { $sum = $sum + $i }\necho $sum", "15")]
     [InlineData("for i in (1..3) { for j in (1..2) { echo $i $j } }", "1 1\n1 2\n2 1\n2 2\n3 1\n3 2")]
@@ -113,9 +140,20 @@ public sealed class BoundUnitEmitterTests : IClassFixture<ToshRuntimeFixture>
     [InlineData("var x = 17\n$x %= 5\necho $x", "2")]
     [InlineData("var s = \"foo\"\n$s += \"bar\"\necho $s", "foobar")]
     [InlineData("var n = 0\nfor i in (1..10) { $n += $i }\necho $n", "55")]
+    // null-coalescing assignment
+    [InlineData("var x = null\n$x ??= 5\necho $x", "5")]
+    [InlineData("var x = 7\n$x ??= (1 / 0)\necho $x", "7")]
+    [InlineData("var x = \"set\"\n$x ??= (\"unused\" + (1 / 0))\necho $x", "set")]
+    [InlineData("var x = null\nfunc initialize() { $x ??= 5 }\ninitialize\necho $x", "5")]
+    [InlineData("var x = \"set\"\nfunc initialize() { $x ??= (1 / 0) }\ninitialize\necho $x", "set")]
     // member assignment
     [InlineData("class Box { prop Value = 1 }\nvar b = new Box()\n$b.Value = 9\necho $b.Value", "9")]
     [InlineData("class Box { prop Value = 1 }\nvar b = new Box()\n$b.Value = 1\n$b.Value += 2\necho $b.Value", "3")]
+    [InlineData("class Box { prop Value = null }\nvar b = new Box()\n$b.Value ??= 9\necho $b.Value", "9")]
+    [InlineData("class Box { prop Value = 7 }\nvar b = new Box()\n$b.Value ??= (1 / 0)\necho $b.Value", "7")]
+    // index assignment
+    [InlineData("var d = { \"x\" => null }\n$d[\"x\"] ??= 9\necho $d[\"x\"]", "9")]
+    [InlineData("var d = { \"x\" => 7 }\n$d[\"x\"] ??= (1 / 0)\necho $d[\"x\"]", "7")]
     // destructuring declarations
     [InlineData("var [a, b, c] = [1, 2, 3]\necho $a\necho $b\necho $c", "1\n2\n3")]
     [InlineData("var rec = { \"Name\" => \"Alice\", \"Age\" => 30 }\nvar { Name, Age } = $rec\necho $Name\necho $Age", "Alice\n30")]
@@ -549,6 +587,49 @@ public sealed class BoundUnitEmitterTests : IClassFixture<ToshRuntimeFixture>
         Assert.Contains("hello world", output);
     }
 
+    [Fact]
+    public void Compiled_direct_recursion_uses_structured_depth_guard_and_releases_frame()
+    {
+        const string source = """
+            func recurse(n) {
+                if ($n == 0) { return 0 }
+                return (recurse ($n - 1))
+            }
+            echo (recurse 200)
+            """;
+
+        global::Tosh.Compiler.Runtime.ToshHost.Initialize();
+        var exception = Assert.Throws<TargetInvocationException>(() => CompileLoadAndRun(source));
+        var diagnostic = Assert.IsType<ToshDiagnosticException>(exception.InnerException);
+        var detail = Assert.Single(diagnostic.Diagnostics);
+        Assert.Equal("tosh.runtime.recursion_limit_exceeded", detail.Code);
+        Assert.Contains("func recurse", detail.Info);
+        Assert.Equal(0, ToshExecutionDepthGuard.CurrentDepth);
+    }
+
+    [Fact]
+    public void Compiled_direct_constructor_recursion_uses_structured_depth_guard()
+    {
+        const string source = """
+            class Loop {
+                prop Next = new Loop()
+            }
+            new Loop()
+        """;
+
+        var exception = Assert.Throws<TargetInvocationException>(() => CompileLoadAndRun(source));
+        Exception cause = exception;
+        while (cause is TargetInvocationException { InnerException: not null } invocation)
+        {
+            cause = invocation.InnerException!;
+        }
+        var diagnostic = Assert.IsType<ToshDiagnosticException>(cause);
+        Assert.Equal(
+            "tosh.runtime.recursion_limit_exceeded",
+            Assert.Single(diagnostic.Diagnostics).Code);
+        Assert.Equal(0, ToshExecutionDepthGuard.CurrentDepth);
+    }
+
     private string CompileAndRun(string source)
     {
         var (output, result) = CompileAndRunWithDiagnostics(source);
@@ -907,7 +988,7 @@ public sealed class BoundUnitEmitterTests : IClassFixture<ToshRuntimeFixture>
     }
 
     [Fact]
-    public void Profile_pure_accepts_refinement_type_alias_without_tier3_replay()
+    public void Profile_pure_rejects_refinement_variable_conversion_without_tier3_replay()
     {
         var source =
             "type Port = int where (_ >= 1 and _ <= 65535)\n" +
@@ -915,8 +996,16 @@ public sealed class BoundUnitEmitterTests : IClassFixture<ToshRuntimeFixture>
             "echo $p";
 
         var result = EmitWithProfile(source, CompileProfile.Pure);
-        Assert.True(result.IsClean,
-            $"expected clean emit at pure profile, got: {string.Join(", ", result.UnsupportedShapes)}");
+        Assert.False(result.IsClean);
+        Assert.Contains(
+            result.UnsupportedShapes,
+            diagnostic =>
+                diagnostic.Contains("profile 'pure'", StringComparison.Ordinal) &&
+                diagnostic.Contains("tier 2", StringComparison.Ordinal) &&
+                diagnostic.Contains("variable annotation conversion", StringComparison.Ordinal));
+        Assert.DoesNotContain(
+            result.UnsupportedShapes,
+            diagnostic => diagnostic.Contains("tier 3", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -1093,6 +1182,115 @@ public sealed class BoundUnitEmitterTests : IClassFixture<ToshRuntimeFixture>
             + "echo $d.Breed");
 
         Assert.Equal("sam\nlab", output.Trim());
+    }
+
+    [Fact]
+    public void Compiled_three_level_construction_binds_each_layers_primary_constructor_locals()
+    {
+        var output = CompileAndRun(
+            "class PrimaryRoot(root: int) { prop RootValue = $root }\n"
+            + "class PrimaryMiddle(middle: int) extends PrimaryRoot(42) { prop MiddleValue = $middle }\n"
+            + "class PrimaryLeaf(leaf: int) extends PrimaryMiddle(41) { prop LeafValue = $leaf }\n"
+            + "var value = new PrimaryLeaf(40)\n"
+            + "echo $value.RootValue\n"
+            + "echo $value.MiddleValue\n"
+            + "echo $value.LeafValue");
+
+        Assert.Equal("42\n41\n40", output.Trim().Replace("\r", ""));
+    }
+
+    [Fact]
+    public void Compiled_leading_super_initializers_construct_each_layer_once()
+    {
+        var output = CompileAndRun(
+            "class SuperRoot { prop RootValue\nSuperRoot(root: int) { $this.RootValue = $root } }\n"
+            + "class SuperMiddle extends SuperRoot { prop MiddleValue\n"
+            + "SuperMiddle(middle: int) { $super(42); $this.MiddleValue = $middle } }\n"
+            + "class SuperLeaf extends SuperMiddle { prop LeafValue\n"
+            + "SuperLeaf(leaf: int) { $super(41); $this.LeafValue = $leaf } }\n"
+            + "var value = new SuperLeaf(40)\n"
+            + "echo $value.RootValue\n"
+            + "echo $value.MiddleValue\n"
+            + "echo $value.LeafValue");
+
+        Assert.Equal("42\n41\n40", output.Trim().Replace("\r", ""));
+    }
+
+    [Fact]
+    public void Compiled_zero_argument_base_initializers_run_the_constructor_body()
+    {
+        var output = CompileAndRun(
+            "class ImplicitBase { prop Calls = 0\nImplicitBase() { $this.Calls += 1 } }\n"
+            + "class ImplicitChild extends ImplicitBase { }\n"
+            + "class ExplicitEmptyChild extends ImplicitBase() { }\n"
+            + "var implicitChild = new ImplicitChild()\n"
+            + "var explicitChild = new ExplicitEmptyChild()\n"
+            + "echo $implicitChild.Calls\n"
+            + "echo $explicitChild.Calls");
+
+        Assert.Equal("1\n1", output.Trim().Replace("\r", ""));
+    }
+
+    [Fact]
+    public void Compiled_generic_base_chain_replays_without_truncating_inheritance()
+    {
+        var output = CompileAndRun(
+            "class GenericRoot<T>(value: T) { prop Value: T = $value }\n"
+            + "class GenericMiddle extends GenericRoot<int>($value) { GenericMiddle(value) { } }\n"
+            + "class GenericLeaf extends GenericMiddle($value) { GenericLeaf(value) { } }\n"
+            + "var leaf = new GenericLeaf(42)\n"
+            + "echo $leaf.Value");
+
+        Assert.Equal("42", output.Trim());
+    }
+
+    [Fact]
+    public void Direct_clr_shell_construction_preserves_three_level_base_arguments()
+    {
+        var (_, result, assembly) = CompileLoadAndRun(
+            "class ClrRoot(root: string) { prop RootValue = $root }\n"
+            + "class ClrMiddle(middle: string) extends ClrRoot(\"root\") { prop MiddleValue = $middle }\n"
+            + "class ClrLeaf(leaf: string) extends ClrMiddle(\"middle\") { prop LeafValue = $leaf }");
+
+        Assert.True(
+            result.IsClean,
+            $"expected clean emit, got: {string.Join(", ", result.UnsupportedShapes)}");
+
+        var leafType = assembly.GetTypes().Single(type => type.Name == "ClrLeaf");
+        var value = Activator.CreateInstance(leafType, ["x"]);
+        Assert.NotNull(value);
+        Assert.Equal("root", leafType.GetField("RootValue")!.GetValue(value));
+        Assert.Equal("middle", leafType.GetField("MiddleValue")!.GetValue(value));
+        Assert.Equal("x", leafType.GetField("LeafValue")!.GetValue(value));
+    }
+
+    [Theory]
+    [InlineData(
+        "class MixedBase(value: int) { prop Value = $value }\n"
+        + "class MixedChild extends MixedBase(1) { MixedChild() { $super(2) } }",
+        "tosh.compile.duplicate_base_constructor_initializer")]
+    [InlineData(
+        "class LateBase(value: int) { prop Value = $value }\n"
+        + "class LateChild extends LateBase { LateChild() { echo late; $super(1) } }",
+        "tosh.compile.super_initializer_must_be_first")]
+    [InlineData(
+        "class RepeatedBase(value: int) { prop Value = $value }\n"
+        + "class RepeatedChild extends RepeatedBase { RepeatedChild() { $super(1); $super(2) } }",
+        "tosh.compile.duplicate_base_constructor_initializer")]
+    [InlineData(
+        "class RequiredBase(value: int) { prop Value = $value }\n"
+        + "class MissingInitializerChild extends RequiredBase { }",
+        "tosh.compile.base_constructor_arity_mismatch")]
+    public void Compiled_invalid_base_initializers_report_structured_diagnostics(
+        string source,
+        string diagnosticCode)
+    {
+        var result = EmitWithProfile(source, CompileProfile.Permissive);
+
+        Assert.False(result.IsClean);
+        Assert.Contains(
+            result.UnsupportedShapes,
+            diagnostic => diagnostic.StartsWith(diagnosticCode, StringComparison.Ordinal));
     }
 
     [Fact]
@@ -1617,17 +1815,85 @@ public sealed class BoundUnitEmitterTests : IClassFixture<ToshRuntimeFixture>
     }
 
     [Fact]
-    public void Compiled_enum_member_access_resolves_through_loaded_clr_type()
+    public void Compiled_tuple_assignment_is_atomic_when_later_conversion_fails()
+    {
+        var output = CompileAndRun(
+            "var first: int = 1\n"
+            + "var second: int = 2\n"
+            + "try { ($first, $second) = [3, \"bad\"] } catch (error) { }\n"
+            + "echo $first $second");
+
+        Assert.Equal("1 2", output.Trim());
+    }
+
+    [Fact]
+    public void Compiled_tuple_assignment_updates_the_shadowing_symbol()
+    {
+        var output = CompileAndRun(
+            "var value = 1\n"
+            + "if (true) {\n"
+            + "    var value = 2\n"
+            + "    var other = 0\n"
+            + "    ($value, $other) = [3, 4]\n"
+            + "    echo $value $other\n"
+            + "}\n"
+            + "echo $value");
+
+        Assert.Equal("3 4\n1", output.Trim().Replace("\r", ""));
+    }
+
+    [Fact]
+    public void Compiled_tuple_assignment_updates_captured_targets()
+    {
+        var output = CompileAndRun(
+            "var first = 1\n"
+            + "var second = 2\n"
+            + "func update() { ($first, $second) = [3, 4] }\n"
+            + "update\n"
+            + "echo $first $second");
+
+        Assert.Equal("3 4", output.Trim());
+    }
+
+    [Theory]
+    [InlineData("const value = null\n$value ??= 5")]
+    [InlineData("const first = 1\nvar second = 2\n($first, $second) = [3, 4]")]
+    public void Compiled_assignment_rejects_const_targets(string source)
+    {
+        var result = EmitWithProfile(source, CompileProfile.Permissive);
+
+        Assert.Contains(
+            result.UnsupportedShapes,
+            diagnostic => diagnostic.Contains("cannot reassign constant", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Compiled_enum_member_access_uses_the_declared_enum_without_host_resolution()
     {
         var result = EmitWithProfile(
-            "enum Color: int { Red = 1, Green = 2 }\necho Color.Green",
-            CompileProfile.Runtime);
+            "enum Color: int { Red = 1, Green = 2 }\necho (Color.Green)",
+            CompileProfile.Pure);
         Assert.True(result.IsClean,
-            $"expected clean runtime emit, got: {string.Join(", ", result.UnsupportedShapes)}");
+            $"expected clean pure emit, got: {string.Join(", ", result.UnsupportedShapes)}");
 
-        var output = CompileAndRun(
-            "enum Color: int { Red = 1, Green = 2 }\necho Color.Green");
-        Assert.Equal("Color [Green]", output.Trim());
+        var (output, emitResult, assembly) = CompileLoadAndRun(
+            """
+            enum Color: int { Red = 1, Green = 2 }
+            func probe() { return Color.Green }
+            echo (Color.Green)
+            """);
+        Assert.True(emitResult.IsClean,
+            $"expected clean emit, got: {string.Join(", ", emitResult.UnsupportedShapes)}");
+
+        var program = Assert.Single(assembly.GetTypes(), type => type.Name == "Program");
+        var probe = Assert.IsAssignableFrom<MethodInfo>(
+            program.GetMethod("Func_probe", BindingFlags.Public | BindingFlags.Static));
+        var value = probe.Invoke(null, Array.Empty<object?>());
+        Assert.NotNull(value);
+        Assert.True(value.GetType().IsEnum, $"actual type: {value.GetType().FullName}");
+        Assert.Equal("Green", value.ToString());
+        Assert.Equal("Color.Green", ToshValueFormatter.Format(value));
+        Assert.Equal("Color.Green", output.Trim());
     }
 
     [Fact]

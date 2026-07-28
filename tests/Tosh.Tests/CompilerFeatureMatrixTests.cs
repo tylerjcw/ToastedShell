@@ -96,6 +96,36 @@ public sealed class CompilerFeatureMatrixTests : IClassFixture<ToshRuntimeFixtur
             "Inherited classes emit a real CLR type hierarchy (base TypeBuilder as parent).");
 
         yield return Case(
+            "types.class-defaulted-ctor-param",
+            "Types",
+            "class P(x, y = $x * 10) { prop Y = $y }",
+            permissive: true,
+            runtime: false,
+            pure: false,
+            "TS-P1-05: defaulted constructor parameters need the engine's callable default binder, so the class stays on Tier-3 source replay.");
+
+        yield return Case(
+            "types.class-defaulted-method-param",
+            "Types",
+            "class C { func m(a, b = $a * 2) { return $b } }",
+            permissive: true,
+            runtime: false,
+            pure: false,
+            "TS-P1-05: defaulted method parameters need the engine's callable default binder, so the class stays on Tier-3 source replay.");
+
+        yield return Case(
+            "types.class-construction-chain",
+            "Types",
+            "class MatrixCtorRoot(root: int) { prop R = $root }\n"
+                + "class MatrixCtorMiddle(middle: int) extends MatrixCtorRoot(42) { prop M = $middle }\n"
+                + "class MatrixCtorLeaf(leaf: int) extends MatrixCtorMiddle(41) { prop L = $leaf }\n"
+                + "var value = new MatrixCtorLeaf(40)\necho $value.R",
+            permissive: true,
+            runtime: true,
+            pure: false,
+            "Complete CLR shell hierarchies bind each layer's constructor locals; inherited construction remains Tier 2 at the call site.");
+
+        yield return Case(
             "types.class-implements-interface",
             "Types",
             "interface Runnable { func run() }\nclass Job implements Runnable { func run() { return \"ok\" } }",
@@ -459,6 +489,15 @@ public sealed class CompilerFeatureMatrixTests : IClassFixture<ToshRuntimeFixtur
             "Record destructuring (`var { a } = …`) emits ToshHost.DestructureRecord plus per-symbol stores.");
 
         yield return Case(
+            "vars.tuple-assignment",
+            "Variables",
+            "var a = 0\nvar b = 0\n($a, $b) = [1, 2]\necho $a",
+            permissive: true,
+            runtime: true,
+            pure: true,
+            "Tuple assignment resolves targets by symbol and stages every conversion before committing atomically.");
+
+        yield return Case(
             "vars.member-assignment",
             "Variables",
             "class Box { prop V = 0 }\nvar b = new Box()\n$b.V = 5",
@@ -466,6 +505,15 @@ public sealed class CompilerFeatureMatrixTests : IClassFixture<ToshRuntimeFixtur
             runtime: true,
             pure: true,
             "Member assignment ($obj.X = v) emits direct field/property stores.");
+
+        yield return Case(
+            "vars.null-coalescing-assignment",
+            "Variables",
+            "var x = null\n$x ??= 5\necho $x",
+            permissive: true,
+            runtime: true,
+            pure: true,
+            "Null-coalescing assignment short-circuits the RHS and stores only when the target is null.");
 
         yield return Case(
             "vars.using-statement",
@@ -598,13 +646,22 @@ public sealed class CompilerFeatureMatrixTests : IClassFixture<ToshRuntimeFixtur
             "fixed-var declarations register through the host (Tier 2).");
 
         yield return Case(
+            "declaration.annotated-var",
+            "Declarations",
+            "var count: long = 1",
+            permissive: true,
+            runtime: true,
+            pure: false,
+            "Annotated mutable variables use the canonical host conversion path on every write (Tier 2).");
+
+        yield return Case(
             "declaration.refinement-var",
             "Declarations",
             "var port: int where (_ > 0) = 8080",
             permissive: true,
             runtime: true,
-            pure: true,
-            "Refinement-typed `var` lowers to native IL with a runtime-checked predicate body.");
+            pure: false,
+            "Refinement-typed `var` uses the canonical host annotation converter (Tier 2) before storing the value.");
 
         // ── Subcommand trees ──
         yield return Case(
@@ -749,6 +806,54 @@ public sealed class CompilerFeatureMatrixTests : IClassFixture<ToshRuntimeFixtur
             "func tag(label, value) { echo $\"{$label}={$value}\" }\ntag(value = \"v\", label = \"k\")",
             stdout: "k=v",
             "named args route by parameter name");
+
+        yield return ExecCase(
+            "defaults.func-chain",
+            "func f(a: int, b: int = $a + 1, c: int = $b + 1) -> string { return $\"{$a},{$b},{$c}\" }\necho (f 1)",
+            stdout: "1,2,3",
+            "TS-P1-05: defaults evaluate left-to-right with earlier parameters visible");
+
+        yield return ExecCase(
+            "defaults.func-lexical-call-time",
+            "var g: int = 1\nfunc f(x: int = $g) -> int { return $x }\necho (f)\n$g = 2\necho (f)",
+            stdout: "1\n2",
+            "TS-P1-05: defaults evaluate at call time against the captured lexical scope");
+
+        yield return ExecCase(
+            "defaults.class-ctor-and-method",
+            "class P(x, y = $x * 10) { prop Y = $y }\necho ((new P(3)).Y)\nclass C { func m(a, b = $a * 2) { return $b } }\necho ((new C()).m(5))",
+            stdout: "30\n10",
+            "TS-P1-05: defaulted ctor/method parameters resolve through engine replay");
+
+        yield return ExecCase(
+            "defaults.named-arg-gap",
+            "func f(a, b = $a + 1, c = $b * 10) { return $\"{$a},{$b},{$c}\" }\necho (f(1, c = 99))",
+            stdout: "1,2,99",
+            "TS-P1-05: named arguments bind before the remaining defaults fill the gap");
+
+        yield return ExecCase(
+            "pipeline.value-single-collapse",
+            "var xs = [1, 2, 3]\nvar n = ($xs | count)\necho $n",
+            stdout: "3",
+            "TS-P1-20: a one-item value pipeline collapses to the item, not a single-element list");
+
+        yield return ExecCase(
+            "pipeline.value-literal-seed-collapse",
+            "var n = ([1, 2, 3] | count)\necho $n",
+            stdout: "3",
+            "TS-P1-20: literal-seeded value pipelines collapse identically to variable-seeded ones");
+
+        yield return ExecCase(
+            "pipeline.value-empty-is-null",
+            "var n = ([1, 2, 3] | where { _ > 99 })\necho ($n == null ? \"NULL\" : \"NOTNULL\")",
+            stdout: "NULL",
+            "TS-P1-20: a value pipeline that yields nothing produces null");
+
+        yield return ExecCase(
+            "pipeline.sequence-source-keeps-items",
+            "for x in ([1, 2, 3] | each { _ }) { echo $x }",
+            stdout: "1\n2\n3",
+            "TS-P1-20: iteration sources keep every item rather than demanding a single value");
     }
 
     [Theory]

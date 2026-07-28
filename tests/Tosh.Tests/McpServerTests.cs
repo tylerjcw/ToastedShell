@@ -186,6 +186,31 @@ public sealed class McpServerTests
     }
 
     [Fact]
+    public async Task RunSnippet_class_method_respects_timeout_without_waiting_for_inner_command()
+    {
+        await AssertRunSnippetTimesOutPromptlyAsync(
+            """
+            class Slow {
+                func wait() { sleep 5 }
+            }
+            var slow = new Slow()
+            $slow.wait()
+            """);
+    }
+
+    [Fact]
+    public async Task RunSnippet_constructor_respects_timeout_without_waiting_for_inner_command()
+    {
+        await AssertRunSnippetTimesOutPromptlyAsync(
+            """
+            class Slow {
+                Slow() { sleep 5 }
+            }
+            var slow = new Slow()
+            """);
+    }
+
+    [Fact]
     public async Task RunSnippet_returns_multiple_results()
     {
         var content = await CallToolAsync("run_snippet", new { code = "echo 1\necho 2\necho 3" });
@@ -266,6 +291,26 @@ public sealed class McpServerTests
     }
 
     // --- Test Helpers ---
+
+    private static async Task AssertRunSnippetTimesOutPromptlyAsync(string code)
+    {
+        const int timeoutMilliseconds = 250;
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+
+        var content = await CallToolAsync(
+            "run_snippet",
+            new { code, timeout_ms = timeoutMilliseconds });
+
+        stopwatch.Stop();
+
+        using var doc = JsonDocument.Parse(content);
+        var stderr = doc.RootElement.GetProperty("stderr").GetString()!;
+        Assert.Contains("timed out", stderr, StringComparison.OrdinalIgnoreCase);
+        Assert.InRange(
+            stopwatch.Elapsed,
+            TimeSpan.FromMilliseconds(100),
+            TimeSpan.FromSeconds(2));
+    }
 
     private static async Task<string> CallToolAsync(string toolName, object arguments)
     {
