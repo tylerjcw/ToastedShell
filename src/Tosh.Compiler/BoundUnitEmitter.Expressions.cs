@@ -22,6 +22,9 @@ internal sealed partial class EmitterImpl
             case BoundVariableReference varRef:
                 return EmitVariableReference(varRef);
 
+            case BoundChainedComparison chain:
+                return EmitChainedComparison(chain);
+
             case BoundBinaryOperator binOp:
                 return EmitBinaryOperator(binOp);
 
@@ -376,6 +379,11 @@ internal sealed partial class EmitterImpl
                 _il.Emit(OpCodes.Ldc_R8, d);
                 return typeof(double);
 
+            case StorageSize storageSize:
+                _il.Emit(OpCodes.Ldc_I8, storageSize.Bytes);
+                _il.Emit(OpCodes.Call, s_storageSizeFromBytes);
+                return typeof(StorageSize);
+
             default:
                 Diagnostics.Add($"unsupported literal type: {literal.Value.GetType().Name}");
                 return null;
@@ -668,6 +676,18 @@ internal sealed partial class EmitterImpl
                 _il.Emit(OpCodes.Ldsfld, enumField);
                 return typeof(object);
             }
+
+            // Integral enums use literal fields, which have no storage to load.
+            // Emit the underlying constant directly and retain the enum's CLR
+            // stack type so downstream boxing and dispatch see the declared
+            // ToastScript enum rather than resolving an unrelated CLR type with
+            // the same short name through ToshHost.
+            if (_clrEnumTypes.TryGetValue(unionName, out var integralEnum)
+                && integralEnum.Members.TryGetValue(variantName, out var enumValue))
+            {
+                EmitClrEnumLiteralValue(_il, enumValue);
+                return integralEnum.Type;
+            }
         }
 
         _il.Emit(OpCodes.Ldstr, staticMember.Path);
@@ -931,6 +951,8 @@ internal sealed partial class EmitterImpl
         var savedLoopStack = _loopStack;
         var savedBlockOutput = _blockOutputLocal;
         var savedBlockCaptures = _blockCaptureIndices;
+        var savedReturnEmissionFrame = _returnEmissionFrame;
+        var savedDeferredCleanupFrames = _deferredCleanupFrames;
         try
         {
             _il = lambdaMethod.GetILGenerator();
@@ -943,9 +965,15 @@ internal sealed partial class EmitterImpl
             _underscoreStack = new();
             _loopStack = new();
             _blockCaptureIndices = captureIndices;
+            _deferredCleanupFrames = new();
 
             var resultsLocal = _il.DeclareLocal(typeof(List<object>));
             _blockOutputLocal = resultsLocal;
+            var returnFrame = CreateReturnEmissionFrame(
+                typeof(List<object>),
+                resultsLocal);
+            _returnEmissionFrame = returnFrame;
+            var executionFrame = EmitExecutionFrameEntry("lambda");
             _il.Emit(OpCodes.Newobj, s_listCtor);
             _il.Emit(OpCodes.Stloc, resultsLocal);
 
@@ -976,13 +1004,9 @@ internal sealed partial class EmitterImpl
                 _typedParamLocals[parameter.Symbol] = local;
             }
 
-            foreach (var stmt in lambda.Body.Statements)
-            {
-                EmitStatement(stmt);
-            }
-
-            _il.Emit(OpCodes.Ldloc, resultsLocal);
-            _il.Emit(OpCodes.Ret);
+            EmitBlock(lambda.Body);
+            EmitExecutionFrameExit(executionFrame);
+            EmitReturnEpilogue(returnFrame);
             return lambdaMethod;
         }
         catch
@@ -1002,6 +1026,8 @@ internal sealed partial class EmitterImpl
             _loopStack = savedLoopStack;
             _blockOutputLocal = savedBlockOutput;
             _blockCaptureIndices = savedBlockCaptures;
+            _returnEmissionFrame = savedReturnEmissionFrame;
+            _deferredCleanupFrames = savedDeferredCleanupFrames;
         }
     }
 
@@ -1263,10 +1289,59 @@ internal sealed partial class EmitterImpl
         return s_toshTupleType;
     }
 
+    /// <summary>
+    /// Emits a chained comparison (<c>a &lt; b &lt; c</c>) as
+    /// <c>(a &lt; b) and (b &lt; c)</c> with short-circuit. Each operand
+    /// is evaluated into its own local exactly once, which is why the
+    /// chain survives lowering as its own node rather than being
+    /// rewritten into `and` over duplicated operands (TS-P1-22).
+    /// </summary>
+    private Type? EmitChainedComparison(BoundChainedComparison chain)
+    {
+        var falsey = _il.DefineLabel();
+        var done = _il.DefineLabel();
+
+        // Evaluate the first operand once and keep it boxed so each
+        // comparison can reuse it as the previous operand.
+        var previous = _il.DeclareLocal(typeof(object));
+        var previousType = EmitExpression(chain.Operands[0]);
+        if (previousType is null) return null;
+        BoxIfValueType(previousType);
+        _il.Emit(OpCodes.Stloc, previous);
+
+        for (var i = 0; i < chain.Operators.Count; i++)
+        {
+            var next = _il.DeclareLocal(typeof(object));
+            var nextType = EmitExpression(chain.Operands[i + 1]);
+            if (nextType is null) return null;
+            BoxIfValueType(nextType);
+            _il.Emit(OpCodes.Stloc, next);
+
+            _il.Emit(OpCodes.Ldloc, previous);
+            _il.Emit(OpCodes.Ldloc, next);
+            var comparisonType = EmitBinaryOperatorFallback(
+                typeof(object),
+                chain.Operators[i],
+                typeof(object),
+                chain.Span);
+            EmitConvertToBoolean(comparisonType);
+            _il.Emit(OpCodes.Brfalse, falsey);
+
+            previous = next;
+        }
+
+        _il.Emit(OpCodes.Ldc_I4_1);
+        _il.Emit(OpCodes.Br, done);
+        _il.MarkLabel(falsey);
+        _il.Emit(OpCodes.Ldc_I4_0);
+        _il.MarkLabel(done);
+        return typeof(bool);
+    }
+
     private Type? EmitBinaryOperator(BoundBinaryOperator binOp)
     {
-        // Short-circuit operators must guard the right-hand side, so
-        // they cannot use the eager left/right emission path below.
+        // Short-circuit operators must guard the right-hand side, so they
+        // cannot use the eager shared-runtime path below.
         switch (binOp.Operator)
         {
             case "??": return EmitNullCoalesce(binOp);
@@ -1274,84 +1349,31 @@ internal sealed partial class EmitterImpl
             case "or": return EmitLogicalOr(binOp);
         }
 
-        // String concat: "a" + b → string.Concat(a, b.ToString()).
-        if (binOp.Operator == "+")
-        {
-            var leftType = EmitExpression(binOp.Left);
-            if (leftType is null) return null;
-            if (leftType == typeof(string))
-            {
-                var rightType = EmitExpression(binOp.Right);
-                if (rightType is null) return null;
-                ConvertToString(rightType);
-                _il.Emit(OpCodes.Call, typeof(string).GetMethod(
-                    nameof(string.Concat),
-                    new[] { typeof(string), typeof(string) })!);
-                return typeof(string);
-            }
-
-            // Numeric path.
-            var rightTypeNum = EmitExpression(binOp.Right);
-            if (rightTypeNum is null) return null;
-            return EmitNumericArith("+", leftType, rightTypeNum);
-        }
-
-        var l = EmitExpression(binOp.Left);
-        if (l is null) return null;
-        var r = EmitExpression(binOp.Right);
-        if (r is null) return null;
-
-        switch (binOp.Operator)
-        {
-            case "-":
-            case "*":
-            case "/":
-            case "%":
-                return EmitNumericArith(binOp.Operator, l, r);
-
-            case "==":
-                EmitEquality(l, r, invert: false);
-                return typeof(bool);
-            case "!=":
-                EmitEquality(l, r, invert: true);
-                return typeof(bool);
-            case "<":
-                EmitComparison(l, r, OpCodes.Clt);
-                return typeof(bool);
-            case ">":
-                EmitComparison(l, r, OpCodes.Cgt);
-                return typeof(bool);
-            case "<=":
-                // !(l > r)
-                EmitComparison(l, r, OpCodes.Cgt);
-                _il.Emit(OpCodes.Ldc_I4_0);
-                _il.Emit(OpCodes.Ceq);
-                return typeof(bool);
-            case ">=":
-                // !(l < r)
-                EmitComparison(l, r, OpCodes.Clt);
-                _il.Emit(OpCodes.Ldc_I4_0);
-                _il.Emit(OpCodes.Ceq);
-                return typeof(bool);
-
-            default:
-                // Generic operators (`**`, `//`, `=~`, `!~`, `in`,
-                // `contains`, `starts-with`, `ends-with`, `is`, `as`,
-                // …) defer to OperatorEvaluator.EvaluateBinary at
-                // runtime so the compiler stays semantics-aligned with
-                // the engine.
-                return EmitBinaryOperatorFallback(l, binOp.Operator, r);
-        }
+        // Every eager binary expression shares the runtime dispatcher with the
+        // interpreter. Besides dynamic operands, this is required for checked
+        // integral promotion, structural/cross-type equality, non-numeric
+        // ordering, either-sided string concatenation, string repetition, and
+        // polymorphic values such as collections, temporal values, quantities,
+        // vectors, matrices, and storage sizes.
+        var leftType = EmitExpression(binOp.Left);
+        if (leftType is null) return null;
+        var rightType = EmitExpression(binOp.Right);
+        if (rightType is null) return null;
+        return EmitBinaryOperatorFallback(
+            leftType,
+            binOp.Operator,
+            rightType,
+            binOp.Span);
     }
 
     /// <summary>
     /// Emits a runtime call to <see
-    /// cref="global::Tosh.Runtime.OperatorEvaluator.EvaluateBinary"/>
+    /// cref="global::Tosh.Runtime.OperatorEvaluator.EvaluateBinaryWithDiagnostics"/>
     /// using the values already on the IL stack (left below, right
     /// on top). Boxes value types as needed and returns
     /// <see cref="object"/>.
     /// </summary>
-    private Type EmitBinaryOperatorFallback(Type l, string op, Type r)
+    private Type EmitBinaryOperatorFallback(Type l, string op, Type r, TextSpan span)
     {
         // Stack: ..., left, right
         if (r.IsValueType) _il.Emit(OpCodes.Box, r);
@@ -1360,7 +1382,12 @@ internal sealed partial class EmitterImpl
         if (l.IsValueType) _il.Emit(OpCodes.Box, l);
         _il.Emit(OpCodes.Ldstr, op);
         _il.Emit(OpCodes.Ldloc, rTemp);
-        _il.Emit(OpCodes.Call, s_opEvaluateBinary);
+        var parse = (ParseResult)_unit.ParseResult;
+        _il.Emit(OpCodes.Ldstr, parse.SourceName);
+        _il.Emit(OpCodes.Ldstr, parse.SourceText);
+        _il.Emit(OpCodes.Ldc_I4, span.Start);
+        _il.Emit(OpCodes.Ldc_I4, span.Length);
+        _il.Emit(OpCodes.Call, s_opEvaluateBinaryWithDiagnostics);
         return typeof(object);
     }
 
@@ -1493,57 +1520,6 @@ internal sealed partial class EmitterImpl
         return common;
     }
 
-    private void EmitEquality(Type left, Type right, bool invert)
-    {
-        if (IsNumericType(left) && IsNumericType(right))
-        {
-            var common = CommonNumericType(left, right)!;
-            if (right != common) ConvertNumeric(right, common);
-            if (left != common)
-            {
-                var temp = _il.DeclareLocal(common);
-                _il.Emit(OpCodes.Stloc, temp);
-                ConvertNumeric(left, common);
-                _il.Emit(OpCodes.Ldloc, temp);
-            }
-            _il.Emit(OpCodes.Ceq);
-        }
-        else
-        {
-            // Box value types and call object.Equals(a, b).
-            if (right.IsValueType) _il.Emit(OpCodes.Box, right);
-            var rTemp = _il.DeclareLocal(typeof(object));
-            _il.Emit(OpCodes.Stloc, rTemp);
-            if (left.IsValueType) _il.Emit(OpCodes.Box, left);
-            _il.Emit(OpCodes.Ldloc, rTemp);
-            _il.Emit(OpCodes.Call, s_objectEquals);
-        }
-        if (invert)
-        {
-            _il.Emit(OpCodes.Ldc_I4_0);
-            _il.Emit(OpCodes.Ceq);
-        }
-    }
-
-    private void EmitComparison(Type left, Type right, OpCode op)
-    {
-        var common = CommonNumericType(left, right);
-        if (common is null)
-        {
-            Diagnostics.Add($"non-numeric operands to comparison: {left.Name} and {right.Name}");
-            return;
-        }
-        if (right != common) ConvertNumeric(right, common);
-        if (left != common)
-        {
-            var temp = _il.DeclareLocal(common);
-            _il.Emit(OpCodes.Stloc, temp);
-            ConvertNumeric(left, common);
-            _il.Emit(OpCodes.Ldloc, temp);
-        }
-        _il.Emit(op);
-    }
-
     private Type? EmitUnaryOperator(BoundUnaryOperator unOp)
     {
         var operandType = EmitExpression(unOp.Operand);
@@ -1568,19 +1544,19 @@ internal sealed partial class EmitterImpl
                 return operandType;
 
             case "!":
-                if (operandType != typeof(bool))
-                {
-                    Diagnostics.Add($"unary '!' on non-bool: {operandType.Name}");
-                    return null;
-                }
+            case "not":
+                // Both spelling forms share the language-wide truthiness
+                // protocol. This avoids a direct IL `!` accepting only bool
+                // while `not` takes a different runtime fallback.
+                EmitTruthTest(operandType);
                 _il.Emit(OpCodes.Ldc_I4_0);
                 _il.Emit(OpCodes.Ceq);
                 return typeof(bool);
 
             default:
-                // Unknown unary (e.g., `not`) defers to
-                // OperatorEvaluator.EvaluateUnary at runtime so the
-                // compiler stays semantics-aligned with the engine.
+                // Unknown unary operators defer to OperatorEvaluator at
+                // runtime so the compiler stays semantics-aligned with the
+                // engine.
                 if (operandType.IsValueType) _il.Emit(OpCodes.Box, operandType);
                 var operandLocal = _il.DeclareLocal(typeof(object));
                 _il.Emit(OpCodes.Stloc, operandLocal);

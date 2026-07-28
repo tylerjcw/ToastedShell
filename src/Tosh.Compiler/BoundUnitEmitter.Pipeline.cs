@@ -12,7 +12,14 @@ namespace Tosh.Compiler;
 
 internal sealed partial class EmitterImpl
 {
-    private Type? EmitPipeline(BoundPipeline pipeline, bool asStatement)
+    /// <param name="asSequence">
+    /// When true the pipeline's value is the full item sequence (an
+    /// iteration source). When false — every ordinary value context:
+    /// initializers, assignments, <c>return</c> operands, arguments,
+    /// defaults — the pipeline must yield exactly one value, matching
+    /// the interpreter's subexpression rule (TS-P1-20).
+    /// </param>
+    private Type? EmitPipeline(BoundPipeline pipeline, bool asStatement, bool asSequence = false)
     {
         if (pipeline.Stages.Count == 0)
         {
@@ -31,20 +38,20 @@ internal sealed partial class EmitterImpl
 
         if (!hasRedirections)
         {
-            return EmitPipelineCore(pipeline, asStatement);
+            return EmitPipelineCore(pipeline, asStatement, asSequence);
         }
 
         // Redirection wrapping. Evaluate target expressions, build
         // streams/modes/targets arrays, call ToshHost.BeginRedirection,
         // then run the body inside try/finally.
-        return EmitPipelineWithRedirections(pipeline, asStatement);
+        return EmitPipelineWithRedirections(pipeline, asStatement, asSequence);
     }
 
-    private Type? EmitPipelineCore(BoundPipeline pipeline, bool asStatement)
+    private Type? EmitPipelineCore(BoundPipeline pipeline, bool asStatement, bool asSequence = false)
     {
         if (pipeline.Stages.Count >= 2)
         {
-            return EmitMultiStagePipeline(pipeline, asStatement);
+            return EmitMultiStagePipeline(pipeline, asStatement, asSequence);
         }
 
         var stage = pipeline.Stages[0];
@@ -75,7 +82,7 @@ internal sealed partial class EmitterImpl
         }
     }
 
-    private Type? EmitPipelineWithRedirections(BoundPipeline pipeline, bool asStatement)
+    private Type? EmitPipelineWithRedirections(BoundPipeline pipeline, bool asStatement, bool asSequence = false)
     {
         // Stream redirection requires opening files, swapping
         // Console.Out/Error/In, and tracking a disposable scope —
@@ -169,7 +176,7 @@ internal sealed partial class EmitterImpl
 
         _il.BeginExceptionBlock();
 
-        var bodyType = EmitPipelineCore(pipeline, asStatement);
+        var bodyType = EmitPipelineCore(pipeline, asStatement, asSequence);
         if (!asStatement && bodyType is not null)
         {
             BoxIfValueType(bodyType);
@@ -199,6 +206,13 @@ internal sealed partial class EmitterImpl
     private Type? EmitPipelineAsValue(BoundPipeline pipeline) => EmitPipeline(pipeline, asStatement: false);
 
     /// <summary>
+    /// Emits a pipeline whose value is consumed as a sequence (a
+    /// <c>for … in</c> source), so every produced item is preserved
+    /// instead of being collapsed to a single value.
+    /// </summary>
+    private Type? EmitPipelineAsSequence(BoundPipeline pipeline) => EmitPipeline(pipeline, asStatement: false, asSequence: true);
+
+    /// <summary>
     /// Emits IL for a 2+ stage pipeline. Each stage is dispatched
     /// through <see cref="global::Tosh.Compiler.Runtime.ToshHost.RunStage"/>
     /// which receives the previous stage's
@@ -213,7 +227,7 @@ internal sealed partial class EmitterImpl
     ///   • User-defined functions cannot be pipeline stages.
     ///   • Splat / named arguments still surface as diagnostics.
     /// </summary>
-    private Type? EmitMultiStagePipeline(BoundPipeline pipeline, bool asStatement)
+    private Type? EmitMultiStagePipeline(BoundPipeline pipeline, bool asStatement, bool asSequence = false)
     {
         // Reusable accumulator local: each stage replaces it.
         var accLocal = _il.DeclareLocal(typeof(IAsyncEnumerable<object?>));
@@ -286,8 +300,13 @@ internal sealed partial class EmitterImpl
             _il.Emit(OpCodes.Call, s_hostDrainStatement);
             return null;
         }
-        _il.Emit(OpCodes.Call, s_hostDrainValue);
-        return s_listOfObject;
+        if (asSequence)
+        {
+            _il.Emit(OpCodes.Call, s_hostDrainValue);
+            return s_listOfObject;
+        }
+        _il.Emit(OpCodes.Call, s_hostDrainSubexpressionValue);
+        return typeof(object);
     }
 
     /// <summary>
@@ -459,6 +478,8 @@ internal sealed partial class EmitterImpl
         var savedLoopStack = _loopStack;
         var savedBlockOutput = _blockOutputLocal;
         var savedBlockCaptures = _blockCaptureIndices;
+        var savedReturnEmissionFrame = _returnEmissionFrame;
+        var savedDeferredCleanupFrames = _deferredCleanupFrames;
         try
         {
             _il = blockMethod.GetILGenerator();
@@ -471,9 +492,12 @@ internal sealed partial class EmitterImpl
             _underscoreStack = new();
             _loopStack = new();
             _blockCaptureIndices = captureIndices;
+            _returnEmissionFrame = null;
+            _deferredCleanupFrames = new();
 
             var resultsLocal = _il.DeclareLocal(typeof(List<object>));
             _blockOutputLocal = resultsLocal;
+            var executionFrame = EmitExecutionFrameEntry("block");
             _il.Emit(OpCodes.Newobj, s_listCtor);
             _il.Emit(OpCodes.Stloc, resultsLocal);
 
@@ -484,6 +508,7 @@ internal sealed partial class EmitterImpl
                     return null;
             }
 
+            EmitExecutionFrameExit(executionFrame);
             _il.Emit(OpCodes.Ldloc, resultsLocal);
             _il.Emit(OpCodes.Ret);
             return blockMethod;
@@ -505,6 +530,8 @@ internal sealed partial class EmitterImpl
             _loopStack = savedLoopStack;
             _blockOutputLocal = savedBlockOutput;
             _blockCaptureIndices = savedBlockCaptures;
+            _returnEmissionFrame = savedReturnEmissionFrame;
+            _deferredCleanupFrames = savedDeferredCleanupFrames;
         }
     }
 

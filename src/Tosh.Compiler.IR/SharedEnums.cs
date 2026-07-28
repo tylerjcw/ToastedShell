@@ -20,6 +20,7 @@ public enum SubcommandModifier
     Hidden = 1 << 1,
     Hollow = 1 << 2,
     Vital = 1 << 3,
+    Default = 1 << 4,
 }
 
 public enum ScriptInputDeclarationKind

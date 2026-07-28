@@ -12,12 +12,62 @@ namespace Tosh.Compiler;
 
 internal sealed partial class EmitterImpl
 {
-    private static bool CanEmitClrClassShell(BoundClassDefinition cls)
+    /// <summary>
+    /// A class shell is construction-complete only when every source-declared
+    /// class in its base chain can also be represented by a CLR shell. A flat
+    /// shell rooted at <see cref="object"/> for an unmodeled base suppresses
+    /// source replay and silently drops the base-class constructor/member
+    /// semantics, so unresolved/external bases conservatively remain Tier 3.
+    /// </summary>
+    private bool CanEmitClrClassShell(BoundClassDefinition cls)
+    {
+        return CanEmitClrClassShell(cls, new HashSet<string>(StringComparer.Ordinal));
+    }
+
+    private bool CanEmitClrClassShell(
+        BoundClassDefinition cls,
+        HashSet<string> visiting)
+    {
+        if (!CanEmitClrClassShellOwnShape(cls))
+            return false;
+
+        if (cls.BaseClassName is null)
+            return true;
+
+        if (!visiting.Add(cls.Name))
+            return false;
+
+        try
+        {
+            if (!TryFindDeclaredClassDefinition(cls.BaseClassName, out var baseClass))
+                return false;
+
+            // The runtime/source path owns the user-facing diagnostic for
+            // attempting to inherit from a sealed/static-only class. More
+            // importantly, such a type is not a compatible CLR parent.
+            if (baseClass.IsSealed || baseClass.IsHermit)
+                return false;
+
+            return CanEmitClrClassShell(baseClass, visiting);
+        }
+        finally
+        {
+            visiting.Remove(cls.Name);
+        }
+    }
+
+    private static bool CanEmitClrClassShellOwnShape(BoundClassDefinition cls)
     {
         if (cls.IsPartial) return false;
+        if (cls.TypeParameters is { Count: > 0 }) return false;
         foreach (var p in cls.PrimaryConstructorParameters)
         {
             if (p.IsRest) return false;
+            // A fixed-arity CLR constructor cannot represent optional or
+            // defaulted parameters; construction with omitted arguments
+            // must resolve through the engine's callable default binder
+            // (TS-P1-05), so leave the declaration to source replay.
+            if (p.IsOptional || p.Default is not null) return false;
         }
         // At most one user-declared constructor is supported. Its
         // parameters drive the shell ctor signature when no primary
@@ -35,16 +85,30 @@ internal sealed partial class EmitterImpl
                     if (prop.GetterBody is not null) return false;
                     if (prop.SetterBody is not null) return false;
                     continue;
-                case BoundClassMethodMember:
+                case BoundClassMethodMember method:
                     // Methods (including override and abstract) are handled
                     // in DeclareClrClassShell — their presence doesn't
-                    // disqualify the type from having a CLR shell.
+                    // disqualify the type from having a CLR shell, unless a
+                    // parameter needs the engine's callable default binder
+                    // (TS-P1-05). A shell would emit such a method with a
+                    // fixed arity (or skip it entirely), leaving calls that
+                    // omit the defaulted argument without any dispatch
+                    // target, so the whole declaration stays on source
+                    // replay.
+                    foreach (var mp in method.Method.Parameters)
+                    {
+                        if (mp.IsRest || mp.IsOptional || mp.Default is not null) return false;
+                    }
                     continue;
                 case BoundClassConstructorMember ctor:
                     if (++ctorCount > 1) return false;
                     foreach (var p in ctor.Parameters)
                     {
                         if (p.IsRest) return false;
+                        // Same rule as primary-constructor parameters:
+                        // optional/defaulted slots require the engine's
+                        // callable default binder (TS-P1-05).
+                        if (p.IsOptional || p.Default is not null) return false;
                     }
                     continue;
                 case BoundClassEventMember:
@@ -55,10 +119,56 @@ internal sealed partial class EmitterImpl
                     return false;
             }
         }
-        // If both a primary ctor and an explicit ctor exist, only
-        // the primary ctor's parameters drive the shell signature;
-        // we don't try to model overloaded CLR ctors yet.
+
+        // A single CLR constructor cannot faithfully represent both forms:
+        // choosing the primary signature makes the explicit constructor body
+        // unreachable, while choosing the explicit signature loses primary
+        // property binding. Leave this declaration to source replay.
+        if (cls.PrimaryConstructorParameters.Count > 0 && ctorCount > 0)
+            return false;
+
         return true;
+    }
+
+    /// <summary>
+    /// Find one class declaration by its source name anywhere in this bound
+    /// unit. Module-contained classes are currently emitted as top-level CLR
+    /// shells too, so they participate in the same simple-name namespace.
+    /// Ambiguous names are deliberately rejected rather than selecting an
+    /// arbitrary base shell.
+    /// </summary>
+    private bool TryFindDeclaredClassDefinition(
+        string name,
+        out BoundClassDefinition definition)
+    {
+        BoundClassDefinition? match = null;
+        var ambiguous = false;
+
+        Visit(_unit.Root.Statements);
+
+        definition = match!;
+        return match is not null && !ambiguous;
+
+        void Visit(IReadOnlyList<BoundStatement> statements)
+        {
+            foreach (var statement in statements)
+            {
+                switch (statement)
+                {
+                    case BoundClassDefinition candidate
+                        when string.Equals(candidate.Name, name, StringComparison.Ordinal):
+                        if (match is null)
+                            match = candidate;
+                        else if (!ReferenceEquals(match, candidate))
+                            ambiguous = true;
+                        break;
+
+                    case BoundModuleDefinition module:
+                        Visit(module.Body.Statements);
+                        break;
+                }
+            }
+        }
     }
 
     /// <summary>
@@ -135,7 +245,7 @@ internal sealed partial class EmitterImpl
         {
             BoundClassDefinition c => _clrTypeShells.ContainsKey(c.Name),
             BoundRecordDefinition r => _clrTypeShells.ContainsKey(r.Name),
-            BoundEnumDefinition e => _clrEnumTypes.Contains(e.Name) || _clrEnumStaticShells.ContainsKey(e.Name),
+            BoundEnumDefinition e => _clrEnumTypes.ContainsKey(e.Name) || _clrEnumStaticShells.ContainsKey(e.Name),
             BoundInterfaceDefinition i => _clrTypeShells.ContainsKey(i.Name),
             BoundTraitDefinition t => _clrTypeShells.ContainsKey(t.Name),
             BoundStructDefinition s => _clrTypeShells.ContainsKey(s.Name),
@@ -153,7 +263,7 @@ internal sealed partial class EmitterImpl
     /// </summary>
     private void DeclareClrEnumType(BoundEnumDefinition en)
     {
-        if (_clrEnumTypes.Contains(en.Name)) return;
+        if (_clrEnumTypes.ContainsKey(en.Name)) return;
         if (!TryResolveClrEnumUnderlyingType(en.UnderlyingTypeName, out var underlying))
             return;
         if (!TryBuildClrEnumLiteralValues(en, underlying, out var values))
@@ -166,15 +276,59 @@ internal sealed partial class EmitterImpl
         StampToshTypeAttribute(enumBuilder, "enum", en.Span);
         StampOriginalNameIfMangled(enumBuilder, en.Name);
 
+        var members = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
         for (var i = 0; i < en.Members.Count; i++)
         {
             var member = en.Members[i];
             var field = enumBuilder.DefineLiteral(MangleClrIdentifier(member.Name), values[i]);
             StampOriginalNameIfMangled(field, member.Name);
+            members[member.Name] = values[i];
         }
 
-        enumBuilder.CreateType();
-        _clrEnumTypes.Add(en.Name);
+        var emittedType = enumBuilder.CreateType();
+        _clrEnumTypes.Add(
+            en.Name,
+            new ClrIntegralEnumShell(emittedType, underlying, members));
+    }
+
+    /// <summary>
+    /// Emits one integral enum literal using its underlying evaluation-stack
+    /// representation. Small integral types use the CLR's native int32 stack
+    /// form; unsigned values preserve their bit patterns through unchecked
+    /// conversions.
+    /// </summary>
+    private static void EmitClrEnumLiteralValue(ILGenerator il, object value)
+    {
+        switch (value)
+        {
+            case byte byteValue:
+                il.Emit(OpCodes.Ldc_I4, (int)byteValue);
+                return;
+            case sbyte sbyteValue:
+                il.Emit(OpCodes.Ldc_I4, (int)sbyteValue);
+                return;
+            case short shortValue:
+                il.Emit(OpCodes.Ldc_I4, (int)shortValue);
+                return;
+            case ushort ushortValue:
+                il.Emit(OpCodes.Ldc_I4, (int)ushortValue);
+                return;
+            case int intValue:
+                il.Emit(OpCodes.Ldc_I4, intValue);
+                return;
+            case uint uintValue:
+                il.Emit(OpCodes.Ldc_I4, unchecked((int)uintValue));
+                return;
+            case long longValue:
+                il.Emit(OpCodes.Ldc_I8, longValue);
+                return;
+            case ulong ulongValue:
+                il.Emit(OpCodes.Ldc_I8, unchecked((long)ulongValue));
+                return;
+            default:
+                throw new InvalidOperationException(
+                    $"Unsupported CLR enum literal type '{value.GetType().FullName}'.");
+        }
     }
 
     /// <summary>

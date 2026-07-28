@@ -12,19 +12,17 @@ namespace Tosh.Compiler;
 
 internal sealed partial class EmitterImpl
 {
-    private void EnsureBaseClassShellDeclared(string baseName)
+    private bool EnsureBaseClassShellDeclared(string baseName)
     {
-        if (_clrTypeShells.ContainsKey(baseName)) return;
-        foreach (var stmt in _unit.Root.Statements)
+        if (_clrTypeShells.ContainsKey(baseName)) return true;
+        if (!TryFindDeclaredClassDefinition(baseName, out var baseClass)
+            || !CanEmitClrClassShell(baseClass))
         {
-            if (stmt is BoundClassDefinition baseCls
-                && string.Equals(baseCls.Name, baseName, StringComparison.Ordinal)
-                && CanEmitClrClassShell(baseCls))
-            {
-                DeclareClrClassShell(baseCls);
-                return;
-            }
+            return false;
         }
+
+        DeclareClrClassShell(baseClass);
+        return _clrTypeShells.ContainsKey(baseName);
     }
 
     private void DeclareClrClassShell(BoundClassDefinition cls)
@@ -39,6 +37,53 @@ internal sealed partial class EmitterImpl
         // class, which causes IsClrShellEmittedTypeDefinition to return
         // false and the registration call to be emitted.
         if (cls.TypeParameters is { Count: > 0 }) return;
+
+        // Locate the (at most one) explicit user-declared constructor.
+        // CanEmitClrClassShell rejects primary+explicit coexistence because a
+        // single CLR signature cannot preserve both constructor contracts.
+        BoundClassConstructorMember? explicitCtor = null;
+        foreach (var member in cls.Members)
+        {
+            if (member is BoundClassConstructorMember c)
+            {
+                explicitCtor = c;
+                break;
+            }
+        }
+
+        if (!TryAnalyzeClrSuperInitializer(cls, explicitCtor, out var superInitializer))
+            return;
+
+        // Resolve the parent TypeBuilder before defining the derived type.
+        // If the declared or external base has no compatible shell, leave the
+        // entire derived declaration for source replay instead of truncating
+        // its hierarchy at System.Object.
+        Type parentType = MetadataType(typeof(object));
+        ClrTypeShell? baseShell = null;
+        if (cls.BaseClassName is not null)
+        {
+            if (!EnsureBaseClassShellDeclared(cls.BaseClassName)
+                || !_clrTypeShells.TryGetValue(cls.BaseClassName, out baseShell))
+            {
+                return;
+            }
+
+            parentType = baseShell.Type;
+
+            var actualBaseArity = cls.BaseConstructorArgs?.Count
+                ?? superInitializer?.Arguments.Count
+                ?? 0;
+            var expectedBaseArity = baseShell.CtorParamTypes.Length;
+            if (actualBaseArity != expectedBaseArity)
+            {
+                Diagnostics.Add(
+                    "tosh.compile.base_constructor_arity_mismatch: "
+                    + $"class '{cls.Name}' supplies {actualBaseArity} argument(s) "
+                    + $"to base class '{cls.BaseClassName}', whose CLR shell "
+                    + $"constructor requires {expectedBaseArity}.");
+                return;
+            }
+        }
 
         var attrs = TypeAttributes.Public | TypeAttributes.Class;
         if (cls.IsHermit)
@@ -59,21 +104,6 @@ internal sealed partial class EmitterImpl
         }
         // Non-sealed, non-abstract classes are left without either flag
         // so derived classes can inherit from them at the CLR level.
-
-        // Resolve the parent TypeBuilder. If the base class is declared
-        // in the same unit we recursively ensure its shell is declared
-        // first, then use its TypeBuilder as the CLR parent. Unknown
-        // base classes (external assemblies, not-yet-modeled shapes)
-        // fall back to `object` — the shell is still reflectable even
-        // if the inheritance chain is truncated at the CLR level.
-        Type parentType = MetadataType(typeof(object));
-        ClrTypeShell? baseShell = null;
-        if (cls.BaseClassName is not null)
-        {
-            EnsureBaseClassShellDeclared(cls.BaseClassName);
-            if (_clrTypeShells.TryGetValue(cls.BaseClassName, out baseShell))
-                parentType = baseShell.Type;
-        }
 
         var typeBuilder = _moduleBuilder.DefineType(
             $"{_assemblyName}.{MangleClrIdentifier(cls.Name)}",
@@ -126,18 +156,9 @@ internal sealed partial class EmitterImpl
             }
         }
 
-        // Locate the (at most one) explicit user-declared constructor.
-        // When the class header has no primary-ctor parameters, the
-        // explicit ctor's parameters drive the shell ctor signature
-        // (e.g. `class Greeter { Greeter(name: string) { ... } }`).
-        // When both forms exist, the primary ctor wins for the
-        // signature and the explicit body still gets lowered into
-        // the shell ctor IL after field copies.
-        BoundClassConstructorMember? explicitCtor = null;
-        foreach (var member in cls.Members)
-        {
-            if (member is BoundClassConstructorMember c) { explicitCtor = c; break; }
-        }
+        // When the class header has no primary-ctor parameters, the explicit
+        // ctor's parameters drive the shell ctor signature (for example,
+        // `class Greeter { Greeter(name: string) { ... } }`).
         IReadOnlyList<BoundParameter> ctorSigParams =
             cls.PrimaryConstructorParameters.Count > 0 || explicitCtor is null
                 ? cls.PrimaryConstructorParameters
@@ -151,11 +172,12 @@ internal sealed partial class EmitterImpl
         // captures, inheritance, computed props, etc.) — those still
         // need the engine-side ToshClassObject to own dispatch.
         var supportsDirectNewObj = true;
-        // Inheritance, abstract base, interfaces, and traits aren't
-        // representable on a flat shell yet for direct construction.
-        // Traits may carry property default values that are set by the
-        // tosh evaluator during ToshHost.CreateObject — bypassing that
-        // path with a bare newobj would silently drop those defaults.
+        // Inheritance now emits a complete CLR shell hierarchy, but an
+        // inherited `new` call site remains host-dispatched until all
+        // inherited member/method semantics can stay on the typed path.
+        // Traits may carry property default values that are set by the tosh
+        // evaluator during ToshHost.CreateObject — bypassing that path with
+        // a bare newobj would silently drop those defaults.
         if (cls.BaseClassName is not null
             || (cls.UsedTraits is { Count: > 0 })
             || (cls.ImplementedInterfaces is { Count: > 0 })
@@ -182,15 +204,13 @@ internal sealed partial class EmitterImpl
             ctor.DefineParameter(i + 1, ParameterAttributes.None, ctorSigParams[i].Name);
         }
         var ctorIl = ctor.GetILGenerator();
-        // Call the base constructor. When a base shell is known in this unit
-        // we call its ctor directly, passing nulls for each typed parameter
-        // slot so the IL is verifiable. When no base shell is known (external
-        // type or unmodeled base) we fall back to object..ctor().
+        // Call the base constructor. Header arguments and a leading direct
+        // `$super(args)` are two source spellings for the same CLR initializer;
+        // both are evaluated in the selected constructor's parameter scope.
         ctorIl.Emit(OpCodes.Ldarg_0);
         if (baseShell is not null)
         {
-            if (cls.BaseConstructorArgs is { Count: > 0 }
-                && cls.BaseConstructorArgs.Count == baseShell.CtorParamTypes.Length)
+            if (cls.BaseConstructorArgs is not null || superInitializer is not null)
             {
                 var savedIl = _il;
                 var savedLocals = _locals;
@@ -210,22 +230,44 @@ internal sealed partial class EmitterImpl
                     for (var i = 0; i < ctorSigParams.Count; i++)
                         _paramSlots[ctorSigParams[i].Symbol] = i + 1;
 
-                    foreach (var baseArg in cls.BaseConstructorArgs)
+                    if (cls.BaseConstructorArgs is not null)
                     {
-                        if (TryResolveCtorInitializerParameterSlot(baseArg, ctorSigParams, out var paramSlot))
+                        foreach (var baseArg in cls.BaseConstructorArgs)
                         {
-                            ctorIl.Emit(OpCodes.Ldarg, paramSlot);
-                            continue;
-                        }
+                            if (TryResolveCtorInitializerParameterSlot(baseArg, ctorSigParams, out var paramSlot))
+                            {
+                                ctorIl.Emit(OpCodes.Ldarg, paramSlot);
+                                continue;
+                            }
 
-                        var baseArgType = EmitPipeline(baseArg, asStatement: false);
-                        if (baseArgType is null)
-                        {
-                            ctorIl.Emit(OpCodes.Ldnull);
+                            var baseArgType = EmitPipeline(baseArg, asStatement: false);
+                            if (baseArgType is null)
+                            {
+                                // Preserve a verifiable stack after the
+                                // expression emitter records its diagnostic.
+                                ctorIl.Emit(OpCodes.Ldnull);
+                            }
+                            else
+                            {
+                                BoxIfValueType(baseArgType);
+                            }
                         }
-                        else
+                    }
+                    else
+                    {
+                        foreach (var baseArg in superInitializer!.Arguments)
                         {
-                            BoxIfValueType(baseArgType);
+                            var baseArgType = EmitExpression(baseArg.Value);
+                            if (baseArgType is null)
+                            {
+                                // Preserve a verifiable stack after the
+                                // expression emitter records its diagnostic.
+                                ctorIl.Emit(OpCodes.Ldnull);
+                            }
+                            else
+                            {
+                                BoxIfValueType(baseArgType);
+                            }
                         }
                     }
                 }
@@ -239,17 +281,23 @@ internal sealed partial class EmitterImpl
                     _currentThisType = savedThis;
                 }
             }
-            else
-            {
-                for (var i = 0; i < baseShell.CtorParamTypes.Length; i++)
-                    ctorIl.Emit(OpCodes.Ldnull);
-            }
             ctorIl.Emit(OpCodes.Call, baseShell.Ctor);
         }
         else
         {
             ctorIl.Emit(OpCodes.Call, MetadataType(typeof(object)).GetConstructor(Type.EmptyTypes)!);
         }
+
+        // CLR requires the base constructor call to be the first operation.
+        // Once it has completed, guard all lowered initializer and constructor
+        // body work so recursive direct `new` expressions fail as a Tosh
+        // diagnostic rather than overflowing the CLR stack.
+        var constructorExecutionFrame = ctorIl.DeclareLocal(typeof(IDisposable));
+        ctorIl.Emit(OpCodes.Ldstr, $"class {cls.Name}.ctor");
+        ctorIl.Emit(OpCodes.Call, s_hostEnterExecutionFrame);
+        ctorIl.Emit(OpCodes.Stloc, constructorExecutionFrame);
+        ctorIl.BeginExceptionBlock();
+
         for (var i = 0; i < ctorSigParams.Count; i++)
         {
             var pname = ctorSigParams[i].Name;
@@ -325,6 +373,7 @@ internal sealed partial class EmitterImpl
         // are net-zero stack so we can append straight to ctorIl,
         // then emit Ret. _currentThisType is set so $this resolves;
         // _paramSlots maps each parameter symbol to its arg slot.
+        var constructorReturnEpilogueEmitted = false;
         if (explicitCtor is not null)
         {
             var savedIl = _il;
@@ -333,6 +382,8 @@ internal sealed partial class EmitterImpl
             var savedTypedLocals = _typedParamLocals;
             var savedReturnType = _currentFunctionReturnType;
             var savedThis = _currentThisType;
+            var savedReturnEmissionFrame = _returnEmissionFrame;
+            var savedDeferredCleanupFrames = _deferredCleanupFrames;
             try
             {
                 _il = ctorIl;
@@ -341,6 +392,7 @@ internal sealed partial class EmitterImpl
                 _typedParamLocals = new();
                 _currentFunctionReturnType = null;
                 _currentThisType = typeBuilder;
+                _deferredCleanupFrames = new();
                 // When the primary ctor drives the signature but the
                 // explicit ctor's parameters need to be visible to
                 // its body, they don't have arg slots. In that case
@@ -352,10 +404,24 @@ internal sealed partial class EmitterImpl
                     {
                         _paramSlots[explicitCtor.Parameters[i].Symbol] = i + 1;
                     }
-                    foreach (var stmt in explicitCtor.Body.Statements)
-                    {
-                        EmitStatement(stmt);
-                    }
+                    IReadOnlyList<BoundStatement> bodyStatements = superInitializer is null
+                        ? explicitCtor.Body.Statements
+                        : explicitCtor.Body.Statements.Skip(1).ToArray();
+                    var bodyBlock = CreateSyntheticBlock(
+                        bodyStatements,
+                        explicitCtor.Body.Span);
+                    var returnFrame = CreateReturnEmissionFrame(typeof(void));
+                    _returnEmissionFrame = returnFrame;
+                    EmitBlock(bodyBlock);
+                    // Falling through a constructor body must leave the
+                    // protected region just like an explicit source return.
+                    ctorIl.Emit(OpCodes.Leave, returnFrame.Epilogue);
+                    ctorIl.BeginFinallyBlock();
+                    ctorIl.Emit(OpCodes.Ldloc, constructorExecutionFrame);
+                    ctorIl.Emit(OpCodes.Callvirt, s_executionFrameDispose);
+                    ctorIl.EndExceptionBlock();
+                    EmitReturnEpilogue(returnFrame);
+                    constructorReturnEpilogueEmitted = true;
                 }
                 // else: explicit ctor coexists with primary ctor; its
                 // parameters aren't bound to CLR args. Leave body
@@ -373,9 +439,21 @@ internal sealed partial class EmitterImpl
                 _typedParamLocals = savedTypedLocals;
                 _currentFunctionReturnType = savedReturnType;
                 _currentThisType = savedThis;
+                _returnEmissionFrame = savedReturnEmissionFrame;
+                _deferredCleanupFrames = savedDeferredCleanupFrames;
             }
         }
-        ctorIl.Emit(OpCodes.Ret);
+        if (!constructorReturnEpilogueEmitted)
+        {
+            var epilogue = ctorIl.DefineLabel();
+            ctorIl.Emit(OpCodes.Leave, epilogue);
+            ctorIl.BeginFinallyBlock();
+            ctorIl.Emit(OpCodes.Ldloc, constructorExecutionFrame);
+            ctorIl.Emit(OpCodes.Callvirt, s_executionFrameDispose);
+            ctorIl.EndExceptionBlock();
+            ctorIl.MarkLabel(epilogue);
+            ctorIl.Emit(OpCodes.Ret);
+        }
 
         var paramNames = new string[ctorSigParams.Count];
         for (var i = 0; i < paramNames.Length; i++) paramNames[i] = ctorSigParams[i].Name;
@@ -576,6 +654,111 @@ internal sealed partial class EmitterImpl
         }
     }
 
+    /// <summary>
+    /// Validate and extract the compatibility-form constructor initializer
+    /// `$super(args)`. Only a plain, foreground, one-stage call can be
+    /// normalized; `$super.member()` is a <see cref="BoundMethodCall"/> and is
+    /// intentionally left in the ordinary expression/dispatch path.
+    /// </summary>
+    private bool TryAnalyzeClrSuperInitializer(
+        BoundClassDefinition cls,
+        BoundClassConstructorMember? explicitCtor,
+        out BoundCallableInvocation? initializer)
+    {
+        initializer = null;
+        if (explicitCtor is null)
+            return true;
+
+        var calls = new List<(int Index, BoundCallableInvocation Invocation)>();
+        for (var i = 0; i < explicitCtor.Body.Statements.Count; i++)
+        {
+            if (TryGetDirectSuperConstructorCall(
+                    explicitCtor.Body.Statements[i],
+                    out var invocation))
+            {
+                calls.Add((i, invocation));
+            }
+        }
+
+        if (calls.Count > 1)
+        {
+            Diagnostics.Add(
+                "tosh.compile.duplicate_base_constructor_initializer: "
+                + $"constructor '{cls.Name}()' calls '$super(...)' more than once.");
+            return false;
+        }
+
+        if (calls.Count == 0)
+            return true;
+
+        var call = calls[0];
+        if (call.Index != 0)
+        {
+            Diagnostics.Add(
+                "tosh.compile.super_initializer_must_be_first: "
+                + $"'$super(...)' must be the first executable statement "
+                + $"in constructor '{cls.Name}()'.");
+            return false;
+        }
+
+        if (cls.BaseConstructorArgs is not null)
+        {
+            Diagnostics.Add(
+                "tosh.compile.duplicate_base_constructor_initializer: "
+                + $"class '{cls.Name}' cannot combine 'extends "
+                + $"{cls.BaseClassName}(...)' arguments with '$super(...)'.");
+            return false;
+        }
+
+        if (cls.BaseClassName is null)
+        {
+            Diagnostics.Add(
+                "tosh.compile.super_without_base_class: "
+                + $"class '{cls.Name}' cannot call '$super(...)' because "
+                + "it has no base class.");
+            return false;
+        }
+
+        if (call.Invocation.Arguments.Any(static argument =>
+                argument.Name is not null || argument.IsSplat))
+        {
+            Diagnostics.Add(
+                "tosh.compile.unsupported_super_initializer_argument: "
+                + $"constructor '{cls.Name}()' must use positional, "
+                + "non-splat arguments in '$super(...)' when emitting a CLR shell.");
+            return false;
+        }
+
+        initializer = call.Invocation;
+        return true;
+    }
+
+    private static bool TryGetDirectSuperConstructorCall(
+        BoundStatement statement,
+        out BoundCallableInvocation invocation)
+    {
+        invocation = null!;
+        if (statement is not BoundPipelineStatement pipelineStatement
+            || pipelineStatement.Pipeline.Stages.Count != 1
+            || pipelineStatement.Pipeline.Stages[0] is not BoundExpressionStage
+            {
+                Value: BoundCallableInvocation
+                {
+                    Target: BoundVariableReference { Name: var name },
+                } call,
+            }
+            || !string.Equals(name, "super", StringComparison.OrdinalIgnoreCase)
+            || pipelineStatement.Pipeline.BoundRedirections.Count > 0
+            || pipelineStatement.Pipeline.BoundInputRedirection is not null
+            || pipelineStatement.Pipeline.Original is PipelineSyntax { IsBackground: true })
+        {
+            return false;
+        }
+
+        invocation = call;
+        return true;
+    }
+
     private static bool TryResolveCtorInitializerParameterSlot(
         BoundPipeline initializer,
         IReadOnlyList<BoundParameter> ctorSigParams,
@@ -629,7 +812,10 @@ internal sealed partial class EmitterImpl
         if (m.Method.Captures.Count > 0) return false;  // closures over outer scope
         foreach (var p in m.Method.Parameters)
         {
-            if (p.IsRest || p.IsOptional) return false;
+            // Defaulted parameters need the engine's callable default
+            // binder (TS-P1-05): a fixed-arity CLR method cannot bind a
+            // call that omits them.
+            if (p.IsRest || p.IsOptional || p.Default is not null) return false;
         }
         return true;
     }
@@ -721,6 +907,8 @@ internal sealed partial class EmitterImpl
             var savedTypedLocals = _typedParamLocals;
             var savedReturnType = _currentFunctionReturnType;
             var savedThis = _currentThisType;
+            var savedReturnEmissionFrame = _returnEmissionFrame;
+            var savedDeferredCleanupFrames = _deferredCleanupFrames;
             try
             {
                 _il = pending.Method.GetILGenerator();
@@ -730,6 +918,11 @@ internal sealed partial class EmitterImpl
                 _currentFunctionReturnType = null;       // object-typed return
                 var isStaticMethod = pending.Method.IsStatic;
                 _currentThisType = isStaticMethod ? null : pending.Shell.Type;
+                _deferredCleanupFrames = new();
+                var returnFrame = CreateReturnEmissionFrame(typeof(object));
+                _returnEmissionFrame = returnFrame;
+                var executionFrame = EmitExecutionFrameEntry(
+                    $"class {pending.Shell.Name}.{pending.Definition.Name}");
                 // Instance methods: declared params start at slot 1
                 // because arg 0 is `this`. Static methods start at 0.
                 var argBase = isStaticMethod ? 0 : 1;
@@ -737,13 +930,13 @@ internal sealed partial class EmitterImpl
                 {
                     _paramSlots[pending.Definition.Parameters[i].Symbol] = i + argBase;
                 }
-                foreach (var stmt in pending.Definition.Body.Statements)
-                {
-                    EmitStatement(stmt);
-                }
+                EmitBlock(pending.Definition.Body);
+
                 // Fall-through: implicit `return null`.
                 _il.Emit(OpCodes.Ldnull);
-                _il.Emit(OpCodes.Ret);
+                _il.Emit(OpCodes.Stloc, returnFrame.ValueLocal!);
+                EmitExecutionFrameExit(executionFrame);
+                EmitReturnEpilogue(returnFrame);
             }
             finally
             {
@@ -753,6 +946,8 @@ internal sealed partial class EmitterImpl
                 _typedParamLocals = savedTypedLocals;
                 _currentFunctionReturnType = savedReturnType;
                 _currentThisType = savedThis;
+                _returnEmissionFrame = savedReturnEmissionFrame;
+                _deferredCleanupFrames = savedDeferredCleanupFrames;
             }
         }
     }

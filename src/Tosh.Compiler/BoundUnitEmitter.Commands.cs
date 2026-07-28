@@ -56,7 +56,8 @@ internal sealed partial class EmitterImpl
             var argType = EmitExpression(call.Arguments[0].Value);
             if (argType is null) return;
             BoxIfValueType(argType);
-            _il.Emit(OpCodes.Call, s_writeLineObject);
+            _il.Emit(OpCodes.Call, s_formatValue);
+            _il.Emit(OpCodes.Call, s_writeLineString);
             return;
         }
 
@@ -76,7 +77,8 @@ internal sealed partial class EmitterImpl
             }
             else
             {
-                ConvertToString(argType);
+                BoxIfValueType(argType);
+                _il.Emit(OpCodes.Call, s_formatValue);
             }
             _il.Emit(OpCodes.Stelem_Ref);
         }

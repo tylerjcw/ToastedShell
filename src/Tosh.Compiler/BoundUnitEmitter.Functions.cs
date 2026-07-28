@@ -479,6 +479,8 @@ internal sealed partial class EmitterImpl
         var savedTypedLocals = _typedParamLocals;
         var savedReturnType = _currentFunctionReturnType;
         var savedReturnRefinement = _currentFunctionReturnRefinement;
+        var savedReturnEmissionFrame = _returnEmissionFrame;
+        var savedDeferredCleanupFrames = _deferredCleanupFrames;
         try
         {
             _il = entry.Method.GetILGenerator();
@@ -487,8 +489,34 @@ internal sealed partial class EmitterImpl
             _typedParamLocals = new();
             _currentFunctionReturnType = entry.IsTyped ? entry.ReturnClrType : null;
             _currentFunctionReturnRefinement = entry.IsTyped ? func.ReturnType as RefinementType : null;
+            _deferredCleanupFrames = new();
+            var returnFrame = CreateReturnEmissionFrame(entry.ReturnClrType);
+            _returnEmissionFrame = returnFrame;
+            var executionFrame = EmitExecutionFrameEntry($"func {func.Name}");
             if (entry.UsesPackedArguments)
             {
+                // Resolve named-argument wrappers into their positional
+                // slots before the positional prologue binds anything
+                // (TS-P1-05): `f(1, c = 99)` must land 99 in c's slot,
+                // leaving b's slot to its declared default. The result
+                // lives in a local rather than overwriting arg 0, so the
+                // prologue below reads one stable array.
+                var hasRestParameter = func.Parameters.Count > 0 && func.Parameters[^1].IsRest;
+                var argsLocal = _il.DeclareLocal(typeof(object[]));
+                _il.Emit(OpCodes.Ldarg_0);
+                _il.Emit(OpCodes.Ldc_I4, func.Parameters.Count);
+                _il.Emit(OpCodes.Newarr, typeof(string));
+                for (var i = 0; i < func.Parameters.Count; i++)
+                {
+                    _il.Emit(OpCodes.Dup);
+                    _il.Emit(OpCodes.Ldc_I4, i);
+                    _il.Emit(OpCodes.Ldstr, func.Parameters[i].Name);
+                    _il.Emit(OpCodes.Stelem_Ref);
+                }
+                _il.Emit(hasRestParameter ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
+                _il.Emit(OpCodes.Call, s_hostNormalizePackedArguments);
+                _il.Emit(OpCodes.Stloc, argsLocal);
+
                 for (var i = 0; i < func.Parameters.Count; i++)
                 {
                     var parameter = func.Parameters[i];
@@ -508,13 +536,13 @@ internal sealed partial class EmitterImpl
 
                         _il.MarkLabel(loop);
                         _il.Emit(OpCodes.Ldloc, idxLocal);
-                        _il.Emit(OpCodes.Ldarg_0);
+                        _il.Emit(OpCodes.Ldloc, argsLocal);
                         _il.Emit(OpCodes.Ldlen);
                         _il.Emit(OpCodes.Conv_I4);
                         _il.Emit(OpCodes.Bge_S, done);
 
                         _il.Emit(OpCodes.Ldloc, restLocal);
-                        _il.Emit(OpCodes.Ldarg_0);
+                        _il.Emit(OpCodes.Ldloc, argsLocal);
                         _il.Emit(OpCodes.Ldloc, idxLocal);
                         _il.Emit(OpCodes.Ldelem_Ref);
                         _il.Emit(OpCodes.Callvirt, s_listAdd);
@@ -534,7 +562,7 @@ internal sealed partial class EmitterImpl
                         var hasArg = _il.DefineLabel();
                         var loaded = _il.DefineLabel();
 
-                        _il.Emit(OpCodes.Ldarg_0);
+                        _il.Emit(OpCodes.Ldloc, argsLocal);
                         _il.Emit(OpCodes.Ldlen);
                         _il.Emit(OpCodes.Conv_I4);
                         _il.Emit(OpCodes.Ldc_I4, i);
@@ -545,7 +573,7 @@ internal sealed partial class EmitterImpl
                         _il.Emit(OpCodes.Br_S, loaded);
 
                         _il.MarkLabel(hasArg);
-                        _il.Emit(OpCodes.Ldarg_0);
+                        _il.Emit(OpCodes.Ldloc, argsLocal);
                         _il.Emit(OpCodes.Ldc_I4, i);
                         _il.Emit(OpCodes.Ldelem_Ref);
                         _il.Emit(OpCodes.Stloc, local);
@@ -618,10 +646,8 @@ internal sealed partial class EmitterImpl
                     _paramSlots[func.Parameters[i].Symbol] = i;
                 }
             }
-            foreach (var stmt in func.Body.Statements)
-            {
-                EmitStatement(stmt);
-            }
+            EmitBlock(func.Body);
+
             // Fall-through return: typed funcs must produce a default
             // value of the declared return type; untyped funcs keep
             // the legacy `Ldnull/Ret` semantics.
@@ -633,7 +659,9 @@ internal sealed partial class EmitterImpl
             {
                 _il.Emit(OpCodes.Ldnull);
             }
-            _il.Emit(OpCodes.Ret);
+            _il.Emit(OpCodes.Stloc, returnFrame.ValueLocal!);
+            EmitExecutionFrameExit(executionFrame);
+            EmitReturnEpilogue(returnFrame);
         }
         finally
         {
@@ -643,6 +671,8 @@ internal sealed partial class EmitterImpl
             _typedParamLocals = savedTypedLocals;
             _currentFunctionReturnType = savedReturnType;
             _currentFunctionReturnRefinement = savedReturnRefinement;
+            _returnEmissionFrame = savedReturnEmissionFrame;
+            _deferredCleanupFrames = savedDeferredCleanupFrames;
         }
     }
 

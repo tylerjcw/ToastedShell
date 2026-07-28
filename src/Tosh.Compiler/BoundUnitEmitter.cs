@@ -22,10 +22,11 @@ namespace Tosh.Compiler;
 /// Currently supported:
 /// • <c>BoundScript</c> with <c>BoundPipelineStatement</c> children
 /// • <c>BoundCommandCall</c> named <c>echo</c> with literal/expression args
-/// • <c>BoundLiteral</c> of int/long/double/bool/string/null
+/// • <c>BoundLiteral</c> of int/long/double/bool/string/StorageSize/null
 /// • <c>BoundVariableDeclaration</c> + <c>BoundVariableReference</c>
-/// • <c>BoundBinaryOperator</c> on numeric/string operands (<c>+ - * / %</c>,
-///   plus <c>== != &lt; &gt;</c>)
+/// • <c>BoundBinaryOperator</c> through the canonical runtime operator
+///   dispatcher, including polymorphic arithmetic, comparison, matching,
+///   and equality
 /// • <c>BoundUnaryOperator</c> for <c>-x</c> and <c>!x</c>
 /// • <c>BoundExpressionStage</c> as a pipeline stage
 /// </summary>
@@ -243,11 +244,14 @@ internal sealed partial class EmitterImpl : IDisposable
     /// </summary>
     private readonly Dictionary<Type, ClrTypeShell> _clrShellsByType = new();
     /// <summary>
-    /// Top-level <c>enum</c> declarations that have been emitted as real CLR
-    /// enum metadata. Keyed by the tosh enum name so the replay gate can
-    /// distinguish native metadata from Tier-3 interpreter registration.
+    /// Top-level integral <c>enum</c> declarations emitted as real CLR enum
+    /// metadata. Besides identifying native declarations for the replay gate,
+    /// each entry retains the emitted type and literal values so
+    /// <see cref="EmitStaticMemberAccess"/> can lower
+    /// <c>EnumName.Member</c> directly without host name resolution.
     /// </summary>
-    private readonly HashSet<string> _clrEnumTypes = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, ClrIntegralEnumShell> _clrEnumTypes =
+        new(StringComparer.Ordinal);
     /// <summary>
     /// Enum declarations that cannot be expressed as a CLR <c>enum</c>
     /// (non-integral underlying type, or one or more members carrying a
@@ -391,23 +395,32 @@ internal sealed partial class EmitterImpl : IDisposable
         typeof(Console).GetMethod(nameof(Console.WriteLine), new[] { typeof(string) })!;
     private static readonly MethodInfo s_writeLineObject =
         typeof(Console).GetMethod(nameof(Console.WriteLine), new[] { typeof(object) })!;
+    private static readonly MethodInfo s_formatValue =
+        typeof(ToshValueFormatter).GetMethod(
+            nameof(ToshValueFormatter.Format),
+            new[] { typeof(object) })!;
     private static readonly MethodInfo s_stringJoin =
         typeof(string).GetMethod(nameof(string.Join), new[] { typeof(string), typeof(string[]) })!;
     private static readonly MethodInfo s_objectToString =
         typeof(object).GetMethod(nameof(object.ToString), Type.EmptyTypes)!;
-    private static readonly MethodInfo s_objectEquals =
-        typeof(object).GetMethod(nameof(object.Equals), new[] { typeof(object), typeof(object) })!;
     private static readonly MethodInfo s_convertToInt32 =
         typeof(Convert).GetMethod(nameof(Convert.ToInt32), new[] { typeof(object) })!;
     private static readonly MethodInfo s_convertToInt64 =
         typeof(Convert).GetMethod(nameof(Convert.ToInt64), new[] { typeof(object) })!;
     private static readonly MethodInfo s_convertToDouble =
         typeof(Convert).GetMethod(nameof(Convert.ToDouble), new[] { typeof(object) })!;
+    private static readonly MethodInfo s_storageSizeFromBytes =
+        typeof(StorageSize).GetMethod(
+            nameof(StorageSize.FromBytes),
+            new[] { typeof(long) })!;
 
     private static readonly Type s_toshHost = typeof(global::Tosh.Compiler.Runtime.ToshHost);
     private static readonly MethodInfo s_hostInitialize =
         s_toshHost.GetMethod(nameof(global::Tosh.Compiler.Runtime.ToshHost.Initialize),
             new[] { typeof(global::Tosh.Runtime.ToshRuntime) })!;
+    private static readonly MethodInfo s_hostEnterExecutionFrame =
+        s_toshHost.GetMethod(nameof(global::Tosh.Compiler.Runtime.ToshHost.EnterExecutionFrame),
+            new[] { typeof(string) })!;
     private static readonly MethodInfo s_hostInvokeStatement =
         s_toshHost.GetMethod(nameof(global::Tosh.Compiler.Runtime.ToshHost.InvokeStatement),
             new[] { typeof(string), typeof(object[]) })!;
@@ -475,10 +488,19 @@ internal sealed partial class EmitterImpl : IDisposable
         typeof(global::Tosh.Runtime.OperatorEvaluator).GetMethod(
             nameof(global::Tosh.Runtime.OperatorEvaluator.ToBoolean),
             new[] { typeof(object) })!;
-    private static readonly MethodInfo s_opEvaluateBinary =
+    private static readonly MethodInfo s_opEvaluateBinaryWithDiagnostics =
         typeof(global::Tosh.Runtime.OperatorEvaluator).GetMethod(
-            nameof(global::Tosh.Runtime.OperatorEvaluator.EvaluateBinary),
-            new[] { typeof(object), typeof(string), typeof(object) })!;
+            nameof(global::Tosh.Runtime.OperatorEvaluator.EvaluateBinaryWithDiagnostics),
+            new[]
+            {
+                typeof(object),
+                typeof(string),
+                typeof(object),
+                typeof(string),
+                typeof(string),
+                typeof(int),
+                typeof(int),
+            })!;
     private static readonly MethodInfo s_opEvaluateUnary =
         typeof(global::Tosh.Runtime.OperatorEvaluator).GetMethod(
             nameof(global::Tosh.Runtime.OperatorEvaluator.EvaluateUnary),
@@ -502,6 +524,9 @@ internal sealed partial class EmitterImpl : IDisposable
     private static readonly MethodInfo s_hostDrainStatement =
         s_toshHost.GetMethod(nameof(global::Tosh.Compiler.Runtime.ToshHost.DrainStatement),
             new[] { typeof(IAsyncEnumerable<object?>) })!;
+    private static readonly MethodInfo s_hostDrainSubexpressionValue =
+        s_toshHost.GetMethod(nameof(global::Tosh.Compiler.Runtime.ToshHost.DrainSubexpressionValue),
+            new[] { typeof(IAsyncEnumerable<object?>) })!;
     private static readonly MethodInfo s_hostDrainValue =
         s_toshHost.GetMethod(nameof(global::Tosh.Compiler.Runtime.ToshHost.DrainValue),
             new[] { typeof(IAsyncEnumerable<object?>) })!;
@@ -518,7 +543,23 @@ internal sealed partial class EmitterImpl : IDisposable
         s_toshHost.GetMethod(
             nameof(global::Tosh.Compiler.Runtime.ToshHost.CheckType),
             new[] { typeof(object), typeof(string), typeof(int), typeof(int), typeof(string) })!;
+    private static readonly MethodInfo s_hostCheckTypeAtSource =
+        s_toshHost.GetMethod(
+            nameof(global::Tosh.Compiler.Runtime.ToshHost.CheckTypeAtSource),
+            new[]
+            {
+                typeof(object),
+                typeof(string),
+                typeof(int),
+                typeof(int),
+                typeof(string),
+                typeof(string),
+                typeof(string),
+            })!;
 
+    private static readonly MethodInfo s_hostNormalizePackedArguments =
+        s_toshHost.GetMethod(nameof(global::Tosh.Compiler.Runtime.ToshHost.NormalizePackedArguments),
+            new[] { typeof(object?[]), typeof(string[]), typeof(bool) })!;
     private static readonly MethodInfo s_hostRegisterTypeFromSource =
         s_toshHost.GetMethod(nameof(global::Tosh.Compiler.Runtime.ToshHost.RegisterTypeFromSource),
             new[] { typeof(int), typeof(int) })!;
@@ -1268,9 +1309,10 @@ internal sealed partial class EmitterImpl : IDisposable
             }
         }
 
-        // Main pass: top-level statements go into Main; function
-        // definitions are emitted into their own MethodBuilders and
-        // skipped here.
+        // Main pass: top-level executable statements go into one
+        // defer-aware lexical block. Function definitions are emitted into
+        // their own MethodBuilders and omitted from that block.
+        ReturnEmissionFrame? mainReturnFrame = null;
         if (hasSubcommandDispatch)
         {
             if (CanCompileSubcommandDispatch())
@@ -1313,6 +1355,7 @@ internal sealed partial class EmitterImpl : IDisposable
         }
         else
         {
+            var executableStatements = new List<BoundStatement>();
             foreach (var statement in _unit.Root.Statements)
             {
                 if (statement is BoundFunctionDefinition func)
@@ -1360,10 +1403,27 @@ internal sealed partial class EmitterImpl : IDisposable
                     // Already registered in the prologue.
                     continue;
                 }
-                EmitStatement(statement);
+                executableStatements.Add(statement);
             }
+
+            var savedReturnEmissionFrame = _returnEmissionFrame;
+            var savedDeferredCleanupFrames = _deferredCleanupFrames;
+            _deferredCleanupFrames = new();
+            mainReturnFrame = CreateReturnEmissionFrame(typeof(void));
+            _returnEmissionFrame = mainReturnFrame;
+            EmitBlock(CreateSyntheticBlock(executableStatements, _unit.Root.Span));
+            _returnEmissionFrame = savedReturnEmissionFrame;
+            _deferredCleanupFrames = savedDeferredCleanupFrames;
         }
-        _il.Emit(OpCodes.Ret);
+
+        if (mainReturnFrame is { } frame)
+        {
+            EmitReturnEpilogue(frame);
+        }
+        else
+        {
+            _il.Emit(OpCodes.Ret);
+        }
         _program.CreateType();
 
         // Emit module-method bodies (collected during DeclareClrModuleShell)
@@ -1691,6 +1751,28 @@ internal sealed partial class EmitterImpl : IDisposable
 
         public TypeBuilder Type { get; }
         public Dictionary<string, FieldBuilder> Fields { get; }
+    }
+
+    /// <summary>
+    /// CLR metadata retained for one integral enum. Literal fields have no
+    /// runtime storage, so member access emits the underlying constant and
+    /// treats the resulting stack value as <see cref="Type"/>.
+    /// </summary>
+    private sealed class ClrIntegralEnumShell
+    {
+        public ClrIntegralEnumShell(
+            Type type,
+            Type underlyingType,
+            Dictionary<string, object> members)
+        {
+            Type = type;
+            UnderlyingType = underlyingType;
+            Members = members;
+        }
+
+        public Type Type { get; }
+        public Type UnderlyingType { get; }
+        public Dictionary<string, object> Members { get; }
     }
 
     /// <summary>

@@ -32,6 +32,11 @@ internal sealed partial class EmitterImpl
                 }
                 else if (_suppressStatementOutputDepth > 0)
                 {
+                    if (TryEmitSuppressedEcho(pipelineStmt.Pipeline))
+                    {
+                        break;
+                    }
+
                     var suppressed = EmitPipeline(pipelineStmt.Pipeline, asStatement: false);
                     if (suppressed is not null)
                     {
@@ -77,6 +82,10 @@ internal sealed partial class EmitterImpl
                 break;
 
             case BoundBreakStatement:
+                if (TryEmitDeferredCleanupLoopControl())
+                {
+                    break;
+                }
                 if (_loopStack.Count == 0)
                 {
                     Diagnostics.Add("'break' outside of a loop");
@@ -86,6 +95,10 @@ internal sealed partial class EmitterImpl
                 break;
 
             case BoundContinueStatement:
+                if (TryEmitDeferredCleanupLoopControl())
+                {
+                    break;
+                }
                 if (_loopStack.Count == 0)
                 {
                     Diagnostics.Add("'continue' outside of a loop");
@@ -146,15 +159,63 @@ internal sealed partial class EmitterImpl
 
     /// <summary>
     /// Emits IL for <c>($a, $b) = pipeline</c>. Evaluates the RHS
-    /// pipeline as a value, then for each named target on the left
-    /// looks up the existing local by symbol name (the lowerer does
-    /// not resolve <see cref="BoundTupleAssignment.Names"/> to
-    /// <see cref="BoundSymbol"/>s today, so we fall back to a
-    /// name-based scan over the active local table). Assigns the
-    /// i-th element of the iterable RHS to the i-th name.
+    /// pipeline once, converts every element into a temporary, and
+    /// commits only after every target has passed resolution and
+    /// conversion. This preserves simultaneous-assignment semantics
+    /// when a later target fails.
     /// </summary>
     private void EmitTupleAssignment(BoundTupleAssignment tupleAssign)
     {
+        if (tupleAssign.Symbols.Count != tupleAssign.Names.Count)
+        {
+            Diagnostics.Add("tuple assignment: bound target metadata is incomplete.");
+            return;
+        }
+
+        var destinations = new List<(
+            string Name,
+            BoundSymbol Symbol,
+            LocalSlot? Local,
+            FieldBuilder? Field)>(
+            tupleAssign.Names.Count);
+
+        // Resolve every destination before emitting the RHS or any stores.
+        for (var index = 0; index < tupleAssign.Names.Count; index++)
+        {
+            var name = tupleAssign.Names[index];
+            var symbol = tupleAssign.Symbols[index];
+            if (symbol is null)
+            {
+                Diagnostics.Add(
+                    $"tuple assignment: target variable '${name}' is not in scope "
+                    + "(declare it first with `var`).");
+                return;
+            }
+            if (symbol.IsConst)
+            {
+                Diagnostics.Add($"cannot reassign constant '{name}'");
+                return;
+            }
+            if (_paramSlots.ContainsKey(symbol) || _typedParamLocals.ContainsKey(symbol))
+            {
+                Diagnostics.Add($"cannot reassign parameter '{name}'");
+                return;
+            }
+            if (_locals.TryGetValue(symbol, out var local))
+            {
+                destinations.Add((name, symbol, local, null));
+                continue;
+            }
+            if (_staticFields.TryGetValue(symbol, out var field))
+            {
+                destinations.Add((name, symbol, null, field));
+                continue;
+            }
+
+            Diagnostics.Add($"tuple assignment: unresolved target variable '${name}'.");
+            return;
+        }
+
         // Evaluate RHS to object, store in local.
         var rhsType = EmitPipelineAsValue(tupleAssign.Value);
         if (rhsType is null) return;
@@ -169,52 +230,54 @@ internal sealed partial class EmitterImpl
         var arrLocal = _il.DeclareLocal(typeof(object[]));
         _il.Emit(OpCodes.Stloc, arrLocal);
 
-        for (var i = 0; i < tupleAssign.Names.Count; i++)
-        {
-            var name = tupleAssign.Names[i];
-            LocalSlot? slot = null;
-            foreach (var kv in _locals)
-            {
-                if (string.Equals(kv.Key.Name, name, StringComparison.Ordinal))
-                {
-                    slot = kv.Value;
-                    break;
-                }
-            }
-            if (slot is null)
-            {
-                Diagnostics.Add(
-                    $"tuple assignment: target variable '${name}' is not a "
-                    + "local in scope (declare it first with `var`).");
-                return;
-            }
+        var staged = new List<(LocalBuilder Value, LocalSlot? Local, FieldBuilder? Field)>(
+            destinations.Count);
 
-            // value = arr[i]  (with bounds-fallback to null)
+        // Convert into temporaries first. An Unbox_Any/Castclass failure here
+        // occurs before any user-visible binding has been mutated.
+        for (var index = 0; index < destinations.Count; index++)
+        {
+            var destination = destinations[index];
+            var targetType = destination.Local is { } local
+                ? local.Type
+                : typeof(object);
+
             _il.Emit(OpCodes.Ldloc, arrLocal);
-            _il.Emit(OpCodes.Ldc_I4, i);
+            _il.Emit(OpCodes.Ldc_I4, index);
             _il.Emit(OpCodes.Call, s_hostIndexOrNull);
-            // Stack: object value
-            EmitStoreToLocalSlot(slot.Value);
-        }
-    }
 
-    /// <summary>
-    /// Stores the boxed object on the IL stack into
-    /// <paramref name="slot"/>, unboxing/converting where
-    /// necessary to match the slot's static type.
-    /// </summary>
-    private void EmitStoreToLocalSlot(LocalSlot slot)
-    {
-        var slotType = slot.Type;
-        if (slotType.IsValueType)
-        {
-            _il.Emit(OpCodes.Unbox_Any, slotType);
+            var stagedType = EmitAnnotatedVariableValue(
+                destination.Symbol,
+                typeof(object),
+                tupleAssign.Value.Span,
+                destination.Name);
+
+            if (targetType.IsValueType && stagedType == typeof(object))
+            {
+                _il.Emit(OpCodes.Unbox_Any, targetType);
+            }
+            else if (targetType != typeof(object) && stagedType == typeof(object))
+            {
+                _il.Emit(OpCodes.Castclass, targetType);
+            }
+
+            var stagedLocal = _il.DeclareLocal(targetType);
+            _il.Emit(OpCodes.Stloc, stagedLocal);
+            staged.Add((stagedLocal, destination.Local, destination.Field));
         }
-        else if (slotType != typeof(object))
+
+        foreach (var assignment in staged)
         {
-            _il.Emit(OpCodes.Castclass, slotType);
+            _il.Emit(OpCodes.Ldloc, assignment.Value);
+            if (assignment.Local is { } local)
+            {
+                _il.Emit(OpCodes.Stloc, local.Local);
+            }
+            else
+            {
+                _il.Emit(OpCodes.Stsfld, assignment.Field!);
+            }
         }
-        _il.Emit(OpCodes.Stloc, slot.Local);
     }
 
     private void EmitLambdaBodyPipelineStatement(BoundPipelineStatement pipelineStmt)
@@ -248,6 +311,11 @@ internal sealed partial class EmitterImpl
                 }
                 else
                 {
+                    produced = EmitAnnotatedVariableValue(
+                        decl.Symbol,
+                        produced,
+                        decl.Value.Span,
+                        decl.Symbol.Name);
                     BoxIfValueType(produced);
                 }
             }
@@ -272,38 +340,80 @@ internal sealed partial class EmitterImpl
             producedType = typeof(object);
             _il.Emit(OpCodes.Ldnull);
         }
-        // Refinement-check enforcement: when the declared symbol
-        // type is a refinement, route the value through
-        // ToshHost.CheckType so the IL throws a runtime diagnostic
-        // on annotation failure, matching the interpreter's
-        // semantics. The check leaves an `object` on the stack and
-        // promotes the local's storage type accordingly.
-        if (decl.Symbol.DeclaredType is RefinementType refDecl)
+        producedType = EmitAnnotatedVariableValue(
+            decl.Symbol,
+            producedType,
+            decl.Value.Span,
+            decl.Symbol.Name);
+
+        // An unannotated `var` is dynamically retypable in the interpreter:
+        // `var value = int.MaxValue; $value = $value + 1` promotes the binding
+        // to BigInteger. Keep mutable unannotated/dynamic bindings in object
+        // storage so the shared runtime operator's exact result type survives
+        // reassignment. Explicitly typed locals and constants may retain their
+        // concrete CLR slots.
+        var requiresDynamicStorage =
+            !decl.IsConst &&
+            (!decl.HasExplicitTypeAnnotation ||
+             decl.Symbol.DeclaredType.IsDynamic ||
+             decl.Symbol.DeclaredType.ClrType == typeof(object));
+        if (requiresDynamicStorage && producedType != typeof(object))
         {
             BoxIfValueType(producedType);
-            _il.Emit(OpCodes.Ldstr, refDecl.Name);
-            _il.Emit(OpCodes.Ldc_I4, decl.Span.Start);
-            _il.Emit(OpCodes.Ldc_I4, decl.Span.Length);
-            _il.Emit(OpCodes.Ldstr, $"var {decl.Symbol.Name}");
-            _il.Emit(OpCodes.Call, s_hostCheckType);
             producedType = typeof(object);
         }
+
         var local = _il.DeclareLocal(producedType);
         _il.Emit(OpCodes.Stloc, local);
         _locals[decl.Symbol] = new LocalSlot(local, producedType);
     }
 
     /// <summary>
+    /// Applies a source-level variable annotation through the interpreter's
+    /// canonical conversion path. The returned value is boxed because local
+    /// slots are an implementation detail, while preserving the converted
+    /// runtime CLR value is part of ToastScript's observable semantics.
+    /// </summary>
+    private Type EmitAnnotatedVariableValue(
+        BoundSymbol symbol,
+        Type producedType,
+        TextSpan valueSpan,
+        string owner)
+    {
+        var typeName = symbol.DeclaredTypeName;
+        if (string.IsNullOrWhiteSpace(typeName))
+        {
+            return producedType;
+        }
+
+        RequireTier(2, "variable annotation conversion (canonical runtime semantics)");
+        BoxIfValueType(producedType);
+        var parse = (ParseResult)_unit.ParseResult;
+        _il.Emit(OpCodes.Ldstr, typeName);
+        _il.Emit(OpCodes.Ldc_I4, valueSpan.Start);
+        _il.Emit(OpCodes.Ldc_I4, valueSpan.Length);
+        _il.Emit(OpCodes.Ldstr, owner);
+        _il.Emit(OpCodes.Ldstr, parse.SourceName);
+        _il.Emit(OpCodes.Ldstr, parse.SourceText);
+        _il.Emit(OpCodes.Call, s_hostCheckTypeAtSource);
+        return typeof(object);
+    }
+
+    /// <summary>
     /// Emits a reassignment <c>$x = ...</c>. Currently supports plain
     /// <c>=</c> on a previously-declared local whose stored type
     /// matches (or can be implicitly converted from) the new value,
-    /// plus the compound forms <c>+= -= *= /= %=</c>. The compound
-    /// forms are lowered to <c>$x = $x op rhs</c> at IL time, sharing
-    /// the numeric-coercion path with <see cref="EmitNumericArith"/>.
-    /// String <c>+=</c> falls into the string-concat branch.
+    /// plus the compound forms <c>+= -= *= **= /= //= %=</c>. Compound
+    /// assignment is emitted as <c>$x = $x op rhs</c> through the same
+    /// source-aware runtime dispatcher as an ordinary binary expression.
     /// </summary>
     private void EmitVariableAssignment(BoundVariableAssignment assign)
     {
+        if (assign.Symbol?.IsConst == true)
+        {
+            Diagnostics.Add($"cannot reassign constant '{assign.Name}'");
+            return;
+        }
         if (assign.Symbol is not null && (_paramSlots.ContainsKey(assign.Symbol) || _typedParamLocals.ContainsKey(assign.Symbol)))
         {
             Diagnostics.Add($"cannot reassign parameter '{assign.Name}'");
@@ -326,18 +436,37 @@ internal sealed partial class EmitterImpl
             EmitPlainAssignmentInto(slot, assign);
             return;
         }
-
-        // Compound assignment: load current value, emit RHS, combine,
-        // store. Mirrors EmitBinaryOperator's coercion rules.
-        var binaryOp = op switch
+        if (op == "??=")
         {
-            "+=" => "+",
-            "-=" => "-",
-            "*=" => "*",
-            "/=" => "/",
-            "%=" => "%",
-            _ => null,
-        };
+            var nullableUnderlyingType = Nullable.GetUnderlyingType(slot.Type);
+
+            // A non-nullable value-type local can never require the fallback.
+            if (slot.Type.IsValueType && nullableUnderlyingType is null)
+            {
+                return;
+            }
+
+            var done = _il.DefineLabel();
+            if (nullableUnderlyingType is not null)
+            {
+                _il.Emit(OpCodes.Ldloca, slot.Local);
+                _il.Emit(
+                    OpCodes.Call,
+                    slot.Type.GetProperty(nameof(Nullable<int>.HasValue))!.GetMethod!);
+            }
+            else
+            {
+                _il.Emit(OpCodes.Ldloc, slot.Local);
+            }
+            _il.Emit(OpCodes.Brtrue, done);
+            EmitPlainAssignmentInto(slot, assign);
+            _il.MarkLabel(done);
+            return;
+        }
+
+        // Compound assignment preserves the established compiler order:
+        // load the current value, evaluate the RHS, dispatch, then store.
+        var binaryOp = GetCompoundAssignmentOperator(op);
         if (binaryOp is null)
         {
             Diagnostics.Add($"unsupported assignment operator: '{op}'");
@@ -346,28 +475,22 @@ internal sealed partial class EmitterImpl
 
         _il.Emit(OpCodes.Ldloc, slot.Local);
         var leftType = slot.Type;
-
-        // String += rhs → string.Concat(left, rhs.ToString()).
-        if (binaryOp == "+" && leftType == typeof(string))
-        {
-            var rhsStrType = EmitPipelineAsValue(assign.Value);
-            if (rhsStrType is null) { _il.Emit(OpCodes.Pop); return; }
-            ConvertToString(rhsStrType);
-            _il.Emit(OpCodes.Call, typeof(string).GetMethod(
-                nameof(string.Concat), new[] { typeof(string), typeof(string) })!);
-            _il.Emit(OpCodes.Stloc, slot.Local);
-            return;
-        }
-
         var rhsType = EmitPipelineAsValue(assign.Value);
         if (rhsType is null) { _il.Emit(OpCodes.Pop); return; }
-        var resultType = EmitNumericArith(binaryOp, leftType, rhsType);
-        if (resultType is null) return;
-        if (resultType != slot.Type)
+        var resultType = EmitBinaryOperatorFallback(
+            leftType,
+            binaryOp,
+            rhsType,
+            assign.Span);
+        if (assign.Symbol is not null)
         {
-            ConvertNumeric(resultType, slot.Type);
+            resultType = EmitAnnotatedVariableValue(
+                assign.Symbol,
+                resultType,
+                assign.Value.Span,
+                assign.Name);
         }
-        _il.Emit(OpCodes.Stloc, slot.Local);
+        EmitValueIntoLocalSlot(slot, resultType, assign.Name);
     }
 
     private void EmitPlainAssignmentInto(LocalSlot slot, BoundVariableAssignment assign)
@@ -375,27 +498,36 @@ internal sealed partial class EmitterImpl
         var producedType = EmitPipelineAsValue(assign.Value);
         if (producedType is null) return;
 
-        // Refinement enforcement on reassignment: when the target
-        // symbol declared a refinement type, route the new value
-        // through ToshHost.CheckType before storing. Promotes the
-        // value to object, so we then re-coerce to the slot type
-        // just like any other assignment shape.
-        if (assign.Symbol is not null && assign.Symbol.DeclaredType is RefinementType refSym)
+        if (assign.Symbol is not null)
         {
-            BoxIfValueType(producedType);
-            _il.Emit(OpCodes.Ldstr, refSym.Name);
-            _il.Emit(OpCodes.Ldc_I4, assign.Span.Start);
-            _il.Emit(OpCodes.Ldc_I4, assign.Span.Length);
-            _il.Emit(OpCodes.Ldstr, $"var {assign.Name}");
-            _il.Emit(OpCodes.Call, s_hostCheckType);
-            producedType = typeof(object);
+            producedType = EmitAnnotatedVariableValue(
+                assign.Symbol,
+                producedType,
+                assign.Value.Span,
+                assign.Name);
         }
 
+        EmitValueIntoLocalSlot(slot, producedType, assign.Name);
+    }
+
+    private void EmitValueIntoLocalSlot(
+        LocalSlot slot,
+        Type producedType,
+        string targetName)
+    {
         if (producedType != slot.Type)
         {
             if (IsNumericType(producedType) && IsNumericType(slot.Type))
             {
                 ConvertNumeric(producedType, slot.Type);
+            }
+            else if (producedType == typeof(object))
+            {
+                // Shared runtime operators deliberately return object so their
+                // exact dynamic result type is preserved. Reassignment into an
+                // already-established CLR slot still needs the normal declared
+                // type conversion (for example, an int loop counter).
+                CoerceObjectToTyped(_il, slot.Type);
             }
             else if (slot.Type == typeof(object))
             {
@@ -404,7 +536,7 @@ internal sealed partial class EmitterImpl
             else
             {
                 Diagnostics.Add(
-                    $"assignment type mismatch for '{assign.Name}': " +
+                    $"assignment type mismatch for '{targetName}': " +
                     $"slot is {slot.Type.Name}, value is {producedType.Name}");
                 _il.Emit(OpCodes.Pop);
                 return;
@@ -427,45 +559,69 @@ internal sealed partial class EmitterImpl
         {
             var produced = EmitPipelineAsValue(assign.Value);
             if (produced is null) return;
-            BoxIfValueType(produced);
-            // Refinement enforcement on captured-field reassignment.
-            if (assign.Symbol is not null && assign.Symbol.DeclaredType is RefinementType refSym)
+            if (assign.Symbol is not null)
             {
-                _il.Emit(OpCodes.Ldstr, refSym.Name);
-                _il.Emit(OpCodes.Ldc_I4, assign.Span.Start);
-                _il.Emit(OpCodes.Ldc_I4, assign.Span.Length);
-                _il.Emit(OpCodes.Ldstr, $"var {assign.Name}");
-                _il.Emit(OpCodes.Call, s_hostCheckType);
+                produced = EmitAnnotatedVariableValue(
+                    assign.Symbol,
+                    produced,
+                    assign.Value.Span,
+                    assign.Name);
             }
+            BoxIfValueType(produced);
             _il.Emit(OpCodes.Stsfld, field);
             return;
         }
-
-        var binaryOp = op switch
+        if (op == "??=")
         {
-            "+=" => "+",
-            "-=" => "-",
-            "*=" => "*",
-            "/=" => "/",
-            "%=" => "%",
-            _ => null,
-        };
+            var done = _il.DefineLabel();
+            _il.Emit(OpCodes.Ldsfld, field);
+            _il.Emit(OpCodes.Brtrue, done);
+
+            var produced = EmitPipelineAsValue(assign.Value);
+            if (produced is null)
+            {
+                _il.MarkLabel(done);
+                return;
+            }
+            if (assign.Symbol is not null)
+            {
+                produced = EmitAnnotatedVariableValue(
+                    assign.Symbol,
+                    produced,
+                    assign.Value.Span,
+                    assign.Name);
+            }
+            BoxIfValueType(produced);
+            _il.Emit(OpCodes.Stsfld, field);
+            _il.MarkLabel(done);
+            return;
+        }
+
+        var binaryOp = GetCompoundAssignmentOperator(op);
         if (binaryOp is null)
         {
             Diagnostics.Add($"unsupported assignment operator: '{op}'");
             return;
         }
 
-        // Load current field value, run the op via the same numeric
-        // dispatcher used by `+`/`-`/etc., then store back. Both
-        // operands are object (boxed) so EmitNumericArith unboxes
-        // through Convert.* — same path as a regular `$x + y`.
+        // Captures use object fields, so the shared runtime result can be
+        // stored without narrowing its dynamic CLR type.
         _il.Emit(OpCodes.Ldsfld, field);
         var rhsType = EmitPipelineAsValue(assign.Value);
         if (rhsType is null) { _il.Emit(OpCodes.Pop); return; }
-        BoxIfValueType(rhsType);
-        var resultType = EmitNumericArith(binaryOp, typeof(object), typeof(object));
-        if (resultType is null) return;
+        var resultType = EmitBinaryOperatorFallback(
+            typeof(object),
+            binaryOp,
+            rhsType,
+            assign.Span);
+        if (assign.Symbol is not null)
+        {
+            resultType = EmitAnnotatedVariableValue(
+                assign.Symbol,
+                resultType,
+                assign.Value.Span,
+                assign.Name);
+        }
         BoxIfValueType(resultType);
         _il.Emit(OpCodes.Stsfld, field);
     }
@@ -474,8 +630,8 @@ internal sealed partial class EmitterImpl
     /// Emits assignment to a member/index target (for example
     /// <c>$obj.Name = x</c>, <c>$obj.Name += x</c>, or future indexed
     /// targets). Compound forms are lowered via
-    /// <c>OperatorEvaluator.EvaluateBinary</c> to keep semantics aligned
-    /// with the interpreter's operator dispatcher.
+    /// <c>OperatorEvaluator.EvaluateBinaryWithDiagnostics</c> to keep
+    /// operator and failure semantics aligned with ordinary expressions.
     /// </summary>
     private void EmitMemberAssignment(BoundMemberAssignment assign)
     {
@@ -502,7 +658,9 @@ internal sealed partial class EmitterImpl
             "+=" => "+",
             "-=" => "-",
             "*=" => "*",
+            "**=" => "**",
             "/=" => "/",
+            "//=" => "//",
             "%=" => "%",
             _ => null,
         };
@@ -514,6 +672,35 @@ internal sealed partial class EmitterImpl
         BoxIfValueType(targetType);
         var targetLocal = _il.DeclareLocal(typeof(object));
         _il.Emit(OpCodes.Stloc, targetLocal);
+
+        if (assign.Operator == "??=")
+        {
+            var done = _il.DefineLabel();
+            _il.Emit(OpCodes.Ldloc, targetLocal);
+            _il.Emit(OpCodes.Ldstr, target.MemberPath);
+            _il.Emit(target.NullSafe ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
+            _il.Emit(OpCodes.Call, s_hostGetMember);
+            _il.Emit(OpCodes.Brtrue, done);
+
+            var rhsType = EmitPipelineAsValue(assign.Value);
+            if (rhsType is null)
+            {
+                _il.MarkLabel(done);
+                return;
+            }
+            BoxIfValueType(rhsType);
+            var coalescedValueLocal = _il.DeclareLocal(typeof(object));
+            _il.Emit(OpCodes.Stloc, coalescedValueLocal);
+
+            _il.Emit(OpCodes.Ldloc, targetLocal);
+            _il.Emit(OpCodes.Ldstr, target.MemberPath);
+            _il.Emit(OpCodes.Ldloc, coalescedValueLocal);
+            _il.Emit(target.NullSafe ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
+            _il.Emit(OpCodes.Call, s_hostSetMember);
+            _il.Emit(OpCodes.Pop);
+            _il.MarkLabel(done);
+            return;
+        }
 
         var valueLocal = _il.DeclareLocal(typeof(object));
         if (assign.Operator == "=")
@@ -536,13 +723,18 @@ internal sealed partial class EmitterImpl
             _il.Emit(OpCodes.Ldstr, target.MemberPath);
             _il.Emit(target.NullSafe ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
             _il.Emit(OpCodes.Call, s_hostGetMember);
-            _il.Emit(OpCodes.Ldstr, binaryOperator);
 
             var rhsType = EmitPipelineAsValue(assign.Value);
-            if (rhsType is null) return;
-            BoxIfValueType(rhsType);
-
-            _il.Emit(OpCodes.Call, s_opEvaluateBinary);
+            if (rhsType is null)
+            {
+                _il.Emit(OpCodes.Pop);
+                return;
+            }
+            EmitBinaryOperatorFallback(
+                typeof(object),
+                binaryOperator,
+                rhsType,
+                assign.Span);
             _il.Emit(OpCodes.Stloc, valueLocal);
         }
 
@@ -575,6 +767,33 @@ internal sealed partial class EmitterImpl
         var indexLocal = _il.DeclareLocal(typeof(object));
         _il.Emit(OpCodes.Stloc, indexLocal);
 
+        if (assign.Operator == "??=")
+        {
+            var done = _il.DefineLabel();
+            _il.Emit(OpCodes.Ldloc, targetLocal);
+            _il.Emit(OpCodes.Ldloc, indexLocal);
+            _il.Emit(OpCodes.Call, s_hostGetIndex);
+            _il.Emit(OpCodes.Brtrue, done);
+
+            var rhsType = EmitPipelineAsValue(assign.Value);
+            if (rhsType is null)
+            {
+                _il.MarkLabel(done);
+                return;
+            }
+            BoxIfValueType(rhsType);
+            var coalescedValueLocal = _il.DeclareLocal(typeof(object));
+            _il.Emit(OpCodes.Stloc, coalescedValueLocal);
+
+            _il.Emit(OpCodes.Ldloc, targetLocal);
+            _il.Emit(OpCodes.Ldloc, indexLocal);
+            _il.Emit(OpCodes.Ldloc, coalescedValueLocal);
+            _il.Emit(OpCodes.Call, s_hostSetIndex);
+            _il.Emit(OpCodes.Pop);
+            _il.MarkLabel(done);
+            return;
+        }
+
         var valueLocal = _il.DeclareLocal(typeof(object));
         if (assign.Operator == "=")
         {
@@ -595,13 +814,18 @@ internal sealed partial class EmitterImpl
             _il.Emit(OpCodes.Ldloc, targetLocal);
             _il.Emit(OpCodes.Ldloc, indexLocal);
             _il.Emit(OpCodes.Call, s_hostGetIndex);
-            _il.Emit(OpCodes.Ldstr, binaryOperator);
 
             var rhsType = EmitPipelineAsValue(assign.Value);
-            if (rhsType is null) return;
-            BoxIfValueType(rhsType);
-
-            _il.Emit(OpCodes.Call, s_opEvaluateBinary);
+            if (rhsType is null)
+            {
+                _il.Emit(OpCodes.Pop);
+                return;
+            }
+            EmitBinaryOperatorFallback(
+                typeof(object),
+                binaryOperator,
+                rhsType,
+                assign.Span);
             _il.Emit(OpCodes.Stloc, valueLocal);
         }
 
@@ -706,20 +930,14 @@ internal sealed partial class EmitterImpl
     }
 
     /// <summary>
-    /// Emits an <c>if cond { … } else { … }</c>. The condition must
-    /// evaluate to <see cref="bool"/>; nested non-bool conditions are
-    /// reported as a diagnostic and the block is skipped.
+    /// Emits an <c>if cond { … } else { … }</c>. Every condition is
+    /// normalized through the runtime truthiness protocol before branching.
     /// </summary>
     private void EmitIfStatement(BoundIfStatement ifStmt)
     {
         var condType = EmitExpression(ifStmt.Condition);
         if (condType is null) return;
-        if (condType != typeof(bool))
-        {
-            Diagnostics.Add($"if condition must be bool, got {condType.Name}");
-            _il.Emit(OpCodes.Pop);
-            return;
-        }
+        EmitTruthTest(condType);
 
         var elseLabel = _il.DefineLabel();
         var endLabel = _il.DefineLabel();
@@ -749,12 +967,7 @@ internal sealed partial class EmitterImpl
         _il.MarkLabel(topLabel);
         var condType = EmitExpression(whileStmt.Condition);
         if (condType is null) return;
-        if (condType != typeof(bool))
-        {
-            Diagnostics.Add($"while condition must be bool, got {condType.Name}");
-            _il.Emit(OpCodes.Pop);
-            return;
-        }
+        EmitTruthTest(condType);
 
         // until inverts the test: keep looping while condition is true.
         _il.Emit(whileStmt.IsUntil ? OpCodes.Brtrue : OpCodes.Brfalse, endLabel);
@@ -856,8 +1069,10 @@ internal sealed partial class EmitterImpl
     /// </summary>
     private void EmitForEachStatement(BoundForStatement forStmt)
     {
-        // Evaluate the source pipeline as a value.
-        var srcType = EmitPipelineAsValue(forStmt.Source);
+        // Evaluate the source pipeline as a sequence: a for-loop
+        // consumes every item, so the single-value subexpression rule
+        // that applies to ordinary value contexts must not apply here.
+        var srcType = EmitPipelineAsSequence(forStmt.Source);
         if (srcType is null) return;
         BoxIfValueType(srcType);
         _il.Emit(OpCodes.Call, s_hostToEnumerable);
@@ -917,6 +1132,11 @@ internal sealed partial class EmitterImpl
 
     private void EmitReturnStatement(BoundReturnStatement ret)
     {
+        if (TryEmitDeferredCleanupReturn(ret))
+        {
+            return;
+        }
+
         // Lambda body context: add return value to output list, then return the list.
         if (_blockOutputLocal is not null)
         {
@@ -937,8 +1157,7 @@ internal sealed partial class EmitterImpl
                     _il.MarkLabel(skipAdd);
                 }
             }
-            _il.Emit(OpCodes.Ldloc, _blockOutputLocal);
-            _il.Emit(OpCodes.Ret);
+            EmitReturnWithoutValueAndLeave();
             return;
         }
 
@@ -953,7 +1172,7 @@ internal sealed partial class EmitterImpl
             {
                 _il.Emit(OpCodes.Ldnull);
             }
-            _il.Emit(OpCodes.Ret);
+            EmitReturnValueAndLeave();
             return;
         }
         var t = EmitPipelineAsValue(ret.Value);
@@ -967,7 +1186,7 @@ internal sealed partial class EmitterImpl
             {
                 _il.Emit(OpCodes.Ldnull);
             }
-            _il.Emit(OpCodes.Ret);
+            EmitReturnValueAndLeave();
             return;
         }
         if (typedReturn is not null)
@@ -1007,15 +1226,33 @@ internal sealed partial class EmitterImpl
         {
             BoxIfValueType(t);
         }
-        _il.Emit(OpCodes.Ret);
+        EmitReturnValueAndLeave();
     }
 
     private void EmitBlock(BoundBlock block)
     {
-        EmitBlockStatementsWithDefers(block.Statements, 0);
+        if (!block.Statements.Any(static statement => statement is BoundDeferStatement))
+        {
+            foreach (var statement in block.Statements)
+            {
+                EmitStatement(statement);
+            }
+            return;
+        }
+
+        var failureState = EmitCreateDeferFailureState();
+        EmitBlockStatementsWithDefers(
+            block.Statements,
+            index: 0,
+            failureState,
+            isOutermostDefer: true);
     }
 
-    private void EmitBlockStatementsWithDefers(IReadOnlyList<BoundStatement> statements, int index)
+    private void EmitBlockStatementsWithDefers(
+        IReadOnlyList<BoundStatement> statements,
+        int index,
+        LocalBuilder failureState,
+        bool isOutermostDefer)
     {
         if (index >= statements.Count)
         {
@@ -1024,16 +1261,21 @@ internal sealed partial class EmitterImpl
 
         if (statements[index] is BoundDeferStatement defer)
         {
-            _il.BeginExceptionBlock();
-            EmitBlockStatementsWithDefers(statements, index + 1);
-            _il.BeginFinallyBlock();
-            EmitDeferredBlock(defer.Body);
-            _il.EndExceptionBlock();
+            EmitDeferredRemainder(
+                statements,
+                index + 1,
+                defer,
+                failureState,
+                isOutermostDefer);
             return;
         }
 
         EmitStatement(statements[index]);
-        EmitBlockStatementsWithDefers(statements, index + 1);
+        EmitBlockStatementsWithDefers(
+            statements,
+            index + 1,
+            failureState,
+            isOutermostDefer);
     }
 
     private void EmitDeferredBlock(BoundBlock body)

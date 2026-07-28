@@ -277,6 +277,8 @@ internal sealed partial class EmitterImpl
         var savedThisType = _currentThisType;
         var savedUnderscoreStack = _underscoreStack;
         var savedLoopStack = _loopStack;
+        var savedReturnEmissionFrame = _returnEmissionFrame;
+        var savedDeferredCleanupFrames = _deferredCleanupFrames;
 
         var method = _program.DefineMethod(
             qualName,
@@ -295,6 +297,9 @@ internal sealed partial class EmitterImpl
         _currentThisType = null;
         _underscoreStack = new Stack<LocalBuilder>();
         _loopStack = new Stack<LoopFrame>();
+        _deferredCleanupFrames = new();
+        var returnFrame = CreateReturnEmissionFrame(typeof(void));
+        _returnEmissionFrame = returnFrame;
 
         // 1. Bind flags (indices 0..flags.Count-1).
         for (var i = 0; i < flags.Count; i++)
@@ -318,11 +323,9 @@ internal sealed partial class EmitterImpl
             _il.Emit(OpCodes.Stsfld, field);
         }
 
-        // 3. Emit body statements.
-        foreach (var stmt in bodyStatements)
-            EmitStatement(stmt);
-
-        _il.Emit(OpCodes.Ret);
+        // 3. Emit the executable body as one defer-aware lexical block.
+        EmitBlock(CreateSyntheticBlock(bodyStatements, default));
+        EmitReturnEpilogue(returnFrame);
 
         // Restore emitter state.
         _il = savedIl;
@@ -336,6 +339,8 @@ internal sealed partial class EmitterImpl
         _currentThisType = savedThisType;
         _underscoreStack = savedUnderscoreStack;
         _loopStack = savedLoopStack;
+        _returnEmissionFrame = savedReturnEmissionFrame;
+        _deferredCleanupFrames = savedDeferredCleanupFrames;
 
         return method;
     }

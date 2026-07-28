@@ -46,6 +46,19 @@ public static class ToshHost
     }
 
     /// <summary>
+    /// Enters one compiled ToastScript execution frame.  Emitted methods keep
+    /// the returned lease in a <c>finally</c> block so the shared recursion
+    /// limit applies to direct CLR calls as well as host-dispatched calls.
+    /// </summary>
+    public static IDisposable EnterExecutionFrame(string frameName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(frameName);
+        return ToshExecutionDepthGuard.Enter(
+            Runtime.Config.Shell.MaxRecursionDepth,
+            frameName);
+    }
+
+    /// <summary>
     /// Wires the ambient runtime. Idempotent — only the first call
     /// takes effect. If <paramref name="runtime"/> is null, builds a
     /// default runtime via <see cref="ToshRuntime.CreateDefault"/>
@@ -80,6 +93,101 @@ public static class ToshHost
     {
         var (last, _) = InvokeAndDrain(name, args, printItems: true);
         return last;
+    }
+
+    /// <summary>
+    /// Resolves named-argument wrappers in a packed-argument array into
+    /// their positional slots so the packed function prologue can bind
+    /// purely by index (TS-P1-05). Positional values fill the remaining
+    /// non-named slots left-to-right; unbound slots receive
+    /// <see cref="CompiledLambdaCallable.MissingArgument"/> so declared
+    /// defaults still apply; surplus positional values are appended for
+    /// a trailing rest parameter. A purely positional call returns the
+    /// original array unchanged. Unknown names are currently ignored to
+    /// match the interpreter (diagnosing them is TS-P1-06).
+    /// </summary>
+    public static object?[] NormalizePackedArguments(object?[]? args, string[] parameterNames, bool hasRest)
+    {
+        args ??= [];
+
+        var sawNamed = false;
+        foreach (var argument in args)
+        {
+            if (argument is INamedArgument)
+            {
+                sawNamed = true;
+                break;
+            }
+        }
+
+        if (!sawNamed)
+        {
+            return args;
+        }
+
+        var named = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+        var positional = new List<object?>(args.Length);
+        foreach (var argument in args)
+        {
+            if (argument is INamedArgument namedArgument)
+            {
+                // Duplicate and unknown names are diagnosed here so a
+                // compiled call reports the same failures as the
+                // interpreter's binder (TS-P1-06).
+                if (!named.TryAdd(namedArgument.Name, namedArgument.Value))
+                {
+                    throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                        Code: "tosh.runtime.duplicate_named_argument",
+                        Title: $"Named argument '{namedArgument.Name}' was supplied more than once.",
+                        Label: $"'{namedArgument.Name}' is already bound by an earlier named argument",
+                        Help: "each parameter may be bound by at most one named argument."));
+                }
+
+                if (Array.FindIndex(
+                        parameterNames,
+                        name => string.Equals(name, namedArgument.Name, StringComparison.OrdinalIgnoreCase)) < 0)
+                {
+                    var declared = parameterNames.Length == 0
+                        ? "it declares no parameters"
+                        : $"declared parameters: {string.Join(", ", parameterNames)}";
+                    throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                        Code: "tosh.runtime.unknown_named_argument",
+                        Title: $"There is no parameter named '{namedArgument.Name}'.",
+                        Label: $"'{namedArgument.Name}' does not match a parameter",
+                        Help: $"{declared}."));
+                }
+            }
+            else
+            {
+                positional.Add(argument);
+            }
+        }
+
+        var positionalCount = hasRest ? parameterNames.Length - 1 : parameterNames.Length;
+        var result = new List<object?>(Math.Max(positionalCount, args.Length));
+        var positionalIndex = 0;
+        for (var i = 0; i < positionalCount; i++)
+        {
+            if (named.TryGetValue(parameterNames[i], out var value))
+            {
+                result.Add(value);
+            }
+            else if (positionalIndex < positional.Count)
+            {
+                result.Add(positional[positionalIndex++]);
+            }
+            else
+            {
+                result.Add(CompiledLambdaCallable.MissingArgument);
+            }
+        }
+
+        for (; positionalIndex < positional.Count; positionalIndex++)
+        {
+            result.Add(positional[positionalIndex]);
+        }
+
+        return result.ToArray();
     }
 
     /// <summary>
@@ -758,7 +866,7 @@ public static class ToshHost
         var parts = new string[args.Length];
         for (var i = 0; i < args.Length; i++)
         {
-            parts[i] = args[i]?.ToString() ?? string.Empty;
+            parts[i] = ToshValueFormatter.Format(args[i]);
         }
         Console.WriteLine(string.Join(" ", parts));
     }
@@ -895,29 +1003,10 @@ public static class ToshHost
     }
 
     /// <summary>
-    /// Truthiness coercion mirroring the interpreter: null is false,
-    /// bool passes through, numbers are non-zero, strings/collections
-    /// are non-empty, everything else is truthy.
+    /// Compatibility wrapper for ToastScript's canonical truthiness
+    /// primitive.
     /// </summary>
-    public static bool IsTruthy(object? value)
-    {
-        if (value is null) return false;
-        if (value is bool b) return b;
-        if (value is string s) return s.Length > 0;
-        if (value is System.Collections.ICollection col) return col.Count > 0;
-        if (value is byte by) return by != 0;
-        if (value is sbyte sb) return sb != 0;
-        if (value is short sh) return sh != 0;
-        if (value is ushort us) return us != 0;
-        if (value is int i) return i != 0;
-        if (value is uint ui) return ui != 0;
-        if (value is long l) return l != 0;
-        if (value is ulong ul) return ul != 0;
-        if (value is float f) return f != 0f;
-        if (value is double d) return d != 0d;
-        if (value is decimal dec) return dec != 0m;
-        return true;
-    }
+    public static bool IsTruthy(object? value) => ToshTruthiness.IsTruthy(value);
 
     /// <summary>
     /// Wraps <paramref name="value"/> as an exception and throws it.
@@ -1800,15 +1889,44 @@ public static class ToshHost
     }
 
     /// <summary>
-    /// Value-context drain. Always materializes to a
-    /// <see cref="List{T}"/>, even when nothing was yielded or when
-    /// only one item was produced — the emitter relies on the list
-    /// shape so call sites can treat <c>(cmd | first 3)</c> uniformly.
+    /// Sequence drain. Always materializes to a <see cref="List{T}"/>,
+    /// preserving every produced item. Used for iteration sources
+    /// (<c>for … in (pipeline)</c>), where the consumer wants the whole
+    /// sequence. Ordinary value contexts use
+    /// <see cref="DrainSubexpressionValue"/> instead: they must observe
+    /// the interpreter's single-value subexpression rule (TS-P1-20).
     /// </summary>
     public static List<object?> DrainValue(IAsyncEnumerable<object?> input)
     {
         var (_, all) = DrainEnumerator(input, printItems: false);
         return all;
+    }
+
+    /// <summary>
+    /// Subexpression drain (TS-P1-20). A parenthesized pipeline used
+    /// where a single value is expected — a variable initializer,
+    /// assignment right-hand side, <c>return</c> operand, argument, or
+    /// default — collapses to that value, exactly as the interpreter's
+    /// subexpression evaluation does: nothing yielded becomes
+    /// <see langword="null"/>, one item becomes the item itself, and
+    /// more than one is a structured failure rather than a silently
+    /// returned list. Iteration sources keep using
+    /// <see cref="DrainValue"/>, which preserves every item.
+    /// </summary>
+    public static object? DrainSubexpressionValue(IAsyncEnumerable<object?> input)
+    {
+        var (_, all) = DrainEnumerator(input, printItems: false);
+
+        if (all.Count <= 1)
+        {
+            return all.Count == 1 ? all[0] : null;
+        }
+
+        throw ToshDiagnosticException.Create(new ToshDiagnostic(
+            Code: "tosh.runtime.subexpression_requires_single_value",
+            Title: "Subexpressions used as arguments must produce exactly one value.",
+            Label: $"this subexpression produced {all.Count} values",
+            Help: "ensure the parenthesized pipeline returns exactly one object."));
     }
 
     private static (object? Last, List<object?> All) DrainEnumerator(
@@ -1867,6 +1985,33 @@ public static class ToshHost
             spanLength,
             s_sourceName ?? "<compiled>",
             s_sourceText ?? string.Empty,
+            owner);
+    }
+
+    /// <summary>
+    /// Compiled-variable annotation bridge with explicit source metadata.
+    /// Unlike <see cref="CheckType(object?, string, int, int, string)"/>,
+    /// this overload does not depend on source replay having registered the
+    /// compilation unit first, so ordinary annotated locals retain the same
+    /// conversion and diagnostic spans as interpreted variables.
+    /// </summary>
+    public static object? CheckTypeAtSource(
+        object? value,
+        string typeName,
+        int spanStart,
+        int spanLength,
+        string owner,
+        string sourceName,
+        string sourceText)
+    {
+        if (s_engine is null) Initialize();
+        return s_engine!.ConvertValueToAnnotatedType(
+            typeName,
+            value,
+            spanStart,
+            spanLength,
+            sourceName,
+            sourceText,
             owner);
     }
 
@@ -2256,6 +2401,30 @@ public static class ToshHost
             {
                 path.Add(new CompiledDispatchFrame { Node = child });
                 continue;
+            }
+
+            // No explicit child matched. If the current leaf declares a child with the
+            // `default` modifier and no positionals have been taken yet, route into that
+            // child and reinterpret the current token as its first positional.
+            if (parseOptions &&
+                leaf.PositionalValues.Count == 0)
+            {
+                CompiledSubcommandNode? defaultChild = null;
+                foreach (var kv in leaf.Node.Children)
+                {
+                    if ((kv.Value.Modifiers & SubcommandModifier.Default) != 0)
+                    {
+                        defaultChild = kv.Value;
+                        break;
+                    }
+                }
+                if (defaultChild is not null)
+                {
+                    var defaultFrame = new CompiledDispatchFrame { Node = defaultChild };
+                    defaultFrame.PositionalValues.Add(raw);
+                    path.Add(defaultFrame);
+                    continue;
+                }
             }
 
             leaf.PositionalValues.Add(raw);

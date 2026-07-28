@@ -211,28 +211,36 @@ internal sealed partial class EmitterImpl
             var savedIl = _il;
             var savedLocals = _locals;
             var savedParams = _paramSlots;
+            var savedReturnEmissionFrame = _returnEmissionFrame;
+            var savedDeferredCleanupFrames = _deferredCleanupFrames;
             try
             {
                 _il = pending.Method.GetILGenerator();
                 _locals = new();
                 _paramSlots = new();
+                _deferredCleanupFrames = new();
+                var returnFrame = CreateReturnEmissionFrame(typeof(object));
+                _returnEmissionFrame = returnFrame;
+                var executionFrame = EmitExecutionFrameEntry($"module {pending.Module.QualifiedName}.{pending.Definition.Name}");
                 for (var i = 0; i < pending.Definition.Parameters.Count; i++)
                 {
                     _paramSlots[pending.Definition.Parameters[i].Symbol] = i;
                 }
-                foreach (var stmt in pending.Definition.Body.Statements)
-                {
-                    EmitStatement(stmt);
-                }
+                EmitBlock(pending.Definition.Body);
+
                 // Implicit `return null` for fall-through.
                 _il.Emit(OpCodes.Ldnull);
-                _il.Emit(OpCodes.Ret);
+                _il.Emit(OpCodes.Stloc, returnFrame.ValueLocal!);
+                EmitExecutionFrameExit(executionFrame);
+                EmitReturnEpilogue(returnFrame);
             }
             finally
             {
                 _il = savedIl;
                 _locals = savedLocals;
                 _paramSlots = savedParams;
+                _returnEmissionFrame = savedReturnEmissionFrame;
+                _deferredCleanupFrames = savedDeferredCleanupFrames;
             }
         }
     }

@@ -135,6 +135,14 @@ public sealed record BoundVariableDeclaration(
     /// which the compile audit reports as a strict-mode violation.
     /// </summary>
     public bool AnnotatedDynamic { get; init; }
+
+    /// <summary>
+    /// True when the source declaration included any explicit type
+    /// annotation. The emitter uses this to distinguish a genuinely
+    /// typed local from an unannotated mutable binding whose runtime
+    /// value is allowed to change CLR type after reassignment.
+    /// </summary>
+    public bool HasExplicitTypeAnnotation { get; init; }
 }
 
 // ─── Expressions ──────────────────────────────────────────────────────
@@ -171,6 +179,19 @@ public sealed record BoundMemberAccess(
 /// <see cref="BoundExpression.Type"/> slot when both operands have
 /// concrete numeric types.
 /// </summary>
+/// <summary>
+/// A chained comparison (<c>a &lt; b &lt; c</c>). <see cref="Operands"/>
+/// holds one more element than <see cref="Operators"/>. Evaluation is
+/// left to right with short-circuit, and every operand is evaluated at
+/// most once (TS-P1-22).
+/// </summary>
+public sealed record BoundChainedComparison(
+    IReadOnlyList<BoundExpression> Operands,
+    IReadOnlyList<string> Operators,
+    TextSpan Span,
+    BoundType Type)
+    : BoundExpression(Span, Type);
+
 public sealed record BoundBinaryOperator(
     BoundExpression Left,
     string Operator,
@@ -538,6 +559,7 @@ public sealed record BoundUsingStatement(
 /// </summary>
 public sealed record BoundTupleAssignment(
     IReadOnlyList<string> Names,
+    IReadOnlyList<BoundSymbol?> Symbols,
     BoundPipeline Value,
     TextSpan Span)
     : BoundStatement(Span);
@@ -1084,7 +1106,9 @@ public sealed record BoundSymbol(
     string Name,
     BoundSymbolKind Kind,
     int ScopeDepth,
-    BoundType DeclaredType);
+    BoundType DeclaredType,
+    bool IsConst = false,
+    string? DeclaredTypeName = null);
 
 public enum BoundSymbolKind
 {
