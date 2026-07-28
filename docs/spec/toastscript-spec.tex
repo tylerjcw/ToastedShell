@@ -117,7 +117,9 @@
            {->}{{{\color{toshorange}->}}}2
            {..}{{{\color{toshorange}..}}}2
            {\$}{{{\color{toshblue}\$}}}1
-           {ō}{{\=o}}1,
+           {ō}{{\=o}}1
+           {»}{{\guillemotright}}1
+           {«}{{\guillemotleft}}1,
 }
 
 \lstset{
@@ -678,6 +680,30 @@ Double-quoted strings support these escapes:
 \bottomrule
 \end{tabular}
 
+An unrecognised escape is preserved verbatim, including its backslash:
+\code{"\textbackslash d+"} contains the three characters
+\code{\textbackslash}, \code{d}, and \code{+}.  This makes common regex
+forms work without doubled slashes:
+
+\begin{lstlisting}
+"a1" =~ "\d"       # true
+"file.cs" =~ "\.cs$"  # true
+\end{lstlisting}
+
+Single-quoted strings are raw: backslashes never introduce escapes and the
+next single quote closes the string.  Use \code{\$'...'} for ANSI-C escapes
+such as \code{\textbackslash x1b}, or switch quote forms when the text itself
+contains a single quote.
+
+\begin{warnbox}[Migration note --- July 25, 2026]
+Earlier builds decoded escapes inside ordinary \code{'...'} strings and
+silently removed the backslash from unknown escapes in \code{"..."} and
+\code{\$"..."}.  Ordinary single quotes are now raw, and every
+escape-processing form preserves unknown escape pairs.  Replace an ordinary
+single-quoted string with \code{\$'...'} when the old escape processing was
+intentional.
+\end{warnbox}
+
 \subsection{String Interpolation}
 \ikw{interpolation}
 
@@ -751,16 +777,43 @@ null         # Null reference
 100ms
 2m30s
 
+# ISO temporal instants (parsed as DateTimeOffset)
+2026-03-27
+2026-03-27T14:30
+2026-03-27T14:30:45Z
+2026-03-27T14:30:45.1234567-04:00
+
 # IP addresses (parsed as System.Net.IPAddress)
 192.168.1.1
 ::1
 2001:db8::1
 
 # Quantities with units (backtick syntax)
-100\texttt{`}m        # 100 meters (Length)
-9.8\texttt{`}m/s^2    # acceleration
-5\texttt{`}kg         # 5 kilograms (Mass)
+100`m        # 100 meters (Length)
+9.8`m/s^2    # acceleration
+5`kg         # 5 kilograms (Mass)
 \end{lstlisting}
+
+Intrinsic temporal literals deliberately accept only these ISO-style shapes:
+\code{yyyy-MM-dd}, \code{yyyy-MM-ddTHH:mm},
+\code{yyyy-MM-ddTHH:mm:ss}, and the seconds form with one through seven
+fractional digits.  Date-time forms may omit a zone or end in \code{Z} or a
+numeric \code{+HH:mm}/\code{-HH:mm} offset.  Explicit commands such as
+\code{date parse} may accept additional human-oriented input, but that
+permissive parser is never used to guess the type of a bareword.
+
+IPv4 literals likewise require four explicit decimal octets from 0 through
+255, without leading zeroes.  IPv6 uses its ordinary colon notation.
+Consequently, dotted numeric text such as \code{1.2.3} is neither a date nor
+an abbreviated IPv4 literal.
+
+\begin{warnbox}[Migration note --- July 25, 2026]
+Earlier builds let the CLR's culture-oriented date and abbreviated-IPv4
+parsers guess the type of expression barewords.  Text such as \code{1.2.3}
+could therefore become a date in 2003 or the address \code{1.2.0.3}.
+Intrinsic literals are now exact.  Quote human-oriented input as text or pass
+it to an explicit parser such as \code{date parse}.
+\end{warnbox}
 
 
 % =============================================================================
@@ -788,7 +841,7 @@ TōSh provides over 40 short aliases for common CLR types. Use these in type
 annotations, casts, and \code{new} expressions.
 
 {\small
-\begin{longtable}{llL{4.5cm}}
+\begin{longtable}{L{2.4cm}L{7.2cm}L{3.0cm}}
 \toprule
 \textbf{Alias} & \textbf{CLR Type} & \textbf{Notes} \\
 \midrule
@@ -860,7 +913,9 @@ use SI decimal factors (1 kb = 1{,}000 bytes). Binary suffixes \code{kib}, \code
 \code{gib}, \code{tib}, \code{pib} use powers of 1{,}024.  These suffixes are
 \emph{expression-context literals}: they parse to \code{StorageSize} values in
 expressions (\code{var x = 10kb}, \code{(10kb > 5mb)}) but remain plain strings
-when passed as raw command arguments (\code{echo 10kb}).
+when passed as raw command arguments (\code{echo 10kb}).  Suffix matching is
+case-insensitive and mandatory; a malformed or overflowing suffix form in
+expression position never silently falls back to a string.
 \end{notebox}
 
 \subsection{TemporalAmount / TimeSpan}
@@ -883,7 +938,13 @@ Lazy sequences defined by start, optional step, and end:
 1..10                    # 1, 2, 3, ..., 10
 1..2..10                 # 1, 3, 5, 7, 9 (step of 2)
 10..1                    # 10, 9, 8, ..., 1 (auto-descending)
+-2..2                    # -2, -1, 0, 1, 2
 \end{lstlisting}
+
+Range starts, steps, and ends are signed 32-bit integers.  A literal
+fractional bound such as \code{1.5..3} produces
+\code{tosh.parser.range\_requires\_integer}; negative integer bounds are
+ordinary ranges.
 
 \subsection{IShellRecordObject}
 
@@ -1154,25 +1215,47 @@ double-it "21"             # "21" auto-converts to 21
 \section{Truthiness}
 \label{sec:truthiness}
 
-TōSh uses the following truthiness rules when a value is tested in a boolean
-context (e.g.\ \code{if}, \code{while}, \code{any}, \code{all}):
+TōSh uses one truthiness protocol whenever a value is tested as a condition.
+The same rules apply to \code{if}/\code{while}/\code{until}, conditional
+expressions, comprehension and match guards, event \code{when} guards,
+\code{not}/\code{and}/\code{or}, and standard-library predicates such as
+\code{where}, \code{any}, \code{all}, and \code{assert}.
 
-\begin{longtable}{lll}
+\begin{longtable}{L{4.8cm}L{4.1cm}L{4.1cm}}
 \toprule
 \textbf{Type} & \textbf{Truthy} & \textbf{Falsy} \\
 \midrule
 \endhead
 \code{bool} & \code{true} & \code{false} \\
 \code{null} & --- & Always falsy \\
-\code{int}, \code{long}, etc. & Non-zero & Zero \\
-\code{double}, \code{float} & Non-zero & Zero, NaN \\
-\code{string} & Non-empty & Empty or null \\
-\code{IEnumerable} & Non-empty & Empty \\
+\code{byte} through \code{UInt128}, native integers, \code{BigInteger} & Non-zero & Zero \\
+\code{Half}, \code{float}, \code{double} & Non-zero (including infinity) & Positive/negative zero, NaN \\
+\code{decimal} & Non-zero & Zero \\
+\code{Complex} & Non-zero with no NaN component & Zero or either component is NaN \\
+\code{string} & Non-empty & Empty \\
+\code{ICollection}, synchronous \code{IEnumerable} & Non-empty & Empty \\
 Everything else & Always truthy & --- \\
 \bottomrule
 \caption{Truthiness rules}
 \label{tab:truthiness}
 \end{longtable}
+
+\begin{notebox}
+Count-bearing collections are tested through their count.  A general
+synchronous \code{IEnumerable} is probed with one \code{MoveNext} call and
+the temporary enumerator is disposed.  This can observably advance a
+deliberately single-pass enumerable; test such a value once and retain the
+result when that distinction matters.
+\end{notebox}
+
+Truthiness is not an explicit cast.  For example, the non-empty string
+\code{"false"} is truthy, while converting that string to \code{bool} produces
+\code{false}.  Logical operators always return a boolean and preserve
+short-circuit evaluation; they do not return one of their operands.
+
+Refinement \code{where} predicates are the intentional exception: they are
+validation contracts and must return an actual \code{bool}.  Refinement
+\code{if <guard> coerce} guards use the broad truthiness rules above.
 
 
 \section{Refinement Types}
@@ -1201,8 +1284,9 @@ The body may contain any combination of the three clause forms:
 
 \begin{description}
   \item[\code{where <predicate>}] A constraint predicate.  The value (bound to
-    \code{\_}) must evaluate to \code{true} after all coercions have been applied.
-    Multiple \code{where} clauses are evaluated as a conjunction.
+    \code{\_}) must evaluate to the boolean value \code{true} after all
+    coercions have been applied; other truthy values are rejected. Multiple
+    \code{where} clauses are evaluated as a conjunction.
 
   \item[\code{if <guard> coerce <expr>}] A conditional normalisation that fires
     \emph{before} predicate evaluation.  When \code{guard} is truthy, \code{expr}
@@ -1344,6 +1428,36 @@ echo (10kb > 5kb)          # true (StorageSize comparison, both are literals)
 echo (10kb > 5mb)          # false
 \end{lstlisting}
 
+\subsection{Chained Comparison}
+\label{sec:chained-comparison}
+
+Relational comparisons chain.  Writing \code{a < b < c} means
+\code{(a < b) and (b < c)}, matching ordinary mathematical notation:
+
+\begin{lstlisting}
+echo (1 < 2 < 3)          # true
+echo (3 < 2 < 1)          # false
+echo (1 <= 1 <= 1)        # true
+echo (1 < 2 < 3 < 4)      # chains of any length
+\end{lstlisting}
+
+Two guarantees make a chain different from writing the conjunction out
+by hand:
+
+\begin{itemize}
+  \item Each operand is evaluated \emph{at most once}.  In
+        \tosh{1 < (next) < 3} the \code{next} call happens a single
+        time, whereas the hand-written
+        \tosh{(1 < (next)) and ((next) < 3)} would call it twice.
+  \item Evaluation short-circuits.  Once a pair compares false, the
+        remaining operands are never evaluated.
+\end{itemize}
+
+Only \code{<}, \code{<=}, \code{>}, \code{>=}, \code{==}, and
+\code{!=} chain.  A run containing \code{is}, \code{in},
+\code{contains}, or a regex operator keeps the ordinary
+left-associative reading.
+
 \section{Regex Operators}
 \iop{=\textasciitilde}\iop{!\textasciitilde}
 
@@ -1380,10 +1494,15 @@ ls | where _.Name =~ "\.cs$"
 \begin{lstlisting}
 if ($age >= 18 and $hasId) { echo "Allowed" }
 if ($age >= 18 && $hasId) { echo "Allowed" }   # equivalent
-var fallback = $value or "default"
-var fallback = $value || "default"              # equivalent
+var hasValue = $value or "default"              # boolean result
+var hasValue = $value || "default"              # equivalent
 if (not $found) { echo "Not found" }
 \end{lstlisting}
+
+Both operands are tested with the truthiness rules in
+Table~\ref{tab:truthiness}.  \code{and}, \code{or}, and \code{not} return
+\code{bool}; use \code{??} when the desired result is an operand value rather
+than a boolean.
 
 \begin{notebox}
 TōSh prefers word-form logical operators (\code{and}, \code{or}, \code{not})
@@ -1414,6 +1533,9 @@ echo ("a" is in ["a", "b", "c"])     # equivalent
 echo (5 not in [1, 2, 3])           # true
 echo (5 is not in [1, 2, 3])        # equivalent
 echo ("hello" contains "ell")        # true
+echo ([1, 2, 3] contains 2)          # true
+echo ({"name" => "Ada"} contains "name") # true: keys
+echo ((1..5) contains 3)             # true
 echo ("hello" starts-with "hel")     # true
 echo ("hello" ends-with "llo")       # true
 \end{lstlisting}
@@ -1421,10 +1543,12 @@ echo ("hello" ends-with "llo")       # true
 \begin{notebox}
 \code{is in} and \code{in} also perform a \emph{substring check} when the
 right-hand operand is a \code{string}: \tosh{"." is in "/foo/bar"} returns
-\code{true}.  When operating on strings, \code{contains} is equivalent
-but reads more naturally: \tosh{"hello" contains "ell"}.  Use \code{is in}
-for collection membership and \code{contains} for string containment to
-keep intent clear.
+\code{true}. String matching is ordinal (case-sensitive). For dictionaries,
+membership searches keys rather than values; other CLR and shell-native
+collections compare their elements with canonical equality. Non-collection
+left operands do not support \code{contains} and return \code{false}.
+\code{collection contains value} is exactly the operand-reversed spelling
+of \code{value in collection}.
 \end{notebox}
 
 \section{Type Operators}
@@ -1488,7 +1612,9 @@ echo ($x > 0 ? "positive" : ($x < 0 ? "negative" : "zero"))
 \code{+=} & Add and assign \\
 \code{-=} & Subtract and assign \\
 \code{*=} & Multiply and assign \\
+\code{**=} & Exponentiate and assign \\
 \code{/=} & Divide and assign \\
+\code{//=} & Floor-divide and assign \\
 \code{\%=} & Modulo and assign \\
 \code{??=} & Assign if null \\
 \bottomrule
@@ -1523,7 +1649,7 @@ Operators are listed from highest to lowest precedence:
 10 & \code{or} / \code{||} & Logical OR \\
 11 & \code{?}, \code{:} & Ternary conditional \\
 12 & \code{??} & Null coalescing \\
-13 & \code{=}, \code{+=}, \code{-=}, \code{*=}, \code{/=}, \code{\%=}, \code{??=} & Assignment \\
+13 & \code{=}, \code{+=}, \code{-=}, \code{*=}, \code{**=}, \code{/=}, \code{//=}, \code{\%=}, \code{??=} & Assignment \\
 \bottomrule
 \caption{Operator precedence (highest to lowest)}
 \label{tab:precedence}
@@ -1799,7 +1925,7 @@ No \code{break} is needed.
 Arm bodies may be a single pipeline expression (\code{pattern => expr}) or a
 block (\code{pattern => \{ ... \}}).  An optional guard clause
 \code{if ((<condition>))} after the pattern skips the arm when the guard
-evaluates to \code{false} even if the pattern matched.
+is falsy even if the pattern matched.
 
 The fat-arrow body also accepts the jump statements \code{return},
 \code{yield}, \code{throw}, \code{break}, and \code{continue} directly,
@@ -1919,6 +2045,44 @@ func example() {
 }
 example()   # Output: first, second, third
 \end{lstlisting}
+
+A defer is registered only when execution reaches its declaration.  For
+example, a defer written after a \code{return} or an escaping
+\code{throw} is not registered.  On scope exit, every registered cleanup
+is attempted exactly once in reverse registration order, even when a
+newer cleanup fails.  Values yielded by cleanup pipelines are discarded;
+direct side effects such as file writes or explicit writer commands still
+occur.  Values already produced by the ordinary scope body are preserved.
+
+Failure handling during unwind is deterministic:
+
+\begin{itemize}
+  \item If cleanup succeeds, the original completion, jump, cancellation,
+        or failure resumes unchanged.
+  \item If only one failure exists, TōSh rethrows that original exception
+        without an aggregate wrapper.
+  \item When failures compete, TōSh raises
+        \code{ToshDeferAggregateException}.  Its failure order is the
+        scope-body failure first, when present, followed by cleanup
+        failures in their actual LIFO execution order.  Nested defer
+        aggregates are flattened; unrelated aggregate and diagnostic
+        exceptions are not.
+  \item A cleanup failure supersedes a pending \code{return},
+        \code{break}, or \code{continue}.  The displaced jump is control
+        flow, not an entry in the failure list.
+\end{itemize}
+
+Cleanup runs in a cancellation-shielded context: cancellation that caused
+the scope to exit does not prevent a reached defer from receiving its one
+execution attempt.  The original \code{OperationCanceledException}
+remains the outward cancellation result; any cleanup failures are retained
+in the public defer-failure metadata.  A cleanup that may block should use
+an explicit \code{timeout}.
+
+For compatibility, \code{return}, \code{break}, and \code{continue}
+executed by a deferred cleanup are local to that cleanup and suppressed.
+They neither replace the enclosing scope's pending exit nor prevent an
+earlier registered cleanup from running.
 
 \section{Break, Continue, Return, Throw}
 \ikw{break}\ikw{continue}\ikw{return}\ikw{throw}
@@ -2110,6 +2274,49 @@ connect "example.com"                 # port defaults to 443
 connect "localhost" 8080
 \end{lstlisting}
 
+\subsection*{Default-Value Semantics}
+\label{sec:default-binding}
+
+Defaults follow one protocol for functions, lambdas, methods, and
+constructors:
+
+\begin{itemize}
+  \item A default is evaluated only when the caller supplies neither a
+        positional nor a named argument for that parameter, and it is
+        re-evaluated on every such call --- never captured once at
+        declaration time.
+  \item Defaults evaluate in the callable's own lexical scope, at call
+        time, so a default that reads an outer variable observes that
+        variable's value when the call happens.
+  \item Evaluation proceeds left to right, and a default may reference
+        any \emph{earlier} parameter that is already bound.  Referring
+        to the parameter's own name, or to a later parameter, raises
+        \code{tosh.runtime.unknown\_variable}.
+  \item Overload resolution never evaluates a default; only the selected
+        overload's defaults run, so a losing candidate produces no side
+        effects.
+  \item An evaluated default is converted through the parameter's
+        annotation and refinement exactly like a supplied argument.  A
+        default that cannot be converted raises
+        \code{tosh.runtime.parameter\_default\_conversion\_failed}.
+\end{itemize}
+
+\begin{lstlisting}
+func step(a: int, b: int = $a + 1, c: int = $b + 1) -> string {
+    return $"{$a},{$b},{$c}"
+}
+
+step 1                     # 1,2,3   -- defaults chain left to right
+step(1, c = 99)            # 1,2,99  -- named argument, b still defaults
+\end{lstlisting}
+
+\begin{notebox}
+Because defaults evaluate at call time, a mutable default expression
+produces a fresh value per call.  \tosh{func add(item, into = [])}
+therefore starts from a new empty list on every call rather than sharing
+one list across calls.
+\end{notebox}
+
 \section{Named Arguments and Callable Invocation}
 
 Function calls can use command-style syntax, parenthesized call syntax, or
@@ -2182,6 +2389,31 @@ kind 42            # integer
 kind "hi"          # string
 \end{lstlisting}
 
+\section{Recursion Depth}
+
+TōSh protects the host process with a limit on active ToastScript
+execution frames. The default and highest supported limit are 128
+frames. Functions, methods, lambdas, constructors, and nested
+\code{eval}/\code{source} execution participate in the same
+asynchronous-flow-local count; compiled ToastScript uses the same
+protocol.
+
+Exceeding the limit raises the stable
+\code{tosh.runtime.recursion\_limit\_exceeded} diagnostic. It does not
+terminate the process, and an interactive session remains usable after
+the diagnostic is handled.
+
+The limit may be lowered for a session or persisted in
+\code{config.tosh}:
+
+\begin{lstlisting}
+$tosh.Config.Shell.MaxRecursionDepth = 64
+\end{lstlisting}
+
+Accepted values are 1 through 128. TōSh does not currently perform
+tail-call elimination, so deeply recursive algorithms should be
+rewritten as loops when practical.
+
 \section{Operator Overloading}
 \label{sec:operator-overloading}
 
@@ -2249,6 +2481,7 @@ When evaluating \code{a OP b} where either operand is a class instance:
 \end{itemize}
 
 \section{Generator Functions}
+\label{sec:generators}
 \ikw{yield}
 
 A function that contains a \code{yield} statement is a \emph{generator
@@ -2321,6 +2554,10 @@ func onFirstStart(event) handles SessionStarted once {
     writeline "Welcome to your first session!"
 }
 \end{lstlisting}
+
+The last value emitted by a \code{when} block is tested using the canonical
+truthiness rules in Table~\ref{tab:truthiness}.  A block that emits no values
+therefore has a falsy guard.
 
 \section{Doc-Comments}
 
@@ -2574,6 +2811,24 @@ module Inventory {
 var items = Inventory.sample-items()
 var state = Inventory.StockState.Healthy
 \end{lstlisting}
+
+\subsection*{Module-Qualified Command Dispatch}
+
+Functions exported from a module may also be invoked in command position
+using \code{module.function} syntax---no \code{\$} prefix, arguments
+separated by whitespace like any other command:
+
+\begin{lstlisting}
+module Geometry {
+    func area(r) { return 3.14159 * $r * $r }
+}
+
+Geometry.area 5            # 78.53975
+\end{lstlisting}
+
+This works for any module-name casing, including identifiers that contain
+hyphens (\code{kebab-mod.hi}), underscores, or mixed case.  Nested modules
+resolve segment-by-segment (\code{outer.inner.fn}).
 
 \section{Class Definitions}
 \ikw{class}\ikw{prop}
@@ -2835,7 +3090,7 @@ constraint names are accepted conservatively (reserved for future
 user-defined constraints).
 
 \begin{center}
-\begin{tabular}{ll}
+\begin{tabular}{L{3.6cm}L{9cm}}
 \toprule
 \textbf{Constraint} & \textbf{Satisfied by} \\
 \midrule
@@ -2880,6 +3135,14 @@ Classes can extend another TōSh class, fulfill one or more interfaces, and use
 one or more traits.  \code{implements} is accepted as an alias for
 \code{fulfills}.  Parent constructors can be supplied in the \code{extends}
 clause or called from the constructor with \code{\$super(...)}.
+Construction proceeds exactly once per class layer, from the root base class
+to the most-derived class.  The preferred form is
+\code{extends Base(args)}.  A direct \code{\$super(args)} call is retained as
+an alternative for an explicit constructor, but it must be that constructor's
+first executable statement and must not be combined with arguments in the
+\code{extends} clause.  If neither form is present, TōSh implicitly invokes a
+matching zero-argument base constructor; a base that requires arguments
+produces a diagnostic.
 
 \begin{lstlisting}
 interface Printable {
@@ -3443,7 +3706,7 @@ echo (nameof($x))     # "x"
 alloc buffer = 1024     # Allocate 1024 bytes of native memory
 \end{lstlisting}
 
-See Chapter~\ref{ch:cmd-native} for full native interop commands.
+See Chapter~\ref{ch:command-catalog} for full native interop commands.
 
 \section{Picking Columns vs Rows}
 \label{sec:get-row}
@@ -3784,6 +4047,10 @@ tosh deploy.tosh deploy myserver --dry-run
 
 \begin{itemize}
   \item \code{flag} values are set with \code{--name value} or \code{--name=value}.
+  \item The CLI flag name is exactly the identifier as declared---no
+        case folding or kebab-from-snake conversion.  A flag declared
+        \code{flag dry-run} is invoked as \code{--dry-run}; \code{flag fooBar}
+        as \code{--fooBar}; \code{flag MAX\_RETRIES} as \code{--MAX\_RETRIES}.
   \item Boolean flags may be set with \code{--name} (sets to \code{true}) or
         \code{--no-name} (sets to \code{false}).
   \item \code{arg} values are consumed from the remaining positional tokens in
@@ -3877,7 +4144,7 @@ tosh myscript.tosh git commit --help
 
 \section{Diagnostics}
 
-\begin{tabular}{lL{7cm}}
+\begin{tabular}{L{7.6cm}L{5.6cm}}
 \toprule
 \textbf{Code} & \textbf{Trigger} \\
 \midrule
@@ -3989,7 +4256,7 @@ tosh -C greet.tosh -o greet.dll
 \section{Flags}
 \label{sec:compile-flags}
 
-\begin{tabular}{l p{0.55\linewidth}}
+\begin{tabular}{>{\raggedright\arraybackslash}p{0.34\linewidth} >{\raggedright\arraybackslash}p{0.55\linewidth}}
 \toprule
 \textbf{Flag} & \textbf{Effect} \\
 \midrule
@@ -4107,7 +4374,7 @@ public surface that silently degrades to \code{dynamic}.
 \section{The audit rules}
 \label{sec:compile-audit-rules}
 
-\begin{tabular}{l p{0.6\linewidth}}
+\begin{tabular}{>{\raggedright\arraybackslash}p{0.42\linewidth} >{\raggedright\arraybackslash}p{0.5\linewidth}}
 \toprule
 \textbf{Diagnostic} & \textbf{When} \\
 \midrule
@@ -4489,14 +4756,18 @@ exposes.
 \section{Tasks}
 \label{sec:compile-sdk-tasks}
 
-\begin{tabular}{l p{0.65\linewidth}}
+{\sloppy
+\begin{tabular}{>{\raggedright\arraybackslash}p{0.32\linewidth} >{\raggedright\arraybackslash}p{0.62\linewidth}}
 \toprule
 \textbf{Task} & \textbf{Purpose} \\
 \midrule
-\code{Tosh.Sdk.Tasks.ToshCompile} & In-process MSBuild task. Mirrors the CLI compile pipeline (parse → bind → lower → type-check → emit) but runs inside the MSBuild worker, avoiding the per-build process-launch cost of the legacy \code{<Exec>}-based target. Inputs: \code{Sources}, \code{OutputPath}, \code{Profile}, \code{AllowDynamic}, \code{EmitReferenceAssembly}, \code{EmitAppHost}, \code{PublishSingleFile}, \code{AssemblyName}. \\
+\code{Tosh.Sdk.Tasks.ToshCompile} & {\small In-process MSBuild task. Mirrors the CLI compile pipeline (parse → bind → lower → type-check → emit) but runs inside the MSBuild worker, avoiding the per-build process-launch cost of the legacy \code{<Exec>}-based target.
+
+Inputs: \code{Sources}, \code{OutputPath}, \code{Profile}, \code{AllowDynamic}, \code{EmitReferenceAssembly}, \code{EmitAppHost}, \code{PublishSingleFile}, \code{AssemblyName}.} \\
 \code{Tosh.Sdk.Tasks.ToshStagePackageReferences} & Stages NuGet \code{PackageReference} content into the runtime's reference and analyzer paths so package types are visible during compile and at runtime. \\
 \bottomrule
 \end{tabular}
+}
 
 \section{Fallback path}
 \label{sec:compile-sdk-fallback}
@@ -4635,7 +4906,7 @@ interpreter (parser, binder, type checker); the second is compile-only.
 \section{Compile-only diagnostic codes}
 \label{sec:compile-diag-codes}
 
-\begin{tabular}{l p{0.55\linewidth}}
+\begin{tabular}{>{\raggedright\arraybackslash\ttfamily\small}p{0.42\linewidth} >{\raggedright\arraybackslash}p{0.5\linewidth}}
 \toprule
 \textbf{Code} & \textbf{Meaning} \\
 \midrule
@@ -4664,7 +4935,7 @@ included here because they are reachable only through compiled code paths
 (\code{IShellCallable.InvokeAsync}, \code{CompiledLambdaCallable},
 \code{CompiledMethodReferenceValue}).
 
-\begin{tabular}{l p{0.55\linewidth}}
+\begin{tabular}{>{\raggedright\arraybackslash\ttfamily\small}p{0.62\linewidth} >{\raggedright\arraybackslash}p{0.3\linewidth}}
 \toprule
 \textbf{Code} & \textbf{Meaning} \\
 \midrule

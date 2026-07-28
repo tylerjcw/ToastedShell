@@ -1070,6 +1070,10 @@ channel-recv $ch | each { |v| echo $v }  # Stream all values from a channel
 Blocks until a value is available. Returns when the channel is closed and drained.
 \end{notebox}
 
+\begin{notebox}
+A null payload is emitted as one value; a closed and drained channel emits no value.
+\end{notebox}
+
 \end{cmdbox}
 
 \subsection{\texttt{channel-select}}
@@ -4250,7 +4254,7 @@ all <callable|block>
 \toprule
 \textbf{Argument} & \textbf{Description} \\
 \midrule
-callable|\allowbreak block & A lambda or block predicate that returns boolean values. \\
+callable|\allowbreak block & A lambda or block predicate evaluated with ToastScript truthiness. \\
 \bottomrule
 \end{tabular}
 
@@ -4281,7 +4285,7 @@ any <callable|block>
 \toprule
 \textbf{Argument} & \textbf{Description} \\
 \midrule
-callable|\allowbreak block & A lambda or block predicate that returns boolean values. \\
+callable|\allowbreak block & A lambda or block predicate evaluated with ToastScript truthiness. \\
 \bottomrule
 \end{tabular}
 
@@ -4713,12 +4717,12 @@ filter <callable|block>
 \toprule
 \textbf{Argument} & \textbf{Description} \\
 \midrule
-callable|\allowbreak block & A lambda or block predicate that returns boolean values. \\
+callable|\allowbreak block & A lambda or block predicate evaluated with ToastScript truthiness. \\
 \bottomrule
 \end{tabular}
 
 \textbf{Pipeline input:} scalar, record
- --- Consumes the current pipeline and keeps only items whose predicate evaluates to true. Tree-shaped inputs are pruned like `where`.
+ --- Consumes the current pipeline and keeps only items whose predicate is truthy. Tree-shaped inputs are pruned like `where`.
 
 \textbf{Output:} Returns the input items that matched the predicate.
 
@@ -4949,12 +4953,12 @@ group-while <callable|block>
 \toprule
 \textbf{Argument} & \textbf{Description} \\
 \midrule
-callable|\allowbreak block & A predicate that receives each item. A new group starts when it returns false. \\
+callable|\allowbreak block & A predicate that receives each item. A new group starts when its result is falsy. \\
 \bottomrule
 \end{tabular}
 
 \textbf{Pipeline input:} scalar, record
- --- Groups consecutive pipeline items while the predicate returns true.
+ --- Groups consecutive pipeline items while the predicate is truthy.
 
 \textbf{Output:} Arrays of consecutive items grouped while the predicate holds.
 
@@ -5316,7 +5320,7 @@ none <callable|block>
 \toprule
 \textbf{Argument} & \textbf{Description} \\
 \midrule
-callable|\allowbreak block & A lambda or block predicate that returns boolean values. \\
+callable|\allowbreak block & A lambda or block predicate evaluated with ToastScript truthiness. \\
 \bottomrule
 \end{tabular}
 
@@ -5389,7 +5393,7 @@ partition <callable|block>
 \toprule
 \textbf{Argument} & \textbf{Description} \\
 \midrule
-callable|\allowbreak block & A predicate that returns true or false for each item. \\
+callable|\allowbreak block & A predicate evaluated for each item using ToastScript truthiness. \\
 \bottomrule
 \end{tabular}
 
@@ -5679,12 +5683,12 @@ skip-until <predicate-expression|callable>
 \toprule
 \textbf{Argument} & \textbf{Description} \\
 \midrule
-predicate & A callable or block evaluated for each item. Starts yielding when it returns true. \\
+predicate & A callable or block evaluated for each item. Starts yielding when its result is truthy. \\
 \bottomrule
 \end{tabular}
 
 \textbf{Pipeline input:} scalar, record
- --- Discards items until the predicate returns true, then yields the rest.
+ --- Discards items until the predicate is truthy, then yields the rest.
 
 \textbf{Output:} Pipeline items starting from the first that satisfies the predicate.
 
@@ -5707,7 +5711,7 @@ Skips input values while the predicate remains true.
 skip-while <predicate-expression|callable>
 \end{signature}
 
-\textbf{Output:} All input items starting from (and including) the first one for which the predicate returned false.
+\textbf{Output:} All input items starting from (and including) the first one for which the predicate result was falsy.
 
 \begin{lstlisting}
 echo 1 2 3 4 | skip-while { _ < 3 }
@@ -5932,12 +5936,12 @@ take-until <predicate-expression|callable>
 \toprule
 \textbf{Argument} & \textbf{Description} \\
 \midrule
-predicate & A callable or block evaluated for each item. Stops when it returns true. \\
+predicate & A callable or block evaluated for each item. Stops when its result is truthy. \\
 \bottomrule
 \end{tabular}
 
 \textbf{Pipeline input:} scalar, record
- --- Yields items until the predicate returns true.
+ --- Yields items until the predicate is truthy.
 
 \textbf{Output:} Pipeline items up to (but not including) the first that satisfies the predicate.
 
@@ -5961,7 +5965,7 @@ Yields input values while the predicate remains true.
 take-while <predicate-expression|callable>
 \end{signature}
 
-\textbf{Output:} Input items from the front of the stream up to (but not including) the first one for which the predicate returned false.
+\textbf{Output:} Input items from the front of the stream up to (but not including) the first one for which the predicate result was falsy.
 
 \begin{lstlisting}
 echo 1 2 3 4 | take-while { _ < 3 }
@@ -6082,14 +6086,14 @@ where <predicate-expression|callable>
 \toprule
 \textbf{Argument} & \textbf{Description} \\
 \midrule
-predicate & A predicate block or callable that returns a boolean. \textit{(block|callable)} \\
+predicate & A predicate block or callable evaluated with ToastScript truthiness. \textit{(block|callable)} \\
 \bottomrule
 \end{tabular}
 
 \textbf{Pipeline input:} scalar
  --- Consumes any pipeline objects and tests each against the predicate.
 
-\textbf{Output:} Pipeline objects for which the predicate returned true.
+\textbf{Output:} Pipeline objects for which the predicate result was truthy.
 
 \begin{lstlisting}
 ls -la | where _.Type == file  # Filter by property

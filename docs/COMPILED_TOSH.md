@@ -326,14 +326,24 @@ runtime support it needs:
 
 #### Tier 1 — *pure*
 
-Real IL with **no `ToshHost` / `ToshEngine` calls** at execution time.
-The resulting code is indistinguishable from a hand-written .NET
-assembly that happens to share method conventions with tosh.
+Real IL with no execution-time calls or metadata references to
+`Tosh.Compiler.Runtime`, `ToshHost`, or `ToshEngine`. Tier 1 may call
+stable, engine-independent `Tosh.Runtime` semantic primitives, including
+operator evaluation, truthiness, formatting, and conversion helpers. It
+requires no compiler-host state, executable source registration, or
+replay: pure means host-independent, not BCL-only.
 
-Examples currently in Tier 1:
+Features currently classified as Tier 1 at their emit sites:
+
+Artifact-wide Tier-1 conformance is not yet proven by those local
+classifications; the dependency audit tracked by `TS-P1-20` must close that
+gap.
 
 - Literals (string / int / double / bool / null).
-- Arithmetic, comparison, boolean operators.
+- Eager arithmetic, comparison, concatenation, repetition, and
+  polymorphic operators through the stable
+  `Tosh.Runtime.OperatorEvaluator` protocol.
+- Short-circuit and boolean operators.
 - `if` / `else`, `for`, `while`, `try` / `catch` / `finally`.
 - `var` declarations and reassignments at any scope.
 - Top-level `func` calls resolved at IL-emit time (`call`).
@@ -346,9 +356,11 @@ Examples currently in Tier 1:
 
 #### Tier 2 — *runtime*
 
-Real IL **plus** at least one call into `ToshHost` (or `ToshEngine`
-through it) at runtime. The host call is the only dynamic part; the
-arguments are still computed in real IL.
+Real IL with at least one compiler-host dependency: a call into
+`ToshHost`/`ToshEngine`, or dependence on host-owned registration or
+runtime state. Calls only to stable `Tosh.Runtime` primitives remain
+Tier 1; arguments surrounding a Tier-2 bridge are still computed in
+real IL.
 
 Tier-2 host entry points (each one of these triggers Tier 2):
 
@@ -361,6 +373,12 @@ Tier-2 host entry points (each one of these triggers Tier 2):
 | `ToshHost.InvokeMember`                | Dynamic `.member` access on an unknown shape     |
 | `ToshHost.ResolveQualifiedAccess`      | `Foo.bar` lookup that isn't a real CLR field     |
 | `ToshHost.InvokeQualifiedMethod`       | `Foo.bar(...)` call that isn't a real CLR method |
+| `ToshHost.Initialize`                  | Compiled-program host bootstrap                  |
+| `ToshHost.RegisterCompiledAssembly`    | Assembly/source metadata registration            |
+| `ToshHost.EnterExecutionFrame`         | Recursion-depth accounting                       |
+
+The last three are currently emitted unconditionally in otherwise Tier-1
+programs. Their removal or replacement is part of `TS-P1-20`.
 
 Tier 2 is today's *default* — most non-trivial programs need at least
 one builtin command.
@@ -372,22 +390,26 @@ and re-evaluates that span through `ToshEngine` at runtime. The
 compiled output therefore carries its own source code and is not
 self-contained.
 
+Executable source replay is distinct from inert source name/text embedded
+solely for span-aware diagnostics. Runtime and pure artifacts may carry
+diagnostic context, but must never register or evaluate it.
+
 Tier-3 features:
 
 | Feature                        | Reason                                              |
 |--------------------------------|-----------------------------------------------------|
-| `class` / `record` / `struct` declarations | No `TypeBuilder` lowering yet — engine builds the type. |
-| `union` / `enum` / `trait` declarations    | Same.                                               |
+| Complex/generic/partial `class` declarations | Shapes that cannot form a complete CLR shell hierarchy remain engine-owned. Plain classes and records already use `TypeBuilder`. |
+| Declaration shapes that exceed the current CLR metadata/shell paths | The engine remains authoritative for the unsupported portion. |
 | Block-pipeline arguments (`{ ... }`)       | Block bodies are re-parsed from source by the engine. |
 | `module` bodies with non-trivial declarations | Module shells are real CLR types, but a body containing a class/record/etc still needs source replay. |
 
 ### Profiles
 
-| `--profile=`   | Allowed tiers | Use when                                                       |
-|----------------|---------------|----------------------------------------------------------------|
-| `permissive`   | 1, 2, 3       | (default) any tosh feature works, output may carry source.     |
-| `runtime`      | 1, 2          | you want a redistributable `.dll` that doesn't ship its own source. |
-| `pure`         | 1             | aspirational — useful for diagnosing what's still host-bound.  |
+| `--profile=`   | Allowed tiers | Use when |
+|----------------|---------------|----------|
+| `permissive`   | 1, 2, 3       | (default) any tosh feature works; output may register and replay source. |
+| `runtime`      | 1, 2          | compiler-hosted execution is acceptable, but executable source registration/replay is not. Inert diagnostic source context may be embedded. |
+| `pure`         | 1             | intended contract: a host-independent CLR-first subset; stable `Tosh.Runtime` calls are allowed. Until `TS-P1-20` closes, gate acceptance alone is not proof of artifact conformance. |
 
 ### Output
 
@@ -408,6 +430,15 @@ $ echo $?
 Diagnostics are deduplicated per (tier, feature) pair, so a program
 with many calls to the same Tier-2 builtin only reports once.
 
+### Profile integrity invariant
+
+`RequireTier` records the intended tier of an emit site; it is not proof
+of the emitted dependency graph. A pure build must also pass a post-emit
+`AssemblyRef`/`MemberRef` audit for `Tosh.Compiler.Runtime`, `ToshHost`,
+`ToshEngine`, registration, and replay helpers. `TS-P1-20` tracks the
+current unconditional bootstrap/execution-frame violation that this
+second gate must catch.
+
 ### Goal
 
 Each release should:
@@ -419,7 +450,8 @@ Each release should:
 
 Use `--profile=runtime` regularly to make sure new features don't
 silently regress to Tier 3, and `--profile=pure` to find the
-remaining Tier-2 cliffs.
+declared Tier-2 cliffs. The post-emit dependency audit must find host
+references that were not declared through `RequireTier`.
 
 ---
 
@@ -463,10 +495,10 @@ Snapshot of how far each layer has actually moved. Commits are on `master`.
 | `Tosh.Compiler` project + `Tosh.Compiler.Runtime` host shim                          | done        | `3ff32d7` walking-skeleton; emitter uses `PersistedAssemblyBuilder` to produce a real PE + emits `<out>.runtimeconfig.json` so `dotnet <out>.dll` runs |
 | `tosh --compile script.tosh [out.dll]` CLI flag                                       | done        | `Program.cs CompileScriptAsync` |
 | Strict `--compile` (binder runs, fail-fast on diagnostics, no half-baked output)      | done        | `Program.cs CompileScriptAsync` runs `Binder.Bind(parseResult, ...)` against the concatenated unit; binder diagnostics, parse errors, and emitter unsupported shapes all return non-zero. Partial `.dll` is deleted on emitter failure so `dotnet <out>.dll` can't run stale output. |
-| `--profile=permissive|runtime|pure` flag + tier-based diagnostic gate                 | done        | See [Profiles & the tier model](#profiles--the-tier-model). Three-tier model: pure IL (1) / IL + `ToshHost` (2) / source-replay (3). `BoundUnitEmitter.RequireTier` emits dedup'd diagnostics into `EmitResult.UnsupportedShapes` when an emit site exceeds the active profile's allowed tier; CLI deletes the partial `.dll` on failure. Default profile is `permissive`. |
-| Compiler feature matrix across `permissive`/`runtime`/`pure`                          | done / expanding | `tests/Tosh.Tests/CompilerFeatureMatrixTests.cs` is the executable ledger for compiled language coverage. The matrix now covers broad syntax, declaration, callable, module, metadata, interop, and SDK-facing families across all three profiles, with no all-profile-rejected rows in the latest documented audit. It must keep expanding until it is exhaustive rather than representative; every row should identify whether the implementation is native IL / Tier 1, runtime-hosted / Tier 2, source replay / Tier 3, or a deliberate unsupported diagnostic. Runes and any remaining source-replay paths should stay explicit profile decisions rather than accidental emitter gaps. |
-| Literals, arithmetic, string interpolation                                           | done        | `6044476` |
-| `var` / locals + `$x` reads + reassignment + compound assignment (`+= -= *= /= %=`)  | done        | `6044476`, `85392ea` |
+| `--profile=permissive|runtime|pure` flag + tier-based diagnostic gate                 | done / integrity audit planned | See [Profiles & the tier model](#profiles--the-tier-model). Three-tier model: host-independent IL plus stable `Tosh.Runtime` primitives (1) / compiler-hosted IL (2) / executable source replay (3). `BoundUnitEmitter.RequireTier` emits dedup'd diagnostics into `EmitResult.UnsupportedShapes` when an emit site exceeds the active profile's allowed tier; CLI deletes the partial `.dll` on failure. `TS-P1-20` tracks the required post-emit dependency audit and current unconditional host references. Default profile is `permissive`. |
+| Compiler feature matrix across `permissive`/`runtime`/`pure`                          | done / expanding | `tests/Tosh.Tests/CompilerFeatureMatrixTests.cs` is the executable ledger for intended compiler-profile acceptance. The matrix now covers broad syntax, declaration, callable, module, metadata, interop, and SDK-facing families across all three profiles, with no all-profile-rejected rows in the latest documented audit. It must keep expanding until it is exhaustive rather than representative; every row should identify whether the implementation is host-independent IL plus stable runtime primitives / Tier 1, runtime-hosted / Tier 2, source replay / Tier 3, or a deliberate unsupported diagnostic. Matrix acceptance does not replace the artifact dependency audit tracked by `TS-P1-20`. Runes and any remaining source-replay paths should stay explicit profile decisions rather than accidental emitter gaps. |
+| Literals, eager operators, string interpolation                                      | done        | Eager binary expressions use `Tosh.Runtime.OperatorEvaluator.EvaluateBinaryWithDiagnostics`. `CompilerOperatorParityTests` compares CLR type, value, formatted stdout, and structured diagnostics across interpreted and emitted execution (`TS-P1-03`). |
+| `var` / locals + `$x` reads + reassignment + compound assignment (`+= -= *= **= /= //= %=`) | done | Mutable unannotated bindings preserve dynamic CLR type changes; annotated stores use canonical conversion. Compound local, captured, member, and index targets share ordinary operator dispatch (`TS-P1-04`). |
 | `if` / `while` / `until`                                                              | done        | `ef9dcfa` |
 | `for i in start..end` (range fast-path) + generic `for x in expr` over iterables     | done        | `85392ea`, `b848547` |
 | User-defined functions (top-level), recursion, `return`                              | done        | `545d323`, `236b127` (object-typed numeric paths). Fully-typed funcs (`func add(a: int, b: int) -> int { … }`) emit a typed CLR primary `add(int,int) -> int` and a thin `Func_add(object, object) -> object` shim that forwards to it; internal calls use the typed primary directly so arg coercion happens in IL rather than via boxed-object Convert.ChangeType round-trips. Untyped funcs continue on the legacy `Func_<name>(object,…) -> object` shape. |
@@ -481,8 +513,8 @@ Snapshot of how far each layer has actually moved. Commits are on `master`.
 | Splat / named arguments                                                              | done        | All call shapes that the parser produces with splat or named args lower through the shared `EmitArgsArrayCore(name, args)` emitter: fast `newarr` path when no splat, `List<object?>` + `ToArray()` + `ToshHost.SpreadArgs` when present, with named entries wrapped as `NamedArgument(name, value)`. Covers command calls, callable invocation (`$fn(...)`), `new TypeName(...)`, static method calls, instance method calls, user-function pipeline stages, and the union-variant constructor fallback. Runtime side: `ReflectionInvoker.TryBindParameters` unwraps `INamedArgument` (implemented by `Tosh.Language.NamedArgument`) and binds by parameter name; `ToshHost.InvokeMember` reflection fallback now routes through `Runtime.Invoker.InvokeInstance`; `ToshHost.RunUserFuncStage` and `ToshHost.TryBuildOverloadInvocation` split named/positional and bind by name. |
 | User functions as pipeline stages                                                    | done        | `ldtoken` the `Func_<name>` dynamic shim's `MethodBuilder` → `MethodInfo`; `ToshHost.RunUserFuncStage` dispatches by arity (drain-once vs. one invocation per input item). The shim is always emitted — even for fully-typed funcs — so reflection.Invoke sees a uniform `(object,…) -> object` signature regardless of typedness. |
 | Closures over top-level variables                                                    | done        | Tier 2 #5. `BoundUnitEmitter.PromoteCapturedSymbols` walks every nested `BoundFunctionDefinition.Captures`, promotes captures of top-level `var` symbols into `private static` fields on the program type, and rewrites reads/writes to `Ldsfld`/`Stsfld`. Captures of peer top-level functions resolve through the `_userFunctions` map. Deeper-than-top-level captures still emit a diagnostic. |
-| Classes / records / methods                                                          | partial     | Records: real CLR `public sealed class` with positional constructor + public `object` fields per field; `new Rec(a,b,c)` lowers to direct `newobj` and `$r.Field` lowers to direct `ldfld` when target's static type is the shell. Classes with primary-ctor properties + plain methods now also lower fully natively: each method becomes a real CLR instance method on the shell with `$this` mapped to `Ldarg_0`, `$this.Field` to direct `ldfld`, and `$this.method(args)` to direct `callvirt` against the shell's `MethodBuilder`. `new TypeName(...)` uses direct `newobj` whenever every member can be represented on the shell. Conservative fallbacks to engine dispatch (via `ToshHost.NewObject` / `ToshHost.InvokeMember`) for: inheritance, traits, interfaces, abstract / hermit classes, secondary constructors, computed properties (getter/setter bodies), lazy props, static methods, methods with rest/optional params or captures. CLR-shell-emitted class/record declarations skip Tier 3 source replay; fallback class/record forms still register from source. |
-| Enums                                                                                 | done        | Simple integral enums emit real CLR `enum` metadata with `[ToshType("enum", ...)]`, CLR-safe type/member names, `[ToshOriginalName]` on mangled names, correct integral underlying types, auto-incremented members, and literal explicit member values. Non-integral underlying types and dynamic/literal-only member values (e.g. `enum Label: string { Good = "good" }`) emit a CLR static class shell (`public sealed abstract class` with one `public static readonly object` field per member, populated in `.cctor`); `EnumName.Member` lowers to `ldsfld`. Both shapes are clean in `permissive`, `runtime`, and `pure`. Member access on integral enums resolves through the loaded CLR enum type (Tier 2 host lookup); member access on the static-shell shape is direct `ldsfld` (Tier 1). |
+| Classes / records / methods                                                          | partial     | Records: real CLR `public sealed class` with positional constructor + public `object` fields per field; `new Rec(a,b,c)` lowers to direct `newobj` and `$r.Field` lowers to direct `ldfld` when target's static type is the shell. Classes with primary-ctor properties + plain methods now also lower fully natively: each method becomes a real CLR instance method on the shell with `$this` mapped to `Ldarg_0`, `$this.Field` to direct `ldfld`, and `$this.method(args)` to direct `callvirt` against the shell's `MethodBuilder`. A non-generic source-declared inheritance chain emits real base/derived CLR shells only when the complete chain is representable; each shell constructor calls its immediate base exactly once with the header initializer or a normalized leading `$super(...)`. Inherited `new` call sites remain Tier 2 host dispatch. Conservative fallbacks to engine dispatch (via `ToshHost.NewObject` / `ToshHost.InvokeMember`) remain for traits, interfaces, abstract / hermit classes, incompatible constructor shapes, computed properties (getter/setter bodies), lazy props, static methods, methods with rest/optional params or captures. CLR-shell-emitted class/record declarations skip Tier 3 source replay; fallback class/record forms still register from source rather than truncating a hierarchy at `System.Object`. |
+| Enums                                                                                 | done        | Simple integral enums emit real CLR `enum` metadata with `[ToshType("enum", ...)]`, CLR-safe type/member names, `[ToshOriginalName]` on mangled names, correct integral underlying types, auto-incremented members, and literal explicit member values. Non-integral underlying types and dynamic/literal-only member values (e.g. `enum Label: string { Good = "good", Bad = "bad" }`) emit a CLR static class shell (`public sealed abstract class` with one `public static readonly object` field per member, populated in `.cctor`). Integral member access emits the underlying enum literal directly; static-shell member access emits `ldsfld`. Both member-access emit sites are classified Tier 1, avoid CLR short-name collisions, and preserve ToastScript names in formatted output. |
 | `match` / `switch` (lowered to `if`/`else` chains)                                   | done        | Tier 2, branch labels per arm; pattern tests (literal equality, comparison `_ op N`, ranges, guards) call `OperatorEvaluator.Matches` / `AreEqual`; scrutinee bound on `_underscoreStack` so `_` references resolve |
 | Spread elements (`[...$xs]`), record `{ name: ... }`, slice indices                  | done        | Spread elements: list literals call `ToshHost.SpreadArgs` for `...expr` items. Record literal `:` separator now accepted by parser alongside `=`. Slice `$xs[1..3]`: `ShellIndexingUtilities.GetSlice` materialises `ToshRange.Enumerate()` into the target collection (string / array / IList / IEnumerable); compiler emits `ToshRange` values via `BoundUnitEmitter.EmitRange`. |
 | User-function shadowing of builtin command names                                     | done        | Parser pre-scans tokens for `func <name>` declarations and bypasses the current-item-expression and `get`/`select`/`pick` argument-parsing branches when the name is shadowed (e.g. `func describe(n) {...}` then `(describe 5)` no longer wraps `5` in a block argument). |
@@ -536,7 +568,8 @@ From this compiler document's viewpoint, the same work breaks down as follows:
    `permissive` is the full-language compatibility profile, `runtime` is the
    normal app/library profile, and `pure` is the CLR-first public-ABI subset.
    CI should treat profile failures as contract regressions once a row is
-   assigned.
+   assigned, and should independently audit emitted `AssemblyRef`/`MemberRef`
+   dependencies so undeclared host references fail the promised profile.
 
 4. **Drive Tier-3 source replay down to deliberate design choices.**
    Audit `Register*FromSource`, `RunScriptFromSource`, source-based subcommand
@@ -814,7 +847,9 @@ It intentionally separates stable ABI promises from implementation details.
 - **The compiler feature matrix is now the truth table.**
   `CompilerFeatureMatrixTests` records which representative language forms are
   accepted by `permissive`, `runtime`, and `pure`. A feature is not considered
-  moved forward unless the matrix expectation moves with it.
+  moved forward unless the matrix expectation moves with it. Those expectations
+  record intended acceptance; a post-emit dependency audit must independently
+  prove that an accepted artifact actually satisfies its profile (`TS-P1-20`).
 
 - **Bound IR is an immutable record tree.** Same shape as the parse
   tree (`ArgumentSyntax` / `StatementSyntax`), one `BoundNode` per
@@ -827,11 +862,12 @@ It intentionally separates stable ABI promises from implementation details.
   and `Tosh.Compiler.Runtime` (host shim) live as their own
   projects; `Tosh.Compiler` references `Tosh.Language` for the IR.
 
-- **Differential testing is the oracle.** Every emitter feature
-  ships with a test in `tests/Tosh.Tests/BoundUnitEmitterTests.cs`
-  that compiles a snippet, loads the assembly into the test
-  process, and asserts captured stdout matches the interpreter's
-  output for the same source.
+- **Differential testing is the oracle.** Semantic features ship with
+  interpreted-versus-compiled tests that compare CLR value type, value,
+  canonical stdout, and structured diagnostics. Operator coverage lives in
+  `tests/Tosh.Tests/CompilerOperatorParityTests.cs`;
+  `tests/Tosh.Tests/BoundUnitEmitterTests.cs` remains the broader emission-shape
+  and integration suite.
 
 ---
 
@@ -928,7 +964,8 @@ is now explicitly tracked below.
 - `using` statements now emit as a no-op in compiled mode (binder/type-level
   effect only).
 - Member-path assignment emission (`BoundMemberAssignment`) now supports
-  plain and compound assignment (`=`, `+=`, `-=`, `*=`, `/=`, `%=`).
+  plain and compound assignment
+  (`=`, `+=`, `-=`, `*=`, `**=`, `/=`, `//=`, `%=`).
 - Destructuring declaration emission (`BoundDestructuringDeclaration`) now
   supports array and record patterns.
 - Defer statement emission (`BoundDeferStatement`) now lowers to nested
@@ -944,8 +981,9 @@ is now explicitly tracked below.
 - Advanced callable/closure interop without source replay.
 - Type-declaration emission completeness: advanced class/trait/interface/union/
   enum/alias/event semantics currently represented by shells or replay paths.
-- Operator surface parity: remaining operators that still report unsupported in
-  IL (including non-numeric and niche language operators).
+- Operator follow-through: finish the remaining conversion, storage, and
+  evaluation-order decisions tracked by `TS-P1-14` through `TS-P1-16`; eager
+  and compound binary dispatch itself is now canonical.
 
 ### Next implementation slices
 

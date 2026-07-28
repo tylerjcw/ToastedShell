@@ -177,6 +177,7 @@ $tosh.Config.Prompt.IndicatorText = " ❯ "
 $tosh.Config.Shell.Pipefail = true
 $tosh.Config.Shell.AutoCd = false
 $tosh.Config.Shell.Trace = false
+$tosh.Config.Shell.MaxRecursionDepth = 128
 
 $tosh.Config.History.Persistent = true
 $tosh.Config.History.FilePath = "history.jsonl"
@@ -184,6 +185,15 @@ $tosh.Config.History.MaxEntries = 5000
 $tosh.Config.History.Deduplication = "Consecutive"
 $tosh.Config.History.IgnoreLeadingSpace = false
 ```
+
+`Shell.MaxRecursionDepth` limits the number of active ToastScript
+execution frames in one asynchronous flow. The default and safe maximum
+are both `128`; a session may choose a stricter value from `1` through
+`128`. The limit covers functions, methods, lambdas, constructors, and
+nested `eval`/`source` execution in both interpreted and compiled code.
+Exceeding it raises the structured
+`tosh.runtime.recursion_limit_exceeded` diagnostic without terminating
+the shell process.
 
 ## Example `config.tosh`
 
