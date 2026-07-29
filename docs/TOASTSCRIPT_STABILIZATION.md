@@ -2906,3 +2906,36 @@ checkable examples; the probe script regenerates candidates when the
 specification changes.
 
 Validation: 3,441 passed, 0 failed, 0 skipped in 2m41s.
+
+### July 29, 2026 — Ordering and equality must agree (standing check)
+
+Three repairs have had one shape. `TS-P1-15` found enum members ordered but not
+equal to their backing value; `TS-P1-26` found equality asymmetric for bool
+against string; the conformance corpus found quantities ordered but not equal.
+The cause is structural — ordering and equality are implemented apart, so a type
+taught one is not thereby taught the other — so the fourth instance is worth
+preventing rather than repairing.
+
+`OrderingEqualityAgreementTests` states the invariant instead of enumerating
+types. For any pair the language agrees to order, exactly one of `a < b`,
+`a == b`, `a > b` holds, and `a < b` agrees with `b > a`. A pair the language
+declines to order is out of scope, which keeps the property about types that do
+order rather than about which pairs are orderable.
+
+Corpus built through the engine rather than constructed directly, so the values
+are exactly what a script produces: numerics across CLR types, strings, enum
+members against each other and against backing values, quantities within and
+across units, storage sizes, and temporals. A third case asserts the two
+equality implementations agree on all of them, since `TS-P1-24` leaves those
+separate.
+
+Verified by negative control: with `Quantity.Equals` disabled, both cross-unit
+pairs report "0 of three hold", naming the defect rather than merely failing.
+
+Operational note: one full run aborted at 1,813 tests and passed cleanly on
+re-run at 3,444. That matches two earlier entries — a packaged-SDK subprocess
+exiting 134 under concurrent load, and `ScopeAndChannelTests` failing once then
+passing in isolation. Recorded rather than dismissed; if it recurs it is worth
+tracing rather than retrying.
+
+Validation: 3,444 passed, 0 failed, 0 skipped in 2m41s.
