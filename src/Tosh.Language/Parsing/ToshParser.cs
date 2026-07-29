@@ -139,6 +139,32 @@ public static class ToshParser
         private readonly Stack<int> _statementBlockOpenTokenIndices = [];
 
         /// <summary>
+        /// Registers a brace as the owner of the boundaries inside it, so
+        /// <see cref="HasStatementBoundaryAfter"/> can consult the structural
+        /// pass instead of re-deriving from line breaks (<c>TS-P2-24</c>).
+        /// </summary>
+        /// <remarks>
+        /// Every brace-delimited member list whose members separate by newline
+        /// needs one: blocks, class bodies, match arms, and native bind blocks.
+        /// A list that registers no owner silently falls back to the line-break
+        /// heuristic, which is how class bodies were missed.
+        /// </remarks>
+        private BoundaryOwnerScope PushBoundaryOwner(int openBraceTokenIndex)
+        {
+            _statementBlockOpenTokenIndices.Push(openBraceTokenIndex);
+            return new BoundaryOwnerScope(_statementBlockOpenTokenIndices);
+        }
+
+        private readonly struct BoundaryOwnerScope : IDisposable
+        {
+            private readonly Stack<int> _owners;
+
+            public BoundaryOwnerScope(Stack<int> owners) => _owners = owners;
+
+            public void Dispose() => _owners.Pop();
+        }
+
+        /// <summary>
         /// Names declared as modules in this source (TS-P2-23). Lets the
         /// parser decide `Geo.area` from a fact rather than from
         /// capitalization: a declared module is module dispatch whatever
@@ -150,6 +176,18 @@ public static class ToshParser
 
         private int _position;
         private bool _isParsingTopLevelStatement;
+        /// <summary>
+        /// Test hook for <c>TS-P2-24</c>: disables the line-break fallback in
+        /// <see cref="HasStatementBoundaryAfter"/> so the remaining re-derivation
+        /// can be measured rather than estimated.
+        /// </summary>
+        /// <remarks>
+        /// Turning it on took the suite from 113 failures to 6 as brace-delimited
+        /// member lists were moved onto the structural pass. The item is done when
+        /// the fallback can be deleted outright, not when the last call site is
+        /// wired — this hook is how that is checked.
+        /// </remarks>
+        internal static bool StructuralBoundaryFallbackDisabled;
         private bool _stopRefinementAtEquals;
 
         public InternalParser(
@@ -1330,7 +1368,9 @@ public static class ToshParser
                 return Array.Empty<NativeFunctionBindingSyntax>();
             }
 
+            var openBraceTokenIndex = _position;
             var openBrace = NextToken();
+            using var boundaryOwner = PushBoundaryOwner(openBraceTokenIndex);
             var functions = new List<NativeFunctionBindingSyntax>();
 
             while (Current.Kind != SyntaxTokenKind.EndOfFile && Current.Kind != SyntaxTokenKind.CloseBrace)
@@ -2063,7 +2103,9 @@ public static class ToshParser
                     TextSpan.FromBounds(matchToken.Span.Start, value.Span.End));
             }
 
+            var openBraceTokenIndex = _position;
             var openBrace = NextToken();
+            using var boundaryOwner = PushBoundaryOwner(openBraceTokenIndex);
             var arms = new List<MatchArmSyntax>();
 
             while (Current.Kind != SyntaxTokenKind.EndOfFile && Current.Kind != SyntaxTokenKind.CloseBrace)
@@ -4008,7 +4050,14 @@ public static class ToshParser
                 return Array.Empty<ClassMemberSyntax>();
             }
 
+            // A class body owns its member boundaries the same way a block owns
+            // its statement boundaries, so register the opener and let
+            // HasStatementBoundaryAfter consult the structural pass here too
+            // (TS-P2-24). Without this only the line-break fallback answered,
+            // because the owner stack was pushed exclusively by ParseBlock.
+            var openBraceTokenIndex = _position;
             var openBrace = NextToken();
+            using var boundaryOwner = PushBoundaryOwner(openBraceTokenIndex);
             var members = new List<ClassMemberSyntax>();
 
             while (Current.Kind != SyntaxTokenKind.EndOfFile && Current.Kind != SyntaxTokenKind.CloseBrace)
@@ -9970,6 +10019,11 @@ public static class ToshParser
             if (IsCurrentPromotedStatementBlockBoundary())
             {
                 return true;
+            }
+
+            if (StructuralBoundaryFallbackDisabled)
+            {
+                return false;
             }
 
             return Current.Kind != SyntaxTokenKind.EndOfFile &&
