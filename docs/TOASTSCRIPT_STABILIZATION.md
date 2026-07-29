@@ -388,7 +388,7 @@ closed.
 | `TS-P1-11` | Planned | `_` in destructuring is bound and overwritten instead of discarding the matched value. | Every `_` target skips without creating or modifying a binding; nested/rest patterns are covered. |
 | `TS-P1-12` | Planned | `const` currently accepts arbitrary runtime pipelines and behaves as a readonly binding rather than a constant. | Constant-expression rules are specified and enforced; `let` covers runtime immutability before compatibility behavior is removed. |
 | `TS-P1-13` | Planned | Compiled ordinary member/index assignments evaluate target components before the RHS, while the interpreter preserves RHS-first order; only `??=` intentionally uses target-first order. | Side-effecting target, index, and RHS probes produce the same ordering in interpreted and compiled modes for every assignment operator. |
-| `TS-P1-14` | Complete — 2026-07-26 | Cross-type equality and ordering are incoherent: `==` coerces numerically (`1 == "1"` is true) and falls back to case-insensitive `ToString` comparison for mixed types while string-to-string stays case-sensitive; ordered comparison converts right-to-left only, so `"abc" < 5` silently string-compares to `false` while `5 > "abc"` throws; booleans participate in ordering, so `1 < 2 < 3` silently evaluates to `false`. | One documented equality/ordering conversion matrix implemented once and used by every surface (extends the `TS-P1-01`/`TS-P1-03` corpus); conversion is symmetric or produces a structured diagnostic; no silent lexicographic fallback for mixed numeric comparisons; the chained-comparison shape is either supported or diagnosed; interpreted and compiled modes agree. |
+| `TS-P1-14` | Complete — 2026-07-26; audited 2026-07-29, see `TS-P1-26` | Cross-type equality and ordering are incoherent: `==` coerces numerically (`1 == "1"` is true) and falls back to case-insensitive `ToString` comparison for mixed types while string-to-string stays case-sensitive; ordered comparison converts right-to-left only, so `"abc" < 5` silently string-compares to `false` while `5 > "abc"` throws; booleans participate in ordering, so `1 < 2 < 3` silently evaluates to `false`. | One documented equality/ordering conversion matrix implemented once and used by every surface (extends the `TS-P1-01`/`TS-P1-03` corpus); conversion is symmetric or produces a structured diagnostic; no silent lexicographic fallback for mixed numeric comparisons; the chained-comparison shape is either supported or diagnosed; interpreted and compiled modes agree. |
 | `TS-P1-15` | Complete — 2026-07-26 | Enum values are not orderable or number-comparable: `E.A < E.C` throws (`ToshEnumValue` cannot be compared) and `E.B == 1` is false, despite the specification's numeric-backed enum examples. | Enum values compare and order canonically against members of the same enum and against their underlying numeric values; diagnostics for genuinely incompatible enum comparisons name the shell-level enum type; the specification's `Permissions : int` examples pass as conformance cases. |
 | `TS-P1-16` | Planned | Float division-by-zero depends on the zero operand's type: `10.0 / 0` throws "Division by zero" while `10.0 / 0.0` returns `Infinity`, exposing a second arithmetic path inside the interpreter. | One documented rule per numeric family (integral, float, decimal) for division and modulo by zero; the zero operand's declared type does not change the outcome; interpreted and compiled modes agree. |
 | `TS-P1-17` | Withdrawn — 2026-07-26 | Filed as "the empty brace literal `{}` evaluates to an internal type-definition object instead of an empty record". Re-examination showed the then-current `{}` was a correct empty record; the observation was `type-of` rendering, fixed as `TS-P1-23`, plus the positional ambiguity later resolved by `TS-P2-25`. Under the accepted paired-delimiter grammar, `{}` is a block and `{||}` is an empty record. | n/a — not a defect as filed. |
@@ -400,6 +400,7 @@ closed.
 | `TS-P1-23` | Complete — 2026-07-26; structural display paths 2026-07-27 | `type-of` yields a shell type descriptor for shell-typed values, but the descriptor rendered as its own CLR class name, so `type-of [1, 2]` reported `Tosh.Runtime.BuiltInShellTypes+BuiltInShellTypeDefinition` instead of the type being asked about. | Displaying a built-in shell type descriptor shows the shell type name; `type-of` reports usable names for lists, records, and other shell-typed values; CLR values are unaffected. |
 | `TS-P1-24` | In progress — refinement cluster converged 2026-07-27 | The interpreter carries sync/async twin methods that are *parallel implementations* rather than delegations, so a semantic fix can land on one surface and silently miss the other. This has happened twice: `OperatorEvaluator.AreEqual` versus `ToshEngine.AreEqualAsync` (`TS-P1-14`/`TS-P1-15`) and `ToshHost.DrainValue` versus `InvokeValue` (`TS-P1-20`). A corrected audit on 2026-07-26 counted 23 truly parallel pairs against 6 that delegate. The refinement cluster, the largest, is now converged. Remaining largest duplications: `ThrowDetailedSingleConstructorMismatch` (55 lines), `TryGetInstanceMember` (51), `ApplyPendingParameterDefaults` (50), `InvokeQualifiedMethod` (47), `ConvertPropertyValue` (44), `TrySetInstanceMember` (43), `SelectBestCallableMatches` (41), `GetInstanceMembers` (38), `ConvertConstructorParameterValue` (35). | Each pair either delegates to one implementation or is removed; a test or analyzer fails when a new parallel sync/async pair is introduced; behaviour is unchanged, evidenced by the existing suite plus the annotated-conversion drift guard. |
 | `TS-P1-25` | In progress — audit built 2026-07-27 | (Filed 2026-07-26 under a duplicate `TS-P1-20`; renumbered 2026-07-27.) The pure compiler profile can report a Tier-1-clean artifact while emitted IL still unconditionally calls `ToshHost.Initialize`/`RegisterCompiledAssembly` from `Main` and `ToshHost.EnterExecutionFrame` from functions, methods, lambdas, and blocks. | A pure artifact contains no metadata references or calls to `Tosh.Compiler.Runtime`, `ToshHost`, or `ToshEngine`; bootstrap is omitted or conditional; recursion guarding uses a stable `Tosh.Runtime` primitive; and a post-emit IL dependency audit fails independently of `RequireTier` diagnostics. Verified 2026-07-27: the emitted IL references exactly `System.Console`, `System.Private.CoreLib`, `Tosh.Compiler.Runtime`, and `Tosh.Runtime`, so only the three unconditional `ToshHost` members stand between the artifact and purity; the over-declared `deps.json` is a separate packaging concern. |
+| `TS-P1-26` | Proposed — needs a decision | Equality is asymmetric for bool against string: `true == "true"` is `true` while `"true" == true` is `false`. Numeric pairs are symmetric in both directions (`1 == "1"` and `"1" == 1`), as are bool-against-number, so only the string-on-the-left-of-a-bool direction fails to coerce. Both `OperatorEvaluator.AreEqual` and `ToshEngine.AreEqualAsync` agree with each other, so this is one rule applied in one direction rather than a sync/async drift. Found by `EqualityParityTests` on its first run. `TS-P1-14` promised symmetry explicitly for ordering and did not state it for equality, which is why it survived that item. | A decision records whether a string coerces to bool for equality at all: either `"true" == true` becomes `true` (extend coercion, matching the numeric rule) or `true == "true"` becomes `false` (drop bool/string coercion). Equality is symmetric for every pair in the corpus afterwards, on both implementations; the characterization entry in `EqualityParityTests` is inverted in the same change. |
 
 ## P2 — Parser, Binder, Diagnostics, and Surface Generation
 
@@ -2449,3 +2450,54 @@ Remaining unaudited of the seven: `TS-P1-14`, `TS-P1-22`, `TS-P2-12`,
 `TS-P2-15`.
 
 Validation: 3,331 passed, 0 failed, 0 skipped; zero warnings.
+
+### July 29, 2026 — Closed-item audit, second pass
+
+The remaining four items with universal acceptance language. Suite now 3,381.
+
+**`TS-P2-12` — confirmed.** "Every quote form has a conformance case." Twelve
+forms enumerated: single-quoted is raw (`'a\nb'` is 4 characters), double-quoted
+processes escapes (3), unknown double escapes keep the backslash, triple-quoted
+and ANSI-C and all three interpolated variants behave as documented. Both
+specification examples that originally motivated the item — `("a1" =~ "\d")` and
+`"file.cs" =~ "\.cs$"` — return true.
+
+**`TS-P2-15` — confirmed.** "`name=value` and `name = value` parse identically."
+Checked across free functions, instance methods, and static methods rather than
+free functions alone; all three agree, and option-style `--flag=value` stays
+greedy.
+
+**`TS-P1-22` — confirmed.** Each operand evaluated once and later pairs
+short-circuited: `1 < (mid()) < 3` calls `mid` once, and `5 < (mid()) < 3` stops
+after the failing pair. Compiled mode is covered by
+`Compiled_chains_match_the_interpreter` and
+`Compiled_chains_evaluate_each_operand_once_and_short_circuit`, so the
+"interpreted and compiled" clause holds.
+
+**`TS-P1-14` — behaviour holds, but the "implemented once" clause does not, and
+a real defect was hiding behind it.**
+
+The matrix is implemented twice — `OperatorEvaluator.AreEqual` and
+`ToshEngine.AreEqualAsync` — because a user-defined `Equals` may be
+asynchronous, so the async path cannot delegate. They agree only because someone
+maintains them in step, which is the `TS-P2-06` shape again. Worse, they had
+already drifted once: `TS-P1-15` records finding the engine still carrying the
+old rule after `TS-P1-14` had been applied to the evaluator alone. It was fixed
+without adding a test, so nothing prevented a recurrence.
+
+`EqualityParityTests` is that test, the equality counterpart of
+`AnnotatedConversionParityTests`, and `AreEqualAsync` became `internal` for it on
+the precedent `TS-P1-24` set. It found a defect on its first run, filed as
+`TS-P1-26`: `true == "true"` is `true` while `"true" == true` is `false`.
+Numeric-against-string and bool-against-number are symmetric in both directions,
+so only this one pairing fails to coerce, and both implementations share it —
+one rule applied in one direction rather than a drift. It survived `TS-P1-14`
+because that item promised symmetry explicitly for ordering and never stated it
+for equality.
+
+Audit result across all seven: five confirmed, two gaps — `TS-P2-06`'s three
+rival lists (fixed) and this. The `TS-P1-23` hypothesis that prompted the audit
+is supported: "Complete" has meant "the named example works", not "the named
+surfaces were enumerated".
+
+Validation: 3,381 passed, 0 failed, 0 skipped in 2m40s; zero warnings.

@@ -4788,7 +4788,19 @@ public sealed partial class ToshEngine : IShellEvaluator
         return OperatorEvaluator.Matches(actual, @operator, expected, nullable);
     }
 
-    private async ValueTask<bool> AreEqualAsync(
+    /// <summary>
+    /// Asynchronous equality, kept alongside <see cref="OperatorEvaluator.AreEqual"/>
+    /// because a user-defined <c>Equals</c> may be asynchronous.
+    /// </summary>
+    /// <remarks>
+    /// <c>internal</c> rather than <c>private</c> so <c>EqualityParityTests</c> can
+    /// compare the two implementations directly instead of inferring which path a
+    /// script reached — the same reason <c>TS-P1-24</c> opened
+    /// <c>TryConvertAnnotatedValue</c> to its drift guard. These two already
+    /// diverged once: the <c>TS-P1-14</c> equality change landed here only after
+    /// <c>TS-P1-15</c> discovered it had been applied to the evaluator alone.
+    /// </remarks>
+    internal async ValueTask<bool> AreEqualAsync(
         object? actual,
         object? expected,
         CancellationToken cancellationToken)
