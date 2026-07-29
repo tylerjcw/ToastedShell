@@ -428,7 +428,7 @@ closed.
 | `TS-P2-21` | Planned | A `new` expression cannot take named arguments at all: `new D(1, b = 7)` and `new R("w", Qty = 5)` both fail while parsing with `tosh.parser.assignment_in_predicate`, so the runtime binder is never reached. Function and method calls accept the same syntax. This bounds `TS-P1-06`: constructor named-argument validation is unreachable until the parser accepts the form. | `new Type(name = value)` parses as a named argument for classes, records, and structs; the runtime binder's unknown/duplicate diagnostics apply; a genuine assignment mistake keeps a targeted diagnostic rather than the predicate-assignment message. |
 | `TS-P2-22` | Planned | The type checker does not walk class-member annotations, so static checking is materially weaker inside class bodies. `var x: int = "42"` and `func f(x: int)` both report `tosh.type.mismatch`, while the equivalent `prop X: int = "42"`, constructor parameter, method parameter, and property assignment report nothing. Runtime behaviour is consistent (all convert), so this is a static-coverage hole rather than a semantic divergence. | Class property, constructor-parameter, method-parameter, and property-assignment annotations are checked with the same rule and severity as `var` and `func` annotations; a corpus covers matching and mismatching cases in both positions. |
 | `TS-P2-23` | In progress — declaration table 2026-07-26 | Parse-time identity decisions rest on *spelling* rather than on facts the runtime already holds. Two casing tests remain (`char.IsUpper` in `LooksLikeQualifiedDotNetAccess` and `LooksLikePotentialClrTypeName`) deciding whether a dotted name is a CLR type, and 160 hardcoded `Current.Text == "…"` comparisons decide keyword and construct identity. `TS-P2-16` narrowed one such rule but did not remove the guess. The parser cannot do better today because `ToshParser.Parse` receives only source text, while the command, module, and type registries arrive later at `Lowerer.Lower`. | Identity is resolved against a real table rather than inferred from capitalization: either the parser is given the registries, or the decision is deferred to a later phase that has them. Keyword and construct recognition is driven by the generated language-surface registry (`TS-P2-10`) rather than by scattered literal comparisons. A capitalized module and a lowercase CLR type both resolve correctly. |
-| `TS-P2-24` | In progress — member-list owners registered; fallback dependence measured down from 113 to 6 2026-07-28 | Step 2 of the parser roadmap. Structural questions — where a statement ends, where a pipeline stage divides — are answered by heuristics scattered through the recursive-descent parser, each re-deriving the answer with local lookahead. `LiteParser` decides them once over the whole token stream, with paired delimiter frames so a separator inside a nested construct does not split the enclosing statement. Ordinary `ParseBlock` statement paths now consume exact-owner promoted candidates; top-level and stage integration remain. | The parser consumes the lite structure instead of re-deriving it; the `LooksLike*`/`HasTopLevel*` helpers that only answered structural questions are removed; structure agrees with today's parser across the corpus, evidenced by differential tests. |
+| `TS-P2-24` | In progress — element-boundary model adopted; fallback dependence measured down from 113 to 4 2026-07-29 | Step 2 of the parser roadmap. Structural questions — where a statement ends, where a pipeline stage divides — are answered by heuristics scattered through the recursive-descent parser, each re-deriving the answer with local lookahead. `LiteParser` decides them once over the whole token stream, with paired delimiter frames so a separator inside a nested construct does not split the enclosing statement. Ordinary `ParseBlock` statement paths now consume exact-owner promoted candidates; top-level and stage integration remain. | The parser consumes the lite structure instead of re-deriving it; the `LooksLike*`/`HasTopLevel*` helpers that only answered structural questions are removed; structure agrees with today's parser across the corpus, evidenced by differential tests. |
 | `TS-P2-25` | Complete — paired delimiters 2026-07-28 | Plain `{` overloaded blocks, records, dictionaries, sets, predicates, and specialized grammar groups. Position and content lookahead could silently change its meaning and prevented `LiteParser` from promoting brace-enclosed boundaries without duplicating parser grammar. | Ordinary `{ ... }` is a block; records use `{| ... |}`, dictionaries `{% ... %}`, and sets `{: ... :}` with six real delimiter tokens. Specialized parser-owned braces stay plain. Literal dispatch uses the opener alone; legacy `LooksLike*` and generic brace collection parsing are removed. Exact-owner boundary promotion, corpus/spec/tooling migration, targeted recovery diagnostics, rebuilt PDFs, and focused tests land together. |
 
 **Implementation note for `TS-P2-11` (July 25 review recommendation).** The
@@ -2324,3 +2324,45 @@ statement one. That is a design question, not a wiring gap, and is the next
 decision this item needs.
 
 Suite green with the hook off: 3,331 passed, 0 failed, 0 skipped in 2m35s.
+
+### July 29, 2026 — The element-boundary model (TS-P2-24)
+
+Adopts option C from the boundary-model choice: paired collection literals reuse
+the existing ownership mechanism, and the vocabulary is renamed to match what it
+actually describes. Fallback dependence measured down from 113 to **4**.
+
+The distinction that was missing. `CandidateBoundaries` suppressed candidates
+inside grouping constructs and paired literals alike, but they suppress for
+opposite reasons: inside `(...)` a line break continues an expression, while
+inside `{| ... |}` it separates one entry from the next. Collapsing both into
+"not a boundary" is what left record and dict parsing on the line-break
+heuristic.
+
+Two corrections were needed along the way, both found by measuring rather than
+reasoning:
+
+- Enabling every boundary kind inside literals took the count **up**, 6 to 10,
+  and broke `Semicolons_inside_paired_literals_are_suppressed`. A `;` is not an
+  entry separator in a record or a dict. Only line breaks are, so only line
+  breaks are enabled.
+- Sets are not entry lists at all. `{: 1, 2 :}` separates by comma, and a line
+  break inside one is whitespace. `BoundaryFrameRole` now distinguishes
+  `EntryList` (`{|`, `{%`) from `Literal` (`{:`), and the test that previously
+  asserted all three behave alike is split to say what is actually true of each.
+
+Renaming, since the concept was never statement-specific. `LiteBoundary` now
+documents a position where the next *element* may begin — a statement in a
+block, a member in a class body, an arm in a match, a function in a bind block,
+an entry in a record or dict. `HasStatementBoundaryAfter` becomes
+`HasElementBoundaryAfter` (27 sites), `IsBoundaryOwnedByBlock` becomes
+`IsBoundaryOwnedBy`, `PromoteBoundariesForBlock` becomes
+`PromoteBoundariesForOwner`, and the owner stack drops its block-specific name.
+
+Remaining 4, and they are a different sub-problem. `EngineTests`'
+class-definition and computed-property cases fail with
+`missing_pipeline_separator`, with a cancellation test failing downstream of
+them. Those are stage division rather than element division — a computed
+property whose body is a pipeline — which is the part of step 2 that has not
+been started.
+
+Validation: 3,331 passed, 0 failed, 0 skipped in 2m42s with the hook off.

@@ -419,9 +419,30 @@ public sealed class LiteParserTests
     [Theory]
     [InlineData("var r = {|\n    a = 1\n    b = 2\n|}")]
     [InlineData("var d = {%\n    \"a\" => 1\n    \"b\" => 2\n%}")]
-    [InlineData("var s = {:\n    1,\n    2\n:}")]
-    public void Multi_line_paired_literals_yield_no_statement_boundaries(string source)
+    public void Record_and_dict_literals_own_the_line_break_between_entries(string source)
     {
+        // Entries separate by comma *or* newline, so the literal owns the line
+        // break between them and the parser can consult the structural pass
+        // instead of re-deriving it (TS-P2-24). Every candidate is attributed to
+        // the literal's own opener, which is what keeps it from being promoted
+        // for an enclosing block.
+        var result = ToshParser.Parse(source, "<lite-test>");
+        Assert.Empty(result.Diagnostics);
+
+        var interior = Candidates(source).Where(boundary => boundary.TokenIndex > 0).ToList();
+        Assert.NotEmpty(interior);
+        Assert.All(interior, boundary => Assert.Equal(LiteBoundaryKind.LineBreak, boundary.Kind));
+        Assert.All(interior, boundary => Assert.NotNull(boundary.OwnerOpenTokenIndex));
+    }
+
+    [Fact]
+    public void Set_literals_own_nothing_because_items_separate_by_comma()
+    {
+        // `{: :}` is not an entry list: a newline between items is whitespace,
+        // not a separator, so the literal owns no boundary. Treating all three
+        // paired literals alike is what first broke this.
+        const string source = "var s = {:\n    1,\n    2\n:}";
+
         var result = ToshParser.Parse(source, "<lite-test>");
         Assert.Empty(result.Diagnostics);
         Assert.DoesNotContain(Candidates(source), boundary => boundary.TokenIndex > 0);
@@ -884,7 +905,7 @@ public sealed class LiteParserTests
         var tokens = new ToshLexer(source).Lex();
         var openBraceIndex = Assert.Single(PlainBraceOpenIndices(source));
         var promotedStarts = LiteParser
-            .PromoteBoundariesForBlock(
+            .PromoteBoundariesForOwner(
                 LiteParser.CandidateBoundaries(tokens, source),
                 openBraceIndex)
             .Select(boundary => tokens[boundary.TokenIndex].Span.Start)
@@ -999,7 +1020,7 @@ public sealed class LiteParserTests
                 Assert.IsType<FunctionDefinitionStatementSyntax>(statement).Name));
 
         var tokens = new ToshLexer(source).Lex();
-        var boundaries = LiteParser.PromoteBoundariesForBlock(
+        var boundaries = LiteParser.PromoteBoundariesForOwner(
             LiteParser.CandidateBoundaries(tokens, source),
             PlainBraceOpenIndices(source)[0]);
         Assert.Contains(
@@ -1045,7 +1066,7 @@ public sealed class LiteParserTests
         var openBraceIndex = openBraces[plainBraceOrdinal];
         var candidates = LiteParser.CandidateBoundaries(tokens, source);
 
-        return LiteParser.PromoteBoundariesForBlock(candidates, openBraceIndex)
+        return LiteParser.PromoteBoundariesForOwner(candidates, openBraceIndex)
             .Select(boundary => tokens[boundary.TokenIndex].Text)
             .ToArray();
     }
@@ -1058,7 +1079,7 @@ public sealed class LiteParserTests
         var openBraceIndex = PlainBraceOpenIndices(source)[plainBraceOrdinal];
 
         return LiteParser
-            .PromoteBoundariesForBlock(
+            .PromoteBoundariesForOwner(
                 LiteParser.CandidateBoundaries(tokens, source),
                 openBraceIndex)
             .Select(boundary => tokens[boundary.TokenIndex].Span.Start)

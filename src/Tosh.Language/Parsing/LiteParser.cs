@@ -73,13 +73,16 @@ public enum LiteBoundaryKind
 }
 
 /// <summary>
-/// A position where a statement may begin. <see cref="BraceDepth"/> counts
-/// enclosing ordinary <c>{ ... }</c> pairs.
-/// <see cref="OwnerOpenTokenIndex"/> identifies the innermost plain brace
-/// that owns the candidate, or is <see langword="null"/> at top level.
-/// LiteParser deliberately does not decide whether that brace is a block or
-/// a specialized entry list; a parser consumer promotes candidates only
-/// after it has established the opener's grammar role.
+/// A position where the next <em>element</em> of the enclosing construct may
+/// begin — a statement in a block, a member in a class body, an arm in a match,
+/// a function in a bind block, or an entry in a record or dict literal. The
+/// concept is deliberately not "statement": the same structural question is
+/// asked by constructs whose elements are not statements (<c>TS-P2-24</c>).
+/// <see cref="BraceDepth"/> counts enclosing ordinary <c>{ ... }</c> pairs.
+/// <see cref="OwnerOpenTokenIndex"/> identifies the innermost opener that owns
+/// the candidate, or is <see langword="null"/> at top level. LiteParser
+/// deliberately does not decide that opener's grammar role; a parser consumer
+/// promotes candidates only after it has established one.
 /// </summary>
 public sealed record LiteBoundary(
     int TokenIndex,
@@ -364,8 +367,24 @@ public static class LiteParser
 
     private enum BoundaryFrameRole
     {
+        /// <summary>Parentheses and brackets: a line break continues an expression.</summary>
         Grouping,
+
+        /// <summary>
+        /// A set literal <c>{: … :}</c>. Items separate by comma only, so a line
+        /// break inside one is whitespace and owns nothing.
+        /// </summary>
         Literal,
+
+        /// <summary>
+        /// A record <c>{| … |}</c> or dict <c>{% … %}</c> literal. Entries
+        /// separate by comma <em>or</em> newline, so the literal owns a line
+        /// break between entries — but not a <c>;</c>, which is not an entry
+        /// separator in either form (<c>TS-P2-24</c>).
+        /// </summary>
+        EntryList,
+
+        /// <summary>An ordinary block, class body, match arm list, or bind block.</summary>
         PlainBrace,
     }
 
@@ -380,7 +399,7 @@ public static class LiteParser
     /// can exist: a plain brace re-enables candidates inside an outer group
     /// or literal, while a nested group or paired literal suppresses them.
     /// Plain-brace roles remain parser-owned; use
-    /// <see cref="PromoteBoundariesForBlock"/> only after the parser has
+    /// <see cref="PromoteBoundariesForOwner"/> only after the parser has
     /// established that a particular opener begins a block.
     /// </summary>
     public static IReadOnlyList<LiteBoundary> CandidateBoundaries(
@@ -409,11 +428,31 @@ public static class LiteParser
             // As in Parse, classify a boundary against the frames that
             // enclose the current token before pushing the token itself.
             // This matters when an opener begins a statement.
+            // A plain brace and a paired collection literal both own the
+            // positions inside them; a grouping construct does not. The
+            // distinction is real rather than cosmetic: inside `(...)` a line
+            // break continues an expression, while inside `{| ... |}` it
+            // separates one field from the next. Suppressing both alike hid
+            // that, and left record and dict parsing on the line-break
+            // heuristic (TS-P2-24).
+            //
+            // Ownership is by exact opener token index, so a literal's
+            // candidates can never be promoted for a block and vice versa.
             var boundariesEnabled = frames.Count == 0 ||
                                     frames.Peek().Role == BoundaryFrameRole.PlainBrace;
+
+            // A record or dict literal owns the line break between its entries,
+            // but nothing else: `;` is not an entry separator in either form, and
+            // a background `&` has no meaning there. Enabling every kind alike is
+            // what broke semicolon suppression on the first attempt.
+            var lineBreakBoundariesEnabled =
+                boundariesEnabled ||
+                (frames.TryPeek(out var lineBreakFrame) &&
+                 lineBreakFrame.Role == BoundaryFrameRole.EntryList);
+
             var ownerOpenTokenIndex =
                 frames.TryPeek(out var ownerFrame) &&
-                ownerFrame.Role == BoundaryFrameRole.PlainBrace
+                ownerFrame.Role is BoundaryFrameRole.PlainBrace or BoundaryFrameRole.EntryList
                     ? ownerFrame.OpenTokenIndex
                     : (int?)null;
             var continuesPipeline =
@@ -452,7 +491,7 @@ public static class LiteParser
                     braceDepth,
                     ownerOpenTokenIndex);
             }
-            else if (boundariesEnabled &&
+            else if (lineBreakBoundariesEnabled &&
                      !continuesPipeline &&
                      index > 0 &&
                      HasLineBreakBetween(sourceText, tokens[index - 1].Span.End, token.Span.Start) &&
@@ -548,9 +587,9 @@ public static class LiteParser
         var role = token.Kind switch
         {
             SyntaxTokenKind.OpenBrace => BoundaryFrameRole.PlainBrace,
-            SyntaxTokenKind.OpenBraceColon or
+            SyntaxTokenKind.OpenBraceColon => BoundaryFrameRole.Literal,
             SyntaxTokenKind.OpenBracePipe or
-            SyntaxTokenKind.OpenBracePercent => BoundaryFrameRole.Literal,
+            SyntaxTokenKind.OpenBracePercent => BoundaryFrameRole.EntryList,
             _ => BoundaryFrameRole.Grouping,
         };
 
@@ -564,7 +603,7 @@ public static class LiteParser
     /// by nested braces are intentionally excluded and must be promoted
     /// independently when their own opener is proven to be a block.
     /// </summary>
-    public static IReadOnlyList<LiteBoundary> PromoteBoundariesForBlock(
+    public static IReadOnlyList<LiteBoundary> PromoteBoundariesForOwner(
         IReadOnlyList<LiteBoundary> candidates,
         int blockOpenTokenIndex)
     {
@@ -572,7 +611,7 @@ public static class LiteParser
         ArgumentOutOfRangeException.ThrowIfNegative(blockOpenTokenIndex);
 
         return candidates
-            .Where(boundary => IsBoundaryOwnedByBlock(boundary, blockOpenTokenIndex))
+            .Where(boundary => IsBoundaryOwnedBy(boundary, blockOpenTokenIndex))
             .ToArray();
     }
 
@@ -582,7 +621,7 @@ public static class LiteParser
     /// token-index lookup so it does not repeatedly scan every candidate for
     /// every nested block.
     /// </summary>
-    internal static bool IsBoundaryOwnedByBlock(
+    internal static bool IsBoundaryOwnedBy(
         LiteBoundary boundary,
         int blockOpenTokenIndex)
     {
