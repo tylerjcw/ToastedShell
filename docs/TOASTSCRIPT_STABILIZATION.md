@@ -457,6 +457,7 @@ These are intentionally not part of the first repair slice.
 | `TS-P3-08` | Proposed | Parser-owned typed structural regions | Replace brace-content classification with parser-owned regions (`Block`, member list, arm list, projection, destructuring, accessors, and other grammar roles). Regions retain exact opener/closer ownership, promote only boundaries proven to belong to statement blocks, and are shared with formatters and language services; `LiteParser` must not grow a shadow `ClassifyBrace` grammar. |
 | `TS-P3-09` | Proposed | Prefix `!` negation | Accept `Bang` in prefix position so `!$x` means `not $x`. Smaller than it looks: the lexer already emits a `Bang` token as the fallthrough after `!=` and `!~` (`ToshLexer.cs`), so only the parser needs to change, alongside whatever `TS-P2-02` does for unary `-`. Two constraints: (1) it is why the dict delimiter is `{%` and not `{!` — keeping `{!` unclaimed is what leaves this open, so neither item should be changed without the other; (2) `!!`, `!$`, `!^`, and `!*` are consumed by `HistoryExpansionUtilities` on the raw REPL line *before* lexing, so scripts are unaffected but an interactive `!$x` collides with the `!$` word designator — the item must decide that case explicitly rather than let whichever layer runs first win. |
 | `TS-P3-10` | Proposed — needs a decision | Collection rendering is split between two styles. Records, dicts, and sets have bespoke source-like renderings (`{| a = 1 |}`, `{% "k" => 1 %}`, `{: 1, 2 :}`) that parse back as written. Arrays and lists fall to `ObjectFormatter`'s generic container path and render with a CLR type header over multiple lines (`Int32[] [\n  1\n  2\n]`), which is a display form rather than source. Found by `FormatRoundTripTests`, which had to be scoped around it. | A decision records whether displayed collections are meant to be source-like. If they are, arrays and lists render as `[1, 2, 3]` and join the round-trip property; if the type header is deliberate for display, the split is documented and the property stays scoped, with the reason stated where a reader of the formatter will find it. |
+| `TS-P3-11` | Proposed — needs a decision | The syntax and documentation call `{| … |}` a **record**; `type-of` reports **`table`**. `ExpandoObject` maps to the `Table` descriptor, `dynamicrecord` is already an alias for it, and `table`'s own constructor signature reads `table([record] | key, value, ...)` — so both words are in use for one concept. Not a defect: the model may intend a record to be a single-row table. | A decision records which word the type system uses, and the other becomes an alias rather than a second name in circulation. If `record` wins, `type-of {| a = 1 |}` reports `record`, the `table` annotation keeps working, and the specification, help text, and constructor signatures are updated in the same slice. |
 
 ## Test Strategy
 
@@ -2809,3 +2810,47 @@ arrays were excluded because the contract does not cover them, not because the
 test was inconvenient.
 
 Validation: 3,428 passed, 0 failed, 0 skipped in 2m37s; zero warnings.
+
+### July 29, 2026 — Two diagnostic defects from the board review
+
+Both were logged as observations during the closed-item review; both turned out
+to be wider than the symptom recorded.
+
+**Every diagnostic raised inside an interpolation hole pointed at line 1.**
+Logged as "`tosh.type.index` anchors to line 1", but the index warning was
+incidental. `Lowerer.TryLowerInterpolationHole` re-parses a hole's source text
+standalone, so every span it produces is hole-relative — while the renderer
+resolves spans against the *outer* source. Anything diagnosed inside `$"{…}"`
+therefore landed at position 0.
+
+```
+$d["k"]        outside a hole  →  4:6   correct
+$"{$d["k"]}"   inside          →  1:1   points at an unrelated line
+```
+
+The hole is now parsed at its true offset, so spans come out absolute. Left
+padding is the cheapest route given `ToshParser` accepts only a source string;
+the padding is whitespace the lexer skips and contains no line breaks, so
+nothing about how the hole parses changes.
+
+**A dictionary indexed by a string warned that it expected an integer.**
+`CheckIndexAccess` assumed positional indexing for anything that was not
+dynamic or a record object, so `$d["k"]` — the ordinary way to read a dict —
+warned every time. It now resolves the dictionary's key type and checks against
+that; an `object` key accepts anything, so the check only bites when the key
+type is specific. Array-by-string still warns, and now with an accurate span.
+
+**A command taking its subject from the pipe warned about arity.**
+`$ch | channel-recv` supplies the channel through the pipeline, so no positional
+argument is written, but the check counted only what was written and reported
+"expects 1 argument(s) but received 0". `CheckPipeline` already knows the stage
+index, so a stage after the first now discounts one required argument. A genuine
+over-arity still warns.
+
+Filed rather than fixed: `TS-P3-11`, that `type-of` reports `table` for what the
+syntax calls a record. Both words are already in circulation — `dynamicrecord`
+is an alias, and `table`'s constructor signature mentions `record` — so it is a
+naming decision about the type system, not a defect.
+
+Validation: 3,428 passed, 0 failed, 0 skipped in 2m37s; the only build warnings
+remain the DevCompanion SQLite advisory.

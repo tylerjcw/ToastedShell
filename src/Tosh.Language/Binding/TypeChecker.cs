@@ -407,7 +407,9 @@ public static class TypeChecker
             var stage = pipeline.Stages[i];
             if (stage is BoundCommandCall call)
             {
-                CheckCommandCall(call, ctx);
+                // A stage after the first receives its subject from the pipe,
+                // so one declared argument is already supplied.
+                CheckCommandCall(call, ctx, receivesPipedInput: i > 0);
 
                 if (i > 0)
                 {
@@ -586,7 +588,10 @@ public static class TypeChecker
         }
     }
 
-    private static void CheckCommandCall(BoundCommandCall call, CheckContext ctx)
+    private static void CheckCommandCall(
+        BoundCommandCall call,
+        CheckContext ctx,
+        bool receivesPipedInput = false)
     {
         foreach (var arg in call.Arguments)
             WalkExpression(arg.Value, ctx);
@@ -597,7 +602,7 @@ public static class TypeChecker
             return;
         }
 
-        CheckBuiltinCommandCall(call, ctx);
+        CheckBuiltinCommandCall(call, ctx, receivesPipedInput);
     }
 
     private static void CheckUserFunctionCommandCall(BoundCommandCall call, BoundFunctionDefinition fn, CheckContext ctx)
@@ -665,7 +670,10 @@ public static class TypeChecker
         }
     }
 
-    private static void CheckBuiltinCommandCall(BoundCommandCall call, CheckContext ctx)
+    private static void CheckBuiltinCommandCall(
+        BoundCommandCall call,
+        CheckContext ctx,
+        bool receivesPipedInput)
     {
         if (call.ResolvedCommand is null) return;
 
@@ -682,7 +690,15 @@ public static class TypeChecker
         if (!TryCollectBuiltinPositionals(call, ctx, expectedArgs, out var positionals))
             return;
 
+        // `$ch | channel-recv` supplies the channel through the pipe, so the
+        // command legitimately has no positional argument. Counting only what is
+        // written warned on the ordinary way to use every subject-taking command.
         var required = expectedArgs.Count(a => a.Required);
+        if (receivesPipedInput && required > 0)
+        {
+            required--;
+        }
+
         var maxAccepted = expectedArgs.Any(IsVariadicCommandArgument)
             ? int.MaxValue
             : expectedArgs.Length;
@@ -1075,6 +1091,33 @@ public static class TypeChecker
             Lifecycle: ToshDiagnosticLifecycle.Preview));
     }
 
+    /// <summary>
+    /// The key type of <paramref name="type"/> when it is a dictionary, taking
+    /// the non-generic <see cref="System.Collections.IDictionary"/> to be keyed
+    /// by <see cref="object"/>.
+    /// </summary>
+    private static bool TryGetDictionaryKeyType(Type type, out Type keyType)
+    {
+        foreach (var candidate in new[] { type }.Concat(type.GetInterfaces()))
+        {
+            if (candidate.IsGenericType &&
+                candidate.GetGenericTypeDefinition() == typeof(IDictionary<,>))
+            {
+                keyType = candidate.GetGenericArguments()[0];
+                return true;
+            }
+        }
+
+        if (typeof(System.Collections.IDictionary).IsAssignableFrom(type))
+        {
+            keyType = typeof(object);
+            return true;
+        }
+
+        keyType = typeof(object);
+        return false;
+    }
+
     private static void CheckIndexAccess(BoundIndexAccess access, CheckContext ctx)
     {
         var indexType = access.Index.Type;
@@ -1087,6 +1130,35 @@ public static class TypeChecker
         var targetType = access.Target.Type;
         if (targetType.IsDynamic) return;
         if (targetType.ClrType is { } tc && typeof(IShellRecordObject).IsAssignableFrom(tc)) return;
+
+        // A dictionary is indexed by its key type, not by position. Without this
+        // the check assumed an integer index and warned on every `$d["k"]`,
+        // which is the ordinary way to read a dict. An `object` key accepts
+        // anything, so the check only bites when the key type is specific.
+        if (targetType.ClrType is { } dictType &&
+            TryGetDictionaryKeyType(dictType, out var keyType))
+        {
+            if (keyType == typeof(object))
+            {
+                return;
+            }
+
+            if (!IsAssignable(indexType, BoundType.FromClr(keyType), out var keyReason))
+            {
+                ctx.Diagnostics.Add(new ToshDiagnostic(
+                    Code: "tosh.type.index",
+                    Title: $"Dictionary is keyed by '{BoundType.FromClr(keyType).DisplayName}' but received '{indexType.DisplayName}'.",
+                    SourceName: ctx.SourceName,
+                    SourceText: ctx.SourceText,
+                    Span: access.Span,
+                    Help: keyReason,
+                    Severity: ToshDiagnosticSeverity.Warning,
+                    Category: ToshDiagnosticCategory.Type,
+                    Lifecycle: ToshDiagnosticLifecycle.Preview));
+            }
+
+            return;
+        }
 
         var expectsString = access.LookupKind is IndexLookupKind.ByKey;
         var expected = expectsString ? BoundType.FromClr(typeof(string)) : BoundType.FromClr(typeof(int));

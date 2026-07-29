@@ -1138,7 +1138,10 @@ public static class Lowerer
                     // path takes over.
                     parts.Add(new BoundInterpolatedExpression(
                         SourceText: expr.Expression,
-                        Expression: TryLowerInterpolationHole(expr.Expression, ctx),
+                        Expression: TryLowerInterpolationHole(
+                            expr.Expression,
+                            expr.ExpressionSpan,
+                            ctx),
                         Span: expr.ExpressionSpan));
                     break;
             }
@@ -1156,14 +1159,31 @@ public static class Lowerer
     /// supported shapes — that signals downstream consumers to fall
     /// back to a runtime re-parse.
     /// </summary>
-    private static BoundExpression? TryLowerInterpolationHole(string text, LowerContext ctx)
+    private static BoundExpression? TryLowerInterpolationHole(
+        string text,
+        TextSpan holeSpan,
+        LowerContext ctx)
     {
         if (string.IsNullOrWhiteSpace(text)) return null;
 
         ParseResult parsed;
         try
         {
-            parsed = ToshParser.Parse(text, "<interp-hole>");
+            // Parse the hole at its true offset in the outer source. The snippet
+            // is re-parsed standalone, so without this every span inside it is
+            // hole-relative while the renderer resolves spans against the outer
+            // text — putting every diagnostic raised inside `$"{...}"` on line 1,
+            // pointing at unrelated source.
+            //
+            // Left-padding is the cheapest way to get absolute spans given
+            // ToshParser only accepts a source string. The padding is whitespace,
+            // which the lexer skips, and contains no line breaks, so nothing
+            // about how the hole itself parses changes.
+            var positioned = holeSpan.Start > 0
+                ? string.Concat(new string(' ', holeSpan.Start), text)
+                : text;
+
+            parsed = ToshParser.Parse(positioned, "<interp-hole>");
         }
         catch
         {
