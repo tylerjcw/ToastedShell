@@ -174,6 +174,20 @@ public static class ToshParser
         private readonly HashSet<string> _declaredModuleNames;
         private readonly ParseContext _context;
 
+        /// <summary>
+        /// Frame openers that enclose at least one <c>|</c> they own, from the
+        /// structural pass. Replaces the token re-scan
+        /// <c>HasTopLevelPipeBeforeCloseParen</c> used to perform (<c>TS-P2-24</c>).
+        /// </summary>
+        private readonly HashSet<int> _stageDivisionOwnerTokenIndices;
+
+        /// <summary>
+        /// Token span start to token index. The two call sites hold the opening
+        /// token rather than its index, and spans are unique and ordered, so this
+        /// resolves one to the other without changing their signatures.
+        /// </summary>
+        private readonly Dictionary<int, int> _tokenIndexBySpanStart;
+
         private int _position;
         private bool _isParsingTopLevelStatement;
         private bool _stopRefinementAtEquals;
@@ -193,8 +207,17 @@ public static class ToshParser
             _lineHushDirectives = lineHushDirectives;
             _lineComments = lineComments;
             _liteBoundariesByTokenIndex = LiteParser
-                .CandidateBoundaries(tokens, sourceText)
+                .CandidateBoundaries(tokens, sourceText, out var liteStageDivisions)
                 .ToDictionary(boundary => boundary.TokenIndex);
+            _stageDivisionOwnerTokenIndices = liteStageDivisions
+                .Where(division => division.OwnerOpenTokenIndex is not null)
+                .Select(division => division.OwnerOpenTokenIndex!.Value)
+                .ToHashSet();
+            _tokenIndexBySpanStart = new Dictionary<int, int>(tokens.Count);
+            for (var tokenIndex = 0; tokenIndex < tokens.Count; tokenIndex++)
+            {
+                _tokenIndexBySpanStart.TryAdd(tokens[tokenIndex].Span.Start, tokenIndex);
+            }
             var liteScript = LiteParser.Parse(tokens, sourceText);
             _liteTopLevelStatementStartTokenIndices = liteScript
                 .Statements
@@ -8804,7 +8827,7 @@ public static class ToshParser
             }
 
             if (implicitCurrentItem &&
-                !HasTopLevelPipeBeforeCloseParen() &&
+                !GroupOwnsStageDivision(openParen) &&
                 !LooksLikeParenthesizedCommandSubexpression())
             {
                 var predicateExpression = ParseWherePredicateExpression();
@@ -9098,7 +9121,7 @@ public static class ToshParser
                 return expression;
             }
 
-            if (HasTopLevelPipeBeforeCloseParen())
+            if (GroupOwnsStageDivision(openParen))
             {
                 var pipeline = ParsePipeline(
                     untilCloseParen: true,
@@ -10376,56 +10399,22 @@ public static class ToshParser
             return false;
         }
 
-        private bool HasTopLevelPipeBeforeCloseParen()
+        /// <summary>
+        /// Does the group opened by <paramref name="openToken"/> contain a <c>|</c>
+        /// it owns? Answered from the structural pass rather than by re-scanning
+        /// the token stream with a private depth counter (<c>TS-P2-24</c>).
+        /// </summary>
+        /// <remarks>
+        /// Ownership is by innermost frame, so a pipe inside a nested block or
+        /// literal belongs to that construct and not to this group — which the
+        /// hand-rolled scan also achieved, and <c>LiteStageDivisionTests</c> pins.
+        /// </remarks>
+        private bool GroupOwnsStageDivision(SyntaxToken openToken)
         {
-            var depth = 0;
-
-            for (var index = _position; index < _tokens.Count; index++)
-            {
-                var token = _tokens[index];
-
-                switch (token.Kind)
-                {
-                    case SyntaxTokenKind.OpenParen:
-                    case SyntaxTokenKind.OpenBrace:
-                    case SyntaxTokenKind.OpenBracket:
-                    case SyntaxTokenKind.OpenBraceColon:
-                    case SyntaxTokenKind.OpenBracePipe:
-                    case SyntaxTokenKind.OpenBracePercent:
-                        depth++;
-                        break;
-
-                    case SyntaxTokenKind.CloseParen:
-                        if (depth == 0)
-                        {
-                            return false;
-                        }
-
-                        depth--;
-                        break;
-
-                    case SyntaxTokenKind.CloseBrace:
-                    case SyntaxTokenKind.CloseBracket:
-                    case SyntaxTokenKind.ColonCloseBrace:
-                    case SyntaxTokenKind.PipeCloseBrace:
-                    case SyntaxTokenKind.PercentCloseBrace:
-                        if (depth > 0)
-                        {
-                            depth--;
-                        }
-                        break;
-
-                    case SyntaxTokenKind.Pipe:
-                        if (depth == 0)
-                        {
-                            return true;
-                        }
-                        break;
-                }
-            }
-
-            return false;
+            return _tokenIndexBySpanStart.TryGetValue(openToken.Span.Start, out var tokenIndex) &&
+                   _stageDivisionOwnerTokenIndices.Contains(tokenIndex);
         }
+
 
         private bool LooksLikeVariableDeclaration()
         {

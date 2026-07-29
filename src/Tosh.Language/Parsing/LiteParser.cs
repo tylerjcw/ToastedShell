@@ -91,6 +91,22 @@ public sealed record LiteBoundary(
     int? OwnerOpenTokenIndex = null);
 
 /// <summary>
+/// A <c>|</c> or <c>|&gt;</c> that divides stages within its innermost enclosing
+/// frame. <see cref="OwnerOpenTokenIndex"/> is the opener of that frame, or
+/// <see langword="null"/> at top level.
+/// </summary>
+/// <remarks>
+/// Unlike <see cref="LiteBoundary"/>, ownership here is by the innermost frame
+/// whatever its role: a pipe inside <c>(...)</c> belongs to those parentheses.
+/// That is the question <c>ToshParser.HasTopLevelPipeBeforeCloseParen</c> answers
+/// by re-scanning the token stream with its own depth counter (<c>TS-P2-24</c>).
+/// </remarks>
+public sealed record LiteStageDivision(
+    int TokenIndex,
+    int? OwnerOpenTokenIndex,
+    bool IsPipeForward);
+
+/// <summary>
 /// A structural pre-pass over the token stream (step 2 of the parser
 /// roadmap, groundwork for <c>TS-P2-11</c>), modelled on Nushell's
 /// <c>lite_parser</c>.
@@ -405,10 +421,27 @@ public static class LiteParser
     public static IReadOnlyList<LiteBoundary> CandidateBoundaries(
         IReadOnlyList<SyntaxToken> tokens,
         string sourceText)
+        => CandidateBoundaries(tokens, sourceText, out _);
+
+    /// <summary>
+    /// Candidate boundaries, and the stage divisions found in the same walk.
+    /// </summary>
+    /// <remarks>
+    /// One pass rather than two: the frame stack that decides boundary ownership
+    /// is the same stack that decides which construct a <c>|</c> divides, and
+    /// computing them separately would mean two implementations of delimiter
+    /// pairing to keep in step.
+    /// </remarks>
+    public static IReadOnlyList<LiteBoundary> CandidateBoundaries(
+        IReadOnlyList<SyntaxToken> tokens,
+        string sourceText,
+        out IReadOnlyList<LiteStageDivision> stageDivisions)
     {
         ArgumentNullException.ThrowIfNull(tokens);
         sourceText ??= string.Empty;
 
+        var divisions = new List<LiteStageDivision>();
+        stageDivisions = divisions;
         var boundaries = new List<LiteBoundary>();
         var braceDepth = 0;
         var frames = new Stack<BoundaryFrame>();
@@ -504,6 +537,17 @@ public static class LiteParser
                     LiteBoundaryKind.LineBreak,
                     braceDepth,
                     ownerOpenTokenIndex);
+            }
+
+            // Every `|` divides stages in whichever frame encloses it, including
+            // a grouping frame where boundaries themselves are suppressed. The
+            // adjacent `>` of `|>` is part of the separator, not a division.
+            if (token.Kind == SyntaxTokenKind.Pipe)
+            {
+                divisions.Add(new LiteStageDivision(
+                    index,
+                    frames.TryPeek(out var stageFrame) ? stageFrame.OpenTokenIndex : null,
+                    IsPipeForward(tokens, index)));
             }
 
             if (boundariesEnabled)
