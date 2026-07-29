@@ -137,9 +137,8 @@ public sealed class LiteParserTests
         var tokens = new ToshLexer(source).Lex();
         var stage = Assert.Single(LiteParser.Parse(tokens, source).Statements).Stages.Single();
         var eofIndex = Assert.Single(
-            tokens
-                .Select((token, index) => (token, index))
-                .Where(pair => pair.token.Kind == SyntaxTokenKind.EndOfFile)).index;
+            tokens.Select((token, index) => (token, index)),
+            pair => pair.token.Kind == SyntaxTokenKind.EndOfFile).index;
 
         Assert.Equal(eofIndex, stage.EndIndex);
         Assert.Equal(eofIndex, LiteParser.Parse(tokens, source).Statements[0].EndIndex);

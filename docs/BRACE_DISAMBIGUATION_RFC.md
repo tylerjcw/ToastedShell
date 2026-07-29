@@ -59,12 +59,23 @@ as filed, and it changes which options are worth considering.
 
 ## 1. What the token stream actually says
 
-### 1.1 There are four syntactic forms, not five
+### 1.1 There are five syntactic forms, plus a predicate variant
 
-The item lists five: block, record, dict, set, and predicate. A predicate
-is not a distinct parse — it is a block that a command consumes as one.
-The only thing separating them is a hardcoded command name in
-`ToshParser.ParseCommandArgument`:
+> **Corrected 2026-07-28.** This section originally claimed "four forms,
+> not five" and that the `where` special case was not load-bearing. Both
+> were wrong, and both were wrong the same way: the parser's *dispatch*
+> was read without enumerating what it dispatches to. The corrected
+> account follows.
+
+The forms are block, record, dict, set, and — missed entirely on the first
+pass — a generic brace collection: `{ 1, 2, 3 }` evaluated to an
+`array<int>` via `ParseBraceCollectionLiteralArgument`. It was undocumented,
+had zero occurrences anywhere in `examples/`, `tests/`, `docs/`, or the
+ToastScript embedded in the C# test sources, and duplicated `[1, 2, 3]`.
+It is removed by this decision rather than given a delimiter.
+
+A predicate is not a sixth *parse*, but neither is it an ordinary block.
+`ToshParser.ParseCommandArgument` dispatches on a hardcoded command name:
 
 ```csharp
 case SyntaxTokenKind.OpenBrace:
@@ -74,10 +85,19 @@ case SyntaxTokenKind.OpenBrace:
     }
 ```
 
-`filter { $_ > 1 }` reaches `ParseBlockArgument` instead and works
-identically, so the special case is not load-bearing for predicate
-commands generally. It is the same spelling-driven identity that
-`TS-P2-23` exists to remove.
+That special case **is** load-bearing, contrary to the original claim.
+`ParsePredicateBlockArgument` does not call the ordinary statement parser;
+it calls `ParseWherePredicateExpression`, a separate expression grammar.
+The evidence originally offered against it — that `filter { $_ > 1 }`
+behaves identically — proved nothing, because that form uses an explicit
+`$_`. The specification's own idiom is the bare underscore
+(`where _.Name =~ "\.cs$"`), which depends on the dedicated grammar.
+Deleting the special case would have broken documented syntax.
+
+The spelling-driven dispatch is still worth removing, but it belongs to
+`TS-P2-23` (identity from a table rather than from a name), not here —
+`ParseContext` already carries the host's command names and is the natural
+place to record which commands take a predicate block.
 
 ### 1.2 Position already determines the meaning, totally
 
