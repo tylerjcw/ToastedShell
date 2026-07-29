@@ -46,6 +46,7 @@ public sealed class EqualityParityTests
             ("abc", "abd"),
             (true, true),
             (true, 1),
+            (true, "true"),
             (null, null),
             (null, 0),
             (null, ""),
@@ -98,24 +99,31 @@ public sealed class EqualityParityTests
     }
 
     [Fact]
-    public async Task Bool_against_string_is_asymmetric_today()
+    public async Task Bool_against_string_is_symmetric()
     {
-        // CHARACTERIZATION, not a contract. `TS-P1-26` decides which direction
-        // is right; when it lands this becomes an equality assertion and moves
-        // into Corpus(). Pinned here rather than left out so the asymmetry stays
-        // visible instead of being quietly excluded from the guard.
-        //
-        // Only this pair is affected: numeric-against-string and
-        // bool-against-number both coerce in either direction.
+        // TS-P1-26. This was a characterization of the opposite behaviour until
+        // the cascade stopped returning on the first successful *conversion*
+        // rather than the first successful *equality*: `"true" == true`
+        // converted the bool to "True", compared it against "true", and returned
+        // false without ever trying string-to-bool.
         var engine = new ToshEngine(ToshRuntime.CreateDefault());
 
         Assert.True(OperatorEvaluator.AreEqual(true, "true"));
-        Assert.False(OperatorEvaluator.AreEqual("true", true));
-
-        // Both implementations share the asymmetry, so this is one rule applied
-        // in one direction rather than a sync/async divergence.
+        Assert.True(OperatorEvaluator.AreEqual("true", true));
         Assert.True(await engine.AreEqualAsync(true, "true", CancellationToken.None));
-        Assert.False(await engine.AreEqualAsync("true", true, CancellationToken.None));
+        Assert.True(await engine.AreEqualAsync("true", true, CancellationToken.None));
+
+        // The fix widens nothing else: a string that converts to neither the
+        // other operand's type nor back is still unequal.
+        Assert.False(OperatorEvaluator.AreEqual("abc", 5));
+        Assert.False(OperatorEvaluator.AreEqual(5, "abc"));
+        Assert.False(OperatorEvaluator.AreEqual("1", true));
+        Assert.False(OperatorEvaluator.AreEqual(true, "1"));
+
+        // And TS-P1-14's removal of the case-insensitive ToString fallback still
+        // holds: case sensitivity stays uniform.
+        Assert.False(OperatorEvaluator.AreEqual("abc", "ABC"));
+        Assert.False(OperatorEvaluator.AreEqual("True", "true"));
     }
 
     [Fact]

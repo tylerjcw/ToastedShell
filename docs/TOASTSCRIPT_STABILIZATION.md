@@ -400,7 +400,7 @@ closed.
 | `TS-P1-23` | Complete — 2026-07-26; structural display paths 2026-07-27 | `type-of` yields a shell type descriptor for shell-typed values, but the descriptor rendered as its own CLR class name, so `type-of [1, 2]` reported `Tosh.Runtime.BuiltInShellTypes+BuiltInShellTypeDefinition` instead of the type being asked about. | Displaying a built-in shell type descriptor shows the shell type name; `type-of` reports usable names for lists, records, and other shell-typed values; CLR values are unaffected. |
 | `TS-P1-24` | In progress — refinement cluster converged 2026-07-27 | The interpreter carries sync/async twin methods that are *parallel implementations* rather than delegations, so a semantic fix can land on one surface and silently miss the other. This has happened twice: `OperatorEvaluator.AreEqual` versus `ToshEngine.AreEqualAsync` (`TS-P1-14`/`TS-P1-15`) and `ToshHost.DrainValue` versus `InvokeValue` (`TS-P1-20`). A corrected audit on 2026-07-26 counted 23 truly parallel pairs against 6 that delegate. The refinement cluster, the largest, is now converged. Remaining largest duplications: `ThrowDetailedSingleConstructorMismatch` (55 lines), `TryGetInstanceMember` (51), `ApplyPendingParameterDefaults` (50), `InvokeQualifiedMethod` (47), `ConvertPropertyValue` (44), `TrySetInstanceMember` (43), `SelectBestCallableMatches` (41), `GetInstanceMembers` (38), `ConvertConstructorParameterValue` (35). | Each pair either delegates to one implementation or is removed; a test or analyzer fails when a new parallel sync/async pair is introduced; behaviour is unchanged, evidenced by the existing suite plus the annotated-conversion drift guard. |
 | `TS-P1-25` | In progress — audit built 2026-07-27 | (Filed 2026-07-26 under a duplicate `TS-P1-20`; renumbered 2026-07-27.) The pure compiler profile can report a Tier-1-clean artifact while emitted IL still unconditionally calls `ToshHost.Initialize`/`RegisterCompiledAssembly` from `Main` and `ToshHost.EnterExecutionFrame` from functions, methods, lambdas, and blocks. | A pure artifact contains no metadata references or calls to `Tosh.Compiler.Runtime`, `ToshHost`, or `ToshEngine`; bootstrap is omitted or conditional; recursion guarding uses a stable `Tosh.Runtime` primitive; and a post-emit IL dependency audit fails independently of `RequireTier` diagnostics. Verified 2026-07-27: the emitted IL references exactly `System.Console`, `System.Private.CoreLib`, `Tosh.Compiler.Runtime`, and `Tosh.Runtime`, so only the three unconditional `ToshHost` members stand between the artifact and purity; the over-declared `deps.json` is a separate packaging concern. |
-| `TS-P1-26` | Proposed — needs a decision | Equality is asymmetric for bool against string: `true == "true"` is `true` while `"true" == true` is `false`. Numeric pairs are symmetric in both directions (`1 == "1"` and `"1" == 1`), as are bool-against-number, so only the string-on-the-left-of-a-bool direction fails to coerce. Both `OperatorEvaluator.AreEqual` and `ToshEngine.AreEqualAsync` agree with each other, so this is one rule applied in one direction rather than a sync/async drift. Found by `EqualityParityTests` on its first run. `TS-P1-14` promised symmetry explicitly for ordering and did not state it for equality, which is why it survived that item. | A decision records whether a string coerces to bool for equality at all: either `"true" == true` becomes `true` (extend coercion, matching the numeric rule) or `true == "true"` becomes `false` (drop bool/string coercion). Equality is symmetric for every pair in the corpus afterwards, on both implementations; the characterization entry in `EqualityParityTests` is inverted in the same change. |
+| `TS-P1-26` | Complete — 2026-07-29 | Equality is asymmetric for bool against string: `true == "true"` is `true` while `"true" == true` is `false`. Numeric pairs are symmetric in both directions (`1 == "1"` and `"1" == 1`), as are bool-against-number, so only the string-on-the-left-of-a-bool direction fails to coerce. Both `OperatorEvaluator.AreEqual` and `ToshEngine.AreEqualAsync` agree with each other, so this is one rule applied in one direction rather than a sync/async drift. Found by `EqualityParityTests` on its first run. `TS-P1-14` promised symmetry explicitly for ordering and did not state it for equality, which is why it survived that item. | A decision records whether a string coerces to bool for equality at all: either `"true" == true` becomes `true` (extend coercion, matching the numeric rule) or `true == "true"` becomes `false` (drop bool/string coercion). Equality is symmetric for every pair in the corpus afterwards, on both implementations; the characterization entry in `EqualityParityTests` is inverted in the same change. |
 
 ## P2 — Parser, Binder, Diagnostics, and Surface Generation
 
@@ -2501,3 +2501,43 @@ is supported: "Complete" has meant "the named example works", not "the named
 surfaces were enumerated".
 
 Validation: 3,381 passed, 0 failed, 0 skipped in 2m40s; zero warnings.
+
+### July 29, 2026 — Symmetric equality (TS-P1-26)
+
+Filed as needing a semantics decision — which coercion direction was intended —
+and that framing was wrong. Reading the cascade showed a plain defect with an
+unambiguous fix.
+
+`AreEqual` already attempted both directions. It returned on the first
+successful *conversion* rather than the first successful *equality*:
+
+```
+"true" == true    converts true to "True", compares against "true",
+                  returns false — never trying string-to-bool
+true == "true"    converts "true" to true, matches
+```
+
+`bool` renders as `"True"`, and `TS-P1-14` removed the case-insensitive
+`ToString` fallback that had been masking this. So no coercion policy needed
+choosing: testing both directions and holding equality when *either* matches
+makes the result independent of operand order by construction, because the same
+two conversions are attempted whichever operand comes first.
+
+The first attempt at that broke `ClassEqualityCancellationTests`, and the
+failure was instructive. The single early return had been load-bearing for a
+second reason: it prevented the fall-through to the tail, which dispatches a
+user-defined `Equals`. With it removed, `"PROBE" == $left` tried harder, reached
+the tail, and invoked `ValueProbe.Equals("PROBE")` — whose body reads
+`$other.Value` off a `string` and throws. Both directions are now tried, but a
+successful conversion still decides the answer, so the shield is explicit rather
+than accidental.
+
+Applied to both implementations. That is the point of the guard that found this:
+`EqualityParityTests` would have failed had the fix landed on one surface, which
+is exactly how `TS-P1-14` originally went in.
+
+Method note: the value here came from an existing test, not the new one. The new
+guard found the asymmetry; the old suite caught the over-broad fix. Neither
+would have been enough alone.
+
+Validation: 3,383 passed, 0 failed, 0 skipped in 2m37s; zero warnings.

@@ -4865,28 +4865,38 @@ public sealed partial class ToshEngine : IShellEvaluator
             return true;
         }
 
+        // TS-P1-26: both directions are attempted, and equality holds if either
+        // matches. See OperatorEvaluator.AreEqual for why returning on the first
+        // successful *conversion* rather than the first successful *equality*
+        // made this asymmetric.
         var convertedExpected = await TryConvertForEqualityAsync(
             expected,
             actual.GetType(),
             cancellationToken);
-        if (convertedExpected.Converted)
+        if (convertedExpected.Converted &&
+            await ObjectEqualsAsync(actual, convertedExpected.Value, cancellationToken))
         {
-            return await ObjectEqualsAsync(
-                actual,
-                convertedExpected.Value,
-                cancellationToken);
+            return true;
         }
 
         var convertedActual = await TryConvertForEqualityAsync(
             actual,
             expected.GetType(),
             cancellationToken);
-        if (convertedActual.Converted)
+        if (convertedActual.Converted &&
+            await ObjectEqualsAsync(convertedActual.Value, expected, cancellationToken))
         {
-            return await ObjectEqualsAsync(
-                convertedActual.Value,
-                expected,
-                cancellationToken);
+            return true;
+        }
+
+        // A successful conversion decides the answer even when it produced
+        // unequal values; see OperatorEvaluator.AreEqual. Falling through here
+        // would dispatch a user-defined `Equals` with an operand of the wrong
+        // type — `ValueProbe.Equals("PROBE")` reading `$other.Value` off a
+        // string — which the original early return shielded against.
+        if (convertedExpected.Converted || convertedActual.Converted)
+        {
+            return false;
         }
 
         // TS-P1-14: no case-insensitive ToString fallback here either.

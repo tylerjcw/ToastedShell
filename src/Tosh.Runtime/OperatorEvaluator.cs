@@ -330,14 +330,37 @@ public static class OperatorEvaluator
             return true;
         }
 
-        if (TypeConversion.TryConvert(expected, actual.GetType(), out var convertedExpected))
+        // TS-P1-26: both directions are attempted, and equality holds if either
+        // matches. Returning on the first *conversion* that succeeded — rather
+        // than the first that produced equal values — made equality asymmetric:
+        // `"true" == true` converted the bool to "True", compared it against
+        // "true", and returned false without ever trying string-to-bool, while
+        // `true == "true"` converted the other way and matched. Since the same
+        // two conversions are attempted whichever operand comes first, testing
+        // both makes the result independent of operand order by construction.
+        var expectedIsConvertible =
+            TypeConversion.TryConvert(expected, actual.GetType(), out var convertedExpected);
+        if (expectedIsConvertible && ObjectEquals(actual, convertedExpected))
         {
-            return ObjectEquals(actual, convertedExpected);
+            return true;
         }
 
-        if (TypeConversion.TryConvert(actual, expected.GetType(), out var convertedActual))
+        var actualIsConvertible =
+            TypeConversion.TryConvert(actual, expected.GetType(), out var convertedActual);
+        if (actualIsConvertible && ObjectEquals(convertedActual, expected))
         {
-            return ObjectEquals(convertedActual, expected);
+            return true;
+        }
+
+        // A successful conversion decides the answer, even when it produced
+        // unequal values. Both directions are tried first, which is what makes
+        // the result independent of operand order (TS-P1-26) — but falling
+        // through to the tail would dispatch a user-defined `Equals` with an
+        // operand of the wrong type, which the original single early return had
+        // shielded against by accident.
+        if (expectedIsConvertible || actualIsConvertible)
+        {
+            return false;
         }
 
         // TS-P1-14: no ToString()-based fallback. It previously made
