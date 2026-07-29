@@ -138,13 +138,13 @@ public static class HelpCatalog
                 Description: "Defines a named data shape with positional construction, defaults, and structural equality.",
                 Usage: "record <Name>(<field[: Type][?][= value]>, ...)",
                 Aliases: Array.Empty<string>(),
-                Related: ["class", "enum", "module", "var"],
+                Related: ["class", "enum", "module", "var", "table"],
                 Examples:
                 [
                     "record Item(name: string, quantity: int, category?: string = \"Food\")",
                     "var bread = new Item(\"Bread\", 2)",
                 ],
-                Notes: "Record instances are first-class shell objects. `{ ... }` still creates an anonymous dynamic record."),
+                Notes: "Record instances are first-class shell objects. `record` is also the shell type of an anonymous dynamic record, written `{| ... |}` — see `help table` for that form."),
             ["prop"] = new(
                 Category: "Language",
                 Description: "Declares a class property, computed member, or accessor-backed property.",
@@ -1088,17 +1088,17 @@ public static class HelpCatalog
                 Notes: "Prefer `dict` for most shell code; use `hashtable` when you need CLR hashtable behavior specifically."),
             ["table"] = new(
                 Category: "Shell Types",
-                Description: "Anonymous dynamic record shape backed by ExpandoObject.",
-                Usage: "{| Field = value, ... |} | new table(record-like) | new table(key, value, ...)",
-                Aliases: ["dynamicrecord"],
+                Description: "Anonymous dynamic record shape backed by ExpandoObject. The shell type is named `record`; `table` is a retained alias.",
+                Usage: "{| Field = value, ... |} | new record(record-like) | new record(key, value, ...)",
+                Aliases: ["record", "dynamicrecord"],
                 Related: ["record", "dict", "hashtable", "new", "types"],
                 Examples:
                 [
                     "var person = {| Name = \"Toast\", Uid = 1000 |}",
-                    "var person = new table(Name, \"Toast\", Uid, 1000)",
-                    "echo $person.Name",
+                    "var person = new record(Name, \"Toast\", Uid, 1000)",
+                    "echo (type-of $person)   ## record",
                 ],
-                Notes: "`table` is the shell name for anonymous dynamic records. Use named `record` when you want a reusable typed data shape."),
+                Notes: "`type-of` answers `record`, and annotations accept `record`, `table`, or `dynamicrecord`. Use a named `record` declaration when you want a reusable typed data shape."),
             ["tuple"] = new(
                 Category: "Shell Types",
                 Description: "Ordered positional shell value backed by the ToSh tuple runtime type.",

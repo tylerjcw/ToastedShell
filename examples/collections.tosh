@@ -80,11 +80,12 @@ var settings = new hashtable(HOME, "/home/komrad", SHELL, "/usr/bin/tosh")
 echo $"HOME: {$settings.HOME}"
 echo $"Type: {type-of $settings | get Name}"
 
-# --- Tables ----------------------------------------------------------------
-# new table(...) creates a single-row shell table.
+# --- Anonymous records -----------------------------------------------------
+# new record(...) builds one from alternating key/value arguments; `table` and
+# `dynamicrecord` are aliases for the same shell type.
 
-echo "=== Tables ==="
-var row = new table(Name, "Toast", Uid, 1000)
+echo "=== Records ==="
+var row = new record(Name, "Toast", Uid, 1000)
 echo $row.Name
 echo $"Type: {type-of $row | get Name}"
 

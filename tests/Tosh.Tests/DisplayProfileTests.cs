@@ -122,6 +122,11 @@ public sealed class DisplayProfileTests
         second["Kind"] = "demo";
 
         var preferences = new DisplayPreferences();
+
+        // Deliberately keyed on the alias rather than on `record`, the type's name
+        // since TS-P3-11. A profile in a user's config predates the rename, so if
+        // preference resolution stopped consulting aliases their columns would
+        // silently stop applying — which is what this caught when the rename landed.
         preferences.Profiles.GetOrCreate("table").SetTableColumns(["Kind", "Name"]);
 
         var display = new DisplayEngine(new ObjectFormatter(DisplayProfileRegistry.CreateDefault(preferences)))
@@ -135,6 +140,35 @@ public sealed class DisplayProfileTests
         Assert.Contains("Name", text, StringComparison.Ordinal);
         Assert.DoesNotContain("Value", text, StringComparison.Ordinal);
         Assert.True(text.IndexOf("Kind", StringComparison.Ordinal) < text.IndexOf("Name", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Display_engine_applies_overrides_keyed_on_the_current_type_name()
+    {
+        // The other half: the alias resolving is worth nothing if the real name
+        // does not. Same fixture as above, keyed on `record` instead of `table`.
+        IDictionary<string, object?> first = new System.Dynamic.ExpandoObject();
+        first["Name"] = "alpha";
+        first["Value"] = 1;
+        first["Kind"] = "demo";
+
+        IDictionary<string, object?> second = new System.Dynamic.ExpandoObject();
+        second["Name"] = "beta";
+        second["Value"] = 2;
+        second["Kind"] = "demo";
+
+        var preferences = new DisplayPreferences();
+        preferences.Profiles.GetOrCreate("record").SetTableColumns(["Kind", "Name"]);
+
+        var display = new DisplayEngine(new ObjectFormatter(DisplayProfileRegistry.CreateDefault(preferences)))
+        {
+            Preferences = preferences,
+        };
+
+        var text = display.RenderMany([first, second]);
+
+        Assert.Contains("Kind", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("Value", text, StringComparison.Ordinal);
     }
 
     [Fact]

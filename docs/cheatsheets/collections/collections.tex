@@ -44,7 +44,7 @@ new array<int>(1, 2, 3)
 new dict<string, int>(Alice, 95, Bob, 87)
 new map({| Theme = "dark", TabSize = 4 |})
 new hashtable(HOME, "/home/me", SHELL, "/usr/bin/tosh")
-new table(Name, "Toast", Uid, 1000)
+new record(Name, "Toast", Uid, 1000)
 new tuple(alpha, 42)
 \end{lstlisting}
 
@@ -52,7 +52,7 @@ new tuple(alpha, 42)
 \item \texttt{list<T>} is growable and works well for accumulation.
 \item \texttt{dict<K, V>} gives a strongly typed dictionary.
 \item \texttt{map(...)} and record literals are handy for dynamic data.
-\item \texttt{table} is useful when you want a record that renders well.
+\item \texttt{record} builds an anonymous dynamic record; \texttt{table} and \texttt{dynamicrecord} are aliases.
 \end{itemize}
 
 \section{Basic Access}

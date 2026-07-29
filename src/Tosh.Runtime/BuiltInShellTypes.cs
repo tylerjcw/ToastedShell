@@ -39,11 +39,17 @@ public static class BuiltInShellTypes
         CreateHashtable,
         [new ShellConstructorDescriptor(-1, "hashtable([record] | key, value, ...)")]);
 
+    /// <summary>
+    /// The dynamic record type. Named <c>record</c> because that is what the
+    /// syntax, the specification, and users call <c>{| … |}</c>; <c>table</c> and
+    /// <c>dynamicrecord</c> remain aliases so existing annotations keep working
+    /// (<c>TS-P3-11</c>).
+    /// </summary>
     internal static readonly BuiltInShellTypeDefinition Table = new(
-        "table",
+        "record",
         typeof(ExpandoObject),
         CreateTable,
-        [new ShellConstructorDescriptor(-1, "table([record] | key, value, ...)")]);
+        [new ShellConstructorDescriptor(-1, "record([record] | key, value, ...)")]);
 
     internal static readonly BuiltInShellTypeDefinition Tuple = new(
         "tuple",
@@ -60,6 +66,7 @@ public static class BuiltInShellTypes
             ["map"] = Dict,
             ["set"] = Set,
             ["hashtable"] = Hashtable,
+            ["record"] = Table,
             ["table"] = Table,
             ["dynamicrecord"] = Table,
             ["tuple"] = Tuple,
@@ -101,6 +108,32 @@ public static class BuiltInShellTypes
 
         definition = null!;
         return false;
+    }
+
+    /// <summary>
+    /// Every name <paramref name="shellTypeName"/>'s type answers to, including
+    /// the name itself.
+    /// </summary>
+    /// <remarks>
+    /// Exists so a surface keyed by shell type name — a display profile, for one —
+    /// keeps matching after a type is renamed and its old name kept as an alias.
+    /// <c>record</c> was <c>table</c> until <c>TS-P3-11</c>, and a user profile
+    /// keyed <c>table</c> silently stopped applying until the aliases were
+    /// consulted here.
+    /// </remarks>
+    public static IReadOnlyList<string> AliasesFor(string shellTypeName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(shellTypeName);
+
+        if (!Definitions.TryGetValue(shellTypeName, out var definition))
+        {
+            return [shellTypeName];
+        }
+
+        return Definitions
+            .Where(pair => ReferenceEquals(pair.Value, definition))
+            .Select(pair => pair.Key)
+            .ToArray();
     }
 
     public static bool TryDescribeRuntimeValue(object? value, out IShellTypeDescriptor descriptor)
@@ -506,7 +539,7 @@ public static class BuiltInShellTypes
 
         if (type == typeof(ExpandoObject))
         {
-            return "table";
+            return "record";
         }
 
         if (type == typeof(Dictionary<string, object?>))

@@ -29,7 +29,11 @@ public sealed class DotNetTypeResolver : IImportingTypeResolver
         // error types declared in tosh. Exposed case-insensitively
         // so `extends Error`, `error`, and `ERROR` all resolve.
         ["error"] = typeof(ToshError),
+        // The anonymous dynamic record. `record` is the name the syntax and
+        // the specification use; `table` stays resolvable as an alias (TS-P3-11).
+        ["record"] = typeof(System.Dynamic.ExpandoObject),
         ["table"] = typeof(System.Dynamic.ExpandoObject),
+        ["dynamicrecord"] = typeof(System.Dynamic.ExpandoObject),
         ["dict"] = typeof(Dictionary<string, object?>),
         ["map"] = typeof(Dictionary<string, object?>),
         ["file"] = typeof(FileInfo),

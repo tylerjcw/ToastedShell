@@ -1321,7 +1321,10 @@ public sealed class EngineTests
         Assert.Equal("dict", results[3]);
         Assert.Equal("dict", results[4]);
         Assert.Equal("hashtable", results[5]);
-        Assert.Equal("table", results[6]);
+
+        // `new table(...)` above still constructs — `table` is a retained alias —
+        // but the type answers `record` since TS-P3-11.
+        Assert.Equal("record", results[6]);
         Assert.Equal("tuple", results[7]);
         Assert.Equal(42, results[8]);
         Assert.Equal(1000, results[9]);

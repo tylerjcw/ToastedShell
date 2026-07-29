@@ -221,7 +221,14 @@ public sealed class DisplayProfilePreferences
 
         if (BuiltInShellTypes.TryDescribeRuntimeValue(sample, out var builtInDescriptor))
         {
-            yield return builtInDescriptor.ShellTypeName;
+            // Every alias, not just the current name, so a profile keyed by an
+            // older spelling keeps applying — `table` for `record` after
+            // TS-P3-11, and `map` for `dict`.
+            foreach (var alias in BuiltInShellTypes.AliasesFor(builtInDescriptor.ShellTypeName))
+            {
+                yield return alias;
+            }
+
             yield return builtInDescriptor.ShellFullName;
         }
 

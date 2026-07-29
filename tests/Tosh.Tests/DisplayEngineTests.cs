@@ -1192,7 +1192,7 @@ public sealed class DisplayEngineTests
 
         var text = display.RenderMany(values);
 
-        Assert.Contains("[table]", text, StringComparison.Ordinal);
+        Assert.Contains("[record]", text, StringComparison.Ordinal);
         Assert.Contains("[GroupingInfo]", text, StringComparison.Ordinal);
         Assert.Contains("Name", text, StringComparison.Ordinal);
         Assert.Contains("Size", text, StringComparison.Ordinal);

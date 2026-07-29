@@ -14,7 +14,8 @@ public sealed class StructuredDataCommandTests
         var typeResults = await engine.ExecuteToListAsync("echo \"{\\\"name\\\":\\\"toast\\\",\\\"size\\\":1024}\" | from json | type-of | get Name");
         var results = await engine.ExecuteToListAsync("echo \"{\\\"name\\\":\\\"toast\\\",\\\"size\\\":1024}\" | from json | get { name, size }");
 
-        Assert.Collection(typeResults, item => Assert.Equal("table", item));
+        // `record` since TS-P3-11; `table` remains an alias but is not what type-of answers.
+        Assert.Collection(typeResults, item => Assert.Equal("record", item));
         var projection = Assert.IsAssignableFrom<IDictionary<string, object?>>(Assert.Single(results));
         Assert.True(projection.TryGetValue("name", out var name));
         Assert.True(projection.TryGetValue("size", out var size));
@@ -42,7 +43,7 @@ public sealed class StructuredDataCommandTests
         var typeResults = await engine.ExecuteToListAsync("echo \"name,size\" \"alpha,1\" \"beta,2\" | from csv | type-of | get Name");
         var expandedResults = await engine.ExecuteToListAsync("echo \"name,size\" \"alpha,1\" \"beta,2\" | from csv | each { _ } | get name");
 
-        Assert.Collection(typeResults, item => Assert.Equal("array<table>", item));
+        Assert.Collection(typeResults, item => Assert.Equal("array<record>", item));
         Assert.Equal(["alpha", "beta"], expandedResults);
     }
 
