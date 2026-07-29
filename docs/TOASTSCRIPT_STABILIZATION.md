@@ -456,6 +456,7 @@ These are intentionally not part of the first repair slice.
 | `TS-P3-07` | Research | Unify `StorageSize`/`TemporalAmount` with the Quantity unit system | Two systems model the same domains (`10kb` versus `` 10`kB ``, `5s` versus `` 5`s ``) with a promotion bridge; evaluate making suffix literals sugar for Quantities so `TS-P2-14` lands on one system. |
 | `TS-P3-08` | Proposed | Parser-owned typed structural regions | Replace brace-content classification with parser-owned regions (`Block`, member list, arm list, projection, destructuring, accessors, and other grammar roles). Regions retain exact opener/closer ownership, promote only boundaries proven to belong to statement blocks, and are shared with formatters and language services; `LiteParser` must not grow a shadow `ClassifyBrace` grammar. |
 | `TS-P3-09` | Proposed | Prefix `!` negation | Accept `Bang` in prefix position so `!$x` means `not $x`. Smaller than it looks: the lexer already emits a `Bang` token as the fallthrough after `!=` and `!~` (`ToshLexer.cs`), so only the parser needs to change, alongside whatever `TS-P2-02` does for unary `-`. Two constraints: (1) it is why the dict delimiter is `{%` and not `{!` — keeping `{!` unclaimed is what leaves this open, so neither item should be changed without the other; (2) `!!`, `!$`, `!^`, and `!*` are consumed by `HistoryExpansionUtilities` on the raw REPL line *before* lexing, so scripts are unaffected but an interactive `!$x` collides with the `!$` word designator — the item must decide that case explicitly rather than let whichever layer runs first win. |
+| `TS-P3-10` | Proposed — needs a decision | Collection rendering is split between two styles. Records, dicts, and sets have bespoke source-like renderings (`{| a = 1 |}`, `{% "k" => 1 %}`, `{: 1, 2 :}`) that parse back as written. Arrays and lists fall to `ObjectFormatter`'s generic container path and render with a CLR type header over multiple lines (`Int32[] [\n  1\n  2\n]`), which is a display form rather than source. Found by `FormatRoundTripTests`, which had to be scoped around it. | A decision records whether displayed collections are meant to be source-like. If they are, arrays and lists render as `[1, 2, 3]` and join the round-trip property; if the type header is deliberate for display, the split is documented and the property stays scoped, with the reason stated where a reader of the formatter will find it. |
 
 ## Test Strategy
 
@@ -2769,3 +2770,42 @@ Observations logged, none acted on:
   each parser, but an inconsistency a user meets before any of the internals.
 
 Validation: 3,407 passed, 0 failed, 0 skipped; zero warnings.
+
+### July 29, 2026 — A format round-trip property
+
+`FormatRoundTripTests` states one property — a rendering must parse back and
+render identically — and lets it find its own instances. It exists because the
+`TS-P2-25` display defect was invisible to the suite: every formatter test
+asserts what the formatter *produces*, and none asserted that what it produces
+is valid *input*. The bug surfaced only because the literals were being
+demonstrated by hand.
+
+Running it immediately established that the property is narrower than assumed.
+Five of twenty-five cases failed, and only one was a defect:
+
+- Arrays and lists render with a CLR type header over multiple lines
+  (`Int32[] [\n  1\n  2\n]`). That is a display form and does not pretend to be
+  source, so it is not a violation — it means round-trip is not a contract the
+  formatter offers across the board. The property is scoped to where it is
+  offered, and the split is filed as `TS-P3-10` rather than assumed away or
+  "fixed" by stripping a header that may be deliberate.
+- The empty dict rendered `{%%} (empty)` where the empty record and set render
+  `{||}` and `{::}`. The annotation was redundant — `{%%}` already says empty —
+  and it made the rendering unparseable. Removed. This one was mine: the
+  suffix was carried over unexamined when the delimiters were fixed.
+
+Also established: a bare string renders unquoted at the root, which is right for
+display, so strings are exercised nested inside a container where the quoted
+form is used.
+
+The negative control asserts that `{ a = 1 }` — the pre-fix record rendering —
+now fails to parse, so the property demonstrably catches the class of defect it
+was built for.
+
+Method note. Scoping a property after seeing it fail is the step where a guard
+quietly becomes worthless, so the exclusion is recorded in the test itself and
+filed as an item rather than left as a shrug. The distinction that matters:
+arrays were excluded because the contract does not cover them, not because the
+test was inconvenient.
+
+Validation: 3,428 passed, 0 failed, 0 skipped in 2m37s; zero warnings.

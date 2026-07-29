@@ -1589,9 +1589,11 @@ public static class BuiltInDisplayProfiles
                     // output round-trips as source (TS-P2-25). `{ ... }` opens a
                     // block now, so the previous rendering could not be pasted
                     // back into the shell.
+                    // `{%%}` already says empty, and the annotation made the
+                    // rendering unparseable where `{||}` and `{::}` are not.
                     if (dict.Count == 0)
                     {
-                        return "{%%} (empty)";
+                        return "{%%}";
                     }
 
                     var preview = string.Join(", ", dict.Take(4).Select(kv => $"{FormatDictKey(kv.Key)} => {FormatDisplaySummaryValue(kv.Value)}"));
