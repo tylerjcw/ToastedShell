@@ -9961,6 +9961,17 @@ public static class ToshParser
                 return true;
             }
 
+            // Inside a block the structural pass owns the same question, and a
+            // promoted candidate is one LiteParser attributed to exactly this
+            // block's opener. Consulting it here is what makes the parser
+            // consume the structure rather than re-derive it (TS-P2-24); the
+            // line-break test below remains only for positions the structural
+            // pass does not describe.
+            if (IsCurrentPromotedStatementBlockBoundary())
+            {
+                return true;
+            }
+
             return Current.Kind != SyntaxTokenKind.EndOfFile &&
                    HasLineBreakBetween(previousEnd, Current.Span.Start) &&
                    (Current.Kind == SyntaxTokenKind.DocComment ||
