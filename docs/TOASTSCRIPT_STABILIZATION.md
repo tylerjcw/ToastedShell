@@ -429,7 +429,7 @@ closed.
 | `TS-P2-21` | Planned | A `new` expression cannot take named arguments at all: `new D(1, b = 7)` and `new R("w", Qty = 5)` both fail while parsing with `tosh.parser.assignment_in_predicate`, so the runtime binder is never reached. Function and method calls accept the same syntax. This bounds `TS-P1-06`: constructor named-argument validation is unreachable until the parser accepts the form. | `new Type(name = value)` parses as a named argument for classes, records, and structs; the runtime binder's unknown/duplicate diagnostics apply; a genuine assignment mistake keeps a targeted diagnostic rather than the predicate-assignment message. |
 | `TS-P2-22` | Planned | The type checker does not walk class-member annotations, so static checking is materially weaker inside class bodies. `var x: int = "42"` and `func f(x: int)` both report `tosh.type.mismatch`, while the equivalent `prop X: int = "42"`, constructor parameter, method parameter, and property assignment report nothing. Runtime behaviour is consistent (all convert), so this is a static-coverage hole rather than a semantic divergence. | Class property, constructor-parameter, method-parameter, and property-assignment annotations are checked with the same rule and severity as `var` and `func` annotations; a corpus covers matching and mismatching cases in both positions. |
 | `TS-P2-23` | In progress — declaration table 2026-07-26 | Parse-time identity decisions rest on *spelling* rather than on facts the runtime already holds. Two casing tests remain (`char.IsUpper` in `LooksLikeQualifiedDotNetAccess` and `LooksLikePotentialClrTypeName`) deciding whether a dotted name is a CLR type, and 160 hardcoded `Current.Text == "…"` comparisons decide keyword and construct identity. `TS-P2-16` narrowed one such rule but did not remove the guess. The parser cannot do better today because `ToshParser.Parse` receives only source text, while the command, module, and type registries arrive later at `Lowerer.Lower`. | Identity is resolved against a real table rather than inferred from capitalization: either the parser is given the registries, or the decision is deferred to a later phase that has them. Keyword and construct recognition is driven by the generated language-surface registry (`TS-P2-10`) rather than by scattered literal comparisons. A capitalized module and a lowercase CLR type both resolve correctly. |
-| `TS-P2-24` | In progress — element boundaries complete; first stage-division helper retired 2026-07-29 | Step 2 of the parser roadmap. Structural questions — where a statement ends, where a pipeline stage divides — are answered by heuristics scattered through the recursive-descent parser, each re-deriving the answer with local lookahead. `LiteParser` decides them once over the whole token stream, with paired delimiter frames so a separator inside a nested construct does not split the enclosing statement. Ordinary `ParseBlock` statement paths now consume exact-owner promoted candidates; top-level and stage integration remain. | The parser consumes the lite structure instead of re-deriving it; the `LooksLike*`/`HasTopLevel*` helpers that only answered structural questions are removed; structure agrees with today's parser across the corpus, evidenced by differential tests. |
+| `TS-P2-24` | Complete — closed 2026-07-29 on the programme owner's call | Step 2 of the parser roadmap. Structural questions — where a statement ends, where a pipeline stage divides — are answered by heuristics scattered through the recursive-descent parser, each re-deriving the answer with local lookahead. `LiteParser` decides them once over the whole token stream, with paired delimiter frames so a separator inside a nested construct does not split the enclosing statement. Ordinary `ParseBlock` statement paths consume exact-owner promoted candidates and the fallback is deleted; the one purely structural helper, `HasTopLevelPipeBeforeCloseParen`, is retired. The eight surviving `HasTopLevel*` helpers ask semantic questions and are out of the clause's scope — the judgement recorded in the July 29 assessment, resolved in favour of closing. | The parser consumes the lite structure instead of re-deriving it; the `LooksLike*`/`HasTopLevel*` helpers that only answered structural questions are removed; structure agrees with today's parser across the corpus, evidenced by differential tests. |
 | `TS-P2-25` | Complete — paired delimiters 2026-07-28 | Plain `{` overloaded blocks, records, dictionaries, sets, predicates, and specialized grammar groups. Position and content lookahead could silently change its meaning and prevented `LiteParser` from promoting brace-enclosed boundaries without duplicating parser grammar. | Ordinary `{ ... }` is a block; records use `{| ... |}`, dictionaries `{% ... %}`, and sets `{: ... :}` with six real delimiter tokens. Specialized parser-owned braces stay plain. Literal dispatch uses the opener alone; legacy `LooksLike*` and generic brace collection parsing are removed. Exact-owner boundary promotion, corpus/spec/tooling migration, targeted recovery diagnostics, rebuilt PDFs, and focused tests land together. |
 
 **Implementation note for `TS-P2-11` (July 25 review recommendation).** The
@@ -456,8 +456,8 @@ These are intentionally not part of the first repair slice.
 | `TS-P3-07` | Research | Unify `StorageSize`/`TemporalAmount` with the Quantity unit system | Two systems model the same domains (`10kb` versus `` 10`kB ``, `5s` versus `` 5`s ``) with a promotion bridge; evaluate making suffix literals sugar for Quantities so `TS-P2-14` lands on one system. |
 | `TS-P3-08` | Proposed | Parser-owned typed structural regions | Replace brace-content classification with parser-owned regions (`Block`, member list, arm list, projection, destructuring, accessors, and other grammar roles). Regions retain exact opener/closer ownership, promote only boundaries proven to belong to statement blocks, and are shared with formatters and language services; `LiteParser` must not grow a shadow `ClassifyBrace` grammar. |
 | `TS-P3-09` | Proposed | Prefix `!` negation | Accept `Bang` in prefix position so `!$x` means `not $x`. Smaller than it looks: the lexer already emits a `Bang` token as the fallthrough after `!=` and `!~` (`ToshLexer.cs`), so only the parser needs to change, alongside whatever `TS-P2-02` does for unary `-`. Two constraints: (1) it is why the dict delimiter is `{%` and not `{!` — keeping `{!` unclaimed is what leaves this open, so neither item should be changed without the other; (2) `!!`, `!$`, `!^`, and `!*` are consumed by `HistoryExpansionUtilities` on the raw REPL line *before* lexing, so scripts are unaffected but an interactive `!$x` collides with the `!$` word designator — the item must decide that case explicitly rather than let whichever layer runs first win. |
-| `TS-P3-10` | Proposed — needs a decision | Collection rendering is split between two styles. Records, dicts, and sets have bespoke source-like renderings (`{| a = 1 |}`, `{% "k" => 1 %}`, `{: 1, 2 :}`) that parse back as written. Arrays and lists fall to `ObjectFormatter`'s generic container path and render with a CLR type header over multiple lines (`Int32[] [\n  1\n  2\n]`), which is a display form rather than source. Found by `FormatRoundTripTests`, which had to be scoped around it. | A decision records whether displayed collections are meant to be source-like. If they are, arrays and lists render as `[1, 2, 3]` and join the round-trip property; if the type header is deliberate for display, the split is documented and the property stays scoped, with the reason stated where a reader of the formatter will find it. |
-| `TS-P3-11` | Proposed — needs a decision | The syntax and documentation call `{| … |}` a **record**; `type-of` reports **`table`**. `ExpandoObject` maps to the `Table` descriptor, `dynamicrecord` is already an alias for it, and `table`'s own constructor signature reads `table([record] | key, value, ...)` — so both words are in use for one concept. Not a defect: the model may intend a record to be a single-row table. | A decision records which word the type system uses, and the other becomes an alias rather than a second name in circulation. If `record` wins, `type-of {| a = 1 |}` reports `record`, the `table` annotation keeps working, and the specification, help text, and constructor signatures are updated in the same slice. |
+| `TS-P3-10` | Complete — decided and implemented 2026-07-29 | Collection rendering is split between two styles. Records, dicts, and sets have bespoke source-like renderings (`{| a = 1 |}`, `{% "k" => 1 %}`, `{: 1, 2 :}`) that parse back as written. Arrays and lists fall to `ObjectFormatter`'s generic container path and render with a CLR type header over multiple lines (`Int32[] [\n  1\n  2\n]`), which is a display form rather than source. Found by `FormatRoundTripTests`, which had to be scoped around it. | Decided: header at root, source-like nested. A collection keeps `Int32[] [ 1, 2, 3 ]` when it is the whole result, where the element type is informative and the rendering is display; nested inside another value it renders `[ 1, 2, 3 ]` and joins the round-trip property — the same root/nested split strings already had. `FormatRoundTripTests` covers nested arrays and pins the root header. |
+| `TS-P3-11` | Complete — decided and implemented 2026-07-29 | The syntax and documentation call `{| … |}` a **record**; `type-of` reports **`table`**. `ExpandoObject` maps to the `Table` descriptor, `dynamicrecord` is already an alias for it, and `table`'s own constructor signature reads `table([record] | key, value, ...)` — so both words are in use for one concept. Not a defect: the model may intend a record to be a single-row table. | Decided: `record` wins. `type-of {| a = 1 |}` reports `record`; `table` and `dynamicrecord` remain resolvable annotations; the constructor signature reads `record(...)`; help and the specification say `record` and name the aliases. |
 
 ## Test Strategy
 
@@ -2984,3 +2984,73 @@ would still ship alongside the interpreter even though its IL no longer
 references it. That is packaging rather than emission.
 
 Validation: 3,445 passed, 0 failed, 0 skipped in 2m39s.
+
+### July 29, 2026 — Three decisions taken: collection rendering, the record's name, and closing step 2
+
+Three items were sitting on a decision rather than on work. Taking them together
+kept the answers consistent, since two of them are about what a displayed value
+calls itself.
+
+**`TS-P3-10` — header at root, source-like nested.** `FormatRoundTripTests` had
+been scoped around arrays because they render with a CLR type header
+(`Int32[] [ 1, 2, 3 ]`) that is display rather than source. The decision does not
+pick one style over the other; it makes the choice positional, which is the split
+strings already had — a bare string renders unquoted at the root and quoted when
+nested, because the two positions want different things. So `isRoot` is threaded
+into `FormatEnumerable` and the type name is emitted only there. At the root the
+element type is the informative part and nothing is going to be pasted back;
+nested, the type name is noise on every field and makes the whole enclosing value
+unparseable.
+
+That brought nested arrays into the round-trip property, and the property
+immediately earned its keep again by exposing a second defect:
+
+**Indentation was counted twice per level.** `FormatContainer` re-indents every
+line of every item it holds, *and* indented itself by its own depth — so a nested
+container's items drifted a level further right at each level, with its closing
+bracket following. Three levels of array rendered items at 2, 6, and 12 spaces
+instead of 2, 4, and 6. The `depth` parameter existed only to compute that
+indent, so removing the arithmetic removed the parameter from all three call
+sites. This was never new; the type header made it look like decoration rather
+than misalignment.
+
+**`TS-P3-11` — `record` wins.** `type-of {| a = 1 |}` answered `table` while the
+syntax, the specification, and the help text all said record. The descriptor is
+renamed and `table` and `dynamicrecord` stay registered as aliases, so existing
+annotations keep working. Three places had to move together, and the second was
+found only by running the first: the shell-type registry (`type-of`), the
+annotation resolver (`var r: record = …` — a name is not an annotation until
+`DotNetTypeResolver` knows it), and `GetFriendlyTypeName`. `dynamicrecord` was
+documented as an alias but had never been resolvable as an annotation at all;
+it is now.
+
+The specification's own type table was wrong in a way unrelated to the rename:
+it mapped `table` to `ToSh.DataTable`, "structured tabular data". The type is
+`System.Dynamic.ExpandoObject` and always has been.
+
+The rename also found a way an alias can be honoured everywhere except where it
+matters. `DisplayPreferences` resolves a user's column overrides by shell type
+name, and yielded only the descriptor's *current* name as a candidate — so a
+profile keyed `table`, which is what anyone's config would say, silently stopped
+applying the moment the type answered `record`. Nothing threw; the columns just
+went back to default. `BuiltInShellTypes.AliasesFor` now supplies every name a
+type answers to, and preference resolution offers all of them, which fixes the
+same latent problem for `map` against `dict`. The test that found it is left
+keyed on the alias, with a comment saying why, and a companion keyed on `record`
+proves the primary name still resolves — an alias guard that passes because
+nothing resolves is the failure mode worth guarding against.
+
+Not renamed: `type-of` on a CLR `Type` and the `ObjectInspector` member kind
+already used `record` for the *named* record declaration, so the two senses of
+the word — a declared shape and an anonymous one — now share a name the way C#'s
+`record` and an anonymous type do not. Recorded rather than resolved; if it turns
+out to confuse, the anonymous form is the one to qualify.
+
+**`TS-P2-24` — closed.** The July 29 assessment left the item open on one
+judgement: whether `HasTopLevelOperatorBeforeStageBoundary`, which asks a
+semantic question with a structural qualifier, counts against the clause about
+removing structural helpers. Resolved as no. Element boundaries consume the lite
+structure with the fallback deleted rather than merely unused; the one purely
+structural helper is retired; `LiteParserTests` and `LiteStageDivisionTests`
+carry the differential evidence. The remaining `HasTopLevel*` helpers ask what a
+construct *is*, which is grammar, not structure.
