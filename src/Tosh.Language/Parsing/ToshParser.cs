@@ -176,18 +176,6 @@ public static class ToshParser
 
         private int _position;
         private bool _isParsingTopLevelStatement;
-        /// <summary>
-        /// Test hook for <c>TS-P2-24</c>: disables the line-break fallback in
-        /// <see cref="HasElementBoundaryAfter"/> so the remaining re-derivation
-        /// can be measured rather than estimated.
-        /// </summary>
-        /// <remarks>
-        /// Turning it on took the suite from 113 failures to 6 as brace-delimited
-        /// member lists were moved onto the structural pass. The item is done when
-        /// the fallback can be deleted outright, not when the last call site is
-        /// wired — this hook is how that is checked.
-        /// </remarks>
-        internal static bool StructuralBoundaryFallbackDisabled;
         private bool _stopRefinementAtEquals;
 
         public InternalParser(
@@ -876,7 +864,7 @@ public static class ToshParser
             var refinement = typeName is not null ? TryParseRefinementClause() : null;
             var declarationHeadEnd = refinement?.Span.End ?? nameToken.Span.End;
 
-            if (IsDeclarationBoundary(nameToken.Span.End, stopAtCloseParen, stopAtCloseBrace, stopAtSemicolon))
+            if (IsDeclarationBoundary(stopAtCloseParen, stopAtCloseBrace, stopAtSemicolon))
             {
                 if (isConst)
                 {
@@ -1390,7 +1378,7 @@ public static class ToshParser
                     continue;
                 }
 
-                if (HasElementBoundaryAfter(function.Span.End))
+                if (IsAtElementBoundary())
                 {
                     continue;
                 }
@@ -1736,7 +1724,7 @@ public static class ToshParser
 
             if (IsPipelineTerminator(Current.Kind, stopAtCloseParen, stopAtCloseBrace, stopAtSemicolon) ||
                 Current.Kind == SyntaxTokenKind.Pipe ||
-                HasElementBoundaryAfter(throwToken.Span.End))
+                IsAtElementBoundary())
             {
                 return TryWrapPostfixConditional(new ThrowStatementSyntax(null, throwToken.Span));
             }
@@ -2131,7 +2119,7 @@ public static class ToshParser
                     continue;
                 }
 
-                if (HasElementBoundaryAfter(arm.Span.End))
+                if (IsAtElementBoundary())
                 {
                     continue;
                 }
@@ -2415,7 +2403,7 @@ public static class ToshParser
 
             if (IsPipelineTerminator(Current.Kind, stopAtCloseParen, stopAtCloseBrace, stopAtSemicolon) ||
                 Current.Kind == SyntaxTokenKind.Pipe ||
-                HasElementBoundaryAfter(returnToken.Span.End))
+                IsAtElementBoundary())
             {
                 return TryWrapPostfixConditional(new ReturnStatementSyntax(null, returnToken.Span));
             }
@@ -2441,7 +2429,7 @@ public static class ToshParser
 
             if (IsPipelineTerminator(Current.Kind, stopAtCloseParen, stopAtCloseBrace, stopAtSemicolon) ||
                 Current.Kind == SyntaxTokenKind.Pipe ||
-                HasElementBoundaryAfter(yieldToken.Span.End))
+                IsAtElementBoundary())
             {
                 return TryWrapPostfixConditional(new YieldStatementSyntax(null, yieldToken.Span));
             }
@@ -2489,7 +2477,7 @@ public static class ToshParser
                 return inner;
             }
 
-            if (HasElementBoundaryAfter(inner.Span.End))
+            if (IsAtElementBoundary())
             {
                 return inner;
             }
@@ -3500,7 +3488,7 @@ public static class ToshParser
                     continue;
                 }
 
-                if (HasElementBoundaryAfter(memberEnd))
+                if (IsAtElementBoundary())
                 {
                     continue;
                 }
@@ -4077,7 +4065,7 @@ public static class ToshParser
                     continue;
                 }
 
-                if (HasElementBoundaryAfter(member.Span.End))
+                if (IsAtElementBoundary())
                 {
                     continue;
                 }
@@ -4316,7 +4304,13 @@ public static class ToshParser
 
         private (BlockSyntax? Getter, BlockSyntax? Setter, int End) ParsePropertyAccessorBlock()
         {
+            // An accessor list owns the boundary between `get` and `set` exactly
+            // as a class body owns the one between members (TS-P2-24). Without the
+            // owner, `get => $this.X` had no structural boundary after it and its
+            // arrow body ran on into the following `set`.
+            var openBraceTokenIndex = _position;
             var openBrace = NextToken();
+            using var boundaryOwner = PushBoundaryOwner(openBraceTokenIndex);
             BlockSyntax? getter = null;
             BlockSyntax? setter = null;
 
@@ -6038,7 +6032,7 @@ public static class ToshParser
                        !LooksLikeRedirectionOperator() &&
                        !LooksLikeInputRedirection())
                 {
-                    if (HasElementBoundaryAfter(lastConsumedEnd))
+                    if (IsAtElementBoundary())
                     {
                         break;
                     }
@@ -6211,7 +6205,7 @@ public static class ToshParser
                     Current.Kind != SyntaxTokenKind.Ampersand &&
                     !LooksLikeRedirectionOperator() &&
                     !LooksLikeInputRedirection() &&
-                    !(expressionArgument is not null && HasElementBoundaryAfter(expressionArgument.Span.End)))
+                    !(expressionArgument is not null && IsAtElementBoundary()))
                 {
                     _diagnostics.Add(new SyntaxDiagnostic(
                         Code: "tosh.parser.unexpected_get_expression_tokens",
@@ -6230,7 +6224,7 @@ public static class ToshParser
                    !LooksLikeRedirectionOperator() &&
                    !LooksLikeInputRedirection())
             {
-                if (HasElementBoundaryAfter(lastConsumedEnd))
+                if (IsAtElementBoundary())
                 {
                     break;
                 }
@@ -6267,7 +6261,7 @@ public static class ToshParser
             while (arguments.Count < expressionArgumentIndex &&
                    !IsCurrentItemExpressionCommandBoundary(stopAtCloseParen, stopAtCloseBrace, stopAtSemicolon))
             {
-                if (HasElementBoundaryAfter(lastConsumedEnd))
+                if (IsAtElementBoundary())
                 {
                     break;
                 }
@@ -6303,7 +6297,7 @@ public static class ToshParser
                 // `assert <block> <message>` accepts an optional trailing message argument.
                 if (string.Equals(commandName, "assert", StringComparison.OrdinalIgnoreCase) &&
                     !IsCurrentItemExpressionCommandBoundary(stopAtCloseParen, stopAtCloseBrace, stopAtSemicolon) &&
-                    !HasElementBoundaryAfter(blockArgument.Span.End))
+                    !IsAtElementBoundary())
                 {
                     var messageArgument = ParseArgument(commandName);
                     if (messageArgument is not null)
@@ -6313,7 +6307,7 @@ public static class ToshParser
                 }
 
                 if (!IsCurrentItemExpressionCommandBoundary(stopAtCloseParen, stopAtCloseBrace, stopAtSemicolon) &&
-                    !HasElementBoundaryAfter(arguments[^1].Span.End))
+                    !IsAtElementBoundary())
                 {
                     AddUnexpectedCurrentItemExpressionTokensDiagnostic(commandName, Current.Span);
                     SkipToStageBoundary(stopAtCloseParen, stopAtCloseBrace, stopAtSemicolon);
@@ -6333,7 +6327,7 @@ public static class ToshParser
             if (string.Equals(commandName, "assert", StringComparison.OrdinalIgnoreCase) &&
                 expressionArgument is not null &&
                 !IsCurrentItemExpressionCommandBoundary(stopAtCloseParen, stopAtCloseBrace, stopAtSemicolon) &&
-                !HasElementBoundaryAfter(expressionArgument.Span.End))
+                !IsAtElementBoundary())
             {
                 var messageArgument = ParseArgument(commandName);
                 if (messageArgument is not null)
@@ -6343,7 +6337,7 @@ public static class ToshParser
             }
 
             if (!IsCurrentItemExpressionCommandBoundary(stopAtCloseParen, stopAtCloseBrace, stopAtSemicolon) &&
-                !(arguments.Count > 0 && HasElementBoundaryAfter(arguments[^1].Span.End)))
+                !(arguments.Count > 0 && IsAtElementBoundary()))
             {
                 AddUnexpectedCurrentItemExpressionTokensDiagnostic(commandName, Current.Span);
                 SkipToStageBoundary(stopAtCloseParen, stopAtCloseBrace, stopAtSemicolon);
@@ -8175,7 +8169,7 @@ public static class ToshParser
                     continue;
                 }
 
-                if (value is not null && HasElementBoundaryAfter(value.Span.End))
+                if (value is not null && IsAtElementBoundary())
                 {
                     continue;
                 }
@@ -8262,7 +8256,7 @@ public static class ToshParser
                     {
                         NextToken();
                     }
-                    else if (HasElementBoundaryAfter(spread.Span.End))
+                    else if (IsAtElementBoundary())
                     {
                         // newline separator
                     }
@@ -8304,7 +8298,7 @@ public static class ToshParser
                     {
                         NextToken();
                     }
-                    else if (compValue is not null && HasElementBoundaryAfter(compValue.Span.End))
+                    else if (compValue is not null && IsAtElementBoundary())
                     {
                         // newline separator
                     }
@@ -8368,7 +8362,7 @@ public static class ToshParser
                     continue;
                 }
 
-                if (value is not null && HasElementBoundaryAfter(value.Span.End))
+                if (value is not null && IsAtElementBoundary())
                 {
                     continue;
                 }
@@ -9584,7 +9578,7 @@ public static class ToshParser
                     continue;
                 }
 
-                if (expression is not null && HasElementBoundaryAfter(expression.Span.End))
+                if (expression is not null && IsAtElementBoundary())
                 {
                     continue;
                 }
@@ -9838,7 +9832,7 @@ public static class ToshParser
                     continue;
                 }
 
-                if (stage is not null && HasElementBoundaryAfter(stage.Span.End))
+                if (stage is not null && IsAtElementBoundary())
                 {
                     break;
                 }
@@ -10003,7 +9997,7 @@ public static class ToshParser
                    Current.Span.End == Peek(1).Span.Start;
         }
 
-        private bool HasElementBoundaryAfter(int previousEnd)
+        private bool IsAtElementBoundary()
         {
             // Top-level structural ranges are candidates rather than a
             // one-to-one semantic parse. Only consult them while the
@@ -10018,26 +10012,13 @@ public static class ToshParser
                 return true;
             }
 
-            // Inside a block the structural pass owns the same question, and a
-            // promoted candidate is one LiteParser attributed to exactly this
-            // block's opener. Consulting it here is what makes the parser
-            // consume the structure rather than re-derive it (TS-P2-24); the
-            // line-break test below remains only for positions the structural
-            // pass does not describe.
-            if (IsCurrentPromotedElementBoundary())
-            {
-                return true;
-            }
-
-            if (StructuralBoundaryFallbackDisabled)
-            {
-                return false;
-            }
-
-            return Current.Kind != SyntaxTokenKind.EndOfFile &&
-                   HasLineBreakBetween(previousEnd, Current.Span.Start) &&
-                   (Current.Kind == SyntaxTokenKind.DocComment ||
-                    ToshParser.IsExpressionStartToken(Current.Kind));
+            // Every other position is owned by an enclosing construct that
+            // registered itself: a block, class body, match arm list, bind
+            // block, accessor list, or record/dict literal. The structural pass
+            // answers the question outright, so the line-break re-derivation
+            // that used to sit here is gone rather than merely unused
+            // (TS-P2-24).
+            return IsCurrentPromotedElementBoundary();
         }
 
         private bool HasLineBreakBetween(int start, int end)
@@ -11659,10 +11640,10 @@ public static class ToshParser
             return false;
         }
 
-        private bool IsDeclarationBoundary(int previousEnd, bool untilCloseParen, bool untilCloseBrace, bool untilSemicolon)
+        private bool IsDeclarationBoundary(bool untilCloseParen, bool untilCloseBrace, bool untilSemicolon)
         {
             return IsPipelineTerminator(Current.Kind, untilCloseParen, untilCloseBrace, untilSemicolon) ||
-                   HasElementBoundaryAfter(previousEnd);
+                   IsAtElementBoundary();
         }
 
         private bool TryConsumePostfixToken(int previousExpressionEnd, out SyntaxToken token, out string postfixText, out bool nullSafe)

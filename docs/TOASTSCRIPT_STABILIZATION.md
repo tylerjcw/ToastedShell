@@ -428,7 +428,7 @@ closed.
 | `TS-P2-21` | Planned | A `new` expression cannot take named arguments at all: `new D(1, b = 7)` and `new R("w", Qty = 5)` both fail while parsing with `tosh.parser.assignment_in_predicate`, so the runtime binder is never reached. Function and method calls accept the same syntax. This bounds `TS-P1-06`: constructor named-argument validation is unreachable until the parser accepts the form. | `new Type(name = value)` parses as a named argument for classes, records, and structs; the runtime binder's unknown/duplicate diagnostics apply; a genuine assignment mistake keeps a targeted diagnostic rather than the predicate-assignment message. |
 | `TS-P2-22` | Planned | The type checker does not walk class-member annotations, so static checking is materially weaker inside class bodies. `var x: int = "42"` and `func f(x: int)` both report `tosh.type.mismatch`, while the equivalent `prop X: int = "42"`, constructor parameter, method parameter, and property assignment report nothing. Runtime behaviour is consistent (all convert), so this is a static-coverage hole rather than a semantic divergence. | Class property, constructor-parameter, method-parameter, and property-assignment annotations are checked with the same rule and severity as `var` and `func` annotations; a corpus covers matching and mismatching cases in both positions. |
 | `TS-P2-23` | In progress — declaration table 2026-07-26 | Parse-time identity decisions rest on *spelling* rather than on facts the runtime already holds. Two casing tests remain (`char.IsUpper` in `LooksLikeQualifiedDotNetAccess` and `LooksLikePotentialClrTypeName`) deciding whether a dotted name is a CLR type, and 160 hardcoded `Current.Text == "…"` comparisons decide keyword and construct identity. `TS-P2-16` narrowed one such rule but did not remove the guess. The parser cannot do better today because `ToshParser.Parse` receives only source text, while the command, module, and type registries arrive later at `Lowerer.Lower`. | Identity is resolved against a real table rather than inferred from capitalization: either the parser is given the registries, or the decision is deferred to a later phase that has them. Keyword and construct recognition is driven by the generated language-surface registry (`TS-P2-10`) rather than by scattered literal comparisons. A capitalized module and a lowercase CLR type both resolve correctly. |
-| `TS-P2-24` | In progress — element-boundary model adopted; fallback dependence measured down from 113 to 4 2026-07-29 | Step 2 of the parser roadmap. Structural questions — where a statement ends, where a pipeline stage divides — are answered by heuristics scattered through the recursive-descent parser, each re-deriving the answer with local lookahead. `LiteParser` decides them once over the whole token stream, with paired delimiter frames so a separator inside a nested construct does not split the enclosing statement. Ordinary `ParseBlock` statement paths now consume exact-owner promoted candidates; top-level and stage integration remain. | The parser consumes the lite structure instead of re-deriving it; the `LooksLike*`/`HasTopLevel*` helpers that only answered structural questions are removed; structure agrees with today's parser across the corpus, evidenced by differential tests. |
+| `TS-P2-24` | In progress — **element boundaries complete, fallback deleted** 2026-07-29; stage division remains | Step 2 of the parser roadmap. Structural questions — where a statement ends, where a pipeline stage divides — are answered by heuristics scattered through the recursive-descent parser, each re-deriving the answer with local lookahead. `LiteParser` decides them once over the whole token stream, with paired delimiter frames so a separator inside a nested construct does not split the enclosing statement. Ordinary `ParseBlock` statement paths now consume exact-owner promoted candidates; top-level and stage integration remain. | The parser consumes the lite structure instead of re-deriving it; the `LooksLike*`/`HasTopLevel*` helpers that only answered structural questions are removed; structure agrees with today's parser across the corpus, evidenced by differential tests. |
 | `TS-P2-25` | Complete — paired delimiters 2026-07-28 | Plain `{` overloaded blocks, records, dictionaries, sets, predicates, and specialized grammar groups. Position and content lookahead could silently change its meaning and prevented `LiteParser` from promoting brace-enclosed boundaries without duplicating parser grammar. | Ordinary `{ ... }` is a block; records use `{| ... |}`, dictionaries `{% ... %}`, and sets `{: ... :}` with six real delimiter tokens. Specialized parser-owned braces stay plain. Literal dispatch uses the opener alone; legacy `LooksLike*` and generic brace collection parsing are removed. Exact-owner boundary promotion, corpus/spec/tooling migration, targeted recovery diagnostics, rebuilt PDFs, and focused tests land together. |
 
 **Implementation note for `TS-P2-11` (July 25 review recommendation).** The
@@ -2366,3 +2366,39 @@ property whose body is a pipeline — which is the part of step 2 that has not
 been started.
 
 Validation: 3,331 passed, 0 failed, 0 skipped in 2m42s with the hook off.
+
+### July 29, 2026 — The line-break fallback is deleted (TS-P2-24)
+
+The element-boundary half of the item is finished on its real criterion: the
+re-derivation is *gone*, not merely unused. `113 → 4 → 0`.
+
+Last owner registered: `ParsePropertyAccessorBlock`. A property's accessor list
+owns the boundary between `get` and `set` exactly as a class body owns the one
+between members, and without the owner `get => $this.X` had no boundary after it
+and its arrow body ran on into the following `set`.
+
+That was the whole of the remaining 4. The previous entry called them "stage
+division ... which has not been started", inferred from the
+`missing_pipeline_separator` code without reading the source. Wrong, and wrong
+the same way as the `take-while` attribution: a diagnostic code names the
+symptom, not the cause.
+
+With the harness then reporting a clean suite, the fallback was deleted rather
+than left disabled, `HasElementBoundaryAfter(previousEnd)` became
+`IsAtElementBoundary()` — the parameter was dead once the line-break test went,
+and 23 call sites lost the argument — and `StructuralBoundaryFallbackDisabled`
+was removed, its job done.
+
+`HasElementBoundaryAfter` now consults only the structural pass. Constructs that
+register as owners: blocks, class bodies, match arm lists, native bind blocks,
+property accessor lists, and record/dict literals. A construct that forgets to
+register no longer silently falls back to a heuristic — it gets no boundaries at
+all, which fails loudly.
+
+Remaining under `TS-P2-24`: stage division. `LiteParser` records
+`LiteSeparatorKind.Pipe`/`PipeForward` per stage, but `ParsePipeline` still
+decides stage division itself except for the pipe-forward check. That is a
+genuinely separate integration, and this time the claim is based on reading
+`ParsePipeline` rather than on a diagnostic code.
+
+Validation: 3,331 passed, 0 failed, 0 skipped in 2m49s; zero warnings.
