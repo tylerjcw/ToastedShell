@@ -421,6 +421,28 @@ internal sealed partial class EmitterImpl : IDisposable
     private static readonly MethodInfo s_hostEnterExecutionFrame =
         s_toshHost.GetMethod(nameof(global::Tosh.Compiler.Runtime.ToshHost.EnterExecutionFrame),
             new[] { typeof(string) })!;
+
+    /// <summary>
+    /// The recursion guard as a <c>Tosh.Runtime</c> primitive, used by the pure
+    /// profile (<c>TS-P1-25</c>).
+    /// </summary>
+    /// <remarks>
+    /// <c>ToshHost.EnterExecutionFrame</c> is a thin wrapper that supplies the
+    /// session's configured limit before delegating here. A pure artifact has no
+    /// host to read configuration from, so it guards at the documented default
+    /// instead — the same ceiling, minus the ability to lower it per session.
+    /// </remarks>
+    private static readonly MethodInfo s_guardEnterExecutionFrame =
+        typeof(global::Tosh.Runtime.ToshExecutionDepthGuard).GetMethod(
+            nameof(global::Tosh.Runtime.ToshExecutionDepthGuard.Enter),
+            new[]
+            {
+                typeof(int),
+                typeof(string),
+                typeof(string),
+                typeof(string),
+                typeof(global::Tosh.Runtime.TextSpan?),
+            })!;
     private static readonly MethodInfo s_hostInvokeStatement =
         s_toshHost.GetMethod(nameof(global::Tosh.Compiler.Runtime.ToshHost.InvokeStatement),
             new[] { typeof(string), typeof(object[]) })!;
@@ -1146,8 +1168,18 @@ internal sealed partial class EmitterImpl : IDisposable
         // Main prologue: wire up the ambient ToshRuntime once so any
         // builtin command dispatched through ToshHost has a runtime
         // available. Idempotent on the host side.
-        _il.Emit(OpCodes.Ldnull);
-        _il.Emit(OpCodes.Call, s_hostInitialize);
+        //
+        // Omitted under the pure profile (TS-P1-25): its whole purpose is to
+        // give ToshHost a runtime, and a pure artifact dispatches nothing
+        // through ToshHost — builtin dispatch is a tier-2 feature the profile
+        // already rejects, so the bootstrap would initialise a host that is
+        // never called while forcing the reference that makes the artifact
+        // impure.
+        if (_profile != CompileProfile.Pure)
+        {
+            _il.Emit(OpCodes.Ldnull);
+            _il.Emit(OpCodes.Call, s_hostInitialize);
+        }
 
         // Phase 2: register the source text + name so that block
         // arguments embedded in pipeline stages can be re-bound to
@@ -1286,11 +1318,19 @@ internal sealed partial class EmitterImpl : IDisposable
         // Register the compiled assembly with ToshHost up front so host-backed
         // resolution paths (module static access and host NewObject fallback)
         // resolve CLR shells from this assembly first in long-running processes.
-        // typeof(Program).Assembly
-        _il.Emit(OpCodes.Ldtoken, _program);
-        _il.Emit(OpCodes.Call, s_runtimeTypeHandle_GetTypeFromHandle);
-        _il.Emit(OpCodes.Callvirt, s_type_get_Assembly);
-        _il.Emit(OpCodes.Call, s_hostRegisterCompiledAssembly);
+        // Omitted under the pure profile, which promises an artifact carrying no
+        // reference to Tosh.Compiler.Runtime (TS-P1-25). The registration only
+        // serves host-backed resolution — module static access and the host
+        // NewObject fallback — and a pure artifact reaches neither, since those
+        // shapes are already rejected as tier violations before emission.
+        if (_profile != CompileProfile.Pure)
+        {
+            // typeof(Program).Assembly
+            _il.Emit(OpCodes.Ldtoken, _program);
+            _il.Emit(OpCodes.Call, s_runtimeTypeHandle_GetTypeFromHandle);
+            _il.Emit(OpCodes.Callvirt, s_type_get_Assembly);
+            _il.Emit(OpCodes.Call, s_hostRegisterCompiledAssembly);
+        }
 
         var hasModuleDefinitions = _unit.Root.Statements.OfType<BoundModuleDefinition>().Any();
         foreach (var statement in _unit.Root.Statements)

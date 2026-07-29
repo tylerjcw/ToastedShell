@@ -399,7 +399,7 @@ closed.
 | `TS-P1-22` | Complete — 2026-07-26 | `a < b < c` parses left-associatively, so `1 < 2 < 3` compares `true < 3` and silently answers `false`. The accepted decision is real chaining. | `a < b < c` evaluates as `(a < b) and (b < c)` with each operand evaluated once and short-circuit preserved, in interpreted and compiled modes; the parser, binder traversal, type checker, and emitter all handle the new shape; precedence and formatting round-trip. |
 | `TS-P1-23` | Complete — 2026-07-26; structural display paths 2026-07-27 | `type-of` yields a shell type descriptor for shell-typed values, but the descriptor rendered as its own CLR class name, so `type-of [1, 2]` reported `Tosh.Runtime.BuiltInShellTypes+BuiltInShellTypeDefinition` instead of the type being asked about. | Displaying a built-in shell type descriptor shows the shell type name; `type-of` reports usable names for lists, records, and other shell-typed values; CLR values are unaffected. |
 | `TS-P1-24` | In progress — refinement cluster converged 2026-07-27 | The interpreter carries sync/async twin methods that are *parallel implementations* rather than delegations, so a semantic fix can land on one surface and silently miss the other. This has happened twice: `OperatorEvaluator.AreEqual` versus `ToshEngine.AreEqualAsync` (`TS-P1-14`/`TS-P1-15`) and `ToshHost.DrainValue` versus `InvokeValue` (`TS-P1-20`). A corrected audit on 2026-07-26 counted 23 truly parallel pairs against 6 that delegate. The refinement cluster, the largest, is now converged. Remaining largest duplications: `ThrowDetailedSingleConstructorMismatch` (55 lines), `TryGetInstanceMember` (51), `ApplyPendingParameterDefaults` (50), `InvokeQualifiedMethod` (47), `ConvertPropertyValue` (44), `TrySetInstanceMember` (43), `SelectBestCallableMatches` (41), `GetInstanceMembers` (38), `ConvertConstructorParameterValue` (35). | Each pair either delegates to one implementation or is removed; a test or analyzer fails when a new parallel sync/async pair is introduced; behaviour is unchanged, evidenced by the existing suite plus the annotated-conversion drift guard. |
-| `TS-P1-25` | In progress — audit built 2026-07-27 | (Filed 2026-07-26 under a duplicate `TS-P1-20`; renumbered 2026-07-27.) The pure compiler profile can report a Tier-1-clean artifact while emitted IL still unconditionally calls `ToshHost.Initialize`/`RegisterCompiledAssembly` from `Main` and `ToshHost.EnterExecutionFrame` from functions, methods, lambdas, and blocks. | A pure artifact contains no metadata references or calls to `Tosh.Compiler.Runtime`, `ToshHost`, or `ToshEngine`; bootstrap is omitted or conditional; recursion guarding uses a stable `Tosh.Runtime` primitive; and a post-emit IL dependency audit fails independently of `RequireTier` diagnostics. Verified 2026-07-27: the emitted IL references exactly `System.Console`, `System.Private.CoreLib`, `Tosh.Compiler.Runtime`, and `Tosh.Runtime`, so only the three unconditional `ToshHost` members stand between the artifact and purity; the over-declared `deps.json` is a separate packaging concern. |
+| `TS-P1-25` | Complete — 2026-07-29 | (Filed 2026-07-26 under a duplicate `TS-P1-20`; renumbered 2026-07-27.) The pure compiler profile can report a Tier-1-clean artifact while emitted IL still unconditionally calls `ToshHost.Initialize`/`RegisterCompiledAssembly` from `Main` and `ToshHost.EnterExecutionFrame` from functions, methods, lambdas, and blocks. | A pure artifact contains no metadata references or calls to `Tosh.Compiler.Runtime`, `ToshHost`, or `ToshEngine`; bootstrap is omitted or conditional; recursion guarding uses a stable `Tosh.Runtime` primitive; and a post-emit IL dependency audit fails independently of `RequireTier` diagnostics. Verified 2026-07-27: the emitted IL references exactly `System.Console`, `System.Private.CoreLib`, `Tosh.Compiler.Runtime`, and `Tosh.Runtime`, so only the three unconditional `ToshHost` members stand between the artifact and purity; the over-declared `deps.json` is a separate packaging concern. |
 | `TS-P1-26` | Complete — 2026-07-29 | Equality is asymmetric for bool against string: `true == "true"` is `true` while `"true" == true` is `false`. Numeric pairs are symmetric in both directions (`1 == "1"` and `"1" == 1`), as are bool-against-number, so only the string-on-the-left-of-a-bool direction fails to coerce. Both `OperatorEvaluator.AreEqual` and `ToshEngine.AreEqualAsync` agree with each other, so this is one rule applied in one direction rather than a sync/async drift. Found by `EqualityParityTests` on its first run. `TS-P1-14` promised symmetry explicitly for ordering and did not state it for equality, which is why it survived that item. | A decision records whether a string coerces to bool for equality at all: either `"true" == true` becomes `true` (extend coercion, matching the numeric rule) or `true == "true"` becomes `false` (drop bool/string coercion). Equality is symmetric for every pair in the corpus afterwards, on both implementations; the characterization entry in `EqualityParityTests` is inverted in the same change. |
 
 ## P2 — Parser, Binder, Diagnostics, and Surface Generation
@@ -2939,3 +2939,48 @@ passing in isolation. Recorded rather than dismissed; if it recurs it is worth
 tracing rather than retrying.
 
 Validation: 3,444 passed, 0 failed, 0 skipped in 2m41s.
+
+### July 29, 2026 — The pure profile is pure (TS-P1-25)
+
+The emitter wrote three `ToshHost` calls into every artifact regardless of
+profile, so a program of only tier-1 shapes compiled clean and still carried the
+compiler host. `RequireTier` could never catch it: that gate reasons about the
+shapes in the *source*, not about what the emitter writes unconditionally.
+
+All three are now profile-aware.
+
+- `ToshHost.Initialize` exists to give the host a runtime for builtin dispatch.
+  A pure artifact dispatches nothing through the host — builtin dispatch is a
+  tier-2 feature the profile already rejects — so the bootstrap was initialising
+  a host that is never called while forcing the reference that made the artifact
+  impure. Omitted.
+- `ToshHost.RegisterCompiledAssembly` serves host-backed module static access and
+  the `NewObject` fallback, both of which a pure artifact cannot reach for the
+  same reason. Omitted.
+- `ToshHost.EnterExecutionFrame` is a thin wrapper that reads the session's
+  configured depth limit and delegates to
+  `ToshExecutionDepthGuard.Enter`. The pure profile now calls that primitive
+  directly at `DefaultMaximumDepth` — the same ceiling, minus the ability to
+  lower it per session. Dropping the host does not drop the guard, and a test
+  asserts the guard is still present rather than only that the host is gone.
+
+Measured on a real compiled artifact, not just an in-memory emit. Before, it
+referenced `System.Console`, `System.Private.CoreLib`, `Tosh.Compiler.Runtime`,
+and `Tosh.Runtime`. Now `Tosh.Compiler.Runtime` is absent, `ToshHost` appears
+zero times, `ToshExecutionDepthGuard` appears, and the artifact runs to exit 0.
+A permissive build of the same source still carries the host, so the two
+profiles genuinely differ.
+
+The four characterizations written when the audit was built are inverted, which
+is the point of having written them that way: `Pure_artifact_still_references_the_compiler_host`
+became `Pure_artifact_references_no_forbidden_assembly`, and the negative
+control that asserted pure and permissive emit *identical* references now
+asserts they differ.
+
+Not addressed, and still worth its own item: the generated `deps.json` declares
+the toolchain's whole closure — `Tosh.Compiler.IR`, `Tosh.Compiler.Runtime`,
+`Tosh.Language`, `Tosh.Runtime`, `Tosh.Stdlib`, `Tosh.Tui` — so a pure artifact
+would still ship alongside the interpreter even though its IL no longer
+references it. That is packaging rather than emission.
+
+Validation: 3,445 passed, 0 failed, 0 skipped in 2m39s.

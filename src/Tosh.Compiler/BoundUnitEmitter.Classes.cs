@@ -293,8 +293,7 @@ internal sealed partial class EmitterImpl
         // body work so recursive direct `new` expressions fail as a Tosh
         // diagnostic rather than overflowing the CLR stack.
         var constructorExecutionFrame = ctorIl.DeclareLocal(typeof(IDisposable));
-        ctorIl.Emit(OpCodes.Ldstr, $"class {cls.Name}.ctor");
-        ctorIl.Emit(OpCodes.Call, s_hostEnterExecutionFrame);
+        EmitEnterExecutionFrameCall(ctorIl, $"class {cls.Name}.ctor");
         ctorIl.Emit(OpCodes.Stloc, constructorExecutionFrame);
         ctorIl.BeginExceptionBlock();
 

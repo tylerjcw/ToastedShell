@@ -19,11 +19,10 @@ namespace Tosh.Tests;
 /// </summary>
 /// <remarks>
 /// The audit reads the emitted metadata rather than trusting the emit result,
-/// which is the "independently of RequireTier" half of the acceptance. Until
-/// the bootstrap rework lands, the assertions below record what is actually
-/// emitted today and name this item, following the characterization pattern
-/// established by <c>LexerCharacterizationTests</c>: the expectations change in
-/// the same commit as the fix.
+/// which is the "independently of RequireTier" half of the acceptance. It began
+/// as a characterization of the defect — the assertions recorded what was
+/// emitted and named the item — and was inverted in the commit that made
+/// bootstrap and the recursion guard profile-aware.
 /// </remarks>
 public sealed class PureProfileDependencyAuditTests
 {
@@ -61,11 +60,8 @@ public sealed class PureProfileDependencyAuditTests
     }
 
     [Fact]
-    public void Pure_artifact_still_references_the_compiler_host()
+    public void Pure_artifact_references_no_forbidden_assembly()
     {
-        // CHARACTERIZATION — this asserts the defect, not the contract.
-        // When TS-P1-25 lands, invert this to Assert.Empty and delete the
-        // note below.
         var (_, image) = Emit(PureSource, CompileProfile.Pure);
         var references = ReadAssemblyReferences(image);
 
@@ -73,22 +69,33 @@ public sealed class PureProfileDependencyAuditTests
             .Where(forbidden => references.Contains(forbidden))
             .ToArray();
 
-        Assert.NotEmpty(violations);
-        Assert.Contains("Tosh.Compiler.Runtime", violations);
+        Assert.Empty(violations);
     }
 
     [Fact]
-    public void Pure_artifact_still_calls_host_bootstrap_and_the_recursion_guard()
+    public void Pure_artifact_calls_no_host_member()
     {
-        // CHARACTERIZATION — see above. These are the specific members the
-        // emitter writes unconditionally: ToshHost.Initialize and
+        // The three the emitter used to write unconditionally: Initialize and
         // RegisterCompiledAssembly from Main, EnterExecutionFrame from every
         // function, method, lambda, and block.
         var (_, image) = Emit(PureSource, CompileProfile.Pure);
         var members = ReadMemberReferences(image);
 
-        Assert.Contains("ToshHost.EnterExecutionFrame", members);
-        Assert.Contains("ToshHost.RegisterCompiledAssembly", members);
+        Assert.DoesNotContain("ToshHost.Initialize", members);
+        Assert.DoesNotContain("ToshHost.RegisterCompiledAssembly", members);
+        Assert.DoesNotContain("ToshHost.EnterExecutionFrame", members);
+    }
+
+    [Fact]
+    public void Pure_artifact_still_guards_recursion_through_the_runtime_primitive()
+    {
+        // Dropping the host must not drop the guard. ToshHost.EnterExecutionFrame
+        // only supplied the session's configured limit before delegating here, so
+        // a pure artifact guards at the documented default instead.
+        var (_, image) = Emit(PureSource, CompileProfile.Pure);
+        var members = ReadMemberReferences(image);
+
+        Assert.Contains("ToshExecutionDepthGuard.Enter", members);
     }
 
     [Fact]
@@ -106,12 +113,12 @@ public sealed class PureProfileDependencyAuditTests
         var pure = ReadAssemblyReferences(pureImage);
         var permissive = ReadAssemblyReferences(permissiveImage);
 
-        Assert.Contains("Tosh.Compiler.Runtime", pure);
+        Assert.DoesNotContain("Tosh.Compiler.Runtime", pure);
         Assert.Contains("Tosh.Compiler.Runtime", permissive);
-        Assert.True(
+        Assert.False(
             pure.SetEquals(permissive),
-            "pure and permissive currently emit the same references; when TS-P1-25 "
-            + "lands this becomes the assertion that they differ");
+            "pure and permissive must not emit the same references — that equality "
+            + "was the original finding");
     }
 
     private static (EmitResult Result, byte[] Image) Emit(string source, CompileProfile profile)
