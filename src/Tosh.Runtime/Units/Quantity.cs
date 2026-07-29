@@ -124,6 +124,34 @@ public class Quantity : IComparable, IComparable<Quantity>, IShellRecordObject, 
         return BaseValue.CompareTo(other.BaseValue);
     }
 
+    /// <summary>
+    /// Value equality on the base value, matching <see cref="CompareTo(Quantity?)"/>.
+    /// </summary>
+    /// <remarks>
+    /// Without this, ordering was dimension-aware while equality fell through to
+    /// reference identity: <c>5`s &gt; 4000`ms</c> answered <see langword="true"/>
+    /// while <c>5`s == 5000`ms</c> answered <see langword="false"/>, even though
+    /// both render as <c>5 seconds</c>. The specification states that comparison
+    /// operators use base-value comparison with dimension checking, and lists
+    /// that exact equality as an example.
+    ///
+    /// Mismatched dimensions are unequal rather than an error — <c>==</c> is a
+    /// question, where ordering is a request that has no meaningful answer across
+    /// dimensions.
+    /// </remarks>
+    public override bool Equals(object? obj)
+    {
+        return obj is Quantity other &&
+               Dimension.Equals(other.Dimension) &&
+               BaseValue.Equals(other.BaseValue);
+    }
+
+    /// <summary>
+    /// Hashes the base value and dimension, so quantities equal across units hash
+    /// alike and can share a dictionary key or set slot.
+    /// </summary>
+    public override int GetHashCode() => HashCode.Combine(Dimension, BaseValue);
+
     #endregion
 
     #region Conversion

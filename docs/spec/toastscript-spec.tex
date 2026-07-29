@@ -4462,8 +4462,8 @@ ordinary CLR rules.
 
 \begin{lstlisting}
 # tosh
-func pick(a: int) -> string => $"one:$a"
-func pick(a: int, b: int) -> string => $"two:$a+$b"
+func pick(a: int) -> string => $"one:{$a}"
+func pick(a: int, b: int) -> string => $"two:{$a}+{$b}"
 \end{lstlisting}
 
 \begin{lstlisting}[language={[Sharp]C}]
@@ -4640,8 +4640,8 @@ through \code{InvokeUserOverload}, which scores each candidate against the
 supplied argument list and dispatches to the best match.
 
 \begin{lstlisting}
-func pick(a: int) -> string => $"one:$a"
-func pick(a: int, b: int) -> string => $"two:$a+$b"
+func pick(a: int) -> string => $"one:{$a}"
+func pick(a: int, b: int) -> string => $"two:{$a}+{$b}"
 var f = &pick
 $f(1)            # "one:1"
 $f(1, 2)         # "two:1+2"

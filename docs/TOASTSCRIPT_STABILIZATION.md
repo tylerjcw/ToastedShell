@@ -2854,3 +2854,55 @@ naming decision about the type system, not a defect.
 
 Validation: 3,428 passed, 0 failed, 0 skipped in 2m37s; the only build warnings
 remain the DevCompanion SQLite advisory.
+
+### July 29, 2026 — Specification conformance corpus (Test Strategy §1)
+
+The strategy section records that four specification examples were failing as
+written, and that extracting them into fixtures "would have caught all four
+mechanically". Built, and it found two more.
+
+Extraction, by `scratchpad/spec_probe.py`: 188 `lstlisting` blocks, 242 lines
+carrying a trailing comment — but most comments are prose ("Variable", "int
+(System.Int32)") rather than expected results. Only **24** annotate a value.
+Those are replayed with the lines that preceded them in their own block, so
+`$x`, `$fn`, and friends exist.
+
+Two genuine defects, and both are the kind only an executable corpus finds.
+
+**The specification could not work as written.** The CLR-interop overload
+examples were written `$"one:$a"` and `$"two:$a+$b"`, expecting `one:1` and
+`two:1+2`. A ToastScript hole is braced, so those return the literal text
+`one:$a`. Four occurrences corrected to `{$a}`. The unbraced form is now pinned
+as a test in its own right, so the correction cannot regress into the old
+spelling.
+
+**Quantity equality was not unit-aware, while ordering was.**
+
+```
+5`s              → 5 seconds
+5000`ms          → 5 seconds        same normalised value
+5`s > 4000`ms    → true             ordering is dimension-aware
+5`s == 5000`ms   → false            equality was not
+```
+
+`Quantity` implements `IComparable`, which is why ordering worked, but never
+overrode `Equals` — so equality fell through to reference identity. The
+specification is explicit that "comparison operators also use base-value
+comparison with dimension checking" and lists `5`s == 5000`ms` as an example.
+`Equals` and `GetHashCode` now match `CompareTo`: base value plus dimension.
+Mismatched dimensions are unequal rather than an error, since `==` is a question
+where ordering is a request with no meaningful cross-dimension answer.
+
+This is the third instance of one shape: `TS-P1-15` found enums ordered but not
+equal, `TS-P1-26` found equality asymmetric for bool against string, and this
+finds quantities ordered but not equal. Ordering and equality are implemented
+apart, and a type taught to one is not thereby taught the other. Worth a
+standing check rather than a third individual repair.
+
+Curated rather than extracted at test time: a generic extractor cannot tell a
+documented value from a description, and fails on shapes that are not
+expressions at all — `$x += 5` among them. `SpecConformanceTests` holds the
+checkable examples; the probe script regenerates candidates when the
+specification changes.
+
+Validation: 3,441 passed, 0 failed, 0 skipped in 2m41s.
