@@ -2541,3 +2541,45 @@ guard found the asymmetry; the old suite caught the over-broad fix. Neither
 would have been enough alone.
 
 Validation: 3,383 passed, 0 failed, 0 skipped in 2m37s; zero warnings.
+
+### July 29, 2026 — An untested branch found by measuring before refactoring (TS-P2-24)
+
+Stage division is the remaining half of `TS-P2-24`. Measuring its scope before
+starting found something more important than the refactor.
+
+`HasTopLevelPipeBeforeCloseParen` answers one structural question — does this
+parenthesised group contain a top-level `|` — at two call sites: an if-condition
+chooses between a pipeline and an operator expression, and an
+implicit-current-item group chooses between a pipeline and a `where` predicate.
+
+**Stubbing it to `return false` left the entire suite passing at 3,383.** Its
+`true` branch had no coverage whatsoever. `if (ls | count)` could have been
+broken outright and nothing would have reported it.
+
+The behaviour itself is fine — `if ([1,2,3] | any { $_ > 2 })` takes the true
+branch, `if ([] | count)` takes the false one, and the predicate form still
+works. This was a coverage gap, not a defect.
+
+It is, however, exactly the gap that would have made the planned refactor
+unverifiable. `TS-P2-24` intends to replace this helper with a structural-pass
+query; done against the suite as it stood, that change could have removed
+pipeline-in-condition support entirely and stayed green.
+
+`PipelineInParenthesesTests` closes it: five cases over the `true` branch —
+single- and multi-stage pipelines, both truthiness outcomes — and three over the
+`false` branch, since a helper that chooses between two readings needs both
+pinned or the other rots. Verified by negative control: with the helper stubbed,
+five fail and the three false-branch cases correctly do not.
+
+Method note. The order mattered more than the work. Had the refactor come first
+it would have passed its own tests, passed the suite, and silently deleted a
+feature. "Measure before refactoring" earned its keep here in a way that reading
+the code could not have — the helper looks obviously load-bearing, and it is;
+what was missing was any test saying so.
+
+Remaining under `TS-P2-24`: the refactor itself, now safe to attempt.
+`LiteParser.Parse` computes stages only at top level, so answering this from the
+structural pass needs stage divisions tracked per delimiter frame and exposed by
+owner token index — the same ownership shape the element boundaries already use.
+
+Validation: 3,391 passed, 0 failed, 0 skipped in 2m38s; zero warnings.
