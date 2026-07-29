@@ -2620,3 +2620,55 @@ answers semantic questions — is there an operator, a comma, a comprehension
 before some delimiter — and legitimately stays.
 
 Validation: 3,407 passed, 0 failed, 0 skipped in 2m37s; zero warnings.
+
+### July 29, 2026 — Measuring the last stage helper, and where TS-P2-24 stands
+
+`HasTopLevelOperatorBeforeStageBoundary` is the remaining stage-related helper.
+Measured before touching it, and the result argues against touching it.
+
+| stub | suite |
+|---|---|
+| `return false` | **115 failures** |
+| `return true` | **0 failures** |
+
+So the `true` branch is heavily exercised and the `false` branch is not
+distinguished by any test: always taking `ParseOperatorExpression` instead of
+`ParseArgument` is indistinguishable from correct behaviour. Probing the
+no-operator shapes that reach this call site — a bare list, record, string,
+spread, match — shows all of them working, which is consistent with
+`ParseOperatorExpression` being a superset for these inputs.
+
+**Not acted on.** "The suite passes when stubbed" is exactly the reasoning that
+would have deleted pipeline-in-condition support two entries ago. That the
+distinction is untested is evidence about the tests, not about the code. The
+possible redundancy is recorded here as a simplification candidate for whoever
+picks it up with a way to prove it.
+
+It is also arguably out of scope. The acceptance targets helpers that answer
+*only* structural questions; this one asks a semantic question ("is there an
+operator") with a structural qualifier ("before the stage boundary"), which is
+not the same thing.
+
+**Where the item stands.** Of the eight surviving `HasTopLevel*` helpers, seven
+ask semantic questions — is there a comma, an operator, a comprehension before
+some delimiter — and legitimately remain. The only purely structural one,
+`HasTopLevelPipeBeforeCloseParen`, is retired. The `LooksLike*` family stands at
+54 against the 56 recorded at filing, and is predominantly grammatical ("what
+construct is this") rather than structural ("where does this end"), so it is
+largely not what the clause targets either.
+
+Against the three acceptance clauses:
+
+1. *The parser consumes the lite structure instead of re-deriving it.* Element
+   boundaries: done, the fallback is deleted rather than unused. Stage division:
+   the structural helper is retired.
+2. *Helpers that only answered structural questions are removed.* The one that
+   did is gone.
+3. *Structure agrees with today's parser, evidenced by differential tests.*
+   `LiteParserTests` and `LiteStageDivisionTests`.
+
+That reads as closeable, but the judgement on clause 2 — whether the hybrid
+helper counts — belongs to the programme owner rather than to me, so the status
+is left in progress with this assessment recorded.
+
+Validation: 3,407 passed, 0 failed, 0 skipped; zero warnings; working tree clean.
