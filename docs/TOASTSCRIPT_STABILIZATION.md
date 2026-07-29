@@ -410,7 +410,7 @@ closed.
 | `TS-P2-03` | Planned | Ranges bind at primary precedence instead of below additive expressions. | Precedence corpus covers both range bounds and explicit-parenthesis controls. |
 | `TS-P2-04` | Complete — 2026-07-26 | The documented compact `$value?.Member` syntax silently becomes a bareword. | Fused safe navigation tokenizes correctly or produces a targeted diagnostic; spacing does not change meaning. |
 | `TS-P2-05` | Complete — 2026-07-26 | Numeric separator validation permits forms such as `1__2`, `_1` is misclassified, and large binary/octal values leak overflow exceptions. | Lexer distinguishes identifiers from numerics, validates separator placement, and recovers with structured overflow diagnostics. |
-| `TS-P2-06` | Complete — 2026-07-26 | Newline statement detection omits legal expression starts; unterminated block comments are silently accepted. | All expression-start tokens share one source of truth; unterminated comments report a span-aware diagnostic. |
+| `TS-P2-06` | Complete — 2026-07-26; audited and consolidated 2026-07-29 | Newline statement detection omits legal expression starts; unterminated block comments are silently accepted. | All expression-start tokens share one source of truth; unterminated comments report a span-aware diagnostic. |
 | `TS-P2-07` | Complete — 2026-07-26 | Binder and variable-binder visitors miss pipe-forward, substitution, and other nested forms. | One exhaustive syntax walker visits every child; a reflection/exhaustiveness test fails when a new syntax node lacks traversal. |
 | `TS-P2-08` | Complete — 2026-07-26 | The raw function-name pre-scan can reinterpret later commands after unrelated text containing `func`. | Declarations are discovered structurally without non-local token poisoning. |
 | `TS-P2-09` | Planned | LSP maps warnings to errors and MCP `explain_error` stops runtime analysis when only warnings exist. | Severity is preserved end-to-end; warnings do not suppress independent runtime explanations. |
@@ -2402,3 +2402,50 @@ genuinely separate integration, and this time the claim is based on reading
 `ParsePipeline` rather than on a diagnostic code.
 
 Validation: 3,331 passed, 0 failed, 0 skipped in 2m49s; zero warnings.
+
+### July 29, 2026 — Closed-item audit, first pass
+
+Auditing closed items for the `TS-P1-23` failure mode: closed on one observation
+rather than on an enumeration of the surfaces the acceptance names. Of 23 closed
+P1/P2 items, seven use universal language ("every", "all", "each",
+"identical"). Three were checked.
+
+**`TS-P2-07` — confirmed, strongest form.** "One exhaustive syntax walker visits
+every child" is enforced mechanically by `SyntaxTraversalExhaustivenessTests`: a
+new node type fails the suite until it is traversed or acknowledged with a
+reason. This is the only closed item that cannot silently regress, and it is
+worth treating as the model for what "every" should mean.
+
+**`TS-P2-14` — confirmed, with evidence.** "Suffix forms lex as typed literals in
+every expression position." Twelve positions enumerated: variable initializer,
+arithmetic, comparison, list element, record field, dict value, return value,
+interpolation, ternary arm, set element, and parameter default all yield
+`StorageSize`. One differs — `takes 10kb` in command-argument position yields
+`String` — and that is the documented exception, since the decision reads
+"typed in expression context but remain strings as raw command arguments".
+`takes(10kb)` and `takes (10kb)` both yield `StorageSize`. The claim holds; it
+is now evidenced rather than assumed.
+
+**`TS-P2-06` — did not hold; fixed.** "All expression-start tokens share one
+source of truth." There were three sources. `IsExpressionStartToken` listed 16
+kinds; `CanStartCommandSubexpressionArgument` and `CanStartPrimaryArgument` each
+listed the same 16 plus `Bang`, as independent switch statements. Nothing was
+missing from any of them, so no defect was visible — they agreed only because
+someone had maintained all three in step.
+
+That is precisely the drift hazard the item was filed to remove, and it has a
+near-term cost: `TS-P3-09` moves `Bang` into the canonical set when `!` becomes a
+prefix operator, and three places to remember is how such a change gets
+half-done. Both argument predicates now read
+`kind == Bang || IsExpressionStartToken(kind)`, so the relationship is explicit
+and the sets cannot diverge.
+
+Method note: the scan that found this also produced false positives —
+`CanStartPrimaryArgument` was reported as missing `OpenBracePercent` when the
+token was simply past the scanner's window. A crude scan is a way to find
+candidates, not a source of findings; each one still has to be read.
+
+Remaining unaudited of the seven: `TS-P1-14`, `TS-P1-22`, `TS-P2-12`,
+`TS-P2-15`.
+
+Validation: 3,331 passed, 0 failed, 0 skipped; zero warnings.

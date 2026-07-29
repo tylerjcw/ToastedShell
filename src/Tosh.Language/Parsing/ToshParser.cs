@@ -6637,26 +6637,10 @@ public static class ToshParser
                 return true;
             }
 
-            return Current.Kind switch
-            {
-                SyntaxTokenKind.Number => true,
-                SyntaxTokenKind.String => true,
-                SyntaxTokenKind.InterpolatedString => true,
-                SyntaxTokenKind.Boolean => true,
-                SyntaxTokenKind.Null => true,
-                SyntaxTokenKind.UnitLiteral => true,
-                SyntaxTokenKind.OpenParen => true,
-                SyntaxTokenKind.OpenBracket => true,
-                SyntaxTokenKind.OpenBrace => true,
-                SyntaxTokenKind.OpenBraceColon => true,
-                SyntaxTokenKind.OpenBracePipe => true,
-                SyntaxTokenKind.OpenBracePercent => true,
-                SyntaxTokenKind.DollarOpenParen => true,
-                SyntaxTokenKind.LessThanOpenParen => true,
-                SyntaxTokenKind.Ampersand => true,
-                SyntaxTokenKind.Bang => true,
-                _ => false,
-            };
+            // Same shared set as above, plus `!`. See
+            // CanStartCommandSubexpressionArgument for why this is not a list.
+            return Current.Kind == SyntaxTokenKind.Bang ||
+                   IsExpressionStartToken(Current.Kind);
         }
 
         private ArgumentSyntax? ParsePrimaryArgument(string? commandName = null, bool implicitCurrentItem = false)
@@ -8920,25 +8904,17 @@ public static class ToshParser
             return CanStartCommandSubexpressionArgument(next);
         }
 
+        /// <summary>
+        /// Argument position admits everything that can begin an expression, plus
+        /// <c>!</c>, which cannot begin a statement. Expressed in terms of the
+        /// shared predicate rather than as a second list, so the two cannot drift
+        /// (<c>TS-P2-06</c>) — and so <c>TS-P3-09</c> has one place to change when
+        /// <c>!</c> becomes a prefix operator.
+        /// </summary>
         private static bool CanStartCommandSubexpressionArgument(SyntaxToken token)
         {
-            return token.Kind is SyntaxTokenKind.Bareword
-                or SyntaxTokenKind.String
-                or SyntaxTokenKind.InterpolatedString
-                or SyntaxTokenKind.Number
-                or SyntaxTokenKind.Boolean
-                or SyntaxTokenKind.Null
-                or SyntaxTokenKind.UnitLiteral
-                or SyntaxTokenKind.OpenParen
-                or SyntaxTokenKind.OpenBracket
-                or SyntaxTokenKind.OpenBrace
-                or SyntaxTokenKind.OpenBraceColon
-                or SyntaxTokenKind.OpenBracePipe
-                or SyntaxTokenKind.OpenBracePercent
-                or SyntaxTokenKind.DollarOpenParen
-                or SyntaxTokenKind.LessThanOpenParen
-                or SyntaxTokenKind.Ampersand
-                or SyntaxTokenKind.Bang;
+            return token.Kind == SyntaxTokenKind.Bang ||
+                   IsExpressionStartToken(token.Kind);
         }
 
         private ArgumentSyntax ParseTupleLiteralArgument(SyntaxToken openParen, bool implicitCurrentItem)
