@@ -344,9 +344,13 @@ public sealed class ObjectFormatter
         int depth,
         HashSet<object> visited)
     {
+        // Rendered in the record literal's own delimiters so displayed output
+        // round-trips as source (TS-P2-25). A bare `{ ... }` opens a block now,
+        // so the previous rendering produced text the parser rejects — visible
+        // on every display of a record, in the REPL, diagnostics, and logs.
         if (depth >= options.MaxDepth)
         {
-            return "{ ... }";
+            return "{| ... |}";
         }
 
         var parts = fields
@@ -359,7 +363,9 @@ public sealed class ObjectFormatter
             parts.Add("...");
         }
 
-        return $"{{ {string.Join(", ", parts)} }}";
+        return parts.Count == 0
+            ? "{||}"
+            : $"{{| {string.Join(", ", parts)} |}}";
     }
 
     private string FormatDictionary(

@@ -37,7 +37,7 @@ _pkgs=()
 
 pkgbase=tosh
 pkgname=("${_pkgs[@]}")
-pkgver=26.7.2.10
+pkgver=26.7.3.10
 pkgrel=1
 arch=('x86_64')
 url='https://github.com/komrad/tosh'

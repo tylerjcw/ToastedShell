@@ -1585,13 +1585,17 @@ public static class BuiltInDisplayProfiles
                 context =>
                 {
                     var dict = (Dictionary<object, object?>)context.Value;
+                    // Rendered in the dict literal's own delimiters so displayed
+                    // output round-trips as source (TS-P2-25). `{ ... }` opens a
+                    // block now, so the previous rendering could not be pasted
+                    // back into the shell.
                     if (dict.Count == 0)
                     {
-                        return "{} (empty)";
+                        return "{%%} (empty)";
                     }
 
                     var preview = string.Join(", ", dict.Take(4).Select(kv => $"{FormatDictKey(kv.Key)} => {FormatDisplaySummaryValue(kv.Value)}"));
-                    return dict.Count > 4 ? $"{{ {preview}, ... }} ({dict.Count} entries)" : $"{{ {preview} }}";
+                    return dict.Count > 4 ? $"{{% {preview}, ... %}} ({dict.Count} entries)" : $"{{% {preview} %}}";
                 });
     }
 

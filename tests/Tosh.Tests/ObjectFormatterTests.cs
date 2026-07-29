@@ -50,7 +50,9 @@ public sealed class ObjectFormatterTests
             var r = {| kind = (type-of $v) |}
             echo $"{$r}"
             """);
-        Assert.Equal($"{{ kind = {expectedName} }}", Assert.Single(nested)?.ToString());
+        // Record rendering uses the literal's own delimiters so output
+        // round-trips as source (TS-P2-25).
+        Assert.Equal($"{{| kind = {expectedName} |}}", Assert.Single(nested)?.ToString());
     }
 
     [Fact]

@@ -2672,3 +2672,39 @@ helper counts — belongs to the programme owner rather than to me, so the statu
 is left in progress with this assessment recorded.
 
 Validation: 3,407 passed, 0 failed, 0 skipped; zero warnings; working tree clean.
+
+### July 29, 2026 — Displayed collections round-trip again (TS-P2-25 follow-up)
+
+Found by demonstrating the new literals rather than by a failing test: after
+`TS-P2-25`, displaying a record or dict produced text the parser rejects.
+
+```
+var r = { name = "Ada" }    → tosh.parser.variable_references_require_dollar
+var d = { "ada" => 36 }     → tosh.parser.missing_pipeline_separator
+```
+
+Records rendered as `{ name = "Ada" }` and dicts as `{ "ada" => 36 }` — the
+pre-decision spellings. A bare `{` now opens a block, so neither could be pasted
+back. Sets were already correct because `{: :}` did not change spelling, which
+is why nothing looked wrong at a glance.
+
+The scope is wider than the REPL: anything that displays a record or dict shows
+it — diagnostics, logs, `echo`, table cells. Every one of them was emitting
+syntax the shell would refuse.
+
+Fixed in the two places that render them: `ObjectFormatter.FormatRecordFields`
+and the object-keyed dictionary display profile, including the truncated and
+empty forms (`{| ... |}`, `{||}`, `{%%}`). Verified by feeding each rendered
+form back in — record, dict, set, nested record, and all three empties parse and
+evaluate.
+
+Worth noting how it surfaced. The suite was green throughout; the tests assert
+what the formatter produces, not that what it produces is valid input. A
+round-trip property — *format, re-parse, compare* — would have caught it
+mechanically, and is the shape worth adding if this recurs.
+
+One test needed updating: `ObjectFormatterTests` had hardcoded the old record
+spelling in its nested assertion, which is the correct kind of failure — the
+expectation moved in the same change as the behaviour.
+
+Validation: 3,407 passed, 0 failed, 0 skipped in 2m43s; zero warnings.
