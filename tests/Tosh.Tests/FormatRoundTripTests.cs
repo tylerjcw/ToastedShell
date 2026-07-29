@@ -22,13 +22,14 @@ namespace Tosh.Tests;
 /// programme has come to rely on: state the property, let it find the instances.
 /// </para>
 /// <para>
-/// Scope, established by running the property rather than assumed. Records,
-/// dicts and sets have bespoke source-like renderings; arrays and lists fall to
-/// the generic path and render with a CLR type header
-/// (<c>Int32[] [ 1, 2, 3 ]</c>), which does not pretend to be source. So
-/// round-trip is not a contract the formatter offers across the board, and this
-/// asserts it only where it is offered. The array inconsistency is recorded as
-/// an observation, not silently excluded — see the stabilization log.
+/// Scope, established by running the property rather than assumed. Under
+/// <c>TS-P3-10</c> a collection keeps its CLR type header only when it is the
+/// whole result (<c>Int32[] [ 1, 2, 3 ]</c>), where the element type is
+/// informative and the rendering is display rather than source; nested, it
+/// renders <c>[ 1, 2 ]</c> and round-trips. So a root-level array is still
+/// outside the property, deliberately, and arrays are exercised here in the
+/// nested position where the contract is offered — the same split strings
+/// already had, and for the same reason.
 /// </para>
 /// <para>
 /// A bare string also renders unquoted at the root (<c>abc</c>, not
@@ -94,12 +95,66 @@ public sealed class FormatRoundTripTests
     [InlineData("\"\"")]
     [InlineData("{| inner = 1 |}")]
     [InlineData("{: 1, 2 :}")]
+    // Nested collections lost their type header in TS-P3-10, which is what
+    // brings them inside the property; the root form still keeps it.
+    [InlineData("[1, 2, 3]")]
+    [InlineData("[[1, 2], [3]]")]
+    [InlineData("[\"a\", \"b\"]")]
     [InlineData("true")]
     [InlineData("null")]
     [InlineData("1.5")]
     public async Task Values_nested_in_a_record_round_trip(string element)
     {
         await AssertRoundTripsAsync($"{{| v = {element} |}}");
+    }
+
+    [Fact]
+    public async Task A_root_collection_keeps_its_type_header()
+    {
+        // The other half of the TS-P3-10 decision, pinned so the header is not
+        // dropped everywhere by a later reading of this file: at the root the
+        // element type is the informative part, and the rendering is display.
+        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var (_, text) = await EvaluateAndFormatAsync(engine, "[1, 2, 3]");
+
+        Assert.Equal("Int32[] [ 1, 2, 3 ]", text);
+    }
+
+    [Fact]
+    public async Task A_nested_collection_drops_it()
+    {
+        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var (_, text) = await EvaluateAndFormatAsync(engine, "{| v = [1, 2, 3] |}");
+
+        Assert.Equal("{| v = [ 1, 2, 3 ] |}", text);
+    }
+
+    [Fact]
+    public async Task Nested_containers_indent_once_per_level()
+    {
+        // A container re-indents every line of every item, so a nested one that
+        // also indented by its own depth was counted twice. Asserted on the
+        // detail style, which is the only place the arithmetic is visible.
+        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        var value = Assert.Single(await engine.ExecuteToListAsync("[[1, 2], [3]]"));
+
+        var text = engine.Runtime.Formatter.Format(
+            value,
+            new ObjectFormattingOptions(ObjectRenderStyle.Detail));
+
+        Assert.Equal(
+            """
+            Int32[][] [
+              [
+                1
+                2
+              ]
+              [
+                3
+              ]
+            ]
+            """.ReplaceLineEndings("\n"),
+            text.ReplaceLineEndings("\n"));
     }
 
     [Fact]

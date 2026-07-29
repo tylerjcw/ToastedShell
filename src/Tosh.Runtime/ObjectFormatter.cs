@@ -147,7 +147,7 @@ public sealed class ObjectFormatter
 
             if (value is IEnumerable enumerable and not string)
             {
-                return FormatEnumerable(enumerable, runtimeType, options, depth, visited);
+                return FormatEnumerable(enumerable, runtimeType, options, depth, visited, isRoot);
             }
 
             return FormatObject(value, runtimeType, options, depth, visited);
@@ -394,7 +394,7 @@ public sealed class ObjectFormatter
             items.Add($"... +{hiddenCount} more");
         }
 
-        return FormatContainer(GetTypeName(dictionary.GetType()), "{", "}", items, options, depth);
+        return FormatContainer(GetTypeName(dictionary.GetType()), "{", "}", items, options);
     }
 
     private string FormatEnumerable(
@@ -402,7 +402,8 @@ public sealed class ObjectFormatter
         Type runtimeType,
         ObjectFormattingOptions options,
         int depth,
-        HashSet<object> visited)
+        HashSet<object> visited,
+        bool isRoot)
     {
         var items = new List<string>();
         var hiddenCount = 0;
@@ -424,7 +425,13 @@ public sealed class ObjectFormatter
             items.Add($"... +{hiddenCount} more");
         }
 
-        return FormatContainer(GetTypeName(runtimeType), "[", "]", items, options, depth);
+        // The element type is informative when a collection is the whole result
+        // and noise when it is one field among many — and the header is not source,
+        // so a nested collection rendered with it cannot be pasted back
+        // (TS-P3-10). Strings already switch between unquoted and quoted on the
+        // same root/nested distinction.
+        var typeName = isRoot ? GetTypeName(runtimeType) : null;
+        return FormatContainer(typeName, "[", "]", items, options);
     }
 
     private string FormatObject(
@@ -465,7 +472,7 @@ public sealed class ObjectFormatter
             displayedCount++;
         }
 
-        return FormatContainer(GetTypeName(runtimeType), "{", "}", lines, options, depth);
+        return FormatContainer(GetTypeName(runtimeType), "{", "}", lines, options);
     }
 
     internal static object? SafeGetValue(PropertyInfo property, object target)
@@ -511,29 +518,39 @@ public sealed class ObjectFormatter
         return $"{typeName}<{arguments}>";
     }
 
+    /// <param name="typeName">
+    /// Prefix for the container, or <see langword="null"/> to render without one.
+    /// </param>
+    /// <remarks>
+    /// Indents by exactly one level and takes no <c>depth</c>, because a
+    /// container re-indents every line of every item it holds — so a nested
+    /// container that also indented by its own depth was counted twice, and its
+    /// items drifted a level further right at each level while its closing
+    /// bracket drifted with them. Visible before this only under the CLR type
+    /// header; source-like nested rendering (TS-P3-10) put it in plain sight.
+    /// </remarks>
     private static string FormatContainer(
-        string typeName,
+        string? typeName,
         string opening,
         string closing,
         IReadOnlyList<string> items,
-        ObjectFormattingOptions options,
-        int depth)
+        ObjectFormattingOptions options)
     {
+        var prefix = typeName is null ? string.Empty : typeName + " ";
+
         if (items.Count == 0)
         {
-            return $"{typeName} {opening}{closing}";
+            return $"{prefix}{opening}{closing}";
         }
 
         if (options.Style == ObjectRenderStyle.Compact)
         {
-            return $"{typeName} {opening} {string.Join(", ", items)} {closing}";
+            return $"{prefix}{opening} {string.Join(", ", items)} {closing}";
         }
 
-        var indent = new string(' ', options.IndentSize * (depth + 1));
-        var outerIndent = new string(' ', options.IndentSize * depth);
+        var indent = new string(' ', options.IndentSize);
         var builder = new StringBuilder();
-        builder.Append(typeName);
-        builder.Append(' ');
+        builder.Append(prefix);
         builder.AppendLine(opening);
 
         foreach (var item in items)
@@ -547,7 +564,6 @@ public sealed class ObjectFormatter
             }
         }
 
-        builder.Append(outerIndent);
         builder.Append(closing);
         return builder.ToString();
     }
