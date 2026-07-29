@@ -2708,3 +2708,64 @@ spelling in its nested assertion, which is the correct kind of failure — the
 expectation moved in the same change as the behaviour.
 
 Validation: 3,407 passed, 0 failed, 0 skipped in 2m43s; zero warnings.
+
+### July 29, 2026 — Full board review and re-verification of closed items
+
+Board: **32 complete**, 1 withdrawn (`TS-P1-17`), 5 in progress (`TS-P1-24`,
+`TS-P1-25`, `TS-P2-11`, `TS-P2-23`, `TS-P2-24`), 1 partial (`TS-P1-07`),
+20 planned, 7 proposed, 2 research — 68 items.
+
+Thirty of the thirty-two closed items were re-verified behaviourally through the
+CLI, independently of the suite. **All hold.**
+
+- P0: tuple swap resolves before mutating; base-to-leaf construction runs each
+  layer once; `??=` is lazy for a non-null target and eager for null; defer runs
+  LIFO with body output preserved; recursion raises a structured diagnostic and
+  the session survives, limit 128; `channel-recv` emits a null payload as a value
+  and ends on closure without an extra one.
+- P1: all thirteen — truthiness table, element containment, compound assignment,
+  chained defaults and named gaps, unknown-name diagnosis, strict symmetric
+  ordering, enum ordering and backing-value equality, value-context collapse,
+  `$this` in a method default, chained comparison, type-descriptor display,
+  equality symmetry.
+- P2: fused `?.`, numeric separators, keyword-argument non-poisoning, all quote
+  forms, negative ranges, storage suffixes typed in expression context, named
+  arguments with and without spaces, module dispatch at every casing, and the
+  paired delimiters.
+
+Not spot-checked: `TS-P0-02` (non-destructive `channel-select`) and `TS-P0-06`
+(async class cancellation). Both are race and cancellation properties that a
+one-liner cannot meaningfully exercise; they rest on their dedicated tests.
+
+**Three apparent regressions were my own errors**, worth recording because each
+looked like a real failure:
+
+- `($a, $b) = ($b, $a)` assigned a tuple rather than swapping. The right-hand
+  side must be a collection (`[$b, $a]`); `(…, …)` is a tuple literal.
+- A verification class declared both a primary and an explicit constructor of
+  the same arity and failed with a self-ambiguity error. That is `TS-P1-18`,
+  which is *planned and open* — the script reproduced a known defect rather
+  than finding a new one.
+- `type-of 10kb` reported `String`. Command-argument position, which is
+  `TS-P2-14`'s documented exception. In expression position it is `StorageSize`.
+
+One acceptance clause needed re-reading rather than re-fixing. `TS-P2-16` says
+dispatch is "independent of module-name casing", which sounds like call casing
+need not match the declaration — it need not, and does not. The specification's
+wording is "works for any module-name casing", meaning whatever casing you
+*declare* dispatches; and plain functions are equally case-sensitive, since
+`func Foo` is not callable as `foo`. The item holds; the acceptance wording is
+looser than the spec it implements.
+
+Observations logged, none acted on:
+
+- `type-of` on a record reports `table`.
+- A dict piped to `count` yields 1, the `TS-P3-04` asymmetry, seen live.
+- `tosh.type.index` anchors its span to line 1 regardless of where the indexing
+  is, so the diagnostic points at unrelated source.
+- `channel-recv` warns `expects 1 argument(s) but received 0` when the channel
+  arrives by pipeline, then works correctly.
+- Sets require commas while records and dicts also accept newlines. Faithful to
+  each parser, but an inconsistency a user meets before any of the internals.
+
+Validation: 3,407 passed, 0 failed, 0 skipped; zero warnings.
