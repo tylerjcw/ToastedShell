@@ -1679,6 +1679,14 @@ public sealed partial class ToshEngine : IShellEvaluator
         yield break;
     }
 
+    /// <summary>
+    /// True for a destructuring target that discards rather than binds. Only bare
+    /// <c>_</c> — a name that merely *starts* with an underscore is an ordinary
+    /// identifier, as it is in every language that has this convention.
+    /// </summary>
+    private static bool IsDiscardTarget(string name) =>
+        string.Equals(name, "_", StringComparison.Ordinal);
+
     private async IAsyncEnumerable<object?> EvaluateDestructuringDeclarationAsync(
         string sourceName,
         string sourceText,
@@ -1715,6 +1723,17 @@ public sealed partial class ToshEngine : IShellEvaluator
                     for (var i = 0; i < arrayPattern.Names.Count; i++)
                     {
                         var name = arrayPattern.Names[i];
+
+                        // `_` discards its element — it must not create a binding and must
+                        // not overwrite an existing one (TS-P1-11). Before this,
+                        // `var [a, _, c] = [1, 2, 3]` left `$_` holding 2, clobbering
+                        // whatever `_` meant beforehand — and `_` is the current pipeline
+                        // item, so a destructuring inside a predicate silently changed it.
+                        if (IsDiscardTarget(name))
+                        {
+                            continue;
+                        }
+
                         var elementValue = i < array.Length ? array[i] : null;
                         DeclareVariable(name, new VariableBinding(elementValue, ReplayAsPipeline: false, IsAllocatedOnly: false), destructuring.Modifier);
                     }
@@ -1757,6 +1776,12 @@ public sealed partial class ToshEngine : IShellEvaluator
 
                     foreach (var name in recordPattern.Names)
                     {
+                        // Same discard rule as array destructuring above (TS-P1-11).
+                        if (IsDiscardTarget(name))
+                        {
+                            continue;
+                        }
+
                         dict.TryGetValue(name, out var memberValue);
                         DeclareVariable(name, new VariableBinding(memberValue, ReplayAsPipeline: false, IsAllocatedOnly: false), destructuring.Modifier);
                     }
@@ -4958,6 +4983,16 @@ public sealed partial class ToshEngine : IShellEvaluator
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
+
+        // Records and dictionaries compare by name, not by enumeration order
+        // (TS-P1-10). Delegated to OperatorEvaluator rather than reimplemented: this
+        // method and OperatorEvaluator.AreEqual are the parallel pair TS-P1-24 was filed
+        // for, and the first attempt at this fix landed only on the synchronous side —
+        // `==` goes through here, so the defect survived a change that looked complete.
+        if (OperatorEvaluator.TryCompareByName(actual, expected, out var byName))
+        {
+            return byName;
+        }
 
         // Preserve OperatorEvaluator's collection-first semantics, including
         // recursive element comparison and ordered enumeration.

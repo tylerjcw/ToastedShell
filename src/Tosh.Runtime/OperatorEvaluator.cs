@@ -277,6 +277,18 @@ public static class OperatorEvaluator
 
     public static bool AreEqual(object? actual, object? expected)
     {
+        // Records and dictionaries compare by name and value, never by enumeration
+        // order (TS-P1-10). This has to precede the element-wise path below, because an
+        // ExpandoObject is an IEnumerable<KeyValuePair<…>> and would otherwise be
+        // compared as an *ordered sequence* — which made
+        // `{| a = 1, b = 2 |} == {| b = 2, a = 1 |}` false while the same record written
+        // twice in the same order compared true. Insertion order is not part of a
+        // record's identity.
+        if (TryCompareByName(actual, expected, out var byName))
+        {
+            return byName;
+        }
+
         // When both sides are non-string enumerables, compare element-wise.
         if (actual is IEnumerable actualCollection && actual is not string &&
             expected is IEnumerable expectedCollection && expected is not string)
@@ -484,6 +496,81 @@ public static class OperatorEvaluator
 
     private static string DescribeOperandType(object? value)
         => value is null ? "null" : value.GetType().FullName ?? value.GetType().Name;
+
+    /// <summary>
+    /// Compares two record-like values field by field, ignoring order. Answers
+    /// <see langword="false"/> from <paramref name="handled"/> when the pair is not two
+    /// record-likes, so the caller falls through to its ordinary paths.
+    /// </summary>
+    /// <remarks>
+    /// Keys are matched case-insensitively because member lookup is: a record's
+    /// <c>TryGetMember</c> resolves <c>Name</c> for <c>name</c>, so equality that
+    /// distinguished them would contradict access. A record is only compared against
+    /// another record — mixing a record with a dict is left to the existing paths rather
+    /// than declared equal here, since they are different shell types.
+    /// </remarks>
+    internal static bool TryCompareByName(object? actual, object? expected, out bool result)
+    {
+        result = false;
+
+        // Deliberately narrower than IsRecordLike: string-keyed records only. A `{% … %}`
+        // dictionary is object-keyed, and calling TryGetFields on one throws — it
+        // iterates a generic Dictionary as DictionaryEntry, which is a pre-existing crash
+        // filed as TS-P1-29 rather than fixed here. Dict equality keeps whatever the
+        // ordinary paths already did.
+        if (!IsStringKeyedRecord(actual) || !IsStringKeyedRecord(expected))
+        {
+            return false;
+        }
+
+        if (!ShellRecordUtilities.TryGetFields(actual, out var actualFields) ||
+            !ShellRecordUtilities.TryGetFields(expected, out var expectedFields))
+        {
+            return false;
+        }
+
+        if (actualFields.Count != expectedFields.Count)
+        {
+            result = false;
+            return true;
+        }
+
+        var expectedByName = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var field in expectedFields)
+        {
+            expectedByName[field.Key] = field.Value;
+        }
+
+        foreach (var field in actualFields)
+        {
+            if (!expectedByName.TryGetValue(field.Key, out var counterpart) ||
+                !AreEqual(field.Value, counterpart))
+            {
+                result = false;
+                return true;
+            }
+        }
+
+        result = true;
+        return true;
+    }
+
+    /// <summary>
+    /// An *anonymous* record: a string-keyed dictionary, which is what the
+    /// <c>ExpandoObject</c> behind <c>{| … |}</c> is.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately excludes <see cref="IShellRecordObject"/>. That interface is also
+    /// implemented by <c>ToshClassInstance</c>, so including it made *class instances*
+    /// structurally equal and broke left-biased equality dispatch — a user's own
+    /// <c>Equals</c> stopped being consulted. `TS-P1-10` is about anonymous records;
+    /// a declared class decides its own identity, which is the whole point of letting it
+    /// define <c>Equals</c>.
+    /// </remarks>
+    private static bool IsStringKeyedRecord(object? value) =>
+        value is IDictionary<string, object?>
+              or IReadOnlyDictionary<string, object?>;
 
     private static bool Contains(object? actual, object? expected)
     {
@@ -1104,11 +1191,20 @@ public static class OperatorEvaluator
         if (left is Quantity lq && right is Quantity rq) return lq / rq;
         if (left is Quantity lqs && IsNumeric(right)) return lqs / ToDouble(right);
 
+        // One rule per numeric family, and the floating one is IEEE (TS-P1-16).
+        // Integral and decimal division by zero throws, matching C#; floating division
+        // yields ±Infinity, or NaN for 0.0/0.0, also matching C# and IEEE 754.
+        //
+        // The floating lambda used to throw, which put the interpreter at odds with the
+        // *constant folder*: `10.0 / 0.0` written as literals folded to Infinity while
+        // `$a / $b` holding the same doubles threw. The item was filed as "depends on the
+        // zero operand's type", but the real split was folded versus evaluated — two
+        // implementations of one operation, disagreeing.
         return EvaluateNumeric(
             left,
             right,
             (lhs, rhs) => rhs == 0 ? throw new InvalidOperationException("Division by zero.") : lhs / rhs,
-            (lhs, rhs) => rhs == 0.0 ? throw new InvalidOperationException("Division by zero.") : lhs / rhs,
+            (lhs, rhs) => lhs / rhs,
             (lhs, rhs) => rhs == 0 ? throw new InvalidOperationException("Division by zero.") : lhs / rhs);
     }
 
@@ -1119,11 +1215,12 @@ public static class OperatorEvaluator
             throw new InvalidOperationException("The '%' operator requires non-null operands.");
         }
 
+        // Same rule as division: floating modulo by zero is NaN, not an error (TS-P1-16).
         return EvaluateNumeric(
             left,
             right,
             (lhs, rhs) => rhs == 0 ? throw new InvalidOperationException("Division by zero.") : lhs % rhs,
-            (lhs, rhs) => rhs == 0.0 ? throw new InvalidOperationException("Division by zero.") : lhs % rhs,
+            (lhs, rhs) => lhs % rhs,
             (lhs, rhs) => rhs == 0 ? throw new InvalidOperationException("Division by zero.") : lhs % rhs);
     }
 
