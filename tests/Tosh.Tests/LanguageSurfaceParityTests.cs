@@ -127,7 +127,6 @@ public sealed class LanguageSurfaceParityTests
         // Imports.
         ["using"] = "using System.Text",
         ["require"] = "require \"./nothing.tosh\"",
-        ["import"] = "import System.Text",
         ["from"] = "require M from \"./nothing.tosh\"",
         ["as"] = "require M from \"./nothing.tosh\" as N",
 
@@ -227,6 +226,54 @@ public sealed class LanguageSurfaceParityTests
             failures.Count == 0,
             "Words the registry calls member modifiers that do not work in member "
             + "position:\n  " + string.Join("\n  ", failures));
+    }
+
+    [Fact]
+    public void Every_registry_word_is_named_somewhere_in_the_parser_or_lexer()
+    {
+        // A *necessary* condition, and the one the probes cannot supply. A word the
+        // parser and lexer never mention cannot be syntax, whatever a probe does —
+        // and a probe is easy to fool, because any bareword line parses. `import`
+        // reached this registry from Binder's typo-suggestion pool with the probe
+        // `import System.Text`, which "passed" for exactly that reason. It appears
+        // zero times in the parser and lexer, and on a Linux box it is
+        // /usr/bin/import, ImageMagick's screenshot tool.
+        //
+        // The two checks are complementary and neither is sufficient alone. Source
+        // presence would have wrongly condemned nothing but wrongly *accepted*
+        // `let`, `quote`, and `once`, which appear in parser source for unrelated
+        // reasons; the probes accept those correctly. Source presence rejects
+        // `import`, which the probes accepted. Both, together.
+        var source = File.ReadAllText(LocateParserSource())
+            + File.ReadAllText(Path.Combine(RepositoryRoot(), "src/Tosh.Language/Parsing/ToshLexer.cs"));
+
+        // One exemption, and it is not a loophole. `ParseClassMember` used to name
+        // every C#-familiar alias in a 22-branch string.Equals chain; converting it
+        // to a registry lookup deliberately removed those literals from the parser,
+        // which is the end state this item is driving toward. So an alias is
+        // legitimized by *its canonical spelling* being real parser syntax — a
+        // condition that still bottoms out in the parser and cannot be satisfied by
+        // adding a word to the registry alone.
+        //
+        // Written after this guard flagged obsolete, override, protected and
+        // readonly on its first run: the check was requiring the parser to name
+        // words the parser now correctly delegates.
+        bool NamedInSource(string word) =>
+            source.Contains($"\"{word}\"", StringComparison.Ordinal);
+
+        bool LegitimizedByCanonical(string word) =>
+            LanguageSurface.MemberModifierAliases.TryGetValue(word, out var canonical) &&
+            NamedInSource(canonical);
+
+        var unmentioned = LanguageSurface.Words.Keys
+            .Where(word => !NamedInSource(word) && !LegitimizedByCanonical(word))
+            .OrderBy(word => word, StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.True(
+            unmentioned.Length == 0,
+            "Registry words the parser and lexer never name. A probe can be fooled by "
+            + "a bareword line; this cannot:\n  " + string.Join("\n  ", unmentioned));
     }
 
     [Fact]

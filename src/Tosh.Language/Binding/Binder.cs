@@ -32,7 +32,7 @@ public static class Binder
     // `require` is a parser keyword and never appears in ShellCommandRegistry.
     private static readonly string[] KeywordSuggestionPool = new[]
     {
-        "require", "using", "import", "export", "var", "const",
+        "require", "using", "export", "var", "const",
         "func", "class", "interface", "trait", "module", "enum",
         "record", "struct", "union", "rune", "event",
         "if", "else", "for", "while", "until", "return", "yield",

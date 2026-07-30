@@ -205,9 +205,13 @@ public static class LanguageSurface
             ["obsolete"] = MemberMod,    // fading
 
             // ── Imports ────────────────────────────────────────────────────────
+            // `import` is deliberately absent: it is not a ToastScript word. It
+            // reached this registry from Binder's typo-suggestion pool, and its probe
+            // `import System.Text` "passed" only because any bareword line parses.
+            // On this machine it resolves to /usr/bin/import, ImageMagick's
+            // screenshot tool.
             ["using"] = LanguageWordKind.Import,
             ["require"] = LanguageWordKind.Import,
-            ["import"] = LanguageWordKind.Import,
             ["from"] = LanguageWordKind.Import,
             ["as"] = LanguageWordKind.Import,
 
