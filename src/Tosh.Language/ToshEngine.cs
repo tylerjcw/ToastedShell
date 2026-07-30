@@ -3323,6 +3323,11 @@ public sealed partial class ToshEngine : IShellEvaluator
             }
 
             existingDef.MergePartial(runtimeProperties, runtimeMethods, runtimeConstructors);
+
+            // Declared again rather than returning early, so a file contributing
+            // a partial exports the name it contributed to. Same object, so the
+            // two declarations cannot diverge.
+            DeclareType(@class.Name, existingDef, @class.Modifier, sourceName, sourceText, @class.Span);
             yield break;
         }
 
@@ -3791,6 +3796,19 @@ public sealed partial class ToshEngine : IShellEvaluator
         ModuleExportTable? sharedExports = null;
         if (module.IsPartial && TryFindExistingModule(module.Name, out existingModule))
         {
+            // Classes, records and structs all refuse this; modules merged
+            // silently, which is the one place the four kinds disagreed.
+            if (!existingModule.IsPartial)
+            {
+                throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                    Code: "tosh.runtime.partial_mismatch",
+                    Title: $"Cannot extend module '{module.Name}' as partial: the original module was not declared as partial.",
+                    SourceName: sourceName,
+                    SourceText: sourceText,
+                    Span: module.Span,
+                    Label: "both declarations must be partial"));
+            }
+
             sharedExports = existingModule.ExportTable;
         }
 
@@ -3821,14 +3839,17 @@ public sealed partial class ToshEngine : IShellEvaluator
             }
         }
 
-        if (existingModule is not null)
-        {
-            // Module already declared; the shared ModuleExportTable was
-            // mutated in place. Nothing else to register.
-            yield break;
-        }
+        // A partial declaration that merged into an existing module still
+        // *declares* that module here, rather than returning early. The shared
+        // ModuleExportTable means this is the same object and not a copy, so
+        // there is nothing to keep in step — but without the declaration, a file
+        // contributing a partial exported nothing under the name, and
+        // `require Sys from "./b.tosh"` failed with "Export 'Sys' was not found"
+        // while the merge had in fact succeeded. The bare `require "./b.tosh"`
+        // form worked only because it never looks a name up.
+        var moduleObject = existingModule
+            ?? new ToshModuleObject(this, module.Name, moduleScope.Exports ?? new ModuleExportTable());
 
-        var moduleObject = new ToshModuleObject(this, module.Name, moduleScope.Exports ?? new ModuleExportTable());
         var effectiveModifier = module.Modifier;
 
         if (effectiveModifier == DeclarationModifier.Default &&
@@ -3838,6 +3859,7 @@ public sealed partial class ToshEngine : IShellEvaluator
             effectiveModifier = DeclarationModifier.Export;
         }
 
+        moduleObject.IsPartial = module.IsPartial;
         DeclareModule(module.Name, moduleObject, effectiveModifier);
         yield break;
     }
@@ -4016,6 +4038,7 @@ public sealed partial class ToshEngine : IShellEvaluator
             }
 
             existingDef.MergePartial(runtimeFields);
+            DeclareType(record.Name, existingDef, record.Modifier, sourceName, sourceText, record.Span);
             yield break;
         }
 
@@ -4086,6 +4109,7 @@ public sealed partial class ToshEngine : IShellEvaluator
             }
 
             existingDef.MergePartial(runtimeFields);
+            DeclareType(@struct.Name, existingDef, @struct.Modifier, sourceName, sourceText, @struct.Span);
             yield break;
         }
 

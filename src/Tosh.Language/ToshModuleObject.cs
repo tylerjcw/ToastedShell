@@ -22,6 +22,17 @@ internal sealed class ToshModuleObject : IShellRecordObject, IShellInvocableObje
 
     internal ModuleExportTable ExportTable => _exports;
 
+    /// <summary>
+    /// Whether this module was declared <c>partial</c>, so a later partial
+    /// declaration may extend it.
+    /// </summary>
+    /// <remarks>
+    /// Classes, records and structs all refuse a partial declaration that would
+    /// extend a non-partial original. Modules accepted it silently until this was
+    /// tracked, which is the one place the four declaration kinds disagreed.
+    /// </remarks>
+    internal bool IsPartial { get; set; }
+
     internal void SetCommand(IShellCommand command)
     {
         _exports.Commands[command.Name] = command;
