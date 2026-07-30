@@ -20,10 +20,12 @@
 
   <ItemGroup>
     <!--
-      Caps test parallelism. Without this file xUnit runs one thread per core, and on
-      a 32-core machine that is 32 collections building engines at once — enough to
-      exhaust a 128 GB system three times in one working session. The cap is a
-      mitigation, not the fix: the underlying growth is filed separately.
+      Caps test parallelism at 8. This was added believing parallelism drove the
+      suite's memory; measurement disproved that — 32 threads peak at 3,737 MB and 8
+      at 3,860 MB, indistinguishable, with identical wall time. It is kept for a
+      different and weaker reason: the two tests that have flaked in this programme
+      failed only under parallel load, and a lower, fixed thread count makes runs
+      more comparable to each other. See TS-P2-38 and TS-P2-39.
     -->
     <None Include="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
