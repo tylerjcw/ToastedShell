@@ -447,6 +447,7 @@ closed.
 | `TS-P2-30` | Complete — aliases documented 2026-07-29; the two dead entries remain, see below | The C#-familiar member-modifier aliases are undocumented. `private`, `abstract`, `readonly`, `required`, `override`, `protected`, `obsolete`, `shared`, and `public` are all accepted, parsed in the same loop as their ToastScript spellings (`shy`, `hollow`, `fixed`, `vital`, `overrule`, `guarded`, `fading`, `static`, `proud`) — but the specification documents only the ToastScript words, so a reader cannot know the aliases exist. Nine working spellings undiscoverable, the same shape as partial modules before `TS-P2-28`. Related: `IsDeclarationModifierWord` lists `abstract` and `private` among *declaration* modifiers, which they are not — `abstract class C { }` and `private var x = 1` both fail. Those two entries are dead. | The specification documents each alias beside the word it means, and states that both spellings work; `IsDeclarationModifierWord`'s two dead entries are removed or the type-level positions are made to accept them, decided explicitly rather than left ambiguous. **Done:** the Member Modifiers section pairs each alias with its ToastScript word (`shy`/`private`, `fixed`/`readonly`, `vital`/`required`, `guarded`/`protected`, `overrule`/`override`, `fading`/`obsolete`, `hollow`/`abstract`) and states that both forms mean the same thing; all nine are in the keyword list and the PDF colouring list, held there by `The_specification_keyword_list_matches_the_registry`. **Still open:** `IsDeclarationModifierWord` names `abstract` and `private` among declaration modifiers where neither works. Left for a deliberate call rather than removed in passing, since honouring them at type level is the other reasonable answer. |
 | `TS-P2-31` | Complete — decided and implemented 2026-07-29 | A brace-bodied property accessor silently produces a block value instead of a getter. `prop X { get => ($this.backing * 2) }` works and returns `10`; `prop X { get { return $this.backing * 2 } }` returns a `ShellBlock`, with no diagnostic. The cause is that `ParsePropertyAccessorBlock` parses each accessor body with `ParseArrowStatementBlock`, which calls `ConsumeFatArrow()` unconditionally — so the brace form was never supported, and since `TS-P2-25` made `{` block-only everywhere it now parses as a first-class block *value* rather than erroring. Silent wrong answer rather than a refusal, which is the worst shape available. Accessor blocks are otherwise undocumented. | Decided: **support it**, because a getter restricted to one expression pushes anything conditional into a helper method and `{ ... }` is what a method body already looks like. `ParseAccessorBody` routes a brace to `ParseRequiredBlock` and everything else to the arrow path, so both forms work and the choice is not observable. Multi-statement getters and setters run; `$value` is the incoming value in a setter; an unknown accessor name is still refused. The specification's class-features list now names the form, its two bodies, and `$value`. Negative control: 4 of 6 new cases fail against the unfixed parser, the two that pass being the arrow form and the unknown-accessor diagnostic. |
 | `TS-P2-32` | Planned — filed 2026-07-29 | A keyword loses REPL completion to a CLR type whose name differs only in case. Typing `match` offers `Match`, `MatchCasing`, `MatchCollection`, `MatchEvaluator`, `MatchType` and the executable `match_parens` — but not the keyword `match`. `rune` offers only `Rune`. Both words are present in the completion source, so this is ranking or case-insensitive de-duplication rather than a missing entry, and it affects exactly the words that collide with a BCL type name. Found by the `TS-P2-10` completion-coverage guard, which excludes these two with the reason recorded rather than weakening itself. | A keyword ranks at least as high as a CLR type in a position where the keyword is grammatical, or keywords and types are shown as distinct groups rather than de-duplicated against each other; `match` and `rune` complete from their own prefixes, and the two exclusions are removed from the guard. |
+| `TS-P2-33` | Planned — filed 2026-07-30 | The LSP feature table documents a comprehension form the language does not have. `let` reads "Example: `[for x in $items let y = x * 2 pick y]`", `pick` reads "Projection clause in a comprehension ... Example: `[for x in $items pick x * 2]`", and `get` reads "Projection clause in a comprehension (alias for `pick`)". None of those parse: comprehensions are body-first with `<|`, as in `[$y <| for x in 1..3 let y = ($x * 2)]`. `pick` is not a comprehension clause at all — it is a builtin **command**, an alias for the `get` projection command, so its hover text is wrong in both category and syntax. Users get editor guidance that fails when followed. | The three entries describe the form that exists, with examples taken from executable fixtures rather than written by hand; `pick` moves out of the keyword table to wherever command help lives; and the LSP's examples are covered by the same mechanism that keeps the specification's honest, so a hover example cannot claim syntax the parser rejects. |
 
 **Implementation note for `TS-P2-11` (July 25 review recommendation).** The
 `TS-P2-01`/`TS-P2-02`/`TS-P2-04`/`TS-P2-12`–`TS-P2-15` family shares one root
@@ -3609,3 +3610,52 @@ Method note, third instance this session: two wrong diagnoses in a row from
 reasoning about a mechanism instead of printing what it produced. "Ranking crowded
 it out" was plausible, cheap to believe, and wrong twice. One `Assert.True(false)`
 with the actual suggestions settled it immediately.
+
+### July 30, 2026 — `import` is not a word, and the guard that should have known
+
+Corrected by the programme owner mid-slice: `import` is not ToastScript. It resolves
+to `/usr/bin/import`, ImageMagick's screenshot tool. It had been added to the
+registry, given a probe, and — worse — **written into the specification's keyword
+list and its PDF colouring list** on the strength of that entry.
+
+The provenance is the useful part. `import` reached the registry from exactly one
+place: `Binder.KeywordSuggestionPool`, a list whose purpose is mapping typos like
+`rquire` onto `require`. It is not a claim about the language, and treating a
+consumer as authoritative is what this whole item exists to stop. Neither the LSP
+nor the VS Code metadata documents `import`; both were right.
+
+And the probe passed. `import System.Text` parses cleanly **because any bareword line
+parses** — it is a command invocation as far as the parser is concerned. That trap
+was recorded two entries ago for `quote foo` and then not applied here. Three
+attempts to prove `import` real by behaviour also failed to distinguish it, because
+`new CultureInfo("en-US")` works with no import statement at all: the type resolver
+scans the whole platform index, so `using` and `import` and nothing look identical
+from the outside.
+
+**The missing check was a necessary condition, and it is now a test.** A word the
+parser and lexer never *name* cannot be syntax, whatever a probe does. `import`
+appears zero times in either. The two checks are complementary and neither suffices
+alone:
+
+- source presence rejects `import`, which the probes accepted;
+- probes accept `let`, `quote`, and `once`, which appear in parser source for
+  unrelated reasons and which source presence alone would have wrongly admitted.
+
+**That new guard was itself wrong on its first run**, and instructively so. It
+flagged `obsolete`, `override`, `protected`, and `readonly` — the four aliases whose
+22-branch `string.Equals` chain had just been replaced by a registry lookup. The
+parser no longer names them *because the conversion succeeded*. So the check now
+legitimizes an alias through its canonical spelling being real parser syntax, which
+still bottoms out in the parser and cannot be satisfied by editing the registry
+alone.
+
+Removed from: the registry, the probe table, `Binder.KeywordSuggestionPool` — where
+suggesting a non-word for a typo is its own small defect — and both specification
+lists.
+
+Also filed, from reading the LSP's entries closely rather than counting them
+(`TS-P2-33`): its `let`, `pick`, and `get` hover texts all describe a leading-`for`
+comprehension — `[for x in $items pick x * 2]` — which does not parse. Comprehensions
+are body-first with `<|`. And `pick` is a builtin *command*, an alias for the `get`
+projection command, so its entry is wrong in category as well as syntax. Editor
+guidance that fails when followed is worse than none.
