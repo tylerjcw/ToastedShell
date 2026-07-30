@@ -411,6 +411,7 @@ closed.
 | `TS-P1-25` | Complete — 2026-07-29 | (Filed 2026-07-26 under a duplicate `TS-P1-20`; renumbered 2026-07-27.) The pure compiler profile can report a Tier-1-clean artifact while emitted IL still unconditionally calls `ToshHost.Initialize`/`RegisterCompiledAssembly` from `Main` and `ToshHost.EnterExecutionFrame` from functions, methods, lambdas, and blocks. | A pure artifact contains no metadata references or calls to `Tosh.Compiler.Runtime`, `ToshHost`, or `ToshEngine`; bootstrap is omitted or conditional; recursion guarding uses a stable `Tosh.Runtime` primitive; and a post-emit IL dependency audit fails independently of `RequireTier` diagnostics. Verified 2026-07-27: the emitted IL references exactly `System.Console`, `System.Private.CoreLib`, `Tosh.Compiler.Runtime`, and `Tosh.Runtime`, so only the three unconditional `ToshHost` members stand between the artifact and purity; the over-declared `deps.json` is a separate packaging concern. |
 | `TS-P1-26` | Complete — 2026-07-29 | Equality is asymmetric for bool against string: `true == "true"` is `true` while `"true" == true` is `false`. Numeric pairs are symmetric in both directions (`1 == "1"` and `"1" == 1`), as are bool-against-number, so only the string-on-the-left-of-a-bool direction fails to coerce. Both `OperatorEvaluator.AreEqual` and `ToshEngine.AreEqualAsync` agree with each other, so this is one rule applied in one direction rather than a sync/async drift. Found by `EqualityParityTests` on its first run. `TS-P1-14` promised symmetry explicitly for ordering and did not state it for equality, which is why it survived that item. | A decision records whether a string coerces to bool for equality at all: either `"true" == true` becomes `true` (extend coercion, matching the numeric rule) or `true == "true"` becomes `false` (drop bool/string coercion). Equality is symmetric for every pair in the corpus afterwards, on both implementations; the characterization entry in `EqualityParityTests` is inverted in the same change. |
 | `TS-P1-27` | Complete — implemented 2026-07-30 | ToastScript's concurrency system and the CLR's did not meet. `async`/`await` are builtin commands over `ShellFuture`, and a CLR method returning `Task`/`Task<T>` was never awaited by anything: the task flowed into the pipeline untouched, `await` refused it with `await_requires_future`, and it displayed as `AsyncStateMachineBox\`1` — the compiler's state machine type, since `Task` does not override `ToString`. The only route to a value was `.Result`, which blocks and can deadlock. Reported from real code: `async { $p.SendPingAsync(…) }` then `await $reply`. | Decided C#-identical and explicit: a task-returning call yields a task and you await it. `await` accepts `Task`, `Task<T>`, `ValueTask`, `ValueTask<T>` and a `ShellFuture`, **flattens** so one `await` unwraps a future whose output is a task, emits nothing for a declared-`Task`, honours cancellation via `WaitAsync`, and surfaces a faulted task's *own* message rather than `AggregateException`'s. Tasks stay values so work can overlap — asserted by timing. An un-awaited task renders `Task<PingReply> (pending)`. Auto-awaiting at the call site was rejected: it removes concurrency and would have to land on both surfaces of the dual-surface interfaces. Specification gains an Asynchrony section — it had none. Negative control: 6 of 10 cases fail unfixed. |
+| `TS-P1-28` | Complete — fixed 2026-07-30 | A computed `static`/`shared` property answered **`null`**, silently, in every spelling — arrow-bodied and accessor-block alike, in a `hermit class` and a plain one. Static properties were only ever *initialized*, never *evaluated*: both initialization sites read `IsStatic && Initializer is not null && !IsComputed`, so a computed one never entered `_staticValues`, and `TryGetStaticMember` fell through to a line commented `// null default`. Stored static properties worked throughout, which is why the report read as "static properties do not work at all" rather than "computed ones do not". No diagnostic at any point. Reported from a real library whose `hermit class State` exposed `shared prop Icmp => …`. | `TryGetStaticMember` evaluates a computed static property's getter through `ExecuteClassBlockSync`, mirroring the instance path — `CreateLocals` already accepts a null instance and omits `$this`, so no new plumbing was needed. Every spelling returns its value, on each read rather than cached, and the stored path is unchanged. Negative control across both fixes in this slice: 8 of 12 cases fail unfixed. |
 
 ## P2 — Parser, Binder, Diagnostics, and Surface Generation
 
@@ -455,6 +456,8 @@ closed.
 | `TS-P2-37` | Planned — filed 2026-07-30 | The shell type alias `file` shadows `System.IO.File`, so `File.ReadAllTextAsync(…)` reports "No overload matched static method 'ReadAllTextAsync' on 'System.IO.FileInfo'" — the alias resolves `File` to `FileInfo` and the static is looked up on the wrong type. The fully-qualified `System.IO.File.ReadAllTextAsync` works. Same shape as the `double`/`map`/`set` collisions `TS-P2-23` handled for *bare* names, but this one is in the member-access path where a declaration cannot win. | A capitalized name that matches a shell type alias only case-insensitively resolves to the CLR type in member-access position, or the diagnostic names both candidates and says which was chosen; `File.ReadAllTextAsync` works without qualification, and `var f: file = …` keeps binding to `FileInfo`. |
 | `TS-P2-38` | Open — 2026-07-30: the suite is **not** the cause; see the correction entry | A **128 GB** machine was exhausted three times in one session while the test suite was running, taking the editor down each time. Attributing it to the suite was wrong, and the measurements say so: RSS traced over a full run is flat — 174 MB at start, ~2.8 GB within three seconds, then **dead flat at 2,744 MB for 130 seconds** while 3,500 tests execute, so the tests retain nothing. At 32 threads the numbers are indistinguishable from 8 (peak 3,737 MB against 3,860 MB, identical wall time), so parallelism is not a multiplier either. A single shell invocation is 174 MB; a single test in the host is 196 MB. **The suite's normal behaviour cannot exhaust 128 GB.** What actually did remains unknown — candidates are a rare unbounded path (`TS-P1-08`, `TS-P1-19`) firing occasionally, or a non-`dotnet` consumer the sampler never counted, since it matched only `dotnet`/`testhost` while VS Code's Roslyn host alone was measured at 1.27 GB. | The next exhaustion is caught with a sampler that measures **total system memory**, not one process family, so the consumer is identified rather than assumed. Until then a memory-capped run stays the standing instruction — not because the suite is known to be at fault, but because a cgroup cap turns a machine-wide failure into a killed process. The 2.8 GB steady state is a separate, smaller question: reasonable for 3,554 tests, and not what took the machine down. |
 | `TS-P2-39` | Planned — filed 2026-07-30 | Two unrelated tests fail *only* under parallel load and pass 3/3 in isolation: `ScopeAndChannelTests.Scope_awaits_spawned_jobs_and_returns_completions` (seen three times) and `GenericClassTests.Generic_class_user_interface_constraint_accepts_implementing_class`. Two different subsystems failing only when concurrent points at shared mutable static state rather than at either test. **Named suspect, not a proven cause:** `DotNetTypeResolver._negativeResultCache` is a process-wide `ConcurrentDictionary` of names confirmed unresolvable, never cleared, and invalidated only when `AppDomain.CurrentDomain.GetAssemblies().Length` grows — which a ToastScript-declared type does not do, since it is a `ToshClassDefinition` in a scope and not a CLR assembly. A deterministic reproduction was attempted (resolve `IShape` via a failing annotation, then declare `interface IShape` and use it in a generic constraint) and **did not reproduce** — the constraint resolved correctly — so either that path does not populate the cache or constraints do not consult it. | The flakiness is reproduced deterministically, by seeding whatever state is shared rather than by repeating the suite until it fails; the sharing is either removed or made per-engine; both tests pass under repeated parallel runs. If the negative cache is exonerated, the failed reproduction above is recorded so it is not retried. |
+| `TS-P2-40` | Complete — fixed 2026-07-30 | Completion silently dropped one of any two members whose names differ **only in case**. A class holding `shared func icmp()` beside `shared prop Icmp` offered one of them and never both; which one depended on enumeration order, because `OrderSuggestions` ran `DistinctBy(Label, OrdinalIgnoreCase)` *before* `OrderBy`. The member-suggestion dictionaries were case-insensitive for the same reason. This wore the same symptom as `TS-P1-28` — "the property does not even show up in autocomplete" — while having nothing to do with static-ness. | De-duplication is ordinal in the two member-suggestion dictionaries and in `OrderSuggestions`, so case-distinct members both appear; an exact duplicate spelling still collapses, which is the case de-duplication is actually for. |
+| `TS-P2-41` | Planned — filed 2026-07-30 | A bare sibling member reference inside a class body produces a diagnostic that suggests **shell commands**. `static prop Y => f()` beside `static func f()` reports "Command 'f' is not a registered builtin or function declared in this source — did you mean 'df', 'fg', or 'if'?". The rule itself is correct and uniform: members are reached through `ClassName.` or `$this.`, and bare `f()` fails from an instance method too, so this is not a resolution defect. But the suggestion list is actively misleading — it names three unrelated shell commands when a member of the enclosing class differs by nothing at all. | When an unresolved bare name matches a member of the lexically enclosing class or struct, the diagnostic suggests the qualified form (`did you mean 'C.f()'?`) ahead of any command-name suggestions, and says that members require a qualifier. The specification states the rule, which today it only implies via "`$this` inside methods". |
 
 **Implementation note for `TS-P2-11` (July 25 review recommendation).** The
 `TS-P2-01`/`TS-P2-02`/`TS-P2-04`/`TS-P2-12`–`TS-P2-15` family shares one root
@@ -3922,3 +3925,53 @@ invisible. The corrected acceptance asks for total-system sampling on the next
 occurrence, so the consumer is identified rather than assumed. A capped run remains the
 standing instruction regardless — not because the suite is guilty, but because a cgroup
 cap converts a machine-wide failure into one killed process.
+
+### July 30, 2026 — One symptom, two defects, and a rule that is not one (TS-P1-28, TS-P2-40)
+
+Reported from a real library: a `hermit class State` whose static functions worked while
+its static properties "do not work, at all" and "do not even show up in autocomplete".
+That is one sentence describing two unrelated defects and one correct language rule, and
+separating them mattered more than fixing either.
+
+**`TS-P1-28` — computed static properties were never evaluated.** Static properties were
+only ever *initialized*. Both initialization sites read
+`IsStatic && Initializer is not null && !IsComputed`, so a computed property never
+entered `_staticValues`, and `TryGetStaticMember` fell through to a line whose comment
+was already the whole bug:
+
+```csharp
+if (_staticValues.TryGetValue(memberName, out var stored)) { value = stored; return true; }
+return true; // null default        ← every computed static property landed here
+```
+
+`static prop Y => 7` answered `null`. So did an accessor-block form. No diagnostic. The
+fix mirrors the instance path — `CreateLocals` already accepts a null instance and omits
+`$this`, so evaluating a static getter needed no new plumbing.
+
+Stored static properties worked the whole time, which is exactly why the report read as
+"static properties don't work" instead of "computed ones don't". Isolating that took four
+probes and was the difference between a one-line fix and a search.
+
+**`TS-P2-40` — completion dropped members differing only in case.** Nothing to do with
+static-ness. The reporter's class held `func icmp()` beside `prop Icmp`, and
+`OrderSuggestions` ran `DistinctBy(Label, OrdinalIgnoreCase)` *before* `OrderBy`, so one
+of the pair vanished and *which* one depended on enumeration order. Fixing the two
+suggestion dictionaries alone was not enough — it flipped the winner rather than keeping
+both, which is how the second dedupe was found. Ordinal throughout now; an exact
+duplicate spelling still collapses, which is what de-duplication is for.
+
+**And a rule that is not a defect.** `static prop Icmp => icmp()` fails, and should:
+members are reached through `ClassName.` or `$this.`, never bare. Bare `f()` fails from
+an instance method too, so the rule is uniform. What is wrong is the diagnostic —
+"Command 'f' is not a registered builtin … did you mean 'df', 'fg', or 'if'?" — which
+names three unrelated shell commands while a member of the enclosing class sits one
+qualifier away. Filed as `TS-P2-41` rather than fixed here, because the fix belongs with
+the suggestion machinery and not with static properties.
+
+Verified against the reporter's own file rather than a fixture:
+`ToastLib.Network.State.Icmp` now returns `true`, running a real ICMP ping through two
+nested partial modules and a `require`. Their `IsNetworkUp` still needs one change of its
+own — it calls `State.Icmp()` with parentheses, which asks for a method and reports
+"Static method 'Icmp' was not found on class 'State'"; a property is read without them.
+Worth noting that this diagnostic is *good*: it says exactly what was looked for and
+where.
