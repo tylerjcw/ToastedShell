@@ -46,6 +46,29 @@ public static class ShellIterationUtilities
         }
     }
 
+    /// <summary>
+    /// Whether expanding <paramref name="value"/> could yield anything other than the
+    /// value itself. Mirrors <see cref="ExpandCollectionLikeValue"/>'s own rule — null,
+    /// strings, and record-likes are atoms, and so is anything that is not
+    /// <see cref="IEnumerable"/>.
+    /// </summary>
+    /// <remarks>
+    /// Kept beside the expansion it mirrors, because the two disagreeing would put the
+    /// lookahead back for values that do not need it or remove it for values that do.
+    /// </remarks>
+    private static bool IsExpandableForIteration(object? value)
+    {
+        if (value is IShellEnumerableObject)
+        {
+            return true;
+        }
+
+        return value is not null
+            && value is not string
+            && !ShellRecordUtilities.IsRecordLike(value)
+            && value is IEnumerable;
+    }
+
     public static IEnumerable<object?> ExpandCollectionLikeValue(object? value)
     {
         if (value is null || value is string || ShellRecordUtilities.IsRecordLike(value))
@@ -144,6 +167,27 @@ public static class ShellIterationUtilities
         }
 
         var first = enumerator.Current;
+
+        // The lookahead below exists to answer one question: is this a *lone* collection
+        // that should be expanded element-wise? When the first item is not expandable the
+        // answer does not matter — expanding a scalar yields the scalar — so pulling a
+        // second item to find out is pure waste, and the waste is observable. A generator
+        // gets resumed once more than the consumer asked for, so `gen | first 1` produced
+        // two items and `gen | any { … }` did too (TS-P1-08). For an expensive or
+        // side-effecting producer that is a real extra unit of work, and if the surplus
+        // item throws, the error is reported for work nobody requested.
+        if (!IsExpandableForIteration(first))
+        {
+            yield return first;
+
+            while (await enumerator.MoveNextAsync())
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                yield return enumerator.Current;
+            }
+
+            yield break;
+        }
 
         if (!await enumerator.MoveNextAsync())
         {

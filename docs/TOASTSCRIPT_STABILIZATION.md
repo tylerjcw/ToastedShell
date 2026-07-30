@@ -391,7 +391,7 @@ closed.
 | `TS-P1-05` | Complete — 2026-07-26 | Constructor/method defaults become null; free defaults and compiled captures use incompatible scopes. | One callable binder evaluates defaults according to the working decision for functions, methods, and constructors in both execution modes. |
 | `TS-P1-06` | Complete — 2026-07-26 | Unknown/duplicate named arguments are accepted and mixed named/rest calls can drop or wrap positional arguments incorrectly. | Unknown and duplicate names are diagnosed; rest contains only unconsumed positional values in source order. |
 | `TS-P1-07` | Partially complete — defer case 2026-07-25 | The defer-specific loss of values emitted before `return` is addressed; other nested control-flow shapes can still materialize or change streaming behavior. | Previously emitted values stream unchanged; optional return value is final; nested control flow does not alter output semantics or introduce unnecessary materialization. |
-| `TS-P1-08` | Planned — re-rating proposal **withdrawn** 2026-07-28; the evidence was misattributed | Nested generator statements materialize output, while short-circuit consumers peek a second upstream item. **`take-while` does not short-circuit an infinite generator at all.** `recur (0, 1) func(a, b) => ($a + $b) \| take-while { _ < 100 }` (`LazySequenceTests.Recur_fibonacci_take_while`) should stop at 89; instead it generates Fibonacci without bound. Because the values are arbitrary-precision integers whose digit count grows linearly, total memory grows quadratically: an instrumented run reached **104,741 MB in 57 seconds** and exhausted a 128 GB machine. The sibling `iterate 1 func(x) => ($x * 2) \| take-while { _ <= 64 }` fails instead with `'iterate' operations must produce exactly one value per input item`. | Nested `yield` streams promptly; `first`/`any` do not evaluate an unnecessary next item; **`take-while`/`skip-while` short-circuit without materializing an unbounded upstream**; infinite-source tests complete under a bounded memory cap. |
+| `TS-P1-08` | Complete — 2026-07-30; the headline symptom was already fixed, the surplus pull is now too | Nested generator statements materialize output, while short-circuit consumers peek a second upstream item. **`take-while` does not short-circuit an infinite generator at all.** `recur (0, 1) func(a, b) => ($a + $b) \| take-while { _ < 100 }` (`LazySequenceTests.Recur_fibonacci_take_while`) should stop at 89; instead it generates Fibonacci without bound. Because the values are arbitrary-precision integers whose digit count grows linearly, total memory grows quadratically: an instrumented run reached **104,741 MB in 57 seconds** and exhausted a 128 GB machine. The sibling `iterate 1 func(x) => ($x * 2) \| take-while { _ <= 64 }` fails instead with `'iterate' operations must produce exactly one value per input item`. | Nested `yield` streams promptly; `first`/`any` do not evaluate an unnecessary next item; **`take-while`/`skip-while` short-circuit without materializing an unbounded upstream**; infinite-source tests complete under a bounded memory cap. |
 | `TS-P1-09` | Planned | Class hierarchy lookup loses generic bindings, inherited overloads, `vital` validation, and private visibility rules. | Recursive hierarchy test matrix covers generic intermediaries, overload sets, required members, private/protected access, and partial statics. |
 | `TS-P1-10` | Complete — fixed 2026-07-30 | Anonymous-record equality depends on dictionary insertion order. | Records with the same names and canonically equal values compare equal regardless of insertion order. |
 | `TS-P1-11` | Complete — fixed 2026-07-30 | `_` in destructuring is bound and overwritten instead of discarding the matched value. | Every `_` target skips without creating or modifying a binding; nested/rest patterns are covered. |
@@ -4089,3 +4089,56 @@ one over crashes with `unexpected_exception` instead of a diagnostic. Found beca
 than growing to cover it.
 
 Negative control: 13 of 24 new cases fail against the unfixed runtime.
+
+### July 30, 2026 — TS-P1-08: half already fixed, half measurable
+
+Opened this expecting the 104 GB memory bomb. It is gone, and has been for most of this
+programme — but the item still said otherwise, which is its own kind of defect.
+
+**The headline symptom no longer reproduces.** `recur (0, 1) func(a, b) => ($a + $b) |
+take-while { _ < 100 }` yields `0, 1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89` and stops. The
+sibling `iterate 1 func(x) => ($x * 2) | take-while { _ <= 64 }` yields `1, 2, 4, 8, 16, 32,
+64` with no "must produce exactly one value per input item" error.
+`LazySequenceTests.Recur_fibonacci_take_while` asserts exactly that and is green — it has
+been green since the parser repair earlier in this programme, which found that
+`ParseAnonymousFunctionArrowBody` was **swallowing `| take-while …` into the lambda body**
+and leaving the generator unbounded. The 104 GB was the consequence of a parse error, not
+of the iteration machinery.
+
+That also closes a loop on `TS-P2-38`: the 104 GB event was a *test* in this suite, so
+before that repair a full run could balloon exactly that far. The suite's measured 2.8 GB
+today is the same suite after the fix. It does not explain the later crashes — the suite
+was already innocent by then — but it explains the shape of the first one.
+
+**The second clause was real, and is now measured.** Short-circuit consumers pulled one
+item more than they needed:
+
+| consumer | pulled before | pulled now | needed |
+|---|---|---|---|
+| `first 1` | 2 | **1** | 1 |
+| `first 2` | 2 | 2 | 2 |
+| `any { _ > 0 }` | 2 | **1** | 1 |
+| `take-while { _ < 3 }` | 3 | 3 | 3 — inherent |
+
+`first 2` pulling exactly two ruled out a simple off-by-one and pointed away from
+`FirstCommand`, which is correct: it breaks the moment it has emitted its last item. The
+surplus was in `ShellIterationUtilities.ReplaySingleInputCollectionAsync`, which pulls a
+second item to decide whether the input is a *lone* collection to expand element-wise.
+
+That lookahead only earns its cost when the first item is expandable. Expanding a scalar
+yields the scalar, so for a generator of numbers the second pull answered a question with
+no consequence — while costing a unit of the producer's work and surfacing an error if the
+surplus item threw. It is now taken only when the first item is actually expandable, and
+every expansion behaviour is pinned: a lone array still expands, two arrays stay two items,
+records and strings stay atoms.
+
+`take-while` is included in the table at 3 deliberately. It *must* evaluate the item that
+fails its predicate to know to stop, so three is correct rather than surplus, and recording
+that stops a later reader "optimising" it.
+
+**Method note.** The first attempt to measure pull counts used `echo` inside the generator
+and measured nothing — those values *are* the pipeline, so `first 1` consumed them and the
+evidence disappeared into the thing being tested. `writeline` writes directly, which is what
+makes the count visible. Negative control: 2 of 12 cases fail against the unfixed runtime,
+and the 10 that pass are the expansion semantics, which is the right split — the fix was
+meant to change pull counts and nothing else.
