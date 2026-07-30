@@ -47,71 +47,46 @@ internal sealed class ReplCompletionEngine
         ["_"] = "The current pipeline item in predicates and block-driven pipeline commands.",
     };
 
-    private static readonly IReadOnlyDictionary<string, string> Keywords = new Dictionary<string, string>(StringComparer.Ordinal)
+    /// <summary>
+    /// Completion entries for every word in the language, labelled by what the word
+    /// is. Derived from <see cref="LanguageSurface"/> rather than listed here
+    /// (<c>TS-P2-10</c>): the hand-kept list held 36 of the language's 103 words, so
+    /// two thirds of the keywords could not be completed at all — typing `def` and
+    /// pressing tab did not offer `defer`.
+    /// </summary>
+    private static readonly IReadOnlyDictionary<string, string> Keywords =
+        LanguageSurface.Words.ToDictionary(
+            pair => pair.Key,
+            pair => DescribeWordKind(pair.Value),
+            StringComparer.Ordinal);
+
+    /// <summary>
+    /// The label shown beside a completion. Order matters: a word that is only an
+    /// operator reads as one, a word carrying any modifier flag reads as a modifier,
+    /// and everything else is a keyword — so `in`, which is both control flow and an
+    /// operator, stays a keyword.
+    /// </summary>
+    private static string DescribeWordKind(LanguageWordKind kind)
     {
-        ["func"] = "Keyword",
-        ["var"] = "Keyword",
-        ["class"] = "Keyword",
-        ["module"] = "Keyword",
-        ["enum"] = "Keyword",
-        ["record"] = "Keyword",
-        ["prop"] = "Keyword",
-        ["shy"] = "Keyword",
-        ["static"] = "Keyword",
-        ["shared"] = "Modifier",
-        ["sealed"] = "Modifier",
-        ["hollow"] = "Modifier",
-        ["fixed"] = "Modifier",
-        ["vital"] = "Modifier",
-        ["guarded"] = "Modifier",
-        ["overrule"] = "Modifier",
-        ["hermit"] = "Modifier",
-        ["strict"] = "Modifier",
-        ["lazy"] = "Modifier",
-        ["fading"] = "Modifier",
-        ["local"] = "Modifier",
-        ["raw"] = "Modifier",
-        ["partial"] = "Modifier",
-        ["proud"] = "Modifier",
-        ["public"] = "Modifier",
-        ["fluid"] = "Modifier",
-        ["struct"] = "Keyword",
-        ["trait"] = "Keyword",
-        ["fulfills"] = "Keyword",
-        ["uses"] = "Keyword",
-        ["global"] = "Keyword",
-        ["export"] = "Keyword",
-        ["using"] = "Keyword",
-        ["require"] = "Keyword",
-        ["from"] = "Keyword",
-        ["as"] = "Keyword",
-        ["if"] = "Keyword",
-        ["else"] = "Keyword",
-        ["for"] = "Keyword",
-        ["in"] = "Keyword",
-        ["while"] = "Keyword",
-        ["until"] = "Keyword",
-        ["return"] = "Keyword",
-        ["throw"] = "Keyword",
-        ["try"] = "Keyword",
-        ["catch"] = "Keyword",
-        ["finally"] = "Keyword",
-        ["switch"] = "Keyword",
-        ["match"] = "Keyword",
-        ["case"] = "Keyword",
-        ["default"] = "Keyword",
-        ["break"] = "Keyword",
-        ["continue"] = "Keyword",
-        ["and"] = "Operator",
-        ["or"] = "Operator",
-        ["not"] = "Operator",
-        ["is"] = "Operator",
-        ["is-not"] = "Operator",
-        ["not-in"] = "Operator",
-        ["new"] = "Language form",
-        ["nameof"] = "Language form",
-        ["name-of"] = "Language form",
-    };
+        if (kind == LanguageWordKind.OperatorWord)
+        {
+            return "Operator";
+        }
+
+        if (kind == LanguageWordKind.Constant)
+        {
+            return "Constant";
+        }
+
+        if ((kind & (LanguageWordKind.VisibilityModifier |
+                     LanguageWordKind.TypeModifier |
+                     LanguageWordKind.MemberModifier)) != 0)
+        {
+            return "Modifier";
+        }
+
+        return "Keyword";
+    }
 
     private readonly ToshRuntime _runtime;
     private IReadOnlyDictionary<string, CommandMetadata>? _metadataCache;
