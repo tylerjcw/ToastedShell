@@ -369,6 +369,53 @@ public sealed class LanguageSurfaceParityTests
             $"{relativePath} names words the registry does not:\n  " + string.Join("\n  ", unknown));
     }
 
+    [Fact]
+    public void The_specification_keyword_list_matches_the_registry()
+    {
+        // The specification is a consumer too, and the item's problem statement names
+        // its tables explicitly. Two lists live in the document: the itemized
+        // §Keywords section a reader consults, and the `lstdefinelanguage` list that
+        // colours every code sample in the PDF. Both are checked, because they had
+        // already drifted from each other — `fading` appears in the colouring list
+        // and not in the reader's list.
+        //
+        // Operator words are excluded by the specification's own explicit statement:
+        // "The words `and`, `or`, and `not` are operators, not keywords." They are
+        // documented in the operator section instead, so their absence here is
+        // correct and deliberate rather than drift.
+        var spec = File.ReadAllText(Path.Combine(RepositoryRoot(), "docs/spec/toastscript-spec.tex"));
+
+        var expected = LanguageSurface.Words
+            .Where(pair => pair.Value != LanguageWordKind.OperatorWord)
+            .Select(pair => pair.Key)
+            .ToHashSet(StringComparer.Ordinal);
+
+        var sectionStart = spec.IndexOf(@"\section{Keywords and Contextual Words}", StringComparison.Ordinal);
+        Assert.True(sectionStart >= 0, "could not locate the specification's keyword section");
+        var sectionEnd = spec.IndexOf(@"\section", sectionStart + 10, StringComparison.Ordinal);
+        var section = spec[sectionStart..sectionEnd];
+
+        var documented = Regex.Matches(section, @"\\item \\code\{([a-z][a-z0-9\\\-]*)\}")
+            .Select(m => m.Groups[1].Value.Replace("\\", string.Empty, StringComparison.Ordinal))
+            .ToHashSet(StringComparer.Ordinal);
+
+        var undocumented = expected.Except(documented, StringComparer.Ordinal)
+            .OrderBy(word => word, StringComparer.Ordinal).ToArray();
+        var overdocumented = documented.Except(expected, StringComparer.Ordinal)
+            .OrderBy(word => word, StringComparer.Ordinal).ToArray();
+
+        Assert.True(
+            undocumented.Length == 0,
+            "Words in the registry that the specification's keyword section does not "
+            + "list:\n  " + string.Join("\n  ", undocumented));
+
+        Assert.True(
+            overdocumented.Length == 0,
+            "Words the specification lists that the registry does not have — add them "
+            + "to the registry with a probe, since the specification is more likely to "
+            + "be right:\n  " + string.Join("\n  ", overdocumented));
+    }
+
     private static string RepositoryRoot() =>
         Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../"));
 

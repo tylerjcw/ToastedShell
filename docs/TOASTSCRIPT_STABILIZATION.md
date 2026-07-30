@@ -444,7 +444,8 @@ closed.
 | `TS-P2-27` | Complete — decided and implemented 2026-07-29 | `from csv` yields every column as `string`, so the specification's own `\| where _.Amount > 100` fails with "Values of type 'System.String' and 'System.Int32' cannot be ordered" and needs an explicit `cast int`. This sits against the stated design — typed object pipelines — and against `from json`, which *does* produce typed values because JSON carries types. Whether CSV should infer is a decision, not obviously a defect: NuShell infers, PowerShell's `Import-Csv` does not. The diagnostic itself is good and names both types. | Decided: infer numbers and booleans, not dates. Integers narrow to `int` where they fit, decimals become `double`, `true`/`false` become `bool`; dates stay text because `01/02/26` is three different days by locale. Inference is **per column** — one disagreeing cell leaves the whole column textual, so values within a column always compare with each other. A leading zero keeps its column textual (`007`, zip codes); a thousands separator cannot be numeric because the comma is the delimiter. An empty cell is not evidence and becomes `null` in a typed column. `--raw` / `--no-infer` returns everything as text. Applies to `tsv` too, sharing the format. |
 | `TS-P2-28` | Complete — fixed 2026-07-29 | A `partial` declaration split across imported files could not be assembled with the **named** import form. `require Sys from "./a.tosh"` followed by `require Sys from "./b.tosh"` failed with `require_failed` — "Export 'Sys' was not found" — on whichever file came second, in either order, while the bare `require "./b.tosh"` form worked. The diagnostic was actively misleading: the merge had succeeded. All four kinds that support `partial` shared the shape `existingDef.MergePartial(…); yield break;` — merge into the existing declaration, then return *before* declaring — so the contributing file exported nothing under the name and the named-import lookup found nothing. Modules additionally accepted `partial module X` extending a non-partial `module X` silently, where classes, records, and structs all refuse it. Partial modules were undocumented. | Both import forms assemble a split partial in either order, for modules, classes, records, and structs; the parts share one export table rather than being copied; extending a non-partial declaration raises `tosh.runtime.partial_mismatch` for all four kinds; the specification documents partial modules and the cross-file split, and states that a non-partial redeclaration replaces rather than merges. Negative control: 8 of 16 new cases fail against the unfixed engine. |
 | `TS-P2-29` | Planned — filed 2026-07-29 | `source "./x.tosh"` resolves the relative path against the **working directory**, not the directory of the script doing the sourcing, so a script that sources a sibling file works only when run from its own directory. `require` resolves relative to the requiring script and gets this right. Found while testing partial-module assembly: `source "./a.tosh"` from a script in `/tmp/…/pm/` looked for `/home/komrad/projects/tosh/a.tosh`. | `source` resolves a relative path against the sourcing script's directory, matching `require`; an absolute path and a path relative to the working directory keep working; a script that sources a sibling runs identically from any working directory; the change is noted as breaking if any shipped script relied on CWD resolution. |
-| `TS-P2-30` | Planned — filed 2026-07-29 | The C#-familiar member-modifier aliases are undocumented. `private`, `abstract`, `readonly`, `required`, `override`, `protected`, `obsolete`, `shared`, and `public` are all accepted, parsed in the same loop as their ToastScript spellings (`shy`, `hollow`, `fixed`, `vital`, `overrule`, `guarded`, `fading`, `static`, `proud`) — but the specification documents only the ToastScript words, so a reader cannot know the aliases exist. Nine working spellings undiscoverable, the same shape as partial modules before `TS-P2-28`. Related: `IsDeclarationModifierWord` lists `abstract` and `private` among *declaration* modifiers, which they are not — `abstract class C { }` and `private var x = 1` both fail. Those two entries are dead. | The specification documents each alias beside the word it means, and states that both spellings work; `IsDeclarationModifierWord`'s two dead entries are removed or the type-level positions are made to accept them, decided explicitly rather than left ambiguous. |
+| `TS-P2-30` | Complete — aliases documented 2026-07-29; the two dead entries remain, see below | The C#-familiar member-modifier aliases are undocumented. `private`, `abstract`, `readonly`, `required`, `override`, `protected`, `obsolete`, `shared`, and `public` are all accepted, parsed in the same loop as their ToastScript spellings (`shy`, `hollow`, `fixed`, `vital`, `overrule`, `guarded`, `fading`, `static`, `proud`) — but the specification documents only the ToastScript words, so a reader cannot know the aliases exist. Nine working spellings undiscoverable, the same shape as partial modules before `TS-P2-28`. Related: `IsDeclarationModifierWord` lists `abstract` and `private` among *declaration* modifiers, which they are not — `abstract class C { }` and `private var x = 1` both fail. Those two entries are dead. | The specification documents each alias beside the word it means, and states that both spellings work; `IsDeclarationModifierWord`'s two dead entries are removed or the type-level positions are made to accept them, decided explicitly rather than left ambiguous. **Done:** the Member Modifiers section pairs each alias with its ToastScript word (`shy`/`private`, `fixed`/`readonly`, `vital`/`required`, `guarded`/`protected`, `overrule`/`override`, `fading`/`obsolete`, `hollow`/`abstract`) and states that both forms mean the same thing; all nine are in the keyword list and the PDF colouring list, held there by `The_specification_keyword_list_matches_the_registry`. **Still open:** `IsDeclarationModifierWord` names `abstract` and `private` among declaration modifiers where neither works. Left for a deliberate call rather than removed in passing, since honouring them at type level is the other reasonable answer. |
+| `TS-P2-31` | Complete — decided and implemented 2026-07-29 | A brace-bodied property accessor silently produces a block value instead of a getter. `prop X { get => ($this.backing * 2) }` works and returns `10`; `prop X { get { return $this.backing * 2 } }` returns a `ShellBlock`, with no diagnostic. The cause is that `ParsePropertyAccessorBlock` parses each accessor body with `ParseArrowStatementBlock`, which calls `ConsumeFatArrow()` unconditionally — so the brace form was never supported, and since `TS-P2-25` made `{` block-only everywhere it now parses as a first-class block *value* rather than erroring. Silent wrong answer rather than a refusal, which is the worst shape available. Accessor blocks are otherwise undocumented. | Decided: **support it**, because a getter restricted to one expression pushes anything conditional into a helper method and `{ ... }` is what a method body already looks like. `ParseAccessorBody` routes a brace to `ParseRequiredBlock` and everything else to the arrow path, so both forms work and the choice is not observable. Multi-statement getters and setters run; `$value` is the incoming value in a setter; an unknown accessor name is still refused. The specification's class-features list now names the form, its two bodies, and `$value`. Negative control: 4 of 6 new cases fail against the unfixed parser, the two that pass being the arrow form and the unknown-accessor diagnostic. |
 
 **Implementation note for `TS-P2-11` (July 25 review recommendation).** The
 `TS-P2-01`/`TS-P2-02`/`TS-P2-04`/`TS-P2-12`–`TS-P2-15` family shares one root
@@ -3502,3 +3503,64 @@ declaration modifier *and* a member modifier — and its probe (`shy func f() { 
 kept passing throughout, because that is a real use of the other family. A word in
 two families needs a probe per family; `Every_member_modifier_works_in_member_position`
 is that check, and `hollow` turned out to need it too.
+
+### July 29, 2026 — Reading the specification first, and what that found
+
+Last entry closed with a note that this slice should have started by reading the
+specification's own keyword enumeration instead of guessing. Doing that took
+minutes and settled everything the four wrong guesses had cost:
+
+- The spec's §Keywords itemize lists **81** words; its `lstdefinelanguage`
+  colouring list lists **80**. Every one of them is now in the registry — **zero
+  missing in either direction**, which is the first time any two lists in this
+  programme have agreed exactly.
+- The registry held 22 the §Keywords section did not. Eleven are operator words,
+  and their absence is *correct*: the spec says so explicitly — "The words `and`,
+  `or`, and `not` are operators, not keywords" — and documents them in the operator
+  section instead. The remaining eleven were genuine gaps.
+
+That comparison is now `The_specification_keyword_list_matches_the_registry`,
+which makes the specification a checked consumer rather than a hand-maintained one,
+directly against the item's "spec tables ... have drifted" clause. It also caught
+that the spec's two lists had drifted from *each other*: `fading` appeared in the
+colouring list and not in the reader's list.
+
+**`TS-P2-30` closes on its documentation half.** The Member Modifiers section now
+pairs each C#-familiar alias with the word it means — `shy`/`private`,
+`fixed`/`readonly`, `vital`/`required`, `guarded`/`protected`,
+`overrule`/`override`, `fading`/`obsolete`, `hollow`/`abstract` — and states that
+both spellings mean the same thing. Nine working spellings stop being
+undiscoverable. `IsDeclarationModifierWord`'s two dead entries stay open for a
+deliberate call, since honouring `abstract` and `private` at type level is the other
+reasonable answer.
+
+**`TS-P2-31`, found by asking whether the spec documented `get` and `set`.** It did
+not, and the reason nobody had noticed is that the brace-bodied accessor silently
+did the wrong thing:
+
+```tosh
+prop X { get => ($this.b * 2) }        ## 10
+prop X { get { return $this.b * 2 } }  ## ShellBlock, no diagnostic
+```
+
+Two correct changes met and produced a defect. Accessor bodies went through
+`ParseArrowStatementBlock`, whose `ConsumeFatArrow` consumes an arrow if present and
+shrugs otherwise — reasonable on its own. `TS-P2-25` made `{` block-only
+everywhere — also reasonable. Together, a braced accessor body fell through the
+shrug into `ParseStatement` and became a first-class block *value*. Neither change
+was wrong; the combination was, and nothing was watching the intersection.
+
+Decided to support the brace form rather than diagnose it: a getter restricted to
+one expression pushes anything conditional into a helper method, and `{ ... }` is
+what a method body already looks like. `ParseAccessorBody` routes a brace to
+`ParseRequiredBlock`, so both forms work and the choice of body syntax is not
+observable — asserted as a property rather than as two expectations, because that
+is the actual claim. Negative control: 4 of 6 cases fail against the unfixed parser,
+and the 2 that pass are the arrow form and the unknown-accessor diagnostic, which
+already worked.
+
+Also worth recording: this is the second feature this session found working but
+undocumented, after partial modules in `TS-P2-28`. Both were found by checking
+whether the documentation covered something rather than by a failing test, and in
+both cases the missing documentation was the reason a defect had survived — nobody
+had written the example that would have failed.

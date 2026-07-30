@@ -105,7 +105,8 @@
             new,shy,global,export,static,shared,prop,defer,as,from,native,ref,
             out,sealed,hollow,hermit,strict,partial,fluid,leaky,fixed,lazy,
             vital,guarded,overrule,fading,local,raw,proud,public,extends,
-            fulfills,implements,uses,nameof,quote},
+            fulfills,implements,uses,nameof,name-of,quote,get,set,import,
+            abstract,private,protected,readonly,override,obsolete,fading},
   sensitive=true,
   comment=[l]{\#},
   morestring=[b]",
@@ -549,6 +550,7 @@ modifier before \code{class}, a member modifier before \code{prop}, or
 
 \begin{multicols}{5}
 \begin{itemize}[label={},leftmargin=0pt]
+  \item \code{abstract}
   \item \code{alloc}
   \item \code{as}
   \item \code{bind}
@@ -566,6 +568,7 @@ modifier before \code{class}, a member modifier before \code{prop}, or
   \item \code{event}
   \item \code{extends}
   \item \code{export}
+  \item \code{fading}
   \item \code{false}
   \item \code{finally}
   \item \code{fixed}
@@ -574,6 +577,7 @@ modifier before \code{class}, a member modifier before \code{prop}, or
   \item \code{from}
   \item \code{func}
   \item \code{fulfills}
+  \item \code{get}
   \item \code{global}
   \item \code{guarded}
   \item \code{handles}
@@ -581,6 +585,7 @@ modifier before \code{class}, a member modifier before \code{prop}, or
   \item \code{hollow}
   \item \code{if}
   \item \code{implements}
+  \item \code{import}
   \item \code{in}
   \item \code{interface}
   \item \code{lazy}
@@ -589,20 +594,26 @@ modifier before \code{class}, a member modifier before \code{prop}, or
   \item \code{local}
   \item \code{match}
   \item \code{module}
+  \item \code{name-of}
   \item \code{nameof}
   \item \code{native}
   \item \code{new}
   \item \code{null}
+  \item \code{obsolete}
   \item \code{once}
   \item \code{out}
+  \item \code{override}
   \item \code{overrule}
   \item \code{partial}
   \item \code{priority}
+  \item \code{private}
   \item \code{prop}
+  \item \code{protected}
   \item \code{proud}
   \item \code{public}
   \item \code{quote}
   \item \code{raw}
+  \item \code{readonly}
   \item \code{record}
   \item \code{ref}
   \item \code{require}
@@ -610,6 +621,7 @@ modifier before \code{class}, a member modifier before \code{prop}, or
   \item \code{return}
   \item \code{rune}
   \item \code{sealed}
+  \item \code{set}
   \item \code{shared}
   \item \code{shy}
   \item \code{static}
@@ -2944,6 +2956,10 @@ Class features:
   \item \textbf{Primary constructor}---parameters after the class name.
   \item \textbf{Stored properties}---\code{prop Name: Type = value}.
   \item \textbf{Computed properties}---\code{prop Name => (expr)} (type annotation is inferred).
+  \item \textbf{Accessor blocks}---\code{prop Name \{ get ... set ... \}}.  Each
+    accessor takes either an arrow body (\code{get => (expr)}) or a brace body
+    (\code{get \{ ... \}}), the latter holding as many statements as it needs.
+    Inside \code{set}, the incoming value is \code{\$value}.
   \item \textbf{Methods}---\code{func Name(params) \{ ... \}}.
   \item \textbf{Static methods}---\code{shared func Name(params) \{ ... \}} (also accepts \code{static}).
   \item \textbf{Self-reference}---\code{\$this} inside methods.
@@ -3000,30 +3016,34 @@ partial class User { func greet() { writeline $"Hi, {$this.Name}" } }
 \end{lstlisting}
 
 \subsection{Member Modifiers}
-\ikw{shy}\ikw{shared}\ikw{static}\ikw{fixed}\ikw{vital}\ikw{guarded}\ikw{overrule}\ikw{fading}\ikw{local}\ikw{raw}\ikw{proud}\ikw{public}
+\ikw{shy}\ikw{private}\ikw{shared}\ikw{static}\ikw{fixed}\ikw{readonly}\ikw{vital}\ikw{required}
+\ikw{guarded}\ikw{protected}\ikw{overrule}\ikw{override}\ikw{fading}\ikw{obsolete}\ikw{local}
+\ikw{raw}\ikw{proud}\ikw{public}\ikw{abstract}\ikw{lazy}
 
 Member-level modifiers appear before \code{prop} or \code{func} inside a
-class body.
+class body.  Several accept a second, C\#-familiar spelling; both forms are
+accepted and mean exactly the same thing, so a reader arriving from C\# is not
+stopped by vocabulary.  The ToastScript word is listed first throughout.
 
 \begin{description}
-  \item[\code{shy}] Hides the member from public inspection and external access (private).
+  \item[\code{shy} / \code{private}] Hides the member from public inspection and external access.
   \item[\code{shared} / \code{static}] Member belongs to the class rather than an instance.
-  \item[\code{fixed}] Makes a property read-only after initialisation.
-  \item[\code{vital}] Marks a property as required---construction fails
-    without a value.
-  \item[\code{guarded}] Restricts access to the defining class and its
-    subclasses (protected).
-  \item[\code{overrule}] Overrides an inherited method from a parent class.
+  \item[\code{fixed} / \code{readonly}] Makes a property read-only after initialisation.
+  \item[\code{vital} / \code{required}] Marks a property as required---construction
+    fails without a value.
+  \item[\code{guarded} / \code{protected}] Restricts access to the defining class
+    and its subclasses.
+  \item[\code{overrule} / \code{override}] Overrides an inherited method from a parent class.
   \item[\code{lazy}] Defers the property initialiser until first access;
     the result is cached.
-  \item[\code{fading}] Marks the member as deprecated; emits a warning to
-    stderr on use.
+  \item[\code{fading} / \code{obsolete}] Marks the member as deprecated; emits a
+    warning to stderr on use.
   \item[\code{local}] Restricts visibility to the defining assembly
     (internal).
   \item[\code{raw}] Marks a method for unsafe/native interop.
   \item[\code{proud} / \code{public}] Explicitly marks a member as public
     (no-op, members default to public).
-  \item[\code{hollow}] (on a method) Declares an abstract method that subclasses must overrule.
+  \item[\code{hollow} / \code{abstract}] (on a method) Declares an abstract method that subclasses must overrule.
     An empty body \code{\{ \}} is required: \code{hollow func name() \{ \}}.
 \end{description}
 
