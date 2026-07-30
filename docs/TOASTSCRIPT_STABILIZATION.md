@@ -393,13 +393,13 @@ closed.
 | `TS-P1-07` | Partially complete — defer case 2026-07-25 | The defer-specific loss of values emitted before `return` is addressed; other nested control-flow shapes can still materialize or change streaming behavior. | Previously emitted values stream unchanged; optional return value is final; nested control flow does not alter output semantics or introduce unnecessary materialization. |
 | `TS-P1-08` | Planned — re-rating proposal **withdrawn** 2026-07-28; the evidence was misattributed | Nested generator statements materialize output, while short-circuit consumers peek a second upstream item. **`take-while` does not short-circuit an infinite generator at all.** `recur (0, 1) func(a, b) => ($a + $b) \| take-while { _ < 100 }` (`LazySequenceTests.Recur_fibonacci_take_while`) should stop at 89; instead it generates Fibonacci without bound. Because the values are arbitrary-precision integers whose digit count grows linearly, total memory grows quadratically: an instrumented run reached **104,741 MB in 57 seconds** and exhausted a 128 GB machine. The sibling `iterate 1 func(x) => ($x * 2) \| take-while { _ <= 64 }` fails instead with `'iterate' operations must produce exactly one value per input item`. | Nested `yield` streams promptly; `first`/`any` do not evaluate an unnecessary next item; **`take-while`/`skip-while` short-circuit without materializing an unbounded upstream**; infinite-source tests complete under a bounded memory cap. |
 | `TS-P1-09` | Planned | Class hierarchy lookup loses generic bindings, inherited overloads, `vital` validation, and private visibility rules. | Recursive hierarchy test matrix covers generic intermediaries, overload sets, required members, private/protected access, and partial statics. |
-| `TS-P1-10` | Planned | Anonymous-record equality depends on dictionary insertion order. | Records with the same names and canonically equal values compare equal regardless of insertion order. |
-| `TS-P1-11` | Planned | `_` in destructuring is bound and overwritten instead of discarding the matched value. | Every `_` target skips without creating or modifying a binding; nested/rest patterns are covered. |
+| `TS-P1-10` | Complete — fixed 2026-07-30 | Anonymous-record equality depends on dictionary insertion order. | Records with the same names and canonically equal values compare equal regardless of insertion order. |
+| `TS-P1-11` | Complete — fixed 2026-07-30 | `_` in destructuring is bound and overwritten instead of discarding the matched value. | Every `_` target skips without creating or modifying a binding; nested/rest patterns are covered. |
 | `TS-P1-12` | Planned | `const` currently accepts arbitrary runtime pipelines and behaves as a readonly binding rather than a constant. | Constant-expression rules are specified and enforced; `let` covers runtime immutability before compatibility behavior is removed. |
 | `TS-P1-13` | Planned | Compiled ordinary member/index assignments evaluate target components before the RHS, while the interpreter preserves RHS-first order; only `??=` intentionally uses target-first order. | Side-effecting target, index, and RHS probes produce the same ordering in interpreted and compiled modes for every assignment operator. |
 | `TS-P1-14` | Complete — 2026-07-26; audited 2026-07-29, see `TS-P1-26` | Cross-type equality and ordering are incoherent: `==` coerces numerically (`1 == "1"` is true) and falls back to case-insensitive `ToString` comparison for mixed types while string-to-string stays case-sensitive; ordered comparison converts right-to-left only, so `"abc" < 5` silently string-compares to `false` while `5 > "abc"` throws; booleans participate in ordering, so `1 < 2 < 3` silently evaluates to `false`. | One documented equality/ordering conversion matrix implemented once and used by every surface (extends the `TS-P1-01`/`TS-P1-03` corpus); conversion is symmetric or produces a structured diagnostic; no silent lexicographic fallback for mixed numeric comparisons; the chained-comparison shape is either supported or diagnosed; interpreted and compiled modes agree. |
 | `TS-P1-15` | Complete — 2026-07-26 | Enum values are not orderable or number-comparable: `E.A < E.C` throws (`ToshEnumValue` cannot be compared) and `E.B == 1` is false, despite the specification's numeric-backed enum examples. | Enum values compare and order canonically against members of the same enum and against their underlying numeric values; diagnostics for genuinely incompatible enum comparisons name the shell-level enum type; the specification's `Permissions : int` examples pass as conformance cases. |
-| `TS-P1-16` | Planned | Float division-by-zero depends on the zero operand's type: `10.0 / 0` throws "Division by zero" while `10.0 / 0.0` returns `Infinity`, exposing a second arithmetic path inside the interpreter. | One documented rule per numeric family (integral, float, decimal) for division and modulo by zero; the zero operand's declared type does not change the outcome; interpreted and compiled modes agree. |
+| `TS-P1-16` | Complete — fixed 2026-07-30 | Float division-by-zero gave two different answers. Filed as depending on the zero operand's type — `10.0 / 0` threw while `10.0 / 0.0` returned `Infinity` — but the real split is **folded versus evaluated**: literal operands are constant-folded with C# semantics and yield `Infinity`, while the same doubles held in variables reach `OperatorEvaluator`, whose floating lambda threw. Two implementations of one operation, which is `TS-P1-24`'s shape on the arithmetic axis. | One documented rule per numeric family (integral, float, decimal) for division and modulo by zero; the zero operand's declared type does not change the outcome; interpreted and compiled modes agree. |
 | `TS-P1-17` | Withdrawn — 2026-07-26 | Filed as "the empty brace literal `{}` evaluates to an internal type-definition object instead of an empty record". Re-examination showed the then-current `{}` was a correct empty record; the observation was `type-of` rendering, fixed as `TS-P1-23`, plus the positional ambiguity later resolved by `TS-P2-25`. Under the accepted paired-delimiter grammar, `{}` is a block and `{||}` is an empty record. | n/a — not a defect as filed. |
 | `TS-P1-18` | Planned | A class that declares both a primary constructor and an explicit constructor of the same arity registers duplicate overloads, so every instantiation fails with a self-ambiguity error (`Multiple constructor overloads matched class 'C' with 1 argument(s): C(x); C(x)`). | A declaration-time rule is documented and enforced (the explicit constructor either replaces the synthesized primary overload or produces a structured declaration diagnostic); instantiation never reports a class as ambiguous with itself; interpreted and compiled construction agree. |
 | `TS-P1-19` | Planned | An infinite generator invoked in command position (`gen \| first 3`) silently produces no output and exits cleanly, while the call form (`gen() \| first 3`) hangs; both diverge from the accepted stream-producer decision (companion to `TS-P1-08`). | Command-position and call-position generator invocations produce identical streams; infinite generators stream promptly and terminate under `first`/`any`; the silent-empty shape is covered by a regression test. |
@@ -412,6 +412,7 @@ closed.
 | `TS-P1-26` | Complete — 2026-07-29 | Equality is asymmetric for bool against string: `true == "true"` is `true` while `"true" == true` is `false`. Numeric pairs are symmetric in both directions (`1 == "1"` and `"1" == 1`), as are bool-against-number, so only the string-on-the-left-of-a-bool direction fails to coerce. Both `OperatorEvaluator.AreEqual` and `ToshEngine.AreEqualAsync` agree with each other, so this is one rule applied in one direction rather than a sync/async drift. Found by `EqualityParityTests` on its first run. `TS-P1-14` promised symmetry explicitly for ordering and did not state it for equality, which is why it survived that item. | A decision records whether a string coerces to bool for equality at all: either `"true" == true` becomes `true` (extend coercion, matching the numeric rule) or `true == "true"` becomes `false` (drop bool/string coercion). Equality is symmetric for every pair in the corpus afterwards, on both implementations; the characterization entry in `EqualityParityTests` is inverted in the same change. |
 | `TS-P1-27` | Complete — implemented 2026-07-30 | ToastScript's concurrency system and the CLR's did not meet. `async`/`await` are builtin commands over `ShellFuture`, and a CLR method returning `Task`/`Task<T>` was never awaited by anything: the task flowed into the pipeline untouched, `await` refused it with `await_requires_future`, and it displayed as `AsyncStateMachineBox\`1` — the compiler's state machine type, since `Task` does not override `ToString`. The only route to a value was `.Result`, which blocks and can deadlock. Reported from real code: `async { $p.SendPingAsync(…) }` then `await $reply`. | Decided C#-identical and explicit: a task-returning call yields a task and you await it. `await` accepts `Task`, `Task<T>`, `ValueTask`, `ValueTask<T>` and a `ShellFuture`, **flattens** so one `await` unwraps a future whose output is a task, emits nothing for a declared-`Task`, honours cancellation via `WaitAsync`, and surfaces a faulted task's *own* message rather than `AggregateException`'s. Tasks stay values so work can overlap — asserted by timing. An un-awaited task renders `Task<PingReply> (pending)`. Auto-awaiting at the call site was rejected: it removes concurrency and would have to land on both surfaces of the dual-surface interfaces. Specification gains an Asynchrony section — it had none. Negative control: 6 of 10 cases fail unfixed. |
 | `TS-P1-28` | Complete — fixed 2026-07-30 | A computed `static`/`shared` property answered **`null`**, silently, in every spelling — arrow-bodied and accessor-block alike, in a `hermit class` and a plain one. Static properties were only ever *initialized*, never *evaluated*: both initialization sites read `IsStatic && Initializer is not null && !IsComputed`, so a computed one never entered `_staticValues`, and `TryGetStaticMember` fell through to a line commented `// null default`. Stored static properties worked throughout, which is why the report read as "static properties do not work at all" rather than "computed ones do not". No diagnostic at any point. Reported from a real library whose `hermit class State` exposed `shared prop Icmp => …`. | `TryGetStaticMember` evaluates a computed static property's getter through `ExecuteClassBlockSync`, mirroring the instance path — `CreateLocals` already accepts a null instance and omits `$this`, so no new plumbing was needed. Every spelling returns its value, on each read rather than cached, and the stored path is unchanged. Negative control across both fixes in this slice: 8 of 12 cases fail unfixed. |
+| `TS-P1-29` | Planned — filed 2026-07-30 | `ShellRecordUtilities.TryGetFields` throws on an object-keyed dictionary: "Unable to cast object of type 'KeyValuePair`2[Object,Object]' to type 'DictionaryEntry'". Its `IDictionary` branch iterates as `DictionaryEntry`, which is what the *non-generic* enumerator yields, but a `Dictionary<object, object?>` reached through `IEnumerable` yields `KeyValuePair<object, object?>`. A `{% … %}` dict literal is object-keyed, so any caller that hands one to `TryGetFields` crashes with `unexpected_exception` rather than a diagnostic. Found while fixing `TS-P1-10`, which had to be narrowed to string-keyed records to avoid it. | `TryGetFields` handles both enumerator shapes, so an object-keyed dictionary yields its entries instead of throwing; a crash in a utility that formatters and equality both call is covered by a test that passes a `{% … %}` literal directly. |
 
 ## P2 — Parser, Binder, Diagnostics, and Surface Generation
 
@@ -4033,3 +4034,58 @@ specific test and the fourth overall across three subsystems, all under parallel
 Distinguishing it from the `TS-P2-41` regression mattered: that one also looked like a flake
 until it failed in isolation, which is the only signal that separated a real defect from
 this noise.
+
+### July 30, 2026 — Three P1 semantics repairs, and one that had to be narrowed twice
+
+All three had the same shape: the language held two answers for one question.
+
+**`TS-P1-10` — record equality ignored nothing, including order.**
+`{| a = 1, b = 2 |} == {| b = 2, a = 1 |}` was `false`. `AreEqual` opens with an
+element-wise enumerable comparison, and an `ExpandoObject` is an
+`IEnumerable<KeyValuePair<…>>`, so two records were compared as *ordered sequences*.
+Insertion order is not part of a record's identity. Fixed by comparing field by field
+ahead of the sequence path, keys matched case-insensitively because member lookup is.
+
+**The first fix changed nothing, and the second broke eleven tests.** Both errors are
+worth recording because both were predictable.
+
+The first landed only on `OperatorEvaluator.AreEqual`. `==` goes through
+`ToshEngine.AreEqualAsync` — the parallel twin `TS-P1-24` exists for — so the defect
+survived a change that looked complete and verified. The two now share one helper rather
+than carrying two copies of the rule; the second implementation delegates.
+
+The second used `ShellRecordUtilities.IsRecordLike`, which also matches
+`ToshClassInstance`. That made *class instances* structurally equal and broke left-biased
+equality dispatch, so a user's own `Equals` stopped being consulted — 11 failures, led by
+`ClassEqualityCancellationTests.Equality_dispatch_is_left_biased`, a test written to
+protect exactly that. Narrowed to string-keyed dictionaries, which is what an anonymous
+record is. A declared class decides its own identity; that is the point of letting it
+define `Equals`.
+
+Arrays stay order-*sensitive*, asserted explicitly — both records and arrays are
+`IEnumerable`, which is how records came to be compared as sequences in the first place.
+
+**`TS-P1-11` — `_` both discarded and bound.** `var [a, _, c] = [1, 2, 3]` left `$_`
+holding `2`. Worse than a leaked name: `_` is the current pipeline item, so a destructuring
+inside a predicate silently changed what `_` meant downstream. Both destructuring forms now
+skip it. The specification already promised this — "Skip elements with `_`" — so the
+runtime was behind its own documentation, which is the third time this week.
+
+**`TS-P1-16` — division by zero, and the item's framing was wrong.** Filed as depending on
+the zero operand's type. It does not: the split is **folded versus evaluated**. Literal
+operands are constant-folded with C# semantics and give `Infinity`; the same doubles in
+variables reach `OperatorEvaluator`, whose floating lambda threw. `TS-P1-24`'s shape on the
+arithmetic axis, and the third instance of it in this one slice.
+
+One rule per family now: integral and decimal division by zero throw, matching C#;
+floating division is IEEE — `±Infinity`, `NaN` for `0.0/0.0` and for floating modulo. The
+folded and evaluated paths are asserted to agree rather than each asserted separately.
+
+**Filed:** `TS-P1-29`. `ShellRecordUtilities.TryGetFields` throws on an object-keyed
+dictionary — its `IDictionary` branch iterates as `DictionaryEntry`, which only the
+non-generic enumerator yields. A `{% … %}` literal is object-keyed, so any caller handing
+one over crashes with `unexpected_exception` instead of a diagnostic. Found because
+`TS-P1-10`'s first draft called it on dicts; the fix was narrowed away from that rather
+than growing to cover it.
+
+Negative control: 13 of 24 new cases fail against the unfixed runtime.
