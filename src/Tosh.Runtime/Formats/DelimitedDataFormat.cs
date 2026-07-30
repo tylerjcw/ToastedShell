@@ -42,9 +42,17 @@ public sealed class DelimitedDataFormat : IDataFormat
         }
 
         var headers = NormalizeHeaders(records[0]);
-        var rows = records
-            .Skip(1)
-            .Select(record => CreateRow(headers, record))
+        var dataRecords = records.Skip(1).ToArray();
+
+        // Column types are inferred from the whole column, so the rows have to be
+        // in hand first. They already were — the previous code materialized them
+        // too — so this costs no streaming that was not already given up.
+        var converters = HasRawFlag(arguments)
+            ? null
+            : DelimitedValueInference.InferColumns(headers.Count, dataRecords);
+
+        var rows = dataRecords
+            .Select(record => CreateRow(headers, record, converters))
             .ToArray();
 
         yield return rows;
@@ -142,12 +150,46 @@ public sealed class DelimitedDataFormat : IDataFormat
         return "\"" + text.Replace("\"", "\"\"", StringComparison.Ordinal) + "\"";
     }
 
-    private static System.Dynamic.ExpandoObject CreateRow(IReadOnlyList<string> headers, IReadOnlyList<string> values)
+    /// <summary>
+    /// Builds one record, applying <paramref name="converters"/> where a column was
+    /// inferred as numeric or boolean (<c>TS-P2-27</c>).
+    /// </summary>
+    private static System.Dynamic.ExpandoObject CreateRow(
+        IReadOnlyList<string> headers,
+        IReadOnlyList<string> values,
+        Func<string, object?>?[]? converters)
     {
         return ShellRecordUtilities.CreateExpando(headers.Select((header, index) =>
-            new KeyValuePair<string, object?>(
+        {
+            var cell = index < values.Count ? values[index] : string.Empty;
+            var converter = converters is not null && index < converters.Length
+                ? converters[index]
+                : null;
+
+            // A textual column keeps the empty string it always had; a typed
+            // column cannot, so a gap there becomes null rather than a value that
+            // would not compare with its neighbours.
+            return new KeyValuePair<string, object?>(
                 header,
-                index < values.Count ? values[index] : string.Empty)));
+                converter is null ? cell : converter(cell));
+        }));
+    }
+
+    /// <summary>
+    /// <c>--raw</c> turns inference off and returns every column as text, which is
+    /// what the format literally contains.
+    /// </summary>
+    private static bool HasRawFlag(IReadOnlyList<object?> arguments)
+    {
+        foreach (var argument in arguments)
+        {
+            if (argument?.ToString() is "--raw" or "--no-infer")
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static IReadOnlyList<string> NormalizeHeaders(IReadOnlyList<string> headers)
