@@ -4135,49 +4135,40 @@ public static class ToshParser
             var isLocal = false;
             var isRaw = false;
 
+            // Membership and aliasing both come from LanguageSurface (TS-P2-10).
+            // This replaced 22 `string.Equals` calls, each alias spelled out twice —
+            // once to enter the loop and once to set its flag — which is how the CLI
+            // highlighter came to know none of the nine aliases while the Tome
+            // colorizer knew all of them.
             while (Current.Kind == SyntaxTokenKind.Bareword &&
-                   (string.Equals(Current.Text, "shy", StringComparison.Ordinal) ||
-                    string.Equals(Current.Text, "private", StringComparison.Ordinal) ||
-                    string.Equals(Current.Text, "static", StringComparison.Ordinal) ||
-                    string.Equals(Current.Text, "shared", StringComparison.Ordinal) ||
-                    string.Equals(Current.Text, "public", StringComparison.Ordinal) ||
-                    string.Equals(Current.Text, "proud", StringComparison.Ordinal) ||
-                    string.Equals(Current.Text, "hollow", StringComparison.Ordinal) ||
-                    string.Equals(Current.Text, "abstract", StringComparison.Ordinal) ||
-                    string.Equals(Current.Text, "fixed", StringComparison.Ordinal) ||
-                    string.Equals(Current.Text, "readonly", StringComparison.Ordinal) ||
-                    string.Equals(Current.Text, "vital", StringComparison.Ordinal) ||
-                    string.Equals(Current.Text, "required", StringComparison.Ordinal) ||
-                    string.Equals(Current.Text, "overrule", StringComparison.Ordinal) ||
-                    string.Equals(Current.Text, "override", StringComparison.Ordinal) ||
-                    string.Equals(Current.Text, "guarded", StringComparison.Ordinal) ||
-                    string.Equals(Current.Text, "protected", StringComparison.Ordinal) ||
-                    string.Equals(Current.Text, "lazy", StringComparison.Ordinal) ||
-                    string.Equals(Current.Text, "fading", StringComparison.Ordinal) ||
-                    string.Equals(Current.Text, "obsolete", StringComparison.Ordinal) ||
-                    string.Equals(Current.Text, "local", StringComparison.Ordinal) ||
-                    string.Equals(Current.Text, "raw", StringComparison.Ordinal)))
+                   LanguageSurface.TryResolveMemberModifier(Current.Text, out var modifier))
             {
-                isShy |= string.Equals(Current.Text, "shy", StringComparison.Ordinal) ||
-                         string.Equals(Current.Text, "private", StringComparison.Ordinal);
-                isStatic |= string.Equals(Current.Text, "static", StringComparison.Ordinal) ||
-                            string.Equals(Current.Text, "shared", StringComparison.Ordinal);
-                isAbstract |= string.Equals(Current.Text, "hollow", StringComparison.Ordinal) ||
-                              string.Equals(Current.Text, "abstract", StringComparison.Ordinal);
-                isFixed |= string.Equals(Current.Text, "fixed", StringComparison.Ordinal) ||
-                           string.Equals(Current.Text, "readonly", StringComparison.Ordinal);
-                isVital |= string.Equals(Current.Text, "vital", StringComparison.Ordinal) ||
-                           string.Equals(Current.Text, "required", StringComparison.Ordinal);
-                isOverride |= string.Equals(Current.Text, "overrule", StringComparison.Ordinal) ||
-                              string.Equals(Current.Text, "override", StringComparison.Ordinal);
-                isGuarded |= string.Equals(Current.Text, "guarded", StringComparison.Ordinal) ||
-                             string.Equals(Current.Text, "protected", StringComparison.Ordinal);
-                isLazy |= string.Equals(Current.Text, "lazy", StringComparison.Ordinal);
-                isFading |= string.Equals(Current.Text, "fading", StringComparison.Ordinal) ||
-                            string.Equals(Current.Text, "obsolete", StringComparison.Ordinal);
-                isLocal |= string.Equals(Current.Text, "local", StringComparison.Ordinal);
-                isRaw |= string.Equals(Current.Text, "raw", StringComparison.Ordinal);
-                // 'public'/'proud' recognized and consumed but has no effect (it's the default)
+                switch (modifier)
+                {
+                    case "shy": isShy = true; break;
+                    case "static": isStatic = true; break;
+                    case "hollow": isAbstract = true; break;
+                    case "fixed": isFixed = true; break;
+                    case "vital": isVital = true; break;
+                    case "overrule": isOverride = true; break;
+                    case "guarded": isGuarded = true; break;
+                    case "lazy": isLazy = true; break;
+                    case "fading": isFading = true; break;
+                    case "local": isLocal = true; break;
+                    case "raw": isRaw = true; break;
+
+                    // `proud` (and its alias `public`) is recognised and consumed but
+                    // has no effect — it is the default.
+                    case "proud": break;
+
+                    default:
+                        // A member modifier the registry knows and this switch does
+                        // not. Failing loudly beats consuming it silently, which is
+                        // what the old chain would have done by simply not matching.
+                        throw new InvalidOperationException(
+                            $"Unhandled member modifier '{modifier}' — add it to ParseClassMember.");
+                }
+
                 NextToken();
             }
 

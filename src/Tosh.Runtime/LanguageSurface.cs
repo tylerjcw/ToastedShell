@@ -48,6 +48,21 @@ public enum LanguageWordKind
 
     /// <summary>An expression form spelled as a word, such as <c>new</c>.</summary>
     LanguageForm = 1 << 11,
+
+    /// <summary>A property accessor: <c>get</c>, <c>set</c>.</summary>
+    Accessor = 1 << 12,
+
+    /// <summary>
+    /// A clause on an event handler — <c>handles</c>, <c>priority</c>, <c>when</c>,
+    /// <c>once</c>.
+    /// </summary>
+    HandlerClause = 1 << 13,
+
+    /// <summary>
+    /// A keyword only in a particular position, such as <c>let</c> and <c>where</c>
+    /// inside a comprehension.
+    /// </summary>
+    Contextual = 1 << 14,
 }
 
 /// <summary>
@@ -66,14 +81,21 @@ public enum LanguageWordKind
 /// </para>
 /// <para>
 /// Membership here is established by **executing** each word in its canonical
-/// shape, not by finding its spelling in the parser. That distinction is not
-/// pedantic — it is the whole reason this registry can be trusted. A source scan
-/// said all 115 candidates were real, because words like <c>let</c>, <c>quote</c>,
-/// and <c>once</c> do appear in parser source for unrelated reasons; running them
-/// shows <c>let x = 5</c> fails, <c>quote</c> is an unknown command, and
-/// <c>once</c> is not a member modifier. All three were documented in the LSP
-/// feature table as though they existed. <c>LanguageSurfaceParityTests</c> holds
-/// the probes, so a word cannot enter this list without demonstrating it is real.
+/// shape, not by finding its spelling in the parser, and
+/// <c>LanguageSurfaceParityTests</c> holds a probe for every entry. A word cannot
+/// join this list without demonstrating it is real.
+/// </para>
+/// <para>
+/// That validation is **directional, and the limit matters**: a passing probe
+/// proves the word is real, and a failing probe proves nothing except that the
+/// probe is wrong. Building this registry produced three false accusations from
+/// exactly that mistake — <c>let</c>, <c>quote</c>, and <c>once</c> were all
+/// reported as documented-but-nonexistent, and all three are real in positions that
+/// had not been tried: <c>let</c> is a comprehension clause
+/// (<c>[$y &lt;| for x in 1..3 let y = ($x * 2)]</c>), <c>quote</c> takes a block in
+/// argument position (<c>echo (quote { $x + 1 })</c>), and <c>once</c> is an
+/// event-handler clause (<c>func f(e) handles X once { }</c>). So a word missing
+/// from this registry is a claim about the registry, never about the language.
 /// </para>
 /// <para>
 /// Prose stays with its consumer. The help catalogue's descriptions and the LSP's
@@ -137,17 +159,24 @@ public static class LanguageSurface
             ["match"] = Flow,
 
             // ── Visibility: exactly what ParseDeclarationModifier accepts ──────
-            ["shy"] = Visibility,
+            // `shy` is also a member modifier — it is the only word in two families,
+            // and categorising it as visibility alone stopped `shy prop X = 1` from
+            // parsing the moment ParseClassMember started asking this registry.
+            ["shy"] = Visibility | MemberMod,
             ["global"] = Visibility,
             ["export"] = Visibility,
 
             // ── Type modifiers ─────────────────────────────────────────────────
             ["sealed"] = TypeMod,
-            ["hollow"] = TypeMod,
+
+            // Also a member modifier: `hollow class C { hollow func f() { } }` uses
+            // it in both positions.
+            ["hollow"] = TypeMod | MemberMod,
             ["hermit"] = TypeMod,
             ["strict"] = TypeMod,
             ["partial"] = TypeMod,
             ["fluid"] = TypeMod,
+            ["leaky"] = TypeMod,
 
             // ── Member modifiers ───────────────────────────────────────────────
             ["shared"] = MemberMod,
@@ -191,6 +220,7 @@ public static class LanguageSurface
             ["uses"] = LanguageWordKind.Composition,
             ["fulfills"] = LanguageWordKind.Composition,
             ["extends"] = LanguageWordKind.Composition,
+            ["implements"] = LanguageWordKind.Composition,
 
             // ── Operator words ─────────────────────────────────────────────────
             ["and"] = LanguageWordKind.OperatorWord,
@@ -199,6 +229,11 @@ public static class LanguageSurface
             ["is"] = LanguageWordKind.OperatorWord,
             ["is-not"] = LanguageWordKind.OperatorWord,
             ["not-in"] = LanguageWordKind.OperatorWord,
+            ["is-in"] = LanguageWordKind.OperatorWord,
+            ["is-not-in"] = LanguageWordKind.OperatorWord,
+            ["contains"] = LanguageWordKind.OperatorWord,
+            ["starts-with"] = LanguageWordKind.OperatorWord,
+            ["ends-with"] = LanguageWordKind.OperatorWord,
 
             // ── Constants ──────────────────────────────────────────────────────
             ["true"] = LanguageWordKind.Constant,
@@ -209,6 +244,22 @@ public static class LanguageSurface
             ["new"] = LanguageWordKind.LanguageForm,
             ["nameof"] = LanguageWordKind.LanguageForm,
             ["name-of"] = LanguageWordKind.LanguageForm,
+            ["quote"] = LanguageWordKind.LanguageForm,
+
+            // ── Property accessors ─────────────────────────────────────────────
+            ["get"] = LanguageWordKind.Accessor,
+            ["set"] = LanguageWordKind.Accessor,
+
+            // ── Event-handler clauses ──────────────────────────────────────────
+            ["handles"] = LanguageWordKind.HandlerClause,
+            ["priority"] = LanguageWordKind.HandlerClause,
+            ["when"] = LanguageWordKind.HandlerClause,
+            ["once"] = LanguageWordKind.HandlerClause,
+
+            // ── Contextual ─────────────────────────────────────────────────────
+            // Keywords only inside a comprehension clause list.
+            ["let"] = LanguageWordKind.Contextual,
+            ["where"] = LanguageWordKind.Contextual,
         };
 
     /// <summary>Every word in the surface, with everything it is.</summary>
@@ -258,6 +309,37 @@ public static class LanguageSurface
             ["shared"] = "static",
             ["public"] = "proud",
         };
+
+    /// <summary>
+    /// Resolves a member-modifier spelling to the ToastScript word it means, so a
+    /// caller handles nine fewer cases than there are spellings.
+    /// </summary>
+    /// <remarks>
+    /// This exists to replace a 22-branch chain of <c>string.Equals</c> in
+    /// <c>ParseClassMember</c>, where each alias was written out beside its
+    /// canonical spelling twice — once to enter the loop and once to set the flag.
+    /// The aliasing is data, and belongs here with the words rather than inline in
+    /// the parser (<c>TS-P2-10</c>).
+    /// </remarks>
+    public static bool TryResolveMemberModifier(string? text, out string canonical)
+    {
+        if (text is not null && MemberModifierAliases.TryGetValue(text, out var mapped))
+        {
+            canonical = mapped;
+            return true;
+        }
+
+        if (text is not null &&
+            WordKinds.TryGetValue(text, out var kind) &&
+            kind.HasFlag(LanguageWordKind.MemberModifier))
+        {
+            canonical = text;
+            return true;
+        }
+
+        canonical = string.Empty;
+        return false;
+    }
 
     /// <summary>All three modifier families together.</summary>
     public static IReadOnlySet<string> Modifiers { get; } = Select(
