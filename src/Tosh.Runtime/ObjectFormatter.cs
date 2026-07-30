@@ -109,6 +109,16 @@ public sealed class ObjectFormatter
             return ((IShellStaticType)shellType).ShellTypeName;
         }
 
+        // An un-awaited CLR task. Without this it renders as its runtime type —
+        // `AsyncStateMachineBox`1` — because Task does not override ToString and the
+        // compiler's state machine box is what a task actually is at run time. That
+        // told a user nothing, and it is the visible half of what TS-P1-27 fixed;
+        // a forgotten `await` has to be legible now that `await` is explicit.
+        if (ClrAwaitable.IsAwaitable(value))
+        {
+            return ClrAwaitable.Describe(value);
+        }
+
         if (ShellRecordUtilities.TryGetFields(value, out var recordFields))
         {
             return FormatRecordFields(recordFields, options, depth, visited);

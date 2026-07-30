@@ -950,24 +950,25 @@ var f = async { sleep 0.2; echo done }  # Start a deferred operation
 \textit{Library: \code{Tosh.Stdlib.Concurrency}}
 
 \begin{cmdbox}{await}
-Awaits a future created by async and replays its outputs.
+Awaits a future from `async` or a CLR Task, and replays its outputs.
 
 \begin{signature}
-await [future]
+await [awaitable]
 \end{signature}
 
 \begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
 \toprule
 \textbf{Argument} & \textbf{Description} \\
 \midrule
-future & A ShellFuture value. If omitted, read one from pipeline input. (optional) \\
+awaitable & A future from `async`, or a CLR Task/ValueTask. If omitted, read one from pipeline input. (optional) \\
 \bottomrule
 \end{tabular}
 
-\textbf{Output:} Replays the values produced by the future operation.
+\textbf{Output:} Replays the values produced by the operation, or the task's result.
 
 \begin{lstlisting}
 var f = async { sleep 0.1; echo ok }; await $f  # Await a future
+var r = await ($p.SendPingAsync("8.8.8.8", 1000)); echo $r.Status  # Await a CLR task
 \end{lstlisting}
 
 \end{cmdbox}
