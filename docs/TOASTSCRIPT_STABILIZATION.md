@@ -446,6 +446,7 @@ closed.
 | `TS-P2-29` | Planned — filed 2026-07-29 | `source "./x.tosh"` resolves the relative path against the **working directory**, not the directory of the script doing the sourcing, so a script that sources a sibling file works only when run from its own directory. `require` resolves relative to the requiring script and gets this right. Found while testing partial-module assembly: `source "./a.tosh"` from a script in `/tmp/…/pm/` looked for `/home/komrad/projects/tosh/a.tosh`. | `source` resolves a relative path against the sourcing script's directory, matching `require`; an absolute path and a path relative to the working directory keep working; a script that sources a sibling runs identically from any working directory; the change is noted as breaking if any shipped script relied on CWD resolution. |
 | `TS-P2-30` | Complete — aliases documented 2026-07-29; the two dead entries remain, see below | The C#-familiar member-modifier aliases are undocumented. `private`, `abstract`, `readonly`, `required`, `override`, `protected`, `obsolete`, `shared`, and `public` are all accepted, parsed in the same loop as their ToastScript spellings (`shy`, `hollow`, `fixed`, `vital`, `overrule`, `guarded`, `fading`, `static`, `proud`) — but the specification documents only the ToastScript words, so a reader cannot know the aliases exist. Nine working spellings undiscoverable, the same shape as partial modules before `TS-P2-28`. Related: `IsDeclarationModifierWord` lists `abstract` and `private` among *declaration* modifiers, which they are not — `abstract class C { }` and `private var x = 1` both fail. Those two entries are dead. | The specification documents each alias beside the word it means, and states that both spellings work; `IsDeclarationModifierWord`'s two dead entries are removed or the type-level positions are made to accept them, decided explicitly rather than left ambiguous. **Done:** the Member Modifiers section pairs each alias with its ToastScript word (`shy`/`private`, `fixed`/`readonly`, `vital`/`required`, `guarded`/`protected`, `overrule`/`override`, `fading`/`obsolete`, `hollow`/`abstract`) and states that both forms mean the same thing; all nine are in the keyword list and the PDF colouring list, held there by `The_specification_keyword_list_matches_the_registry`. **Still open:** `IsDeclarationModifierWord` names `abstract` and `private` among declaration modifiers where neither works. Left for a deliberate call rather than removed in passing, since honouring them at type level is the other reasonable answer. |
 | `TS-P2-31` | Complete — decided and implemented 2026-07-29 | A brace-bodied property accessor silently produces a block value instead of a getter. `prop X { get => ($this.backing * 2) }` works and returns `10`; `prop X { get { return $this.backing * 2 } }` returns a `ShellBlock`, with no diagnostic. The cause is that `ParsePropertyAccessorBlock` parses each accessor body with `ParseArrowStatementBlock`, which calls `ConsumeFatArrow()` unconditionally — so the brace form was never supported, and since `TS-P2-25` made `{` block-only everywhere it now parses as a first-class block *value* rather than erroring. Silent wrong answer rather than a refusal, which is the worst shape available. Accessor blocks are otherwise undocumented. | Decided: **support it**, because a getter restricted to one expression pushes anything conditional into a helper method and `{ ... }` is what a method body already looks like. `ParseAccessorBody` routes a brace to `ParseRequiredBlock` and everything else to the arrow path, so both forms work and the choice is not observable. Multi-statement getters and setters run; `$value` is the incoming value in a setter; an unknown accessor name is still refused. The specification's class-features list now names the form, its two bodies, and `$value`. Negative control: 4 of 6 new cases fail against the unfixed parser, the two that pass being the arrow form and the unknown-accessor diagnostic. |
+| `TS-P2-32` | Planned — filed 2026-07-29 | A keyword loses REPL completion to a CLR type whose name differs only in case. Typing `match` offers `Match`, `MatchCasing`, `MatchCollection`, `MatchEvaluator`, `MatchType` and the executable `match_parens` — but not the keyword `match`. `rune` offers only `Rune`. Both words are present in the completion source, so this is ranking or case-insensitive de-duplication rather than a missing entry, and it affects exactly the words that collide with a BCL type name. Found by the `TS-P2-10` completion-coverage guard, which excludes these two with the reason recorded rather than weakening itself. | A keyword ranks at least as high as a CLR type in a position where the keyword is grammatical, or keywords and types are shown as distinct groups rather than de-duplicated against each other; `match` and `rune` complete from their own prefixes, and the two exclusions are removed from the guard. |
 
 **Implementation note for `TS-P2-11` (July 25 review recommendation).** The
 `TS-P2-01`/`TS-P2-02`/`TS-P2-04`/`TS-P2-12`–`TS-P2-15` family shares one root
@@ -3564,3 +3565,47 @@ undocumented, after partial modules in `TS-P2-28`. Both were found by checking
 whether the documentation covered something rather than by a failing test, and in
 both cases the missing documentation was the reason a defect had survived — nobody
 had written the example that would have failed.
+
+### July 29, 2026 — Completion gains two thirds of the language (TS-P2-10)
+
+Measured the four prose-carrying consumers against the registry. The REPL
+completion engine was by far the worst and the most visible:
+
+| consumer | words | missing |
+|---|---|---|
+| LSP feature table | 93 | 11 |
+| help catalogue | 77 | 45 (plus 19 legitimate topic pages) |
+| VS Code metadata | 68 | 35 |
+| REPL completion | 36 | **67** |
+
+Two thirds of the language could not be tab-completed. Typing `def` and pressing
+tab did not offer `defer`; nor `const`, `interface`, `union`, `partial`, `sealed`,
+`abstract`, or any of the nine aliases. The engine's map is now derived from the
+registry, with the completion label computed from the word's category — operator,
+constant, modifier, or keyword — so the ordering of that computation is the only
+hand-written part left.
+
+`Repl_completion_offers_every_word_in_the_language` asserts the result through the
+real completion API rather than against the derived map, because asserting a
+derivation against itself is a tautology.
+
+**That guard immediately found a second defect, and the guard's own first two
+attempts were wrong in an instructive way.** Probing each word from its single first
+character reported `match` and `rune` missing; that looked like ranking, so the
+probe moved to the word minus its last character — and both were *still* missing.
+Only then did printing the actual suggestions show why: `matc` offers `Match`,
+`MatchCasing`, `MatchCollection`, `MatchEvaluator`, `MatchType`, and the executable
+`match_parens`, but not the keyword `match`. `rune` offers only the CLR type `Rune`.
+Both words are present in the completion source, so a keyword is losing to a BCL
+type that differs from it only in case. Filed as `TS-P2-32`.
+
+The two are excluded from the guard with that reason stated in the test, rather than
+the guard being weakened until it passed. The distinction matters and it is the same
+one this programme keeps returning to: scoping a property after seeing it fail is
+the step where a guard quietly becomes worthless, so the exclusion names a filed
+item and the 101 other words stay checked.
+
+Method note, third instance this session: two wrong diagnoses in a row from
+reasoning about a mechanism instead of printing what it produced. "Ranking crowded
+it out" was plausible, cheap to believe, and wrong twice. One `Assert.True(false)`
+with the actual suggestions settled it immediately.
