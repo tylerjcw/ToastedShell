@@ -410,6 +410,7 @@ closed.
 | `TS-P1-24` | In progress — rescoped 2026-07-29 to the 29 convergeable internals | The interpreter carries sync/async twin methods that are *parallel implementations* rather than delegations, so a semantic fix can land on one surface and silently miss the other. This has happened twice: `OperatorEvaluator.AreEqual` versus `ToshEngine.AreEqualAsync` (`TS-P1-14`/`TS-P1-15`) and `ToshHost.DrainValue` versus `InvokeValue` (`TS-P1-20`). A corrected audit on 2026-07-26 counted 23 truly parallel pairs against 6 that delegate. The refinement cluster, the largest, is now converged. Remaining largest duplications: `ThrowDetailedSingleConstructorMismatch` (55 lines), `TryGetInstanceMember` (51), `ApplyPendingParameterDefaults` (50), `InvokeQualifiedMethod` (47), `ConvertPropertyValue` (44), `TrySetInstanceMember` (43), `SelectBestCallableMatches` (41), `GetInstanceMembers` (38), `ConvertConstructorParameterValue` (35). | Each pair either delegates to one implementation or is removed; a test or analyzer fails when a new parallel sync/async pair is introduced; behaviour is unchanged, evidenced by the existing suite plus the annotated-conversion drift guard. **Rescoped 2026-07-29 by decision.** The dual surface is deliberate: `IShellRecordObject`, `IObjectAccessor`, `IShellInvocableObject`, `IShellEnumerableObject`, and `IShellStaticType` each declare both a sync and an async member because the interpreter serves both kinds of caller with genuinely different member-dispatch semantics — `GetIndexedValueAsync` avoids re-entering the synchronous record API on purpose, not by oversight. So the 30 contract-imposed pairs are intended, not debt, and clause 1 applies to the **29 parallel internals** only. Retiring the synchronous surface behind one blocking bridge was considered and rejected as a much larger change than this item describes; if it is ever wanted it gets its own item. Clause 2 is met: `SyncAsyncTwinInventoryTests`. |
 | `TS-P1-25` | Complete — 2026-07-29 | (Filed 2026-07-26 under a duplicate `TS-P1-20`; renumbered 2026-07-27.) The pure compiler profile can report a Tier-1-clean artifact while emitted IL still unconditionally calls `ToshHost.Initialize`/`RegisterCompiledAssembly` from `Main` and `ToshHost.EnterExecutionFrame` from functions, methods, lambdas, and blocks. | A pure artifact contains no metadata references or calls to `Tosh.Compiler.Runtime`, `ToshHost`, or `ToshEngine`; bootstrap is omitted or conditional; recursion guarding uses a stable `Tosh.Runtime` primitive; and a post-emit IL dependency audit fails independently of `RequireTier` diagnostics. Verified 2026-07-27: the emitted IL references exactly `System.Console`, `System.Private.CoreLib`, `Tosh.Compiler.Runtime`, and `Tosh.Runtime`, so only the three unconditional `ToshHost` members stand between the artifact and purity; the over-declared `deps.json` is a separate packaging concern. |
 | `TS-P1-26` | Complete — 2026-07-29 | Equality is asymmetric for bool against string: `true == "true"` is `true` while `"true" == true` is `false`. Numeric pairs are symmetric in both directions (`1 == "1"` and `"1" == 1`), as are bool-against-number, so only the string-on-the-left-of-a-bool direction fails to coerce. Both `OperatorEvaluator.AreEqual` and `ToshEngine.AreEqualAsync` agree with each other, so this is one rule applied in one direction rather than a sync/async drift. Found by `EqualityParityTests` on its first run. `TS-P1-14` promised symmetry explicitly for ordering and did not state it for equality, which is why it survived that item. | A decision records whether a string coerces to bool for equality at all: either `"true" == true` becomes `true` (extend coercion, matching the numeric rule) or `true == "true"` becomes `false` (drop bool/string coercion). Equality is symmetric for every pair in the corpus afterwards, on both implementations; the characterization entry in `EqualityParityTests` is inverted in the same change. |
+| `TS-P1-27` | Complete — implemented 2026-07-30 | ToastScript's concurrency system and the CLR's did not meet. `async`/`await` are builtin commands over `ShellFuture`, and a CLR method returning `Task`/`Task<T>` was never awaited by anything: the task flowed into the pipeline untouched, `await` refused it with `await_requires_future`, and it displayed as `AsyncStateMachineBox\`1` — the compiler's state machine type, since `Task` does not override `ToString`. The only route to a value was `.Result`, which blocks and can deadlock. Reported from real code: `async { $p.SendPingAsync(…) }` then `await $reply`. | Decided C#-identical and explicit: a task-returning call yields a task and you await it. `await` accepts `Task`, `Task<T>`, `ValueTask`, `ValueTask<T>` and a `ShellFuture`, **flattens** so one `await` unwraps a future whose output is a task, emits nothing for a declared-`Task`, honours cancellation via `WaitAsync`, and surfaces a faulted task's *own* message rather than `AggregateException`'s. Tasks stay values so work can overlap — asserted by timing. An un-awaited task renders `Task<PingReply> (pending)`. Auto-awaiting at the call site was rejected: it removes concurrency and would have to land on both surfaces of the dual-surface interfaces. Specification gains an Asynchrony section — it had none. Negative control: 6 of 10 cases fail unfixed. |
 
 ## P2 — Parser, Binder, Diagnostics, and Surface Generation
 
@@ -450,6 +451,8 @@ closed.
 | `TS-P2-33` | Planned — filed 2026-07-30 | The LSP feature table documents a comprehension form the language does not have. `let` reads "Example: `[for x in $items let y = x * 2 pick y]`", `pick` reads "Projection clause in a comprehension ... Example: `[for x in $items pick x * 2]`", and `get` reads "Projection clause in a comprehension (alias for `pick`)". None of those parse: comprehensions are body-first with `<|`, as in `[$y <| for x in 1..3 let y = ($x * 2)]`. `pick` is not a comprehension clause at all — it is a builtin **command**, an alias for the `get` projection command, so its hover text is wrong in both category and syntax. Users get editor guidance that fails when followed. | The three entries describe the form that exists, with examples taken from executable fixtures rather than written by hand; `pick` moves out of the keyword table to wherever command help lives; and the LSP's examples are covered by the same mechanism that keeps the specification's honest, so a hover example cannot claim syntax the parser rejects. |
 | `TS-P2-34` | Complete — fixed 2026-07-30 | A module-qualified command accepted a *value* argument and refused a *delimited* one. `M.F 5`, `M.F "s"`, `M.F $v` and `M.F (1+2)` worked; `M.F { … }`, `M.F [1, 2]`, `M.F {\| a = 1 \|}`, `M.F {: 1 :}` and `M.F {% … %}` all reported `missing_pipeline_separator` at the opening delimiter. `LooksLikeStaticMemberAccessExpression` reads a dotted name in command position as a CLR member access unless the next token starts a command argument, and `NextTokenStartsCommandArgument` listed only value tokens — no `{`, `[`, or paired literal opener. Same family as `TS-P2-16`, which fixed the value case and left this behind. Reported from a real library whose helpers take block arguments: twelve parse errors from one missing token list. | The delimiter openers count as command arguments, so a qualified command accepts everything an unqualified one does. A following bareword still reads as a sibling argument, keeping `echo Config.version Config.maxRetries` as two member accesses; a delimiter on the *next* line still does not bind, as `HasLineBreakBetween` already required. Negative control across both fixes: 10 of 18 cases fail unfixed. |
 | `TS-P2-35` | Complete — implemented 2026-07-30 | `require Outer.Inner from "…" as Alias` did not resolve. Only the outermost export name was looked up, so a library organised as nested modules — a namespace-like structure — reported the whole dotted string as a missing export, accurate but unhelpful given `Outer` was present and `Inner` was inside it. | A dotted import name walks module exports and declares whatever the final segment names — module, type, refinement, command, or variable — binding the final segment when no `as` alias is given. Paths of any depth work, partial modules at every level work, and importing the outer module keeps working. **Found while fixing it:** `ToshEngine` carries *two* `ImportRequiredArtifact` overloads twelve thousand lines apart, and the `require` statement path uses the second — so the first patch left the feature compiled and unreachable. Both now route through one resolver. |
+| `TS-P2-36` | Planned — filed 2026-07-30 | Generic static methods do not infer their type argument. `System.Threading.Tasks.Task.FromResult(7)` fails with "No overload matched static method 'FromResult' on 'System.Threading.Tasks.Task' with 1 argument(s)", because `FromResult<TResult>` needs `TResult` inferred from the argument. This matters more now that `TS-P1-27` made explicit `await` the model: `Task.WhenAll`, `Task.FromResult` and friends are exactly the helpers that model invites, and none of them are reachable. | A generic static method infers its type arguments from the supplied arguments, as C# does; `Task.FromResult(7)`, `Task.WhenAll($a, $b)` and `Enumerable.Empty<T>()`-style calls resolve; an argument set that genuinely cannot be inferred produces a diagnostic naming the type parameter rather than reporting the overload as missing. |
+| `TS-P2-37` | Planned — filed 2026-07-30 | The shell type alias `file` shadows `System.IO.File`, so `File.ReadAllTextAsync(…)` reports "No overload matched static method 'ReadAllTextAsync' on 'System.IO.FileInfo'" — the alias resolves `File` to `FileInfo` and the static is looked up on the wrong type. The fully-qualified `System.IO.File.ReadAllTextAsync` works. Same shape as the `double`/`map`/`set` collisions `TS-P2-23` handled for *bare* names, but this one is in the member-access path where a declaration cannot win. | A capitalized name that matches a shell type alias only case-insensitively resolves to the CLR type in member-access position, or the diagnostic names both candidates and says which was chosen; `File.ReadAllTextAsync` works without qualification, and `var f: file = …` keeps binding to `FileInfo`. |
 
 **Implementation note for `TS-P2-11` (July 25 review recommendation).** The
 `TS-P2-01`/`TS-P2-02`/`TS-P2-04`/`TS-P2-12`–`TS-P2-15` family shares one root
@@ -3734,3 +3737,87 @@ That is the recurrence of the observation already recorded twice in this log, so
 stays an observation rather than becoming an item — but it has now been seen a third
 time under parallel load, which is the point at which "intermittent" starts to mean
 "unfixed".
+
+### July 30, 2026 — CLR-compatible `await` (TS-P1-27)
+
+Reported from real code, and the report was right to suspect the language rather
+than the author:
+
+```tosh
+var p = new Ping()
+var reply = async { $p.SendPingAsync("8.8.8.8", 1000) }
+await $reply        ## AsyncStateMachineBox`1[…PingReply…]
+```
+
+**Two systems that never met.** `async` and `await` are *builtin commands* — they
+appear zero times in the lexer, parser, and specification — operating over
+`ShellFuture`. A CLR method returning `Task`/`Task<T>` was never awaited by
+anything: the task flowed into the pipeline untouched, `await` refused it with
+`await_requires_future`, and `.Result` was the only route to a value. The display
+was a symptom rather than the defect: `Task` does not override `ToString`, so the
+formatter fell back to the runtime type, which is the compiler's state machine box.
+
+The directive was that ToastScript's async/await be the same as, or compatible with,
+the CLR's. Two decisions followed.
+
+**Explicit, C#-identical.** A task-returning call yields a task; you await it.
+Auto-awaiting at the call site was considered and rejected for two reasons, the
+second architectural: it removes the ability to hold a task and start work
+concurrently, which is the reason tasks exist; and member invocation lives on *both*
+surfaces of the dual-surface interfaces, so the change would have had to land twice —
+the shape that hid three duplication bugs in the preceding days. A test asserts the
+concurrency the decision preserves, by timing two overlapping delays rather than by
+description.
+
+**`await` flattens.** One `await` unwraps a future whose output is a task, so the
+reported code works as written. C# needs `Task.Unwrap` here; a future-of-task has no
+use, and leaving it unflattened is precisely the trap that produced the report.
+
+Three details that were easy to get wrong:
+
+- **The awaited type comes from the declared generic argument, not from a `Result`
+  property.** A method declared to return plain `Task` compiles to
+  `AsyncStateMachineBox<VoidTaskResult>`, whose inherited `Result` holds an internal
+  struct meaning "no value". Trusting the property would make every void async method
+  emit garbage. `await (File.WriteAllTextAsync(…))` emits nothing, and a test says so.
+- **Cancellation** goes through `task.WaitAsync(token)` — the same call
+  `ShellFuture.AwaitAsync` already used — so Ctrl-C during an await behaves alike on
+  both paths. The first draft awaited bare and would have hung.
+- **A faulted task raises its own message**, not `AggregateException`'s "One or more
+  errors occurred", because the reported code wraps this in `catch (e)` and
+  `$e.Message` is what a user reads. One layer is unwrapped.
+
+The specification gains an Asynchrony section; it had none, which is why the
+limitation was undiscoverable — the third feature this week found working-but-
+undocumented, after partial modules and accessor blocks. `async`/`await` are
+deliberately **not** added to `LanguageSurface`: they are commands, not word-shaped
+syntax, the same distinction that keeps `pick` out.
+
+**A process failure worth recording.** The first negative control reported 10 of 10
+passing against "unfixed" code, which should have been impossible. `git stash push`
+had silently failed — `ClrAwaitable.cs` was untracked, and stderr was redirected to
+`/dev/null` — so nothing was stashed and the control ran against the fix. The
+subsequent `git stash pop` then applied a *pre-existing* stash from the abandoned
+`TS-P2-25` attempt, leaving merge-conflict markers in three parser files. Repaired by
+restoring them from `HEAD`, which already carries the committed fixes; the old stash
+entry was never consumed and remains in the list.
+
+Two lessons, both narrow enough to act on: a negative control that *passes* is a
+broken control, not a reassuring result — the whole point is that it must fail. And
+suppressing stderr on a state-changing git command turns a loud failure into a silent
+one. The second control, done by copying files aside instead of stashing, failed 6 of
+10 as it should.
+
+**One more of my own, caught by the full suite.** The test asserting that tasks stay
+first-class timed two 200ms delays against a 380ms budget. It passed alone and failed
+inside the parallel run — a wall-clock assertion under parallel test load measures the
+machine, not the code. Replaced with the property it was standing in for: two
+un-awaited tasks held as values simultaneously, checked in C# with
+`ClrAwaitable.IsAwaitable`. Overlap follows from that deterministically. A flaky test
+is worse than no test, and a timing budget is a flaky test with extra steps.
+
+**Filed alongside**, both surfaced by this work and both sharpened by it:
+`TS-P2-36`, generic static methods not inferring their type argument — which now
+matters more, since explicit `await` invites exactly the `Task.WhenAll`/`FromResult`
+helpers that are unreachable; and `TS-P2-37`, the `file` alias shadowing
+`System.IO.File` in member-access position.

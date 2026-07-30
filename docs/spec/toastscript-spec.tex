@@ -2549,6 +2549,92 @@ Finite generator functions integrate naturally with the full pipeline command se
 \code{first}, \code{skip}, \code{where}, \code{map}, \code{collect}, etc.
 \end{tipbox}
 
+\section{Asynchrony}
+
+\code{async} and \code{await} are \emph{commands}, not keywords---they are
+resolved by the command dispatcher like any other builtin, and they do not
+appear in the keyword list for that reason.
+
+\code{async} starts a callable or block in the background and returns a future
+handle; \code{await} waits for it and replays its outputs:
+
+\begin{lstlisting}
+var f = async { sleep 0.2; echo done }
+await $f                      # done
+\end{lstlisting}
+
+\subsection*{Awaiting CLR Tasks}
+
+\code{await} also accepts a CLR \code{Task}, \code{Task<T>}, \code{ValueTask},
+or \code{ValueTask<T>}, so .NET asynchronous methods work the way a .NET reader
+expects.  A task-returning call yields a task, and you await it---the same
+explicit model as C\#:
+
+\begin{lstlisting}
+using System.Net.NetworkInformation
+
+var p = new Ping()
+var reply = await ($p.SendPingAsync("8.8.8.8", 1000))
+echo $reply.Status            # Success
+\end{lstlisting}
+
+Because a task is a value, work can overlap---start several, then await each:
+
+\begin{lstlisting}
+var a = $client.GetStringAsync($first)
+var b = $client.GetStringAsync($second)
+
+var one = await $a
+var two = await $b            # both requests were already in flight
+\end{lstlisting}
+
+A method declared to return plain \code{Task} produces no value, so awaiting it
+emits nothing:
+
+\begin{lstlisting}
+await (System.IO.File.WriteAllTextAsync($path, $text))
+\end{lstlisting}
+
+\begin{notebox}
+\code{await} unwraps as many layers as it finds, so a block whose last
+expression is an asynchronous call needs only one \code{await}:
+
+\begin{lstlisting}
+var f = async { $p.SendPingAsync("8.8.8.8", 1000) }
+var reply = await $f          # a PingReply, not a Task
+\end{lstlisting}
+
+This is a deliberate difference from C\#, where the equivalent needs
+\code{Task.Unwrap}.  A future whose value is a task has no use, and leaving it
+unflattened is a trap.
+\end{notebox}
+
+A failed task raises its \emph{own} error, not the
+\code{AggregateException} wrapper the CLR would surface, so
+\code{\$e.Message} inside \code{catch} is the message the operation actually
+failed with:
+
+\begin{lstlisting}
+try {
+    await (System.IO.File.ReadAllTextAsync("/nope.txt"))
+} catch (e) {
+    echo $e.Message           # Could not find a part of the path '/nope.txt'.
+}
+\end{lstlisting}
+
+\begin{warnbox}
+Reading \code{.Result} or calling \code{.GetAwaiter().GetResult()} on a task
+also works, and \emph{blocks the calling thread}.  Prefer \code{await}; the
+blocking forms can deadlock.
+\end{warnbox}
+
+An un-awaited task displays as what it is, so a forgotten \code{await} is
+visible rather than mysterious:
+
+\begin{lstlisting}
+$p.SendPingAsync("8.8.8.8", 1000)     # Task<PingReply> (pending)
+\end{lstlisting}
+
 \section{Event Handlers}
 \ikw{handles}
 
