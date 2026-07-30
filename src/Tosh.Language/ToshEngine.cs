@@ -9948,6 +9948,71 @@ public sealed partial class ToshEngine : IShellEvaluator
     /// Exposed publicly so compiled tosh (the IL emitter's host bridge)
     /// can resolve types for <c>new</c>-expressions without re-parsing.
     /// </summary>
+    /// <summary>
+    /// Resolves a module-qualified type name — <c>Outer.Inner.SmallInt</c> — by walking module
+    /// exports, so a type declared inside a module can be named from outside it.
+    /// </summary>
+    /// <remarks>
+    /// Without this, a module-qualified name could not be used as an annotation at all:
+    /// `var x: ToastLib.Math.IntPercent = 60` reported `annotation_unknown_type` even though
+    /// the unqualified `IntPercent` worked, and the same was true of a `class` or `record`
+    /// declared in a module. Every lookup on the annotation path — refinement types, named
+    /// types, and the CLR resolver — took a flat name (<c>TS-P1-34</c>).
+    ///
+    /// Deliberately placed beneath the flat lookups in both callers, so an unqualified name
+    /// keeps resolving exactly as it did and only a dotted name reaches the walk. Shares the
+    /// shape of `TryResolveNestedExport`, which does the same walk for `require` — the third
+    /// place this programme has needed "follow a dotted path through modules".
+    /// </remarks>
+    private bool TryResolveQualifiedModuleMember(string name, out object? member)
+    {
+        member = null;
+
+        if (!name.Contains('.', StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var segments = name.Split('.', StringSplitOptions.None);
+
+        if (segments.Length < 2 || segments.Any(string.IsNullOrEmpty))
+        {
+            return false;
+        }
+
+        if (!TryFindExistingModule(segments[0], out var current))
+        {
+            return false;
+        }
+
+        for (var index = 1; index < segments.Length - 1; index++)
+        {
+            if (!current.ExportTable.Modules.TryGetValue(segments[index], out var next) ||
+                next is not ToshModuleObject nested)
+            {
+                return false;
+            }
+
+            current = nested;
+        }
+
+        var leaf = segments[^1];
+
+        if (current.ExportTable.RefinementTypes.TryGetValue(leaf, out var refinement))
+        {
+            member = refinement;
+            return true;
+        }
+
+        if (current.ExportTable.Types.TryGetValue(leaf, out var type))
+        {
+            member = type;
+            return true;
+        }
+
+        return false;
+    }
+
     public bool TryGetNamedType(string name, out IShellNamedType definition)
     {
         foreach (var scope in _scopes)
@@ -9964,6 +10029,13 @@ public sealed partial class ToshEngine : IShellEvaluator
             rawValue is IShellNamedType runtimeDefinition)
         {
             definition = runtimeDefinition;
+            return true;
+        }
+
+        if (TryResolveQualifiedModuleMember(name, out var qualified) &&
+            qualified is IShellNamedType qualifiedType)
+        {
+            definition = qualifiedType;
             return true;
         }
 
@@ -9986,6 +10058,13 @@ public sealed partial class ToshEngine : IShellEvaluator
             rawValue is RefinementTypeDefinition runtimeDefinition)
         {
             definition = runtimeDefinition;
+            return true;
+        }
+
+        if (TryResolveQualifiedModuleMember(name, out var qualified) &&
+            qualified is RefinementTypeDefinition qualifiedRefinement)
+        {
+            definition = qualifiedRefinement;
             return true;
         }
 

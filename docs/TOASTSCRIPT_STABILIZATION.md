@@ -318,8 +318,11 @@ July 26 semantic decisions (comparison, chained comparison, `$this` in
 method defaults) and the July 28 paired-delimiter decision are
 implemented.
 
-**In progress** (as of July 29, 2026 — 72 items, 36 complete; P0 8/8,
-P1 14/24, P2 12/27, P3 2/11; suite 3,464 passing).
+**In progress** (as of July 30, 2026 — 95 items, 52 complete; P0 8/8,
+P1 23/35, P2 19/41, P3 2/11; plus one partially complete and one
+withdrawn. Suite 3,624 passing, 1 skipped. Counted from the tables
+below by status prefix; an earlier snapshot in this section said 36 of
+72 and had not been re-derived since July 29.)
 
 - `TS-P1-24`, duplicated sync/async semantics. The inventory ratchet is built
   (`SyncAsyncTwinInventoryTests`), and building it corrected the audit twice
@@ -416,6 +419,9 @@ closed.
 | `TS-P1-30` | Complete — fixed 2026-07-30; interpolation follows in `TS-P1-32` | **At a TTY, an external command's output is never captured.** `var x = git rev-parse --show-toplevel` prints the path to the terminal and leaves `$x` as `null`; `(git rev-parse …)` answers `null`; `$"{git rev-parse …}"` and `$(…).Trim()` answer empty. All five forms print correctly and capture nothing. `DetermineSpawnMode` decides between passthrough and piped using `hasTerminal = !context.IsPipelined && !Console.IsOutputRedirected && …`, so the question "is my output being consumed?" is answered by `IsPipelined` alone — which is true only when a *downstream stage* exists. Assignment, subexpression, and interpolation all consume the value without being pipelined, so they take `SpawnMode.TerminalPassthrough`, where stdout is inherited and nothing is captured. **Invisible to the entire suite**: 3,602 tests pass because a test process never has a TTY, and without one the same code captures correctly. Reproduced by allocating a pty with `script`. | `CommandContext` carries whether its output will be consumed, distinct from `IsPipelined`, and `DetermineSpawnMode` treats a consuming context as it treats a pipelined one. The scope decision is *which* contexts count — assignment, subexpression, and interpolation at minimum; `return`, conditions, and command arguments need deciding. Note the existing comment's tension is not an obstacle here: forcing the piped path redirects stdin and skips the foreground-group handoff, which breaks an *interactive* child — but a child whose output is being captured is not one the user is interacting with, so piping is correct exactly in the captured case. Tests must run under a pty, or the fix is unverifiable by the suite that missed it. |
 | `TS-P1-32` | Planned — filed 2026-07-30 | An interpolation hole does not capture external output: `echo $"{git rev-parse --abbrev-ref HEAD}"` prints the branch to the terminal and interpolates the empty string. Same root cause as `TS-P1-30` but reached by a different route — a hole **re-parses its text** and runs it as a whole statement through `EvaluateAsync`, so it arrives at the pipeline via `EvaluateParseResultAsync` → `EvaluateStatementAsync` → `EvaluatePipelineWithRedirectionAsync` rather than through any of the consuming sites `TS-P1-30` marked. Pinned as a characterization in `TtyCaptureTests.An_interpolation_hole_does_not_yet_capture` so the gap is visible. | The capture flag threads through `EvaluateAsync`, `EvaluateParseResultAsync`, `EvaluateStatementAsync` and `EvaluatePipelineWithRedirectionAsync` — four signatures, all defaultable, but one of them is the engine's hottest dispatch, so it wants its own slice rather than riding along. The characterization assertion flips to the positive form in the same commit. |
 | `TS-P1-33` | Planned — filed 2026-07-30 | `members` on a `ShellTextLine` lists only `Text`, while every `string` member is callable on it — `.Trim()`, `.Length`, `.ToUpper()`, `.Split()`, `== "…"`, `cast string`, and a `string` annotation all work, because `ReflectionObjectAccessor.ResolveSegment` unwraps to the underlying string. Introspection therefore contradicts behaviour, and that mismatch is what convinced both the reporter and the author that the type was not string-like — leading to a proposed fix for a defect that did not exist. | `members` and `methods` on a `ShellTextLine` list the string surface it actually exposes, or state that it forwards to `string`; completion does the same. Discoverability matching behaviour is the whole of it. |
+| `TS-P1-34` | Complete — fixed 2026-07-30 | **A module-qualified type name could not be used as an annotation at all.** `var x: ToastLib.Math.IntPercent = 60` raised `tosh.runtime.annotation_unknown_type` while the bare `IntPercent` worked and enforced. Reported for refinement types, but the cause was general: every lookup on the annotation path — `TryGetRefinementType`, `TryGetNamedType`, and the CLR resolver — took a **flat** name with no notion of a dotted module path, so a qualified `class` and `record` failed identically (`var v: Outer.Inner.Widget = …`). The third place this programme has needed "follow a dotted path through modules", after `require`'s nested export walk (`TS-P2-35`) and qualified command arguments. | Both lookups fall through to one shared walk, `TryResolveQualifiedModuleMember`: resolve the leading segment as a module, walk nested modules by `ExportTable.Modules`, then look the leaf up among the final module's refinement types and named types. Placed *beneath* the flat lookups in both callers, so an unqualified name resolves exactly as before and only a dotted name reaches the walk. Fixing the lookups rather than the known-check matters: the annotation must not merely be *accepted* but resolve to the same definition, so the refinement still coerces and still rejects. |
+| `TS-P1-35` | Complete — fixed 2026-07-30 | **A module shadowing a CLR type made that type unreachable from inside itself.** `coerce Math.Clamp(_, 0, 100)` declared inside `module Math` failed with "Member 'Clamp' was not found on module 'Math'" — the module name won and there was no fallback. Latent until `TS-P1-34`: while the qualified annotation was broken, the reporter's refinement was only ever reachable through the name that leaked unqualified into the requiring scope, where `Math` was not a bound module and fell through to `System.Math`. Resolving the qualified name evaluates the coercion with the module in scope, so fixing `TS-P1-34` alone would have moved the reporter from one error to another. Same collision as `TS-P2-37` (`file` versus `System.IO.File`). | `ToshModuleObject.InvokeInstanceMethod` falls back to the shadowed CLR type via `TryResolveTypeName` and `Runtime.Invoker.InvokeStatic` **on a member miss only** — a module's own export still wins, so no existing call changes which member it resolves to; the fallback can only turn a hard failure into a hit. A miss on a module that shadows nothing still errors, so the fallback does not swallow real mistakes. |
+| `TS-P1-36` | Decision needed — filed 2026-07-30 | **Two module forms with different name visibility.** A `partial module`'s exported refinement types resolve *unqualified* in the requiring scope — the reporter's `var x: IntPercent` works after requiring their library — while a plain `module`'s do not: `var d: SmallInt` fails with `annotation_unknown_type` after requiring an identical non-partial module, and `new Widget()` fails with "Unable to resolve type 'Widget'" where the refinement leaks. Found while fixing `TS-P1-34`, which makes both reachable *qualified*, so nothing is blocked by it now. The likely mechanism is that partial merging declares into the ambient scope (the `DeclareType`/`DeclareModule` calls added after `MergePartial` for `TS-P2-28`) while a plain module's exports stay behind `ExportTable`. | Decide the rule, then make one path implement it: either `require` binds a module's exports unqualified (and `TS-P2-28`'s behaviour is correct and should extend to plain modules), or exports are reached only through the module name and an alias (and the partial path is over-declaring). Whichever way, `partial` must not change *visibility* — it is a declaration-splitting modifier, and having it silently widen scope is the kind of second answer to one question this programme keeps finding. Specification states the chosen rule. |
 
 ## P2 — Parser, Binder, Diagnostics, and Surface Generation
 
@@ -4201,3 +4207,72 @@ and runs it as a whole statement through `EvaluateAsync`, reaching the pipeline 
 site. Four defaultable signatures would carry the flag there; it wants its own slice rather
 than riding along at the end of a long one. Pinned as a characterization so the gap is
 visible and flipping it later is a deliberate edit.
+
+### July 30, 2026 — A qualified name, and the defect it was hiding (TS-P1-34, TS-P1-35)
+
+Reported as "I can not access `type`s defined inside of modules that I am requiring":
+
+```
+❯ var x: ToastLib.Math.IntPercent = 60
+✖ error tosh.runtime.annotation_unknown_type
+  'x' uses unknown type annotation 'ToastLib.Math.IntPercent'.
+```
+
+**The report understated it.** Probing before editing anything established that the bare
+`IntPercent` worked *and enforced* — `150` clamped to `100` — while both `ToastLib.Math.IntPercent`
+and an `as`-aliased `M.IntPercent` failed. So this was not a missing type, it was a name that
+could not be spelled. One more probe widened it past the report: a qualified **class**
+annotation failed identically, `var v: Outer.Inner.Widget = (new Outer.Inner.Widget())`. That
+one probe decided where the fix went. Had it not been run, the natural move was to teach
+`TryGetRefinementType` about dotted names and declare the reported symptom fixed, leaving
+classes and records broken in exactly the same way for the next report to find.
+
+The cause was uniform and unremarkable: **every** lookup on the annotation path took a flat
+name. So the fix is one walk, `TryResolveQualifiedModuleMember`, hung beneath the flat lookups
+in both `TryGetNamedType` and `TryGetRefinementType` — unqualified names never reach it, and
+dotted ones resolve through `ExportTable.Modules` to the leaf. Fixing the *lookups* rather than
+`IsKnownAnnotatedType` is the part that matters. Making the check permissive would have made
+the annotation accepted; making the lookup work makes it resolve to the actual definition,
+which is why `Outer.Inner.SmallInt = 99` coerces to `10` and `Outer.Inner.Port = 0` still fails.
+An annotation that is known but toothless would have looked like a fix and been worse than the
+error.
+
+**Then the fix exposed a second defect — the reporter's own case still failed.**
+
+```
+✖ error Member 'Clamp' was not found on module 'Math'.
+  4 │ export type IntPercent = int where (…) coerce Math.Clamp(_, 0, 100)
+```
+
+Their coercion calls `Math.Clamp` from inside `module Math`, so the module name shadows
+`System.Math`. This had never worked; it had only never been *reached*. While the qualified
+annotation was broken, the refinement was only usable through the name that leaked unqualified
+into the requiring scope — and there `Math` is not a bound module, so it fell through to the CLR
+type. Resolving the qualified name evaluates the coercion with the module in scope, and the
+shadow became visible. Worth stating plainly: for one probe cycle the fix appeared to have
+broken the reporter's file, when it had exposed a second defect standing behind the first.
+
+Filed as `TS-P1-35` and fixed rather than deferred, because deferring would have handed the
+reporter a different error for the same line. `ToshModuleObject.InvokeInstanceMethod` now falls
+back to the shadowed CLR type **on a miss only**, so a module's own export still wins — asserted
+first, since that is what the fallback must not break — and a miss on a module shadowing nothing
+still errors, so mistakes are not swallowed into a silent null. This is `TS-P2-37`'s collision
+(`file` versus `System.IO.File`) answered for the general case; that item should now be re-checked
+against this rule rather than fixed separately.
+
+**Validation.** Fourteen new assertions in `QualifiedModuleTypeTests`, including the reported
+route end to end through a required file with `partial module`, since partial merging declares
+through a different path (`TS-P2-28`) than a plain module. The negative control — restored by
+**file copy**, after a `git stash` silently no-opped earlier in this programme — failed 8 and
+passed 6 against the unfixed code, and the split is the one it should be: every assertion of new
+behaviour failed, and the six that passed are exactly the preservation assertions (four
+unknown-name rejections, two shadowing controls). A control where those six had also failed would
+have meant the tests were asserting the walk's mechanics rather than its behaviour. Full suite
+3,624 passing, 1 skipped.
+
+**Noted, not fixed:** exported names leak inconsistently. A `partial module`'s exported refinement
+types resolve unqualified in the requiring scope, while a plain `module`'s do not — `var d: SmallInt`
+fails where the reporter's `var x: IntPercent` succeeds. Both are now reachable qualified, which is
+the spelling that should always have worked, so this is no longer blocking anyone; but two module
+forms with different name-visibility rules is a semantic decision that has never been made
+deliberately. It wants its own item and a decision, not a quiet patch.

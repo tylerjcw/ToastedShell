@@ -2933,6 +2933,53 @@ This works for any module-name casing, including identifiers that contain
 hyphens (\code{kebab-mod.hi}), underscores, or mixed case.  Nested modules
 resolve segment-by-segment (\code{outer.inner.fn}).
 
+\subsection*{Module-Qualified Type Names}
+
+A type declared inside a module may be named from outside it by its
+qualified path, in every position a type name is accepted---including a
+variable's type annotation.  Nested modules resolve segment-by-segment, the
+same rule as command dispatch:
+
+\begin{lstlisting}
+module Outer {
+    module Inner {
+        export type SmallInt = int where (_ >= 0 and _ <= 10) coerce 10
+        export class Widget { prop Name = "w" }
+    }
+}
+
+var a: Outer.Inner.SmallInt = 5     # 5
+var b: Outer.Inner.SmallInt = 99    # 10 --- the refinement's coercion runs
+var w: Outer.Inner.Widget = (new Outer.Inner.Widget())
+\end{lstlisting}
+
+The qualified name resolves to the same definition the unqualified name
+would, so a refinement type used as a qualified annotation still applies its
+predicate and its coercion, and still rejects a value it cannot coerce.
+
+\subsection*{Modules That Shadow CLR Types}
+
+A module may be named after a CLR type---\code{Math}, \code{Console}---and
+inside it that name refers to the module.  Its own exports win, and the
+shadowed type stays reachable: a member that the module does not export is
+looked up on the CLR type of the same name.
+
+\begin{lstlisting}
+module Math {
+    export func Clamp(a, b, c) { return "module-wins" }
+    export func widest() { return Math.Max(3, 7) }
+}
+
+Math.Clamp(1, 2, 3)        # module-wins --- the export
+Math.widest()              # 7 --- System.Math.Max, not shadowed away
+\end{lstlisting}
+
+This matters most inside the module's own body, where the shadowing is
+unavoidable: a refinement type declared in \code{module Math} whose coercion
+calls \code{Math.Clamp} would otherwise have no way to reach
+\code{System.Math}.  A member found on neither the module nor a shadowed type
+is still an error rather than a null.
+
 \subsection*{Partial Modules}
 \ikw{partial}
 

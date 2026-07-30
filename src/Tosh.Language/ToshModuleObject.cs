@@ -120,7 +120,21 @@ internal sealed class ToshModuleObject : IShellRecordObject, IShellInvocableObje
             return new InvocationResult(Flatten(values), ReturnedVoid: false);
         }
 
-        throw new InvalidOperationException($"Member '{methodName}' was not found on module '{Name}'.");
+        // A module named after a CLR type shadows it, so `Math.Clamp(…)` inside
+        // `module Math` looked the method up on the module and failed. Falling back to the
+        // shadowed type on a member *miss* keeps the module's own exports winning while
+        // leaving the CLR surface reachable — the same resolution rule as TS-P2-37's
+        // `file`/`System.IO.File` collision.
+        //
+        // Only reached once the module has no such export, so this cannot change which
+        // member an existing call resolves to; it only turns a hard failure into a hit.
+        if (_engine.TryResolveTypeName(Name) is { } shadowedType)
+        {
+            return _engine.Runtime.Invoker.InvokeStatic(shadowedType, methodName, arguments);
+        }
+
+        throw new InvalidOperationException(
+            $"Member '{methodName}' was not found on module '{Name}'.");
     }
 
     public bool TryGetExport(string name, out object? value)
