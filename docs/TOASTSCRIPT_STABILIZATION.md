@@ -424,7 +424,7 @@ closed.
 | `TS-P2-07` | Complete — 2026-07-26 | Binder and variable-binder visitors miss pipe-forward, substitution, and other nested forms. | One exhaustive syntax walker visits every child; a reflection/exhaustiveness test fails when a new syntax node lacks traversal. |
 | `TS-P2-08` | Complete — 2026-07-26 | The raw function-name pre-scan can reinterpret later commands after unrelated text containing `func`. | Declarations are discovered structurally without non-local token poisoning. |
 | `TS-P2-09` | Planned | LSP maps warnings to errors and MCP `explain_error` stops runtime analysis when only warnings exist. | Severity is preserved end-to-end; warnings do not suppress independent runtime explanations. |
-| `TS-P2-10` | Planned | Operators, keywords, document symbols, help, MCP, LSP, and spec tables are hand-maintained and have drifted. | A machine-readable language-surface registry generates or validates every consumer. |
+| `TS-P2-10` | In progress — registry and guard 2026-07-29 | Operators, keywords, document symbols, help, MCP, LSP, and spec tables are hand-maintained and have drifted. Measured: **eight consumers holding 115 distinct words between them, of which 7 appeared in all eight.** The CLI highlighter knew 59, the Tome colorizer 21, the REPL classifier 15, the LSP feature table 93. Consequences were ordinary and visible — `const`, `defer`, `yield`, `union`, `rune`, `event`, `import`, and `interface` went unhighlighted at the prompt; the Tome coloured no control-flow keyword; and the LSP documented `let`, `quote`, and `once` as keywords when none of the three exists. | A machine-readable language-surface registry generates or validates every consumer. **Landed:** `LanguageSurface` in `Tosh.Runtime` carries 95 words by category, each **execution-validated** by a probe in `LanguageSurfaceParityTests`; the CLI highlighter and Tome colorizer derive from it; the guard also proves no consumer names a word the registry lacks, across five consumers, and that the visibility family is exactly what `ParseDeclarationModifier` accepts. **Remaining:** the three prose-carrying consumers (help catalogue, LSP hover text, VS Code metadata) still hold their own key sets, and operators and document symbols are untouched. |
 | `TS-P2-11` | In progress — characterization corpus 2026-07-26 | Parser expression layers rely on scattered lookahead and special cases. | Adopt an explicit precedence/postfix architecture, preferably Pratt-style, without changing accepted syntax unintentionally. |
 | `TS-P2-12` | Complete — 2026-07-25 | String escape semantics violate the specification's quoting table: single-quoted strings process escape sequences (`'a\nb'` has length 3) despite being documented as raw, and unknown escapes in double-quoted strings silently drop the backslash (`"\d+"` becomes `d+`), so `("a1" =~ "\d")` is false and the specification's own `=~ "\.cs$"` example matches incorrectly. No single-line quote form preserves a backslash literally. | Single-quoted strings are raw (no escape processing); unknown double-quote escapes are preserved verbatim or produce a targeted diagnostic; every quote form has a conformance case; a migration note records the contract change. |
 | `TS-P2-13` | Complete — 2026-07-25 | Expression-position barewords silently coerce to `DateTimeOffset` through the permissive `DateTimeOffset.TryParse` fallback: `1.2.3` and the malformed range `1.5..3` both evaluate to dates in 2003. Relatedly, float-headed and negative-headed ranges (`1.5..3`, `-1..5`) never lex as ranges at all (companion to `TS-P2-03`). | Intrinsic temporal literals parse only through the exact documented format list; dotted-number typos yield barewords or diagnostics, never dates; float and negative range bounds lex correctly or produce a targeted diagnostic. |
@@ -444,6 +444,7 @@ closed.
 | `TS-P2-27` | Complete — decided and implemented 2026-07-29 | `from csv` yields every column as `string`, so the specification's own `\| where _.Amount > 100` fails with "Values of type 'System.String' and 'System.Int32' cannot be ordered" and needs an explicit `cast int`. This sits against the stated design — typed object pipelines — and against `from json`, which *does* produce typed values because JSON carries types. Whether CSV should infer is a decision, not obviously a defect: NuShell infers, PowerShell's `Import-Csv` does not. The diagnostic itself is good and names both types. | Decided: infer numbers and booleans, not dates. Integers narrow to `int` where they fit, decimals become `double`, `true`/`false` become `bool`; dates stay text because `01/02/26` is three different days by locale. Inference is **per column** — one disagreeing cell leaves the whole column textual, so values within a column always compare with each other. A leading zero keeps its column textual (`007`, zip codes); a thousands separator cannot be numeric because the comma is the delimiter. An empty cell is not evidence and becomes `null` in a typed column. `--raw` / `--no-infer` returns everything as text. Applies to `tsv` too, sharing the format. |
 | `TS-P2-28` | Complete — fixed 2026-07-29 | A `partial` declaration split across imported files could not be assembled with the **named** import form. `require Sys from "./a.tosh"` followed by `require Sys from "./b.tosh"` failed with `require_failed` — "Export 'Sys' was not found" — on whichever file came second, in either order, while the bare `require "./b.tosh"` form worked. The diagnostic was actively misleading: the merge had succeeded. All four kinds that support `partial` shared the shape `existingDef.MergePartial(…); yield break;` — merge into the existing declaration, then return *before* declaring — so the contributing file exported nothing under the name and the named-import lookup found nothing. Modules additionally accepted `partial module X` extending a non-partial `module X` silently, where classes, records, and structs all refuse it. Partial modules were undocumented. | Both import forms assemble a split partial in either order, for modules, classes, records, and structs; the parts share one export table rather than being copied; extending a non-partial declaration raises `tosh.runtime.partial_mismatch` for all four kinds; the specification documents partial modules and the cross-file split, and states that a non-partial redeclaration replaces rather than merges. Negative control: 8 of 16 new cases fail against the unfixed engine. |
 | `TS-P2-29` | Planned — filed 2026-07-29 | `source "./x.tosh"` resolves the relative path against the **working directory**, not the directory of the script doing the sourcing, so a script that sources a sibling file works only when run from its own directory. `require` resolves relative to the requiring script and gets this right. Found while testing partial-module assembly: `source "./a.tosh"` from a script in `/tmp/…/pm/` looked for `/home/komrad/projects/tosh/a.tosh`. | `source` resolves a relative path against the sourcing script's directory, matching `require`; an absolute path and a path relative to the working directory keep working; a script that sources a sibling runs identically from any working directory; the change is noted as breaking if any shipped script relied on CWD resolution. |
+| `TS-P2-30` | Planned — filed 2026-07-29 | The C#-familiar member-modifier aliases are undocumented. `private`, `abstract`, `readonly`, `required`, `override`, `protected`, `obsolete`, `shared`, and `public` are all accepted, parsed in the same loop as their ToastScript spellings (`shy`, `hollow`, `fixed`, `vital`, `overrule`, `guarded`, `fading`, `static`, `proud`) — but the specification documents only the ToastScript words, so a reader cannot know the aliases exist. Nine working spellings undiscoverable, the same shape as partial modules before `TS-P2-28`. Related: `IsDeclarationModifierWord` lists `abstract` and `private` among *declaration* modifiers, which they are not — `abstract class C { }` and `private var x = 1` both fail. Those two entries are dead. | The specification documents each alias beside the word it means, and states that both spellings work; `IsDeclarationModifierWord`'s two dead entries are removed or the type-level positions are made to accept them, decided explicitly rather than left ambiguous. |
 
 **Implementation note for `TS-P2-11` (July 25 review recommendation).** The
 `TS-P2-01`/`TS-P2-02`/`TS-P2-04`/`TS-P2-12`–`TS-P2-15` family shares one root
@@ -3378,3 +3379,75 @@ it is the reason the two genuine spec defects were separable from my mistakes.
 
 **Next: `TS-P2-10`**, the language-surface registry, chosen as the only Planned
 item another in-progress item cannot proceed without.
+
+### July 29, 2026 — The language-surface registry (TS-P2-10, first slice)
+
+Chosen because it was the only Planned item another in-progress item could not
+proceed without. Measuring it first was worth more than the implementation.
+
+**The drift, measured.** Eight consumers keep their own idea of what a keyword is.
+Between them they name **115 distinct words, of which 7 appear in all eight**:
+
+| consumer | words |
+|---|---|
+| LSP feature table | 93 |
+| help catalogue | 77 |
+| VS Code metadata | 68 |
+| CLI highlighter | 59 |
+| binder suggestion pool | 40 |
+| REPL completion | 36 |
+| Tome colorizer | 21 |
+| REPL classifier | 15 |
+
+The consequences are ordinary rather than exotic. `const`, `defer`, `yield`,
+`union`, `rune`, `event`, and `import` are real keywords that went unhighlighted at
+the prompt. `interface` was the sharpest: it sat in the highlighter's
+`TypeDeclarationKeywords` without being in `Keywords`, so the identifier *after* it
+was coloured as a type while the keyword itself was not coloured at all — a
+disagreement inside one file. The Tome colorizer coloured no control-flow keyword
+at all, so `if` and `while` were highlighted in the terminal and plain in the Tome.
+
+**Membership is established by executing each word, and that mattered twice.**
+
+The first validation pass was a source scan: does the word appear as a literal the
+parser compares against? It said all 115 were genuine. That check is too weak, and
+running the words showed it: `let x = 5` fails, `quote` is an unknown command, and
+`once` is not a member modifier — yet all three are documented in the LSP feature
+table as keywords. `let` is not merely absent, it is a *proposal*, `TS-P3-02`. The
+registry now carries a probe per word — the smallest program in which it does its
+job — and a word cannot enter without one.
+
+The second time was the reverse error, and it was mine. Having found `abstract` and
+`private` in `IsDeclarationModifierWord`, I probed `abstract class C { }` and
+`private var x = 1`, saw both fail, and reported that the parser listed two
+modifiers the language did not have. Wrong: they are **member** modifiers, part of
+an undocumented family of C#-familiar aliases parsed alongside their ToastScript
+spellings — `private`/`shy`, `abstract`/`hollow`, `readonly`/`fixed`,
+`required`/`vital`, `override`/`overrule`, `protected`/`guarded`,
+`obsolete`/`fading`, `shared`/`static`, `public`/`proud`. Nine working spellings,
+documented nowhere; filed as `TS-P2-30`. Trying a word in the wrong position and
+concluding it is not real is a distinct failure from reading a predicate and
+assuming it fires, and this session produced one of each.
+
+`IsDeclarationModifierWord` does still list `abstract` and `private` among
+*declaration* modifiers, where they genuinely do not work. Those two entries are
+dead, and the item records the choice between removing them and honouring them.
+
+**A guard is only as wide as its pattern.** The consumer-subset check passed for the
+Tome colorizer while missing nine words, because the colorizer keeps its modifiers
+in a set named `Modifiers` and the pattern only matched sets named `Keywords`,
+`ControlFlowKeywords`, and friends. That is the least visible way for a guard to be
+worthless — it reports success over the part it cannot see. Widened to `Modifiers`,
+`Constants`, and `KeywordSuggestionPool`, and now covering five consumers.
+
+**Landed:** `LanguageSurface` with 95 words by category, nine probes' worth of
+aliases included; the CLI highlighter and Tome colorizer derive from it rather than
+holding lists; the guard checks both directions plus the exact agreement of the
+visibility family with `ParseDeclarationModifier`.
+
+**Not landed:** the three prose-carrying consumers — help catalogue, LSP hover text,
+VS Code metadata — still hold their own key sets. Their descriptions are editorial
+and differ legitimately, so unifying them means separating identity from prose
+rather than deleting one of them, which is its own slice. Operators and document
+symbols are untouched. `TS-P2-23`'s clause 2 needs the keyword-recognition side,
+which is the next step here.
