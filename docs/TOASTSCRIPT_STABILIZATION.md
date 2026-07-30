@@ -318,38 +318,46 @@ July 26 semantic decisions (comparison, chained comparison, `$this` in
 method defaults) and the July 28 paired-delimiter decision are
 implemented.
 
-**In progress.**
+**In progress** (as of July 29, 2026 — 72 items, 36 complete; P0 8/8,
+P1 14/24, P2 12/27, P3 2/11; suite 3,464 passing).
 
-- `TS-P1-24`, duplicated sync/async semantics. Five dead parallel copies
-  removed, then the refinement cluster — the largest — converged onto a
-  single asynchronous implementation. Thirteen live pairs remain, led by
-  `ThrowDetailedSingleConstructorMismatch` and `TryGetInstanceMember`.
-  The `AnnotatedConversionParityTests` drift guard now compares
-  diagnostics as well as values.
-- `TS-P2-11`, `TS-P2-23`, and `TS-P2-24`, the parser architecture. The
-  mode-tracking lexer, declaration table, `ParseContext`, and
-  delimiter-paired `LiteParser` structural pass are built and validated.
-  `TS-P2-25` removed the brace ambiguity: candidates now carry their exact
-  plain-brace owner and can be promoted only for a parser-proven block.
-  The recursive parser now consumes those exact-owner candidates for
-  ordinary block statement boundaries. Top-level statement and pipeline
-  stage consumption, followed by structural-helper deletion, remain the
-  next `TS-P2-24` integration slices.
+- `TS-P1-24`, duplicated sync/async semantics. **Blocked on a decision, not
+  on work.** The inventory ratchet is built (`SyncAsyncTwinInventoryTests`),
+  and building it corrected the audit twice over: reflection finds 63 twins
+  where two successive text searches found 23 and 29. Of the 63, 30 are
+  mandated by the project's *own* dual-surface interfaces, so the first
+  acceptance clause is unreachable until it is decided whether that dual
+  surface should exist. 29 genuinely parallel internals remain convergeable.
+- `TS-P2-23`, parse-time identity. Clauses 1 and 3 are met — `ParseContext`
+  now carries commands, modules, **and** types, and a lower-case type alias
+  resolves where it previously reported `unknown_command`. **Clause 2 is
+  blocked on `TS-P2-10`**, which is still Planned: there is no
+  language-surface registry to drive keyword recognition from, and the
+  hardcoded spelling comparisons have drifted 160 → 182.
+- `TS-P2-11`, parser expression layers. The mode-tracking lexer,
+  declaration table, and characterization corpus are built. `TS-P2-24` and
+  `TS-P2-25` are complete, so the structural layer this depends on is done.
 
 **Remaining.**
 
 - P1: `TS-P1-07` (partial — the defer case is closed, other nested
   control-flow shapes are not), `TS-P1-08`–`TS-P1-13`, `TS-P1-16`,
-  `TS-P1-18`, `TS-P1-19`, and `TS-P1-25`.
-- P2: `TS-P2-01`–`TS-P2-03`, `TS-P2-09`, `TS-P2-10`, and
-  `TS-P2-17`–`TS-P2-22`.
+  `TS-P1-18`, and `TS-P1-19`.
+- P2: `TS-P2-01`–`TS-P2-03`, `TS-P2-09`, `TS-P2-10`,
+  `TS-P2-17`–`TS-P2-22`, and `TS-P2-26`–`TS-P2-27`.
+- P3: `TS-P3-01`–`TS-P3-09`, of which `TS-P3-04` and `TS-P3-07` are
+  research rather than proposals.
 
-**Sequencing note.** The July 26 duplicated-semantics audit concluded
-that converging `TS-P1-24` is worth more than the next individual P1
-repair, because every remaining semantic item is at risk of the same
-half-landing. The parser track is now unblocked: continue `TS-P2-24`
-from parser-owned boundary promotion, then return to the existing item
-order; `TS-P1-24` remains the parallel semantic-convergence track.
+**Sequencing note, revised July 29.** The July 26 audit put `TS-P1-24`
+ahead of the next individual P1 repair. That reasoning no longer holds
+unchanged: the item is now blocked on a design decision, and its risk is
+contained by a standing ratchet rather than by convergence. The
+outstanding *blocker* is `TS-P2-10` — the only Planned item that another
+in-progress item cannot proceed without — so it has the strongest claim on
+being moved up. `TS-P2-26` is the cheapest high-value item: three
+specification examples were found broken by executing them, and the
+conformance corpus structurally cannot reach the ones most likely to be
+copied.
 
 A second review pass on July 25 verified the completed P0 fixes live and
 filed `TS-P0-07`–`TS-P0-08`, `TS-P1-14`–`TS-P1-19`, `TS-P2-12`–`TS-P2-20`,
