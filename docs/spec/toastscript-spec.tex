@@ -5057,12 +5057,12 @@ read-lines /var/log/app.log
 \begin{lstlisting}
 # Filter and transform CSV data
 cat sales.csv
-    | from-csv
+    | from csv
     | where _.Amount > 100
     | sort Amount
     | reverse
-    | select Date, Customer, Amount
-    | to-csv
+    | select Date Customer Amount
+    | to csv
     | write-file big-sales.csv
 \end{lstlisting}
 
@@ -5079,7 +5079,7 @@ read-lines data.txt | split "," | flatten | distinct | sort
 \begin{lstlisting}
 # Top CPU consumers
 func top-cpu(n: int = 10) {
-    ps -ef | sort Cpu | reverse | first $n | select Pid, Name, Cpu, Memory
+    ps -ef | sort Cpu | reverse | first $n | select Pid Name Cpu Memory
 }
 top-cpu 5
 \end{lstlisting}
@@ -5115,12 +5115,12 @@ check-services nginx postgresql redis
 
 \begin{lstlisting}
 # Parse and filter JSON data
-var data = read-file api-response.json | from-json
+var data = read-file api-response.json | from json
 $data.items
     | where _.status == "active"
     | map { {| name = _.name, created = _.created_at |} }
     | sort created
-    | to-json --compact
+    | to json --compact
 \end{lstlisting}
 
 \subsection{Build a Report}

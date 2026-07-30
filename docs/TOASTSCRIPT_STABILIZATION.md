@@ -431,6 +431,8 @@ closed.
 | `TS-P2-23` | In progress — type table populated 2026-07-29; **remainder blocked on `TS-P2-10`** | Parse-time identity decisions rest on *spelling* rather than on facts the runtime already holds. Both casing tests now consult the host's type table first and fall back to `char.IsUpper` only for names no table covers; 182 hardcoded `Current.Text == "…"` comparisons still decide keyword and construct identity, and cannot be driven from a registry that does not exist yet. `TS-P2-16` narrowed one such rule but did not remove the guess. The parser cannot do better today because `ToshParser.Parse` receives only source text, while the command, module, and type registries arrive later at `Lowerer.Lower`. | Identity is resolved against a real table rather than inferred from capitalization: either the parser is given the registries, or the decision is deferred to a later phase that has them. Keyword and construct recognition is driven by the generated language-surface registry (`TS-P2-10`) rather than by scattered literal comparisons. A capitalized module and a lowercase CLR type both resolve correctly. **Status 2026-07-29:** clauses 1 and 3 are met and tested — `ParseContext` carries commands, modules, and types, and a lower-case type alias now resolves where it previously reported `unknown_command`. Clause 2 is blocked: `TS-P2-10` is Planned, so there is no registry to drive keyword recognition from. This item cannot close before that one. |
 | `TS-P2-24` | Complete — closed 2026-07-29 on the programme owner's call | Step 2 of the parser roadmap. Structural questions — where a statement ends, where a pipeline stage divides — are answered by heuristics scattered through the recursive-descent parser, each re-deriving the answer with local lookahead. `LiteParser` decides them once over the whole token stream, with paired delimiter frames so a separator inside a nested construct does not split the enclosing statement. Ordinary `ParseBlock` statement paths consume exact-owner promoted candidates and the fallback is deleted; the one purely structural helper, `HasTopLevelPipeBeforeCloseParen`, is retired. The eight surviving `HasTopLevel*` helpers ask semantic questions and are out of the clause's scope — the judgement recorded in the July 29 assessment, resolved in favour of closing. | The parser consumes the lite structure instead of re-deriving it; the `LooksLike*`/`HasTopLevel*` helpers that only answered structural questions are removed; structure agrees with today's parser across the corpus, evidenced by differential tests. |
 | `TS-P2-25` | Complete — paired delimiters 2026-07-28 | Plain `{` overloaded blocks, records, dictionaries, sets, predicates, and specialized grammar groups. Position and content lookahead could silently change its meaning and prevented `LiteParser` from promoting brace-enclosed boundaries without duplicating parser grammar. | Ordinary `{ ... }` is a block; records use `{| ... |}`, dictionaries `{% ... %}`, and sets `{: ... :}` with six real delimiter tokens. Specialized parser-owned braces stay plain. Literal dispatch uses the opener alone; legacy `LooksLike*` and generic brace collection parsing are removed. Exact-owner boundary promotion, corpus/spec/tooling migration, targeted recovery diagnostics, rebuilt PDFs, and focused tests land together. |
+| `TS-P2-26` | Planned — filed 2026-07-29 | The specification's multi-line **worked examples** have never been executed, and three of the four commands in one of them do not exist. "CSV Processing" used `from-csv`, `to-csv`, and `select Date, Customer, Amount`; the real spellings are `from csv`, `to csv`, and space-separated arguments. "JSON API Processing" used `from-json` and `to-json`. `SpecConformanceTests` did not catch any of it: the corpus was harvested from lines carrying a *documented expected value*, which excludes every multi-line pipeline — precisely the examples a new user copies first. Corrected in the specification 2026-07-29; the coverage gap that let them rot is what this item is for. | The worked examples are executable fixtures with fixture data, run in the suite, and a hyphenated or comma-separated form that does not exist fails at build time rather than being discovered by a reader. The corpus covers multi-line pipelines, not only single expressions with an annotated result. |
+| `TS-P2-27` | Planned — filed 2026-07-29 | `from csv` yields every column as `string`, so the specification's own `\| where _.Amount > 100` fails with "Values of type 'System.String' and 'System.Int32' cannot be ordered" and needs an explicit `cast int`. This sits against the stated design — typed object pipelines — and against `from json`, which *does* produce typed values because JSON carries types. Whether CSV should infer is a decision, not obviously a defect: NuShell infers, PowerShell's `Import-Csv` does not. The diagnostic itself is good and names both types. | A decision records whether `from csv` infers column types. If it does, numeric, boolean, and date-like columns arrive typed, inference is documented with its ambiguous cases (leading zeros, thousands separators, locale dates), and an opt-out returns raw strings. If it does not, the specification stops implying otherwise and the worked example casts explicitly. |
 
 **Implementation note for `TS-P2-11` (July 25 review recommendation).** The
 `TS-P2-01`/`TS-P2-02`/`TS-P2-04`/`TS-P2-12`–`TS-P2-15` family shares one root
@@ -3197,3 +3199,47 @@ Planned and there is no registry to drive it from. 182 `Current.Text == "…"`
 comparisons remain, up from the 160 recorded at filing, which is drift in the
 wrong direction and an argument for `TS-P2-10` moving up the order. `TS-P2-23`
 cannot close before it.
+
+### July 29, 2026 — Running the specification's worked examples for the first time
+
+A step-back review of the shell surface, done by executing it rather than reading
+it. Most of what was tried works: typed pipelines, the paired collection
+literals, unit equality across scales, list and set comprehensions with a `where`
+clause, classes with methods calling into CLR statics, `try`/`catch (e)`, and
+`select` followed by `to csv`.
+
+What did not work were the specification's **worked examples** — the multi-line
+pipelines in the appendix, which is what a new user copies first. Of the two
+tried, both were broken, and the CSV one in three separate ways:
+
+- `from-csv` and `to-csv` do not exist. The commands are `from csv` and `to csv`.
+  `from-json` and `to-json` in the JSON example are wrong the same way.
+- `select Date, Customer, Amount` does not parse — `unexpected_token ','`.
+  Arguments are space-separated, as in every shell. Written with commas twice.
+- With those corrected the pipeline still fails: `from csv` yields every column as
+  `string`, so `where _.Amount > 100` reports "Values of type 'System.String' and
+  'System.Int32' cannot be ordered" and needs an explicit `cast int`.
+
+The first two are corrected in the specification. The third is filed as
+`TS-P2-27` because it is a decision — NuShell infers CSV column types, PowerShell
+does not, and this shell's stated design points one way while its implementation
+points the other. Notably `from json` *does* produce typed values, so the
+inconsistency is internal, not just against the document.
+
+**Why the conformance corpus missed all of it**, which is the more useful finding.
+`SpecConformanceTests` was built by harvesting specification lines that carry a
+*documented expected value* — 24 of 242 candidates. That method structurally
+excludes every multi-line pipeline, because a pipeline's result is not written as
+a trailing comment. So the corpus covers the examples that were easiest to check
+and skips the ones most likely to be copied. Filed as `TS-P2-26`.
+
+This is the third time the specification's own examples have been found wrong by
+running them, after `TS-P2-12`'s regex cases and the `$"one:$a"` interpolation
+defect. The pattern is consistent enough to state as a rule: an example that has
+never been executed should be assumed broken, and the corpus should be measured by
+what fraction of examples it *runs*, not by how many assertions it holds.
+
+Two syntax errors in the probe were mine rather than the language's — `catch e {`
+instead of `catch (e) {`, and `cast $value int` instead of `cast int $value` —
+recorded so the finding is not overstated. Both produced targeted diagnostics that
+named the fix, which is the diagnostic work paying off.
