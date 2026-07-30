@@ -441,6 +441,8 @@ closed.
 | `TS-P2-25` | Complete — paired delimiters 2026-07-28 | Plain `{` overloaded blocks, records, dictionaries, sets, predicates, and specialized grammar groups. Position and content lookahead could silently change its meaning and prevented `LiteParser` from promoting brace-enclosed boundaries without duplicating parser grammar. | Ordinary `{ ... }` is a block; records use `{| ... |}`, dictionaries `{% ... %}`, and sets `{: ... :}` with six real delimiter tokens. Specialized parser-owned braces stay plain. Literal dispatch uses the opener alone; legacy `LooksLike*` and generic brace collection parsing are removed. Exact-owner boundary promotion, corpus/spec/tooling migration, targeted recovery diagnostics, rebuilt PDFs, and focused tests land together. |
 | `TS-P2-26` | Planned — filed 2026-07-29 | The specification's multi-line **worked examples** have never been executed, and three of the four commands in one of them do not exist. "CSV Processing" used `from-csv`, `to-csv`, and `select Date, Customer, Amount`; the real spellings are `from csv`, `to csv`, and space-separated arguments. "JSON API Processing" used `from-json` and `to-json`. `SpecConformanceTests` did not catch any of it: the corpus was harvested from lines carrying a *documented expected value*, which excludes every multi-line pipeline — precisely the examples a new user copies first. Corrected in the specification 2026-07-29; the coverage gap that let them rot is what this item is for. | The worked examples are executable fixtures with fixture data, run in the suite, and a hyphenated or comma-separated form that does not exist fails at build time rather than being discovered by a reader. The corpus covers multi-line pipelines, not only single expressions with an annotated result. |
 | `TS-P2-27` | Planned — filed 2026-07-29 | `from csv` yields every column as `string`, so the specification's own `\| where _.Amount > 100` fails with "Values of type 'System.String' and 'System.Int32' cannot be ordered" and needs an explicit `cast int`. This sits against the stated design — typed object pipelines — and against `from json`, which *does* produce typed values because JSON carries types. Whether CSV should infer is a decision, not obviously a defect: NuShell infers, PowerShell's `Import-Csv` does not. The diagnostic itself is good and names both types. | A decision records whether `from csv` infers column types. If it does, numeric, boolean, and date-like columns arrive typed, inference is documented with its ambiguous cases (leading zeros, thousands separators, locale dates), and an opt-out returns raw strings. If it does not, the specification stops implying otherwise and the worked example casts explicitly. |
+| `TS-P2-28` | Complete — fixed 2026-07-29 | A `partial` declaration split across imported files could not be assembled with the **named** import form. `require Sys from "./a.tosh"` followed by `require Sys from "./b.tosh"` failed with `require_failed` — "Export 'Sys' was not found" — on whichever file came second, in either order, while the bare `require "./b.tosh"` form worked. The diagnostic was actively misleading: the merge had succeeded. All four kinds that support `partial` shared the shape `existingDef.MergePartial(…); yield break;` — merge into the existing declaration, then return *before* declaring — so the contributing file exported nothing under the name and the named-import lookup found nothing. Modules additionally accepted `partial module X` extending a non-partial `module X` silently, where classes, records, and structs all refuse it. Partial modules were undocumented. | Both import forms assemble a split partial in either order, for modules, classes, records, and structs; the parts share one export table rather than being copied; extending a non-partial declaration raises `tosh.runtime.partial_mismatch` for all four kinds; the specification documents partial modules and the cross-file split, and states that a non-partial redeclaration replaces rather than merges. Negative control: 8 of 16 new cases fail against the unfixed engine. |
+| `TS-P2-29` | Planned — filed 2026-07-29 | `source "./x.tosh"` resolves the relative path against the **working directory**, not the directory of the script doing the sourcing, so a script that sources a sibling file works only when run from its own directory. `require` resolves relative to the requiring script and gets this right. Found while testing partial-module assembly: `source "./a.tosh"` from a script in `/tmp/…/pm/` looked for `/home/komrad/projects/tosh/a.tosh`. | `source` resolves a relative path against the sourcing script's directory, matching `require`; an absolute path and a path relative to the working directory keep working; a script that sources a sibling runs identically from any working directory; the change is noted as breaking if any shipped script relied on CWD resolution. |
 
 **Implementation note for `TS-P2-11` (July 25 review recommendation).** The
 `TS-P2-01`/`TS-P2-02`/`TS-P2-04`/`TS-P2-12`–`TS-P2-15` family shares one root
@@ -3251,3 +3253,73 @@ Two syntax errors in the probe were mine rather than the language's — `catch e
 instead of `catch (e) {`, and `cast $value int` instead of `cast int $value` —
 recorded so the finding is not overstated. Both produced targeted diagnostics that
 named the fix, which is the diagnostic work paying off.
+
+### July 29, 2026 — Partial declarations across files (TS-P2-28), and a question that was not a feature request
+
+Asked whether partial modules exist and whether they can be split across imported
+files. Both answers were yes, which made this a defect slice rather than the
+feature implementation it looked like.
+
+**What already worked**, and is better built than expected: `ModuleDefinitionStatementSyntax`
+carries `IsPartial`, and `EvaluateModuleDefinitionAsync` merges by *sharing* the
+existing `ModuleExportTable` rather than copying into it — so every
+`ToshModuleObject` view observes the merged state automatically, and prior exports
+are pre-seeded into the new body's scope, which is what lets a later part call into
+an earlier one.
+
+**What did not work** was the named import form:
+
+```tosh
+require Sys from "./a.tosh"
+require Sys from "./b.tosh"
+✖ tosh.runtime.require_failed — Export 'Sys' was not found in '…/b.tosh'
+```
+
+Whichever file came second failed, in either order, while bare
+`require "./b.tosh"` worked. The cause is four lines that all look harmless:
+
+```csharp
+existingDef.MergePartial(...);
+yield break;              // ← before DeclareType/DeclareModule
+```
+
+Merge, then return before declaring. The contributing file therefore exported
+nothing under that name, and `ImportRequiredArtifact` — which reads
+`artifact.Exports.Modules[name]` — found nothing and threw. The bare form worked
+only because it never looks a name up; the merge had already happened as a side
+effect. So the diagnostic said the export was missing at the exact moment the
+merge had succeeded.
+
+**The scope grew twice while measuring, both times outward.**
+
+- It is not module-specific. Classes, records, and structs share the identical
+  shape, and a partial *class* split across two files fails the same way —
+  confirmed live before assuming it. One fix pattern, four sites.
+- Modules were missing a check the other three have. `module Sys { … }` followed
+  by `partial module Sys { … }` merged silently; the class equivalent raises
+  `tosh.runtime.partial_mismatch`. `ToshModuleObject` had no `IsPartial` to check
+  against, so it now carries one.
+
+**What was deliberately left alone.** A plain non-partial redeclaration *replaces*
+the previous one and its members are gone — `module Sys` twice keeps only the
+second, and `class Box` twice behaves identically. That looks like the same class
+of silent loss, and it is consistent across all four kinds, and it is what a REPL
+wants when you redefine something at the prompt. It is pinned by a test that says
+so, precisely so a later reader does not "fix" it, and stated in the
+specification as the reason `partial` is required rather than inferred.
+
+**Also found and filed separately** as `TS-P2-29`: `source "./x.tosh"` resolves
+relative to the working directory rather than the sourcing script's directory,
+where `require` resolves correctly. A script that sources a sibling only works
+when run from its own directory.
+
+Negative control: 8 of the 16 new cases fail against the unfixed engine, and the 8
+that pass are the ones covering behaviour that already worked — the bare form,
+the same-file split, a lone partial, and plain redeclaration. A guard where every
+case fails before the fix would have been the more suspicious result here, since
+half the surface was already correct.
+
+Documentation: partial modules had no entry at all — `partial` was documented for
+classes and structs only, so a working feature was undiscoverable. The module
+section now covers merging, declaration order, the cross-file split with both
+import forms, and the replace-versus-merge rule.

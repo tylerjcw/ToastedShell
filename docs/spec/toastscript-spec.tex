@@ -2836,6 +2836,79 @@ This works for any module-name casing, including identifiers that contain
 hyphens (\code{kebab-mod.hi}), underscores, or mixed case.  Nested modules
 resolve segment-by-segment (\code{outer.inner.fn}).
 
+\subsection*{Partial Modules}
+\ikw{partial}
+
+A module marked \code{partial} may be declared more than once; the
+declarations merge into one module.  Every declaration must carry
+\code{partial}---extending a module that was not declared partial raises
+\code{tosh.runtime.partial\_mismatch}, matching the rule for classes,
+records, and structs.
+
+\begin{lstlisting}
+partial module Sys {
+    export func alpha() -> string { return "from-a" }
+}
+
+partial module Sys {
+    export func beta() -> string { return "from-b" }
+}
+
+Sys.alpha()                # from-a
+Sys.beta()                 # from-b
+\end{lstlisting}
+
+Parts merge in declaration order, and each part sees what earlier parts
+exported, so a later part can build on an earlier one rather than merely
+sit beside it:
+
+\begin{lstlisting}
+partial module Sys {
+    export func base-name() -> string { return "core" }
+}
+
+partial module Sys {
+    export func label() -> string { return $"[{(base-name())}]" }
+}
+
+Sys.label()                # [core]
+\end{lstlisting}
+
+\subsection*{Splitting a Partial Declaration Across Files}
+
+Partial declarations---modules, classes, records, and structs alike---may be
+split across separate files and assembled by \code{require}.  Both the bare
+and the named import form work, in any order:
+
+\begin{lstlisting}
+# sys-core.tosh
+partial module Sys {
+    export func alpha() -> string { return "from-core" }
+}
+
+# sys-extra.tosh
+partial module Sys {
+    export func beta() -> string { return "from-extra" }
+}
+
+# main.tosh
+require Sys from "./sys-core.tosh"
+require Sys from "./sys-extra.tosh"
+
+Sys.alpha()                # from-core
+Sys.beta()                 # from-extra
+\end{lstlisting}
+
+The parts share one export table rather than being copied, so every
+reference to the module observes the merged state regardless of which file
+declared the member being used.
+
+A declaration \emph{without} \code{partial} does not merge---it replaces
+any previous declaration of that name, which is what makes redefining a
+module or class at the prompt behave as expected.  Members of the replaced
+declaration are gone.  This is the reason \code{partial} is required rather
+than inferred.
+
 \section{Class Definitions}
 \ikw{class}\ikw{prop}
 
@@ -2895,9 +2968,10 @@ the class's overall behaviour.
   \item[\code{strict}] Makes every property in the class \emph{read-only}
     after initialisation, as if each were individually marked \code{fixed}.
   \item[\code{partial}] Allows the class definition to be split across
-    multiple declarations.  All declarations must carry the \code{partial}
-    modifier.  Properties and methods are merged; duplicate property names
-    are silently skipped; methods support overloading.
+    multiple declarations, including declarations in separate files
+    assembled by \code{require}.  All declarations must carry the
+    \code{partial} modifier.  Properties and methods are merged; duplicate
+    property names are silently skipped; methods support overloading.
 \end{description}
 
 \noindent Example:
