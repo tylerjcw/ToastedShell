@@ -413,7 +413,9 @@ closed.
 | `TS-P1-27` | Complete — implemented 2026-07-30 | ToastScript's concurrency system and the CLR's did not meet. `async`/`await` are builtin commands over `ShellFuture`, and a CLR method returning `Task`/`Task<T>` was never awaited by anything: the task flowed into the pipeline untouched, `await` refused it with `await_requires_future`, and it displayed as `AsyncStateMachineBox\`1` — the compiler's state machine type, since `Task` does not override `ToString`. The only route to a value was `.Result`, which blocks and can deadlock. Reported from real code: `async { $p.SendPingAsync(…) }` then `await $reply`. | Decided C#-identical and explicit: a task-returning call yields a task and you await it. `await` accepts `Task`, `Task<T>`, `ValueTask`, `ValueTask<T>` and a `ShellFuture`, **flattens** so one `await` unwraps a future whose output is a task, emits nothing for a declared-`Task`, honours cancellation via `WaitAsync`, and surfaces a faulted task's *own* message rather than `AggregateException`'s. Tasks stay values so work can overlap — asserted by timing. An un-awaited task renders `Task<PingReply> (pending)`. Auto-awaiting at the call site was rejected: it removes concurrency and would have to land on both surfaces of the dual-surface interfaces. Specification gains an Asynchrony section — it had none. Negative control: 6 of 10 cases fail unfixed. |
 | `TS-P1-28` | Complete — fixed 2026-07-30 | A computed `static`/`shared` property answered **`null`**, silently, in every spelling — arrow-bodied and accessor-block alike, in a `hermit class` and a plain one. Static properties were only ever *initialized*, never *evaluated*: both initialization sites read `IsStatic && Initializer is not null && !IsComputed`, so a computed one never entered `_staticValues`, and `TryGetStaticMember` fell through to a line commented `// null default`. Stored static properties worked throughout, which is why the report read as "static properties do not work at all" rather than "computed ones do not". No diagnostic at any point. Reported from a real library whose `hermit class State` exposed `shared prop Icmp => …`. | `TryGetStaticMember` evaluates a computed static property's getter through `ExecuteClassBlockSync`, mirroring the instance path — `CreateLocals` already accepts a null instance and omits `$this`, so no new plumbing was needed. Every spelling returns its value, on each read rather than cached, and the stored path is unchanged. Negative control across both fixes in this slice: 8 of 12 cases fail unfixed. |
 | `TS-P1-29` | Planned — filed 2026-07-30 | `ShellRecordUtilities.TryGetFields` throws on an object-keyed dictionary: "Unable to cast object of type 'KeyValuePair`2[Object,Object]' to type 'DictionaryEntry'". Its `IDictionary` branch iterates as `DictionaryEntry`, which is what the *non-generic* enumerator yields, but a `Dictionary<object, object?>` reached through `IEnumerable` yields `KeyValuePair<object, object?>`. A `{% … %}` dict literal is object-keyed, so any caller that hands one to `TryGetFields` crashes with `unexpected_exception` rather than a diagnostic. Found while fixing `TS-P1-10`, which had to be narrowed to string-keyed records to avoid it. | `TryGetFields` handles both enumerator shapes, so an object-keyed dictionary yields its entries instead of throwing; a crash in a utility that formatters and equality both call is covered by a test that passes a `{% … %}` literal directly. |
-| `TS-P1-30` | Proposed — needs a scope decision, filed 2026-07-30 | **At a TTY, an external command's output is never captured.** `var x = git rev-parse --show-toplevel` prints the path to the terminal and leaves `$x` as `null`; `(git rev-parse …)` answers `null`; `$"{git rev-parse …}"` and `$(…).Trim()` answer empty. All five forms print correctly and capture nothing. `DetermineSpawnMode` decides between passthrough and piped using `hasTerminal = !context.IsPipelined && !Console.IsOutputRedirected && …`, so the question "is my output being consumed?" is answered by `IsPipelined` alone — which is true only when a *downstream stage* exists. Assignment, subexpression, and interpolation all consume the value without being pipelined, so they take `SpawnMode.TerminalPassthrough`, where stdout is inherited and nothing is captured. **Invisible to the entire suite**: 3,602 tests pass because a test process never has a TTY, and without one the same code captures correctly. Reproduced by allocating a pty with `script`. | `CommandContext` carries whether its output will be consumed, distinct from `IsPipelined`, and `DetermineSpawnMode` treats a consuming context as it treats a pipelined one. The scope decision is *which* contexts count — assignment, subexpression, and interpolation at minimum; `return`, conditions, and command arguments need deciding. Note the existing comment's tension is not an obstacle here: forcing the piped path redirects stdin and skips the foreground-group handoff, which breaks an *interactive* child — but a child whose output is being captured is not one the user is interacting with, so piping is correct exactly in the captured case. Tests must run under a pty, or the fix is unverifiable by the suite that missed it. |
+| `TS-P1-30` | Complete — fixed 2026-07-30; interpolation follows in `TS-P1-32` | **At a TTY, an external command's output is never captured.** `var x = git rev-parse --show-toplevel` prints the path to the terminal and leaves `$x` as `null`; `(git rev-parse …)` answers `null`; `$"{git rev-parse …}"` and `$(…).Trim()` answer empty. All five forms print correctly and capture nothing. `DetermineSpawnMode` decides between passthrough and piped using `hasTerminal = !context.IsPipelined && !Console.IsOutputRedirected && …`, so the question "is my output being consumed?" is answered by `IsPipelined` alone — which is true only when a *downstream stage* exists. Assignment, subexpression, and interpolation all consume the value without being pipelined, so they take `SpawnMode.TerminalPassthrough`, where stdout is inherited and nothing is captured. **Invisible to the entire suite**: 3,602 tests pass because a test process never has a TTY, and without one the same code captures correctly. Reproduced by allocating a pty with `script`. | `CommandContext` carries whether its output will be consumed, distinct from `IsPipelined`, and `DetermineSpawnMode` treats a consuming context as it treats a pipelined one. The scope decision is *which* contexts count — assignment, subexpression, and interpolation at minimum; `return`, conditions, and command arguments need deciding. Note the existing comment's tension is not an obstacle here: forcing the piped path redirects stdin and skips the foreground-group handoff, which breaks an *interactive* child — but a child whose output is being captured is not one the user is interacting with, so piping is correct exactly in the captured case. Tests must run under a pty, or the fix is unverifiable by the suite that missed it. |
+| `TS-P1-32` | Planned — filed 2026-07-30 | An interpolation hole does not capture external output: `echo $"{git rev-parse --abbrev-ref HEAD}"` prints the branch to the terminal and interpolates the empty string. Same root cause as `TS-P1-30` but reached by a different route — a hole **re-parses its text** and runs it as a whole statement through `EvaluateAsync`, so it arrives at the pipeline via `EvaluateParseResultAsync` → `EvaluateStatementAsync` → `EvaluatePipelineWithRedirectionAsync` rather than through any of the consuming sites `TS-P1-30` marked. Pinned as a characterization in `TtyCaptureTests.An_interpolation_hole_does_not_yet_capture` so the gap is visible. | The capture flag threads through `EvaluateAsync`, `EvaluateParseResultAsync`, `EvaluateStatementAsync` and `EvaluatePipelineWithRedirectionAsync` — four signatures, all defaultable, but one of them is the engine's hottest dispatch, so it wants its own slice rather than riding along. The characterization assertion flips to the positive form in the same commit. |
+| `TS-P1-33` | Planned — filed 2026-07-30 | `members` on a `ShellTextLine` lists only `Text`, while every `string` member is callable on it — `.Trim()`, `.Length`, `.ToUpper()`, `.Split()`, `== "…"`, `cast string`, and a `string` annotation all work, because `ReflectionObjectAccessor.ResolveSegment` unwraps to the underlying string. Introspection therefore contradicts behaviour, and that mismatch is what convinced both the reporter and the author that the type was not string-like — leading to a proposed fix for a defect that did not exist. | `members` and `methods` on a `ShellTextLine` list the string surface it actually exposes, or state that it forwards to `string`; completion does the same. Discoverability matching behaviour is the whole of it. |
 
 ## P2 — Parser, Binder, Diagnostics, and Surface Generation
 
@@ -4143,3 +4145,59 @@ evidence disappeared into the thing being tested. `writeline` writes directly, w
 makes the count visible. Negative control: 2 of 12 cases fail against the unfixed runtime,
 and the 10 that pass are the expansion semantics, which is the right split — the fix was
 meant to change pull counts and nothing else.
+
+### July 30, 2026 — Capturing external output, and a fix proposed for a defect that did not exist
+
+Reported from an interactive session: `var x = git rev-parse --show-toplevel` printed the
+path and left `$x` as `null`. Five forms behaved that way; `| collect` did not.
+
+**The cause was one question answered by the wrong flag.**
+`ExternalProcessCommand.DetermineSpawnMode` asked "is my output being consumed?" and read
+`context.IsPipelined`, which is true only when a **downstream stage** exists. So
+`git … | collect` captured, while assignment, `( … )`, `$( … )`, `return`, and a `for`
+source all consumed the value without being pipelined and took
+`SpawnMode.TerminalPassthrough`, where stdout is inherited and nothing is captured.
+
+`CommandContext` now carries `OutputIsCaptured` alongside `IsPipelined` — deliberately
+separate, because the two answer different questions and other code reads `IsPipelined` to
+decide about *input*. It threads from `EvaluatePipelineAsync` through
+`ExecuteCommandSyntaxAsync`, the same path `isPipelined` already took, and is set at the
+13 sites that collect a pipeline's values.
+
+**The mode was already there.** A capturing context routes to the existing `SpawnMode.Hybrid`
+— `RedirectStandardOutput = true`, stdin and stderr inherited — so `var x = $(fzf)` still
+draws its UI and `curl`'s progress meter still appears while the value is captured. The
+code's own NOTE described this hybrid as the intended destination; it existed but was
+reachable only through an opt-in allowlist.
+
+**Why 3,602 tests missed it, and what that demanded of the fix.** A test process has no TTY,
+so `hasTerminal` is false and the same code captures correctly. Every test exercised the
+branch that worked. `TtyCaptureTests` therefore runs the built CLI under a real pty via
+`script(1)` — without that it would re-verify the working branch and prove nothing. Negative
+control: 5 of 8 fail against the unfixed runtime, and the 3 that pass are `| collect`,
+top-level display, and the interpolation characterization.
+
+**Part two of the approved plan was withdrawn after measuring it.** The plan proposed making
+`ShellTextLine` string-like, on the evidence that `TypeConversion` has no entry for it. That
+reading was correct and worthless: the conversion happens elsewhere, and on a single
+`ShellTextLine` all of `.Trim()`, `.Length`, `.ToUpper()`, `.Split()`, `== "…"`,
+`var y: string = $x` and `cast string $x` already work. I proposed a fix for a defect that
+did not exist, from a mechanism I had not run — the same error this log keeps recording, and
+the fourth instance of it in two days.
+
+What the reporter actually hit was two things: capture failing (above), so `.Trim()` ran on
+an empty value; and `collect` yielding an **array**, so `$x` was an array of one
+`ShellTextLine` and `.Trim()` failed with "No overload matched instance method 'Trim' on
+'System.Object[]'". A subexpression `( … | collect)` unwraps a single value, which is why
+that spelling behaved differently and made the type look inconsistent.
+
+One real finding survives from the detour, filed as `TS-P1-33`: `members` on a
+`ShellTextLine` lists only `Text` while the whole string surface is callable. Introspection
+contradicting behaviour is what convinced both of us the type was broken.
+
+**Left open, `TS-P1-32`:** an interpolation hole still does not capture. It re-parses its text
+and runs it as a whole statement through `EvaluateAsync`, reaching the pipeline via
+`EvaluateStatementAsync` — the engine's hottest dispatch — rather than any marked consuming
+site. Four defaultable signatures would carry the flag there; it wants its own slice rather
+than riding along at the end of a long one. Pinned as a characterization so the gap is
+visible and flipping it later is a deliberate edit.
