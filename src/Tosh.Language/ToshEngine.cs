@@ -251,17 +251,48 @@ public sealed partial class ToshEngine : IShellEvaluator
     private ParseContext CreateParseContext()
     {
         var moduleNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var typeNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
         foreach (var scope in _scopes)
         {
             foreach (var name in scope.Modules.Keys)
             {
                 moduleNames.Add(name);
             }
+
+            // Classes, records, structs, enums and traits the session has
+            // declared, plus the shell types registered as defaults.
+            foreach (var name in scope.Classes.Keys)
+            {
+                typeNames.Add(name);
+            }
+        }
+
+        foreach (var name in Runtime.Classes.Keys)
+        {
+            typeNames.Add(name);
+        }
+
+        // The built-in aliases are the ones the casing rule could never get
+        // right: `string`, `int`, `record` and friends are types spelled in
+        // lower case. `using X = Y` aliases land here for the same reason.
+        foreach (var alias in DotNetTypeResolver.BuiltInAliases.Keys)
+        {
+            typeNames.Add(alias);
+        }
+
+        if (Runtime.TypeResolver is DotNetTypeResolver resolver)
+        {
+            foreach (var alias in resolver.GetAliases().Keys)
+            {
+                typeNames.Add(alias);
+            }
         }
 
         return ParseContext.Create(
             commandNames: Runtime.Commands.AllNames,
-            moduleNames: moduleNames);
+            moduleNames: moduleNames,
+            typeNames: typeNames);
     }
 
     /// <summary>

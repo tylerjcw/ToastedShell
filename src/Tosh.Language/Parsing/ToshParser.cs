@@ -11821,7 +11821,26 @@ public static class ToshParser
             return firstSegment.Length > 0 && _declaredModuleNames.Contains(firstSegment);
         }
 
-        private static bool LooksLikeQualifiedDotNetAccess(string text)
+        /// <summary>
+        /// Whether <paramref name="text"/>'s leading dotted segment names a type,
+        /// asked of the host's type table first and of capitalization only when
+        /// the table has nothing to say (<c>TS-P2-23</c>).
+        /// </summary>
+        /// <remarks>
+        /// The table is what makes a *lower-case* type work. Capitalization can
+        /// never recognise `string.Join`, `int.Parse`, or a `using Alias = …` the
+        /// user chose to spell in lower case — which is why `string` was hardcoded
+        /// here as a one-name exception. It is not an exception now; it is one
+        /// entry in <c>DotNetTypeResolver.BuiltInAliases</c>, alongside every
+        /// other lower-case alias that used to fail.
+        ///
+        /// Casing survives as the fallback because the table is necessarily
+        /// partial: the platform type index holds thousands of names and is not
+        /// worth materializing per parse, so an unqualified `System.Text.Json`
+        /// still resolves the old way. Deleting the fallback outright is safe only
+        /// once shape-driven argument parsing removes the need to guess at all.
+        /// </remarks>
+        private bool LooksLikeQualifiedDotNetAccess(string text)
         {
             if (string.IsNullOrWhiteSpace(text) ||
                 !text.Contains('.', StringComparison.Ordinal) ||
@@ -11837,10 +11856,33 @@ public static class ToshParser
                 return false;
             }
 
-            return char.IsUpper(firstSegment[0]) || string.Equals(firstSegment, "string", StringComparison.Ordinal);
+            if (_context.IsKnownType(firstSegment))
+            {
+                return true;
+            }
+
+            return char.IsUpper(firstSegment[0]);
         }
 
-        private static bool LooksLikePotentialClrTypeName(string text)
+        /// <summary>
+        /// Whether an *unqualified* name should be read as a CLR type.
+        /// </summary>
+        /// <remarks>
+        /// Deliberately does not consult the type table, unlike the qualified form
+        /// above. The table holds every built-in alias, and those names collide
+        /// with things users and hosts legitimately call: `func double(x)` then
+        /// `double(5)` is a call to that function, and `map` and `set` are commands
+        /// as well as aliases for `Dictionary` and `HashSet`. Consulting the table
+        /// here claimed all of them for the type — caught by
+        /// `Function_call_single_arg_no_tuple`, which had declared a function named
+        /// `double` since long before the table existed.
+        ///
+        /// A bare name is where a *declaration* should win, and the qualified form
+        /// is where the type table belongs: `int.Parse` names a type because of the
+        /// dot, not because of the spelling. So casing remains the rule for bare
+        /// names, unchanged.
+        /// </remarks>
+        private bool LooksLikePotentialClrTypeName(string text)
         {
             if (string.IsNullOrWhiteSpace(text))
             {
