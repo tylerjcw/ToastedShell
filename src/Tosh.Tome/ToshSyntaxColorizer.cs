@@ -1,3 +1,4 @@
+using Tosh.Runtime;
 using Tosh.Language.Parsing;
 using Tosh.Tome.Theme;
 using Tosh.Tui.Editing;
@@ -30,37 +31,29 @@ internal sealed class ToshSyntaxColorizer : ISyntaxColorizer
     private static string Comment       => S(Role.Comment);
     private static string TypeName      => S(Role.TypeName);
 
-    private static readonly HashSet<string> Keywords = new(StringComparer.Ordinal)
-    {
-        "var", "func", "class", "struct", "trait", "module", "enum", "record",
-        "prop", "static", "global", "export", "using", "require", "from", "as",
-        "new", "nameof", "name-of", "fulfills", "uses",
-    };
+    // Derived from LanguageSurface rather than kept here (TS-P2-10). The lists this
+    // replaced held 21 words against the CLI highlighter's 59 and were missing every
+    // control-flow keyword except the nine in ControlFlowKeywords — so `if`, `while`,
+    // and `for` were coloured in the terminal and not in the Tome. They were also
+    // the only consumer that knew the C#-familiar member-modifier aliases, which the
+    // highlighter lacked: the two disagreed in both directions at once.
+    private static readonly HashSet<string> Keywords =
+        LanguageSurface.Keywords.ToHashSet(StringComparer.Ordinal);
 
-    private static readonly HashSet<string> ControlFlowKeywords = new(StringComparer.Ordinal)
-    {
-        "if", "else", "for", "in", "while", "until", "break", "continue",
-        "return", "throw", "try", "catch", "finally", "switch", "case",
-        "default", "match", "yield", "defer",
-    };
+    private static readonly HashSet<string> ControlFlowKeywords =
+        LanguageSurface.ControlFlow.ToHashSet(StringComparer.Ordinal);
 
-    private static readonly HashSet<string> Modifiers = new(StringComparer.Ordinal)
-    {
-        "shy", "shared", "sealed", "hollow", "fixed", "vital", "guarded",
-        "overrule", "hermit", "strict", "lazy", "fading", "local", "raw",
-        "partial", "proud", "public", "fluid", "private", "protected",
-        "abstract", "readonly", "required", "override", "obsolete",
-    };
+    private static readonly HashSet<string> Modifiers =
+        LanguageSurface.Modifiers.ToHashSet(StringComparer.Ordinal);
 
-    private static readonly HashSet<string> OperatorWords = new(StringComparer.Ordinal)
-    {
-        "and", "or", "not", "is", "is-not", "not-in",
-    };
+    private static readonly HashSet<string> OperatorWords =
+        LanguageSurface.OperatorWords.ToHashSet(StringComparer.Ordinal);
 
-    private static readonly HashSet<string> Constants = new(StringComparer.Ordinal)
-    {
-        "true", "false", "null",
-    };
+    private static readonly HashSet<string> Constants =
+        LanguageSurface.Constants.ToHashSet(StringComparer.Ordinal);
+
+    private static readonly HashSet<string> LanguageForms =
+        LanguageSurface.LanguageForms.ToHashSet(StringComparer.Ordinal);
 
     public IReadOnlyList<StyledSpan> Colorize(string line, int lineIndex)
     {

@@ -38,40 +38,25 @@ public static class SyntaxHighlighter
         "source",
     };
 
-    private static readonly HashSet<string> Keywords = new(StringComparer.Ordinal)
-    {
-        "var", "alloc", "func", "class", "struct", "trait", "module", "enum", "record", "prop", "shy", "static", "global", "export", "return", "throw", "if", "else", "for", "in",
-        "while", "until", "break", "continue", "using", "require", "native", "bind", "from", "as", "out", "ref", "callconv", "try", "catch", "finally", "switch", "case", "default", "match",
-        "shared", "sealed", "hollow", "fixed", "vital", "guarded", "overrule", "hermit", "strict", "lazy", "fading", "local", "raw", "partial", "proud", "public", "fluid", "fulfills", "uses",
-    };
+    // Every one of these came from LanguageSurface rather than a list kept here
+    // (TS-P2-10). The lists this replaced were missing eight real keywords —
+    // const, defer, yield, union, rune, event, import, interface — so a user
+    // typing `defer` saw a plain word. `interface` was the sharpest case: it sat
+    // in TypeDeclarationKeywords without being in Keywords, so the name after it
+    // was coloured as a type while the keyword itself was not coloured at all.
+    private static readonly HashSet<string> Keywords = LanguageSurface.Keywords.ToHashSet(StringComparer.Ordinal);
 
-    // These are a subset of Keywords that change execution flow; rendered in a distinct color.
-    private static readonly HashSet<string> ControlFlowKeywords = new(StringComparer.Ordinal)
-    {
-        "if", "else", "for", "in", "while", "until", "break", "continue",
-        "return", "throw", "try", "catch", "finally", "switch", "case", "default", "match",
-    };
+    // A subset of Keywords that changes execution flow; rendered in a distinct color.
+    private static readonly HashSet<string> ControlFlowKeywords = LanguageSurface.ControlFlow.ToHashSet(StringComparer.Ordinal);
 
-    private static readonly HashSet<string> LanguageForms = new(StringComparer.Ordinal)
-    {
-        "new", "nameof", "name-of",
-    };
+    private static readonly HashSet<string> LanguageForms = LanguageSurface.LanguageForms.ToHashSet(StringComparer.Ordinal);
 
-    private static readonly HashSet<string> OperatorWords = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "and", "or", "not", "is", "is-not", "in", "not-in",
-    };
+    private static readonly HashSet<string> OperatorWords = new(LanguageSurface.OperatorWords, StringComparer.OrdinalIgnoreCase);
 
-    private static readonly HashSet<string> BuiltInConstants = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "true", "false", "null",
-    };
+    private static readonly HashSet<string> BuiltInConstants = new(LanguageSurface.Constants, StringComparer.OrdinalIgnoreCase);
 
     // Keywords that introduce a type name immediately after them (the declaration identifier).
-    private static readonly HashSet<string> TypeDeclarationKeywords = new(StringComparer.Ordinal)
-    {
-        "class", "struct", "enum", "trait", "record", "interface",
-    };
+    private static readonly HashSet<string> TypeDeclarationKeywords = LanguageSurface.TypeDeclarations.ToHashSet(StringComparer.Ordinal);
 
     public static string Highlight(string input, ToshRuntime? runtime = null)
     {
