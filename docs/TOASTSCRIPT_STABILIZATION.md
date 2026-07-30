@@ -448,6 +448,8 @@ closed.
 | `TS-P2-31` | Complete — decided and implemented 2026-07-29 | A brace-bodied property accessor silently produces a block value instead of a getter. `prop X { get => ($this.backing * 2) }` works and returns `10`; `prop X { get { return $this.backing * 2 } }` returns a `ShellBlock`, with no diagnostic. The cause is that `ParsePropertyAccessorBlock` parses each accessor body with `ParseArrowStatementBlock`, which calls `ConsumeFatArrow()` unconditionally — so the brace form was never supported, and since `TS-P2-25` made `{` block-only everywhere it now parses as a first-class block *value* rather than erroring. Silent wrong answer rather than a refusal, which is the worst shape available. Accessor blocks are otherwise undocumented. | Decided: **support it**, because a getter restricted to one expression pushes anything conditional into a helper method and `{ ... }` is what a method body already looks like. `ParseAccessorBody` routes a brace to `ParseRequiredBlock` and everything else to the arrow path, so both forms work and the choice is not observable. Multi-statement getters and setters run; `$value` is the incoming value in a setter; an unknown accessor name is still refused. The specification's class-features list now names the form, its two bodies, and `$value`. Negative control: 4 of 6 new cases fail against the unfixed parser, the two that pass being the arrow form and the unknown-accessor diagnostic. |
 | `TS-P2-32` | Planned — filed 2026-07-29 | A keyword loses REPL completion to a CLR type whose name differs only in case. Typing `match` offers `Match`, `MatchCasing`, `MatchCollection`, `MatchEvaluator`, `MatchType` and the executable `match_parens` — but not the keyword `match`. `rune` offers only `Rune`. Both words are present in the completion source, so this is ranking or case-insensitive de-duplication rather than a missing entry, and it affects exactly the words that collide with a BCL type name. Found by the `TS-P2-10` completion-coverage guard, which excludes these two with the reason recorded rather than weakening itself. | A keyword ranks at least as high as a CLR type in a position where the keyword is grammatical, or keywords and types are shown as distinct groups rather than de-duplicated against each other; `match` and `rune` complete from their own prefixes, and the two exclusions are removed from the guard. |
 | `TS-P2-33` | Planned — filed 2026-07-30 | The LSP feature table documents a comprehension form the language does not have. `let` reads "Example: `[for x in $items let y = x * 2 pick y]`", `pick` reads "Projection clause in a comprehension ... Example: `[for x in $items pick x * 2]`", and `get` reads "Projection clause in a comprehension (alias for `pick`)". None of those parse: comprehensions are body-first with `<|`, as in `[$y <| for x in 1..3 let y = ($x * 2)]`. `pick` is not a comprehension clause at all — it is a builtin **command**, an alias for the `get` projection command, so its hover text is wrong in both category and syntax. Users get editor guidance that fails when followed. | The three entries describe the form that exists, with examples taken from executable fixtures rather than written by hand; `pick` moves out of the keyword table to wherever command help lives; and the LSP's examples are covered by the same mechanism that keeps the specification's honest, so a hover example cannot claim syntax the parser rejects. |
+| `TS-P2-34` | Complete — fixed 2026-07-30 | A module-qualified command accepted a *value* argument and refused a *delimited* one. `M.F 5`, `M.F "s"`, `M.F $v` and `M.F (1+2)` worked; `M.F { … }`, `M.F [1, 2]`, `M.F {\| a = 1 \|}`, `M.F {: 1 :}` and `M.F {% … %}` all reported `missing_pipeline_separator` at the opening delimiter. `LooksLikeStaticMemberAccessExpression` reads a dotted name in command position as a CLR member access unless the next token starts a command argument, and `NextTokenStartsCommandArgument` listed only value tokens — no `{`, `[`, or paired literal opener. Same family as `TS-P2-16`, which fixed the value case and left this behind. Reported from a real library whose helpers take block arguments: twelve parse errors from one missing token list. | The delimiter openers count as command arguments, so a qualified command accepts everything an unqualified one does. A following bareword still reads as a sibling argument, keeping `echo Config.version Config.maxRetries` as two member accesses; a delimiter on the *next* line still does not bind, as `HasLineBreakBetween` already required. Negative control across both fixes: 10 of 18 cases fail unfixed. |
+| `TS-P2-35` | Complete — implemented 2026-07-30 | `require Outer.Inner from "…" as Alias` did not resolve. Only the outermost export name was looked up, so a library organised as nested modules — a namespace-like structure — reported the whole dotted string as a missing export, accurate but unhelpful given `Outer` was present and `Inner` was inside it. | A dotted import name walks module exports and declares whatever the final segment names — module, type, refinement, command, or variable — binding the final segment when no `as` alias is given. Paths of any depth work, partial modules at every level work, and importing the outer module keeps working. **Found while fixing it:** `ToshEngine` carries *two* `ImportRequiredArtifact` overloads twelve thousand lines apart, and the `require` statement path uses the second — so the first patch left the feature compiled and unreachable. Both now route through one resolver. |
 
 **Implementation note for `TS-P2-11` (July 25 review recommendation).** The
 `TS-P2-01`/`TS-P2-02`/`TS-P2-04`/`TS-P2-12`–`TS-P2-15` family shares one root
@@ -3659,3 +3661,76 @@ comprehension — `[for x in $items pick x * 2]` — which does not parse. Compr
 are body-first with `<|`. And `pick` is a builtin *command*, an alias for the `get`
 projection command, so its entry is wrong in category as well as syntax. Editor
 guidance that fails when followed is worse than none.
+
+### July 30, 2026 — Two defects from one library, and a third implementation nobody knew about
+
+Reported from a real library rather than found by inspection: modules nested to form
+a namespace-like structure, imported as
+`require ToastLib.Shell from "…" as ToastShell`, with helpers invoked as
+`ToastShell.HasPipe { … }`. Twelve parse errors and one require failure, from two
+unrelated causes. Worth recording because the reporter's first question was whether
+they were using the language wrongly, and they were not.
+
+**`TS-P2-34` — a qualified command took values and refused structures.**
+
+```tosh
+M.F 5            ## worked
+M.F "text"       ## worked
+M.F (1 + 2)      ## worked
+M.F { … }        ## missing_pipeline_separator
+M.F [1, 2]       ## missing_pipeline_separator
+M.F {| a = 1 |}  ## missing_pipeline_separator
+```
+
+`LooksLikeStaticMemberAccessExpression` reads a dotted name in command position as a
+CLR member access *unless* the next token starts a command argument, and
+`NextTokenStartsCommandArgument` enumerated `Number`, `String`,
+`InterpolatedString`, `Boolean`, `Null`, `UnitLiteral`, `Bareword` — and no
+delimiter opener at all. So the block was left as a separate stage and the diagnostic
+pointed at the brace, which is exactly why it read as a limitation of blocks rather
+than a hole in a token list. The reported case used a `rune`, which was a red herring:
+the callee kind was never involved.
+
+This is the same family as `TS-P2-16`, which fixed `Geo.area 2` — the value case —
+and left the delimited case behind. A fix that enumerates tokens is a fix that will
+be incomplete again the next time a token kind is added, and the paired delimiters
+from `TS-P2-25` are precisely the tokens that arrived after that list was written.
+
+**`TS-P2-35` — dotted import paths, and a third implementation.**
+
+The interesting part is not the feature, it is that the first fix appeared correct
+and changed nothing. `ToshEngine` carries **two** `ImportRequiredArtifact` overloads
+twelve thousand lines apart — one taking name/alias arrays, one iterating
+`statement.Imports` — and the `require` statement path uses the second. The
+implementation sat compiled, tested by nothing, and unreachable, while the
+behaviour was identical to before.
+
+That is `TS-P1-24`'s failure mode on an axis that item does not cover. `TS-P1-24` is
+scoped to sync/async twins; this is two implementations of one operation with no
+async involved, which the twin inventory cannot see because neither name ends in
+`Async`. The inventory measures a *shape*, and duplication does not always take that
+shape.
+
+Both now route through one resolver, with the modifier parameterized so the two
+callers keep their own visibility semantics.
+
+**Method note.** The dotted import was verified against the reporter's own library
+rather than only a fixture — `ToastLib.Filesystem.GetExtension("/tmp/x.tar.gz")`
+returns `.gz` through the whole chain, with `Filesystem.tosh` requiring
+`ToastLib.Shell` from another file. A synthetic fixture would have passed after the
+first, unreachable fix, because a fixture written alongside a fix tends to exercise
+the path the fix is on.
+
+**Also cleaned up:** two 12 MB PostScript files in the repository root, which were
+screen captures. They came from probing whether `import` was a keyword by running
+`import System.Text` — on Linux that is `/usr/bin/import`, ImageMagick's screen
+grabber, and it did exactly what it is for. The lesson is narrower than "be careful":
+a probe for whether a word is a keyword must never be a bare command line, because
+that is the one shape that can execute something.
+
+**Flake note.** `ScopeAndChannelTests.Scope_awaits_spawned_jobs_and_returns_completions`
+failed once in the full run and passed 3/3 in isolation and on the next full run.
+That is the recurrence of the observation already recorded twice in this log, so it
+stays an observation rather than becoming an item — but it has now been seen a third
+time under parallel load, which is the point at which "intermittent" starts to mean
+"unfixed".
