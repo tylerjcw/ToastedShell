@@ -11297,6 +11297,20 @@ public static class ToshParser
                 case SyntaxTokenKind.Boolean:
                 case SyntaxTokenKind.Null:
                 case SyntaxTokenKind.UnitLiteral:
+
+                // Delimited arguments. Without these a module-qualified command
+                // accepted a value argument and refused a *structured* one:
+                // `Shell.HasPipe { ... }`, `M.F [1, 2]`, `M.F {| a = 1 |}` and
+                // `M.F {: 1 :}` all fell back to being read as static member
+                // accesses, leaving the argument as a separate stage and reporting
+                // `missing_pipeline_separator` at the opening delimiter. `M.F 5`
+                // worked, which is what made it look like a limitation of blocks
+                // rather than a hole in this list.
+                case SyntaxTokenKind.OpenBrace:
+                case SyntaxTokenKind.OpenBracket:
+                case SyntaxTokenKind.OpenBracePipe:
+                case SyntaxTokenKind.OpenBraceColon:
+                case SyntaxTokenKind.OpenBracePercent:
                     return true;
                 case SyntaxTokenKind.Bareword:
                     return !IsAnyOperatorToken(next);

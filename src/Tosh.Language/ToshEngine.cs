@@ -2126,6 +2126,18 @@ public sealed partial class ToshEngine : IShellEvaluator
                 ? importedAliases[i]
                 : name;
 
+            // A dotted import name walks into nested modules, so a library organised
+            // as `module Outer { module Inner { ... } }` can be imported as
+            // `require Outer.Inner from "..." as Alias`. Without this only the
+            // outermost name resolved, and the nested form reported the whole dotted
+            // string as a missing export — accurate but unhelpful, since `Outer` was
+            // there and `Inner` was inside it.
+            if (name.Contains('.', StringComparison.Ordinal) &&
+                TryResolveNestedExport(artifact, name, bindingName, DeclarationModifier.Default))
+            {
+                continue;
+            }
+
             if (artifact.Exports.Modules.TryGetValue(name, out var module))
             {
                 if (module is null)
@@ -2164,6 +2176,91 @@ public sealed partial class ToshEngine : IShellEvaluator
 
             throw new InvalidOperationException($"Export '{name}' was not found in '{artifact.Path}'.");
         }
+    }
+
+    /// <summary>
+    /// Resolves a dotted import name such as <c>Outer.Inner</c> by walking module
+    /// exports, and declares whatever the final segment names.
+    /// </summary>
+    /// <remarks>
+    /// Every segment but the last must be a module; the last may be anything a flat
+    /// import can bring in. When the caller supplied no <c>as</c> alias the binding
+    /// takes the *final* segment, because the dotted path is not itself a usable
+    /// identifier.
+    /// </remarks>
+    private bool TryResolveNestedExport(
+        ToshRequiredScriptArtifact artifact,
+        string name,
+        string bindingName,
+        DeclarationModifier modifier)
+    {
+        var segments = name.Split('.', StringSplitOptions.None);
+
+        if (segments.Length < 2 || segments.Any(string.IsNullOrEmpty))
+        {
+            return false;
+        }
+
+        if (!artifact.Exports.Modules.TryGetValue(segments[0], out var root) ||
+            root is not ToshModuleObject current)
+        {
+            return false;
+        }
+
+        // Walk to the module holding the final segment.
+        for (var index = 1; index < segments.Length - 1; index++)
+        {
+            if (!current.ExportTable.Modules.TryGetValue(segments[index], out var next) ||
+                next is not ToshModuleObject nested)
+            {
+                return false;
+            }
+
+            current = nested;
+        }
+
+        var leaf = segments[^1];
+        var binding = string.Equals(bindingName, name, StringComparison.Ordinal) ? leaf : bindingName;
+        var exports = current.ExportTable;
+
+        if (exports.Modules.TryGetValue(leaf, out var leafModule) && leafModule is not null)
+        {
+            DeclareModule(binding, leafModule, modifier);
+            return true;
+        }
+
+        if (exports.Types.TryGetValue(leaf, out var leafType))
+        {
+            DeclareType(binding, leafType, modifier, artifact.Path);
+            return true;
+        }
+
+        if (exports.RefinementTypes.TryGetValue(leaf, out var leafRefinement))
+        {
+            DeclareRefinementType(
+                leafRefinement with { Name = binding },
+                modifier,
+                artifact.Path);
+            return true;
+        }
+
+        if (exports.Commands.TryGetValue(leaf, out var leafCommand))
+        {
+            DeclareCommand(
+                string.Equals(binding, leafCommand.Name, StringComparison.Ordinal)
+                    ? leafCommand
+                    : new RenamedCommand(binding, leafCommand),
+                modifier);
+            return true;
+        }
+
+        if (exports.Variables.TryGetValue(leaf, out var leafValue))
+        {
+            DeclareVariable(binding, ToVariableBinding(leafValue), modifier);
+            return true;
+        }
+
+        return false;
     }
 
     private async IAsyncEnumerable<object?> EvaluateRequireStatementAsync(
@@ -14024,6 +14121,16 @@ public sealed partial class ToshEngine : IShellEvaluator
         foreach (var import in statement.Imports)
         {
             var bindingName = import.Alias ?? import.Name;
+
+            // Both overloads route through the same resolver. The first fix landed
+            // only on the other one, which is dead for this path — `require X.Y from
+            // …` comes through here, so the dotted form kept failing while the code
+            // to support it sat twelve thousand lines away, compiled and unreachable.
+            if (import.Name.Contains('.', StringComparison.Ordinal) &&
+                TryResolveNestedExport(artifact, import.Name, bindingName, statement.Modifier))
+            {
+                continue;
+            }
 
             if (artifact.Exports.Modules.TryGetValue(import.Name, out var module))
             {
