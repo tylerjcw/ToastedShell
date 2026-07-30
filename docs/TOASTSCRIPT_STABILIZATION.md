@@ -398,7 +398,7 @@ closed.
 | `TS-P1-21` | Complete — 2026-07-26 | A parameter default on a class method or constructor cannot reference `$this`: `func m(a, b = $this.V)` fails with `tosh.runtime.unknown_variable` because defaults are evaluated during callable binding, before the `this`/`super` bindings are seeded. `TS-P1-05` made this an explicit failure rather than the previous silent null. Needs a recorded decision, not just a fix: an instance method default may clearly see `$this`, but a **constructor** default would observe a partially-constructed instance whose properties have not been initialized yet (base-to-leaf construction binds arguments first), so allowing it exposes uninitialized state while rejecting it makes methods and constructors inconsistent. | A decision-log entry states whether `$this` is in scope for method defaults, constructor defaults, or both; the callable default binder seeds the agreed bindings; the rejected case keeps a targeted diagnostic naming `$this` rather than the generic unknown-variable help; interpreted and compiled modes agree; the specification's default-value semantics section records the rule. |
 | `TS-P1-22` | Complete — 2026-07-26 | `a < b < c` parses left-associatively, so `1 < 2 < 3` compares `true < 3` and silently answers `false`. The accepted decision is real chaining. | `a < b < c` evaluates as `(a < b) and (b < c)` with each operand evaluated once and short-circuit preserved, in interpreted and compiled modes; the parser, binder traversal, type checker, and emitter all handle the new shape; precedence and formatting round-trip. |
 | `TS-P1-23` | Complete — 2026-07-26; structural display paths 2026-07-27 | `type-of` yields a shell type descriptor for shell-typed values, but the descriptor rendered as its own CLR class name, so `type-of [1, 2]` reported `Tosh.Runtime.BuiltInShellTypes+BuiltInShellTypeDefinition` instead of the type being asked about. | Displaying a built-in shell type descriptor shows the shell type name; `type-of` reports usable names for lists, records, and other shell-typed values; CLR values are unaffected. |
-| `TS-P1-24` | In progress — refinement cluster converged 2026-07-27 | The interpreter carries sync/async twin methods that are *parallel implementations* rather than delegations, so a semantic fix can land on one surface and silently miss the other. This has happened twice: `OperatorEvaluator.AreEqual` versus `ToshEngine.AreEqualAsync` (`TS-P1-14`/`TS-P1-15`) and `ToshHost.DrainValue` versus `InvokeValue` (`TS-P1-20`). A corrected audit on 2026-07-26 counted 23 truly parallel pairs against 6 that delegate. The refinement cluster, the largest, is now converged. Remaining largest duplications: `ThrowDetailedSingleConstructorMismatch` (55 lines), `TryGetInstanceMember` (51), `ApplyPendingParameterDefaults` (50), `InvokeQualifiedMethod` (47), `ConvertPropertyValue` (44), `TrySetInstanceMember` (43), `SelectBestCallableMatches` (41), `GetInstanceMembers` (38), `ConvertConstructorParameterValue` (35). | Each pair either delegates to one implementation or is removed; a test or analyzer fails when a new parallel sync/async pair is introduced; behaviour is unchanged, evidenced by the existing suite plus the annotated-conversion drift guard. |
+| `TS-P1-24` | In progress — inventory guard 2026-07-29; **acceptance needs revising, see below** | The interpreter carries sync/async twin methods that are *parallel implementations* rather than delegations, so a semantic fix can land on one surface and silently miss the other. This has happened twice: `OperatorEvaluator.AreEqual` versus `ToshEngine.AreEqualAsync` (`TS-P1-14`/`TS-P1-15`) and `ToshHost.DrainValue` versus `InvokeValue` (`TS-P1-20`). A corrected audit on 2026-07-26 counted 23 truly parallel pairs against 6 that delegate. The refinement cluster, the largest, is now converged. Remaining largest duplications: `ThrowDetailedSingleConstructorMismatch` (55 lines), `TryGetInstanceMember` (51), `ApplyPendingParameterDefaults` (50), `InvokeQualifiedMethod` (47), `ConvertPropertyValue` (44), `TrySetInstanceMember` (43), `SelectBestCallableMatches` (41), `GetInstanceMembers` (38), `ConvertConstructorParameterValue` (35). | Each pair either delegates to one implementation or is removed; a test or analyzer fails when a new parallel sync/async pair is introduced; behaviour is unchanged, evidenced by the existing suite plus the annotated-conversion drift guard. **Revision needed (2026-07-29):** the first clause is unreachable for 30 of the 63 pairs, because the project's *own* interfaces — `IShellRecordObject`, `IObjectAccessor`, `IShellInvocableObject`, `IShellEnumerableObject`, `IShellStaticType` — each declare both a sync and an async member, so every implementer must supply both. Those pairs need a decision on the dual-surface contract, not a refactor. The second clause is met: `SyncAsyncTwinInventoryTests`. |
 | `TS-P1-25` | Complete — 2026-07-29 | (Filed 2026-07-26 under a duplicate `TS-P1-20`; renumbered 2026-07-27.) The pure compiler profile can report a Tier-1-clean artifact while emitted IL still unconditionally calls `ToshHost.Initialize`/`RegisterCompiledAssembly` from `Main` and `ToshHost.EnterExecutionFrame` from functions, methods, lambdas, and blocks. | A pure artifact contains no metadata references or calls to `Tosh.Compiler.Runtime`, `ToshHost`, or `ToshEngine`; bootstrap is omitted or conditional; recursion guarding uses a stable `Tosh.Runtime` primitive; and a post-emit IL dependency audit fails independently of `RequireTier` diagnostics. Verified 2026-07-27: the emitted IL references exactly `System.Console`, `System.Private.CoreLib`, `Tosh.Compiler.Runtime`, and `Tosh.Runtime`, so only the three unconditional `ToshHost` members stand between the artifact and purity; the over-declared `deps.json` is a separate packaging concern. |
 | `TS-P1-26` | Complete — 2026-07-29 | Equality is asymmetric for bool against string: `true == "true"` is `true` while `"true" == true` is `false`. Numeric pairs are symmetric in both directions (`1 == "1"` and `"1" == 1`), as are bool-against-number, so only the string-on-the-left-of-a-bool direction fails to coerce. Both `OperatorEvaluator.AreEqual` and `ToshEngine.AreEqualAsync` agree with each other, so this is one rule applied in one direction rather than a sync/async drift. Found by `EqualityParityTests` on its first run. `TS-P1-14` promised symmetry explicitly for ordering and did not state it for equality, which is why it survived that item. | A decision records whether a string coerces to bool for equality at all: either `"true" == true` becomes `true` (extend coercion, matching the numeric rule) or `true == "true"` becomes `false` (drop bool/string coercion). Equality is symmetric for every pair in the corpus afterwards, on both implementations; the characterization entry in `EqualityParityTests` is inverted in the same change. |
 
@@ -428,7 +428,7 @@ closed.
 | `TS-P2-20` | Planned | `nameof($foo.Bar)` returns `"foo"` — the parser strips member access and reports the root identifier. | `nameof` on a member chain returns the final segment (matching C#) or produces a targeted diagnostic; the specification documents the chosen behavior. |
 | `TS-P2-21` | Planned | A `new` expression cannot take named arguments at all: `new D(1, b = 7)` and `new R("w", Qty = 5)` both fail while parsing with `tosh.parser.assignment_in_predicate`, so the runtime binder is never reached. Function and method calls accept the same syntax. This bounds `TS-P1-06`: constructor named-argument validation is unreachable until the parser accepts the form. | `new Type(name = value)` parses as a named argument for classes, records, and structs; the runtime binder's unknown/duplicate diagnostics apply; a genuine assignment mistake keeps a targeted diagnostic rather than the predicate-assignment message. |
 | `TS-P2-22` | Planned | The type checker does not walk class-member annotations, so static checking is materially weaker inside class bodies. `var x: int = "42"` and `func f(x: int)` both report `tosh.type.mismatch`, while the equivalent `prop X: int = "42"`, constructor parameter, method parameter, and property assignment report nothing. Runtime behaviour is consistent (all convert), so this is a static-coverage hole rather than a semantic divergence. | Class property, constructor-parameter, method-parameter, and property-assignment annotations are checked with the same rule and severity as `var` and `func` annotations; a corpus covers matching and mismatching cases in both positions. |
-| `TS-P2-23` | In progress — declaration table 2026-07-26 | Parse-time identity decisions rest on *spelling* rather than on facts the runtime already holds. Two casing tests remain (`char.IsUpper` in `LooksLikeQualifiedDotNetAccess` and `LooksLikePotentialClrTypeName`) deciding whether a dotted name is a CLR type, and 160 hardcoded `Current.Text == "…"` comparisons decide keyword and construct identity. `TS-P2-16` narrowed one such rule but did not remove the guess. The parser cannot do better today because `ToshParser.Parse` receives only source text, while the command, module, and type registries arrive later at `Lowerer.Lower`. | Identity is resolved against a real table rather than inferred from capitalization: either the parser is given the registries, or the decision is deferred to a later phase that has them. Keyword and construct recognition is driven by the generated language-surface registry (`TS-P2-10`) rather than by scattered literal comparisons. A capitalized module and a lowercase CLR type both resolve correctly. |
+| `TS-P2-23` | In progress — type table populated 2026-07-29; **remainder blocked on `TS-P2-10`** | Parse-time identity decisions rest on *spelling* rather than on facts the runtime already holds. Both casing tests now consult the host's type table first and fall back to `char.IsUpper` only for names no table covers; 182 hardcoded `Current.Text == "…"` comparisons still decide keyword and construct identity, and cannot be driven from a registry that does not exist yet. `TS-P2-16` narrowed one such rule but did not remove the guess. The parser cannot do better today because `ToshParser.Parse` receives only source text, while the command, module, and type registries arrive later at `Lowerer.Lower`. | Identity is resolved against a real table rather than inferred from capitalization: either the parser is given the registries, or the decision is deferred to a later phase that has them. Keyword and construct recognition is driven by the generated language-surface registry (`TS-P2-10`) rather than by scattered literal comparisons. A capitalized module and a lowercase CLR type both resolve correctly. **Status 2026-07-29:** clauses 1 and 3 are met and tested — `ParseContext` carries commands, modules, and types, and a lower-case type alias now resolves where it previously reported `unknown_command`. Clause 2 is blocked: `TS-P2-10` is Planned, so there is no registry to drive keyword recognition from. This item cannot close before that one. |
 | `TS-P2-24` | Complete — closed 2026-07-29 on the programme owner's call | Step 2 of the parser roadmap. Structural questions — where a statement ends, where a pipeline stage divides — are answered by heuristics scattered through the recursive-descent parser, each re-deriving the answer with local lookahead. `LiteParser` decides them once over the whole token stream, with paired delimiter frames so a separator inside a nested construct does not split the enclosing statement. Ordinary `ParseBlock` statement paths consume exact-owner promoted candidates and the fallback is deleted; the one purely structural helper, `HasTopLevelPipeBeforeCloseParen`, is retired. The eight surviving `HasTopLevel*` helpers ask semantic questions and are out of the clause's scope — the judgement recorded in the July 29 assessment, resolved in favour of closing. | The parser consumes the lite structure instead of re-deriving it; the `LooksLike*`/`HasTopLevel*` helpers that only answered structural questions are removed; structure agrees with today's parser across the corpus, evidenced by differential tests. |
 | `TS-P2-25` | Complete — paired delimiters 2026-07-28 | Plain `{` overloaded blocks, records, dictionaries, sets, predicates, and specialized grammar groups. Position and content lookahead could silently change its meaning and prevented `LiteParser` from promoting brace-enclosed boundaries without duplicating parser grammar. | Ordinary `{ ... }` is a block; records use `{| ... |}`, dictionaries `{% ... %}`, and sets `{: ... :}` with six real delimiter tokens. Specialized parser-owned braces stay plain. Literal dispatch uses the opener alone; legacy `LooksLike*` and generic brace collection parsing are removed. Exact-owner boundary promotion, corpus/spec/tooling migration, targeted recovery diagnostics, rebuilt PDFs, and focused tests land together. |
 
@@ -3054,3 +3054,146 @@ structure with the fallback deleted rather than merely unused; the one purely
 structural helper is retired; `LiteParserTests` and `LiteStageDivisionTests`
 carry the differential evidence. The remaining `HasTopLevel*` helpers ask what a
 construct *is*, which is grammar, not structure.
+
+### July 29, 2026 — The twin inventory, and why TS-P1-24's first clause cannot be met
+
+Built the guard the acceptance asks for, and building it corrected the audit the
+item rests on.
+
+**The count was wrong, twice, for the same reason.** The item records "23 truly
+parallel pairs against 6 that delegate", measured by text search. A regex audit
+run today over `Tosh.Language` and `Tosh.Runtime` said 29 parallel and 10
+delegating. Reflection says **63** pairs. Both text-based numbers missed the same
+things: interface declarations, explicit implementations, and any pair whose
+declaration spans lines the pattern did not anticipate. A third measurement
+disagreeing with the first two is the point at which the method, not the number,
+is the problem — so the guard measures by reflection, where the answer is exact
+and cannot drift with formatting.
+
+**What the real inventory shows is not a long tail.** Grouped by cause:
+
+- **9 declarations in the project's own dual-surface interfaces** —
+  `IShellRecordObject.TryGetMember`/`TryGetMemberAsync`,
+  `IObjectAccessor.GetValue`, `IShellInvocableObject.InvokeInstanceMethod`,
+  `IShellEnumerableObject.EnumerateShellItems`,
+  `IShellStaticType.CreateInstance`, and their siblings.
+- **21 implementations of those declarations**, across `ToshClassInstance`,
+  `ToshClassDefinition`, the three reference kinds, and
+  `ReflectionObjectAccessor`.
+- **4 already converged** — the refinement cluster and the annotated-conversion
+  pair, listed so that *un*-converging them fails.
+- **29 genuinely parallel internals**, which is the convergeable remainder.
+
+So the first acceptance clause — "each pair either delegates to one
+implementation or is removed" — is unreachable for 30 of the 63 as long as the
+interfaces declare both members. An implementer *cannot* delegate: the contract
+demands both.
+
+**And the largest of them cannot be converged even in principle without changing
+semantics.** `ShellIndexingUtilities.GetIndexedValue` (84 lines) against
+`GetIndexedValueAsync` is not a copy with `await` sprinkled in. The async branch
+awaits `IShellRecordObject.TryGetMemberAsync` and then deliberately avoids
+re-entering the synchronous record API, with a comment saying so. Making the sync
+path delegate would block on a user-defined property getter that may itself be
+asynchronous; making the async path delegate would drop asynchronous member
+dispatch. Either direction is a behaviour change, so neither is a refactor. This
+is the shape the whole contract-imposed group has.
+
+**Decision required, and it is not mine.** Either the dual-surface interfaces are
+deliberate — the interpreter genuinely needs to serve synchronous and
+asynchronous callers with different member-dispatch semantics, in which case the
+acceptance should say so and scope itself to the 29 internals — or the
+synchronous surface should be retired in favour of one asynchronous
+implementation with a single blocking bridge at the boundary, which is a much
+larger change than the item describes and would want its own item.
+
+Recorded rather than resolved. What did land is the ratchet: `KnownTwins` pins
+all 63 with a note on each group, a new twin fails until it is listed, and a
+converged twin fails until it is struck off. Neither direction is silent, which
+is the property the two earlier one-pair repairs lacked.
+
+Method note. The guard excludes twins imposed from outside the codebase —
+`IAsyncDisposable`, `TextWriter` — by checking whether the base or interface
+declaration lives in a `Tosh.*` assembly. Without that filter the inventory was
+dominated by `Dispose`/`DisposeAsync` and `Write`/`WriteAsync`, which no decision
+here can affect, and the pairs that matter were buried among them.
+
+### July 29, 2026 — The type table was never filled (TS-P2-23 step 2)
+
+`ParseContext` was given a `typeNames` set and an `IsKnownType` query on July 26.
+Nothing ever populated it. `CreateParseContext` passed commands and modules and
+left types null, so `IsKnownType` answered `false` for every name, and the single
+call site that consulted it —
+`_context.IsKnownCommand(Current.Text) && !_context.IsKnownType(Current.Text)` —
+was vacuously true in its second half. The mechanism existed, was tested for the
+cases that did not need it, and did nothing.
+
+The consequence was a live, user-visible defect:
+
+```
+> int.Parse("42")
+✖ error tosh.runtime.unknown_command — Command 'int.Parse' was not found.
+                                       help: did you mean 'intersperse'?
+```
+
+`long.Parse`, `bool.Parse`, `double.Parse`, and `char.ToUpper` all failed the same
+way. Static access on a *lower-case* type alias did not work at all.
+
+The tell was sitting in the predicate. `LooksLikeQualifiedDotNetAccess` ended:
+
+```csharp
+return char.IsUpper(firstSegment[0]) || string.Equals(firstSegment, "string", StringComparison.Ordinal);
+```
+
+That `"string"` is not a design decision, it is a patch. Someone hit this exact
+class of failure once, and fixed the one name in front of them rather than the
+rule — which is the shape `TS-P2-23` exists to remove.
+
+`CreateParseContext` now fills the table from what the engine already has:
+declared classes in each scope, `Runtime.Classes`,
+`DotNetTypeResolver.BuiltInAliases`, and any `using X = Y` aliases. Both casing
+predicates became instance methods and consult the table first. The `"string"`
+special case is deleted — not because it was wrong about `string`, but because
+`string` is one entry in `BuiltInAliases` alongside every other lower-case alias
+that used to fail.
+
+Casing survives as the fallback, deliberately and documented in the method: the
+platform type index holds thousands of names and is not worth materializing per
+parse, so an unqualified `System.Text.Encoding.UTF8` still resolves the old way.
+A test pins that, so deleting the fallback stays a deliberate act.
+
+Verified with a negative control rather than by assertion alone — the same
+programs run against `HEAD` before the change produce `unknown_command`, which is
+what establishes that the table is load-bearing and not decorative. A second
+negative control parses `int.Parse("42")` with and without a type table and
+asserts the resulting *trees* differ, since both parse cleanly and only the shape
+tells them apart.
+
+**The table had to be narrowed, and the suite is what narrowed it.** The first
+version consulted it for bare names too, and `Function_call_single_arg_no_tuple`
+failed: it declares `func double(x)` and calls `double(5)`, and `double` is a
+built-in alias, so the call was read as a constructor — "Construct instances with
+`new double(...)`". The same trap was set for `map` and `set`, which are commands
+*and* aliases for `Dictionary` and `HashSet`, and for `list`.
+
+The fix is a precedence rule worth stating plainly: a bare name is where a
+declaration wins, and a qualified name is where the type table belongs.
+`int.Parse` names a type because of the dot, not because of the spelling. So
+`LooksLikeQualifiedDotNetAccess` consults the table on the leading segment and
+`LooksLikePotentialClrTypeName` does not consult it at all for the unqualified
+case, where casing is unchanged. Four alias collisions are pinned as a theory so
+the narrowing cannot be quietly undone.
+
+Worth noting about the near-miss: had that test not existed, the type table would
+have shipped claiming `double`, `map`, `set`, and `list` from every user who
+declared a function by those names. The table was populated and the predicate
+widened in the same edit, and only one of the two was wrong.
+
+**Where the item stands.** Clause 1 (identity from a table rather than
+capitalization) and clause 3 (a capitalized module and a lower-case CLR type both
+resolve) are met and tested. Clause 2 — keyword recognition driven by the
+generated language-surface registry — is blocked, because `TS-P2-10` is still
+Planned and there is no registry to drive it from. 182 `Current.Text == "…"`
+comparisons remain, up from the 160 recorded at filing, which is drift in the
+wrong direction and an argument for `TS-P2-10` moving up the order. `TS-P2-23`
+cannot close before it.
