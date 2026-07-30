@@ -846,7 +846,13 @@ internal sealed class ReplCompletionEngine
 
     private IReadOnlyList<ReplCompletionSuggestion> GetTypeSuggestions(string partial)
     {
-        var suggestions = new Dictionary<string, ReplCompletionSuggestion>(StringComparer.OrdinalIgnoreCase);
+        // Ordinal, not OrdinalIgnoreCase: a class may declare a method and a
+        // property whose names differ only in case — `shared func icmp()` beside
+        // `shared prop Icmp` — and a case-insensitive key silently dropped one of
+        // them. Methods are added after members, so the property lost and simply
+        // never appeared in completion. Ordinal still de-duplicates the case that
+        // matters, an inherited member repeated under the same spelling.
+        var suggestions = new Dictionary<string, ReplCompletionSuggestion>(StringComparer.Ordinal);
 
         foreach (var name in _runtime.Classes.Keys)
         {
@@ -899,7 +905,7 @@ internal sealed class ReplCompletionEngine
 
     private IReadOnlyList<ReplCompletionSuggestion> GetMemberSuggestions(object target, string partial, bool staticOnly, bool includeHidden = false)
     {
-        var suggestions = new Dictionary<string, ReplCompletionSuggestion>(StringComparer.OrdinalIgnoreCase);
+        var suggestions = new Dictionary<string, ReplCompletionSuggestion>(StringComparer.Ordinal);
 
         switch (target)
         {
@@ -1618,7 +1624,12 @@ internal sealed class ReplCompletionEngine
     private static IReadOnlyList<ReplCompletionSuggestion> OrderSuggestions(IEnumerable<ReplCompletionSuggestion> suggestions)
     {
         return suggestions
-            .DistinctBy(suggestion => suggestion.Label, StringComparer.OrdinalIgnoreCase)
+            // Ordinal: `icmp` and `Icmp` are different members and both belong in the
+            // list. Ignoring case here dropped one of them regardless of what the
+            // upstream dictionaries did, and because DistinctBy runs before OrderBy it
+            // kept whichever happened to be enumerated first — so which member
+            // disappeared depended on insertion order.
+            .DistinctBy(suggestion => suggestion.Label, StringComparer.Ordinal)
             .OrderBy(suggestion => suggestion.Priority)
             .ThenBy(suggestion => suggestion.Label, StringComparer.OrdinalIgnoreCase)
             .ToArray();

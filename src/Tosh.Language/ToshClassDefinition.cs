@@ -521,11 +521,24 @@ public sealed class ToshClassDefinition : IShellNamedType
         // Check static properties
         if (_propertiesByName.TryGetValue(memberName, out var property) && property.IsStatic)
         {
+            // A computed static property has to be *evaluated*; it has no stored
+            // value and never will. Static properties were only ever initialized —
+            // both initialization sites read `IsStatic && Initializer is not null &&
+            // !IsComputed` — so a computed one had no `_staticValues` entry and fell
+            // to the null default below, silently. `static prop Y => 7` answered
+            // null, and so did an accessor-block form, with no diagnostic at all.
+            if (property.IsComputed && property.GetterBody is not null)
+            {
+                value = EvaluateStaticPropertyGetter(property);
+                return true;
+            }
+
             if (_staticValues.TryGetValue(memberName, out var stored))
             {
                 value = stored;
                 return true;
             }
+
             return true; // null default
         }
 
@@ -1631,6 +1644,26 @@ public sealed class ToshClassDefinition : IShellNamedType
         }
 
         return args;
+    }
+
+    /// <summary>
+    /// Evaluates a computed <c>static</c>/<c>shared</c> property's getter. Identical to
+    /// the instance form except that there is no instance, so the locals carry no
+    /// <c>$this</c> — <see cref="CreateLocals"/> already accepts a null instance and
+    /// omits it.
+    /// </summary>
+    private object? EvaluateStaticPropertyGetter(ToshClassPropertyDefinition property)
+    {
+        var locals = CreateLocals(null, new Dictionary<string, object?>(StringComparer.Ordinal));
+        var values = _engine.ExecuteClassBlockSync(
+            SourceName,
+            SourceText,
+            property.GetterBody!,
+            locals,
+            CapturedScopes,
+            $"{Name}.{property.Name}.get");
+
+        return FlattenCallResult(values);
     }
 
     private object? EvaluatePropertyGetter(ToshClassInstance instance, ToshClassPropertyDefinition property)
