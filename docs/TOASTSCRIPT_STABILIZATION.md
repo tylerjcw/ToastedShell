@@ -424,7 +424,7 @@ closed.
 | `TS-P2-07` | Complete — 2026-07-26 | Binder and variable-binder visitors miss pipe-forward, substitution, and other nested forms. | One exhaustive syntax walker visits every child; a reflection/exhaustiveness test fails when a new syntax node lacks traversal. |
 | `TS-P2-08` | Complete — 2026-07-26 | The raw function-name pre-scan can reinterpret later commands after unrelated text containing `func`. | Declarations are discovered structurally without non-local token poisoning. |
 | `TS-P2-09` | Planned | LSP maps warnings to errors and MCP `explain_error` stops runtime analysis when only warnings exist. | Severity is preserved end-to-end; warnings do not suppress independent runtime explanations. |
-| `TS-P2-10` | In progress — registry and guard 2026-07-29 | Operators, keywords, document symbols, help, MCP, LSP, and spec tables are hand-maintained and have drifted. Measured: **eight consumers holding 115 distinct words between them, of which 7 appeared in all eight.** The CLI highlighter knew 59, the Tome colorizer 21, the REPL classifier 15, the LSP feature table 93. Consequences were ordinary and visible — `const`, `defer`, `yield`, `union`, `rune`, `event`, `import`, and `interface` went unhighlighted at the prompt; the Tome coloured no control-flow keyword; and the LSP documented `let`, `quote`, and `once` as keywords when none of the three exists. | A machine-readable language-surface registry generates or validates every consumer. **Landed:** `LanguageSurface` in `Tosh.Runtime` carries 95 words by category, each **execution-validated** by a probe in `LanguageSurfaceParityTests`; the CLI highlighter and Tome colorizer derive from it; the guard also proves no consumer names a word the registry lacks, across five consumers, and that the visibility family is exactly what `ParseDeclarationModifier` accepts. **Remaining:** the three prose-carrying consumers (help catalogue, LSP hover text, VS Code metadata) still hold their own key sets, and operators and document symbols are untouched. |
+| `TS-P2-10` | In progress — registry and guard 2026-07-29 | Operators, keywords, document symbols, help, MCP, LSP, and spec tables are hand-maintained and have drifted. Measured: **eight consumers holding 115 distinct words between them, of which 7 appeared in all eight.** The CLI highlighter knew 59, the Tome colorizer 21, the REPL classifier 15, the LSP feature table 93. Consequences were ordinary and visible — `const`, `defer`, `yield`, `union`, `rune`, `event`, `import`, and `interface` went unhighlighted at the prompt, and the Tome coloured no control-flow keyword. (An earlier version of this row said the LSP documented three nonexistent keywords; that was wrong — see the July 29 correction entry.) | A machine-readable language-surface registry generates or validates every consumer. **Landed:** `LanguageSurface` in `Tosh.Runtime` carries **103** words by category, each **execution-validated** by a probe in `LanguageSurfaceParityTests`; the CLI highlighter and Tome colorizer derive from it; `ParseClassMember`'s 22-branch modifier chain is one registry lookup, taking the parser's spelling comparisons from 182 to 142; the guard proves no consumer names a word the registry lacks across five consumers, that every member modifier works in member position, and that the visibility family is exactly what `ParseDeclarationModifier` accepts. **Remaining:** the three prose-carrying consumers still hold their own key sets — the LSP under-documents 11 registry words, mostly the `TS-P2-30` aliases — and operators and document symbols are untouched. |
 | `TS-P2-11` | In progress — characterization corpus 2026-07-26 | Parser expression layers rely on scattered lookahead and special cases. | Adopt an explicit precedence/postfix architecture, preferably Pratt-style, without changing accepted syntax unintentionally. |
 | `TS-P2-12` | Complete — 2026-07-25 | String escape semantics violate the specification's quoting table: single-quoted strings process escape sequences (`'a\nb'` has length 3) despite being documented as raw, and unknown escapes in double-quoted strings silently drop the backslash (`"\d+"` becomes `d+`), so `("a1" =~ "\d")` is false and the specification's own `=~ "\.cs$"` example matches incorrectly. No single-line quote form preserves a backslash literally. | Single-quoted strings are raw (no escape processing); unknown double-quote escapes are preserved verbatim or produce a targeted diagnostic; every quote form has a conformance case; a migration note records the contract change. |
 | `TS-P2-13` | Complete — 2026-07-25 | Expression-position barewords silently coerce to `DateTimeOffset` through the permissive `DateTimeOffset.TryParse` fallback: `1.2.3` and the malformed range `1.5..3` both evaluate to dates in 2003. Relatedly, float-headed and negative-headed ranges (`1.5..3`, `-1..5`) never lex as ranges at all (companion to `TS-P2-03`). | Intrinsic temporal literals parse only through the exact documented format list; dotted-number typos yield barewords or diagnostics, never dates; float and negative range bounds lex correctly or produce a targeted diagnostic. |
@@ -3451,3 +3451,54 @@ and differ legitimately, so unifying them means separating identity from prose
 rather than deleting one of them, which is its own slice. Operators and document
 symbols are untouched. `TS-P2-23`'s clause 2 needs the keyword-recognition side,
 which is the next step here.
+
+### July 29, 2026 — Correction: the LSP was right and the registry was wrong (TS-P2-10)
+
+The previous entry reported that the LSP feature table documented three keywords
+that do not exist — `let`, `quote`, and `once` — and treated that as evidence for
+validating the registry by execution. **All three are real.** So are the other
+thirteen words the first registry draft was missing. The LSP was the most complete
+consumer, and the registry was the incomplete one.
+
+- `let` is a **comprehension clause**:
+  `[$y <| for x in 1..3 let y = ($x * 2)]` yields `[2, 4, 6]`. `TS-P3-02` proposes
+  general `let` *bindings*, which is a different feature; `let x = 5` failing does
+  not mean `let` is absent.
+- `quote` takes a **block in argument position**: `echo (quote { $x + 1 })` returns
+  a syntax object. `quote foo` is an unknown command because the form needs a brace.
+- `once` is an **event-handler clause**: `func f(e) handles X once { }`. The probe
+  that condemned it put it in member position.
+
+Sixteen words were missing from the first draft and every one is genuine:
+`contains`, `starts-with`, `ends-with`, `is-in`, `is-not-in` (operator words);
+`get`, `set` (property accessors); `handles`, `priority`, `when`, `once` (handler
+clauses); `let`, `where` (comprehension clauses); `implements` (composition);
+`leaky` (type modifier); `quote` (expression form). The registry is now 103 words
+across three new categories the first draft did not know existed — accessors,
+handler clauses, and contextual keywords.
+
+**The methodological point, which is the durable part.** Execution validation is
+**directional**. A passing probe proves a word is real. A failing probe proves
+nothing about the word — only that the probe is wrong. This slice produced *three*
+false accusations from that single confusion, plus one earlier in the same slice
+(`abstract` and `private` reported as fictional when they are member-modifier
+aliases). Four instances of one mistake in one item.
+
+The pattern is now specific enough to state as a rule: **a word absent from the
+registry is a claim about the registry, never about the language.** The guard's
+consumer-subset check is deliberately one-way for that reason, and the negative
+control that asserted `let` was not real is withdrawn rather than quietly deleted,
+with its reason recorded in the test.
+
+Also corrected: the parser's spelling comparisons went 182 → 142 in this slice, not
+by deleting checks but by replacing `ParseClassMember`'s 22-branch modifier chain —
+each alias written out twice, once to enter the loop and once to set its flag — with
+one registry lookup and a switch on canonical spellings.
+
+**And one live regression, caught by running the shell rather than the suite.**
+Categorising `shy` as visibility-only broke `shy prop X = 1`, which broke a user
+autoload file on the next launch. `shy` is the one word in two families — a
+declaration modifier *and* a member modifier — and its probe (`shy func f() { }`)
+kept passing throughout, because that is a real use of the other family. A word in
+two families needs a probe per family; `Every_member_modifier_works_in_member_position`
+is that check, and `hollow` turned out to need it too.
