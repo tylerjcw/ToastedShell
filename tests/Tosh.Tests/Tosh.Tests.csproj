@@ -19,6 +19,16 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!--
+      Caps test parallelism. Without this file xUnit runs one thread per core, and on
+      a 32-core machine that is 32 collections building engines at once — enough to
+      exhaust a 128 GB system three times in one working session. The cap is a
+      mitigation, not the fix: the underlying growth is filed separately.
+    -->
+    <None Include="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\src\Tosh.Cli\Tosh.Cli.csproj" />
     <ProjectReference Include="..\..\src\Tosh.Compiler.IR\Tosh.Compiler.IR.csproj" />
     <ProjectReference Include="..\..\src\Tosh.Language\Tosh.Language.csproj" />

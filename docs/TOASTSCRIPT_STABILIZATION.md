@@ -453,6 +453,8 @@ closed.
 | `TS-P2-35` | Complete — implemented 2026-07-30 | `require Outer.Inner from "…" as Alias` did not resolve. Only the outermost export name was looked up, so a library organised as nested modules — a namespace-like structure — reported the whole dotted string as a missing export, accurate but unhelpful given `Outer` was present and `Inner` was inside it. | A dotted import name walks module exports and declares whatever the final segment names — module, type, refinement, command, or variable — binding the final segment when no `as` alias is given. Paths of any depth work, partial modules at every level work, and importing the outer module keeps working. **Found while fixing it:** `ToshEngine` carries *two* `ImportRequiredArtifact` overloads twelve thousand lines apart, and the `require` statement path uses the second — so the first patch left the feature compiled and unreachable. Both now route through one resolver. |
 | `TS-P2-36` | Planned — filed 2026-07-30 | Generic static methods do not infer their type argument. `System.Threading.Tasks.Task.FromResult(7)` fails with "No overload matched static method 'FromResult' on 'System.Threading.Tasks.Task' with 1 argument(s)", because `FromResult<TResult>` needs `TResult` inferred from the argument. This matters more now that `TS-P1-27` made explicit `await` the model: `Task.WhenAll`, `Task.FromResult` and friends are exactly the helpers that model invites, and none of them are reachable. | A generic static method infers its type arguments from the supplied arguments, as C# does; `Task.FromResult(7)`, `Task.WhenAll($a, $b)` and `Enumerable.Empty<T>()`-style calls resolve; an argument set that genuinely cannot be inferred produces a diagnostic naming the type parameter rather than reporting the overload as missing. |
 | `TS-P2-37` | Planned — filed 2026-07-30 | The shell type alias `file` shadows `System.IO.File`, so `File.ReadAllTextAsync(…)` reports "No overload matched static method 'ReadAllTextAsync' on 'System.IO.FileInfo'" — the alias resolves `File` to `FileInfo` and the static is looked up on the wrong type. The fully-qualified `System.IO.File.ReadAllTextAsync` works. Same shape as the `double`/`map`/`set` collisions `TS-P2-23` handled for *bare* names, but this one is in the member-access path where a declaration cannot win. | A capitalized name that matches a shell type alias only case-insensitively resolves to the CLR type in member-access position, or the diagnostic names both candidates and says which was chosen; `File.ReadAllTextAsync` works without qualification, and `var f: file = …` keeps binding to `FileInfo`. |
+| `TS-P2-38` | Mitigated 2026-07-30; root cause open | The test suite exhausted a **128 GB** machine three times in one session, taking the editor down with it. Cause of the *multiplier* found: there was no `xunit.runner.json`, so xUnit ran one thread per core — 32 on this machine — each collection building its own engines. Measured after capping to 8 threads: the suite peaks at **6,357 MB** and passes. 6.2 GB is itself high for 3,554 tests, so the cap bounds the blast radius without explaining the growth; something retains more than a test needs. Related open items that would produce exactly this if they fire during a run: `TS-P1-08` (nested generator statements materialize) and `TS-P1-19` (infinite generator in command position hangs). | `xunit.runner.json` caps parallelism and is copied to output (done). Root cause: the per-worker footprint is measured and attributed — whether it is engine construction, a retained cache, or a generator materializing — and the suite peak is brought to something proportionate to the number of concurrent workers. A capped run is the standing instruction for anyone running the full suite until then. |
+| `TS-P2-39` | Planned — filed 2026-07-30 | Two unrelated tests fail *only* under parallel load and pass 3/3 in isolation: `ScopeAndChannelTests.Scope_awaits_spawned_jobs_and_returns_completions` (seen three times) and `GenericClassTests.Generic_class_user_interface_constraint_accepts_implementing_class`. Two different subsystems failing only when concurrent points at shared mutable static state rather than at either test. **Named suspect, not a proven cause:** `DotNetTypeResolver._negativeResultCache` is a process-wide `ConcurrentDictionary` of names confirmed unresolvable, never cleared, and invalidated only when `AppDomain.CurrentDomain.GetAssemblies().Length` grows — which a ToastScript-declared type does not do, since it is a `ToshClassDefinition` in a scope and not a CLR assembly. A deterministic reproduction was attempted (resolve `IShape` via a failing annotation, then declare `interface IShape` and use it in a generic constraint) and **did not reproduce** — the constraint resolved correctly — so either that path does not populate the cache or constraints do not consult it. | The flakiness is reproduced deterministically, by seeding whatever state is shared rather than by repeating the suite until it fails; the sharing is either removed or made per-engine; both tests pass under repeated parallel runs. If the negative cache is exonerated, the failed reproduction above is recorded so it is not retried. |
 
 **Implementation note for `TS-P2-11` (July 25 review recommendation).** The
 `TS-P2-01`/`TS-P2-02`/`TS-P2-04`/`TS-P2-12`–`TS-P2-15` family shares one root
@@ -3821,3 +3823,50 @@ is worse than no test, and a timing budget is a flaky test with extra steps.
 matters more, since explicit `await` invites exactly the `Task.WhenAll`/`FromResult`
 helpers that are unreachable; and `TS-P2-37`, the `file` alias shadowing
 `System.IO.File` in member-access position.
+
+### July 30, 2026 — The suite's memory, measured rather than endured (TS-P2-38)
+
+The full suite took a 128 GB machine down three times in one session, and the editor
+with it. Twice I worked around it and once I made it worse by dropping the capped-run
+discipline I had adopted earlier in the session and going back to bare `dotnet test`.
+That was the wrong response to a repeating symptom.
+
+**The multiplier, found.** There was no `xunit.runner.json`, so xUnit ran at default
+parallelism — one thread per core, **32** on this machine — with every collection
+constructing its own engines. Capped to 8 threads the suite peaks at **6,357 MB** and
+passes clean, measured by sampling total `dotnet`/`testhost` RSS under a 10 GB cgroup
+cap so a recurrence would kill the run rather than the machine.
+
+**The cap is a mitigation, and 6.2 GB is still the finding.** That is a lot for 3,554
+tests, so bounding concurrency limits the blast radius without explaining the growth.
+Two open items would produce exactly this if they fire mid-run — `TS-P1-08`, nested
+generator statements materializing, and `TS-P1-19`, an infinite generator in command
+position — and an earlier memory bomb this programme fixed was precisely that shape,
+peaking at 104 GB from a lambda swallowing its `| first N`. Filed as `TS-P2-38` with
+the root cause open rather than declared solved by the cap.
+
+**A second finding, honestly graded.** Two unrelated tests fail only under parallel
+load and pass 3/3 in isolation: `ScopeAndChannelTests` (three sightings now) and
+`GenericClassTests.Generic_class_user_interface_constraint_accepts_implementing_class`.
+Two subsystems failing only when concurrent points at shared mutable static state.
+
+The suspect is specific: `DotNetTypeResolver._negativeResultCache` is a process-wide
+dictionary of names confirmed unresolvable, never cleared, invalidated only when the
+loaded-assembly count grows — which a ToastScript-declared type does not do. If a name
+is cached negative before it is declared, declaring it cannot clear the entry. That
+would also be a *product* defect, not merely a test artifact: a long REPL session that
+references a name before defining it would inherit the stale answer.
+
+**It did not reproduce.** Resolving `IShape` through a failing annotation, then
+declaring `interface IShape` and using it as a generic constraint, produced the correct
+answer — so either that path does not populate the cache or constraint resolution does
+not consult it. Recorded as a suspect with the failed reproduction attached, so the
+next person does not spend the same hour on it, and filed as `TS-P2-39` rather than
+asserted.
+
+**Standing instruction until `TS-P2-38` has a root cause:** run the full suite under a
+memory cap.
+
+```
+systemd-run --user --scope -p MemoryMax=10G -p MemorySwapMax=0 -- dotnet test Tosh.slnx --no-build
+```
