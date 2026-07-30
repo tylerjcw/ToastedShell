@@ -917,7 +917,7 @@ public sealed partial class ToshEngine : IShellEvaluator
     {
         // Evaluate the right-hand side
         var values = await AsyncEnumerableExtensions.ToListAsync(
-            EvaluatePipelineAsync(sourceName, sourceText, tupleAssign.Value, cancellationToken),
+            EvaluatePipelineAsync(sourceName, sourceText, tupleAssign.Value, cancellationToken, outputIsCaptured: true),
             cancellationToken);
 
         IReadOnlyList<object?> unpacked;
@@ -1814,7 +1814,7 @@ public sealed partial class ToshEngine : IShellEvaluator
         else
         {
             var values = await AsyncEnumerableExtensions.ToListAsync(
-                EvaluatePipelineAsync(sourceName, sourceText, statement.Value, cancellationToken),
+                EvaluatePipelineAsync(sourceName, sourceText, statement.Value, cancellationToken, outputIsCaptured: true),
                 cancellationToken);
 
             if (values.Count != 1)
@@ -2502,7 +2502,7 @@ public sealed partial class ToshEngine : IShellEvaluator
         else
         {
             values = await AsyncEnumerableExtensions.ToListAsync(
-                EvaluatePipelineAsync(sourceName, sourceText, statement.Value, cancellationToken),
+                EvaluatePipelineAsync(sourceName, sourceText, statement.Value, cancellationToken, outputIsCaptured: true),
                 cancellationToken);
         }
 
@@ -2550,7 +2550,7 @@ public sealed partial class ToshEngine : IShellEvaluator
         else
         {
             var values = await AsyncEnumerableExtensions.ToListAsync(
-                EvaluatePipelineAsync(sourceName, sourceText, statement.Value, cancellationToken),
+                EvaluatePipelineAsync(sourceName, sourceText, statement.Value, cancellationToken, outputIsCaptured: true),
                 cancellationToken);
             value = values.Count switch
             {
@@ -3783,7 +3783,7 @@ public sealed partial class ToshEngine : IShellEvaluator
         foreach (var prop in runtimeProperties.Where(p => p.IsStatic && p.Initializer is not null))
         {
             var values = await AsyncEnumerableExtensions.ToListAsync(
-                EvaluatePipelineAsync(sourceName, sourceText, prop.Initializer!, cancellationToken),
+                EvaluatePipelineAsync(sourceName, sourceText, prop.Initializer!, cancellationToken, outputIsCaptured: true),
                 cancellationToken);
             definition.TrySetStaticMember(prop.Name, values.Count == 1 ? values[0] : values);
         }
@@ -4067,7 +4067,7 @@ public sealed partial class ToshEngine : IShellEvaluator
             else
             {
                 var values = await AsyncEnumerableExtensions.ToListAsync(
-                    EvaluatePipelineAsync(sourceName, sourceText, member.Value, cancellationToken),
+                    EvaluatePipelineAsync(sourceName, sourceText, member.Value, cancellationToken, outputIsCaptured: true),
                     cancellationToken);
                 rawValue = values.Count switch
                 {
@@ -4426,7 +4426,12 @@ public sealed partial class ToshEngine : IShellEvaluator
     {
         EnsureBindingNameIsNotReserved(sourceName, sourceText, statement.VariableName, statement.Span, "reserved runtime namespace");
 
-        await foreach (var item in EvaluatePipelineAsync(sourceName, sourceText, statement.Source, cancellationToken)
+        // `for line in curl -s … { … }` consumes the values, so the child's stdout must be
+        // captured even at a terminal. The loop still streams — the flag changes how the
+        // process is spawned, not how values flow (TS-P1-30).
+        await foreach (var item in EvaluatePipelineAsync(
+                               sourceName, sourceText, statement.Source, cancellationToken,
+                               outputIsCaptured: true)
                            .WithCancellation(cancellationToken))
         {
             await foreach (var current in ShellIterationUtilities
@@ -5542,7 +5547,7 @@ public sealed partial class ToshEngine : IShellEvaluator
         }
 
         var values = await AsyncEnumerableExtensions.ToListAsync(
-            EvaluatePipelineAsync(sourceName, sourceText, pipeline, cancellationToken),
+            EvaluatePipelineAsync(sourceName, sourceText, pipeline, cancellationToken, outputIsCaptured: true),
             cancellationToken);
 
         return values.Count switch
@@ -5662,6 +5667,9 @@ public sealed partial class ToshEngine : IShellEvaluator
 
             var hasOutputRedirection = outputTargets.Count > 0;
 
+            // Deliberately NOT captured: this is the top-level display path, and terminal
+            // passthrough is exactly what it is for. Redirection is handled below from the
+            // values the pipeline yields (TS-P1-30).
             await foreach (var value in EvaluatePipelineAsync(sourceName, sourceText, pipeline, cancellationToken, initialInput, firstCommandArguments)
                                .WithCancellation(cancellationToken))
             {
@@ -5914,7 +5922,8 @@ public sealed partial class ToshEngine : IShellEvaluator
         CancellationToken cancellationToken,
         IAsyncEnumerable<object?>? initialInput = null,
         IReadOnlyList<object?>? firstCommandArguments = null,
-        PipelineExitStatusTracker? pipelineExitStatusTracker = null)
+        PipelineExitStatusTracker? pipelineExitStatusTracker = null,
+        bool outputIsCaptured = false)
     {
         var ownsTracker = pipelineExitStatusTracker is null;
         pipelineExitStatusTracker ??= new PipelineExitStatusTracker(Runtime.Config.Shell.Pipefail);
@@ -5947,7 +5956,8 @@ public sealed partial class ToshEngine : IShellEvaluator
                     pendingFirstCommandArguments,
                     isPipelined,
                     pipelineExitStatusTracker,
-                    cancellationToken),
+                    cancellationToken,
+                    outputIsCaptured: outputIsCaptured),
                 PipeForwardStageSyntax pipeForward => ExecutePipeForwardStageAsync(
                     sourceName,
                     sourceText,
@@ -6240,7 +6250,8 @@ public sealed partial class ToshEngine : IShellEvaluator
         bool isPipelined,
         PipelineExitStatusTracker? pipelineExitStatusTracker,
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken,
-        IReadOnlyList<object?>? prependedArguments = null)
+        IReadOnlyList<object?>? prependedArguments = null,
+        bool outputIsCaptured = false)
     {
         var command = ResolveCommand(sourceName, sourceText, commandSyntax);
 
@@ -6305,7 +6316,17 @@ public sealed partial class ToshEngine : IShellEvaluator
             commandSyntax.Arguments.Select(argument => argument.Span).ToArray(),
             commandSyntax.ExplicitTypeArguments,
             _targetTypeAnnotation.Value);
-        var context = new CommandContext(Runtime, input, arguments, cancellationToken, invocation, isPipelined, CreateScopedTypeResolver(), pipelineExitStatusTracker, BlockExecutor: _ownBlockExecutor);
+        var context = new CommandContext(
+            Runtime,
+            input,
+            arguments,
+            cancellationToken,
+            invocation,
+            isPipelined,
+            CreateScopedTypeResolver(),
+            pipelineExitStatusTracker,
+            BlockExecutor: _ownBlockExecutor,
+            OutputIsCaptured: outputIsCaptured);
 
         if (Runtime.Config.Shell.Trace)
         {
@@ -7335,7 +7356,7 @@ public sealed partial class ToshEngine : IShellEvaluator
                         }
 
                         var results = await AsyncEnumerableExtensions.ToListAsync(
-                            EvaluatePipelineAsync(sourceName, sourceText, subexpression.Pipeline, cancellationToken),
+                            EvaluatePipelineAsync(sourceName, sourceText, subexpression.Pipeline, cancellationToken, outputIsCaptured: true),
                             cancellationToken);
 
                         if (results.Count <= 1)
@@ -7364,7 +7385,7 @@ public sealed partial class ToshEngine : IShellEvaluator
                         else
                         {
                             results = await AsyncEnumerableExtensions.ToListAsync(
-                                EvaluatePipelineAsync(sourceName, sourceText, commandSubstitution.Pipeline, cancellationToken),
+                                EvaluatePipelineAsync(sourceName, sourceText, commandSubstitution.Pipeline, cancellationToken, outputIsCaptured: true),
                                 cancellationToken);
                         }
 
@@ -7382,7 +7403,7 @@ public sealed partial class ToshEngine : IShellEvaluator
                         else
                         {
                             results = await AsyncEnumerableExtensions.ToListAsync(
-                                EvaluatePipelineAsync(sourceName, sourceText, processSubstitution.Pipeline, cancellationToken),
+                                EvaluatePipelineAsync(sourceName, sourceText, processSubstitution.Pipeline, cancellationToken, outputIsCaptured: true),
                                 cancellationToken);
                         }
 
@@ -7400,7 +7421,7 @@ public sealed partial class ToshEngine : IShellEvaluator
                         else
                         {
                             results = await AsyncEnumerableExtensions.ToListAsync(
-                                EvaluatePipelineAsync(sourceName, sourceText, outputProcessSubstitution.Pipeline, cancellationToken),
+                                EvaluatePipelineAsync(sourceName, sourceText, outputProcessSubstitution.Pipeline, cancellationToken, outputIsCaptured: true),
                                 cancellationToken);
                         }
 
@@ -13116,7 +13137,7 @@ public sealed partial class ToshEngine : IShellEvaluator
                 else
                 {
                     returnValues = await AsyncEnumerableExtensions.ToListAsync(
-                        EvaluatePipelineAsync(sourceName, sourceText, returnStatement.Value, cancellationToken, pendingInput),
+                        EvaluatePipelineAsync(sourceName, sourceText, returnStatement.Value, cancellationToken, pendingInput, outputIsCaptured: true),
                         cancellationToken);
                 }
 

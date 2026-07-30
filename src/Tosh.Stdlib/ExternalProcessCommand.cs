@@ -63,11 +63,26 @@ public sealed class ExternalProcessCommand : IShellCommand, ICommandResolutionMe
 
     private SpawnMode DetermineSpawnMode(CommandContext context)
     {
-        var hasTerminal = !context.IsPipelined
-                       && !Console.IsInputRedirected
-                       && !Console.IsOutputRedirected
-                       && ReferenceEquals(context.Runtime.Output, Console.Out)
-                       && ReferenceEquals(context.Runtime.Error, Console.Error);
+        var atTerminal = !Console.IsInputRedirected
+                      && !Console.IsOutputRedirected
+                      && ReferenceEquals(context.Runtime.Output, Console.Out)
+                      && ReferenceEquals(context.Runtime.Error, Console.Error);
+
+        // A consumer is waiting for this value, so stdout has to be piped even at a
+        // terminal — but stdin and stderr stay with the terminal, so an interactive child
+        // still prompts and still shows progress. That is precisely what Hybrid does.
+        //
+        // This used to be decided by `IsPipelined` alone, which is true only when a
+        // *downstream stage* exists. So `git … | collect` captured while
+        // `var x = git …`, `(git …)`, `$(git …)` and `$"{git …}"` all printed to the
+        // terminal and yielded null — they consume the value without being pipelined
+        // (TS-P1-30).
+        if (atTerminal && context.OutputIsCaptured)
+        {
+            return SpawnMode.Hybrid;
+        }
+
+        var hasTerminal = atTerminal && !context.IsPipelined;
 
         if (hasTerminal && IsHybridConsumer(context))
         {
