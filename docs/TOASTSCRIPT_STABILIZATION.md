@@ -3975,3 +3975,61 @@ own — it calls `State.Icmp()` with parentheses, which asks for a method and re
 "Static method 'Icmp' was not found on class 'State'"; a property is read without them.
 Worth noting that this diagnostic is *good*: it says exactly what was looked for and
 where.
+
+### July 30, 2026 — Two diagnostics that pointed the wrong way (TS-P2-41, TS-P2-33)
+
+Both of these are cases where the language was right and the thing *describing* the
+language was wrong. Neither changes behaviour; both change what a user is told.
+
+**`TS-P2-41` — a bare member reference now names its missing qualifier.** Writing
+`static prop Icmp => icmp()` beside `static func icmp()` reported:
+
+```
+Command 'icmp' is not a registered builtin or function declared in this source.
+  did you mean 'df', 'fg', or 'if'?
+```
+
+Three unrelated shell commands, while a member of the enclosing class sat one qualifier
+away. The rule is not the defect — members are reached through the type name or `$this`,
+and bare `f()` fails from an instance method too — so the fix is the message:
+
+```
+'icmp' is a member of 'State' and cannot be called as a bare name.
+  write 'State.icmp' or '$this.icmp'
+```
+
+The binder now tracks the class bodies it is walking with the member names each declares,
+and consults that **before** the Levenshtein path. That ordering is the part worth
+keeping: the old path only reported when it happened to find a near-miss command, so
+`icmp` was flagged only because `df`, `fg`, and `if` exist. A member named `zzqqxx`
+produced **no diagnostic at all** — silence, not a wrong suggestion. Four probes confirmed
+the new check covers methods, properties, static and instance position, and that a
+genuine command typo still gets command suggestions.
+
+**`TS-P2-33` — five LSP hover entries described syntax the language does not have.**
+`let`, `pick`, and `get` all documented a leading-`for` comprehension,
+`[for x in $items pick x * 2]`, which does not parse — comprehensions are body-first with
+`<|`. `pick` is not a comprehension clause at all but a pipeline command. `when`'s example
+omitted the parameter list its form requires.
+
+Every replacement was verified by parsing it before being written, which caught that
+`func f handles X when { … }` fails without `(event)`.
+
+**The durable half is `HoverExampleParityTests`**: every backticked `Example:` in the
+keyword table must parse. Its negative control names all three fictional comprehensions
+against the uncorrected table, so it demonstrably catches the class of defect rather than
+passing vacuously. Same shape as the specification keyword guard — a document that makes
+claims about the language is a consumer, and a consumer can be checked.
+
+Worth recording why this was missed for so long: counting entries made the LSP table look
+like the *best*-covered consumer at 93 words. Reading three of them found wrong syntax in
+all three. Coverage and correctness are different measurements, and only one of them was
+ever taken.
+
+**Flake note.** `GenericClassTests.Generic_class_user_interface_constraint_accepts_implementing_class`
+failed in the verification run and passed 2/2 in isolation — the second sighting of that
+specific test and the fourth overall across three subsystems, all under parallel load.
+`TS-P2-39` holds the suspicion of shared static state, still unreproduced deterministically.
+Distinguishing it from the `TS-P2-41` regression mattered: that one also looked like a flake
+until it failed in isolation, which is the only signal that separated a real defect from
+this noise.
