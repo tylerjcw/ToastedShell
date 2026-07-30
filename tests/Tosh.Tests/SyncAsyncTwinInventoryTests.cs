@@ -43,12 +43,14 @@ public sealed class SyncAsyncTwinInventoryTests
     private static readonly string[] KnownTwins =
     [
         // ── Declared by the project's own dual-surface interfaces ──────────────
-        // These are not stray duplication. Each interface declares both a sync and
-        // an async member, so every implementer must supply both, and no
-        // individual pair can be converged while the contract stands. This is the
-        // item's central obstacle rather than a long tail: see the July 29 log
-        // entry, which asks for a decision on whether the dual surface should
-        // exist at all.
+        // Deliberate, decided July 29, and therefore out of scope for TS-P1-24's
+        // convergence clause. Each interface declares both a sync and an async
+        // member because the interpreter serves both kinds of caller with
+        // different member-dispatch semantics — GetIndexedValueAsync avoids
+        // re-entering the synchronous record API on purpose. No implementer can
+        // delegate while the contract stands, and the contract is meant to stand.
+        // Retiring the sync surface behind one blocking bridge was considered and
+        // rejected as a larger change than this item; it would get its own item.
         "IObjectAccessor.GetValue",
         "IObjectAccessor.SetValue",
         "IShellEnumerableObject.EnumerateShellItems",
@@ -60,8 +62,7 @@ public sealed class SyncAsyncTwinInventoryTests
         "IShellStaticType.InvokeStaticMethod",
 
         // ── Implementations of the above ───────────────────────────────────────
-        // Mechanically required by the contracts listed above. They disappear when
-        // the contract changes and not before.
+        // Mechanically required by the contracts listed above, which are staying.
         "ReflectionObjectAccessor.GetValue",
         "ReflectionObjectAccessor.SetValue",
         "ToshClassClrSuperReference.InvokeInstanceMethod",

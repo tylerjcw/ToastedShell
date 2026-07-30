@@ -5126,6 +5126,48 @@ read-lines /var/log/app.log
     | reverse
 \end{lstlisting}
 
+\subsection{Delimited Column Types}
+
+\code{from csv} and \code{from tsv} infer column types, so numeric columns
+arrive ready to compare rather than as text.  Inference is deliberately
+narrow---integers, decimals, and \code{true}/\code{false}:
+
+\begin{lstlisting}
+Id,Name,Amount,Ratio,Active
+001,Alice,150,2.5,true
+
+# Id     -> string  (leading zero: an identifier, not a number)
+# Name   -> string
+# Amount -> int
+# Ratio  -> double
+# Active -> bool
+\end{lstlisting}
+
+The rules, and what each one protects:
+
+\begin{description}
+  \item[Per column, not per cell] A column is typed only when every non-empty
+    cell agrees.  One \code{n/a} in a numeric column leaves the whole column
+    textual, so values within a column always compare with each other.
+  \item[Integers and decimals reconcile] A column of \code{1, 2, 2.5} is
+    \code{double}.  Integers narrow to \code{int} where they fit, widening to
+    \code{long} only when they must.
+  \item[Leading zeros stay text] \code{007} and \code{01234} are identifiers;
+    converting them destroys the zero irreversibly.  \code{0} and \code{0.5}
+    are ordinary numbers.
+  \item[No thousands separators] \code{1,234} is textual---the comma is also
+    the delimiter.
+  \item[No dates] \code{01/02/26} is three different days depending on locale,
+    so date-like columns stay text.  Convert explicitly with \code{cast}.
+  \item[Empty cells] Not evidence either way, and become \code{null} in a typed
+    column rather than a value that would not compare with its neighbours.
+\end{description}
+
+Pass \code{--raw} (or \code{--no-infer}) to switch inference off and receive
+every column as text.
+
+\code{from json} needs none of this: JSON declares its own types.
+
 \subsection{CSV Processing}
 
 \begin{lstlisting}
