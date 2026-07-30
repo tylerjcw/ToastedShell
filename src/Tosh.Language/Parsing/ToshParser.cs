@@ -4348,7 +4348,7 @@ public static class ToshParser
                 }
 
                 var accessorName = NextToken().Text;
-                var accessorBody = ParseArrowStatementBlock($"property {accessorName}");
+                var accessorBody = ParseAccessorBody($"property {accessorName}");
 
                 if (string.Equals(accessorName, "get", StringComparison.Ordinal))
                 {
@@ -4398,6 +4398,32 @@ public static class ToshParser
                 parameters,
                 body,
                 TextSpan.FromBounds(memberStart, body.Span.End));
+        }
+
+        /// <summary>
+        /// Parses a property accessor's body, which may be either
+        /// <c>get =&gt; expr</c> or <c>get { ... }</c>.
+        /// </summary>
+        /// <remarks>
+        /// The brace form was never supported and did not fail either. Accessor
+        /// bodies went through <see cref="ParseArrowStatementBlock"/>, whose
+        /// <c>ConsumeFatArrow</c> is lenient — it consumes an arrow if one is there
+        /// and shrugs otherwise — so <c>get { return $this.b }</c> fell into
+        /// <c>ParseStatement</c>, where a block-only <c>{</c> (<c>TS-P2-25</c>) made
+        /// it a first-class block *value*. The accessor returned a
+        /// <c>ShellBlock</c> instead of running, with no diagnostic: a silent wrong
+        /// answer rather than a refusal.
+        ///
+        /// Supporting the brace form was the decision (<c>TS-P2-31</c>) rather than
+        /// diagnosing it, because a getter restricted to one expression pushes
+        /// anything conditional into a helper method, and <c>{ ... }</c> is what a
+        /// method body already looks like.
+        /// </remarks>
+        private BlockSyntax ParseAccessorBody(string owner)
+        {
+            return Current.Kind == SyntaxTokenKind.OpenBrace
+                ? ParseRequiredBlock(owner)
+                : ParseArrowStatementBlock(owner);
         }
 
         private BlockSyntax ParseArrowStatementBlock(string owner)
