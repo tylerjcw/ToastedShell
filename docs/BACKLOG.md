@@ -9,6 +9,24 @@ Completed items prior to 2026-05-07 live in
 > [TOASTSCRIPT_STABILIZATION.md](TOASTSCRIPT_STABILIZATION.md). Update that
 > document rather than duplicating its item statuses here.
 
+> **Status, July 30, 2026 — feature backlog, frozen; not re-audited.**
+> This document tracks *features*. It is not the source of truth for language
+> semantics and has not been re-audited since May 7, 2026, while roughly half the
+> project's commit history landed after that date. Treat closed items as history
+> and open items as candidates rather than as a current plan.
+>
+> Thirteen items are open, all of them features rather than defects: LSP
+> `textDocument/formatting` and the source formatter, doc-comment XML emission,
+> and library mode. **Three are gated** by the July 30 priority decision that
+> compiled ToastScript is an experiment until the interpreted language is solid
+> (see [ROADMAP.md](ROADMAP.md)) — library mode's SDK property, the
+> `\part{Compilation}` spec section, and doc-ID mangling per
+> [CLR_ABI_v1.md](CLR_ABI_v1.md).
+>
+> Defects, semantic decisions, and the acceptance gates live in
+> [TOASTSCRIPT_STABILIZATION.md](TOASTSCRIPT_STABILIZATION.md). Nothing here
+> should be started before that programme's P1 tier is closed.
+
 Last updated: May 7, 2026. Lambda return-type annotations, postfix
 `if`/`unless` on `return`/`break`/`continue`/`throw`/`yield`, lazy
 parenthesised generator comprehensions `(body <| for ...)`, the rune

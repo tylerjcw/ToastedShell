@@ -1,5 +1,12 @@
 # Compiled ToastScript: Design Considerations
 
+> **Status as of July 30, 2026 — experiment, not a goal yet.** The interpreted
+> language takes priority until it is rock-solid; see the standing priority
+> decision in [ROADMAP.md](ROADMAP.md). The compiler stays building and its
+> guards stay green, but it does not gain new surface and it does not constrain
+> an interpreter semantic decision. This document remains the design record for
+> when it becomes a goal again.
+
 ## Context
 
 ToastScript today is a tree-walking interpreter hosted inside the TōSh shell process. The vision is a *buildable* .NET language: `toshc mytool.tosh` produces a self-contained `.dll`/`.exe`, runnable without the shell.

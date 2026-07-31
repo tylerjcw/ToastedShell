@@ -59,6 +59,30 @@ Objects of the same type should render the same way across commands unless the u
 
 Before `tosh` becomes a large language, it needs to become a great place to think. Editing, completion, diagnostics, paging, tables, and object inspection are core features, not extras.
 
+## Standing Priority Decision — July 30, 2026
+
+**The interpreted language comes first. Compiled ToastScript is an experiment
+until it is rock-solid.**
+
+Compiled ToastScript ([COMPILED_TOSH.md](COMPILED_TOSH.md), `Tosh.Compiler` and
+its IR and runtime bridge) is a working second implementation of the language's
+semantics. That is what makes it valuable and also what makes it expensive: every
+semantic decision has to be made twice, and the stabilization programme is
+currently making a great many of them. It remains a goal, but a later one.
+
+Until the interpreted language is stable, this ordering holds:
+
+1. Interpreted semantics, the shell, and the REPL.
+2. The compiler follows the language rather than constraining it. Compiler work
+   is maintenance — keep it building and its guards green — not new surface.
+3. A semantic decision is not blocked on the compiler's ability to implement it.
+   Where the two disagree, the interpreter is right by definition until this
+   decision is revisited.
+
+Revisit when the stabilization programme's P1 tier is closed. Recorded here
+rather than only in conversation because it changes what *not* to work on, and
+that is the kind of decision that silently reverts.
+
 ## Architectural Direction
 
 ### A. Typed Value Layer
