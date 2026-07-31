@@ -10,43 +10,16 @@ packaging/archlinux/src/
 packaging/archlinux/pkg/
 tmp/
 
-# Docs
-docs/*
-docs/spec/*
-docs/cheatsheets/*
-!docs/spec/
+# Docs — tracked by default. Only generated output is ignored.
+#
+# This block used to be `docs/*` plus a hand-maintained per-file allowlist, which
+# is the wrong default for a directory of design records: a document was tracked
+# only if someone remembered to add a line here. Seven were not, and had never
+# existed anywhere but one working copy — including docs/TSSP.md, a wire protocol
+# specification, and docs/spec/diagnostic-codes.tex plus
+# docs/cheatsheets/_shared/preamble.tex, both build inputs. Inverted 2026-07-30 so
+# forgetting is no longer how a document gets lost.
 docs/spec/ToastScript.pdf
-!docs/spec/toastscript-spec.pdf
-!docs/cheatsheets/
-!docs/cheatsheets/README.md
-!docs/cheatsheets/Makefile
-!docs/cheatsheets/basics/
-!docs/cheatsheets/basics/basics.pdf
-!docs/cheatsheets/collections/
-!docs/cheatsheets/collections/collections.pdf
-!docs/cheatsheets/control-flow/
-!docs/cheatsheets/control-flow/control-flow.pdf
-!docs/cheatsheets/filesystem/
-!docs/cheatsheets/filesystem/filesystem.pdf
-!docs/cheatsheets/interop/
-!docs/cheatsheets/interop/interop.pdf
-!docs/cheatsheets/syntax/
-!docs/cheatsheets/syntax/syntax.pdf
-!docs/cheatsheets/units/
-!docs/cheatsheets/units/units.pdf
-!docs/ARCHITECTURE.md
-!docs/BACKLOG.md
-!docs/BRACE_DISAMBIGUATION_RFC.md
-!docs/CLR_ABI_v1.md
-!docs/CONFIGURATION.md
-!docs/EDITOR_SUPPORT.md
-!docs/INDEX.md
-!docs/LINE_EDITOR_RFC.md
-!docs/ROADMAP.md
-!docs/TOASTSCRIPT_STABILIZATION.md
-!docs/RUNTIME_NAMESPACES.md
-!docs/TUI_ARCHITECTURE.md
-!docs/TOME.md
 
 # Scripts
 scripts/*
@@ -56,23 +29,20 @@ scripts/*
 
 # Test results
 TestResults/
-# LaTeX intermediate output (the canonical PDF is ToastScript.pdf)
-docs/spec/*.aux
-docs/spec/*.fdb_latexmk
-docs/spec/*.fls
-docs/spec/*.idx
-docs/spec/*.ilg
-docs/spec/*.ind
-docs/spec/*.ist
-docs/spec/*.lof
-docs/spec/*.toc
-docs/spec/*.synctex.gz
-docs/spec/*.out
-docs/cheatsheets/**/*.aux
-docs/cheatsheets/**/*.fdb_latexmk
-docs/cheatsheets/**/*.fls
-docs/cheatsheets/**/*.log
-docs/cheatsheets/**/*.out
+# LaTeX intermediate output (the canonical PDF is ToastScript.pdf).
+# `docs/**` rather than per-directory: latexmk writes into docs/cheatsheets/ and
+# into each cheatsheet's own subdirectory, and the old per-directory rules missed
+# half of them. `.ist` is deliberately absent — index-style.ist is a source file.
+docs/**/*.aux
+docs/**/*.fdb_latexmk
+docs/**/*.fls
+docs/**/*.idx
+docs/**/*.ilg
+docs/**/*.ind
+docs/**/*.lof
+docs/**/*.toc
+docs/**/*.out
+docs/**/*.synctex.gz
 
 # IDE / editor caches
 .vs/
@@ -86,7 +56,6 @@ editor/vscode/tosh.tosh-lang/node_modules/
 .claude/
 .mcp.json
 .codex
-AGENTS.md
 
 
 ## Ignore Visual Studio temporary files, build results, and
