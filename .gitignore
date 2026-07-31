@@ -21,11 +21,10 @@ tmp/
 # forgetting is no longer how a document gets lost.
 docs/spec/ToastScript.pdf
 
-# Scripts
-scripts/*
-!scripts/build.tosh
-!scripts/publish_tosh.sh
-!scripts/toshmem.tosh
+# Scripts are tracked. This was `scripts/*` plus an allowlist naming three files
+# while thirteen existed — the same trap as the docs block above, and it would have
+# silently dropped the next script written. Only generated output is ignored.
+scripts/**/__pycache__/
 
 # Test results
 TestResults/

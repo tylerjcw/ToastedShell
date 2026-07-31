@@ -5,6 +5,24 @@ namespace Tosh.Tests;
 
 public sealed class ScopeAndChannelTests
 {
+    /// <summary>
+    /// Renders everything a <see cref="ShellJobCompletion"/> knows, for failure messages.
+    /// </summary>
+    /// <remarks>
+    /// <c>TS-P2-39</c>: this test failed three times under parallel load and never in
+    /// isolation, and each sighting reported only "Expected Completed, Actual Failed" —
+    /// which is not enough to tell a child that could not start from one that ran and exited
+    /// non-zero. The completion already carries the exit code, stderr, and duration; the
+    /// assertions simply discarded them. Six full-suite runs since, three of them at 32
+    /// parallel threads, have not reproduced it, so the next sighting may be the only
+    /// evidence available for a while — it should arrive complete.
+    /// </remarks>
+    private static string Describe(ShellJobCompletion completion) =>
+        $"job {completion.Id} '{completion.Command}': status={completion.Status}, "
+        + $"exit={completion.ExitCode?.ToString() ?? "none"}, pid={completion.ProcessId?.ToString() ?? "none"}, "
+        + $"duration={completion.Duration.TotalMilliseconds:F0}ms, "
+        + $"stderr=[{string.Join(" | ", completion.ErrorLines)}]";
+
     // ── scope ───────────────────────────────────────────────────────────────────
 
     [Fact]
@@ -20,12 +38,19 @@ public sealed class ScopeAndChannelTests
             }
             """);
 
+        var completions = results.Select(Assert.IsType<ShellJobCompletion>).ToList();
+
         // Both completions come back, ordered by job ID.
-        Assert.Equal(2, results.Count);
-        foreach (var item in results)
+        Assert.True(
+            completions.Count == 2,
+            $"expected 2 completions, got {completions.Count}:\n  "
+            + string.Join("\n  ", completions.Select(Describe)));
+
+        foreach (var completion in completions)
         {
-            var completion = Assert.IsType<ShellJobCompletion>(item);
-            Assert.Equal(ShellJobStatus.Completed, completion.Status);
+            Assert.True(
+                completion.Status == ShellJobStatus.Completed,
+                $"a scope-owned job did not complete — {Describe(completion)}");
         }
     }
 
