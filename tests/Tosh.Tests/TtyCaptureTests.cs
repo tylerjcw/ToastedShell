@@ -166,22 +166,43 @@ public sealed class TtyCaptureTests
     }
 
     [Fact]
-    public void An_interpolation_hole_does_not_yet_capture()
+    public void An_interpolation_hole_captures()
     {
         if (PtyUnavailable())
         {
             return;
         }
 
-        // Characterization, not an endorsement. An interpolation hole re-parses its text and
-        // runs it as a whole statement through EvaluateAsync, so it reaches the pipeline by a
-        // different route than the consuming sites this change marked — the flag would have
-        // to thread through EvaluateParseResultAsync and EvaluateStatementAsync, the engine's
-        // hottest dispatch. Filed as TS-P1-32 and left for its own slice; pinned here so the
-        // gap is visible and so flipping it later is a deliberate edit to this assertion
-        // rather than a surprise.
+        // Was pinned as a characterization of the TS-P1-32 gap — asserting `GOT[]`, the empty
+        // interpolation — precisely so that closing it would be a deliberate edit to this
+        // assertion rather than a silent change. This is that edit.
+        //
+        // A hole re-parses its text and runs it as a whole statement, so it reaches the
+        // pipeline through EvaluateAsync → EvaluateParseResultAsync → EvaluateStatementAsync
+        // rather than through any of the consuming sites TS-P1-30 marked. Threading the flag
+        // along that route is the whole fix; the interpolation hole is its only caller that
+        // passes `true`.
         var output = RunUnderPty("echo $\"GOT[{git rev-parse --abbrev-ref HEAD}]\"");
 
-        Assert.Contains("GOT[]", output, StringComparison.Ordinal);
+        Assert.Contains("GOT[", output, StringComparison.Ordinal);
+        Assert.DoesNotContain("GOT[]", output, StringComparison.Ordinal);
+        Assert.Contains(CurrentBranch(), output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_nested_interpolation_hole_captures()
+    {
+        if (PtyUnavailable())
+        {
+            return;
+        }
+
+        // A hole inside a function body, so the capture flag has to survive a call frame
+        // rather than only the top-level statement the fix was written against.
+        var output = RunUnderPty(
+            "func branch() { return $\"B[{git rev-parse --abbrev-ref HEAD}]\" }\necho (branch())");
+
+        Assert.DoesNotContain("B[]", output, StringComparison.Ordinal);
+        Assert.Contains(CurrentBranch(), output, StringComparison.Ordinal);
     }
 }

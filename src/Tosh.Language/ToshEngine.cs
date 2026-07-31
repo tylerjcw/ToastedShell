@@ -379,7 +379,27 @@ public sealed partial class ToshEngine : IShellEvaluator
         return EvaluateAsync(source, "<input>", cancellationToken);
     }
 
-    public IAsyncEnumerable<object?> EvaluateAsync(string source, string sourceName, CancellationToken cancellationToken = default)
+    /// <summary>
+    /// The <see cref="IShellEvaluator"/> seam. Kept at exactly three parameters because the
+    /// interface declares it so; capture-aware callers use the overload below.
+    /// </summary>
+    public IAsyncEnumerable<object?> EvaluateAsync(
+        string source,
+        string sourceName,
+        CancellationToken cancellationToken = default)
+        => EvaluateAsync(source, sourceName, cancellationToken, outputIsCaptured: false);
+
+    /// <param name="outputIsCaptured">
+    /// Whether the caller is consuming the value rather than displaying it, so an external
+    /// command's stdout must be piped (<c>TS-P1-30</c>). An interpolation hole re-parses its text
+    /// and runs it through here as a whole statement, which is why capture has to be expressible
+    /// on this seam rather than only at the consuming sites (<c>TS-P1-32</c>).
+    /// </param>
+    public IAsyncEnumerable<object?> EvaluateAsync(
+        string source,
+        string sourceName,
+        CancellationToken cancellationToken,
+        bool outputIsCaptured)
     {
         var parseResult = Parse(source, sourceName);
 
@@ -400,7 +420,7 @@ public sealed partial class ToshEngine : IShellEvaluator
         ApplyBinder(parseResult);
         ApplyLowering(parseResult);
 
-        return EvaluateAsync(parseResult, cancellationToken);
+        return EvaluateParseResultAsync(parseResult, cancellationToken, outputIsCaptured);
     }
 
     /// <summary>
@@ -594,7 +614,8 @@ public sealed partial class ToshEngine : IShellEvaluator
 
     private async IAsyncEnumerable<object?> EvaluateParseResultAsync(
         ParseResult parseResult,
-        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken,
+        bool outputIsCaptured = false)
     {
         cancellationToken.ThrowIfCancellationRequested();
         using var executionFrame = ToshExecutionDepthGuard.Enter(
@@ -658,7 +679,8 @@ public sealed partial class ToshEngine : IShellEvaluator
                 parseResult.SourceName,
                 parseResult.SourceText,
                 parseResult.Statement,
-                cancellationToken)
+                cancellationToken,
+                outputIsCaptured)
                 .GetAsyncEnumerator(cancellationToken);
         }
         catch (ReturnSignalException signal)
@@ -866,18 +888,31 @@ public sealed partial class ToshEngine : IShellEvaluator
         pendingException?.Throw();
     }
 
+    /// <param name="outputIsCaptured">
+    /// Whether a consumer is waiting for this statement's value, so an external command must have
+    /// its stdout piped rather than inherited (<c>TS-P1-30</c>). Only the pipeline arm can act on
+    /// it; every other arm ignores it, which is why it rides here rather than in the pipeline
+    /// syntax. Defaulted so the engine's hottest dispatch keeps its existing call shape — the
+    /// single caller that sets it is the interpolation hole (<c>TS-P1-32</c>).
+    /// </param>
     private IAsyncEnumerable<object?> EvaluateStatementAsync(
         string sourceName,
         string sourceText,
         StatementSyntax statement,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool outputIsCaptured = false)
     {
         return statement switch
         {
             ScriptStatementSyntax script => EvaluateScriptStatementAsync(sourceName, sourceText, script, cancellationToken),
             PipelineStatementSyntax pipeline => pipeline.Pipeline.IsBackground
                 ? EvaluateBackgroundPipelineAsync(sourceName, sourceText, pipeline, cancellationToken)
-                : EvaluatePipelineWithRedirectionAsync(sourceName, sourceText, pipeline.Pipeline, cancellationToken),
+                : EvaluatePipelineWithRedirectionAsync(
+                    sourceName,
+                    sourceText,
+                    pipeline.Pipeline,
+                    cancellationToken,
+                    outputIsCaptured: outputIsCaptured),
             VariableDeclarationStatementSyntax declaration => EvaluateVariableDeclarationAsync(sourceName, sourceText, declaration, cancellationToken),
             ScriptInputStatementSyntax input => EvaluateScriptInputStatementAsync(sourceName, sourceText, input),
             SubcommandStatementSyntax subcommand => EvaluateOrphanSubcommandStatementAsync(sourceName, sourceText, subcommand),
@@ -5821,7 +5856,8 @@ public sealed partial class ToshEngine : IShellEvaluator
         PipelineSyntax pipeline,
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken,
         IAsyncEnumerable<object?>? initialInput = null,
-        IReadOnlyList<object?>? firstCommandArguments = null)
+        IReadOnlyList<object?>? firstCommandArguments = null,
+        bool outputIsCaptured = false)
     {
         // Resolve input redirection (in< / i<) before executing the pipeline.
         if (pipeline.InputRedirection is { } inputRedirection)
@@ -5833,7 +5869,7 @@ public sealed partial class ToshEngine : IShellEvaluator
 
         if (pipeline.Redirections is null or { Count: 0 })
         {
-            await foreach (var value in EvaluatePipelineAsync(sourceName, sourceText, pipeline, cancellationToken, initialInput, firstCommandArguments)
+            await foreach (var value in EvaluatePipelineAsync(sourceName, sourceText, pipeline, cancellationToken, initialInput, firstCommandArguments, outputIsCaptured: outputIsCaptured)
                                .WithCancellation(cancellationToken))
             {
                 yield return value;
@@ -5925,7 +5961,7 @@ public sealed partial class ToshEngine : IShellEvaluator
             // Deliberately NOT captured: this is the top-level display path, and terminal
             // passthrough is exactly what it is for. Redirection is handled below from the
             // values the pipeline yields (TS-P1-30).
-            await foreach (var value in EvaluatePipelineAsync(sourceName, sourceText, pipeline, cancellationToken, initialInput, firstCommandArguments)
+            await foreach (var value in EvaluatePipelineAsync(sourceName, sourceText, pipeline, cancellationToken, initialInput, firstCommandArguments, outputIsCaptured: outputIsCaptured)
                                .WithCancellation(cancellationToken))
             {
                 if (hasOutputRedirection)
@@ -7843,8 +7879,17 @@ public sealed partial class ToshEngine : IShellEvaluator
 
                                 case InterpolatedStringExpressionPart expression:
                                     {
+                                        // The hole's value is being consumed into a string, so an
+                                        // external command inside it must have its stdout piped
+                                        // rather than inherited — `echo $"{git rev-parse …}"` used
+                                        // to print the branch to the terminal and interpolate the
+                                        // empty string (TS-P1-32).
                                         var results = await AsyncEnumerableExtensions.ToListAsync(
-                                            EvaluateAsync(expression.Expression, sourceName, cancellationToken),
+                                            EvaluateAsync(
+                                                expression.Expression,
+                                                sourceName,
+                                                cancellationToken,
+                                                outputIsCaptured: true),
                                             cancellationToken);
 
                                         if (results.Count == 1)
