@@ -643,6 +643,41 @@ public static class ToshParser
                 return ParseRecordDefinitionStatement(docTokens, stopAtCloseParen, stopAtCloseBrace, stopAtSemicolon);
             }
 
+            // `raw struct` / `raw union` must be tested before plain `struct`:
+            // they are a different declaration kind, not a modified one.
+            if (LooksLikeRawStructDefinition())
+            {
+                return ParseRawStructDefinitionStatement(docTokens);
+            }
+
+            // Top-level `raw func name(...) -> ret from "lib"`.
+            if (MatchesKeywordAtOffset(GetDeclarationModifierOffset(), "raw"))
+            {
+                var rawOffset = GetDeclarationModifierOffset();
+
+                if (MatchesKeywordAtOffset(rawOffset + 1, "func"))
+                {
+                    var rawStart = Current.Span.Start;
+                    var rawModifier = ParseDeclarationModifier();
+                    NextToken(); // consume 'raw'
+
+                    if (LooksLikeRawNativeFunction())
+                    {
+                        var binding = ParseNativeBindingFunction();
+                        return new RawFunctionStatementSyntax(
+                            binding,
+                            rawModifier,
+                            TextSpan.FromBounds(rawStart, binding.Span.End));
+                    }
+
+                    _diagnostics.Add(new SyntaxDiagnostic(
+                        Code: "tosh.parser.raw_func_requires_library",
+                        Title: "A top-level 'raw func' needs a library.",
+                        Span: Current.Span,
+                        Label: "write 'raw func name(...) -> type from \"libc.so.6\"'"));
+                }
+            }
+
             if (LooksLikeStructDefinition())
             {
                 return ParseStructDefinitionStatement(docTokens);
@@ -1462,6 +1497,28 @@ public static class ToshParser
             var returnTypeName = TryParseReturnTypeAnnotation();
             var symbolName = nameToken.Text;
             string? callingConventionName = null;
+            string? nativeTarget = null;
+
+            // `from "lib"` — the standalone `raw func` form, for a single binding
+            // that does not justify a whole block.
+            if (Current.Kind == SyntaxTokenKind.Bareword &&
+                string.Equals(Current.Text, "from", StringComparison.OrdinalIgnoreCase))
+            {
+                NextToken();
+
+                if (Current.Kind is SyntaxTokenKind.Bareword or SyntaxTokenKind.String)
+                {
+                    nativeTarget = NextToken().Text.Trim('"');
+                }
+                else
+                {
+                    _diagnostics.Add(new SyntaxDiagnostic(
+                        Code: "tosh.parser.expected_native_library",
+                        Title: "A raw function needs a library after 'from'.",
+                        Span: Current.Span,
+                        Label: "write something like 'from \"libc.so.6\"'"));
+                }
+            }
 
             if (Current.Kind == SyntaxTokenKind.Bareword &&
                 string.Equals(Current.Text, "as", StringComparison.OrdinalIgnoreCase))
@@ -1501,6 +1558,11 @@ public static class ToshParser
                 }
             }
 
+            // `where (…)` is the success contract. It reuses the refinement
+            // clause verbatim — same keyword, same `_` placeholder, same meaning
+            // — with `_` bound to the native return value.
+            var successPredicate = TryParseRefinementClause();
+
             var end = Peek(-1).Span.End;
 
             return new NativeFunctionBindingSyntax(
@@ -1509,7 +1571,9 @@ public static class ToshParser
                 parameters,
                 returnTypeName,
                 callingConventionName,
-                TextSpan.FromBounds(memberStart, Math.Max(end, nameToken.Span.End)));
+                TextSpan.FromBounds(memberStart, Math.Max(end, nameToken.Span.End)),
+                successPredicate,
+                nativeTarget);
         }
 
         private IReadOnlyList<NativeFunctionParameterSyntax> ParseNativeBindingParameters()
@@ -1638,12 +1702,50 @@ public static class ToshParser
                     typeName = ParseTypeNameSuffix(typeName);
                 }
 
+                typeName = ParseNativeBufferSuffix(typeName);
                 return new NativeFunctionParameterSyntax(name, string.IsNullOrWhiteSpace(typeName) ? null : typeName, passingMode, firstToken.Span);
             }
 
             var generatedName = $"arg{parameterIndex + 1}";
-            var typeOnlyName = ParseTypeNameSuffix(nameOrType);
+            var typeOnlyName = ParseNativeBufferSuffix(ParseTypeNameSuffix(nameOrType));
             return new NativeFunctionParameterSyntax(generatedName, string.IsNullOrWhiteSpace(typeOnlyName) ? null : typeOnlyName, passingMode, firstToken.Span);
+        }
+
+        /// <summary>
+        /// Consumes a <c>[n]</c> capacity suffix on a native parameter type, so
+        /// <c>buffer[256]</c> and <c>double[3]</c> survive as one type name.
+        /// Kept separate from <see cref="ParseTypeNameSuffix"/> because a bracket
+        /// suffix means a fixed inline capacity here, not a CLR array type.
+        /// </summary>
+        private string? ParseNativeBufferSuffix(string? typeName)
+        {
+            if (string.IsNullOrWhiteSpace(typeName) || Current.Kind != SyntaxTokenKind.OpenBracket)
+            {
+                return typeName;
+            }
+
+            NextToken(); // consume '['
+
+            if (Current.Kind is not (SyntaxTokenKind.Number or SyntaxTokenKind.Bareword) ||
+                !int.TryParse(Current.Text, out var count) ||
+                count <= 0)
+            {
+                _diagnostics.Add(new SyntaxDiagnostic(
+                    Code: "tosh.parser.native_buffer_requires_length",
+                    Title: $"'{typeName}' needs a positive capacity.",
+                    Span: Current.Span,
+                    Label: "write something like 'buffer[256]'"));
+                return typeName;
+            }
+
+            NextToken(); // consume the count
+
+            if (Current.Kind == SyntaxTokenKind.CloseBracket)
+            {
+                NextToken();
+            }
+
+            return $"{typeName}[{count}]";
         }
 
         private IReadOnlyList<RequireImportSyntax> ParseRequireImportList()
@@ -3682,6 +3784,279 @@ public static class ToshParser
                 DocComment: DocComment.Parse(docTokens ?? Array.Empty<SyntaxToken>()));
         }
 
+        /// <summary>
+        /// <c>raw struct Name [pack n] [size n] { name: type[count] = default ... }</c>
+        /// </summary>
+        private StatementSyntax ParseRawStructDefinitionStatement(IReadOnlyList<SyntaxToken>? docTokens = null)
+        {
+            var declarationStart = Current.Span.Start;
+            var modifier = ParseDeclarationModifier();
+
+            NextToken(); // consume 'raw'
+
+            var isUnion = string.Equals(Current.Text, "union", StringComparison.Ordinal);
+            NextToken(); // consume 'struct' / 'union'
+
+            var nameToken = ExpectVariableName();
+
+            // Optional header clauses, order-free. Both are rare; `size` is an
+            // assertion rather than a requirement, and neither belongs in a
+            // docs example lest they read as mandatory.
+            int? pack = null;
+            int? declaredSize = null;
+
+            while (Current.Kind == SyntaxTokenKind.Bareword &&
+                   (string.Equals(Current.Text, "pack", StringComparison.Ordinal) ||
+                    string.Equals(Current.Text, "size", StringComparison.Ordinal)))
+            {
+                var clause = Current.Text;
+                NextToken();
+
+                if (!TryReadRawStructInteger(out var value))
+                {
+                    _diagnostics.Add(new SyntaxDiagnostic(
+                        Code: "tosh.parser.raw_struct_clause_requires_integer",
+                        Title: $"'{clause}' requires a byte count.",
+                        Span: Current.Span,
+                        Label: $"write an integer after '{clause}'"));
+                    break;
+                }
+
+                if (string.Equals(clause, "pack", StringComparison.Ordinal)) pack = value;
+                else declaredSize = value;
+            }
+
+            var fields = new List<RawStructFieldSyntax>();
+
+            if (Current.Kind != SyntaxTokenKind.OpenBrace)
+            {
+                _diagnostics.Add(new SyntaxDiagnostic(
+                    Code: "tosh.parser.expected_raw_struct_body",
+                    Title: $"Raw struct '{nameToken.Text}' requires a body.",
+                    Span: Current.Span,
+                    Label: $"write '{{ ... }}' after '{nameToken.Text}'"));
+
+                return new RawStructDefinitionStatementSyntax(
+                    nameToken.Text, fields, modifier, isUnion, pack, declaredSize,
+                    TextSpan.FromBounds(declarationStart, nameToken.Span.End),
+                    DocComment.Parse(docTokens ?? Array.Empty<SyntaxToken>()));
+            }
+
+            var openBraceTokenIndex = _position;
+            var openBrace = NextToken(); // consume '{'
+            using var boundaryOwner = PushBoundaryOwner(openBraceTokenIndex);
+
+            while (Current.Kind != SyntaxTokenKind.CloseBrace &&
+                   Current.Kind != SyntaxTokenKind.EndOfFile)
+            {
+                if (Current.Kind == SyntaxTokenKind.Semicolon)
+                {
+                    NextToken();
+                    continue;
+                }
+
+                var field = ParseRawStructField();
+
+                if (field is null)
+                {
+                    SkipToBlockBoundary();
+                    continue;
+                }
+
+                fields.Add(field);
+
+                if (Current.Kind == SyntaxTokenKind.Semicolon)
+                {
+                    NextToken();
+                    continue;
+                }
+
+                if (IsAtElementBoundary())
+                {
+                    continue;
+                }
+
+                if (Current.Kind is not SyntaxTokenKind.CloseBrace and not SyntaxTokenKind.EndOfFile)
+                {
+                    _diagnostics.Add(new SyntaxDiagnostic(
+                        Code: "tosh.parser.missing_raw_struct_field_separator",
+                        Title: "Raw struct fields must be separated by a newline or ';'.",
+                        Span: Current.Span,
+                        Label: "insert a newline or ';' between fields"));
+                    SkipToBlockBoundary();
+                }
+            }
+
+            var end = Current.Span.End;
+
+            if (Current.Kind == SyntaxTokenKind.CloseBrace)
+            {
+                NextToken();
+            }
+            else
+            {
+                _diagnostics.Add(new SyntaxDiagnostic(
+                    Code: "tosh.parser.missing_closing_brace",
+                    Title: "A closing '}' is required here.",
+                    Span: openBrace.Span,
+                    Label: $"raw struct '{nameToken.Text}' never closes"));
+            }
+
+            return new RawStructDefinitionStatementSyntax(
+                nameToken.Text,
+                fields,
+                modifier,
+                isUnion,
+                pack,
+                declaredSize,
+                TextSpan.FromBounds(declarationStart, end),
+                DocComment.Parse(docTokens ?? Array.Empty<SyntaxToken>()));
+        }
+
+        private bool TryReadRawStructInteger(out int value)
+        {
+            value = 0;
+            var text = Current.Text;
+
+            if (Current.Kind is not (SyntaxTokenKind.Number or SyntaxTokenKind.Bareword) ||
+                !int.TryParse(text, out value) ||
+                value <= 0)
+            {
+                return false;
+            }
+
+            NextToken();
+            return true;
+        }
+
+        /// <summary>
+        /// One field line: <c>name: type</c>, <c>name: type[count]</c>, with an
+        /// optional <c>= default</c>. Returns null when the line cannot be
+        /// parsed, so the caller stops rather than looping on a bad token.
+        /// </summary>
+        private RawStructFieldSyntax? ParseRawStructField()
+        {
+            if (Current.Kind != SyntaxTokenKind.Bareword)
+            {
+                _diagnostics.Add(new SyntaxDiagnostic(
+                    Code: "tosh.parser.expected_raw_struct_field",
+                    Title: "Expected a field name inside the raw struct body.",
+                    Span: Current.Span,
+                    Label: "write 'name: type' here"));
+                return null;
+            }
+
+            var nameToken = NextToken();
+            ParseTypedIdentifierToken(nameToken.Text, out var fieldName, out var inlineTypeName, out var expectsFollowingTypeName);
+
+            string? typeName = inlineTypeName;
+            var end = nameToken.Span.End;
+
+            if (expectsFollowingTypeName)
+            {
+                typeName = ParseTypeName("raw struct field type");
+                end = Current.Span.End;
+            }
+            else if (Current.Kind == SyntaxTokenKind.Bareword && Current.Text == ":")
+            {
+                NextToken();
+                typeName = ParseTypeName("raw struct field type");
+                end = Current.Span.End;
+            }
+            else
+            {
+                typeName = ParseTypeNameSuffix(typeName);
+            }
+
+            if (string.IsNullOrWhiteSpace(typeName))
+            {
+                _diagnostics.Add(new SyntaxDiagnostic(
+                    Code: "tosh.parser.expected_raw_struct_field_type",
+                    Title: $"Field '{fieldName}' needs a type.",
+                    Span: Current.Span,
+                    Label: "write a native type like 'long', 'ulong[3]', or 'cstring[65]'"));
+                return null;
+            }
+
+            // `ulong[3]` — the element count is part of the ABI (char[65] and
+            // char[256] are different layouts), so it is never inferred. It may
+            // arrive glued to the type name or as separate bracket tokens.
+            int? arrayLength = null;
+            var bracketIndex = typeName!.IndexOf('[');
+
+            if (bracketIndex > 0 && typeName.EndsWith(']'))
+            {
+                var countText = typeName[(bracketIndex + 1)..^1];
+
+                if (!int.TryParse(countText, out var glued) || glued <= 0)
+                {
+                    _diagnostics.Add(new SyntaxDiagnostic(
+                        Code: "tosh.parser.raw_struct_array_requires_length",
+                        Title: $"Field '{fieldName}' needs a positive array length.",
+                        Span: nameToken.Span,
+                        Label: "write something like 'ulong[3]' or 'cstring[65]'"));
+                    return null;
+                }
+
+                arrayLength = glued;
+                typeName = typeName[..bracketIndex];
+            }
+            else if (Current.Kind == SyntaxTokenKind.OpenBracket)
+            {
+                NextToken();
+
+                if (!TryReadRawStructInteger(out var count))
+                {
+                    _diagnostics.Add(new SyntaxDiagnostic(
+                        Code: "tosh.parser.raw_struct_array_requires_length",
+                        Title: $"Field '{fieldName}' needs a positive array length.",
+                        Span: Current.Span,
+                        Label: "the element count is part of the ABI and cannot be inferred"));
+                    return null;
+                }
+
+                arrayLength = count;
+                end = Current.Span.End;
+
+                if (Current.Kind == SyntaxTokenKind.CloseBracket)
+                {
+                    end = Current.Span.End;
+                    NextToken();
+                }
+            }
+
+            // Defaults apply when TōSh constructs a value, never when the
+            // marshaller produces one — an `out` parameter still arrives zeroed.
+            PipelineSyntax? defaultValue = null;
+
+            if (IsEqualsToken(Current))
+            {
+                var equalsToken = NextToken();
+                var expression = ParseOperatorExpression(Current.Span.Start, implicitCurrentItem: false);
+
+                if (expression is null)
+                {
+                    _diagnostics.Add(new SyntaxDiagnostic(
+                        Code: "tosh.parser.expected_raw_struct_field_default",
+                        Title: "Raw struct fields require a value after '='.",
+                        Span: equalsToken.Span,
+                        Label: $"write a default value for field '{fieldName}'"));
+                }
+                else
+                {
+                    defaultValue = new PipelineSyntax([new ExpressionPipelineStageSyntax(expression, expression.Span)]);
+                    end = expression.Span.End;
+                }
+            }
+
+            return new RawStructFieldSyntax(
+                fieldName,
+                typeName!,
+                arrayLength,
+                defaultValue,
+                TextSpan.FromBounds(nameToken.Span.Start, end));
+        }
+
         private StatementSyntax ParseTraitDefinitionStatement(IReadOnlyList<SyntaxToken>? docTokens = null)
         {
             var declarationStart = Current.Span.Start;
@@ -4134,6 +4509,7 @@ public static class ToshParser
             var isFading = false;
             var isLocal = false;
             var isRaw = false;
+            var isProud = false;
 
             // Membership and aliasing both come from LanguageSurface (TS-P2-10).
             // This replaced 22 `string.Equals` calls, each alias spelled out twice —
@@ -4157,9 +4533,10 @@ public static class ToshParser
                     case "local": isLocal = true; break;
                     case "raw": isRaw = true; break;
 
-                    // `proud` (and its alias `public`) is recognised and consumed but
-                    // has no effect — it is the default.
-                    case "proud": break;
+                    // `proud` (and its alias `public`) is the default for every
+                    // member kind except a native `bind` block, which defaults to
+                    // shy — so it has to be recorded rather than merely consumed.
+                    case "proud": isProud = true; break;
 
                     default:
                         // A member modifier the registry knows and this switch does
@@ -4172,10 +4549,37 @@ public static class ToshParser
                 NextToken();
             }
 
+            // `bind native "lib" { ... }` as a class member: the library path is
+            // written once and the bound functions become static members of the
+            // wrapping type. Native members default to `shy` — hidden mechanism,
+            // typed public surface — which is the reverse of `func`'s default.
+            if (LooksLikeBindStatement())
+            {
+                var bindStatement = ParseBindStatement() as BindStatementSyntax
+                                    ?? throw new InvalidOperationException("Expected a bind statement while parsing a class member.");
+
+                return new ClassBindMemberSyntax(
+                    bindStatement,
+                    IsShy: !isProud,
+                    TextSpan.FromBounds(memberStart, bindStatement.Span.End));
+            }
+
             if (Current.Kind == SyntaxTokenKind.Bareword &&
                 string.Equals(Current.Text, "prop", StringComparison.Ordinal))
             {
                 return ParseClassPropertyMember(isShy, isStatic, isFixed, isVital, isGuarded, isLazy, isFading, isLocal, isAbstract, memberStart, docTokens);
+            }
+
+            // `raw func name(...) -> ret from "lib"` — a single binding written
+            // inline, for the case that does not justify a whole bind block.
+            if (isRaw && LooksLikeRawNativeFunction())
+            {
+                var binding = ParseNativeBindingFunction();
+
+                return new ClassBindMemberSyntax(
+                    SynthesizeBindStatement(binding),
+                    IsShy: !isProud,
+                    TextSpan.FromBounds(memberStart, binding.Span.End));
             }
 
             if (Current.Kind == SyntaxTokenKind.Bareword &&
@@ -6752,7 +7156,12 @@ public static class ToshParser
                         if (LooksLikeStaticMemberAccessExpression() &&
                             (!implicitCurrentItem || ShouldPreferStaticDotNetAccessInPredicateContext(Current.Text)))
                         {
-                            return ParseStaticMemberAccessArgument();
+                            // Through ParsePostfixChain like every other primary,
+                            // so `A.b.c[0]` and `A.b.c(...)` work. Returning the
+                            // bare node meant a trailing `[0]` was left for the
+                            // command parser, which read the whole thing —
+                            // brackets included — as a command name.
+                            return ParsePostfixChain(ParseStaticMemberAccessArgument(), implicitCurrentItem);
                         }
 
                         if (implicitCurrentItem && !string.IsNullOrEmpty(Current.Text) && (char.IsLetter(Current.Text[0]) || Current.Text[0] == '_'))
@@ -10769,6 +11178,77 @@ public static class ToshParser
                     Peek(offset + 2).Kind == SyntaxTokenKind.OpenBrace);
         }
 
+        /// <summary>
+        /// A <c>raw func</c> is a <c>func</c> with no body: the signature is
+        /// followed by <c>from</c>, not by <c>{</c> or <c>=&gt;</c>. Scanning for
+        /// <c>from</c> is what separates it from an ordinary method that merely
+        /// carries the <c>raw</c> documentation marker.
+        /// </summary>
+        private bool LooksLikeRawNativeFunction()
+        {
+            if (!MatchesKeyword(Current, "func")) return false;
+
+            // A signature is short, so a bounded scan is enough and cannot run
+            // away on malformed input.
+            for (var offset = 1; offset < 64; offset++)
+            {
+                var token = Peek(offset);
+
+                if (token.Kind is SyntaxTokenKind.EndOfFile
+                    or SyntaxTokenKind.OpenBrace
+                    or SyntaxTokenKind.Semicolon)
+                {
+                    return false;
+                }
+
+                if (token.Kind != SyntaxTokenKind.Bareword) continue;
+
+                if (string.Equals(token.Text, "from", StringComparison.OrdinalIgnoreCase)) return true;
+                if (token.Text.StartsWith("=>", StringComparison.Ordinal)) return false;
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Wraps a single <c>raw func … from "lib"</c> as a one-function bind
+        /// statement, so it takes exactly the same evaluation path as a block.
+        /// </summary>
+        private static BindStatementSyntax SynthesizeBindStatement(NativeFunctionBindingSyntax binding)
+        {
+            var target = binding.NativeTarget ?? string.Empty;
+
+            return new BindStatementSyntax(
+                GetDefaultNativeBindModuleName(target),
+                target,
+                [binding],
+                binding.Span);
+        }
+
+        /// <summary>
+        /// <c>raw struct Name { ... }</c> or <c>raw union Name { ... }</c>.
+        /// Only a brace body is accepted — a raw struct has no primary
+        /// constructor, because a fourteen-field C struct in parentheses is
+        /// unreadable and defeats the one-field-per-line transcription that
+        /// makes these declarations match their man page.
+        /// </summary>
+        private bool LooksLikeRawStructDefinition()
+        {
+            var offset = GetDeclarationModifierOffset();
+
+            if (!MatchesKeywordAtOffset(offset, "raw")) return false;
+            offset++;
+
+            if (!MatchesKeywordAtOffset(offset, "struct") &&
+                !MatchesKeywordAtOffset(offset, "union"))
+            {
+                return false;
+            }
+
+            return Peek(offset + 1).Kind == SyntaxTokenKind.Bareword &&
+                   IsValidIdentifier(Peek(offset + 1).Text);
+        }
+
         private bool LooksLikeTraitDefinition()
         {
             var offset = GetDeclarationModifierOffset();
@@ -10988,6 +11468,7 @@ public static class ToshParser
                     string.Equals(Peek(1).Text, "rune", StringComparison.Ordinal) ||
                     string.Equals(Peek(1).Text, "leaky", StringComparison.Ordinal) ||
                     string.Equals(Peek(1).Text, "fixed", StringComparison.Ordinal) ||
+                    string.Equals(Peek(1).Text, "raw", StringComparison.Ordinal) ||
                     string.Equals(Peek(1).Text, "lazy", StringComparison.Ordinal));
         }
 
@@ -11306,8 +11787,16 @@ public static class ToshParser
                 // `missing_pipeline_separator` at the opening delimiter. `M.F 5`
                 // worked, which is what made it look like a limitation of blocks
                 // rather than a hole in this list.
-                case SyntaxTokenKind.OpenBrace:
+                // An *adjacent* `[` is an index, not an argument. `M.F [1, 2]`
+                // passes a list; `A.b.c[0]` subscripts the path. Spacing is what
+                // separates them, and it is the same adjacency test
+                // ParsePostfixChain already applies. Without this, the whole
+                // dotted path was taken as a command name and the subscript was
+                // left as a separate list argument.
                 case SyntaxTokenKind.OpenBracket:
+                    return next.Span.Start != Current.Span.End;
+
+                case SyntaxTokenKind.OpenBrace:
                 case SyntaxTokenKind.OpenBracePipe:
                 case SyntaxTokenKind.OpenBraceColon:
                 case SyntaxTokenKind.OpenBracePercent:

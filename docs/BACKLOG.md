@@ -589,9 +589,15 @@ rationale. Counts: 196 keep, 12 fade, 6 move, 30 consolidate, 11 rename.
 
 ### Remaining action items
 
-1. **Gate native FFI behind `tosh-interop` module** — six `native-*`
-   commands (and short aliases) load only when explicitly imported.
-   Default off. (OWASP A04.) _Open._
+1. ~~**Gate native FFI behind `tosh-interop` module**~~ — _Won't do
+   (2026-07-31)._ The OWASP A04 framing assumes an actor the threat model
+   does not have: this is a single-user shell whose author is actively
+   writing FFI, so the gate is friction with no attacker to stop. It is
+   also now aimed at the wrong layer — after the fluent-interop work the
+   capability lives in the *statements* (`raw struct`, `bind native`,
+   `raw func`), not the six commands, which are vestigial for anything
+   but dynamic sizes and raw pointer arithmetic. If gating ever becomes
+   real (a multi-user or embedded host), gate the statements.
 2. **Streaming/throughput contract** (item 6 below) — uses this audit
    as the authoritative command list. Tag each Pipeline command
    lazy/eager/short-circuiting in `help`. _Open._
@@ -1488,7 +1494,40 @@ plus metadata-only refasm. Document `permissive`-compiled assemblies as
 
 - **Tier-3 reduction** ([FIRST_CLASS_DOTNET_STATUS.md](FIRST_CLASS_DOTNET_STATUS.md) item 4). High-leverage long-term, high-cost short-term. Revisit after Waves 1–2.
 - **Rune model decision** ([FIRST_CLASS_DOTNET_STATUS.md](FIRST_CLASS_DOTNET_STATUS.md) item 13). Research-shaped; defer.
-- **Native interop expansion** beyond primitives (struct marshalling, callbacks, `Span<T>`, `[MarshalAs]`). Defer until a real user need surfaces.
+- ~~**Native interop expansion** beyond primitives~~ — mostly landed 2026-07-31
+  (`raw struct`, inline arrays and char buffers, struct-by-value both
+  directions, pointer-to-struct walking, `out`/`ref`, success contracts,
+  errno). See the two follow-ups below for what remains.
+
+- **Native callbacks / function pointers.** `func qsort(nint, nuint, nuint, callback)`
+  is rejected — passing a TōSh closure where C wants a function pointer is the
+  one interop shape still missing. Needs `Marshal.GetFunctionPointerForDelegate`
+  over a closure, plus a lifetime story so the delegate is not collected while
+  native code still holds the pointer (a rooted handle owned by the binding, or
+  an explicit scope).
+  - Blocks: sd-bus for `~/.config/tosh/lib/Bluetooth.tosh`, which currently
+    re-spawns `bluetoothctl` on *every* property read — `$h.Name`,
+    `$h.IsPaired`, `$h.Battery` is three processes. Also libarchive progress
+    callbacks and any `qsort`-shaped API.
+  - Priority: P2. _Open._
+
+- **`Span<T>` / `Memory<T>` as native parameter shapes**, and explicit
+  `[MarshalAs]` overrides for the cases the inference gets wrong.
+  Priority: P3. _Open._
+
+- **Test-suite parallel flakiness.** Single spurious failures appeared in 3 of 8
+  consecutive full-suite runs on an unchanged tree, in two unrelated areas:
+  `TtyCaptureTests.An_interpolation_hole_does_not_yet_capture` (shells out to
+  `git` inside a PTY) and
+  `GenericClassTests.Generic_class_user_interface_constraint_accepts_implementing_class`.
+  Both pass reliably in isolation.
+  - **Why it matters beyond noise:** a flaky suite makes bisection unsound. It
+    already caused one incorrect attribution during the interop work, where a
+    single green baseline was taken as proof that a change had caused a failure
+    it had not.
+  - Likely either shared process state (working directory, environment, PTY or
+    file-descriptor pressure) or an xunit collection that should be serialised.
+  - Priority: P2. _Open._
 
 ---
 

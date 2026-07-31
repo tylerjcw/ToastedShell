@@ -4,6 +4,13 @@ public static class NativeCommandUtilities
 {
     public static int ResolveAllocationSize(CommandContext context, object? argument, int argumentIndex)
     {
+        // A `raw struct` referenced by qualified name arrives as the type object
+        // itself, not a name to resolve.
+        if (argument is INativeLayoutType layout)
+        {
+            return NativeInteropUtilities.SizeOf(layout.ClrType);
+        }
+
         if (argument is Type type)
         {
             if (!NativeInteropUtilities.IsSupportedInteropType(type, allowString: false))
@@ -45,6 +52,11 @@ public static class NativeCommandUtilities
 
     public static Type ResolveInteropType(CommandContext context, object? argument, int argumentIndex, bool allowString = false)
     {
+        if (argument is INativeLayoutType layout)
+        {
+            return layout.ClrType;
+        }
+
         var typeName = argument?.ToString();
 
         if (string.IsNullOrWhiteSpace(typeName))
@@ -69,6 +81,42 @@ public static class NativeCommandUtilities
         }
 
         return resolved;
+    }
+
+    /// <summary>
+    /// Rejects a read or write that would run past the end of an owned buffer.
+    ///
+    /// <see cref="NativeBuffer"/> validates its own <c>ReadBytes</c>/<c>WriteBytes</c>,
+    /// but the buffer commands resolve straight to an <see cref="IntPtr"/> and
+    /// call <c>Marshal</c> directly, so those checks were bypassed: reading a
+    /// <c>long</c> from a 4-byte buffer returned adjacent heap, and
+    /// <c>--count 64</c> returned 64 bytes of it.
+    ///
+    /// A bare pointer carries no length, so nothing is checked there — that is
+    /// the boundary the caller explicitly opted into by handling raw pointers.
+    /// </summary>
+    public static void ValidateBufferRange(
+        CommandContext context,
+        object? source,
+        int offset,
+        int length,
+        int argumentIndex,
+        string operation)
+    {
+        if (source is not NativeBuffer buffer)
+        {
+            return;
+        }
+
+        if (offset < 0 || length < 0 || (long)offset + length > buffer.ByteLength)
+        {
+            throw context.CreateDiagnostic(
+                code: "tosh.runtime.native_buffer_range",
+                title: $"{operation} would run past the end of a {buffer.ByteLength}-byte buffer.",
+                argumentIndex: argumentIndex,
+                label: $"{length} byte(s) at offset {offset} needs a buffer of at least {(long)offset + length}",
+                help: "Allocate a larger buffer, or drop to a raw pointer if the length is genuinely unknown.");
+        }
     }
 
     public static IntPtr ResolvePointer(CommandContext context, object? argument, int argumentIndex)

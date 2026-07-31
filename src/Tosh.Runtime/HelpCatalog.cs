@@ -494,8 +494,27 @@ public static class HelpCatalog
                     "bind native libc.so.6 as LibC { func strlen(string) -> nuint }",
                     "bind native libc.so.6 as LibC { func getenv(string) -> cstring }",
                     "bind User32 { func MessageBoxW(nint, string, string, uint) -> int callconv stdcall }",
+                    "hermit class Sys { shy bind native \"libc.so.6\" { func uname(out buf: UtsName) -> ok } }",
+                    "bind native libc.so.6 as LibC { func gethostname(out name: buffer[256]) -> ok }",
+                    "bind native libc.so.6 as LibC { func sysconf(name: int) -> long where (_ != -1) }",
                 ],
-                Notes: "Bind works with modules created by `require native`, or it can load a native library inline with `bind native ... as Name { ... }`. Bound functions become callable as module members like `LibC.abs(-5)`. Use `cstring` for borrowed NUL-terminated C-string returns, and `nint` / `nuint` (or `ptr` / `uptr`) for raw pointer-sized values. Plain `string` is supported for native parameters, but native return strings require explicit ownership semantics, so ToSh asks you to use `cstring` instead. `out` and `ref` parameters return updated values after the call: if there is one by-ref parameter and no normal return value, ToSh yields that value directly; otherwise it yields a record with `ReturnValue` plus one field per by-ref parameter. Passing a native buffer lets the call write back into unmanaged memory directly. Calling conventions default to `cdecl` and can be overridden with `callconv stdcall`, `callconv thiscall`, `callconv fastcall`, or `callconv winapi`."),
+                Notes: "Bind works with modules created by `require native`, or it can load a native library inline with `bind native ... as Name { ... }`. A bind block may also be written inside a module or class body; in a class its functions become static members (`Sys.uname()`), and they default to `shy` so the raw ABI surface stays hidden behind typed members — write `proud bind` to expose them. `out` parameters are engine-allocated and do not appear at the call site; `ref` parameters do, and a native buffer passed to one is written back. Return conventions: `-> ok` treats 0 as success, `-> count` treats >= 0 as success and yields the value, `-> auto` projects the out parameters of a call that cannot fail, and `where (…)` takes a custom predicate over `_`. Any of them throws a `NativeError` carrying errno on failure, and on success the single out parameter becomes the result. `buffer[n]` collapses C's (pointer, length) output-string pair into one parameter and yields a decoded string; with `-> count` the returned count supplies the true length, which is what makes `readlink` safe. Use `cstring` for borrowed NUL-terminated C-string returns and `nint` / `nuint` (or `ptr` / `uptr`) for pointer-sized values; plain `string` works for parameters but not returns, which need explicit ownership. Calling conventions default to `cdecl` and can be overridden with `callconv stdcall`, `thiscall`, `fastcall`, or `winapi`."),
+            ["raw"] = new(
+                Category: "Interop",
+                Description: "Declares something that crosses the native ABI: a C memory layout, or a single P/Invoke binding.",
+                Usage: "raw struct <Name> [pack <n>] [size <n>] { <field>: <type>[[n]] [= <default>] ... } | raw union <Name> { ... } | raw func <Name>(<params>) -> <type> from <library> [as <symbol>] [callconv <name>] [where (<predicate>)]",
+                Aliases: Array.Empty<string>(),
+                Related: ["bind", "size-of", "offset-of", "alloc"],
+                Examples:
+                [
+                    "raw struct Timeval { tv_sec: long; tv_usec: long }",
+                    "raw struct UtsName { sysname: cstring[65]; nodename: cstring[65] }",
+                    "raw struct Loads { avg: ulong[3] }",
+                    "raw struct PollFd { fd: int = -1; events: short = 1; revents: short }",
+                    "raw union Word { whole: uint; low: ushort }",
+                    "raw func sysconf(name: int) -> count from \"libc.so.6\"",
+                ],
+                Notes: "A `raw struct` is a byte layout, deliberately separate from a tosh `struct` (which is a dictionary-backed object model). It emits a real sequential-layout CLR type, so `size-of`, `offset-of`, `alloc`, `read-buffer`, and native signatures all accept it by name. Padding is never declared — sequential layout aligns each field naturally, exactly as a C compiler does, so transcribe the header and omit its `pad` / `__pad0` members. Array counts are part of the ABI and cannot be inferred: `cstring[65]` is an inline `char[65]` buffer, `ulong[3]` an inline array. `bool` is rejected in favour of `byte`, because default marshalling maps it to a 4-byte Win32 BOOL rather than a C `_Bool`. `pack n` sets packing and `size n` asserts the computed size, turning a mis-transcribed struct into a declaration-time error instead of silent corruption; both are optional and rarely needed. Field defaults apply when tosh constructs a value (`new PollFd()`) and to `ref` parameters, but never to an `out` parameter, which arrives zero-filled because the callee is expected to write it. `raw func` is the single-binding form of `bind`; inside a bind block `raw` is implied."),
             ["alloc"] = new(
                 Category: "Interop",
                 Description: "Allocates an unmanaged native buffer by byte count or interop type size.",
@@ -508,7 +527,7 @@ public static class HelpCatalog
                     "alloc fileTimeBuffer = System.Runtime.InteropServices.ComTypes.FILETIME",
                     "var scratch = (alloc 256)",
                 ],
-                Notes: "Use the statement form when you want a named buffer immediately. Use `forget $buffer` or `forget buffer` to release it when you are done. The older `native-alloc` helper name still works."),
+                Notes: "`native-alloc` is the canonical name; `alloc` is a blessed alias and also a statement form for a named buffer. Release with `forget $buffer`, which unsets the variable and frees the buffer in one step."),
             ["native-free"] = new(
                 Category: "Interop",
                 Description: "Frees unmanaged buffers created by native-alloc.",
@@ -520,25 +539,25 @@ public static class HelpCatalog
                     "native-free $buffer",
                     "$buffers | native-free",
                 ],
-                Notes: "This compatibility helper still works, but `forget` is now the preferred way to release named native buffers. It does not attempt to free arbitrary raw pointers returned by external libraries."),
+                Notes: "Deliberately has no short alias — `free` is the System memory command. Prefer `forget $buffer`, which unsets the variable and frees the buffer together. Does not free arbitrary raw pointers returned by external libraries."),
             ["read-buffer"] = new(
                 Category: "Interop",
                 Description: "Reads a C string, byte range, or native scalar/struct-layout value from native memory.",
-                Usage: "read-buffer <cstring|bytes|type-name> [buffer|pointer] [length] [offset]",
+                Usage: "read-buffer <cstring|bytes|type-name> [buffer|pointer] [--at <offset>] [--count <bytes>]",
                 Aliases: ["native-read"],
                 Related: ["alloc", "write-buffer", "size-of", "offset-of"],
                 Examples:
                 [
                     "read-buffer cstring $buffer",
-                    "read-buffer bytes $buffer 16",
-                    "read-buffer long $buffer",
+                    "read-buffer bytes $buffer --count 16",
+                    "read-buffer long $buffer --at 8",
                     "read-buffer System.Runtime.InteropServices.ComTypes.FILETIME $buffer",
                 ],
-                Notes: "Use `cstring` for NUL-terminated borrowed C strings, `bytes` when you want a raw byte array, a primitive/enum/pointer-sized type when you want a single native scalar, or a struct with sequential/explicit layout when you want a marshalled value. This is also the easiest way to inspect the results of `out` and `ref` native calls that write into an allocated buffer. The older `native-read` name still works."),
+                Notes: "Use `cstring` for NUL-terminated borrowed C strings, `bytes` when you want a raw byte array, a primitive/enum/pointer-sized type when you want a single native scalar, or a struct with sequential/explicit layout when you want a marshalled value. This is also the easiest way to inspect the results of `out` and `ref` native calls that write into an allocated buffer. `native-read` is the canonical name; `read-buffer` is a blessed alias."),
             ["write-buffer"] = new(
                 Category: "Interop",
                 Description: "Writes a C string, byte sequence, or struct-layout value into native memory.",
-                Usage: "write-buffer <buffer|pointer> <value> [offset]",
+                Usage: "write-buffer <buffer|pointer> <value> [--at <offset>]",
                 Aliases: ["native-write"],
                 Related: ["alloc", "read-buffer", "offset-of"],
                 Examples:
@@ -547,7 +566,7 @@ public static class HelpCatalog
                     "write-buffer $buffer [1, 2, 3, 4]",
                     "write-buffer $buffer (new System.Runtime.InteropServices.ComTypes.FILETIME())",
                 ],
-                Notes: "Strings are written as NUL-terminated C strings. Struct values should have sequential or explicit layout. This pairs naturally with `bind` when a native export expects an `out` or `ref` buffer-backed struct. The older `native-write` name still works."),
+                Notes: "Strings are written as NUL-terminated C strings. Struct values should have sequential or explicit layout. This pairs naturally with `bind` when a native export expects an `out` or `ref` buffer-backed struct. `native-write` is the canonical name; `write-buffer` is a blessed alias."),
             ["size-of"] = new(
                 Category: "Interop",
                 Description: "Returns the unmanaged size of a supported native interop type.",
@@ -559,7 +578,7 @@ public static class HelpCatalog
                     "size-of int",
                     "size-of System.Runtime.InteropServices.ComTypes.FILETIME",
                 ],
-                Notes: "This uses the same native layout rules as bind and the buffer helpers. The older `native-sizeof` name still works."),
+                Notes: "This uses the same native layout rules as bind and the buffer helpers. `native-sizeof` is the canonical name; `size-of` is a blessed alias."),
             ["offset-of"] = new(
                 Category: "Interop",
                 Description: "Returns the unmanaged field offset for a sequential or explicit-layout struct.",
@@ -571,7 +590,7 @@ public static class HelpCatalog
                     "offset-of System.Runtime.InteropServices.ComTypes.FILETIME dwLowDateTime",
                     "offset-of System.Runtime.InteropServices.ComTypes.FILETIME.dwHighDateTime",
                 ],
-                Notes: "Use this when you need to reason about native layout directly, especially for pointer arithmetic or validating a struct definition. The older `native-offsetof` name still works."),
+                Notes: "Use this when you need to reason about native layout directly, especially for pointer arithmetic or validating a struct definition. `native-offsetof` is the canonical name; `offset-of` is a blessed alias."),
             ["redirection"] = new(
                 Category: "Shell",
                 Description: "Redirects pipeline output and native process streams explicitly, without overloading '<' or '>' comparisons.",

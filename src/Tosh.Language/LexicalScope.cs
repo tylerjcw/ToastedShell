@@ -25,6 +25,7 @@ public sealed class LexicalScope
         RefinementTypes = new Dictionary<string, RefinementTypeDefinition>(StringComparer.OrdinalIgnoreCase);
         TypeImports = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         TypeAliases = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        NativeTypes = new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase);
         IsModuleScope = isModuleScope;
         ExportDeclarationsByDefault = exportDeclarationsByDefault;
         Exports = isModuleScope ? (exports ?? new ModuleExportTable()) : null;
@@ -43,6 +44,19 @@ public sealed class LexicalScope
     public HashSet<string> TypeImports { get; }
 
     public Dictionary<string, string> TypeAliases { get; }
+
+    /// <summary>
+    /// CLR types emitted for <c>raw struct</c> declarations, keyed by their
+    /// declared TōSh name.
+    ///
+    /// <see cref="TypeAliases"/> cannot hold these: it maps a name to a
+    /// <em>path string</em> that the base resolver looks up, and a
+    /// Reflection.Emit type has no discoverable path. <see cref="Classes"/>
+    /// cannot either — it holds <c>IShellNamedType</c>, and its consumers cast.
+    /// So emitted native types need their own registry, consulted first by
+    /// <see cref="ScopedTypeResolver"/>.
+    /// </summary>
+    public Dictionary<string, Type> NativeTypes { get; }
 
     public HashSet<string> LocalEventNames { get; } = new(StringComparer.OrdinalIgnoreCase);
 
@@ -73,6 +87,7 @@ public sealed class LexicalScope
         foreach (var (key, value) in RefinementTypes) clone.RefinementTypes[key] = value;
         foreach (var name in TypeImports) clone.TypeImports.Add(name);
         foreach (var (key, value) in TypeAliases) clone.TypeAliases[key] = value;
+        foreach (var (key, value) in NativeTypes) clone.NativeTypes[key] = value;
         foreach (var name in LocalEventNames) clone.LocalEventNames.Add(name);
         foreach (var code in HushedCodes) clone.HushedCodes.Add(code);
         return clone;

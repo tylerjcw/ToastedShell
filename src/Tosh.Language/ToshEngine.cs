@@ -226,12 +226,19 @@ public sealed partial class ToshEngine : IShellEvaluator
 
     internal ITypeResolver CreateScopedTypeResolver()
     {
+        // Runtime.NativeTypes holds globally-declared `raw struct` types. It sits
+        // under the lexical scopes but above the CLR resolver, so a global raw
+        // struct is nameable even with no scope on the stack.
+        var baseResolver = Runtime.NativeTypes.Count == 0 && Runtime.Modules.Count == 0
+            ? Runtime.TypeResolver
+            : new NativeTypeRegistryResolver(Runtime.TypeResolver, Runtime.NativeTypes, Runtime.Modules);
+
         if (_scopes.Count == 0)
         {
-            return Runtime.TypeResolver;
+            return baseResolver;
         }
 
-        return new ScopedTypeResolver(Runtime.TypeResolver, _scopes.ToArray());
+        return new ScopedTypeResolver(baseResolver, _scopes.ToArray());
     }
 
     public ParseResult Parse(string source, string sourceName = "<input>")
@@ -896,6 +903,8 @@ public sealed partial class ToshEngine : IShellEvaluator
             EnumDefinitionStatementSyntax @enum => EvaluateEnumDefinitionAsync(sourceName, sourceText, @enum, cancellationToken),
             RecordDefinitionStatementSyntax record => EvaluateRecordDefinitionAsync(sourceName, sourceText, record, cancellationToken),
             StructDefinitionStatementSyntax @struct => EvaluateStructDefinitionAsync(sourceName, sourceText, @struct, cancellationToken),
+            RawStructDefinitionStatementSyntax rawStruct => EvaluateRawStructDefinitionAsync(sourceName, sourceText, rawStruct, cancellationToken),
+            RawFunctionStatementSyntax rawFunction => EvaluateRawFunctionStatementAsync(sourceName, sourceText, rawFunction, cancellationToken),
             TraitDefinitionStatementSyntax trait => EvaluateTraitDefinitionAsync(sourceName, sourceText, trait, cancellationToken),
             EventDefinitionStatementSyntax @event => EvaluateEventDefinitionAsync(sourceName, sourceText, @event, cancellationToken),
             IfStatementSyntax @if => EvaluateIfStatementAsync(sourceName, sourceText, @if, cancellationToken),
@@ -2424,28 +2433,208 @@ public sealed partial class ToshEngine : IShellEvaluator
         foreach (var function in statement.Functions)
         {
             cancellationToken.ThrowIfCancellationRequested();
-
-            var parameters = function.Parameters
-                .Select(parameter => new NativeFunctionParameterDefinition(
-                    parameter.Name,
-                    parameter.TypeName ?? string.Empty,
-                    ResolveNativeInteropParameterType(parameter.TypeName, parameter.PassingMode, sourceName, sourceText, parameter.Span, $"parameter '{parameter.Name}'"),
-                    parameter.PassingMode))
-                .ToArray();
-            var returnType = ResolveNativeInteropReturnType(function.ReturnTypeName, sourceName, sourceText, function.Span);
-            var callingConvention = ResolveNativeCallingConvention(function.CallingConventionName, sourceName, sourceText, function.Span);
-            var command = new NativeFunctionCommand(
-                statement.ModuleName,
-                function.Name,
-                function.SymbolName,
-                module.NativeLibraryBinding,
-                parameters,
-                returnType,
-                callingConvention);
-            module.SetCommand(command);
+            module.SetCommand(BuildNativeFunctionCommand(
+                sourceName, sourceText, statement.ModuleName, module.NativeLibraryBinding, function));
         }
 
         yield break;
+    }
+
+    /// <summary>
+    /// Declares a top-level <c>raw func … from "lib"</c> as a command in the
+    /// enclosing scope, so it is callable by the name it was given rather than
+    /// through a module the caller never asked for.
+    /// </summary>
+    private async IAsyncEnumerable<object?> EvaluateRawFunctionStatementAsync(
+        string sourceName,
+        string sourceText,
+        RawFunctionStatementSyntax statement,
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var target = statement.Binding.NativeTarget;
+
+        if (string.IsNullOrWhiteSpace(target))
+        {
+            throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                Code: "tosh.runtime.raw_func_requires_library",
+                Title: $"Raw function '{statement.Binding.Name}' needs a library.",
+                SourceName: sourceName,
+                SourceText: sourceText,
+                Span: statement.Span,
+                Label: "write 'from \"libc.so.6\"' after the signature"));
+        }
+
+        // The backing module only exists to own the loaded handle; the command
+        // itself is what gets declared.
+        var moduleName = $"__raw_{statement.Binding.Name}";
+        EnsureNativeModuleAvailable(sourceName, target!, moduleName, DeclarationModifier.Default);
+
+        if (!TryGetModule(moduleName, out var module) || module.NativeLibraryBinding is null)
+        {
+            throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                Code: "tosh.runtime.bind_target_not_native_module",
+                Title: $"'{target}' could not be loaded as a native library.",
+                SourceName: sourceName,
+                SourceText: sourceText,
+                Span: statement.Span,
+                Label: $"while binding '{statement.Binding.Name}'"));
+        }
+
+        DeclareCommand(
+            BuildNativeFunctionCommand(
+                sourceName, sourceText, statement.Binding.Name, module.NativeLibraryBinding, statement.Binding),
+            statement.Modifier);
+
+        await ValueTask.CompletedTask;
+        yield break;
+    }
+
+    /// <summary>
+    /// Declares the <c>bind native</c> blocks written inside a class body,
+    /// attaching each bound function as a static member of the class.
+    ///
+    /// The library is loaded under a module name derived from the class so two
+    /// classes binding the same library do not collide, but the module itself is
+    /// incidental — what the user sees is <c>SystemInfo.sysinfo()</c>.
+    /// </summary>
+    private async ValueTask BindNativeClassMembersAsync(
+        string sourceName,
+        string sourceText,
+        ClassDefinitionStatementSyntax @class,
+        ToshClassDefinition definition,
+        CancellationToken cancellationToken)
+    {
+        foreach (var member in @class.Members.OfType<ClassBindMemberSyntax>())
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var statement = member.Bind;
+
+            // Default, not Shy: the backing module is an implementation detail of
+            // loading the library, and a class body is not a scope a shy module
+            // could live in. Hiding is expressed on the members instead.
+            if (statement.NativeTarget is not null)
+            {
+                EnsureNativeModuleAvailable(sourceName, statement.NativeTarget, statement.ModuleName, DeclarationModifier.Default);
+            }
+
+            if (!TryGetModule(statement.ModuleName, out var module) || module.NativeLibraryBinding is null)
+            {
+                throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                    Code: "tosh.runtime.bind_target_not_native_module",
+                    Title: $"'{statement.ModuleName}' is not a native library module.",
+                    SourceName: sourceName,
+                    SourceText: sourceText,
+                    Span: statement.Span,
+                    Label: $"write 'bind native \"<library>\" {{ ... }}' inside class '{@class.Name}'"));
+            }
+
+            foreach (var function in statement.Functions)
+            {
+                definition.SetNativeMember(
+                    BuildNativeFunctionCommand(
+                        sourceName, sourceText, @class.Name, module.NativeLibraryBinding, function),
+                    member.IsShy);
+            }
+        }
+
+        await ValueTask.CompletedTask;
+    }
+
+    /// <summary>
+    /// Resolves one native function signature into an invocable command. Shared
+    /// by the module and class paths so a binding behaves identically wherever
+    /// it is written.
+    /// </summary>
+    private NativeFunctionCommand BuildNativeFunctionCommand(
+        string sourceName,
+        string sourceText,
+        string ownerName,
+        NativeLibraryBinding binding,
+        NativeFunctionBindingSyntax function)
+    {
+        {
+            var parameters = new List<NativeFunctionParameterDefinition>(function.Parameters.Count);
+
+            foreach (var parameter in function.Parameters)
+            {
+                // Out-array parameters: `buffer[n]` for C's output-string idiom,
+                // or a typed `T[n]` such as getloadavg's `double[3]`.
+                if (TryParseOutArrayParameter(parameter.TypeName, out var elementName, out var arrayLength))
+                {
+                    if (parameter.PassingMode != NativeParameterPassingMode.Out)
+                    {
+                        throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                            Code: "tosh.runtime.native_buffer_requires_out",
+                            Title: $"Parameter '{parameter.Name}' must be declared 'out' to use a buffer.",
+                            SourceName: sourceName,
+                            SourceText: sourceText,
+                            Span: parameter.Span,
+                            Label: $"write 'out {parameter.Name}: {parameter.TypeName}'",
+                            Help: "A buffer is memory the callee writes into; it carries no value in."));
+                    }
+
+                    var isCString = elementName is null;
+
+                    var elementType = isCString
+                        ? typeof(byte)
+                        : ResolveNativeInteropParameterType(
+                            elementName, NativeParameterPassingMode.In, sourceName, sourceText, parameter.Span,
+                            $"parameter '{parameter.Name}'");
+
+                    parameters.Add(new NativeFunctionParameterDefinition(
+                        parameter.Name,
+                        parameter.TypeName ?? string.Empty,
+                        elementType.MakeArrayType(),
+                        NativeParameterPassingMode.Out,
+                        InlineBufferLength: arrayLength,
+                        DecodeAsCString: isCString));
+
+                    // Only `buffer[n]` carries the implicit length argument; a
+                    // typed T[n] leaves its count to whatever the signature says.
+                    if (isCString)
+                    {
+                        parameters.Add(new NativeFunctionParameterDefinition(
+                            parameter.Name + "__length",
+                            "nuint",
+                            typeof(UIntPtr),
+                            NativeParameterPassingMode.In,
+                            IsSynthesizedLength: true));
+                    }
+
+                    continue;
+                }
+
+                parameters.Add(new NativeFunctionParameterDefinition(
+                    parameter.Name,
+                    parameter.TypeName ?? string.Empty,
+                    ResolveNativeInteropParameterType(parameter.TypeName, parameter.PassingMode, sourceName, sourceText, parameter.Span, $"parameter '{parameter.Name}'"),
+                    parameter.PassingMode));
+            }
+            var returnType = ResolveNativeInteropReturnType(function.ReturnTypeName, sourceName, sourceText, function.Span);
+            var callingConvention = ResolveNativeCallingConvention(function.CallingConventionName, sourceName, sourceText, function.Span);
+
+            // An explicit `where (…)` overrides any named convention on the
+            // return type — you cannot mean both at once.
+            var successPredicate = CreateNativeSuccessPredicate(sourceName, sourceText, function);
+
+            if (successPredicate is not null)
+            {
+                returnType = returnType with { Convention = NativeErrorConvention.Predicate };
+            }
+
+            return new NativeFunctionCommand(
+                ownerName,
+                function.Name,
+                function.SymbolName,
+                binding,
+                parameters,
+                returnType,
+                callingConvention,
+                successPredicate);
+        }
     }
 
     private void EnsureNativeModuleAvailable(
@@ -3445,6 +3634,7 @@ public sealed partial class ToshEngine : IShellEvaluator
             }
 
             existingDef.MergePartial(runtimeProperties, runtimeMethods, runtimeConstructors);
+            await BindNativeClassMembersAsync(sourceName, sourceText, @class, existingDef, cancellationToken);
 
             // Declared again rather than returning early, so a file contributing
             // a partial exports the name it contributed to. Same object, so the
@@ -3452,6 +3642,8 @@ public sealed partial class ToshEngine : IShellEvaluator
             DeclareType(@class.Name, existingDef, @class.Modifier, sourceName, sourceText, @class.Span);
             yield break;
         }
+
+        await BindNativeClassMembersAsync(sourceName, sourceText, @class, definition, cancellationToken);
 
         DeclareType(@class.Name, definition, @class.Modifier, sourceName, sourceText, @class.Span);
 
@@ -4195,6 +4387,61 @@ public sealed partial class ToshEngine : IShellEvaluator
         definition.IsPartial = record.IsPartial;
 
         DeclareType(record.Name, definition, record.Modifier, sourceName, sourceText, record.Span);
+        yield break;
+    }
+
+    /// <summary>
+    /// Declares a <c>raw struct</c>: builds the shared layout plan, emits a real
+    /// sequential-layout CLR type, and registers both the emitted type (for the
+    /// interop type resolver) and an <see cref="IShellNamedType"/> façade (for
+    /// `new`, `describe-type`, and `members`) from the one declaration.
+    /// </summary>
+    private async IAsyncEnumerable<object?> EvaluateRawStructDefinitionAsync(
+        string sourceName,
+        string sourceText,
+        RawStructDefinitionStatementSyntax rawStruct,
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        EnsureBindingNameIsNotReserved(sourceName, sourceText, rawStruct.Name, rawStruct.Span, "reserved runtime namespace");
+
+        if (rawStruct.Fields.Count == 0)
+        {
+            throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                Code: "tosh.runtime.raw_struct_requires_fields",
+                Title: $"Raw struct '{rawStruct.Name}' has no fields.",
+                SourceName: sourceName,
+                SourceText: sourceText,
+                Span: rawStruct.Span,
+                Label: "a native layout needs at least one field"));
+        }
+
+        var typeResolver = CreateScopedTypeResolver();
+        var plan = Bridge.RawStructPlanBuilder.Build(
+            rawStruct,
+            name => typeResolver.Resolve(name),
+            sourceName,
+            sourceText);
+
+        var clrType = Bridge.NativeStructTypeFactory.GetOrCreate(plan);
+
+        // Field defaults are evaluated now, in declaration scope, and applied
+        // when TōSh constructs a value — never by the marshaller.
+        var defaults = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var field in rawStruct.Fields)
+        {
+            if (field.DefaultValue is null) continue;
+
+            defaults[field.Name] = await EvaluatePipelineAsync(
+                sourceName,
+                sourceText,
+                field.DefaultValue,
+                cancellationToken).FirstOrDefaultAsync(cancellationToken);
+        }
+
+        var definition = new ToshRawStructDefinition(plan, clrType, defaults);
+
+        DeclareType(rawStruct.Name, definition, rawStruct.Modifier, sourceName, sourceText, rawStruct.Span, clrType);
         yield break;
     }
 
@@ -7697,6 +7944,15 @@ public sealed partial class ToshEngine : IShellEvaluator
                     throw new InvalidOperationException($"Unsupported argument syntax: {argument.GetType().Name}.");
             }
         }
+        // A native binding is invoked through a module or class member, neither
+        // of which carries a CommandSpan, so the failure arrives spanless and the
+        // renderer would underline the start of the script. This is the first
+        // frame that knows where the call was written.
+        catch (NativeError native) when (native.Span.Length == 0 && native.Span.Start == 0)
+        {
+            native.Span = argument.Span;
+            throw;
+        }
         catch (Exception exception) when (exception is not ToshDiagnosticException && exception is not OperationCanceledException && exception is not Tosh.Runtime.ShellControlFlowException && !IsToshThrown(exception))
         {
             throw CreateExpressionDiagnostic(sourceName, sourceText, argument, exception);
@@ -8129,6 +8385,11 @@ public sealed partial class ToshEngine : IShellEvaluator
         TextSpan span,
         Exception exception)
     {
+        if (TryCreateNativeErrorDiagnostic(sourceName, sourceText, span, exception) is { } nativeDiagnostic)
+        {
+            return nativeDiagnostic;
+        }
+
         return ToshDiagnosticException.Create(new ToshDiagnostic(
             Code: exception is InvalidOperationException
                 ? "tosh.runtime.expression_failed"
@@ -8138,6 +8399,39 @@ public sealed partial class ToshEngine : IShellEvaluator
             SourceText: sourceText,
             Span: span,
             Label: "while evaluating this expression"));
+    }
+
+    /// <summary>
+    /// A failed native call already carries a full diagnostic contract — the
+    /// symbol that failed, the value it returned, and errno with its symbolic
+    /// name. Flattening it to <c>unexpected_exception</c> would discard exactly
+    /// the parts worth reading.
+    /// </summary>
+    private static ToshDiagnosticException? TryCreateNativeErrorDiagnostic(
+        string sourceName,
+        string sourceText,
+        TextSpan span,
+        Exception exception)
+    {
+        return exception is NativeError nativeError
+            ? BuildNativeErrorDiagnostic(sourceName, sourceText, span, nativeError)
+            : null;
+    }
+
+    private static ToshDiagnosticException BuildNativeErrorDiagnostic(
+        string sourceName,
+        string sourceText,
+        TextSpan span,
+        NativeError nativeError)
+    {
+        return ToshDiagnosticException.Create(new ToshDiagnostic(
+            Code: $"tosh.native.{nativeError.Code}",
+            Title: nativeError.DiagnosticTitle,
+            SourceName: sourceName,
+            SourceText: sourceText,
+            Span: span,
+            Label: nativeError.Label,
+            Help: nativeError.Help));
     }
 
     private object? ResolveQualifiedAccessOrFallback(string path)
@@ -8429,6 +8723,33 @@ public sealed partial class ToshEngine : IShellEvaluator
             TryGetNamedType(segments[0], out var shellType))
         {
             value = Runtime.Invoker.GetStaticMember(shellType, segments[1]);
+            return true;
+        }
+
+        // Deeper chains through a declared type: `T.prop.field` used to fall
+        // through to the bareword fallback and evaluate to the literal string
+        // "T.prop.field", silently. The module branch above has always walked
+        // arbitrary depth; this brings declared types in line.
+        //
+        // Failure falls through rather than propagating, because a longer path
+        // may still resolve against a CLR type prefix further down — which is
+        // how it behaved before this branch existed.
+        // Membership is *tested*, not attempted-and-caught. Catching would
+        // swallow a real failure inside a property getter — a thrown value, a
+        // NativeError, a cancellation — and report "not found" instead of the
+        // cause. Once the head resolves, the rest of the walk propagates:
+        // there is no plausible CLR type named `T.prop`, so falling through
+        // would only replace a precise error with a vaguer one.
+        if (segments.Length > 2 &&
+            TryGetNamedType(segments[0], out var chainRoot) &&
+            chainRoot.TryGetStaticMember(segments[1], out var current))
+        {
+            for (var index = 2; index < segments.Length; index++)
+            {
+                current = Runtime.ObjectAccessor.GetValue(current, segments[index]);
+            }
+
+            value = current;
             return true;
         }
 
@@ -9665,13 +9986,24 @@ public sealed partial class ToshEngine : IShellEvaluator
         return false;
     }
 
+    /// <param name="nativeClrType">
+    /// Set only for <c>raw struct</c> declarations: the emitted sequential-layout
+    /// CLR type. It is registered into the same scope the definition lands in,
+    /// so the type resolver can find it by name in a native signature.
+    ///
+    /// Threading it through here rather than into a separate declare path is
+    /// deliberate — one declaration must never register the façade without also
+    /// registering the type, or `size-of SysInfo` and `new SysInfo()` would
+    /// disagree about whether the name exists.
+    /// </param>
     private void DeclareType(
         string name,
         IShellNamedType definition,
         DeclarationModifier modifier,
         string? sourceName = null,
         string? sourceText = null,
-        TextSpan? span = null)
+        TextSpan? span = null,
+        Type? nativeClrType = null)
     {
         EnsureReservedBindingName(name);
         EnsureTypeNameDoesNotConflictWithRefinementAlias(name, sourceName, sourceText, span, "type");
@@ -9682,6 +10014,11 @@ public sealed partial class ToshEngine : IShellEvaluator
         {
             moduleScope.Classes[name] = definition;
             moduleScope.Exports!.Types[name] = definition;
+            if (nativeClrType is not null)
+            {
+                moduleScope.NativeTypes[name] = nativeClrType;
+                moduleScope.Exports!.NativeTypes[name] = nativeClrType;
+            }
             return;
         }
 
@@ -9689,6 +10026,11 @@ public sealed partial class ToshEngine : IShellEvaluator
         {
             exportScope.Classes[name] = definition;
             exportScope.Exports!.Types[name] = definition;
+            if (nativeClrType is not null)
+            {
+                exportScope.NativeTypes[name] = nativeClrType;
+                exportScope.Exports!.NativeTypes[name] = nativeClrType;
+            }
             return;
         }
 
@@ -9700,22 +10042,26 @@ public sealed partial class ToshEngine : IShellEvaluator
             }
 
             _scopes.Peek().Classes[name] = definition;
+            if (nativeClrType is not null) _scopes.Peek().NativeTypes[name] = nativeClrType;
             return;
         }
 
         if (modifier is DeclarationModifier.Global or DeclarationModifier.Export)
         {
             Runtime.Classes[name] = definition;
+            if (nativeClrType is not null) Runtime.NativeTypes[name] = nativeClrType;
             return;
         }
 
         if (_scopes.Count > 0)
         {
             _scopes.Peek().Classes[name] = definition;
+            if (nativeClrType is not null) _scopes.Peek().NativeTypes[name] = nativeClrType;
             return;
         }
 
         Runtime.Classes[name] = definition;
+        if (nativeClrType is not null) Runtime.NativeTypes[name] = nativeClrType;
     }
 
     private void DeclareRefinementType(
@@ -14146,6 +14492,11 @@ public sealed partial class ToshEngine : IShellEvaluator
         //      command's argument source texts verbatim.
         var span = NarrowToArgumentSpan(sourceText, commandSyntax, exception) ?? commandSyntax.Span;
 
+        if (TryCreateNativeErrorDiagnostic(sourceName, sourceText, span, exception) is { } nativeDiagnostic)
+        {
+            return nativeDiagnostic;
+        }
+
         return ToshDiagnosticException.Create(new ToshDiagnostic(
             Code: exception is InvalidOperationException or CommandArgumentException
                 ? "tosh.runtime.command_failed"
@@ -14456,6 +14807,112 @@ public sealed partial class ToshEngine : IShellEvaluator
         return sanitized.Length == 0 ? "Native" : sanitized.ToString();
     }
 
+    /// <summary>
+    /// Runs a native binding declared inside a class body. Mirrors
+    /// <c>ToshModuleObject.InvokeInstanceMethod</c>, which does the same for a
+    /// module's bound commands — the difference is only where the command was
+    /// registered, not how it runs.
+    /// </summary>
+    internal async ValueTask<IReadOnlyList<object?>> InvokeNativeMemberAsync(
+        IShellCommand command,
+        IReadOnlyList<object?> arguments,
+        CancellationToken cancellationToken)
+    {
+        var context = new CommandContext(
+            Runtime,
+            AsyncEnumerableExtensions.Empty<object?>(),
+            arguments,
+            cancellationToken,
+            ScopedTypeResolver: CreateScopedTypeResolver());
+
+        return await AsyncEnumerableExtensions.ToListAsync(command.ExecuteAsync(context), cancellationToken);
+    }
+
+    /// <summary>
+    /// Builds the <c>where (…)</c> success contract as a closure over the
+    /// declaring scopes, so the predicate can reference anything visible where
+    /// the binding was written.
+    ///
+    /// Reuses the refinement evaluator rather than introducing a second one:
+    /// `_` is bound to the native return value exactly as it is bound to a value
+    /// under test in <c>type Port = int where (…)</c>.
+    /// </summary>
+    private Func<object?, CancellationToken, ValueTask<bool>>? CreateNativeSuccessPredicate(
+        string sourceName,
+        string sourceText,
+        NativeFunctionBindingSyntax function)
+    {
+        if (function.SuccessPredicate is null)
+        {
+            return null;
+        }
+
+        var annotation = CreateRefinementAnnotation(sourceName, sourceText, function.SuccessPredicate);
+
+        // The clause parser wraps its predicates, so take them from the
+        // annotation rather than evaluating the wrapper itself. `coerce` has no
+        // meaning for a pass/fail contract, so only `where` clauses apply.
+        var predicates = annotation?.Clauses
+            .OfType<RefinementWhereClause>()
+            .Select(static clause => clause.Predicate)
+            .ToArray();
+
+        if (annotation is null || predicates is null || predicates.Length == 0)
+        {
+            return null;
+        }
+
+        var span = function.Span;
+        var title = $"The success predicate for '{function.Name}'";
+
+        return async (value, cancellationToken) =>
+        {
+            // Multiple `where` clauses conjoin, matching block refinements.
+            foreach (var predicate in predicates)
+            {
+                if (!await EvaluateRefinementBooleanExpressionAsync(
+                        annotation, predicate, value, span, title, cancellationToken))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        };
+    }
+
+    /// <summary>
+    /// Recognises an out-array parameter, <c>T[n]</c>.
+    /// </summary>
+    /// <param name="elementTypeName">
+    /// The element type, or <c>null</c> for <c>buffer[n]</c> — the collapsed
+    /// form of C's output-string idiom, which decodes to a string and carries an
+    /// implicit length argument. A bare <c>buffer</c> is not recognised: the
+    /// capacity is the whole point and there is nothing to infer it from.
+    /// </param>
+    private static bool TryParseOutArrayParameter(string? typeName, out string? elementTypeName, out int length)
+    {
+        elementTypeName = null;
+        length = 0;
+
+        if (string.IsNullOrWhiteSpace(typeName)) return false;
+
+        var trimmed = typeName.Trim();
+        var bracket = trimmed.IndexOf('[');
+
+        if (bracket <= 0 || !trimmed.EndsWith(']')) return false;
+        if (!int.TryParse(trimmed[(bracket + 1)..^1], out length) || length <= 0) return false;
+
+        var element = trimmed[..bracket];
+
+        if (!element.Equals("buffer", StringComparison.OrdinalIgnoreCase))
+        {
+            elementTypeName = element;
+        }
+
+        return true;
+    }
+
     private Type ResolveNativeInteropParameterType(
         string? typeName,
         NativeParameterPassingMode passingMode,
@@ -14477,19 +14934,13 @@ public sealed partial class ToshEngine : IShellEvaluator
 
         var normalized = typeName.Trim();
 
-        if (string.Equals(normalized, "cstring", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(normalized, "cstr", StringComparison.OrdinalIgnoreCase))
+        var isByRef = passingMode != NativeParameterPassingMode.In;
+
+        if (NativeTypeLexicon.IsCStringName(normalized))
         {
-            if (passingMode != NativeParameterPassingMode.In)
+            if (NativeTypeLexicon.ValidateByRef(normalized, isByRef, sourceName, sourceText, span) is { } cstringRejection)
             {
-                throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                    Code: "tosh.runtime.unsupported_native_byref_string",
-                    Title: "By-ref native string parameters need an explicit pointer type.",
-                    SourceName: sourceName,
-                    SourceText: sourceText,
-                    Span: span,
-                    Label: "use 'nint', 'ptr', or a buffer-backed struct type here",
-                    Help: "borrowed `cstring` works for input parameters and returns, but `out`/`ref` string marshalling is not supported yet."));
+                throw ToshDiagnosticException.Create(cstringRejection);
             }
 
             return typeof(string);
@@ -14509,16 +14960,10 @@ public sealed partial class ToshEngine : IShellEvaluator
                 Help: "start with primitive CLR types like int, long, float, double, bool, string, IntPtr, UIntPtr, or a struct with sequential/explicit layout."));
         }
 
-        if (passingMode != NativeParameterPassingMode.In && resolved == typeof(string))
+        if (isByRef && resolved == typeof(string) &&
+            NativeTypeLexicon.ValidateByRef("string", isByRef, sourceName, sourceText, span) is { } stringRejection)
         {
-            throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                Code: "tosh.runtime.unsupported_native_byref_string",
-                Title: "By-ref native string parameters need an explicit pointer type.",
-                SourceName: sourceName,
-                SourceText: sourceText,
-                Span: span,
-                Label: "use 'nint', 'ptr', or a buffer-backed struct type here",
-                Help: "plain `string` is only supported for input parameters today."));
+            throw ToshDiagnosticException.Create(stringRejection);
         }
 
         return resolved;
@@ -14536,6 +14981,31 @@ public sealed partial class ToshEngine : IShellEvaluator
         }
 
         var normalized = typeName.Trim();
+
+        // Named return conventions. These are `where` with its two commonest
+        // predicates given names — the convention is still stated explicitly at
+        // the declaration site, so this is not sentinel inference.
+        if (string.Equals(normalized, "ok", StringComparison.OrdinalIgnoreCase))
+        {
+            return new NativeFunctionReturnDefinition(
+                normalized, typeof(int), NativeFunctionReturnKind.Default, NativeErrorConvention.Ok);
+        }
+
+        if (string.Equals(normalized, "count", StringComparison.OrdinalIgnoreCase))
+        {
+            // ssize_t is pointer-sized, which covers read/write/readlink as well
+            // as sysconf's long on LP64.
+            return new NativeFunctionReturnDefinition(
+                normalized, typeof(IntPtr), NativeFunctionReturnKind.Default, NativeErrorConvention.Count);
+        }
+
+        // `auto` projects the out parameters of a call that cannot fail. The
+        // native return value, if any, is discarded — which is safe on every
+        // supported calling convention.
+        if (string.Equals(normalized, "auto", StringComparison.OrdinalIgnoreCase))
+        {
+            return new NativeFunctionReturnDefinition(normalized, typeof(void), NativeFunctionReturnKind.Default);
+        }
 
         if (string.Equals(normalized, "cstring", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(normalized, "cstr", StringComparison.OrdinalIgnoreCase))
@@ -14565,26 +15035,18 @@ public sealed partial class ToshEngine : IShellEvaluator
         string sourceText,
         TextSpan span)
     {
-        if (string.IsNullOrWhiteSpace(name))
+        if (NativeTypeLexicon.TryResolveCallingConvention(name, out var convention))
         {
-            return CallingConvention.Cdecl;
+            return convention;
         }
 
-        return name.Trim().ToLowerInvariant() switch
-        {
-            "cdecl" => CallingConvention.Cdecl,
-            "stdcall" => CallingConvention.StdCall,
-            "thiscall" => CallingConvention.ThisCall,
-            "fastcall" => CallingConvention.FastCall,
-            "winapi" => CallingConvention.Winapi,
-            _ => throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                Code: "tosh.runtime.unsupported_native_calling_convention",
-                Title: $"Native interop does not support calling convention '{name}'.",
-                SourceName: sourceName,
-                SourceText: sourceText,
-                Span: span,
-                Label: "use cdecl, stdcall, thiscall, fastcall, or winapi")),
-        };
+        throw ToshDiagnosticException.Create(new ToshDiagnostic(
+            Code: "tosh.runtime.unsupported_native_calling_convention",
+            Title: $"Native interop does not support calling convention '{name}'.",
+            SourceName: sourceName,
+            SourceText: sourceText,
+            Span: span,
+            Label: "use cdecl, stdcall, thiscall, fastcall, or winapi"));
     }
 
     private static bool IsSupportedNativeInteropType(Type type)
@@ -14763,6 +15225,13 @@ public sealed partial class ToshEngine : IShellEvaluator
                 signal.Span,
                 signal.Value,
                 cancellationToken),
+            // Before the generic ToshError branch: a NativeError already carries
+            // a complete diagnostic contract (symbol, returned value, errno with
+            // its symbolic name). The duck-typed probe below only reads
+            // ToshClassInstance members, so a CLR exception subclass would
+            // otherwise render as its type name with no help line.
+            NativeError native => ValueTask.FromResult(
+                BuildNativeErrorDiagnostic(sourceName, sourceText, native.Span, native)),
             ToshError tosh => CreateThrownValueDiagnosticAsync(
                 sourceName,
                 sourceText,

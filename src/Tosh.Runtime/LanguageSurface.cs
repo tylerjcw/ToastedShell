@@ -187,7 +187,10 @@ public static class LanguageSurface
             ["overrule"] = MemberMod,
             ["fading"] = MemberMod,
             ["lazy"] = MemberMod,
-            ["raw"] = MemberMod,
+            // `raw` is the one word for "this declaration crosses the native
+            // ABI": `raw struct` declares a C memory layout, `raw func`
+            // declares a P/Invoke. It is both a type and a member modifier.
+            ["raw"] = TypeMod | MemberMod,
             ["proud"] = MemberMod,
             ["public"] = MemberMod,
             ["local"] = MemberMod,

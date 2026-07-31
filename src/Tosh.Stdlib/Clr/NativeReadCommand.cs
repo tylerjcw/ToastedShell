@@ -7,16 +7,16 @@ namespace Tosh.Stdlib.Clr;
 [CommandCategory("CLR")]
 [CommandArgument("cstring|bytes|type-name", "Read mode: a null-terminated C string, a byte array, or a supported native scalar/struct-layout type.")]
 [CommandArgument("buffer|pointer", "NativeBuffer or pointer to read from. May be supplied from the pipeline.", Required = false)]
-[CommandArgument("length", "Required byte count when mode is `bytes`.", Required = false, TypeName = "int")]
-[CommandArgument("offset", "Optional byte offset from the buffer or pointer before reading.", Required = false, TypeName = "int")]
+[CommandArgument("--at", "Byte offset from the buffer or pointer before reading.", Required = false, TypeName = "int")]
+[CommandArgument("--count", "Byte count. Required when the mode is `bytes`; ignored otherwise.", Required = false, TypeName = "int")]
 [CommandExample("$buffer | native-read cstring", Title = "Read a C string from a native buffer")]
-[CommandExample("native-read bytes $buffer 16", Title = "Read a byte range")]
-[CommandExample("native-read int32 $buffer 0 4", Title = "Read an Int32 at an offset")]
+[CommandExample("native-read bytes $buffer --count 16", Title = "Read a byte range")]
+[CommandExample("native-read int32 $buffer --at 4", Title = "Read an Int32 at an offset")]
 [CommandOutput("The decoded value(s) read from the native buffer, in the requested format.")]
 public sealed class NativeReadCommand : ShellCommand
 {
     public NativeReadCommand(string name = "native-read")
-        : base(name, "Reads a C string, byte range, or native scalar/struct-layout value from native memory.", $"{name} <cstring|bytes|type-name> [buffer|pointer] [length] [offset]") { }
+        : base(name, "Reads a C string, byte range, or native scalar/struct-layout value from native memory.", $"{name} <cstring|bytes|type-name> [buffer|pointer] [--at <offset>] [--count <bytes>]") { }
 
     public override async IAsyncEnumerable<object?> ExecuteAsync(CommandContext context)
     {
@@ -39,7 +39,8 @@ public sealed class NativeReadCommand : ShellCommand
                 label: "write 'cstring', 'bytes', or a native type name");
         }
 
-        var sources = await ResolveSourcesAsync(context);
+        var options = ParseOptions(context);
+        var sources = await ResolveSourcesAsync(context, options);
 
         if (sources.Count == 0)
         {
@@ -52,23 +53,63 @@ public sealed class NativeReadCommand : ShellCommand
         foreach (var (source, argumentIndex) in sources)
         {
             context.CancellationToken.ThrowIfCancellationRequested();
-            yield return ReadValue(context, mode, source, argumentIndex);
+            yield return ReadValue(context, mode, source, argumentIndex, options);
         }
     }
 
-    private static object? ReadValue(CommandContext context, string mode, object? source, int? argumentIndex)
+    private readonly record struct ReadOptions(int Offset, int? Count, IReadOnlyList<int> PositionalIndexes);
+
+    /// <summary>
+    /// Offset and count are named flags rather than positional slots.
+    /// Positionally, the offset sat at argument 3 behind a `length` slot that
+    /// only `bytes` mode reads — so every scalar read had to write a meaningless
+    /// `0` to reach it (`read-buffer long $buf 0 8`).
+    /// </summary>
+    private static ReadOptions ParseOptions(CommandContext context)
+    {
+        var arguments = context.Arguments;
+        var offset = 0;
+        int? count = null;
+        var positional = new List<int>();
+
+        for (var index = 1; index < arguments.Count; index++)
+        {
+            var text = arguments[index]?.ToString();
+
+            if (text is "--at" or "--offset")
+            {
+                offset = CommandArguments.RequireConverted<int>(arguments, ++index, "offset");
+                continue;
+            }
+
+            if (text is "--count" or "--length")
+            {
+                count = CommandArguments.RequireConverted<int>(arguments, ++index, "count");
+                continue;
+            }
+
+            positional.Add(index);
+        }
+
+        return new ReadOptions(offset, count, positional);
+    }
+
+    private static object? ReadValue(
+        CommandContext context,
+        string mode,
+        object? source,
+        int? argumentIndex,
+        ReadOptions options)
     {
         var pointer = NativeCommandUtilities.ResolvePointer(context, source, argumentIndex ?? 1);
-        var valueArgumentStart = argumentIndex is null ? 1 : 2;
-        var offset = TryReadIntArgument(context, valueArgumentStart + 1, defaultValue: 0);
-        pointer = IntPtr.Add(pointer, offset);
+        pointer = IntPtr.Add(pointer, options.Offset);
 
         if (string.Equals(mode, "cstring", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(mode, "cstr", StringComparison.OrdinalIgnoreCase))
         {
             if (source is NativeBuffer buffer)
             {
-                return buffer.ReadCString(offset);
+                return buffer.ReadCString(options.Offset);
             }
 
             return pointer == IntPtr.Zero ? null : Marshal.PtrToStringAnsi(pointer);
@@ -76,13 +117,24 @@ public sealed class NativeReadCommand : ShellCommand
 
         if (string.Equals(mode, "bytes", StringComparison.OrdinalIgnoreCase))
         {
-            var length = TryReadRequiredIntArgument(context, valueArgumentStart);
+            if (options.Count is not { } length)
+            {
+                throw context.CreateDiagnostic(
+                    code: "tosh.runtime.native_read_requires_length",
+                    title: "native-read bytes requires a byte count.",
+                    argumentIndex: 0,
+                    label: "write '--count <bytes>'");
+            }
+
+            NativeCommandUtilities.ValidateBufferRange(
+                context, source, options.Offset, length, argumentIndex ?? 1, "native-read bytes");
+
             var bytes = new byte[length];
             Marshal.Copy(pointer, bytes, 0, length);
             return bytes;
         }
 
-        var type = NativeCommandUtilities.ResolveInteropType(context, mode, 0, allowString: false);
+        var type = NativeCommandUtilities.ResolveInteropType(context, context.Arguments[0], 0, allowString: false);
 
         if (!NativeInteropUtilities.IsSupportedInteropType(type, allowString: false))
         {
@@ -93,10 +145,15 @@ public sealed class NativeReadCommand : ShellCommand
                 label: "use a primitive, enum, pointer-sized, or struct-layout type here");
         }
 
+        NativeCommandUtilities.ValidateBufferRange(
+            context, source, options.Offset, NativeInteropUtilities.SizeOf(type), argumentIndex ?? 1, $"native-read {mode}");
+
         return NativeInteropUtilities.ReadValue(type, pointer);
     }
 
-    private static async Task<List<(object? Source, int? ArgumentIndex)>> ResolveSourcesAsync(CommandContext context)
+    private static async Task<List<(object? Source, int? ArgumentIndex)>> ResolveSourcesAsync(
+        CommandContext context,
+        ReadOptions options)
     {
         var sources = new List<(object?, int?)>();
 
@@ -113,47 +170,13 @@ public sealed class NativeReadCommand : ShellCommand
             return sources;
         }
 
-        if (context.Arguments.Count >= 2)
+        // The first non-flag argument after the mode is the buffer.
+        if (options.PositionalIndexes.Count > 0)
         {
-            sources.Add((context.Arguments[1], 1));
+            var index = options.PositionalIndexes[0];
+            sources.Add((context.Arguments[index], index));
         }
 
         return sources;
-    }
-
-    private static int TryReadRequiredIntArgument(CommandContext context, int index)
-    {
-        if (context.Arguments.Count <= index ||
-            !TypeConversion.TryConvert(context.Arguments[index], typeof(int), out var converted) ||
-            converted is not int value)
-        {
-            throw context.CreateDiagnostic(
-                code: "tosh.runtime.native_read_requires_length",
-                title: "native-read bytes requires a byte length.",
-                argumentIndex: index,
-                label: "write a byte length here");
-        }
-
-        return value;
-    }
-
-    private static int TryReadIntArgument(CommandContext context, int index, int defaultValue)
-    {
-        if (context.Arguments.Count <= index)
-        {
-            return defaultValue;
-        }
-
-        if (TypeConversion.TryConvert(context.Arguments[index], typeof(int), out var converted) &&
-            converted is int value)
-        {
-            return value;
-        }
-
-        throw context.CreateDiagnostic(
-            code: "tosh.runtime.native_read_offset_requires_int",
-            title: "native-read offsets must be integers.",
-            argumentIndex: index,
-            label: "write an integer offset here");
     }
 }

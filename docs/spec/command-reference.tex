@@ -635,7 +635,8 @@ Reads a C string, byte range, or native scalar/struct-layout value from native m
 \textit{Aliases:} \code{read-buffer}
 
 \begin{signature}
-native-read <cstring|bytes|type-name> [buffer|pointer] [length] [offset]
+native-read <cstring|bytes|type-name> [buffer|pointer] [--at <offset>] \\
+\quad [--count <bytes>]
 \end{signature}
 
 \begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
@@ -644,8 +645,8 @@ native-read <cstring|bytes|type-name> [buffer|pointer] [length] [offset]
 \midrule
 cstring|\allowbreak bytes|\allowbreak type-name & Read mode: a null-terminated C string, a byte array, or a supported native scalar/struct-layout type. \\
 buffer|\allowbreak pointer & NativeBuffer or pointer to read from. May be supplied from the pipeline. (optional) \\
-length & Required byte count when mode is `bytes`. (optional) \textit{(int)} \\
-offset & Optional byte offset from the buffer or pointer before reading. (optional) \textit{(int)} \\
+--at & Byte offset from the buffer or pointer before reading. (optional) \textit{(int)} \\
+--count & Byte count. Required when the mode is `bytes`; ignored otherwise. (optional) \textit{(int)} \\
 \bottomrule
 \end{tabular}
 
@@ -653,8 +654,8 @@ offset & Optional byte offset from the buffer or pointer before reading. (option
 
 \begin{lstlisting}
 $buffer | native-read cstring  # Read a C string from a native buffer
-native-read bytes $buffer 16  # Read a byte range
-native-read int32 $buffer 0 4  # Read an Int32 at an offset
+native-read bytes $buffer --count 16  # Read a byte range
+native-read int32 $buffer --at 4  # Read an Int32 at an offset
 \end{lstlisting}
 
 \end{cmdbox}
@@ -703,7 +704,7 @@ Writes a C string, byte sequence, or struct-layout value into native memory.
 \textit{Aliases:} \code{write-buffer}
 
 \begin{signature}
-native-write <buffer|pointer> <value> [offset]
+native-write <buffer|pointer> <value> [--at <offset>]
 \end{signature}
 
 \begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
@@ -712,7 +713,7 @@ native-write <buffer|pointer> <value> [offset]
 \midrule
 buffer|\allowbreak pointer & NativeBuffer or pointer to write into. \\
 value & String, byte sequence, enum, primitive, pointer-sized value, or struct-layout value to write. \\
-offset & Optional byte offset from the buffer or pointer before writing. (optional) \textit{(int)} \\
+--at & Byte offset from the buffer or pointer before writing. (optional) \textit{(int)} \\
 \bottomrule
 \end{tabular}
 
@@ -720,7 +721,8 @@ offset & Optional byte offset from the buffer or pointer before writing. (option
 
 \begin{lstlisting}
 native-write $buffer "hello"  # Write a C string
-native-write $buffer [72 105 0] 0  # Write explicit bytes
+native-write $buffer [72 105 0]  # Write explicit bytes
+native-write $buffer 42 --at 8  # Write at an offset
 \end{lstlisting}
 
 \end{cmdbox}

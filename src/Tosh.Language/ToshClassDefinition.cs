@@ -14,6 +14,15 @@ public sealed class ToshClassDefinition : IShellNamedType
     private readonly List<ToshClassPropertyDefinition> _properties;
     private readonly List<ToshClassMethodDefinition> _methods;
 
+    /// <summary>
+    /// Functions bound from a <c>bind native</c> block in the class body. Always
+    /// static — an instance-bound P/Invoke is never what anyone wants — and
+    /// <c>shy</c> unless the block was declared <c>proud</c>, so the raw ABI
+    /// surface stays hidden behind typed members written over it.
+    /// </summary>
+    private readonly Dictionary<string, (IShellCommand Command, bool IsShy)> _nativeMembers =
+        new(StringComparer.OrdinalIgnoreCase);
+
     public ToshClassDefinition(
         ToshEngine engine,
         string name,
@@ -494,6 +503,18 @@ public sealed class ToshClassDefinition : IShellNamedType
     {
         cancellationToken.ThrowIfCancellationRequested();
 
+        // Native bindings are checked before declared methods so a `bind` block
+        // member is callable as `SystemInfo.sysinfo()`. They are always static,
+        // and `shy` does not hide them from the class's own members — it hides
+        // them from outside, which the resolver enforces.
+        if (_nativeMembers.TryGetValue(methodName, out var nativeMember))
+        {
+            var nativeValues = await _engine.InvokeNativeMemberAsync(
+                nativeMember.Command, arguments, cancellationToken);
+
+            return new InvocationResult(FlattenCallResult(nativeValues), ReturnedVoid: false);
+        }
+
         if (!_methodsByName.TryGetValue(methodName, out var candidates))
         {
             throw new InvalidOperationException($"Static method '{methodName}' was not found on class '{Name}'.");
@@ -512,6 +533,23 @@ public sealed class ToshClassDefinition : IShellNamedType
             cancellationToken);
         var values = await ExecuteMethodBlockAsync(method, locals, instance: null, cancellationToken);
         return new InvocationResult(FlattenCallResult(values), ReturnedVoid: false);
+    }
+
+    internal void SetNativeMember(IShellCommand command, bool isShy)
+    {
+        _nativeMembers[command.Name] = (command, isShy);
+    }
+
+    internal bool TryGetNativeMember(string memberName, out IShellCommand command)
+    {
+        if (_nativeMembers.TryGetValue(memberName, out var entry))
+        {
+            command = entry.Command;
+            return true;
+        }
+
+        command = null!;
+        return false;
     }
 
     public bool TryGetStaticMember(string memberName, out object? value)
@@ -549,6 +587,14 @@ public sealed class ToshClassDefinition : IShellNamedType
                 ? $"'{memberName}' is a method on class '{Name}'. Call it with parentheses: {Name}.{memberName}(...)"
                 : $"'{memberName}' is an instance method on class '{Name}'. Create an instance first: var obj = new {Name}(); $obj.{memberName}(...)";
             throw new InvalidOperationException(hint);
+        }
+
+        // Same courtesy for native bindings — without this the diagnostic was a
+        // bare "not found", which reads as if the binding had failed.
+        if (_nativeMembers.TryGetValue(memberName, out var native))
+        {
+            throw new InvalidOperationException(
+                $"'{memberName}' is a native binding on class '{Name}'. Call it with parentheses: {native.Command.Usage}");
         }
 
         return false;
@@ -626,16 +672,32 @@ public sealed class ToshClassDefinition : IShellNamedType
 
     public IReadOnlyList<ShellMethodDescriptor> GetShellMethods(bool includeHidden = false)
     {
-        return Methods
+        var declared = Methods
             .Where(method => includeHidden || !method.IsShy)
-            .OrderBy(method => method.Name, StringComparer.OrdinalIgnoreCase)
             .Select(method => new ShellMethodDescriptor(
                 method.Name,
                 ReturnTypeName: GetAnnotationDisplayName(method.ReturnTypeName),
                 IsStatic: method.IsStatic,
                 ParameterCount: method.Parameters.Count,
                 Signature: FormatMethodSignature(method),
-                IsHidden: method.IsShy))
+                IsHidden: method.IsShy));
+
+        // Native bindings are real callable members, so `methods` must show the
+        // proud ones — otherwise `proud bind` and `shy bind` would look identical
+        // from outside and the distinction would be decorative.
+        var native = _nativeMembers.Values
+            .Where(entry => includeHidden || !entry.IsShy)
+            .Select(entry => new ShellMethodDescriptor(
+                entry.Command.Name,
+                ReturnTypeName: (entry.Command as Bridge.NativeFunctionCommand)?.ReturnTypeName,
+                IsStatic: true,
+                ParameterCount: (entry.Command as Bridge.NativeFunctionCommand)?.CallableParameterCount ?? 0,
+                Signature: entry.Command.Usage,
+                IsHidden: entry.IsShy));
+
+        return declared
+            .Concat(native)
+            .OrderBy(method => method.Name, StringComparer.OrdinalIgnoreCase)
             .ToArray();
     }
 

@@ -29,6 +29,9 @@ public sealed class DotNetTypeResolver : IImportingTypeResolver
         // error types declared in tosh. Exposed case-insensitively
         // so `extends Error`, `error`, and `ERROR` all resolve.
         ["error"] = typeof(ToshError),
+        // Raised when a native call fails its declared success contract, so
+        // `catch (e) { $e is NativeError }` and `extends NativeError` both work.
+        ["nativeerror"] = typeof(NativeError),
         // The anonymous dynamic record. `record` is the name the syntax and
         // the specification use; `table` stays resolvable as an alias (TS-P3-11).
         ["record"] = typeof(System.Dynamic.ExpandoObject),

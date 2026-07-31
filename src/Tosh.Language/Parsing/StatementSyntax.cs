@@ -109,13 +109,36 @@ public sealed record RuneDefinitionStatementSyntax(
     TextSpan Span,
     DocComment? DocComment = null) : StatementSyntax(Span);
 
+/// <param name="SuccessPredicate">
+/// The <c>where (…)</c> success contract, where <c>_</c> is the native return
+/// value. Same keyword, placeholder and meaning as a refinement type — a native
+/// call that fails its predicate throws a <c>NativeError</c> carrying errno.
+/// </param>
+/// <param name="NativeTarget">
+/// The library named by a <c>from "lib"</c> clause on a standalone
+/// <c>raw func</c>. Null inside a <c>bind</c> block, where the block already
+/// names the library once for every function in it.
+/// </param>
 public sealed record NativeFunctionBindingSyntax(
     string Name,
     string SymbolName,
     IReadOnlyList<NativeFunctionParameterSyntax> Parameters,
     string? ReturnTypeName,
     string? CallingConventionName,
-    TextSpan Span);
+    TextSpan Span,
+    ArgumentSyntax? SuccessPredicate = null,
+    string? NativeTarget = null);
+
+/// <summary>
+/// A top-level <c>raw func name(…) -&gt; ret from "lib"</c>. Unlike a bind block,
+/// which groups its functions under a module, this declares the name directly in
+/// the enclosing scope — the point of the one-off form is that you call it by the
+/// name you gave it.
+/// </summary>
+public sealed record RawFunctionStatementSyntax(
+    NativeFunctionBindingSyntax Binding,
+    DeclarationModifier Modifier,
+    TextSpan Span) : StatementSyntax(Span);
 
 public sealed record BindStatementSyntax(
     string ModuleName,
@@ -143,6 +166,22 @@ public sealed record ClassPropertyMemberSyntax(
     TextSpan Span,
     DocComment? DocComment = null,
     ArgumentSyntax? Refinement = null) : ClassMemberSyntax(IsShy, IsStatic, Span);
+
+/// <summary>
+/// A <c>bind native "lib" { … }</c> block declared inside a class body, so the
+/// library path is written once and the bound functions hang off the type that
+/// wraps them rather than a separate module.
+/// </summary>
+/// <param name="IsShy">
+/// Native members default to <c>shy</c> — the opposite of <c>func</c>. That is
+/// the point of the design: the raw ABI surface stays hidden and a typed
+/// <c>proud</c>/<c>shared prop</c> surface is written over it. <c>proud</c>
+/// opts back out.
+/// </param>
+public sealed record ClassBindMemberSyntax(
+    BindStatementSyntax Bind,
+    bool IsShy,
+    TextSpan Span) : ClassMemberSyntax(IsShy, IsStatic: true, Span);
 
 public sealed record ClassMethodMemberSyntax(
     FunctionDefinitionStatementSyntax Method,
@@ -289,6 +328,52 @@ public sealed record StructDefinitionStatementSyntax(
     bool IsSealed = false,
     bool IsFluid = false,
     bool IsPartial = false,
+    TextSpan Span = default,
+    DocComment? DocComment = null) : StatementSyntax(Span);
+
+/// <summary>
+/// One field line inside a <c>raw struct</c> body: <c>name: type[count] = default</c>.
+/// </summary>
+/// <param name="ArrayLength">
+/// Element count for a fixed C array (<c>ulong[3]</c>) or inline char buffer
+/// (<c>cstring[65]</c>). Null for a scalar field. The count is irreducible — it
+/// is part of the ABI, and <c>char[65]</c> and <c>char[256]</c> are different
+/// layouts — so it is always written out.
+/// </param>
+/// <param name="DefaultValue">
+/// Applied when TōSh <em>constructs</em> a value, never by the marshaller: a CLR
+/// struct cannot carry an initializer that <c>Marshal.PtrToStructure</c> would
+/// run. So an <c>out</c> parameter still arrives zero-filled.
+/// </param>
+public sealed record RawStructFieldSyntax(
+    string Name,
+    string TypeName,
+    int? ArrayLength,
+    PipelineSyntax? DefaultValue,
+    TextSpan Span,
+    DocComment? DocComment = null);
+
+/// <summary>
+/// <c>raw struct Name [pack n] [size n] { field... }</c> — a C memory layout,
+/// deliberately a separate declaration kind from TōSh <c>struct</c>.
+///
+/// TōSh structs are a dictionary-backed object model with computed properties,
+/// methods and refinement-typed fields; a raw struct is a byte layout that
+/// becomes a real sequential-layout CLR type. Merging them would force every
+/// one of those features to answer "what does this mean in a layout?".
+/// </summary>
+/// <param name="DeclaredSize">
+/// Optional assertion against <c>Marshal.SizeOf</c>, not a requirement. Padding
+/// is never declared — <c>LayoutKind.Sequential</c> aligns naturally, exactly as
+/// a C compiler does.
+/// </param>
+public sealed record RawStructDefinitionStatementSyntax(
+    string Name,
+    IReadOnlyList<RawStructFieldSyntax> Fields,
+    DeclarationModifier Modifier,
+    bool IsUnion = false,
+    int? Pack = null,
+    int? DeclaredSize = null,
     TextSpan Span = default,
     DocComment? DocComment = null) : StatementSyntax(Span);
 

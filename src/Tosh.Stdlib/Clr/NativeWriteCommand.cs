@@ -8,30 +8,51 @@ namespace Tosh.Stdlib.Clr;
 [CommandCategory("CLR")]
 [CommandArgument("buffer|pointer", "NativeBuffer or pointer to write into.")]
 [CommandArgument("value", "String, byte sequence, enum, primitive, pointer-sized value, or struct-layout value to write.")]
-[CommandArgument("offset", "Optional byte offset from the buffer or pointer before writing.", Required = false, TypeName = "int")]
+[CommandArgument("--at", "Byte offset from the buffer or pointer before writing.", Required = false, TypeName = "int")]
 [CommandExample("native-write $buffer \"hello\"", Title = "Write a C string")]
-[CommandExample("native-write $buffer [72 105 0] 0", Title = "Write explicit bytes")]
+[CommandExample("native-write $buffer [72 105 0]", Title = "Write explicit bytes")]
+[CommandExample("native-write $buffer 42 --at 8", Title = "Write at an offset")]
 [CommandOutput("Emits nothing; writes the supplied value(s) into the native buffer as a side effect.")]
 public sealed class NativeWriteCommand : ShellCommand
 {
     public NativeWriteCommand(string name = "native-write")
-        : base(name, "Writes a C string, byte sequence, or struct-layout value into native memory.", $"{name} <buffer|pointer> <value> [offset]") { }
+        : base(name, "Writes a C string, byte sequence, or struct-layout value into native memory.", $"{name} <buffer|pointer> <value> [--at <offset>]") { }
 
     public override async IAsyncEnumerable<object?> ExecuteAsync(CommandContext context)
     {
-        if (context.Arguments.Count < 2 || context.Arguments.Count > 3)
+        // `--at` matches native-read's spelling. The trailing positional offset
+        // stays accepted so existing scripts keep working.
+        var offset = 0;
+        var positional = new List<object?>();
+
+        for (var index = 0; index < context.Arguments.Count; index++)
+        {
+            var text = context.Arguments[index]?.ToString();
+
+            if (text is "--at" or "--offset")
+            {
+                offset = CommandArguments.RequireConverted<int>(context.Arguments, ++index, "offset");
+                continue;
+            }
+
+            positional.Add(context.Arguments[index]);
+        }
+
+        if (positional.Count < 2 || positional.Count > 3)
         {
             throw context.CreateDiagnostic(
                 code: "tosh.runtime.native_write_argument_count",
                 title: "native-write expects a target, a value, and an optional offset.",
-                label: "write 'native-write <buffer|pointer> <value> [offset]'");
+                label: "write 'native-write <buffer|pointer> <value> [--at <offset>]'");
         }
 
-        var target = context.Arguments[0];
-        var value = context.Arguments[1];
-        var offset = context.Arguments.Count == 3
-            ? ReadOffset(context, 2)
-            : 0;
+        var target = positional[0];
+        var value = positional[1];
+
+        if (positional.Count == 3)
+        {
+            offset = ReadOffset(context, 2);
+        }
 
         if (target is NativeBuffer buffer)
         {
@@ -58,6 +79,20 @@ public sealed class NativeWriteCommand : ShellCommand
         {
             buffer.WriteBytes(byteSequence, offset);
             return;
+        }
+
+        // The string and byte-sequence paths above go through NativeBuffer, which
+        // bounds-checks. A struct write did not: `Marshal.StructureToPtr` into an
+        // undersized buffer corrupts the heap silently.
+        if (value is not null)
+        {
+            var runtimeType = value.GetType();
+
+            if (NativeInteropUtilities.IsSupportedInteropType(runtimeType, allowString: false))
+            {
+                NativeCommandUtilities.ValidateBufferRange(
+                    context, buffer, offset, NativeInteropUtilities.SizeOf(runtimeType), 0, "native-write");
+            }
         }
 
         WriteStructuredValue(context, IntPtr.Add(buffer.Pointer, offset), value, 1);

@@ -54,6 +54,7 @@ public sealed class ToshRuntime
         History = new List<CommandHistoryEntry>();
         Variables = new Dictionary<string, object?>(StringComparer.Ordinal);
         Classes = new Dictionary<string, object?>(StringComparer.Ordinal);
+        NativeTypes = new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase);
         Modules = new Dictionary<string, object?>(StringComparer.Ordinal);
         LoadedModules = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         ExportedEnvironmentVariables = new HashSet<string>(StringComparer.Ordinal);
@@ -105,6 +106,14 @@ public sealed class ToshRuntime
     public object? RuntimeNamespace { get; set; }
 
     public IDictionary<string, object?> Classes { get; }
+
+    /// <summary>
+    /// CLR types emitted for globally-declared <c>raw struct</c>s, keyed by
+    /// declared name. The runtime-level counterpart of
+    /// <c>LexicalScope.NativeTypes</c>; consulted by the type resolver so a
+    /// global raw struct is nameable in native signatures.
+    /// </summary>
+    public IDictionary<string, Type> NativeTypes { get; }
 
     public IDictionary<string, object?> Modules { get; }
 

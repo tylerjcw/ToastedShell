@@ -895,7 +895,7 @@ annotations, casts, and \code{new} expressions.
 \code{tuple} & \code{System.Tuple} types & Immutable positional tuple \\
 \code{file} & \code{System.IO.FileInfo} & File reference \\
 \code{dir} / \code{directory} & \code{System.IO.DirectoryInfo} & Directory reference \\
-\code{byte-ptr} & \code{System.IntPtr} & Native pointer \\
+\code{ptr} & \code{System.IntPtr} & Native pointer \\
 \code{ptr} & \code{System.IntPtr} & Native pointer (alias) \\
 \code{ip} / \code{ipaddress} & \code{System.Net.IPAddress} & IP address \\
 \code{version} & \code{System.Version} & Semantic version \\
@@ -2840,42 +2840,217 @@ require { Reporting, Utilities } from "./toastlib.tosh"
 \end{lstlisting}
 
 \section{Native Library Loading}
-\ikw{bind}\ikw{callconv}
+\ikw{bind}\ikw{callconv}\ikw{raw}\ikw{from}\ikw{where}
 
 Load and bind native (unmanaged) libraries:
 
 \begin{lstlisting}
-require native "./libcrypto.so" as Crypto
-
-bind Crypto {
-    func sha256(data: byte-ptr, len: uint64) -> byte-ptr
+bind native "./libcrypto.so" as Crypto {
+    func sha256(data: ptr, len: uint64) -> ptr
 }
 \end{lstlisting}
 
-Native bindings support \code{in}, \code{ref}, and \code{out} parameter modes
-and an optional \code{callconv} override for specifying the native calling
-convention.  Parameters default to \code{in} (pass by value).  \code{ref}
-passes a managed reference; \code{out} captures a value written by the native
-function into a new variable.
+A bind block may also be written inside a module or a class body, so the
+library path is stated once and the bound functions hang off the type that
+wraps them:
 
 \begin{lstlisting}
-require native "./libfoo.so" as Foo
+export hermit class SystemFacts {
+    shy bind native "libc.so.6" {
+        func uname(out buf: UtsName) -> ok
+        func sysconf(name: int)      -> count
+    }
 
-bind Foo {
-    # out parameter: value written by the native function
-    func get-value(out result: int) -> bool
+    shared prop Kernel:   string => SystemFacts.uname().release
+    shared prop PageSize: long   => SystemFacts.sysconf(30)
+}
+\end{lstlisting}
 
-    # ref parameter: read/write managed reference
-    func increment(ref counter: int)
+Native members inside a class are always static, and default to \code{shy} ---
+the reverse of \code{func} --- so the raw ABI surface stays hidden behind the
+typed members written over it.  \code{proud bind} opts back out.
 
-    # custom calling convention (Cdecl, StdCall, ThisCall, etc.)
-    callconv Cdecl
-    func legacy-api(data: byte-ptr, len: int) -> int
+For a single binding that does not justify a block, \code{raw func} names its
+library inline with \code{from}:
+
+\begin{lstlisting}
+raw func sysconf(name: int) -> count from "libc.so.6"
+\end{lstlisting}
+
+\subsection{Parameter Modes}
+
+Parameters default to \code{in} (pass by value).  \code{ref} passes a managed
+reference the callee both reads and writes.  \code{out} is written by the
+callee and read by nobody, so it is \emph{engine-allocated and does not appear
+at the call site}:
+
+\begin{lstlisting}
+bind native "libc.so.6" as LibC {
+    func gettimeofday(out tv: Timeval, nint) -> int
 }
 
-var ok = false
-var n = 0
-$ok = (Foo.get-value out $n)   # $n receives the written value
+var r = LibC.gettimeofday(0)   # one argument, not two
+$r.tv.tv_sec
+\end{lstlisting}
+
+Use \code{out} when the callee fills a structure and reads nothing
+(\code{sysinfo}, \code{uname}, \code{gettimeofday}); use \code{ref} when it
+reads and writes the same memory (\code{poll}, \code{select}, \code{ioctl}
+with \code{TCSETS}).  Passing a native buffer to a \code{ref} parameter writes
+the result back into unmanaged memory.
+
+\subsection{Return Conventions}
+
+A native call declares how success is decided.  This is orthogonal to what a
+successful call yields.
+
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+\textbf{Return} & \textbf{Meaning} \\
+\midrule
+\code{-> ok}    & \code{int}; \code{0} is success, anything else throws \\
+\code{-> count} & \code{>= 0} is success \emph{and is the value} \\
+\code{-> auto}  & no checking; project the out parameters \\
+\code{-> T where (\_)} & custom predicate over the return value \\
+\code{-> T}     & raw, unchecked \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\code{where} is the same keyword, placeholder and meaning as a refinement
+type, with \code{\_} bound to the native return value.  \code{ok} and
+\code{count} are that clause with its two commonest predicates given names ---
+the convention is still stated explicitly at the declaration site.
+
+A checked call spends its return value on the success decision, so the out
+parameter becomes the result: with exactly one, it is yielded directly; with
+several, a record keyed by parameter name; an unchecked call yields a record
+carrying \code{ReturnValue} alongside them.
+
+\begin{lstlisting}
+bind native "libc.so.6" as LibC {
+    func sysinfo(out info: SysInfo) -> ok
+}
+
+var info = LibC.sysinfo()      # a SysInfo, not a record wrapping one
+\end{lstlisting}
+
+Failure throws a \code{NativeError} carrying \code{Errno}, \code{ErrnoName},
+\code{Symbol}, \code{Library} and \code{Result}, rendered with the offending
+symbol and a \code{strerror} message.
+
+\subsection{Buffers and Arrays}
+
+\code{buffer[n]} collapses C's output-string idiom --- always an adjacent
+\code{(pointer, length)} pair --- into one parameter that expands to both ABI
+arguments and yields a decoded string:
+
+\begin{lstlisting}
+bind native "libc.so.6" as LibC {
+    func gethostname(out name: buffer[256])            -> ok
+    func readlink(path: string, out buf: buffer[4096]) -> count
+    func getloadavg(out avg: double[3], count: int)    -> int where (_ == 3)
+}
+\end{lstlisting}
+
+With \code{-> count} the returned count supplies the buffer's true length
+rather than scanning for a NUL, which is what makes \code{readlink}
+safe --- it does not terminate its output.  A typed \code{T[n]} out-parameter
+is engine-allocated and comes back as an array.
+
+\subsection{Calling Conventions}
+
+\code{callconv} is a trailing clause on the function it applies to:
+
+\begin{lstlisting}
+bind native "user32.dll" as User32 {
+    func MessageBoxW(nint, string, string, uint) -> int callconv stdcall
+}
+\end{lstlisting}
+
+It defaults to \code{cdecl}; \code{stdcall}, \code{thiscall}, \code{fastcall}
+and \code{winapi} are also accepted.  An unrecognised name is an error rather
+than a silent fallback.
+
+\subsection{Type Restrictions}
+
+\code{cstring} is a borrowed NUL-terminated C string; \code{nint} / \code{nuint}
+(or \code{ptr} / \code{uptr}) are pointer-sized values.  Plain \code{string}
+works as a parameter but not as a return type, which needs explicit ownership
+semantics.  \code{out} and \code{ref} string parameters are rejected for the
+same reason and need an explicit pointer type.
+
+\section{Raw Structs}
+\ikw{raw}\ikw{struct}\ikw{union}\ikw{pack}\ikw{size}
+
+A \code{raw struct} declares a C memory layout.  It is deliberately a separate
+declaration kind from \code{struct}: a tosh struct is a dictionary-backed
+object model with computed properties and refinement-typed fields, whereas a
+raw struct is a byte layout that becomes a real sequential-layout CLR type.
+
+\begin{lstlisting}
+raw struct SysInfo {
+    uptime:    long
+    loads:     ulong[3]
+    totalram:  ulong
+    procs:     ushort
+    totalhigh: ulong
+    mem_unit:  uint
+}
+\end{lstlisting}
+
+The emitted type is nameable anywhere a native interop type is expected, so
+\code{size-of}, \code{offset-of}, \code{alloc}, \code{read-buffer} and native
+signatures all accept it.
+
+\textbf{Padding is never declared.}  Sequential layout aligns each field
+naturally, exactly as a C compiler does, so a declaration transcribes the
+header and omits its \code{pad} / \code{\_\_pad0} / \code{\_\_glibc\_reserved}
+members.  In the example above \code{totalhigh} lands at offset~88, not~82,
+without any padding field being written.
+
+Array counts are part of the ABI and cannot be inferred, since
+\code{char[65]} and \code{char[256]} are different layouts.  \code{cstring[n]}
+is an inline character buffer; \code{T[n]} is an inline array.
+
+\begin{lstlisting}
+raw struct UtsName {
+    sysname:    cstring[65]
+    nodename:   cstring[65]
+    release:    cstring[65]
+    version:    cstring[65]
+    machine:    cstring[65]
+    domainname: cstring[65]
+}
+\end{lstlisting}
+
+\code{bool} is rejected in favour of \code{byte}: default marshalling maps it
+to a four-byte Win32 \code{BOOL} rather than a C \code{\_Bool}, which would
+shift every subsequent field.
+
+Two optional header clauses, both rarely needed.  \code{pack n} sets the
+packing; \code{size n} asserts the computed size, turning a mis-transcribed
+struct into a declaration-time error rather than silent memory corruption.
+
+\begin{lstlisting}
+raw struct Packed pack 1 { a: byte; b: long }   # 9 bytes, not 16
+raw struct Checked size 16 { a: long; b: long }
+\end{lstlisting}
+
+\code{raw union} places every field at offset zero.
+
+Fields may carry defaults.  These apply when tosh constructs a value and to
+\code{ref} parameters, but never to an \code{out} parameter, which arrives
+zero-filled --- a CLR struct cannot carry an initializer the marshaller would
+run, and seeding one would mask a callee that failed to write.
+
+\begin{lstlisting}
+raw struct PollFd {
+    fd:      int   = -1
+    events:  short = 1
+    revents: short
+}
 \end{lstlisting}
 
 \section{Module Definitions}
@@ -3937,7 +4112,28 @@ echo (nameof($x))     # "x"
 
 \begin{lstlisting}
 alloc buffer = 1024     # Allocate 1024 bytes of native memory
+alloc info = SysInfo    # Or size it from an interop type
 \end{lstlisting}
+
+Byte offsets on the buffer helpers are the \code{--at} flag, not a positional
+slot:
+
+\begin{lstlisting}
+write-buffer $buffer 42 --at 8
+read-buffer long $buffer --at 8
+read-buffer bytes $buffer --count 16
+forget $buffer          # unsets the variable and frees the buffer
+\end{lstlisting}
+
+The \code{native-*} names are canonical; \code{alloc}, \code{read-buffer},
+\code{write-buffer}, \code{size-of} and \code{offset-of} are blessed aliases.
+\code{native-free} deliberately has no short alias, because \code{free} is the
+System memory command --- use \code{forget}, which releases the variable and
+the buffer together.
+
+With \code{raw struct} and \code{out} parameters, most code needs none of
+this: the engine allocates and marshals, and the buffer helpers remain for
+genuinely dynamic sizes and raw pointer arithmetic.
 
 See Chapter~\ref{ch:command-catalog} for full native interop commands.
 

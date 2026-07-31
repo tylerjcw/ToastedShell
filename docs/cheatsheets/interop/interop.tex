@@ -155,31 +155,51 @@ Inventory.state_of($bread)
 
 \section{Native Interop Basics}
 \begin{lstlisting}
-require native "./libcrypto.so" as Crypto
-
-bind Crypto {
-    func sha256(data: byte-ptr, len: ulong) -> byte-ptr
+bind native "./libcrypto.so" as Crypto {
+    func sha256(data: ptr, len: ulong) -> ptr
 }
+\end{lstlisting}
+
+Describe a C struct with \texttt{raw struct}. Padding is never
+declared --- sequential layout aligns naturally, as C does.
+
+\begin{lstlisting}
+raw struct UtsName {
+    sysname:  cstring[65]
+    nodename: cstring[65]
+    release:  cstring[65]
+}
+
+bind native "libc.so.6" as LibC {
+    func uname(out buf: UtsName) -> ok
+}
+
+(LibC.uname()).release
 \end{lstlisting}
 
 \begin{lstlisting}
 alloc buffer = 1024
-native-write $buffer "hello"
-native-read $buffer
-size-of int
-offset-of MyStruct FieldName
-native-free $buffer
+write-buffer $buffer "hello"
+read-buffer cstring $buffer
+read-buffer long $buffer --at 8
+size-of UtsName
+offset-of UtsName release
+forget $buffer
 \end{lstlisting}
 
 \tighttable{>{\ttfamily\raggedright\arraybackslash}p{0.29\linewidth}X}{
 \toprule
 Native tool & Purpose \\
 \midrule
-\texttt{alloc} / \texttt{native-free} & manage unmanaged buffers \\
-\texttt{native-read} / \texttt{native-write} & copy values to and from native memory \\
+\texttt{raw struct} & declare a C memory layout \\
+\texttt{bind native} & bind library exports \\
+\texttt{alloc} / \texttt{forget} & manage unmanaged buffers \\
+\texttt{read-buffer} / \texttt{write-buffer} & copy values to and from native memory \\
 \texttt{size-of} / \texttt{offset-of} & inspect unmanaged layouts \\
 \bottomrule
 }
+
+\note{The \texttt{native-*} names are canonical; the short forms above are blessed aliases. \texttt{native-free} has none --- \texttt{free} is the System memory command, so use \texttt{forget}, which unsets the variable and frees the buffer together.}
 
 \note{\textbf{Use records for compact data, classes for behavior, CLR interop for existing .NET types, and native interop only when managed APIs are not enough.} ToSh lives directly on top of the CLR, so shell pipelines, user-defined types, and .NET APIs can coexist in the same script.}
 
@@ -317,56 +337,76 @@ bind native "libc.so.6" as LibC {
 }
 \end{lstlisting}
 
-\begin{lstlisting}
-require native "./libcrypto.so" as Crypto
-bind Crypto {
-    func sha256(data: byte-ptr, len: ulong) -> byte-ptr
-}
-\end{lstlisting}
-
 \tighttable{>{\ttfamily\raggedright\arraybackslash}p{0.29\linewidth}X}{
 \toprule
 Native type & Typical use \\
 \midrule
 \texttt{nint} / \texttt{nuint} & pointer-sized ints \\
-\texttt{byte-ptr} & raw buffer pointers \\
+\texttt{ptr} & raw buffer pointers \\
 \texttt{cstring} & C string interop surfaces \\
+\texttt{cstring[n]} & inline \texttt{char[n]} inside a raw struct \\
+\texttt{buffer[n]} & output-string pair (pointer + length) \\
 \texttt{out} / \texttt{ref} & by-reference native parameters \\
 \bottomrule
 }
 
+\section{Return Conventions}
+\begin{lstlisting}
+func sysinfo(out i: SysInfo)      -> ok
+func sysconf(name: int)           -> count
+func gettimeofday(out t: TV, nint)-> auto
+func getloadavg(out a: double[3],
+                n: int) -> int where (_ == 3)
+\end{lstlisting}
+
+\tighttable{>{\ttfamily\raggedright\arraybackslash}p{0.24\linewidth}X}{
+\toprule
+Return & Success is \\
+\midrule
+\texttt{ok} & \texttt{0}; anything else throws \\
+\texttt{count} & \texttt{>= 0}, and is the value \\
+\texttt{auto} & always; projects out params \\
+\texttt{where (\_)} & your predicate over \texttt{\_} \\
+\bottomrule
+}
+
+A checked call yields its \texttt{out} parameter directly. Failure throws
+\texttt{NativeError} with \texttt{Errno} and \texttt{ErrnoName}.
+
 \section{Buffer Workflow}
 \begin{lstlisting}
-var src = (native-alloc 6)
-var dst = (native-alloc 6)
-native-write $src "toast"
+alloc src = 6
+alloc dst = 6
+write-buffer $src "toast"
 LibC.memcpy($dst, $src, 6)
-native-read cstring $dst
-native-free $src $dst
+read-buffer cstring $dst
+forget $src $dst
 \end{lstlisting}
 
 \begin{lstlisting}
 alloc counter = long
-native-write $counter 42
-native-read long $counter
-native-free $counter
+write-buffer $counter 42 --at 0
+read-buffer long $counter
+forget $counter
 \end{lstlisting}
 
 \section{Layout Inspection}
 \begin{lstlisting}
 size-of int
-size-of nint
-offset-of MyStruct Field1
+size-of UtsName
+offset-of SysInfo totalram
 \end{lstlisting}
 
 \section{Native Safety Rules}
 \begin{itemize}
 \item Prefer \texttt{cstring} or pointer types for native string surfaces.
-\item Free every buffer allocated with \texttt{native-alloc} / \texttt{alloc}.
-\item Keep native signatures explicit: pointer types, by-ref mode, and calling convention.
+\item Never declare padding --- sequential layout aligns as C does.
+\item Use \texttt{byte}, not \texttt{bool}: \texttt{bool} marshals as a 4-byte Win32 \texttt{BOOL}.
+\item \texttt{out} is engine-allocated; \texttt{ref} means the callee also reads.
+\item \texttt{forget} every buffer you \texttt{alloc}.
 \end{itemize}
 
-\note{\textbf{Rule of thumb:} stay in CLR land unless you truly need a native ABI. When you do cross that boundary, spell signatures explicitly and free every buffer you allocate.}
+\note{\textbf{Rule of thumb:} stay in CLR land unless you truly need a native ABI. When you do cross that boundary, declare the layout with \texttt{raw struct}, state the success convention, and let the engine own the memory.}
 
 \end{multicols*}
 \end{document}

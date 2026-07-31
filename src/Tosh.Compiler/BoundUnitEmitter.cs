@@ -1159,9 +1159,17 @@ internal sealed partial class EmitterImpl : IDisposable
         // of native bindings (first-class .NET plan, step 7 phase 1).
         foreach (var statement in _unit.Root.Statements)
         {
-            if (statement is BoundBindStatement bind && CanEmitNativeBindShell(bind))
+            if (statement is not BoundBindStatement bind) continue;
+
+            if (CanEmitNativeBindShell(bind))
             {
                 DeclareNativeBindShell(bind);
+            }
+            else
+            {
+                // Say *why* this one stayed Tier 3 when the reason is a real
+                // error rather than an unlifted shape.
+                ReportInvalidNativeBindSignatures(bind);
             }
         }
 

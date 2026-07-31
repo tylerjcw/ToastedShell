@@ -38,6 +38,27 @@ internal sealed class ToshModuleObject : IShellRecordObject, IShellInvocableObje
         _exports.Commands[command.Name] = command;
     }
 
+    /// <summary>
+    /// The emitted CLR type for a <c>raw struct</c> exported from this module,
+    /// so `ToastLib.System.SysInfo` is nameable in a native signature declared
+    /// outside the module. Kept separate from <see cref="TryGetMember"/>, which
+    /// yields the <c>IShellNamedType</c> façade rather than the type itself.
+    /// </summary>
+    internal bool TryGetExportedNativeType(string name, out Type? type) =>
+        _exports.NativeTypes.TryGetValue(name, out type);
+
+    internal bool TryGetExportedModule(string name, out ToshModuleObject module)
+    {
+        if (_exports.Modules.TryGetValue(name, out var value) && value is ToshModuleObject nested)
+        {
+            module = nested;
+            return true;
+        }
+
+        module = null!;
+        return false;
+    }
+
     public bool TryGetMember(string name, out object? value, bool includeHidden = false)
     {
         if (_exports.Modules.TryGetValue(name, out value))

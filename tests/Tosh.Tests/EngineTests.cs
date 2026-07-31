@@ -3887,8 +3887,12 @@ $output");
         Assert.Equal([true, true], results);
     }
 
+    /// <summary>
+    /// `out` parameters are engine-allocated and do not appear at the call site,
+    /// so `gettimeofday` takes only its (unused) timezone pointer.
+    /// </summary>
     [Fact]
-    public async Task Native_bindings_support_out_struct_parameters_and_buffer_writeback()
+    public async Task Native_bindings_support_out_struct_parameters()
     {
         if (!OperatingSystem.IsLinux())
         {
@@ -3903,18 +3907,44 @@ $output");
             bind native "libc.so.6" as LibC {
                 func gettimeofday(out tv: Tosh.Tests.NativeTimeVal, nint) -> int
             }
-            var direct = LibC.gettimeofday(null, 0)
+            var direct = LibC.gettimeofday(0)
+            $direct.ReturnValue
+            $direct.tv.tv_sec > 0
+            """);
+
+        Assert.Equal([0, true], results);
+    }
+
+    /// <summary>
+    /// Buffer writeback moved to `ref`, which is where it belongs: supplying the
+    /// memory means the parameter is not write-only. `out` drops from the call
+    /// site precisely because there is nothing for a caller to pass.
+    /// </summary>
+    [Fact]
+    public async Task Native_bindings_write_back_into_ref_buffers()
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            return;
+        }
+
+        var runtime = ToshRuntime.CreateDefault();
+        var engine = new ToshEngine(runtime);
+
+        var results = await engine.ExecuteToListAsync(
+            """
+            bind native "libc.so.6" as LibC {
+                func gettimeofday(ref tv: Tosh.Tests.NativeTimeVal, nint) -> int
+            }
             alloc buffer = Tosh.Tests.NativeTimeVal
             var buffered = LibC.gettimeofday($buffer, 0)
             var roundTrip = (read-buffer Tosh.Tests.NativeTimeVal $buffer)
-            $direct.ReturnValue
-            $direct.tv.tv_sec > 0
             $buffered.ReturnValue
             $roundTrip.tv_sec > 0
             forget $buffer | ignore
             """);
 
-        Assert.Equal([0, true, 0, true], results);
+        Assert.Equal([0, true], results);
     }
 
     [Fact]

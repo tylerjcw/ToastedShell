@@ -845,55 +845,24 @@ internal sealed partial class EmitterImpl
     /// <summary>
     /// First-class .NET plan, step 7. Maps a tosh native type name
     /// to the CLR primitive (or <see cref="string"/>) used by P/Invoke
-    /// marshaling. <c>string</c>/<c>cstring</c>/<c>cstr</c> all map to
-    /// <see cref="string"/>; the caller is responsible for applying
-    /// the right <c>MarshalAs</c> on the parameter. Returns <c>null</c>
+    /// marshaling, delegating to <see cref="NativeTypeLexicon"/> so this
+    /// tier and the interpreter cannot drift apart. Returns <c>null</c>
     /// for shapes the emitter doesn't handle yet (custom marshaling,
     /// struct-by-value), which causes the bind statement to fall back
     /// to source replay.
     /// </summary>
-    private static Type? TryMapNativeBindType(string? name)
-    {
-        if (string.IsNullOrEmpty(name)) return typeof(void);
-        return name.ToLowerInvariant() switch
-        {
-            "int" => typeof(int),
-            "uint" => typeof(uint),
-            "long" => typeof(long),
-            "ulong" => typeof(ulong),
-            "short" => typeof(short),
-            "ushort" => typeof(ushort),
-            "byte" => typeof(byte),
-            "sbyte" => typeof(sbyte),
-            "double" => typeof(double),
-            "float" => typeof(float),
-            "bool" => typeof(bool),
-            "nint" or "ptr" => typeof(IntPtr),
-            "nuint" or "uptr" => typeof(UIntPtr),
-            "string" or "cstring" or "cstr" => typeof(string),
-            "void" => typeof(void),
-            _ => null,
-        };
-    }
+    private static Type? TryMapNativeBindType(string? name) =>
+        NativeTypeLexicon.TryResolveScalar(name, out var clrType) ? clrType : null;
 
-    private static bool IsNativeBindStringTypeName(string? name)
-    {
-        if (string.IsNullOrEmpty(name)) return false;
-        return name.ToLowerInvariant() is "string" or "cstring" or "cstr";
-    }
+    private static bool IsNativeBindStringTypeName(string? name) =>
+        NativeTypeLexicon.IsStringLikeName(name);
 
     private static System.Runtime.InteropServices.CallingConvention ParseNativeBindCallConv(string? name)
     {
-        if (string.IsNullOrEmpty(name)) return System.Runtime.InteropServices.CallingConvention.Cdecl;
-        return name.ToLowerInvariant() switch
-        {
-            "cdecl" => System.Runtime.InteropServices.CallingConvention.Cdecl,
-            "stdcall" => System.Runtime.InteropServices.CallingConvention.StdCall,
-            "winapi" => System.Runtime.InteropServices.CallingConvention.Winapi,
-            "thiscall" => System.Runtime.InteropServices.CallingConvention.ThisCall,
-            "fastcall" => System.Runtime.InteropServices.CallingConvention.FastCall,
-            _ => System.Runtime.InteropServices.CallingConvention.Cdecl,
-        };
+        // Unknown names are rejected by CanEmitNativeBindShell before we get
+        // here, so the fallback is unreachable rather than a silent default.
+        NativeTypeLexicon.TryResolveCallingConvention(name, out var convention);
+        return convention;
     }
 
     /// <summary>
@@ -905,6 +874,45 @@ internal sealed partial class EmitterImpl
     /// Anything else (<c>ref</c>/<c>out</c> string, struct-by-value,
     /// unknown type names) still routes to source replay.
     /// </summary>
+    /// <summary>
+    /// Reports the bind-signature problems that are outright <em>errors</em>
+    /// rather than shapes this tier merely cannot lift yet.
+    ///
+    /// <see cref="CanEmitNativeBindShell"/> answers one question ("can this be
+    /// a <c>[DllImport]</c>?") and returns <c>false</c> for two very different
+    /// reasons: a struct-by-value parameter, which is legitimate and just needs
+    /// source replay, versus a misspelled type name, which the engine rejects
+    /// outright at runtime. Both used to surface as the same generic "tier 3"
+    /// note, so a typo looked exactly like an unimplemented feature.
+    ///
+    /// Anything named here would throw from
+    /// <c>ToshEngine.ResolveNativeInteropParameterType</c> if the script ran,
+    /// so naming it at compile time costs nothing and saves the round trip.
+    /// </summary>
+    private void ReportInvalidNativeBindSignatures(BoundBindStatement bind)
+    {
+        var module = string.IsNullOrEmpty(bind.ModuleName) ? "<native>" : bind.ModuleName;
+
+        foreach (var fn in bind.Functions)
+        {
+            if (!NativeTypeLexicon.TryResolveCallingConvention(fn.CallingConventionName, out _))
+            {
+                Diagnostics.Add(
+                    $"bind '{module}.{fn.Name}': unsupported calling convention " +
+                    $"'{fn.CallingConventionName}' (use cdecl, stdcall, thiscall, fastcall, or winapi)");
+            }
+
+            foreach (var p in fn.Parameters)
+            {
+                var isByRef = p.PassingMode != NativeParameterPassingMode.In;
+                if (NativeTypeLexicon.ValidateByRef(p.TypeName, isByRef) is { } rejection)
+                {
+                    Diagnostics.Add($"bind '{module}.{fn.Name}': parameter '{p.Name}' — {rejection.Title}");
+                }
+            }
+        }
+    }
+
     private bool CanEmitNativeBindShell(BoundBindStatement bind)
     {
         if (bind.NativeTarget is null) return false;
@@ -914,15 +922,20 @@ internal sealed partial class EmitterImpl
         foreach (var fn in bind.Functions)
         {
             if (TryMapNativeBindType(fn.ReturnTypeName) is null) return false;
+
+            // An unknown calling convention is an error in the engine, so it
+            // must not compile to a silently-defaulted Cdecl here.
+            if (!NativeTypeLexicon.TryResolveCallingConvention(fn.CallingConventionName, out _)) return false;
+
             foreach (var p in fn.Parameters)
             {
                 if (TryMapNativeBindType(p.TypeName) is null) return false;
-                if (p.PassingMode != NativeParameterPassingMode.In)
-                {
-                    // by-ref string marshaling needs explicit
-                    // pointer types; mirror the engine's rejection.
-                    if (IsNativeBindStringTypeName(p.TypeName)) return false;
-                }
+
+                // by-ref string marshaling needs explicit pointer types. The
+                // rule lives in NativeTypeLexicon so this tier and the engine
+                // cannot disagree about it.
+                var isByRef = p.PassingMode != NativeParameterPassingMode.In;
+                if (NativeTypeLexicon.ValidateByRef(p.TypeName, isByRef) is not null) return false;
             }
         }
         return true;

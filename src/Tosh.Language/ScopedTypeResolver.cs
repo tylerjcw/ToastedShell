@@ -35,6 +35,24 @@ internal sealed class ScopedTypeResolver : ITypeResolver
 
     private bool TryResolveInScope(LexicalScope scope, string name, out Type? type)
     {
+        // `raw struct` types are checked first. They are emitted at declaration
+        // time and have no path for the base resolver to look up, so nothing
+        // downstream could find them; and a native type name shadowing an alias
+        // in the same scope is a collision `DeclareType` already rejects.
+        if (scope.NativeTypes.TryGetValue(name, out var nativeType))
+        {
+            type = nativeType;
+            return true;
+        }
+
+        // Qualified access to a raw struct exported from a module —
+        // `Demo.Pair`, `ToastLib.System.SysInfo`. Modules nest, so this walks
+        // the chain rather than assuming a single segment.
+        if (name.Contains('.') && NativeTypeQualifiedLookup.TryResolve(scope.Modules, name, out type))
+        {
+            return true;
+        }
+
         foreach (var (alias, targetPath) in scope.TypeAliases)
         {
             if (string.Equals(name, alias, StringComparison.OrdinalIgnoreCase))

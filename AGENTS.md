@@ -805,7 +805,8 @@ TōSh has ~209 built-in commands spanning these categories:
 - **Shell**: echo, clear, history, config, exit, exec, source, assert, eval
 - **Object/CLR**: typeof, describe-type, members, methods, props, funcs, constructors, types, load-assembly, new-object, cast. The verb-form commands (`call`, `call-method`, `get-prop`, `get-props`, `get-methods`, `set-prop`, `del-prop`, `has-prop`, `has-method`) are deprecated — prefer fluent member access (`$obj.Method($args)`, `$obj.Prop`, `$obj.Prop = value`) and `members has X` / `methods has X` for introspection.
 - **Prompt**: prompt-time, prompt-dir, prompt-git, prompt-userhost, prompt-history, prompt-jobs, prompt-duration, prompt-exitcode, prompt-text, prompt-newline
-- **Interop**: alloc, native-free, native-read, native-write, native-sizeof, native-offsetof
+- **Interop**: native-alloc, native-free, native-read, native-write, native-sizeof, native-offsetof. The `native-*` names are canonical; `alloc`, `read-buffer`, `write-buffer`, `size-of`, and `offset-of` are blessed aliases. `native-free` has no alias — use `forget $buffer`, which unsets the variable and frees the buffer in one step. Byte offsets are the `--at` flag, not a positional slot.
+- **Native declarations** (language keywords, not commands): `raw struct` / `raw union` declare a C memory layout; `bind native "lib" { func … }` binds exports, and works inside a module or class body; `raw func … from "lib"` is the single-binding form. Return conventions are `-> ok` (0 is success), `-> count` (>= 0 is success and is the value), `-> auto` (project out params, no checking), or an explicit `where (…)`. Failures throw `NativeError` carrying errno.
 - **Path Predicates**: exists, is-file, is-dir, is-link
 
 ## Writing Config Files
