@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using Tosh.Client;
+using Tosh.Dap;
 using Tosh.Lsp;
 using Tosh.Mcp;
 using Tosh.Stdlib.Tssp;
@@ -12,10 +13,16 @@ namespace Tosh.Tests;
 /// </summary>
 /// <remarks>
 /// <para>
-/// A July 30 survey found the LSP server, the MCP server, and the TSSP client library — about
-/// 2,000 lines between them — with **no test referencing them at all**. They are also the
+/// A July 30 survey found the LSP server, the MCP server, the DAP server, and the TSSP client
+/// library — about 2,500 lines between them — with **no test referencing them at all**. They are also the
 /// surfaces where breakage is quietest: nothing in the suite notices when a server stops
 /// answering `initialize`, because nothing in the suite ever asks it to.
+/// </para>
+/// <para>
+/// The DAP server was the sharpest case: its `.csproj` was in no solution, so an ordinary
+/// build had not compiled it since April — while the VS Code extension contributes a `tosh`
+/// debugger that builds it on demand and launches it. A user pressing F5 was the only thing
+/// checking whether it still compiled. It did, but that was luck rather than a guarantee.
 /// </para>
 /// <para>
 /// These are deliberately smoke tests and not protocol conformance suites. Each asserts that
@@ -97,6 +104,33 @@ public sealed class ProtocolSmokeTests
 
         Assert.Contains("\"id\":2", response, StringComparison.Ordinal);
         Assert.Contains("greet", response, StringComparison.Ordinal);
+    }
+
+    // ── DAP: Content-Length framing, same as LSP ──────────────────────────────
+
+    [Fact]
+    public async Task The_debug_adapter_answers_initialize()
+    {
+        var input = new MemoryStream([
+            .. LspFrame("""
+                {"seq":1,"type":"request","command":"initialize","arguments":{
+                "adapterID":"tosh","clientID":"smoke","linesStartAt1":true}}
+                """),
+            .. LspFrame("""{"seq":2,"type":"request","command":"threads"}"""),
+        ]);
+
+        var output = new MemoryStream();
+        using var cts = new CancellationTokenSource(Budget);
+
+        await new ToshDapServer(input, output).RunAsync(cts.Token);
+
+        var response = Encoding.UTF8.GetString(output.ToArray());
+
+        Assert.Contains("Content-Length:", response, StringComparison.Ordinal);
+        Assert.Contains("\"type\":\"response\"", response, StringComparison.Ordinal);
+        Assert.Contains("initialize", response, StringComparison.Ordinal);
+        // `success:false` on initialize means the editor drops the session immediately.
+        Assert.DoesNotContain("\"success\":false", response, StringComparison.Ordinal);
     }
 
     // ── MCP: newline-delimited JSON ────────────────────────────────────────────

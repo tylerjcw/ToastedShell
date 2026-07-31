@@ -16,7 +16,6 @@ public static class ToshPublisher
         "Tosh.Language.dll",
         "Tosh.Runtime.dll",
         "Tosh.Stdlib.dll",
-        "Tosh.Core.dll",
         "Tosh.Tui.dll",
     ];
 
