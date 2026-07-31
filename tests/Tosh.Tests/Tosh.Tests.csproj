@@ -38,6 +38,7 @@
     <ProjectReference Include="..\..\src\Tosh.Stdlib\Tosh.Stdlib.csproj" />
     <ProjectReference Include="..\..\src\Tosh.Tui\Tosh.Tui.csproj" />
     <ProjectReference Include="..\..\src\Tosh.LanguageServices\Tosh.LanguageServices.csproj" />
+    <ProjectReference Include="..\..\src\Tosh.Client\Tosh.Client.csproj" />
     <ProjectReference Include="..\..\src\Tosh.Lsp\Tosh.Lsp.csproj" />
     <ProjectReference Include="..\..\src\Tosh.Mcp\Tosh.Mcp.csproj" />
     <ProjectReference Include="..\..\src\Tosh.Compiler\Tosh.Compiler.csproj" />
