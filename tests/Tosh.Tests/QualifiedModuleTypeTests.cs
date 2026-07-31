@@ -130,6 +130,73 @@ public sealed class QualifiedModuleTypeTests
         }
     }
 
+    // ── TS-P1-36: exports are reached through the module name, never bare ──────
+
+    [Theory]
+    // Types, classes and commands alike: `export` publishes a member *of the module*, and the
+    // module's name is how you reach it. Nothing lands in the requiring scope.
+    [InlineData("var v: SmallInt = 5", "unknown type annotation")]
+    [InlineData("var w = (new Widget())", "Widget")]
+    public async Task An_export_does_not_leak_unqualified_from_a_plain_module(
+        string source,
+        string expected)
+    {
+        var error = await Assert.ThrowsAnyAsync<Exception>(
+            async () => await WithModuleAsync(source));
+
+        Assert.Contains(expected, error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task An_export_does_not_leak_unqualified_from_a_partial_module()
+    {
+        // `partial` splits a declaration across files; it must not also widen visibility.
+        // Asserted separately because partial merging declares through a different path
+        // (TS-P2-28) than a plain module, so the two could drift apart without this.
+        //
+        // This is the decision recorded for TS-P1-36 — exports are reached through the module
+        // name or an alias, never bare. The item was filed as a *defect* on the belief that a
+        // partial module leaked its exports; that turned out to be unreproducible, and the
+        // rule was already in force. It is pinned here so the decision is enforced rather than
+        // merely true today.
+        var path = Path.Combine(Path.GetTempPath(), $"tosh-noleak-{Guid.NewGuid():N}.tosh");
+        await File.WriteAllTextAsync(
+            path,
+            """
+            partial module Lib {
+                partial module Nums {
+                    export type Small = int where (_ >= 0 and _ <= 10) coerce 10
+                    export func hello() { return "hi" }
+                }
+            }
+            """);
+
+        try
+        {
+            var escaped = path.Replace("\\", "\\\\", StringComparison.Ordinal);
+
+            var typeError = await Assert.ThrowsAnyAsync<Exception>(
+                async () => await EvaluateAsync(
+                    $"require \"{escaped}\"\nvar v: Small = 5"));
+            Assert.Contains("unknown type annotation", typeError.Message, StringComparison.Ordinal);
+
+            var commandError = await Assert.ThrowsAnyAsync<Exception>(
+                async () => await EvaluateAsync($"require \"{escaped}\"\nhello()"));
+            Assert.Contains("hello", commandError.Message, StringComparison.Ordinal);
+
+            // And the qualified spellings still work, which is the other half of the rule —
+            // "not bare" is only correct if the module name genuinely reaches them.
+            Assert.Equal(10, await EvaluateAsync(
+                $"require \"{escaped}\"\nvar v: Lib.Nums.Small = 99\n$v"));
+            Assert.Equal("hi", await EvaluateAsync(
+                $"require \"{escaped}\"\nLib.Nums.hello()"));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
     // ── TS-P1-35: a shadowing module still reaches the CLR type ────────────────
 
     /// <summary>
