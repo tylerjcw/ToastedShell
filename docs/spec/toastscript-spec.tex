@@ -3261,6 +3261,10 @@ echo ($p.Distance($q))         # 5
 Class features:
 \begin{itemize}
   \item \textbf{Primary constructor}---parameters after the class name.
+    They are in scope for property initializers.
+  \item \textbf{Explicit constructors}---a member named after the class,
+    \code{ClassName(params) \{ ... \}}.  A class may declare several, and they
+    overload on their parameter types.
   \item \textbf{Stored properties}---\code{prop Name: Type = value}.
   \item \textbf{Computed properties}---\code{prop Name => (expr)} (type annotation is inferred).
   \item \textbf{Accessor blocks}---\code{prop Name \{ get ... set ... \}}.  Each
@@ -3273,6 +3277,50 @@ Class features:
   \item \textbf{Visibility}---\code{shy} for private members.
   \item \textbf{Instantiation}---\code{new ClassName(args)}.
 \end{itemize}
+
+\subsection*{Constructor Overloads}
+
+Constructors overload on their parameter \emph{types}, not on how many
+parameters they take.  Two constructors may share an arity as long as a reader
+and the resolver can tell them apart:
+
+\begin{lstlisting}
+class G {
+    prop X: string = ""
+    G(n: int)    { $this.X = $"int:{$n}" }
+    G(s: string) { $this.X = $"str:{$s}" }
+}
+
+(new G(7)).X               # int:7
+(new G("hi")).X            # str:hi
+\end{lstlisting}
+
+The primary constructor participates as one more overload, so it may sit beside
+explicit constructors of a different signature:
+
+\begin{lstlisting}
+class H(x: int) {
+    prop X: string = "primary"
+    H(s: string) { $this.X = $"str:{$s}" }
+}
+
+(new H(7)).X               # primary
+(new H("hi")).X            # str:hi
+\end{lstlisting}
+
+Two constructors with an \emph{identical} signature are rejected where they are
+declared, with \code{tosh.runtime.duplicate\_constructor}---including the case
+where an explicit constructor repeats the primary one:
+
+\begin{lstlisting}
+class C(x: int) {
+    C(y: int) { }          # error: same signature as the primary constructor
+}
+\end{lstlisting}
+
+The check is a declaration rule rather than a call-site one because such a class
+can never be constructed at that signature: the error belongs where the mistake
+is, not at every \code{new}.
 
 \subsection{Class Modifiers}
 \ikw{sealed}\ikw{hollow}\ikw{hermit}\ikw{strict}\ikw{partial}

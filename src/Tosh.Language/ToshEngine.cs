@@ -3634,6 +3634,11 @@ public sealed partial class ToshEngine : IShellEvaluator
             }
 
             existingDef.MergePartial(runtimeProperties, runtimeMethods, runtimeConstructors);
+
+            // After the merge, not before: a later part can contribute the constructor that
+            // collides with an earlier part's, and neither part is wrong on its own.
+            existingDef.ValidateConstructorSignatures();
+
             await BindNativeClassMembersAsync(sourceName, sourceText, @class, existingDef, cancellationToken);
 
             // Declared again rather than returning early, so a file contributing
@@ -3642,6 +3647,9 @@ public sealed partial class ToshEngine : IShellEvaluator
             DeclareType(@class.Name, existingDef, @class.Modifier, sourceName, sourceText, @class.Span);
             yield break;
         }
+
+        // Before DeclareType, so a class the resolver could never construct never enters scope.
+        definition.ValidateConstructorSignatures();
 
         await BindNativeClassMembersAsync(sourceName, sourceText, @class, definition, cancellationToken);
 

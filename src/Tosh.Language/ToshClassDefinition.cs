@@ -139,6 +139,98 @@ public sealed class ToshClassDefinition : IShellNamedType
     /// Merges members from another partial class definition into this one.
     /// Properties, methods, and constructors from the other definition are added.
     /// </summary>
+    /// <summary>
+    /// Rejects two constructors the overload resolver could never tell apart — <c>TS-P1-34</c>'s
+    /// sibling, <c>TS-P1-18</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A class declaring a primary constructor <c>C(x: int)</c> and an explicit <c>C(y: int)</c>
+    /// registered both, so *every* instantiation failed with "Multiple constructor overloads
+    /// matched class 'C' with 1 argument(s): C(y: int); C(x: int)" — a class reported as ambiguous
+    /// with itself, at the point of use, with nothing naming the declaration at fault.
+    /// </para>
+    /// <para>
+    /// The rule compares **type annotations positionally**, not arity. Same arity is emphatically
+    /// legal and works today: `G(n: int)` beside `G(s: string)` resolves correctly, and so does a
+    /// primary `H(x: int)` beside an explicit `H(s: string)`. A blanket arity rule would have
+    /// broken both. Only an *identical* signature is rejected, which is exactly the case the
+    /// resolver cannot decide — so this can turn no working program into an error, since any
+    /// program it rejects could not be instantiated at that signature in the first place.
+    /// </para>
+    /// <para>
+    /// An unannotated parameter is its own signature and collides only with another unannotated
+    /// one in the same position. `C(y: int)` beside `C(x)` stays legal: they are distinguishable,
+    /// the typed one being preferred for an <c>int</c> and the untyped one taking everything else.
+    /// </para>
+    /// </remarks>
+    internal void ValidateConstructorSignatures()
+    {
+        var seen = new List<(IReadOnlyList<FunctionParameterDefinition> Parameters, bool IsPrimary)>();
+
+        foreach (var constructor in _constructors)
+        {
+            seen.Add((constructor.Parameters, false));
+        }
+
+        if (_primaryConstructorParameters.Count > 0)
+        {
+            seen.Add((_primaryConstructorParameters, true));
+        }
+
+        for (var i = 0; i < seen.Count; i++)
+        {
+            for (var j = i + 1; j < seen.Count; j++)
+            {
+                if (!SignaturesCollide(seen[i].Parameters, seen[j].Parameters))
+                {
+                    continue;
+                }
+
+                var involvesPrimary = seen[i].IsPrimary || seen[j].IsPrimary;
+                var signature = FormatConstructorSignature(seen[j].Parameters);
+
+                throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                    Code: "tosh.runtime.duplicate_constructor",
+                    Title: involvesPrimary
+                        ? $"Class '{Name}' declares a constructor with the same signature as its primary constructor."
+                        : $"Class '{Name}' declares two constructors with the same signature.",
+                    SourceName: SourceName,
+                    SourceText: SourceText,
+                    Span: Span,
+                    Label: $"both are {signature}",
+                    Help: involvesPrimary
+                        ? "give the explicit constructor a different signature, or drop the primary "
+                          + "constructor's parameters and let the explicit one take them."
+                        : "give one of them a different signature."));
+            }
+        }
+    }
+
+    /// <summary>
+    /// Two parameter lists the resolver cannot distinguish: same length, and the same declared
+    /// type in every position (an absent annotation matching only another absent annotation).
+    /// </summary>
+    private static bool SignaturesCollide(
+        IReadOnlyList<FunctionParameterDefinition> left,
+        IReadOnlyList<FunctionParameterDefinition> right)
+    {
+        if (left.Count != right.Count)
+        {
+            return false;
+        }
+
+        for (var index = 0; index < left.Count; index++)
+        {
+            if (!string.Equals(left[index].TypeName, right[index].TypeName, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     internal void MergePartial(
         IReadOnlyList<ToshClassPropertyDefinition> properties,
         IReadOnlyList<ToshClassMethodDefinition> methods,
