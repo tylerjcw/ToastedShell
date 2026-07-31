@@ -811,9 +811,8 @@ func trx_failed_filter(trx_path: string) -> string? {
     var elem_rx = new System.Text.RegularExpressions.Regex("(?s)<UnitTestResult\\b[^>]+outcome=\"Failed\"[^>]*(?:/>|>.*?</UnitTestResult>)")
     var name_rx = new System.Text.RegularExpressions.Regex("testName=\"([^\"]+)\"")
     var ms = $elem_rx.Matches($content)
-    if ($ms.Count == 0) { return null }
     var parts = [$"(FullyQualifiedName={$nm.Groups[1].Value})" <| for match in $ms where ($name_rx.Match($match.Value).Success) let nm = $name_rx.Match($match.Value)]
-    if (($parts | count) == 0) { return null }
+    return null if (($ms.Count == 0) or (($parts | count) == 0))
     return ($parts | join "|")
 }
 

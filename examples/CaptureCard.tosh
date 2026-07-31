@@ -1,0 +1,75 @@
+#!/bin/tosh
+record Rect(Width: int, Height: int)
+
+class AudioSource {
+    prop Id: string = ""
+    prop Sink: string = ""
+    prop Delay: double = 0.0
+    prop Loopback: string = ""
+    prop Proc: Process
+
+    AudioSource(id: string, sink: string = "", delay: double = 0.0) {
+        $this.Id = $id
+        $this.Sink = $sink
+        $this.Delay = $delay
+        $this.Loopback = $"-C {$this.Id}"
+        $this.Loopback = ($this.Sink != "") ? $"{$this.Loopback} -P {$this.Sink}" : $this.Loopback
+        $this.Loopback = ($this.Delay > 0) ? $"{$this.Loopback} --delay {$this.Delay}" : $this.Loopback
+    }
+
+    func Play() -> Process {
+        $this.Proc = Process.Start("pw-loopback", $this.Loopback)
+    }
+
+    func Stop() {
+        $this.Proc.Kill() | ignore
+    }
+}
+
+class VideoSource {
+    prop Id: string = ""
+    prop Size: Rect = new Rect(0, 0)
+    prop Fps: int = 0
+
+    prop Options = []
+
+    VideoSource(id: string, width: int = 1920, height: int = 1080, fps: int = 60) {
+        $this.Id = $id
+        $this.Size = new Rect($width, $height)
+        $this.Fps = $fps
+
+        $this.Options = [
+            '--title=xbox',
+            '--no-audio',
+            '--untimed',
+            '--cache=no',
+            '--hwdec=no',
+            '--profile=low-latency',
+            '--demuxer-lavf-o-add=input_format=nv12',
+            $"--demuxer-lavf-o-add=video_size={$this.Size.Width}x{$this.Size.Height}",
+            $"--demuxer-lavf-o-add=framerate={$this.Fps}",
+            $"av://v4l2:{$this.Id}"
+        ]
+    }
+
+    func Play(args...) {
+        mpv ...$this.Options ...$args
+    }
+}
+
+export class CaptureCard(
+    width: int = 1920, height: int = 1080, fps: int = 60,
+    audioSink: string = "", audioDelay: double = 0.0
+) {
+    prop Audio: AudioSource = new AudioSource("alsa_input.usb-ezcap_ezcap_LIVE_GAMER_RAW_00000001-02.analog-stereo", $audioSink, $audioDelay)
+    prop Video: VideoSource = new VideoSource("/dev/v4l/by-id/usb-ezcap_ezcap_LIVE_GAMER_RAW_00000001-video-index0", $width, $height, $fps)
+
+    func Play(args...) {
+        try {
+            $this.Audio.Play()
+            $this.Video.Play()
+        } finally {
+            $this.Audio.Stop() | ignore
+        }
+    }
+}

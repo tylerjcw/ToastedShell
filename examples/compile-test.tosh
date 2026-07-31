@@ -7,9 +7,9 @@ class Item(name, price) {
 }
 
 var total = 0
-var firstHalf  = [10, 20]
+var firstHalf = [10, 20]
 var secondHalf = [30, 40]
-var prices     = [...$firstHalf, ...$secondHalf]   # spread
+var prices = [...$firstHalf, ...$secondHalf]  # spread
 var items = [
     new Item("apple", 10),
     new Item("bread", 20),
@@ -17,35 +17,36 @@ var items = [
     new Item("date",  40)
 ]
 
-func classify(n) {
-    if ($n < 15) { return "small"  }
-    if ($n < 35) { return "medium" }
+func classify(n: dynamic) -> dynamic {
+    if ($n < 15) {
+        return "small"
+    }
+    if ($n < 35) {
+        return "medium"
+    }
     return "large"
 }
 
-func addToTotal(amount) {
-    $total = $total + $amount   # closure: rewrites the captured top-level
+func addToTotal(amount: dynamic) -> dynamic {
+    $total = $total + $amount  # closure: rewrites the captured top-level
 }
 
 for i in 0..3 {
     addToTotal $prices[$i]
 }
-
 for i in 0..3 {
-    echo ($items[$i].describe())   # method call on user class
+    echo ($items[$i].describe())  # method call on user class
 }
-
 echo $"total: ${$total}"
-
 for i in 0..3 {
     echo $"  {$prices[$i]} -> "
     echo (classify $prices[$i])
 }
-
 try {
-    if ($total < 50) { throw "total too small" }
+    if ($total < 50) {
+        throw "total too small"
+    }
     echo "ok"
-}
-catch (err) {
+} catch (err) {
     echo $"caught: {$err}"
 }
