@@ -96,6 +96,18 @@ public sealed class SyncAsyncTwinInventoryTests
         // Private or internal, reached from both surfaces, and duplicated by
         // choice rather than by contract. These are what the item can actually
         // close, and each one that converges gets struck off this block.
+        //
+        // Three came off on 2026-07-30 by *deletion* rather than refactoring:
+        // ThrowDetailedSingleConstructorMismatch, ConvertConstructorParameterValue
+        // and InvokeConstructorOnInstance (115 lines) had **no callers at all**.
+        // The public construction surface converges at CreateInstanceCoreAsync —
+        // CreateInstance is a wrapper that blocks on it — so the synchronous
+        // constructor path underneath had become unreachable without anyone
+        // noticing. That is the most dangerous shape this item is about: a
+        // maintainer fixing a constructor bug could edit the dead copy, see the
+        // suite stay green, and conclude the fix worked.
+        //
+        // Reachability, not size, is the first question for the remainder.
         "ReflectionInvoker.CreateInstance",
         "ReflectionObjectAccessor.AssignSegment",
         "ReflectionObjectAccessor.ResolveOrMaterializeSegment",
@@ -103,7 +115,6 @@ public sealed class SyncAsyncTwinInventoryTests
         "ShellIndexingUtilities.GetIndexedValue",
         "ShellIndexingUtilities.SetIndexedValue",
         "ShellIterationUtilities.ExpandIterationItems",
-        "ToshClassDefinition.ConvertConstructorParameterValue",
         "ToshClassDefinition.ConvertPropertyValue",
         "ToshClassDefinition.EnumerateItems",
         "ToshClassDefinition.EvaluatePropertyGetter",
@@ -112,8 +123,6 @@ public sealed class SyncAsyncTwinInventoryTests
         "ToshClassDefinition.GetInitialPropertyValue",
         "ToshClassDefinition.GetInstanceMembers",
         "ToshClassDefinition.GetOrInitializeLazyProperty",
-        "ToshClassDefinition.InvokeConstructorOnInstance",
-        "ToshClassDefinition.ThrowDetailedSingleConstructorMismatch",
         "ToshClassDefinition.TryGetInstanceMember",
         "ToshClassDefinition.TryInvokeEnumerator",
         "ToshClassDefinition.TryInvokeSpecialInstanceMethod",

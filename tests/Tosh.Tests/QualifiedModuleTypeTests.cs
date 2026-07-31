@@ -26,13 +26,21 @@ namespace Tosh.Tests;
 /// </remarks>
 public sealed class QualifiedModuleTypeTests
 {
+    /// <remarks>
+    /// The class is named <c>LeakProbeWidget</c> rather than <c>Widget</c> because a bare type
+    /// name resolves against every assembly loaded in the process, and `Tosh.LspFixture` declares
+    /// a CLR <c>Widget</c> that `LspFeatureTests` loads at runtime. A negative assertion — "this
+    /// name must NOT resolve" — is therefore only as stable as which assemblies happen to be
+    /// loaded when it runs, and it failed once under full-suite load while passing 17/17 in
+    /// isolation. Recorded as a TS-P2-39 sighting; the name is now unique either way.
+    /// </remarks>
     private const string Module =
         """
         module Outer {
             module Inner {
                 export type SmallInt = int where (_ >= 0 and _ <= 10) coerce 10
                 export type Port = int where (_ >= 1 and _ <= 65535)
-                export class Widget { prop Name = "w" }
+                export class LeakProbeWidget { prop Name = "w" }
                 export record Point(X: int, Y: int)
             }
         }
@@ -78,7 +86,7 @@ public sealed class QualifiedModuleTypeTests
     [Theory]
     // Not refinement-specific: classes and records failed identically, which is why the fix
     // is in the shared lookups rather than in the refinement path the report pointed at.
-    [InlineData("var w: Outer.Inner.Widget = (new Outer.Inner.Widget())\n$w.Name", "w")]
+    [InlineData("var w: Outer.Inner.LeakProbeWidget = (new Outer.Inner.LeakProbeWidget())\n$w.Name", "w")]
     [InlineData("var p: Outer.Inner.Point = (new Outer.Inner.Point(1, 2))\n$p.X", 1)]
     public async Task A_qualified_class_or_record_annotation_resolves(
         string source,
@@ -136,7 +144,7 @@ public sealed class QualifiedModuleTypeTests
     // Types, classes and commands alike: `export` publishes a member *of the module*, and the
     // module's name is how you reach it. Nothing lands in the requiring scope.
     [InlineData("var v: SmallInt = 5", "unknown type annotation")]
-    [InlineData("var w = (new Widget())", "Widget")]
+    [InlineData("var w = (new LeakProbeWidget())", "LeakProbeWidget")]
     public async Task An_export_does_not_leak_unqualified_from_a_plain_module(
         string source,
         string expected)

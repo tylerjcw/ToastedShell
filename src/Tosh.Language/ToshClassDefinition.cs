@@ -1228,194 +1228,6 @@ public sealed class ToshClassDefinition : IShellNamedType
         return members;
     }
 
-    internal void InvokeConstructorOnInstance(
-        ToshClassInstance instance,
-        IReadOnlyList<object?> arguments) =>
-        InvokeConstructorOnInstanceAsync(instance, arguments, CancellationToken.None)
-            .GetAwaiter()
-            .GetResult();
-
-    internal Task InvokeConstructorOnInstanceAsync(
-        ToshClassInstance instance,
-        IReadOnlyList<object?> arguments,
-        CancellationToken cancellationToken) =>
-        ConstructOnInstanceAsync(instance, arguments, cancellationToken);
-
-    private async Task ConstructOnInstanceAsync(
-        ToshClassInstance instance,
-        IReadOnlyList<object?> arguments,
-        CancellationToken cancellationToken,
-        bool isImplicitBaseCall = false,
-        ToshClassDefinition? requestedBy = null)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-
-        if (instance.IsConstructionLayerComplete(this))
-        {
-            throw CreateConstructionDiagnostic(
-                code: "tosh.runtime.base_constructor_already_initialized",
-                title: $"Base class '{Name}' has already been initialized for this instance.",
-                span: requestedBy?.Span ?? Span,
-                label: "each class layer can be constructed only once",
-                sourceName: requestedBy?.SourceName,
-                sourceText: requestedBy?.SourceText);
-        }
-
-        if (!instance.TryBeginConstructionLayer(this))
-        {
-            throw CreateConstructionDiagnostic(
-                code: "tosh.runtime.constructor_cycle",
-                title: $"Constructor cycle detected while initializing class '{Name}'.",
-                span: requestedBy?.Span ?? Span,
-                label: "this class layer is already being initialized",
-                sourceName: requestedBy?.SourceName,
-                sourceText: requestedBy?.SourceText);
-        }
-
-        try
-        {
-            ToshClassConstructorDefinition constructor;
-            Dictionary<string, object?> constructorLocals;
-
-            try
-            {
-                (constructor, constructorLocals) = await SelectConstructorAsync(
-                    arguments,
-                    cancellationToken);
-            }
-            catch (InvalidOperationException) when (isImplicitBaseCall && requestedBy is not null)
-            {
-                throw requestedBy.CreateConstructionDiagnostic(
-                    code: "tosh.runtime.missing_base_constructor_initializer",
-                    title: $"Class '{requestedBy.Name}' must initialize base class '{Name}' with constructor arguments.",
-                    span: requestedBy.Span,
-                    label: $"add 'extends {Name}(...)' or a leading '$super(...)'",
-                    help: $"'{Name}' has no constructor that can be called without arguments.");
-            }
-
-            ValidateConstructorTypeArguments(constructor, constructorLocals, instance);
-
-            var (superInitializer, constructorBody) =
-                SplitConstructorInitializer(constructor);
-
-            if (BaseConstructorArgs is not null && superInitializer is not null)
-            {
-                throw CreateConstructionDiagnostic(
-                    code: "tosh.runtime.duplicate_base_constructor_initializer",
-                    title: $"Class '{Name}' initializes its base class more than once.",
-                    span: superInitializer.Span,
-                    label: "remove this '$super(...)' call or remove the 'extends Base(...)' arguments",
-                    help: "Use exactly one base-constructor initializer.");
-            }
-
-            if (BaseClass is not null)
-            {
-                if (BaseConstructorArgs is not null)
-                {
-                    var baseArguments = await EvaluateBaseConstructorArgsAsync(
-                        constructorLocals,
-                        cancellationToken);
-                    await BaseClass.ConstructOnInstanceAsync(
-                        instance,
-                        baseArguments,
-                        cancellationToken);
-                }
-                else if (superInitializer is not null)
-                {
-                    await RunConstructorInitializerAsync(
-                        instance,
-                        constructor,
-                        constructorLocals,
-                        superInitializer,
-                        cancellationToken);
-                }
-                else
-                {
-                    await BaseClass.ConstructOnInstanceAsync(
-                        instance,
-                        Array.Empty<object?>(),
-                        cancellationToken,
-                        isImplicitBaseCall: true,
-                        requestedBy: this);
-                }
-            }
-            else if (ClrBaseType is not null)
-            {
-                if (BaseConstructorArgs is not null)
-                {
-                    var baseArguments = await EvaluateBaseConstructorArgsAsync(
-                        constructorLocals,
-                        cancellationToken);
-                    await InitializeClrBaseAsync(instance, baseArguments, cancellationToken);
-                }
-                else if (superInitializer is not null)
-                {
-                    await RunConstructorInitializerAsync(
-                        instance,
-                        constructor,
-                        constructorLocals,
-                        superInitializer,
-                        cancellationToken);
-                }
-                else
-                {
-                    try
-                    {
-                        await InitializeClrBaseAsync(
-                            instance,
-                            Array.Empty<object?>(),
-                            cancellationToken);
-                    }
-                    catch (Exception exception) when (
-                        exception is not ToshDiagnosticException and not OperationCanceledException)
-                    {
-                        throw CreateConstructionDiagnostic(
-                            code: "tosh.runtime.missing_base_constructor_initializer",
-                            title: $"Class '{Name}' must initialize CLR base class '{ClrBaseType.FullName}' with constructor arguments.",
-                            span: Span,
-                            label: $"add 'extends {ClrBaseType.Name}(...)' or a leading '$super(...)'",
-                            help: exception.Message);
-                    }
-                }
-            }
-            else if (superInitializer is not null)
-            {
-                throw CreateConstructionDiagnostic(
-                    code: "tosh.runtime.super_without_base_class",
-                    title: $"Class '{Name}' cannot call '$super(...)' because it has no base class.",
-                    span: superInitializer.Span,
-                    label: "remove this base-constructor initializer");
-            }
-
-            foreach (var property in Properties)
-            {
-                if (property.IsComputed || property.IsStatic || property.IsLazy || property.IsAbstract)
-                {
-                    continue;
-                }
-
-                var initialValue = await GetInitialPropertyValueAsync(
-                    instance,
-                    property,
-                    constructorLocals,
-                    cancellationToken);
-                instance.SetStoredValue(property.Name, initialValue);
-            }
-
-            await RunConstructorAsync(
-                instance,
-                constructor with { Body = constructorBody },
-                constructorLocals,
-                cancellationToken);
-            instance.CompleteConstructionLayer(this);
-        }
-        catch
-        {
-            instance.AbortConstructionLayer(this);
-            throw;
-        }
-    }
-
     internal InvocationResult InvokeInstanceMethod(ToshClassInstance instance, string methodName, IReadOnlyList<object?> arguments, bool includeHidden)
     {
         return InvokeInstanceMethodAsync(
@@ -1873,45 +1685,80 @@ public sealed class ToshClassDefinition : IShellNamedType
             cancellationToken);
     }
 
-    private object? ConvertPropertyValue(ToshClassInstance? instance, ToshClassPropertyDefinition property, object? value)
+    /// <summary>
+    /// The part of property conversion that is identical on both surfaces: everything up to
+    /// the point where the engine's annotated-value conversion has to be called, which is the
+    /// only step that differs between the synchronous and asynchronous paths.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Substitutes generic type-parameter names (e.g. <c>T1</c>) against the instance's resolved
+    /// type-argument bindings. When the property's declared type is itself a class type parameter
+    /// a strict no-coercion check applies, matching constructor and method parameter behaviour;
+    /// otherwise the caller goes through the engine's standard conversion path.
+    /// </para>
+    /// <para>
+    /// Extracted for <c>TS-P1-24</c>. The two twins had already drifted: the asynchronous copy
+    /// had lost these explanatory comments entirely, which is the documented failure mode of a
+    /// parallel implementation showing up before any behavioural divergence did.
+    /// </para>
+    /// </remarks>
+    /// <returns>
+    /// <see langword="true"/> when the value is settled here and <paramref name="result"/> holds
+    /// it; <see langword="false"/> when the caller must run the annotated-value conversion.
+    /// </returns>
+    private bool TryResolvePropertyValueByBinding(
+        ToshClassInstance? instance,
+        ToshClassPropertyDefinition property,
+        object? value,
+        out object? result)
     {
+        result = value;
+
         if (property.TypeName is null)
         {
-            return value;
+            return true;
         }
 
-        // Substitute generic type-parameter names (e.g. 'T1') against the
-        // instance's resolved type-argument bindings. When the property's
-        // declared type is itself a class type-parameter we apply a
-        // strict no-coercion check (matching the constructor and method
-        // parameter behaviour); otherwise we go through the engine's
-        // standard annotated-value conversion path.
-        if (instance is not null)
+        if (instance is null)
         {
-            var bindings = instance.GetBindingsFor(this);
-            if (bindings is not null && bindings.TryGetValue(property.TypeName, out var boundType))
-            {
-                if (boundType is null)
-                {
-                    // Type parameter is recognised but the user did not
-                    // supply a resolvable CLR type — accept any value
-                    // (effectively nominal-only).
-                    return value;
-                }
+            return false;
+        }
 
-                EnforceStrictBinding(
-                    boundType,
-                    value,
-                    property.Span,
-                    SourceName,
-                    SourceText,
-                    $"{Name}.{property.Name}");
-                return value;
-            }
+        var bindings = instance.GetBindingsFor(this);
+
+        if (bindings is null || !bindings.TryGetValue(property.TypeName, out var boundType))
+        {
+            return false;
+        }
+
+        if (boundType is null)
+        {
+            // Type parameter is recognised but the user did not supply a resolvable CLR type —
+            // accept any value (effectively nominal-only).
+            return true;
+        }
+
+        EnforceStrictBinding(
+            boundType,
+            value,
+            property.Span,
+            SourceName,
+            SourceText,
+            $"{Name}.{property.Name}");
+
+        return true;
+    }
+
+    private object? ConvertPropertyValue(ToshClassInstance? instance, ToshClassPropertyDefinition property, object? value)
+    {
+        if (TryResolvePropertyValueByBinding(instance, property, value, out var resolved))
+        {
+            return resolved;
         }
 
         return _engine.ConvertAnnotatedValue(
-            property.TypeName,
+            property.TypeName!,
             property.Refinement,
             value,
             property.Span,
@@ -1926,35 +1773,13 @@ public sealed class ToshClassDefinition : IShellNamedType
         object? value,
         CancellationToken cancellationToken)
     {
-        if (property.TypeName is null)
+        if (TryResolvePropertyValueByBinding(instance, property, value, out var resolved))
         {
-            return value;
-        }
-
-        if (instance is not null)
-        {
-            var bindings = instance.GetBindingsFor(this);
-            if (bindings is not null &&
-                bindings.TryGetValue(property.TypeName, out var boundType))
-            {
-                if (boundType is null)
-                {
-                    return value;
-                }
-
-                EnforceStrictBinding(
-                    boundType,
-                    value,
-                    property.Span,
-                    SourceName,
-                    SourceText,
-                    $"{Name}.{property.Name}");
-                return value;
-            }
+            return resolved;
         }
 
         return await _engine.ConvertAnnotatedValueAsync(
-            property.TypeName,
+            property.TypeName!,
             property.Refinement,
             value,
             property.Span,
@@ -2275,72 +2100,33 @@ public sealed class ToshClassDefinition : IShellNamedType
         return (winner, locals);
     }
 
-    private void ThrowDetailedSingleConstructorMismatch(ToshClassConstructorDefinition constructor, IReadOnlyList<object?> arguments)
+    /// <summary>
+    /// Works out which argument each constructor parameter would receive, so the caller can
+    /// re-run the conversions and surface the first one that fails.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This is the whole of what the two <c>ThrowDetailedSingleConstructorMismatch</c> twins
+    /// duplicated: named-versus-positional sorting, the required-argument count, the arity
+    /// bail-out, and the rest-parameter tail. Both copies then walked the same plan, one calling
+    /// the synchronous converter and the other awaiting the asynchronous one — the only genuine
+    /// difference between them (<c>TS-P1-24</c>).
+    /// </para>
+    /// <para>
+    /// Returns <see langword="null"/> when the argument count cannot fit the signature at all.
+    /// In that case there is no per-argument conversion to blame, and the caller falls back to
+    /// the generic "no constructor matched" message.
+    /// </para>
+    /// </remarks>
+    private static List<(FunctionParameterDefinition Parameter, object? Value)>?
+        PlanConstructorArgumentConversions(
+            ToshClassConstructorDefinition constructor,
+            IReadOnlyList<object?> arguments)
     {
         var parameters = constructor.Parameters;
         var hasRestParameter = parameters.Count > 0 && parameters[^1].IsRest;
         var positionalCount = hasRestParameter ? parameters.Count - 1 : parameters.Count;
 
-        var namedArgs = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
-        var positionalArgs = new List<object?>();
-
-        foreach (var arg in arguments)
-        {
-            if (arg is NamedArgument named)
-            {
-                namedArgs[named.Name] = named.Value;
-            }
-            else
-            {
-                positionalArgs.Add(arg);
-            }
-        }
-
-        var requiredCount = parameters.Count(parameter =>
-            !parameter.IsOptional && !parameter.IsRest && parameter.DefaultValue is null && !namedArgs.ContainsKey(parameter.Name));
-
-        if (positionalArgs.Count < requiredCount || (!hasRestParameter && positionalArgs.Count > positionalCount - namedArgs.Count))
-        {
-            return;
-        }
-
-        var positionalIndex = 0;
-        for (var index = 0; index < positionalCount; index++)
-        {
-            var parameter = parameters[index];
-
-            if (namedArgs.TryGetValue(parameter.Name, out var namedValue))
-            {
-                ConvertConstructorParameterValue(constructor, parameter, namedValue);
-                continue;
-            }
-
-            if (positionalIndex >= positionalArgs.Count)
-            {
-                continue;
-            }
-
-            ConvertConstructorParameterValue(constructor, parameter, positionalArgs[positionalIndex++]);
-        }
-
-        if (hasRestParameter)
-        {
-            var restParam = parameters[^1];
-            for (var index = positionalCount; index < arguments.Count; index++)
-            {
-                ConvertConstructorParameterValue(constructor, restParam, arguments[index]);
-            }
-        }
-    }
-
-    private async Task ThrowDetailedSingleConstructorMismatchAsync(
-        ToshClassConstructorDefinition constructor,
-        IReadOnlyList<object?> arguments,
-        CancellationToken cancellationToken)
-    {
-        var parameters = constructor.Parameters;
-        var hasRestParameter = parameters.Count > 0 && parameters[^1].IsRest;
-        var positionalCount = hasRestParameter ? parameters.Count - 1 : parameters.Count;
         var namedArgs = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
         var positionalArgs = new List<object?>();
 
@@ -2365,22 +2151,19 @@ public sealed class ToshClassDefinition : IShellNamedType
         if (positionalArgs.Count < requiredCount ||
             (!hasRestParameter && positionalArgs.Count > positionalCount - namedArgs.Count))
         {
-            return;
+            return null;
         }
 
+        var plan = new List<(FunctionParameterDefinition, object?)>();
         var positionalIndex = 0;
+
         for (var index = 0; index < positionalCount; index++)
         {
-            cancellationToken.ThrowIfCancellationRequested();
             var parameter = parameters[index];
 
             if (namedArgs.TryGetValue(parameter.Name, out var namedValue))
             {
-                await ConvertConstructorParameterValueAsync(
-                    constructor,
-                    parameter,
-                    namedValue,
-                    cancellationToken);
+                plan.Add((parameter, namedValue));
                 continue;
             }
 
@@ -2389,66 +2172,243 @@ public sealed class ToshClassDefinition : IShellNamedType
                 continue;
             }
 
-            await ConvertConstructorParameterValueAsync(
-                constructor,
-                parameter,
-                positionalArgs[positionalIndex++],
-                cancellationToken);
+            plan.Add((parameter, positionalArgs[positionalIndex++]));
         }
 
         if (hasRestParameter)
         {
             var restParameter = parameters[^1];
+
             for (var index = positionalCount; index < arguments.Count; index++)
             {
-                cancellationToken.ThrowIfCancellationRequested();
-                await ConvertConstructorParameterValueAsync(
-                    constructor,
-                    restParameter,
-                    arguments[index],
-                    cancellationToken);
+                plan.Add((restParameter, arguments[index]));
             }
         }
+
+        return plan;
     }
 
-    private object? ConvertConstructorParameterValue(
+    private async Task ThrowDetailedSingleConstructorMismatchAsync(
+        ToshClassConstructorDefinition constructor,
+        IReadOnlyList<object?> arguments,
+        CancellationToken cancellationToken)
+    {
+        if (PlanConstructorArgumentConversions(constructor, arguments) is not { } plan)
+        {
+            return;
+        }
+
+        foreach (var (parameter, value) in plan)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            await ConvertConstructorParameterValueAsync(constructor, parameter, value, cancellationToken);
+        }
+    }
+    private Exception? TranslateConstructorParameterConversionFailure(
         ToshClassConstructorDefinition constructor,
         FunctionParameterDefinition parameter,
-        object? value)
+        ToshDiagnosticException exception)
     {
+        var alreadyPrecise = exception.Diagnostics.Any(diagnostic =>
+            string.Equals(diagnostic.Code, "tosh.runtime.annotation_unknown_type", StringComparison.Ordinal) ||
+            string.Equals(diagnostic.Code, "tosh.runtime.refinement_failed", StringComparison.Ordinal) ||
+            string.Equals(diagnostic.Code, "tosh.runtime.expression_failed", StringComparison.Ordinal));
+
+        if (alreadyPrecise || parameter.Refinement is not null)
+        {
+            // Null means "rethrow the original", so the call site can use a bare `throw;` and
+            // keep the stack trace. Returning the exception to be thrown would have reset it —
+            // a real difference from the code this replaced, and the kind of detail a
+            // convergence is supposed to preserve rather than quietly change.
+            return null;
+        }
+
+        return ToshDiagnosticException.Create(new ToshDiagnostic(
+            Code: "tosh.runtime.constructor_parameter_type_conversion_failed",
+            Title: $"Constructor argument '{parameter.Name}' could not be converted to '{parameter.TypeName}'.",
+            SourceName: constructor.SourceName,
+            SourceText: constructor.SourceText,
+            Span: parameter.Span,
+            Label: $"'{parameter.Name}' expects {parameter.TypeName}"));
+    }
+    internal Task InvokeConstructorOnInstanceAsync(
+        ToshClassInstance instance,
+        IReadOnlyList<object?> arguments,
+        CancellationToken cancellationToken) =>
+        ConstructOnInstanceAsync(instance, arguments, cancellationToken);
+
+    private async Task ConstructOnInstanceAsync(
+        ToshClassInstance instance,
+        IReadOnlyList<object?> arguments,
+        CancellationToken cancellationToken,
+        bool isImplicitBaseCall = false,
+        ToshClassDefinition? requestedBy = null)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (instance.IsConstructionLayerComplete(this))
+        {
+            throw CreateConstructionDiagnostic(
+                code: "tosh.runtime.base_constructor_already_initialized",
+                title: $"Base class '{Name}' has already been initialized for this instance.",
+                span: requestedBy?.Span ?? Span,
+                label: "each class layer can be constructed only once",
+                sourceName: requestedBy?.SourceName,
+                sourceText: requestedBy?.SourceText);
+        }
+
+        if (!instance.TryBeginConstructionLayer(this))
+        {
+            throw CreateConstructionDiagnostic(
+                code: "tosh.runtime.constructor_cycle",
+                title: $"Constructor cycle detected while initializing class '{Name}'.",
+                span: requestedBy?.Span ?? Span,
+                label: "this class layer is already being initialized",
+                sourceName: requestedBy?.SourceName,
+                sourceText: requestedBy?.SourceText);
+        }
+
         try
         {
-            return _engine.ConvertAnnotatedValue(
-                parameter.TypeName,
-                parameter.Refinement,
-                value,
-                parameter.Span,
-                constructor.SourceName,
-                constructor.SourceText,
-                $"{Name}.{parameter.Name}");
+            ToshClassConstructorDefinition constructor;
+            Dictionary<string, object?> constructorLocals;
+
+            try
+            {
+                (constructor, constructorLocals) = await SelectConstructorAsync(
+                    arguments,
+                    cancellationToken);
+            }
+            catch (InvalidOperationException) when (isImplicitBaseCall && requestedBy is not null)
+            {
+                throw requestedBy.CreateConstructionDiagnostic(
+                    code: "tosh.runtime.missing_base_constructor_initializer",
+                    title: $"Class '{requestedBy.Name}' must initialize base class '{Name}' with constructor arguments.",
+                    span: requestedBy.Span,
+                    label: $"add 'extends {Name}(...)' or a leading '$super(...)'",
+                    help: $"'{Name}' has no constructor that can be called without arguments.");
+            }
+
+            ValidateConstructorTypeArguments(constructor, constructorLocals, instance);
+
+            var (superInitializer, constructorBody) =
+                SplitConstructorInitializer(constructor);
+
+            if (BaseConstructorArgs is not null && superInitializer is not null)
+            {
+                throw CreateConstructionDiagnostic(
+                    code: "tosh.runtime.duplicate_base_constructor_initializer",
+                    title: $"Class '{Name}' initializes its base class more than once.",
+                    span: superInitializer.Span,
+                    label: "remove this '$super(...)' call or remove the 'extends Base(...)' arguments",
+                    help: "Use exactly one base-constructor initializer.");
+            }
+
+            if (BaseClass is not null)
+            {
+                if (BaseConstructorArgs is not null)
+                {
+                    var baseArguments = await EvaluateBaseConstructorArgsAsync(
+                        constructorLocals,
+                        cancellationToken);
+                    await BaseClass.ConstructOnInstanceAsync(
+                        instance,
+                        baseArguments,
+                        cancellationToken);
+                }
+                else if (superInitializer is not null)
+                {
+                    await RunConstructorInitializerAsync(
+                        instance,
+                        constructor,
+                        constructorLocals,
+                        superInitializer,
+                        cancellationToken);
+                }
+                else
+                {
+                    await BaseClass.ConstructOnInstanceAsync(
+                        instance,
+                        Array.Empty<object?>(),
+                        cancellationToken,
+                        isImplicitBaseCall: true,
+                        requestedBy: this);
+                }
+            }
+            else if (ClrBaseType is not null)
+            {
+                if (BaseConstructorArgs is not null)
+                {
+                    var baseArguments = await EvaluateBaseConstructorArgsAsync(
+                        constructorLocals,
+                        cancellationToken);
+                    await InitializeClrBaseAsync(instance, baseArguments, cancellationToken);
+                }
+                else if (superInitializer is not null)
+                {
+                    await RunConstructorInitializerAsync(
+                        instance,
+                        constructor,
+                        constructorLocals,
+                        superInitializer,
+                        cancellationToken);
+                }
+                else
+                {
+                    try
+                    {
+                        await InitializeClrBaseAsync(
+                            instance,
+                            Array.Empty<object?>(),
+                            cancellationToken);
+                    }
+                    catch (Exception exception) when (
+                        exception is not ToshDiagnosticException and not OperationCanceledException)
+                    {
+                        throw CreateConstructionDiagnostic(
+                            code: "tosh.runtime.missing_base_constructor_initializer",
+                            title: $"Class '{Name}' must initialize CLR base class '{ClrBaseType.FullName}' with constructor arguments.",
+                            span: Span,
+                            label: $"add 'extends {ClrBaseType.Name}(...)' or a leading '$super(...)'",
+                            help: exception.Message);
+                    }
+                }
+            }
+            else if (superInitializer is not null)
+            {
+                throw CreateConstructionDiagnostic(
+                    code: "tosh.runtime.super_without_base_class",
+                    title: $"Class '{Name}' cannot call '$super(...)' because it has no base class.",
+                    span: superInitializer.Span,
+                    label: "remove this base-constructor initializer");
+            }
+
+            foreach (var property in Properties)
+            {
+                if (property.IsComputed || property.IsStatic || property.IsLazy || property.IsAbstract)
+                {
+                    continue;
+                }
+
+                var initialValue = await GetInitialPropertyValueAsync(
+                    instance,
+                    property,
+                    constructorLocals,
+                    cancellationToken);
+                instance.SetStoredValue(property.Name, initialValue);
+            }
+
+            await RunConstructorAsync(
+                instance,
+                constructor with { Body = constructorBody },
+                constructorLocals,
+                cancellationToken);
+            instance.CompleteConstructionLayer(this);
         }
-        catch (ToshDiagnosticException exception)
+        catch
         {
-            if (exception.Diagnostics.Any(diagnostic =>
-                string.Equals(diagnostic.Code, "tosh.runtime.annotation_unknown_type", StringComparison.Ordinal) ||
-                string.Equals(diagnostic.Code, "tosh.runtime.refinement_failed", StringComparison.Ordinal) ||
-                string.Equals(diagnostic.Code, "tosh.runtime.expression_failed", StringComparison.Ordinal)))
-            {
-                throw;
-            }
-
-            if (parameter.Refinement is not null)
-            {
-                throw;
-            }
-
-            throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                Code: "tosh.runtime.constructor_parameter_type_conversion_failed",
-                Title: $"Constructor argument '{parameter.Name}' could not be converted to '{parameter.TypeName}'.",
-                SourceName: constructor.SourceName,
-                SourceText: constructor.SourceText,
-                Span: parameter.Span,
-                Label: $"'{parameter.Name}' expects {parameter.TypeName}"));
+            instance.AbortConstructionLayer(this);
+            throw;
         }
     }
 
@@ -2471,27 +2431,10 @@ public sealed class ToshClassDefinition : IShellNamedType
                 cancellationToken);
         }
         catch (ToshDiagnosticException exception)
+            when (TranslateConstructorParameterConversionFailure(constructor, parameter, exception)
+                  is { } translated)
         {
-            if (exception.Diagnostics.Any(diagnostic =>
-                    string.Equals(diagnostic.Code, "tosh.runtime.annotation_unknown_type", StringComparison.Ordinal) ||
-                    string.Equals(diagnostic.Code, "tosh.runtime.refinement_failed", StringComparison.Ordinal) ||
-                    string.Equals(diagnostic.Code, "tosh.runtime.expression_failed", StringComparison.Ordinal)))
-            {
-                throw;
-            }
-
-            if (parameter.Refinement is not null)
-            {
-                throw;
-            }
-
-            throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                Code: "tosh.runtime.constructor_parameter_type_conversion_failed",
-                Title: $"Constructor argument '{parameter.Name}' could not be converted to '{parameter.TypeName}'.",
-                SourceName: constructor.SourceName,
-                SourceText: constructor.SourceText,
-                Span: parameter.Span,
-                Label: $"'{parameter.Name}' expects {parameter.TypeName}"));
+            throw translated;
         }
     }
 
