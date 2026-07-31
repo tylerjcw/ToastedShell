@@ -66,6 +66,17 @@ internal static class ReflectionMetadataUtilities
         return value switch
         {
             null => throw new InvalidOperationException("A null value cannot be resolved to a type."),
+
+            // A ShellTextLine *is* its text as far as member access is concerned:
+            // ReflectionObjectAccessor unwraps to the underlying string, so `.Trim()`,
+            // `.Length`, `.Split()`, comparison and `cast string` all work. Introspection
+            // reported the wrapper instead, listing the single member `Text` — so `members`
+            // contradicted behaviour, and that contradiction is what convinced both a reporter
+            // and the author that the type was not string-like, leading to a proposed fix for a
+            // defect that did not exist (TS-P1-33). Placed first so it wins over the runtime
+            // describer below.
+            ShellTextLine => typeof(string),
+
             IShellTypeDescriptor descriptor => descriptor,
             IShellTypedObject typed => typed.ShellTypeDescriptor,
             _ when BuiltInShellTypes.TryDescribeRuntimeValue(value, out var builtInDescriptor) => builtInDescriptor,
