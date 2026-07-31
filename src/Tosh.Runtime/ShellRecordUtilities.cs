@@ -87,11 +87,33 @@ public static class ShellRecordUtilities
                 return true;
 
             case IDictionary dictionary:
-                fields = dictionary.Cast<DictionaryEntry>()
-                    .Select(entry => new KeyValuePair<string, object?>(
-                        entry.Key?.ToString() ?? string.Empty,
-                        entry.Value))
-                    .ToArray();
+                // `Cast<DictionaryEntry>()` enumerates through IEnumerable, and
+                // Dictionary<K,V> yields boxed KeyValuePair<K,V> there — only its explicit
+                // IDictionary.GetEnumerator() yields DictionaryEntry. So a `{% … %}` literal,
+                // which is object-keyed, crashed this with a raw InvalidCastException surfacing
+                // as `unexpected_exception` (TS-P1-29). Going through IDictionaryEnumerator
+                // handles both shapes, because IDictionary.GetEnumerator() is defined to return
+                // one whatever the concrete dictionary is.
+                var entries = new List<KeyValuePair<string, object?>>(dictionary.Count);
+                var enumerator = dictionary.GetEnumerator();
+
+                try
+                {
+                    while (enumerator.MoveNext())
+                    {
+                        entries.Add(new KeyValuePair<string, object?>(
+                            enumerator.Key?.ToString() ?? string.Empty,
+                            enumerator.Value));
+                    }
+                }
+                finally
+                {
+                    // IDictionaryEnumerator does not extend IDisposable, but concrete ones
+                    // often implement it; Hashtable's does.
+                    (enumerator as IDisposable)?.Dispose();
+                }
+
+                fields = entries;
                 return true;
 
             default:
