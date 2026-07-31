@@ -13148,6 +13148,43 @@ public sealed partial class ToshEngine : IShellEvaluator
         }
     }
 
+    /// <summary>
+    /// Wraps a class-body pipeline as a one-statement block, and projects the values it produced
+    /// back into a single result — the two halves of <c>EvaluateClassPipelineValue</c> that do not
+    /// depend on how the block is executed.
+    /// </summary>
+    /// <remarks>
+    /// Extracted for <c>TS-P1-24</c>. The <c>Sync</c> and <c>Async</c> forms of this method were
+    /// byte-identical apart from the block call, including the unwrapping switch below — and the
+    /// twin inventory never counted them, because its discovery rule looked for
+    /// <c>Foo</c>/<c>FooAsync</c> and these are named <c>FooSync</c>/<c>FooAsync</c>. The guard has
+    /// been taught the second convention.
+    /// </remarks>
+    private static BlockSyntax BuildClassPipelineBlock(PipelineSyntax pipeline)
+    {
+        var span = pipeline.Stages.Count == 0
+            ? default
+            : TextSpan.FromBounds(pipeline.Stages[0].Span.Start, pipeline.Stages[^1].Span.End);
+
+        return new BlockSyntax([new PipelineStatementSyntax(pipeline, span)], span);
+    }
+
+    /// <summary>
+    /// Collapses a class-body pipeline's results, unwrapping <c>$this</c> self-references so a
+    /// property or method returning <c>$this</c> yields the instance rather than the marker.
+    /// </summary>
+    private static object? ProjectClassPipelineValues(IReadOnlyList<object?> values)
+    {
+        return values.Count switch
+        {
+            0 => null,
+            1 => values[0] is ToshClassSelfReference selfReference ? selfReference.Unwrap() : values[0],
+            _ => values
+                .Select(value => value is ToshClassSelfReference self ? self.Unwrap() : value)
+                .ToArray(),
+        };
+    }
+
     internal object? EvaluateClassPipelineValueSync(
         string sourceName,
         string sourceText,
@@ -13161,20 +13198,15 @@ public sealed partial class ToshEngine : IShellEvaluator
             return shorthandValue;
         }
 
-        var span = pipeline.Stages.Count == 0
-            ? default
-            : TextSpan.FromBounds(pipeline.Stages[0].Span.Start, pipeline.Stages[^1].Span.End);
-        var block = new BlockSyntax([new PipelineStatementSyntax(pipeline, span)], span);
-        var values = ExecuteClassBlockSync(sourceName, sourceText, block, locals, capturedScopes, callName);
+        var values = ExecuteClassBlockSync(
+            sourceName,
+            sourceText,
+            BuildClassPipelineBlock(pipeline),
+            locals,
+            capturedScopes,
+            callName);
 
-        return values.Count switch
-        {
-            0 => null,
-            1 => values[0] is ToshClassSelfReference selfReference ? selfReference.Unwrap() : values[0],
-            _ => values
-                .Select(value => value is ToshClassSelfReference self ? self.Unwrap() : value)
-                .ToArray(),
-        };
+        return ProjectClassPipelineValues(values);
     }
 
     internal async ValueTask<object?> EvaluateClassPipelineValueAsync(
@@ -13191,27 +13223,16 @@ public sealed partial class ToshEngine : IShellEvaluator
             return shorthandValue;
         }
 
-        var span = pipeline.Stages.Count == 0
-            ? default
-            : TextSpan.FromBounds(pipeline.Stages[0].Span.Start, pipeline.Stages[^1].Span.End);
-        var block = new BlockSyntax([new PipelineStatementSyntax(pipeline, span)], span);
         var values = await ExecuteClassBlockAsync(
             sourceName,
             sourceText,
-            block,
+            BuildClassPipelineBlock(pipeline),
             locals,
             capturedScopes,
             callName,
             cancellationToken);
 
-        return values.Count switch
-        {
-            0 => null,
-            1 => values[0] is ToshClassSelfReference selfReference ? selfReference.Unwrap() : values[0],
-            _ => values
-                .Select(value => value is ToshClassSelfReference self ? self.Unwrap() : value)
-                .ToArray(),
-        };
+        return ProjectClassPipelineValues(values);
     }
 
     private static bool TryEvaluateShorthandLocalPipeline(

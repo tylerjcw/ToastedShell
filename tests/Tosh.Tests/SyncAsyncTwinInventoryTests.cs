@@ -92,6 +92,24 @@ public sealed class SyncAsyncTwinInventoryTests
         "ToshEngine.TryApplyRefinementWithOptionalCoercion",
         "ToshEngine.TryConvertAnnotatedValue",
 
+        // ── Thin wrappers over one shared implementation ──────────────────────
+        // Reclassified 2026-07-30 after measuring rather than counting. Each of
+        // these bottoms out on the *same* async body: ExecuteClassBlockSync does
+        // `ExecuteBlockAsync(…).GetAwaiter().GetResult()`, and the rest reach it
+        // through that or block on their own async twin directly. Their sync
+        // forms are 3-5 lines of call and cannot carry a semantic decision, so
+        // they are not what TS-P1-24 is about — listing them beside genuinely
+        // duplicated logic overstated the remaining work and, worse, made the
+        // dangerous entries harder to see.
+        //
+        // Still listed, because adding another wrapper is a deliberate act.
+        "ToshClassDefinition.EvaluatePropertyGetter",
+        "ToshClassDefinition.ExecuteMethodBlock",
+        "ToshClassDefinition.ExecutePropertySetter",
+        "ToshClassDefinition.GetInitialPropertyValue",
+        "ToshClassDefinition.GetOrInitializeLazyProperty",
+        "ToshEngine.ExecuteClassBlock",
+
         // ── Genuinely parallel internals: the convergeable remainder ──────────
         // Private or internal, reached from both surfaces, and duplicated by
         // choice rather than by contract. These are what the item can actually
@@ -113,21 +131,21 @@ public sealed class SyncAsyncTwinInventoryTests
         "ReflectionObjectAccessor.ResolveOrMaterializeSegment",
         "ReflectionObjectAccessor.ResolveSegment",
         "ShellIndexingUtilities.GetIndexedValue",
-        "ShellIndexingUtilities.SetIndexedValue",
         "ShellIterationUtilities.ExpandIterationItems",
         "ToshClassDefinition.ConvertPropertyValue",
         "ToshClassDefinition.EnumerateItems",
-        "ToshClassDefinition.EvaluatePropertyGetter",
-        "ToshClassDefinition.ExecuteMethodBlock",
-        "ToshClassDefinition.ExecutePropertySetter",
-        "ToshClassDefinition.GetInitialPropertyValue",
         "ToshClassDefinition.GetInstanceMembers",
-        "ToshClassDefinition.GetOrInitializeLazyProperty",
         "ToshClassDefinition.TryGetInstanceMember",
         "ToshClassDefinition.TryInvokeEnumerator",
         "ToshClassDefinition.TryInvokeSpecialInstanceMethod",
         "ToshClassDefinition.TrySelectSpecialInstanceMethod",
         "ToshClassDefinition.TrySetInstanceMember",
+        // Found only after the discovery rule learned the `FooSync`/`FooAsync` spelling.
+        // ExecuteClassBlock's sync form blocks on its async form, so it is a bridge rather than
+        // a parallel implementation; EvaluateClassPipelineValue's two forms were byte-identical
+        // apart from that call and now share BuildClassPipelineBlock and
+        // ProjectClassPipelineValues.
+        "ToshEngine.EvaluateClassPipelineValue",
         "ToshEngine.ApplyPendingParameterDefaults",
         "ToshEngine.InvokeQualifiedMethod",
         "ToshEngine.ResolveQualifiedMemberChain",
@@ -203,10 +221,21 @@ public sealed class SyncAsyncTwinInventoryTests
 
                 foreach (var name in names)
                 {
-                    if (name.EndsWith("Async", StringComparison.Ordinal) &&
-                        names.Contains(name[..^"Async".Length]))
+                    if (!name.EndsWith("Async", StringComparison.Ordinal))
                     {
-                        yield return $"{type.Name}.{name[..^"Async".Length]}";
+                        continue;
+                    }
+
+                    var stem = name[..^"Async".Length];
+
+                    // Both spellings of the convention. Looking only for `Foo`/`FooAsync` was a
+                    // blind spot in this guard's own discovery rule: `ExecuteClassBlockSync` and
+                    // `EvaluateClassPipelineValueSync` are twins by any reading, and neither was
+                    // ever counted. The second was byte-identical to its async form apart from
+                    // the block call — precisely what this inventory exists to surface.
+                    if (names.Contains(stem) || names.Contains(stem + "Sync"))
+                    {
+                        yield return $"{type.Name}.{stem}";
                     }
                 }
             }
