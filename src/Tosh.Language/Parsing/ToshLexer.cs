@@ -62,6 +62,11 @@ public sealed class ToshLexer
     /// Used by the source formatter to preserve comments across a format pass.
     /// Doc comments (<c>##</c>) are emitted as <see cref="SyntaxTokenKind.DocComment"/>
     /// tokens instead and are not included here.
+    ///
+    /// Every entry's <c>Text</c> is a bare <c>"#"</c> or begins <c>"# "</c>: a lone
+    /// <c>#</c> only opens a comment when whitespace or end-of-line follows it, so a
+    /// glued form like <c>#ff0000</c> never reaches this list. The formatter relies on
+    /// that invariant to re-emit <c>Text</c> verbatim and still round-trip.
     /// </summary>
     public IReadOnlyList<LineComment> LineComments => _lineComments;
 
@@ -93,8 +98,27 @@ public sealed class ToshLexer
                     continue;
                 }
 
-                SkipComment();
-                continue;
+                // `#!` on the very first line is a shebang, not a comment and
+                // not a bareword. It only has this meaning at offset 0.
+                if (_position == 0 && Peek() == '!')
+                {
+                    SkipComment();
+                    continue;
+                }
+
+                // A lone `#` opens a line comment only when it stands alone as a
+                // word. We reach here straight after SkipWhitespace, so the
+                // word-start half of the rule already holds and only the
+                // following character is left to check. Glued to a non-space it
+                // falls through to the bareword reader, which is what lets
+                // `#ff0000`, `issue#42`, and `C#` go unquoted.
+                if (IsCommentTerminator(Peek()))
+                {
+                    SkipComment();
+                    continue;
+                }
+
+                // Otherwise fall through: '#' is lexed as part of a bareword.
             }
 
             // $ prefixed tokens: $(, $'''...''', $"""...""", $'...', $"..."
@@ -377,10 +401,13 @@ public sealed class ToshLexer
             }
 
             // Bare _ as current pipeline item — emit as its own token so
-            // postfix chains like _.Name.ToString() work correctly
+            // postfix chains like _.Name.ToString() work correctly.
+            // A following '#' only ends the '_' when it opens a comment
+            // ('# ' or '##'); glued to a word it belongs to the bareword.
             if (Current == '_' && (Peek() is '.' or '?' or ' ' or '\t' or '\r' or '\n' or '\0'
-                or '|' or '#' or '(' or ')' or '{' or '}' or '[' or ']' or ';' or ','
-                or '>' or '<' or '&' or '!'))
+                or '|' or '(' or ')' or '{' or '}' or '[' or ']' or ';' or ','
+                or '>' or '<' or '&' or '!'
+                || (Peek() == '#' && (IsCommentTerminator(Peek(2)) || Peek(2) == '#'))))
             {
                 tokens.Add(new SyntaxToken(SyntaxTokenKind.Bareword, _position, "_", "_"));
                 _position++;
@@ -504,6 +531,14 @@ public sealed class ToshLexer
             _position++;
         }
     }
+
+    /// <summary>
+    /// True when the character following a lone <c>#</c> makes it a line-comment
+    /// opener rather than a bareword character. Delegates to
+    /// <see cref="ToshCommentSyntax"/>, which is the one definition of the rule.
+    /// </summary>
+    private static bool IsCommentTerminator(char next)
+        => ToshCommentSyntax.IsLineCommentTerminator(next);
 
     private void SkipComment()
     {
@@ -1285,10 +1320,20 @@ public sealed class ToshLexer
                 break;
             }
 
+            // A lone '#' inside a bareword is never a comment: a comment opener has
+            // to stand alone as a word, and by construction this '#' is preceded by
+            // the bareword we are already reading. So `issue#42`, `#ff0000` and
+            // `C#` all stay whole. Only '##' breaks out, because doc comments and
+            // '##{' blocks keep their meaning wherever they appear.
+            if (Current == '#' && Peek() == '#')
+            {
+                break;
+            }
+
             // Keep lone '?' inside barewords so nullable type/identifier forms like
             // 'string?' and 'name?' keep lexing as a single token. The dedicated
             // '??' and '?.' tokens are already handled before we reach this path.
-            if (Current is '|' or '#' or '(' or ')' or '{' or '}' or '[' or ']' or ';' or ',' or '>' or '<' or '&' or '!')
+            if (Current is '|' or '(' or ')' or '{' or '}' or '[' or ']' or ';' or ',' or '>' or '<' or '&' or '!')
             {
                 break;
             }

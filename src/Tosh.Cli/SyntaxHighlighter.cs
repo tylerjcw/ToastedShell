@@ -88,7 +88,7 @@ public static class SyntaxHighlighter
             if (token.Span.Start > lastEnd)
             {
                 var gap = input[lastEnd..token.Span.Start];
-                var commentIndex = gap.IndexOf('#');
+                var commentIndex = ToshCommentSyntax.FindCommentStart(gap);
 
                 if (commentIndex >= 0)
                 {

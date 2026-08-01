@@ -154,29 +154,9 @@ internal sealed class ToshSyntaxColorizer : ISyntaxColorizer
 
     /// <summary>
     /// Finds the start of a line comment ('#' outside any string). Returns -1
-    /// when there is no comment on this line.
+    /// when there is no comment on this line. The rule itself lives in
+    /// <see cref="ToshCommentSyntax"/> so it cannot drift from the lexer.
     /// </summary>
     private static int FindCommentStart(string line)
-    {
-        var inString = false;
-        var stringChar = '\0';
-        for (var i = 0; i < line.Length; i++)
-        {
-            var ch = line[i];
-            if (inString)
-            {
-                if (ch == '\\' && i + 1 < line.Length) { i++; continue; }
-                if (ch == stringChar) inString = false;
-                continue;
-            }
-            if (ch is '"' or '\'')
-            {
-                inString = true;
-                stringChar = ch;
-                continue;
-            }
-            if (ch == '#') return i;
-        }
-        return -1;
-    }
+        => ToshCommentSyntax.FindCommentStart(line);
 }

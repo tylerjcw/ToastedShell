@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.RegularExpressions;
+using Tosh.Language.Parsing;
 using Tosh.Runtime;
 
 namespace Tosh.Cli;
@@ -873,8 +874,10 @@ public sealed class ReplLineEditor
 
             if (inString) continue;
 
-            // Handle comments
-            if (ch == '#' && (i == 0 || text[i - 1] != '\\'))
+            // Handle comments. A lone '#' glued to a word is a bareword
+            // character, not a comment opener — ToshCommentSyntax owns the rule.
+            if (ch == '#' && (i == 0 || text[i - 1] != '\\')
+                && ToshCommentSyntax.OpensComment(text, i))
             {
                 // Skip to start of line
                 while (i > 0 && text[i - 1] != '\n') i--;
@@ -1146,8 +1149,10 @@ public sealed class ReplLineEditor
         var escaping = false;
         var inComment = false;
 
-        foreach (var ch in line)
+        for (var index = 0; index < line.Length; index++)
         {
+            var ch = line[index];
+
             if (inComment)
             {
                 continue;
@@ -1199,8 +1204,13 @@ public sealed class ReplLineEditor
 
             switch (ch)
             {
+                // Only a real comment opener masks the rest of the line; a '#'
+                // glued to a word (`#ff0000`) is an ordinary bareword character.
                 case '#':
-                    inComment = true;
+                    if (ToshCommentSyntax.OpensComment(line, index))
+                    {
+                        inComment = true;
+                    }
                     break;
                 case '\'':
                     inSingleQuote = true;
@@ -1597,7 +1607,7 @@ public sealed class ReplLineEditor
                 }
                 mask[start] = true;
             }
-            else if (ch == '#')
+            else if (ch == '#' && ToshCommentSyntax.OpensComment(text, i))
             {
                 while (i < text.Length && text[i] != '\n') { mask[i] = true; i++; }
             }
@@ -1621,7 +1631,8 @@ public sealed class ReplLineEditor
             if (inDoubleQuote) { if (ch == '"' && (i == 0 || text[i - 1] != '\\')) inDoubleQuote = false; continue; }
             if (ch == '\'' && opener != '\'') { inSingleQuote = true; continue; }
             if (ch == '"' && opener != '"') { inDoubleQuote = true; continue; }
-            if (ch == '#') { while (i + 1 < text.Length && text[i + 1] != '\n') i++; continue; }
+            if (ch == '#' && ToshCommentSyntax.OpensComment(text, i))
+            { while (i + 1 < text.Length && text[i + 1] != '\n') i++; continue; }
             if (ch == opener) depth++;
             else if (ch == closer && --depth == 0) return i;
         }

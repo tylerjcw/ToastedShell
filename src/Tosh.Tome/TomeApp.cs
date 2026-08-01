@@ -360,7 +360,13 @@ internal sealed partial class TomeApp
                 stringChar = ch;
                 continue;
             }
-            if (ch == '#' || (ch == '/' && i + 1 < line.Length && line[i + 1] == '/'))
+            // A lone '#' only opens a comment when whitespace or end-of-line
+            // follows it; '##' always does. Glued to a word it is an ordinary
+            // bareword character. Matches the lexer rule.
+            var nextCh = i + 1 < line.Length ? line[i + 1] : '\0';
+            var opensHashComment = ch == '#'
+                && (nextCh == '#' || nextCh is ' ' or '\t' or '\r' or '\n' or '\0');
+            if (opensHashComment || (ch == '/' && i + 1 < line.Length && line[i + 1] == '/'))
             {
                 for (var j = i; j < line.Length; j++) map[j] = true;
                 break;

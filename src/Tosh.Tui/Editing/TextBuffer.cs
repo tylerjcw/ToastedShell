@@ -674,8 +674,9 @@ public sealed class TextBuffer
         var escaping = false;
         var inComment = false;
 
-        foreach (var ch in line)
+        for (var i = 0; i < line.Length; i++)
         {
+            var ch = line[i];
             if (inComment) continue;
             if (inSingle)
             {
@@ -693,7 +694,16 @@ public sealed class TextBuffer
             }
             switch (ch)
             {
-                case '#': inComment = true; break;
+                // A lone '#' only opens a comment when whitespace or end-of-line
+                // follows it; '##' always does. Otherwise it is a bareword
+                // character (`#ff0000`) and must not mask the rest of the line.
+                case '#':
+                    var next = i + 1 < line.Length ? line[i + 1] : '\0';
+                    if (next == '#' || next is ' ' or '\t' or '\r' or '\n' or '\0')
+                    {
+                        inComment = true;
+                    }
+                    break;
                 case '\'': inSingle = true; break;
                 case '"': inDouble = true; break;
                 case '{': delta++; break;

@@ -106,8 +106,10 @@ public static class ReplInputClassifier
                 lastNonEmptyLine = line;
             }
 
-            foreach (var character in line)
+            for (var index = 0; index < line.Length; index++)
             {
+                var character = line[index];
+
                 if (inComment)
                 {
                     continue;
@@ -159,8 +161,13 @@ public static class ReplInputClassifier
 
                 switch (character)
                 {
+                    // Only a real comment opener ends the line; a '#' glued to a
+                    // word (`#ff0000`) is an ordinary bareword character.
                     case '#':
-                        inComment = true;
+                        if (ToshCommentSyntax.OpensComment(line, index))
+                        {
+                            inComment = true;
+                        }
                         break;
 
                     case '\'':

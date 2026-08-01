@@ -688,6 +688,10 @@ public sealed class ToshLanguageFeatures
                 if (ch is '"' or '\'') { inString = true; stringChar = ch; continue; }
                 if (ch == '#')
                 {
+                    // A lone '#' only opens a comment when whitespace or the end of
+                    // the line follows it; glued to a word it is a bareword character
+                    // (`#ff0000`, `issue#42`). ToshCommentSyntax owns the rule.
+                    if (!ToshCommentSyntax.OpensComment(line, ci)) continue;
                     var isDocComment = ci + 1 < line.Length && line[ci + 1] == '#';
                     var modifiers = isDocComment ? 0x04 : 0; // documentation modifier for ##
                     rawTokens.Add((lineIdx, ci, line.Length - ci, 0, modifiers)); // comment

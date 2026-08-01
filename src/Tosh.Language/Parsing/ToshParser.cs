@@ -944,6 +944,27 @@ public static class ToshParser
             }
 
             var equalsToken = ExpectEqualsToken("Variable declarations use '=' after the variable name.");
+
+            // An initializer may legitimately continue onto the next line — `var x =` then an
+            // indented `(1 + 2)` is a required-operand continuation, and is tested as such by
+            // LiteParserTests. But the continuation consumed *anything* that followed, including
+            // lines that can only be new statements: `var x =` followed by `var y =` ate the
+            // second declaration, so `y` was never declared and the binder then reported that
+            // `var` looked like an unknown command — a diagnostic two lines from the mistake.
+            // And `var x =` with nothing after it at all bound null silently.
+            //
+            // So the rule is narrow: reject only when there is no operand to find (end of input)
+            // or when what follows can only be another declaration. Everything the continuation
+            // rule was built for still works (TS-P1-41).
+            if (Current.Kind is SyntaxTokenKind.EndOfFile || LooksLikeVariableDeclaration())
+            {
+                _diagnostics.Add(new SyntaxDiagnostic(
+                    Code: "tosh.parser.expected_initializer",
+                    Title: $"Expected an expression after '=' in the declaration of '{declaredName}'.",
+                    Span: equalsToken.Span,
+                    Label: "write the value here, or drop the '=' to declare without initializing"));
+            }
+
             var value = ParsePipeline(
                 untilCloseParen: stopAtCloseParen,
                 untilCloseBrace: stopAtCloseBrace,
