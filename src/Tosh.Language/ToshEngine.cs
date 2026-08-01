@@ -7201,7 +7201,7 @@ public sealed partial class ToshEngine : IShellEvaluator
                                 var resolved = new Type?[typeArgList.Count];
                                 for (int i = 0; i < typeArgList.Count; i++)
                                 {
-                                    resolved[i] = ResolveTypeName(typeArgList[i]);
+                                    resolved[i] = ResolveTypeArgument(typeArgList[i]);
                                 }
                                 return await classDef.CreateGenericInstanceAsync(
                                     resolved,
@@ -10583,6 +10583,43 @@ public sealed partial class ToshEngine : IShellEvaluator
         ("PATH", "$env.PATH"),
         ("status", "$tosh.Last.ExitCode"),
     ];
+
+    /// <summary>
+    /// Resolves one type argument of a generic instantiation to the CLR type it should be
+    /// validated against, or <see langword="null"/> when the name is a ToastScript type and no
+    /// CLR type should be enforced.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A ToastScript class has no CLR type of its own, so `Holder&lt;Circle&gt;` must bind
+    /// nominally — a null binding, which the strict check treats as "accept any value". Resolving
+    /// the bare name through the CLR resolver instead searched **every loaded assembly** and could
+    /// return an unrelated type that merely shares the name.
+    /// </para>
+    /// <para>
+    /// That is not hypothetical: it is <c>TS-P2-39</c>, the suite's longest-running flake. The
+    /// compiler's emitter tests compile ToastScript into dynamic assemblies named
+    /// <c>ToshTest_{Guid}</c>, one of which declares <c>class Circle</c>. Once such an assembly was
+    /// loaded, an interpreted test declaring its own <c>Circle</c> bound its type parameter to the
+    /// *emitted* type and then failed strict binding against its own instance —
+    /// "produced a value that could not be converted to 'ToshTest_….Circle'". It reproduced only
+    /// when the emitting test ran first, which is why it looked like load-dependent flakiness
+    /// through seven sightings and always passed in isolation.
+    /// </para>
+    /// <para>
+    /// Checking the shell's own types first is also the right precedence on its own terms: a name
+    /// the script declared should mean the thing the script declared.
+    /// </para>
+    /// </remarks>
+    private Type? ResolveTypeArgument(string typeArgument)
+    {
+        if (TryGetNamedType(typeArgument, out _))
+        {
+            return null;
+        }
+
+        return ResolveTypeName(typeArgument);
+    }
 
     private bool TryGetRefinementType(string name, out RefinementTypeDefinition definition)
     {
