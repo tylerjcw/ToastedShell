@@ -738,8 +738,8 @@ public sealed class ToshLanguageFeatures
                 case SyntaxTokenKind.Pipe
                     or SyntaxTokenKind.DoublePipe or SyntaxTokenKind.DoubleAmpersand
                     or SyntaxTokenKind.Ampersand
-                    or SyntaxTokenKind.GreaterThan or SyntaxTokenKind.GreaterThanGreaterThan
-                    or SyntaxTokenKind.LessThan or SyntaxTokenKind.LessThanLessThanLessThan
+                    or SyntaxTokenKind.GreaterThanGreaterThan
+                    or SyntaxTokenKind.LessThanLessThanLessThan
                     or SyntaxTokenKind.GreaterThanEqual or SyntaxTokenKind.LessThanEqual
                     or SyntaxTokenKind.BangEqual or SyntaxTokenKind.BangTilde
                     or SyntaxTokenKind.Bang
@@ -748,6 +748,13 @@ public sealed class ToshLanguageFeatures
                     // LSP has no standard punctuation semantic-token type. Paired
                     // collection delimiters use the closest standard category so
                     // clients color each two-character token as a single unit.
+                    //
+                    // `<` and `>` are deliberately absent: the lexer cannot tell a
+                    // comparison from a generic delimiter, and an `operator` token
+                    // painted over `Point2D<T>` overrides the grammar's generic
+                    // punctuation — semantic tokens always win over TextMate. The
+                    // grammar distinguishes the two by adjacency, so it keeps the
+                    // call (TS-P3-12).
                     or SyntaxTokenKind.OpenBraceColon or SyntaxTokenKind.ColonCloseBrace
                     or SyntaxTokenKind.OpenBracePipe or SyntaxTokenKind.PipeCloseBrace
                     or SyntaxTokenKind.OpenBracePercent or SyntaxTokenKind.PercentCloseBrace:
@@ -791,10 +798,14 @@ public sealed class ToshLanguageFeatures
     {
         var word = token.Text;
 
-        // Variable reference ($name)
+        // Variable reference ($name). For a dotted reference — `$this.X`, `$o.Y` — only the
+        // head is the variable: one token across the whole path painted over the grammar's
+        // accessor and member scopes, which is why `$this.X` rendered as a single flat colour
+        // in any theme with semantic highlighting (TS-P3-12).
         if (word.StartsWith('$'))
         {
-            rawTokens.Add((pos.Line, pos.Character, word.Length, 4, 0)); // variable
+            var headLength = word.IndexOf('.') is var dot && dot > 0 ? dot : word.Length;
+            rawTokens.Add((pos.Line, pos.Character, headLength, 4, 0)); // variable
             return;
         }
 

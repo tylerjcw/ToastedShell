@@ -348,4 +348,64 @@ public sealed class SyntaxHighlighterTests
 
         Assert.DoesNotContain("\x1b[96mint\x1b[0m", highlighted);
     }
+
+    /// <summary>Decodes semantic tokens into (text, type) pairs for one-line sources.</summary>
+    private static List<(string Text, int Type)> DecodeSemanticTokens(string source)
+    {
+        var tokens = new ToshLanguageFeatures().GetSemanticTokens(source, "test.tosh");
+        var decoded = new List<(string, int)>();
+        var line = 0;
+        var character = 0;
+
+        for (var offset = 0; offset < tokens.Data.Count; offset += 5)
+        {
+            var deltaLine = tokens.Data[offset];
+            line += deltaLine;
+            character = deltaLine == 0
+                ? character + tokens.Data[offset + 1]
+                : tokens.Data[offset + 1];
+
+            if (line == 0)
+            {
+                decoded.Add((
+                    source.Substring(character, tokens.Data[offset + 2]),
+                    tokens.Data[offset + 3]));
+            }
+        }
+
+        return decoded;
+    }
+
+    [Fact]
+    public void Semantic_tokens_leave_generic_angle_brackets_to_the_grammar()
+    {
+        // Semantic tokens override TextMate wherever they land. `<` and `>` were emitted as
+        // `operator`, which painted over the grammar's generic punctuation in `Point2D<T>` —
+        // and since the lexer cannot tell a comparison from a generic delimiter, the honest
+        // move is to emit nothing and let the grammar's adjacency rule decide (TS-P3-12).
+        var decoded = DecodeSemanticTokens("var p = new Point2D<T>(1, 2)");
+
+        Assert.DoesNotContain(decoded, token => token.Text == "<");
+        Assert.DoesNotContain(decoded, token => token.Text == ">");
+    }
+
+    [Fact]
+    public void Semantic_tokens_cover_only_the_head_of_a_dotted_variable()
+    {
+        // `$this.X` was one variable-typed token across the whole path, flattening the
+        // grammar's $this / accessor / member split into a single colour in any theme with
+        // semantic highlighting — which is exactly what a screenshot reported (TS-P3-12).
+        var decoded = DecodeSemanticTokens("echo ($this.X + $o.Y)");
+        var variables = decoded.Where(token => token.Type == 4).Select(token => token.Text).ToArray();
+
+        Assert.Equal(["$this", "$o"], variables);
+    }
+
+    [Fact]
+    public void Semantic_tokens_still_cover_a_whole_undotted_variable()
+    {
+        var decoded = DecodeSemanticTokens("echo $name");
+
+        Assert.Contains(("$name", 4), decoded);
+    }
 }
