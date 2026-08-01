@@ -30,7 +30,7 @@ public sealed class DeclarationIndex
     {
         var parseResult = ToshParser.Parse(text, sourceName);
         var map = new TextCoordinateMap(parseResult.SourceText);
-        var collector = new Collector(parseResult.SourceText, map);
+        var collector = new Collector(parseResult.SourceText, map, ToLocalPath(sourceName));
         collector.Collect(parseResult.Statement);
         return new DeclarationIndex(
             sourceName,
@@ -38,6 +38,34 @@ public sealed class DeclarationIndex
             map,
             collector.BuildDeclarations(),
             collector.BuildFunctions());
+    }
+
+    /// <summary>
+    /// Turns whatever names the document into a filesystem path, or <see langword="null"/> when it
+    /// does not name a file.
+    /// </summary>
+    /// <remarks>
+    /// The language server identifies documents by URI — <c>file:///home/…/main.tosh</c> — while
+    /// the CLI and tests pass plain paths. Relative <c>require</c> targets resolve against the
+    /// document's directory, so the URI form has to be unwrapped first: `Path.GetDirectoryName`
+    /// on a `file://` string yields `file:/home/…`, which resolves to nothing and silently
+    /// disabled require-following in the editor while every unit test passed (<c>TS-P3-12</c>).
+    /// </remarks>
+    private static string? ToLocalPath(string sourceName)
+    {
+        if (string.IsNullOrWhiteSpace(sourceName))
+        {
+            return null;
+        }
+
+        if (!sourceName.StartsWith("file://", StringComparison.OrdinalIgnoreCase))
+        {
+            return sourceName;
+        }
+
+        return Uri.TryCreate(sourceName, UriKind.Absolute, out var uri) && uri.IsFile
+            ? uri.LocalPath
+            : null;
     }
 
     public IReadOnlyList<string> GetVisibleVariables(int offset)
@@ -611,15 +639,28 @@ public sealed class DeclarationIndex
 
     private sealed class Collector
     {
+        /// <summary>
+        /// How far a chain of <c>require</c> statements is followed. A library that requires a
+        /// library that requires a third is realistic; deeper than that is a sign of a cycle the
+        /// visited set already handles, or of a graph too large to be worth parsing on every
+        /// keystroke.
+        /// </summary>
+        private const int MaxRequireDepth = 3;
+
+        /// <summary>Documents already pulled in, so a cycle terminates and a diamond parses once.</summary>
+        private readonly HashSet<string> _visitedRequires = new(StringComparer.OrdinalIgnoreCase);
+
+        private readonly string? _documentPath;
         private readonly string _text;
         private readonly TextCoordinateMap _map;
         private readonly List<IndexedDeclaration> _declarations = new();
         private readonly List<IndexedFunctionDeclaration> _functions = new();
 
-        public Collector(string text, TextCoordinateMap map)
+        public Collector(string text, TextCoordinateMap map, string? documentPath = null)
         {
             _text = text;
             _map = map;
+            _documentPath = documentPath;
         }
 
         public void Collect(StatementSyntax statement)
@@ -685,6 +726,14 @@ public sealed class DeclarationIndex
                     {
                         CollectStatement(child, functionScope, depth + 1);
                     }
+                    break;
+
+                case RequireStatementSyntax require:
+                    CollectRequiredDocument(
+                        require,
+                        scopeSpan,
+                        depth,
+                        Path.GetDirectoryName(_documentPath));
                     break;
 
                 case ClassDefinitionStatementSyntax @class:
@@ -1018,6 +1067,222 @@ public sealed class DeclarationIndex
                         CollectArgument(range.End, scopeSpan, depth);
                     }
                     break;
+            }
+        }
+
+        /// <summary>
+        /// Pulls the type-like and function declarations of a <c>require</c>d file into this
+        /// index, so the editor knows about names the document did not declare itself.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// The index was document-local, so a file built on `require "./lib/Point.tosh"` got no
+        /// completion, no hover and no semantic-token colouring for anything that library
+        /// declared — every name from it read as unknown. The REPL never had this gap, because
+        /// its highlighter consults the live runtime; only the editor did (<c>TS-P3-12</c>).
+        /// </para>
+        /// <para>
+        /// Bounded deliberately. This runs on every keystroke that rebuilds the index, so a
+        /// require graph is followed to <see cref="MaxRequireDepth"/> and each document is parsed
+        /// once per build. A missing or unreadable target is silently skipped: a half-typed path
+        /// is the normal state of a file being edited, and an editor feature must not throw
+        /// because a `require` does not resolve yet.
+        /// </para>
+        /// <para>
+        /// Imported declarations are given the requiring statement's position as their scope
+        /// start, so they become visible exactly where the `require` appears — the same rule the
+        /// runtime follows, and it keeps "declared before use" honest for offsets above it.
+        /// </para>
+        /// </remarks>
+        private void CollectRequiredDocument(
+            RequireStatementSyntax require,
+            TextSpan scopeSpan,
+            int depth,
+            string? baseDirectory)
+        {
+            // A native library exposes CLR types rather than ToastScript declarations, and there
+            // is no source file to parse.
+            if (require.IsNative || depth >= MaxRequireDepth)
+            {
+                return;
+            }
+
+            var path = ResolveRequirePath(require.Target, baseDirectory);
+
+            if (path is null || !_visitedRequires.Add(path))
+            {
+                return;
+            }
+
+            string importedText;
+            try
+            {
+                importedText = File.ReadAllText(path);
+            }
+            catch (IOException)
+            {
+                return;
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return;
+            }
+
+            ParseResult imported;
+            try
+            {
+                imported = ToshParser.Parse(importedText, path);
+            }
+            catch (Exception)
+            {
+                // A library that does not parse yet is not a reason to lose the names this
+                // document does declare.
+                return;
+            }
+
+            var importScope = TextSpan.FromBounds(require.Span.Start, scopeSpan.End);
+
+            CollectImportedDeclarations(
+                imported.Statement,
+                importScope,
+                depth + 1,
+                require.Span,
+                Path.GetDirectoryName(path));
+        }
+
+        /// <summary>
+        /// Walks a required document's top level, recording the names it publishes against the
+        /// requiring document's own coordinates.
+        /// </summary>
+        /// <remarks>
+        /// Only top-level type-like and function declarations are taken. Ranges point at the
+        /// <c>require</c> statement rather than into the other file, because this index's
+        /// coordinate map belongs to *this* document — a range from another file would send
+        /// go-to-definition to a nonsensical offset. Cross-file navigation is its own feature.
+        /// </remarks>
+        private void CollectImportedDeclarations(
+            StatementSyntax statement,
+            TextSpan importScope,
+            int depth,
+            TextSpan requireSpan,
+            string? baseDirectory)
+        {
+            switch (statement)
+            {
+                case ScriptStatementSyntax script:
+                    foreach (var child in script.Statements)
+                    {
+                        CollectImportedDeclarations(child, importScope, depth, requireSpan, baseDirectory);
+                    }
+                    break;
+
+                // A library requiring another library. The nested target resolves against *its*
+                // directory, which is why the base is threaded rather than taken from the
+                // document being edited.
+                case RequireStatementSyntax nested:
+                    CollectRequiredDocument(nested, importScope, depth, baseDirectory);
+                    break;
+
+                case ClassDefinitionStatementSyntax @class:
+                    AddImported(@class.Name, DeclarationKind.Class, importScope, depth, requireSpan, @class.DocComment);
+                    break;
+
+                case RecordDefinitionStatementSyntax record:
+                    AddImported(record.Name, DeclarationKind.Record, importScope, depth, requireSpan);
+                    break;
+
+                case EnumDefinitionStatementSyntax @enum:
+                    AddImported(@enum.Name, DeclarationKind.Enum, importScope, depth, requireSpan);
+                    break;
+
+                case TypeAliasStatementSyntax alias:
+                    AddImported(alias.Name, DeclarationKind.TypeAlias, importScope, depth, requireSpan);
+                    break;
+
+                case FunctionDefinitionStatementSyntax function:
+                    AddImported(function.Name, DeclarationKind.Function, importScope, depth, requireSpan, function.DocComment);
+                    break;
+
+                case ModuleDefinitionStatementSyntax module:
+                    AddImported(module.Name, DeclarationKind.Module, importScope, depth, requireSpan);
+
+                    // A module's exports are reached as `Module.Name`, so the members themselves
+                    // are not top-level names here — but nested modules and the types inside are
+                    // what completion offers after the dot, and they still have to be indexed.
+                    foreach (var child in module.Body.Statements)
+                    {
+                        CollectImportedDeclarations(child, importScope, depth, requireSpan, baseDirectory);
+                    }
+                    break;
+            }
+        }
+
+        private void AddImported(
+            string name,
+            DeclarationKind kind,
+            TextSpan importScope,
+            int depth,
+            TextSpan requireSpan,
+            DocComment? docComment = null)
+        {
+            var range = _map.ToRange(requireSpan.Start, requireSpan.End);
+
+            _declarations.Add(new IndexedDeclaration(
+                name,
+                kind,
+                importScope.Start,
+                importScope.End,
+                depth,
+                requireSpan.Start,
+                range,
+                range,
+                docComment));
+        }
+
+        /// <summary>
+        /// Turns a <c>require</c> target into a readable path, or <see langword="null"/> when it
+        /// cannot be one.
+        /// </summary>
+        /// <remarks>
+        /// Relative targets resolve against the requiring document's directory, which is the rule
+        /// the runtime uses. A bare module name — `require ToastLib.Math` — names something the
+        /// runtime finds on its own search path, which the language server does not have; those
+        /// are skipped rather than guessed at.
+        /// </remarks>
+        private string? ResolveRequirePath(string target, string? baseDirectory)
+        {
+            if (string.IsNullOrWhiteSpace(target))
+            {
+                return null;
+            }
+
+            var trimmed = target.Trim('"', '\'', ' ');
+
+            if (trimmed.Length == 0 || !trimmed.EndsWith(".tosh", StringComparison.OrdinalIgnoreCase))
+            {
+                return null;
+            }
+
+            try
+            {
+                if (Path.IsPathRooted(trimmed))
+                {
+                    return File.Exists(trimmed) ? Path.GetFullPath(trimmed) : null;
+                }
+
+                var directory = baseDirectory;
+
+                if (string.IsNullOrEmpty(directory))
+                {
+                    return null;
+                }
+
+                var combined = Path.GetFullPath(Path.Combine(directory, trimmed));
+                return File.Exists(combined) ? combined : null;
+            }
+            catch (ArgumentException)
+            {
+                return null;
             }
         }
 
