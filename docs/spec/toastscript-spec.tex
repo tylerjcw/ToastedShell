@@ -523,6 +523,46 @@ is a block comment.  Consecutive \code{\#\#} documentation comments attach to
 the next function, class, module, record, enum, event, or class member and feed
 hover, completion, signature-help, and \code{help} metadata.
 
+\subsection{When \code{\#} Is a Comment}
+\label{sec:hash-boundary}
+
+A lone \code{\#} opens a comment only when it \emph{stands alone as a word}: it
+must begin a word --- be at the start of a line or preceded by whitespace ---
+\emph{and} be followed by whitespace or the end of the line.  Anywhere else it
+is an ordinary bareword character:
+
+\begin{lstlisting}
+# a comment                 # '#' begins a word, space follows
+echo hello  # a comment     # same, mid-line
+#                           # a lone '#' at end of line is an empty comment
+
+echo #ff0000                # bareword "#ff0000" -- no quoting needed
+echo issue#42               # bareword "issue#42"
+echo http://host/page#frag  # bareword, fragment intact
+echo C#                     # bareword "C#"
+\end{lstlisting}
+
+The word-start half of the rule is the POSIX shell rule: \code{bash} and
+\code{zsh} also refuse to start a comment mid-word, which is why
+\code{echo issue\#42} prints \code{issue\#42} in both.  Requiring whitespace to
+follow as well is what TōSh adds, and it is what lets \code{\#ff0000} go
+unquoted.
+
+\begin{notebox}
+\code{\#\#} is unconditional.  Doc comments and \code{\#\#\{...\}\#\#} blocks
+keep their meaning wherever they appear, so a divider line such as
+\code{\#\#\#\#\#\#\#\#\#\#} still reads as a doc comment.  The one further
+exception is \code{\#!} at byte offset zero, which is a shebang.
+\end{notebox}
+
+\begin{warnbox}[Migration note --- July 31, 2026]
+Earlier builds treated \code{\#} as a comment opener everywhere, so
+\code{echo issue\#42} printed \code{issue} and silently discarded the rest of
+the line.  Comments written \code{\#comment} with no following space are now
+barewords; write \code{\# comment} instead.  The formatter normalises the
+spelling, and no comment in the TōSh tree needed changing.
+\end{warnbox}
+
 \section{Identifiers}
 
 Identifiers start with a letter or underscore and may contain letters, digits,

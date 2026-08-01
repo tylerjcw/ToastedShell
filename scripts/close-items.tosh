@@ -1,0 +1,28 @@
+## Mark items complete by replacing their status cell. Writes to an output path; never in place.
+## Usage: close.tosh <doc> <out> <id> <status> [<id> <status> ...]
+var doc = $tosh.Script.Args[0]
+var out = $tosh.Script.Args[1]
+var rest = ($tosh.Script.Args | skip 2 | collect)
+
+var out_lines = []
+var closed = 0
+
+for line in (read-file $doc | lines) {
+    var updated = $line
+    var index = 0
+    while ($index < ($rest | count)) {
+        var id = $rest[$index]
+        var status = $rest[($index + 1)]
+        if ($updated.StartsWith($"| `" + $id + "` |")) {
+            var parts = ($updated.Split("|"))
+            $parts[2] = $" {$status} "
+            $updated = ($parts | join "|")
+            $closed = ($closed + 1)
+        }
+        $index = ($index + 2)
+    }
+    $out_lines = ($out_lines + [$updated])
+}
+
+write-file $out (($out_lines | join "\n") + "\n") | ignore
+echo $"closed={$closed}"

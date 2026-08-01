@@ -989,6 +989,33 @@ public static class TypeChecker
         }
     }
 
+    /// <summary>
+    /// Whether a member missing from <paramref name="type"/> is genuinely missing at runtime.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Only a type that cannot be widened answers this question honestly. If the static type is an
+    /// interface or an open (non-sealed) class, the value may be a more derived type at runtime
+    /// that declares the member, so "not found here" is not "not found". `var a = []` infers
+    /// <c>IList</c>, the value is really an <c>object[]</c>, and <c>$a.Length</c> warned
+    /// <c>member_not_found</c> and then evaluated correctly (<c>TS-P2-45</c>).
+    /// </para>
+    /// <para>
+    /// Reflection compounds it: <see cref="Type.GetMember(string, BindingFlags)"/> on an interface
+    /// does not return members inherited from its base interfaces, so even the correct spelling —
+    /// <c>Count</c>, which <c>IList</c> gets from <c>ICollection</c> — would have been reported
+    /// missing. Two mechanisms, one symptom.
+    /// </para>
+    /// <para>
+    /// Warning on valid code is the specific harm <c>TS-P2-41</c> was reverted for: it teaches
+    /// readers to ignore the diagnostic class, which costs more than the check earns. Sealed
+    /// classes, value types and arrays stay checked, which is where the typo-catching value is —
+    /// <c>string</c> is sealed, so <c>$s.Trimm()</c> is still caught.
+    /// </para>
+    /// </remarks>
+    private static bool MemberChecksAreSound(Type type) =>
+        !type.IsInterface && (type.IsValueType || type.IsArray || type.IsSealed);
+
     private static void CheckMemberAccess(BoundMemberAccess access, CheckContext ctx)
     {
         var targetType = access.Target.Type;
@@ -999,6 +1026,8 @@ public static class TypeChecker
         var flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.IgnoreCase;
         foreach (var segment in access.MemberPath.Split('.', StringSplitOptions.RemoveEmptyEntries))
         {
+            if (!MemberChecksAreSound(clr)) return;
+
             var member = clr.GetMember(segment, flags).FirstOrDefault();
             if (member is null)
             {
@@ -1030,6 +1059,10 @@ public static class TypeChecker
         if (!targetType.IsConcrete || targetType.ClrType is null) return;
 
         if (call.Arguments.Any(a => a.IsSplat || a.Name is not null)) return;
+
+        // Same soundness rule as member access: an interface or open class cannot say what the
+        // runtime type will offer.
+        if (!MemberChecksAreSound(targetType.ClrType)) return;
 
         var flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.IgnoreCase;
         var overloads = targetType.ClrType

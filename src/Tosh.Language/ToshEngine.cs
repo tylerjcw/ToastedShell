@@ -7133,7 +7133,7 @@ public sealed partial class ToshEngine : IShellEvaluator
                             SourceText: sourceText,
                             Span: variableReference.Span,
                             Label: $"'{variableReference.Name}' is not defined in this scope",
-                            Help: $"declare it first with 'var {variableReference.Name} = ...'."));
+                            Help: DescribeUnknownVariable(variableReference.Name)));
                     }
 
                 case NewObjectArgumentSyntax newObject:
@@ -10441,6 +10441,46 @@ public sealed partial class ToshEngine : IShellEvaluator
         definition = null!;
         return false;
     }
+
+    /// <summary>
+    /// Help text for an unknown variable, naming the shell namespace when the spelling is one
+    /// people reach for out of habit from another shell.
+    /// </summary>
+    /// <remarks>
+    /// Script arguments live at <c>$tosh.Script.Args</c>. Someone arriving from bash, Python or
+    /// PowerShell writes <c>$args</c> or <c>$argv</c> first, got "declare it first with
+    /// 'var args = ...'" — advice that points away from the answer — and had no path to the real
+    /// spelling short of piping <c>$tosh.Script</c> through <c>members</c> (<c>TS-P2-44</c>).
+    /// </remarks>
+    private static string DescribeUnknownVariable(string name)
+    {
+        foreach (var (spelling, suggestion) in ShellNamespaceSuggestions)
+        {
+            if (string.Equals(name, spelling, StringComparison.OrdinalIgnoreCase))
+            {
+                return $"did you mean '{suggestion}'? {spelling} is not a shell variable in TōSh.";
+            }
+        }
+
+        return $"declare it first with 'var {name} = ...'.";
+    }
+
+    /// <summary>
+    /// Names that are variables in other shells but namespace members here, paired with the
+    /// spelling that works.
+    /// </summary>
+    private static readonly (string Spelling, string Suggestion)[] ShellNamespaceSuggestions =
+    [
+        ("args", "$tosh.Script.Args"),
+        ("argv", "$tosh.Script.Args"),
+        ("ARGV", "$tosh.Script.Args"),
+        ("scriptname", "$tosh.Script.Name"),
+        ("scriptdir", "$tosh.Script.Directory"),
+        ("PWD", "$env.PWD"),
+        ("HOME", "$env.HOME"),
+        ("PATH", "$env.PATH"),
+        ("status", "$tosh.Last.ExitCode"),
+    ];
 
     private bool TryGetRefinementType(string name, out RefinementTypeDefinition definition)
     {

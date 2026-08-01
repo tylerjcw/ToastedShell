@@ -1848,7 +1848,7 @@ public sealed class EngineTests
 
         var ex = await Assert.ThrowsAsync<ToshDiagnosticException>(() => engine.ExecuteToListAsync("""
             class HttpError(status) extends Error {
-                prop Status = status
+                prop Status = $status
             }
             throw (new HttpError(500))
             """));

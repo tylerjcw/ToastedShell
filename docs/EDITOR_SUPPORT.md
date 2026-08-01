@@ -4,7 +4,17 @@ TōSh now keeps its VS Code extension source in-repo under [editor/vscode/tosh.t
 
 ## Current VS Code Support
 
-- TextMate grammar / syntax highlighting
+- TextMate grammar / syntax highlighting, covering all eight string forms
+  (including the triple-quoted and `$`-interpolated variants), `##{ }##` block
+  comments, doc-comment tags, refinement `type` declarations, `subcommand` /
+  `flag` / `arg`, named-stream redirection (`out>`, `o+e>>`, …), quantity and
+  imaginary literals, and every built-in command name
+- structural code folding (`ToshFoldingRangeProvider` in `extension.js`):
+  doc-comment blocks above declarations, `##{ }##` block comments, runs of
+  ordinary `#` comments, multi-line strings, `# region` / `# endregion` pairs,
+  and every bracket pair including `{| |}`, `{% %}` and `{: :}`. Registered
+  unconditionally because `Tosh.Lsp` does not implement
+  `textDocument/foldingRange`
 - language configuration for comments, brackets, and indentation
 - snippets for common TōSh constructs
 - a real `.NET` language server in [src/Tosh.Lsp](/home/komrad/projects/tosh/src/Tosh.Lsp)
@@ -188,3 +198,18 @@ The next LSP milestones should focus on:
 1. deeper member/type inference across more shell constructs
 2. rename/refactor-style navigation features
 3. keeping editor behavior in lockstep with new runtime syntax
+4. `textDocument/foldingRange`, so folding comes from the real parser instead of
+   the extension's line scanner
+
+## Regenerating `language-data.json`
+
+`language-data.json` is generated, not hand-edited. Its keywords and special
+variables live in [src/Tosh.Runtime/VsCodeMetadataEmitter.cs](/home/komrad/projects/tosh/src/Tosh.Runtime/VsCodeMetadataEmitter.cs)
+and its built-ins come from the live command metadata:
+
+```bash
+tosh --export-command-metadata --vscode -o editor/vscode/tosh.tosh-lang/language-data.json
+```
+
+Editing the JSON directly will be silently undone the next time anyone
+regenerates it — add new keywords to the emitter instead.
