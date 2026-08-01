@@ -10899,6 +10899,138 @@ public sealed partial class ToshEngine : IShellEvaluator
         out int score)
         => TryBindCallableParameters(parameters, arguments, out locals, out score, out _);
 
+    /// <summary>
+    /// One parameter slot's outcome from binding, before any type conversion is attempted.
+    /// </summary>
+    /// <param name="Parameter">The parameter this step fills.</param>
+    /// <param name="Value">The argument it receives; meaningless when <paramref name="IsMissing"/>.</param>
+    /// <param name="IsRest">Whether this step contributes to the trailing rest collection.</param>
+    /// <param name="IsMissing">
+    /// No argument was supplied, so the slot takes its default. Defaults are deliberately *not*
+    /// evaluated here: a losing overload candidate must never run a default's side effects, so the
+    /// winner's are applied afterwards by <c>ApplyPendingParameterDefaults</c>.
+    /// </param>
+    private readonly record struct CallableBindingStep(
+        FunctionParameterDefinition Parameter,
+        object? Value,
+        bool IsRest,
+        bool IsMissing);
+
+    /// <summary>
+    /// Works out which argument fills which parameter, without converting anything.
+    /// </summary>
+    /// <remarks>
+    /// This is everything the two <c>TryBindCallableParameters</c> twins duplicated: splitting
+    /// named from positional arguments, rejecting names that match no parameter, counting required
+    /// parameters, the arity check, named-takes-priority ordering, and the rest-parameter tail.
+    /// Both then walked the same slots, one converting synchronously and the other awaiting — the
+    /// only genuine difference between them (<c>TS-P1-24</c>).
+    ///
+    /// Deliberately *not* converged by making the synchronous form block on the asynchronous one,
+    /// which is the pattern used elsewhere in this file. Overload resolution runs on the command
+    /// dispatch path, and turning it into sync-over-async would change threading behaviour under
+    /// load to remove a duplication that this planner removes anyway.
+    /// </remarks>
+    /// <returns>The ordered steps, or <see langword="null"/> when the arguments cannot fit.</returns>
+    private static List<CallableBindingStep>? PlanCallableParameterBinding(
+        IReadOnlyList<FunctionParameterDefinition> parameters,
+        IReadOnlyList<object?> arguments)
+    {
+        var hasRestParameter = parameters.Count > 0 && parameters[^1].IsRest;
+        var positionalCount = hasRestParameter ? parameters.Count - 1 : parameters.Count;
+
+        var namedArgs = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+        var positionalArgs = new List<object?>();
+
+        foreach (var argument in arguments)
+        {
+            if (argument is NamedArgument named)
+            {
+                namedArgs[named.Name] = named.Value;
+            }
+            else
+            {
+                positionalArgs.Add(argument);
+            }
+        }
+
+        if (!AllNamedArgumentsMatchParameters(parameters, namedArgs))
+        {
+            return null;
+        }
+
+        var requiredCount = parameters.Count(parameter =>
+            !parameter.IsOptional &&
+            !parameter.IsRest &&
+            parameter.DefaultValue is null &&
+            !namedArgs.ContainsKey(parameter.Name));
+
+        if (positionalArgs.Count < requiredCount ||
+            (!hasRestParameter && positionalArgs.Count > positionalCount - namedArgs.Count))
+        {
+            return null;
+        }
+
+        var steps = new List<CallableBindingStep>(parameters.Count);
+        var positionalIndex = 0;
+
+        for (var index = 0; index < positionalCount; index++)
+        {
+            var parameter = parameters[index];
+
+            if (namedArgs.TryGetValue(parameter.Name, out var namedValue))
+            {
+                steps.Add(new CallableBindingStep(parameter, namedValue, IsRest: false, IsMissing: false));
+                continue;
+            }
+
+            if (positionalIndex >= positionalArgs.Count)
+            {
+                steps.Add(new CallableBindingStep(parameter, null, IsRest: false, IsMissing: true));
+                continue;
+            }
+
+            steps.Add(new CallableBindingStep(
+                parameter,
+                positionalArgs[positionalIndex++],
+                IsRest: false,
+                IsMissing: false));
+        }
+
+        if (hasRestParameter)
+        {
+            var restParameter = parameters[^1];
+
+            for (var index = positionalCount; index < arguments.Count; index++)
+            {
+                steps.Add(new CallableBindingStep(restParameter, arguments[index], IsRest: true, IsMissing: false));
+            }
+        }
+
+        return steps;
+    }
+
+    /// <summary>
+    /// Records a slot that had no argument: the local is null, a default is queued rather than
+    /// run, and the score reflects how good a match this is. Shared so the two twins cannot
+    /// disagree about scoring, which is what decides overload resolution.
+    /// </summary>
+    private static void ApplyMissingArgumentStep(
+        CallableBindingStep step,
+        Dictionary<string, object?> locals,
+        ref int score,
+        ref List<FunctionParameterDefinition>? pendingDefaults)
+    {
+        locals[step.Parameter.Name] = null;
+
+        if (step.Parameter.DefaultValue is not null)
+        {
+            (pendingDefaults ??= new List<FunctionParameterDefinition>()).Add(step.Parameter);
+        }
+
+        score += step.Parameter.DefaultValue is not null ? 1 : 4;
+    }
+
     internal bool TryBindCallableParameters(
         IReadOnlyList<FunctionParameterDefinition> parameters,
         IReadOnlyList<object?> arguments,
@@ -10910,86 +11042,27 @@ public sealed partial class ToshEngine : IShellEvaluator
         score = 0;
         pendingDefaults = null;
 
-        var hasRestParameter = parameters.Count > 0 && parameters[^1].IsRest;
-        var positionalCount = hasRestParameter ? parameters.Count - 1 : parameters.Count;
-
-        // Separate named and positional arguments
-        var namedArgs = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
-        var positionalArgs = new List<object?>();
-
-        foreach (var arg in arguments)
-        {
-            if (arg is NamedArgument named)
-            {
-                namedArgs[named.Name] = named.Value;
-            }
-            else
-            {
-                positionalArgs.Add(arg);
-            }
-        }
-
-        if (!AllNamedArgumentsMatchParameters(parameters, namedArgs))
-        {
-            return false;
-        }
-
-        var requiredCount = parameters.Count(parameter =>
-            !parameter.IsOptional && !parameter.IsRest && parameter.DefaultValue is null && !namedArgs.ContainsKey(parameter.Name));
-
-        if (positionalArgs.Count < requiredCount || (!hasRestParameter && positionalArgs.Count > positionalCount - namedArgs.Count))
+        if (PlanCallableParameterBinding(parameters, arguments) is not { } steps)
         {
             return false;
         }
 
         locals["args"] = arguments.ToArray();
-        var positionalIndex = 0;
+        List<object?>? restArguments = null;
 
-        for (var index = 0; index < positionalCount; index++)
+        foreach (var step in steps)
         {
-            var parameter = parameters[index];
-
-            // Named argument takes priority
-            if (namedArgs.TryGetValue(parameter.Name, out var namedValue))
+            if (step.IsMissing)
             {
-                if (!TryConvertParameterValue(parameter, namedValue, out var convertedNamedValue, out var namedFailure))
-                {
-                    if (namedFailure is not null)
-                    {
-                        throw namedFailure;
-                    }
-
-                    locals = new Dictionary<string, object?>(StringComparer.Ordinal);
-                    score = 0;
-                    return false;
-                }
-
-                locals[parameter.Name] = convertedNamedValue;
+                ApplyMissingArgumentStep(step, locals, ref score, ref pendingDefaults);
                 continue;
             }
 
-            if (positionalIndex >= positionalArgs.Count)
+            if (!TryConvertParameterValue(step.Parameter, step.Value, out var converted, out var failure))
             {
-                // Defaults are not evaluated during overload scoring: a
-                // losing candidate must never run default side effects.
-                // The winner's pending defaults are applied afterwards by
-                // ApplyPendingParameterDefaults(Async).
-                locals[parameter.Name] = null;
-                if (parameter.DefaultValue is not null)
+                if (failure is not null)
                 {
-                    (pendingDefaults ??= new List<FunctionParameterDefinition>()).Add(parameter);
-                }
-                score += parameter.DefaultValue is not null ? 1 : 4;
-                continue;
-            }
-
-            var value = positionalArgs[positionalIndex++];
-
-            if (!TryConvertParameterValue(parameter, value, out var convertedValue, out var positionalFailure))
-            {
-                if (positionalFailure is not null)
-                {
-                    throw positionalFailure;
+                    throw failure;
                 }
 
                 locals = new Dictionary<string, object?>(StringComparer.Ordinal);
@@ -10997,35 +11070,28 @@ public sealed partial class ToshEngine : IShellEvaluator
                 return false;
             }
 
-            if (!ReferenceEquals(convertedValue, value))
+            if (step.IsRest)
+            {
+                (restArguments ??= []).Add(converted);
+                continue;
+            }
+
+            if (!ReferenceEquals(converted, step.Value))
             {
                 score += 1;
             }
 
-            locals[parameter.Name] = convertedValue;
+            locals[step.Parameter.Name] = converted;
         }
 
-        if (hasRestParameter)
+        if (restArguments is not null)
         {
-            var restParam = parameters[^1];
-            var restArgs = new List<object?>();
-            for (var i = positionalCount; i < arguments.Count; i++)
-            {
-                if (!TryConvertParameterValue(restParam, arguments[i], out var convertedRestValue, out var restFailure))
-                {
-                    if (restFailure is not null)
-                    {
-                        throw restFailure;
-                    }
-
-                    locals = new Dictionary<string, object?>(StringComparer.Ordinal);
-                    score = 0;
-                    return false;
-                }
-
-                restArgs.Add(convertedRestValue);
-            }
-            locals[restParam.Name] = restArgs;
+            locals[parameters[^1].Name] = restArguments;
+        }
+        else if (parameters.Count > 0 && parameters[^1].IsRest)
+        {
+            // A rest parameter with no arguments still binds, to an empty list.
+            locals[parameters[^1].Name] = new List<object?>();
         }
 
         return true;
@@ -11100,134 +11166,58 @@ public sealed partial class ToshEngine : IShellEvaluator
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        var locals = new Dictionary<string, object?>(StringComparer.Ordinal);
+        static (bool, Dictionary<string, object?>, int, List<FunctionParameterDefinition>?) NoMatch()
+            => (false, new Dictionary<string, object?>(StringComparer.Ordinal), 0, null);
+
+        if (PlanCallableParameterBinding(parameters, arguments) is not { } steps)
+        {
+            return NoMatch();
+        }
+
+        var locals = new Dictionary<string, object?>(StringComparer.Ordinal) { ["args"] = arguments.ToArray() };
         var score = 0;
         List<FunctionParameterDefinition>? pendingDefaults = null;
-        var hasRestParameter = parameters.Count > 0 && parameters[^1].IsRest;
-        var positionalCount = hasRestParameter ? parameters.Count - 1 : parameters.Count;
-        var namedArgs = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
-        var positionalArgs = new List<object?>();
+        List<object?>? restArguments = null;
 
-        foreach (var argument in arguments)
-        {
-            if (argument is NamedArgument named)
-            {
-                namedArgs[named.Name] = named.Value;
-            }
-            else
-            {
-                positionalArgs.Add(argument);
-            }
-        }
-
-        if (!AllNamedArgumentsMatchParameters(parameters, namedArgs))
-        {
-            return (false, new Dictionary<string, object?>(StringComparer.Ordinal), 0, null);
-        }
-
-        var requiredCount = parameters.Count(parameter =>
-            !parameter.IsOptional &&
-            !parameter.IsRest &&
-            parameter.DefaultValue is null &&
-            !namedArgs.ContainsKey(parameter.Name));
-
-        if (positionalArgs.Count < requiredCount ||
-            (!hasRestParameter && positionalArgs.Count > positionalCount - namedArgs.Count))
-        {
-            return (false, new Dictionary<string, object?>(StringComparer.Ordinal), 0, null);
-        }
-
-        locals["args"] = arguments.ToArray();
-        var positionalIndex = 0;
-
-        for (var index = 0; index < positionalCount; index++)
+        foreach (var step in steps)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var parameter = parameters[index];
 
-            if (namedArgs.TryGetValue(parameter.Name, out var namedValue))
+            if (step.IsMissing)
             {
-                var namedConversion = await TryConvertParameterValueAsync(
-                    parameter,
-                    namedValue,
-                    cancellationToken);
-                if (!namedConversion.Success)
-                {
-                    if (namedConversion.Failure is not null)
-                    {
-                        throw namedConversion.Failure;
-                    }
-
-                    return (false, new Dictionary<string, object?>(StringComparer.Ordinal), 0, null);
-                }
-
-                locals[parameter.Name] = namedConversion.Converted;
+                ApplyMissingArgumentStep(step, locals, ref score, ref pendingDefaults);
                 continue;
             }
 
-            if (positionalIndex >= positionalArgs.Count)
+            var conversion = await TryConvertParameterValueAsync(step.Parameter, step.Value, cancellationToken);
+
+            if (!conversion.Success)
             {
-                // Defaults are not evaluated during overload scoring: a
-                // losing candidate must never run default side effects.
-                // The winner's pending defaults are applied afterwards by
-                // ApplyPendingParameterDefaults(Async).
-                locals[parameter.Name] = null;
-                if (parameter.DefaultValue is not null)
+                if (conversion.Failure is not null)
                 {
-                    (pendingDefaults ??= new List<FunctionParameterDefinition>()).Add(parameter);
+                    throw conversion.Failure;
                 }
-                score += parameter.DefaultValue is not null ? 1 : 4;
+
+                return NoMatch();
+            }
+
+            if (step.IsRest)
+            {
+                (restArguments ??= []).Add(conversion.Converted);
                 continue;
             }
 
-            var value = positionalArgs[positionalIndex++];
-            var positionalConversion = await TryConvertParameterValueAsync(
-                parameter,
-                value,
-                cancellationToken);
-            if (!positionalConversion.Success)
-            {
-                if (positionalConversion.Failure is not null)
-                {
-                    throw positionalConversion.Failure;
-                }
-
-                return (false, new Dictionary<string, object?>(StringComparer.Ordinal), 0, null);
-            }
-
-            if (!ReferenceEquals(positionalConversion.Converted, value))
+            if (!ReferenceEquals(conversion.Converted, step.Value))
             {
                 score++;
             }
 
-            locals[parameter.Name] = positionalConversion.Converted;
+            locals[step.Parameter.Name] = conversion.Converted;
         }
 
-        if (hasRestParameter)
+        if (parameters.Count > 0 && parameters[^1].IsRest)
         {
-            var restParameter = parameters[^1];
-            var restArguments = new List<object?>();
-            for (var index = positionalCount; index < arguments.Count; index++)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                var restConversion = await TryConvertParameterValueAsync(
-                    restParameter,
-                    arguments[index],
-                    cancellationToken);
-                if (!restConversion.Success)
-                {
-                    if (restConversion.Failure is not null)
-                    {
-                        throw restConversion.Failure;
-                    }
-
-                    return (false, new Dictionary<string, object?>(StringComparer.Ordinal), 0, null);
-                }
-
-                restArguments.Add(restConversion.Converted);
-            }
-
-            locals[restParameter.Name] = restArguments;
+            locals[parameters[^1].Name] = restArguments ?? [];
         }
 
         return (true, locals, score, pendingDefaults);

@@ -92,6 +92,16 @@ public sealed class SyncAsyncTwinInventoryTests
         "ToshEngine.TryApplyRefinementWithOptionalCoercion",
         "ToshEngine.TryConvertAnnotatedValue",
 
+        // The July 30 slices. Each pair now shares one implementation of the
+        // decisions it used to duplicate, with the twins reduced to the call that
+        // genuinely differs:
+        //   ConvertPropertyValue      -> TryResolvePropertyValueByBinding
+        //   EvaluateClassPipelineValue-> BuildClassPipelineBlock + ProjectClassPipelineValues
+        //   TryBindCallableParameters -> PlanCallableParameterBinding + ApplyMissingArgumentStep
+        "ToshClassDefinition.ConvertPropertyValue",
+        "ToshEngine.EvaluateClassPipelineValue",
+        "ToshEngine.TryBindCallableParameters",
+
         // ── Thin wrappers over one shared implementation ──────────────────────
         // Reclassified 2026-07-30 after measuring rather than counting. Each of
         // these bottoms out on the *same* async body: ExecuteClassBlockSync does
@@ -132,7 +142,6 @@ public sealed class SyncAsyncTwinInventoryTests
         "ReflectionObjectAccessor.ResolveSegment",
         "ShellIndexingUtilities.GetIndexedValue",
         "ShellIterationUtilities.ExpandIterationItems",
-        "ToshClassDefinition.ConvertPropertyValue",
         "ToshClassDefinition.EnumerateItems",
         "ToshClassDefinition.GetInstanceMembers",
         "ToshClassDefinition.TryGetInstanceMember",
@@ -145,12 +154,10 @@ public sealed class SyncAsyncTwinInventoryTests
         // a parallel implementation; EvaluateClassPipelineValue's two forms were byte-identical
         // apart from that call and now share BuildClassPipelineBlock and
         // ProjectClassPipelineValues.
-        "ToshEngine.EvaluateClassPipelineValue",
         "ToshEngine.ApplyPendingParameterDefaults",
         "ToshEngine.InvokeQualifiedMethod",
         "ToshEngine.ResolveQualifiedMemberChain",
         "ToshEngine.SelectBestCallableMatches",
-        "ToshEngine.TryBindCallableParameters",
         "ToshEngine.TryConvertParameterValue",
         "ToshEngine.TryInvokeShellSymbol",
     ];

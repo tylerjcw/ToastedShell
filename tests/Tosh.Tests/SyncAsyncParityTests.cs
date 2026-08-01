@@ -154,4 +154,205 @@ public sealed class SyncAsyncParityTests
         Assert.Equal(21, syncValue);
         Assert.Equal(syncValue, asyncValue);
     }
+
+    // ── Overload binding, driven directly on both surfaces ─────────────────────
+
+    /// <summary>
+    /// Binds <paramref name="arguments"/> against a signature through both binders and returns
+    /// each one's full outcome, rendered so any difference shows up in the assertion message.
+    /// </summary>
+    /// <remarks>
+    /// These are reachable because <c>Tosh.Language</c> grants <c>InternalsVisibleTo</c> to this
+    /// project. Driving them directly matters: overload *scoring* decides which candidate wins,
+    /// and a score that differed between the surfaces would pick different overloads for the same
+    /// call without either binder throwing — a silent wrong answer rather than a failure.
+    /// </remarks>
+    private static async Task<(string Sync, string Async)> BindBothWaysAsync(
+        IReadOnlyList<FunctionParameterDefinition> parameters,
+        params object?[] arguments)
+    {
+        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+
+        string sync;
+        try
+        {
+            var ok = engine.TryBindCallableParameters(
+                parameters, arguments, out var locals, out var score, out var pending);
+            sync = Render(ok, locals, score, pending);
+        }
+        catch (Exception exception)
+        {
+            sync = $"{exception.GetType().Name}:{exception.Message}";
+        }
+
+        string async;
+        try
+        {
+            var result = await engine.TryBindCallableParametersAsync(
+                parameters, arguments, CancellationToken.None);
+            async = Render(result.Success, result.Locals, result.Score, result.PendingDefaults);
+        }
+        catch (Exception exception)
+        {
+            async = $"{exception.GetType().Name}:{exception.Message}";
+        }
+
+        return (sync, async);
+    }
+
+    private static string Render(
+        bool success,
+        Dictionary<string, object?> locals,
+        int score,
+        List<FunctionParameterDefinition>? pendingDefaults)
+    {
+        var bound = string.Join(
+            ",",
+            locals.Where(entry => entry.Key != "args")
+                .OrderBy(entry => entry.Key, StringComparer.Ordinal)
+                .Select(entry => $"{entry.Key}={Format(entry.Value)}"));
+
+        var pending = pendingDefaults is null
+            ? "-"
+            : string.Join("|", pendingDefaults.Select(parameter => parameter.Name));
+
+        return $"success={success} score={score} bound=[{bound}] pending={pending}";
+    }
+
+    private static string Format(object? value) => value switch
+    {
+        null => "null",
+        List<object?> list => $"[{string.Join(" ", list.Select(Format))}]",
+        object[] array => $"[{string.Join(" ", array.Select(Format))}]",
+        _ => value.ToString() ?? "null",
+    };
+
+    private static FunctionParameterDefinition Parameter(
+        string name,
+        string? typeName = null,
+        bool isOptional = false,
+        bool isRest = false) =>
+        new(name, typeName, isOptional, isRest, DefaultValue: null, Span: default);
+
+    [Fact]
+    public async Task Positional_binding_agrees_on_both_surfaces()
+    {
+        var (sync, async) = await BindBothWaysAsync([Parameter("a"), Parameter("b")], 1, 2);
+
+        Assert.Equal("success=True score=0 bound=[a=1,b=2] pending=-", sync);
+        Assert.Equal(sync, async);
+    }
+
+    [Fact]
+    public async Task A_missing_argument_scores_identically_on_both_surfaces()
+    {
+        // Scoring is the part that silently picks a different overload if it drifts, so the
+        // assertion pins the number rather than merely comparing the two surfaces: if both
+        // drifted together, comparing them alone would still pass.
+        //
+        // `b` is optional because a *required* parameter with no argument fails binding outright
+        // rather than scoring — an earlier draft asserted score=4 against two required parameters
+        // and failed, which is the binder being stricter than the test assumed.
+        var (sync, async) = await BindBothWaysAsync(
+            [Parameter("a"), Parameter("b", isOptional: true)],
+            1);
+
+        Assert.Equal("success=True score=4 bound=[a=1,b=null] pending=-", sync);
+        Assert.Equal(sync, async);
+    }
+
+    [Fact]
+    public async Task A_named_argument_agrees_on_both_surfaces()
+    {
+        var (sync, async) = await BindBothWaysAsync(
+            [Parameter("a"), Parameter("b")],
+            new NamedArgument("b", 9),
+            1);
+
+        Assert.Equal("success=True score=0 bound=[a=1,b=9] pending=-", sync);
+        Assert.Equal(sync, async);
+    }
+
+    [Fact]
+    public async Task An_unmatched_named_argument_is_rejected_on_both_surfaces()
+    {
+        var (sync, async) = await BindBothWaysAsync(
+            [Parameter("a")],
+            new NamedArgument("nosuch", 1));
+
+        Assert.StartsWith("success=False", sync, StringComparison.Ordinal);
+        Assert.Equal(sync, async);
+    }
+
+    [Theory]
+    // Too many arguments for the signature, and too few for its required parameters.
+    [InlineData(3)]
+    [InlineData(0)]
+    public async Task An_arity_mismatch_agrees_on_both_surfaces(int count)
+    {
+        var arguments = Enumerable.Range(1, count).Cast<object?>().ToArray();
+        var (sync, async) = await BindBothWaysAsync([Parameter("a"), Parameter("b")], arguments);
+
+        Assert.Equal(sync, async);
+    }
+
+    [Fact]
+    public async Task A_rest_parameter_collects_identically_on_both_surfaces()
+    {
+        var (sync, async) = await BindBothWaysAsync(
+            [Parameter("first"), Parameter("rest", isRest: true)],
+            1, 2, 3);
+
+        Assert.Equal("success=True score=0 bound=[first=1,rest=[2 3]] pending=-", sync);
+        Assert.Equal(sync, async);
+    }
+
+    [Fact]
+    public async Task An_empty_rest_parameter_still_binds_on_both_surfaces()
+    {
+        // The edge the refactor could most easily have dropped: with no trailing arguments there
+        // are no rest *steps* at all, yet the parameter must still bind — to an empty list, not
+        // to nothing. Caught while rewriting; pinned so it stays caught.
+        var (sync, async) = await BindBothWaysAsync(
+            [Parameter("first"), Parameter("rest", isRest: true)],
+            1);
+
+        Assert.Equal("success=True score=0 bound=[first=1,rest=[]] pending=-", sync);
+        Assert.Equal(sync, async);
+    }
+
+    [Fact]
+    public async Task A_coerced_argument_scores_identically_on_both_surfaces()
+    {
+        // The coercion penalty: a converted argument scores worse than an exact match, which is
+        // how an overload taking `int` loses to one taking `string` for a string argument.
+        //
+        // This case exists because a negative control found the gap. Diverging only the sync
+        // binder's `score += 1` left every other assertion here green — none of them coerced
+        // anything, so the penalty was never exercised and the parity suite could not have caught
+        // a drift in the one number that decides overload resolution.
+        var (sync, async) = await BindBothWaysAsync([Parameter("n", "int")], "42");
+
+        Assert.Equal("success=True score=1 bound=[n=42] pending=-", sync);
+        Assert.Equal(sync, async);
+    }
+
+    [Fact]
+    public async Task An_exact_match_is_not_penalised_on_either_surface()
+    {
+        // The other half of the same rule: an argument that needs no conversion must score 0, or
+        // the penalty above would be meaningless.
+        var (sync, async) = await BindBothWaysAsync([Parameter("n", "int")], 42);
+
+        Assert.Equal("success=True score=0 bound=[n=42] pending=-", sync);
+        Assert.Equal(sync, async);
+    }
+
+    [Fact]
+    public async Task A_failed_conversion_agrees_on_both_binders()
+    {
+        var (sync, async) = await BindBothWaysAsync([Parameter("n", "int")], "not-a-number");
+
+        Assert.Equal(sync, async);
+    }
 }
