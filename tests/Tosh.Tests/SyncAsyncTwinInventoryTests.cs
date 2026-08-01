@@ -107,6 +107,12 @@ public sealed class SyncAsyncTwinInventoryTests
         // had been written out four times for.
         "ToshClassDefinition.TryGetInstanceMember",
         "ToshClassDefinition.TrySetInstanceMember",
+        //   TrySelectSpecialInstanceMethod -> GetSpecialInstanceMethodCandidates
+        //                                     + AmbiguousSpecialMethod
+        //   TryInvokeEnumerator            -> EnumeratorMethodNames, which HasEnumerator
+        //                                     had been spelling out a third time
+        "ToshClassDefinition.TrySelectSpecialInstanceMethod",
+        "ToshClassDefinition.TryInvokeEnumerator",
 
         // ── Thin wrappers over one shared implementation ──────────────────────
         // Reclassified 2026-07-30 after measuring rather than counting. Each of
@@ -167,9 +173,7 @@ public sealed class SyncAsyncTwinInventoryTests
         "ShellIndexingUtilities.GetIndexedValue",
         "ToshClassDefinition.EnumerateItems",
         "ToshClassDefinition.GetInstanceMembers",
-        "ToshClassDefinition.TryInvokeEnumerator",
         "ToshClassDefinition.TryInvokeSpecialInstanceMethod",
-        "ToshClassDefinition.TrySelectSpecialInstanceMethod",
         // Found only after the discovery rule learned the `FooSync`/`FooAsync` spelling.
         // ExecuteClassBlock's sync form blocks on its async form, so it is a bridge rather than
         // a parallel implementation; EvaluateClassPipelineValue's two forms were byte-identical

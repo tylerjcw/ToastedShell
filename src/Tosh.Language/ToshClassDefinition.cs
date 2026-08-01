@@ -1396,9 +1396,18 @@ public sealed class ToshClassDefinition : IShellNamedType
         yield return instance;
     }
 
+    /// <summary>
+    /// Whether this class defines any of <see cref="EnumeratorMethodNames"/>, and can therefore
+    /// be iterated.
+    /// </summary>
+    /// <remarks>
+    /// This was a *third* copy of the name list, spelled out separately from the two dispatch
+    /// paths. It is the reason the list was worth extracting at all: with three copies, the odds
+    /// that a new spelling reaches all of them are poor, and the symptom would be a class that
+    /// reports itself iterable and then is not — or the reverse.
+    /// </remarks>
     internal bool HasEnumerator =>
-        HasSpecialInstanceMethod("enumerate", Array.Empty<object?>()) ||
-        HasSpecialInstanceMethod("GetEnumerator", Array.Empty<object?>());
+        EnumeratorMethodNames.Any(name => HasSpecialInstanceMethod(name, Array.Empty<object?>()));
 
     internal async IAsyncEnumerable<object?> EnumerateItemsAsync(
         ToshClassInstance instance,
@@ -2676,9 +2685,19 @@ public sealed class ToshClassDefinition : IShellNamedType
         return (winner, locals);
     }
 
+    /// <summary>
+    /// The method names a class may define to make itself iterable, in precedence order.
+    /// </summary>
+    /// <remarks>
+    /// The list existed once per surface. Adding a third recognised spelling would have made a
+    /// class iterable in scripts but not at the prompt, or the reverse, with nothing to catch it
+    /// (<c>TS-P1-24</c>).
+    /// </remarks>
+    private static readonly string[] EnumeratorMethodNames = ["enumerate", "GetEnumerator"];
+
     private bool TryInvokeEnumerator(ToshClassInstance instance, out object? value)
     {
-        foreach (var methodName in new[] { "enumerate", "GetEnumerator" })
+        foreach (var methodName in EnumeratorMethodNames)
         {
             if (!TryInvokeSpecialInstanceMethod(instance, methodName, Array.Empty<object?>(), out value))
             {
@@ -2696,7 +2715,7 @@ public sealed class ToshClassDefinition : IShellNamedType
         ToshClassInstance instance,
         CancellationToken cancellationToken)
     {
-        foreach (var methodName in new[] { "enumerate", "GetEnumerator" })
+        foreach (var methodName in EnumeratorMethodNames)
         {
             var invocation = await TryInvokeSpecialInstanceMethodAsync(
                 instance,
@@ -2712,6 +2731,42 @@ public sealed class ToshClassDefinition : IShellNamedType
         return (false, null);
     }
 
+    /// <summary>
+    /// The instance methods that could serve a special-method call of this name, or
+    /// <see langword="null"/> when the class declares none and the base class should be tried.
+    /// </summary>
+    /// <remarks>
+    /// The <c>!IsStatic</c> filter is the whole rule, and it was applied once per surface. A
+    /// static method leaking into instance dispatch on one surface only is the kind of difference
+    /// that shows up as "it works in a script but not at the prompt" (<c>TS-P1-24</c>).
+    /// </remarks>
+    private IEnumerable<ToshClassMethodDefinition>? GetSpecialInstanceMethodCandidates(string methodName)
+        => _methodsByName.TryGetValue(methodName, out var candidates)
+            ? candidates.Where(candidate => !candidate.IsStatic)
+            : null;
+
+    /// <summary>
+    /// The error raised when more than one special-method overload matches, listing the
+    /// signatures that tied.
+    /// </summary>
+    /// <remarks>
+    /// Written out word for word on each surface before this, down to the phrasing of
+    /// "Multiple overloads matched special method". Sharing it also shares
+    /// <see cref="FormatMethodSignature"/>, so the two surfaces cannot come to describe the same
+    /// tie differently.
+    /// </remarks>
+    private InvalidOperationException AmbiguousSpecialMethod(
+        string methodName,
+        int argumentCount,
+        IEnumerable<ToshClassMethodDefinition> tied)
+    {
+        var signatures = string.Join("; ", tied.Select(FormatMethodSignature));
+
+        return new InvalidOperationException(
+            $"Multiple overloads matched special method '{Name}.{methodName}' with "
+            + $"{argumentCount} argument(s): {signatures}.");
+    }
+
     private bool TrySelectSpecialInstanceMethod(
         string methodName,
         IReadOnlyList<object?> arguments,
@@ -2719,7 +2774,7 @@ public sealed class ToshClassDefinition : IShellNamedType
         out Dictionary<string, object?> locals,
         ToshClassInstance? instance = null)
     {
-        if (!_methodsByName.TryGetValue(methodName, out var candidates))
+        if (GetSpecialInstanceMethodCandidates(methodName) is not { } candidates)
         {
             if (BaseClass is not null)
             {
@@ -2732,7 +2787,7 @@ public sealed class ToshClassDefinition : IShellNamedType
         }
 
         var matches = _engine.SelectBestCallableMatches(
-            candidates.Where(candidate => !candidate.IsStatic),
+            candidates,
             static candidate => candidate.Parameters,
             arguments);
 
@@ -2745,11 +2800,10 @@ public sealed class ToshClassDefinition : IShellNamedType
 
         if (matches.Count > 1)
         {
-            var signatures = string.Join(
-                "; ",
-                matches.Select(match => FormatMethodSignature(match.Candidate)));
-            throw new InvalidOperationException(
-                $"Multiple overloads matched special method '{Name}.{methodName}' with {arguments.Count} argument(s): {signatures}.");
+            throw AmbiguousSpecialMethod(
+                methodName,
+                arguments.Count,
+                matches.Select(match => match.Candidate));
         }
 
         method = matches[0].Candidate;
@@ -2775,7 +2829,7 @@ public sealed class ToshClassDefinition : IShellNamedType
         CancellationToken cancellationToken,
         ToshClassInstance? instance = null)
     {
-        if (!_methodsByName.TryGetValue(methodName, out var candidates))
+        if (GetSpecialInstanceMethodCandidates(methodName) is not { } candidates)
         {
             if (BaseClass is not null)
             {
@@ -2790,7 +2844,7 @@ public sealed class ToshClassDefinition : IShellNamedType
         }
 
         var matches = await _engine.SelectBestCallableMatchesAsync(
-            candidates.Where(candidate => !candidate.IsStatic),
+            candidates,
             static candidate => candidate.Parameters,
             arguments,
             cancellationToken);
@@ -2802,11 +2856,10 @@ public sealed class ToshClassDefinition : IShellNamedType
 
         if (matches.Count > 1)
         {
-            var signatures = string.Join(
-                "; ",
-                matches.Select(match => FormatMethodSignature(match.Candidate)));
-            throw new InvalidOperationException(
-                $"Multiple overloads matched special method '{Name}.{methodName}' with {arguments.Count} argument(s): {signatures}.");
+            throw AmbiguousSpecialMethod(
+                methodName,
+                arguments.Count,
+                matches.Select(match => match.Candidate));
         }
 
         var winner = matches[0].Candidate;

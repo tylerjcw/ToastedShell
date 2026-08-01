@@ -466,4 +466,101 @@ public sealed class SyncAsyncParityTests
         Assert.Equal("ok:True", sync);
         Assert.Equal(sync, async);
     }
+
+    // ── Iteration, and the enumerator name list ────────────────────────────────
+
+    private static async Task<(string Sync, string Async, bool HasEnumerator)> IterateBothWaysAsync(
+        string source,
+        string className)
+    {
+        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        await engine.ExecuteToListAsync(source);
+
+        Assert.True(engine.TryGetNamedType(className, out var type));
+        var definition = Assert.IsType<ToshClassDefinition>(type);
+        var instance = Assert.IsType<ToshClassInstance>(
+            await definition.CreateInstanceAsync([], CancellationToken.None));
+
+        var sync = string.Join(",", definition.EnumerateItems(instance).Select(item => item?.ToString()));
+
+        var asyncItems = new List<string?>();
+        await foreach (var item in definition.EnumerateItemsAsync(instance, CancellationToken.None))
+        {
+            asyncItems.Add(item?.ToString());
+        }
+
+        return (sync, string.Join(",", asyncItems), definition.HasEnumerator);
+    }
+
+    [Theory]
+    // Both recognised spellings, so the shared name list is exercised rather than assumed. It
+    // previously existed in *three* places — the two dispatch paths and HasEnumerator — and a
+    // fourth spelling added to only some of them would make a class iterable on one surface, or
+    // report itself iterable and then not be.
+    [InlineData("enumerate")]
+    [InlineData("GetEnumerator")]
+    public async Task An_iterable_class_agrees_on_both_surfaces(string methodName)
+    {
+        var (sync, async, hasEnumerator) = await IterateBothWaysAsync(
+            $$"""
+            class Seq {
+                func {{methodName}}() { return [1, 2, 3] }
+            }
+            """,
+            "Seq");
+
+        Assert.Equal("1,2,3", sync);
+        Assert.Equal(sync, async);
+        Assert.True(hasEnumerator, "the class defines an enumerator but does not report one");
+    }
+
+    [Fact]
+    public async Task A_class_without_an_enumerator_yields_itself_on_both_surfaces()
+    {
+        var (sync, async, hasEnumerator) = await IterateBothWaysAsync(
+            """
+            class Plain {
+                prop N: int = 1
+            }
+            """,
+            "Plain");
+
+        Assert.False(hasEnumerator);
+        Assert.Equal(sync, async);
+        Assert.NotEmpty(sync);
+    }
+
+    [Fact]
+    public async Task An_ambiguous_special_method_fails_the_same_way_on_both_surfaces()
+    {
+        // The ambiguity message, previously written out once per surface. Two same-arity
+        // overloads of an enumerator tie, and both surfaces must describe the tie identically.
+        var source =
+            """
+            class Tied {
+                func enumerate(a: int) { return [1] }
+                func enumerate(b: int) { return [2] }
+            }
+            """;
+
+        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+        await engine.ExecuteToListAsync(source);
+        Assert.True(engine.TryGetNamedType("Tied", out var type));
+        var definition = Assert.IsType<ToshClassDefinition>(type);
+        var instance = Assert.IsType<ToshClassInstance>(
+            await definition.CreateInstanceAsync([], CancellationToken.None));
+
+        var sync = Describe(() =>
+            $"{definition.TryInvokeSpecialInstanceMethod(instance, "enumerate", [1], out var value)}:{value}");
+
+        var async = await DescribeAsync(async () =>
+        {
+            var result = await definition.TryInvokeSpecialInstanceMethodAsync(
+                instance, "enumerate", [1], CancellationToken.None);
+            return $"{result.Matched}:{result.Value}";
+        });
+
+        Assert.Contains("Multiple overloads matched special method", sync, StringComparison.Ordinal);
+        Assert.Equal(sync, async);
+    }
 }
