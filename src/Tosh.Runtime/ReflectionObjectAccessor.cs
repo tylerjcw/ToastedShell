@@ -350,9 +350,7 @@ public sealed class ReflectionObjectAccessor : IObjectAccessor
 
             if (shellRecord is ShellEnvironmentNamespace)
             {
-                throw new InvalidOperationException(
-                    $"Cannot assign to '$env.{segment}' directly. The $env namespace is read-only. "
-                    + $"Use: export {segment} = \"value\"");
+                throw EnvironmentIsReadOnly(segment);
             }
         }
 
@@ -416,9 +414,7 @@ public sealed class ReflectionObjectAccessor : IObjectAccessor
 
         if (target is ShellEnvironmentNamespace)
         {
-            throw new InvalidOperationException(
-                $"Cannot assign to '$env.{segment}' directly. The $env namespace is read-only. "
-                + $"Use: export {segment} = \"value\"");
+            throw EnvironmentIsReadOnly(segment);
         }
 
         AssignSegment(
@@ -427,6 +423,18 @@ public sealed class ReflectionObjectAccessor : IObjectAccessor
             value,
             includeShellRecord: target is not IShellRecordObject);
     }
+
+    /// <summary>
+    /// The one message explaining that <c>$env</c> cannot be assigned through member access.
+    /// </summary>
+    /// <remarks>
+    /// It was written out once per surface. Both copies were identical, including the suggested
+    /// `export` form — and a duplicated *message* is the cheapest possible example of what
+    /// <c>TS-P1-24</c> is about: whoever improves the wording will improve one of them.
+    /// </remarks>
+    private static InvalidOperationException EnvironmentIsReadOnly(string segment) =>
+        new($"Cannot assign to '$env.{segment}' directly. The $env namespace is read-only. "
+            + $"Use: export {segment} = \"value\"");
 
     private static MemberInfo ResolveMember(Type targetType, string segment)
     {

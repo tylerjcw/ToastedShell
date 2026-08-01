@@ -120,6 +120,27 @@ public sealed class SyncAsyncTwinInventoryTests
         "ToshClassDefinition.GetOrInitializeLazyProperty",
         "ToshEngine.ExecuteClassBlock",
 
+        // ── Async prefix over a shared core ───────────────────────────────────
+        // Reclassified 2026-07-30. Each async form handles the one genuinely
+        // asynchronous case — an IShellRecordObject / IShellEnumerableObject
+        // member call, which the project's dual-surface contracts require — and
+        // then delegates to the synchronous core, passing includeShellRecord:false
+        // so the record branch is not attempted twice. That is the correct shape
+        // for a contract-imposed pair, not a parallel implementation: the decisions
+        // live in one body and the prefix only chooses how to reach the member.
+        //
+        // A genuinely duplicated *message* did hide in this cluster and was
+        // removed: the "$env is read-only" guidance was written out once per
+        // surface, identical down to the suggested `export` form. Whoever improves
+        // that wording would have improved one copy. The materialize-if-null
+        // decision in ResolveOrMaterializeSegment is still mirrored, because the
+        // store differs (TrySetValue versus TrySetMemberAsync) and only the
+        // ExpandoObject construction is common — one line, not worth a seam.
+        "ReflectionObjectAccessor.AssignSegment",
+        "ReflectionObjectAccessor.ResolveOrMaterializeSegment",
+        "ReflectionObjectAccessor.ResolveSegment",
+        "ShellIterationUtilities.ExpandIterationItems",
+
         // ── Genuinely parallel internals: the convergeable remainder ──────────
         // Private or internal, reached from both surfaces, and duplicated by
         // choice rather than by contract. These are what the item can actually
@@ -137,11 +158,7 @@ public sealed class SyncAsyncTwinInventoryTests
         //
         // Reachability, not size, is the first question for the remainder.
         "ReflectionInvoker.CreateInstance",
-        "ReflectionObjectAccessor.AssignSegment",
-        "ReflectionObjectAccessor.ResolveOrMaterializeSegment",
-        "ReflectionObjectAccessor.ResolveSegment",
         "ShellIndexingUtilities.GetIndexedValue",
-        "ShellIterationUtilities.ExpandIterationItems",
         "ToshClassDefinition.EnumerateItems",
         "ToshClassDefinition.GetInstanceMembers",
         "ToshClassDefinition.TryGetInstanceMember",
