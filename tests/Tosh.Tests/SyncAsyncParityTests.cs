@@ -355,4 +355,115 @@ public sealed class SyncAsyncParityTests
 
         Assert.Equal(sync, async);
     }
+
+    // ── Member reads, across every route the router can pick ───────────────────
+
+    /// <summary>Reads a member through both surfaces, returning what each produced.</summary>
+    private static async Task<(string Sync, string Async)> GetBothWaysAsync(
+        string source,
+        string className,
+        string member)
+    {
+        var instance = await ConstructAsync(source, className);
+
+        var sync = Describe(() =>
+        {
+            var found = instance.TryGetMember(member, out var value);
+            return $"{found}:{value ?? "null"}";
+        });
+
+        var async = await DescribeAsync(async () =>
+        {
+            var result = await instance.TryGetMemberAsync(member, includeHidden: false, CancellationToken.None);
+            return $"{result.Found}:{result.Value ?? "null"}";
+        });
+
+        return (sync, async);
+    }
+
+    private static string Describe(Func<string> action)
+    {
+        try
+        {
+            return action();
+        }
+        catch (Exception exception)
+        {
+            return $"{exception.GetType().Name}:{exception.Message}";
+        }
+    }
+
+    private static async Task<string> DescribeAsync(Func<Task<string>> action)
+    {
+        try
+        {
+            return await action();
+        }
+        catch (Exception exception)
+        {
+            return $"{exception.GetType().Name}:{exception.Message}";
+        }
+    }
+
+    private const string EveryRoute =
+        """
+        class Base {
+            prop Inherited: int = 5
+        }
+        class Routes extends Base {
+            prop Stored: int = 1
+            prop Computed => 2
+            lazy prop Lazy = 3
+            shy prop Hidden: int = 4
+            fixed prop Fixed: int = 6
+        }
+        """;
+
+    [Theory]
+    // One case per route the shared router can return, plus the two fall-throughs beneath it.
+    [InlineData("Stored", "True:1")]
+    [InlineData("Computed", "True:2")]
+    [InlineData("Lazy", "True:3")]
+    [InlineData("Inherited", "True:5")]     // resolved on the base class
+    [InlineData("Hidden", "False:null")]    // shy, and includeHidden is false on both surfaces
+    [InlineData("NoSuchMember", "False:null")]
+    public async Task Every_read_route_agrees_on_both_surfaces(string member, string expected)
+    {
+        var (sync, async) = await GetBothWaysAsync(EveryRoute, "Routes", member);
+
+        Assert.Equal(expected, sync);
+        Assert.Equal(sync, async);
+    }
+
+    [Fact]
+    public async Task Assigning_a_computed_property_fails_the_same_way_on_both_surfaces()
+    {
+        // The read-only message, which used to be written out once per surface.
+        var (sync, async) = await SetBothWaysAsync(EveryRoute, "Routes", "Computed", 9);
+
+        Assert.Contains("read-only", sync, StringComparison.Ordinal);
+        Assert.Equal(sync, async);
+    }
+
+    [Fact]
+    public async Task Reassigning_a_fixed_property_fails_the_same_way_on_both_surfaces()
+    {
+        // The `fixed` message, likewise — and the route that only triggers once the instance has
+        // finished initializing, so it exercises the instance state the router consults.
+        var (sync, async) = await SetBothWaysAsync(EveryRoute, "Routes", "Fixed", 9);
+
+        Assert.Contains("fixed", sync, StringComparison.Ordinal);
+        Assert.Equal(sync, async);
+    }
+
+    [Fact]
+    public async Task An_inherited_property_is_written_the_same_way_on_both_surfaces()
+    {
+        // The base-class fall-through on the write path, which recurses into the parent's own
+        // twin rather than the shared router.
+        var (sync, async) = await SetBothWaysAsync(EveryRoute, "Routes", "Inherited", 42);
+
+        Assert.Equal("ok:True", sync);
+        Assert.Equal(sync, async);
+    }
 }

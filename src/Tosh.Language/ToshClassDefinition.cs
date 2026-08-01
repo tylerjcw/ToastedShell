@@ -800,48 +800,86 @@ public sealed class ToshClassDefinition : IShellNamedType
             .ToArray();
     }
 
-    internal bool TryGetInstanceMember(ToshClassInstance instance, string name, bool includeHidden, out object? value)
+    /// <summary>How a member name is served, once the class has decided which route applies.</summary>
+    private enum InstanceMemberRoute
     {
-        if (_propertiesByName.TryGetValue(name, out var property) &&
-            !property.IsStatic &&
-            (!property.IsShy || includeHidden) &&
-            (!property.IsGuarded || includeHidden) &&
-            (!property.IsLocal || includeHidden))
+        /// <summary>No property of that name is visible here.</summary>
+        NotDeclared,
+
+        /// <summary>A computed property: run its getter.</summary>
+        Computed,
+
+        /// <summary>A lazy property: initialize once, then share.</summary>
+        Lazy,
+
+        /// <summary>A stored property: read the instance's slot.</summary>
+        Stored,
+    }
+
+    /// <summary>
+    /// Decides which route serves <paramref name="name"/> on this class, and emits the
+    /// deprecation warning if the property is fading.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This is what the two <c>TryGetInstanceMember</c> twins duplicated: the visibility test
+    /// (static, shy, guarded and local members are hidden unless <paramref name="includeHidden"/>),
+    /// the fading-property warning, and the computed/lazy/stored precedence. Both then did the same
+    /// thing with the answer, differing only in whether the getter call was awaited
+    /// (<c>TS-P1-24</c>).
+    /// </para>
+    /// <para>
+    /// The warning belongs here rather than in the callers precisely because it is a *side effect*
+    /// tied to the decision: duplicated, it could fire once on one surface and twice — or not at
+    /// all — on the other, and nothing would fail.
+    /// </para>
+    /// </remarks>
+    private InstanceMemberRoute ResolveInstanceMemberRoute(
+        string name,
+        bool includeHidden,
+        out ToshClassPropertyDefinition? property)
+    {
+        if (!TryGetVisibleInstanceProperty(name, includeHidden, out property))
         {
-            // Emit deprecation warning for fading properties
-            if (property.IsFading)
-            {
-                _engine.WriteWarning(
-                    code: "tosh.runtime.fading_member",
-                    title: $"Property '{property.Name}' on class '{Name}' is fading (deprecated).",
-                    help: "Use a non-fading replacement, or hush this code: hush tosh.runtime.fading_member",
-                    category: Tosh.Runtime.ToshDiagnosticCategory.Deprecation);
-            }
-
-            if (property.GetterBody is not null)
-            {
-                value = EvaluatePropertyGetter(instance, property);
-                return true;
-            }
-
-            // Lazy property: evaluate the initializer once, sharing the result
-            // with concurrent readers while rejecting true recursive reads.
-            if (property.IsLazy)
-            {
-                value = GetOrInitializeLazyProperty(instance, property);
-                return true;
-            }
-
-            return instance.TryGetStoredValue(property.Name, out value);
+            return InstanceMemberRoute.NotDeclared;
         }
 
-        if (BaseClass is not null)
+        if (property.IsFading)
         {
-            return BaseClass.TryGetInstanceMember(instance, name, includeHidden, out value);
+            _engine.WriteWarning(
+                code: "tosh.runtime.fading_member",
+                title: $"Property '{property.Name}' on class '{Name}' is fading (deprecated).",
+                help: "Use a non-fading replacement, or hush this code: hush tosh.runtime.fading_member",
+                category: Tosh.Runtime.ToshDiagnosticCategory.Deprecation);
         }
 
+        if (property.GetterBody is not null)
+        {
+            return InstanceMemberRoute.Computed;
+        }
+
+        return property.IsLazy ? InstanceMemberRoute.Lazy : InstanceMemberRoute.Stored;
+    }
+
+    /// <summary>
+    /// Reads <paramref name="name"/> off the CLR base object, if there is one and it has such a
+    /// member. Shared because "swallow the lookup failure" is a decision, and a silent catch is
+    /// the last place a divergence would be noticed.
+    /// </summary>
+    private bool TryGetClrBaseMember(
+        ToshClassInstance instance,
+        string name,
+        out object? value,
+        CancellationToken cancellationToken = default)
+    {
         if (ClrBaseType is not null && instance.ClrBaseObject is not null)
         {
+            // Checked *outside* the try, so a cancellation cannot be mistaken for "no such
+            // member" and swallowed. The asynchronous twin achieved this with an explicit
+            // `catch (OperationCanceledException) { throw; }` ahead of its blanket catch; moving
+            // the check out is the same guarantee with one fewer thing to remember.
+            cancellationToken.ThrowIfCancellationRequested();
+
             try
             {
                 value = _engine.Runtime.ObjectAccessor.GetValue(instance.ClrBaseObject, name);
@@ -854,6 +892,30 @@ public sealed class ToshClassDefinition : IShellNamedType
         return false;
     }
 
+    internal bool TryGetInstanceMember(ToshClassInstance instance, string name, bool includeHidden, out object? value)
+    {
+        switch (ResolveInstanceMemberRoute(name, includeHidden, out var property))
+        {
+            case InstanceMemberRoute.Computed:
+                value = EvaluatePropertyGetter(instance, property!);
+                return true;
+
+            case InstanceMemberRoute.Lazy:
+                value = GetOrInitializeLazyProperty(instance, property!);
+                return true;
+
+            case InstanceMemberRoute.Stored:
+                return instance.TryGetStoredValue(property!.Name, out value);
+        }
+
+        if (BaseClass is not null)
+        {
+            return BaseClass.TryGetInstanceMember(instance, name, includeHidden, out value);
+        }
+
+        return TryGetClrBaseMember(instance, name, out value);
+    }
+
     internal async ValueTask<(bool Found, object? Value)> TryGetInstanceMemberAsync(
         ToshClassInstance instance,
         string name,
@@ -862,37 +924,18 @@ public sealed class ToshClassDefinition : IShellNamedType
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        if (_propertiesByName.TryGetValue(name, out var property) &&
-            !property.IsStatic &&
-            (!property.IsShy || includeHidden) &&
-            (!property.IsGuarded || includeHidden) &&
-            (!property.IsLocal || includeHidden))
+        switch (ResolveInstanceMemberRoute(name, includeHidden, out var property))
         {
-            if (property.IsFading)
-            {
-                _engine.WriteWarning(
-                    code: "tosh.runtime.fading_member",
-                    title: $"Property '{property.Name}' on class '{Name}' is fading (deprecated).",
-                    help: "Use a non-fading replacement, or hush this code: hush tosh.runtime.fading_member",
-                    category: Tosh.Runtime.ToshDiagnosticCategory.Deprecation);
-            }
+            case InstanceMemberRoute.Computed:
+                return (true, await EvaluatePropertyGetterAsync(instance, property!, cancellationToken));
 
-            if (property.GetterBody is not null)
-            {
-                return (true, await EvaluatePropertyGetterAsync(instance, property, cancellationToken));
-            }
+            case InstanceMemberRoute.Lazy:
+                return (true, await GetOrInitializeLazyPropertyAsync(instance, property!, cancellationToken));
 
-            if (property.IsLazy)
-            {
-                return (true, await GetOrInitializeLazyPropertyAsync(
-                    instance,
-                    property,
-                    cancellationToken));
-            }
-
-            return instance.TryGetStoredValue(property.Name, out var value)
-                ? (true, value)
-                : (false, null);
+            case InstanceMemberRoute.Stored:
+                return instance.TryGetStoredValue(property!.Name, out var stored)
+                    ? (true, stored)
+                    : (false, null);
         }
 
         if (BaseClass is not null)
@@ -904,24 +947,9 @@ public sealed class ToshClassDefinition : IShellNamedType
                 cancellationToken);
         }
 
-        if (ClrBaseType is not null && instance.ClrBaseObject is not null)
-        {
-            try
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                return (true, _engine.Runtime.ObjectAccessor.GetValue(instance.ClrBaseObject, name));
-            }
-            catch (OperationCanceledException)
-            {
-                throw;
-            }
-            catch
-            {
-                // Member not found on the CLR base.
-            }
-        }
-
-        return (false, null);
+        return TryGetClrBaseMember(instance, name, out var clrValue, cancellationToken)
+            ? (true, clrValue)
+            : (false, null);
     }
 
     private object? GetOrInitializeLazyProperty(
@@ -1001,50 +1029,134 @@ public sealed class ToshClassDefinition : IShellNamedType
         }
     }
 
-    internal bool TrySetInstanceMember(ToshClassInstance instance, string name, object? value, bool includeHidden)
+    /// <summary>
+    /// Finds the instance property <paramref name="name"/> refers to on this class, if it is
+    /// visible from the caller's position.
+    /// </summary>
+    /// <remarks>
+    /// The rule — static members are never instance members, and shy, guarded and local ones are
+    /// hidden unless <paramref name="includeHidden"/> — was written out four times: once per
+    /// surface for reads and once per surface for writes. Four copies of a visibility rule is
+    /// four chances for a new modifier to be honoured in three places (<c>TS-P1-24</c>).
+    /// </remarks>
+    private bool TryGetVisibleInstanceProperty(
+        string name,
+        bool includeHidden,
+        out ToshClassPropertyDefinition? property)
     {
-        if (!_propertiesByName.TryGetValue(name, out var property) ||
+        if (!_propertiesByName.TryGetValue(name, out property) ||
             property.IsStatic ||
             (property.IsShy && !includeHidden) ||
             (property.IsGuarded && !includeHidden) ||
             (property.IsLocal && !includeHidden))
         {
-            if (BaseClass is not null)
-            {
-                return BaseClass.TrySetInstanceMember(instance, name, value, includeHidden);
-            }
-
-            if (ClrBaseType is not null && instance.ClrBaseObject is not null)
-            {
-                try
-                {
-                    _engine.Runtime.ObjectAccessor.SetValue(instance.ClrBaseObject, name, value);
-                    return true;
-                }
-                catch { /* member not found or read-only on CLR base */ }
-            }
-
+            property = null;
             return false;
         }
 
-        if (property.SetterBody is not null)
+        return true;
+    }
+
+    /// <summary>How an assignment to a visible property is served.</summary>
+    private enum InstanceMemberAssignment
+    {
+        /// <summary>No visible property of that name; try the base class, then the CLR base.</summary>
+        NotDeclared,
+
+        /// <summary>A custom setter: run its body.</summary>
+        Setter,
+
+        /// <summary>Computed with no setter: assignment is an error.</summary>
+        ReadOnly,
+
+        /// <summary>Declared <c>fixed</c> and already initialized: assignment is an error.</summary>
+        Fixed,
+
+        /// <summary>An ordinary stored property: convert and store.</summary>
+        Stored,
+    }
+
+    /// <summary>
+    /// Decides how an assignment to <paramref name="name"/> is served, and throws for the two
+    /// cases that are errors rather than routes.
+    /// </summary>
+    /// <remarks>
+    /// The read-only and fixed messages were written out once per surface, word for word. Keeping
+    /// the throws here rather than returning a route to the callers means neither surface can
+    /// reword one of them alone, which is the same failure the <c>$env</c> message had.
+    /// </remarks>
+    private InstanceMemberAssignment ResolveInstanceMemberAssignment(
+        ToshClassInstance instance,
+        string name,
+        bool includeHidden,
+        out ToshClassPropertyDefinition? property)
+    {
+        if (!TryGetVisibleInstanceProperty(name, includeHidden, out property))
         {
-            ExecutePropertySetter(instance, property, value);
-            return true;
+            return InstanceMemberAssignment.NotDeclared;
+        }
+
+        if (property!.SetterBody is not null)
+        {
+            return InstanceMemberAssignment.Setter;
         }
 
         if (property.GetterBody is not null)
         {
-            throw new InvalidOperationException($"Property '{property.Name}' on class '{Name}' is read-only.");
+            throw new InvalidOperationException(
+                $"Property '{property.Name}' on class '{Name}' is read-only.");
         }
 
         if (property.IsFixed && !instance.IsInitializing)
         {
-            throw new InvalidOperationException($"Property '{property.Name}' on class '{Name}' is fixed and cannot be reassigned after initialization.");
+            throw new InvalidOperationException(
+                $"Property '{property.Name}' on class '{Name}' is fixed and cannot be reassigned after initialization.");
         }
 
-        instance.SetStoredValue(property.Name, ConvertPropertyValue(instance, property, value));
-        return true;
+        return InstanceMemberAssignment.Stored;
+    }
+
+    /// <summary>Writes <paramref name="name"/> to the CLR base object, if it will take it.</summary>
+    private bool TrySetClrBaseMember(
+        ToshClassInstance instance,
+        string name,
+        object? value,
+        CancellationToken cancellationToken = default)
+    {
+        if (ClrBaseType is not null && instance.ClrBaseObject is not null)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            try
+            {
+                _engine.Runtime.ObjectAccessor.SetValue(instance.ClrBaseObject, name, value);
+                return true;
+            }
+            catch { /* member not found or read-only on CLR base */ }
+        }
+
+        return false;
+    }
+
+    internal bool TrySetInstanceMember(ToshClassInstance instance, string name, object? value, bool includeHidden)
+    {
+        switch (ResolveInstanceMemberAssignment(instance, name, includeHidden, out var property))
+        {
+            case InstanceMemberAssignment.Setter:
+                ExecutePropertySetter(instance, property!, value);
+                return true;
+
+            case InstanceMemberAssignment.Stored:
+                instance.SetStoredValue(property!.Name, ConvertPropertyValue(instance, property, value));
+                return true;
+        }
+
+        if (BaseClass is not null)
+        {
+            return BaseClass.TrySetInstanceMember(instance, name, value, includeHidden);
+        }
+
+        return TrySetClrBaseMember(instance, name, value);
     }
 
     internal async ValueTask<bool> TrySetInstanceMemberAsync(
@@ -1056,67 +1168,30 @@ public sealed class ToshClassDefinition : IShellNamedType
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        if (!_propertiesByName.TryGetValue(name, out var property) ||
-            property.IsStatic ||
-            (property.IsShy && !includeHidden) ||
-            (property.IsGuarded && !includeHidden) ||
-            (property.IsLocal && !includeHidden))
+        switch (ResolveInstanceMemberAssignment(instance, name, includeHidden, out var property))
         {
-            if (BaseClass is not null)
-            {
-                return await BaseClass.TrySetInstanceMemberAsync(
-                    instance,
-                    name,
-                    value,
-                    includeHidden,
-                    cancellationToken);
-            }
+            case InstanceMemberAssignment.Setter:
+                await ExecutePropertySetterAsync(instance, property!, value, cancellationToken);
+                return true;
 
-            if (ClrBaseType is not null && instance.ClrBaseObject is not null)
-            {
-                try
-                {
-                    cancellationToken.ThrowIfCancellationRequested();
-                    _engine.Runtime.ObjectAccessor.SetValue(instance.ClrBaseObject, name, value);
-                    return true;
-                }
-                catch (OperationCanceledException)
-                {
-                    throw;
-                }
-                catch
-                {
-                    // Member not found or read-only on the CLR base.
-                }
-            }
-
-            return false;
+            case InstanceMemberAssignment.Stored:
+                instance.SetStoredValue(
+                    property!.Name,
+                    await ConvertPropertyValueAsync(instance, property, value, cancellationToken));
+                return true;
         }
 
-        if (property.SetterBody is not null)
+        if (BaseClass is not null)
         {
-            await ExecutePropertySetterAsync(instance, property, value, cancellationToken);
-            return true;
-        }
-
-        if (property.GetterBody is not null)
-        {
-            throw new InvalidOperationException($"Property '{property.Name}' on class '{Name}' is read-only.");
-        }
-
-        if (property.IsFixed && !instance.IsInitializing)
-        {
-            throw new InvalidOperationException($"Property '{property.Name}' on class '{Name}' is fixed and cannot be reassigned after initialization.");
-        }
-
-        instance.SetStoredValue(
-            property.Name,
-            await ConvertPropertyValueAsync(
+            return await BaseClass.TrySetInstanceMemberAsync(
                 instance,
-                property,
+                name,
                 value,
-                cancellationToken));
-        return true;
+                includeHidden,
+                cancellationToken);
+        }
+
+        return TrySetClrBaseMember(instance, name, value, cancellationToken);
     }
 
     internal IReadOnlyList<KeyValuePair<string, object?>> GetInstanceMembers(ToshClassInstance instance, bool includeHidden)
