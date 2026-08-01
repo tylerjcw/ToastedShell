@@ -1,0 +1,25 @@
+## Append text to a table cell for one item. Writes to an output path; never in place.
+## Usage: append.tosh <doc> <out> <id> <cell-index> <text>
+var doc  = $tosh.Script.Args[0]
+var out  = $tosh.Script.Args[1]
+var id   = $tosh.Script.Args[2]
+var cell = ($tosh.Script.Args[3] | cast int)
+var text = $tosh.Script.Args[4]
+
+var out_lines = []
+var touched = 0
+
+for line in (read-file $doc | lines) {
+    var updated = $line
+    if ($line.StartsWith($"| `" + $id + "` |")) {
+        var parts = ($updated.Split("|"))
+        $parts[$cell] = ($parts[$cell].TrimEnd() + " " + $text + " ")
+        $updated = ($parts | join "|")
+        $touched = ($touched + 1)
+    }
+    $out_lines = ($out_lines + [$updated])
+}
+
+if ($touched != 1) { throw $"expected 1 match for {$id}, found {$touched}" }
+write-file $out (($out_lines | join "\n") + "\n") | ignore
+echo $"touched={$touched}"

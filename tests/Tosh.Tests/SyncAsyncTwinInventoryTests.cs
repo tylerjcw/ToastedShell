@@ -113,6 +113,16 @@ public sealed class SyncAsyncTwinInventoryTests
         //                                     had been spelling out a third time
         "ToshClassDefinition.TrySelectSpecialInstanceMethod",
         "ToshClassDefinition.TryInvokeEnumerator",
+        //   InvokeQualifiedMethod      -> PlanQualifiedInvocation
+        //   TryInvokeShellSymbol       -> TryPlanShellSymbol
+        //   ResolveQualifiedMemberChain-> RequireMemberPath
+        // The synchronous side of this trio is not an interpreter path: it is what
+        // compiled ToastScript's host bridge calls, so a divergence here would mean
+        // compiled and interpreted programs resolving the same dotted call
+        // differently. Parity is asserted through InvokeQualifiedMethodPublic.
+        "ToshEngine.InvokeQualifiedMethod",
+        "ToshEngine.ResolveQualifiedMemberChain",
+        "ToshEngine.TryInvokeShellSymbol",
 
         // ── Thin wrappers over one shared implementation ──────────────────────
         // Reclassified 2026-07-30 after measuring rather than counting. Each of
@@ -180,11 +190,8 @@ public sealed class SyncAsyncTwinInventoryTests
         // apart from that call and now share BuildClassPipelineBlock and
         // ProjectClassPipelineValues.
         "ToshEngine.ApplyPendingParameterDefaults",
-        "ToshEngine.InvokeQualifiedMethod",
-        "ToshEngine.ResolveQualifiedMemberChain",
         "ToshEngine.SelectBestCallableMatches",
         "ToshEngine.TryConvertParameterValue",
-        "ToshEngine.TryInvokeShellSymbol",
     ];
 
     private const BindingFlags Declared =

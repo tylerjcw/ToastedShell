@@ -563,4 +563,129 @@ public sealed class SyncAsyncParityTests
         Assert.Contains("Multiple overloads matched special method", sync, StringComparison.Ordinal);
         Assert.Equal(sync, async);
     }
+
+    // ── Qualified invocation: the interpreter/compiler seam ────────────────────
+
+    /// <summary>
+    /// Invokes a dotted path through both surfaces and returns what each produced.
+    /// </summary>
+    /// <remarks>
+    /// This pair matters more than the others because the *synchronous* side is not an
+    /// interpreter path at all: `InvokeQualifiedMethodPublic` exists so compiled ToastScript's
+    /// host bridge can dispatch a `BoundStaticMethodCall` without re-parsing. So a divergence
+    /// here means compiled and interpreted programs resolve the same dotted call differently —
+    /// the same shape as <c>TS-P1-40</c>, reached from the other direction.
+    /// </remarks>
+    private static async Task<(string Sync, string Async)> InvokeQualifiedBothWaysAsync(
+        string declarations,
+        string path,
+        params object?[] arguments)
+    {
+        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+
+        if (declarations.Length > 0)
+        {
+            await engine.ExecuteToListAsync(declarations);
+        }
+
+        // Compared by *message*, not by exception type. The asynchronous side is observed
+        // through ExecuteToListAsync, which wraps a failure in a ToshDiagnosticException carrying
+        // a source span, while the synchronous side is called directly and throws bare. That
+        // difference is the engine adding context, not the two invocation paths disagreeing.
+        //
+        // It is a real difference for a *reader* though: compiled ToastScript, which is what the
+        // synchronous side exists for, gets an InvalidOperationException with no span where the
+        // interpreter gets a full diagnostic. Recorded on TS-P1-40 rather than fixed here, since
+        // the compiler is in maintenance.
+        string Message(Exception exception) => exception.Message;
+
+        string sync;
+        try
+        {
+            sync = $"{engine.InvokeQualifiedMethodPublic(path, arguments) ?? "null"}";
+        }
+        catch (Exception exception)
+        {
+            sync = Message(exception);
+        }
+
+        var rendered = string.Join(", ", arguments.Select(argument => argument?.ToString() ?? "null"));
+
+        string async;
+        try
+        {
+            var results = await engine.ExecuteToListAsync($"{path}({rendered})");
+            async = $"{(results.Count == 0 ? "null" : results[^1]) ?? "null"}";
+        }
+        catch (Exception exception)
+        {
+            async = Message(exception);
+        }
+
+        return (sync, async);
+    }
+
+    [Fact]
+    public async Task A_clr_static_call_agrees_on_both_surfaces()
+    {
+        var (sync, async) = await InvokeQualifiedBothWaysAsync("", "System.Math.Max", 3, 7);
+
+        Assert.Equal("7", sync);
+        Assert.Equal(sync, async);
+    }
+
+    [Fact]
+    public async Task A_module_function_agrees_on_both_surfaces()
+    {
+        // The shell-symbol branch: a module name followed by an exported function.
+        var (sync, async) = await InvokeQualifiedBothWaysAsync(
+            """
+            module Lib {
+                export func twice(n) { return ($n * 2) }
+            }
+            """,
+            "Lib.twice",
+            21);
+
+        Assert.Equal("42", sync);
+        Assert.Equal(sync, async);
+    }
+
+    [Fact]
+    public async Task A_nested_module_function_agrees_on_both_surfaces()
+    {
+        // More than two segments, so the middle of the path becomes a member walk rather than
+        // part of the name — the segment arithmetic both twins used to do separately.
+        var (sync, async) = await InvokeQualifiedBothWaysAsync(
+            """
+            module Outer {
+                export module Inner {
+                    export func greet() { return "hi" }
+                }
+            }
+            """,
+            "Outer.Inner.greet");
+
+        Assert.Equal("hi", sync);
+        Assert.Equal(sync, async);
+    }
+
+    [Fact]
+    public async Task A_type_named_as_a_method_fails_the_same_way_on_both_surfaces()
+    {
+        // The "construct instances with 'new …'" rejection, which existed once per surface.
+        var (sync, async) = await InvokeQualifiedBothWaysAsync("", "System.Text.StringBuilder");
+
+        Assert.Contains("Construct instances with", sync, StringComparison.Ordinal);
+        Assert.Equal(sync, async);
+    }
+
+    [Fact]
+    public async Task An_unresolvable_path_fails_the_same_way_on_both_surfaces()
+    {
+        var (sync, async) = await InvokeQualifiedBothWaysAsync("", "No.Such.Path.method");
+
+        Assert.Contains("Unable to resolve", sync, StringComparison.Ordinal);
+        Assert.Equal(sync, async);
+    }
 }

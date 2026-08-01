@@ -8520,27 +8520,54 @@ public sealed partial class ToshEngine : IShellEvaluator
     public object? InvokeQualifiedMethodPublic(string path, IReadOnlyList<object?> arguments)
         => InvokeQualifiedMethod(path, arguments);
 
-    private object? InvokeQualifiedMethod(string path, IReadOnlyList<object?> arguments)
+    /// <summary>What a resolved dotted path turns out to name.</summary>
+    private enum QualifiedInvocationKind
     {
-        if (TryResolveShellStaticType(path, out _))
-        {
-            throw new InvalidOperationException($"Construct instances with 'new {path}(...)'.");
-        }
+        /// <summary>A static method on the resolved type.</summary>
+        Static,
 
-        if (TryInvokeShellSymbol(path, arguments, out var shellResult))
-        {
-            return shellResult;
-        }
+        /// <summary>An instance method, reached by walking members from the resolved type.</summary>
+        Instance,
+    }
 
-        var directType = ResolveTypeName(path);
+    /// <summary>
+    /// Where a dotted invocation path lands: the type it resolves against, the member chain to
+    /// walk from there, and the method to call at the end.
+    /// </summary>
+    private readonly record struct QualifiedInvocationPlan(
+        QualifiedInvocationKind Kind,
+        Type DeclaringType,
+        string MethodName,
+        IReadOnlyList<string> MemberPath);
 
-        if (directType is not null)
+    /// <summary>
+    /// Rejects a path that names a type rather than a method, with the message that says what to
+    /// write instead.
+    /// </summary>
+    private static InvalidOperationException ConstructInsteadOfInvoking(string path) =>
+        new($"Construct instances with 'new {path}(...)'.");
+
+    /// <summary>
+    /// Works out what <paramref name="path"/> names, without invoking anything.
+    /// </summary>
+    /// <remarks>
+    /// This is what the two <c>InvokeQualifiedMethod</c> twins duplicated: rejecting a path that
+    /// is really a type, splitting the dotted path, and the longest-prefix scan that decides
+    /// whether the call is static or instance and how much of the tail is a member chain. Both
+    /// then did the same thing with the answer, differing only in whether the invocation was
+    /// awaited (<c>TS-P1-24</c>).
+    /// </remarks>
+    private QualifiedInvocationPlan PlanQualifiedInvocation(string path)
+    {
+        if (ResolveTypeName(path) is not null)
         {
-            throw new InvalidOperationException($"Construct instances with 'new {path}(...)'.");
+            throw ConstructInsteadOfInvoking(path);
         }
 
         var segments = SplitQualifiedPath(path);
 
+        // Longest prefix first: `A.B.C.method` prefers a type `A.B.C` over a type `A.B` with a
+        // member `C`, which is what makes nested types resolve before member chains.
         for (var prefixLength = segments.Length - 1; prefixLength >= 1; prefixLength--)
         {
             var type = ResolveTypeName(string.Join('.', segments.Take(prefixLength)));
@@ -8550,24 +8577,51 @@ public sealed partial class ToshEngine : IShellEvaluator
                 continue;
             }
 
-            if (prefixLength == segments.Length - 1)
-            {
-                var invocation = Runtime.Invoker.InvokeStatic(type, segments[^1], arguments);
-                return invocation.ReturnedVoid ? null : invocation.Value;
-            }
-
-            var target = ResolveQualifiedMemberChain(type, segments[prefixLength..^1]);
-
-            if (target is null)
-            {
-                throw new InvalidOperationException("Cannot invoke an instance method on null.");
-            }
-
-            var instanceInvocation = Runtime.Invoker.InvokeInstance(target, segments[^1], arguments);
-            return instanceInvocation.ReturnedVoid ? target : instanceInvocation.Value;
+            return prefixLength == segments.Length - 1
+                ? new QualifiedInvocationPlan(
+                    QualifiedInvocationKind.Static,
+                    type,
+                    segments[^1],
+                    Array.Empty<string>())
+                : new QualifiedInvocationPlan(
+                    QualifiedInvocationKind.Instance,
+                    type,
+                    segments[^1],
+                    segments[prefixLength..^1]);
         }
 
         throw new InvalidOperationException($"Unable to resolve .NET access path '{path}'.");
+    }
+
+    private object? InvokeQualifiedMethod(string path, IReadOnlyList<object?> arguments)
+    {
+        if (TryResolveShellStaticType(path, out _))
+        {
+            throw ConstructInsteadOfInvoking(path);
+        }
+
+        if (TryInvokeShellSymbol(path, arguments, out var shellResult))
+        {
+            return shellResult;
+        }
+
+        var plan = PlanQualifiedInvocation(path);
+
+        if (plan.Kind == QualifiedInvocationKind.Static)
+        {
+            var invocation = Runtime.Invoker.InvokeStatic(plan.DeclaringType, plan.MethodName, arguments);
+            return invocation.ReturnedVoid ? null : invocation.Value;
+        }
+
+        var target = ResolveQualifiedMemberChain(plan.DeclaringType, plan.MemberPath);
+
+        if (target is null)
+        {
+            throw new InvalidOperationException("Cannot invoke an instance method on null.");
+        }
+
+        var instanceInvocation = Runtime.Invoker.InvokeInstance(target, plan.MethodName, arguments);
+        return instanceInvocation.ReturnedVoid ? target : instanceInvocation.Value;
     }
 
     private async ValueTask<object?> InvokeQualifiedMethodAsync(
@@ -8579,65 +8633,44 @@ public sealed partial class ToshEngine : IShellEvaluator
 
         if (TryResolveShellStaticType(path, out _))
         {
-            throw new InvalidOperationException($"Construct instances with 'new {path}(...)'.");
+            throw ConstructInsteadOfInvoking(path);
         }
 
-        var shellInvocation = await TryInvokeShellSymbolAsync(
-            path,
-            arguments,
-            cancellationToken);
+        var shellInvocation = await TryInvokeShellSymbolAsync(path, arguments, cancellationToken);
+
         if (shellInvocation.Matched)
         {
             return shellInvocation.Value;
         }
 
-        var directType = ResolveTypeName(path);
+        var plan = PlanQualifiedInvocation(path);
 
-        if (directType is not null)
+        if (plan.Kind == QualifiedInvocationKind.Static)
         {
-            throw new InvalidOperationException($"Construct instances with 'new {path}(...)'.");
-        }
-
-        var segments = SplitQualifiedPath(path);
-
-        for (var prefixLength = segments.Length - 1; prefixLength >= 1; prefixLength--)
-        {
-            var type = ResolveTypeName(string.Join('.', segments.Take(prefixLength)));
-
-            if (type is null)
-            {
-                continue;
-            }
-
-            if (prefixLength == segments.Length - 1)
-            {
-                var invocation = await Runtime.Invoker.InvokeStaticMethodAsync(
-                    type,
-                    segments[^1],
-                    arguments,
-                    cancellationToken);
-                return invocation.ReturnedVoid ? null : invocation.Value;
-            }
-
-            var target = await ResolveQualifiedMemberChainAsync(
-                type,
-                segments[prefixLength..^1],
-                cancellationToken);
-
-            if (target is null)
-            {
-                throw new InvalidOperationException("Cannot invoke an instance method on null.");
-            }
-
-            var instanceInvocation = await Runtime.Invoker.InvokeInstanceMethodAsync(
-                target,
-                segments[^1],
+            var invocation = await Runtime.Invoker.InvokeStaticMethodAsync(
+                plan.DeclaringType,
+                plan.MethodName,
                 arguments,
                 cancellationToken);
-            return instanceInvocation.ReturnedVoid ? target : instanceInvocation.Value;
+            return invocation.ReturnedVoid ? null : invocation.Value;
         }
 
-        throw new InvalidOperationException($"Unable to resolve .NET access path '{path}'.");
+        var target = await ResolveQualifiedMemberChainAsync(
+            plan.DeclaringType,
+            plan.MemberPath,
+            cancellationToken);
+
+        if (target is null)
+        {
+            throw new InvalidOperationException("Cannot invoke an instance method on null.");
+        }
+
+        var instanceInvocation = await Runtime.Invoker.InvokeInstanceMethodAsync(
+            target,
+            plan.MethodName,
+            arguments,
+            cancellationToken);
+        return instanceInvocation.ReturnedVoid ? target : instanceInvocation.Value;
     }
 
     private bool TryResolveQualifiedAccess(string path, out object? value, out bool matchedType)
@@ -8678,79 +8711,141 @@ public sealed partial class ToshEngine : IShellEvaluator
         return false;
     }
 
-    private bool TryInvokeShellSymbol(string path, IReadOnlyList<object?> arguments, out object? value)
+    /// <summary>Which kind of shell symbol a dotted path names, if any.</summary>
+    private enum ShellSymbolKind
+    {
+        /// <summary>Not a shell symbol; the caller should try CLR resolution.</summary>
+        None,
+
+        /// <summary>A member reached from a module, possibly through a nested member path.</summary>
+        Module,
+
+        /// <summary>A static member of a shell type.</summary>
+        ShellStatic,
+    }
+
+    /// <summary>
+    /// A dotted path resolved against the shell's own symbols, before any invocation happens.
+    /// </summary>
+    /// <param name="MemberPath">
+    /// The dotted path from the module to the object holding the method, or <see langword="null"/>
+    /// when the method is on the module itself.
+    /// </param>
+    private readonly record struct ShellSymbolPlan(
+        ShellSymbolKind Kind,
+        object? Module,
+        IShellStaticType? StaticType,
+        string MethodName,
+        string? MemberPath);
+
+    /// <summary>
+    /// Decides whether <paramref name="path"/> names a shell symbol, and which one.
+    /// </summary>
+    /// <remarks>
+    /// The segment arithmetic here is what the two <c>TryInvokeShellSymbol</c> twins duplicated:
+    /// that a module call needs at least two segments, that everything between the module and the
+    /// final name is a member path, and that a shell static type is matched only at exactly two
+    /// segments. Both twins then invoked the same way, differing only in awaiting
+    /// (<c>TS-P1-24</c>).
+    /// </remarks>
+    private bool TryPlanShellSymbol(string path, out ShellSymbolPlan plan)
     {
         var segments = SplitQualifiedPath(path);
 
-        if (segments.Length >= 2 &&
-            TryGetModule(segments[0], out var module))
+        if (segments.Length >= 2 && TryGetModule(segments[0], out var module))
         {
-            object target = module;
-
-            if (segments.Length > 2)
-            {
-                target = Runtime.ObjectAccessor.GetValue(module, string.Join('.', segments[1..^1]))
-                         ?? throw new InvalidOperationException($"Cannot invoke '{segments[^1]}' on null.");
-            }
-
-            var invocation = Runtime.Invoker.InvokeInstance(target, segments[^1], arguments);
-            value = invocation.ReturnedVoid ? target : invocation.Value;
+            plan = new ShellSymbolPlan(
+                ShellSymbolKind.Module,
+                module,
+                StaticType: null,
+                segments[^1],
+                segments.Length > 2 ? string.Join('.', segments[1..^1]) : null);
             return true;
         }
 
-        if (segments.Length == 2 &&
-            TryResolveShellStaticType(segments[0], out var shellType))
+        if (segments.Length == 2 && TryResolveShellStaticType(segments[0], out var shellType))
         {
-            var invocation = Runtime.Invoker.InvokeStatic(shellType, segments[1], arguments);
-            value = invocation.ReturnedVoid ? null : invocation.Value;
+            plan = new ShellSymbolPlan(
+                ShellSymbolKind.ShellStatic,
+                Module: null,
+                shellType,
+                segments[1],
+                MemberPath: null);
             return true;
         }
 
-        value = null;
+        plan = default;
         return false;
     }
+
+    private bool TryInvokeShellSymbol(string path, IReadOnlyList<object?> arguments, out object? value)
+    {
+        if (!TryPlanShellSymbol(path, out var plan))
+        {
+            value = null;
+            return false;
+        }
+
+        if (plan.Kind == ShellSymbolKind.ShellStatic)
+        {
+            var staticInvocation = Runtime.Invoker.InvokeStatic(plan.StaticType!, plan.MethodName, arguments);
+            value = staticInvocation.ReturnedVoid ? null : staticInvocation.Value;
+            return true;
+        }
+
+        var target = plan.Module!;
+
+        if (plan.MemberPath is not null)
+        {
+            target = Runtime.ObjectAccessor.GetValue(plan.Module, plan.MemberPath)
+                     ?? throw CannotInvokeOnNull(plan.MethodName);
+        }
+
+        var invocation = Runtime.Invoker.InvokeInstance(target, plan.MethodName, arguments);
+        value = invocation.ReturnedVoid ? target : invocation.Value;
+        return true;
+    }
+
+    private static InvalidOperationException CannotInvokeOnNull(string methodName) =>
+        new($"Cannot invoke '{methodName}' on null.");
 
     private async ValueTask<(bool Matched, object? Value)> TryInvokeShellSymbolAsync(
         string path,
         IReadOnlyList<object?> arguments,
         CancellationToken cancellationToken)
     {
-        var segments = SplitQualifiedPath(path);
-
-        if (segments.Length >= 2 &&
-            TryGetModule(segments[0], out var module))
+        if (!TryPlanShellSymbol(path, out var plan))
         {
-            object target = module;
-
-            if (segments.Length > 2)
-            {
-                target = await Runtime.ObjectAccessor.GetValueAsync(
-                             module,
-                             string.Join('.', segments[1..^1]),
-                             cancellationToken)
-                         ?? throw new InvalidOperationException($"Cannot invoke '{segments[^1]}' on null.");
-            }
-
-            var invocation = await Runtime.Invoker.InvokeInstanceMethodAsync(
-                target,
-                segments[^1],
-                arguments,
-                cancellationToken);
-            return (true, invocation.ReturnedVoid ? target : invocation.Value);
+            return (false, null);
         }
 
-        if (segments.Length == 2 &&
-            TryResolveShellStaticType(segments[0], out var shellType))
+        if (plan.Kind == ShellSymbolKind.ShellStatic)
         {
-            var invocation = await Runtime.Invoker.InvokeStaticMethodAsync(
-                shellType,
-                segments[1],
+            var staticInvocation = await Runtime.Invoker.InvokeStaticMethodAsync(
+                plan.StaticType!,
+                plan.MethodName,
                 arguments,
                 cancellationToken);
-            return (true, invocation.ReturnedVoid ? null : invocation.Value);
+            return (true, staticInvocation.ReturnedVoid ? null : staticInvocation.Value);
         }
 
-        return (false, null);
+        var target = plan.Module!;
+
+        if (plan.MemberPath is not null)
+        {
+            target = await Runtime.ObjectAccessor.GetValueAsync(
+                         plan.Module,
+                         plan.MemberPath,
+                         cancellationToken)
+                     ?? throw CannotInvokeOnNull(plan.MethodName);
+        }
+
+        var invocation = await Runtime.Invoker.InvokeInstanceMethodAsync(
+            target,
+            plan.MethodName,
+            arguments,
+            cancellationToken);
+        return (true, invocation.ReturnedVoid ? target : invocation.Value);
     }
 
     private bool TryResolveShellSymbolAccess(string path, out object? value)
@@ -8810,12 +8905,22 @@ public sealed partial class ToshEngine : IShellEvaluator
         return false;
     }
 
-    private object? ResolveQualifiedMemberChain(Type type, IReadOnlyList<string> memberSegments)
+    /// <summary>
+    /// Rejects an empty member chain. Shared because the message was written out once per
+    /// surface, and a duplicated message drifts the moment someone improves one of them.
+    /// </summary>
+    private static void RequireMemberPath(Type type, IReadOnlyList<string> memberSegments)
     {
         if (memberSegments.Count == 0)
         {
-            throw new InvalidOperationException($"No member path was provided for type '{type.FullName}'.");
+            throw new InvalidOperationException(
+                $"No member path was provided for type '{type.FullName}'.");
         }
+    }
+
+    private object? ResolveQualifiedMemberChain(Type type, IReadOnlyList<string> memberSegments)
+    {
+        RequireMemberPath(type, memberSegments);
 
         object? current = Runtime.Invoker.GetStaticMember(type, memberSegments[0]);
 
@@ -8832,10 +8937,7 @@ public sealed partial class ToshEngine : IShellEvaluator
         IReadOnlyList<string> memberSegments,
         CancellationToken cancellationToken)
     {
-        if (memberSegments.Count == 0)
-        {
-            throw new InvalidOperationException($"No member path was provided for type '{type.FullName}'.");
-        }
+        RequireMemberPath(type, memberSegments);
 
         object? current = Runtime.Invoker.GetStaticMember(type, memberSegments[0]);
 
