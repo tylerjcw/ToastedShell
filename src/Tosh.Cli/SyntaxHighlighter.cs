@@ -392,8 +392,31 @@ public static class SyntaxHighlighter
             return true;
         }
 
-        // Return type annotation: `func foo() -> Type`
-        if (trimmedEnd.EndsWith("->", StringComparison.Ordinal))
+        // Return type annotation: `func foo() -> Type` — in either spelling. The Unicode
+        // arrow is what the pretty-printed form and real profiles actually contain, and
+        // missing it left every `→ FileSystemEntry` return annotation uncoloured while the
+        // ASCII spelling coloured fine.
+        if (trimmedEnd.EndsWith("->", StringComparison.Ordinal) ||
+            trimmedEnd.EndsWith("\u2192", StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        // Type test / conversion: `_ is Point2D`, `is not`, `$x as Widget` — match arms are
+        // where declared classes appear most and were never treated as a type context.
+        if (trimmedEnd.EndsWith(" is", StringComparison.Ordinal) ||
+            trimmedEnd.EndsWith(" is not", StringComparison.Ordinal) ||
+            trimmedEnd.EndsWith(" as", StringComparison.Ordinal) ||
+            trimmedEnd.EndsWith(" where", StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        // Generic argument position: `Holder<Circle>` — glued `<` only, so `a < b` stays a
+        // comparison.
+        if (trimmedEnd.EndsWith("<", StringComparison.Ordinal) &&
+            trimmedEnd.Length > 1 &&
+            char.IsLetterOrDigit(trimmedEnd[^2]))
         {
             return true;
         }

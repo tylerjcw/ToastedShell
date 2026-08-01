@@ -304,4 +304,48 @@ public sealed class SyntaxHighlighterTests
         Assert.Contains("\x1b[96m_Point\x1b[0m", highlighted);
         Assert.Contains("\x1b[96mX\x1b[0m", highlighted);
     }
+
+    /// <summary>
+    /// Type names colour in every context a reader meets them — <c>TS-P3-13</c>'s REPL half.
+    /// </summary>
+    /// <remarks>
+    /// The type-context heuristic knew `->` but not `→`, so the pretty-printed arrow — which is
+    /// what real profiles contain — left every return annotation uncoloured. `is`/`as` (match
+    /// arms, where declared classes appear most) and glued `<` (generic arguments) were never
+    /// type contexts at all. Reported from a profile.tosh screenshot, where `→ FileSystemEntry`
+    /// and `is Point2D` rendered as plain text.
+    /// </remarks>
+    [Theory]
+    // The Unicode arrow, as the pretty-printer and real profiles write it.
+    [InlineData("func up(levels: int) \u2192 int")]
+    // ASCII arrow, which already worked — pinned so the two spellings cannot drift apart.
+    [InlineData("func up(levels: int) -> int")]
+    // Type test in a match arm.
+    [InlineData("$x is int")]
+    [InlineData("$x is not int")]
+    // Conversion.
+    [InlineData("$x as int")]
+    // Generic argument, glued to the name.
+    [InlineData("var xs = list<int")]
+    public void Highlights_builtin_types_in_every_type_context(string input)
+    {
+        var runtime = ToshRuntime.CreateDefault();
+
+        var highlighted = SyntaxHighlighter.Highlight(input, runtime);
+
+        // bright-cyan is the default theme's Type colour.
+        Assert.Contains("\x1b[96mint\x1b[0m", highlighted);
+    }
+
+    [Fact]
+    public void A_comparison_is_not_mistaken_for_a_generic_argument()
+    {
+        // `a < b` keeps its spacing; only a glued `<` opens a type context, so `int` here is
+        // an ordinary argument rather than a type.
+        var runtime = ToshRuntime.CreateDefault();
+
+        var highlighted = SyntaxHighlighter.Highlight("echo 3 < int", runtime);
+
+        Assert.DoesNotContain("\x1b[96mint\x1b[0m", highlighted);
+    }
 }
