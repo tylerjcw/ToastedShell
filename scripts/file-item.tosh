@@ -1,0 +1,13 @@
+var doc = $tosh.Script.Args[0]
+var out = $tosh.Script.Args[1]
+var anchor = $tosh.Script.Args[2]
+var row = $tosh.Script.Args[3]
+var lines = []
+var n = 0
+for line in (read-file $doc | lines) {
+    $lines = ($lines + [$line])
+    if ($line.StartsWith($"| `" + $anchor + "` |")) { $lines = ($lines + [$row]); $n = ($n + 1) }
+}
+if ($n != 1) { throw $"expected 1 anchor, found {$n}" }
+write-file $out (($lines | join "\n") + "\n") | ignore
+echo $"inserted={$n}"

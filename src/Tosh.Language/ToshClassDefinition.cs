@@ -1045,10 +1045,7 @@ public sealed class ToshClassDefinition : IShellNamedType
         out ToshClassPropertyDefinition? property)
     {
         if (!_propertiesByName.TryGetValue(name, out property) ||
-            property.IsStatic ||
-            (property.IsShy && !includeHidden) ||
-            (property.IsGuarded && !includeHidden) ||
-            (property.IsLocal && !includeHidden))
+            !IsVisibleInstanceProperty(property, includeHidden))
         {
             property = null;
             return false;
@@ -1056,6 +1053,33 @@ public sealed class ToshClassDefinition : IShellNamedType
 
         return true;
     }
+
+    /// <summary>
+    /// Whether <paramref name="property"/> is reachable on an instance from a caller with the
+    /// given visibility.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Static members are never instance members; shy, guarded and local ones are hidden unless
+    /// <paramref name="includeHidden"/>.
+    /// </para>
+    /// <para>
+    /// <c>GetInstanceMembers</c> — what <c>members</c> reports — used to apply a *weaker* rule,
+    /// testing only <c>IsShy || IsGuarded</c>. So `members` listed `local` and `shared`
+    /// properties that member access then refused: `$c.Local` and `$c.Shared` both failed with
+    /// "Member not found" while appearing in the listing. Introspection contradicting behaviour
+    /// is the <c>TS-P1-33</c> family, and here it was caused by the same rule existing twice with
+    /// different contents — which is what <c>TS-P1-24</c> is about. One predicate now serves
+    /// member lookup and both member listings.
+    /// </para>
+    /// </remarks>
+    private static bool IsVisibleInstanceProperty(
+        ToshClassPropertyDefinition property,
+        bool includeHidden) =>
+        !property.IsStatic
+        && (!property.IsShy || includeHidden)
+        && (!property.IsGuarded || includeHidden)
+        && (!property.IsLocal || includeHidden);
 
     /// <summary>How an assignment to a visible property is served.</summary>
     private enum InstanceMemberAssignment
@@ -1217,7 +1241,7 @@ public sealed class ToshClassDefinition : IShellNamedType
 
         foreach (var property in Properties)
         {
-            if ((property.IsShy || property.IsGuarded) && !includeHidden)
+            if (!IsVisibleInstanceProperty(property, includeHidden))
             {
                 continue;
             }
@@ -1276,7 +1300,7 @@ public sealed class ToshClassDefinition : IShellNamedType
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            if ((property.IsShy || property.IsGuarded) && !includeHidden)
+            if (!IsVisibleInstanceProperty(property, includeHidden))
             {
                 continue;
             }

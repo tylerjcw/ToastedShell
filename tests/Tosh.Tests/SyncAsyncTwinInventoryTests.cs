@@ -123,6 +123,18 @@ public sealed class SyncAsyncTwinInventoryTests
         "ToshEngine.InvokeQualifiedMethod",
         "ToshEngine.ResolveQualifiedMemberChain",
         "ToshEngine.TryInvokeShellSymbol",
+        //   ApplyPendingParameterDefaults -> NeedsPendingDefault
+        //   SelectBestCallableMatches     -> AccumulateBestMatch
+        //   TryConvertParameterValue      -> DescribeAnnotationFailure
+        //   GetInstanceMembers            -> IsVisibleInstanceProperty, which also
+        //                                    fixed a real disagreement: the listing
+        //                                    used a weaker rule than lookup, so it
+        //                                    advertised `local` and `shared` members
+        //                                    that member access then refused.
+        "ToshClassDefinition.GetInstanceMembers",
+        "ToshEngine.ApplyPendingParameterDefaults",
+        "ToshEngine.SelectBestCallableMatches",
+        "ToshEngine.TryConvertParameterValue",
 
         // ── Thin wrappers over one shared implementation ──────────────────────
         // Reclassified 2026-07-30 after measuring rather than counting. Each of
@@ -141,6 +153,18 @@ public sealed class SyncAsyncTwinInventoryTests
         "ToshClassDefinition.GetInitialPropertyValue",
         "ToshClassDefinition.GetOrInitializeLazyProperty",
         "ToshEngine.ExecuteClassBlock",
+
+        // Verified 2026-08-01 rather than assumed:
+        //   ReflectionInvoker.CreateInstance          — the async form is
+        //     `ValueTask.FromResult(CreateInstance(…))`, already a delegation.
+        //   TryInvokeSpecialInstanceMethod            — a six-line dispatcher over
+        //     TrySelectSpecialInstanceMethod and ExecuteMethodBlock, both converged.
+        //   EnumerateItems                            — IEnumerable/IAsyncEnumerable
+        //     iterator bodies, which cannot share a body without materializing the
+        //     sequence; changing streaming to remove eight lines is a bad trade.
+        "ReflectionInvoker.CreateInstance",
+        "ToshClassDefinition.EnumerateItems",
+        "ToshClassDefinition.TryInvokeSpecialInstanceMethod",
 
         // ── Async prefix over a shared core ───────────────────────────────────
         // Reclassified 2026-07-30. Each async form handles the one genuinely
@@ -179,19 +203,12 @@ public sealed class SyncAsyncTwinInventoryTests
         // suite stay green, and conclude the fix worked.
         //
         // Reachability, not size, is the first question for the remainder.
-        "ReflectionInvoker.CreateInstance",
         "ShellIndexingUtilities.GetIndexedValue",
-        "ToshClassDefinition.EnumerateItems",
-        "ToshClassDefinition.GetInstanceMembers",
-        "ToshClassDefinition.TryInvokeSpecialInstanceMethod",
         // Found only after the discovery rule learned the `FooSync`/`FooAsync` spelling.
         // ExecuteClassBlock's sync form blocks on its async form, so it is a bridge rather than
         // a parallel implementation; EvaluateClassPipelineValue's two forms were byte-identical
         // apart from that call and now share BuildClassPipelineBlock and
         // ProjectClassPipelineValues.
-        "ToshEngine.ApplyPendingParameterDefaults",
-        "ToshEngine.SelectBestCallableMatches",
-        "ToshEngine.TryConvertParameterValue",
     ];
 
     private const BindingFlags Declared =

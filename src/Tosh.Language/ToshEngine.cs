@@ -11239,6 +11239,19 @@ public sealed partial class ToshEngine : IShellEvaluator
         return true;
     }
 
+    /// <summary>
+    /// The diagnostic behind a failed annotated conversion, when the conversion produced one.
+    /// </summary>
+    /// <remarks>
+    /// A refinement that rejects a value reports itself through an
+    /// <c>AnnotationRefinementError</c> carried in the converted slot rather than by throwing, so
+    /// the caller has to unwrap it. That unwrapping was written out once per surface, and a
+    /// surface that forgot it would silently report "conversion failed" with no reason
+    /// (<c>TS-P1-24</c>).
+    /// </remarks>
+    private static ToshDiagnosticException? DescribeAnnotationFailure(object? converted) =>
+        converted is AnnotationRefinementError refinementError ? refinementError.Exception : null;
+
     private bool TryConvertParameterValue(
         FunctionParameterDefinition parameter,
         object? value,
@@ -11251,11 +11264,7 @@ public sealed partial class ToshEngine : IShellEvaluator
         if (parameter.TypeName is not null &&
             !TryConvertAnnotatedValue(parameter.TypeName, value, out converted))
         {
-            if (converted is AnnotationRefinementError refinementError)
-            {
-                failure = refinementError.Exception;
-            }
-
+            failure = DescribeAnnotationFailure(converted);
             return false;
         }
 
@@ -11281,12 +11290,7 @@ public sealed partial class ToshEngine : IShellEvaluator
             converted = typeConversion.Converted;
             if (!typeConversion.Success)
             {
-                return (
-                    false,
-                    converted,
-                    converted is AnnotationRefinementError refinementError
-                        ? refinementError.Exception
-                        : null);
+                return (false, converted, DescribeAnnotationFailure(converted));
             }
         }
 
@@ -11365,6 +11369,34 @@ public sealed partial class ToshEngine : IShellEvaluator
         return (true, locals, score, pendingDefaults);
     }
 
+    /// <summary>
+    /// Keeps only the lowest-scoring matches seen so far, collecting ties.
+    /// </summary>
+    /// <remarks>
+    /// The rule — a strictly better score replaces everything, an equal score joins the tie — is
+    /// what decides which overload wins and which calls are reported ambiguous. It was written
+    /// out once per surface, and the two copies had to agree exactly for compiled and interpreted
+    /// dispatch to pick the same overload (<c>TS-P1-24</c>).
+    /// </remarks>
+    private static void AccumulateBestMatch<TCandidate>(
+        List<CallableBindingMatch<TCandidate>> bestMatches,
+        ref int bestScore,
+        CallableBindingMatch<TCandidate> match)
+    {
+        if (match.Score < bestScore)
+        {
+            bestMatches.Clear();
+            bestMatches.Add(match);
+            bestScore = match.Score;
+            return;
+        }
+
+        if (match.Score == bestScore)
+        {
+            bestMatches.Add(match);
+        }
+    }
+
     internal IReadOnlyList<CallableBindingMatch<TCandidate>> SelectBestCallableMatches<TCandidate>(
         IEnumerable<TCandidate> candidates,
         Func<TCandidate, IReadOnlyList<FunctionParameterDefinition>> parameterSelector,
@@ -11390,18 +11422,10 @@ public sealed partial class ToshEngine : IShellEvaluator
                 continue;
             }
 
-            var match = new CallableBindingMatch<TCandidate>(candidate, locals, score, pendingDefaults);
-
-            if (score < bestScore)
-            {
-                bestMatches.Clear();
-                bestMatches.Add(match);
-                bestScore = score;
-            }
-            else if (score == bestScore)
-            {
-                bestMatches.Add(match);
-            }
+            AccumulateBestMatch(
+                bestMatches,
+                ref bestScore,
+                new CallableBindingMatch<TCandidate>(candidate, locals, score, pendingDefaults));
         }
 
         if (bestMatches.Count == 0)
@@ -11498,22 +11522,14 @@ public sealed partial class ToshEngine : IShellEvaluator
                 continue;
             }
 
-            var match = new CallableBindingMatch<TCandidate>(
-                candidate,
-                binding.Locals,
-                binding.Score,
-                binding.PendingDefaults);
-
-            if (binding.Score < bestScore)
-            {
-                bestMatches.Clear();
-                bestMatches.Add(match);
-                bestScore = binding.Score;
-            }
-            else if (binding.Score == bestScore)
-            {
-                bestMatches.Add(match);
-            }
+            AccumulateBestMatch(
+                bestMatches,
+                ref bestScore,
+                new CallableBindingMatch<TCandidate>(
+                    candidate,
+                    binding.Locals,
+                    binding.Score,
+                    binding.PendingDefaults));
         }
 
         if (bestMatches.Count == 0)
@@ -11533,6 +11549,41 @@ public sealed partial class ToshEngine : IShellEvaluator
     /// The evaluated value passes through the same annotation/refinement
     /// conversion as an explicitly supplied argument.
     /// </summary>
+    /// <summary>
+    /// Whether this parameter's default still has to be evaluated, seeding the visible scope with
+    /// already-bound values as it goes.
+    /// </summary>
+    /// <remarks>
+    /// Three rules in one, and all three were written out once per surface: a rest parameter never
+    /// takes a default; a parameter that was actually supplied contributes its value to the scope
+    /// the *later* defaults are evaluated in, which is what makes `func f(a, b = $a * 2)` work;
+    /// and only the pending ones are evaluated, so a losing overload candidate never runs a
+    /// default's side effects (<c>TS-P1-24</c>).
+    /// </remarks>
+    private static bool NeedsPendingDefault(
+        FunctionParameterDefinition parameter,
+        HashSet<string> pendingNames,
+        Dictionary<string, object?> locals,
+        Dictionary<string, object?> visible)
+    {
+        if (parameter.IsRest)
+        {
+            return false;
+        }
+
+        if (pendingNames.Contains(parameter.Name))
+        {
+            return true;
+        }
+
+        if (locals.TryGetValue(parameter.Name, out var boundValue))
+        {
+            visible[parameter.Name] = boundValue;
+        }
+
+        return false;
+    }
+
     internal void ApplyPendingParameterDefaults(
         IReadOnlyList<FunctionParameterDefinition> parameters,
         Dictionary<string, object?> locals,
@@ -11554,18 +11605,8 @@ public sealed partial class ToshEngine : IShellEvaluator
 
         foreach (var parameter in parameters)
         {
-            if (parameter.IsRest)
+            if (!NeedsPendingDefault(parameter, pendingNames, locals, visible))
             {
-                continue;
-            }
-
-            if (!pendingNames.Contains(parameter.Name))
-            {
-                if (locals.TryGetValue(parameter.Name, out var boundValue))
-                {
-                    visible[parameter.Name] = boundValue;
-                }
-
                 continue;
             }
 
@@ -11618,18 +11659,8 @@ public sealed partial class ToshEngine : IShellEvaluator
 
         foreach (var parameter in parameters)
         {
-            if (parameter.IsRest)
+            if (!NeedsPendingDefault(parameter, pendingNames, locals, visible))
             {
-                continue;
-            }
-
-            if (!pendingNames.Contains(parameter.Name))
-            {
-                if (locals.TryGetValue(parameter.Name, out var boundValue))
-                {
-                    visible[parameter.Name] = boundValue;
-                }
-
                 continue;
             }
 
