@@ -317,4 +317,78 @@ public sealed class ClassHierarchyLookupTests
             ($b.value | type-of).Name
             """));
     }
+
+    // ── Visibility: `shy` is private to the class that declared it ─────────────
+
+    [Theory]
+    // A subclass is not the declaring class, so a `shy` member of the base is out of reach —
+    // through a property and through a method alike.
+    [InlineData("class B { shy prop S = 1 }\nclass D extends B { func read() { return $this.S } }\n(new D()).read()")]
+    [InlineData("class B { shy func f() -> int { return 1 } }\nclass D extends B { func g() { return $this.f() } }\n(new D()).g()")]
+    public async Task A_shy_member_of_the_base_is_not_reachable_from_a_subclass(string source)
+    {
+        await Assert.ThrowsAnyAsync<Exception>(async () => await RunAsync(source));
+    }
+
+    [Theory]
+    // The class that declared it still reads it, which is the whole point of the distinction.
+    [InlineData("class B { shy prop S = 1\n    func read() { return $this.S } }\n(new B()).read()", "1")]
+    [InlineData("class B { shy func f() -> int { return 4 }\n    func g() { return $this.f() } }\n(new B()).g()", "4")]
+    public async Task A_class_still_reads_its_own_shy_members(string source, string expected)
+    {
+        Assert.Equal(expected, await RunAsync(source));
+    }
+
+    [Fact]
+    public async Task A_base_method_reads_its_own_shy_member_on_a_subclass_instance()
+    {
+        // The case that rules out the cheap fix. Lookups start at the *instance's* class, so
+        // hiding the base's private members whenever the walk crossed a class boundary would
+        // have broken this — B reading B's own private, merely because the object is a D.
+        Assert.Equal("7", await RunAsync(
+            """
+            class B {
+                shy prop S = 7
+                func read() { return $this.S }
+            }
+            class D extends B { }
+            (new D()).read()
+            """));
+    }
+
+    [Fact]
+    public async Task An_override_still_wins_for_a_base_method()
+    {
+        // The other half of why the walk still starts at the instance's class: `$this.X` inside a
+        // base method has to find the subclass's override, not the base's own value.
+        Assert.Equal("9", await RunAsync(
+            """
+            class B {
+                prop X = 1
+                func read() { return $this.X }
+            }
+            class D extends B { overrule prop X = 9 }
+            (new D()).read()
+            """));
+    }
+
+    [Theory]
+    // `guarded` is the modifier that *does* reach down the chain — that is the difference from
+    // `shy`, and tightening one must not tighten the other.
+    [InlineData("class B { guarded prop G = 3 }\nclass D extends B { func read() { return $this.G } }\n(new D()).read()", "3")]
+    [InlineData("class B { guarded func f() -> int { return 5 } }\nclass D extends B { func g() { return $this.f() } }\n(new D()).g()", "5")]
+    [InlineData("class B { guarded func f() -> int { return 6 } }\nclass D extends B { func g() { return $super.f() } }\n(new D()).g()", "6")]
+    public async Task A_guarded_member_is_reachable_from_a_subclass(string source, string expected)
+    {
+        Assert.Equal(expected, await RunAsync(source));
+    }
+
+    [Theory]
+    // Neither modifier is reachable from outside any class, which always held and still does.
+    [InlineData("class C { shy prop S = 1 }\n(new C()).S")]
+    [InlineData("class C { guarded prop G = 3 }\n(new C()).G")]
+    public async Task Hidden_members_stay_hidden_from_outside(string source)
+    {
+        await Assert.ThrowsAnyAsync<Exception>(async () => await RunAsync(source));
+    }
 }

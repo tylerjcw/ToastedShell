@@ -180,27 +180,27 @@ public sealed class ToshClassInstance : IShellRecordObject, IShellInvocableObjec
 
     public bool TryGetMember(string name, out object? value, bool includeHidden = false)
     {
-        return Definition.TryGetInstanceMember(this, name, includeHidden, out value);
+        return Definition.TryGetInstanceMember(this, name, includeHidden, accessor: null, out value);
     }
 
     public bool TrySetMember(string name, object? value)
     {
-        return Definition.TrySetInstanceMember(this, name, value, includeHidden: false);
+        return Definition.TrySetInstanceMember(this, name, value, includeHidden: false, accessor: null);
     }
 
     public IReadOnlyList<KeyValuePair<string, object?>> GetMembers(bool includeHidden = false)
     {
-        return Definition.GetInstanceMembers(this, includeHidden);
+        return Definition.GetInstanceMembers(this, includeHidden, accessor: null);
     }
 
     public ValueTask<IReadOnlyList<KeyValuePair<string, object?>>> GetMembersAsync(
         bool includeHidden,
         CancellationToken cancellationToken) =>
-        Definition.GetInstanceMembersAsync(this, includeHidden, cancellationToken);
+        Definition.GetInstanceMembersAsync(this, accessor: null, includeHidden, cancellationToken);
 
     public InvocationResult InvokeInstanceMethod(string methodName, IReadOnlyList<object?> arguments)
     {
-        return Definition.InvokeInstanceMethod(this, methodName, arguments, includeHidden: false);
+        return Definition.InvokeInstanceMethod(this, methodName, arguments, includeHidden: false, accessor: null);
     }
 
     public ValueTask<InvocationResult> InvokeInstanceMethodAsync(
@@ -213,6 +213,7 @@ public sealed class ToshClassInstance : IShellRecordObject, IShellInvocableObjec
             methodName,
             arguments,
             includeHidden: false,
+            accessor: null,
             cancellationToken);
     }
 
@@ -230,7 +231,7 @@ public sealed class ToshClassInstance : IShellRecordObject, IShellInvocableObjec
         string name,
         bool includeHidden,
         CancellationToken cancellationToken) =>
-        Definition.TryGetInstanceMemberAsync(this, name, includeHidden, cancellationToken);
+        Definition.TryGetInstanceMemberAsync(this, name, includeHidden, accessor: null, cancellationToken);
 
     public ValueTask<bool> TrySetMemberAsync(
         string name,
@@ -241,6 +242,7 @@ public sealed class ToshClassInstance : IShellRecordObject, IShellInvocableObjec
             name,
             value,
             includeHidden: false,
+            accessor: null,
             cancellationToken);
 
     internal ValueTask<bool> TrySetMemberAsync(
@@ -248,7 +250,7 @@ public sealed class ToshClassInstance : IShellRecordObject, IShellInvocableObjec
         object? value,
         bool includeHidden,
         CancellationToken cancellationToken) =>
-        Definition.TrySetInstanceMemberAsync(this, name, value, includeHidden, cancellationToken);
+        Definition.TrySetInstanceMemberAsync(this, name, value, includeHidden, accessor: null, cancellationToken);
 
     public bool HasShellItems => Definition.HasEnumerator;
 

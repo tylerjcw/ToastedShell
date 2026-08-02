@@ -873,9 +873,10 @@ public sealed class ToshClassDefinition : IShellNamedType
     private InstanceMemberRoute ResolveInstanceMemberRoute(
         string name,
         bool includeHidden,
+        ToshClassDefinition? accessor,
         out ToshClassPropertyDefinition? property)
     {
-        if (!TryGetVisibleInstanceProperty(name, includeHidden, out property))
+        if (!TryGetVisibleInstanceProperty(name, includeHidden, accessor, out property))
         {
             return InstanceMemberRoute.NotDeclared;
         }
@@ -928,9 +929,14 @@ public sealed class ToshClassDefinition : IShellNamedType
         return false;
     }
 
-    internal bool TryGetInstanceMember(ToshClassInstance instance, string name, bool includeHidden, out object? value)
+    internal bool TryGetInstanceMember(
+        ToshClassInstance instance,
+        string name,
+        bool includeHidden,
+        ToshClassDefinition? accessor,
+        out object? value)
     {
-        switch (ResolveInstanceMemberRoute(name, includeHidden, out var property))
+        switch (ResolveInstanceMemberRoute(name, includeHidden, accessor, out var property))
         {
             case InstanceMemberRoute.Computed:
                 value = EvaluatePropertyGetter(instance, property!);
@@ -946,7 +952,7 @@ public sealed class ToshClassDefinition : IShellNamedType
 
         if (BaseClass is not null)
         {
-            return BaseClass.TryGetInstanceMember(instance, name, includeHidden, out value);
+            return BaseClass.TryGetInstanceMember(instance, name, includeHidden, accessor, out value);
         }
 
         return TryGetClrBaseMember(instance, name, out value);
@@ -956,11 +962,12 @@ public sealed class ToshClassDefinition : IShellNamedType
         ToshClassInstance instance,
         string name,
         bool includeHidden,
+        ToshClassDefinition? accessor,
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        switch (ResolveInstanceMemberRoute(name, includeHidden, out var property))
+        switch (ResolveInstanceMemberRoute(name, includeHidden, accessor, out var property))
         {
             case InstanceMemberRoute.Computed:
                 return (true, await EvaluatePropertyGetterAsync(instance, property!, cancellationToken));
@@ -980,6 +987,7 @@ public sealed class ToshClassDefinition : IShellNamedType
                 instance,
                 name,
                 includeHidden,
+                accessor,
                 cancellationToken);
         }
 
@@ -1078,10 +1086,11 @@ public sealed class ToshClassDefinition : IShellNamedType
     private bool TryGetVisibleInstanceProperty(
         string name,
         bool includeHidden,
+        ToshClassDefinition? accessor,
         out ToshClassPropertyDefinition? property)
     {
         if (!_propertiesByName.TryGetValue(name, out property) ||
-            !IsVisibleInstanceProperty(property, includeHidden))
+            !IsVisibleInstanceProperty(property, this, includeHidden, accessor))
         {
             property = null;
             return false;
@@ -1111,11 +1120,57 @@ public sealed class ToshClassDefinition : IShellNamedType
     /// </remarks>
     private static bool IsVisibleInstanceProperty(
         ToshClassPropertyDefinition property,
-        bool includeHidden) =>
+        ToshClassDefinition declaring,
+        bool includeHidden,
+        ToshClassDefinition? accessor) =>
         !property.IsStatic
-        && (!property.IsShy || includeHidden)
-        && (!property.IsGuarded || includeHidden)
+        && (!property.IsShy || CanSeeShy(declaring, includeHidden, accessor))
+        && (!property.IsGuarded || CanSeeGuarded(declaring, includeHidden, accessor))
         && (!property.IsLocal || includeHidden);
+
+    /// <summary>
+    /// Whether a <c>shy</c> member of <paramref name="declaring"/> is visible to code running in
+    /// <paramref name="accessor"/>. Private means private to the class that declared it, so only
+    /// that same class qualifies — a subclass does not.
+    /// </summary>
+    /// <remarks>
+    /// A null <paramref name="accessor"/> means the caller did not say whose code is running, and
+    /// falls back to <paramref name="includeHidden"/> — the behaviour every surface had before
+    /// the accessing class was carried. That is what keeps introspection surfaces such as
+    /// completion working unchanged while <c>$this</c> and <c>$super</c>, which do know, get the
+    /// real rule.
+    /// </remarks>
+    private static bool CanSeeShy(
+        ToshClassDefinition declaring,
+        bool includeHidden,
+        ToshClassDefinition? accessor) =>
+        accessor is null ? includeHidden : ReferenceEquals(accessor, declaring);
+
+    /// <summary>
+    /// Whether a <c>guarded</c> member of <paramref name="declaring"/> is visible to code running
+    /// in <paramref name="accessor"/>. Protected reaches down the chain, so the declaring class
+    /// and anything derived from it qualify — which is the whole difference from <c>shy</c>.
+    /// </summary>
+    private static bool CanSeeGuarded(
+        ToshClassDefinition declaring,
+        bool includeHidden,
+        ToshClassDefinition? accessor)
+    {
+        if (accessor is null)
+        {
+            return includeHidden;
+        }
+
+        for (var current = accessor; current is not null; current = current.BaseClass)
+        {
+            if (ReferenceEquals(current, declaring))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     /// <summary>How an assignment to a visible property is served.</summary>
     private enum InstanceMemberAssignment
@@ -1149,9 +1204,10 @@ public sealed class ToshClassDefinition : IShellNamedType
         ToshClassInstance instance,
         string name,
         bool includeHidden,
+        ToshClassDefinition? accessor,
         out ToshClassPropertyDefinition? property)
     {
-        if (!TryGetVisibleInstanceProperty(name, includeHidden, out property))
+        if (!TryGetVisibleInstanceProperty(name, includeHidden, accessor, out property))
         {
             return InstanceMemberAssignment.NotDeclared;
         }
@@ -1198,9 +1254,14 @@ public sealed class ToshClassDefinition : IShellNamedType
         return false;
     }
 
-    internal bool TrySetInstanceMember(ToshClassInstance instance, string name, object? value, bool includeHidden)
+    internal bool TrySetInstanceMember(
+        ToshClassInstance instance,
+        string name,
+        object? value,
+        bool includeHidden,
+        ToshClassDefinition? accessor)
     {
-        switch (ResolveInstanceMemberAssignment(instance, name, includeHidden, out var property))
+        switch (ResolveInstanceMemberAssignment(instance, name, includeHidden, accessor, out var property))
         {
             case InstanceMemberAssignment.Setter:
                 ExecutePropertySetter(instance, property!, value);
@@ -1213,7 +1274,7 @@ public sealed class ToshClassDefinition : IShellNamedType
 
         if (BaseClass is not null)
         {
-            return BaseClass.TrySetInstanceMember(instance, name, value, includeHidden);
+            return BaseClass.TrySetInstanceMember(instance, name, value, includeHidden, accessor);
         }
 
         return TrySetClrBaseMember(instance, name, value);
@@ -1224,11 +1285,12 @@ public sealed class ToshClassDefinition : IShellNamedType
         string name,
         object? value,
         bool includeHidden,
+        ToshClassDefinition? accessor,
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        switch (ResolveInstanceMemberAssignment(instance, name, includeHidden, out var property))
+        switch (ResolveInstanceMemberAssignment(instance, name, includeHidden, accessor, out var property))
         {
             case InstanceMemberAssignment.Setter:
                 await ExecutePropertySetterAsync(instance, property!, value, cancellationToken);
@@ -1248,20 +1310,24 @@ public sealed class ToshClassDefinition : IShellNamedType
                 name,
                 value,
                 includeHidden,
+                accessor,
                 cancellationToken);
         }
 
         return TrySetClrBaseMember(instance, name, value, cancellationToken);
     }
 
-    internal IReadOnlyList<KeyValuePair<string, object?>> GetInstanceMembers(ToshClassInstance instance, bool includeHidden)
+    internal IReadOnlyList<KeyValuePair<string, object?>> GetInstanceMembers(
+        ToshClassInstance instance,
+        bool includeHidden,
+        ToshClassDefinition? accessor)
     {
         var members = new List<KeyValuePair<string, object?>>();
 
         // Include base class members first
         if (BaseClass is not null)
         {
-            foreach (var baseMember in BaseClass.GetInstanceMembers(instance, includeHidden))
+            foreach (var baseMember in BaseClass.GetInstanceMembers(instance, includeHidden, accessor))
             {
                 members.Add(baseMember);
             }
@@ -1277,7 +1343,7 @@ public sealed class ToshClassDefinition : IShellNamedType
 
         foreach (var property in Properties)
         {
-            if (!IsVisibleInstanceProperty(property, includeHidden))
+            if (!IsVisibleInstanceProperty(property, this, includeHidden, accessor))
             {
                 continue;
             }
@@ -1288,7 +1354,7 @@ public sealed class ToshClassDefinition : IShellNamedType
                 continue;
             }
 
-            TryGetInstanceMember(instance, property.Name, includeHidden, out var value);
+            TryGetInstanceMember(instance, property.Name, includeHidden, accessor, out var value);
             members.Add(new KeyValuePair<string, object?>(property.Name, value));
         }
 
@@ -1297,6 +1363,7 @@ public sealed class ToshClassDefinition : IShellNamedType
 
     internal async ValueTask<IReadOnlyList<KeyValuePair<string, object?>>> GetInstanceMembersAsync(
         ToshClassInstance instance,
+        ToshClassDefinition? accessor,
         bool includeHidden,
         CancellationToken cancellationToken)
     {
@@ -1307,6 +1374,7 @@ public sealed class ToshClassDefinition : IShellNamedType
         {
             members.AddRange(await BaseClass.GetInstanceMembersAsync(
                 instance,
+                accessor,
                 includeHidden,
                 cancellationToken));
         }
@@ -1336,7 +1404,7 @@ public sealed class ToshClassDefinition : IShellNamedType
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            if (!IsVisibleInstanceProperty(property, includeHidden))
+            if (!IsVisibleInstanceProperty(property, this, includeHidden, accessor))
             {
                 continue;
             }
@@ -1354,6 +1422,7 @@ public sealed class ToshClassDefinition : IShellNamedType
                 instance,
                 property.Name,
                 includeHidden,
+                accessor,
                 cancellationToken);
             members.Add(new KeyValuePair<string, object?>(
                 property.Name,
@@ -1363,13 +1432,19 @@ public sealed class ToshClassDefinition : IShellNamedType
         return members;
     }
 
-    internal InvocationResult InvokeInstanceMethod(ToshClassInstance instance, string methodName, IReadOnlyList<object?> arguments, bool includeHidden)
+    internal InvocationResult InvokeInstanceMethod(
+        ToshClassInstance instance,
+        string methodName,
+        IReadOnlyList<object?> arguments,
+        bool includeHidden,
+        ToshClassDefinition? accessor)
     {
         return InvokeInstanceMethodAsync(
                 instance,
                 methodName,
                 arguments,
                 includeHidden,
+                accessor,
                 CancellationToken.None)
             .AsTask()
             .GetAwaiter()
@@ -1381,6 +1456,7 @@ public sealed class ToshClassDefinition : IShellNamedType
         string methodName,
         IReadOnlyList<object?> arguments,
         bool includeHidden,
+        ToshClassDefinition? accessor,
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -1390,7 +1466,7 @@ public sealed class ToshClassDefinition : IShellNamedType
         // subclass adding one overload hid every inherited one: with `f(a: int)` on the base and
         // `f(a: string)` on the subclass, `$d.f(1)` bound the string overload by coercion, and
         // an inherited overload of another arity could not be called at all.
-        var candidateSet = CollectInstanceMethodCandidates(methodName, includeHidden);
+        var candidateSet = CollectInstanceMethodCandidates(methodName, includeHidden, accessor);
 
         if (candidateSet.Count == 0)
         {
@@ -1408,6 +1484,7 @@ public sealed class ToshClassDefinition : IShellNamedType
                     methodName,
                     arguments,
                     includeHidden,
+                    accessor,
                     cancellationToken);
             }
 
@@ -1457,7 +1534,8 @@ public sealed class ToshClassDefinition : IShellNamedType
     /// </summary>
     private List<(ToshClassMethodDefinition Method, ToshClassDefinition Owner)> CollectInstanceMethodCandidates(
         string methodName,
-        bool includeHidden)
+        bool includeHidden,
+        ToshClassDefinition? accessor)
     {
         var collected = new List<(ToshClassMethodDefinition Method, ToshClassDefinition Owner)>();
 
@@ -1475,7 +1553,11 @@ public sealed class ToshClassDefinition : IShellNamedType
                     continue;
                 }
 
-                if (!includeHidden && (candidate.IsShy || candidate.IsGuarded || candidate.IsLocal))
+                // Same rule the properties use, so a `shy` method is private to the class that
+                // declared it and a `guarded` one reaches down the chain.
+                if ((candidate.IsShy && !CanSeeShy(current, includeHidden, accessor)) ||
+                    (candidate.IsGuarded && !CanSeeGuarded(current, includeHidden, accessor)) ||
+                    (candidate.IsLocal && !includeHidden))
                 {
                     continue;
                 }
@@ -2305,11 +2387,11 @@ public sealed class ToshClassDefinition : IShellNamedType
 
         if (instance is not null)
         {
-            result["this"] = new ToshClassSelfReference(instance);
+            result["this"] = new ToshClassSelfReference(instance, accessor: this);
 
             if (BaseClass is not null)
             {
-                result["super"] = new ToshClassSuperReference(instance, BaseClass);
+                result["super"] = new ToshClassSuperReference(instance, BaseClass, accessor: this);
             }
             else if (ClrBaseType is not null)
             {
@@ -2335,12 +2417,12 @@ public sealed class ToshClassDefinition : IShellNamedType
 
         var bindings = new Dictionary<string, object?>(StringComparer.Ordinal)
         {
-            ["this"] = new ToshClassSelfReference(instance),
+            ["this"] = new ToshClassSelfReference(instance, accessor: this),
         };
 
         if (BaseClass is not null)
         {
-            bindings["super"] = new ToshClassSuperReference(instance, BaseClass);
+            bindings["super"] = new ToshClassSuperReference(instance, BaseClass, accessor: this);
         }
         else if (ClrBaseType is not null)
         {

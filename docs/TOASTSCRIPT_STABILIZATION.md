@@ -396,7 +396,7 @@ closed.
 | `TS-P1-06` | Complete — 2026-07-26 | Unknown/duplicate named arguments are accepted and mixed named/rest calls can drop or wrap positional arguments incorrectly. | Unknown and duplicate names are diagnosed; rest contains only unconsumed positional values in source order. |
 | `TS-P1-07` | Partially complete — defer case 2026-07-25 | The defer-specific loss of values emitted before `return` is addressed; other nested control-flow shapes can still materialize or change streaming behavior. | Previously emitted values stream unchanged; optional return value is final; nested control flow does not alter output semantics or introduce unnecessary materialization. |
 | `TS-P1-08` | Complete — 2026-07-30; the headline symptom was already fixed, the surplus pull is now too | Nested generator statements materialize output, while short-circuit consumers peek a second upstream item. **`take-while` does not short-circuit an infinite generator at all.** `recur (0, 1) func(a, b) => ($a + $b) \| take-while { _ < 100 }` (`LazySequenceTests.Recur_fibonacci_take_while`) should stop at 89; instead it generates Fibonacci without bound. Because the values are arbitrary-precision integers whose digit count grows linearly, total memory grows quadratically: an instrumented run reached **104,741 MB in 57 seconds** and exhausted a 128 GB machine. The sibling `iterate 1 func(x) => ($x * 2) \| take-while { _ <= 64 }` fails instead with `'iterate' operations must produce exactly one value per input item`. | Nested `yield` streams promptly; `first`/`any` do not evaluate an unnecessary next item; **`take-while`/`skip-while` short-circuit without materializing an unbounded upstream**; infinite-source tests complete under a bounded memory cap. |
-| `TS-P1-09` | In progress — statics, vital, and overload sets fixed 2026-08-02; shy visibility remains | Class hierarchy lookup loses generic bindings, inherited overloads, `vital` validation, and private visibility rules. | Recursive hierarchy test matrix covers generic intermediaries, overload sets, required members, private/protected access, and partial statics. |
+| `TS-P1-09` | Complete — fixed 2026-08-02 | Class hierarchy lookup loses generic bindings, inherited overloads, `vital` validation, and private visibility rules. | Recursive hierarchy test matrix covers generic intermediaries, overload sets, required members, private/protected access, and partial statics. |
 | `TS-P1-10` | Complete — fixed 2026-07-30 | Anonymous-record equality depends on dictionary insertion order. | Records with the same names and canonically equal values compare equal regardless of insertion order. |
 | `TS-P1-11` | Complete — fixed 2026-07-30 | `_` in destructuring is bound and overwritten instead of discarding the matched value. | Every `_` target skips without creating or modifying a binding; nested/rest patterns are covered. |
 | `TS-P1-12` | Planned | `const` currently accepts arbitrary runtime pipelines and behaves as a readonly binding rather than a constant. | Constant-expression rules are specified and enforced; `let` covers runtime immutability before compatibility behavior is removed. |
@@ -4482,3 +4482,51 @@ matter — an inherited-only overload set, which always worked, and `overrule` s
 matching signature. Full capped suite: 3,965 passing, 1 skipped, the single failure being
 `TS-P2-48`'s LSP fixture flake, confirmed by 2 isolated runs and a clean run of all 39 tests in
 its class.
+
+## `TS-P1-09` — `shy` is private to the class that declared it (August 2)
+
+The last of the item's claims, and the one that could not be fixed cheaply. A `shy` property or
+method on a base class was readable from a subclass's own methods.
+
+**Why the obvious fix is wrong.** The walk hands `includeHidden` unchanged to the base, so the
+`true` that lets a class see its own private members also unlocked its parent's. Passing `false`
+when crossing a class boundary looks like a one-line repair and breaks a legitimate case
+immediately: lookups start at the *instance's* class, so a base method reading its own private
+member on a subclass instance crosses that same boundary. Starting the walk at the executing
+class instead trades one defect for another — `$this.X` inside a base method must still find a
+subclass's override.
+
+Both cases are now tests, because either shortcut passes the defect's own test while breaking
+something else.
+
+**What was actually missing was the accessing class.** `$this` resolves through
+`ToshClassSelfReference`, which knew the instance but not whose code was running — so a base
+method reading its own private and a subclass reading that same private were the same query.
+`CreateLocals` is an instance method of the definition, so the executing class was available at
+the point the binding is made; it simply was not carried. `$this` and `$super` now carry it, and
+visibility is decided per class as the walk passes through it:
+
+- `shy` — visible only when the accessing class *is* the declaring class.
+- `guarded` — visible to the declaring class and anything derived from it, which is the whole
+  difference between the two and had to keep working while `shy` was tightened.
+
+The walk still starts at the instance's class, so override dispatch is untouched.
+
+A null accessor means the caller did not say whose code is running and falls back to the previous
+`includeHidden` behaviour. That is deliberate: it keeps introspection surfaces such as REPL
+completion working exactly as before, and confines the new rule to the two references that
+genuinely know the answer. Access from outside a class passes null and was already correct.
+
+**On the threading itself.** The parameter was made required rather than defaulted, so the
+compiler enumerated all 24 call sites instead of leaving one silently on the old behaviour — the
+sync/async twins of every read, write, invoke and listing among them. `GetInstanceMembersAsync`
+is exactly the twin that a defaulted parameter would have missed, since it reaches the visibility
+predicate by its own route. One predicate pair, `CanSeeShy` and `CanSeeGuarded`, serves property
+lookup, member listing and method resolution, so a future modifier cannot be honoured on two
+surfaces out of three (`TS-P1-24`).
+
+**Verification.** 34 tests in `ClassHierarchyLookupTests` now. The negative control reverted the
+four source files while keeping the tests: exactly the two defect cases failed and all 32
+controls passed — including the base-method-reads-its-own-private case and override dispatch,
+which are there to fail against the shortcuts rather than against the defect. Full capped suite
+fully green: 3,977 passing, 1 skipped, no failures.
