@@ -3318,6 +3318,43 @@ Class features:
   \item \textbf{Instantiation}---\code{new ClassName(args)}.
 \end{itemize}
 
+\subsection*{Chaining to the Primary Constructor}
+\ikw{this}
+
+A class may declare a primary constructor and explicit constructors together.
+When it does, an explicit constructor reaches the primary one with
+\code{\$this(...)}, which must be the first statement in its body:
+
+\begin{lstlisting}
+class Point(x, y) {
+    prop X = $x
+    prop Y = $y
+
+    ## Construct from a single scalar: the same value on both axes.
+    Point(size) { $this($size, $size) }
+}
+
+(new Point(2, 3)).X        # 2
+(new Point(4)).Y           # 4
+\end{lstlisting}
+
+The chain binds the primary parameters \emph{before} property initializers run,
+which is what lets \code{prop X = \$x} work no matter which constructor was
+called.  Without it, an initializer that reads a primary parameter fails when
+construction comes in through an explicit constructor, because the primary
+parameters were never bound.
+
+\code{\$this(...)} mirrors \code{\$super(...)}: same position rule, same
+once-only rule, pointed at this class's own primary constructor rather than its
+base class.  The explicit constructor's parameters are visible to the chain
+arguments---\code{\$this(\$a + \$b)} is the usual shape---and the arguments are
+checked against the primary signature exactly as a direct \code{new} would be.
+
+A chain does not replace the constructor body; the rest of the body runs after
+it.  Note also that chaining does not permit an ambiguous pair: a primary and an
+explicit constructor of identical signature remain a declaration error, because
+a call would still have two candidates and no way to choose.
+
 \subsection*{Constructor Overloads}
 
 Constructors overload on their parameter \emph{types}, not on how many

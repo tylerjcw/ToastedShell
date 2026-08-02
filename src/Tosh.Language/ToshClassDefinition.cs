@@ -1559,6 +1559,66 @@ public sealed class ToshClassDefinition : IShellNamedType
             cancellationToken);
     }
 
+    /// <summary>
+    /// Separates a leading <c>$this(...)</c> chain call from the rest of a constructor body.
+    /// </summary>
+    /// <remarks>
+    /// Same rules as the base-constructor initializer: at most one, and it must come first, so
+    /// the primary parameters are bound before anything can read them.
+    /// </remarks>
+    private (PipelineStatementSyntax? Chain, BlockSyntax Body)
+        SplitPrimaryConstructorChain(ToshClassConstructorDefinition constructor)
+    {
+        var chains = constructor.Body.Statements
+            .Select((statement, index) => (statement, index))
+            .Where(pair => IsDirectPrimaryConstructorCall(pair.statement))
+            .ToArray();
+
+        if (chains.Length == 0)
+        {
+            return (null, constructor.Body);
+        }
+
+        if (chains.Length > 1)
+        {
+            throw CreateConstructionDiagnostic(
+                code: "tosh.runtime.duplicate_primary_constructor_chain",
+                title: $"Constructor '{Name}()' calls '$this(...)' more than once.",
+                span: chains[1].statement.Span,
+                label: "remove this duplicate primary-constructor call",
+                sourceName: constructor.SourceName,
+                sourceText: constructor.SourceText);
+        }
+
+        var (statement, index) = chains[0];
+
+        if (index != 0)
+        {
+            throw CreateConstructionDiagnostic(
+                code: "tosh.runtime.primary_chain_must_be_first",
+                title: "'$this(...)' must be the first executable statement in a constructor.",
+                span: statement.Span,
+                label: "move this call to the start of the constructor",
+                sourceName: constructor.SourceName,
+                sourceText: constructor.SourceText);
+        }
+
+        if (_primaryConstructorParameters.Count == 0)
+        {
+            throw CreateConstructionDiagnostic(
+                code: "tosh.runtime.primary_chain_without_primary",
+                title: $"Class '{Name}' cannot call '$this(...)' because it has no primary constructor.",
+                span: statement.Span,
+                label: $"declare parameters on the class — 'class {Name}(...)' — or remove this call",
+                sourceName: constructor.SourceName,
+                sourceText: constructor.SourceText);
+        }
+
+        return (
+            (PipelineStatementSyntax)statement,
+            new BlockSyntax(constructor.Body.Statements.Skip(1).ToArray(), constructor.Body.Span));
+    }
+
     private (PipelineStatementSyntax? Initializer, BlockSyntax Body)
         SplitConstructorInitializer(ToshClassConstructorDefinition constructor)
     {
@@ -1632,6 +1692,48 @@ public sealed class ToshClassDefinition : IShellNamedType
         }
 
         return string.Equals(name, "super", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Whether <paramref name="statement"/> is a leading <c>$this(...)</c> — an explicit
+    /// constructor chaining to its class's primary constructor.
+    /// </summary>
+    /// <remarks>
+    /// Mirrors <see cref="IsDirectSuperConstructorCall"/> exactly, because the two are the same
+    /// idea pointed at different constructors: <c>$super(...)</c> initializes the base class,
+    /// <c>$this(...)</c> initializes this class's own primary parameters. Spelled with the
+    /// existing <c>$this</c> rather than a new keyword for that reason (<c>TS-P1-37</c>).
+    /// </remarks>
+    private static bool IsDirectPrimaryConstructorCall(StatementSyntax statement)
+    {
+        if (statement is not PipelineStatementSyntax
+            {
+                Pipeline:
+                {
+                    Stages:
+                    [
+                        ExpressionPipelineStageSyntax
+                        {
+                            Expression: CallableInvocationArgumentSyntax
+                            {
+                                Target: VariableReferenceArgumentSyntax { Name: var name },
+                            },
+                        },
+                    ],
+                    IsBackground: false,
+                },
+            } pipelineStatement)
+        {
+            return false;
+        }
+
+        if (pipelineStatement.Pipeline.Redirections is { Count: > 0 }
+            || pipelineStatement.Pipeline.InputRedirection is not null)
+        {
+            return false;
+        }
+
+        return string.Equals(name, "this", StringComparison.OrdinalIgnoreCase);
     }
 
 
@@ -2339,6 +2441,78 @@ public sealed class ToshClassDefinition : IShellNamedType
             Span: parameter.Span,
             Label: $"'{parameter.Name}' expects {parameter.TypeName}"));
     }
+    /// <summary>
+    /// Evaluates a <c>$this(...)</c> chain call and binds its arguments to this class's primary
+    /// constructor parameters, returning the constructor locals with those bindings merged in.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The explicit constructor's own parameters stay visible — they are what the chain
+    /// arguments are usually computed from, as in <c>C(a, b) { $this($a + $b) }</c> — and the
+    /// primary parameters are added alongside. A name declared by both belongs to the explicit
+    /// constructor, since that is the one the caller actually invoked.
+    /// </para>
+    /// <para>
+    /// Arguments are converted against the primary parameters' annotations by the same binder
+    /// that a direct <c>new C(...)</c> would use, so a chain cannot smuggle in a value the
+    /// primary constructor would have rejected.
+    /// </para>
+    /// </remarks>
+    private async ValueTask<Dictionary<string, object?>> BindPrimaryConstructorChainAsync(
+        ToshClassConstructorDefinition constructor,
+        PipelineStatementSyntax chain,
+        Dictionary<string, object?> constructorLocals,
+        ToshClassInstance instance,
+        CancellationToken cancellationToken)
+    {
+        var invocation = (CallableInvocationArgumentSyntax)
+            ((ExpressionPipelineStageSyntax)chain.Pipeline.Stages[0]).Expression;
+
+        var arguments = new List<object?>(invocation.Arguments.Count);
+
+        foreach (var argument in invocation.Arguments)
+        {
+            // Wrapped as a one-stage pipeline so the existing class-context evaluator can run
+            // it, rather than adding a second way to evaluate an argument.
+            var argumentPipeline = new PipelineSyntax(
+                [new ExpressionPipelineStageSyntax(argument, argument.Span)]);
+
+            arguments.Add(await _engine.EvaluateClassPipelineValueAsync(
+                constructor.SourceName,
+                constructor.SourceText,
+                argumentPipeline,
+                CreateLocals(instance, constructorLocals),
+                constructor.CapturedScopes,
+                cancellationToken,
+                $"{Name}.$this()"));
+        }
+
+        var binding = await _engine.TryBindCallableParametersAsync(
+            _primaryConstructorParameters,
+            arguments,
+            cancellationToken);
+
+        if (!binding.Success)
+        {
+            throw CreateConstructionDiagnostic(
+                code: "tosh.runtime.primary_chain_arguments",
+                title: $"'$this(...)' does not match the primary constructor of '{Name}'.",
+                span: chain.Span,
+                label: $"expected {FormatConstructorSignature(_primaryConstructorParameters)}",
+                sourceName: constructor.SourceName,
+                sourceText: constructor.SourceText);
+        }
+
+        var merged = new Dictionary<string, object?>(binding.Locals, StringComparer.Ordinal);
+
+        foreach (var local in constructorLocals)
+        {
+            merged[local.Key] = local.Value;
+        }
+
+        return merged;
+    }
+
     internal Task InvokeConstructorOnInstanceAsync(
         ToshClassInstance instance,
         IReadOnlyList<object?> arguments,
@@ -2399,8 +2573,25 @@ public sealed class ToshClassDefinition : IShellNamedType
 
             ValidateConstructorTypeArguments(constructor, constructorLocals, instance);
 
+            // A leading `$this(...)` binds this class's primary-constructor parameters, so a
+            // property initializer that reads one sees a value even though construction came in
+            // through an explicit constructor. Split and applied *before* the initializer loop
+            // below, which is the whole point: that loop is where the missing binding used to
+            // surface as "Variable 'x' was not found" (TS-P1-37).
+            var (primaryChain, chainedBody) = SplitPrimaryConstructorChain(constructor);
+
+            if (primaryChain is not null)
+            {
+                constructorLocals = await BindPrimaryConstructorChainAsync(
+                    constructor,
+                    primaryChain,
+                    constructorLocals,
+                    instance,
+                    cancellationToken);
+            }
+
             var (superInitializer, constructorBody) =
-                SplitConstructorInitializer(constructor);
+                SplitConstructorInitializer(constructor with { Body = chainedBody });
 
             if (BaseConstructorArgs is not null && superInitializer is not null)
             {
