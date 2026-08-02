@@ -4021,7 +4021,13 @@ public sealed partial class ToshEngine : IShellEvaluator
         {
             foreach (var method in runtimeMethods.Where(m => !m.IsOverride && !m.IsAbstract && !m.IsStatic))
             {
-                if (HasMethodInHierarchy(definition.BaseClass, method.Name))
+                // Matched on the whole signature rather than the name alone. A same-named method
+                // with different parameters is an *overload*, not an override, and demanding
+                // `overrule` for it made an inherited overload set impossible to extend: a class
+                // whose base declared `func f(a: int)` could not declare `func f(a: string)`,
+                // nor even `func f(a: int, b: int)`, without claiming to override something it
+                // does not.
+                if (OverridesMethodInHierarchy(definition.BaseClass, method))
                 {
                     throw ToshDiagnosticException.Create(new ToshDiagnostic(
                         Code: "tosh.runtime.missing_overrule",
@@ -4084,6 +4090,56 @@ public sealed partial class ToshEngine : IShellEvaluator
         }
 
         return missing;
+    }
+
+    /// <summary>
+    /// Whether any class in <paramref name="classDefinition"/>'s chain declares a method that
+    /// <paramref name="method"/> would genuinely override: the same name *and* the same parameter
+    /// list. Name alone is what <see cref="HasMethodInHierarchy"/> answers, which is right for
+    /// asking whether `overrule` has anything at all to point at, and wrong for deciding whether
+    /// a method shadows one — an overload shares the name by definition.
+    /// </summary>
+    private static bool OverridesMethodInHierarchy(
+        ToshClassDefinition classDefinition,
+        ToshClassMethodDefinition method)
+    {
+        for (var current = classDefinition; current is not null; current = current.BaseClass)
+        {
+            foreach (var candidate in current.Methods)
+            {
+                if (string.Equals(candidate.Name, method.Name, StringComparison.OrdinalIgnoreCase) &&
+                    ParameterListsMatch(candidate.Parameters, method.Parameters))
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Compares two parameter lists by arity and declared type name, the same test the
+    /// constructor-collision rule applies (<c>TS-P1-18</c>).
+    /// </summary>
+    private static bool ParameterListsMatch(
+        IReadOnlyList<FunctionParameterDefinition> left,
+        IReadOnlyList<FunctionParameterDefinition> right)
+    {
+        if (left.Count != right.Count)
+        {
+            return false;
+        }
+
+        for (var index = 0; index < left.Count; index++)
+        {
+            if (!string.Equals(left[index].TypeName, right[index].TypeName, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private static bool HasMethodInHierarchy(ToshClassDefinition classDefinition, string methodName)

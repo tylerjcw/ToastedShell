@@ -566,14 +566,21 @@ public sealed class ToshClassDefinition : IShellNamedType
         await ConstructOnInstanceAsync(instance, arguments, cancellationToken);
         instance.CompleteInitialization();
 
-        // Validate that all vital (required) properties have been set to non-null values
-        foreach (var property in Properties.Where(p => p.IsVital && !p.IsStatic && !p.IsComputed))
+        // Validate that all vital (required) properties have been set to non-null values.
+        // The whole chain is walked, not just this class: a `vital` property declared on a base
+        // is still required of everything built from it, and checking only `Properties` — which
+        // holds what this class itself declares — let `class D extends B { }` construct while
+        // leaving B's vital property unset.
+        for (var declaring = this; declaring is not null; declaring = declaring.BaseClass)
         {
-            if (instance.TryGetStoredValue(property.Name, out var value) && value is null)
+            foreach (var property in declaring.Properties.Where(p => p.IsVital && !p.IsStatic && !p.IsComputed))
             {
-                throw new InvalidOperationException(
-                    $"Vital property '{property.Name}' on class '{Name}' must be provided a value. " +
-                    $"Set it in the constructor or provide an initializer.");
+                if (instance.TryGetStoredValue(property.Name, out var value) && value is null)
+                {
+                    throw new InvalidOperationException(
+                        $"Vital property '{property.Name}' on class '{declaring.Name}' must be provided a value. " +
+                        $"Set it in the constructor or provide an initializer.");
+                }
             }
         }
 
@@ -607,8 +614,17 @@ public sealed class ToshClassDefinition : IShellNamedType
             return new InvocationResult(FlattenCallResult(nativeValues), ReturnedVoid: false);
         }
 
+        // Statics are inherited, so a name this class does not declare is asked of its base —
+        // the same walk every instance lookup already performed. The base answers for its own
+        // members, which keeps the storage and the `shy` rule with the class that declared them
+        // rather than copying either into the derived class.
         if (!_methodsByName.TryGetValue(methodName, out var candidates))
         {
+            if (BaseClass is not null)
+            {
+                return await BaseClass.InvokeStaticMethodAsync(methodName, arguments, cancellationToken);
+            }
+
             throw new InvalidOperationException($"Static method '{methodName}' was not found on class '{Name}'.");
         }
 
@@ -616,6 +632,21 @@ public sealed class ToshClassDefinition : IShellNamedType
 
         if (staticCandidates.Length == 0)
         {
+            // The name is declared here but not as a callable static — an instance method, or one
+            // hidden by `shy`. A base may still offer it statically, so ask before refusing.
+            if (BaseClass is not null)
+            {
+                return await BaseClass.InvokeStaticMethodAsync(methodName, arguments, cancellationToken);
+            }
+
+            // Said apart, because a `shy static` reported "is an instance method" — a description
+            // of neither what was declared nor why the call was refused.
+            if (candidates.Any(candidate => candidate.IsStatic && candidate.IsShy))
+            {
+                throw new InvalidOperationException(
+                    $"Static method '{methodName}' on class '{Name}' is shy and cannot be called from outside the class.");
+            }
+
             throw new InvalidOperationException($"'{methodName}' is an instance method on class '{Name}' and cannot be called statically. Create an instance first: var obj = new {Name}(); $obj.{methodName}(...)");
         }
 
@@ -689,7 +720,10 @@ public sealed class ToshClassDefinition : IShellNamedType
                 $"'{memberName}' is a native binding on class '{Name}'. Call it with parentheses: {native.Command.Usage}");
         }
 
-        return false;
+        // Nothing by that name here, so the base is asked — a static property declared on a base
+        // is readable through a derived class, and reading it through the declaring class is what
+        // keeps one shared value rather than a copy per subclass.
+        return BaseClass is not null && BaseClass.TryGetStaticMember(memberName, out value);
     }
 
     public bool TrySetStaticMember(string memberName, object? value)
@@ -700,7 +734,9 @@ public sealed class ToshClassDefinition : IShellNamedType
             return true;
         }
 
-        return false;
+        // Assignment follows the read: an inherited static is stored on the class that declared
+        // it, so `D.S = 1` and `B.S` refer to the same slot instead of silently diverging.
+        return BaseClass is not null && BaseClass.TrySetStaticMember(memberName, value);
     }
 
     public bool TryGetMember(string name, out object? value, bool includeHidden = false)
@@ -1349,7 +1385,14 @@ public sealed class ToshClassDefinition : IShellNamedType
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        if (!_methodsByName.TryGetValue(methodName, out var candidates))
+        // The overload set is gathered across the whole chain rather than from this class alone.
+        // Resolving against only the nearest class that happened to declare the name meant a
+        // subclass adding one overload hid every inherited one: with `f(a: int)` on the base and
+        // `f(a: string)` on the subclass, `$d.f(1)` bound the string overload by coercion, and
+        // an inherited overload of another arity could not be called at all.
+        var candidateSet = CollectInstanceMethodCandidates(methodName, includeHidden);
+
+        if (candidateSet.Count == 0)
         {
             // Allow calling the constructor by class name (e.g. $super.BaseClass(args))
             if (string.Equals(methodName, Name, StringComparison.OrdinalIgnoreCase))
@@ -1381,23 +1424,72 @@ public sealed class ToshClassDefinition : IShellNamedType
         }
 
         var (method, locals) = await SelectMethodAsync(
-            candidates.Where(candidate => !candidate.IsStatic && (includeHidden || (!candidate.IsShy && !candidate.IsGuarded && !candidate.IsLocal))).ToArray(),
+            candidateSet.Select(entry => entry.Method).ToArray(),
             arguments,
             cancellationToken,
             instance);
+
+        // The winner runs in the class that declared it, not in the one the call arrived at. That
+        // is what gives an inherited method the `$this`/`$super` bindings of its own class — a
+        // base method executed from the subclass's definition would be handed the subclass's
+        // base as its `$super`, skipping a level of the chain.
+        var owner = candidateSet.First(entry => ReferenceEquals(entry.Method, method)).Owner;
 
         // Emit deprecation warning for fading methods
         if (method.IsFading)
         {
             _engine.WriteWarning(
                 code: "tosh.runtime.fading_member",
-                title: $"Method '{method.Name}' on class '{Name}' is fading (deprecated).",
+                title: $"Method '{method.Name}' on class '{owner.Name}' is fading (deprecated).",
                 help: "Use a non-fading replacement, or hush this code: hush tosh.runtime.fading_member",
                 category: Tosh.Runtime.ToshDiagnosticCategory.Deprecation);
         }
 
-        var values = await ExecuteMethodBlockAsync(method, locals, instance, cancellationToken);
+        var values = await owner.ExecuteMethodBlockAsync(method, locals, instance, cancellationToken);
         return new InvocationResult(FlattenCallResult(values), ReturnedVoid: false);
+    }
+
+    /// <summary>
+    /// The instance overload set for <paramref name="methodName"/> across this class and its
+    /// bases, each method paired with the class that declared it. A nearer class replaces a base
+    /// method of the same signature — that is what <c>overrule</c> means — while one with a
+    /// different signature joins the set instead of hiding it.
+    /// </summary>
+    private List<(ToshClassMethodDefinition Method, ToshClassDefinition Owner)> CollectInstanceMethodCandidates(
+        string methodName,
+        bool includeHidden)
+    {
+        var collected = new List<(ToshClassMethodDefinition Method, ToshClassDefinition Owner)>();
+
+        for (var current = this; current is not null; current = current.BaseClass)
+        {
+            if (!current._methodsByName.TryGetValue(methodName, out var candidates))
+            {
+                continue;
+            }
+
+            foreach (var candidate in candidates)
+            {
+                if (candidate.IsStatic)
+                {
+                    continue;
+                }
+
+                if (!includeHidden && (candidate.IsShy || candidate.IsGuarded || candidate.IsLocal))
+                {
+                    continue;
+                }
+
+                if (collected.Any(existing => SignaturesCollide(existing.Method.Parameters, candidate.Parameters)))
+                {
+                    continue;
+                }
+
+                collected.Add((candidate, current));
+            }
+        }
+
+        return collected;
     }
 
     internal IEnumerable<object?> EnumerateItems(ToshClassInstance instance)

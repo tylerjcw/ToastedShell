@@ -396,7 +396,7 @@ closed.
 | `TS-P1-06` | Complete — 2026-07-26 | Unknown/duplicate named arguments are accepted and mixed named/rest calls can drop or wrap positional arguments incorrectly. | Unknown and duplicate names are diagnosed; rest contains only unconsumed positional values in source order. |
 | `TS-P1-07` | Partially complete — defer case 2026-07-25 | The defer-specific loss of values emitted before `return` is addressed; other nested control-flow shapes can still materialize or change streaming behavior. | Previously emitted values stream unchanged; optional return value is final; nested control flow does not alter output semantics or introduce unnecessary materialization. |
 | `TS-P1-08` | Complete — 2026-07-30; the headline symptom was already fixed, the surplus pull is now too | Nested generator statements materialize output, while short-circuit consumers peek a second upstream item. **`take-while` does not short-circuit an infinite generator at all.** `recur (0, 1) func(a, b) => ($a + $b) \| take-while { _ < 100 }` (`LazySequenceTests.Recur_fibonacci_take_while`) should stop at 89; instead it generates Fibonacci without bound. Because the values are arbitrary-precision integers whose digit count grows linearly, total memory grows quadratically: an instrumented run reached **104,741 MB in 57 seconds** and exhausted a 128 GB machine. The sibling `iterate 1 func(x) => ($x * 2) \| take-while { _ <= 64 }` fails instead with `'iterate' operations must produce exactly one value per input item`. | Nested `yield` streams promptly; `first`/`any` do not evaluate an unnecessary next item; **`take-while`/`skip-while` short-circuit without materializing an unbounded upstream**; infinite-source tests complete under a bounded memory cap. |
-| `TS-P1-09` | Planned | Class hierarchy lookup loses generic bindings, inherited overloads, `vital` validation, and private visibility rules. | Recursive hierarchy test matrix covers generic intermediaries, overload sets, required members, private/protected access, and partial statics. |
+| `TS-P1-09` | In progress — statics, vital, and overload sets fixed 2026-08-02; shy visibility remains | Class hierarchy lookup loses generic bindings, inherited overloads, `vital` validation, and private visibility rules. | Recursive hierarchy test matrix covers generic intermediaries, overload sets, required members, private/protected access, and partial statics. |
 | `TS-P1-10` | Complete — fixed 2026-07-30 | Anonymous-record equality depends on dictionary insertion order. | Records with the same names and canonically equal values compare equal regardless of insertion order. |
 | `TS-P1-11` | Complete — fixed 2026-07-30 | `_` in destructuring is bound and overwritten instead of discarding the matched value. | Every `_` target skips without creating or modifying a binding; nested/rest patterns are covered. |
 | `TS-P1-12` | Planned | `const` currently accepts arbitrary runtime pipelines and behaves as a readonly binding rather than a constant. | Constant-expression rules are specified and enforced; `let` covers runtime immutability before compatibility behavior is removed. |
@@ -481,6 +481,9 @@ closed.
 | `TS-P2-46` | Superseded by `TS-P1-41` — refiled 2026-07-31 | Filed as "a declaration with an empty initializer parses clean and declares nothing", which understated it. The reporter's own shell session showed the real shape: the initializer *continues onto the next line*, deliberately, and consumes whatever it finds there — so a following `var y =` was eaten and `y` never declared. Refiled at P1 because the failure mode is losing a statement, not a papercut. | See `TS-P1-41`. |
 | `TS-P2-47` | Planned — filed 2026-08-01 | **`members` on an instance describes the type, not the instance.** `$c | members` resolves a class instance to its *type* descriptor, so the listing comes from `GetShellMembers`, whose filter is `includeHidden || !property.IsShy` — weaker again than either the instance listing or member lookup. It therefore advertises `local` and `shared` properties on an instance that `$c.Local` and `$c.Shared` both refuse with "Member not found". Distinct from the `GetInstanceMembers` disagreement fixed under `TS-P1-24`: that one was two copies of a rule drifting, this one is a deliberate design — a type descriptor legitimately lists statics, and reports an `IsStatic` flag per member so a reader can tell. Found while converging the member twins. | Decide what `members` means when handed an *instance* rather than a type. Either it describes the instance, and statics and locals are filtered out with the class-name form (`C \| members`) remaining the way to see them; or it keeps describing the type, and the display makes inaccessibility visible rather than leaving `Local` looking like an ordinary member. The status quo is the one option to rule out, because it reads as a listing of what you can use and is not (`TS-P1-33` family). |
 | `TS-P2-48` | Planned — filed 2026-08-01 | **`LspFeatureTests.Require_can_feed_completion_and_signature_help_for_fixture_types` fails under full-suite load and passes in isolation.** Unlike `TS-P2-39`, the mechanism is not mysterious: the test `require`s a **`.csproj`** and shells out to `dotnet build` at runtime, so under a parallel suite it competes with the build server and the other test-host processes for locks and CPU. Seen in three consecutive full runs on 2026-08-01, always green when run alone. Confirmed unrelated to the `require`-following added for `TS-P3-12`: that resolver accepts only `.tosh` targets and skips a `.csproj` outright, and the failure predates it. | Build the fixture once per suite rather than once per test — an `IClassFixture` or an `AssemblyFixture` that compiles it on first use — or mark the test as requiring exclusive execution. Shelling out to a build from inside a parallel test run is the defect; the assertion itself is sound and worth keeping, since it is the only coverage of CLR types reaching completion through `require`. |
+| `TS-P2-49` | Planned — filed 2026-08-02 | Explicit type arguments do not parse at a member call site: `$a.m<int>(11)` and `A.m<int>(11)` both fail with `tosh.parser.missing_pipeline_separator`, while the free-function form `m<int> 11` parses and inference (`$a.m(11)`) works. Found while probing `TS-P1-09`. | A member call accepts explicit type arguments in both instance and static position; the free-function and inferred forms are unchanged; regression tests cover all four spellings. |
+| `TS-P2-50` | Planned — filed 2026-08-02 | A comma inside `<…>` immediately followed by `(` mis-parses, so a two-or-more-parameter generic cannot take arguments in either place it needs them: `class Q<X, Y>(a: X, b: Y) extends P<X, Y>($a, $b)` fails, and `(new P<int, int>(3, 4)).X` parses the type arguments as a tuple and reports `Member 'X' was not found on type 'ToshTuple'`. One type argument plus arguments parses, and two type arguments without arguments parse, which is what kept this hidden. Found while probing `TS-P1-09`. | Type argument lists of any arity parse ahead of a parenthesised argument list in `extends` clauses, `new` expressions, and parenthesised member access; the spec's own generic-inheritance example is executed by the conformance corpus. |
+| `TS-P2-51` | Planned — filed 2026-08-02 | A static property cannot be assigned: `B.S = 5` fails to parse with `tosh.parser.variable_references_require_dollar`, on the declaring class as much as through a subclass, so a static is effectively read-only after its initializer. `TrySetStaticMember` has exactly one caller — declaration-time initialization — and no user-reachable path. Found while probing `TS-P1-09`. | Assignment to a static property parses and stores to the declaring class's slot; reading it back through any subclass sees the same value. |
 
 **Implementation note for `TS-P2-11` (July 25 review recommendation).** The
 `TS-P2-01`/`TS-P2-02`/`TS-P2-04`/`TS-P2-12`–`TS-P2-15` family shares one root
@@ -4411,3 +4414,71 @@ stream. It terminates cleanly and is a separate question — whether a deferred 
 contribute to a generator's output at all — so it was left alone rather than decided in passing.
 Separately, `>> file` does not create the file when it does not already exist; found while
 building a probe, unrelated to this item.
+
+## `TS-P1-09` — what a class inherits (August 2, partial)
+
+Four of the item's five claims were probed before any code was changed, and the probing
+rewrote the list. Three are fixed; one does not exist; one remains.
+
+**"Generic bindings are lost" — did not reproduce.** The specification's own `Point2D` example
+runs correctly, as do three-level chains, a base fixed to a concrete type, a constrained base,
+and reordered type parameters. Four earlier probes *appeared* to confirm the claim and every one
+of them was a fault in the probe — a missing `$super(…)`, a constructor colliding with its own
+primary under `TS-P1-18`, quotes nested inside an interpolation. Those cases are now
+characterization tests, because a claim this plausible will otherwise be re-filed.
+
+Two genuine defects did surface from those failed probes, both in the *parser* rather than in
+hierarchy lookup, and both filed separately: explicit type arguments at a member call site
+(`TS-P2-49`) and a comma inside `<…>` followed by `(` (`TS-P2-50`).
+
+**Statics were not inherited at all** — "partial statics" understated it. Every instance lookup
+walked `BaseClass`; not one of the four static entry points did, so `D.s()` reported "Static
+method 's' was not found on class 'D'" while `B.s()` worked. The walk is now the same one the
+instance paths take: the base answers for its own members, which keeps both the storage and the
+`shy` rule with the class that declared them rather than copying either downward. A `shy static`
+also stopped claiming to be "an instance method", which described neither what was declared nor
+why the call was refused.
+
+Assignment is the one static surface still missing, and it is missing everywhere rather than
+just through a subclass: `B.S = 5` does not parse. The write path's base walk is therefore
+correct by symmetry with the read but unreachable today, which is filed as `TS-P2-51` rather
+than claimed as fixed here.
+
+**`vital` was validated against `Properties`** — what the class itself declares — so
+`class D extends B { }` constructed happily with B's required property unset. Validation now
+walks the chain and names the declaring class.
+
+**Overload sets were lost in two separate places, and fixing one alone would have been a trap.**
+The declaration check asked only whether the *name* existed in the hierarchy, so any same-named
+method demanded `overrule`: a subclass could not add `f(a: string)` beside an inherited
+`f(a: int)`, nor even `f(a: int, b: int)`. Matching the full signature fixes that — but doing
+only that turned a rejected declaration into an accepted one that then misbehaved, because
+resolution gathered candidates from the nearest class declaring the name and never merged the
+rest. Measured immediately after the first half: `$d.f(1)` returned `str`, binding the string
+overload by coercion, and the different-arity call failed outright. Accepting a declaration whose
+calls then resolve wrongly is worse than rejecting it, so the second half is part of the same
+change.
+
+The overload set is now gathered across the chain, a nearer class replacing a base method of the
+same signature and a different signature joining the set. The winner then runs **in the class
+that declared it**, not the one the call arrived at — a base method executed from the subclass's
+definition would be handed the subclass's base as its `$super` and skip a level of the chain.
+That is asserted directly rather than assumed.
+
+**Still open: `shy` is visible to subclasses.** A `shy` property or method on a base is readable
+from a derived class's own methods, which private membership should forbid. It is not a
+one-line fix, and the reason is worth recording: `$this` resolves through
+`ToshClassSelfReference`, which starts every lookup at `_instance.Definition` — the *most
+derived* class — with `includeHidden: true`. There is no notion of which class's code is
+executing, so a base method reading its own `shy` member is indistinguishable from a subclass
+reading it. Starting the walk at the executing class instead would fix visibility and break
+override dispatch, since `$this.X` from a base method must still find a subclass's override.
+The fix is to carry the *accessing* class through the lookup and treat `shy` as visible only to
+its declaring class — which means threading it through both halves of every sync/async twin in
+that path. Left for its own change rather than bolted onto this one.
+
+**Verification.** 23 tests in `ClassHierarchyLookupTests`, including the two controls that
+matter — an inherited-only overload set, which always worked, and `overrule` still winning for a
+matching signature. Full capped suite: 3,965 passing, 1 skipped, the single failure being
+`TS-P2-48`'s LSP fixture flake, confirmed by 2 isolated runs and a clean run of all 39 tests in
+its class.
