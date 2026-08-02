@@ -482,7 +482,7 @@ closed.
 | `TS-P2-47` | Planned — filed 2026-08-01 | **`members` on an instance describes the type, not the instance.** `$c | members` resolves a class instance to its *type* descriptor, so the listing comes from `GetShellMembers`, whose filter is `includeHidden || !property.IsShy` — weaker again than either the instance listing or member lookup. It therefore advertises `local` and `shared` properties on an instance that `$c.Local` and `$c.Shared` both refuse with "Member not found". Distinct from the `GetInstanceMembers` disagreement fixed under `TS-P1-24`: that one was two copies of a rule drifting, this one is a deliberate design — a type descriptor legitimately lists statics, and reports an `IsStatic` flag per member so a reader can tell. Found while converging the member twins. | Decide what `members` means when handed an *instance* rather than a type. Either it describes the instance, and statics and locals are filtered out with the class-name form (`C \| members`) remaining the way to see them; or it keeps describing the type, and the display makes inaccessibility visible rather than leaving `Local` looking like an ordinary member. The status quo is the one option to rule out, because it reads as a listing of what you can use and is not (`TS-P1-33` family). |
 | `TS-P2-48` | Planned — filed 2026-08-01 | **`LspFeatureTests.Require_can_feed_completion_and_signature_help_for_fixture_types` fails under full-suite load and passes in isolation.** Unlike `TS-P2-39`, the mechanism is not mysterious: the test `require`s a **`.csproj`** and shells out to `dotnet build` at runtime, so under a parallel suite it competes with the build server and the other test-host processes for locks and CPU. Seen in three consecutive full runs on 2026-08-01, always green when run alone. Confirmed unrelated to the `require`-following added for `TS-P3-12`: that resolver accepts only `.tosh` targets and skips a `.csproj` outright, and the failure predates it. | Build the fixture once per suite rather than once per test — an `IClassFixture` or an `AssemblyFixture` that compiles it on first use — or mark the test as requiring exclusive execution. Shelling out to a build from inside a parallel test run is the defect; the assertion itself is sound and worth keeping, since it is the only coverage of CLR types reaching completion through `require`. |
 | `TS-P2-49` | Planned — filed 2026-08-02 | Explicit type arguments do not parse at a member call site: `$a.m<int>(11)` and `A.m<int>(11)` both fail with `tosh.parser.missing_pipeline_separator`, while the free-function form `m<int> 11` parses and inference (`$a.m(11)`) works. Found while probing `TS-P1-09`. | A member call accepts explicit type arguments in both instance and static position; the free-function and inferred forms are unchanged; regression tests cover all four spellings. |
-| `TS-P2-50` | Planned — filed 2026-08-02 | A comma inside `<…>` immediately followed by `(` mis-parses, so a two-or-more-parameter generic cannot take arguments in either place it needs them: `class Q<X, Y>(a: X, b: Y) extends P<X, Y>($a, $b)` fails, and `(new P<int, int>(3, 4)).X` parses the type arguments as a tuple and reports `Member 'X' was not found on type 'ToshTuple'`. One type argument plus arguments parses, and two type arguments without arguments parse, which is what kept this hidden. Found while probing `TS-P1-09`. | Type argument lists of any arity parse ahead of a parenthesised argument list in `extends` clauses, `new` expressions, and parenthesised member access; the spec's own generic-inheritance example is executed by the conformance corpus. |
+| `TS-P2-50` | Complete — fixed 2026-08-02 | Filed as one defect ("a comma inside `<…>` immediately followed by `(` mis-parses") and was two, sharing a symptom. **(a)** A base constructor could be given only one argument: `extends P0($a, $b)` failed with `tosh.parser.missing_pipeline_separator` and no type argument was involved anywhere — each argument was read as a pipeline running until the close paren, so the separating comma was neither a terminator nor a valid continuation. **(b)** `(new P<int, int>(3, 4)).A` parsed the type arguments as a tuple and reported `Member 'A' was not found on type 'ToshTuple'`, because the scanner deciding tuple-or-not did not step over a type argument list as its two sibling scanners already did. | Base constructor argument lists of any arity parse, read the way every other parenthesised argument list is; a type argument list of any arity inside parentheses is not mistaken for a tuple, and tuples and comparisons are unaffected. |
 | `TS-P2-51` | Planned — filed 2026-08-02 | A static property cannot be assigned: `B.S = 5` fails to parse with `tosh.parser.variable_references_require_dollar`, on the declaring class as much as through a subclass, so a static is effectively read-only after its initializer. `TrySetStaticMember` has exactly one caller — declaration-time initialization — and no user-reachable path. Found while probing `TS-P1-09`. | Assignment to a static property parses and stores to the declaring class's slot; reading it back through any subclass sees the same value. |
 
 **Implementation note for `TS-P2-11` (July 25 review recommendation).** The
@@ -4578,3 +4578,44 @@ the corpus is curated rather than harvested, so a new section does not enter it 
 new `tosh.runtime.const_redeclaration` code carries a source span and code frame like the
 reassignment refusal beside it, and the generated diagnostic reference was regenerated. Full
 capped suite fully green: 4,000 passing, 1 skipped.
+
+## `TS-P2-50` — two defects wearing one symptom (August 2)
+
+Filed a day earlier from probing `TS-P1-09`, as "a comma inside `<…>` immediately followed by `(`
+mis-parses", with two failing spellings offered as evidence of one cause. They had two, and the
+filed diagnosis was right about only one of them. Narrowing each spelling separately is what
+separated them — varying one thing at a time, where the original probe had varied two.
+
+**A base constructor could be given exactly one argument, and generics had nothing to do with it.**
+`extends P<X, Y>($a, $b)` failed; so did `extends P0($a, $b)`, with no type argument anywhere in
+the line; while `extends P<int, int>($a)` parsed. The trigger was the second *argument*. Each was
+read as a pipeline running until the close paren, so the separating comma was neither a terminator
+that pipeline recognised nor a valid continuation of it, and the parse died with "missing pipeline
+separator" pointing at the comma. `$super($a, $b)` and `$this($a, $b)` were unaffected throughout,
+because they are ordinary invocations and take a different path — which is why this survived: the
+spelling most people use for the same job worked.
+
+Arguments are now read the way every other parenthesised argument list is read, stopping at the
+separating comma.
+
+**The tuple confusion was the other half, and was as filed.** In `(new P<int, int>(3, 4)).A` the
+comma between the type arguments read as a top-level separator, so the parenthesised expression
+became a tuple and the member access reported `Member 'A' was not found on type 'ToshTuple'`. One
+type argument parsed, having no comma to misread.
+
+The scanner that decides tuple-or-not now steps over a type argument list. It is worth naming what
+that fix was: the rule existed in **three** scanners and was right in two — both siblings already
+called `SkipAdjacentGenericTypeArguments` at depth zero, and this one did not. Not a new rule,
+then, but the third copy of an existing one catching up (`TS-P1-24`).
+
+**Verification.** 17 tests. The negative control failed 9 of them and passed 8. One case had to be
+moved while writing them up: `extends P0(1, 2)` was placed among the "already worked" controls and
+is a two-argument list, so it was a defect case wearing a control's label — the control run is what
+exposed it, by failing a test that was supposed to pass. Tuples, tuple element access and
+parenthesised comparisons are pinned beside the type-argument cases, since comparison operators are
+the reason angle brackets are ambiguous at all. Full capped suite: 4,017 passing, 1 skipped, no
+failures.
+
+**Still open:** `TS-P2-49`, explicit type arguments at a member call site (`$a.m<int>(11)`), is
+untouched by this. It is not a scanner gap: `MethodCallArgumentSyntax` has no type-argument slot at
+all, so it needs the parser, the syntax node, and the binding path together — its own change.

@@ -4216,8 +4216,25 @@ public static class ToshParser
                     }
                 }
 
-                var arg = ParsePipeline(untilCloseParen: true, untilCloseBrace: false, untilSemicolon: false, allowExpressionStart: true);
-                args.Add(arg);
+                // Read one argument, stopping at the separating comma, the way every other
+                // parenthesised argument list is read.
+                //
+                // Reading each one as a *pipeline running until the close paren* was why a base
+                // constructor could only ever be given one argument: the first comma was neither
+                // a terminator the pipeline recognised nor a valid continuation of it, so
+                // `extends Base($a, $b)` failed with "missing pipeline separator" while
+                // `extends Base($a)` parsed. Nothing about generics was involved — the same
+                // failure appeared with no type arguments anywhere in sight.
+                var expression = HasTopLevelOperatorBeforeCommaOrCloseParen()
+                    ? ParseOperatorExpression(Current.Span.Start)
+                    : ParseArgument();
+
+                if (expression is null)
+                {
+                    break;
+                }
+
+                args.Add(new PipelineSyntax([new ExpressionPipelineStageSyntax(expression, expression.Span)]));
             }
 
             if (Current.Kind == SyntaxTokenKind.CloseParen)
@@ -10550,6 +10567,22 @@ public static class ToshParser
 
             for (var index = _position; index < _tokens.Count; index++)
             {
+                // A type argument list is stepped over rather than scanned into, exactly as the
+                // sibling scanners do. Without this, the comma in `(new P<int, int>(3, 4))` read
+                // as a top-level separator and the parenthesised expression was parsed as a
+                // tuple — so the member access that followed reported `Member 'A' was not found
+                // on type 'ToshTuple'`. One type argument parsed, because there was no comma to
+                // misread; two did not.
+                if (depth == 0)
+                {
+                    var skipped = SkipAdjacentGenericTypeArguments(index);
+                    if (skipped > index)
+                    {
+                        index = skipped - 1;
+                        continue;
+                    }
+                }
+
                 var token = _tokens[index];
 
                 switch (token.Kind)
