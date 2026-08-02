@@ -135,6 +135,10 @@ public sealed class SyncAsyncTwinInventoryTests
         "ToshEngine.ApplyPendingParameterDefaults",
         "ToshEngine.SelectBestCallableMatches",
         "ToshEngine.TryConvertParameterValue",
+        //   GetIndexedValue -> TryGetIndexedValueBeforeRecords +
+        //                      GetIndexedValueAfterRecords, with each surface
+        //                      supplying only its own record step between them.
+        "ShellIndexingUtilities.GetIndexedValue",
 
         // ── Thin wrappers over one shared implementation ──────────────────────
         // Reclassified 2026-07-30 after measuring rather than counting. Each of
@@ -187,29 +191,11 @@ public sealed class SyncAsyncTwinInventoryTests
         "ReflectionObjectAccessor.ResolveSegment",
         "ShellIterationUtilities.ExpandIterationItems",
 
-        // ── Genuinely parallel internals: the convergeable remainder ──────────
-        // Private or internal, reached from both surfaces, and duplicated by
-        // choice rather than by contract. These are what the item can actually
-        // close, and each one that converges gets struck off this block.
-        //
-        // Three came off on 2026-07-30 by *deletion* rather than refactoring:
-        // ThrowDetailedSingleConstructorMismatch, ConvertConstructorParameterValue
-        // and InvokeConstructorOnInstance (115 lines) had **no callers at all**.
-        // The public construction surface converges at CreateInstanceCoreAsync —
-        // CreateInstance is a wrapper that blocks on it — so the synchronous
-        // constructor path underneath had become unreachable without anyone
-        // noticing. That is the most dangerous shape this item is about: a
-        // maintainer fixing a constructor bug could edit the dead copy, see the
-        // suite stay green, and conclude the fix worked.
-        //
-        // Reachability, not size, is the first question for the remainder.
-        "ShellIndexingUtilities.GetIndexedValue",
-        // Found only after the discovery rule learned the `FooSync`/`FooAsync` spelling.
-        // ExecuteClassBlock's sync form blocks on its async form, so it is a bridge rather than
-        // a parallel implementation; EvaluateClassPipelineValue's two forms were byte-identical
-        // apart from that call and now share BuildClassPipelineBlock and
-        // ProjectClassPipelineValues.
-    ];
+        // ── Genuinely parallel internals: none remain ─────────────────────────
+        // Twenty-nine at the start of this programme, zero now: some converged onto
+        // a shared decision, some deleted as unreachable, some reclassified after
+        // reading them. The block is kept so that adding one lands here visibly.
+];
 
     private const BindingFlags Declared =
         BindingFlags.Public | BindingFlags.NonPublic |

@@ -688,4 +688,119 @@ public sealed class SyncAsyncParityTests
         Assert.Contains("Unable to resolve", sync, StringComparison.Ordinal);
         Assert.Equal(sync, async);
     }
+
+    // ── Indexing, the last of the parallel internals ───────────────────────────
+
+    /// <summary>Indexes a target through both surfaces and returns what each produced.</summary>
+    private static async Task<(string Sync, string Async)> IndexBothWaysAsync(
+        object? target,
+        object? index,
+        IndexLookupKind lookupKind = IndexLookupKind.Default)
+    {
+        string sync;
+        try
+        {
+            sync = $"{ShellIndexingUtilities.GetIndexedValue(target, index, lookupKind) ?? "null"}";
+        }
+        catch (Exception exception)
+        {
+            sync = exception.Message;
+        }
+
+        string async;
+        try
+        {
+            var value = await ShellIndexingUtilities.GetIndexedValueAsync(
+                target, index, lookupKind, CancellationToken.None);
+            async = $"{value ?? "null"}";
+        }
+        catch (Exception exception)
+        {
+            async = exception.Message;
+        }
+
+        return (sync, async);
+    }
+
+    [Theory]
+    // Every shape the shared pre-record half handles.
+    [InlineData(new object[] { 10, 20, 30 }, 1, "20")]
+    [InlineData(new object[] { 10, 20, 30 }, 0, "10")]
+    public async Task An_integer_index_agrees_on_both_surfaces(object[] items, int index, string expected)
+    {
+        var (sync, async) = await IndexBothWaysAsync(items, index);
+
+        Assert.Equal(expected, sync);
+        Assert.Equal(sync, async);
+    }
+
+    [Theory]
+    [InlineData("abc", 1, "b")]
+    // Out of range, so the message itself has to match — it is the shared half that produces it.
+    [InlineData("abc", 9, "Index 9 is out of range for string length 3.")]
+    [InlineData("abc", -1, "Indexes must be zero or greater.")]
+    public async Task A_string_index_agrees_on_both_surfaces(string text, int index, string expected)
+    {
+        var (sync, async) = await IndexBothWaysAsync(text, index);
+
+        Assert.Equal(expected, sync);
+        Assert.Equal(sync, async);
+    }
+
+    [Fact]
+    public async Task A_numeric_string_key_still_reaches_the_dictionary()
+    {
+        // The case that made this convergence delicate, and that an earlier attempt broke.
+        // TryGetIntegerIndex accepts "3", so a numeric string enters the integer branch — which
+        // sits ahead of record and dictionary lookup. That branch must *fall through* when the
+        // target is none of the integer-indexable shapes, or a dictionary key spelled "3" stops
+        // resolving. The first extraction ended it with a throw and turned this into an error;
+        // caught by probing the shell, not by the suite, which is why it is pinned here now.
+        var dictionary = new Dictionary<object, object?> { ["0"] = "zero", ["3"] = "THREE" };
+        var (sync, async) = await IndexBothWaysAsync(dictionary, "3");
+
+        Assert.Equal("THREE", sync);
+        Assert.Equal(sync, async);
+    }
+
+    [Fact]
+    public async Task A_numeric_string_index_still_means_the_element()
+    {
+        // The reason the split is before/after rather than an async prefix. TryGetIntegerIndex
+        // accepts "3", so a numeric string reaches the integer branch — which sits *ahead* of
+        // record access. Hoisting the record lookup to the front, the obvious convergence, would
+        // silently change this to mean "the field named 3".
+        var (sync, async) = await IndexBothWaysAsync(new object[] { "a", "b", "c", "d" }, "3");
+
+        Assert.Equal("d", sync);
+        Assert.Equal(sync, async);
+    }
+
+    [Fact]
+    public async Task A_dictionary_key_agrees_on_both_surfaces()
+    {
+        var dictionary = new Dictionary<string, object?> { ["alpha"] = 1, ["beta"] = 2 };
+        var (sync, async) = await IndexBothWaysAsync(dictionary, "beta");
+
+        Assert.Equal("2", sync);
+        Assert.Equal(sync, async);
+    }
+
+    [Fact]
+    public async Task A_missing_key_fails_the_same_way_on_both_surfaces()
+    {
+        var dictionary = new Dictionary<string, object?> { ["alpha"] = 1 };
+        var (sync, async) = await IndexBothWaysAsync(dictionary, "nope");
+
+        Assert.Equal(sync, async);
+    }
+
+    [Fact]
+    public async Task Indexing_null_fails_the_same_way_on_both_surfaces()
+    {
+        var (sync, async) = await IndexBothWaysAsync(null, 0);
+
+        Assert.Equal("Cannot index into null.", sync);
+        Assert.Equal(sync, async);
+    }
 }
