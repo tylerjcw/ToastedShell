@@ -518,7 +518,7 @@ public static class OperatorEvaluator
         // iterates a generic Dictionary as DictionaryEntry, which is a pre-existing crash
         // filed as TS-P1-29 rather than fixed here. Dict equality keeps whatever the
         // ordinary paths already did.
-        if (!IsStringKeyedRecord(actual) || !IsStringKeyedRecord(expected))
+        if (!IsStructurallyComparableMapping(actual) || !IsStructurallyComparableMapping(expected))
         {
             return false;
         }
@@ -568,9 +568,20 @@ public static class OperatorEvaluator
     /// a declared class decides its own identity, which is the whole point of letting it
     /// define <c>Equals</c>.
     /// </remarks>
-    private static bool IsStringKeyedRecord(object? value) =>
+    private static bool IsStructurallyComparableMapping(object? value) =>
         value is IDictionary<string, object?>
-              or IReadOnlyDictionary<string, object?>;
+              or IReadOnlyDictionary<string, object?>
+              // Object-keyed dictionaries too, which is what a `{% … %}` literal produces.
+              // They were excluded when TS-P1-10 landed because TryGetFields threw on them —
+              // the crash that became TS-P1-29 — leaving `{| a = 1, b = 2 |}` order-independent
+              // while the dictionary spelling of the same mapping was order-*sensitive*. Two
+              // spellings of one unordered mapping disagreeing about whether order counts
+              // (TS-P1-39).
+              //
+              // A ToshClassInstance is deliberately still excluded: it implements
+              // IShellRecordObject but not IDictionary, so the left-biased dispatch that lets a
+              // declared class define its own Equals is untouched (TS-P1-26).
+              or IDictionary;
 
     private static bool Contains(object? actual, object? expected)
     {

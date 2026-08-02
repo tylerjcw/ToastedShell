@@ -167,4 +167,50 @@ public sealed class P1SemanticsTests
 
         Assert.Equal(folded, evaluated);
     }
+
+    // ── TS-P1-39: a dictionary compares like a record ──────────────────────────
+
+    [Theory]
+    // A dictionary is an unordered mapping, so two spellings of the same content are equal.
+    // `{| … |}` already worked; `{% … %}` did not, because TS-P1-10 gated its comparison behind
+    // string-keyed dictionaries to avoid the TryGetFields crash that later became TS-P1-29.
+    // With that crash fixed, the reason for the narrowing was gone.
+    [InlineData("{% \"a\" => 1, \"b\" => 2 %} == {% \"b\" => 2, \"a\" => 1 %}", true)]
+    [InlineData("{% \"a\" => 1 %} == {% \"a\" => 1 %}", true)]
+    // Same keys, different value.
+    [InlineData("{% \"a\" => 1 %} == {% \"a\" => 2 %}", false)]
+    // Different key counts.
+    [InlineData("{% \"a\" => 1 %} == {% \"a\" => 1, \"b\" => 2 %}", false)]
+    // Non-string keys, which is what the literal actually produces.
+    [InlineData("{% 1 => \"x\", 2 => \"y\" %} == {% 2 => \"y\", 1 => \"x\" %}", true)]
+    public async Task Dictionary_equality_ignores_order(string expression, bool expected)
+    {
+        Assert.Equal(expected, await EvaluateAsync(expression));
+    }
+
+    [Fact]
+    public async Task A_record_and_a_dictionary_agree_on_the_same_content()
+    {
+        // The asymmetry this closes, stated directly: the two spellings of one mapping must not
+        // disagree about whether order counts.
+        Assert.Equal(
+            await EvaluateAsync("{| a = 1, b = 2 |} == {| b = 2, a = 1 |}"),
+            await EvaluateAsync("{% \"a\" => 1, \"b\" => 2 %} == {% \"b\" => 2, \"a\" => 1 %}"));
+    }
+
+    [Fact]
+    public async Task A_declared_class_still_decides_its_own_equality()
+    {
+        // The shield TS-P1-26 put up. Widening the mapping test to IDictionary must not reach
+        // ToshClassInstance, which implements IShellRecordObject but not IDictionary — a class
+        // that defines Equals keeps deciding its own identity.
+        Assert.Equal(false, await EvaluateAsync(
+            """
+            class Point(x: int) {
+                prop X: int = x
+                func Equals(o) { return false }
+            }
+            (new Point(1)) == (new Point(1))
+            """));
+    }
 }
