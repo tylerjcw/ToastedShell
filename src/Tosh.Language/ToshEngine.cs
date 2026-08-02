@@ -3360,6 +3360,21 @@ public sealed partial class ToshEngine : IShellEvaluator
             CaptureVisibleScopes());
     }
 
+    /// <summary>
+    /// Whether executing <paramref name="statement"/> can produce a <c>yield</c>, and so must be
+    /// streamed rather than collected. Answered per syntax node and cached, because the block
+    /// executor asks on every statement of every iteration while the answer is fixed at parse
+    /// time; the table holds weak references, so a discarded parse tree still collects.
+    /// </summary>
+    private static bool StatementYields(StatementSyntax statement)
+    {
+        return YieldingStatements
+            .GetValue(statement, static node => new System.Runtime.CompilerServices.StrongBox<bool>(ContainsYieldInStatement(node)))
+            .Value;
+    }
+
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<StatementSyntax, System.Runtime.CompilerServices.StrongBox<bool>> YieldingStatements = new();
+
     private static bool ContainsYieldStatement(BlockSyntax block)
     {
         foreach (var statement in block.Statements)
@@ -3384,6 +3399,11 @@ public sealed partial class ToshEngine : IShellEvaluator
                 (ifStmt.ElseBlock is not null && ContainsYieldStatement(ifStmt.ElseBlock)),
             ForStatementSyntax forStmt => ContainsYieldStatement(forStmt.Body),
             WhileStatementSyntax whileStmt => ContainsYieldStatement(whileStmt.Body),
+            // `until` is `while` with the condition negated, and it was the one loop missing
+            // here. The omission cost twice over: a function whose only yield sat in an `until`
+            // was not recognised as a generator, and the loop was collected rather than
+            // streamed, so an endless one never returned.
+            UntilStatementSyntax untilStmt => ContainsYieldStatement(untilStmt.Body),
             TryStatementSyntax tryStmt =>
                 ContainsYieldStatement(tryStmt.TryBlock) ||
                 (tryStmt.CatchClause is not null && ContainsYieldStatement(tryStmt.CatchClause.Body)) ||
@@ -4733,6 +4753,7 @@ public sealed partial class ToshEngine : IShellEvaluator
                 List<object?>? iterationValues = null;
                 var shouldBreak = false;
                 var shouldContinue = false;
+                ReturnSignalException? pendingReturn = null;
 
                 try
                 {
@@ -4759,6 +4780,14 @@ public sealed partial class ToshEngine : IShellEvaluator
                 {
                     shouldBreak = true;
                 }
+                catch (ReturnSignalException signal)
+                {
+                    // `return` ends the loop the way `break` does, so whatever this iteration
+                    // already yielded is delivered before the signal travels on. Letting it
+                    // propagate straight from here discards the buffer, which is why a
+                    // generator written `yield $i` then `return` used to lose its last value.
+                    pendingReturn = signal;
+                }
 
                 if (iterationValues is not null)
                 {
@@ -4766,6 +4795,11 @@ public sealed partial class ToshEngine : IShellEvaluator
                     {
                         yield return value;
                     }
+                }
+
+                if (pendingReturn is not null)
+                {
+                    throw pendingReturn;
                 }
 
                 if (shouldBreak)
@@ -4794,6 +4828,7 @@ public sealed partial class ToshEngine : IShellEvaluator
             List<object?>? iterationValues = null;
             var shouldBreak = false;
             var shouldContinue = false;
+            ReturnSignalException? pendingReturn = null;
 
             try
             {
@@ -4811,6 +4846,14 @@ public sealed partial class ToshEngine : IShellEvaluator
             {
                 shouldBreak = true;
             }
+            catch (ReturnSignalException signal)
+            {
+                // `return` ends the loop the way `break` does, so whatever this iteration
+                // already yielded is delivered before the signal travels on. Letting it
+                // propagate straight from here discards the buffer, which is why a
+                // generator written `yield $i` then `return` used to lose its last value.
+                pendingReturn = signal;
+            }
 
             if (iterationValues is not null)
             {
@@ -4818,6 +4861,11 @@ public sealed partial class ToshEngine : IShellEvaluator
                 {
                     yield return value;
                 }
+            }
+
+            if (pendingReturn is not null)
+            {
+                throw pendingReturn;
             }
 
             if (shouldBreak)
@@ -4845,6 +4893,7 @@ public sealed partial class ToshEngine : IShellEvaluator
             List<object?>? iterationValues = null;
             var shouldBreak = false;
             var shouldContinue = false;
+            ReturnSignalException? pendingReturn = null;
 
             try
             {
@@ -4862,6 +4911,14 @@ public sealed partial class ToshEngine : IShellEvaluator
             {
                 shouldBreak = true;
             }
+            catch (ReturnSignalException signal)
+            {
+                // `return` ends the loop the way `break` does, so whatever this iteration
+                // already yielded is delivered before the signal travels on. Letting it
+                // propagate straight from here discards the buffer, which is why a
+                // generator written `yield $i` then `return` used to lose its last value.
+                pendingReturn = signal;
+            }
 
             if (iterationValues is not null)
             {
@@ -4869,6 +4926,11 @@ public sealed partial class ToshEngine : IShellEvaluator
                 {
                     yield return value;
                 }
+            }
+
+            if (pendingReturn is not null)
+            {
+                throw pendingReturn;
             }
 
             if (shouldBreak)
@@ -13891,6 +13953,27 @@ public sealed partial class ToshEngine : IShellEvaluator
                     pendingFirstCommandArguments),
                 _ => EvaluateStatementAsync(sourceName, sourceText, statement, cancellationToken),
             };
+
+            // A statement that yields is generator output, so stream it instead of draining it
+            // to a list. Draining is what made an infinite generator hang: `while (true) { yield
+            // 7 }` is a single statement, and materializing every value it will ever produce
+            // never finishes. A bare `yield` already streams through its own branch above; this
+            // extends the same rule to a yield nested in a loop, `if`, `try`, or `switch`.
+            //
+            // Neither step below is skipped in spirit. Suppression cannot apply — it fires only
+            // for a single-stage pipeline statement, which never contains a yield — and the last
+            // result is already maintained by the body's own block execution, so leaving it alone
+            // here matches what a bare `yield` does.
+            if (StatementYields(statement))
+            {
+                await foreach (var value in statementResults.WithCancellation(cancellationToken))
+                {
+                    yield return value;
+                }
+
+                pendingInput = null;
+                continue;
+            }
 
             IReadOnlyList<object?> values = await AsyncEnumerableExtensions.ToListAsync(statementResults, cancellationToken);
 

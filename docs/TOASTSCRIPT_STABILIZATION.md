@@ -406,7 +406,7 @@ closed.
 | `TS-P1-16` | Complete — fixed 2026-07-30 | Float division-by-zero gave two different answers. Filed as depending on the zero operand's type — `10.0 / 0` threw while `10.0 / 0.0` returned `Infinity` — but the real split is **folded versus evaluated**: literal operands are constant-folded with C# semantics and yield `Infinity`, while the same doubles held in variables reach `OperatorEvaluator`, whose floating lambda threw. Two implementations of one operation, which is `TS-P1-24`'s shape on the arithmetic axis. | One documented rule per numeric family (integral, float, decimal) for division and modulo by zero; the zero operand's declared type does not change the outcome; interpreted and compiled modes agree. |
 | `TS-P1-17` | Withdrawn — 2026-07-26 | Filed as "the empty brace literal `{}` evaluates to an internal type-definition object instead of an empty record". Re-examination showed the then-current `{}` was a correct empty record; the observation was `type-of` rendering, fixed as `TS-P1-23`, plus the positional ambiguity later resolved by `TS-P2-25`. Under the accepted paired-delimiter grammar, `{}` is a block and `{||}` is an empty record. | n/a — not a defect as filed. |
 | `TS-P1-18` | Complete — fixed 2026-07-30 | A class declaring both a primary constructor and an explicit constructor of the same signature registered duplicate overloads, so **every** instantiation failed with `Multiple constructor overloads matched class 'C' with 1 argument(s): C(y: int); C(x: int)` — a class reported as ambiguous with itself, at the point of use, naming neither declaration as the thing to fix. | `ToshClassDefinition.ValidateConstructorSignatures` rejects it **where it is declared** (`tosh.runtime.duplicate_constructor`), called before `DeclareType` on the plain path and **after** `MergePartial` on the partial path, since a later part can contribute the collision and neither part is wrong alone. The rule compares **type annotations positionally, not arity**, and that distinction is the whole design: probing first established that same-arity constructors are legal and working — `G(n: int)` beside `G(s: string)`, and a primary `H(x: int)` beside an explicit `H(s: string)`, both resolve correctly — so the blanket arity rule the item's wording implied would have broken working code. Rejecting only *identical* signatures also means no working program can break: a class this refuses could never have been constructed at that signature. Deliberately **not** rejected: a typed parameter beside an untyped one (`K(n: int)` and `K(o)`). That is ambiguous for an `int` argument but usable for everything else, and the resolver names both constructors the author actually wrote — which is an ordinary overload ambiguity, not a class ambiguous with itself. Assumed the opposite while designing the rule; measuring it changed the design, and the case is pinned in the tests. Explicit constructors were **undocumented in the specification** — not in the class-features list at all — which is plausibly why this survived; the spec now documents the member form, the type-based overload rule, and this diagnostic. Compiled construction is not aligned here, per the July 30 decision that the interpreter is authoritative while semantics move. |
-| `TS-P1-19` | Planned | An infinite generator invoked in command position (`gen \| first 3`) silently produces no output and exits cleanly, while the call form (`gen() \| first 3`) hangs; both diverge from the accepted stream-producer decision (companion to `TS-P1-08`). | Command-position and call-position generator invocations produce identical streams; infinite generators stream promptly and terminate under `first`/`any`; the silent-empty shape is covered by a regression test. |
+| `TS-P1-19` | Complete — fixed 2026-08-02 | An infinite generator invoked in command position (`gen \| first 3`) silently produces no output and exits cleanly, while the call form (`gen() \| first 3`) hangs; both diverge from the accepted stream-producer decision (companion to `TS-P1-08`). | Command-position and call-position generator invocations produce identical streams; infinite generators stream promptly and terminate under `first`/`any`; the silent-empty shape is covered by a regression test. |
 | `TS-P1-20` | Complete — 2026-07-26 | A compiled multi-stage pipeline in value context never applied the interpreter's single-value subexpression rule: `var n = ([1, 2, 3] \| count)` produced a one-element `List<object>` rather than `3`, and a pipeline yielding several values returned a list silently where the interpreter raises `tosh.runtime.subexpression_requires_single_value`. Single-stage value pipelines already collapsed through `InvokeValue`, so the two shapes disagreed inside the host itself. Found while validating `TS-P1-05`. | Value-context pipelines collapse identically in both modes (none → `null`, one → the item, several → the shared diagnostic); iteration sources still receive every item; literal, variable, and command seeds behave alike; conformance rows and differential regressions cover each shape. |
 | `TS-P1-21` | Complete — 2026-07-26 | A parameter default on a class method or constructor cannot reference `$this`: `func m(a, b = $this.V)` fails with `tosh.runtime.unknown_variable` because defaults are evaluated during callable binding, before the `this`/`super` bindings are seeded. `TS-P1-05` made this an explicit failure rather than the previous silent null. Needs a recorded decision, not just a fix: an instance method default may clearly see `$this`, but a **constructor** default would observe a partially-constructed instance whose properties have not been initialized yet (base-to-leaf construction binds arguments first), so allowing it exposes uninitialized state while rejecting it makes methods and constructors inconsistent. | A decision-log entry states whether `$this` is in scope for method defaults, constructor defaults, or both; the callable default binder seeds the agreed bindings; the rejected case keeps a targeted diagnostic naming `$this` rather than the generic unknown-variable help; interpreted and compiled modes agree; the specification's default-value semantics section records the rule. |
 | `TS-P1-22` | Complete — 2026-07-26 | `a < b < c` parses left-associatively, so `1 < 2 < 3` compares `true < 3` and silently answers `false`. The accepted decision is real chaining. | `a < b < c` evaluates as `(a < b) and (b < c)` with each operand evaluated once and short-circuit preserved, in interpreted and compiled modes; the parser, binder traversal, type checker, and emitter all handle the new shape; precedence and formatting round-trip. |
@@ -4347,3 +4347,67 @@ that the bare name `Widget` does not resolve, in a process where `Tosh.LspFixtur
 `Widget` that another test loads at runtime. Running the two classes together did not reproduce it,
 so the mechanism is consistent rather than proven, but the lesson holds either way: an assertion
 that a name is *unresolvable* is load-order dependent unless that name is unique in the process.
+
+## `TS-P1-19` — an endless generator now streams (August 2)
+
+Fixed, along with two further defects found while confirming it.
+
+**The report was half right, and the half that was wrong mattered.** The item recorded two
+different symptoms: command position (`gen | first 3`) "silently produces no output and exits
+cleanly", call position (`gen() | first 3`) hangs. Measured today, both forms hang identically —
+the parser repair in `TS-P1-08` had already removed the difference between them. The "silent
+empty" was never a behaviour: it was a process killed by a timeout before its output buffer
+flushed. Two probes established this, one measuring exit status alongside the output rather than
+the output alone, and one comparing an in-process side-effect count against what reached the
+terminal. Reading output without reading exit status is how an infinite loop disguises itself as
+an empty stream.
+
+**The cause was not in the generator machinery.** Both loop evaluators and the generator
+invocation path were already lazy — each yields per iteration and suspends when nobody pulls.
+The drain was one line up, in `ExecuteBlockAsync`:
+
+```csharp
+IReadOnlyList<object?> values = await AsyncEnumerableExtensions.ToListAsync(statementResults, …);
+```
+
+Every statement was materialised before a single value left the block. A bare `yield` escaped
+this through its own earlier branch, which is exactly why `yield 1; yield 2` streamed while the
+same yields wrapped in a loop did not — a loop is *one statement*, and listing every value it
+will ever produce does not finish. The asymmetry was measurable before the cause was found:
+`first 1` against a 50-iteration generator ran all 50, against a 10-iteration `for` ran all 10,
+and against five bare yields ran one.
+
+Statements that can yield are now streamed instead. Neither step being skipped is lost: result
+suppression only ever fires for a single-stage pipeline statement, which cannot contain a yield,
+and the last result is maintained by the body's own block execution — matching what a bare
+`yield` already did. The predicate is cached per syntax node in a weak table, because the answer
+is fixed at parse time while the question is asked on every iteration.
+
+**Two defects behind the first.**
+
+1. **`return` discarded the values its own iteration had yielded.** The loop evaluators buffer an
+   iteration (C# forbids `yield` inside a try-with-catch) and flush it after, but the signal
+   escaped past the buffer. `break` was always correct — it is stashed in a flag and the buffer
+   flushed first — so `return` now takes the same route. Before the streaming fix this lost
+   *every* value, not just the last: `for i in [1,2,3,4] { yield $i; if ($i == 2) { return } }`
+   produced nothing at all, then produced `1`, and now produces `1 2`.
+2. **`until` was missing from the yield-detecting walk.** `if`, `for`, `while`, `try` and `switch`
+   were all handled; `until` was not. It cost twice, because the same predicate classifies a
+   function as a generator: a function whose only `yield` sat in an `until` loop was not a
+   generator at all, *and* its loop was collected rather than streamed. The finite case masked it
+   perfectly — collecting a bounded loop terminates and returns the right values — so only the
+   endless form exposed it, which is the shape nobody writes until the endless form works.
+
+**Verification.** 20 tests in `InfiniteGeneratorTests`, every one under a cancellation deadline,
+since the failure signature is non-termination and a regression must fail rather than hang the
+suite behind it. The negative control against the unfixed engine failed 13 of 20; the 7 that
+passed are precisely those written as controls — bare-yield laziness, `break`, finite drain
+across all three loop forms, a non-yielding loop, and `return` from an ordinary function. Full
+capped suite: 3,942 passing, 1 skipped, with the one failure being `TS-P2-48`'s LSP fixture
+flake, which passed 3 of 3 in isolation.
+
+**Noticed, not fixed.** `defer { yield 9 }` drops the deferred value rather than adding it to the
+stream. It terminates cleanly and is a separate question — whether a deferred block should
+contribute to a generator's output at all — so it was left alone rather than decided in passing.
+Separately, `>> file` does not create the file when it does not already exist; found while
+building a probe, unrelated to this item.
