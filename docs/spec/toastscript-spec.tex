@@ -1736,22 +1736,57 @@ undeclared name is an error.
 \section{Constants}
 \ikw{const}
 
-The \code{const} keyword declares a compile-time constant. Constants must be
-initialised with a literal or constant expression, cannot be reassigned, and
-are always typed by their initialiser.
+The \code{const} keyword declares an \emph{immutable binding}. The initialiser
+may be any expression, is evaluated once where the declaration appears, and the
+name is typed by the result. A constant cannot be reassigned, and cannot be
+redeclared in the scope that already binds it.
 
 \begin{lstlisting}
 const MaxRetries = 3
 const AppName = "TōSh"
-const Pi = 3.14159265358979
+const StartedAt = (date)      # any expression, evaluated once
 
 echo $MaxRetries     # 3
-# $MaxRetries = 5   # error: cannot assign to a constant
+# $MaxRetries = 5   # error: tosh.runtime.const_reassignment
+# var MaxRetries = 5 # error: tosh.runtime.const_redeclaration
 \end{lstlisting}
 
 Constants are visible in the same scope and all nested scopes, exactly like
-\code{var}, but the name resolves to the literal value at use sites rather
-than through a variable lookup.
+\code{var}, and are resolved by variable lookup in the same way.
+
+\begin{notebox}
+\code{const} is deliberately \emph{not} a compile-time constant. Earlier
+drafts of this specification described it as one, requiring a literal or
+constant expression and folding the value at use sites; the implementation
+never did either, and the binding form proved the more useful of the two ---
+\code{const StartedAt = (date)} says exactly what it means. A compile-time
+constant remains a possible future addition under its own keyword, in which
+case the constant-expression rules would be literals, operators over them, and
+references to other such constants.
+\end{notebox}
+
+Immutability applies to the \emph{binding}, not to the value it holds. A
+constant bound to a record or a list still permits its contents to be changed;
+what cannot change is which value the name refers to.
+
+\begin{lstlisting}
+const Config = {| retries = 3 |}
+$Config.retries = 5           # allowed --- the record is mutable
+# $Config = {| retries = 5 |} # error --- the binding is not
+\end{lstlisting}
+
+Shadowing in a \emph{nested} scope is not redeclaration and stays legal: an
+inner block or a function body may bind its own name without disturbing the
+constant outside it.
+
+\begin{lstlisting}
+const X = 5
+if (true) {
+    const X = 6               # a different binding, inner scope
+    echo $X                   # 6
+}
+echo $X                       # 5
+\end{lstlisting}
 
 \section{Destructuring}
 \label{sec:destructuring}

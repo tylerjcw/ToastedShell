@@ -1719,7 +1719,13 @@ public sealed partial class ToshEngine : IShellEvaluator
             binding = binding with { IsConst = true };
         }
 
-        DeclareVariable(declaration.Name, binding, declaration.Modifier);
+        DeclareVariable(
+            declaration.Name,
+            binding,
+            declaration.Modifier,
+            sourceName,
+            sourceText,
+            declaration.Span);
         yield break;
     }
 
@@ -10179,9 +10185,16 @@ public sealed partial class ToshEngine : IShellEvaluator
         return new ScopeFrames(disposables);
     }
 
-    private void DeclareVariable(string name, VariableBinding binding, DeclarationModifier modifier)
+    private void DeclareVariable(
+        string name,
+        VariableBinding binding,
+        DeclarationModifier modifier,
+        string? sourceName = null,
+        string? sourceText = null,
+        TextSpan? span = null)
     {
         EnsureReservedBindingName(name);
+        EnsureConstantIsNotRedeclared(name, modifier, sourceName, sourceText, span);
 
         if (modifier == DeclarationModifier.Default &&
             _scopes.Count > 0 &&
@@ -10232,6 +10245,96 @@ public sealed partial class ToshEngine : IShellEvaluator
 
         Runtime.Variables[name] = binding;
         Runtime.SyncExportedEnvironmentVariable(name, binding.Value);
+    }
+
+    /// <summary>
+    /// Refuses a declaration that would replace a <c>const</c> already bound in the very table
+    /// this declaration is about to be written to.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Reassignment was already refused, but redeclaration was not, so a constant could be
+    /// replaced simply by declaring it again — and `var X = 6` over `const X = 5` laundered it
+    /// into a mutable binding that then accepted assignment. A constant that any later line can
+    /// quietly redefine is not one.
+    /// </para>
+    /// <para>
+    /// The question is asked of the *target* table rather than of the scope chain, because
+    /// shadowing in a nested scope is legitimate and stays legal: an inner block or a function
+    /// body may bind its own <c>X</c> without touching the outer constant.
+    /// </para>
+    /// </remarks>
+    private void EnsureConstantIsNotRedeclared(
+        string name,
+        DeclarationModifier modifier,
+        string? sourceName,
+        string? sourceText,
+        TextSpan? span)
+    {
+        if (ResolveDeclarationTarget(modifier) is not { } target ||
+            !target.TryGetValue(name, out var existing) ||
+            !ToVariableBinding(existing).IsConst)
+        {
+            return;
+        }
+
+        // Carries the same weight as the reassignment refusal it sits beside, so the two read as
+        // one rule rather than as a real diagnostic and an internal error.
+        if (sourceName is not null && sourceText is not null && span is { } declarationSpan)
+        {
+            throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                Code: "tosh.runtime.const_redeclaration",
+                Title: $"Cannot redeclare constant '{name}'.",
+                SourceName: sourceName,
+                SourceText: sourceText,
+                Span: declarationSpan,
+                Label: $"'{name}' was already declared with 'const' in this scope",
+                Help: $"use a different name, or declare the original with 'var' if '{name}' needs to change."));
+        }
+
+        throw new InvalidOperationException(
+            $"Cannot redeclare constant '{name}'. It was declared with 'const' in this scope; " +
+            "use a different name, or declare the original with 'var' if it needs to change.");
+    }
+
+    /// <summary>
+    /// The variable table a declaration carrying <paramref name="modifier"/> is written into.
+    /// </summary>
+    /// <remarks>
+    /// Shares its branching with <see cref="DeclareVariable"/> deliberately: a guard that decided
+    /// the destination by its own copy of these rules would answer for a different table than the
+    /// write, and the two would drift apart the first time a modifier was added (<c>TS-P1-24</c>).
+    /// </remarks>
+    private IDictionary<string, object?>? ResolveDeclarationTarget(DeclarationModifier modifier)
+    {
+        if (modifier == DeclarationModifier.Default &&
+            _scopes.Count > 0 &&
+            _scopes.Peek() is { IsModuleScope: true, ExportDeclarationsByDefault: true } moduleScope)
+        {
+            return moduleScope.Variables;
+        }
+
+        if (modifier == DeclarationModifier.Export && TryGetNearestModuleScope(out var exportScope))
+        {
+            return exportScope.Variables;
+        }
+
+        if (modifier == DeclarationModifier.Shy)
+        {
+            return _scopes.Count > 0 ? _scopes.Peek().Variables : null;
+        }
+
+        if (modifier is DeclarationModifier.Global or DeclarationModifier.Export)
+        {
+            if (modifier == DeclarationModifier.Global && TryGetNearestModuleScope(out var globalModuleScope))
+            {
+                return globalModuleScope.Variables;
+            }
+
+            return Runtime.Variables;
+        }
+
+        return _scopes.Count > 0 ? _scopes.Peek().Variables : Runtime.Variables;
     }
 
     private bool TryAssignVariable(string name, VariableBinding binding)

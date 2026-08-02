@@ -49,6 +49,11 @@ public sealed class SpecConformanceTests
     [InlineData("42 is Comparable", "True")]
     [InlineData("\"hello\" is Numeric", "False")]
     [InlineData("42 is-not Numeric", "False")]
+    // Constants — the section was rewritten for TS-P1-12, so its examples are pinned here to
+    // keep the prose and the implementation from drifting apart again.
+    [InlineData("const MaxRetries = 3\n$MaxRetries", "3")]
+    [InlineData("const X = 5\nif (true) { const X = 6 }\n$X", "5")]
+    [InlineData("const Config = {| retries = 3 |}\n$Config.retries = 5\n$Config.retries", "5")]
     // CLR interop.
     [InlineData("String.Join(\", \", [\"a\", \"b\"])", "a, b")]
     [InlineData("Math.Sqrt(16)", "4")]

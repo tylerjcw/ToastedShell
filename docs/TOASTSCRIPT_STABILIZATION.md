@@ -399,7 +399,7 @@ closed.
 | `TS-P1-09` | Complete — fixed 2026-08-02 | Class hierarchy lookup loses generic bindings, inherited overloads, `vital` validation, and private visibility rules. | Recursive hierarchy test matrix covers generic intermediaries, overload sets, required members, private/protected access, and partial statics. |
 | `TS-P1-10` | Complete — fixed 2026-07-30 | Anonymous-record equality depends on dictionary insertion order. | Records with the same names and canonically equal values compare equal regardless of insertion order. |
 | `TS-P1-11` | Complete — fixed 2026-07-30 | `_` in destructuring is bound and overwritten instead of discarding the matched value. | Every `_` target skips without creating or modifying a binding; nested/rest patterns are covered. |
-| `TS-P1-12` | Planned | `const` currently accepts arbitrary runtime pipelines and behaves as a readonly binding rather than a constant. | Constant-expression rules are specified and enforced; `let` covers runtime immutability before compatibility behavior is removed. |
+| `TS-P1-12` | Complete — resolved 2026-08-02 | `const` currently accepts arbitrary runtime pipelines and behaves as a readonly binding rather than a constant. | Constant-expression rules are specified and enforced; `let` covers runtime immutability before compatibility behavior is removed. |
 | `TS-P1-13` | Planned | Compiled ordinary member/index assignments evaluate target components before the RHS, while the interpreter preserves RHS-first order; only `??=` intentionally uses target-first order. | Side-effecting target, index, and RHS probes produce the same ordering in interpreted and compiled modes for every assignment operator. |
 | `TS-P1-14` | Complete — 2026-07-26; audited 2026-07-29, see `TS-P1-26` | Cross-type equality and ordering are incoherent: `==` coerces numerically (`1 == "1"` is true) and falls back to case-insensitive `ToString` comparison for mixed types while string-to-string stays case-sensitive; ordered comparison converts right-to-left only, so `"abc" < 5` silently string-compares to `false` while `5 > "abc"` throws; booleans participate in ordering, so `1 < 2 < 3` silently evaluates to `false`. | One documented equality/ordering conversion matrix implemented once and used by every surface (extends the `TS-P1-01`/`TS-P1-03` corpus); conversion is symmetric or produces a structured diagnostic; no silent lexicographic fallback for mixed numeric comparisons; the chained-comparison shape is either supported or diagnosed; interpreted and compiled modes agree. |
 | `TS-P1-15` | Complete — 2026-07-26 | Enum values are not orderable or number-comparable: `E.A < E.C` throws (`ToshEnumValue` cannot be compared) and `E.B == 1` is false, despite the specification's numeric-backed enum examples. | Enum values compare and order canonically against members of the same enum and against their underlying numeric values; diagnostics for genuinely incompatible enum comparisons name the shell-level enum type; the specification's `Permissions : int` examples pass as conformance cases. |
@@ -4530,3 +4530,51 @@ four source files while keeping the tests: exactly the two defect cases failed a
 controls passed — including the base-method-reads-its-own-private case and override dispatch,
 which are there to fail against the shortcuts rather than against the defect. Full capped suite
 fully green: 3,977 passing, 1 skipped, no failures.
+
+## `TS-P1-12` — `const` is an immutable binding, and the specification now says so (August 2)
+
+Filed as "`const` accepts arbitrary runtime pipelines and behaves as a readonly binding rather
+than a constant", with a plan to enforce constant-expression rules and give runtime immutability
+to `let`. Two findings changed the shape of the work before any of it was written.
+
+**`let` is not available.** It is already the comprehension binding keyword —
+`[$y for x in $xs let y = ($x * 2) where ($y > 4)]` — specified and implemented. The item's plan
+assumed a free keyword, and there was not one. Discovered by reading what the parser does with
+`let` after `let X = 5` failed with `tosh.runtime.annotation_unknown_type`, which is not a
+diagnostic anyone would connect to comprehensions.
+
+**Decision: correct the specification rather than the implementation.** The specification claimed
+`const` "declares a compile-time constant", that initialisers "must be a literal or constant
+expression", and that "the name resolves to the literal value at use sites rather than through a
+variable lookup". The implementation did none of the three, and the binding form is the more
+useful of the two — `const StartedAt = (date)` says exactly what it means, and enforcing the
+older wording would have broken it with no replacement spelling to offer. A compile-time constant
+stays possible later under its own keyword; if it arrives, the constant-expression rule is
+literals, operators over them, and references to other such constants.
+
+**The real defect was narrower, and probing found it.** Reassignment was refused; *redeclaration*
+was not. `const X = 5` followed by `const X = 6` replaced the constant, and followed by
+`var X = 6` it laundered the constant into a mutable binding that then accepted `$X = 7`. A
+guarantee that any later line can step around by writing one more line is not a guarantee. Six
+other routes were probed and all held: compound assignment, assignment from inside a function,
+assignment from inside a block, and shadowing in nested and function scopes, which is legitimate
+and had to stay legal.
+
+The guard asks its question of the *table the declaration is about to be written to*, not of the
+scope chain, which is what keeps nested shadowing working. That target is resolved by a helper
+shared with `DeclareVariable` rather than by a second copy of the same five-way branch — the
+`TS-P1-24` failure shape, where a guard and the write it guards answer for different destinations
+and drift the first time a modifier is added.
+
+**Immutability is of the binding, not the value.** `$Config.retries = 5` on a constant record is
+allowed; `$Config = {| … |}` is not. Documented and pinned by tests rather than changed: freezing
+values is a different and much larger feature, since every collection and record would need an
+immutable form.
+
+**Verification.** 20 tests in `ConstantBindingTests`; the negative control failed exactly the
+three redeclaration cases and passed the other 17. The rewritten specification section's examples
+were added to the `SpecConformanceTests` corpus, so the prose is executed rather than trusted —
+the corpus is curated rather than harvested, so a new section does not enter it on its own. The
+new `tosh.runtime.const_redeclaration` code carries a source span and code frame like the
+reassignment refusal beside it, and the generated diagnostic reference was regenerated. Full
+capped suite fully green: 4,000 passing, 1 skipped.
