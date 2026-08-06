@@ -4628,6 +4628,45 @@ public static class ToshParser
                 return new ClassMethodMemberSyntax(method, isStatic, isShy, isAbstract, isOverride, isGuarded, isFading, isLocal, isRaw, TextSpan.FromBounds(memberStart, method.Span.End));
             }
 
+            // A type declared inside the class body. Parsed by the same statement parsers the
+            // top level uses, so nested and outer declarations cannot diverge in what they
+            // accept; only where the result is registered differs.
+            if (Current.Kind == SyntaxTokenKind.Bareword &&
+                NestedTypeKeywords.Contains(Current.Text))
+            {
+                var declaration = ParseStatement();
+                var nestedName = declaration switch
+                {
+                    ClassDefinitionStatementSyntax c => c.Name,
+                    InterfaceDefinitionStatementSyntax i => i.Name,
+                    UnionDefinitionStatementSyntax u => u.Name,
+                    RecordDefinitionStatementSyntax r => r.Name,
+                    StructDefinitionStatementSyntax st => st.Name,
+                    TraitDefinitionStatementSyntax t => t.Name,
+                    EnumDefinitionStatementSyntax e => e.Name,
+                    _ => null,
+                };
+
+                if (nestedName is null)
+                {
+                    _diagnostics.Add(new SyntaxDiagnostic(
+                        Code: "tosh.parser.expected_nested_type",
+                        Title: $"Expected a type declaration inside class '{className}'.",
+                        Span: declaration.Span,
+                        Label: "write an enum, class, struct, record, union, interface, or trait"));
+
+                    return new ClassPropertyMemberSyntax(
+                        string.Empty, null, null, null, null, isShy,
+                        false, false, false, false, false, false, false, false, declaration.Span);
+                }
+
+                return new ClassNestedTypeMemberSyntax(
+                    declaration,
+                    nestedName,
+                    isShy,
+                    TextSpan.FromBounds(memberStart, declaration.Span.End));
+            }
+
             if (Current.Kind == SyntaxTokenKind.Bareword &&
                 string.Equals(Current.Text, "event", StringComparison.Ordinal))
             {
@@ -10516,6 +10555,18 @@ public static class ToshParser
         /// LessThan / GreaterThan / GreaterThanGreaterThan / Dot
         /// tokens are accepted inside the angle bracket span.
         /// </summary>
+        /// <summary>
+        /// Keywords that begin a type declaration and may therefore appear as a class member.
+        /// </summary>
+        /// <remarks>
+        /// <c>enum</c> is the one reached for first; the rest are included because a class that
+        /// can nest one kind of type and not another is a rule nobody can remember.
+        /// </remarks>
+        private static readonly HashSet<string> NestedTypeKeywords = new(StringComparer.Ordinal)
+        {
+            "enum", "class", "struct", "record", "union", "interface", "trait",
+        };
+
         private int SkipAdjacentGenericTypeArguments(int startIndex)
         {
             if (startIndex < 0 || startIndex + 1 >= _tokens.Count) return startIndex;

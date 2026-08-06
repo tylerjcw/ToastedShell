@@ -2737,6 +2737,18 @@ The last value emitted by a \code{when} block is tested using the canonical
 truthiness rules in Table~\ref{tab:truthiness}.  A block that emits no values
 therefore has a falsy guard.
 
+\code{priority} is an ordering rank, and \emph{lower numbers run first}:
+a handler declared \code{priority 1} runs before one declared
+\code{priority 10}.  Handlers that declare no priority run after every handler
+that declares one, in registration order.
+
+\begin{warnbox}
+The number is a position in a queue, not an importance.  \code{priority 10}
+runs \emph{later} than \code{priority 1}, which is the opposite of how the
+word reads in most systems --- give the handler that must run first the
+smallest number.
+\end{warnbox}
+
 \section{Doc-Comments}
 
 Functions, classes, properties, and methods accept documentation comments
@@ -3939,6 +3951,47 @@ echo $custom.Category    # Electronics
 Records feature value equality, optional fields with \code{?}, and default
 values.
 
+\section{Nested Types}
+
+A class body may declare a type as well as members.  \code{enum},
+\code{class}, \code{struct}, \code{record}, \code{union}, \code{interface}
+and \code{trait} are all accepted, and are written exactly as they would be at
+the top level:
+
+\begin{lstlisting}
+class Reactor {
+    enum Fuel : int {
+        Mox     = 3
+        Uranium = 8
+    }
+
+    prop Loaded: Fuel = Fuel.Mox
+}
+
+echo (cast int Reactor.Fuel.Uranium)    # 8
+\end{lstlisting}
+
+A nested type is a static member of the class that declares it, so it is
+reached through that class --- \code{Reactor.Fuel} --- and its own members
+follow by ordinary access: \code{Reactor.Fuel.Uranium}.  The name does not
+appear in the scope surrounding the class, which is the point of nesting;
+\code{Fuel} alone resolves only inside \code{Reactor}.
+
+A qualified name is also a type name, so a nested class can be constructed and
+annotated with it, at any depth:
+
+\begin{lstlisting}
+class Outer {
+    class Inner { prop V = 7 }
+}
+
+var i: Outer.Inner = new Outer.Inner()
+echo $i.V                               # 7
+\end{lstlisting}
+
+\code{shy} applies as it does to any other member: a shy nested type is
+visible inside its declaring class and refused from outside.
+
 \section{Enum Definitions}
 \ikw{enum}
 
@@ -4005,7 +4058,9 @@ func on-build(e) handles BuildCompleted {
 
 Handler modifiers (\code{priority}, \code{when}, \code{once}) control
 dispatch order, conditional execution, and single-fire semantics---see
-Section~\ref{ch:functions} for the full syntax.
+Section~\ref{ch:functions} for the full syntax.  Dispatch order runs from the
+lowest \code{priority} number to the highest, with unprioritised handlers
+last.
 
 Fields not supplied in the \code{raise} payload keep their declared default
 values.  Event fields are read-only inside the handler body.

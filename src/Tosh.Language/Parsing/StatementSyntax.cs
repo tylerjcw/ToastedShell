@@ -200,6 +200,21 @@ public sealed record ClassConstructorMemberSyntax(
     BlockSyntax Body,
     TextSpan Span) : ClassMemberSyntax(IsShy: false, IsStatic: false, Span);
 
+/// <summary>
+/// A type declared inside a class body — <c>enum</c>, <c>class</c>, <c>struct</c>, <c>record</c>,
+/// <c>union</c>, <c>interface</c> or <c>trait</c>.
+/// </summary>
+/// <remarks>
+/// The declaration is carried verbatim as the statement it would be at the top level, so a nested
+/// type is parsed by exactly the code that parses an outer one and cannot drift from it. What
+/// nesting changes is where the type is registered, not how it is written.
+/// </remarks>
+public sealed record ClassNestedTypeMemberSyntax(
+    StatementSyntax Declaration,
+    string Name,
+    bool IsShy,
+    TextSpan Span) : ClassMemberSyntax(IsShy, IsStatic: true, Span);
+
 /// <summary>An event member declared inside a class: <c>event OnName: PayloadType</c>.</summary>
 public sealed record ClassEventMemberSyntax(
     string Name,

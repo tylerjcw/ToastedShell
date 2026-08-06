@@ -3877,6 +3877,10 @@ public sealed partial class ToshEngine : IShellEvaluator
 
         DeclareType(@class.Name, definition, @class.Modifier, sourceName, sourceText, @class.Span);
 
+        // Nested types are evaluated after the class is in scope, so one may refer to the class
+        // that declares it.
+        await EvaluateNestedTypeMembersAsync(sourceName, sourceText, @class, definition, cancellationToken);
+
         definition.IsSealed = @class.IsSealed;
         definition.IsAbstract = @class.IsAbstract;
         definition.IsHermit = @class.IsHermit;
@@ -10554,6 +10558,64 @@ public sealed partial class ToshEngine : IShellEvaluator
     /// registering the type, or `size-of SysInfo` and `new SysInfo()` would
     /// disagree about whether the name exists.
     /// </param>
+    /// <summary>
+    /// Evaluates the types declared inside a class body and registers each on the class rather
+    /// than in the surrounding scope.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The declaration is run inside a scope of its own and the resulting type lifted out of it.
+    /// That is what keeps the nested name off the enclosing scope: evaluating it in place would
+    /// call <see cref="DeclareType"/> against whatever scope the class was declared in, and
+    /// <c>Fuel</c> would become visible beside <c>Reactor</c> as though it had been written at
+    /// the top level.
+    /// </para>
+    /// <para>
+    /// Running the declarations through the ordinary statement evaluator, rather than a nested
+    /// variant of it, is deliberate: a nested enum is the same enum, and every rule that governs
+    /// an outer declaration governs this one for free.
+    /// </para>
+    /// </remarks>
+    private async Task EvaluateNestedTypeMembersAsync(
+        string sourceName,
+        string sourceText,
+        ClassDefinitionStatementSyntax @class,
+        ToshClassDefinition definition,
+        CancellationToken cancellationToken)
+    {
+        foreach (var member in @class.Members.OfType<ClassNestedTypeMemberSyntax>())
+        {
+            IShellNamedType? nestedType = null;
+
+            using (PushScope(new Dictionary<string, object?>(StringComparer.Ordinal)))
+            {
+                await AsyncEnumerableExtensions.ToListAsync(
+                    EvaluateStatementAsync(sourceName, sourceText, member.Declaration, cancellationToken),
+                    cancellationToken);
+
+                if (_scopes.Count > 0 &&
+                    _scopes.Peek().Classes.TryGetValue(member.Name, out var declared) &&
+                    declared is IShellNamedType named)
+                {
+                    nestedType = named;
+                }
+            }
+
+            if (nestedType is null)
+            {
+                throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                    Code: "tosh.runtime.nested_type_not_declared",
+                    Title: $"Nested type '{member.Name}' in class '{@class.Name}' did not produce a type.",
+                    SourceName: sourceName,
+                    SourceText: sourceText,
+                    Span: member.Span,
+                    Label: $"'{member.Name}' declared no type"));
+            }
+
+            definition.SetNestedType(member.Name, nestedType, member.IsShy);
+        }
+    }
+
     private void DeclareType(
         string name,
         IShellNamedType definition,
@@ -10943,8 +11005,49 @@ public sealed partial class ToshEngine : IShellEvaluator
             return true;
         }
 
+        // A type nested in a class, named through the class that declares it. Without this a
+        // nested class could be reached as a value (`Outer.Inner`) but not named as a type, so
+        // `new Outer.Inner()` and an `Outer.Inner` annotation both failed while the enum case
+        // appeared to work — enums are read through member access and never need naming.
+        if (TryResolveNestedTypeName(name, out var nestedType))
+        {
+            definition = nestedType;
+            return true;
+        }
+
         definition = null!;
         return false;
+    }
+
+    /// <summary>
+    /// Resolves a dotted name whose leading segments name classes and whose last segment names a
+    /// type nested in the one before it, such as <c>Outer.Inner</c> or <c>A.B.C</c>.
+    /// </summary>
+    private bool TryResolveNestedTypeName(string name, out IShellNamedType definition)
+    {
+        definition = null!;
+
+        var separator = name.LastIndexOf('.');
+        if (separator <= 0 || separator == name.Length - 1)
+        {
+            return false;
+        }
+
+        // Recurses through TryGetNamedType so a chain of any depth resolves by the same rule
+        // rather than by a second walk written for the nested case alone.
+        if (!TryGetNamedType(name[..separator], out var owner) ||
+            owner is not ToshClassDefinition owningClass)
+        {
+            return false;
+        }
+
+        if (!owningClass.TryGetNestedType(name[(separator + 1)..], out var nested))
+        {
+            return false;
+        }
+
+        definition = nested;
+        return true;
     }
 
     /// <summary>

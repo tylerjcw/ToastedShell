@@ -658,6 +658,36 @@ public sealed class ToshClassDefinition : IShellNamedType
         return new InvocationResult(FlattenCallResult(values), ReturnedVoid: false);
     }
 
+    /// <summary>
+    /// Types declared inside this class body, keyed by their own name.
+    /// </summary>
+    /// <remarks>
+    /// A nested type is reached as a static member of the class that declares it, so
+    /// <c>Reactor.Fuel</c> resolves through the ordinary static lookup and
+    /// <c>Reactor.Fuel.Mox</c> follows by member access on the type it returns. Nothing about
+    /// the nested type itself differs from an outer one; only where its name lives.
+    /// </remarks>
+    private readonly Dictionary<string, (IShellNamedType Type, bool IsShy)> _nestedTypes =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    internal void SetNestedType(string name, IShellNamedType type, bool isShy)
+        => _nestedTypes[name] = (type, isShy);
+
+    internal bool TryGetNestedType(string name, out IShellNamedType type)
+    {
+        for (var current = this; current is not null; current = current.BaseClass)
+        {
+            if (current._nestedTypes.TryGetValue(name, out var entry))
+            {
+                type = entry.Type;
+                return true;
+            }
+        }
+
+        type = null!;
+        return false;
+    }
+
     internal void SetNativeMember(IShellCommand command, bool isShy)
     {
         _nativeMembers[command.Name] = (command, isShy);
@@ -678,6 +708,20 @@ public sealed class ToshClassDefinition : IShellNamedType
     public bool TryGetStaticMember(string memberName, out object? value)
     {
         value = null;
+
+        // A nested type is a static member of its declaring class. `shy` hides it from outside,
+        // matching how a shy static method is treated on this path.
+        if (_nestedTypes.TryGetValue(memberName, out var nested))
+        {
+            if (nested.IsShy)
+            {
+                throw new InvalidOperationException(
+                    $"Type '{memberName}' on class '{Name}' is shy and cannot be reached from outside the class.");
+            }
+
+            value = nested.Type;
+            return true;
+        }
 
         // Check static properties
         if (_propertiesByName.TryGetValue(memberName, out var property) && property.IsStatic)
