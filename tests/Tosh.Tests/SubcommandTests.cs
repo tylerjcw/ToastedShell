@@ -366,15 +366,20 @@ public sealed class SubcommandTests
         runtime.InvocationArguments = ["--help"];
         var engine = new ToshEngine(runtime);
 
-        await engine.ExecuteToListAsync(
+        var values = await engine.ExecuteToListAsync(
             """
             subcommand visible { writeline "v" }
             hidden subcommand secret { writeline "s" }
             """);
 
-        var text = output.ToString();
-        Assert.Contains("visible", text);
-        Assert.DoesNotContain("secret", text);
+        // Auto-help is now a HelpTopic rather than text written to the runtime's output, so that
+        // it renders through the same panel renderer as `help <name>`. The listing it carries is
+        // what this asserts on.
+        var topic = Assert.IsType<HelpTopic>(Assert.Single(values, value => value is HelpTopic));
+        var names = (topic.Subcommands ?? []).Select(entry => entry.Name).ToArray();
+
+        Assert.Contains("visible", names);
+        Assert.DoesNotContain("secret", names);
     }
 
     [Fact]

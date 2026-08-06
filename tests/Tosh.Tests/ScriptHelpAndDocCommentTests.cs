@@ -71,10 +71,18 @@ public sealed class ScriptHelpAndDocCommentTests
             // the host renders those through a display sink. Both are the script speaking, so
             // both count here; reading only the writer made every case that actually ran look
             // silent.
+            // Subcommand help is a HelpTopic value rather than written text — the same object
+            // `help <name>` produces, rendered by the same panel renderer. Rendering it here is
+            // what lets these assertions read the output a user actually sees.
             return string.Join(
                 "\n",
                 new[] { writer.ToString() }
-                    .Concat(values.Select(value => value?.ToString() ?? string.Empty)));
+                    .Concat(values.Select(value => value switch
+                    {
+                        HelpTopic topic => HelpTopicSummaryRenderer.Render(topic),
+                        null => string.Empty,
+                        _ => value.ToString() ?? string.Empty,
+                    })));
         }
         finally
         {

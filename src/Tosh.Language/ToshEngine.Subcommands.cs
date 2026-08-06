@@ -131,7 +131,7 @@ public sealed partial class ToshEngine
         // If --help was triggered, emit help for the requested level and stop.
         if (helpLevel is not null)
         {
-            WriteAutoHelp(helpLevel, path);
+            yield return BuildAutoHelpTopic(helpLevel, path);
             yield break;
         }
 
@@ -150,7 +150,7 @@ public sealed partial class ToshEngine
             {
                 throw CreateRequiredChildException(sourceName, sourceText, leaf);
             }
-            WriteAutoHelp(leaf, path);
+            yield return BuildAutoHelpTopic(leaf, path);
         }
     }
 
@@ -206,7 +206,7 @@ public sealed partial class ToshEngine
                 {
                     throw CreateRequiredChildException(sourceName, sourceText, node);
                 }
-                WriteAutoHelp(node, path);
+                yield return BuildAutoHelpTopic(node, path);
             }
             yield break;
         }
@@ -627,6 +627,96 @@ public sealed partial class ToshEngine
             Span: null,
             Label: label,
             Help: BuildSubcommandUsageHelp([], node)));
+    }
+
+    /// <summary>
+    /// Describes a subcommand level as a <see cref="HelpTopic"/>, so that `script.tosh sub
+    /// --help` is rendered by the same panel renderer as `help &lt;name&gt;` — colour, boxes and
+    /// column layout included.
+    /// </summary>
+    /// <remarks>
+    /// This replaces a hand-written plain-text writer. Two renderers for the same kind of content
+    /// is how they drift: the text one had gained an Arguments section only just now, and had
+    /// never had the styling the panel renderer applies to names, types and usage lines.
+    /// </remarks>
+    private HelpTopic BuildAutoHelpTopic(SubcommandNode target, IReadOnlyList<DispatchFrame> path)
+    {
+        var usageLine = BuildSubcommandUsageLine(path, target);
+
+        // The root node carries no name — the script file is its name — so the title falls back
+        // to the same display name the usage line uses rather than to a placeholder.
+        var scriptPath = GetCurrentScriptPath();
+        var scriptDisplayName = string.IsNullOrWhiteSpace(scriptPath)
+            ? "<script>"
+            : Path.GetFileName(scriptPath) ?? scriptPath;
+
+        var displayName = target.Name is not null
+            ? string.Join(' ', path.Where(p => p.Node.Name is not null).Select(p => p.Node.Name).Append(target.Name).Distinct())
+            : scriptDisplayName;
+
+        var subcommands = target.Children
+            .Where(child => (child.Value.Modifiers & SubcommandModifier.Hidden) == 0)
+            .Select(child => new HelpArgumentInfo(child.Key, child.Value.Description ?? string.Empty))
+            .ToList();
+
+        var arguments = target.Arguments
+            .Select(argument => new HelpArgumentInfo(
+                Name: argument.IsRest ? argument.Name + "..." : argument.Name,
+                Description: argument.Description ?? string.Empty,
+                Required: !argument.IsOptional && argument.DefaultValue is null,
+                TypeName: argument.TypeName))
+            .ToList();
+
+        // Every flag reachable at this level: those declared here, and those declared by the
+        // levels dispatched through to reach it.
+        var options = new List<HelpOptionInfo>();
+        foreach (var frame in path)
+        {
+            foreach (var flag in frame.Node.Flags)
+            {
+                options.Add(ToHelpOption(flag));
+            }
+        }
+
+        if (!path.Any(frame => ReferenceEquals(frame.Node, target)))
+        {
+            foreach (var flag in target.Flags)
+            {
+                options.Add(ToHelpOption(flag));
+            }
+        }
+
+        if (!PathHasUserHelpFlag(path) && !target.UserDeclaredHelpFlag)
+        {
+            options.Add(new HelpOptionInfo("--help", "Show this help message", null));
+        }
+
+        return new HelpTopic(
+            Name: string.IsNullOrWhiteSpace(displayName) ? scriptDisplayName : displayName,
+            Kind: HelpSubjectKind.External,
+            Category: "Script",
+            Description: target.Description ?? string.Empty,
+            Usage: usageLine.StartsWith("Usage: ", StringComparison.Ordinal)
+                ? usageLine["Usage: ".Length..]
+                : usageLine,
+            Aliases: Array.Empty<string>(),
+            Related: Array.Empty<string>(),
+            Examples: target.Examples ?? Array.Empty<string>(),
+            Path: null,
+            Notes: null,
+            Arguments: arguments.Count > 0 ? arguments : null,
+            Options: options.Count > 0 ? options : null,
+            Subcommands: subcommands.Count > 0 ? subcommands : null);
+    }
+
+    private static HelpOptionInfo ToHelpOption(FunctionParameterSyntax flag)
+    {
+        var syntax = "--" + GetPrimaryScriptOptionName(flag.Name);
+        var badge = RenderTypeBadge(flag.TypeName);
+        return new HelpOptionInfo(
+            badge is null ? syntax : $"{syntax} {badge}",
+            flag.Description ?? string.Empty,
+            null);
     }
 
     private void WriteAutoHelp(SubcommandNode target, IReadOnlyList<DispatchFrame> path)

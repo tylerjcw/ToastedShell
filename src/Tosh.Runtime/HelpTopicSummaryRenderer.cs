@@ -53,6 +53,7 @@ internal static class HelpTopicSummaryRenderer
             navHintPlain.Length + 4,
             (topic.Description?.Length ?? 0) + 4,
             ComputeUsageDesiredOuter(topic.Usage),
+            ComputeSubcommandsDesiredOuter(topic.Subcommands),
             ComputeArgumentsDesiredOuter(topic.Arguments),
             ComputeOptionsDesiredOuter(topic.Options),
             ComputePipelineDesiredOuter(topic.PipelineInput, topic.Output),
@@ -145,6 +146,15 @@ internal static class HelpTopicSummaryRenderer
             RenderUsageSubBox(sb, topic.Usage, innerWidth, outerContentWidth);
         }
 
+        // ── Subcommands sub-box ──────────────────────────────────────────────
+        // Ahead of Arguments, matching the order a usage line reads: pick the subcommand, then
+        // supply its arguments.
+        if (topic.Subcommands is { Count: > 0 } subcommands)
+        {
+            if (!firstSubBox) EmitSubBoxSpacer(); else { sb.AppendLine(BuildOuterRow(string.Empty, outerContentWidth)); firstSubBox = false; }
+            RenderSubcommandsSubBox(sb, subcommands, innerWidth, outerContentWidth);
+        }
+
         // ── Arguments sub-box ────────────────────────────────────────────────
         if (topic.Arguments is { Count: > 0 } args)
         {
@@ -218,6 +228,48 @@ internal static class HelpTopicSummaryRenderer
         {
             var styled = StyleUsageLine(line);
             sb.AppendLine(WrapInOuter($"│ {styled}{Pad(headerContentWidth - line.Length)} │", innerWidth, outerContentWidth));
+        }
+
+        sb.AppendLine(WrapInOuter($"╰{new string('─', innerWidth - 2)}╯", innerWidth, outerContentWidth));
+    }
+
+    /// <summary>
+    /// A name-and-description table of child commands. Two columns rather than the four an
+    /// argument needs: a subcommand has no type, and "required" does not apply to a choice.
+    /// </summary>
+    private static void RenderSubcommandsSubBox(
+        StringBuilder sb,
+        IReadOnlyList<HelpArgumentInfo> subcommands,
+        int innerWidth,
+        int outerContentWidth)
+    {
+        var contentWidth = innerWidth - 4; // for "│ ... │"
+        var nameCol = Math.Max(4, subcommands.Max(entry => entry.Name.Length));
+        nameCol = Math.Min(nameCol, Math.Max(4, contentWidth / 3));
+        var descCol = Math.Max(8, contentWidth - nameCol - 2);
+
+        sb.AppendLine(WrapInOuter($"╭{new string('─', innerWidth - 2)}╮", innerWidth, outerContentWidth));
+        sb.AppendLine(WrapInOuter(BuildSubBoxHeader("Subcommands", innerWidth), innerWidth, outerContentWidth));
+        sb.AppendLine(WrapInOuter($"├{new string('─', innerWidth - 2)}┤", innerWidth, outerContentWidth));
+
+        foreach (var entry in subcommands)
+        {
+            var nameStyled = Style(FlagStyle, PadRightPlain(ClipWithEllipsis(entry.Name, nameCol), nameCol));
+            var descLines = WrapText(entry.Description ?? string.Empty, descCol).ToList();
+
+            for (var i = 0; i < Math.Max(1, descLines.Count); i++)
+            {
+                // The name is written once and the following lines indent under the description,
+                // the same way an argument's wrapped description is laid out.
+                var namePart = i == 0 ? nameStyled : Style(FlagStyle, PadRightPlain(string.Empty, nameCol));
+                var descLine = i < descLines.Count ? descLines[i] : string.Empty;
+                var plainWidth = nameCol + 2 + descLine.Length;
+
+                sb.AppendLine(WrapInOuter(
+                    $"│ {namePart}  {descLine}{Pad(contentWidth - plainWidth)} │",
+                    innerWidth,
+                    outerContentWidth));
+            }
         }
 
         sb.AppendLine(WrapInOuter($"╰{new string('─', innerWidth - 2)}╯", innerWidth, outerContentWidth));
@@ -854,6 +906,14 @@ internal static class HelpTopicSummaryRenderer
         // We wrap usage anyway, but try to keep first words on one line.
         var firstSegment = usage!.Split(' ').FirstOrDefault() ?? string.Empty;
         return Math.Min(80, firstSegment.Length + 16) + InnerMargin + OuterWall + 4;
+    }
+
+    private static int ComputeSubcommandsDesiredOuter(IReadOnlyList<HelpArgumentInfo>? subcommands)
+    {
+        if (subcommands is not { Count: > 0 }) return 0;
+        var nameCol = Math.Max(4, subcommands.Max(entry => entry.Name.Length));
+        var descCol = subcommands.Max(entry => (entry.Description ?? string.Empty).Length);
+        return nameCol + descCol + 2 + 4 + 4;
     }
 
     private static int ComputeArgumentsDesiredOuter(IReadOnlyList<HelpArgumentInfo>? args)

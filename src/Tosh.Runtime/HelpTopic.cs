@@ -16,4 +16,10 @@ public sealed record HelpTopic(
     HelpPipelineInputInfo? PipelineInput = null,
     string? Output = null,
     IReadOnlyList<HelpExample>? ExampleItems = null,
-    string? Streaming = null);
+    string? Streaming = null,
+    /// <summary>
+    /// Child commands, when this topic describes something that dispatches to them — a script
+    /// built from <c>subcommand</c> blocks. Name and description only; the other
+    /// <see cref="HelpArgumentInfo"/> fields do not apply.
+    /// </summary>
+    IReadOnlyList<HelpArgumentInfo>? Subcommands = null);
