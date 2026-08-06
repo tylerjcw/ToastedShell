@@ -19,6 +19,10 @@ public sealed partial class ToshEngine : IShellEvaluator
 {
     private readonly record struct EvaluatedCommandArgument(ArgumentSyntax Syntax, object? Value);
     private readonly record struct ScriptArgumentValue(object? Value, int Index);
+    private readonly record struct CapturedEnumeratorMove(
+        bool HasValue,
+        object? Value,
+        System.Runtime.ExceptionServices.ExceptionDispatchInfo? Failure);
 
     private readonly Stack<LexicalScope> _scopes = new();
     private readonly Stack<string> _functionCallStack = new();
@@ -1038,6 +1042,7 @@ public sealed partial class ToshEngine : IShellEvaluator
             sourceName,
             sourceText,
             script.Statements.OfType<ScriptInputStatementSyntax>().ToArray(),
+            script.DocComment,
             cancellationToken);
 
         foreach (var statement in script.Statements)
@@ -1106,6 +1111,7 @@ public sealed partial class ToshEngine : IShellEvaluator
         string sourceName,
         string sourceText,
         IReadOnlyList<ScriptInputStatementSyntax> declarations,
+        DocComment? scriptDoc,
         CancellationToken cancellationToken)
     {
         if (declarations.Count == 0)
@@ -1132,11 +1138,22 @@ public sealed partial class ToshEngine : IShellEvaluator
 
         ValidateScriptInputs(sourceName, sourceText, flagParameters, argumentParameters);
 
+        var scriptArguments = GetCurrentScriptArguments();
+
+        // A script that declares its inputs answers `--help` with them. Previously the flag fell
+        // through to the ordinary lookup and was refused as an unknown one — a script documented
+        // its arguments and the documentation had nowhere to appear.
+        if (ScriptHelpWasRequested(scriptArguments, flagParameters))
+        {
+            await WriteScriptUsageAsync(sourceName, scriptDoc, argumentParameters, flagParameters);
+            throw new ScriptHelpRequestedException();
+        }
+
         var (flagValues, argumentValues) = ParseScriptArgumentValues(
             sourceName,
             sourceText,
             flagParameters,
-            GetCurrentScriptArguments());
+            scriptArguments);
 
         await BindScriptFlagsAsync(sourceName, sourceText, flagParameters, flagValues, cancellationToken);
         await BindScriptArgumentsAsync(sourceName, sourceText, argumentParameters, argumentValues, cancellationToken);
@@ -1307,6 +1324,134 @@ public sealed partial class ToshEngine : IShellEvaluator
                     Span: argument.Span,
                     Label: "move this rest argument after the other script arguments"));
             }
+        }
+    }
+
+    /// <summary>
+    /// Whether the script was invoked with <c>--help</c> (or <c>-h</c>) and should describe itself
+    /// instead of running.
+    /// </summary>
+    /// <remarks>
+    /// A script that declares its own <c>help</c> or <c>h</c> flag keeps it: the built-in answer
+    /// is a default for scripts that have not said otherwise, never an override of one that has.
+    /// Arguments after a bare <c>--</c> are the script's data and are not scanned, for the same
+    /// reason the ordinary flag parser stops there.
+    /// </remarks>
+    private static bool ScriptHelpWasRequested(
+        IReadOnlyList<object?> arguments,
+        IReadOnlyList<FunctionParameterSyntax> flagParameters)
+    {
+        foreach (var flag in flagParameters)
+        {
+            if (string.Equals(flag.Name, "help", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(flag.Name, "h", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+        }
+
+        foreach (var argument in arguments)
+        {
+            if (argument is not string text)
+            {
+                continue;
+            }
+
+            if (text == "--")
+            {
+                return false;
+            }
+
+            if (text is "--help" or "-h")
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Writes the usage a script's own declarations describe: its doc-comment summary, a usage
+    /// line, and every argument and flag with the description written above it.
+    /// </summary>
+    private async Task WriteScriptUsageAsync(
+        string sourceName,
+        DocComment? scriptDoc,
+        IReadOnlyList<FunctionParameterSyntax> argumentParameters,
+        IReadOnlyList<FunctionParameterSyntax> flagParameters)
+    {
+        var name = Path.GetFileName(sourceName);
+        var output = Runtime.Output;
+
+        // The file-level doc-block, which the parser separates from a declaration's own block by
+        // requiring a blank line between them. Taking the first declaration's description instead
+        // printed "Who to greet." as the summary of a script that greets people.
+        if (scriptDoc?.Description is { Length: > 0 } summary && !string.IsNullOrWhiteSpace(summary))
+        {
+            await output.WriteLineAsync(summary.Trim());
+            await output.WriteLineAsync();
+        }
+
+        var usage = new StringBuilder($"Usage: {name}");
+        if (flagParameters.Count > 0)
+        {
+            usage.Append(" [options]");
+        }
+
+        foreach (var argument in argumentParameters)
+        {
+            usage.Append(argument switch
+            {
+                { IsRest: true } => $" [{argument.Name}...]",
+                { IsOptional: true } => $" [{argument.Name}]",
+                _ => $" <{argument.Name}>",
+            });
+        }
+
+        await output.WriteLineAsync(usage.ToString());
+
+        await WriteScriptUsageSectionAsync(output, "Arguments", argumentParameters, isFlag: false);
+        await WriteScriptUsageSectionAsync(output, "Options", flagParameters, isFlag: true);
+    }
+
+    private static async Task WriteScriptUsageSectionAsync(
+        TextWriter output,
+        string heading,
+        IReadOnlyList<FunctionParameterSyntax> parameters,
+        bool isFlag)
+    {
+        if (parameters.Count == 0)
+        {
+            return;
+        }
+
+        await output.WriteLineAsync();
+        await output.WriteLineAsync($"{heading}:");
+
+        var labels = parameters
+            .Select(parameter => isFlag ? $"--{parameter.Name}" : parameter.Name)
+            .ToArray();
+        var width = labels.Max(static label => label.Length);
+
+        for (var index = 0; index < parameters.Count; index++)
+        {
+            var parameter = parameters[index];
+            var line = new StringBuilder("  ").Append(labels[index].PadRight(width));
+
+            if (parameter.TypeName is { Length: > 0 } typeName)
+            {
+                line.Append("  ").Append(typeName);
+            }
+
+            // The description is the doc-comment written above the declaration, which is the
+            // whole point of the exercise: it is why the comment was written.
+            if (parameter.Description is { Length: > 0 } description)
+            {
+                line.Append("  ").Append(description.Trim());
+            }
+
+            await output.WriteLineAsync(line.ToString());
         }
     }
 
@@ -3379,6 +3524,22 @@ public sealed partial class ToshEngine : IShellEvaluator
             .Value;
     }
 
+    private static bool StatementStreamsOutput(StatementSyntax statement)
+    {
+        // These statements forward a nested block's values and can terminate through a jump or
+        // failure after producing some of them. Draining the whole statement to a list first
+        // loses those already-produced values when the jump escapes. Their nested blocks maintain
+        // the last-result state, and result suppression applies only to pipeline statements, so
+        // streaming them changes neither of those contracts.
+        return StatementYields(statement) || statement is
+            IfStatementSyntax or
+            ForStatementSyntax or
+            WhileStatementSyntax or
+            UntilStatementSyntax or
+            TryStatementSyntax or
+            SwitchStatementSyntax;
+    }
+
     private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<StatementSyntax, System.Runtime.CompilerServices.StrongBox<bool>> YieldingStatements = new();
 
     private static bool ContainsYieldStatement(BlockSyntax block)
@@ -4790,6 +4951,33 @@ public sealed partial class ToshEngine : IShellEvaluator
         }
     }
 
+    /// <summary>
+    /// Pulls one item without letting an exception cross an async-iterator catch boundary.
+    /// Callers can therefore yield <see cref="CapturedEnumeratorMove.Value"/> immediately and
+    /// rethrow a captured control-flow signal only after that value has left the iterator.
+    /// </summary>
+    private static async ValueTask<CapturedEnumeratorMove> MoveNextCapturingFailureAsync(
+        IAsyncEnumerator<object?> enumerator)
+    {
+        try
+        {
+            if (!await enumerator.MoveNextAsync())
+                return default;
+
+            return new CapturedEnumeratorMove(
+                HasValue: true,
+                enumerator.Current,
+                Failure: null);
+        }
+        catch (Exception failure)
+        {
+            return new CapturedEnumeratorMove(
+                HasValue: false,
+                Value: null,
+                System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(failure));
+        }
+    }
+
     private async IAsyncEnumerable<object?> EvaluateForStatementAsync(
         string sourceName,
         string sourceText,
@@ -4812,67 +5000,57 @@ public sealed partial class ToshEngine : IShellEvaluator
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                List<object?>? iterationValues = null;
-                var shouldBreak = false;
-                var shouldContinue = false;
-                ReturnSignalException? pendingReturn = null;
-
-                try
+                System.Runtime.ExceptionServices.ExceptionDispatchInfo? pendingControlFlow = null;
+                await using (var bodyEnumerator = ExecuteBlockAsync(
+                                 sourceName,
+                                 sourceText,
+                                 statement.Body,
+                                 cancellationToken,
+                                 new Dictionary<string, object?>(StringComparer.Ordinal)
+                                 {
+                                     [statement.VariableName] = current,
+                                     ["_"] = current,
+                                 })
+                                 .GetAsyncEnumerator(cancellationToken))
                 {
-                    await foreach (var value in ExecuteBlockAsync(
-                                       sourceName,
-                                       sourceText,
-                                       statement.Body,
-                                       cancellationToken,
-                                       new Dictionary<string, object?>(StringComparer.Ordinal)
-                                       {
-                                           [statement.VariableName] = current,
-                                           ["_"] = current,
-                                       })
-                                       .WithCancellation(cancellationToken))
+                    while (true)
                     {
-                        (iterationValues ??= []).Add(value);
-                    }
-                }
-                catch (ContinueSignalException)
-                {
-                    shouldContinue = true;
-                }
-                catch (BreakSignalException)
-                {
-                    shouldBreak = true;
-                }
-                catch (ReturnSignalException signal)
-                {
-                    // `return` ends the loop the way `break` does, so whatever this iteration
-                    // already yielded is delivered before the signal travels on. Letting it
-                    // propagate straight from here discards the buffer, which is why a
-                    // generator written `yield $i` then `return` used to lose its last value.
-                    pendingReturn = signal;
-                }
+                        var move = await MoveNextCapturingFailureAsync(bodyEnumerator);
+                        if (move.Failure is not null)
+                        {
+                            if (move.Failure.SourceException is ShellControlFlowException)
+                            {
+                                pendingControlFlow = move.Failure;
+                                break;
+                            }
 
-                if (iterationValues is not null)
-                {
-                    foreach (var value in iterationValues)
-                    {
-                        yield return value;
+                            move.Failure.Throw();
+                        }
+
+                        if (!move.HasValue)
+                            break;
+
+                        yield return move.Value;
                     }
                 }
 
-                if (pendingReturn is not null)
+                if (pendingControlFlow?.SourceException is ReturnSignalException)
                 {
-                    throw pendingReturn;
+                    pendingControlFlow.Throw();
+                    yield break;
                 }
 
-                if (shouldBreak)
+                if (pendingControlFlow?.SourceException is BreakSignalException)
                 {
                     yield break;
                 }
 
-                if (shouldContinue)
+                if (pendingControlFlow?.SourceException is ContinueSignalException)
                 {
                     continue;
                 }
+
+                pendingControlFlow?.Throw();
             }
         }
     }
@@ -4887,58 +5065,52 @@ public sealed partial class ToshEngine : IShellEvaluator
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            List<object?>? iterationValues = null;
-            var shouldBreak = false;
-            var shouldContinue = false;
-            ReturnSignalException? pendingReturn = null;
-
-            try
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo? pendingControlFlow = null;
+            await using (var bodyEnumerator = ExecuteBlockAsync(
+                             sourceName,
+                             sourceText,
+                             statement.Body,
+                             cancellationToken)
+                             .GetAsyncEnumerator(cancellationToken))
             {
-                await foreach (var value in ExecuteBlockAsync(sourceName, sourceText, statement.Body, cancellationToken)
-                                   .WithCancellation(cancellationToken))
+                while (true)
                 {
-                    (iterationValues ??= []).Add(value);
-                }
-            }
-            catch (ContinueSignalException)
-            {
-                shouldContinue = true;
-            }
-            catch (BreakSignalException)
-            {
-                shouldBreak = true;
-            }
-            catch (ReturnSignalException signal)
-            {
-                // `return` ends the loop the way `break` does, so whatever this iteration
-                // already yielded is delivered before the signal travels on. Letting it
-                // propagate straight from here discards the buffer, which is why a
-                // generator written `yield $i` then `return` used to lose its last value.
-                pendingReturn = signal;
-            }
+                    var move = await MoveNextCapturingFailureAsync(bodyEnumerator);
+                    if (move.Failure is not null)
+                    {
+                        if (move.Failure.SourceException is ShellControlFlowException)
+                        {
+                            pendingControlFlow = move.Failure;
+                            break;
+                        }
 
-            if (iterationValues is not null)
-            {
-                foreach (var value in iterationValues)
-                {
-                    yield return value;
+                        move.Failure.Throw();
+                    }
+
+                    if (!move.HasValue)
+                        break;
+
+                    yield return move.Value;
                 }
             }
 
-            if (pendingReturn is not null)
+            if (pendingControlFlow?.SourceException is ReturnSignalException)
             {
-                throw pendingReturn;
+                pendingControlFlow.Throw();
+                yield break;
             }
 
-            if (shouldBreak)
+            if (pendingControlFlow?.SourceException is BreakSignalException)
             {
                 yield break;
             }
 
-            if (shouldContinue)
+            if (pendingControlFlow?.SourceException is ContinueSignalException)
             {
                 continue;
             }
+
+            pendingControlFlow?.Throw();
         }
     }
 
@@ -4952,58 +5124,52 @@ public sealed partial class ToshEngine : IShellEvaluator
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            List<object?>? iterationValues = null;
-            var shouldBreak = false;
-            var shouldContinue = false;
-            ReturnSignalException? pendingReturn = null;
-
-            try
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo? pendingControlFlow = null;
+            await using (var bodyEnumerator = ExecuteBlockAsync(
+                             sourceName,
+                             sourceText,
+                             statement.Body,
+                             cancellationToken)
+                             .GetAsyncEnumerator(cancellationToken))
             {
-                await foreach (var value in ExecuteBlockAsync(sourceName, sourceText, statement.Body, cancellationToken)
-                                   .WithCancellation(cancellationToken))
+                while (true)
                 {
-                    (iterationValues ??= []).Add(value);
-                }
-            }
-            catch (ContinueSignalException)
-            {
-                shouldContinue = true;
-            }
-            catch (BreakSignalException)
-            {
-                shouldBreak = true;
-            }
-            catch (ReturnSignalException signal)
-            {
-                // `return` ends the loop the way `break` does, so whatever this iteration
-                // already yielded is delivered before the signal travels on. Letting it
-                // propagate straight from here discards the buffer, which is why a
-                // generator written `yield $i` then `return` used to lose its last value.
-                pendingReturn = signal;
-            }
+                    var move = await MoveNextCapturingFailureAsync(bodyEnumerator);
+                    if (move.Failure is not null)
+                    {
+                        if (move.Failure.SourceException is ShellControlFlowException)
+                        {
+                            pendingControlFlow = move.Failure;
+                            break;
+                        }
 
-            if (iterationValues is not null)
-            {
-                foreach (var value in iterationValues)
-                {
-                    yield return value;
+                        move.Failure.Throw();
+                    }
+
+                    if (!move.HasValue)
+                        break;
+
+                    yield return move.Value;
                 }
             }
 
-            if (pendingReturn is not null)
+            if (pendingControlFlow?.SourceException is ReturnSignalException)
             {
-                throw pendingReturn;
+                pendingControlFlow.Throw();
+                yield break;
             }
 
-            if (shouldBreak)
+            if (pendingControlFlow?.SourceException is BreakSignalException)
             {
                 yield break;
             }
 
-            if (shouldContinue)
+            if (pendingControlFlow?.SourceException is ContinueSignalException)
             {
                 continue;
             }
+
+            pendingControlFlow?.Throw();
         }
     }
 
@@ -5013,105 +5179,121 @@ public sealed partial class ToshEngine : IShellEvaluator
         TryStatementSyntax statement,
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        var tryValues = new List<object?>();
-        var catchValues = new List<object?>();
-        var finallyValues = new List<object?>();
-        ShellControlFlowException? pendingControlFlow = null;
-        Exception? pendingFailure = null;
-        var caughtException = false;
-
+        System.Runtime.ExceptionServices.ExceptionDispatchInfo? pendingFailure = null;
+        Exception? caughtException = null;
+        var bodyCompleted = false;
         try
         {
-            await foreach (var value in ExecuteBlockAsync(sourceName, sourceText, statement.TryBlock, cancellationToken)
-                               .WithCancellation(cancellationToken))
+            await using (var tryEnumerator = ExecuteBlockAsync(
+                             sourceName,
+                             sourceText,
+                             statement.TryBlock,
+                             cancellationToken)
+                             .GetAsyncEnumerator(cancellationToken))
             {
-                tryValues.Add(value);
-            }
-        }
-        catch (ReturnSignalException signal)
-        {
-            pendingControlFlow = signal;
-        }
-        catch (BreakSignalException signal)
-        {
-            pendingControlFlow = signal;
-        }
-        catch (ContinueSignalException signal)
-        {
-            pendingControlFlow = signal;
-        }
-        catch (Exception exception) when (statement.CatchClause is not null)
-        {
-            caughtException = true;
-            var catchLocals = new Dictionary<string, object?>(StringComparer.Ordinal);
+                while (true)
+                {
+                    var move = await MoveNextCapturingFailureAsync(tryEnumerator);
+                    if (move.Failure is not null)
+                    {
+                        if (move.Failure.SourceException is ShellControlFlowException ||
+                            statement.CatchClause is null)
+                        {
+                            pendingFailure = move.Failure;
+                        }
+                        else
+                        {
+                            caughtException = move.Failure.SourceException;
+                        }
 
-            if (!string.IsNullOrWhiteSpace(statement.CatchClause.VariableName))
-            {
-                EnsureBindingNameIsNotReserved(sourceName, sourceText, statement.CatchClause.VariableName!, statement.CatchClause.Span, "reserved runtime namespace");
-                catchLocals[statement.CatchClause.VariableName!] = CreateCaughtErrorValue(exception);
+                        break;
+                    }
+
+                    if (!move.HasValue)
+                        break;
+
+                    yield return move.Value;
+                }
             }
 
-            await foreach (var value in ExecuteBlockAsync(
-                               sourceName,
-                               sourceText,
-                               statement.CatchClause.Body,
-                               cancellationToken,
-                               catchLocals)
-                               .WithCancellation(cancellationToken))
+            if (caughtException is not null)
             {
-                catchValues.Add(value);
+                var catchClause = statement.CatchClause!;
+                var catchLocals = new Dictionary<string, object?>(StringComparer.Ordinal);
+
+                if (!string.IsNullOrWhiteSpace(catchClause.VariableName))
+                {
+                    EnsureBindingNameIsNotReserved(
+                        sourceName,
+                        sourceText,
+                        catchClause.VariableName!,
+                        catchClause.Span,
+                        "reserved runtime namespace");
+                    catchLocals[catchClause.VariableName!] = CreateCaughtErrorValue(caughtException);
+                }
+
+                await using var catchEnumerator = ExecuteBlockAsync(
+                        sourceName,
+                        sourceText,
+                        catchClause.Body,
+                        cancellationToken,
+                        catchLocals)
+                    .GetAsyncEnumerator(cancellationToken);
+                while (true)
+                {
+                    var move = await MoveNextCapturingFailureAsync(catchEnumerator);
+                    if (move.Failure is not null)
+                    {
+                        pendingFailure = move.Failure;
+                        break;
+                    }
+
+                    if (!move.HasValue)
+                        break;
+
+                    yield return move.Value;
+                }
             }
-        }
-        catch (Exception exception)
-        {
-            pendingFailure = exception;
+
+            bodyCompleted = true;
         }
         finally
         {
-            if (statement.FinallyBlock is not null)
+            if (!bodyCompleted && statement.FinallyBlock is not null)
             {
-                await foreach (var value in ExecuteBlockAsync(sourceName, sourceText, statement.FinallyBlock, cancellationToken)
+                // A downstream short-circuit disposes this iterator at the active yield. The
+                // source-level finally must still run to completion, although its values have no
+                // remaining consumer and are therefore discarded on this disposal path.
+                await foreach (var _ in ExecuteBlockAsync(
+                                   sourceName,
+                                   sourceText,
+                                   statement.FinallyBlock,
+                                   cancellationToken)
                                    .WithCancellation(cancellationToken))
                 {
-                    finallyValues.Add(value);
                 }
             }
         }
 
-        if (pendingControlFlow is not null)
+        if (statement.FinallyBlock is not null)
         {
-            throw pendingControlFlow;
-        }
-
-        if (pendingFailure is not null)
-        {
-            throw pendingFailure;
-        }
-
-        if (caughtException)
-        {
-            foreach (var value in tryValues)
-            {
-                yield return value;
-            }
-
-            foreach (var value in catchValues)
-            {
-                yield return value;
-            }
-        }
-        else
-        {
-            foreach (var value in tryValues)
+            // Finish cleanup before exposing its values. Besides matching the established
+            // finally ordering, this ensures a downstream short-circuit cannot abandon the
+            // remaining cleanup statements after taking the first finally value.
+            var finallyValues = await AsyncEnumerableExtensions.ToListAsync(
+                ExecuteBlockAsync(
+                    sourceName,
+                    sourceText,
+                    statement.FinallyBlock,
+                    cancellationToken),
+                cancellationToken);
+            foreach (var value in finallyValues)
             {
                 yield return value;
             }
         }
 
-        foreach (var value in finallyValues)
-        {
-            yield return value;
-        }
+        pendingFailure?.Throw();
     }
 
     private async IAsyncEnumerable<object?> EvaluateSwitchStatementAsync(
@@ -14123,7 +14305,7 @@ public sealed partial class ToshEngine : IShellEvaluator
             // for a single-stage pipeline statement, which never contains a yield — and the last
             // result is already maintained by the body's own block execution, so leaving it alone
             // here matches what a bare `yield` does.
-            if (StatementYields(statement))
+            if (StatementStreamsOutput(statement))
             {
                 await foreach (var value in statementResults.WithCancellation(cancellationToken))
                 {

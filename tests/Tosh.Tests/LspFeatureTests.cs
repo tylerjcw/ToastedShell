@@ -572,6 +572,23 @@ public sealed class LspFeatureTests
     }
 
     [Fact]
+    public void Hover_shows_pipeline_stream_schema_and_path_validation()
+    {
+        var (pipeText, pipePos) = ExtractCursor("var x = $env.PATH ¦| split ':'");
+        var hover = _features.GetHover(pipeText, "file:///hover-pipe.tosh", pipePos);
+
+        Assert.NotNull(hover);
+        Assert.Contains("Pipeline Data Stream", hover!.Contents.Value, StringComparison.Ordinal);
+
+        var (lsText, lsPos) = ExtractCursor("ls -la ¦| where Size > 10");
+        var lsHover = _features.GetHover(lsText, "file:///hover-ls-pipe.tosh", lsPos);
+
+        Assert.NotNull(lsHover);
+        Assert.Contains("FileInfo", lsHover!.Contents.Value, StringComparison.Ordinal);
+        Assert.Contains("Name", lsHover.Contents.Value, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Completion_items_include_flags_for_builtin_commands()
     {
         var items = _features.GetCompletionItems("sort -", new LspPosition(0, 6));
@@ -702,10 +719,12 @@ public sealed class LspFeatureTests
         });
 
         Assert.NotNull(process);
-        process!.WaitForExit();
+        var outputTask = process!.StandardOutput.ReadToEndAsync();
+        var errorTask = process.StandardError.ReadToEndAsync();
+        process.WaitForExit();
 
-        var output = process.StandardOutput.ReadToEnd();
-        var error = process.StandardError.ReadToEnd();
+        var output = outputTask.GetAwaiter().GetResult();
+        var error = errorTask.GetAwaiter().GetResult();
 
         Assert.True(process.ExitCode == 0, $"Failed to build LSP fixture project.\nSTDOUT:\n{output}\nSTDERR:\n{error}");
 

@@ -260,9 +260,16 @@ public sealed class DocCommentTests
 
         Assert.Equal("Generates Fibonacci numbers.", topic.Description);
         Assert.Contains("fibonacci 10", topic.Examples);
-        Assert.NotNull(topic.Notes);
-        Assert.Contains("count", topic.Notes, StringComparison.Ordinal);
-        Assert.Contains("Returns:", topic.Notes, StringComparison.Ordinal);
+
+        // Parameters and the return description used to be pre-rendered into `Notes` as one
+        // string with embedded newlines, which this test pinned. That shape is what broke the
+        // help panel — it cannot split such a cell into rows, so the text spilled outside the
+        // box border — and left `help <name> | to json` reporting no arguments at all. They now
+        // populate the structured fields the renderer already knew how to lay out.
+        var argument = Assert.Single(topic.Arguments!);
+        Assert.Equal("count", argument.Name);
+        Assert.Equal("How many numbers.", argument.Description);
+        Assert.Equal("A list of integers.", topic.Output);
     }
 
     // ── LSP features ───────────────────────────────────────────────

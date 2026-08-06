@@ -1343,22 +1343,53 @@ public static class HelpCatalog
                 // External or non-ShellCommand implementations — use direct properties
                 var examples = Array.Empty<string>();
                 string? notes = null;
+                IReadOnlyList<HelpArgumentInfo>? documentedArguments = null;
+                IReadOnlyList<string> seeAlso = Array.Empty<string>();
+                string? returns = null;
 
                 if (command is IDocumentedCommand documented)
                 {
+                    // Blank entries are dropped: a `@example` tag whose examples follow on the
+                    // next lines contributed an empty leading string, which rendered as a bullet
+                    // with nothing beside it.
                     if (documented.DocExamples.Count > 0)
                     {
-                        examples = documented.DocExamples.ToArray();
+                        examples = documented.DocExamples
+                            .Where(static example => !string.IsNullOrWhiteSpace(example))
+                            .ToArray();
                     }
 
-                    var noteParts = new List<string>();
+                    // Parameters go into the structured field the renderer knows how to lay out.
+                    // They were previously pre-rendered into `Notes` as one string with embedded
+                    // newlines, which the panel could not split into rows — so the text spilled
+                    // outside the box border, and `help <name> | to json` reported `Arguments:
+                    // null` for a function whose arguments were documented.
                     if (documented.ParameterDescriptions.Count > 0)
                     {
-                        noteParts.Add(string.Join("\n", documented.ParameterDescriptions.Select(p => $"  {p.Key} — {p.Value}")));
+                        documentedArguments = documented.ParameterDescriptions
+                            .Select(static parameter => new HelpArgumentInfo(parameter.Key, parameter.Value))
+                            .ToList();
                     }
-                    if (documented.ReturnsDescription is { Length: > 0 } ret)
+
+                    returns = documented.ReturnsDescription is { Length: > 0 } ret ? ret : null;
+                    seeAlso = documented.SeeAlso;
+
+                    // Tags that were parsed and then dropped on the way here: a function could
+                    // declare itself deprecated, and `help` would not mention it.
+                    var noteParts = new List<string>();
+                    if (documented.IsDeprecated)
                     {
-                        noteParts.Add($"Returns: {ret}");
+                        noteParts.Add(documented.DeprecatedMessage is { Length: > 0 } message
+                            ? $"Deprecated: {message}"
+                            : "Deprecated.");
+                    }
+                    if (documented.Since is { Length: > 0 } since)
+                    {
+                        noteParts.Add($"Since: {since}");
+                    }
+                    if (documented.Throws.Count > 0)
+                    {
+                        noteParts.Add($"Throws: {string.Join("; ", documented.Throws)}");
                     }
                     if (noteParts.Count > 0)
                     {
@@ -1373,10 +1404,12 @@ public static class HelpCatalog
                     Description: command.Description,
                     Usage: command.Usage,
                     Aliases: aliases ?? Array.Empty<string>(),
-                    Related: Array.Empty<string>(),
+                    Related: seeAlso,
                     Examples: examples,
                     Path: null,
-                    Notes: notes));
+                    Notes: notes,
+                    Arguments: documentedArguments,
+                    Output: returns));
             }
         }
 

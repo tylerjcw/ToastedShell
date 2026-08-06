@@ -121,7 +121,13 @@ public sealed record DocComment(
                 continue;
             }
 
-            if (line.StartsWith("@param=", StringComparison.Ordinal))
+            // Both spellings are accepted. The specification teaches `@param=<name>` in its
+            // doc-comment section and `@param <name>` in its comments section, and only the first
+            // was understood — so the second was swallowed into the description verbatim, leaving
+            // "Adds two numbers. @param a first value" as the summary and no parameter
+            // documentation at all. Silent, and taught by the specification itself.
+            if (line.StartsWith("@param=", StringComparison.Ordinal) ||
+                line.StartsWith("@param ", StringComparison.Ordinal))
             {
                 hasSeenBlockTag = true;
                 var rest = line.AsSpan(7);
@@ -379,11 +385,18 @@ public sealed record DocComment(
                 }
                 // Otherwise, ignore untagged lines after a block tag
             }
-            // If file ends while in an example block, flush it
-            if (inExampleBlock && currentExampleLines is not null)
-            {
-                examples.Add(string.Join("\n", currentExampleLines));
-            }
+        }
+
+        // A trailing example block is flushed here, once the tokens are exhausted.
+        //
+        // This stood *inside* the loop, where it could never fire: the branch that accumulates
+        // example lines ends in `continue`, and every branch that does reach the bottom has
+        // already closed the block and cleared the flag. So `@example` as the last tag in a
+        // doc-comment lost its body outright, while the same block followed by any other tag was
+        // kept — saved by the code that ends a block rather than by this.
+        if (inExampleBlock && currentExampleLines is not null)
+        {
+            examples.Add(string.Join("\n", currentExampleLines));
         }
 
         var description = string.Join(" ", descriptionLines).Trim();

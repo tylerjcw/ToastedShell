@@ -248,6 +248,142 @@ public sealed class InfiniteGeneratorTests
             """));
     }
 
+    [Theory]
+    [InlineData("for only in [1] { while (true) { yield 1 } }")]
+    [InlineData("var once = true\nwhile ($once) { $once = false; while (true) { yield 1 } }")]
+    [InlineData("var done = false\nuntil ($done) { $done = true; while (true) { yield 1 } }")]
+    public async Task An_endless_inner_loop_streams_through_every_outer_loop(string body)
+    {
+        // The outer loop must not wait for its current iteration to finish before exposing the
+        // inner loop's values. An endless inner iteration makes that buffering boundary visible.
+        Assert.Equal("1,1,1", await RunAsync(
+            $$"""
+            func gen() {
+                {{body}}
+            }
+            gen | first 3
+            """));
+    }
+
+    [Fact]
+    public async Task A_nested_loop_produces_only_what_is_pulled()
+    {
+        Assert.Equal(1, await ProducedCountAsync(
+            """
+            func gen() {
+                for only in [1] {
+                    for i in [1, 2, 3] {
+                        writeline "p"
+                        yield $i
+                    }
+                }
+            }
+            gen | first 1 | ignore
+            """));
+    }
+
+    [Theory]
+    [InlineData("try { while (true) { yield 1 } } catch { }")]
+    [InlineData("try { throw \"enter-catch\" } catch { while (true) { yield 1 } }")]
+    public async Task An_endless_try_or_catch_branch_streams(string statement)
+    {
+        Assert.Equal("1,1,1", await RunAsync(
+            $$"""
+            func gen() {
+                {{statement}}
+            }
+            gen | first 3
+            """));
+    }
+
+    [Fact]
+    public async Task A_try_branch_produces_only_what_is_pulled()
+    {
+        Assert.Equal(1, await ProducedCountAsync(
+            """
+            func gen() {
+                try {
+                    writeline "p"
+                    yield 1
+                    writeline "p"
+                    yield 2
+                } catch { }
+            }
+            gen | first 1 | ignore
+            """));
+    }
+
+    [Fact]
+    public async Task Return_through_try_keeps_prior_and_finally_output_before_its_value()
+    {
+        Assert.Equal("1,3,2", await RunAsync(
+            """
+            func gen() {
+                try {
+                    yield 1
+                    return 2
+                } finally {
+                    yield 3
+                }
+            }
+            gen
+            """));
+    }
+
+    [Fact]
+    public async Task Break_and_continue_through_try_keep_prior_and_finally_output()
+    {
+        Assert.Equal("1,10,2,20", await RunAsync(
+            """
+            func gen() {
+                for i in [1, 2, 3] {
+                    try {
+                        yield $i
+                        if ($i == 1) { continue }
+                        if ($i == 2) { break }
+                    } finally {
+                        yield ($i * 10)
+                    }
+                }
+            }
+            gen
+            """));
+    }
+
+    [Fact]
+    public async Task Finally_runs_when_a_short_circuiting_consumer_disposes_the_generator()
+    {
+        Assert.Equal("True", await RunAsync(
+            """
+            var cleaned = false
+            func gen() {
+                try {
+                    while (true) { yield 1 }
+                } finally {
+                    $cleaned = true
+                }
+            }
+            gen | first 1 | ignore
+            $cleaned
+            """));
+    }
+
+    [Theory]
+    [InlineData("if (true) { echo before; return \"after\" }", "before,after")]
+    [InlineData("for i in [1] { echo before; return \"after\" }", "before,after")]
+    [InlineData("var once = true; while ($once) { $once = false; echo before; return \"after\" }", "before,after")]
+    [InlineData("var done = false; until ($done) { $done = true; echo before; return \"after\" }", "before,after")]
+    [InlineData("switch (1) { case 1 { echo before; return \"after\" } }", "before,after")]
+    [InlineData("try { echo before; return \"after\" } finally { echo cleanup }", "before,cleanup,after")]
+    public async Task Nested_control_flow_preserves_ordinary_output_before_return(
+        string body,
+        string expected)
+    {
+        // `yield` is not special here: functions are stream producers, and a nested return must
+        // not erase ordinary pipeline output that the body emitted before reaching it.
+        Assert.Equal(expected, await RunAsync($"func f() {{ {body} }}\nf"));
+    }
+
     // ── `return` keeps the values its iteration already produced ───────────────
 
     [Theory]

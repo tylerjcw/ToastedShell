@@ -484,6 +484,9 @@ closed.
 | `TS-P2-49` | Planned — filed 2026-08-02 | Explicit type arguments do not parse at a member call site: `$a.m<int>(11)` and `A.m<int>(11)` both fail with `tosh.parser.missing_pipeline_separator`, while the free-function form `m<int> 11` parses and inference (`$a.m(11)`) works. Found while probing `TS-P1-09`. | A member call accepts explicit type arguments in both instance and static position; the free-function and inferred forms are unchanged; regression tests cover all four spellings. |
 | `TS-P2-50` | Complete — fixed 2026-08-02 | Filed as one defect ("a comma inside `<…>` immediately followed by `(` mis-parses") and was two, sharing a symptom. **(a)** A base constructor could be given only one argument: `extends P0($a, $b)` failed with `tosh.parser.missing_pipeline_separator` and no type argument was involved anywhere — each argument was read as a pipeline running until the close paren, so the separating comma was neither a terminator nor a valid continuation. **(b)** `(new P<int, int>(3, 4)).A` parsed the type arguments as a tuple and reported `Member 'A' was not found on type 'ToshTuple'`, because the scanner deciding tuple-or-not did not step over a type argument list as its two sibling scanners already did. | Base constructor argument lists of any arity parse, read the way every other parenthesised argument list is; a type argument list of any arity inside parentheses is not mistaken for a tuple, and tuples and comparisons are unaffected. |
 | `TS-P2-51` | Planned — filed 2026-08-02 | A static property cannot be assigned: `B.S = 5` fails to parse with `tosh.parser.variable_references_require_dollar`, on the declaring class as much as through a subclass, so a static is effectively read-only after its initializer. `TrySetStaticMember` has exactly one caller — declaration-time initialization — and no user-reachable path. Found while probing `TS-P1-09`. | Assignment to a static property parses and stores to the declaring class's slot; reading it back through any subclass sees the same value. |
+| `TS-P2-52` | Planned — filed 2026-08-02 | `exit` does not stop a running script: `echo one` / `exit 0` / `echo two` prints both lines. `RequestExit` records the code and sets a flag nothing in the script execution path consults, so a script cannot decline to continue. Found while adding `--help` to scripts, which needed a way to answer and then not run the body and had to introduce a signal exception instead. | `exit` ends the current script immediately with its exit code; the REPL and sourced-file behaviours are unchanged and covered by tests. |
+| `TS-P2-53` | Planned — filed 2026-08-02 | `help <name>` computes a "Related" list by token similarity that is noise for user-defined functions: `help add` on a two-line function suggests `xbox · benchmark · compress · cpu-info · dbg`. A declared `@see` now leads the list, but the computed remainder still follows it. Found while reviewing the help system. | Related suggestions are relevant or absent; a topic with no genuine relations shows no Related section rather than five arbitrary commands. |
+| `TS-P2-54` | Planned — filed 2026-08-02 | A `require`d function is invisible to `help`: `require "lib.tosh"` then `help fn` reports "Help topic 'fn' was not found", although the function is callable. Doc-comments on required libraries are therefore unreachable through the help system. Found while reviewing the help system. | `help` resolves functions brought in by `require`, with their doc-comments, and a test covers the required-file path. |
 
 **Implementation note for `TS-P2-11` (July 25 review recommendation).** The
 `TS-P2-01`/`TS-P2-02`/`TS-P2-04`/`TS-P2-12`–`TS-P2-15` family shares one root
@@ -4619,3 +4622,54 @@ failures.
 **Still open:** `TS-P2-49`, explicit type arguments at a member call site (`$a.m<int>(11)`), is
 untouched by this. It is not a scanner gap: `MethodCallArgumentSyntax` has no type-argument slot at
 all, so it needs the parser, the syntax node, and the binding path together — its own change.
+
+## Help and doc-comments — a review (August 2)
+
+Reported from use: "`arg` doc comments do not appear in the built in `--help` system." Reviewing
+that path found four defects, each of which discards authored documentation without saying so.
+Three more were found and filed rather than fixed.
+
+**A script had no `--help` at all.** A script declaring `arg`/`flag` inputs answered `--help` with
+`tosh.runtime.unknown_script_flag` — the flag reached the ordinary lookup and missed. The
+descriptions written above each declaration were parsed, stored on the parameter, and had nowhere
+to go. The parser's own comment on the file-level doc-block says it is "surfaced in `--help`",
+which was true of nothing. A script now prints its summary, a usage line spelling required,
+optional and rest arguments differently, and both sections with their descriptions.
+
+Two rules bound it. A script declaring its own `help` or `h` flag keeps it — the built-in answer is
+a default for scripts that have not spoken, never an override of one that has. And arguments after
+a bare `--` are data, for the same reason the ordinary flag parser stops there.
+
+Answering `--help` needed a way to *not run the body*, and there wasn't one: `exit` does not stop a
+script. That is filed as `TS-P2-52`, and a signal exception carries the unwind in the meantime.
+
+**`@param <name>` was swallowed into the description.** The specification teaches `@param=<name>`
+in its doc-comment section and `@param <name>` in its comments section; only the first was
+understood. The second was not dropped but *absorbed*, leaving `Adds two numbers. @param a first
+value` as the summary — which is why it reads as a formatting slip rather than a lost tag. Both
+spellings are now accepted and the specification says so.
+
+**A trailing `@example` block was lost.** The flush that ends an example block at the end of a
+doc-comment sat *inside* the token loop, where it could never fire: the branch accumulating example
+lines ends in `continue`, and every branch reaching the bottom has already closed the block and
+cleared the flag. Dead code. The same block followed by any other tag survived — saved by the code
+that ends a block — which is what made the trailing case look like it worked.
+
+**Documented functions got no structured help.** Parameters were pre-rendered into the `Notes`
+string with embedded newlines. The panel cannot split such a cell into rows, so the text spilled
+past the box border and the closing edge appeared mid-paragraph; `help <name> | to json` reported
+`Arguments: null` for a function that documented its arguments. `@deprecated`, `@since`, `@throws`
+and `@see` were parsed by `DocComment` and then dropped on the way to the topic, so a function
+could declare itself deprecated and `help` would never mention it. All of them now populate the
+fields the renderer already knew how to lay out — the structured slots existed and went unfilled.
+
+**Filed, not fixed:** `TS-P2-52` (`exit` does not stop a script), `TS-P2-53` (`Related` suggestions
+are noise — `help add` proposes `xbox · benchmark · compress`), `TS-P2-54` (a `require`d function
+is invisible to `help`, so a library's doc-comments are unreachable).
+
+**Verification.** 23 tests; the negative control failed 19 and passed 4, those four being the
+genuine controls. One existing test needed updating rather than satisfying: it asserted that
+`Notes` contained the parameter text, which is the pre-rendered shape that broke the panel. Full
+capped suite: 4,058 passing, 1 skipped. The one failure, `Document_symbols_group_same_scope_
+function_overloads`, is in uncommitted `Tosh.LanguageServices` work and was confirmed to fail with
+every change here set aside.

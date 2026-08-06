@@ -146,6 +146,12 @@ if (plan.Kind != CliInvocationKind.Repl)
                 throw new InvalidOperationException($"Unsupported CLI invocation kind '{plan.Kind}'.");
         }
     }
+    catch (ScriptHelpRequestedException)
+    {
+        // `--help` was answered and the script declined to run. Nothing failed, so this is a
+        // successful exit rather than a rendered diagnostic.
+        Environment.ExitCode = 0;
+    }
     catch (Exception exception)
     {
         await Console.Error.WriteLineAsync(diagnostics.Render(exception));

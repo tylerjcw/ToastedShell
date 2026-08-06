@@ -53,7 +53,8 @@ public sealed record LspDocumentSymbol(
     [property: JsonPropertyName("kind")] int Kind,
     [property: JsonPropertyName("range")] LspRange Range,
     [property: JsonPropertyName("selectionRange")] LspRange SelectionRange,
-    [property: JsonPropertyName("children")] IReadOnlyList<LspDocumentSymbol> Children);
+    [property: JsonPropertyName("children")] IReadOnlyList<LspDocumentSymbol> Children,
+    [property: JsonPropertyName("docComment")] string? DocComment = null);
 
 public sealed record LspLocation(
     [property: JsonPropertyName("uri")] string Uri,

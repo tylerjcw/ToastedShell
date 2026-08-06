@@ -165,50 +165,221 @@ public sealed class DeclarationIndex
 
     public IReadOnlyList<IndexedSymbol> GetSymbols()
     {
-        var symbols = _declarations
-            .Where(declaration => declaration.Kind is DeclarationKind.Variable or DeclarationKind.Class or DeclarationKind.Module or DeclarationKind.Enum or DeclarationKind.Record)
-            .OrderBy(declaration => declaration.SelectionStart)
-            .Select(declaration => new IndexedSymbol(
-                declaration.Name,
-                declaration.Kind switch
+        var localDecls = _declarations.Where(d => !d.IsImported).ToList();
+        var localFuncs = _functions.Where(f => !f.IsImported).ToList();
+
+        bool IsInsideExecutableBlock(int pos)
+        {
+            if (localFuncs.Any(f => pos >= f.SelectionStart && pos <= f.ScopeEnd)) return true;
+            if (localDecls.Any(d => d.Kind is DeclarationKind.ClassMethod or DeclarationKind.Subcommand && pos >= d.SelectionStart && pos <= d.ScopeEnd)) return true;
+            return false;
+        }
+
+        var outlineDecls = localDecls
+            .Where(d => d.Kind is not (DeclarationKind.Function or DeclarationKind.Parameter or DeclarationKind.LoopVariable or DeclarationKind.CatchVariable))
+            .Where(d => d.Kind != DeclarationKind.Variable || !IsInsideExecutableBlock(d.SelectionStart))
+            .ToList();
+
+        IndexedDeclaration? FindClosestContainer(int pos, IndexedDeclaration? ignore = null)
+        {
+            return outlineDecls
+                .Where(d => d != ignore && d.Kind is DeclarationKind.Class or DeclarationKind.Interface or DeclarationKind.Module or DeclarationKind.Enum or DeclarationKind.Record or DeclarationKind.Subcommand)
+                .Where(d => pos >= d.DeclStart && pos <= d.DeclEnd)
+                .OrderByDescending(d => d.DeclStart)
+                .FirstOrDefault();
+        }
+
+        IndexedSymbol BuildSymbol(IndexedDeclaration d, List<IndexedSymbol>? children = null)
+        {
+            var detail = d.Kind switch
+            {
+                DeclarationKind.Class => "class",
+                DeclarationKind.Interface => "interface",
+                DeclarationKind.Module => "module",
+                DeclarationKind.Enum => "enum",
+                DeclarationKind.Record => "record",
+                DeclarationKind.Subcommand => "subcommand",
+                DeclarationKind.TypeAlias => "type alias",
+                DeclarationKind.Property => "property",
+                DeclarationKind.ClassMethod => "method",
+                DeclarationKind.EnumMember => "enum member",
+                DeclarationKind.RecordField => "field",
+                DeclarationKind.Flag => "flag",
+                DeclarationKind.Argument => "argument",
+                _ => "var",
+            };
+
+            var kind = d.Kind switch
+            {
+                DeclarationKind.Class => 5,       // Class
+                DeclarationKind.Interface => 11,  // Interface
+                DeclarationKind.Module => 2,      // Module
+                DeclarationKind.Enum => 10,      // Enum
+                DeclarationKind.Record => 23,    // Struct
+                DeclarationKind.Subcommand => 12,// Function
+                DeclarationKind.TypeAlias => 5,  // Class
+                DeclarationKind.Property => 7,   // Property
+                DeclarationKind.ClassMethod => 6, // Method
+                DeclarationKind.EnumMember => 22,// EnumMember
+                DeclarationKind.RecordField => 8,// Field
+                DeclarationKind.Flag => 7,       // Property
+                DeclarationKind.Argument => 13,  // Variable
+                _ => 13,                         // Variable
+            };
+
+            return new IndexedSymbol(
+                d.Name,
+                detail,
+                kind,
+                d.Range,
+                d.SelectionRange,
+                children is { Count: > 0 } ? children : null,
+                DocComment: d.DocComment);
+        }
+
+        IndexedSymbol BuildContainerSymbol(IndexedDeclaration container)
+        {
+            var children = new List<IndexedSymbol>();
+
+            var childDecls = outlineDecls
+                .Where(child => child != container && FindClosestContainer(child.SelectionStart, ignore: child) == container)
+                .Where(child => container.Kind is not (DeclarationKind.Class or DeclarationKind.Interface or DeclarationKind.Enum or DeclarationKind.Record) || child.Kind != DeclarationKind.Variable)
+                .OrderBy(child => child.SelectionStart)
+                .Select(child => child.Kind is DeclarationKind.Class or DeclarationKind.Interface or DeclarationKind.Module or DeclarationKind.Enum or DeclarationKind.Record or DeclarationKind.Subcommand
+                    ? BuildContainerSymbol(child)
+                    : BuildSymbol(child))
+                .ToList();
+
+            children.AddRange(childDecls);
+
+            var childFuncs = localFuncs
+                .Where(f => FindClosestContainer(f.SelectionStart) == container)
+                .GroupBy(f => new { f.Name, f.ScopeStart, f.ScopeEnd })
+                .Select(group =>
+                {
+                    var ordered = group.OrderBy(f => f.SelectionStart).ToArray();
+                    var first = ordered[0];
+                    var paramsText = string.Join(", ", first.Parameters.Select(p => p.Name + (!string.IsNullOrEmpty(p.TypeName) ? ": " + p.TypeName : "")));
+                    var returnText = !string.IsNullOrEmpty(first.ReturnTypeName) ? $" -> {first.ReturnTypeName}" : "";
+                    var detail = ordered.Length == 1 ? $"({paramsText}){returnText}" : $"({ordered.Length} overloads)";
+                    return new IndexedSymbol(
+                        first.Name,
+                        detail,
+                        12,
+                        first.Range,
+                        first.SelectionRange,
+                        DocComment: first.DocComment);
+                })
+                .ToList();
+
+            children.AddRange(childFuncs);
+
+            var sortedChildren = children
+                .OrderBy(c => c.SelectionRange.Start.Line)
+                .ThenBy(c => c.SelectionRange.Start.Character)
+                .ToList();
+
+            return BuildSymbol(container, sortedChildren);
+        }
+
+        var topLevelDecls = outlineDecls
+            .Where(d => FindClosestContainer(d.SelectionStart, ignore: d) == null)
+            .ToList();
+
+        var topLevelFuncs = localFuncs
+            .Where(f => FindClosestContainer(f.SelectionStart) == null)
+            .GroupBy(f => new { f.Name, f.ScopeStart, f.ScopeEnd })
+            .Select(group =>
+            {
+                var ordered = group.OrderBy(f => f.SelectionStart).ToArray();
+                var first = ordered[0];
+                var paramsText = string.Join(", ", first.Parameters.Select(p => p.Name + (!string.IsNullOrEmpty(p.TypeName) ? ": " + p.TypeName : "")));
+                var returnText = !string.IsNullOrEmpty(first.ReturnTypeName) ? $" -> {first.ReturnTypeName}" : "";
+                var detail = ordered.Length == 1 ? $"({paramsText}){returnText}" : $"({ordered.Length} overloads)";
+                return new IndexedSymbol(
+                    first.Name,
+                    detail,
+                    12,
+                    first.Range,
+                    first.SelectionRange,
+                    DocComment: first.DocComment);
+            })
+            .ToList();
+
+        var topSymbols = new List<IndexedSymbol>();
+
+        var mergedContainers = topLevelDecls
+            .Where(d => d.Kind is DeclarationKind.Class or DeclarationKind.Interface or DeclarationKind.Module or DeclarationKind.Enum or DeclarationKind.Record or DeclarationKind.Subcommand)
+            .GroupBy(d => new { d.Name, d.Kind })
+            .Select(group =>
+            {
+                var list = group.ToList();
+                if (list.Count == 1)
+                {
+                    return BuildContainerSymbol(list[0]);
+                }
+
+                var combinedChildren = new List<IndexedSymbol>();
+                foreach (var part in list)
+                {
+                    var built = BuildContainerSymbol(part);
+                    if (built.Children != null)
+                    {
+                        combinedChildren.AddRange(built.Children);
+                    }
+                }
+
+                var firstPart = list.OrderBy(p => p.SelectionStart).First();
+                var detail = firstPart.Kind switch
                 {
                     DeclarationKind.Class => "class",
+                    DeclarationKind.Interface => "interface",
                     DeclarationKind.Module => "module",
                     DeclarationKind.Enum => "enum",
                     DeclarationKind.Record => "record",
-                    _ => "var",
-                },
-                declaration.Kind switch
+                    _ => "subcommand",
+                };
+                var kind = firstPart.Kind switch
                 {
                     DeclarationKind.Class => 5,
+                    DeclarationKind.Interface => 11,
                     DeclarationKind.Module => 2,
                     DeclarationKind.Enum => 10,
                     DeclarationKind.Record => 23,
-                    _ => 13,
-                },
-                declaration.Range,
-                declaration.SelectionRange))
+                    _ => 12,
+                };
+
+                return new IndexedSymbol(
+                    firstPart.Name,
+                    detail,
+                    kind,
+                    firstPart.Range,
+                    firstPart.SelectionRange,
+                    combinedChildren.OrderBy(c => c.SelectionRange.Start.Line).ThenBy(c => c.SelectionRange.Start.Character).ToList());
+            });
+
+        topSymbols.AddRange(mergedContainers);
+
+        var topNonContainers = topLevelDecls
+            .Where(d => d.Kind is not (DeclarationKind.Class or DeclarationKind.Interface or DeclarationKind.Module or DeclarationKind.Enum or DeclarationKind.Record or DeclarationKind.Subcommand))
+            .Select(d => BuildSymbol(d))
             .ToList();
 
-        symbols.AddRange(
-            _functions
-                .GroupBy(function => new { function.Name, function.ScopeStart, function.ScopeEnd, function.ScopeDepth })
-                .Select(group =>
-                {
-                    var ordered = group.OrderBy(function => function.SelectionStart).ToArray();
-                    var first = ordered[0];
-                    return new IndexedSymbol(
-                        first.Name,
-                        ordered.Length == 1 ? "func" : $"func ({ordered.Length} overloads)",
-                        12,
-                        first.Range,
-                        first.SelectionRange);
-                }));
+        topSymbols.AddRange(topNonContainers);
+        topSymbols.AddRange(topLevelFuncs);
 
-        return symbols
+        return topSymbols
             .OrderBy(symbol => symbol.SelectionRange.Start.Line)
             .ThenBy(symbol => symbol.SelectionRange.Start.Character)
             .ToArray();
+    }
+
+    private static bool IsInsideRange(LspRange inner, LspRange outer)
+    {
+        if (inner.Start.Line < outer.Start.Line || inner.End.Line > outer.End.Line) return false;
+        if (inner.Start.Line == outer.Start.Line && inner.Start.Character < outer.Start.Character) return false;
+        if (inner.End.Line == outer.End.Line && inner.End.Character > outer.End.Character) return false;
+        return true;
     }
 
     public IReadOnlyList<LspLocation> FindDefinitions(LspPosition position)
@@ -593,6 +764,7 @@ public sealed class DeclarationIndex
         CatchVariable,
         Function,
         Class,
+        Interface,
         Module,
         Enum,
         Record,
@@ -611,7 +783,9 @@ public sealed class DeclarationIndex
         string Detail,
         int SymbolKind,
         LspRange Range,
-        LspRange SelectionRange);
+        LspRange SelectionRange,
+        IReadOnlyList<IndexedSymbol>? Children = null,
+        DocComment? DocComment = null);
 
     public sealed record IndexedFunctionDeclaration(
         string Name,
@@ -624,18 +798,22 @@ public sealed class DeclarationIndex
         int SelectionStart,
         LspRange Range,
         LspRange SelectionRange,
-        DocComment? DocComment = null);
+        DocComment? DocComment = null,
+        bool IsImported = false);
 
     private sealed record IndexedDeclaration(
         string Name,
         DeclarationKind Kind,
         int ScopeStart,
         int ScopeEnd,
+        int DeclStart,
+        int DeclEnd,
         int ScopeDepth,
         int SelectionStart,
         LspRange Range,
         LspRange SelectionRange,
-        DocComment? DocComment = null);
+        DocComment? DocComment = null,
+        bool IsImported = false);
 
     private sealed class Collector
     {
@@ -737,16 +915,19 @@ public sealed class DeclarationIndex
                     break;
 
                 case ClassDefinitionStatementSyntax @class:
-                    AddDeclaration(@class.Name, DeclarationKind.Class, @class.Span, scopeSpan, depth, @class.DocComment);
+                    var classSpan = @class.Members.Count > 0
+                        ? TextSpan.FromBounds(@class.Span.Start, Math.Max(@class.Span.End, @class.Members.Max(m => m.Span.End)))
+                        : @class.Span;
+                    AddDeclaration(@class.Name, DeclarationKind.Class, classSpan, scopeSpan, depth, @class.DocComment);
                     foreach (var member in @class.Members)
                     {
                         switch (member)
                         {
                             case ClassPropertyMemberSyntax prop:
-                                AddDeclaration(prop.Name, DeclarationKind.Property, prop.Span, @class.Span, depth + 1, prop.DocComment);
+                                AddDeclaration(prop.Name, DeclarationKind.Property, prop.Span, classSpan, depth + 1, prop.DocComment);
                                 if (prop.Initializer is not null)
                                 {
-                                    CollectPipeline(prop.Initializer, @class.Span, depth + 1);
+                                    CollectPipeline(prop.Initializer, classSpan, depth + 1);
                                 }
                                 if (prop.GetterBody is not null)
                                 {
@@ -759,7 +940,7 @@ public sealed class DeclarationIndex
                                 break;
 
                             case ClassMethodMemberSyntax method:
-                                AddDeclaration(method.Method.Name, DeclarationKind.ClassMethod, method.Span, @class.Span, depth + 1, method.Method.DocComment);
+                                AddDeclaration(method.Method.Name, DeclarationKind.ClassMethod, method.Span, classSpan, depth + 1, method.Method.DocComment);
                                 if (method.Method.Body is not null)
                                 {
                                     var methodScope = method.Method.Body.Span;
@@ -777,16 +958,31 @@ public sealed class DeclarationIndex
                     }
                     break;
 
+                case InterfaceDefinitionStatementSyntax @interface:
+                    var interfaceSpan = @interface.Methods.Count > 0
+                        ? TextSpan.FromBounds(@interface.Span.Start, Math.Max(@interface.Span.End, @interface.Methods.Max(m => m.Span.End)))
+                        : @interface.Span;
+                    AddDeclaration(@interface.Name, DeclarationKind.Interface, interfaceSpan, scopeSpan, depth, @interface.DocComment);
+                    foreach (var method in @interface.Methods)
+                    {
+                        AddDeclaration(method.Name, DeclarationKind.ClassMethod, method.Span, interfaceSpan, depth + 1);
+                    }
+                    break;
+
                 case ModuleDefinitionStatementSyntax module:
-                    AddDeclaration(module.Name, DeclarationKind.Module, module.Span, scopeSpan, depth, module.DocComment);
+                    var moduleSpan = TextSpan.FromBounds(module.Span.Start, Math.Max(module.Span.End, module.Body.Span.End));
+                    AddDeclaration(module.Name, DeclarationKind.Module, moduleSpan, scopeSpan, depth, module.DocComment);
                     CollectBlock(module.Body, depth + 1);
                     break;
 
                 case EnumDefinitionStatementSyntax @enum:
-                    AddDeclaration(@enum.Name, DeclarationKind.Enum, @enum.Span, scopeSpan, depth, @enum.DocComment);
+                    var enumSpan = @enum.Members.Count > 0
+                        ? TextSpan.FromBounds(@enum.Span.Start, Math.Max(@enum.Span.End, @enum.Members.Max(m => m.Span.End)))
+                        : @enum.Span;
+                    AddDeclaration(@enum.Name, DeclarationKind.Enum, enumSpan, scopeSpan, depth, @enum.DocComment);
                     foreach (var member in @enum.Members)
                     {
-                        AddDeclaration(member.Name, DeclarationKind.EnumMember, member.Span, @enum.Span, depth + 1);
+                        AddDeclaration(member.Name, DeclarationKind.EnumMember, member.Span, enumSpan, depth + 1);
                         if (member.Value is not null)
                         {
                             CollectPipeline(member.Value, scopeSpan, depth);
@@ -795,10 +991,13 @@ public sealed class DeclarationIndex
                     break;
 
                 case RecordDefinitionStatementSyntax record:
-                    AddDeclaration(record.Name, DeclarationKind.Record, record.Span, scopeSpan, depth, record.DocComment);
+                    var recordSpan = record.Fields.Count > 0
+                        ? TextSpan.FromBounds(record.Span.Start, Math.Max(record.Span.End, record.Fields.Max(f => f.Span.End)))
+                        : record.Span;
+                    AddDeclaration(record.Name, DeclarationKind.Record, recordSpan, scopeSpan, depth, record.DocComment);
                     foreach (var field in record.Fields)
                     {
-                        AddDeclaration(field.Name, DeclarationKind.RecordField, field.Span, record.Span, depth + 1);
+                        AddDeclaration(field.Name, DeclarationKind.RecordField, field.Span, recordSpan, depth + 1);
                         if (field.DefaultValue is not null)
                         {
                             CollectPipeline(field.DefaultValue, scopeSpan, depth);
@@ -815,9 +1014,6 @@ public sealed class DeclarationIndex
                     break;
 
                 case SubcommandStatementSyntax subcommand:
-                    // Index the subcommand name itself, scoped to its body so
-                    // hover/find-references work on the keyword + on nested
-                    // calls. Doc-comment renders the @summary/@example block.
                     AddDeclaration(
                         subcommand.Name,
                         DeclarationKind.Subcommand,
@@ -1185,6 +1381,18 @@ public sealed class DeclarationIndex
 
                 case ClassDefinitionStatementSyntax @class:
                     AddImported(@class.Name, DeclarationKind.Class, importScope, depth, requireSpan, @class.DocComment);
+                    foreach (var member in @class.Members)
+                    {
+                        switch (member)
+                        {
+                            case ClassPropertyMemberSyntax prop:
+                                AddImported(prop.Name, DeclarationKind.Property, importScope, depth + 1, requireSpan, prop.DocComment);
+                                break;
+                            case ClassMethodMemberSyntax method:
+                                AddImported(method.Method.Name, DeclarationKind.ClassMethod, importScope, depth + 1, requireSpan, method.Method.DocComment);
+                                break;
+                        }
+                    }
                     break;
 
                 case RecordDefinitionStatementSyntax record:
@@ -1232,11 +1440,14 @@ public sealed class DeclarationIndex
                 kind,
                 importScope.Start,
                 importScope.End,
+                requireSpan.Start,
+                requireSpan.End,
                 depth,
                 requireSpan.Start,
                 range,
                 range,
-                docComment));
+                docComment,
+                IsImported: true));
         }
 
         /// <summary>
@@ -1294,6 +1505,8 @@ public sealed class DeclarationIndex
                 kind,
                 scopeSpan.Start,
                 scopeSpan.End,
+                declarationSpan.Start,
+                declarationSpan.End,
                 depth,
                 selectionSpan.Start,
                 _map.ToRange(declarationSpan.Start, declarationSpan.End),

@@ -553,14 +553,137 @@ public sealed class ToshLanguageFeatures
                     }
             }
         }
+
+        // Offer doc comment generation refactoring for un-documented symbols
+        try
+        {
+            var index = DeclarationIndex.Create(sourceName, text);
+            foreach (var sym in index.GetSymbols())
+            {
+                if (sym.DocComment == null && sym.SymbolKind is 2 or 5 or 10 or 12 or 23)
+                {
+                    var insertPos = new LspPosition(sym.Range.Start.Line, 0);
+                    var docTemplate = $"## @summary {sym.Name} description.\n";
+                    var edit = new LspWorkspaceEdit(
+                        new Dictionary<string, IReadOnlyList<LspTextEdit>>(StringComparer.Ordinal)
+                        {
+                            [sourceName] = [new LspTextEdit(new LspRange(insertPos, insertPos), docTemplate)]
+                        });
+                    actions.Add(new LspCodeAction(
+                        Title: $"Generate doc comment (##) for {sym.Name}",
+                        Kind: "refactor.documentation",
+                        Edit: edit));
+                }
+            }
+        }
+        catch { }
+
         return actions;
     }
 
     public LspHover? GetHover(string text, string sourceName, LspPosition position)
     {
-        var index = DeclarationIndex.Create(sourceName, text);
         var map = new TextCoordinateMap(text);
         var offset = map.ToOffset(position);
+
+        // 1. Check for Pipeline Operator '|' or Redirect Operator (o>, out>, err>, >>)
+        var pipeOffset = FindPipelineOrRedirectOffset(text, offset);
+        if (pipeOffset >= 0)
+        {
+            var upstream = text.Substring(0, pipeOffset).TrimEnd();
+            var lineStart = upstream.LastIndexOf('\n');
+            var lineText = lineStart >= 0 ? upstream.Substring(lineStart + 1) : upstream;
+
+            string schemaMarkdown;
+            if (lineText.Contains("ls"))
+            {
+                schemaMarkdown = """
+                    ### 🔀 Pipeline Data Stream: `FileInfo`
+                    
+                    | Column Name | Type | Description |
+                    |:---|:---|:---|
+                    | `Name` | `string` | File or directory name |
+                    | `Type` | `FileType` | `file` \| `dir` \| `symlink` |
+                    | `Size` | `long` | File size in bytes |
+                    | `Modified` | `DateTime` | Last write timestamp |
+                    | `Mode` | `string` | File permission attributes |
+                    
+                    *Pipeline operations: `get Name Size`, `where _.Type == file`, `sort-by Size`, `row 0`.*
+                    """;
+            }
+            else if (lineText.Contains("ps"))
+            {
+                schemaMarkdown = """
+                    ### 🔀 Pipeline Data Stream: `ProcessInfo`
+                    
+                    | Column Name | Type | Description |
+                    |:---|:---|:---|
+                    | `PID` | `int` | Process identifier |
+                    | `Name` | `string` | Process executable name |
+                    | `CPU` | `double` | CPU usage percentage |
+                    | `Memory` | `long` | Working set memory (bytes) |
+                    
+                    *Pipeline operations: `where CPU > 50`, `sort-by Memory`, `get PID Name`.*
+                    """;
+            }
+            else if (lineText.Contains("split") || lineText.Contains("PATH") || lineText.Contains("cat") || lineText.Contains("read"))
+            {
+                schemaMarkdown = """
+                    ### 🔀 Pipeline Data Stream: `string` (Lines / Path Segments)
+                    
+                    *Elements*: Text string sequence (`string`)
+                    
+                    *Pipeline operations: `where _ is not in $to_add`, `chain $other`, `join ':'`, `grep "pattern"`.*
+                    """;
+            }
+            else
+            {
+                schemaMarkdown = """
+                    ### 🔀 Pipeline Data Stream
+                    
+                    *Piped Stream*: Dynamic sequence of objects or values.
+                    
+                    *Operations: `get <columns>`, `where <cond>`, `sort-by <key>`, `row <index>`.*
+                    """;
+            }
+
+            return new LspHover(
+                new LspMarkupContent("markdown", schemaMarkdown),
+                map.ToRange(pipeOffset, pipeOffset + 1));
+        }
+
+        // 2. Check for Path Validation on String Literals
+        if (offset >= 0 && offset < text.Length && (text[offset] == '"' || text[offset] == '\'' || (offset > 0 && (text[offset - 1] == '"' || text[offset - 1] == '\''))))
+        {
+            var stringLit = ExtractStringLiteralAt(text, offset);
+            if (!string.IsNullOrEmpty(stringLit.PathText))
+            {
+                var fullPath = Path.IsPathRooted(stringLit.PathText)
+                    ? stringLit.PathText
+                    : Path.GetFullPath(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), stringLit.PathText.TrimStart('~', '/')));
+
+                string validationMarkdown;
+                if (Directory.Exists(fullPath))
+                {
+                    validationMarkdown = $"### 📁 Path Validation\n`{stringLit.PathText}`\n\n✅ **Status**: Valid Directory (`Directory exists on disk`)\n\n*Absolute*: `{fullPath}`";
+                }
+                else if (File.Exists(fullPath))
+                {
+                    var fileInfo = new FileInfo(fullPath);
+                    validationMarkdown = $"### 📄 Path Validation\n`{stringLit.PathText}`\n\n✅ **Status**: Valid File (`{fileInfo.Length:N0} bytes`)\n\n*Absolute*: `{fullPath}`";
+                }
+                else
+                {
+                    validationMarkdown = $"### ⚠️ Path Validation\n`{stringLit.PathText}`\n\n⚠️ **Status**: Target path does not exist on disk.\n\n*Target*: `{fullPath}`";
+                }
+
+                return new LspHover(
+                    new LspMarkupContent("markdown", validationMarkdown),
+                    map.ToRange(stringLit.Start, stringLit.End));
+            }
+        }
+
+        var index = DeclarationIndex.Create(sourceName, text);
         var token = FindWordAt(text, offset);
 
         if (string.IsNullOrWhiteSpace(token.Word))
@@ -623,14 +746,26 @@ public sealed class ToshLanguageFeatures
     {
         return DeclarationIndex.Create(sourceName, text)
             .GetSymbols()
-            .Select(symbol => new LspDocumentSymbol(
-                symbol.Name,
-                symbol.Detail,
-                symbol.SymbolKind,
-                symbol.Range,
-                symbol.SelectionRange,
-                Array.Empty<LspDocumentSymbol>()))
+            .Select(ConvertDocumentSymbol)
             .ToArray();
+    }
+
+    private static LspDocumentSymbol ConvertDocumentSymbol(DeclarationIndex.IndexedSymbol symbol)
+    {
+        var children = symbol.Children != null && symbol.Children.Count > 0
+            ? symbol.Children.Select(ConvertDocumentSymbol).ToArray()
+            : Array.Empty<LspDocumentSymbol>();
+
+        var docText = symbol.DocComment?.Summary;
+
+        return new LspDocumentSymbol(
+            symbol.Name,
+            symbol.Detail,
+            symbol.SymbolKind,
+            symbol.Range,
+            symbol.SelectionRange,
+            children,
+            DocComment: docText);
     }
 
     public IReadOnlyList<LspSymbolInformation> GetSymbolInformations(string text, string sourceName)
@@ -3111,6 +3246,49 @@ public sealed class ToshLanguageFeatures
     }
 
     private sealed record CallSite(ArgumentSyntax Argument, int OpenParenIndex, int ActiveParameter);
+
+    private static (string PathText, int Start, int End) ExtractStringLiteralAt(string text, int offset)
+    {
+        if (string.IsNullOrEmpty(text) || offset < 0 || offset >= text.Length)
+            return (string.Empty, offset, offset);
+
+        int start = offset;
+        while (start > 0 && text[start - 1] != '"' && text[start - 1] != '\'' && text[start - 1] != '\n')
+            start--;
+
+        if (start > 0 && (text[start - 1] == '"' || text[start - 1] == '\''))
+        {
+            char quote = text[start - 1];
+            int openQuote = start - 1;
+            int closeQuote = text.IndexOf(quote, start);
+            if (closeQuote > openQuote)
+            {
+                var val = text.Substring(start, closeQuote - start);
+                if (val.Contains('/') || val.Contains('.'))
+                {
+                    return (val, openQuote, closeQuote + 1);
+                }
+            }
+        }
+        return (string.Empty, offset, offset);
+    }
+
+    private static int FindPipelineOrRedirectOffset(string text, int offset)
+    {
+        if (string.IsNullOrEmpty(text)) return -1;
+
+        for (int delta = 0; delta <= 3; delta++)
+        {
+            int p1 = offset + delta;
+            if (p1 >= 0 && p1 < text.Length && (text[p1] == '|' || text[p1] == '>'))
+                return p1;
+
+            int p2 = offset - delta;
+            if (p2 >= 0 && p2 < text.Length && (text[p2] == '|' || text[p2] == '>'))
+                return p2;
+        }
+        return -1;
+    }
 
     private sealed record CommandCallSite(CommandSyntax Command, int ActiveParameter);
 }
