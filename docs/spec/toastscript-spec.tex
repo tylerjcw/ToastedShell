@@ -2776,6 +2776,78 @@ All tags are optional.  A doc-comment containing only prose (no tags) is
 perfectly valid and will display as the item's description.
 \end{tipbox}
 
+\begin{warnbox}
+\code{\#\#} is a doc-comment, not an ordinary comment.  Commenting code out
+with \code{\#\#} turns it into documentation, and it will appear in
+\code{help} and \code{--help} output.  Use a single \code{\#} to comment
+code out.
+\end{warnbox}
+
+\subsection*{Naming an input}
+
+\code{@param}, \code{@arg} and \code{@flag} all document one named input and
+behave identically; they differ only in reading naturally beside the
+declaration they describe.  A function takes parameters, while a script or a
+subcommand takes \code{arg}s and \code{flag}s.  Each accepts either separator
+--- \code{@arg=name <desc>} and \code{@arg name <desc>} are the same tag.
+
+\subsection*{Scripts and \code{--help}}
+
+A script that declares inputs with \code{arg} or \code{flag} answers
+\code{--help} (and \code{-h}) by describing itself, without running its body.
+The summary comes from the file-level doc-block, and each input is listed with
+the description written above it:
+
+\begin{lstlisting}
+## Greets a person by name.
+
+## Who to greet.
+arg name: string
+
+## Shout the greeting.
+flag loud: bool = false
+
+echo $"Hello, {$name}"
+\end{lstlisting}
+
+\begin{lstlisting}
+$ greet.tosh --help
+Greets a person by name.
+
+Usage: greet.tosh [options] <name>
+
+Arguments:
+  name  string  Who to greet.
+
+Options:
+  --loud  bool  Shout the greeting.
+\end{lstlisting}
+
+Required arguments are written \code{<name>}, optional ones \code{[name]},
+and a rest argument \code{[name...]}.  A script that declares its own
+\code{help} or \code{h} flag keeps it --- the built-in answer is a default,
+never an override --- and arguments after a bare \code{--} are data rather
+than a request for help.
+
+\subsection*{Subcommands}
+
+A subcommand may document its inputs in its own doc-block, or leave each
+declaration to describe itself.  Where both do, the subcommand's block wins,
+so one header can describe everything a subcommand takes:
+
+\begin{lstlisting}
+## @summary Build, version-bump, and package.
+## @arg=target What to build.
+## @flag=fast Skip slow steps.
+subcommand publish {
+    arg target: string = "all"
+    flag fast: bool = false
+}
+\end{lstlisting}
+
+Overriding is per input rather than wholesale: an input the block does not
+mention keeps the description written above its declaration.
+
 \section{Visibility Modifiers}
 
 \begin{lstlisting}

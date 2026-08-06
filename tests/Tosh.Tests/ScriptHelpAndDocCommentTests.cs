@@ -348,4 +348,108 @@ public sealed class ScriptHelpAndDocCommentTests
 
         Assert.Contains("thing2", topic.Related, StringComparer.Ordinal);
     }
+
+    // ── Subcommands document their inputs ──────────────────────────────────────
+
+    private const string Subcommands =
+        """
+        ## @summary Test harness.
+
+        ## @summary Builds things.
+        ## @arg=target What to build.
+        ## @flag=fast Skip slow steps.
+        subcommand build {
+            arg target: string = "all"
+            flag fast: bool = false
+            echo "built"
+        }
+        """;
+
+    [Theory]
+    // The reported defect: the usage line named the positional arguments and nothing described
+    // them, so a subcommand's help listed only `--help`.
+    [InlineData("Arguments")]
+    [InlineData("What to build.")]
+    [InlineData("Skip slow steps.")]
+    public async Task A_subcommand_help_describes_its_inputs(string expected)
+    {
+        Assert.Contains(expected, await RunScriptAsync(Subcommands, "build", "--help"), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_subcommand_block_tag_wins_over_the_declarations_own_comment()
+    {
+        // Both places may document an input; the subcommand's own block is the one that decides,
+        // so a single header can describe everything a subcommand takes.
+        var output = await RunScriptAsync(
+            """
+            ## @summary Test harness.
+
+            ## @summary Builds things.
+            ## @arg=target From the block.
+            subcommand build {
+                ## @summary From the declaration.
+                arg target: string = "all"
+                echo "built"
+            }
+            """,
+            "build",
+            "--help");
+
+        Assert.Contains("From the block.", output, StringComparison.Ordinal);
+        Assert.DoesNotContain("From the declaration.", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_declaration_keeps_its_description_when_the_block_is_silent()
+    {
+        // The other half of the precedence rule: overriding is per input, not wholesale, which is
+        // what lets a block describe one argument and leave the rest to their declarations.
+        var output = await RunScriptAsync(
+            """
+            ## @summary Test harness.
+
+            ## @summary Builds things.
+            ## @arg=target From the block.
+            subcommand build {
+                ## @summary From the declaration.
+                arg target: string = "all"
+
+                ## Only the declaration mentions this one.
+                flag fast: bool = false
+                echo "built"
+            }
+            """,
+            "build",
+            "--help");
+
+        Assert.Contains("Only the declaration mentions this one.", output, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    // `@arg` and `@flag` are the spellings that match the keywords a script declares its inputs
+    // with; `@param` keeps working, and every one of them accepts either separator.
+    [InlineData("## @arg=target Described.")]
+    [InlineData("## @arg target Described.")]
+    [InlineData("## @flag=target Described.")]
+    [InlineData("## @param=target Described.")]
+    [InlineData("## @param target Described.")]
+    public async Task Every_named_input_tag_and_separator_documents_the_input(string tag)
+    {
+        var output = await RunScriptAsync(
+            $$"""
+            ## @summary Test harness.
+
+            ## @summary Builds things.
+            {{tag}}
+            subcommand build {
+                arg target: string = "all"
+                echo "built"
+            }
+            """,
+            "build",
+            "--help");
+
+        Assert.Contains("Described.", output, StringComparison.Ordinal);
+    }
 }

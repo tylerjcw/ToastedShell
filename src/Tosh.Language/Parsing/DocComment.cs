@@ -126,11 +126,14 @@ public sealed record DocComment(
             // was understood — so the second was swallowed into the description verbatim, leaving
             // "Adds two numbers. @param a first value" as the summary and no parameter
             // documentation at all. Silent, and taught by the specification itself.
-            if (line.StartsWith("@param=", StringComparison.Ordinal) ||
-                line.StartsWith("@param ", StringComparison.Ordinal))
+            //
+            // `@arg` and `@flag` are the spellings a script or subcommand wants, matching the
+            // `arg` and `flag` keywords its inputs are declared with; `@param` remains for
+            // functions, and all three describe a named input by the same rule.
+            if (TryReadNamedTag(line, out var namedTagBody))
             {
                 hasSeenBlockTag = true;
-                var rest = line.AsSpan(7);
+                var rest = namedTagBody;
                 var spaceIndex = rest.IndexOf(' ');
                 if (spaceIndex >= 0)
                 {
@@ -435,4 +438,35 @@ public sealed record DocComment(
             typeParameters,
             value);
     }
+
+    /// <summary>
+    /// Recognises the tags that document a single named input — <c>@param</c>, <c>@arg</c> and
+    /// <c>@flag</c> — in either the <c>=</c> or the space spelling, and yields the text after the
+    /// tag.
+    /// </summary>
+    /// <remarks>
+    /// One rule for all three because they differ only in which declaration keyword they sit
+    /// beside: a function takes parameters, a script or subcommand takes <c>arg</c>s and
+    /// <c>flag</c>s. Keeping them in one place is what stops a spelling from being understood on
+    /// one surface and silently ignored on another, which is how <c>@param &lt;name&gt;</c> came
+    /// to be absorbed into descriptions.
+    /// </remarks>
+    private static bool TryReadNamedTag(string line, out ReadOnlySpan<char> body)
+    {
+        foreach (var tag in NamedInputTags)
+        {
+            if (line.StartsWith(tag, StringComparison.Ordinal) &&
+                line.Length > tag.Length &&
+                (line[tag.Length] == '=' || line[tag.Length] == ' '))
+            {
+                body = line.AsSpan(tag.Length + 1);
+                return true;
+            }
+        }
+
+        body = default;
+        return false;
+    }
+
+    private static readonly string[] NamedInputTags = ["@param", "@arg", "@flag"];
 }

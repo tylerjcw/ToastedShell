@@ -97,8 +97,8 @@ public sealed partial class ToshEngine
 
         ValidateScriptInputs(sourceName, sourceText, flags, args);
 
-        node.Flags = flags;
-        node.Arguments = args;
+        node.Flags = ApplyDocumentedDescriptions(flags, docComment);
+        node.Arguments = ApplyDocumentedDescriptions(args, docComment);
         node.BodyStatements = body;
         return node;
     }
@@ -689,6 +689,31 @@ public sealed partial class ToshEngine
             }
         }
 
+        // ── Arguments ─────────────────────────────────────────────────
+        // The usage line above names the positional arguments but says nothing about them. Their
+        // descriptions — the doc-comment written above each `arg` — were parsed, carried on the
+        // parameter, and never rendered, so a subcommand that documented its arguments showed
+        // only `--help` under Options and nothing else.
+        if (target.Arguments.Count > 0)
+        {
+            var argumentNameWidth = target.Arguments.Max(argument => argument.Name.Length);
+            var argumentTypeTokens = target.Arguments
+                .Select(argument => RenderTypeBadge(argument.TypeName))
+                .Where(static badge => !string.IsNullOrEmpty(badge))
+                .ToList();
+            var argumentTypeWidth = argumentTypeTokens.Count == 0
+                ? 0
+                : argumentTypeTokens.Max(badge => badge!.Length);
+
+            writer.WriteLine();
+            writer.WriteLine("  Arguments");
+
+            foreach (var argument in target.Arguments)
+            {
+                writer.WriteLine(FormatArgumentLine(argument, argumentNameWidth, argumentTypeWidth));
+            }
+        }
+
         // ── Options ───────────────────────────────────────────────────
         // Collect every flag from every frame on the dispatch path AND the
         // target itself (when target isn't already on the path).
@@ -780,6 +805,69 @@ public sealed partial class ToshEngine
             : (typeBadge ?? string.Empty).PadRight(typeWidth) + "  ";
 
         var description = string.IsNullOrEmpty(flag.Description) ? string.Empty : flag.Description;
+        return $"    {name}  {typeColumn}{description}".TrimEnd();
+    }
+
+    /// <summary>
+    /// Applies the descriptions from a subcommand's own doc-comment — its <c>@arg</c>,
+    /// <c>@flag</c> and <c>@param</c> tags — to the inputs it declares.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Both places may document an input: a tag in the subcommand's block, and a doc-comment
+    /// written directly above the <c>arg</c> or <c>flag</c>. The subcommand's block wins, so one
+    /// header can describe every input of a subcommand and override anything the declarations say
+    /// individually. A declaration keeps its own description when the block does not mention it,
+    /// which is what lets the two be mixed.
+    /// </para>
+    /// <para>
+    /// Previously neither reached this far for a subcommand: the tags were parsed into the
+    /// doc-comment and discarded, and the rendered help listed argument names with no descriptions
+    /// beside them.
+    /// </para>
+    /// </remarks>
+    private static IReadOnlyList<FunctionParameterSyntax> ApplyDocumentedDescriptions(
+        IReadOnlyList<FunctionParameterSyntax> parameters,
+        DocComment? docComment)
+    {
+        if (parameters.Count == 0 || docComment is null || docComment.Parameters.Count == 0)
+        {
+            return parameters;
+        }
+
+        var described = new List<FunctionParameterSyntax>(parameters.Count);
+
+        foreach (var parameter in parameters)
+        {
+            described.Add(
+                docComment.Parameters.TryGetValue(parameter.Name, out var description)
+                && !string.IsNullOrWhiteSpace(description)
+                    ? parameter with { Description = description.Trim() }
+                    : parameter);
+        }
+
+        return described;
+    }
+
+    /// <summary>
+    /// One row of the Arguments section: the argument's name, its type when it declares one, and
+    /// the description written above it. A rest argument keeps its ellipsis so the row matches the
+    /// usage line, and an optional one is marked by its default rather than by brackets, which the
+    /// usage line already carries.
+    /// </summary>
+    private static string FormatArgumentLine(
+        FunctionParameterSyntax argument,
+        int nameWidth,
+        int typeWidth)
+    {
+        var name = (argument.IsRest ? argument.Name + "..." : argument.Name).PadRight(nameWidth);
+
+        var typeBadge = RenderTypeBadge(argument.TypeName);
+        var typeColumn = typeWidth == 0
+            ? string.Empty
+            : (typeBadge ?? string.Empty).PadRight(typeWidth) + "  ";
+
+        var description = string.IsNullOrEmpty(argument.Description) ? string.Empty : argument.Description;
         return $"    {name}  {typeColumn}{description}".TrimEnd();
     }
 
