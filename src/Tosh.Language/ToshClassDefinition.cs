@@ -673,6 +673,32 @@ public sealed class ToshClassDefinition : IShellNamedType
     internal void SetNestedType(string name, IShellNamedType type, bool isShy)
         => _nestedTypes[name] = (type, isShy);
 
+    /// <summary>
+    /// Every nested type visible to code inside this class, including those inherited, keyed by
+    /// name. A nearer declaration wins, which is the same rule members follow.
+    /// </summary>
+    internal IReadOnlyList<(string Name, IShellNamedType Type)> NestedTypesForScope()
+    {
+        List<(string, IShellNamedType)>? collected = null;
+        HashSet<string>? seen = null;
+
+        for (var current = this; current is not null; current = current.BaseClass)
+        {
+            foreach (var (name, entry) in current._nestedTypes)
+            {
+                seen ??= new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                if (!seen.Add(name))
+                {
+                    continue;
+                }
+
+                (collected ??= []).Add((name, entry.Type));
+            }
+        }
+
+        return collected ?? (IReadOnlyList<(string, IShellNamedType)>)Array.Empty<(string, IShellNamedType)>();
+    }
+
     internal bool TryGetNestedType(string name, out IShellNamedType type)
     {
         for (var current = this; current is not null; current = current.BaseClass)
@@ -2233,6 +2259,9 @@ public sealed class ToshClassDefinition : IShellNamedType
     {
         cancellationToken.ThrowIfCancellationRequested();
 
+        // Code belonging to this class names its nested types without qualifying them.
+        using var nestedTypeScope = _engine.PushNestedTypeScope(this);
+
         // Phase 3.4 — method-level generic inference.
         // For methods that declare their own type parameters
         // (`func describe<U>(label: U) -> U`), unify each argument
@@ -2745,6 +2774,10 @@ public sealed class ToshClassDefinition : IShellNamedType
         ToshClassDefinition? requestedBy = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
+
+        // Property initialisers and the constructor body are this class's own code, so its
+        // nested types are in scope by name there as they are inside a method.
+        using var nestedTypeScope = _engine.PushNestedTypeScope(this);
 
         if (instance.IsConstructionLayerComplete(this))
         {

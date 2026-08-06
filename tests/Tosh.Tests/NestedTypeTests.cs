@@ -168,4 +168,90 @@ public sealed class NestedTypeTests
             (new Point()).sum()
             """));
     }
+
+    // ── Inside the class, the qualification is unnecessary ─────────────────────
+
+    [Fact]
+    public async Task A_property_initialiser_names_a_nested_type_directly()
+    {
+        // The class is already inside itself, so writing `Reactor.Fuel.Mox` there would be noise.
+        // Before this, `Fuel.Mox` in an initialiser read as a bareword and produced the literal
+        // text "Fuel.Mox".
+        Assert.Equal("Mox", await RunAsync(
+            """
+            class Reactor {
+                enum Fuel : int {
+                    Mox = 3
+                    Uranium = 8
+                }
+                prop Loaded = Fuel.Mox
+            }
+            (new Reactor()).Loaded
+            """));
+    }
+
+    [Fact]
+    public async Task A_nested_type_may_annotate_a_member_of_its_own_class()
+    {
+        Assert.Equal("Mox", await RunAsync(
+            """
+            class Reactor {
+                enum Fuel : int { Mox = 3 }
+                prop Loaded: Fuel = Fuel.Mox
+            }
+            (new Reactor()).Loaded
+            """));
+    }
+
+    [Fact]
+    public async Task A_method_body_names_a_nested_type_directly()
+    {
+        Assert.Equal("Uranium", await RunAsync(
+            """
+            class Reactor {
+                enum Fuel : int { Uranium = 8 }
+                func pick() { return Fuel.Uranium }
+            }
+            (new Reactor()).pick()
+            """));
+    }
+
+    [Fact]
+    public async Task A_nested_class_is_constructible_by_its_bare_name_from_within()
+    {
+        Assert.Equal("7", await RunAsync(
+            """
+            class Outer {
+                class Inner { prop V = 7 }
+                func make() { return new Inner() }
+            }
+            (new Outer()).make().V
+            """));
+    }
+
+    [Fact]
+    public async Task The_bare_name_is_confined_to_the_declaring_class()
+    {
+        // The scope carrying the nested names is pushed for the class's own code and popped with
+        // it, so nothing outside gains the unqualified spelling.
+        await Assert.ThrowsAnyAsync<Exception>(async () => await RunAsync(
+            """
+            class Reactor { enum Fuel : int { Mox = 3 } }
+            var x: Fuel = 1
+            """));
+    }
+
+    [Fact]
+    public async Task An_inherited_nested_type_is_named_directly_by_a_subclass()
+    {
+        // Nested types follow members: a subclass sees what its base declares.
+        Assert.Equal("Mox", await RunAsync(
+            """
+            class Base { enum Fuel : int { Mox = 3 } }
+            class Derived extends Base {
+                func pick() { return Fuel.Mox }
+            }
+            (new Derived()).pick()
+            """));
+    }
 }

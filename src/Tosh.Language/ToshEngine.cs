@@ -11314,6 +11314,40 @@ public sealed partial class ToshEngine : IShellEvaluator
         return new ScopeFrame(_scopes, Runtime.Events);
     }
 
+    /// <summary>
+    /// Pushes a scope in which a class's nested types are reachable by their own names, for the
+    /// duration of code that belongs to that class.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Outside the class a nested type is reached through it — <c>Reactor.Fuel</c> — but inside,
+    /// the qualification is noise: the code is already in <c>Reactor</c>. Without this a class
+    /// could declare an enum and then not name it, so <c>prop Loaded = Fuel.Mox</c> read
+    /// <c>Fuel.Mox</c> as a bareword and an annotation of <c>Fuel</c> failed outright.
+    /// </para>
+    /// <para>
+    /// The names go into an ordinary lexical scope rather than into type resolution as a special
+    /// case, so they are found by the walk that already looks for types and disappear when the
+    /// scope pops.
+    /// </para>
+    /// </remarks>
+    internal IDisposable? PushNestedTypeScope(ToshClassDefinition definition)
+    {
+        var nested = definition.NestedTypesForScope();
+        if (nested.Count == 0)
+        {
+            return null;
+        }
+
+        var scope = new LexicalScope();
+        foreach (var (name, type) in nested)
+        {
+            scope.Classes[name] = type;
+        }
+
+        return PushScope(scope);
+    }
+
     private IDisposable PushScope(LexicalScope scope)
     {
         _scopes.Push(scope);

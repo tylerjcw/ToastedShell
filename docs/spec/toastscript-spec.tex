@@ -3968,8 +3968,15 @@ class Reactor {
     prop Loaded: Fuel = Fuel.Mox
 }
 
-echo (cast int Reactor.Fuel.Uranium)    # 8
+var r = new Reactor()
+echo $r.Loaded                          # Mox
+echo Reactor.Fuel.Uranium               # Uranium
 \end{lstlisting}
+
+Inside the class the qualification is unnecessary --- the code is already in
+\code{Reactor} --- so \code{Fuel} and \code{Fuel.Mox} resolve directly in
+property initialisers, method bodies and constructors, as the example above
+does.  Outside it, the type is reached through the class that declares it.
 
 A nested type is a static member of the class that declares it, so it is
 reached through that class --- \code{Reactor.Fuel} --- and its own members
