@@ -1047,6 +1047,15 @@ public sealed partial class ToshEngine : IShellEvaluator
 
         foreach (var statement in script.Statements)
         {
+            // The top level runs its own statement loop rather than going through
+            // ExecuteBlockAsync, so the check that stops a body on `exit` has to be made here
+            // too — the first attempt at this fixed only the block executor and a plain script
+            // carried on exactly as before.
+            if (Runtime.ExitRequested)
+            {
+                break;
+            }
+
             if (statement is ScriptInputStatementSyntax)
             {
                 continue;
@@ -14344,6 +14353,20 @@ public sealed partial class ToshEngine : IShellEvaluator
     {
         foreach (var statement in block.Statements)
         {
+            // `exit` stops the work, not just the session. It recorded an exit code and set a
+            // flag that only the REPL loop ever read, so a script ran on regardless: `echo one`,
+            // `exit 0`, `echo two` printed both lines, and any script using `exit` for an early
+            // return silently carried on doing what it meant to skip.
+            //
+            // Checked here because every body — a script, a function, a loop, a branch — runs
+            // through this loop, so one check ends them all rather than each remembering to.
+            // Deferred blocks are still run: they are unwinding, which is exactly what should
+            // happen on the way out.
+            if (Runtime.ExitRequested)
+            {
+                break;
+            }
+
             if (statement is DeferStatementSyntax deferStatement)
             {
                 deferredBlocks?.Add(deferStatement.Body);
