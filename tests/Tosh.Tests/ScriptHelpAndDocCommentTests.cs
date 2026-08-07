@@ -55,17 +55,12 @@ public sealed class ScriptHelpAndDocCommentTests
             runtime.Output = writer;
 
             var engine = new ToshEngine(runtime);
-            IReadOnlyList<object?> values = Array.Empty<object?>();
-            try
-            {
-                values = await AsyncEnumerableExtensions.ToListAsync(
-                    engine.ExecuteScriptFileAsync(path, arguments),
-                    default);
-            }
-            catch (ScriptHelpRequestedException)
-            {
-                // The signal that usage was written and the body declined to run.
-            }
+
+            // Answering `--help` asks the runtime to exit rather than throwing: the script simply
+            // stops before its body, the way `exit` does.
+            var values = await AsyncEnumerableExtensions.ToListAsync(
+                engine.ExecuteScriptFileAsync(path, arguments),
+                default);
 
             // Usage is *written*, while the script's own output comes back as pipeline values —
             // the host renders those through a display sink. Both are the script speaking, so

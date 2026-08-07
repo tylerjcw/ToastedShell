@@ -1155,7 +1155,13 @@ public sealed partial class ToshEngine : IShellEvaluator
         if (ScriptHelpWasRequested(scriptArguments, flagParameters))
         {
             await WriteScriptUsageAsync(sourceName, scriptDoc, argumentParameters, flagParameters);
-            throw new ScriptHelpRequestedException();
+
+            // Answered, so the body does not run. This asks to exit rather than throwing a
+            // signal of its own: `exit` now stops execution, which is the whole reason the
+            // signal existed (`TS-P2-52`). Binding runs before the statement loop, so the loop
+            // sees the request on its first statement and stops there.
+            Runtime.RequestExit();
+            return;
         }
 
         var (flagValues, argumentValues) = ParseScriptArgumentValues(
