@@ -31,6 +31,20 @@ public static class TypeConversion
             return true;
         }
 
+        // An enum value converts through the number behind it, not through its name. Without
+        // this the value fell to the string conversions below and `cast int Fuel.Uranium`
+        // reported "Could not cast 'Uranium' to System.Int32" — the name, which is what
+        // `ToString` returns and is never what a numeric cast is asking for.
+        //
+        // Conversion to string is left alone: the name is the right answer there, and the
+        // instance check above already returns the value itself when the target is the enum type.
+        if (value is IShellEnumValue enumValue &&
+            effectiveType != typeof(string) &&
+            enumValue.UnderlyingValue is { } underlying)
+        {
+            return TryConvert(underlying, targetType, out converted);
+        }
+
         if (effectiveType == typeof(Complex))
         {
             if (ComplexShellType.TryConvert(value, out var complex))

@@ -40,9 +40,32 @@ public sealed class ToshStructInstance : IShellRecordObject, IShellTypedObject, 
 
     public IReadOnlyList<KeyValuePair<string, object?>> GetMembers(bool includeHidden = false)
     {
-        return Definition.Fields
-            .Select(field => new KeyValuePair<string, object?>(field.Name, _values.TryGetValue(field.Name, out var value) ? value : null))
-            .ToArray();
+        // Fields and declared properties both, in declaration order. Listing only fields meant
+        // `$p | members` reported nothing for a struct whose properties `$p.X` reads perfectly
+        // well — introspection contradicting behaviour, which is the `TS-P1-33` shape.
+        var members = new List<KeyValuePair<string, object?>>(
+            Definition.Fields.Count + Definition.Properties.Count);
+
+        foreach (var field in Definition.Fields)
+        {
+            members.Add(new KeyValuePair<string, object?>(
+                field.Name,
+                _values.TryGetValue(field.Name, out var value) ? value : null));
+        }
+
+        foreach (var property in Definition.Properties)
+        {
+            if (property.IsStatic || (property.IsShy && !includeHidden))
+            {
+                continue;
+            }
+
+            members.Add(new KeyValuePair<string, object?>(
+                property.Name,
+                _values.TryGetValue(property.Name, out var value) ? value : null));
+        }
+
+        return members;
     }
 
     public InvocationResult InvokeInstanceMethod(string methodName, IReadOnlyList<object?> arguments)

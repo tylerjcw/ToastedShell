@@ -90,6 +90,32 @@ public sealed class ToshStructDefinition : IShellNamedType
             instance.SetStoredValue(field.Name, value);
         }
 
+        // Declared properties are initialised too. They were parsed into `Properties` and then
+        // read by nothing at all, so `struct Point { prop X = 1 }` produced an instance with no
+        // members: `$p.X` failed and `$p | members` counted zero. Only the primary-constructor
+        // form worked, because those are fields rather than properties.
+        //
+        // The bound fields serve as locals, so an initialiser may read a primary-constructor
+        // parameter — `struct P(x) { prop Doubled = ($x * 2) }` — as a class initialiser can.
+        foreach (var property in Properties)
+        {
+            if (property.IsStatic || property.IsComputed)
+            {
+                continue;
+            }
+
+            var value = property.Initializer is null
+                ? null
+                : _engine.EvaluateClassPipelineValueSync(
+                    SourceName,
+                    SourceText,
+                    property.Initializer,
+                    bound,
+                    CapturedScopes);
+
+            instance.SetStoredValue(property.Name, value);
+        }
+
         return instance;
     }
 
@@ -160,15 +186,38 @@ public sealed class ToshStructDefinition : IShellNamedType
 
     public IReadOnlyList<ShellMemberDescriptor> GetShellMembers(bool includeHidden = false)
     {
-        return Fields
-            .Select(field => new ShellMemberDescriptor(
+        // Fields and declared properties both. Describing only fields is what made `members`
+        // report nothing for a struct whose properties member access reads perfectly well.
+        var described = new List<ShellMemberDescriptor>(Fields.Count + Properties.Count);
+
+        foreach (var field in Fields)
+        {
+            described.Add(new ShellMemberDescriptor(
                 field.Name,
                 Kind: "Field",
                 TypeName: field.TypeName ?? "object",
                 IsStatic: false,
                 IsWritable: IsFluid,
-                IsHidden: false))
-            .ToArray();
+                IsHidden: false));
+        }
+
+        foreach (var property in Properties)
+        {
+            if (property.IsShy && !includeHidden)
+            {
+                continue;
+            }
+
+            described.Add(new ShellMemberDescriptor(
+                property.Name,
+                Kind: "Property",
+                TypeName: property.TypeName ?? "object",
+                IsStatic: property.IsStatic,
+                IsWritable: IsFluid,
+                IsHidden: property.IsShy));
+        }
+
+        return described;
     }
 
     public IReadOnlyList<ShellMethodDescriptor> GetShellMethods(bool includeHidden = false)
