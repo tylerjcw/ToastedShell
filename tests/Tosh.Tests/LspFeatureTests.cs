@@ -485,7 +485,14 @@ public sealed class LspFeatureTests
         var greetSymbols = symbols.Where(symbol => symbol.Name == "greet").ToArray();
 
         var greet = Assert.Single(greetSymbols);
-        Assert.Equal("func (2 overloads)", greet.Detail);
+        // A document symbol's detail carries the signature — `(name: string) -> string` for a
+        // lone function — so the grouped form is the count alone. There is no `func` prefix to
+        // drop: the symbol's Kind already says it is a function, and repeating it in the detail
+        // would be the only place on this surface that did.
+        //
+        // The completion surface is separate and still prefixes its kind ("Function (2
+        // overloads)"), which is asserted above; the two are different views, not one drifting.
+        Assert.Equal("(2 overloads)", greet.Detail);
     }
 
     [Fact]
