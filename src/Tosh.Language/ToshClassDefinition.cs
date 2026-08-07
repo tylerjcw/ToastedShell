@@ -856,8 +856,16 @@ public sealed class ToshClassDefinition : IShellNamedType
 
     public IReadOnlyList<ShellMemberDescriptor> GetShellMembers(bool includeHidden = false)
     {
+        // The same visibility rule member access applies, rather than a weaker copy of it.
+        // Testing only `IsShy` advertised `local` and `guarded` properties that `$c.Local`
+        // then refused with "Member not found" — the type descriptor promising what the
+        // instance denies (`TS-P2-47`). A static property is listed either way, since it is a
+        // real member of the type even though it is not an instance one.
         return Properties
-            .Where(property => includeHidden || !property.IsShy)
+            .Where(property =>
+                property.IsStatic
+                    ? includeHidden || !property.IsShy
+                    : IsVisibleInstanceProperty(property, this, includeHidden, accessor: null))
             .Select(property => new ShellMemberDescriptor(
                 property.Name,
                 Kind: "Property",
