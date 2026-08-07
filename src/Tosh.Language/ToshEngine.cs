@@ -6717,7 +6717,11 @@ public sealed partial class ToshEngine : IShellEvaluator
         }
         finally
         {
-            if (ownsTracker && tracker.HasExitCodes)
+            // Once `exit` has spoken, its code is the answer. The tracker records the status of
+            // the pipeline that just ran — and `exit 3` is itself a command that succeeds — so
+            // letting it write here overwrote the 3 with a 0 and every script exited cleanly no
+            // matter what it asked for.
+            if (ownsTracker && tracker.HasExitCodes && !Runtime.ExitRequested)
             {
                 var exitCode = tracker.GetFinalExitCode();
                 Runtime.SetLastExitCode(exitCode);

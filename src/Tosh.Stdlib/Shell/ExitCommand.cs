@@ -16,9 +16,15 @@ public sealed class ExitCommand : ShellCommand
     public override async IAsyncEnumerable<object?> ExecuteAsync(CommandContext context)
     {
         // Parse optional exit code.
+        //
+        // Converted rather than matched as a string: `exit 3` passes the number 3, not the text
+        // "3", so the string test never fired and no code was recorded — every `exit <n>` left
+        // the process reporting success. Only a bare `exit` in a `-c` string, where the argument
+        // arrives as text, ever took this branch.
         if (context.Arguments.Count > 0
-            && context.Arguments[0] is string codeStr
-            && int.TryParse(codeStr, out var exitCode))
+            && context.Arguments[0] is { } codeArgument
+            && TypeConversion.TryConvert(codeArgument, typeof(int), out var converted)
+            && converted is int exitCode)
         {
             context.Runtime.SetLastExitCode(exitCode);
         }
