@@ -747,6 +747,16 @@ public static class OperatorEvaluator
             $"Cannot convert '{value?.GetType().Name}' to '{typeName}'.");
     }
 
+    /// <summary>
+    /// Whether <paramref name="value"/> is an instance of the named shell type, by the same walk
+    /// the <c>is</c> operator uses.
+    /// </summary>
+    /// <remarks>
+    /// Exposed so <c>cast</c> can decide "already the right type" without a second opinion:
+    /// `TS-P1-24`'s lesson is that the second opinion is the one that drifts.
+    /// </remarks>
+    public static bool IsInstanceOfShellType(object? value, string typeName) => IsType(value, typeName);
+
     private static bool IsType(object? value, object? typeSpecifier)
     {
         // Handle "is null" / "is-not null" — when the type specifier is null, check nullity.

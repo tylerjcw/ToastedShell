@@ -1269,6 +1269,49 @@ func double-it(n: int) => $n * 2
 double-it "21"             # "21" auto-converts to 21
 \end{lstlisting}
 
+\subsection*{Casting to a declared type}
+\label{sec:cast-declared}
+
+\code{cast} also targets a type declared in ToastScript, including one nested
+inside a class.  The target name is resolved against the CLR first and the
+declarations second, so an existing script that casts to a CLR type keeps
+doing so even if a declaration later takes the same name.
+
+An \textbf{enum} converts from either a member name or a backing value, which
+is the reverse of the conversion that turns a member into its number:
+
+\begin{lstlisting}
+enum Fuel : int { Mox = 3, Uranium = 8 }
+
+cast Fuel 8                 # Uranium
+cast Fuel "Mox"             # Mox   (member names are matched case-insensitively)
+cast int Fuel.Uranium       # 8     (the round trip closes)
+cast Fuel (cast int Fuel.Uranium)   # Uranium
+
+class Reactor { enum Fuel : int { Mox = 3 } }
+cast Reactor.Fuel 3         # Mox
+\end{lstlisting}
+
+Every other declared kind---class, struct, record, union, interface,
+trait---converts only from a value that already \emph{is} one, subclasses
+included.  \code{cast} does not construct:
+
+\begin{lstlisting}
+class Base { prop X = 7 }
+class Derived extends Base { }
+
+var d = new Derived()
+(cast Base $d).X            # 7 - a Derived is a Base
+cast Base 5                 # error: cast converts only a value that already is one
+\end{lstlisting}
+
+\noindent Two failures are distinguished, because they call for different
+fixes.  A name that resolves to no type at all raises
+\code{tosh.runtime.unknown\_cast\_target}---a misspelling, or a declaration
+that has not been \code{require}d yet.  A name that resolves but a value that
+will not convert raises \code{tosh.runtime.cast\_failed}, and for an enum the
+message lists the members that do exist.
+
 \section{Truthiness}
 \label{sec:truthiness}
 

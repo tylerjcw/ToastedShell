@@ -15,7 +15,7 @@ using Tosh.Language.Parsing;
 
 namespace Tosh.Language;
 
-public sealed partial class ToshEngine : IShellEvaluator
+public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
 {
     private readonly record struct EvaluatedCommandArgument(ArgumentSyntax Syntax, object? Value);
     private readonly record struct ScriptArgumentValue(object? Value, int Index);
@@ -2057,7 +2057,7 @@ public sealed partial class ToshEngine : IShellEvaluator
             allocationSpecification = values[0];
         }
 
-        var context = new CommandContext(Runtime, AsyncEnumerableExtensions.Empty<object?>(), [allocationSpecification], cancellationToken, ScopedTypeResolver: CreateScopedTypeResolver(), BlockExecutor: _ownBlockExecutor, ScopedCommands: CreateScopedCommandView());
+        var context = new CommandContext(Runtime, AsyncEnumerableExtensions.Empty<object?>(), [allocationSpecification], cancellationToken, ScopedTypeResolver: CreateScopedTypeResolver(), BlockExecutor: _ownBlockExecutor, ScopedCommands: CreateScopedCommandView(), ShellTypes: this);
         var size = NativeCommandUtilities.ResolveAllocationSize(context, allocationSpecification, 0);
 
         if (size < 0)
@@ -3662,7 +3662,7 @@ public sealed partial class ToshEngine : IShellEvaluator
                         new object?[] { shellEvent },
                         cancellationToken,
                         BlockExecutor: _ownBlockExecutor,
-                        ScopedCommands: CreateScopedCommandView());
+                        ScopedCommands: CreateScopedCommandView(), ShellTypes: this);
 
                     await foreach (var value in functionCommand.ExecuteAsync(context))
                     {
@@ -6977,7 +6977,7 @@ public sealed partial class ToshEngine : IShellEvaluator
             pipelineExitStatusTracker,
             BlockExecutor: _ownBlockExecutor,
             OutputIsCaptured: outputIsCaptured,
-            ScopedCommands: CreateScopedCommandView());
+            ScopedCommands: CreateScopedCommandView(), ShellTypes: this);
 
         if (Runtime.Config.Shell.Trace)
         {
@@ -8076,7 +8076,7 @@ public sealed partial class ToshEngine : IShellEvaluator
                             IsPipelined: false,
                             ScopedTypeResolver: CreateScopedTypeResolver(),
                             BlockExecutor: _ownBlockExecutor,
-                            ScopedCommands: CreateScopedCommandView());
+                            ScopedCommands: CreateScopedCommandView(), ShellTypes: this);
                         var results = await AsyncEnumerableExtensions.ToListAsync(
                             callable.InvokeAsync(context),
                             cancellationToken);
@@ -15865,7 +15865,7 @@ public sealed partial class ToshEngine : IShellEvaluator
             arguments,
             cancellationToken,
             ScopedTypeResolver: CreateScopedTypeResolver(),
-            ScopedCommands: CreateScopedCommandView());
+            ScopedCommands: CreateScopedCommandView(), ShellTypes: this);
 
         return await AsyncEnumerableExtensions.ToListAsync(command.ExecuteAsync(context), cancellationToken);
     }

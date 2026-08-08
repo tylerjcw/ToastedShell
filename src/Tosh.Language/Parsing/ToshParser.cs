@@ -6565,7 +6565,10 @@ public static class ToshParser
                         continue;
                     }
 
-                    var argument = ParseArgument(nameToken.Text);
+                    var argument = ParseArgument(
+                        nameToken.Text,
+                        allowTypeNameArgument: arguments.Count == 0 ||
+                                               !CommandExpectsTypeNameFirstArgumentOnly(nameToken.Text));
 
                     if (argument is not null)
                     {
@@ -6794,7 +6797,10 @@ public static class ToshParser
                     continue;
                 }
 
-                var argument = ParseArgument(commandName);
+                var argument = ParseArgument(
+                    commandName,
+                    allowTypeNameArgument: arguments.Count == 0 ||
+                                           !CommandExpectsTypeNameFirstArgumentOnly(commandName));
 
                 if (argument is not null)
                 {
@@ -7025,9 +7031,12 @@ public static class ToshParser
             return false;
         }
 
-        private ArgumentSyntax? ParseArgument(string? commandName = null, bool implicitCurrentItem = false)
+        private ArgumentSyntax? ParseArgument(
+            string? commandName = null,
+            bool implicitCurrentItem = false,
+            bool allowTypeNameArgument = true)
         {
-            var result = ParsePrimaryArgument(commandName, implicitCurrentItem);
+            var result = ParsePrimaryArgument(commandName, implicitCurrentItem, allowTypeNameArgument);
 
             // Check for range operator: <expr>..<expr> or <expr>..<expr>..<expr>
             if (result is not null && Current.Kind == SyntaxTokenKind.DotDot)
@@ -7164,7 +7173,10 @@ public static class ToshParser
                    IsExpressionStartToken(Current.Kind);
         }
 
-        private ArgumentSyntax? ParsePrimaryArgument(string? commandName = null, bool implicitCurrentItem = false)
+        private ArgumentSyntax? ParsePrimaryArgument(
+            string? commandName = null,
+            bool implicitCurrentItem = false,
+            bool allowTypeNameArgument = true)
         {
             switch (Current.Kind)
             {
@@ -7204,7 +7216,7 @@ public static class ToshParser
                             return ParsePostfixChain(ParseVariableReferenceArgument(), implicitCurrentItem);
                         }
 
-                        if (commandName is not null && CommandExpectsTypeNameArguments(commandName))
+                        if (allowTypeNameArgument && commandName is not null && CommandExpectsTypeNameArguments(commandName))
                         {
                             return ParseTypeNameArgument();
                         }
@@ -11501,6 +11513,17 @@ public static class ToshParser
                    Peek(1).Kind == SyntaxTokenKind.OpenParen;
         }
 
+        /// <summary>
+        /// Commands whose bareword arguments name types rather than values.
+        /// </summary>
+        /// <remarks>
+        /// `TS-P2-55`. <c>cast</c> is the odd one out: it takes a type and then *values*, while
+        /// the rest take type names throughout. Treating every one of its arguments as a type
+        /// name meant `cast int Fuel.Uranium` handed the literal text "Fuel.Uranium" to the
+        /// conversion — the same spelling `echo Fuel.Uranium` resolves to the enum member. So
+        /// the rule is asked about a position, and the main argument loop is the one caller that
+        /// knows which position it is at.
+        /// </remarks>
         private static bool CommandExpectsTypeNameArguments(string commandName)
         {
             return commandName is
@@ -11511,6 +11534,12 @@ public static class ToshParser
                 "members" or
                 "methods" or
                 "get-methods";
+        }
+
+        /// <summary>True when only the command's first argument names a type.</summary>
+        private static bool CommandExpectsTypeNameFirstArgumentOnly(string? commandName)
+        {
+            return string.Equals(commandName, "cast", StringComparison.OrdinalIgnoreCase);
         }
 
         private bool LooksLikeTypedVariableDeclaration()

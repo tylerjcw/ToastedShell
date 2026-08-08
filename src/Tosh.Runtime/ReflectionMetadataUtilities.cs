@@ -81,7 +81,7 @@ internal static class ReflectionMetadataUtilities
             IShellTypedObject typed => typed.ShellTypeDescriptor,
             _ when BuiltInShellTypes.TryDescribeRuntimeValue(value, out var builtInDescriptor) => builtInDescriptor,
             Type type => type,
-            string text => TryResolveShellType(context.Runtime, text, out var shellDescriptor)
+            string text => TryResolveShellType(context, text, out var shellDescriptor)
                 ? shellDescriptor
                 : context.TypeResolver.Resolve(text)
                     ?? throw new InvalidOperationException($"Unable to resolve type '{text}'."),
@@ -406,6 +406,26 @@ internal static class ReflectionMetadataUtilities
                 new KeyValuePair<string, object?>("Signature", constructor.Signature),
             ]);
         }
+    }
+
+    /// <summary>
+    /// Resolves a name to a ToastScript-declared type, asking the caller's own view first.
+    /// </summary>
+    /// <remarks>
+    /// `TS-P2-55`. <c>runtime.Classes</c> holds only *top-level* declarations, so a type declared
+    /// in a script, a module, or a block was unreachable — and a nested one is a static member of
+    /// its declaring class rather than an entry anywhere. The engine's view answers all three by
+    /// the same rule that resolves a type name in source.
+    /// </remarks>
+    internal static bool TryResolveShellType(CommandContext context, string name, out IShellTypeDescriptor descriptor)
+    {
+        if (context.ShellTypes is { } view && view.TryGetNamedType(name, out var namedType))
+        {
+            descriptor = namedType;
+            return true;
+        }
+
+        return TryResolveShellType(context.Runtime, name, out descriptor);
     }
 
     private static bool TryResolveShellType(ToshRuntime runtime, string name, out IShellTypeDescriptor descriptor)

@@ -487,7 +487,7 @@ closed.
 | `TS-P2-52` | Complete — fixed 2026-08-06 | `exit` does not stop a running script: `echo one` / `exit 0` / `echo two` prints both lines. `RequestExit` records the code and sets a flag nothing in the script execution path consults, so a script cannot decline to continue. Found while adding `--help` to scripts, which needed a way to answer and then not run the body and had to introduce a signal exception instead. | `exit` ends the current script immediately with its exit code; the REPL and sourced-file behaviours are unchanged and covered by tests. |
 | `TS-P2-53` | Complete — fixed 2026-08-08 | `help <name>` computed a "Related" list in which sharing a *category* was worth 40 points on its own, and every user-defined function lands in `Scripting` — so `help add` on a two-line function suggested `xbox · benchmark · compress · cpu-info · dbg`. All 342 shipped topics had a Related list, whether or not they had anything to relate to. | A relationship must be earned by shared content: two topics sharing no distinctive word score zero, however much else they have in common. Words are weighted by rarity across the corpus rather than counted, so "the" and "value" cannot manufacture one, and usage strings no longer contribute — a shared `int` is not a subject. Rarity alone was not enough: `min` and `max` are documented in the shell's house vocabulary, so every word they share is common and the best list in the corpus was discarded. A second route qualifies topics whose descriptions are *proportionally* the same words. Measured: `add` goes empty, `each` keeps `parallel · flat-map · map · where · filter` unchanged, `min` keeps `max` and `median`, and 328 of 342 topics keep a list. A topic wanting relations the corpus cannot infer declares `@see`. |
 | `TS-P2-54` | Complete — fixed 2026-08-08 | **Introspection could not see a function the running script had declared.** Filed as "a `require`d function is invisible to `help`"; measuring widened and corrected it. A `func` without `global` or `export` registers in the innermost lexical scope, running a script pushes one, and `HelpCatalog` read the global registry — so `help fn` answered "topic not found" for a function the previous line had called, however it got there: required, sourced, or declared in that same file. At `-c` there is no scope to land in, which is why the identical source worked when pasted. `help` was not alone: `which fn` printed nothing and `time "fn"` reported the target was not executable. | `CommandContext` carries a scope-aware view of commands — the twin of the `ScopedTypeResolver` already there — and `help`, `which`, `apropos` and `time` read it, so a script's own functions, its sourced ones, and its required exports are all introspectable with their doc-comments. A function declared inside a block does not outlive its scope. |
-| `TS-P2-55` | Planned — filed 2026-08-06 | `cast` cannot target a ToastScript-declared type: `cast Fuel $v` on an enum value fails with `tosh.runtime.command_failed`, and the same is expected of classes, structs, records and unions. `cast` resolves its target through CLR type lookup, so a name declared in ToastScript is never found and the conversion path is never reached — casting an enum *from* its value now works, but casting *to* one does not. Found while fixing enum numeric conversion. | `cast` resolves ToastScript-declared types by name, including nested ones (`cast Outer.Inner $v`), and reports an unknown target distinctly from a failed conversion. |
+| `TS-P2-55` | Complete — fixed 2026-08-08 | `cast` could not target a ToastScript-declared type: `cast Fuel $v` failed with "Unable to resolve type 'Fuel'", because `cast` resolved through CLR lookup alone and a declared name is never a CLR type — the conversion path was never reached. Casting an enum member *to* a number already worked, so the asymmetry was one-directional. Two more found while fixing it: a declared type is invisible to any command resolving a type name when declared inside a *script* rather than at the prompt, which also broke `describe-type`; and `cast` sat in the parser's list of commands whose bareword arguments are all type names, so `cast int Fuel.Uranium` and `cast double Math.PI` handed the conversion the literal text. | `cast` resolves declared types by name, nested ones included (`cast Outer.Inner $v`), with an enum converting from a member name or a backing value and every other declared kind converting only from a value that already is one, subclasses included — `cast` does not construct. Resolution is CLR-first so existing scripts are unaffected. An unknown target (`tosh.runtime.unknown_cast_target`) is distinct from a failed conversion (`tosh.runtime.cast_failed`), and a failed enum conversion lists the members. The type view is on `CommandContext`, so `describe-type` sees script declarations too, and the parser's type-name rule now applies to `cast`'s first argument only. |
 | `TS-P2-56` | Complete — fixed 2026-08-06 | A script's exit code does not reach the process: `exit 3` in a script, and `tosh -c 'exit 3'`, both exit 0. `ExitCommand` records the code through `SetLastExitCode` and the host reads `runtime.LastExitCode` afterwards, so something between resets it — most likely per-statement exit-status tracking overwriting it on the way out. Pre-existing: the stable binary behaves the same. Found while fixing `TS-P2-52`. | `exit <n>` leaves the process with status `<n>` from a script, from `-c`, and from inside a function or loop; a script that ends without `exit` still reports the status of its last command. |
 | `TS-P2-57` | Planned — filed 2026-08-08 | `>>` does not create the file it appends to: `"x" \| to text >> missing.txt` fails with "no such file or directory" rather than creating it, so an append redirect only works against a file that already exists. Found while building a probe for `TS-P1-19`. | `>>` creates the target when absent and appends when present, matching `>` and every POSIX shell; a directory that does not exist is still a diagnostic. |
 | `TS-P2-58` | Planned — filed 2026-08-08 | A `yield` inside a `defer` block is silently dropped: `func g() { defer { yield 9 }\n yield 1 }` produces only `1`. The generator terminates cleanly, so nothing reports the loss. Whether a deferred block should contribute to a generator's stream at all is the open question — it runs while unwinding, after the consumer may have stopped pulling. Found while fixing `TS-P1-19`. | Decided one way or the other and made explicit: either a deferred yield reaches the stream, or it is refused at parse time with a diagnostic saying why. Silence is the one option ruled out. |
@@ -4948,3 +4948,59 @@ panel whenever it is not the only value a script produces. `help ls` alone panel
 followed by `help ls` does not. Pre-existing — the installed binary does the same — and the same
 root/nested split `TS-P3-10` decided for collections, except that the nested form here loses the
 rendering rather than choosing a terser one. Filed as `TS-P2-63`.
+
+## `TS-P2-55` — casting to a declared type, and two defects behind it (August 8)
+
+`cast Fuel 8` failed with "Unable to resolve type 'Fuel'". `cast` resolved its target through CLR
+type lookup alone, and a name declared in ToastScript is never a CLR type, so the conversion path
+was never reached at all. Casting an enum member *to* a number had been fixed earlier; this is the
+direction that was still missing, and the pair is what lets an enum leave the type system and come
+back.
+
+**Two conversions exist, and no more.** An enum converts from a member name or a backing value.
+Every other declared kind — class, struct, record, union, interface, trait — converts only from a
+value that already is one, subclasses included, decided by the same walk `is` uses so the two
+cannot come to disagree. `cast` is not a constructor, and "turn this record into that class" is a
+language decision rather than a repair.
+
+**Resolution is CLR-first, and that ordering was learned rather than chosen.** Asking the
+declaration side first broke the command's own first documented example: `cast list<int>` resolves
+to a *shell* descriptor for the builtin list type, so it stopped converting and started reporting
+"this value is not a 'list<int>'". Declared types now fill the gap where the CLR resolver finds
+nothing, which is exactly the gap this item is about, and a declaration cannot silently change what
+an existing script's `cast String` means.
+
+**Failures are told apart.** "I misspelled the type" and "this value will not convert" arrived as
+the same `command_failed` before, so neither could be distinguished from the diagnostic.
+`tosh.runtime.unknown_cast_target` names the first; `tosh.runtime.cast_failed` names the second,
+and for an enum it lists the members that do exist:
+
+```
+❯ cast Fuel "Plutonium"
+✖  error  tosh.runtime.cast_failed
+│  Could not cast 'Plutonium' to 'Fuel': 'Fuel' has no member named 'Plutonium'
+│  (members: Mox, Uranium).
+```
+
+### Two defects found underneath
+
+**A declared type is invisible to a command when declared in a script.** `describe-type Fuel`
+answered "Unable to resolve type 'Fuel'" for an enum two lines above it in the same file, and
+worked when the same source was pasted at `-c`. This is the type-side twin of `TS-P2-54`, found the
+same day and for the same reason: `runtime.Classes` holds *top-level* declarations, and a script's
+land in its scope. `CommandContext` now carries an `IShellNamedTypeView`, which the engine
+implements over the same `TryGetNamedType` that resolves a type name in source — one rule, not a
+second walk that would drift. Unlike the command view it resolves live rather than from a snapshot,
+because a command resolves a type name while the scopes are still the caller's.
+
+**`cast`'s value arguments were being parsed as type names.** The parser keeps a list of commands
+whose bareword arguments name types — `describe-type`, `members`, `methods`, `constructors`,
+`help`. `cast` was in it, and `cast` is the odd one out: it takes a type and *then values*. So
+`cast int Fuel.Uranium` handed the conversion the literal text "Fuel.Uranium", while
+`echo Fuel.Uranium` resolved the very same spelling to the enum member. Not an enum quirk —
+`cast double Math.PI` was equally literal. The rule is now asked about a position, and the two
+argument loops that know which position they are at are the only callers that opt out.
+
+That one was found by writing the specification and executing its examples, which is the third
+time this week that running the documentation rather than reading it has turned up a defect the
+implementation work had not.

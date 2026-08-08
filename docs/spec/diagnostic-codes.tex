@@ -10,7 +10,7 @@ Non-error diagnostics can be suppressed with the \texttt{hush} builtin
 (scope-local) or by adding their codes to
 \texttt{\$tosh.Config.Diagnostics.Hushed}.
 
-This chapter lists all 511 diagnostic codes currently emitted by the
+This chapter lists all 513 diagnostic codes currently emitted by the
 implementation, grouped by namespace. It is generated from the source tree
 by \texttt{scripts/extract\_diagnostic\_codes.py} and should be
 regenerated whenever new diagnostics are added.
@@ -32,7 +32,7 @@ regenerated whenever new diagnostics are added.
 \texttt{tosh.naming.*} & 2 & --- \\
 \texttt{tosh.parser.*} & 162 & Raised by the lexer or parser before any code runs. Indicates malformed source text. \\
 \texttt{tosh.row.*} & 1 & --- \\
-\texttt{tosh.runtime.*} & 312 & Raised by the engine while evaluating a script. The bulk of TōSh diagnostics live here. \\
+\texttt{tosh.runtime.*} & 314 & Raised by the engine while evaluating a script. The bulk of TōSh diagnostics live here. \\
 \texttt{tosh.tui.*} & 8 & Raised by the `tui` subsystem (terminal UI widgets, screens, providers). \\
 \texttt{tosh.type.*} & 9 & --- \\
 \texttt{tosh.user.*} & 1 & --- \\
@@ -301,6 +301,7 @@ Raised by the engine while evaluating a script. The bulk of TōSh diagnostics li
 \item[\texttt{\small tosh.runtime.callable\_invocation\_requires\_single\_value}] Callable invocation in expression context must produce exactly one value.
 \item[\texttt{\small tosh.runtime.callable\_named\_argument}] Callable '\{CallableName\}' has no parameter named '\{named.Key\}'.
 \item[\texttt{\small tosh.runtime.cartesian\_product\_args}] 'cartesian-product' requires a second sequence and an optional combiner.
+\item[\texttt{\small tosh.runtime.cast\_failed}] \textit{(see source)}
 \item[\texttt{\small tosh.runtime.chain\_requires\_sequence}] 'chain' requires at least one sequence argument.
 \item[\texttt{\small tosh.runtime.channel\_invalid\_capacity}] 'channel' capacity must be a positive integer.
 \item[\texttt{\small tosh.runtime.channel\_recv\_requires\_channel}] 'channel-recv' first argument must be a ShellChannel.
@@ -569,6 +570,7 @@ Raised by the engine while evaluating a script. The bulk of TōSh diagnostics li
 \item[\texttt{\small tosh.runtime.unfold\_requires\_seed\_and\_callable}] 'unfold' requires a seed value and a callable value or block.
 \item[\texttt{\small tosh.runtime.uninitialized\_variable}] Variable '\{variableReference.Name\}' has been declared but not assigned yet.
 \item[\texttt{\small tosh.runtime.unknown\_base\_class}] Class '\{@class.Name\}' extends unknown class '\{@class.BaseClassName\}'.
+\item[\texttt{\small tosh.runtime.unknown\_cast\_target}] \textit{(see source)}
 \item[\texttt{\small tosh.runtime.unknown\_command}] Command '\{commandSyntax.Name\}' was not found.
 \item[\texttt{\small tosh.runtime.unknown\_enum\_underlying\_type}] Enum '\{@enum.Name\}' uses unknown underlying type '\{@enum.UnderlyingTypeName\}'.
 \item[\texttt{\small tosh.runtime.unknown\_function\_reference}] Function '\{funcRef.Name\}' was not found.

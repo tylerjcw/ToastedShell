@@ -23,7 +23,8 @@ public sealed record CommandContext(
     PipelineExitStatusTracker? PipelineExitStatusTracker = null,
     IShellBlockExecutor? BlockExecutor = null,
     bool OutputIsCaptured = false,
-    IScopedCommandView? ScopedCommands = null)
+    IScopedCommandView? ScopedCommands = null,
+    IShellNamedTypeView? ShellTypes = null)
 {
     public ITypeResolver TypeResolver => ScopedTypeResolver ?? Runtime.TypeResolver;
 
