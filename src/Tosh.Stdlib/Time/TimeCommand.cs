@@ -125,7 +125,7 @@ public sealed class TimeCommand : ShellCommand
             yield break;
         }
 
-        if (target is string commandName && context.Runtime.Commands.TryGet(commandName, out var resolved))
+        if (target is string commandName && context.VisibleCommands.TryGet(commandName, out var resolved))
         {
             var forwardArgs = context.Arguments.Skip(1).ToList();
             var innerContext = new CommandContext(

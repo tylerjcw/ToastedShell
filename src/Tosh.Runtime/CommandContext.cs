@@ -22,9 +22,21 @@ public sealed record CommandContext(
     ITypeResolver? ScopedTypeResolver = null,
     PipelineExitStatusTracker? PipelineExitStatusTracker = null,
     IShellBlockExecutor? BlockExecutor = null,
-    bool OutputIsCaptured = false)
+    bool OutputIsCaptured = false,
+    IScopedCommandView? ScopedCommands = null)
 {
     public ITypeResolver TypeResolver => ScopedTypeResolver ?? Runtime.TypeResolver;
+
+    /// <summary>
+    /// The commands an introspecting command should be able to see: the caller's lexical scopes
+    /// when there are any, and the global registry otherwise.
+    /// </summary>
+    /// <remarks>
+    /// Reach for this rather than <c>Runtime.Commands</c> in anything that reports on commands —
+    /// <c>help</c>, <c>which</c>, completion — or it will not see a function the running script
+    /// declared. See <see cref="IScopedCommandView"/> for why one is invisible to the other.
+    /// </remarks>
+    public IScopedCommandView VisibleCommands => ScopedCommands ?? Runtime.Commands;
 
     public TextSpan? GetArgumentSpan(int index) => Invocation?.GetArgumentSpan(index);
 

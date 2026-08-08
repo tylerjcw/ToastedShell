@@ -1,6 +1,6 @@
 namespace Tosh.Runtime;
 
-public sealed class ShellCommandRegistry
+public sealed class ShellCommandRegistry : IScopedCommandView
 {
     private readonly Dictionary<string, IShellCommand> _commands = new(StringComparer.Ordinal);
     // alias name -> canonical command name. Aliases are additional invocation names that

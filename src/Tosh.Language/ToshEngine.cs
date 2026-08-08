@@ -245,6 +245,19 @@ public sealed partial class ToshEngine : IShellEvaluator
         return new ScopedTypeResolver(baseResolver, _scopes.ToArray());
     }
 
+    /// <summary>
+    /// Snapshots the commands visible from here, so an introspecting command can see what the
+    /// caller can rather than only what is globally registered (<c>TS-P2-54</c>).
+    /// </summary>
+    internal IScopedCommandView CreateScopedCommandView()
+    {
+        // No scope means nothing shadows the registry, and the registry is already a view — the
+        // `-c` prompt takes this path, which is why introspection appeared to work there.
+        return _scopes.Count == 0
+            ? Runtime.Commands
+            : new ScopedCommandView(_scopes.ToArray(), Runtime.Commands);
+    }
+
     public ParseResult Parse(string source, string sourceName = "<input>")
     {
         var result = ToshParser.Parse(source, sourceName, CreateParseContext());
@@ -2044,7 +2057,7 @@ public sealed partial class ToshEngine : IShellEvaluator
             allocationSpecification = values[0];
         }
 
-        var context = new CommandContext(Runtime, AsyncEnumerableExtensions.Empty<object?>(), [allocationSpecification], cancellationToken, ScopedTypeResolver: CreateScopedTypeResolver(), BlockExecutor: _ownBlockExecutor);
+        var context = new CommandContext(Runtime, AsyncEnumerableExtensions.Empty<object?>(), [allocationSpecification], cancellationToken, ScopedTypeResolver: CreateScopedTypeResolver(), BlockExecutor: _ownBlockExecutor, ScopedCommands: CreateScopedCommandView());
         var size = NativeCommandUtilities.ResolveAllocationSize(context, allocationSpecification, 0);
 
         if (size < 0)
@@ -3648,7 +3661,8 @@ public sealed partial class ToshEngine : IShellEvaluator
                         EmptyAsyncEnumerable(),
                         new object?[] { shellEvent },
                         cancellationToken,
-                        BlockExecutor: _ownBlockExecutor);
+                        BlockExecutor: _ownBlockExecutor,
+                        ScopedCommands: CreateScopedCommandView());
 
                     await foreach (var value in functionCommand.ExecuteAsync(context))
                     {
@@ -6962,7 +6976,8 @@ public sealed partial class ToshEngine : IShellEvaluator
             CreateScopedTypeResolver(),
             pipelineExitStatusTracker,
             BlockExecutor: _ownBlockExecutor,
-            OutputIsCaptured: outputIsCaptured);
+            OutputIsCaptured: outputIsCaptured,
+            ScopedCommands: CreateScopedCommandView());
 
         if (Runtime.Config.Shell.Trace)
         {
@@ -8060,7 +8075,8 @@ public sealed partial class ToshEngine : IShellEvaluator
                             invocation,
                             IsPipelined: false,
                             ScopedTypeResolver: CreateScopedTypeResolver(),
-                            BlockExecutor: _ownBlockExecutor);
+                            BlockExecutor: _ownBlockExecutor,
+                            ScopedCommands: CreateScopedCommandView());
                         var results = await AsyncEnumerableExtensions.ToListAsync(
                             callable.InvokeAsync(context),
                             cancellationToken);
@@ -15848,7 +15864,8 @@ public sealed partial class ToshEngine : IShellEvaluator
             AsyncEnumerableExtensions.Empty<object?>(),
             arguments,
             cancellationToken,
-            ScopedTypeResolver: CreateScopedTypeResolver());
+            ScopedTypeResolver: CreateScopedTypeResolver(),
+            ScopedCommands: CreateScopedCommandView());
 
         return await AsyncEnumerableExtensions.ToListAsync(command.ExecuteAsync(context), cancellationToken);
     }

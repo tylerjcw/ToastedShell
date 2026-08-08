@@ -1132,11 +1132,11 @@ public static class HelpCatalog
                 Notes: "Tuples preserve positional values and expose `Item1`, `Item2`, and so on."),
         };
 
-    public static IReadOnlyList<HelpSummary> BuildSummaries(ToshRuntime runtime)
+    public static IReadOnlyList<HelpSummary> BuildSummaries(ToshRuntime runtime, IScopedCommandView? commands = null)
     {
         ArgumentNullException.ThrowIfNull(runtime);
 
-        return BuildTopics(runtime)
+        return BuildTopics(runtime, commands)
             .OrderBy(topic => topic.Category, StringComparer.OrdinalIgnoreCase)
             .ThenBy(topic => topic.Name, StringComparer.OrdinalIgnoreCase)
             .Select(topic => new HelpSummary(
@@ -1149,24 +1149,24 @@ public static class HelpCatalog
             .ToArray();
     }
 
-    public static IReadOnlyList<HelpTopic> BuildTopics(ToshRuntime runtime)
+    public static IReadOnlyList<HelpTopic> BuildTopics(ToshRuntime runtime, IScopedCommandView? commands = null)
     {
         ArgumentNullException.ThrowIfNull(runtime);
-        return BuildStaticTopics(runtime);
+        return BuildStaticTopics(runtime, commands);
     }
 
-    public static IReadOnlyList<HelpCategoryInfo> BuildCategories(ToshRuntime runtime)
+    public static IReadOnlyList<HelpCategoryInfo> BuildCategories(ToshRuntime runtime, IScopedCommandView? commands = null)
     {
         ArgumentNullException.ThrowIfNull(runtime);
 
-        return BuildStaticTopics(runtime)
+        return BuildStaticTopics(runtime, commands)
             .GroupBy(topic => topic.Category, StringComparer.OrdinalIgnoreCase)
             .OrderBy(group => group.Key, StringComparer.OrdinalIgnoreCase)
             .Select(group => new HelpCategoryInfo(group.Key, group.Count()))
             .ToArray();
     }
 
-    public static HelpTopic? ResolveTopic(ToshRuntime runtime, string name)
+    public static HelpTopic? ResolveTopic(ToshRuntime runtime, string name, IScopedCommandView? commands = null)
     {
         ArgumentNullException.ThrowIfNull(runtime);
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
@@ -1178,7 +1178,7 @@ public static class HelpCatalog
             return canonicalShellTopic;
         }
 
-        var topics = BuildStaticTopicIndex(runtime);
+        var topics = BuildStaticTopicIndex(runtime, commands);
 
         if (topics.TryGetValue(name, out var topic))
         {
@@ -1253,12 +1253,16 @@ public static class HelpCatalog
         return false;
     }
 
-    public static IReadOnlyList<HelpSearchResult> Search(ToshRuntime runtime, string query, int maxResults = 12)
+    public static IReadOnlyList<HelpSearchResult> Search(
+        ToshRuntime runtime,
+        string query,
+        int maxResults = 12,
+        IScopedCommandView? commands = null)
     {
         ArgumentNullException.ThrowIfNull(runtime);
         ArgumentException.ThrowIfNullOrWhiteSpace(query);
 
-        return BuildStaticTopics(runtime)
+        return BuildStaticTopics(runtime, commands)
             .Select(topic => new { Topic = topic, Score = ScoreTopic(topic, query) })
             .Where(result => result.Score > 0.0d)
             .OrderByDescending(result => result.Score)
@@ -1275,16 +1279,20 @@ public static class HelpCatalog
             .ToArray();
     }
 
-    public static IReadOnlyList<HelpSearchResult> GetRelated(ToshRuntime runtime, string name, int maxResults = 6)
+    public static IReadOnlyList<HelpSearchResult> GetRelated(
+        ToshRuntime runtime,
+        string name,
+        int maxResults = 6,
+        IScopedCommandView? commands = null)
     {
         ArgumentNullException.ThrowIfNull(runtime);
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
 
-        var topicIndex = BuildStaticTopicIndex(runtime);
+        var topicIndex = BuildStaticTopicIndex(runtime, commands);
 
         if (!topicIndex.TryGetValue(name, out var topic))
         {
-            var resolved = ResolveTopic(runtime, name);
+            var resolved = ResolveTopic(runtime, name, commands);
 
             if (resolved is null)
             {
@@ -1305,11 +1313,11 @@ public static class HelpCatalog
             .ToArray();
     }
 
-    private static Dictionary<string, HelpTopic> BuildStaticTopicIndex(ToshRuntime runtime)
+    private static Dictionary<string, HelpTopic> BuildStaticTopicIndex(ToshRuntime runtime, IScopedCommandView? commands = null)
     {
         var index = new Dictionary<string, HelpTopic>(StringComparer.OrdinalIgnoreCase);
 
-        foreach (var topic in BuildStaticTopics(runtime))
+        foreach (var topic in BuildStaticTopics(runtime, commands))
         {
             index.TryAdd(topic.Name, topic);
 
@@ -1322,10 +1330,13 @@ public static class HelpCatalog
         return index;
     }
 
-    private static IReadOnlyList<HelpTopic> BuildStaticTopics(ToshRuntime runtime)
+    private static IReadOnlyList<HelpTopic> BuildStaticTopics(ToshRuntime runtime, IScopedCommandView? scopedCommands = null)
     {
-        var commands = runtime.Commands.All.ToArray();
-        var aliasMap = BuildBuiltInAliasMap(commands, runtime.Commands.GetAliasMap());
+        // `TS-P2-54`. The caller's view when it has one, so a function the running script
+        // declared is a topic like any other; the global registry otherwise.
+        var view = scopedCommands ?? runtime.Commands;
+        var commands = view.All.ToArray();
+        var aliasMap = BuildBuiltInAliasMap(commands, view.GetAliasMap());
         var topics = new List<HelpTopic>(commands.Length + LanguageTopics.Count);
 
         foreach (var command in commands)
@@ -1581,28 +1592,99 @@ public static class HelpCatalog
             : command.Usage;
     }
 
+    /// <summary>
+    /// Fills in each topic's computed "Related" list, after whatever the topic declares.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <c>TS-P2-53</c>. Sharing a *category* used to be worth 40 points on its own, and every
+    /// user-defined function lands in <c>Scripting</c> — so a two-line <c>func add</c> came back
+    /// related to <c>xbox · benchmark · compress · cpu-info · dbg</c>, five commands it has
+    /// nothing whatever to do with. A relationship now has to be earned by shared *content*:
+    /// category and kind still rank candidates, but they can no longer make one.
+    /// </para>
+    /// <para>
+    /// Shared words are weighted by how rare they are across the whole help corpus rather than
+    /// counted. A word appearing in two hundred topics ("the", "value", "command") says nothing;
+    /// one appearing in three says a great deal. That is measured from the topics in hand rather
+    /// than from a hand-kept stopword list, which would need extending every time the shell
+    /// gained a word it happened to overuse.
+    /// </para>
+    /// </remarks>
     private static IReadOnlyList<HelpTopic> AddRelatedTopics(IReadOnlyList<HelpTopic> topics)
     {
-        return topics
-            .Select(topic => topic with
+        var tokensByTopic = new HashSet<string>[topics.Count];
+        var documentFrequency = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
+        for (var index = 0; index < topics.Count; index++)
+        {
+            var topic = topics[index];
+            // Usage is deliberately not a source here. It is mostly type and syntax words —
+            // `int`, `path`, `name` — so two unrelated commands taking an `int` looked related,
+            // which is the same "shared something meaningless" mistake at a smaller scale. It
+            // still feeds `Search`, where matching a type name is what the user asked for.
+            var tokens = ExtractTokens(topic.Name, topic.Description, topic.Notes ?? string.Empty);
+            tokensByTopic[index] = tokens;
+
+            foreach (var token in tokens)
+            {
+                documentFrequency.TryGetValue(token, out var count);
+                documentFrequency[token] = count + 1;
+            }
+        }
+
+        var results = new HelpTopic[topics.Count];
+
+        for (var index = 0; index < topics.Count; index++)
+        {
+            var topic = topics[index];
+            var computed = new List<(string Name, double Score)>();
+
+            for (var other = 0; other < topics.Count; other++)
+            {
+                if (other == index)
+                {
+                    continue;
+                }
+
+                var candidate = topics[other];
+
+                if (topic.Aliases.Contains(candidate.Name, StringComparer.OrdinalIgnoreCase) ||
+                    candidate.Aliases.Contains(topic.Name, StringComparer.OrdinalIgnoreCase) ||
+                    string.Equals(candidate.Name, topic.Name, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                var score = ScoreRelated(
+                    topic,
+                    candidate,
+                    tokensByTopic[index],
+                    tokensByTopic[other],
+                    documentFrequency,
+                    topics.Count);
+
+                if (score > 0.0d)
+                {
+                    computed.Add((candidate.Name, score));
+                }
+            }
+
+            results[index] = topic with
             {
                 Related = topic.Related
-                    .Concat(
-                        topics
-                    .Where(candidate => !string.Equals(candidate.Name, topic.Name, StringComparison.OrdinalIgnoreCase))
-                    .Where(candidate => !topic.Aliases.Contains(candidate.Name, StringComparer.OrdinalIgnoreCase))
-                    .Where(candidate => !candidate.Aliases.Contains(topic.Name, StringComparer.OrdinalIgnoreCase))
-                    .Select(candidate => new { candidate.Name, Score = ScoreRelated(topic, candidate) })
-                    .Where(result => result.Score > 0.0d)
-                    .OrderByDescending(result => result.Score)
-                    .ThenBy(result => result.Name, StringComparer.OrdinalIgnoreCase)
-                    .Select(result => result.Name)
-                    .Take(8))
+                    .Concat(computed
+                        .OrderByDescending(result => result.Score)
+                        .ThenBy(result => result.Name, StringComparer.OrdinalIgnoreCase)
+                        .Select(result => result.Name)
+                        .Take(8))
                     .Distinct(StringComparer.OrdinalIgnoreCase)
                     .Take(5)
                     .ToArray(),
-            })
-            .ToArray();
+            };
+        }
+
+        return results;
     }
 
     private static double ScoreTopic(HelpTopic topic, string query)
@@ -1677,9 +1759,58 @@ public static class HelpCatalog
         return score;
     }
 
-    private static double ScoreRelated(HelpTopic left, HelpTopic right)
+    /// <summary>
+    /// How strongly two topics are related, or zero when they are not.
+    /// </summary>
+    /// <remarks>
+    /// Shared content is the gate: without it the answer is zero, however much else the two have
+    /// in common. A word counts for <c>log(N / documentFrequency)</c>, so a word the corpus uses
+    /// everywhere contributes almost nothing and a rare one dominates. Category and kind are
+    /// added afterwards, where they order candidates that already qualify — which is the job
+    /// they can actually do.
+    /// </remarks>
+    private static double ScoreRelated(
+        HelpTopic left,
+        HelpTopic right,
+        HashSet<string> leftTokens,
+        HashSet<string> rightTokens,
+        IReadOnlyDictionary<string, int> documentFrequency,
+        int topicCount)
     {
-        double score = 0.0d;
+        var shared = 0;
+
+        foreach (var token in leftTokens)
+        {
+            if (!rightTokens.Contains(token) ||
+                !documentFrequency.TryGetValue(token, out var frequency) ||
+                frequency <= 0)
+            {
+                continue;
+            }
+
+            // A word in more than a tenth of all topics is corpus furniture, not a subject.
+            // Measured against the shipped corpus: a quarter admits words like "file" and
+            // "directory", which relate `cd` to `append-file` and `lsblk`. A tenth keeps `cd`
+            // with `pwd`, `eval` and `source`, at the price of leaving two dozen terse
+            // one-liners with no computed relations at all — which is the trade this item
+            // asked for, since a topic with nothing genuine to point at should point at
+            // nothing. A topic that wants relations the corpus cannot infer declares `@see`.
+            if (frequency * 10 > topicCount)
+            {
+                continue;
+            }
+
+            shared++;
+        }
+
+        // The gate, and the whole of the change: two topics that share no distinctive word are
+        // not related, however much else they have in common.
+        if (shared < 2)
+        {
+            return 0.0d;
+        }
+
+        var score = shared * 8.0d;
 
         if (string.Equals(left.Category, right.Category, StringComparison.OrdinalIgnoreCase))
         {
@@ -1690,10 +1821,6 @@ public static class HelpCatalog
         {
             score += 8.0d;
         }
-
-        var leftTokens = ExtractTokens(left.Name, left.Description, left.Usage, left.Notes ?? string.Empty);
-        var rightTokens = ExtractTokens(right.Name, right.Description, right.Usage, right.Notes ?? string.Empty);
-        score += leftTokens.Intersect(rightTokens, StringComparer.OrdinalIgnoreCase).Count() * 8.0d;
 
         return score;
     }

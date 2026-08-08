@@ -485,8 +485,8 @@ closed.
 | `TS-P2-50` | Complete — fixed 2026-08-02 | Filed as one defect ("a comma inside `<…>` immediately followed by `(` mis-parses") and was two, sharing a symptom. **(a)** A base constructor could be given only one argument: `extends P0($a, $b)` failed with `tosh.parser.missing_pipeline_separator` and no type argument was involved anywhere — each argument was read as a pipeline running until the close paren, so the separating comma was neither a terminator nor a valid continuation. **(b)** `(new P<int, int>(3, 4)).A` parsed the type arguments as a tuple and reported `Member 'A' was not found on type 'ToshTuple'`, because the scanner deciding tuple-or-not did not step over a type argument list as its two sibling scanners already did. | Base constructor argument lists of any arity parse, read the way every other parenthesised argument list is; a type argument list of any arity inside parentheses is not mistaken for a tuple, and tuples and comparisons are unaffected. |
 | `TS-P2-51` | Complete — fixed 2026-08-08 | A static property cannot be assigned: `B.S = 5` fails to parse with `tosh.parser.variable_references_require_dollar`, on the declaring class as much as through a subclass, so a static is effectively read-only after its initializer. `TrySetStaticMember` has exactly one caller — declaration-time initialization — and no user-reachable path. Found while probing `TS-P1-09`. | Assignment to a static property parses and stores to the declaring class's slot; reading it back through any subclass sees the same value. |
 | `TS-P2-52` | Complete — fixed 2026-08-06 | `exit` does not stop a running script: `echo one` / `exit 0` / `echo two` prints both lines. `RequestExit` records the code and sets a flag nothing in the script execution path consults, so a script cannot decline to continue. Found while adding `--help` to scripts, which needed a way to answer and then not run the body and had to introduce a signal exception instead. | `exit` ends the current script immediately with its exit code; the REPL and sourced-file behaviours are unchanged and covered by tests. |
-| `TS-P2-53` | Planned — filed 2026-08-02 | `help <name>` computes a "Related" list by token similarity that is noise for user-defined functions: `help add` on a two-line function suggests `xbox · benchmark · compress · cpu-info · dbg`. A declared `@see` now leads the list, but the computed remainder still follows it. Found while reviewing the help system. | Related suggestions are relevant or absent; a topic with no genuine relations shows no Related section rather than five arbitrary commands. |
-| `TS-P2-54` | Planned — filed 2026-08-02 | A `require`d function is invisible to `help`: `require "lib.tosh"` then `help fn` reports "Help topic 'fn' was not found", although the function is callable. Doc-comments on required libraries are therefore unreachable through the help system. Found while reviewing the help system. | `help` resolves functions brought in by `require`, with their doc-comments, and a test covers the required-file path. |
+| `TS-P2-53` | Complete — fixed 2026-08-08 | `help <name>` computed a "Related" list in which sharing a *category* was worth 40 points on its own, and every user-defined function lands in `Scripting` — so `help add` on a two-line function suggested `xbox · benchmark · compress · cpu-info · dbg`. All 342 shipped topics had a Related list, whether or not they had anything to relate to. | A relationship must be earned by shared content: two topics sharing no distinctive word score zero, however much else they have in common. Words are weighted by rarity across the corpus rather than counted, so "the" and "value" cannot manufacture one, and usage strings no longer contribute — a shared `int` is not a subject. Measured: `add` goes empty, `each` keeps `parallel · flat-map · map · where · filter` unchanged, and 318 of 342 topics keep a list. A topic wanting relations the corpus cannot infer declares `@see`. |
+| `TS-P2-54` | Complete — fixed 2026-08-08 | **Introspection could not see a function the running script had declared.** Filed as "a `require`d function is invisible to `help`"; measuring widened and corrected it. A `func` without `global` or `export` registers in the innermost lexical scope, running a script pushes one, and `HelpCatalog` read the global registry — so `help fn` answered "topic not found" for a function the previous line had called, however it got there: required, sourced, or declared in that same file. At `-c` there is no scope to land in, which is why the identical source worked when pasted. `help` was not alone: `which fn` printed nothing and `time "fn"` reported the target was not executable. | `CommandContext` carries a scope-aware view of commands — the twin of the `ScopedTypeResolver` already there — and `help`, `which`, `apropos` and `time` read it, so a script's own functions, its sourced ones, and its required exports are all introspectable with their doc-comments. A function declared inside a block does not outlive its scope. |
 | `TS-P2-55` | Planned — filed 2026-08-06 | `cast` cannot target a ToastScript-declared type: `cast Fuel $v` on an enum value fails with `tosh.runtime.command_failed`, and the same is expected of classes, structs, records and unions. `cast` resolves its target through CLR type lookup, so a name declared in ToastScript is never found and the conversion path is never reached — casting an enum *from* its value now works, but casting *to* one does not. Found while fixing enum numeric conversion. | `cast` resolves ToastScript-declared types by name, including nested ones (`cast Outer.Inner $v`), and reports an unknown target distinctly from a failed conversion. |
 | `TS-P2-56` | Complete — fixed 2026-08-06 | A script's exit code does not reach the process: `exit 3` in a script, and `tosh -c 'exit 3'`, both exit 0. `ExitCommand` records the code through `SetLastExitCode` and the host reads `runtime.LastExitCode` afterwards, so something between resets it — most likely per-statement exit-status tracking overwriting it on the way out. Pre-existing: the stable binary behaves the same. Found while fixing `TS-P2-52`. | `exit <n>` leaves the process with status `<n>` from a script, from `-c`, and from inside a function or loop; a script that ends without `exit` still reports the status of its last command. |
 | `TS-P2-57` | Planned — filed 2026-08-08 | `>>` does not create the file it appends to: `"x" \| to text >> missing.txt` fails with "no such file or directory" rather than creating it, so an append redirect only works against a file that already exists. Found while building a probe for `TS-P1-19`. | `>>` creates the target when absent and appends when present, matching `>` and every POSIX shell; a directory that does not exist is still a diagnostic. |
@@ -494,6 +494,8 @@ closed.
 | `TS-P2-59` | Planned — filed 2026-08-08 | Tuple destructuring does not parse: `var (x, y) = (1, 2)` fails with `tosh.bind.unknown_command`, and `const (A, B) = (1, 2)` likewise, although tuples construct and index perfectly well. Confirmed pre-existing against the installed binary. Found while probing `TS-P1-12`. | `var (a, b) = <tuple>` binds each element, with arity mismatch reported as a diagnostic; `const` and `let`-position forms behave alike. |
 | `TS-P2-60` | Complete — fixed 2026-08-08 | **Nothing expanded `~` at the shell's argument layer.** Filed as "expanded for external commands but not builtins"; measuring corrected that — `/bin/echo ~` received a literal tilde too, and `realpath ~` worked because it resolves as a *builtin* that path-resolves its own arguments. `cd`, `ls`, `realpath` and `read-file` all expanded a tilde; `echo` and every external did not. Whether `~` meant the home directory was decided separately by each command that happened to take a path. `~user` was never expanded anywhere, and a bare `~` was read as a command name — reported as `tosh.bind.unknown_command` with "did you mean 'f'?". Reported from use. | `~`, `~/path`, `~name` and `~name/path` expand for every command, builtin and external alike, before globbing; only barewords expand, so `"~"` and a variable holding one stay literal, and a tilde that is not the first character is left alone. A `~name` matching neither a directory alias nor a user is `tosh.runtime.unknown_tilde_target` rather than silently literal. A command head expands too, so a bare `~` changes directory under `auto_cd` and otherwise reports a directory exactly as the absolute path does. Both "did you mean" paths decline on words that are not name-shaped. |
 | `TS-P2-61` | Planned — filed 2026-08-08 | A `shy static` property is readable from outside its class: `class B { shy static prop S = 1 }` then `B.S` answers 1. `TryGetStaticMember` checks `shy` for nested types and not for properties, so the modifier is honoured for one kind of static member and ignored for the other. Assignment inherits the leak deliberately — a `shy` static that refused writes while permitting reads would be a worse asymmetry than the one already present. Found while fixing `TS-P2-51`. | `shy` on a static property is enforced on both reads and writes, from outside the class and through a subclass, with the same diagnostic a shy nested type raises; a method inside the declaring class still sees it. |
+| `TS-P2-62` | Planned — filed 2026-08-08 | `require "./lib.tosh"` does not execute the script in the current scope as the specification says it does. A plain `func` in the required file is unreachable afterwards, by bare name and by module-qualified name alike; only `export func` is imported, because `ImportRequiredArtifact` copies `artifact.Exports` and nothing else. The spec section reads "Execute script in current scope" over a bare-path example, so one of the two is wrong. `source` does execute in the current scope and is the working spelling today. Found while fixing `TS-P2-54`, whose filed premise assumed a plain required function was callable. | Decided and made consistent: either `require` with a bare path imports every declaration the way `source` does, or the specification says that `require` imports exports only and the example is corrected — with a diagnostic when a required file exports nothing, since silently importing nothing is what made this invisible. |
+| `TS-P2-63` | Planned — filed 2026-08-08 | A `HelpTopic` renders as a bare `[HelpTopic]` type header instead of its panel whenever it is not the only value a script produces. `help ls` alone in a script panels; `echo one` then `help ls` does not. Confirmed pre-existing against the installed binary, and the same root/nested split `TS-P3-10` decided for collections — except that here the nested form loses the rendering entirely rather than choosing a terser one. Found while fixing `TS-P2-54`. | A help topic renders as its panel wherever it appears in a script, or the nested form is a deliberate terser rendering rather than a type header; whichever is chosen matches what `TS-P3-10` settled for collections. |
 
 **Implementation note for `TS-P2-11` (July 25 review recommendation).** The
 `TS-P2-01`/`TS-P2-02`/`TS-P2-04`/`TS-P2-12`–`TS-P2-15` family shares one root
@@ -4846,3 +4848,84 @@ a reader more than the original error did.
 **Deliberately not expanded:** a tilde anywhere but the first character. `notes.txt~` is a backup
 file, and `--out=~/x` keeps its tilde — POSIX expands after `=` in some assignments, and matching
 that is a separate decision rather than something to arrive at by widening a condition.
+
+## `TS-P2-54` and `TS-P2-53` — what a script can see of itself (August 8)
+
+`TS-P2-54` was filed as "a `require`d function is invisible to `help`, although the function is
+callable". Measuring it first corrected the reading twice over.
+
+```
+main.tosh:                          -c:
+  ## Doc.                             ## Doc.
+  func localfn() { return 1 }         func localfn() { return 1 }
+  localfn        → 1                  localfn        → 1
+  help localfn   → not found          help localfn   → the panel
+```
+
+`require` had nothing to do with it. A function declared in a **script file** is invisible to
+`help` however it got there — required, sourced, or written on the line above — while the identical
+source pasted at `-c` works. And `help` was not alone: `which localfn` printed nothing at all, and
+`time "localfn"` reported that the target was not executable, both for a function the same script
+had just called.
+
+**The cause is one line of scoping.** `DeclareCommand` registers a `func` without `global` or
+`export` into the innermost lexical scope; running a script pushes one; `HelpCatalog` reads
+`runtime.Commands`, the global registry. At `-c` the scope stack is empty, so the same declaration
+goes global — which is exactly why the defect vanished when the script was pasted rather than run.
+
+So the fix is not in `help`. `CommandContext` now carries an `IScopedCommandView`, the command-side
+twin of the `ScopedTypeResolver` it already carries for precisely this reason, and `help`, `which`,
+`apropos` and `time` read it instead of the registry. `ShellCommandRegistry` implements the
+interface itself, so a caller with no lexical scope — the prompt, the TUI, the language server —
+passes the registry rather than a wrapper. The view is a snapshot taken per invocation, so a
+command reports the scopes it was called from rather than whatever has been pushed since.
+
+**The filed premise was also wrong about `require`.** A plain `func` in a required file is not
+callable afterwards at all: `require` imports `artifact.Exports`, and only `export func` populates
+those. The specification says `require "./utils.tosh"` executes the script in the current scope,
+which is what `source` does and `require` does not. Filed as `TS-P2-62` rather than decided here —
+it is a question about what `require` is for, not a defect with an obvious answer.
+
+**The first draft of these tests was worthless, and the control caught it.** The harness called
+`ExecuteToListAsync(text, scriptPath)` — passing a script *path* as the source name, which changes
+nothing: that is the `-c` path, where the defect never appeared. Six of the seven tests passed
+against the unfixed sources. Running the file through `ExecuteScriptFileAsync`, which is what
+pushes the scope, is the difference between reproducing the defect and describing it. That is twice
+in two days that a test harness has failed to recreate the condition it was written for, and both
+times the negative control was the only thing that said so.
+
+### `TS-P2-53` — a relationship has to be earned
+
+Same review, different mechanism. `ScoreRelated` gave 40 points for sharing a category, 8 for
+sharing a kind, and 8 per shared word — so two topics that shared *nothing but a category* scored
+48 and qualified. Every user-defined function lands in `Scripting`, which is why a two-line
+`func add` came back related to `xbox · benchmark · compress · cpu-info · dbg`. All 342 shipped
+topics had a Related list, whether or not they had anything to relate to.
+
+Content is now the gate: two topics sharing no distinctive word score zero, whatever else they have
+in common. Category and kind still rank candidates that qualify — the job they can actually do.
+"Distinctive" is measured against the corpus rather than a hand-kept stopword list: a word in more
+than a tenth of all topics is furniture, and a shared one has to appear in at least two places
+before it counts. Usage strings were dropped as a token source, because they are mostly type words
+— two unrelated commands both taking an `int` is not a relationship.
+
+Three thresholds were tried and measured rather than reasoned about:
+
+| rule | `add` | `each` | `cd` | topics with relations |
+|---|---|---|---|---|
+| before | `benchmark, dbg, unless, with-retry, assert` | `parallel, flat-map, map, where, filter` | — | 342 / 342 |
+| idf-weighted, usage included | `is, set-prop, cast, constructors, date` | `parallel, from, to, lsblk, require` | — | 342 / 342 |
+| ≥2 shared, rare ≤ ¼, no usage | `∅` | `parallel, flat-map, map, where, filter` | `append-file, findmnt, length, lsblk` | 337 / 342 |
+| **≥2 shared, rare ≤ ⅒, no usage** | **`∅`** | **`parallel, flat-map, map, where, filter`** | **`pwd, eval, exit, prompt-dir, source`** | **318 / 342** |
+
+The middle row is why the first idea was abandoned: weighting by rarity alone made rare words
+outrank category so heavily that `each` lost `map` and `where` and gained `lsblk`. The last row
+costs two dozen terse one-liners their computed relations — `min`, `max`, `median`, `cp`, `ln` —
+and that is the trade this item asked for: a topic with nothing genuine to point at should point at
+nothing, and one that wants relations the corpus cannot infer declares `@see`.
+
+**Also found, not fixed:** a `HelpTopic` renders as a bare `[HelpTopic]` type header rather than its
+panel whenever it is not the only value a script produces. `help ls` alone panels; `echo one`
+followed by `help ls` does not. Pre-existing — the installed binary does the same — and the same
+root/nested split `TS-P3-10` decided for collections, except that the nested form here loses the
+rendering rather than choosing a terser one. Filed as `TS-P2-63`.

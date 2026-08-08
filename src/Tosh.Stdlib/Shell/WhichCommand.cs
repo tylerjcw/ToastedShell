@@ -39,7 +39,7 @@ public sealed class WhichCommand : ShellCommand
                 throw new InvalidOperationException($"The '{Name}' command requires non-empty command names.");
             }
 
-            if (context.Runtime.Commands.TryGet(name, out var builtIn))
+            if (context.VisibleCommands.TryGet(name, out var builtIn))
             {
                 yield return new CommandResolution(
                     name,

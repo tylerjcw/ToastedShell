@@ -64,7 +64,7 @@ public sealed class HelpCommand : ShellCommand
                         continue;
                     }
 
-                    var pipedResolvedTopic = HelpCatalog.ResolveTopic(context.Runtime, topic);
+                    var pipedResolvedTopic = HelpCatalog.ResolveTopic(context.Runtime, topic, context.ScopedCommands);
 
                     if (pipedResolvedTopic is null)
                     {
@@ -77,7 +77,7 @@ public sealed class HelpCommand : ShellCommand
                 yield break;
             }
 
-            foreach (var topic in HelpCatalog.BuildSummaries(context.Runtime))
+            foreach (var topic in HelpCatalog.BuildSummaries(context.Runtime, context.ScopedCommands))
             {
                 context.CancellationToken.ThrowIfCancellationRequested();
                 yield return topic;
@@ -103,7 +103,7 @@ public sealed class HelpCommand : ShellCommand
                 throw new InvalidOperationException($"The '{Name} search' form requires a query.");
             }
 
-            foreach (var result in HelpCatalog.Search(context.Runtime, query))
+            foreach (var result in HelpCatalog.Search(context.Runtime, query, commands: context.ScopedCommands))
             {
                 context.CancellationToken.ThrowIfCancellationRequested();
                 yield return result;
@@ -127,7 +127,7 @@ public sealed class HelpCommand : ShellCommand
             {
                 var relatedTopic = CommandArguments.RequireString(arguments, 1, "topic");
 
-                foreach (var result in HelpCatalog.GetRelated(context.Runtime, relatedTopic))
+                foreach (var result in HelpCatalog.GetRelated(context.Runtime, relatedTopic, commands: context.ScopedCommands))
                 {
                     context.CancellationToken.ThrowIfCancellationRequested();
                     yield return result;
@@ -153,7 +153,7 @@ public sealed class HelpCommand : ShellCommand
                     continue;
                 }
 
-                foreach (var result in HelpCatalog.GetRelated(context.Runtime, relatedTopic))
+                foreach (var result in HelpCatalog.GetRelated(context.Runtime, relatedTopic, commands: context.ScopedCommands))
                 {
                     context.CancellationToken.ThrowIfCancellationRequested();
                     yield return result;
@@ -165,7 +165,7 @@ public sealed class HelpCommand : ShellCommand
 
         if (string.Equals(first, "categories", StringComparison.OrdinalIgnoreCase))
         {
-            foreach (var category in HelpCatalog.BuildCategories(context.Runtime))
+            foreach (var category in HelpCatalog.BuildCategories(context.Runtime, context.ScopedCommands))
             {
                 context.CancellationToken.ThrowIfCancellationRequested();
                 yield return category;
@@ -174,7 +174,7 @@ public sealed class HelpCommand : ShellCommand
             yield break;
         }
 
-        var resolvedTopic = HelpCatalog.ResolveTopic(context.Runtime, first);
+        var resolvedTopic = HelpCatalog.ResolveTopic(context.Runtime, first, context.ScopedCommands);
 
         if (resolvedTopic is null)
         {
@@ -274,7 +274,7 @@ public sealed class HelpCommand : ShellCommand
             return (null, null);
         }
 
-        var initialTopicName = HelpCatalog.ResolveTopic(context.Runtime, initialQuery)?.Name;
+        var initialTopicName = HelpCatalog.ResolveTopic(context.Runtime, initialQuery, context.ScopedCommands)?.Name;
         return (initialQuery, initialTopicName);
     }
 
