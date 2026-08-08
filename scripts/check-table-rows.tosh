@@ -1,0 +1,29 @@
+## Reports item rows whose cell count does not match their table header.
+##
+## A `|` inside a description splits the row, so the table renders wrong and any tool that
+## addresses cells by position — `close-items.tosh` sets `$parts[2]` — writes to the wrong one.
+## `TS-P3-13`.
+##
+## @example check-table-rows.tosh docs/TOASTSCRIPT_STABILIZATION.md
+## @returns one line per malformed row, and a count; exit 1 when any is found
+var doc = $tosh.Script.Args[0]
+
+var expected = 6
+var bad = 0
+var checked = 0
+
+for line in (read-file $doc | lines) {
+    if ($line.StartsWith("| `TS-")) {
+        $checked = ($checked + 1)
+        var cells = ((($line.Replace("\\|", "\u0001")).Split("|")) | count)
+        if ($cells != $expected) {
+            $bad = ($bad + 1)
+            var id = (($line.Split("|"))[1].Trim())
+            echo $"{$id}: {$cells} cells, expected {$expected}"
+        }
+    }
+}
+
+echo $"checked={$checked} malformed={$bad}"
+
+if ($bad > 0) { exit 1 }

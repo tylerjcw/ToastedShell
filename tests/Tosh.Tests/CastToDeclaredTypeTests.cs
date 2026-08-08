@@ -21,6 +21,12 @@ namespace Tosh.Tests;
 /// repair.
 /// </para>
 /// <para>
+/// The probe types are given distinctive names on purpose. Bare type-name resolution scans every
+/// loaded assembly, so a class called <c>B</c> can be captured by a type some emitter test left in
+/// the process — which is what `TS-P2-48` is about, and which this file's own
+/// <c>cast B $d</c> hit before the names were changed.
+/// </para>
+/// <para>
 /// Resolution is CLR-first and declaration-second. That ordering is not a preference — asking
 /// the declaration side first broke the command's own documented example, because
 /// <c>cast list&lt;int&gt;</c> resolves to a *shell* descriptor for the builtin list type and
@@ -126,9 +132,9 @@ public sealed class CastToDeclaredTypeTests
     // ── Declared types that are not enums ──────────────────────────────────────
 
     [Theory]
-    [InlineData("class P { prop X = 7 }\nvar p = new P()\n(cast P $p).X", "7")]
-    [InlineData("struct Pt { prop X = 7 }\nvar p = new Pt()\n(cast Pt $p).X", "7")]
-    [InlineData("record R(a, b)\nvar r = new R(7, 2)\n(cast R $r).a", "7")]
+    [InlineData("class CastProbeClass { prop X = 7 }\nvar p = new CastProbeClass()\n(cast CastProbeClass $p).X", "7")]
+    [InlineData("struct CastProbeStruct { prop X = 7 }\nvar p = new CastProbeStruct()\n(cast CastProbeStruct $p).X", "7")]
+    [InlineData("record CastProbeRecord(a, b)\nvar r = new CastProbeRecord(7, 2)\n(cast CastProbeRecord $r).a", "7")]
     public async Task A_declared_value_casts_to_its_own_type(string source, string expected)
     {
         Assert.Equal(expected, await RunAsync(source));
@@ -140,17 +146,17 @@ public sealed class CastToDeclaredTypeTests
         // Decided by the same walk `is` uses, so `cast` and `is` cannot come to disagree.
         Assert.Equal("7", await RunAsync(
             """
-            class B { prop X = 7 }
-            class D extends B { }
-            var d = new D()
-            (cast B $d).X
+            class CastProbeBase { prop X = 7 }
+            class CastProbeDerived extends CastProbeBase { }
+            var d = new CastProbeDerived()
+            (cast CastProbeBase $d).X
             """));
     }
 
     [Fact]
     public async Task Casting_to_a_declared_class_does_not_construct_one()
     {
-        var diagnostic = await RunForDiagnosticAsync("class P { prop X = 1 }\ncast P 5");
+        var diagnostic = await RunForDiagnosticAsync("class CastProbeClass { prop X = 1 }\ncast CastProbeClass 5");
 
         Assert.Equal("tosh.runtime.cast_failed", diagnostic.Code);
         Assert.Contains("converts only a value that already is one", diagnostic.Title, StringComparison.Ordinal);

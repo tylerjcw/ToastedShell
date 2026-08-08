@@ -1,13 +1,58 @@
+## Files a new item row after an anchor row. Writes to an output path; never in place.
+##
+## Takes the cells separately rather than a pre-formatted row. `TS-P3-13`: a caller that hands
+## over `| id | status | text | text |` cannot say which `|` is a separator and which is content,
+## so a description quoting a pipeline — `$c | members`, `{| a = 1 |}` — silently split the row
+## into extra cells. Twenty of the board's rows were damaged that way before this changed.
+##
+## @example file-item.tosh doc.md out.md TS-P2-60 TS-P2-61 "Planned — filed 2026-08-08" "The description." "The intent."
+## @arg doc - the document to read
+## @arg out - where to write the result
+## @arg anchor - the item id to insert after
+## @arg id - the new item's id
+## @arg status - the status cell
+## @arg description - the description cell; pipes are escaped
+## @arg intent - the intent cell; pipes are escaped
 var doc = $tosh.Script.Args[0]
 var out = $tosh.Script.Args[1]
 var anchor = $tosh.Script.Args[2]
-var row = $tosh.Script.Args[3]
+var id = $tosh.Script.Args[3]
+var status = $tosh.Script.Args[4]
+var description = $tosh.Script.Args[5]
+var intent = $tosh.Script.Args[6]
+
+## A `|` inside a cell must be escaped, or it becomes a cell boundary. Already-escaped pipes are
+## left alone so a caller may pass either form.
+func escape-cell(text: string) -> string {
+    return (($text.Replace("\\|", "|")).Replace("|", "\\|"))
+}
+
+var row = $"| `" + $id + "` | " + (escape-cell $status) + " | " + (escape-cell $description) + " | " + (escape-cell $intent) + " |"
+
+## Counts real cell separators: a `\|` is content, not a boundary, so it is hidden before the
+## split. `Split("|")` alone counts both, which is what made the first draft of this guard reject
+## a correctly escaped row.
+func separator-count(text: string) -> int {
+    return ((($text.Replace("\\|", "\u0001")).Split("|")) | count)
+}
+
+var cells = (separator-count $row)
+if ($cells != 6) {
+    throw $"built a row with {$cells} cells, expected 6 — a cell still contains an unescaped pipe"
+}
+
 var lines = []
 var n = 0
+
 for line in (read-file $doc | lines) {
     $lines = ($lines + [$line])
-    if ($line.StartsWith($"| `" + $anchor + "` |")) { $lines = ($lines + [$row]); $n = ($n + 1) }
+    if ($line.StartsWith($"| `" + $anchor + "` |")) {
+        $lines = ($lines + [$row])
+        $n = ($n + 1)
+    }
 }
+
 if ($n != 1) { throw $"expected 1 anchor, found {$n}" }
+
 write-file $out (($lines | join "\n") + "\n") | ignore
 echo $"inserted={$n}"

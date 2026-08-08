@@ -1981,9 +1981,100 @@ public static class ToshParser
             var deferToken = NextToken();
             var body = ParseRequiredBlock("defer");
 
+            if (FindYieldInDeferredBlock(body) is { } strayYield)
+            {
+                _diagnostics.Add(new SyntaxDiagnostic(
+                    Code: "tosh.parser.yield_in_defer",
+                    Title: "A deferred block cannot yield.",
+                    Span: strayYield,
+                    Label: "this value would have nowhere to go",
+                    Help: "a deferred block runs while the function unwinds, after the consumer may "
+                        + "have stopped pulling, so there is no stream left for it to join. Move the "
+                        + "yield into the body, or collect the value and yield it before returning."));
+            }
+
             return new DeferStatementSyntax(
                 body,
                 TextSpan.FromBounds(deferToken.Span.Start, body.Span.End));
+        }
+
+        /// <summary>
+        /// Finds a <c>yield</c> that belongs to a deferred block, if there is one.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// `TS-P2-58`. A <c>yield</c> inside <c>defer</c> was evaluated and its value discarded:
+        /// <c>func g() { defer { yield 9 }\n yield 1 }</c> produced only <c>1</c>, and the
+        /// generator terminated cleanly, so nothing reported the loss. The deferred block itself
+        /// ran — the side effects landed — which made the silence look like correct behaviour.
+        /// </para>
+        /// <para>
+        /// Refused rather than delivered, per the decision recorded for the item: a deferred block
+        /// runs while the function unwinds, after a consumer may have stopped pulling, so there is
+        /// no stream for it to join and no ordering that could be written down honestly. Refusing
+        /// at parse time costs nothing at runtime and cannot be got wrong.
+        /// </para>
+        /// <para>
+        /// A <c>yield</c> inside a function *declared* in the deferred block belongs to that
+        /// function, not to the defer, so the walk stops at a nested declaration.
+        /// </para>
+        /// </remarks>
+        private static TextSpan? FindYieldInDeferredBlock(BlockSyntax block)
+        {
+            foreach (var statement in block.Statements)
+            {
+                if (FindYieldInDeferredStatement(statement) is { } span)
+                {
+                    return span;
+                }
+            }
+
+            return null;
+        }
+
+        private static TextSpan? FindYieldInDeferredStatement(StatementSyntax statement)
+        {
+            switch (statement)
+            {
+                case YieldStatementSyntax yieldStatement:
+                    return yieldStatement.Span;
+
+                // A nested declaration owns its own yields.
+                case FunctionDefinitionStatementSyntax:
+                case RuneDefinitionStatementSyntax:
+                case ClassDefinitionStatementSyntax:
+                    return null;
+
+                case IfStatementSyntax ifStatement:
+                    return FindYieldInDeferredBlock(ifStatement.ThenBlock)
+                        ?? (ifStatement.ElseBlock is not null ? FindYieldInDeferredBlock(ifStatement.ElseBlock) : null);
+                case ForStatementSyntax forStatement:
+                    return FindYieldInDeferredBlock(forStatement.Body);
+                case WhileStatementSyntax whileStatement:
+                    return FindYieldInDeferredBlock(whileStatement.Body);
+                case UntilStatementSyntax untilStatement:
+                    return FindYieldInDeferredBlock(untilStatement.Body);
+                case DeferStatementSyntax nestedDefer:
+                    return FindYieldInDeferredBlock(nestedDefer.Body);
+                case TryStatementSyntax tryStatement:
+                    return FindYieldInDeferredBlock(tryStatement.TryBlock)
+                        ?? (tryStatement.CatchClause is not null ? FindYieldInDeferredBlock(tryStatement.CatchClause.Body) : null)
+                        ?? (tryStatement.FinallyBlock is not null ? FindYieldInDeferredBlock(tryStatement.FinallyBlock) : null);
+                case SwitchStatementSyntax switchStatement:
+                    foreach (var switchCase in switchStatement.Cases)
+                    {
+                        if (FindYieldInDeferredBlock(switchCase.Body) is { } caseSpan)
+                        {
+                            return caseSpan;
+                        }
+                    }
+
+                    return switchStatement.DefaultBlock is not null
+                        ? FindYieldInDeferredBlock(switchStatement.DefaultBlock)
+                        : null;
+                default:
+                    return null;
+            }
         }
 
         private StatementSyntax ParseSwitchStatement()

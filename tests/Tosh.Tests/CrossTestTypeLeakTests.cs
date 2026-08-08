@@ -35,7 +35,10 @@ namespace Tosh.Tests;
 /// interpreted test. It reproduces only when the emitting test runs first, which is why it looked
 /// like load-dependent flakiness for so long and why it passes in isolation. The same shape was
 /// recorded as the fifth sighting, where a probe class named <c>Widget</c> collided with
-/// <c>Tosh.LspFixture.Widget</c>.
+/// <c>Tosh.LspFixture.Widget</c> — this file's own probe, which is why it is now named
+/// <c>CrossTestLeakProbe</c>. A test that emits a type into the default load context claims that
+/// name for the rest of the process, so a probe must not use one another test might want
+/// (<c>TS-P2-48</c>).
 /// </para>
 /// <para>
 /// This test forces the order rather than hoping for it: emit the assembly, then run the script.
@@ -102,13 +105,13 @@ public sealed class CrossTestTypeLeakTests : IClassFixture<ToshRuntimeFixture>
     {
         // The same collision without generics, so a fix aimed only at constraint validation does
         // not look like a fix for the whole problem.
-        EmitAndLoad("class Widget { prop Name = \"emitted\" }");
+        EmitAndLoad("class CrossTestLeakProbe { prop Name = \"emitted\" }");
 
         var engine = new ToshEngine(ToshRuntime.CreateDefault());
         var results = await engine.ExecuteToListAsync(
             """
-            class Widget { prop Name = "scripted" }
-            var w: Widget = (new Widget())
+            class CrossTestLeakProbe { prop Name = "scripted" }
+            var w: CrossTestLeakProbe = (new CrossTestLeakProbe())
             $w.Name
             """);
 
