@@ -800,6 +800,28 @@ public sealed class ToshClassDefinition : IShellNamedType
     {
         if (_propertiesByName.TryGetValue(memberName, out var property) && property.IsStatic)
         {
+            // The same three routes an instance assignment takes, decided the same way: a
+            // custom setter runs, a getter-only property refuses, and `fixed` refuses once
+            // the declaration's own initializer has run. A static that answered differently
+            // from an instance property would be one more rule to remember for no reason.
+            if (property.SetterBody is not null)
+            {
+                ExecuteStaticPropertySetter(property, value);
+                return true;
+            }
+
+            if (property.GetterBody is not null)
+            {
+                throw new InvalidOperationException(
+                    $"Static property '{property.Name}' on class '{Name}' is read-only.");
+            }
+
+            if (property.IsFixed)
+            {
+                throw new InvalidOperationException(
+                    $"Static property '{property.Name}' on class '{Name}' is fixed and cannot be reassigned after initialization.");
+            }
+
             _staticValues[memberName] = value;
             return true;
         }
@@ -807,6 +829,22 @@ public sealed class ToshClassDefinition : IShellNamedType
         // Assignment follows the read: an inherited static is stored on the class that declared
         // it, so `D.S = 1` and `B.S` refer to the same slot instead of silently diverging.
         return BaseClass is not null && BaseClass.TrySetStaticMember(memberName, value);
+    }
+
+    /// <summary>
+    /// Stores a declared static property's initial value, bypassing the rules that govern a
+    /// later assignment.
+    /// </summary>
+    /// <remarks>
+    /// Declaration-time initialization is not an assignment and must not be judged as one:
+    /// <c>fixed static prop S = 1</c> has to be allowed to reach 1 before <c>fixed</c> starts
+    /// refusing writes. Kept as its own method rather than a flag on
+    /// <see cref="TrySetStaticMember"/> because the two callers mean genuinely different
+    /// things, and a flag invites passing the wrong one.
+    /// </remarks>
+    internal void InitializeStaticMember(string memberName, object? value)
+    {
+        _staticValues[memberName] = value;
     }
 
     public bool TryGetMember(string name, out object? value, bool includeHidden = false)
@@ -2094,6 +2132,21 @@ public sealed class ToshClassDefinition : IShellNamedType
             $"{Name}.{property.Name}.get");
 
         return FlattenCallResult(values);
+    }
+
+    private void ExecuteStaticPropertySetter(ToshClassPropertyDefinition property, object? value)
+    {
+        var locals = CreateLocals(null, new Dictionary<string, object?>(StringComparer.Ordinal)
+        {
+            ["value"] = value,
+        });
+        _engine.ExecuteClassBlockSync(
+            SourceName,
+            SourceText,
+            property.SetterBody!,
+            locals,
+            CapturedScopes,
+            $"{Name}.{property.Name}.set");
     }
 
     private object? EvaluatePropertyGetter(ToshClassInstance instance, ToshClassPropertyDefinition property)

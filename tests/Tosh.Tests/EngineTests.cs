@@ -1451,12 +1451,20 @@ public sealed class EngineTests
     }
 
     [Fact]
-    public void Parser_requires_dollar_prefixed_variable_assignments_after_declaration()
+    public async Task Runtime_requires_dollar_prefixed_member_assignments_after_declaration()
     {
-        var result = ToshParser.Parse("person.Name = \"toast\"");
+        // `TS-P2-51` moved this from the parser to the engine. `person.Name = "x"` and
+        // `B.S = 5` are one shape, and only the engine can say which is which — so the hint is
+        // raised where the *read* of the same spelling has always raised it. See
+        // StaticMemberAssignmentTests for the pair.
+        var engine = new ToshEngine();
 
-        var diagnostic = Assert.Single(result.Diagnostics);
-        Assert.Equal("tosh.parser.variable_references_require_dollar", diagnostic.Code);
+        await engine.ExecuteToListAsync("var person = {| Name = \"ada\" |}");
+        var exception = await Assert.ThrowsAsync<ToshDiagnosticException>(
+            () => engine.ExecuteToListAsync("person.Name = \"toast\""));
+        var diagnostic = Assert.Single(exception.Diagnostics);
+
+        Assert.Equal("tosh.runtime.variable_reference_requires_dollar", diagnostic.Code);
         Assert.Contains("$person.Name", diagnostic.Label, StringComparison.Ordinal);
     }
 

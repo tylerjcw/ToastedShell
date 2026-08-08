@@ -483,7 +483,7 @@ closed.
 | `TS-P2-48` | Planned — filed 2026-08-01 | **`LspFeatureTests.Require_can_feed_completion_and_signature_help_for_fixture_types` fails under full-suite load and passes in isolation.** Unlike `TS-P2-39`, the mechanism is not mysterious: the test `require`s a **`.csproj`** and shells out to `dotnet build` at runtime, so under a parallel suite it competes with the build server and the other test-host processes for locks and CPU. Seen in three consecutive full runs on 2026-08-01, always green when run alone. Confirmed unrelated to the `require`-following added for `TS-P3-12`: that resolver accepts only `.tosh` targets and skips a `.csproj` outright, and the failure predates it. | Build the fixture once per suite rather than once per test — an `IClassFixture` or an `AssemblyFixture` that compiles it on first use — or mark the test as requiring exclusive execution. Shelling out to a build from inside a parallel test run is the defect; the assertion itself is sound and worth keeping, since it is the only coverage of CLR types reaching completion through `require`. |
 | `TS-P2-49` | Complete — fixed 2026-08-08 | Explicit type arguments do not parse at a member call site: `$a.m<int>(11)` and `A.m<int>(11)` both fail with `tosh.parser.missing_pipeline_separator`, while the free-function form `m<int> 11` parses and inference (`$a.m(11)`) works. Found while probing `TS-P1-09`. | A member call accepts explicit type arguments in both instance and static position; the free-function and inferred forms are unchanged; regression tests cover all four spellings. |
 | `TS-P2-50` | Complete — fixed 2026-08-02 | Filed as one defect ("a comma inside `<…>` immediately followed by `(` mis-parses") and was two, sharing a symptom. **(a)** A base constructor could be given only one argument: `extends P0($a, $b)` failed with `tosh.parser.missing_pipeline_separator` and no type argument was involved anywhere — each argument was read as a pipeline running until the close paren, so the separating comma was neither a terminator nor a valid continuation. **(b)** `(new P<int, int>(3, 4)).A` parsed the type arguments as a tuple and reported `Member 'A' was not found on type 'ToshTuple'`, because the scanner deciding tuple-or-not did not step over a type argument list as its two sibling scanners already did. | Base constructor argument lists of any arity parse, read the way every other parenthesised argument list is; a type argument list of any arity inside parentheses is not mistaken for a tuple, and tuples and comparisons are unaffected. |
-| `TS-P2-51` | Planned — filed 2026-08-02 | A static property cannot be assigned: `B.S = 5` fails to parse with `tosh.parser.variable_references_require_dollar`, on the declaring class as much as through a subclass, so a static is effectively read-only after its initializer. `TrySetStaticMember` has exactly one caller — declaration-time initialization — and no user-reachable path. Found while probing `TS-P1-09`. | Assignment to a static property parses and stores to the declaring class's slot; reading it back through any subclass sees the same value. |
+| `TS-P2-51` | Complete — fixed 2026-08-08 | A static property cannot be assigned: `B.S = 5` fails to parse with `tosh.parser.variable_references_require_dollar`, on the declaring class as much as through a subclass, so a static is effectively read-only after its initializer. `TrySetStaticMember` has exactly one caller — declaration-time initialization — and no user-reachable path. Found while probing `TS-P1-09`. | Assignment to a static property parses and stores to the declaring class's slot; reading it back through any subclass sees the same value. |
 | `TS-P2-52` | Complete — fixed 2026-08-06 | `exit` does not stop a running script: `echo one` / `exit 0` / `echo two` prints both lines. `RequestExit` records the code and sets a flag nothing in the script execution path consults, so a script cannot decline to continue. Found while adding `--help` to scripts, which needed a way to answer and then not run the body and had to introduce a signal exception instead. | `exit` ends the current script immediately with its exit code; the REPL and sourced-file behaviours are unchanged and covered by tests. |
 | `TS-P2-53` | Planned — filed 2026-08-02 | `help <name>` computes a "Related" list by token similarity that is noise for user-defined functions: `help add` on a two-line function suggests `xbox · benchmark · compress · cpu-info · dbg`. A declared `@see` now leads the list, but the computed remainder still follows it. Found while reviewing the help system. | Related suggestions are relevant or absent; a topic with no genuine relations shows no Related section rather than five arbitrary commands. |
 | `TS-P2-54` | Planned — filed 2026-08-02 | A `require`d function is invisible to `help`: `require "lib.tosh"` then `help fn` reports "Help topic 'fn' was not found", although the function is callable. Doc-comments on required libraries are therefore unreachable through the help system. Found while reviewing the help system. | `help` resolves functions brought in by `require`, with their doc-comments, and a test covers the required-file path. |
@@ -493,6 +493,7 @@ closed.
 | `TS-P2-58` | Planned — filed 2026-08-08 | A `yield` inside a `defer` block is silently dropped: `func g() { defer { yield 9 }\n yield 1 }` produces only `1`. The generator terminates cleanly, so nothing reports the loss. Whether a deferred block should contribute to a generator's stream at all is the open question — it runs while unwinding, after the consumer may have stopped pulling. Found while fixing `TS-P1-19`. | Decided one way or the other and made explicit: either a deferred yield reaches the stream, or it is refused at parse time with a diagnostic saying why. Silence is the one option ruled out. |
 | `TS-P2-59` | Planned — filed 2026-08-08 | Tuple destructuring does not parse: `var (x, y) = (1, 2)` fails with `tosh.bind.unknown_command`, and `const (A, B) = (1, 2)` likewise, although tuples construct and index perfectly well. Confirmed pre-existing against the installed binary. Found while probing `TS-P1-12`. | `var (a, b) = <tuple>` binds each element, with arity mismatch reported as a diagnostic; `const` and `let`-position forms behave alike. |
 | `TS-P2-60` | Planned — filed 2026-08-08 | `~` is expanded for external commands but not for builtins. `realpath ~` receives `/home/komrad`, while `echo ~` prints the literal `~`, and so does `echo ~/projects`; `~user` is never expanded on any path. `cd` handles `~` itself and works (`cd ~` and `cd ~/projects` both resolve), so the gap is not in `cd` but in argument expansion, which happens on the external-process route only. Reported from use. | `~` and `~/path` expand to the home directory wherever a path argument is accepted, builtins included, and stay literal where they are not a leading path segment; `~user` either resolves that user's home or is refused with a diagnostic rather than passed through unchanged. |
+| `TS-P2-61` | Planned — filed 2026-08-08 | A `shy static` property is readable from outside its class: `class B { shy static prop S = 1 }` then `B.S` answers 1. `TryGetStaticMember` checks `shy` for nested types and not for properties, so the modifier is honoured for one kind of static member and ignored for the other. Assignment inherits the leak deliberately — a `shy` static that refused writes while permitting reads would be a worse asymmetry than the one already present. Found while fixing `TS-P2-51`. | `shy` on a static property is enforced on both reads and writes, from outside the class and through a subclass, with the same diagnostic a shy nested type raises; a method inside the declaring class still sees it. |
 
 **Implementation note for `TS-P2-11` (July 25 review recommendation).** The
 `TS-P2-01`/`TS-P2-02`/`TS-P2-04`/`TS-P2-12`–`TS-P2-15` family shares one root
@@ -4712,3 +4713,64 @@ record. A bare `~` could reasonably:
 The third is the minimum. The first two are language decisions, and the choice between them
 should be made deliberately rather than arrived at by whichever the expansion fix happens to
 produce.
+
+## `TS-P2-51` — a static could be initialized and never written again (August 8)
+
+`B.S = 5` did not fail at runtime. It failed to *parse*, with
+`tosh.parser.variable_references_require_dollar` — "write `$B.S = ...` here" — which reads the
+target as a variable someone had forgotten to spell with a `$`. Every static property was
+therefore read-only after its initializer, on the declaring class as much as through a subclass.
+`TrySetStaticMember`, base walk and all, had exactly one caller: the declaration's own
+initialization. Nothing a user could write reached it.
+
+**The parser cannot decide this, and that is the whole shape of the fix.** `B.S = 5` and
+`person.Name = "x"` are the same tokens in the same order. The parser has no symbol table to tell
+a class from a variable, and capitalization is not an answer either — `TS-P2-16` settled that when
+`Geo.area 2` and `geo.area 2` had to behave alike. So the target is now handed over unresolved and
+the engine, which does know, either performs the static assignment or raises the missing-`$` hint
+itself.
+
+That is a phase move, not a lost diagnostic, and it lands where the matching *read* already
+answered: `person.Name` on its own has always produced
+`tosh.runtime.variable_reference_requires_dollar` at runtime. A write now diagnoses where its read
+does instead of one phase earlier, which is one fewer rule rather than one more.
+
+**The suite caught the precedence question that reading the code did not.** Resolving the head as
+a type first looked obviously right, and passed in isolation. Under the full suite it failed:
+`person.Name = "x"` stopped reporting the forgotten `$` and reported a static assignment failure
+instead, because a compiler test had emitted an unrelated CLR `Person` into the process and type
+resolution matches simple names across every loaded assembly, ignoring case. So the variable table
+is asked first and wins. A wrong hint costs a message; a wrong static write mutates state nobody
+asked to change. The collision is now a test that asserts both halves — that the type really does
+resolve, and that the assignment still names the `$` — because a precedence test whose collision
+has quietly stopped existing is a test that passes for the wrong reason.
+
+**The rules governing the write are the instance rules, deliberately.** A custom setter runs, a
+getter-only property refuses, `fixed` refuses after initialization. `ResolveInstanceMemberAssignment`
+already made those three decisions for instance properties and the static path now makes the same
+ones; a static that answered differently would be a second set of rules to remember for no reason.
+Declaration-time initialization goes through its own entry point rather than a boolean flag, so
+`fixed static prop S = 1` can still reach 1 — the two callers mean genuinely different things, and
+a flag invites passing the wrong one.
+
+**The CLR half came with it, because leaving it out would have created a new bad path.** Reading a
+CLR static has always worked; the write had no branch at all in `AssignSegment`, so once the
+parser stopped rejecting `System.Console.Title = "x"` the expression would have reached reflection
+looking for an *instance* member on `System.RuntimeType` and reported it as missing. Assignment now
+mirrors `ResolveSegment`'s static branches in the same order, splitting the path at the longest
+prefix that names a type — which is what makes `System.Math.PI` find the type rather than stop at
+the namespace, and `Outer.Inner.V` find the nested class rather than treat `Inner.V` as a member
+path. A `const` or `readonly` field is reported as read-only rather than missing, since it can
+still be read; the same question is asked of a shell type before it answers, so `F.A = 2` on an
+enum says read-only instead of sending the user to look for a typo.
+
+**Found on the way, not fixed here.** A `shy static prop` is readable from outside the class that
+declared it — `TryGetStaticMember` checks `shy` for nested types and not for properties. Writes
+now inherit that leak rather than closing it, because a `shy` static that refuses writes while
+permitting reads would be a worse asymmetry than the one already there. Filed as `TS-P2-61`.
+
+Also regenerated: `docs/diagnostic-codes.md`, its LaTeX appendix, and the C# manifest had drifted
+several commits behind the source. Three of the four codes the regeneration adds
+(`tosh.parser.expected_nested_type`, `tosh.runtime.nested_type_not_declared`,
+`tosh.runtime.unknown_type_argument`) belong to the nesting and type-argument work already
+committed; only `tosh.runtime.unknown_static_assignment_target` is new here.

@@ -10,7 +10,7 @@ Non-error diagnostics can be suppressed with the \texttt{hush} builtin
 (scope-local) or by adding their codes to
 \texttt{\$tosh.Config.Diagnostics.Hushed}.
 
-This chapter lists all 506 diagnostic codes currently emitted by the
+This chapter lists all 510 diagnostic codes currently emitted by the
 implementation, grouped by namespace. It is generated from the source tree
 by \texttt{scripts/extract\_diagnostic\_codes.py} and should be
 regenerated whenever new diagnostics are added.
@@ -30,9 +30,9 @@ regenerated whenever new diagnostics are added.
 \texttt{tosh.help.*} & 1 & Raised by the `help` command. \\
 \texttt{tosh.history.*} & 1 & Raised by the history subsystem (for example, replaying entries when no host is attached). \\
 \texttt{tosh.naming.*} & 2 & --- \\
-\texttt{tosh.parser.*} & 161 & Raised by the lexer or parser before any code runs. Indicates malformed source text. \\
+\texttt{tosh.parser.*} & 162 & Raised by the lexer or parser before any code runs. Indicates malformed source text. \\
 \texttt{tosh.row.*} & 1 & --- \\
-\texttt{tosh.runtime.*} & 308 & Raised by the engine while evaluating a script. The bulk of TōSh diagnostics live here. \\
+\texttt{tosh.runtime.*} & 311 & Raised by the engine while evaluating a script. The bulk of TōSh diagnostics live here. \\
 \texttt{tosh.tui.*} & 8 & Raised by the `tui` subsystem (terminal UI widgets, screens, providers). \\
 \texttt{tosh.type.*} & 9 & --- \\
 \texttt{tosh.user.*} & 1 & --- \\
@@ -158,6 +158,7 @@ Raised by the lexer or parser before any code runs. Indicates malformed source t
 \item[\texttt{\small tosh.parser.expected\_native\_calling\_convention}] Native function bindings need a calling convention name after 'callconv'.
 \item[\texttt{\small tosh.parser.expected\_native\_library}] A raw function needs a library after 'from'.
 \item[\texttt{\small tosh.parser.expected\_native\_symbol\_name}] Native function bindings need a symbol name after 'as'.
+\item[\texttt{\small tosh.parser.expected\_nested\_type}] Expected a type declaration inside class '\{className\}'.
 \item[\texttt{\small tosh.parser.expected\_operand}] Expected an operand in this expression.
 \item[\texttt{\small tosh.parser.expected\_parenthesized\_source}] The '\{owner\}' statement requires a source.
 \item[\texttt{\small tosh.parser.expected\_postfix\_condition}] Postfix '\{keyword.Text\}' requires a condition.
@@ -461,6 +462,7 @@ Raised by the engine while evaluating a script. The bulk of TōSh diagnostics li
 \item[\texttt{\small tosh.runtime.native\_write\_offset\_requires\_int}] native-write offsets must be integers.
 \item[\texttt{\small tosh.runtime.native\_write\_requires\_value}] native-write requires a non-null value.
 \item[\texttt{\small tosh.runtime.native\_write\_unsupported\_value}] native-write does not know how to write values of type '\{runtimeType.Name\}'.
+\item[\texttt{\small tosh.runtime.nested\_type\_not\_declared}] Nested type '\{member.Name\}' in class '\{@class.Name\}' did not produce a type.
 \item[\texttt{\small tosh.runtime.networkctl\_command\_failed}] \textit{(see source)}
 \item[\texttt{\small tosh.runtime.networkctl\_command\_missing}] The system 'networkctl' command was not found.
 \item[\texttt{\small tosh.runtime.networkctl\_command\_start\_failed}] Failed to start the system 'networkctl' command.
@@ -573,7 +575,9 @@ Raised by the engine while evaluating a script. The bulk of TōSh diagnostics li
 \item[\texttt{\small tosh.runtime.unknown\_interface}] Class '\{@class.Name\}' fulfills unknown interface '\{ifaceName\}'.
 \item[\texttt{\small tosh.runtime.unknown\_named\_argument}] There is no parameter named '\{namedArgument.Name\}'.
 \item[\texttt{\small tosh.runtime.unknown\_script\_flag}] Unknown script flag '--\{optionName\}'.
+\item[\texttt{\small tosh.runtime.unknown\_static\_assignment\_target}] '\{path\}' does not name a static member, because '\{head\}' names no type.
 \item[\texttt{\small tosh.runtime.unknown\_trait}] Class '\{@class.Name\}' uses unknown trait '\{traitName\}'.
+\item[\texttt{\small tosh.runtime.unknown\_type\_argument}] Type '\{name\}' could not be resolved as a type argument for '\{methodName\}'.
 \item[\texttt{\small tosh.runtime.unknown\_type\_name}] Type '\{typeName\}' could not be resolved for type parameter '\{typeParamsForSeed[i]\}' of function '\{definition.Name\}'.
 \item[\texttt{\small tosh.runtime.unknown\_variable}] Variable '\{variableReference.Name\}' was not found.
 \item[\texttt{\small tosh.runtime.unsupported\_native\_allocation\_type}] '\{type.FullName ?? type.Name\}' is not a supported native allocation type.

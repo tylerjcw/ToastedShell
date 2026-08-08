@@ -3162,7 +3162,25 @@ public sealed partial class ToshEngine : IShellEvaluator
             yield break;
         }
 
-        if (!TryDecomposeMemberAssignmentTarget(assignment.Target, out var rootExpression, out var memberPath))
+        object? target;
+        string memberPath;
+
+        // `TS-P2-51`. A `$`-less dotted target — `B.S`, `Outer.Inner.V`, `System.Console.Title`
+        // — is a static member path. The parser hands the whole path over unresolved because
+        // only the engine can say where the type ends and the members begin.
+        if (TryDecomposeStaticAssignmentTarget(assignment.Target, out var staticPath))
+        {
+            (target, memberPath) = ResolveStaticAssignmentTarget(
+                sourceName,
+                sourceText,
+                staticPath,
+                assignment.Target.Span);
+        }
+        else if (TryDecomposeMemberAssignmentTarget(assignment.Target, out var rootExpression, out memberPath))
+        {
+            target = await EvaluateOrMaterializeRootTargetAsync(sourceName, sourceText, rootExpression, cancellationToken);
+        }
+        else
         {
             throw ToshDiagnosticException.Create(new ToshDiagnostic(
                 Code: "tosh.runtime.invalid_member_assignment_target",
@@ -3172,8 +3190,6 @@ public sealed partial class ToshEngine : IShellEvaluator
                 Span: assignment.Target.Span,
                 Label: "use a target like '$person.Name'"));
         }
-
-        var target = await EvaluateOrMaterializeRootTargetAsync(sourceName, sourceText, rootExpression, cancellationToken);
 
         if (assignment.Operator == "??=")
         {
@@ -4232,7 +4248,7 @@ public sealed partial class ToshEngine : IShellEvaluator
             var values = await AsyncEnumerableExtensions.ToListAsync(
                 EvaluatePipelineAsync(sourceName, sourceText, prop.Initializer!, cancellationToken, outputIsCaptured: true),
                 cancellationToken);
-            definition.TrySetStaticMember(prop.Name, values.Count == 1 ? values[0] : values);
+            definition.InitializeStaticMember(prop.Name, values.Count == 1 ? values[0] : values);
         }
 
         yield break;
@@ -16554,6 +16570,109 @@ public sealed partial class ToshEngine : IShellEvaluator
         rootExpression = current;
         memberPath = string.Join(".", segments);
         return true;
+    }
+
+    /// <summary>
+    /// Joins a <c>$</c>-less assignment target back into one dotted path.
+    /// </summary>
+    /// <remarks>
+    /// The parser leaves the head as a <see cref="StaticMemberAccessArgumentSyntax"/> holding
+    /// whatever it lexed as a single token, and any further <c>.Member</c> tokens arrive as
+    /// wrappers around it. Rejoining them means <c>ResolveStaticAssignmentTarget</c> sees one
+    /// path however the source happened to be tokenized.
+    /// </remarks>
+    private static bool TryDecomposeStaticAssignmentTarget(ArgumentSyntax target, out string path)
+    {
+        var segments = new Stack<string>();
+        var current = target;
+
+        while (current is MemberAccessArgumentSyntax memberAccess)
+        {
+            segments.Push(memberAccess.MemberPath);
+            current = memberAccess.Target;
+        }
+
+        if (current is not StaticMemberAccessArgumentSyntax staticAccess)
+        {
+            path = string.Empty;
+            return false;
+        }
+
+        segments.Push(staticAccess.Path);
+        path = string.Join(".", segments);
+        return true;
+    }
+
+    /// <summary>
+    /// Splits a static assignment path into the type it names and the member path to assign
+    /// from there, or explains why it names no type.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Longest prefix first, matching <c>TryResolveQualifiedAccess</c>: <c>System.Console.Title</c>
+    /// must find the type <c>System.Console</c> rather than stopping at the namespace, while
+    /// <c>B.S.Length</c> must find the class <c>B</c> and leave <c>S.Length</c> as the path to
+    /// walk. One rule serves both, and it is the rule reads already use.
+    /// </para>
+    /// <para>
+    /// A variable of that name is asked about first, and wins. This is the forgotten-<c>$</c>
+    /// case the parser used to reject before it could tell the two apart, and the hint is
+    /// rebuilt here, where the variable table exists, so <c>person.Name = "x"</c> still names
+    /// the real problem.
+    /// </para>
+    /// </remarks>
+    private (object Target, string MemberPath) ResolveStaticAssignmentTarget(
+        string sourceName,
+        string sourceText,
+        string path,
+        TextSpan span)
+    {
+        // A variable of that name wins, and is asked first. Type resolution matches simple
+        // names across every loaded assembly and ignores case, so `var person = …` followed by
+        // `person.Name = "x"` found an unrelated CLR `Person` and wrote a static instead of
+        // naming the forgotten `$` — measured, not imagined: it is what the full suite hit once
+        // a compiler test had emitted a type by that name. A wrong hint costs a message; a
+        // wrong static write mutates shared state, so the safe reading goes first.
+        if (TryBuildVariableReferenceHint(path, out var suggestedReference, out var variableName))
+        {
+            throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                Code: "tosh.runtime.variable_reference_requires_dollar",
+                Title: $"Variable '{variableName}' exists, but variable references must start with '$'.",
+                SourceName: sourceName,
+                SourceText: sourceText,
+                Span: span,
+                Label: $"did you mean '{suggestedReference} = ...'?",
+                Help: "declare variables with 'var name', then assign through them as '$name.Member = value'."));
+        }
+
+        var segments = SplitQualifiedPath(path);
+
+        for (var prefixLength = segments.Length - 1; prefixLength >= 1; prefixLength--)
+        {
+            var prefix = string.Join('.', segments.Take(prefixLength));
+            var remainder = string.Join('.', segments.Skip(prefixLength));
+
+            if (TryGetNamedType(prefix, out var namedType))
+            {
+                return (namedType, remainder);
+            }
+
+            if (ResolveTypeName(prefix) is { } clrType)
+            {
+                return (clrType, remainder);
+            }
+        }
+
+        var head = segments.Length > 0 ? segments[0] : path;
+
+        throw ToshDiagnosticException.Create(new ToshDiagnostic(
+            Code: "tosh.runtime.unknown_static_assignment_target",
+            Title: $"'{path}' does not name a static member, because '{head}' names no type.",
+            SourceName: sourceName,
+            SourceText: sourceText,
+            Span: span,
+            Label: $"'{head}' is not a class, enum, module, or CLR type in scope",
+            Help: "assign a static member as 'TypeName.Member = value', or a variable's member as '$name.Member = value'."));
     }
 
     private static bool ShouldAutoMaterializeListTarget(string methodName)

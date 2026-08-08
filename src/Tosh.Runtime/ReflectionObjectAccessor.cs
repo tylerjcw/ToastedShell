@@ -341,6 +341,32 @@ public sealed class ReflectionObjectAccessor : IObjectAccessor
             throw new InvalidOperationException("Shell text values are read-only.");
         }
 
+        // A static write, checked in the order `ResolveSegment` checks a static read — shell
+        // type first, then CLR type. Reading a static has always worked; until `TS-P2-51` the
+        // write had no reachable path at all, so a static was read-only after its initializer.
+        if (target is IShellStaticType shellStaticType)
+        {
+            if (shellStaticType.TrySetStaticMember(segment, value))
+            {
+                return;
+            }
+
+            // The refusal is worth one more question: a member that *reads* is read-only, and
+            // saying "not found" about something the user can see the value of would send them
+            // looking for a typo. `TryGetStaticMember` explains methods and shy members itself,
+            // so its message is left to stand.
+            throw new InvalidOperationException(
+                shellStaticType.TryGetStaticMember(segment, out _)
+                    ? $"Static member '{segment}' on type '{shellStaticType.ShellTypeName}' is read-only."
+                    : $"Static member '{segment}' was not found on type '{shellStaticType.ShellTypeName}'.");
+        }
+
+        if (target is Type staticTargetType)
+        {
+            AssignStaticSegment(staticTargetType, segment, value);
+            return;
+        }
+
         if (includeShellRecord && target is IShellRecordObject shellRecord)
         {
             if (shellRecord.TrySetMember(segment, value))
@@ -398,6 +424,45 @@ public sealed class ReflectionObjectAccessor : IObjectAccessor
                     return;
                 }
         }
+    }
+
+    /// <summary>Writes a public static property or field on a CLR type.</summary>
+    private static void AssignStaticSegment(Type staticType, string segment, object? value)
+    {
+        var flags = BindingFlags.Public | BindingFlags.Static | BindingFlags.IgnoreCase;
+        var property = staticType.GetProperty(segment, flags);
+
+        if (property is not null && property.GetIndexParameters().Length == 0)
+        {
+            if (property.SetMethod is null || !property.SetMethod.IsPublic)
+            {
+                throw new InvalidOperationException(
+                    $"Static property '{segment}' on type '{staticType.FullName}' is read-only.");
+            }
+
+            property.SetValue(null, ConvertAssignedValue(value, property.PropertyType, segment, staticType));
+            return;
+        }
+
+        var field = staticType.GetField(segment, flags);
+
+        if (field is not null)
+        {
+            // A `const` is a literal, so there is no storage to write; `readonly` is settable
+            // only from the declaring type's initializer. Both read fine, which is why the
+            // message says read-only rather than missing.
+            if (field.IsInitOnly || field.IsLiteral)
+            {
+                throw new InvalidOperationException(
+                    $"Static field '{segment}' on type '{staticType.FullName}' is read-only.");
+            }
+
+            field.SetValue(null, ConvertAssignedValue(value, field.FieldType, segment, staticType));
+            return;
+        }
+
+        throw new InvalidOperationException(
+            $"Static member '{segment}' was not found on type '{staticType.FullName}'.");
     }
 
     private static async ValueTask AssignSegmentAsync(

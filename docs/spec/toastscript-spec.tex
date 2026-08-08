@@ -3622,6 +3622,81 @@ class Product {
 }
 \end{lstlisting}
 
+\subsection{Static Members}
+\label{sec:static-members}
+
+A property or method marked \code{shared} / \code{static} belongs to the
+class rather than to any instance, and is reached through the class name:
+
+\begin{lstlisting}
+class Counter {
+    static prop Total = 0
+    static func describe() { return "counted" }
+}
+
+echo Counter.Total          # 0
+Counter.Total = 5
+echo Counter.Total          # 5
+\end{lstlisting}
+
+\noindent \textbf{A static path carries no \code{\$}.}  \code{\$name} refers
+to a \emph{variable}; a bare dotted name refers to a \emph{type}.  That rule
+already governed reading (\code{Math.PI}, \code{Reactor.Fuel.Mox}), and it
+governs assignment identically: \code{Counter.Total = 5} writes a static,
+while \code{\$counter.Total = 5} writes a member of the variable
+\code{\$counter}.
+
+Because the two spellings are the same shape, the decision cannot be made
+before anything runs.  A dotted target left of \code{=} is resolved when the
+statement executes, and a variable of that name wins: with
+\code{var person = \{| Name = "ada" |\}} in scope,
+\code{person.Name = "toast"} reports
+\code{tosh.runtime.variable\_reference\_requires\_dollar} and suggests
+\code{\$person.Name}, exactly as reading \code{person.Name} always has.  A
+head that names neither a type nor a variable reports
+\code{tosh.runtime.unknown\_static\_assignment\_target}.
+
+\noindent \textbf{One slot per declaration.}  A static declared on a base
+class is a single value shared with every subclass, not a copy per subclass.
+Reading and writing agree on where it lives:
+
+\begin{lstlisting}
+class Base { static prop S = 1 }
+class Derived extends Base { }
+
+Derived.S = 7
+echo Base.S                 # 7
+echo Derived.S              # 7
+\end{lstlisting}
+
+\noindent \textbf{The instance rules apply unchanged.}  A static property
+with a \code{set} accessor runs it instead of storing; one with only a
+\code{get} accessor is read-only; and \code{fixed static} refuses assignment
+after the declaration's own initialiser has run.  A static that answered
+differently from an instance property would be a second set of rules for no
+reason.
+
+\begin{lstlisting}
+class Config {
+    fixed static prop Version = "1.0"
+    static prop Raw = 0
+    static prop Level {
+        get { return Config.Raw }
+        set { Config.Raw = $value }
+    }
+}
+
+Config.Level = 3
+echo Config.Level           # 3
+Config.Version = "2.0"      # error: fixed and cannot be reassigned
+\end{lstlisting}
+
+\noindent Assignment reaches nested types and CLR statics by the same path:
+\code{Outer.Inner.V = 9} and \code{System.Environment.ExitCode = 2} both
+work, the path being split at the longest prefix that names a type.  A CLR
+\code{const} or \code{readonly} field is reported as read-only rather than as
+missing, since it can still be read.
+
 \section{Generic Classes}
 \label{sec:generic-classes}
 

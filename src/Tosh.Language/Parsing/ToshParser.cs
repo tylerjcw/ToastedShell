@@ -7526,33 +7526,19 @@ public static class ToshParser
             }
             else if (Current.Kind == SyntaxTokenKind.Bareword)
             {
+                // `TS-P2-51`. A dotted bareword left of `=` is a *static* member path — the
+                // same spelling that already reads one (`Math.PI`, `Reactor.Fuel.Mox`). The
+                // parser has no symbol table, so it cannot tell `B.S = 5` (a static
+                // assignment) from `person.Name = "x"` (a forgotten `$`); rejecting the shape
+                // outright made every static effectively read-only after its initializer.
+                //
+                // Both go to the engine, which knows the difference and raises the missing-`$`
+                // hint itself when the head names no type. That is where the *read* of the
+                // same spelling already answers — `person.Name` gives
+                // `tosh.runtime.variable_reference_requires_dollar` — so this makes a write
+                // diagnose where its read does, rather than one phase earlier.
                 var token = NextToken();
-                var text = token.Text;
-                var separatorIndex = text.IndexOf('.');
-
-                _diagnostics.Add(new SyntaxDiagnostic(
-                    Code: "tosh.parser.variable_references_require_dollar",
-                    Title: "Variable assignments must use '$' after declaration.",
-                    Span: token.Span,
-                    Label: separatorIndex >= 0
-                        ? $"write '${text} = ...' here"
-                        : $"write '${text}.Member = ...' here",
-                    Help: "declare variables with 'var name', then refer to them everywhere else as '$name'."));
-
-                if (separatorIndex >= 0)
-                {
-                    var rootName = text[..separatorIndex];
-                    var memberPath = text[(separatorIndex + 1)..];
-
-                    expression = new VariableReferenceArgumentSyntax(
-                        rootName,
-                        TextSpan.FromBounds(token.Span.Start, token.Span.Start + rootName.Length));
-                    expression = ApplyMemberOrMethodPostfix(expression, memberPath, token.Span, allowMethodCall: false);
-                }
-                else
-                {
-                    expression = new VariableReferenceArgumentSyntax(text, token.Span);
-                }
+                expression = new StaticMemberAccessArgumentSyntax(token.Text, token.Span);
             }
             else
             {
@@ -7578,7 +7564,13 @@ public static class ToshParser
                 expression = ParseIndexAccess(expression);
             }
 
-            if (expression is not MemberAccessArgumentSyntax and not IndexAccessArgumentSyntax)
+            // A static target carries its own path inside one token (`B.S`), so it satisfies the
+            // "must be a member path" rule without a wrapper node. A dotless one does not:
+            // `foo = 1` is a variable assignment and belongs to the other statement form.
+            var isDottedStaticTarget = expression is StaticMemberAccessArgumentSyntax staticTarget &&
+                                       staticTarget.Path.Contains('.', StringComparison.Ordinal);
+
+            if (!isDottedStaticTarget && expression is not MemberAccessArgumentSyntax and not IndexAccessArgumentSyntax)
             {
                 _diagnostics.Add(new SyntaxDiagnostic(
                     Code: "tosh.parser.expected_member_assignment_target",
