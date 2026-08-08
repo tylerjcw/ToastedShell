@@ -657,6 +657,10 @@ public sealed class LanguageFeatureTests
     [Fact]
     public async Task TupleAssignment_handles_extra_and_missing()
     {
+        // Arrays stay lenient, and deliberately so: the specification documents taking a prefix
+        // of one (`var [first, second] = $fiveItems`). `TS-P2-59` made only a *tuple* mismatch a
+        // diagnostic, because a tuple's shape is fixed and naming the wrong number of targets
+        // for one is a miscount every time. See TupleDestructuringTests for that half.
         var engine = new ToshEngine(ToshRuntime.CreateDefault());
         await engine.ExecuteToListAsync("var x = 10");
         await engine.ExecuteToListAsync("var y = 20");

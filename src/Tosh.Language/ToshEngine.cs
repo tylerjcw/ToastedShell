@@ -970,6 +970,74 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
         };
     }
 
+    /// <summary>
+    /// Refuses a destructuring whose target count does not match a <em>tuple</em> source.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// `TS-P2-59` asked for an arity mismatch to be named rather than absorbed. Applying that to
+    /// every source would have contradicted the specification, which documents taking a prefix
+    /// of an array on purpose: <c>var [first, second] = $fiveItems</c> is a worked example.
+    /// </para>
+    /// <para>
+    /// The distinction that resolves it is a real one rather than a compromise. An array is a
+    /// variable-length collection and reading the first two of it is a meaningful thing to ask
+    /// for. A tuple has a fixed, declared shape, so naming two targets for three elements is a
+    /// miscount every time — and absorbing it silently is what turns that miscount into a
+    /// <c>null</c> reported three lines later.
+    /// </para>
+    /// </remarks>
+    private static void EnsureTupleArityMatches(
+        string sourceName,
+        string sourceText,
+        object? source,
+        int valueCount,
+        int targetCount,
+        TextSpan span)
+    {
+        if (source is not ToshTuple || valueCount == targetCount)
+        {
+            return;
+        }
+
+        throw ToshDiagnosticException.Create(new ToshDiagnostic(
+            Code: "tosh.runtime.tuple_assignment_arity_mismatch",
+            Title: $"This destructuring has {targetCount} targets but the tuple has {valueCount} elements.",
+            SourceName: sourceName,
+            SourceText: sourceText,
+            Span: span,
+            Label: valueCount < targetCount
+                ? "there are not enough elements to fill every target"
+                : "there are more elements than targets to hold them",
+            Help: "give one target per element, or use '_' to discard one you do not want. "
+                + "An array may be destructured into fewer targets; a tuple's shape is fixed."));
+    }
+
+    /// <summary>
+    /// Spreads one value into positional elements, or answers <see langword="null"/> when it is
+    /// not a positional shape at all.
+    /// </summary>
+    /// <remarks>
+    /// `TS-P2-59`. This rule existed twice with two different answers. The declaring form,
+    /// <c>var [a, b] = …</c>, accepted arrays, lists, tuples and any other enumerable; the
+    /// assigning form, <c>(a, b) = …</c>, accepted arrays alone. So <c>var [a, b] = (1, 2)</c>
+    /// bound 1 and 2, while <c>(a, b) = (1, 2)</c> bound the whole tuple to <c>a</c> and null to
+    /// <c>b</c> — one language, two destructurings, different results, and no diagnostic to say
+    /// so. A string is excluded because spreading text into characters is never what a
+    /// destructuring meant.
+    /// </remarks>
+    private static object?[]? TryUnpackPositionalValue(object? value)
+    {
+        return value switch
+        {
+            object?[] array => array,
+            Array typedArray => Enumerable.Range(0, typedArray.Length).Select(index => typedArray.GetValue(index)).ToArray(),
+            IReadOnlyList<object?> list => list.ToArray(),
+            IEnumerable enumerable when value is not string => enumerable.Cast<object?>().ToArray(),
+            _ => null,
+        };
+    }
+
     private async IAsyncEnumerable<object?> EvaluateTupleAssignmentAsync(
         string sourceName,
         string sourceText,
@@ -981,20 +1049,19 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
             EvaluatePipelineAsync(sourceName, sourceText, tupleAssign.Value, cancellationToken, outputIsCaptured: true),
             cancellationToken);
 
-        IReadOnlyList<object?> unpacked;
-        if (values.Count == 1 && values[0] is Array arrayValue)
-        {
-            unpacked = new object?[arrayValue.Length];
+        // One value that is itself positional spreads; anything else is taken as the values the
+        // pipeline produced.
+        IReadOnlyList<object?> unpacked = values.Count == 1 && TryUnpackPositionalValue(values[0]) is { } spread
+            ? spread
+            : values;
 
-            for (var i = 0; i < arrayValue.Length; i++)
-            {
-                ((object?[])unpacked)[i] = arrayValue.GetValue(i);
-            }
-        }
-        else
-        {
-            unpacked = values;
-        }
+        EnsureTupleArityMatches(
+            sourceName,
+            sourceText,
+            values.Count == 1 ? values[0] : null,
+            unpacked.Count,
+            tupleAssign.LeftNames.Count,
+            tupleAssign.Span);
 
         // Prepare every target before mutating any of them. Tuple assignment
         // is simultaneous: an unknown/const target or failed annotation
@@ -1923,14 +1990,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
         {
             case ArrayDestructuringPatternSyntax arrayPattern:
                 {
-                    object?[]? array = value switch
-                    {
-                        object?[] a => a,
-                        Array typedArray => Enumerable.Range(0, typedArray.Length).Select(i => typedArray.GetValue(i)).ToArray(),
-                        IReadOnlyList<object?> list => list.ToArray(),
-                        IEnumerable enumerable when value is not string => enumerable.Cast<object?>().ToArray(),
-                        _ => null,
-                    };
+                    var array = TryUnpackPositionalValue(value);
 
                     if (array is null)
                     {
@@ -1942,6 +2002,14 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
                             Span: destructuring.Span,
                             Label: $"got {(value?.GetType().Name ?? "null")} instead of an array"));
                     }
+
+                    EnsureTupleArityMatches(
+                        sourceName,
+                        sourceText,
+                        value,
+                        array.Length,
+                        arrayPattern.Names.Count,
+                        destructuring.Span);
 
                     for (var i = 0; i < arrayPattern.Names.Count; i++)
                     {
@@ -1958,7 +2026,14 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
                         }
 
                         var elementValue = i < array.Length ? array[i] : null;
-                        DeclareVariable(name, new VariableBinding(elementValue, ReplayAsPipeline: false, IsAllocatedOnly: false), destructuring.Modifier);
+                        DeclareVariable(
+                            name,
+                            new VariableBinding(
+                                elementValue,
+                                ReplayAsPipeline: false,
+                                IsAllocatedOnly: false,
+                                IsConst: destructuring.IsConst),
+                            destructuring.Modifier);
                     }
 
                     break;
@@ -2006,7 +2081,14 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
                         }
 
                         dict.TryGetValue(name, out var memberValue);
-                        DeclareVariable(name, new VariableBinding(memberValue, ReplayAsPipeline: false, IsAllocatedOnly: false), destructuring.Modifier);
+                        DeclareVariable(
+                            name,
+                            new VariableBinding(
+                                memberValue,
+                                ReplayAsPipeline: false,
+                                IsAllocatedOnly: false,
+                                IsConst: destructuring.IsConst),
+                            destructuring.Modifier);
                     }
 
                     break;

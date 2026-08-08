@@ -1865,6 +1865,42 @@ var [_, _, third] = $items
 echo $third         # 30
 \end{lstlisting}
 
+\subsection{Tuple Destructuring}
+\label{sec:tuple-destructuring}
+
+Parentheses destructure positionally, exactly as brackets do, and read
+naturally beside the way a tuple is written:
+
+\begin{lstlisting}
+var (x, y) = (1, 2)
+echo $x             # 1
+
+const (WIDTH, HEIGHT) = (80, 24)
+
+func min-max() { return (3, 9) }
+var (lo, hi) = min-max()
+
+# Existing variables, no declaration
+var a = 1
+var b = 2
+(a, b) = ($b, $a)   # a swap: the value is read in full before either is written
+\end{lstlisting}
+
+\noindent \textbf{A tuple's arity is checked; an array's is not.}  An array
+is a variable-length collection, so taking a prefix of one is a meaningful
+request and stays legal.  A tuple has a fixed, declared shape, so naming the
+wrong number of targets for one is a miscount and raises
+\code{tosh.runtime.tuple\_assignment\_arity\_mismatch}:
+
+\begin{lstlisting}
+var [first, second] = [10, 20, 30, 40, 50]   # fine - a prefix of an array
+var (a, b) = (1, 2, 3)                       # error - the tuple has 3 elements
+\end{lstlisting}
+
+\noindent \code{const} applies to every name a destructuring binds,
+whichever bracket style is used, so \code{const (A, B) = (1, 2)} produces two
+constants and not two ordinary variables.
+
 \section{Spread Operator}
 \label{sec:spread}
 \iop{...}

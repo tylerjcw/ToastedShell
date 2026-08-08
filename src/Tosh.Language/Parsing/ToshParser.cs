@@ -893,10 +893,10 @@ public static class ToshParser
             var varToken = NextToken();
             var isConst = string.Equals(varToken.Text, "const", StringComparison.Ordinal);
 
-            // Destructuring: var { a, b } = ... or var [a, b] = ...
-            if (Current.Kind is SyntaxTokenKind.OpenBrace or SyntaxTokenKind.OpenBracket)
+            // Destructuring: var { a, b } = ..., var [a, b] = ..., or var (a, b) = ...
+            if (Current.Kind is SyntaxTokenKind.OpenBrace or SyntaxTokenKind.OpenBracket or SyntaxTokenKind.OpenParen)
             {
-                return ParseDestructuringDeclaration(declarationStart, modifier, stopAtCloseParen, stopAtCloseBrace, stopAtSemicolon);
+                return ParseDestructuringDeclaration(declarationStart, modifier, isConst, stopAtCloseParen, stopAtCloseBrace, stopAtSemicolon);
             }
 
             var nameToken = Current.Kind == SyntaxTokenKind.Bareword ? NextToken() : ExpectVariableName();
@@ -984,6 +984,7 @@ public static class ToshParser
         private StatementSyntax ParseDestructuringDeclaration(
             int declarationStart,
             DeclarationModifier modifier,
+            bool isConst,
             bool stopAtCloseParen,
             bool stopAtCloseBrace,
             bool stopAtSemicolon)
@@ -1032,12 +1033,16 @@ public static class ToshParser
 
                 pattern = new RecordDestructuringPatternSyntax(names, TextSpan.FromBounds(patternStart, closeSpan.End));
             }
-            else // OpenBracket
+            else // OpenBracket or OpenParen — both positional
             {
-                NextToken(); // consume [
+                var closer = Current.Kind == SyntaxTokenKind.OpenParen
+                    ? SyntaxTokenKind.CloseParen
+                    : SyntaxTokenKind.CloseBracket;
+
+                NextToken(); // consume [ or (
                 var names = new List<string>();
 
-                while (Current.Kind != SyntaxTokenKind.EndOfFile && Current.Kind != SyntaxTokenKind.CloseBracket)
+                while (Current.Kind != SyntaxTokenKind.EndOfFile && Current.Kind != closer)
                 {
                     if (Current.Kind == SyntaxTokenKind.Comma)
                     {
@@ -1066,7 +1071,7 @@ public static class ToshParser
                 }
 
                 var closeSpan = Current.Span;
-                if (Current.Kind == SyntaxTokenKind.CloseBracket)
+                if (Current.Kind == closer)
                 {
                     NextToken();
                 }
@@ -1086,6 +1091,7 @@ public static class ToshParser
                 pattern,
                 value,
                 modifier,
+                isConst,
                 TextSpan.FromBounds(declarationStart, end));
         }
 
@@ -10995,9 +11001,15 @@ public static class ToshParser
                 return false;
             }
 
-            // Destructuring: var { ... } = ... or var [ ... ] = ...
+            // Destructuring: var { ... } = ..., var [ ... ] = ..., or var ( ... ) = ...
+            //
+            // `TS-P2-59`. The parenthesised spelling was the one missing, and it is the one a
+            // reader writes first: `(a, b) = …` already assigns to existing variables, and
+            // `(1, 2)` is how a tuple is built, so `var (a, b) = (1, 2)` is the obvious way to
+            // ask for both at once. Without it the declaration had to be spelled with brackets
+            // while the assignment used parentheses.
             var afterVar = Peek(offset + 1);
-            if (afterVar.Kind is SyntaxTokenKind.OpenBrace or SyntaxTokenKind.OpenBracket)
+            if (afterVar.Kind is SyntaxTokenKind.OpenBrace or SyntaxTokenKind.OpenBracket or SyntaxTokenKind.OpenParen)
             {
                 return true;
             }

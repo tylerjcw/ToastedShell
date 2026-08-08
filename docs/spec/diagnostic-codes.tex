@@ -10,7 +10,7 @@ Non-error diagnostics can be suppressed with the \texttt{hush} builtin
 (scope-local) or by adding their codes to
 \texttt{\$tosh.Config.Diagnostics.Hushed}.
 
-This chapter lists all 513 diagnostic codes currently emitted by the
+This chapter lists all 514 diagnostic codes currently emitted by the
 implementation, grouped by namespace. It is generated from the source tree
 by \texttt{scripts/extract\_diagnostic\_codes.py} and should be
 regenerated whenever new diagnostics are added.
@@ -32,7 +32,7 @@ regenerated whenever new diagnostics are added.
 \texttt{tosh.naming.*} & 2 & --- \\
 \texttt{tosh.parser.*} & 162 & Raised by the lexer or parser before any code runs. Indicates malformed source text. \\
 \texttt{tosh.row.*} & 1 & --- \\
-\texttt{tosh.runtime.*} & 314 & Raised by the engine while evaluating a script. The bulk of TōSh diagnostics live here. \\
+\texttt{tosh.runtime.*} & 315 & Raised by the engine while evaluating a script. The bulk of TōSh diagnostics live here. \\
 \texttt{tosh.tui.*} & 8 & Raised by the `tui` subsystem (terminal UI widgets, screens, providers). \\
 \texttt{tosh.type.*} & 9 & --- \\
 \texttt{tosh.user.*} & 1 & --- \\
@@ -555,6 +555,7 @@ Raised by the engine while evaluating a script. The bulk of TōSh diagnostics li
 \item[\texttt{\small tosh.runtime.tree\_command\_missing}] The system 'tree' command was not found.
 \item[\texttt{\small tosh.runtime.tree\_command\_start\_failed}] Failed to start the system 'tree' command.
 \item[\texttt{\small tosh.runtime.tree\_json\_parse\_failed}] Could not parse structured 'tree' output. \{exception.Message\}
+\item[\texttt{\small tosh.runtime.tuple\_assignment\_arity\_mismatch}] This destructuring has \{targetCount\} targets but the tuple has \{valueCount\} elements.
 \item[\texttt{\small tosh.runtime.type\_name\_conflict}] \{declaredKind\} '\{name\}' conflicts with an existing refinement alias.
 \item[\texttt{\small tosh.runtime.ulimit\_getrlimit\_failed}] Failed to read current limit for '\{resourceName\}'.
 \item[\texttt{\small tosh.runtime.ulimit\_invalid\_value}] Invalid limit value '\{newValue\}'.

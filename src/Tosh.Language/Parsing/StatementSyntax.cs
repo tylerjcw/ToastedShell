@@ -17,7 +17,13 @@ public sealed record ArrayDestructuringPatternSyntax(IReadOnlyList<string> Names
 
 public sealed record RecordDestructuringPatternSyntax(IReadOnlyList<string> Names, TextSpan Span) : DestructuringPatternSyntax(Span);
 
-public sealed record DestructuringDeclarationStatementSyntax(DestructuringPatternSyntax Pattern, PipelineSyntax Value, DeclarationModifier Modifier, TextSpan Span) : StatementSyntax(Span);
+/// <summary>Destructuring declaration: <c>var [a, b] = …</c>, <c>var (a, b) = …</c>, <c>var { a, b } = …</c>.</summary>
+/// <param name="IsConst">
+/// Whether the keyword was <c>const</c>. Without this the bindings were declared mutable
+/// however the declaration was spelled, so <c>const [A, B] = [1, 2]</c> then <c>$A = 9</c>
+/// succeeded — <c>const</c> was accepted and then ignored (<c>TS-P2-59</c>).
+/// </param>
+public sealed record DestructuringDeclarationStatementSyntax(DestructuringPatternSyntax Pattern, PipelineSyntax Value, DeclarationModifier Modifier, bool IsConst, TextSpan Span) : StatementSyntax(Span);
 
 public sealed record AllocStatementSyntax(string Name, PipelineSyntax Value, DeclarationModifier Modifier, TextSpan Span) : StatementSyntax(Span);
 
