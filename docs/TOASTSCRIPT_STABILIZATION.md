@@ -4680,3 +4680,35 @@ genuine controls. One existing test needed updating rather than satisfying: it a
 capped suite: 4,058 passing, 1 skipped. The one failure, `Document_symbols_group_same_scope_
 function_overloads`, is in uncommitted `Tosh.LanguageServices` work and was confirmed to fail with
 every change here set aside.
+
+## `TS-P2-60` — addendum: a bare `~` (August 8)
+
+Reported alongside the expansion gap, and a distinct shape. A `~` on its own at the prompt is
+read as a *command name*, not a path:
+
+```
+❯ ~
+⚠  warn  tosh.bind.unknown_command
+│  Command '~' is not a registered builtin or function declared in this source.
+│      ╰─▶ did you mean 'f'?
+```
+
+Two things wrong with that, beyond the expansion itself. The binder's suggestion — "did you mean
+'f'?" — is noise: `~` is not a misspelling of anything, and offering the nearest single-letter
+command for a punctuation token makes the diagnostic read as though the shell has misunderstood
+something subtler than it has. Any suggestion machinery keyed on edit distance should decline to
+answer when the input is not identifier-shaped.
+
+The behaviour itself needs a decision rather than a fix, and it is the one this addendum exists to
+record. A bare `~` could reasonably:
+
+- change to the home directory, the way an `auto_cd`-style shell treats a bare path — which is
+  what the prompt's own `~tosh` abbreviation suggests a reader would expect;
+- evaluate to the home directory *as a value*, printing it the way `pwd` does, which composes
+  with pipelines (`~ | ls`) and keeps `cd ~` as the way to move; or
+- remain an error, but one that names the real problem — "`~` is a path, not a command" — with
+  the suggestion machinery held back.
+
+The third is the minimum. The first two are language decisions, and the choice between them
+should be made deliberately rather than arrived at by whichever the expansion fix happens to
+produce.
