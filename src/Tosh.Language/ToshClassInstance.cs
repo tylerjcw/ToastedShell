@@ -217,6 +217,25 @@ public sealed class ToshClassInstance : IShellRecordObject, IShellInvocableObjec
             cancellationToken);
     }
 
+    /// <summary>
+    /// Invokes a method with type arguments written at the call site — <c>$a.m&lt;int&gt;(11)</c>.
+    /// Overriding this is what distinguishes a target that understands them from one that must
+    /// refuse; the interface default refuses.
+    /// </summary>
+    public ValueTask<InvocationResult> InvokeInstanceMethodAsync(
+        string methodName,
+        IReadOnlyList<object?> arguments,
+        IReadOnlyList<Type>? typeArguments,
+        CancellationToken cancellationToken) =>
+        Definition.InvokeInstanceMethodAsync(
+            this,
+            methodName,
+            arguments,
+            includeHidden: false,
+            accessor: null,
+            cancellationToken,
+            typeArguments);
+
     bool IShellBinaryOperatorObject.TryEvaluateBinaryOperator(
         string operatorName,
         object? other,

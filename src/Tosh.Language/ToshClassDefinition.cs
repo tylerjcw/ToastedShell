@@ -1535,7 +1535,8 @@ public sealed class ToshClassDefinition : IShellNamedType
         IReadOnlyList<object?> arguments,
         bool includeHidden,
         ToshClassDefinition? accessor,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IReadOnlyList<Type>? explicitTypeArguments = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -1563,7 +1564,8 @@ public sealed class ToshClassDefinition : IShellNamedType
                     arguments,
                     includeHidden,
                     accessor,
-                    cancellationToken);
+                    cancellationToken,
+                    explicitTypeArguments);
             }
 
             if (ClrBaseType is not null && instance.ClrBaseObject is not null)
@@ -1600,7 +1602,7 @@ public sealed class ToshClassDefinition : IShellNamedType
                 category: Tosh.Runtime.ToshDiagnosticCategory.Deprecation);
         }
 
-        var values = await owner.ExecuteMethodBlockAsync(method, locals, instance, cancellationToken);
+        var values = await owner.ExecuteMethodBlockAsync(method, locals, instance, cancellationToken, explicitTypeArguments);
         return new InvocationResult(FlattenCallResult(values), ReturnedVoid: false);
     }
 
@@ -2263,7 +2265,8 @@ public sealed class ToshClassDefinition : IShellNamedType
         ToshClassMethodDefinition method,
         IReadOnlyDictionary<string, object?> boundLocals,
         ToshClassInstance? instance,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IReadOnlyList<Type>? explicitTypeArguments = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -2308,6 +2311,30 @@ public sealed class ToshClassDefinition : IShellNamedType
                 argumentValues,
                 syntheticContext,
                 ownerLabel: $"{Name}.{method.Name}");
+        }
+
+        // Type arguments written at the call site are authoritative: they replace whatever
+        // inference produced, rather than being merged with it. Asking for `<int>` and getting
+        // the inferred binding instead is the failure this feature exists to remove.
+        if (explicitTypeArguments is { Count: > 0 } && method.TypeParameters is { Count: > 0 } declared)
+        {
+            if (explicitTypeArguments.Count != declared.Count)
+            {
+                throw new InvalidOperationException(
+                    $"Method '{Name}.{method.Name}' declares {declared.Count} type parameter(s) "
+                    + $"but was given {explicitTypeArguments.Count}.");
+            }
+
+            methodBindings = new Dictionary<string, Type>(StringComparer.Ordinal);
+            for (var index = 0; index < declared.Count; index++)
+            {
+                methodBindings[declared[index]] = explicitTypeArguments[index];
+            }
+        }
+        else if (explicitTypeArguments is { Count: > 0 })
+        {
+            throw new InvalidOperationException(
+                $"Method '{Name}.{method.Name}' is not generic and takes no type arguments.");
         }
 
         // For generic instance methods, validate any parameters whose original
