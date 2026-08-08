@@ -80,6 +80,22 @@ public sealed class ReflectionInvoker
         string methodName,
         IReadOnlyList<object?> arguments,
         CancellationToken cancellationToken)
+        => InvokeInstanceMethodAsync(target, methodName, arguments, typeArguments: null, cancellationToken);
+
+    /// <summary>
+    /// Invokes an instance method, optionally with type arguments resolved from the call site.
+    /// </summary>
+    /// <remarks>
+    /// The types arrive resolved rather than as names: resolution needs the scope, aliases and
+    /// declared types the engine knows about, and none of that is reachable from here. Passing
+    /// names would mean a second, weaker resolver living in the invoker.
+    /// </remarks>
+    public ValueTask<InvocationResult> InvokeInstanceMethodAsync(
+        object target,
+        string methodName,
+        IReadOnlyList<object?> arguments,
+        IReadOnlyList<Type>? typeArguments,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(target);
         ArgumentException.ThrowIfNullOrWhiteSpace(methodName);
@@ -87,7 +103,7 @@ public sealed class ReflectionInvoker
 
         if (target is IShellInvocableObject shellInvocable)
         {
-            return shellInvocable.InvokeInstanceMethodAsync(methodName, arguments, cancellationToken);
+            return shellInvocable.InvokeInstanceMethodAsync(methodName, arguments, typeArguments, cancellationToken);
         }
 
         if (target is IShellStaticType shellStaticType)
@@ -102,12 +118,76 @@ public sealed class ReflectionInvoker
             return ValueTask.FromResult(InvokeStatic(staticType, methodName, arguments));
         }
 
+        var candidates = target.GetType().GetMethods(BindingFlags.Instance | BindingFlags.Public);
+
+        if (typeArguments is { Count: > 0 })
+        {
+            candidates = ConstructGenericCandidates(
+                candidates,
+                methodName,
+                typeArguments,
+                $"'{target.GetType().FullName}'");
+        }
+
         return ValueTask.FromResult(Invoke(
-            target.GetType().GetMethods(BindingFlags.Instance | BindingFlags.Public),
+            candidates,
             target,
             methodName,
             arguments,
             $"instance method '{methodName}' on '{target.GetType().FullName}'"));
+    }
+
+    /// <summary>
+    /// Narrows <paramref name="candidates"/> to the generic methods named
+    /// <paramref name="methodName"/> whose arity matches, each constructed with
+    /// <paramref name="typeArguments"/>, so ordinary overload selection runs against the
+    /// constructed forms.
+    /// </summary>
+    private static MethodInfo[] ConstructGenericCandidates(
+        MethodInfo[] candidates,
+        string methodName,
+        IReadOnlyList<Type> typeArguments,
+        string ownerDescription)
+    {
+        var constructed = new List<MethodInfo>();
+        var sawName = false;
+
+        foreach (var candidate in candidates)
+        {
+            if (!string.Equals(candidate.Name, methodName, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            sawName = true;
+
+            if (!candidate.IsGenericMethodDefinition ||
+                candidate.GetGenericArguments().Length != typeArguments.Count)
+            {
+                continue;
+            }
+
+            try
+            {
+                constructed.Add(candidate.MakeGenericMethod([.. typeArguments]));
+            }
+            catch (ArgumentException)
+            {
+                // A constraint the arguments do not satisfy. Skipped rather than thrown, so the
+                // failure reads as "no overload matched" alongside any sibling that did.
+            }
+        }
+
+        if (constructed.Count == 0)
+        {
+            var names = string.Join(", ", typeArguments.Select(static type => type.Name));
+            throw new InvalidOperationException(
+                sawName
+                    ? $"Method '{methodName}' on {ownerDescription} has no generic overload taking {typeArguments.Count} type argument(s) <{names}>."
+                    : $"Method '{methodName}' was not found on {ownerDescription}.");
+        }
+
+        return [.. constructed];
     }
 
     public InvocationResult InvokeStatic(Type type, string methodName, IReadOnlyList<object?> arguments)

@@ -7907,10 +7907,22 @@ public sealed partial class ToshEngine : IShellEvaluator
                         }
 
                         var methodArguments = await EvaluateArgumentsAsync(sourceName, sourceText, methodCall.Arguments, cancellationToken);
+
+                        // Names are resolved here rather than passed down: scope, aliases and
+                        // ToastScript-declared types are all knowledge the engine holds and the
+                        // invoker does not.
+                        var methodTypeArguments = ResolveCallSiteTypeArguments(
+                            methodCall.ExplicitTypeArguments,
+                            methodCall.MethodName,
+                            sourceName,
+                            sourceText,
+                            methodCall.Span);
+
                         var invocation = await Runtime.Invoker.InvokeInstanceMethodAsync(
                             target,
                             methodCall.MethodName,
                             methodArguments,
+                            methodTypeArguments,
                             cancellationToken);
                         return invocation.ReturnedVoid ? target : invocation.Value;
                     }
@@ -10633,6 +10645,49 @@ public sealed partial class ToshEngine : IShellEvaluator
 
             definition.SetNestedType(member.Name, nestedType, member.IsShy);
         }
+    }
+
+    /// <summary>
+    /// Resolves the type argument names written at a call site to CLR types, or returns null
+    /// when none were written.
+    /// </summary>
+    /// <remarks>
+    /// An unresolvable name is a diagnostic rather than a silent fallback to inference: the
+    /// caller asked for a specific instantiation, and answering with a different one is the
+    /// failure this whole path exists to avoid.
+    /// </remarks>
+    private IReadOnlyList<Type>? ResolveCallSiteTypeArguments(
+        IReadOnlyList<string>? typeArgumentNames,
+        string methodName,
+        string sourceName,
+        string sourceText,
+        TextSpan span)
+    {
+        if (typeArgumentNames is not { Count: > 0 })
+        {
+            return null;
+        }
+
+        var resolved = new List<Type>(typeArgumentNames.Count);
+
+        foreach (var name in typeArgumentNames)
+        {
+            var type = TryResolveTypeName(name);
+            if (type is null)
+            {
+                throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                    Code: "tosh.runtime.unknown_type_argument",
+                    Title: $"Type '{name}' could not be resolved as a type argument for '{methodName}'.",
+                    SourceName: sourceName,
+                    SourceText: sourceText,
+                    Span: span,
+                    Label: $"unknown type '{name}'"));
+            }
+
+            resolved.Add(type);
+        }
+
+        return resolved;
     }
 
     private void DeclareType(

@@ -90,7 +90,12 @@ public sealed record MethodCallArgumentSyntax(
     string MethodName,
     IReadOnlyList<ArgumentSyntax> Arguments,
     TextSpan Span,
-    bool NullSafe = false) : ArgumentSyntax(Span);
+    bool NullSafe = false,
+    /// <summary>
+    /// Type arguments written at the call site — the <c>int</c> of <c>$a.m&lt;int&gt;(11)</c>.
+    /// Null when none were written, which is not the same as an empty list.
+    /// </summary>
+    IReadOnlyList<string>? ExplicitTypeArguments = null) : ArgumentSyntax(Span);
 
 public sealed record CallableInvocationArgumentSyntax(
     ArgumentSyntax Target,

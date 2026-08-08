@@ -9173,9 +9173,38 @@ public static class ToshParser
             bool allowMethodCall = true,
             bool nullSafe = false)
         {
+            // Explicit type arguments, written between the member name and its argument list:
+            // `$a.m<int>(11)`. Read speculatively and rolled back if no closing `>` is found,
+            // the same way a command name reads them — `a < b` must keep parsing as a
+            // comparison.
+            IReadOnlyList<string>? explicitTypeArguments = null;
+            if (allowMethodCall &&
+                Current.Kind == SyntaxTokenKind.LessThan &&
+                Current.Span.Start == postfixSpan.End)
+            {
+                var savedPosition = _position;
+                var savedDiagnosticCount = _diagnostics.Count;
+                var (_, parsedArgs, hasAngles) = ParseGenericTypeArgumentsStructured();
+
+                // Only a type argument list *immediately* followed by `(` is one: `$a.m<int>`
+                // with nothing after it is a comparison against a member.
+                if (hasAngles && parsedArgs.Count > 0 && Current.Kind == SyntaxTokenKind.OpenParen)
+                {
+                    explicitTypeArguments = parsedArgs;
+                }
+                else
+                {
+                    _position = savedPosition;
+                    if (_diagnostics.Count > savedDiagnosticCount)
+                    {
+                        _diagnostics.RemoveRange(savedDiagnosticCount, _diagnostics.Count - savedDiagnosticCount);
+                    }
+                }
+            }
+
             if (allowMethodCall &&
                 Current.Kind == SyntaxTokenKind.OpenParen &&
-                Current.Span.Start == postfixSpan.End)
+                (Current.Span.Start == postfixSpan.End || explicitTypeArguments is not null))
             {
                 if (!IsValidIdentifier(postfixText))
                 {
@@ -9193,7 +9222,8 @@ public static class ToshParser
                     postfixText,
                     arguments.arguments,
                     TextSpan.FromBounds(expression.Span.Start, end),
-                    NullSafe: nullSafe);
+                    NullSafe: nullSafe,
+                    ExplicitTypeArguments: explicitTypeArguments);
             }
 
             return new MemberAccessArgumentSyntax(
