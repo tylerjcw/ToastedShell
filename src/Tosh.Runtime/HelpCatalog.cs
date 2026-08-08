@@ -1777,40 +1777,61 @@ public static class HelpCatalog
         IReadOnlyDictionary<string, int> documentFrequency,
         int topicCount)
     {
-        var shared = 0;
+        var distinctive = 0;
+        var sharedTotal = 0;
 
         foreach (var token in leftTokens)
         {
-            if (!rightTokens.Contains(token) ||
-                !documentFrequency.TryGetValue(token, out var frequency) ||
-                frequency <= 0)
+            if (!rightTokens.Contains(token))
             {
                 continue;
             }
 
-            // A word in more than a tenth of all topics is corpus furniture, not a subject.
-            // Measured against the shipped corpus: a quarter admits words like "file" and
-            // "directory", which relate `cd` to `append-file` and `lsblk`. A tenth keeps `cd`
-            // with `pwd`, `eval` and `source`, at the price of leaving two dozen terse
-            // one-liners with no computed relations at all — which is the trade this item
-            // asked for, since a topic with nothing genuine to point at should point at
-            // nothing. A topic that wants relations the corpus cannot infer declares `@see`.
-            if (frequency * 10 > topicCount)
-            {
-                continue;
-            }
+            sharedTotal++;
 
-            shared++;
+            // A word in more than a tenth of all topics is corpus furniture. Measured against
+            // the shipped corpus: a quarter admits "file" and "directory", which relate `cd` to
+            // `append-file` and `lsblk`; a tenth keeps `cd` with `pwd`, `eval` and `source`.
+            if (documentFrequency.TryGetValue(token, out var frequency) &&
+                frequency > 0 &&
+                frequency * 10 <= topicCount)
+            {
+                distinctive++;
+            }
         }
 
-        // The gate, and the whole of the change: two topics that share no distinctive word are
-        // not related, however much else they have in common.
-        if (shared < 2)
+        if (sharedTotal == 0)
         {
             return 0.0d;
         }
 
-        var score = shared * 8.0d;
+        // Two ways to earn a relationship, because one measure was not enough.
+        //
+        // Rare shared words are the strong signal, and catch topics that talk about the same
+        // subject in their own words. But they miss the case that matters most: `min` and `max`
+        // are documented as "Returns the minimum/maximum pipeline value", and *every* word they
+        // share — returns, the, pipeline, value — is the shell's house vocabulary. Rarity alone
+        // therefore threw away the best Related list in the corpus,
+        // `max · frequencies · median · percentile · stdev`, which is exactly the list a reader
+        // of `min` wants.
+        //
+        // So proportion is the second route: two topics whose descriptions are *mostly the same
+        // words* are related however common those words are. `min` and `max` share four of the
+        // six they have; `add` and `xbox` share almost none of theirs. The Dice coefficient
+        // measures that directly, and is scale-free, so a formulaic one-line description is not
+        // penalised for being short.
+        // 0.45 measured rather than picked: at 0.5 `min` reaches `max` but not `median`, whose
+        // description says "values" where `min` says "value"; at 0.4 `first` and `last` crowd
+        // `median` back out again.
+        var dice = 2.0d * sharedTotal / (leftTokens.Count + rightTokens.Count);
+        var proportional = sharedTotal >= 3 && dice >= 0.45d;
+
+        if (distinctive < 2 && !proportional)
+        {
+            return 0.0d;
+        }
+
+        var score = (distinctive * 8.0d) + (proportional ? 24.0d : 0.0d);
 
         if (string.Equals(left.Category, right.Category, StringComparison.OrdinalIgnoreCase))
         {

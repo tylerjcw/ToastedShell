@@ -248,16 +248,37 @@ public sealed class ScopedHelpVisibilityTests
     }
 
     [Fact]
+    public void A_family_documented_in_house_vocabulary_stays_together()
+    {
+        // The case that a rarity rule alone got wrong, and the reason there are two routes to
+        // qualifying. `min` and `max` are documented as "Returns the minimum/maximum pipeline
+        // value" — every word they share is the shell's house vocabulary, so weighing words by
+        // rarity threw away the best Related list in the corpus. Proportion catches it: their
+        // descriptions are mostly the same words.
+        var runtime = ToshRuntime.CreateDefault();
+
+        var min = HelpCatalog.ResolveTopic(runtime, "min");
+        var median = HelpCatalog.ResolveTopic(runtime, "median");
+
+        Assert.NotNull(min);
+        Assert.NotNull(median);
+        Assert.Contains("max", min!.Related, StringComparer.OrdinalIgnoreCase);
+        Assert.Contains("median", min.Related, StringComparer.OrdinalIgnoreCase);
+        Assert.Contains("percentile", median!.Related, StringComparer.OrdinalIgnoreCase);
+        Assert.Contains("stdev", median.Related, StringComparer.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void Most_topics_still_have_relations()
     {
         // The blunt guard against over-tightening: emptying the noisy lists must not empty the
-        // corpus. Measured at 318 of 342 when this was written.
+        // corpus. Measured at 328 of 342 when this was written.
         var runtime = ToshRuntime.CreateDefault();
         var topics = HelpCatalog.BuildTopics(runtime);
         var withRelated = topics.Count(topic => topic.Related.Count > 0);
 
         Assert.True(
-            withRelated * 10 >= topics.Count * 8,
+            withRelated * 10 >= topics.Count * 9,
             $"only {withRelated} of {topics.Count} topics kept a Related list");
     }
 

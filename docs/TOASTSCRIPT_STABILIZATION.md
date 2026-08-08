@@ -485,7 +485,7 @@ closed.
 | `TS-P2-50` | Complete — fixed 2026-08-02 | Filed as one defect ("a comma inside `<…>` immediately followed by `(` mis-parses") and was two, sharing a symptom. **(a)** A base constructor could be given only one argument: `extends P0($a, $b)` failed with `tosh.parser.missing_pipeline_separator` and no type argument was involved anywhere — each argument was read as a pipeline running until the close paren, so the separating comma was neither a terminator nor a valid continuation. **(b)** `(new P<int, int>(3, 4)).A` parsed the type arguments as a tuple and reported `Member 'A' was not found on type 'ToshTuple'`, because the scanner deciding tuple-or-not did not step over a type argument list as its two sibling scanners already did. | Base constructor argument lists of any arity parse, read the way every other parenthesised argument list is; a type argument list of any arity inside parentheses is not mistaken for a tuple, and tuples and comparisons are unaffected. |
 | `TS-P2-51` | Complete — fixed 2026-08-08 | A static property cannot be assigned: `B.S = 5` fails to parse with `tosh.parser.variable_references_require_dollar`, on the declaring class as much as through a subclass, so a static is effectively read-only after its initializer. `TrySetStaticMember` has exactly one caller — declaration-time initialization — and no user-reachable path. Found while probing `TS-P1-09`. | Assignment to a static property parses and stores to the declaring class's slot; reading it back through any subclass sees the same value. |
 | `TS-P2-52` | Complete — fixed 2026-08-06 | `exit` does not stop a running script: `echo one` / `exit 0` / `echo two` prints both lines. `RequestExit` records the code and sets a flag nothing in the script execution path consults, so a script cannot decline to continue. Found while adding `--help` to scripts, which needed a way to answer and then not run the body and had to introduce a signal exception instead. | `exit` ends the current script immediately with its exit code; the REPL and sourced-file behaviours are unchanged and covered by tests. |
-| `TS-P2-53` | Complete — fixed 2026-08-08 | `help <name>` computed a "Related" list in which sharing a *category* was worth 40 points on its own, and every user-defined function lands in `Scripting` — so `help add` on a two-line function suggested `xbox · benchmark · compress · cpu-info · dbg`. All 342 shipped topics had a Related list, whether or not they had anything to relate to. | A relationship must be earned by shared content: two topics sharing no distinctive word score zero, however much else they have in common. Words are weighted by rarity across the corpus rather than counted, so "the" and "value" cannot manufacture one, and usage strings no longer contribute — a shared `int` is not a subject. Measured: `add` goes empty, `each` keeps `parallel · flat-map · map · where · filter` unchanged, and 318 of 342 topics keep a list. A topic wanting relations the corpus cannot infer declares `@see`. |
+| `TS-P2-53` | Complete — fixed 2026-08-08 | `help <name>` computed a "Related" list in which sharing a *category* was worth 40 points on its own, and every user-defined function lands in `Scripting` — so `help add` on a two-line function suggested `xbox · benchmark · compress · cpu-info · dbg`. All 342 shipped topics had a Related list, whether or not they had anything to relate to. | A relationship must be earned by shared content: two topics sharing no distinctive word score zero, however much else they have in common. Words are weighted by rarity across the corpus rather than counted, so "the" and "value" cannot manufacture one, and usage strings no longer contribute — a shared `int` is not a subject. Rarity alone was not enough: `min` and `max` are documented in the shell's house vocabulary, so every word they share is common and the best list in the corpus was discarded. A second route qualifies topics whose descriptions are *proportionally* the same words. Measured: `add` goes empty, `each` keeps `parallel · flat-map · map · where · filter` unchanged, `min` keeps `max` and `median`, and 328 of 342 topics keep a list. A topic wanting relations the corpus cannot infer declares `@see`. |
 | `TS-P2-54` | Complete — fixed 2026-08-08 | **Introspection could not see a function the running script had declared.** Filed as "a `require`d function is invisible to `help`"; measuring widened and corrected it. A `func` without `global` or `export` registers in the innermost lexical scope, running a script pushes one, and `HelpCatalog` read the global registry — so `help fn` answered "topic not found" for a function the previous line had called, however it got there: required, sourced, or declared in that same file. At `-c` there is no scope to land in, which is why the identical source worked when pasted. `help` was not alone: `which fn` printed nothing and `time "fn"` reported the target was not executable. | `CommandContext` carries a scope-aware view of commands — the twin of the `ScopedTypeResolver` already there — and `help`, `which`, `apropos` and `time` read it, so a script's own functions, its sourced ones, and its required exports are all introspectable with their doc-comments. A function declared inside a block does not outlive its scope. |
 | `TS-P2-55` | Planned — filed 2026-08-06 | `cast` cannot target a ToastScript-declared type: `cast Fuel $v` on an enum value fails with `tosh.runtime.command_failed`, and the same is expected of classes, structs, records and unions. `cast` resolves its target through CLR type lookup, so a name declared in ToastScript is never found and the conversion path is never reached — casting an enum *from* its value now works, but casting *to* one does not. Found while fixing enum numeric conversion. | `cast` resolves ToastScript-declared types by name, including nested ones (`cast Outer.Inner $v`), and reports an unknown target distinctly from a failed conversion. |
 | `TS-P2-56` | Complete — fixed 2026-08-06 | A script's exit code does not reach the process: `exit 3` in a script, and `tosh -c 'exit 3'`, both exit 0. `ExitCommand` records the code through `SetLastExitCode` and the host reads `runtime.LastExitCode` afterwards, so something between resets it — most likely per-statement exit-status tracking overwriting it on the way out. Pre-existing: the stable binary behaves the same. Found while fixing `TS-P2-52`. | `exit <n>` leaves the process with status `<n>` from a script, from `-c`, and from inside a function or loop; a script that ends without `exit` still reports the status of its last command. |
@@ -4911,18 +4911,37 @@ before it counts. Usage strings were dropped as a token source, because they are
 
 Three thresholds were tried and measured rather than reasoned about:
 
-| rule | `add` | `each` | `cd` | topics with relations |
+| rule | `add` | `each` | `min` | topics with relations |
 |---|---|---|---|---|
-| before | `benchmark, dbg, unless, with-retry, assert` | `parallel, flat-map, map, where, filter` | — | 342 / 342 |
+| before | `benchmark, dbg, unless, with-retry, assert` | `parallel, flat-map, map, where, filter` | `max, frequencies, median, percentile, stdev` | 342 / 342 |
 | idf-weighted, usage included | `is, set-prop, cast, constructors, date` | `parallel, from, to, lsblk, require` | — | 342 / 342 |
-| ≥2 shared, rare ≤ ¼, no usage | `∅` | `parallel, flat-map, map, where, filter` | `append-file, findmnt, length, lsblk` | 337 / 342 |
-| **≥2 shared, rare ≤ ⅒, no usage** | **`∅`** | **`parallel, flat-map, map, where, filter`** | **`pwd, eval, exit, prompt-dir, source`** | **318 / 342** |
+| ≥2 rare shared, rare ≤ ¼, no usage | `∅` | `parallel, flat-map, map, where, filter` | — | 337 / 342 |
+| ≥2 rare shared, rare ≤ ⅒, no usage | `∅` | `parallel, flat-map, map, where, filter` | `∅` | 318 / 342 |
+| **rare OR proportional (Dice ≥ 0.45)** | **`∅`** | **`parallel, flat-map, map, where, filter`** | **`all, any, max, median`** | **328 / 342** |
 
-The middle row is why the first idea was abandoned: weighting by rarity alone made rare words
-outrank category so heavily that `each` lost `map` and `where` and gained `lsblk`. The last row
-costs two dozen terse one-liners their computed relations — `min`, `max`, `median`, `cp`, `ln` —
-and that is the trade this item asked for: a topic with nothing genuine to point at should point at
-nothing, and one that wants relations the corpus cannot infer declares `@see`.
+The second row is why weighting by rarity alone was abandoned: rare words outranked category so
+heavily that `each` lost `map` and `where` and gained `lsblk`.
+
+**The fourth row shipped, and it was wrong — caught by being asked to demonstrate it.** Describing
+the two dozen newly-empty topics as "terse one-liners with nothing genuine to point at" was
+generous to my own change and false about the important ones. `min`'s old list was
+`max · frequencies · median · percentile · stdev`, which is exactly what a reader of `min` wants.
+It vanished because `min` and `max` are documented as "Returns the minimum/maximum pipeline value"
+— *every* word they share is the shell's house vocabulary, so a rarity filter discards all of it.
+Rarity measures the wrong thing for a corpus with a documentation style.
+
+Hence two routes to qualifying, in the shipped row. Rare shared words remain the strong signal for
+topics that describe the same subject in their own words. Proportional overlap — the Dice
+coefficient of the two token sets — catches the opposite case: descriptions that are *mostly the
+same words*, however common those words are. `min` and `max` share four of the six they have;
+`add` and `xbox` share almost none. Dice is scale-free, so a formulaic one-liner is not penalised
+for being short. 0.45 was measured, not picked: at 0.5 `min` reaches `max` but not `median`, whose
+description says "values" where `min` says "value"; at 0.4 `first` and `last` crowd `median` out.
+
+Fourteen topics still end with no computed relations — `cp`, `ln`, `chown`, `sleep`, `tr`, `ping`
+and other single-purpose commands with nothing in the corpus to point at, plus `add` itself, which
+is the reported case. That is the trade this item asked for. A topic wanting relations the corpus
+cannot infer declares `@see`.
 
 **Also found, not fixed:** a `HelpTopic` renders as a bare `[HelpTopic]` type header rather than its
 panel whenever it is not the only value a script produces. `help ls` alone panels; `echo one`
