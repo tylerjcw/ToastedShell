@@ -493,11 +493,11 @@ closed.
 | `TS-P2-58` | Planned — filed 2026-08-08 | A `yield` inside a `defer` block is silently dropped: `func g() { defer { yield 9 }\n yield 1 }` produces only `1`. The generator terminates cleanly, so nothing reports the loss. Whether a deferred block should contribute to a generator's stream at all is the open question — it runs while unwinding, after the consumer may have stopped pulling. Found while fixing `TS-P1-19`. | Decided one way or the other and made explicit: either a deferred yield reaches the stream, or it is refused at parse time with a diagnostic saying why. Silence is the one option ruled out. |
 | `TS-P2-59` | Complete — fixed 2026-08-08 | Filed as "tuple destructuring does not parse"; measuring corrected that. `var [a, b] = (1, 2)` already destructured a tuple, and `var { a, b } = …` already existed. Three narrower things were wrong. **The parenthesised declaring form did not exist** — `(a, b) = …` assigned to existing variables and `var (a, b) = …` failed with `tosh.bind.unknown_command` for `var`, which names nothing. **The two destructurings disagreed about tuples**: the declaring form accepted arrays, lists, tuples and any enumerable, the assigning form arrays alone, so `(a, b) = (1, 2)` bound the whole tuple to `a` and null to `b` in silence — and a swap, `(a, b) = ($b, $a)`, was therefore broken. **`const` was accepted and ignored**: `const [A, B] = [1, 2]` declared two mutable bindings. | `var (a, b) = …` and `const (a, b) = …` declare and bind, routed through the same destructuring the bracket form uses; one unpacking rule now serves both the declaring and assigning paths; `const` applies to every name a destructuring binds, in all three bracket styles. A **tuple** whose arity does not match its targets raises `tosh.runtime.tuple_assignment_arity_mismatch`, while an **array** may still be destructured into fewer targets — the specification documents taking a prefix of one, and an array is variable-length where a tuple's shape is fixed. |
 | `TS-P2-60` | Complete — fixed 2026-08-08 | **Nothing expanded `~` at the shell's argument layer.** Filed as "expanded for external commands but not builtins"; measuring corrected that — `/bin/echo ~` received a literal tilde too, and `realpath ~` worked because it resolves as a *builtin* that path-resolves its own arguments. `cd`, `ls`, `realpath` and `read-file` all expanded a tilde; `echo` and every external did not. Whether `~` meant the home directory was decided separately by each command that happened to take a path. `~user` was never expanded anywhere, and a bare `~` was read as a command name — reported as `tosh.bind.unknown_command` with "did you mean 'f'?". Reported from use. | `~`, `~/path`, `~name` and `~name/path` expand for every command, builtin and external alike, before globbing; only barewords expand, so `"~"` and a variable holding one stay literal, and a tilde that is not the first character is left alone. A `~name` matching neither a directory alias nor a user is `tosh.runtime.unknown_tilde_target` rather than silently literal. A command head expands too, so a bare `~` changes directory under `auto_cd` and otherwise reports a directory exactly as the absolute path does. Both "did you mean" paths decline on words that are not name-shaped. |
-| `TS-P2-61` | Planned — filed 2026-08-08 | A `shy static` property is readable from outside its class: `class B { shy static prop S = 1 }` then `B.S` answers 1. `TryGetStaticMember` checks `shy` for nested types and not for properties, so the modifier is honoured for one kind of static member and ignored for the other. Assignment inherits the leak deliberately — a `shy` static that refused writes while permitting reads would be a worse asymmetry than the one already present. Found while fixing `TS-P2-51`. | `shy` on a static property is enforced on both reads and writes, from outside the class and through a subclass, with the same diagnostic a shy nested type raises; a method inside the declaring class still sees it. |
-| `TS-P2-62` | Planned — filed 2026-08-08 | `require "./lib.tosh"` does not execute the script in the current scope as the specification says it does. A plain `func` in the required file is unreachable afterwards, by bare name and by module-qualified name alike; only `export func` is imported, because `ImportRequiredArtifact` copies `artifact.Exports` and nothing else. The spec section reads "Execute script in current scope" over a bare-path example, so one of the two is wrong. `source` does execute in the current scope and is the working spelling today. Found while fixing `TS-P2-54`, whose filed premise assumed a plain required function was callable. | Decided and made consistent: either `require` with a bare path imports every declaration the way `source` does, or the specification says that `require` imports exports only and the example is corrected — with a diagnostic when a required file exports nothing, since silently importing nothing is what made this invisible. |
-| `TS-P2-63` | Planned — filed 2026-08-08 | A `HelpTopic` renders as a bare `[HelpTopic]` type header instead of its panel whenever it is not the only value a script produces. `help ls` alone in a script panels; `echo one` then `help ls` does not. Confirmed pre-existing against the installed binary, and the same root/nested split `TS-P3-10` decided for collections — except that here the nested form loses the rendering entirely rather than choosing a terser one. Found while fixing `TS-P2-54`. | A help topic renders as its panel wherever it appears in a script, or the nested form is a deliberate terser rendering rather than a type header; whichever is chosen matches what `TS-P3-10` settled for collections. |
-| `TS-P2-64` | Planned — filed 2026-08-08 | Output redirection writes a UTF-8 byte-order mark. `echo "one" out> f.txt` produces `ef bb bf 6f 6e 65 0a` — three bytes of BOM before the text. Confirmed pre-existing against the installed binary, and it applies to `out>` and to the file `out>>` creates. A redirected shell script, CSV, or config file therefore starts with bytes the consuming tool did not expect; a `#!` line preceded by a BOM is not executable. Found while investigating `TS-P2-57`. | Redirection writes UTF-8 without a BOM on every platform, matching what every other shell produces; a test asserts the first bytes of a redirected file rather than its text, since the text compares equal either way. |
-| `TS-P2-65` | Planned — filed 2026-08-08 | A redirection failure reports the code `TOSH400` rather than a `tosh.*` diagnostic code: redirecting into a directory that does not exist gives "✖ error TOSH400 · Cannot open ... for redirection". Every other diagnostic in the shell uses the `tosh.<namespace>.<name>` scheme, and `scripts/extract_diagnostic_codes.py` scans for exactly that, so this code is absent from `docs/diagnostic-codes.md` and cannot be hushed by code the way the documentation says any diagnostic can. Found while investigating `TS-P2-57`. | Redirection failures carry a `tosh.runtime.*` code, appear in the generated diagnostic reference, and respond to `hush`; any other `TOSH<nnn>` codes are found and converted in the same pass. |
+| `TS-P2-61` | Complete — fixed 2026-08-08 | A `shy static` property was readable *and writable* from outside its class: `class B { shy static prop S = 1 }` answered `B.S` from anywhere. `shy` was checked for a nested type and not for a property, so one modifier meant two things depending on which kind of static member wore it. The nested-type check was wrong in the other direction — it threw whenever the type was shy, with no notion of who was asking, so a class could not reach its own by qualified name. Found while fixing `TS-P2-51`. | `shy` is enforced on static reads and writes, from outside and through a subclass, with the same message a shy nested type raises; the declaring class still sees its own. Static access carries no `$this` to name an accessor, so the engine tracks the class whose code is running — threaded as a required parameter through every class-code entry point, which is how the static property *getter* was found to be one of them. |
+| `TS-P2-62` | Complete — decided and documented 2026-08-08 | The specification said `require "./utils.tosh"` executes the script in the current scope. It does not: a required file runs once in a scope of its own and only `export`ed declarations reach the caller. Found while fixing `TS-P2-54`. | **Decided: exports only, and the sentence was wrong.** `export` would mean nothing otherwise, and `source` already runs a file in the current scope — that is the difference between the two spellings. The specification now says so with a worked example, and a file required for exports that declares none raises `tosh.runtime.require_exports_nothing` rather than importing nothing in silence. Also fixed while proving it: the binder flagged a call to an imported function as `tosh.bind.unknown_command` and refused to run it, since a require's exports are in neither the registry nor the source; it now holds back for any source that imports, and reading the required file to learn its exports stays with `TS-P3-12`. |
+| `TS-P2-63` | Complete — fixed 2026-08-08 | A `HelpTopic` rendered as a bare `[HelpTopic]` type header instead of its panel whenever it was not the only value a script produced. `help ls` alone panelled; `echo one` then `help ls` did not, so the panel looked like a property of being first. Two causes: the display engine's bespoke renderer fired only for a single value, and the streaming sink checked for bespoke types only before a table had started. Confirmed pre-existing. Found while fixing `TS-P2-54`. | A help topic keeps its panel wherever it appears among top-level values, in `-c` and in a script; a batch of nothing but help topics still tabulates, which is how two topics are compared and is deliberate. |
+| `TS-P2-64` | Complete — fixed 2026-08-08 | Output redirection wrote a UTF-8 byte-order mark: `echo "one" out> f.txt` produced `ef bb bf 6f 6e 65 0a`. A redirected `#!` script would not execute and a redirected CSV grew a phantom character in its first column name. `write-file` was already writing clean UTF-8, so the two disagreed. Confirmed pre-existing. Found while investigating `TS-P2-57`. | Redirection writes UTF-8 without a BOM, and the test asserts the leading *bytes* rather than the text — the BOM compares equal once a file is read back as a string, which is how it went unnoticed. A redirected shebang script now runs. |
+| `TS-P2-65` | Complete — fixed 2026-08-08 | A redirection failure reported the code `TOSH400`, outside the `tosh.<namespace>.<name>` scheme every other diagnostic uses — so it never reached the generated reference and could not be hushed by code the way the documentation says any diagnostic can. Found while investigating `TS-P2-57`. | Redirection failures carry `tosh.runtime.redirection_target_unavailable`, with a label and help that name the usual cause (a directory that does not exist, which redirection does not create). Both emit sites were converted; no other `TOSH<nnn>` codes remain in the sources. |
 
 **Implementation note for `TS-P2-11` (July 25 review recommendation).** The
 `TS-P2-01`/`TS-P2-02`/`TS-P2-04`/`TS-P2-12`–`TS-P2-15` family shares one root
@@ -5065,3 +5065,72 @@ for three elements is a miscount every time, and absorbing it silently is what t
 into a `null` reported three lines later. The check applies to tuples alone, in both the declaring
 and the assigning form, and the pre-existing test keeps its original assertions with a note saying
 why it still holds.
+
+## `TS-P2-61` – `TS-P2-65` — five small items, and one that grew (August 8)
+
+Four of these were contained. `shy` was not.
+
+**`TS-P2-64`, the BOM.** `Encoding.UTF8` is a `UTF8Encoding` constructed to emit the identifier,
+so every redirected file began `ef bb bf`. `write-file` was already writing clean UTF-8, so the two
+disagreed and only redirection was wrong. The test asserts leading *bytes* rather than text on
+purpose: read back as a string the BOM compares equal, which is exactly how three junk bytes went
+unnoticed in front of every redirected file. The concrete cost, now a test: a redirected `#!`
+script would not execute.
+
+**`TS-P2-65`, the code.** `TOSH400` sat outside the `tosh.<namespace>.<name>` scheme, so
+`extract_diagnostic_codes.py` — which scans for exactly that shape — never saw it, and `hush
+<code>` could not reach it. Both emit sites now raise `tosh.runtime.redirection_target_unavailable`
+with help naming the usual cause: redirection creates the file but not the directories above it.
+No other `TOSH<nnn>` codes remain.
+
+**`TS-P2-63`, the help panel.** Two causes, not one. `DisplayEngine.RenderMany` fired the bespoke
+renderer only when a help topic was the *sole* value; and `StreamingTableSink` checked for bespoke
+types only inside its `!_isTable` branch, so a topic arriving after a table had started was
+flattened into it. A batch of nothing but help topics still tabulates — that is how two topics are
+compared, it reads well, and it was deliberate.
+
+**`TS-P2-62`, decided.** `require` imports exports; the specification's "executes the script in the
+current scope" was simply wrong. Keeping it that way is what makes `export` mean anything, and
+`source` already provides the other behaviour — that is the difference between the two spellings. A
+file required for its exports that declares none now says so.
+
+Proving that turned up a second defect: **the binder refused to run a call to an imported
+function.** It resolves command names against the registry plus the functions declared in the same
+source, and a require's exports are in neither, so `require "./lib.tosh"` followed by `shared`
+reported `tosh.bind.unknown_command` — for a function that was present and callable. `echo (shared)`
+worked, because only command position is inspected, which made it look like a resolution problem
+rather than a binder one. The binder now holds back for any source that imports: a missed typo
+costs a worse runtime message, a false positive costs a program that will not run. Reading the
+required file to learn its exports is the real fix and belongs with `TS-P3-12`, where the language
+server's index needs to chase the same targets.
+
+### `TS-P2-61` — and the parameter that found what the first fix missed
+
+`shy` was checked for a nested type and ignored for a static property, so
+`class B { shy static prop S = 1 }` answered `B.S` from anywhere, and accepted `B.S = 9` too. One
+modifier cannot mean two things depending on which kind of static member wears it.
+
+Instance visibility is decided by *how the object was reached*: `$this` carries the declaring class
+as its accessor, and a reference obtained from outside carries none. A static access has no such
+carrier — `B.S` looks identical wherever it is written — so the engine has to answer "who is
+asking?" itself. It now tracks the class whose code is running.
+
+**The first attempt marked only method bodies and construction, and the suite found the hole.**
+Four tests failed, all of the shape `shared prop ViaProp: int => Holder.p.X` — a computed static
+property whose getter reads a shy static. A property accessor is class code too, and so are
+property initialisers, and so is a default-value expression.
+
+Rather than hunt for the rest by hand, the declaring class became a **required parameter** on all
+four class-code entry points, so the compiler enumerated the callers. It found thirteen, including
+three in `ToshStructDefinition`, `ToshRecordDefinition` and `ToshEventDefinition` — which are not
+classes at all, and correctly pass nothing. That is the third time this programme has used a
+required parameter to make the compiler do the searching, and the third time it found a site that
+reading would have missed.
+
+The nested-type check turned out to be wrong in the opposite direction: it threw whenever the type
+was shy, with no notion of the accessor, so a class could not reach its own shy nested type by
+qualified name. Both now ask the same question.
+
+**A note on the board:** three items are marked `Withdrawn`, and `stabilization-counts.tosh` counts
+anything not starting with `Complete` as open. The "open" figure therefore includes items that need
+no work.

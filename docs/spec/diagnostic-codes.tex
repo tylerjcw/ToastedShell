@@ -10,7 +10,7 @@ Non-error diagnostics can be suppressed with the \texttt{hush} builtin
 (scope-local) or by adding their codes to
 \texttt{\$tosh.Config.Diagnostics.Hushed}.
 
-This chapter lists all 514 diagnostic codes currently emitted by the
+This chapter lists all 516 diagnostic codes currently emitted by the
 implementation, grouped by namespace. It is generated from the source tree
 by \texttt{scripts/extract\_diagnostic\_codes.py} and should be
 regenerated whenever new diagnostics are added.
@@ -32,7 +32,7 @@ regenerated whenever new diagnostics are added.
 \texttt{tosh.naming.*} & 2 & --- \\
 \texttt{tosh.parser.*} & 162 & Raised by the lexer or parser before any code runs. Indicates malformed source text. \\
 \texttt{tosh.row.*} & 1 & --- \\
-\texttt{tosh.runtime.*} & 315 & Raised by the engine while evaluating a script. The bulk of TōSh diagnostics live here. \\
+\texttt{tosh.runtime.*} & 317 & Raised by the engine while evaluating a script. The bulk of TōSh diagnostics live here. \\
 \texttt{tosh.tui.*} & 8 & Raised by the `tui` subsystem (terminal UI widgets, screens, providers). \\
 \texttt{tosh.type.*} & 9 & --- \\
 \texttt{tosh.user.*} & 1 & --- \\
@@ -503,6 +503,7 @@ Raised by the engine while evaluating a script. The bulk of TōSh diagnostics li
 \item[\texttt{\small tosh.runtime.recursion\_limit\_exceeded}] Maximum ToastScript recursion depth was exceeded.
 \item[\texttt{\small tosh.runtime.redirection\_target\_not\_single\_path}] Redirection targets must resolve to exactly one path.
 \item[\texttt{\small tosh.runtime.redirection\_target\_null}] Redirection target cannot be null.
+\item[\texttt{\small tosh.runtime.redirection\_target\_unavailable}] Cannot open '\{redirection.Path\}' for redirection: \{exception.Message\}
 \item[\texttt{\small tosh.runtime.reduce\_requires\_seed\_and\_callable}] 'reduce' requires a seed value and a callable value or block.
 \item[\texttt{\small tosh.runtime.refinement\_failed}] Value for '\{owner\}' does not satisfy its refinement.
 \item[\texttt{\small tosh.runtime.refinement\_requires\_boolean}] \{title\} must evaluate to boolean values.
@@ -511,6 +512,7 @@ Raised by the engine while evaluating a script. The bulk of TōSh diagnostics li
 \item[\texttt{\small tosh.runtime.repeat\_negative\_count}] Repeat count cannot be negative.
 \item[\texttt{\small tosh.runtime.repeat\_requires\_value}] 'repeat' requires a value and an optional count.
 \item[\texttt{\small tosh.runtime.repeatedly\_requires\_callable}] 'repeatedly' requires a callable or block.
+\item[\texttt{\small tosh.runtime.require\_exports\_nothing}] '\{statement.Target\}' declares no exports, so this require imports nothing.
 \item[\texttt{\small tosh.runtime.require\_failed}] \textit{(see source)}
 \item[\texttt{\small tosh.runtime.reserved\_variable\_name}] '\{name\}' is a \{titleSuffix\}.
 \item[\texttt{\small tosh.runtime.return\_type\_conversion\_failed}] Function '\{definition.Name\}' returned a value that could not be converted to '\{definition.ReturnTypeName\}'.

@@ -310,7 +310,7 @@ public sealed class ToshRecordDefinition : IShellNamedType
 
             if (field.DefaultValue is not null)
             {
-                var defaultValue = _engine.EvaluateClassPipelineValueSync(SourceName, SourceText, field.DefaultValue, values, CapturedScopes);
+                var defaultValue = _engine.EvaluateClassPipelineValueSync(null, SourceName, SourceText, field.DefaultValue, values, CapturedScopes);
                 values[field.Name] = ConvertFieldValue(field, defaultValue, typeArgumentBindings);
                 continue;
             }

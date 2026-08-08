@@ -735,14 +735,12 @@ public sealed class ToshClassDefinition : IShellNamedType
     {
         value = null;
 
-        // A nested type is a static member of its declaring class. `shy` hides it from outside,
-        // matching how a shy static method is treated on this path.
+        // A nested type is a static member of its declaring class. `shy` hides it from outside.
         if (_nestedTypes.TryGetValue(memberName, out var nested))
         {
-            if (nested.IsShy)
+            if (nested.IsShy && !CanSeeShyStatic())
             {
-                throw new InvalidOperationException(
-                    $"Type '{memberName}' on class '{Name}' is shy and cannot be reached from outside the class.");
+                throw ShyStaticMemberIsHidden("Type", memberName);
             }
 
             value = nested.Type;
@@ -752,6 +750,14 @@ public sealed class ToshClassDefinition : IShellNamedType
         // Check static properties
         if (_propertiesByName.TryGetValue(memberName, out var property) && property.IsStatic)
         {
+            // `TS-P2-61`. `shy` was honoured for a nested type and ignored for a property, so
+            // `class B { shy static prop S = 1 }` then `B.S` answered 1 from anywhere. One
+            // modifier cannot mean two things depending on which kind of static member wears it.
+            if (property.IsShy && !CanSeeShyStatic())
+            {
+                throw ShyStaticMemberIsHidden("Static property", memberName);
+            }
+
             // A computed static property has to be *evaluated*; it has no stored
             // value and never will. Static properties were only ever initialized —
             // both initialization sites read `IsStatic && Initializer is not null &&
@@ -800,6 +806,13 @@ public sealed class ToshClassDefinition : IShellNamedType
     {
         if (_propertiesByName.TryGetValue(memberName, out var property) && property.IsStatic)
         {
+            // Writes answer to `shy` exactly as reads do. Enforcing one and not the other would
+            // be a worse asymmetry than the leak this closes.
+            if (property.IsShy && !CanSeeShyStatic())
+            {
+                throw ShyStaticMemberIsHidden("Static property", memberName);
+            }
+
             // The same three routes an instance assignment takes, decided the same way: a
             // custom setter runs, a getter-only property refuses, and `fixed` refuses once
             // the declaration's own initializer has run. A static that answered differently
@@ -1256,6 +1269,20 @@ public sealed class ToshClassDefinition : IShellNamedType
     /// completion working unchanged while <c>$this</c> and <c>$super</c>, which do know, get the
     /// real rule.
     /// </remarks>
+    /// <summary>
+    /// Whether the code currently running may see this class's <c>shy</c> static members.
+    /// </summary>
+    /// <remarks>
+    /// Only the declaring class itself, matching <see cref="CanSeeShy"/> for instance members —
+    /// <c>shy</c> is private, so a subclass does not qualify and neither does anything outside.
+    /// The engine answers "who is asking?" because a static access carries no <c>$this</c> to
+    /// ask (<c>TS-P2-61</c>).
+    /// </remarks>
+    private bool CanSeeShyStatic() => ReferenceEquals(_engine.CurrentClass, this);
+
+    private InvalidOperationException ShyStaticMemberIsHidden(string kind, string memberName) =>
+        new($"{kind} '{memberName}' on class '{Name}' is shy and cannot be reached from outside the class.");
+
     private static bool CanSeeShy(
         ToshClassDefinition declaring,
         bool includeHidden,
@@ -1803,7 +1830,7 @@ public sealed class ToshClassDefinition : IShellNamedType
         }
 
         var locals = CreateLocals(instance, constructorLocals);
-        var value = _engine.EvaluateClassPipelineValueSync(SourceName, SourceText, property.Initializer, locals, CapturedScopes);
+        var value = _engine.EvaluateClassPipelineValueSync(this, SourceName, SourceText, property.Initializer, locals, CapturedScopes);
         return ConvertPropertyValue(instance, property, value);
     }
 
@@ -1820,6 +1847,7 @@ public sealed class ToshClassDefinition : IShellNamedType
 
         var locals = CreateLocals(instance, constructorLocals);
         var value = await _engine.EvaluateClassPipelineValueAsync(
+            this,
             SourceName,
             SourceText,
             property.Initializer,
@@ -1842,6 +1870,7 @@ public sealed class ToshClassDefinition : IShellNamedType
     {
         var locals = CreateLocals(instance, constructorLocals);
         await _engine.ExecuteClassBlockAsync(
+            this,
             constructor.SourceName,
             constructor.SourceText,
             constructor.Body,
@@ -2039,6 +2068,7 @@ public sealed class ToshClassDefinition : IShellNamedType
         var locals = CreateLocals(instance, constructorLocals);
         var block = new BlockSyntax([initializer], initializer.Span);
         await _engine.ExecuteClassBlockAsync(
+            this,
             constructor.SourceName,
             constructor.SourceText,
             block,
@@ -2102,6 +2132,7 @@ public sealed class ToshClassDefinition : IShellNamedType
         {
             cancellationToken.ThrowIfCancellationRequested();
             var value = await _engine.EvaluateClassPipelineValueAsync(
+            this,
                 SourceName,
                 SourceText,
                 argPipeline,
@@ -2124,6 +2155,7 @@ public sealed class ToshClassDefinition : IShellNamedType
     {
         var locals = CreateLocals(null, new Dictionary<string, object?>(StringComparer.Ordinal));
         var values = _engine.ExecuteClassBlockSync(
+            this,
             SourceName,
             SourceText,
             property.GetterBody!,
@@ -2141,6 +2173,7 @@ public sealed class ToshClassDefinition : IShellNamedType
             ["value"] = value,
         });
         _engine.ExecuteClassBlockSync(
+            this,
             SourceName,
             SourceText,
             property.SetterBody!,
@@ -2152,7 +2185,7 @@ public sealed class ToshClassDefinition : IShellNamedType
     private object? EvaluatePropertyGetter(ToshClassInstance instance, ToshClassPropertyDefinition property)
     {
         var locals = CreateLocals(instance, new Dictionary<string, object?>(StringComparer.Ordinal));
-        var values = _engine.ExecuteClassBlockSync(SourceName, SourceText, property.GetterBody!, locals, CapturedScopes, $"{Name}.{property.Name}.get");
+        var values = _engine.ExecuteClassBlockSync(this, SourceName, SourceText, property.GetterBody!, locals, CapturedScopes, $"{Name}.{property.Name}.get");
         return FlattenCallResult(values);
     }
 
@@ -2163,6 +2196,7 @@ public sealed class ToshClassDefinition : IShellNamedType
     {
         var locals = CreateLocals(instance, new Dictionary<string, object?>(StringComparer.Ordinal));
         var values = await _engine.ExecuteClassBlockAsync(
+            this,
             SourceName,
             SourceText,
             property.GetterBody!,
@@ -2179,7 +2213,7 @@ public sealed class ToshClassDefinition : IShellNamedType
         {
             ["value"] = value,
         });
-        _engine.ExecuteClassBlockSync(SourceName, SourceText, property.SetterBody!, locals, CapturedScopes, $"{Name}.{property.Name}.set");
+        _engine.ExecuteClassBlockSync(this, SourceName, SourceText, property.SetterBody!, locals, CapturedScopes, $"{Name}.{property.Name}.set");
     }
 
     private async ValueTask ExecutePropertySetterAsync(
@@ -2193,6 +2227,7 @@ public sealed class ToshClassDefinition : IShellNamedType
             ["value"] = value,
         });
         await _engine.ExecuteClassBlockAsync(
+            this,
             SourceName,
             SourceText,
             property.SetterBody!,
@@ -2324,6 +2359,7 @@ public sealed class ToshClassDefinition : IShellNamedType
         cancellationToken.ThrowIfCancellationRequested();
 
         // Code belonging to this class names its nested types without qualifying them.
+        using var executingClass = _engine.EnterClass(this);
         using var nestedTypeScope = _engine.PushNestedTypeScope(this);
 
         // Phase 3.4 — method-level generic inference.
@@ -2457,6 +2493,7 @@ public sealed class ToshClassDefinition : IShellNamedType
 
         var locals = CreateLocals(instance, boundLocals);
         var values = await _engine.ExecuteClassBlockAsync(
+            this,
             method.SourceName,
             method.SourceText,
             method.Body,
@@ -2813,6 +2850,7 @@ public sealed class ToshClassDefinition : IShellNamedType
                 [new ExpressionPipelineStageSyntax(argument, argument.Span)]);
 
             arguments.Add(await _engine.EvaluateClassPipelineValueAsync(
+            this,
                 constructor.SourceName,
                 constructor.SourceText,
                 argumentPipeline,
@@ -2865,6 +2903,7 @@ public sealed class ToshClassDefinition : IShellNamedType
 
         // Property initialisers and the constructor body are this class's own code, so its
         // nested types are in scope by name there as they are inside a method.
+        using var executingClass = _engine.EnterClass(this);
         using var nestedTypeScope = _engine.PushNestedTypeScope(this);
 
         if (instance.IsConstructionLayerComplete(this))

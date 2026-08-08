@@ -5017,6 +5017,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
         locals["args"] = arguments.ToArray();
 
         var values = ExecuteClassBlockSync(
+            null,
             method.SourceName,
             method.SourceText,
             method.Body,
@@ -6363,11 +6364,17 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
                 catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
                 {
                     throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                        "TOSH400",
-                        $"Cannot open '{redirection.Path}' for redirection: {exception.Message}"));
+                        Code: "tosh.runtime.redirection_target_unavailable",
+                        Title: $"Cannot open '{redirection.Path}' for redirection: {exception.Message}",
+                        SourceName: null,
+                        SourceText: null,
+                        Span: null,
+                        Label: "this redirection target could not be opened for writing",
+                        Help: "check that the directory exists and is writable. Redirection creates the "
+                            + "file but not the directories above it."));
                 }
 
-                var writer = TextWriter.Synchronized(new StreamWriter(stream, Encoding.UTF8));
+                var writer = TextWriter.Synchronized(new StreamWriter(stream, RedirectionEncoding));
                 disposableWriters.Add(writer);
 
                 if (RedirectionIncludesOutput(redirection.Stream))
@@ -6485,11 +6492,17 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
                 catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
                 {
                     throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                        "TOSH400",
-                        $"Cannot open '{redirection.Path}' for redirection: {exception.Message}"));
+                        Code: "tosh.runtime.redirection_target_unavailable",
+                        Title: $"Cannot open '{redirection.Path}' for redirection: {exception.Message}",
+                        SourceName: null,
+                        SourceText: null,
+                        Span: null,
+                        Label: "this redirection target could not be opened for writing",
+                        Help: "check that the directory exists and is writable. Redirection creates the "
+                            + "file but not the directories above it."));
                 }
 
-                await using var writer = new StreamWriter(stream, Encoding.UTF8);
+                await using var writer = new StreamWriter(stream, RedirectionEncoding);
 
                 if (text.Length > 0)
                 {
@@ -11622,6 +11635,58 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
         return PushScope(scope);
     }
 
+    /// <summary>UTF-8 without a byte-order mark, for everything redirection writes.</summary>
+    /// <remarks>
+    /// `TS-P2-64`. <c>Encoding.UTF8</c> is a <c>UTF8Encoding</c> constructed to emit the
+    /// identifier, so every redirected file began <c>ef bb bf</c>. On Unix that is three bytes of
+    /// noise in front of whatever the file is for — a redirected <c>#!</c> script will not
+    /// execute, and a CSV grows a phantom character in its first column name. `write-file` was
+    /// already writing clean UTF-8, so this is the redirection path catching up to it rather than
+    /// a new decision.
+    /// </remarks>
+    private static readonly Encoding RedirectionEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
+
+    private readonly Stack<ToshClassDefinition> _executingClasses = new();
+
+    /// <summary>
+    /// The class whose code is currently running, or <see langword="null"/> at the top level.
+    /// </summary>
+    /// <remarks>
+    /// `TS-P2-61`. Instance visibility is decided by *how the object was reached*: <c>$this</c>
+    /// carries the declaring class as its accessor, and a reference obtained from outside carries
+    /// none. A static access has no such carrier — <c>B.S</c> looks identical whether it is
+    /// written inside <c>B</c> or anywhere else — so the question "who is asking?" has to be
+    /// answered by the engine instead.
+    /// </remarks>
+    internal ToshClassDefinition? CurrentClass => _executingClasses.Count > 0 ? _executingClasses.Peek() : null;
+
+    /// <summary>Marks the engine as running <paramref name="definition"/>'s own code.</summary>
+    internal IDisposable EnterClass(ToshClassDefinition definition)
+    {
+        _executingClasses.Push(definition);
+        return new ExecutingClassFrame(_executingClasses);
+    }
+
+    private sealed class ExecutingClassFrame(Stack<ToshClassDefinition> classes) : IDisposable
+    {
+        private bool _disposed;
+
+        public void Dispose()
+        {
+            if (_disposed)
+            {
+                return;
+            }
+
+            _disposed = true;
+
+            if (classes.Count > 0)
+            {
+                classes.Pop();
+            }
+        }
+    }
+
     private IDisposable PushScope(LexicalScope scope)
     {
         _scopes.Push(scope);
@@ -12465,6 +12530,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
             try
             {
                 value = EvaluateClassPipelineValueSync(
+                    null,
                     sourceName,
                     sourceText,
                     parameter.DefaultValue!,
@@ -12520,6 +12586,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
             try
             {
                 value = await EvaluateClassPipelineValueAsync(
+                    null,
                     sourceName,
                     sourceText,
                     parameter.DefaultValue!,
@@ -14084,6 +14151,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
     }
 
     internal IReadOnlyList<object?> ExecuteClassBlockSync(
+        ToshClassDefinition? declaringClass,
         string sourceName,
         string sourceText,
         BlockSyntax block,
@@ -14091,6 +14159,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
         IReadOnlyList<LexicalScope>? capturedScopes,
         string callName)
     {
+        using var executingClass = declaringClass is null ? null : EnterClass(declaringClass);
         using var executionFrame = ToshExecutionDepthGuard.Enter(
             Runtime.Config.Shell.MaxRecursionDepth,
             callName,
@@ -14123,6 +14192,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
     }
 
     internal async Task<IReadOnlyList<object?>> ExecuteClassBlockAsync(
+        ToshClassDefinition? declaringClass,
         string sourceName,
         string sourceText,
         BlockSyntax block,
@@ -14131,6 +14201,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
         string callName,
         CancellationToken cancellationToken)
     {
+        using var executingClass = declaringClass is null ? null : EnterClass(declaringClass);
         cancellationToken.ThrowIfCancellationRequested();
         using var executionFrame = ToshExecutionDepthGuard.Enter(
             Runtime.Config.Shell.MaxRecursionDepth,
@@ -14200,6 +14271,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
     }
 
     internal object? EvaluateClassPipelineValueSync(
+        ToshClassDefinition? declaringClass,
         string sourceName,
         string sourceText,
         PipelineSyntax pipeline,
@@ -14207,12 +14279,14 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
         IReadOnlyList<LexicalScope>? capturedScopes,
         string callName = "<class>")
     {
+        using var executingClass = declaringClass is null ? null : EnterClass(declaringClass);
         if (TryEvaluateShorthandLocalPipeline(pipeline, locals, out var shorthandValue))
         {
             return shorthandValue;
         }
 
         var values = ExecuteClassBlockSync(
+            declaringClass,
             sourceName,
             sourceText,
             BuildClassPipelineBlock(pipeline),
@@ -14224,6 +14298,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
     }
 
     internal async ValueTask<object?> EvaluateClassPipelineValueAsync(
+        ToshClassDefinition? declaringClass,
         string sourceName,
         string sourceText,
         PipelineSyntax pipeline,
@@ -14232,12 +14307,14 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
         CancellationToken cancellationToken,
         string callName = "<class>")
     {
+        using var executingClass = declaringClass is null ? null : EnterClass(declaringClass);
         if (TryEvaluateShorthandLocalPipeline(pipeline, locals, out var shorthandValue))
         {
             return shorthandValue;
         }
 
         var values = await ExecuteClassBlockAsync(
+            declaringClass,
             sourceName,
             sourceText,
             BuildClassPipelineBlock(pipeline),
@@ -15696,6 +15773,27 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
     {
         if (statement.Imports.Count == 0)
         {
+            // `TS-P2-62`. `require` imports a file's exports, and a file with none imports
+            // nothing — which used to happen in silence, so a missing `export` looked exactly
+            // like a missing file until something later failed to resolve. `source` is the
+            // spelling for running a file's every declaration in the current scope.
+            if (artifact.Exports.Variables.Count == 0 &&
+                artifact.Exports.Commands.Count == 0 &&
+                artifact.Exports.Types.Count == 0 &&
+                artifact.Exports.RefinementTypes.Count == 0 &&
+                artifact.Exports.Modules.Count == 0)
+            {
+                throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                    Code: "tosh.runtime.require_exports_nothing",
+                    Title: $"'{statement.Target}' declares no exports, so this require imports nothing.",
+                    SourceName: sourceName,
+                    SourceText: sourceText,
+                    Span: statement.Span,
+                    Label: "nothing in this file is marked 'export'",
+                    Help: "mark a declaration with 'export' to make it importable, or use "
+                        + $"'source \"{statement.Target}\"' to run the file in the current scope."));
+            }
+
             foreach (var (name, value) in artifact.Exports.Variables)
             {
                 DeclareVariable(name, ToVariableBinding(value), statement.Modifier);

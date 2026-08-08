@@ -107,6 +107,7 @@ public sealed class ToshStructDefinition : IShellNamedType
             var value = property.Initializer is null
                 ? null
                 : _engine.EvaluateClassPipelineValueSync(
+            null,
                     SourceName,
                     SourceText,
                     property.Initializer,
@@ -261,6 +262,7 @@ public sealed class ToshStructDefinition : IShellNamedType
         locals["args"] = arguments.ToArray();
 
         var values = _engine.ExecuteClassBlockSync(
+            null,
             method.SourceName,
             method.SourceText,
             method.Body,
@@ -313,7 +315,7 @@ public sealed class ToshStructDefinition : IShellNamedType
 
             if (field.DefaultValue is not null)
             {
-                var defaultValue = _engine.EvaluateClassPipelineValueSync(SourceName, SourceText, field.DefaultValue, values, CapturedScopes);
+                var defaultValue = _engine.EvaluateClassPipelineValueSync(null, SourceName, SourceText, field.DefaultValue, values, CapturedScopes);
                 values[field.Name] = ConvertFieldValue(field, defaultValue);
                 continue;
             }

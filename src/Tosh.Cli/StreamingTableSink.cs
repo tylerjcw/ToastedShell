@@ -46,17 +46,22 @@ internal sealed class StreamingTableSink : IDisplaySink
 
     public async ValueTask EmitAsync(object? value, CancellationToken cancellationToken = default)
     {
+        // Some values have a custom single-value renderer in DisplayEngine.RenderMany
+        // (e.g. HelpTopic, IShellRuntimeNamespaceSummarySource). Route those through the
+        // fallback path so the bespoke layout fires instead of being flattened into a
+        // generic streaming table.
+        //
+        // `TS-P2-63`: checked before the table-mode branch rather than inside it. A help topic
+        // that arrived *after* a table had started was flattened into it, so whether `help ls`
+        // kept its panel depended on what the previous statement had printed.
+        if (value is HelpTopic || value is IShellRuntimeNamespaceSummarySource)
+        {
+            _fallbackValues.Add(value);
+            return;
+        }
+
         if (!_isTable)
         {
-            // Some values have a custom single-value renderer in DisplayEngine.RenderMany
-            // (e.g. HelpTopic, IShellRuntimeNamespaceSummarySource). Route those through the
-            // fallback path so the bespoke layout fires instead of being flattened into a
-            // generic streaming table.
-            if (value is HelpTopic || value is IShellRuntimeNamespaceSummarySource)
-            {
-                _fallbackValues.Add(value);
-                return;
-            }
 
             if (value is not null && _columns is null)
             {
@@ -144,12 +149,35 @@ internal sealed class StreamingTableSink : IDisplaySink
                 }
                 finally
                 {
-                    _runtime.ClearDisplaySelections();
+                    if (_fallbackValues.Count == 0)
+                    {
+                        _runtime.ClearDisplaySelections();
+                    }
                 }
+
+                if (_fallbackValues.Count == 0)
+                {
+                    return;
+                }
+            }
+            else if (_fallbackValues.Count == 0)
+            {
+                _runtime.ClearDisplaySelections();
                 return;
             }
 
-            _runtime.ClearDisplaySelections();
+            // `TS-P2-63`. A bespoke value that arrived after the table started still has to be
+            // drawn: the table has had its turn, and the topic follows it rather than vanishing.
+            try
+            {
+                var trailing = _runtime.Display.RenderMany(_fallbackValues, _options);
+                await ConsoleDisplay.WriteRenderedAsync(trailing, _runtime);
+            }
+            finally
+            {
+                _runtime.ClearDisplaySelections();
+            }
+
             return;
         }
 

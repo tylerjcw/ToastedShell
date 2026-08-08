@@ -63,6 +63,7 @@ public sealed class ToshEventDefinition : IShellEventFactory
             if (field.DefaultValue is not null)
             {
                 value = _engine.EvaluateClassPipelineValueSync(
+            null,
                     SourceName,
                     SourceText,
                     field.DefaultValue,
@@ -91,6 +92,7 @@ public sealed class ToshEventDefinition : IShellEventFactory
             else if (field.DefaultValue is not null)
             {
                 var value = _engine.EvaluateClassPipelineValueSync(
+            null,
                     SourceName,
                     SourceText,
                     field.DefaultValue,

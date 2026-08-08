@@ -74,7 +74,8 @@ public static class Binder
             localFunctions,
             isInteractive,
             isExecutableOnPath ?? IsExecutableOnPath,
-            new List<ToshDiagnostic>());
+            new List<ToshDiagnostic>(),
+            ImportsUnseenNames: ContainsRequireStatement(parseResult.Statement));
 
         VisitStatement(parseResult.Statement, context);
 
@@ -95,6 +96,66 @@ public static class Binder
     // Phase 1: collect same-source function declarations so that calls
     // to forward-declared (or same-file) user functions don't false-flag.
     // ──────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// True when the source <c>require</c>s another file, whose exports the binder cannot see.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The binder resolves command names against the registry plus the functions declared in this
+    /// same source. A <c>require</c>d file's exports are in neither, so calling one produced
+    /// <c>tosh.bind.unknown_command</c> — for a function that is present and callable. Worse, it
+    /// was raised as an error, so `require "./lib.tosh"` followed by `shared` refused to run,
+    /// while `echo (shared)` worked, because the binder only inspects command position.
+    /// </para>
+    /// <para>
+    /// Suppressing the check for a source that imports is the conservative answer: a missed typo
+    /// costs a worse runtime message, and a false positive costs a program that will not run.
+    /// Reading the required file to learn its exports is the real fix and belongs with the same
+    /// work in <c>TS-P3-12</c>, where the language server's index needs to chase the same targets.
+    /// </para>
+    /// </remarks>
+    private static bool ContainsRequireStatement(StatementSyntax statement)
+    {
+        switch (statement)
+        {
+            case RequireStatementSyntax:
+                return true;
+            case ScriptStatementSyntax script:
+                return script.Statements.Any(ContainsRequireStatement);
+            case FunctionDefinitionStatementSyntax func:
+                return BlockContainsRequire(func.Body);
+            case RuneDefinitionStatementSyntax rune:
+                return BlockContainsRequire(rune.Body);
+            case ModuleDefinitionStatementSyntax module:
+                return BlockContainsRequire(module.Body);
+            case IfStatementSyntax @if:
+                return BlockContainsRequire(@if.ThenBlock) ||
+                       (@if.ElseBlock is not null && BlockContainsRequire(@if.ElseBlock));
+            case ForStatementSyntax @for:
+                return BlockContainsRequire(@for.Body);
+            case WhileStatementSyntax @while:
+                return BlockContainsRequire(@while.Body);
+            case UntilStatementSyntax @until:
+                return BlockContainsRequire(@until.Body);
+            case TryStatementSyntax @try:
+                return BlockContainsRequire(@try.TryBlock) ||
+                       (@try.CatchClause is not null && BlockContainsRequire(@try.CatchClause.Body)) ||
+                       (@try.FinallyBlock is not null && BlockContainsRequire(@try.FinallyBlock));
+            case DeferStatementSyntax defer:
+                return BlockContainsRequire(defer.Body);
+            case SwitchStatementSyntax @switch:
+                return @switch.Cases.Any(c => BlockContainsRequire(c.Body)) ||
+                       (@switch.DefaultBlock is not null && BlockContainsRequire(@switch.DefaultBlock));
+            case SubcommandStatementSyntax sub:
+                return BlockContainsRequire(sub.Body);
+            default:
+                return false;
+        }
+    }
+
+    private static bool BlockContainsRequire(BlockSyntax block) =>
+        block.Statements.Any(ContainsRequireStatement);
 
     private static void CollectLocalFunctions(StatementSyntax statement, HashSet<string> sink)
     {
@@ -425,6 +486,12 @@ public static class Binder
             return;
         }
 
+        // A source that imports may be calling something the binder cannot see.
+        if (context.ImportsUnseenNames)
+        {
+            return;
+        }
+
         // Unresolved. Try Levenshtein against the registry (canonical names + aliases).
         var suggestions = FindSuggestions(name, context.CommandRegistry);
         if (suggestions.Count == 0) return; // Could be an external; defer silently.
@@ -610,7 +677,8 @@ public static class Binder
         HashSet<string> LocalFunctions,
         bool IsInteractive,
         Func<string, bool> IsExecutableOnPath,
-        List<ToshDiagnostic> Diagnostics)
+        List<ToshDiagnostic> Diagnostics,
+        bool ImportsUnseenNames = false)
     {
         // Tracks how many deferred-body scopes (func/method/rune/ctor)
         // we're nested inside. When > 0, ShellOnly is not enforced at

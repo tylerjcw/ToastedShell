@@ -78,13 +78,51 @@ public sealed class DisplayEngine
 
         // Single HelpTopic gets a custom rich layout (mirrors the $tosh design),
         // including syntax-highlighted examples when a CodeHighlighter is wired up.
-        // Multiple HelpTopics fall through to the standard table profile.
+        // Several HelpTopics fall through to the standard table profile on purpose — a table is
+        // how two topics are compared, and it reads well.
         if (values.Count == 1 && values[0] is HelpTopic helpTopic)
         {
             return HelpTopicSummaryRenderer.Render(helpTopic, CodeHighlighter);
         }
 
+        // `TS-P2-63`. A HelpTopic *among other values* had neither rendering: the table profile
+        // needs uniform shapes, so a mixed batch fell to the generic container path and the topic
+        // came out as a bare `[HelpTopic]` header. `help ls` alone panelled; `echo one` followed
+        // by `help ls` did not, which made the panel look like a property of being first rather
+        // than of being a help topic. A mixed batch now renders value by value, so each one gets
+        // whatever rendering it would have had on its own.
+        if (values.Count > 1 && ContainsMixedBespokeValue(values))
+        {
+            return string.Join(
+                Environment.NewLine,
+                values.Select(value => RenderMany([value], options)));
+        }
+
         return RenderMany(values, options, depth: 0, new HashSet<object>(ReferenceEqualityComparer.Instance));
+    }
+
+    /// <summary>
+    /// True when the batch holds a value with its own top-level rendering alongside values that
+    /// do not share its shape.
+    /// </summary>
+    /// <remarks>
+    /// A batch of nothing but help topics is left alone — that is the comparison table, and it is
+    /// deliberate. This is only about the mixed case, where a table cannot represent all of them
+    /// and the bespoke value is the one that loses.
+    /// </remarks>
+    private static bool ContainsMixedBespokeValue(IReadOnlyList<object?> values)
+    {
+        var bespoke = 0;
+
+        foreach (var value in values)
+        {
+            if (value is HelpTopic or IShellRuntimeNamespaceSummarySource)
+            {
+                bespoke++;
+            }
+        }
+
+        return bespoke > 0 && bespoke != values.Count;
     }
 
     /// <summary>

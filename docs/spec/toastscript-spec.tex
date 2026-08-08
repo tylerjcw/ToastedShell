@@ -3064,7 +3064,7 @@ using System.IO = IO        # Aliased import
 Load scripts or modules:
 
 \begin{lstlisting}
-# Execute script in current scope
+# Import everything the file exports
 require "./utils.tosh"
 
 # Import specific module
@@ -3076,6 +3076,31 @@ require Inventory from "./toastlib.tosh" as Inv
 # Multiple modules
 require { Reporting, Utilities } from "./toastlib.tosh"
 \end{lstlisting}
+
+\noindent \textbf{\code{require} imports exports; it does not run the file in
+your scope.}  A required file is executed once per session in a scope of its
+own, and only declarations marked \code{export} are brought into the caller.
+Anything else stays private to the module---which is what makes \code{export}
+mean something.
+
+\begin{lstlisting}
+# lib.tosh
+func helper() { return "private to this file" }
+export func shared() { return "importable" }
+export var VERSION = 2
+
+# main.tosh
+require "./lib.tosh"
+shared                # "importable"
+echo $VERSION         # 2
+helper                # error - not exported
+\end{lstlisting}
+
+\noindent Use \code{source} when you do want a file's every declaration in the
+current scope; that is the difference between the two.  A file required for its
+exports that declares none raises
+\code{tosh.runtime.require\_exports\_nothing}, since importing nothing at all
+is never the intent and used to happen in silence.
 
 \section{Native Library Loading}
 \ikw{bind}\ikw{callconv}\ikw{raw}\ikw{from}\ikw{where}
