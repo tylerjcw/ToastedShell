@@ -19,6 +19,44 @@ public sealed class ShellCommandRegistry
     public IEnumerable<string> AllNames =>
         _commands.Keys.Concat(_aliases.Keys).OrderBy(name => name, StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// True when a word could plausibly be a misspelled command name: it starts with a letter
+    /// or underscore, and every other character is one a command name can contain.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Both of the shell's "did you mean" paths ask this before consulting edit distance, which
+    /// otherwise answers any question it is asked: a bare <c>~</c> is one edit from a command
+    /// called <c>f</c>, and was duly offered as a correction for it. Punctuation is not a
+    /// misspelling of anything, and a suggestion for it makes the diagnostic read as though the
+    /// shell had understood something subtler than it has.
+    /// </para>
+    /// <para>
+    /// It lives here, on the registry both callers already hold, because the rule existing twice
+    /// is how one of them would come to disagree with the other (<c>TS-P1-24</c>).
+    /// </para>
+    /// <para>
+    /// Deliberately permissive about the interior — real command names hold digits, <c>-</c>,
+    /// <c>_</c>, <c>.</c> and <c>:</c> — and strict about the first character, which is what
+    /// separates a name from punctuation.
+    /// </para>
+    /// </remarks>
+    public static bool IsNameShaped(string name)
+    {
+        if (string.IsNullOrEmpty(name)) return false;
+        if (!char.IsLetter(name[0]) && name[0] != '_') return false;
+
+        foreach (var character in name)
+        {
+            if (!char.IsLetterOrDigit(character) && character is not ('_' or '-' or '.' or ':'))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     public void Register(IShellCommand command)
     {
         ArgumentNullException.ThrowIfNull(command);

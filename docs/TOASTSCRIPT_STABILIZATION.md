@@ -492,7 +492,7 @@ closed.
 | `TS-P2-57` | Planned — filed 2026-08-08 | `>>` does not create the file it appends to: `"x" \| to text >> missing.txt` fails with "no such file or directory" rather than creating it, so an append redirect only works against a file that already exists. Found while building a probe for `TS-P1-19`. | `>>` creates the target when absent and appends when present, matching `>` and every POSIX shell; a directory that does not exist is still a diagnostic. |
 | `TS-P2-58` | Planned — filed 2026-08-08 | A `yield` inside a `defer` block is silently dropped: `func g() { defer { yield 9 }\n yield 1 }` produces only `1`. The generator terminates cleanly, so nothing reports the loss. Whether a deferred block should contribute to a generator's stream at all is the open question — it runs while unwinding, after the consumer may have stopped pulling. Found while fixing `TS-P1-19`. | Decided one way or the other and made explicit: either a deferred yield reaches the stream, or it is refused at parse time with a diagnostic saying why. Silence is the one option ruled out. |
 | `TS-P2-59` | Planned — filed 2026-08-08 | Tuple destructuring does not parse: `var (x, y) = (1, 2)` fails with `tosh.bind.unknown_command`, and `const (A, B) = (1, 2)` likewise, although tuples construct and index perfectly well. Confirmed pre-existing against the installed binary. Found while probing `TS-P1-12`. | `var (a, b) = <tuple>` binds each element, with arity mismatch reported as a diagnostic; `const` and `let`-position forms behave alike. |
-| `TS-P2-60` | Planned — filed 2026-08-08 | `~` is expanded for external commands but not for builtins. `realpath ~` receives `/home/komrad`, while `echo ~` prints the literal `~`, and so does `echo ~/projects`; `~user` is never expanded on any path. `cd` handles `~` itself and works (`cd ~` and `cd ~/projects` both resolve), so the gap is not in `cd` but in argument expansion, which happens on the external-process route only. Reported from use. | `~` and `~/path` expand to the home directory wherever a path argument is accepted, builtins included, and stay literal where they are not a leading path segment; `~user` either resolves that user's home or is refused with a diagnostic rather than passed through unchanged. |
+| `TS-P2-60` | Complete — fixed 2026-08-08 | **Nothing expanded `~` at the shell's argument layer.** Filed as "expanded for external commands but not builtins"; measuring corrected that — `/bin/echo ~` received a literal tilde too, and `realpath ~` worked because it resolves as a *builtin* that path-resolves its own arguments. `cd`, `ls`, `realpath` and `read-file` all expanded a tilde; `echo` and every external did not. Whether `~` meant the home directory was decided separately by each command that happened to take a path. `~user` was never expanded anywhere, and a bare `~` was read as a command name — reported as `tosh.bind.unknown_command` with "did you mean 'f'?". Reported from use. | `~`, `~/path`, `~name` and `~name/path` expand for every command, builtin and external alike, before globbing; only barewords expand, so `"~"` and a variable holding one stay literal, and a tilde that is not the first character is left alone. A `~name` matching neither a directory alias nor a user is `tosh.runtime.unknown_tilde_target` rather than silently literal. A command head expands too, so a bare `~` changes directory under `auto_cd` and otherwise reports a directory exactly as the absolute path does. Both "did you mean" paths decline on words that are not name-shaped. |
 | `TS-P2-61` | Planned — filed 2026-08-08 | A `shy static` property is readable from outside its class: `class B { shy static prop S = 1 }` then `B.S` answers 1. `TryGetStaticMember` checks `shy` for nested types and not for properties, so the modifier is honoured for one kind of static member and ignored for the other. Assignment inherits the leak deliberately — a `shy` static that refused writes while permitting reads would be a worse asymmetry than the one already present. Found while fixing `TS-P2-51`. | `shy` on a static property is enforced on both reads and writes, from outside the class and through a subclass, with the same diagnostic a shy nested type raises; a method inside the declaring class still sees it. |
 
 **Implementation note for `TS-P2-11` (July 25 review recommendation).** The
@@ -4774,3 +4774,75 @@ several commits behind the source. Three of the four codes the regeneration adds
 (`tosh.parser.expected_nested_type`, `tosh.runtime.nested_type_not_declared`,
 `tosh.runtime.unknown_type_argument`) belong to the nesting and type-argument work already
 committed; only `tosh.runtime.unknown_static_assignment_target` is new here.
+
+## `TS-P2-60` — the tilde, and a claim that was wrong (August 8)
+
+Filed as "`~` is expanded for external commands but not for builtins". Measuring it first, before
+touching anything, showed that reading was inverted:
+
+```
+❯ echo ~              → ~            (builtin, literal)
+❯ /bin/echo ~         → ~            (external, literal)
+❯ realpath ~          → /home/komrad
+❯ which realpath      → realpath  builtin
+                         realpath  external  /usr/bin/realpath
+```
+
+`realpath` resolves as a *builtin* that path-resolves its own arguments, which is the only reason
+it looked like the external route worked. Nothing expanded a tilde at the shell's own argument
+layer at all. `cd`, `ls`, `realpath` and `read-file` expanded one because each calls
+`PathUtilities.ResolvePath`; `echo` and every external process did not, because nothing on the way
+to them ever looked. So the rule was not "builtins versus externals" — it was that **whether `~`
+means the home directory was decided separately by every command that happened to take a path**,
+and a command with no interest in paths could never see one.
+
+**Expansion now happens once, where globbing already happened.** The argument-expansion step ran
+only for commands implementing the implicit-glob contract; it now runs for every command, applying
+tilde expansion to all of them and globbing to the ones that asked. Tilde first, so `~/*.log`
+names a real directory before there is anywhere to look. Only barewords: `echo "~"` stays literal,
+and so does a variable holding one, matching every POSIX shell — expansion is lexical, so it
+applies to the word as written.
+
+**`~name` resolves, and an unresolvable one is refused.** A configured directory alias wins,
+because someone wrote it down on purpose and the accounts on the machine are not their doing;
+otherwise the name is looked up in the passwd file, parsed rather than shelled out to, since a
+shell that spawns `getent` to expand an argument pays for it on every word. A name matching
+neither is `tosh.runtime.unknown_tilde_target`, per the decision recorded for this item, rather
+than two characters and a name handed to a command that will report whatever it makes of them.
+
+**One rule, two policies.** The expansion itself lives in a single function that reports what it
+did — expanded, not a tilde, or an unknown name — and both callers read the same answer. Argument
+expansion refuses an unknown name; path resolution inside a command leaves it alone, and a command
+head leaves it alone too, because resolution has its own account of a name it cannot find and two
+diagnostics competing to explain one word is worse than either. The *rule* existing once is what
+matters; the policy differing by caller is a decision, not a divergence (`TS-P1-24`).
+
+**The bare `~` was a second defect, in a third place.** `Binder.LooksLikeExplicitPath` knew `/` and
+`.` but not `~`, so `~/projects` passed only by containing a separator while a bare `~` fell
+through to the typo machinery. That is where "did you mean 'f'?" came from — the reporter has a
+`func f` in their profile, and `~` is one edit from `f`.
+
+**And the first draft of that test was worthless.** It bound `~` against a default registry, found
+no diagnostic, and passed — against the *unfixed* binder too, because a default registry has
+nothing within one edit of a single punctuation character. The test now registers a one-character
+command first and asserts the collision is real before asserting the rule declines it. A test whose
+premise has quietly stopped holding is a test that passes for the wrong reason, which is the whole
+argument for running controls.
+
+**Writing the specification found two more.** The section claims a bare `~` behaves like the
+absolute path it stands for. Executing that claim with `auto_cd` off showed it did not: `/tmp`
+reported `external_command_is_directory` while `~` reported `unknown_command`, because command
+*heads* were never expanded — one input, described two different ways depending on how it was
+spelled. And the accompanying help said "did you mean 'bg'?", which located a **second** suggestion
+machine: `ToshEngine.ResolveUnknownCommandHelp` has its own Levenshtein search, and fixing the
+binder's had left it answering. The name-shape rule now lives on the command registry that both of
+them already hold.
+
+The help text also named `$tosh.Config.DirectoryAliases`, which does not exist — the real spelling
+is `$tosh.Config.Shell.Dirs`. Caught by running the advice rather than reading it, and there is now
+a test that executes the spelling the diagnostic suggests, because advice that does not work costs
+a reader more than the original error did.
+
+**Deliberately not expanded:** a tilde anywhere but the first character. `notes.txt~` is a backup
+file, and `--out=~/x` keeps its tilde — POSIX expands after `=` in some assignments, and matching
+that is a separate decision rather than something to arrive at by widening a condition.

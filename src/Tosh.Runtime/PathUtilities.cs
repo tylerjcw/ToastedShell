@@ -88,32 +88,170 @@ public static class PathUtilities
         return results;
     }
 
-    private static string ExpandHomeDirectory(string path)
+    /// <summary>What <see cref="ExpandTilde"/> made of a word.</summary>
+    public enum TildeExpansionKind
     {
-        if (path == "~")
+        /// <summary>No leading <c>~</c>, so the word is unchanged.</summary>
+        NotATilde,
+
+        /// <summary>Expanded to a directory.</summary>
+        Expanded,
+
+        /// <summary>A <c>~name</c> naming neither a directory alias nor a user.</summary>
+        UnknownName,
+    }
+
+    /// <summary>The one implementation of the tilde rule.</summary>
+    /// <param name="Kind">What happened.</param>
+    /// <param name="Path">The expanded path, or the original word when nothing was expanded.</param>
+    /// <param name="Name">The unresolved name, when <paramref name="Kind"/> is
+    /// <see cref="TildeExpansionKind.UnknownName"/>.</param>
+    public readonly record struct TildeExpansion(TildeExpansionKind Kind, string Path, string Name);
+
+    /// <summary>
+    /// Expands a leading <c>~</c>: alone, before a separator, or naming a directory alias or a
+    /// user.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The tilde is only recognised at the start of the word, so a backup file called
+    /// <c>notes.txt~</c> and a <c>--flag=~/x</c> are both left alone.
+    /// </para>
+    /// <para>
+    /// A configured directory alias beats a user of the same name: the alias was written down on
+    /// purpose by whoever runs the shell, and the accounts on the machine were not.
+    /// </para>
+    /// <para>
+    /// This is the only place the rule is written. Both callers — path resolution inside a
+    /// command, and the shell's own argument expansion — read the same answer and differ only in
+    /// what they do about <see cref="TildeExpansionKind.UnknownName"/>, which is a policy rather
+    /// than a rule (<c>TS-P1-24</c>).
+    /// </para>
+    /// </remarks>
+    public static TildeExpansion ExpandTilde(string path)
+    {
+        if (string.IsNullOrEmpty(path) || path[0] != '~')
         {
-            return UserHomeDirectory;
+            return new TildeExpansion(TildeExpansionKind.NotATilde, path, string.Empty);
         }
 
-        if (path.StartsWith("~/", StringComparison.Ordinal) || path.StartsWith("~\\", StringComparison.Ordinal))
+        if (path.Length == 1)
         {
-            return Path.Combine(UserHomeDirectory, path[2..]);
+            return new TildeExpansion(TildeExpansionKind.Expanded, UserHomeDirectory, string.Empty);
         }
 
-        if (path.StartsWith('~') && path.Length > 1 && DirectoryAliases is not null)
+        if (path[1] is '/' or '\\')
         {
-            var separatorIndex = path.IndexOfAny([Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar], 1);
-            var aliasName = separatorIndex < 0 ? path[1..] : path[1..separatorIndex];
+            return new TildeExpansion(
+                TildeExpansionKind.Expanded,
+                Path.Combine(UserHomeDirectory, path[2..]),
+                string.Empty);
+        }
 
-            if (DirectoryAliases.TryResolve(aliasName, out var resolved))
+        var separatorIndex = path.IndexOfAny([Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar], 1);
+        var name = separatorIndex < 0 ? path[1..] : path[1..separatorIndex];
+        var remainder = separatorIndex < 0 ? string.Empty : path[(separatorIndex + 1)..];
+
+        if (DirectoryAliases is not null && DirectoryAliases.TryResolve(name, out var alias))
+        {
+            return new TildeExpansion(TildeExpansionKind.Expanded, Combine(alias, remainder), name);
+        }
+
+        if (TryResolveUserHome(name, out var userHome))
+        {
+            return new TildeExpansion(TildeExpansionKind.Expanded, Combine(userHome, remainder), name);
+        }
+
+        return new TildeExpansion(TildeExpansionKind.UnknownName, path, name);
+
+        static string Combine(string root, string remainder) =>
+            remainder.Length == 0 ? root : Path.Combine(root, remainder);
+    }
+
+    /// <summary>Finds a user's home directory by name.</summary>
+    /// <remarks>
+    /// The current user is answered from the environment, which is both the common case and the
+    /// one that has to work when accounts live somewhere other than <c>/etc/passwd</c>. Everyone
+    /// else is looked up in the passwd file, parsed rather than shelled out to — a shell that
+    /// spawns a process to expand an argument would pay for it on every word.
+    /// </remarks>
+    private static bool TryResolveUserHome(string name, out string home)
+    {
+        if (string.Equals(name, Environment.UserName, PathComparison))
+        {
+            home = UserHomeDirectory;
+            return true;
+        }
+
+        return TryResolveUserHomeFromPasswd(name, out home);
+    }
+
+    private static readonly Lock PasswdLock = new();
+    private static Dictionary<string, string>? _passwdHomes;
+    private static DateTime _passwdReadAt;
+
+    private static bool TryResolveUserHomeFromPasswd(string name, out string home)
+    {
+        home = string.Empty;
+
+        if (OperatingSystem.IsWindows())
+        {
+            return false;
+        }
+
+        const string PasswdPath = "/etc/passwd";
+
+        try
+        {
+            var writtenAt = File.GetLastWriteTimeUtc(PasswdPath);
+
+            lock (PasswdLock)
             {
-                return separatorIndex < 0
-                    ? resolved
-                    : Path.Combine(resolved, path[(separatorIndex + 1)..]);
+                if (_passwdHomes is null || writtenAt != _passwdReadAt)
+                {
+                    _passwdHomes = ReadPasswdHomes(PasswdPath);
+                    _passwdReadAt = writtenAt;
+                }
+
+                return _passwdHomes.TryGetValue(name, out home!) && !string.IsNullOrEmpty(home);
+            }
+        }
+        catch (IOException)
+        {
+            return false;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
+    private static Dictionary<string, string> ReadPasswdHomes(string passwdPath)
+    {
+        var homes = new Dictionary<string, string>(StringComparer.Ordinal);
+
+        foreach (var line in File.ReadLines(passwdPath))
+        {
+            // name:password:uid:gid:gecos:home:shell — the gecos field may contain anything,
+            // so the fields are counted rather than searched.
+            var fields = line.Split(':');
+
+            if (fields.Length >= 6 && fields[0].Length > 0 && fields[5].Length > 0)
+            {
+                homes[fields[0]] = fields[5];
             }
         }
 
-        return path;
+        return homes;
+    }
+
+    private static string ExpandHomeDirectory(string path)
+    {
+        // An unresolved `~name` stays literal here. The shell's argument expansion refuses it
+        // with a diagnostic before a command ever sees one, so this is the inner path taken by
+        // text that never passed through argument expansion at all.
+        var expansion = ExpandTilde(path);
+        return expansion.Kind == TildeExpansionKind.Expanded ? expansion.Path : path;
     }
 
     private static IEnumerable<GlobPathMatch> ExpandSinglePattern(

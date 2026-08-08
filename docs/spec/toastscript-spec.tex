@@ -4368,6 +4368,61 @@ not a background operator. The background \code{\&} only applies at the end
 of a pipeline.
 \end{warnbox}
 
+\section{Tilde Expansion}
+\label{sec:tilde}
+
+A \emph{bareword} argument whose first character is \code{\textasciitilde}
+expands to a home directory before the command is invoked.  Unlike glob
+expansion, this happens for \textbf{every} command---builtins, user
+functions, and external processes alike.  Whether \code{\textasciitilde}
+means the home directory is a property of the language, not something each
+command decides for itself.
+
+\begin{lstlisting}
+echo ~                 # /home/ada
+echo ~/projects        # /home/ada/projects
+echo ~root             # /root
+cd ~                   # changes to the home directory
+/bin/echo ~            # the external process receives /home/ada
+\end{lstlisting}
+
+Tilde expansion rules:
+
+\begin{itemize}
+  \item \code{\textasciitilde} alone, and \code{\textasciitilde/path},
+        expand to the current user's home directory.
+  \item \code{\textasciitilde name} expands to a configured directory
+        alias if one exists, and otherwise to that user's home directory.
+        An alias wins, because it was written down on purpose.
+  \item A name matching neither is a diagnostic
+        (\code{tosh.runtime.unknown\_tilde\_target}) rather than being
+        passed through unchanged.
+  \item Only \textbf{bareword} arguments are expanded.  Quoted strings
+        (\code{"\textasciitilde"}) are never expanded, and neither is a
+        variable that happens to hold a tilde---expansion is lexical, so
+        it applies to the word as written.
+  \item The tilde must be the \emph{first} character of the word.
+        \code{notes.txt\textasciitilde} and
+        \code{-{}-out=\textasciitilde/x} are left alone.
+  \item Tilde expansion runs before glob expansion, so
+        \code{\textasciitilde/*.log} searches the home directory.
+\end{itemize}
+
+\begin{lstlisting}
+# Directory aliases give ~name spellings of your own
+$tosh.Config.Shell.Dirs.work = "/srv/projects"
+echo ~work/notes.md    # /srv/projects/notes.md
+
+# Quoting is how a literal tilde is written
+echo "~"               # prints ~
+\end{lstlisting}
+
+\noindent At the start of a command, an expanded tilde is a path like any
+other: with \code{auto\_cd} enabled a bare \code{\textasciitilde} changes to
+the home directory exactly as a bare \code{/tmp} changes to \code{/tmp}, and
+with it disabled both report that the target is a directory rather than a
+program.
+
 \section{Glob Expansion}
 \label{sec:globs}
 \ikw{glob}

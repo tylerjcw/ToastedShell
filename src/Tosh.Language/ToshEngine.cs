@@ -1750,7 +1750,7 @@ public sealed partial class ToshEngine : IShellEvaluator
             try
             {
                 var evaluatedArguments = await EvaluateCommandArgumentsAsync(sourceName, sourceText, command, commandSyntax, cancellationToken);
-                arguments = ExpandImplicitGlobArguments(command, evaluatedArguments);
+                arguments = ExpandCommandArguments(command, evaluatedArguments, sourceName, sourceText);
             }
             catch (ToshDiagnosticException)
             {
@@ -6919,7 +6919,7 @@ public sealed partial class ToshEngine : IShellEvaluator
         try
         {
             var evaluatedArguments = await EvaluateCommandArgumentsAsync(sourceName, sourceText, command, commandSyntax, cancellationToken);
-            arguments = ExpandImplicitGlobArguments(command, evaluatedArguments);
+            arguments = ExpandCommandArguments(command, evaluatedArguments, sourceName, sourceText);
 
             if (prependedArguments is { Count: > 0 })
             {
@@ -7085,15 +7085,34 @@ public sealed partial class ToshEngine : IShellEvaluator
         return results;
     }
 
-    private IReadOnlyList<object?> ExpandImplicitGlobArguments(
+    /// <summary>
+    /// Applies the shell's own word expansions to a command's evaluated arguments.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Tilde expansion runs for <em>every</em> command; globbing only for one that asks for it.
+    /// That asymmetry is `TS-P2-60`: a `~` reached a command only if that command happened to
+    /// path-resolve its own arguments, so `cd ~`, `ls ~` and `read-file ~/x` worked while
+    /// `echo ~` and `/bin/echo ~` both received a literal tilde. Whether `~` means the home
+    /// directory is not something each command should get to decide separately.
+    /// </para>
+    /// <para>
+    /// Only barewords are expanded, so `echo "~"` stays literal — quoting is how a tilde is
+    /// written when a tilde is what is wanted — and so does a `$variable` holding one.
+    /// </para>
+    /// </remarks>
+    private IReadOnlyList<object?> ExpandCommandArguments(
         IShellCommand command,
-        IReadOnlyList<EvaluatedCommandArgument> evaluatedArguments)
+        IReadOnlyList<EvaluatedCommandArgument> evaluatedArguments,
+        string sourceName,
+        string sourceText)
     {
-        if (command is not IImplicitGlobCommand || evaluatedArguments.Count == 0)
+        if (evaluatedArguments.Count == 0)
         {
-            return evaluatedArguments.Select(static argument => argument.Value).ToArray();
+            return [];
         }
 
+        var allowGlobs = command is IImplicitGlobCommand;
         var expanded = new List<object?>(evaluatedArguments.Count);
 
         for (var index = 0; index < evaluatedArguments.Count; index++)
@@ -7103,22 +7122,60 @@ public sealed partial class ToshEngine : IShellEvaluator
             if (evaluatedArgument.Syntax is BarewordArgumentSyntax or SplatArgumentSyntax &&
                 evaluatedArgument.Value is string text &&
                 !string.IsNullOrWhiteSpace(text) &&
-                !text.StartsWith("-", StringComparison.Ordinal) &&
-                PathUtilities.ContainsGlobPattern(text))
+                !text.StartsWith("-", StringComparison.Ordinal))
             {
-                var matches = PathUtilities.ExpandGlob(Runtime.CurrentDirectory, text);
+                // Tilde before glob: `~/*.tosh` has to name a real directory before there is
+                // anywhere to look.
+                text = ExpandArgumentTilde(text, sourceName, sourceText, evaluatedArgument.Syntax.Span);
 
-                if (matches.Count > 0)
+                if (allowGlobs && PathUtilities.ContainsGlobPattern(text))
                 {
-                    expanded.AddRange(matches.Select(static match => (object?)match.ArgumentText));
-                    continue;
+                    var matches = PathUtilities.ExpandGlob(Runtime.CurrentDirectory, text);
+
+                    if (matches.Count > 0)
+                    {
+                        expanded.AddRange(matches.Select(static match => (object?)match.ArgumentText));
+                        continue;
+                    }
                 }
+
+                expanded.Add(text);
+                continue;
             }
 
             expanded.Add(evaluatedArgument.Value);
         }
 
         return expanded;
+    }
+
+    /// <summary>
+    /// Expands a leading tilde in one argument, refusing a <c>~name</c> that names nothing.
+    /// </summary>
+    /// <remarks>
+    /// Passing an unresolved <c>~name</c> through unchanged is the behaviour that made this hard
+    /// to see: the command received two characters and a name, and reported whatever it made of
+    /// them. Saying so here names the real problem once, in the one place that knows a tilde was
+    /// written.
+    /// </remarks>
+    private string ExpandArgumentTilde(string text, string sourceName, string sourceText, TextSpan span)
+    {
+        var expansion = PathUtilities.ExpandTilde(text);
+
+        return expansion.Kind switch
+        {
+            PathUtilities.TildeExpansionKind.Expanded => expansion.Path,
+            PathUtilities.TildeExpansionKind.UnknownName => throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                Code: "tosh.runtime.unknown_tilde_target",
+                Title: $"'~{expansion.Name}' names neither a directory alias nor a user.",
+                SourceName: sourceName,
+                SourceText: sourceText,
+                Span: span,
+                Label: $"no user '{expansion.Name}' and no directory alias '{expansion.Name}'",
+                Help: $"'~name' expands to that user's home directory. Write \"~{expansion.Name}\" in quotes for a literal tilde, "
+                    + $"or set a directory alias with '$tosh.Config.Shell.Dirs.{expansion.Name} = \"/some/path\"'.")),
+            _ => text,
+        };
     }
 
     private async Task EvaluateCommandArgumentAsync(
@@ -7259,7 +7316,14 @@ public sealed partial class ToshEngine : IShellEvaluator
             return moduleCommand;
         }
 
-        var external = ExternalCommandResolver.Resolve(Runtime.CurrentDirectory, commandSyntax.Name);
+        // `TS-P2-60`. A command head is a word like any other, so a leading tilde expands here
+        // too. Without this, a bare `~` reached external resolution as two characters and came
+        // back "Command '~' was not found", while the equivalent `/home/ada` reported that it
+        // is a directory — the same input, described two different ways depending on how it was
+        // spelled. Nothing is registered under a name starting with `~`, so this runs after the
+        // builtin lookups and cannot shadow one.
+        var externalName = ExpandCommandNameTilde(commandSyntax.Name);
+        var external = ExternalCommandResolver.Resolve(Runtime.CurrentDirectory, externalName);
 
         if (external.Status is not ExternalCommandLookupStatus.Found &&
             TryBuildVariableReferenceHint(commandSyntax.Name, out var suggestedReference, out var variableName))
@@ -7321,6 +7385,20 @@ public sealed partial class ToshEngine : IShellEvaluator
         };
     }
 
+    /// <summary>
+    /// Expands a leading tilde in a command head, leaving an unresolvable <c>~name</c> alone.
+    /// </summary>
+    /// <remarks>
+    /// An argument refuses an unknown <c>~name</c>; a command head does not, because the
+    /// resolution that follows has its own account of a name it cannot find, and two diagnostics
+    /// competing to explain one word is worse than either.
+    /// </remarks>
+    private static string ExpandCommandNameTilde(string name)
+    {
+        var expansion = PathUtilities.ExpandTilde(name);
+        return expansion.Kind == PathUtilities.TildeExpansionKind.Expanded ? expansion.Path : name;
+    }
+
     private string ResolveUnknownCommandHelp(string name)
     {
         // Suggest well-known corrections for common mistakes from other shells.
@@ -7345,8 +7423,16 @@ public sealed partial class ToshEngine : IShellEvaluator
             return "check that the path exists and points to an executable file.";
         }
 
-        // Levenshtein nearest-match against builtins.
+        // Levenshtein nearest-match against builtins — asked only about words that could be
+        // misspelled names. This is the second suggestion machine in the shell; the binder has
+        // the other, and the guard had to be added to both or `~` would keep coming back as a
+        // possible `bg` from whichever one answered (`TS-P1-24`).
         var bestMatch = (Name: (string?)null, Distance: int.MaxValue);
+
+        if (!ShellCommandRegistry.IsNameShaped(name))
+        {
+            return $"use 'which {name}' to inspect how Tosh resolves this command.";
+        }
 
         foreach (var command in Runtime.Commands.All)
         {

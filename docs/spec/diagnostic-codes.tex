@@ -10,7 +10,7 @@ Non-error diagnostics can be suppressed with the \texttt{hush} builtin
 (scope-local) or by adding their codes to
 \texttt{\$tosh.Config.Diagnostics.Hushed}.
 
-This chapter lists all 510 diagnostic codes currently emitted by the
+This chapter lists all 511 diagnostic codes currently emitted by the
 implementation, grouped by namespace. It is generated from the source tree
 by \texttt{scripts/extract\_diagnostic\_codes.py} and should be
 regenerated whenever new diagnostics are added.
@@ -32,7 +32,7 @@ regenerated whenever new diagnostics are added.
 \texttt{tosh.naming.*} & 2 & --- \\
 \texttt{tosh.parser.*} & 162 & Raised by the lexer or parser before any code runs. Indicates malformed source text. \\
 \texttt{tosh.row.*} & 1 & --- \\
-\texttt{tosh.runtime.*} & 311 & Raised by the engine while evaluating a script. The bulk of TōSh diagnostics live here. \\
+\texttt{tosh.runtime.*} & 312 & Raised by the engine while evaluating a script. The bulk of TōSh diagnostics live here. \\
 \texttt{tosh.tui.*} & 8 & Raised by the `tui` subsystem (terminal UI widgets, screens, providers). \\
 \texttt{tosh.type.*} & 9 & --- \\
 \texttt{tosh.user.*} & 1 & --- \\
@@ -576,6 +576,7 @@ Raised by the engine while evaluating a script. The bulk of TōSh diagnostics li
 \item[\texttt{\small tosh.runtime.unknown\_named\_argument}] There is no parameter named '\{namedArgument.Name\}'.
 \item[\texttt{\small tosh.runtime.unknown\_script\_flag}] Unknown script flag '--\{optionName\}'.
 \item[\texttt{\small tosh.runtime.unknown\_static\_assignment\_target}] '\{path\}' does not name a static member, because '\{head\}' names no type.
+\item[\texttt{\small tosh.runtime.unknown\_tilde\_target}] '\textasciitilde{}\{expansion.Name\}' names neither a directory alias nor a user.
 \item[\texttt{\small tosh.runtime.unknown\_trait}] Class '\{@class.Name\}' uses unknown trait '\{traitName\}'.
 \item[\texttt{\small tosh.runtime.unknown\_type\_argument}] Type '\{name\}' could not be resolved as a type argument for '\{methodName\}'.
 \item[\texttt{\small tosh.runtime.unknown\_type\_name}] Type '\{typeName\}' could not be resolved for type parameter '\{typeParamsForSeed[i]\}' of function '\{definition.Name\}'.

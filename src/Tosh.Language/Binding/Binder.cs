@@ -453,7 +453,12 @@ public static class Binder
     private static bool LooksLikeExplicitPath(string name)
     {
         if (name.Length == 0) return false;
-        if (name[0] is '/' or '.') return true;
+
+        // `TS-P2-60`. A leading `~` is a path just as much as a leading `/`. `~/projects`
+        // already passed this test by containing a separator, so only the bare `~` and `~name`
+        // forms fell through to the typo machinery — which answered a bare `~` with
+        // "did you mean 'f'?".
+        if (name[0] is '/' or '.' or '~') return true;
         if (name.Contains('/')) return true;
         if (OperatingSystem.IsWindows() && (name.Contains('\\') || (name.Length >= 2 && name[1] == ':')))
             return true;
@@ -523,6 +528,15 @@ public static class Binder
 
     private static IReadOnlyList<string> FindSuggestions(string name, ShellCommandRegistry registry)
     {
+        // `TS-P2-60`. Edit distance answers any question it is asked, including nonsensical
+        // ones: a bare `~` scored within one character of the command `f` and was offered as a
+        // correction. The rule lives on the registry so the engine's own suggestion helper
+        // reads the same one.
+        if (!ShellCommandRegistry.IsNameShaped(name))
+        {
+            return [];
+        }
+
         var threshold = name.Length <= ShortNameMaxLength
             ? ShortNameLevenshteinThreshold
             : LongNameLevenshteinThreshold;
