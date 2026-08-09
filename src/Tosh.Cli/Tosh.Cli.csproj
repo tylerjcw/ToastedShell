@@ -19,14 +19,20 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <ToshPythonCommand Condition="'$(OS)' == 'Windows_NT'">py -3</ToshPythonCommand>
-    <ToshPythonCommand Condition="'$(OS)' != 'Windows_NT'">python3</ToshPythonCommand>
   </PropertyGroup>
 
+  <!--
+    Runs the ToastScript sync with the binary this build just produced, which is
+    the point: the shell's own tooling is written in its own language, and a
+    build exercises it. It replaces a Python script that did the same work —
+    both existed and both were live, the Python reached from here and the port
+    reached from `build.tosh`, so the two ran from different entry points and
+    could drift without anything noticing (`TS-P2-10`).
+  -->
   <Target Name="SyncVsCodeExtension"
           AfterTargets="Build"
-          Condition="'$(DesignTimeBuild)' != 'true' and '$(DisableToshVsCodeExtensionSync)' != 'true' and Exists('$(MSBuildProjectDirectory)/../../scripts/sync_vscode_extension.py')">
-    <Exec Command="$(ToshPythonCommand) &quot;$(MSBuildProjectDirectory)/../../scripts/sync_vscode_extension.py&quot; --quiet"
+          Condition="'$(DesignTimeBuild)' != 'true' and '$(DisableToshVsCodeExtensionSync)' != 'true' and Exists('$(MSBuildProjectDirectory)/../../scripts/sync_vscode_extension.tosh')">
+    <Exec Command="&quot;$(TargetDir)$(AssemblyName)&quot; --safe &quot;$(MSBuildProjectDirectory)/../../scripts/sync_vscode_extension.tosh&quot; --quiet"
           WorkingDirectory="$(MSBuildProjectDirectory)/../.." />
   </Target>
 
