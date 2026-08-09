@@ -1,0 +1,373 @@
+#!/usr/bin/env tosh
+## @summary Extract diagnostic codes from the TōSh source tree.
+## @remarks
+##   ToastScript port of `scripts/extract_diagnostic_codes.py` (`TS-P2-10`).
+##   Scans every `*.cs` file under `src/` for `"tosh.<ns>.<name>"` string
+##   literals and the adjacent `Title` / `Help` / `Severity` fields, then
+##   writes three artefacts:
+##
+##     docs/diagnostic-codes.md                            human-readable reference
+##     docs/spec/diagnostic-codes.tex                      LaTeX chapter for the spec
+##     src/Tosh.Runtime/Generated/DiagnosticCodeManifest.g.cs   static C# manifest
+##
+##   The port is verified by diffing all three against the Python output
+##   rather than by reading, so "faithful" is a measurement and not a claim.
+## @example scripts/extract-diagnostic-codes.tosh --quiet
+## @arg src - source root to scan
+## @arg md - output path for the Markdown reference
+## @arg tex - output path for the LaTeX chapter
+## @arg csharp - output path for the C# manifest
+## @flag quiet - suppress the summary written to stdout
+
+using System.IO
+using System.Text.RegularExpressions
+
+flag src: string = "src"
+flag md: string = "docs/diagnostic-codes.md"
+flag tex: string = "docs/spec/diagnostic-codes.tex"
+flag csharp: string = "src/Tosh.Runtime/Generated/DiagnosticCodeManifest.g.cs"
+flag quiet: bool = false
+
+var CODE_RE = new Regex('"(tosh\.[a-z_]+(?:\.[a-z_]+)+)"')
+var FIELD_RE = new Regex('(?<key>Code|code|Title|title|Help|help|Message|message|Label|label|Severity|severity)\s*[:=]\s*(?<value>(?:\$?"(?:[^"\\]|\\.)*")|(?:\w+))')
+
+## @summary Namespace prose, keyed by the middle segment of a code.
+var BLURBS = {%
+    "parser"  => "Raised by the lexer or parser before any code runs. Indicates malformed source text.",
+    "runtime" => "Raised by the engine while evaluating a script. The bulk of TōSh diagnostics live here.",
+    "tui"     => "Raised by the `tui` subsystem (terminal UI widgets, screens, providers).",
+    "config"  => "Raised by the configuration loader or by the `config` command.",
+    "history" => "Raised by the history subsystem (for example, replaying entries when no host is attached).",
+    "help"    => "Raised by the `help` command.",
+    "get"     => "Raised by the `get` command and friends."
+%}
+
+## @summary The content of a C# string literal, or null when it is not a plain literal.
+## @param=literal The literal as it appears in source, quotes included.
+func unquote(literal: string) {
+    var body = $literal
+    if ($body.StartsWith("$\"")) { $body = $body.Substring(1) }
+    if (not ($body.StartsWith("\"") and $body.EndsWith("\""))) { return null }
+    $body = $body.Substring(1, $body.Length - 2)
+    # Not full C# unescape fidelity, and does not need to be: these become prose
+    # in a table. Order matters — `\\` last would undo the others.
+    return $body.Replace("\\\"", "\"").Replace("\\\\", "\\").Replace("\\n", " ").Replace("\\t", " ").Replace("\\r", " ")
+}
+
+## @summary An interpolated literal rendered as a hint rather than dropped.
+func interpolated_summary(literal: string) {
+    if ($literal.StartsWith("$\"") and $literal.EndsWith("\"")) {
+        return "(interpolated) " + $literal.Substring(2, $literal.Length - 3)
+    }
+    return null
+}
+
+## @summary Markdown table-cell escaping: pipes would split the row.
+func md_escape(s: string) => $s.Replace("|", "\\|").Replace("\n", " ")
+
+## @summary LaTeX escaping. Backslash first, or it would escape its own replacements.
+func tex_escape(s: string) {
+    return $s.Replace("\\", "\\textbackslash{}").Replace("&", "\\&").Replace("%", "\\%").Replace("$", "\\$").Replace("#", "\\#").Replace("_", "\\_").Replace("{", "\\{").Replace("}", "\\}").Replace("~", "\\textasciitilde{}").Replace("^", "\\textasciicircum{}")
+}
+
+## @summary C# string-literal escaping for the generated manifest.
+func csharp_escape(s: string) => $s.Replace("\\", "\\\\").Replace("\"", "\\\"")
+
+# ── Collect ────────────────────────────────────────────────────────────────
+
+var root = (pwd).FullName
+var srcRoot = Path.GetFullPath(Path.Combine($root, $src))
+
+if (not (is-dir $srcRoot).IsDirectory) {
+    throw $"source root not found: {$srcRoot}"
+}
+
+# Sorted by path so "first emit site" is deterministic across runs and machines.
+var files = (ls -R $srcRoot
+    | where { $_.Name.EndsWith(".cs") }
+    | sort { $_.FullName }
+    | collect)
+
+var entries = {% %}
+var order = []
+
+for file in $files {
+    var full = $file.FullName.Replace("\\", "/")
+
+    # Build output and generated files are skipped. The C# manifest this script
+    # emits contains every code as a literal, so a second run would otherwise
+    # rescan its own output and overwrite real source-file metadata.
+    if ($full.Contains("/obj/") or $full.Contains("/bin/") or $full.Contains("/Generated/")) { continue }
+
+    var text = File.ReadAllText($file.FullName)
+    if ($text.Length >= 200) {
+        if ($text.Substring(0, 200).Contains("<auto-generated")) { continue }
+    } else {
+        if ($text.Contains("<auto-generated")) { continue }
+    }
+
+    # Line numbers are counted incrementally. Taking `$text.Substring(0, $m.Index)`
+    # per match and splitting it is O(matches × file size), which on ToshParser.cs
+    # alone — half a megabyte, hundreds of codes — did not finish in five minutes.
+    # Matches arrive in ascending order, so counting only the gap since the previous
+    # one makes the whole file O(size).
+    var scanned = 0
+    var line = 1
+
+    for m in $CODE_RE.Matches($text) {
+        var code = $m.Groups[1].Value
+        var gap = $text.Substring($scanned, ($m.Index - $scanned))
+        $line = ($line + ($gap.Split("\n").Length - 1))
+        $scanned = $m.Index
+        var lineNo = $line
+        var parts = ($code.Split(".") | collect)
+        var ns = "?"
+        # `$parts[$parts.Length - 1]` does not parse — an index slot takes a primary,
+        # not an expression (`TS-P2-72`). The paren is the workaround, not a style.
+        var name = $parts[($parts.Length - 1)]
+        if ($parts.Length >= 3) {
+            $ns = $parts[1]
+            $name = String.Join(".", ($parts | skip 2 | collect))
+        }
+
+        var entry = null
+        if ($code in $entries) {
+            $entry = $entries[$code]
+        } else {
+            $entry = {|
+                code = $code, namespace = $ns, name = $name,
+                file = $file.FullName, line = $lineNo,
+                title = null, help = null, severity = null
+            |}
+            $entries[$code] = $entry
+            $order = [...$order, $code]
+        }
+
+        if ($entry.title != null and $entry.help != null and $entry.severity != null) { continue }
+
+        # A window after the code, clipped at the constructor's close so fields
+        # from the next diagnostic cannot leak in.
+        var windowStart = $m.Index + $m.Length
+        var windowEnd = $windowStart + 1200
+        if ($windowEnd > $text.Length) { $windowEnd = $text.Length }
+        var window = $text.Substring($windowStart, $windowEnd - $windowStart)
+
+        var cut = -1
+        for term in ["));", ")\n;", "\n        }\n"] {
+            var at = $window.IndexOf($term)
+            if ($at >= 0) {
+                if ($cut < 0 or $at < $cut) { $cut = $at }
+            }
+        }
+        if ($cut >= 0) { $window = $window.Substring(0, $cut + 3) }
+
+        for fm in $FIELD_RE.Matches($window) {
+            var key = $fm.Groups["key"].Value.ToLower()
+            var value = $fm.Groups["value"].Value
+
+            if (($key == "title" or $key == "message") and $entry.title == null) {
+                var t = unquote $value
+                if ($t == null) { $t = interpolated_summary $value }
+                $entry.title = $t
+            } else if ($key == "help" and $entry.help == null) {
+                var h = unquote $value
+                if ($h == null) { $h = interpolated_summary $value }
+                $entry.help = $h
+            } else if ($key == "severity" and $entry.severity == null) {
+                if ($value.StartsWith("\"")) {
+                    $entry.severity = unquote $value
+                } else {
+                    $entry.severity = $value
+                }
+            }
+        }
+    }
+}
+
+if (($order | count) == 0) { throw "no diagnostic codes found" }
+
+# ── Group ──────────────────────────────────────────────────────────────────
+
+var all = ($order | each { $entries[$_] } | collect)
+var namespaces = ($all | each { $_.namespace } | sort -u | collect)
+
+func in_namespace(ns: string) {
+    return ($all | where { $_.namespace == $ns } | sort { $_.name } | collect)
+}
+
+var total = ($all | count)
+
+# ── Markdown ───────────────────────────────────────────────────────────────
+
+var out = [
+    "# TōSh Diagnostic Code Reference",
+    "",
+    "> Auto-generated by `scripts/extract-diagnostic-codes.tosh`.",
+    "> Re-run after adding new diagnostics to the engine, parser, or commands.",
+    "",
+    "Every diagnostic raised by TōSh carries a stable `Code:` string of the form",
+    "`tosh.<namespace>.<name>`. User code can match on these in `try`/`catch`",
+    "blocks and tooling (LSP, MCP, editor extensions) keys off them. Suppress",
+    "a non-error diagnostic with `hush <code>` (scope-local) or by adding it to",
+    "`$tosh.Config.Diagnostics.Hushed` from `profile.tosh`. The tables below",
+    "enumerate every code currently emitted by the implementation.",
+    "",
+    $"**Total diagnostic codes:** {$total}",
+    "",
+    "## Namespace summary",
+    "",
+    "| Namespace | Count | Purpose |",
+    "|---|---:|---|"
+]
+
+for ns in $namespaces {
+    var blurb = "—"
+    if ($ns in $BLURBS) { $blurb = $BLURBS[$ns] }
+    $out = [...$out, $"| `tosh.{$ns}.*` | {(in_namespace $ns | count)} | {$blurb} |"]
+}
+$out = [...$out, ""]
+
+for ns in $namespaces {
+    $out = [...$out, $"## `tosh.{$ns}.*`", ""]
+    if ($ns in $BLURBS) { $out = [...$out, $BLURBS[$ns], ""] }
+    $out = [...$out, "| Code | Title | First emit site |", "|---|---|---|"]
+
+    for entry in (in_namespace $ns) {
+        var title = "_(see source)_"
+        if ($entry.title != null) { $title = md_escape $entry.title }
+        var rel = Path.GetRelativePath($root, $entry.file).Replace("\\", "/")
+        $out = [...$out, $"| `{$entry.code}` | {$title} | [{$rel}:{$entry.line}]({$rel}#L{$entry.line}) |"]
+    }
+    $out = [...$out, ""]
+}
+
+var mdPath = Path.GetFullPath(Path.Combine($root, $md))
+Directory.CreateDirectory(Path.GetDirectoryName($mdPath)) | ignore
+File.WriteAllText($mdPath, String.Join("\n", $out) + "\n")
+
+# ── LaTeX ──────────────────────────────────────────────────────────────────
+
+var tx = [
+    "% Auto-generated by scripts/extract-diagnostic-codes.tosh — do not edit by hand.",
+    "\\chapter{Diagnostic Code Reference}",
+    "\\label{ch:diagnostic-codes}",
+    "",
+    "Every diagnostic raised by TōSh carries a stable identifier of the",
+    "form \\texttt{tosh.namespace.name}. User code may pattern-match on these",
+    "identifiers in \\textbf{try}/\\textbf{catch} blocks; tooling such as the",
+    "language server, the MCP server, and editor extensions key off them.",
+    "Non-error diagnostics can be suppressed with the \\texttt{hush} builtin",
+    "(scope-local) or by adding their codes to",
+    "\\texttt{\\$tosh.Config.Diagnostics.Hushed}.",
+    "",
+    $"This chapter lists all {$total} diagnostic codes currently emitted by the",
+    "implementation, grouped by namespace. It is generated from the source tree",
+    "by \\texttt{scripts/extract-diagnostic-codes.tosh} and should be",
+    "regenerated whenever new diagnostics are added.",
+    "",
+    "\\section*{Namespace summary}",
+    "\\begin{tabular}{l r p{0.55\\linewidth}}",
+    "\\toprule",
+    "\\textbf{Namespace} & \\textbf{Count} & \\textbf{Purpose} \\\\",
+    "\\midrule"
+]
+
+for ns in $namespaces {
+    var blurb = "---"
+    if ($ns in $BLURBS) { $blurb = $BLURBS[$ns] }
+    $tx = [...$tx, $"\\texttt{{tosh.{(tex_escape $ns)}.*}} & {(in_namespace $ns | count)} & {(tex_escape $blurb)} \\\\"]
+}
+$tx = [...$tx, "\\bottomrule", "\\end{tabular}", ""]
+
+for ns in $namespaces {
+    $tx = [...$tx, $"\\section{{\\texttt{{tosh.{(tex_escape $ns)}.*}}}}"]
+    if ($ns in $BLURBS) { $tx = [...$tx, (tex_escape $BLURBS[$ns]), ""] }
+
+    # One card per diagnostic: code on its own line, title beneath. `style=nextline`
+    # avoids the column overlap that long codes caused in the old longtable layout.
+    $tx = [...$tx, "\\begin{description}[style=nextline,leftmargin=0pt,labelindent=0pt,labelsep=0pt,labelwidth=0pt,itemsep=0.35em,parsep=0pt,topsep=0.4em]"]
+    for entry in (in_namespace $ns) {
+        var title = "\\textit{(see source)}"
+        if ($entry.title != null) { $title = tex_escape $entry.title }
+        $tx = [...$tx, $"\\item[\\texttt{{\\small {(tex_escape $entry.code)}}}] {$title}"]
+    }
+    $tx = [...$tx, "\\end{description}", ""]
+}
+
+var texPath = Path.GetFullPath(Path.Combine($root, $tex))
+Directory.CreateDirectory(Path.GetDirectoryName($texPath)) | ignore
+File.WriteAllText($texPath, String.Join("\n", $tx) + "\n")
+
+# ── C# manifest ────────────────────────────────────────────────────────────
+
+var cs = [
+    "// <auto-generated />",
+    "// Generated by scripts/extract-diagnostic-codes.tosh — do not edit by hand.",
+    "// Re-run after adding diagnostics:",
+    "//     scripts/extract-diagnostic-codes.tosh",
+    "#nullable enable",
+    "",
+    "using System.Collections.Generic;",
+    "",
+    "namespace Tosh.Runtime.Generated;",
+    "",
+    "/// <summary>Single diagnostic code entry, generated from source scan.</summary>",
+    "public sealed record DiagnosticCodeInfo(",
+    "    string Code,",
+    "    string Namespace,",
+    "    string Name,",
+    "    string Title,",
+    "    string? Help,",
+    "    string SourceFile,",
+    "    int SourceLine);",
+    "",
+    "/// <summary>Static index of every diagnostic code emitted by TōSh.</summary>",
+    "public static class DiagnosticCodeManifest",
+    "{",
+    "    private static readonly Dictionary<string, DiagnosticCodeInfo> _byCode =",
+    "        new(System.StringComparer.OrdinalIgnoreCase)",
+    "    {"
+]
+
+for entry in ($all | sort { $_.code }) {
+    var rel = Path.GetRelativePath($root, $entry.file).Replace("\\", "/")
+    var title = ""
+    if ($entry.title != null) { $title = $entry.title }
+    var helpLit = "null"
+    if ($entry.help != null) { $helpLit = "\"" + (csharp_escape $entry.help) + "\"" }
+
+    $cs = [...$cs,
+        $"        [\"{$entry.code}\"] = new DiagnosticCodeInfo(",
+        $"            Code: \"{$entry.code}\",",
+        $"            Namespace: \"{$entry.namespace}\",",
+        $"            Name: \"{(csharp_escape $entry.name)}\",",
+        $"            Title: \"{(csharp_escape $title)}\",",
+        $"            Help: {$helpLit},",
+        $"            SourceFile: \"{(csharp_escape $rel)}\",",
+        $"            SourceLine: {$entry.line}),"]
+}
+
+$cs = [...$cs,
+    "    };",
+    "",
+    "    /// <summary>Total number of diagnostic codes in the manifest.</summary>",
+    $"    public const int Count = {$total};",
+    "",
+    "    /// <summary>Lookup metadata for a single code (case-insensitive).</summary>",
+    "    public static DiagnosticCodeInfo? TryGet(string code)",
+    "        => _byCode.TryGetValue(code, out var info) ? info : null;",
+    "",
+    "    /// <summary>All diagnostic codes ordered by code.</summary>",
+    "    public static IReadOnlyCollection<DiagnosticCodeInfo> All => _byCode.Values;",
+    "}"]
+
+var csPath = Path.GetFullPath(Path.Combine($root, $csharp))
+Directory.CreateDirectory(Path.GetDirectoryName($csPath)) | ignore
+File.WriteAllText($csPath, String.Join("\n", $cs) + "\n")
+
+if (not $quiet) {
+    writeline $"Extracted {$total} diagnostic codes"
+    writeline $"  Markdown: {$mdPath}"
+    writeline $"  LaTeX:    {$texPath}"
+    writeline $"  C#:       {$csPath}"
+}
