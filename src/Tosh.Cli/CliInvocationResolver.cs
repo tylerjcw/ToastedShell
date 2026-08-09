@@ -138,6 +138,9 @@ internal static class CliInvocationResolver
                     case "--vscode":
                         format = "vscode";
                         break;
+                    case "--surface":
+                        format = "surface";
+                        break;
                     case "-o" or "--output" when i + 1 < effectiveArgs.Count:
                         outputPath = effectiveArgs[++i];
                         break;

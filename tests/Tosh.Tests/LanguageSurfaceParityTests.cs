@@ -585,6 +585,29 @@ public sealed class LanguageSurfaceParityTests
         Assert.True(report.Length == 0, report.ToString());
     }
 
+    [Fact]
+    public void The_surface_exports_every_word_for_consumers_outside_dotnet()
+    {
+        // The VS Code grammar generator is a separate program in a separate language,
+        // so it cannot take a set from the registry the way the CLI highlighter does.
+        // This export is how it reads the language instead of restating it.
+        using var document = System.Text.Json.JsonDocument.Parse(LanguageSurfaceExporter.ExportJson());
+        var words = document.RootElement.GetProperty("words");
+
+        Assert.Equal(LanguageSurface.Words.Count, words.EnumerateObject().Count());
+
+        foreach (var word in LanguageSurface.Words.Keys)
+        {
+            Assert.True(words.TryGetProperty(word, out var kinds), $"the export omits `{word}`");
+            Assert.NotEmpty(kinds.EnumerateArray());
+        }
+
+        // Ordinal-sorted, so a generated artefact checked into git diffs when the
+        // language changes and not when a dictionary enumerates differently.
+        var emitted = words.EnumerateObject().Select(property => property.Name).ToArray();
+        Assert.Equal(emitted.OrderBy(name => name, StringComparer.Ordinal), emitted);
+    }
+
     private static string RepositoryRoot() =>
         Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../"));
 

@@ -481,6 +481,13 @@ static async Task ExportCommandMetadataAsync(CliInvocationPlan plan)
         var metadata = CommandMetadataExporter.BuildMetadata(registry);
         output = VsCodeMetadataEmitter.Emit(metadata);
     }
+    else if (string.Equals(format, "surface", StringComparison.OrdinalIgnoreCase))
+    {
+        // The language-word registry, for consumers that cannot read C#. The VS Code
+        // grammar generator held its own copy of these words for exactly that reason,
+        // and drifted (`TS-P2-10`).
+        output = LanguageSurfaceExporter.ExportJson();
+    }
     else
     {
         output = CommandMetadataExporter.ExportMetadataJson(registry);
