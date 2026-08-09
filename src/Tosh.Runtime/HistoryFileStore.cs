@@ -71,5 +71,9 @@ internal static class HistoryFileStore
 
     private sealed record SerializedHistoryEntry(long? Id, string Text, DateTimeOffset Timestamp);
 
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    // Web defaults are camelCase and history files are already written that way, so
+    // only the encoder is taken from the shared policy — see `ToshJson`. It matters
+    // here: a command containing a quote or any non-ASCII character was stored as
+    // `"` / `\uXXXX`, so history on disk was unreadable for anyone who looked.
+    private static readonly JsonSerializerOptions JsonOptions = ToshJson.With(new(JsonSerializerDefaults.Web));
 }

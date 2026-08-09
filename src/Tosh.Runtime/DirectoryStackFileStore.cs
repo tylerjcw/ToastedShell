@@ -65,9 +65,12 @@ internal static class DirectoryStackFileStore
 
     private sealed record SerializedState(List<string> Entries, int Index);
 
+    // Web defaults are camelCase and the files on disk are already in that shape, so
+    // only the encoder is taken from the shared policy — see `ToshJson`.
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
     {
         WriteIndented = true,
+        Encoder = ToshJson.Encoder,
     };
 }
 

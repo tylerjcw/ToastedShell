@@ -166,10 +166,7 @@ internal static class ShellDataSerializer
         return result;
     }
 
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        WriteIndented = false,
-    };
+    private static readonly JsonSerializerOptions JsonOptions = ToshJson.Compact;
 
     private sealed class ReferenceEqualityComparer : IEqualityComparer<object>
     {

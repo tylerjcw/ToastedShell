@@ -44,10 +44,7 @@ public sealed class JsonDataFormat : IDataFormat
         {
             json = JsonSerializer.Serialize(
                 normalized,
-                new JsonSerializerOptions
-                {
-                    WriteIndented = !args.HasFlag("c", "compact"),
-                });
+                args.HasFlag("c", "compact") ? ToshJson.Compact : ToshJson.Indented);
         }
         catch (JsonException exception)
         {

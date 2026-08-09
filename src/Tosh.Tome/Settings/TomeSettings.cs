@@ -40,13 +40,7 @@ internal sealed class TomeSettings
         try
         {
             var json = File.ReadAllText(path);
-            var opts = new JsonSerializerOptions
-            {
-                PropertyNameCaseInsensitive = true,
-                ReadCommentHandling = JsonCommentHandling.Skip,
-                AllowTrailingCommas = true,
-            };
-            return JsonSerializer.Deserialize<TomeSettings>(json, opts) ?? Default;
+            return JsonSerializer.Deserialize<TomeSettings>(json, ReadOptions) ?? Default;
         }
         catch (Exception ex)
         {
@@ -55,6 +49,19 @@ internal sealed class TomeSettings
             return new TomeSettings { ParseWarning = $"settings: could not parse {path} — {ex.Message}" };
         }
     }
+
+    private static readonly JsonSerializerOptions ReadOptions = new()
+    {
+        PropertyNameCaseInsensitive = true,
+        ReadCommentHandling = JsonCommentHandling.Skip,
+        AllowTrailingCommas = true,
+    };
+
+    private static readonly JsonSerializerOptions IndentedOptions = new()
+    {
+        WriteIndented = true,
+        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+    };
 
     /// <summary>
     /// Writes the current settings back to the config file.
@@ -68,8 +75,10 @@ internal sealed class TomeSettings
         {
             var dir = Path.GetDirectoryName(path);
             if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
-            var opts = new JsonSerializerOptions { WriteIndented = true };
-            File.WriteAllText(path, JsonSerializer.Serialize(this, opts));
+            // Same policy as `Tosh.Runtime.ToshJson`, restated because Tome does not
+            // reference that assembly. A theme name or path with a non-ASCII character
+            // was written to the user's own settings file as `\uXXXX`.
+            File.WriteAllText(path, JsonSerializer.Serialize(this, IndentedOptions));
             return null;
         }
         catch (Exception ex)

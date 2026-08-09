@@ -64,12 +64,7 @@ public static class PipelineFileMaterializer
             ? ShellDataSerializer.Normalize(values[0])
             : values.Select(ShellDataSerializer.Normalize).ToArray();
 
-        return JsonSerializer.Serialize(
-            normalized,
-            new JsonSerializerOptions
-            {
-                WriteIndented = true,
-            });
+        return JsonSerializer.Serialize(normalized, ToshJson.Indented);
     }
 
     public static string SerializeCsv(IReadOnlyList<object?> values)
