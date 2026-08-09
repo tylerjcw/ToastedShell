@@ -137,7 +137,9 @@ public static class VsCodeMetadataEmitter
         ["leaky"] = "Mark a struct as having reference-like (leaked) semantics.",
         ["let"] = "Bind a name in a pattern-match arm or comprehension.",
         ["once"] = "Limit an event handler so it fires at most one time.",
-        ["pick"] = "Alias for `get`: project fields or pick a member by name.",
+        // `pick` was here and is not a keyword: it is an alias of the `get` *command*,
+        // so it already reaches VS Code through `builtins` and appeared twice with two
+        // different descriptions. Removed 2026-08-08 (`TS-P2-10`).
         ["priority"] = "Set the dispatch priority for an event handler.",
         ["private"] = "Synonym for `shy`: hide a class member from outside the class.",
         ["protected"] = "Synonym for `guarded`: restrict access to the defining class and its subclasses.",
@@ -158,6 +160,10 @@ public static class VsCodeMetadataEmitter
         ["set"] = "Setter body inside a `prop` declaration. The incoming value is bound to `$value`.",
         // Subcommand dispatch
         ["subcommand"] = "Declare a named subcommand, turning a script into a structured CLI. Body runs when the user selects it; nest for command trees.",
+        ["subcmd"] = "Short spelling of `subcommand`.",
+        ["true"] = "Boolean literal.",
+        ["false"] = "Boolean literal.",
+        ["null"] = "The absent value.",
         ["flag"] = "Declare an optional named option inside a `subcommand` body. Invoked as `--name value` or `--name=value`; booleans also accept `--no-name`.",
         ["arg"] = "Declare a required positional argument inside a `subcommand` body. Consumed in declaration order.",
         ["eager"] = "Subcommand modifier: run this body even when dispatch descends into a child. Used for setup work. Cannot combine with `hollow`.",

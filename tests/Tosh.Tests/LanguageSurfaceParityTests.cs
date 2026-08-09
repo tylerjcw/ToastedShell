@@ -524,6 +524,53 @@ public sealed class LanguageSurfaceParityTests
             "Registry words the REPL cannot complete:\n  " + string.Join("\n  ", missing));
     }
 
+    [Theory]
+    // The prose-carrying consumers, which the subset check above cannot read: their
+    // tables are `["word"] = "a sentence about it"`, so a regex over string literals
+    // harvests the prose as well as the keys and reports half the English language as
+    // unknown words. Keys only, and **both** directions — a prose table that omits a
+    // real word is how `const`, `defer` and `yield` went undocumented in the first
+    // place.
+    [InlineData("src/Tosh.Runtime/VsCodeMetadataEmitter.cs", "Keywords")]
+    public void A_prose_table_documents_exactly_the_registry(string relativePath, string tableName)
+    {
+        var source = File.ReadAllText(Path.Combine(RepositoryRoot(), relativePath));
+
+        var table = Regex.Match(
+            source,
+            @$"{tableName}\s*=\s*new\([^)]*\)\s*\{{(.*?)\n    \}};",
+            RegexOptions.Singleline);
+
+        Assert.True(table.Success, $"could not locate {tableName} in {relativePath}");
+
+        var documented = Regex.Matches(table.Groups[1].Value, @"^\s*\[""([a-z][a-z0-9-]*)""\] = """, RegexOptions.Multiline)
+            .Select(m => m.Groups[1].Value)
+            .ToHashSet(StringComparer.Ordinal);
+
+        var expected = LanguageSurface.Words.Keys.ToHashSet(StringComparer.Ordinal);
+
+        var undocumented = expected.Except(documented, StringComparer.Ordinal)
+            .OrderBy(word => word, StringComparer.Ordinal).ToArray();
+        var unknown = documented.Except(expected, StringComparer.Ordinal)
+            .OrderBy(word => word, StringComparer.Ordinal).ToArray();
+
+        Assert.True(
+            undocumented.Length == 0,
+            $"{relativePath} has no description for these registry words:\n  "
+            + string.Join("\n  ", undocumented));
+
+        // The one-way rule from the class remarks still holds: a word here that the
+        // registry lacks is a finding about the registry *first*. It becomes a finding
+        // about this table only once the word has been probed and does not parse —
+        // which is how `pick` was resolved, an alias of the `get` command that had no
+        // business in a keyword table.
+        Assert.True(
+            unknown.Length == 0,
+            $"{relativePath} describes words the registry does not have. Probe each "
+            + "one before deleting it — it is more likely the registry is short:\n  "
+            + string.Join("\n  ", unknown));
+    }
+
     private static string RepositoryRoot() =>
         Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../"));
 
