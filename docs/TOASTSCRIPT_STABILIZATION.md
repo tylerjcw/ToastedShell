@@ -498,7 +498,7 @@ closed.
 | `TS-P2-63` | Complete — fixed 2026-08-08 | A `HelpTopic` rendered as a bare `[HelpTopic]` type header instead of its panel whenever it was not the only value a script produced. `help ls` alone panelled; `echo one` then `help ls` did not, so the panel looked like a property of being first. Two causes: the display engine's bespoke renderer fired only for a single value, and the streaming sink checked for bespoke types only before a table had started. Confirmed pre-existing. Found while fixing `TS-P2-54`. | A help topic keeps its panel wherever it appears among top-level values, in `-c` and in a script; a batch of nothing but help topics still tabulates, which is how two topics are compared and is deliberate. |
 | `TS-P2-64` | Complete — fixed 2026-08-08 | Output redirection wrote a UTF-8 byte-order mark: `echo "one" out> f.txt` produced `ef bb bf 6f 6e 65 0a`. A redirected `#!` script would not execute and a redirected CSV grew a phantom character in its first column name. `write-file` was already writing clean UTF-8, so the two disagreed. Confirmed pre-existing. Found while investigating `TS-P2-57`. | Redirection writes UTF-8 without a BOM, and the test asserts the leading *bytes* rather than the text — the BOM compares equal once a file is read back as a string, which is how it went unnoticed. A redirected shebang script now runs. |
 | `TS-P2-65` | Complete — fixed 2026-08-08 | A redirection failure reported the code `TOSH400`, outside the `tosh.<namespace>.<name>` scheme every other diagnostic uses — so it never reached the generated reference and could not be hushed by code the way the documentation says any diagnostic can. Found while investigating `TS-P2-57`. | Redirection failures carry `tosh.runtime.redirection_target_unavailable`, with a label and help that name the usual cause (a directory that does not exist, which redirection does not create). Both emit sites were converted; no other `TOSH<nnn>` codes remain in the sources. |
-| `TS-P2-66` | Planned — filed 2026-08-08 | Type resolution consults an explicit `using` only after an unqualified global scan. `DotNetTypeResolver.Resolve` tries `TryResolveDirect(name)` — which searches the platform index and every loaded assembly — before `TryResolveFromImports(name)`, so `using Tosh.LspFixture` then `new Widget(...)` resolves to any other loaded `Widget` in preference to the one the import names. A stated intention should outrank an incidental match. Found while fixing `TS-P2-48`, where an emitted test type captured the name. Reordering was tried and withdrawn in the same session: `DefaultImplicitUsings` carries a dozen namespaces, so imports-first changes resolution broadly and belongs in its own change with its own measurements. | An unqualified name prefers a type from an active `using` over an arbitrary loaded assembly, with the blast radius measured against the shipped implicit usings; a fully-qualified name still resolves directly. |
+| `TS-P2-66` | Complete — fixed 2026-08-08 | Type resolution consulted an explicit `using` only after an unqualified global scan. `DotNetTypeResolver.Resolve` tried `TryResolveDirect(name)` — the platform index and every loaded assembly, private nested implementation types included — before `TryResolveFromImports(name)`, so a stated intention lost to whatever the runtime happened to hold. `Complex` resolved to `System.Threading.PortableThreadPool+HillClimbing+Complex`, `BigInteger` to `System.Number+BigInteger`, `SpinLock` to a nested field of `ReaderWriterLockSlim`. Found while fixing `TS-P2-48`, where an emitted test type captured a name an import had asked for. | An unqualified name prefers a type from an active `using`; a qualified name still resolves directly, being already an instruction about where to look. The generic form follows the same order. **Measured before the change, across the 16,727 simple names the platform index knows: 33 resolve differently under the two orders, every one toward the public type an import names; 15,544 resolve only through the direct scan and are untouched; none resolve through imports alone, so nothing is lost.** |
 | `TS-P2-67` | Complete — fixed 2026-08-08 | The `@arg` / `@flag` naming tags worked in one placement and one separator; everywhere else the doc-comment's *summary* was used as the description of every input, so a script documenting three arguments showed the same sentence three times. Three causes. A comment attaches to the declaration that follows it, so a single block documenting several inputs reached only the first — `## @flag clean …` above `arg target` described nothing, since the flag was a separate statement. A subcommand-free script never applied its own tags at all. And the name ended at the first space and nothing else. Found while writing a session summary, by running the examples rather than restating them. Filed 2026-08-08 with the separator half mis-described: `=` had always belonged between the *tag* and the body (`@arg=name text`), not between name and description, which is a distinction no reader would guess. | All four spellings mean the same thing — `@arg name text`, `@arg=name text`, `@arg name=text`, `@arg name - text` — with a hyphen treated as a separator only when whitespace follows, so a description may still begin `-v`. Tags reach every input in their block, in a subcommand and in a subcommand-free script alike, and a block-level tag still wins over a per-declaration one. Prose above a single declaration still describes it when no tag names it. |
 | `TS-P2-68` | Complete — fixed 2026-08-08 | A module-qualified function was callable and invisible at once. Reported from use against the reporter's own library: `ToastLib.Filesystem.GetExtension "<path>"` returned a value while `help` on the same name reported "topic not found", `which` printed nothing, the bare member name failed too, and `help ToastLib` had no topic at all — a library organised as nested modules could not be explored from the shell running it. The engine resolves these through `TryResolveModuleQualifiedCommand`; `HelpCatalog` had no module awareness whatever, and the view added for `TS-P2-54` covered lexical scopes and the global registry only. | `IScopedCommandView` carries module exports, resolved by the engine's own walk rather than a second one. A topic is named by the qualified path with the bare member name as an alias — added only when one module exports it, since two modules sharing a name is a real ambiguity and picking one silently answers the wrong question. **Decided:** a bare name resolves when unambiguous, and a module gets a topic of its own listing its commands, nested modules, types and variables. `which` joined the parser's names-not-values list, which is why `help` on a dotted name already worked and `which` did not. |
 
@@ -5273,3 +5273,45 @@ run, and the code was right: a subcommand answers `--help` with a `HelpTopic` *v
 renders through the display engine, while a plain script writes its usage straight to the output
 stream. Asserting only on the output stream tested nothing for half the cases. The harness now
 reduces both shapes to text.
+
+## `TS-P2-66` — measuring a change that touches every type name (August 8)
+
+`Resolve` asked the unqualified global scan first and the imports only when it found nothing. That
+scan reaches the platform index and every loaded assembly, private nested implementation types
+included, so a `using` — a statement of intent — lost to whatever the runtime happened to be
+holding:
+
+```
+Complex     → System.Threading.PortableThreadPool+HillClimbing+Complex
+BigInteger  → System.Number+BigInteger
+SpinLock    → System.Threading.ReaderWriterLockSlim+SpinLock
+Error       → Interop+Error
+```
+
+**The measurement came first, and it is the reason this was safe to change.** The reorder touches
+every type name in the language and `DefaultImplicitUsings` carries a dozen namespaces, so the
+question was not "is imports-first more correct" — obviously it is — but "what else moves". A probe
+compared both orders across the 16,727 simple names the platform index knows:
+
+| | count |
+|---|---|
+| both orders resolve, to **different** types | 33 |
+| resolve through the direct scan only | 15,544 |
+| resolve through the imports only | 0 |
+| both orders agree | 1,150 |
+
+Every one of the 33 moved toward the public type an import names. Nothing resolves through imports
+alone, so putting them first cannot take an answer away — it can only change which of two answers
+is given. That is a blast radius of 33 names, all improvements, and it is why this landed in one
+change rather than the incremental widening that went wrong the first time this file was touched.
+
+Three of the 33 do not end at the imported type after the change: `Error` answers
+`Tosh.Runtime.ToshError` and `Complex` answers the builtin `ToSh.Complex`, because an earlier
+import and the shell's own types are consulted first. Both are the intended precedence rather than
+exceptions to it.
+
+**A test that proved nothing, caught by the control.** The first version asserted `BigInteger`
+alongside `SpinLock` and `FileStatus`. The control showed it passing against the unfixed resolver:
+the direct scan and the imports did disagree about it, but `Resolve` already reached
+`System.Numerics.BigInteger` by another route. It moved to the "unchanged" theory, where it is
+true, rather than staying where it looked like evidence.

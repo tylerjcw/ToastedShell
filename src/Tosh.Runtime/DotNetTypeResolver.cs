@@ -181,12 +181,34 @@ public sealed class DotNetTypeResolver : IImportingTypeResolver
             return aliasedType;
         }
 
+        // `TS-P2-66`. An explicit `using` outranks an incidental match, for an *unqualified* name.
+        //
+        // The unqualified scan searches the platform index and every loaded assembly, including
+        // private nested implementation types, and it used to run first — so a stated intention
+        // lost to whatever the runtime happened to hold. Measured across the 16,727 simple names
+        // the platform index knows: 33 resolve differently under the two orders, and in every one
+        // the import is the type a reader means. `Complex` resolved to
+        // `System.Threading.PortableThreadPool+HillClimbing+Complex` rather than
+        // `System.Numerics.Complex`; `BigInteger` to `System.Number+BigInteger`; `SpinLock` to a
+        // nested field of `ReaderWriterLockSlim`. Nothing is lost by the reorder — no name
+        // resolves through imports alone that direct would have found, so the fallthrough below
+        // still answers the other 15,544.
+        //
+        // A *qualified* name is already an instruction about where to look, so it keeps direct
+        // resolution first.
+        var isUnqualified = !name.Contains('.', StringComparison.Ordinal);
+
+        if (isUnqualified && TryResolveFromImports(name, out var importedFirst))
+        {
+            return importedFirst;
+        }
+
         if (TryResolveDirect(name, out var direct))
         {
             return direct;
         }
 
-        if (TryResolveFromImports(name, out var importedType))
+        if (!isUnqualified && TryResolveFromImports(name, out var importedType))
         {
             return importedType;
         }
@@ -279,6 +301,25 @@ public sealed class DotNetTypeResolver : IImportingTypeResolver
             TryResolveDirectGenericDefinition(aliasedPath, arity, out type))
         {
             return true;
+        }
+
+        // The same precedence as `Resolve`, for the generic form: `using` beats an incidental
+        // match on an unqualified name (`TS-P2-66`).
+        if (!name.Contains('.', StringComparison.Ordinal))
+        {
+            foreach (var importPath in _imports)
+            {
+                if (string.Equals(GetLastSegment(importPath), name, StringComparison.OrdinalIgnoreCase) &&
+                    TryResolveDirectGenericDefinition(importPath, arity, out type))
+                {
+                    return true;
+                }
+
+                if (TryResolveDirectGenericDefinition(importPath + "." + name, arity, out type))
+                {
+                    return true;
+                }
+            }
         }
 
         if (TryResolveDirectGenericDefinition(name, arity, out type))
