@@ -102,12 +102,40 @@ public sealed class ToshLanguageFeatures
         ["ends-with"] = "String suffix operator. Returns `true` if the string ends with the given suffix. Example: `\"hello\" ends-with \"lo\"`.",
         ["where"] = "Filter clause in a comprehension, after the `<|`. Example: `[$x <| for x in 1..6 where ($x % 2) == 0]`. Also a pipeline command for filtering objects.",
         ["let"] = "Binds a variable inside a comprehension clause list. Example: `[$y <| for x in 1..3 let y = ($x * 2)]`. Comprehensions are body-first — the expression comes before `<|`.",
-        ["pick"] = "Pipeline command that projects members from objects; a soft alias for `get`. Example: `ls | pick Name`. Not a comprehension clause.",
+        ["set"] = "Property accessor inside a `prop` body, paired with `get`. Example: `class C { prop X { get { return $_x } set { $_x = $value } } }`.",
         ["get"] = "Property accessor inside a `prop` body. Example: `class C { prop X { get { return 1 } } }`. Also a pipeline command projecting members from objects, aliased as `pick` and `select`.",
         ["quote"] = "Capture a code block as a first-class value without evaluating it. Example: `var block = quote { ls | sort }`.",
         ["new"] = "Construct a CLR object or ToSh named type instance.",
         ["nameof"] = "Return the name of a variable or member path.",
         ["name-of"] = "Command-style alias for `nameof`.",
+
+        // ── Script inputs and subcommands ──────────────────────────────────────
+        ["arg"] = "Declare a positional script argument. Example: `arg target: string`. Reference it as `$target`; `--help` renders it from the doc comment's `@arg` tag.",
+        ["flag"] = "Declare a boolean script flag. Example: `flag clean`. Passing `--clean` sets `$clean` to true.",
+        ["subcommand"] = "Declare a named subcommand, turning a script into a structured CLI. The body runs when the user selects it, and subcommands nest for command trees.",
+        ["subcmd"] = "Short spelling of `subcommand`.",
+        ["eager"] = "Subcommand modifier: run this body even when dispatch descends into a child, for setup work. Cannot combine with `hollow`.",
+        ["hidden"] = "Subcommand modifier: exclude from generated help and \"did you mean\" suggestions. Still fully callable.",
+
+        // ── Control flow and types ─────────────────────────────────────────────
+        ["unless"] = "Run the body when the condition is false — the inverse of `if`. Example: `unless ($done) { retry }`.",
+        ["type"] = "Declare a type alias, or a refinement type narrowed by `where` predicates with optional `coerce` repair. Example: `type Port = int { where _ >= 1 and _ <= 65535 }`.",
+        ["coerce"] = "Repair clause in a refinement type. `if <guard> coerce <expr>` normalises before validation; a bare `coerce <expr>` fires only after a `where` predicate has failed.",
+
+        // ── Literals ───────────────────────────────────────────────────────────
+        ["true"] = "Boolean literal.",
+        ["false"] = "Boolean literal.",
+        ["null"] = "The absent value.",
+
+        // ── C#-familiar spellings ──────────────────────────────────────────────
+        // Accepted wherever the ToastScript word is, and documented so a reader
+        // coming from C# is not stopped by vocabulary. `TS-P2-30`.
+        ["private"] = "C#-familiar spelling of `shy`.",
+        ["abstract"] = "C#-familiar spelling of `hollow`.",
+        ["readonly"] = "C#-familiar spelling of `fixed`.",
+        ["protected"] = "C#-familiar spelling of `guarded`.",
+        ["override"] = "C#-familiar spelling of `overrule`.",
+        ["obsolete"] = "C#-familiar spelling of `fading`.",
     };
 
     private readonly ToshRuntime _runtime;

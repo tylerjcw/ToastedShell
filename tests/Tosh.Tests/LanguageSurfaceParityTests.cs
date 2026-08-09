@@ -532,13 +532,16 @@ public sealed class LanguageSurfaceParityTests
     // real word is how `const`, `defer` and `yield` went undocumented in the first
     // place.
     [InlineData("src/Tosh.Runtime/VsCodeMetadataEmitter.cs", "Keywords")]
+    [InlineData("src/Tosh.LanguageServices/ToshLanguageFeatures.cs", "Keywords")]
     public void A_prose_table_documents_exactly_the_registry(string relativePath, string tableName)
     {
         var source = File.ReadAllText(Path.Combine(RepositoryRoot(), relativePath));
 
         var table = Regex.Match(
             source,
-            @$"{tableName}\s*=\s*new\([^)]*\)\s*\{{(.*?)\n    \}};",
+            // Both spellings of the initializer appear: the emitter writes
+            // `new(StringComparer.Ordinal)`, the LSP writes the type out in full.
+            @$"{tableName}\s*=\s*new\s*(?:\w+(?:<[^>]*>)?\s*)?\([^)]*\)\s*\{{(.*?)\n    \}};",
             RegexOptions.Singleline);
 
         Assert.True(table.Success, $"could not locate {tableName} in {relativePath}");
@@ -554,21 +557,32 @@ public sealed class LanguageSurfaceParityTests
         var unknown = documented.Except(expected, StringComparer.Ordinal)
             .OrderBy(word => word, StringComparer.Ordinal).ToArray();
 
-        Assert.True(
-            undocumented.Length == 0,
-            $"{relativePath} has no description for these registry words:\n  "
-            + string.Join("\n  ", undocumented));
+        // Both directions in one assertion, deliberately. Two `Assert.True` calls
+        // would short-circuit: the first failure hides the second, so a run reports
+        // half the drift and a fix looks complete when it is not.
+        //
+        // The one-way rule from the class remarks still holds for the second list: a
+        // word here that the registry lacks is a finding about the registry *first*.
+        // It becomes a finding about this table only once the word has been probed and
+        // does not parse — which is how `pick` was resolved, an alias of the `get`
+        // command that had no business in a keyword table.
+        var report = new System.Text.StringBuilder();
 
-        // The one-way rule from the class remarks still holds: a word here that the
-        // registry lacks is a finding about the registry *first*. It becomes a finding
-        // about this table only once the word has been probed and does not parse —
-        // which is how `pick` was resolved, an alias of the `get` command that had no
-        // business in a keyword table.
-        Assert.True(
-            unknown.Length == 0,
-            $"{relativePath} describes words the registry does not have. Probe each "
-            + "one before deleting it — it is more likely the registry is short:\n  "
-            + string.Join("\n  ", unknown));
+        if (undocumented.Length > 0)
+        {
+            report.Append($"{relativePath} has no description for these registry words:\n  ")
+                .Append(string.Join("\n  ", undocumented))
+                .Append('\n');
+        }
+
+        if (unknown.Length > 0)
+        {
+            report.Append($"{relativePath} describes words the registry does not have. ")
+                .Append("Probe each one before deleting it — it is more likely the registry is short:\n  ")
+                .Append(string.Join("\n  ", unknown));
+        }
+
+        Assert.True(report.Length == 0, report.ToString());
     }
 
     private static string RepositoryRoot() =>
