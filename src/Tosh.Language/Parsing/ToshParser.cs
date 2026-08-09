@@ -2775,6 +2775,19 @@ public static class ToshParser
 
                 var parameters = ParseFunctionParameters();
                 var end = Peek(-1).Span.End;
+                // A multi-input declaration takes each description from its own named tag; there
+                // is no single prose body that could describe all of them.
+                if (docComment is { Parameters.Count: > 0 })
+                {
+                    parameters = parameters
+                        .Select(parameter =>
+                            docComment.Parameters.TryGetValue(parameter.Name, out var tagged) &&
+                            !string.IsNullOrWhiteSpace(tagged)
+                                ? parameter with { Description = tagged.Trim() }
+                                : parameter)
+                        .ToArray();
+                }
+
                 return new ScriptInputStatementSyntax(
                     kind,
                     parameters,
@@ -2783,8 +2796,17 @@ public static class ToshParser
             }
 
             var parameter = ParseFunctionParameter();
-            // Attach the doc-comment body as the parameter description for single-flag/arg declarations.
-            var description = docComment?.Description?.Trim();
+
+            // Attach the doc-comment's description for single-flag/arg declarations. A named tag
+            // for this input wins over the block's prose: `## @arg target - what to build` above
+            // an `arg target` used to leave the summary in place, so a comment documenting three
+            // inputs described all three with the same sentence (`TS-P2-67`).
+            var description = docComment is not null &&
+                              docComment.Parameters.TryGetValue(parameter.Name, out var tagged) &&
+                              !string.IsNullOrWhiteSpace(tagged)
+                ? tagged.Trim()
+                : docComment?.Description?.Trim();
+
             if (!string.IsNullOrEmpty(description))
                 parameter = parameter with { Description = description };
             return new ScriptInputStatementSyntax(

@@ -133,21 +133,9 @@ public sealed record DocComment(
             if (TryReadNamedTag(line, out var namedTagBody))
             {
                 hasSeenBlockTag = true;
-                var rest = namedTagBody;
-                var spaceIndex = rest.IndexOf(' ');
-                if (spaceIndex >= 0)
-                {
-                    var name = rest[..spaceIndex].ToString();
-                    var desc = rest[(spaceIndex + 1)..].ToString().Trim();
-                    parameters[name] = desc;
-                    lastParamName = name;
-                }
-                else
-                {
-                    var name = rest.ToString();
-                    parameters[name] = string.Empty;
-                    lastParamName = name;
-                }
+                SplitNamedTagBody(namedTagBody, out var name, out var desc);
+                parameters[name] = desc;
+                lastParamName = name;
                 lastTypeParamName = null;
                 continuationTarget = "param";
             }
@@ -451,6 +439,57 @@ public sealed record DocComment(
     /// one surface and silently ignored on another, which is how <c>@param &lt;name&gt;</c> came
     /// to be absorbed into descriptions.
     /// </remarks>
+    /// <summary>
+    /// Splits a named tag's body into the input's name and its description.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// `TS-P2-67`. The name used to end at the first space and nothing else, so the two
+    /// separators a reader actually reaches for were both wrong. <c>@arg name=description</c> put
+    /// <c>name=description</c>'s first word in as the *name*, and matched no input — the `=` was
+    /// only ever accepted between the tag and the body, which is a distinction nobody would
+    /// guess. <c>@arg name - description</c> kept the hyphen, so the rendered help read
+    /// "- what to build".
+    /// </para>
+    /// <para>
+    /// All three now mean the same thing: <c>@arg name description</c>,
+    /// <c>@arg name=description</c>, <c>@arg name - description</c>. A hyphen is a separator only
+    /// when whitespace follows it, so a description may still begin with <c>-v</c> or a
+    /// hyphenated word.
+    /// </para>
+    /// </remarks>
+    private static void SplitNamedTagBody(ReadOnlySpan<char> body, out string name, out string description)
+    {
+        var separator = -1;
+
+        for (var index = 0; index < body.Length; index++)
+        {
+            if (body[index] is ' ' or '=')
+            {
+                separator = index;
+                break;
+            }
+        }
+
+        if (separator < 0)
+        {
+            name = body.ToString();
+            description = string.Empty;
+            return;
+        }
+
+        name = body[..separator].ToString();
+        var rest = body[(separator + 1)..].Trim();
+
+        // A lone hyphen between name and text is punctuation, not part of the description.
+        if (rest.Length > 1 && rest[0] == '-' && char.IsWhiteSpace(rest[1]))
+        {
+            rest = rest[1..].TrimStart();
+        }
+
+        description = rest.ToString();
+    }
+
     private static bool TryReadNamedTag(string line, out ReadOnlySpan<char> body)
     {
         foreach (var tag in NamedInputTags)

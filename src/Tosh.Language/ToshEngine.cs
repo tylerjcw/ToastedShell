@@ -1236,7 +1236,12 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
         // its arguments and the documentation had nowhere to appear.
         if (ScriptHelpWasRequested(scriptArguments, flagParameters))
         {
-            await WriteScriptUsageAsync(sourceName, scriptDoc, argumentParameters, flagParameters);
+            await WriteScriptUsageAsync(
+                sourceName,
+                scriptDoc,
+                argumentParameters,
+                flagParameters,
+                CollectDocumentedNames(declarations, scriptDoc));
 
             // Answered, so the body does not run. This asks to exit rather than throwing a
             // signal of its own: `exit` now stops execution, which is the whole reason the
@@ -1476,7 +1481,8 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
         string sourceName,
         DocComment? scriptDoc,
         IReadOnlyList<FunctionParameterSyntax> argumentParameters,
-        IReadOnlyList<FunctionParameterSyntax> flagParameters)
+        IReadOnlyList<FunctionParameterSyntax> flagParameters,
+        IReadOnlyDictionary<string, string> documented)
     {
         var name = Path.GetFileName(sourceName);
         var output = Runtime.Output;
@@ -1508,8 +1514,20 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
 
         await output.WriteLineAsync(usage.ToString());
 
-        await WriteScriptUsageSectionAsync(output, "Arguments", argumentParameters, isFlag: false);
-        await WriteScriptUsageSectionAsync(output, "Options", flagParameters, isFlag: true);
+        // `TS-P2-67`. The script's own `@arg` / `@flag` tags describe its inputs, exactly as a
+        // subcommand block's do. Without this a subcommand-free script showed its summary as the
+        // description of every argument, so three documented arguments read the same sentence
+        // three times — and the tags a reader had written were parsed and thrown away.
+        await WriteScriptUsageSectionAsync(
+            output,
+            "Arguments",
+            ApplyDocumentedDescriptions(argumentParameters, documented),
+            isFlag: false);
+        await WriteScriptUsageSectionAsync(
+            output,
+            "Options",
+            ApplyDocumentedDescriptions(flagParameters, documented),
+            isFlag: true);
     }
 
     private static async Task WriteScriptUsageSectionAsync(

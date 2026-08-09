@@ -499,7 +499,7 @@ closed.
 | `TS-P2-64` | Complete — fixed 2026-08-08 | Output redirection wrote a UTF-8 byte-order mark: `echo "one" out> f.txt` produced `ef bb bf 6f 6e 65 0a`. A redirected `#!` script would not execute and a redirected CSV grew a phantom character in its first column name. `write-file` was already writing clean UTF-8, so the two disagreed. Confirmed pre-existing. Found while investigating `TS-P2-57`. | Redirection writes UTF-8 without a BOM, and the test asserts the leading *bytes* rather than the text — the BOM compares equal once a file is read back as a string, which is how it went unnoticed. A redirected shebang script now runs. |
 | `TS-P2-65` | Complete — fixed 2026-08-08 | A redirection failure reported the code `TOSH400`, outside the `tosh.<namespace>.<name>` scheme every other diagnostic uses — so it never reached the generated reference and could not be hushed by code the way the documentation says any diagnostic can. Found while investigating `TS-P2-57`. | Redirection failures carry `tosh.runtime.redirection_target_unavailable`, with a label and help that name the usual cause (a directory that does not exist, which redirection does not create). Both emit sites were converted; no other `TOSH<nnn>` codes remain in the sources. |
 | `TS-P2-66` | Planned — filed 2026-08-08 | Type resolution consults an explicit `using` only after an unqualified global scan. `DotNetTypeResolver.Resolve` tries `TryResolveDirect(name)` — which searches the platform index and every loaded assembly — before `TryResolveFromImports(name)`, so `using Tosh.LspFixture` then `new Widget(...)` resolves to any other loaded `Widget` in preference to the one the import names. A stated intention should outrank an incidental match. Found while fixing `TS-P2-48`, where an emitted test type captured the name. Reordering was tried and withdrawn in the same session: `DefaultImplicitUsings` carries a dozen namespaces, so imports-first changes resolution broadly and belongs in its own change with its own measurements. | An unqualified name prefers a type from an active `using` over an arbitrary loaded assembly, with the blast radius measured against the shipped implicit usings; a fully-qualified name still resolves directly. |
-| `TS-P2-67` | Planned — filed 2026-08-08 | The `@arg` / `@flag` naming tags work in one placement and one separator only, which is not the shape they were designed in. Measured: `## @arg name description` above a `subcommand` block works; `## @arg name=description` — the `=` separator the design named first — yields an **empty** description; `## @arg name - description` keeps the hyphen in the text; and tags written *inside* a subcommand block, or in a plain script with no subcommands at all, are ignored entirely, with the doc-comments summary shown as the description of every argument. So a script documenting three arguments shows the same sentence three times. Found while writing the session summary, by running the examples rather than restating them. This is a gap in work reported complete on 2026-08-02. | All three placements agree: tags above a subcommand block, tags inside it, and tags in a subcommand-free script all set the described argument or flag, with the subcommand-level tag winning when both are present. Both separators work, `=` and whitespace, and a leading `-` is treated as a separator rather than text. A test covers each placement and separator, since the working combination was found by trial and the others were not covered at all. |
+| `TS-P2-67` | Complete — fixed 2026-08-08 | The `@arg` / `@flag` naming tags worked in one placement and one separator; everywhere else the doc-comment's *summary* was used as the description of every input, so a script documenting three arguments showed the same sentence three times. Three causes. A comment attaches to the declaration that follows it, so a single block documenting several inputs reached only the first — `## @flag clean …` above `arg target` described nothing, since the flag was a separate statement. A subcommand-free script never applied its own tags at all. And the name ended at the first space and nothing else. Found while writing a session summary, by running the examples rather than restating them. Filed 2026-08-08 with the separator half mis-described: `=` had always belonged between the *tag* and the body (`@arg=name text`), not between name and description, which is a distinction no reader would guess. | All four spellings mean the same thing — `@arg name text`, `@arg=name text`, `@arg name=text`, `@arg name - text` — with a hyphen treated as a separator only when whitespace follows, so a description may still begin `-v`. Tags reach every input in their block, in a subcommand and in a subcommand-free script alike, and a block-level tag still wins over a per-declaration one. Prose above a single declaration still describes it when no tag names it. |
 | `TS-P2-68` | Complete — fixed 2026-08-08 | A module-qualified function was callable and invisible at once. Reported from use against the reporter's own library: `ToastLib.Filesystem.GetExtension "<path>"` returned a value while `help` on the same name reported "topic not found", `which` printed nothing, the bare member name failed too, and `help ToastLib` had no topic at all — a library organised as nested modules could not be explored from the shell running it. The engine resolves these through `TryResolveModuleQualifiedCommand`; `HelpCatalog` had no module awareness whatever, and the view added for `TS-P2-54` covered lexical scopes and the global registry only. | `IScopedCommandView` carries module exports, resolved by the engine's own walk rather than a second one. A topic is named by the qualified path with the bare member name as an alias — added only when one module exports it, since two modules sharing a name is a real ambiguity and picking one silently answers the wrong question. **Decided:** a bare name resolves when unambiguous, and a module gets a topic of its own listing its commands, nested modules, types and variables. `which` joined the parser's names-not-values list, which is why `help` on a dotted name already worked and `which` did not. |
 
 **Implementation note for `TS-P2-11` (July 25 review recommendation).** The
@@ -5241,3 +5241,35 @@ Also confirmed while testing, and worth recording because it bears on `TS-P2-67`
 separator works correctly for functions. The `=` breakage filed there is confined to `@arg` and
 `@flag` in the subcommand path, so the reporter's own `## @param=path The path to the file` renders
 as written now that the topic can be found at all.
+
+## `TS-P2-67` — the tags worked in one place, and the filing was wrong about which (August 8)
+
+Found by executing a session summary's examples instead of restating them. `@arg` and `@flag`
+resolved in exactly one placement, and everywhere else the doc-comment's *summary* became the
+description of every input — so a script documenting three arguments showed one sentence three
+times, and the tags a reader had written were parsed and discarded.
+
+**The filing got the separator half wrong, and measuring again fixed the description before the
+code.** It recorded `@arg name=description` as "the `=` separator the design named first". It was
+not: `=` had always belonged between the *tag* and the body — `@arg=name description` — and the
+name-to-description separator was a space and only a space. Which is exactly the distinction no
+reader would guess, and the reason both spellings now work.
+
+Three causes, none of them the one filed:
+
+- **A comment belongs to the declaration that follows it.** So a block documenting several inputs
+  reached only the first: `## @flag clean - remove artefacts` written above `arg target` described
+  nothing at all, because the tag lived on the argument's comment while the flag was a separate
+  statement. Tags are now gathered from every declaration in a level and overlaid with the block's
+  own comment, which keeps the precedence already decided — a subcommand-level tag wins.
+- **A subcommand-free script never applied its own tags.** The subcommand path had
+  `ApplyDocumentedDescriptions`; the plain-script usage writer did not call it.
+- **The name ended at the first space.** `@arg name=description` therefore read
+  `name=description`'s first word as the name and matched no input; `@arg name - description` kept
+  the hyphen, and the rendered help read "- what to build".
+
+**One test-harness correction worth recording.** Three of the subcommand tests failed on first
+run, and the code was right: a subcommand answers `--help` with a `HelpTopic` *value* that the CLI
+renders through the display engine, while a plain script writes its usage straight to the output
+stream. Asserting only on the output stream tested nothing for half the cases. The harness now
+reduces both shapes to text.

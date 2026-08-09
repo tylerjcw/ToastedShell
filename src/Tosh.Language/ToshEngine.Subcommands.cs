@@ -97,8 +97,9 @@ public sealed partial class ToshEngine
 
         ValidateScriptInputs(sourceName, sourceText, flags, args);
 
-        node.Flags = ApplyDocumentedDescriptions(flags, docComment);
-        node.Arguments = ApplyDocumentedDescriptions(args, docComment);
+        var documented = CollectDocumentedNames(statements.OfType<ScriptInputStatementSyntax>(), docComment);
+        node.Flags = ApplyDocumentedDescriptions(flags, documented);
+        node.Arguments = ApplyDocumentedDescriptions(args, documented);
         node.BodyStatements = body;
         return node;
     }
@@ -919,8 +920,13 @@ public sealed partial class ToshEngine
     private static IReadOnlyList<FunctionParameterSyntax> ApplyDocumentedDescriptions(
         IReadOnlyList<FunctionParameterSyntax> parameters,
         DocComment? docComment)
+        => ApplyDocumentedDescriptions(parameters, CollectDocumentedNames(Array.Empty<ScriptInputStatementSyntax>(), docComment));
+
+    private static IReadOnlyList<FunctionParameterSyntax> ApplyDocumentedDescriptions(
+        IReadOnlyList<FunctionParameterSyntax> parameters,
+        IReadOnlyDictionary<string, string> documented)
     {
-        if (parameters.Count == 0 || docComment is null || docComment.Parameters.Count == 0)
+        if (parameters.Count == 0 || documented.Count == 0)
         {
             return parameters;
         }
@@ -930,13 +936,55 @@ public sealed partial class ToshEngine
         foreach (var parameter in parameters)
         {
             described.Add(
-                docComment.Parameters.TryGetValue(parameter.Name, out var description)
+                documented.TryGetValue(parameter.Name, out var description)
                 && !string.IsNullOrWhiteSpace(description)
                     ? parameter with { Description = description.Trim() }
                     : parameter);
         }
 
         return described;
+    }
+
+    /// <summary>
+    /// Gathers every <c>@arg</c> / <c>@flag</c> / <c>@param</c> tag that describes this level's
+    /// inputs, from the declarations themselves and from the block's own comment.
+    /// </summary>
+    /// <remarks>
+    /// `TS-P2-67`. A comment is attached to the declaration that follows it, so a single block
+    /// documenting several inputs — the way anyone actually writes one — reached only the first.
+    /// `## @flag clean - remove artefacts` written above `arg target` described nothing, because
+    /// the tag lived on the argument's comment while the flag was a separate statement.
+    /// Declarations are read in order and the block's own comment overlays them, which keeps the
+    /// precedence already decided: a subcommand-level tag wins over a per-declaration one.
+    /// </remarks>
+    private static IReadOnlyDictionary<string, string> CollectDocumentedNames(
+        IEnumerable<ScriptInputStatementSyntax> declarations,
+        DocComment? blockDoc)
+    {
+        var documented = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var declaration in declarations)
+        {
+            if (declaration.DocComment is not { Parameters.Count: > 0 } doc)
+            {
+                continue;
+            }
+
+            foreach (var (name, description) in doc.Parameters)
+            {
+                documented[name] = description;
+            }
+        }
+
+        if (blockDoc is { Parameters.Count: > 0 })
+        {
+            foreach (var (name, description) in blockDoc.Parameters)
+            {
+                documented[name] = description;
+            }
+        }
+
+        return documented;
     }
 
     /// <summary>
