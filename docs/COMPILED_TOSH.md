@@ -541,7 +541,7 @@ Snapshot of how far each layer has actually moved. Commits are on `master`.
 
 | Step                                                     | Status      | Notes |
 |----------------------------------------------------------|-------------|-------|
-| Diagnostic-code manifest extraction                       | done        | `scripts/extract_diagnostic_codes.py` + `Tosh.Runtime.Generated.DiagnosticCodeManifest` |
+| Diagnostic-code manifest extraction                       | done        | `scripts/extract-diagnostic-codes.tosh` + `Tosh.Runtime.Generated.DiagnosticCodeManifest` |
 | BenchmarkDotNet harness (`bench/Tosh.Benchmarks/`)        | done        | `acf773b` |
 | Binder benchmarks                                         | done        | `acf773b` — see [BENCHMARKS.md](BENCHMARKS.md) |
 | Parser + evaluator benchmarks                             | done        | `f2264c1` |

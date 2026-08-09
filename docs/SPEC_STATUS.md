@@ -4,7 +4,7 @@ Status of [`docs/spec/toastscript-spec.tex`](spec/toastscript-spec.tex) and [`do
 
 It is intended as a *map* for future spec work, not a replacement for the spec itself.
 
-**Last updated:** 2026-05-06 — Spec restructured into four parts (Language Core, Command Reference, Cookbook, Diagnostics) plus a new **Compilation** part documenting `--compile`, the tier model, profiles, type-discipline audit, public CLR shape, pipelines/redirections under compile, function references, MSBuild integration, the per-profile limit matrix, the conformance test layer, and compiler diagnostics. The duplicate "Appendix I: Command Reference" was removed (Section II is the canonical generated reference); the residual stub Appendices part was removed and the Diagnostic Code Reference was promoted to its own top-level part. Major spec gaps §1–§9 remain addressed; new Gap §10 tracks the Compilation part. Diagnostic code reference continues to be auto-generated from source via [`scripts/extract_diagnostic_codes.py`](../scripts/extract_diagnostic_codes.py).
+**Last updated:** 2026-05-06 — Spec restructured into four parts (Language Core, Command Reference, Cookbook, Diagnostics) plus a new **Compilation** part documenting `--compile`, the tier model, profiles, type-discipline audit, public CLR shape, pipelines/redirections under compile, function references, MSBuild integration, the per-profile limit matrix, the conformance test layer, and compiler diagnostics. The duplicate "Appendix I: Command Reference" was removed (Section II is the canonical generated reference); the residual stub Appendices part was removed and the Diagnostic Code Reference was promoted to its own top-level part. Major spec gaps §1–§9 remain addressed; new Gap §10 tracks the Compilation part. Diagnostic code reference continues to be auto-generated from source via [`scripts/extract-diagnostic-codes.tosh`](../scripts/extract-diagnostic-codes.tosh).
 
 ---
 
@@ -244,7 +244,7 @@ Tags documented: `@param`, `@returns`, `@example`, `@deprecated`, `@see`, `@sinc
 <details>
 <summary>Implementation details</summary>
 
-A Python extractor at [`scripts/extract_diagnostic_codes.py`](../scripts/extract_diagnostic_codes.py) scans every `*.cs` file under `src/` for `"tosh...."` string literals and adjacent `Title`/`Help`/`Severity` fields. It emits three artefacts:
+A ToastScript extractor at [`scripts/extract-diagnostic-codes.tosh`](../scripts/extract-diagnostic-codes.tosh) scans every `*.cs` file under `src/` for `"tosh...."` string literals and adjacent `Title`/`Help`/`Severity` fields. It emits three artefacts:
 
 - [`docs/diagnostic-codes.md`](diagnostic-codes.md) — human-readable Markdown reference grouped by namespace.
 - [`docs/spec/diagnostic-codes.tex`](spec/diagnostic-codes.tex) — LaTeX appendix included by the main spec via `\InputIfFileExists{diagnostic-codes}` between the Truthiness Rules and Command Reference chapters.
@@ -255,7 +255,7 @@ As of the most recent run: **417 codes** across 7 namespaces (`runtime: 264`, `p
 **Regenerate after adding new diagnostics:**
 
 ```bash
-python3 scripts/extract_diagnostic_codes.py
+scripts/extract-diagnostic-codes.tosh
 ```
 
 </details>
@@ -594,7 +594,7 @@ take.
      adding or changing diagnostic codes:
 
      ```bash
-     python3 scripts/extract_diagnostic_codes.py
+     scripts/extract-diagnostic-codes.tosh
      ```
 
    - A normal `Tosh.Cli` build also runs the command-reference generator, the
