@@ -63,6 +63,15 @@ public enum LanguageWordKind
     /// inside a comprehension.
     /// </summary>
     Contextual = 1 << 14,
+
+    /// <summary>
+    /// Shapes a subcommand, parsed by <c>IsSubcommandModifierKeyword</c> before the
+    /// <c>subcommand</c> keyword. A distinct family because two of its five words —
+    /// <c>eager</c> and <c>hidden</c> — are <em>only</em> subcommand modifiers, and
+    /// filing them under <see cref="MemberModifier"/> would have them asserted in
+    /// class-member position, where they are correctly rejected.
+    /// </summary>
+    SubcommandModifier = 1 << 15,
 }
 
 /// <summary>
@@ -111,6 +120,7 @@ public static class LanguageSurface
     private const LanguageWordKind Decl = LanguageWordKind.Declaration;
     private const LanguageWordKind TypeDecl = LanguageWordKind.Declaration | LanguageWordKind.TypeDeclaration;
     private const LanguageWordKind Flow = LanguageWordKind.ControlFlow;
+    private const LanguageWordKind SubcommandMod = LanguageWordKind.SubcommandModifier;
 
     private static readonly Dictionary<string, LanguageWordKind> WordKinds =
         new(StringComparer.Ordinal)
@@ -144,6 +154,7 @@ public static class LanguageSurface
             ["in"] = Flow | LanguageWordKind.OperatorWord,
             ["while"] = Flow,
             ["until"] = Flow,
+            ["unless"] = Flow,
             ["break"] = Flow,
             ["continue"] = Flow,
             ["return"] = Flow,
@@ -155,7 +166,7 @@ public static class LanguageSurface
             ["defer"] = Flow,
             ["switch"] = Flow,
             ["case"] = Flow,
-            ["default"] = Flow,
+            ["default"] = Flow | SubcommandMod,
             ["match"] = Flow,
 
             // ── Visibility: exactly what ParseDeclarationModifier accepts ──────
@@ -171,7 +182,7 @@ public static class LanguageSurface
 
             // Also a member modifier: `hollow class C { hollow func f() { } }` uses
             // it in both positions.
-            ["hollow"] = TypeMod | MemberMod,
+            ["hollow"] = TypeMod | MemberMod | SubcommandMod,
             ["hermit"] = TypeMod,
             ["strict"] = TypeMod,
             ["partial"] = TypeMod,
@@ -182,7 +193,7 @@ public static class LanguageSurface
             ["shared"] = MemberMod,
             ["static"] = MemberMod,
             ["fixed"] = MemberMod,
-            ["vital"] = MemberMod,
+            ["vital"] = MemberMod | SubcommandMod,
             ["guarded"] = MemberMod,
             ["overrule"] = MemberMod,
             ["fading"] = MemberMod,
@@ -267,6 +278,35 @@ public static class LanguageSurface
             // Keywords only inside a comprehension clause list.
             ["let"] = LanguageWordKind.Contextual,
             ["where"] = LanguageWordKind.Contextual,
+
+            // The repair clause of a refinement type: `if <guard> coerce <expr>`
+            // normalises before validation, and a bare `coerce <expr>` fires after a
+            // `where` predicate has failed.
+            ["coerce"] = LanguageWordKind.Contextual,
+
+            // ── Script inputs ──────────────────────────────────────────────────
+            // How a script declares what it takes. Every consumer knew these and the
+            // registry did not, which is the direction that matters: `NOT_KEYWORD` in
+            // the VS Code grammar generator has to name `flag` and `arg` explicitly
+            // because they were missing from the word lists it composes.
+            ["arg"] = Decl,
+            ["flag"] = Decl,
+
+            // ── Subcommands ────────────────────────────────────────────────────
+            ["subcommand"] = Decl,
+            ["subcmd"] = Decl,
+
+            // Subcommand modifiers, from `IsSubcommandModifierKeyword`. `hollow`,
+            // `vital` and `default` were already here in other families and gain this
+            // one; `eager` and `hidden` are new and belong to nothing else.
+            ["eager"] = SubcommandMod,
+            ["hidden"] = SubcommandMod,
+
+            // ── Type aliases ───────────────────────────────────────────────────
+            // `type Name = string`. Its next token names the type being declared, so
+            // it is a type declaration in the sense the editors use: colour what
+            // follows as a type rather than as a value.
+            ["type"] = TypeDecl,
         };
 
     /// <summary>Every word in the surface, with everything it is.</summary>
@@ -280,7 +320,8 @@ public static class LanguageSurface
         LanguageWordKind.Declaration | LanguageWordKind.ControlFlow |
         LanguageWordKind.VisibilityModifier | LanguageWordKind.TypeModifier |
         LanguageWordKind.MemberModifier | LanguageWordKind.Import |
-        LanguageWordKind.Interop | LanguageWordKind.Composition);
+        LanguageWordKind.Interop | LanguageWordKind.Composition |
+        LanguageWordKind.SubcommandModifier);
 
     public static IReadOnlySet<string> ControlFlow { get; } = Select(LanguageWordKind.ControlFlow);
 
@@ -291,6 +332,8 @@ public static class LanguageSurface
     public static IReadOnlySet<string> Constants { get; } = Select(LanguageWordKind.Constant);
 
     public static IReadOnlySet<string> LanguageForms { get; } = Select(LanguageWordKind.LanguageForm);
+
+    public static IReadOnlySet<string> SubcommandModifiers { get; } = Select(LanguageWordKind.SubcommandModifier);
 
     /// <summary>
     /// C#-familiar spellings accepted for member modifiers, mapped to the

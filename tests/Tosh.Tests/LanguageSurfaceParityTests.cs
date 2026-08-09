@@ -54,8 +54,24 @@ public sealed class LanguageSurfaceParityTests
         ["native"] = "native func puts(s: string) -> int from \"libc.so.6\"",
         ["event"] = "class C { event Changed }",
 
+        // Script inputs and subcommands. Added 2026-08-08: all three consumers that
+        // still held their own lists knew these words while the registry did not.
+        ["arg"] = "arg target: string",
+        ["flag"] = "flag clean",
+        ["subcommand"] = "subcommand build { }",
+        ["subcmd"] = "subcmd build { }",
+
+        // Subcommand modifiers. `eager` and `hidden` are *only* this — both are
+        // rejected in class-member position, which is where I first probed them and
+        // nearly filed them as words that do not exist. `hollow`, already in the
+        // registry and indisputably real, fails that same class-member probe: it is
+        // the control that separates a wrong probe from a wrong word.
+        ["eager"] = "subcommand eager setup { }",
+        ["hidden"] = "subcommand hidden secret { }",
+
         // Type declarations.
         ["class"] = "class C { }",
+        ["type"] = "type Name = string",
         ["struct"] = "struct S(x: int)",
         ["record"] = "record R(x: int)",
         ["enum"] = "enum E { A, B }",
@@ -72,6 +88,7 @@ public sealed class LanguageSurfaceParityTests
         ["in"] = "for x in [1] { }",
         ["while"] = "while (false) { }",
         ["until"] = "until (true) { }",
+        ["unless"] = "unless (true) { }",
         ["break"] = "for x in [1] { break }",
         ["continue"] = "for x in [1] { continue }",
         ["return"] = "func f() { return 1 }",
@@ -185,6 +202,12 @@ public sealed class LanguageSurfaceParityTests
         // reported as a proposal on the strength of `let x = 5` failing; TS-P3-02
         // proposes general `let` *bindings*, and the comprehension clause is here
         // today.
+        // The refinement-type repair clause, from the specification's own example.
+        // `coerce` needs the braced refinement body — `type T = int where …` is not
+        // the form, and probing it that way reports `refinement_requires_expression`,
+        // a diagnostic that names the mistake rather than the word.
+        ["coerce"] = "type NormalizedPath = string {\n    where _ starts-with \"/\"\n    coerce \"/\"\n}",
+
         ["let"] = "echo [$y <| for x in 1..3 let y = ($x * 2)]",
         ["where"] = "echo [$x <| for x in 1..6 where ($x % 2) == 0]",
     };
