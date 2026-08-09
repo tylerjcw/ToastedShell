@@ -11636,7 +11636,13 @@ public static class ToshParser
                 "help" or
                 "members" or
                 "methods" or
-                "get-methods";
+                "get-methods" or
+                // `TS-P2-68`. `which` asks about a *name*, so a dotted bareword must arrive as
+                // text. Without this it resolved to the command object first and `which` was
+                // handed something whose `ToString()` is not a name — so
+                // `which ToastLib.Filesystem.GetFileName` printed nothing while the quoted form
+                // worked, and `help` on the same name worked because it was already on this list.
+                "which";
         }
 
         /// <summary>True when only the command's first argument names a type.</summary>

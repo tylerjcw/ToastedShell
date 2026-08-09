@@ -34,4 +34,26 @@ public interface IScopedCommandView
 
     /// <summary>Alias names that resolve to each canonical command name.</summary>
     IReadOnlyDictionary<string, IReadOnlyList<string>> GetAliasMap();
+
+    /// <summary>
+    /// Modules visible from here, each with what it exports.
+    /// </summary>
+    /// <remarks>
+    /// `TS-P2-68`. A module's exports live in its own table, in neither a lexical scope nor the
+    /// global registry — so a function reached as <c>ToastLib.Filesystem.GetFileName</c> was
+    /// callable and invisible at the same time. Empty by default, because the registry has no
+    /// modules; the engine overrides it.
+    /// </remarks>
+    IReadOnlyList<ShellModuleSummary> Modules => [];
+
+    /// <summary>
+    /// Commands reachable only through a module, each under the name a caller writes.
+    /// </summary>
+    /// <remarks>
+    /// Kept beside <see cref="All"/> rather than folded into it because the pairing is the part
+    /// that matters: a help topic is named by the qualified name and carries the bare one as an
+    /// alias, and neither is recoverable from the command alone — <c>IShellCommand.Name</c> is
+    /// the member name, which several modules may share.
+    /// </remarks>
+    IReadOnlyList<KeyValuePair<string, IShellCommand>> QualifiedCommands => [];
 }

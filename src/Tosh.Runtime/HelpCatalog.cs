@@ -1330,6 +1330,62 @@ public static class HelpCatalog
         return index;
     }
 
+    /// <summary>
+    /// A topic for a module itself, listing what it exports.
+    /// </summary>
+    /// <remarks>
+    /// `TS-P2-68`. There was no such thing before: `help ToastLib` and `help ToastLib.Filesystem`
+    /// both reported "topic not found", so a library organised as nested modules had no entry
+    /// point at all — a reader had to already know a member's name to ask about anything.
+    /// </remarks>
+    private static HelpTopic BuildModuleTopic(ShellModuleSummary module)
+    {
+        var sections = new List<string>();
+
+        if (module.Modules.Count > 0)
+        {
+            sections.Add("Modules: " + string.Join(", ", module.Modules));
+        }
+
+        if (module.Types.Count > 0)
+        {
+            sections.Add("Types: " + string.Join(", ", module.Types));
+        }
+
+        if (module.Variables.Count > 0)
+        {
+            sections.Add("Variables: " + string.Join(", ", module.Variables));
+        }
+
+        var arguments = module.Commands
+            .Select(name => new HelpArgumentInfo(
+                Name: name,
+                Required: false,
+                TypeName: "function",
+                Description: $"help {module.QualifiedName}.{name}"))
+            .ToArray();
+
+        var exported = module.Commands.Count + module.Modules.Count + module.Types.Count + module.Variables.Count;
+
+        return new HelpTopic(
+            Name: module.QualifiedName,
+            Kind: HelpSubjectKind.BuiltIn,
+            Category: "Modules",
+            Description: exported == 0
+                ? $"Module '{module.QualifiedName}'. It exports nothing."
+                : $"Module '{module.QualifiedName}', exporting {exported} name{(exported == 1 ? "" : "s")}.",
+            Usage: $"{module.QualifiedName}.<member>",
+            Aliases: Array.Empty<string>(),
+            Related: module.Modules,
+            Examples: module.Commands.Count > 0
+                ? [$"{module.QualifiedName}.{module.Commands[0]}"]
+                : Array.Empty<string>(),
+            Path: null,
+            Notes: sections.Count > 0 ? string.Join("\n\n", sections) : null,
+            Arguments: arguments.Length > 0 ? arguments : null,
+            Output: null);
+    }
+
     private static IReadOnlyList<HelpTopic> BuildStaticTopics(ToshRuntime runtime, IScopedCommandView? scopedCommands = null)
     {
         // `TS-P2-54`. The caller's view when it has one, so a function the running script
@@ -1339,15 +1395,46 @@ public static class HelpCatalog
         var aliasMap = BuildBuiltInAliasMap(commands, view.GetAliasMap());
         var topics = new List<HelpTopic>(commands.Length + LanguageTopics.Count);
 
+        // `TS-P2-68`. A module's command is named by the path a caller writes, so the topic is
+        // `ToastLib.Filesystem.GetFileName`. The bare member name follows as an alias, but only
+        // when one module exports it — two modules sharing a name is a real ambiguity, and an
+        // alias that silently picks one would answer the wrong question.
+        var qualifiedByCommand = new Dictionary<IShellCommand, string>(ReferenceEqualityComparer.Instance as IEqualityComparer<IShellCommand> ?? EqualityComparer<IShellCommand>.Default);
+        var memberNameCounts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var (qualifiedName, moduleCommand) in view.QualifiedCommands)
+        {
+            qualifiedByCommand[moduleCommand] = qualifiedName;
+            var separator = qualifiedName.LastIndexOf('.');
+            var member = separator >= 0 ? qualifiedName[(separator + 1)..] : qualifiedName;
+            memberNameCounts.TryGetValue(member, out var count);
+            memberNameCounts[member] = count + 1;
+        }
+
         foreach (var command in commands)
         {
             var kind = ToHelpSubjectKind(command);
             aliasMap.TryGetValue(command.Name, out var aliases);
 
+            var topicName = command.Name;
+
+            if (qualifiedByCommand.TryGetValue(command, out var qualified))
+            {
+                topicName = qualified;
+                var separator = qualified.LastIndexOf('.');
+                var member = separator >= 0 ? qualified[(separator + 1)..] : qualified;
+
+                if (memberNameCounts.TryGetValue(member, out var shared) && shared == 1)
+                {
+                    aliases = (aliases ?? Array.Empty<string>()).Append(member).ToArray();
+                }
+            }
+
             if (command is ShellCommand shellCommand)
             {
                 var metadata = shellCommand.GetMetadata(aliases);
-                topics.Add(BuildTopicFromMetadata(metadata, kind));
+                var built = BuildTopicFromMetadata(metadata, kind);
+                topics.Add(topicName == command.Name ? built : built with { Name = topicName });
             }
             else
             {
@@ -1409,7 +1496,7 @@ public static class HelpCatalog
                 }
 
                 topics.Add(new HelpTopic(
-                    Name: command.Name,
+                    Name: topicName,
                     Kind: kind,
                     Category: kind is HelpSubjectKind.Alias or HelpSubjectKind.Function ? "Scripting" : "Shell",
                     Description: command.Description,
@@ -1422,6 +1509,11 @@ public static class HelpCatalog
                     Arguments: documentedArguments,
                     Output: returns));
             }
+        }
+
+        foreach (var module in view.Modules)
+        {
+            topics.Add(BuildModuleTopic(module));
         }
 
         foreach (var (name, definition) in LanguageTopics)

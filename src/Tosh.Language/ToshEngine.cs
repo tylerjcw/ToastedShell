@@ -249,13 +249,15 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
     /// Snapshots the commands visible from here, so an introspecting command can see what the
     /// caller can rather than only what is globally registered (<c>TS-P2-54</c>).
     /// </summary>
-    internal IScopedCommandView CreateScopedCommandView()
+    public IScopedCommandView CreateScopedCommandView()
     {
         // No scope means nothing shadows the registry, and the registry is already a view — the
         // `-c` prompt takes this path, which is why introspection appeared to work there.
-        return _scopes.Count == 0
+        var modules = EnumerateVisibleModules();
+
+        return _scopes.Count == 0 && modules.Count == 0
             ? Runtime.Commands
-            : new ScopedCommandView(_scopes.ToArray(), Runtime.Commands);
+            : new ScopedCommandView(_scopes.ToArray(), Runtime.Commands, modules, this);
     }
 
     public ParseResult Parse(string source, string sourceName = "<input>")
@@ -11565,6 +11567,131 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
 
         command = null!;
         return false;
+    }
+
+    /// <summary>
+    /// Every visible module, flattened, each under the name a caller writes.
+    /// </summary>
+    /// <remarks>
+    /// `TS-P2-68`. Introspection needs the same reach the engine has. Recursion is depth-limited
+    /// because a `partial module` may be extended anywhere, and a cycle through the export tables
+    /// is cheaper to bound than to prove impossible.
+    /// </remarks>
+    internal IReadOnlyList<ShellModuleSummary> EnumerateVisibleModules()
+    {
+        var summaries = new List<ShellModuleSummary>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var scope in _scopes)
+        {
+            foreach (var (name, value) in scope.Modules)
+            {
+                Collect(name, value, depth: 0);
+            }
+        }
+
+        foreach (var (name, value) in Runtime.Modules)
+        {
+            Collect(name, value, depth: 0);
+        }
+
+        return summaries;
+
+        void Collect(string qualifiedName, object? value, int depth)
+        {
+            if (depth > 16 || value is not ToshModuleObject module || !seen.Add(qualifiedName))
+            {
+                return;
+            }
+
+            var nested = module.ExportTable.Modules
+                .Select(entry => $"{qualifiedName}.{entry.Key}")
+                .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+
+            summaries.Add(new ShellModuleSummary(
+                qualifiedName,
+                module.ExportTable.Commands.Keys.OrderBy(n => n, StringComparer.OrdinalIgnoreCase).ToArray(),
+                nested,
+                module.ExportTable.Types.Keys.OrderBy(n => n, StringComparer.OrdinalIgnoreCase).ToArray(),
+                module.ExportTable.Variables.Keys.OrderBy(n => n, StringComparer.OrdinalIgnoreCase).ToArray()));
+
+            foreach (var (childName, childValue) in module.ExportTable.Modules)
+            {
+                Collect($"{qualifiedName}.{childName}", childValue, depth + 1);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Finds a module's exported command by its qualified name, walking the same module tree
+    /// <see cref="TryResolveModuleQualifiedCommand"/> walks to dispatch the call.
+    /// </summary>
+    internal bool TryGetModuleCommandByQualifiedName(string qualifiedName, out IShellCommand command)
+    {
+        var separator = qualifiedName.LastIndexOf('.');
+
+        if (separator > 0)
+        {
+            var moduleName = qualifiedName[..separator];
+            var memberName = qualifiedName[(separator + 1)..];
+
+            foreach (var scope in _scopes)
+            {
+                if (TryFromModuleTree(scope.Modules, moduleName, memberName, out command))
+                {
+                    return true;
+                }
+            }
+
+            if (TryFromModuleTree(Runtime.Modules, moduleName, memberName, out command))
+            {
+                return true;
+            }
+        }
+
+        command = null!;
+        return false;
+
+        static bool TryFromModuleTree(
+            IEnumerable<KeyValuePair<string, object?>> roots,
+            string moduleName,
+            string memberName,
+            out IShellCommand found)
+        {
+            var segments = moduleName.Split('.', StringSplitOptions.RemoveEmptyEntries);
+
+            if (segments.Length > 0)
+            {
+                var rootValue = roots.FirstOrDefault(entry => entry.Key == segments[0]).Value;
+
+                if (rootValue is ToshModuleObject rootModule)
+                {
+                    var current = rootModule;
+
+                    for (var index = 1; index < segments.Length; index++)
+                    {
+                        if (!current.ExportTable.Modules.TryGetValue(segments[index], out var next) ||
+                            next is not ToshModuleObject nextModule)
+                        {
+                            found = null!;
+                            return false;
+                        }
+
+                        current = nextModule;
+                    }
+
+                    if (current.ExportTable.Commands.TryGetValue(memberName, out var resolved))
+                    {
+                        found = resolved;
+                        return true;
+                    }
+                }
+            }
+
+            found = null!;
+            return false;
+        }
     }
 
     private bool TryGetNearestModuleScope(out LexicalScope moduleScope)

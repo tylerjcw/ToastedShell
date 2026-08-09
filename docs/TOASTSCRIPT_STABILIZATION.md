@@ -500,7 +500,7 @@ closed.
 | `TS-P2-65` | Complete — fixed 2026-08-08 | A redirection failure reported the code `TOSH400`, outside the `tosh.<namespace>.<name>` scheme every other diagnostic uses — so it never reached the generated reference and could not be hushed by code the way the documentation says any diagnostic can. Found while investigating `TS-P2-57`. | Redirection failures carry `tosh.runtime.redirection_target_unavailable`, with a label and help that name the usual cause (a directory that does not exist, which redirection does not create). Both emit sites were converted; no other `TOSH<nnn>` codes remain in the sources. |
 | `TS-P2-66` | Planned — filed 2026-08-08 | Type resolution consults an explicit `using` only after an unqualified global scan. `DotNetTypeResolver.Resolve` tries `TryResolveDirect(name)` — which searches the platform index and every loaded assembly — before `TryResolveFromImports(name)`, so `using Tosh.LspFixture` then `new Widget(...)` resolves to any other loaded `Widget` in preference to the one the import names. A stated intention should outrank an incidental match. Found while fixing `TS-P2-48`, where an emitted test type captured the name. Reordering was tried and withdrawn in the same session: `DefaultImplicitUsings` carries a dozen namespaces, so imports-first changes resolution broadly and belongs in its own change with its own measurements. | An unqualified name prefers a type from an active `using` over an arbitrary loaded assembly, with the blast radius measured against the shipped implicit usings; a fully-qualified name still resolves directly. |
 | `TS-P2-67` | Planned — filed 2026-08-08 | The `@arg` / `@flag` naming tags work in one placement and one separator only, which is not the shape they were designed in. Measured: `## @arg name description` above a `subcommand` block works; `## @arg name=description` — the `=` separator the design named first — yields an **empty** description; `## @arg name - description` keeps the hyphen in the text; and tags written *inside* a subcommand block, or in a plain script with no subcommands at all, are ignored entirely, with the doc-comments summary shown as the description of every argument. So a script documenting three arguments shows the same sentence three times. Found while writing the session summary, by running the examples rather than restating them. This is a gap in work reported complete on 2026-08-02. | All three placements agree: tags above a subcommand block, tags inside it, and tags in a subcommand-free script all set the described argument or flag, with the subcommand-level tag winning when both are present. Both separators work, `=` and whitespace, and a leading `-` is treated as a separator rather than text. A test covers each placement and separator, since the working combination was found by trial and the others were not covered at all. |
-| `TS-P2-68` | Planned — filed 2026-08-08 | A module-qualified function is callable but invisible to introspection. Reported from use against the reporters own library: `require "lib/Filesystem.tosh"` then `ToastLib.Filesystem.GetExtension "<path>"` returns `.tosh`, while `help ToastLib.Filesystem.GetFileName` reports "topic not found", `which` on the same name prints nothing, and `help GetFileName` on the bare name fails too. `help ToastLib` and `help ToastLib.Filesystem` fail as well, so a module has no topic of its own. The engine resolves these through `TryResolveModuleQualifiedCommand`, which walks a modules `ExportTable.Commands` and its nested modules; `HelpCatalog` has no module awareness whatever and `IScopedCommandView` covers only lexical scope tables and the global registry. This is the `TS-P2-54` shape one layer further out — that fix reached scoped functions and stopped short of module exports. | Introspection resolves a module-qualified name by the same walk the engine uses rather than a second one: `help`, `which`, `apropos` and completion all find `ToastLib.Filesystem.GetFileName` with its doc-comment. Decided and recorded: what a *bare* member name does — resolve when unambiguous, always require qualification, or report the qualified name as a suggestion — and whether a module itself gets a topic listing its exports. |
+| `TS-P2-68` | Complete — fixed 2026-08-08 | A module-qualified function was callable and invisible at once. Reported from use against the reporter's own library: `ToastLib.Filesystem.GetExtension "<path>"` returned a value while `help` on the same name reported "topic not found", `which` printed nothing, the bare member name failed too, and `help ToastLib` had no topic at all — a library organised as nested modules could not be explored from the shell running it. The engine resolves these through `TryResolveModuleQualifiedCommand`; `HelpCatalog` had no module awareness whatever, and the view added for `TS-P2-54` covered lexical scopes and the global registry only. | `IScopedCommandView` carries module exports, resolved by the engine's own walk rather than a second one. A topic is named by the qualified path with the bare member name as an alias — added only when one module exports it, since two modules sharing a name is a real ambiguity and picking one silently answers the wrong question. **Decided:** a bare name resolves when unambiguous, and a module gets a topic of its own listing its commands, nested modules, types and variables. `which` joined the parser's names-not-values list, which is why `help` on a dotted name already worked and `which` did not. |
 
 **Implementation note for `TS-P2-11` (July 25 review recommendation).** The
 `TS-P2-01`/`TS-P2-02`/`TS-P2-04`/`TS-P2-12`–`TS-P2-15` family shares one root
@@ -5201,3 +5201,43 @@ All 20 rows are repaired. Nine split cleanly at the last separator; three had pi
 *intent* as well and were done by hand from a field dump rather than by a rule that would have
 guessed wrong. `TS-P1-33` had lost its intent cell entirely — recovered from the commit that filed
 it, which is the argument for a checker that runs before the damage is a year old.
+
+## `TS-P2-68` — the layer the last fix stopped short of (August 8)
+
+Reported from use, against a real library rather than a probe:
+
+```
+❯ ToastLib.Filesystem.GetExtension "~/.config/tosh/profile.tosh"
+.tosh
+❯ help ToastLib.Filesystem.GetFileName
+✖  Help topic 'ToastLib.Filesystem.GetFileName' was not found.
+```
+
+Callable and invisible at the same time. `which` on the same name printed nothing, the bare
+`GetFileName` failed too, and `help ToastLib` had no topic — so a library organised as nested
+modules could not be explored from the shell that was running it.
+
+**This is `TS-P2-54` one layer out, and the earlier fix is the reason it was worth filing rather
+than guessing at.** That change gave introspection a view of the caller's lexical scopes because
+`HelpCatalog` read only the global registry. A module's exports live in neither: they are in the
+module's own export table, which the engine reaches through
+`TryResolveModuleQualifiedCommand`. The view now carries them, resolved by that same walk rather
+than a second one written beside it — the whole point of the exercise being that two resolution
+rules are how they come to disagree.
+
+**Two decisions, both taken by the reporter.** A bare member name resolves when exactly one module
+exports it; when two do, it is refused rather than guessed at, because qualifying is always
+available and choosing silently answers a question nobody asked. And a module now has a topic of
+its own, listing its commands, nested modules, types and variables — there was none before, so a
+reader had to already know a member's name to ask about anything.
+
+**One surprise in the fixing.** `help ToastLib.Filesystem.GetFileName` worked as soon as the view
+did, but `which` on the identical name still printed nothing — while `which "…"` in quotes worked
+perfectly. The parser keeps a list of commands whose bareword arguments are read as *names* rather
+than evaluated, and `help` was on it while `which` was not. So `which` was being handed the
+resolved command object and asking it for a name. It joined the list.
+
+Also confirmed while testing, and worth recording because it bears on `TS-P2-67`: the `@param=name`
+separator works correctly for functions. The `=` breakage filed there is confined to `@arg` and
+`@flag` in the subcommand path, so the reporter's own `## @param=path The path to the file` renders
+as written now that the topic can be found at all.
