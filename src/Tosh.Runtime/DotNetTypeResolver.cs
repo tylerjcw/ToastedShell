@@ -120,6 +120,45 @@ public sealed class DotNetTypeResolver : IImportingTypeResolver
     private readonly Dictionary<string, string> _aliases = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _imports = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// Names already resolved by this instance, successes and failures alike
+    /// (<c>TS-P1-42</c>).
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// There was a <see cref="_negativeResultCache"/> and nothing for successes, so every
+    /// hit repeated the whole search. Measured, a static call cost ~170ms —
+    /// <c>Path.GetRelativePath</c> 50 times took 8.3 seconds against 2ms for 50 instance
+    /// calls, a ~4,000x gap — because resolving one unqualified name walks a dozen
+    /// imports, and each miss falls into <c>TryResolveDirect</c>, whose nested-type
+    /// fallback then <em>recurses</em> on the parent name:
+    /// <c>System.Collections.Generic.Path</c> → <c>System.Collections.Generic</c> →
+    /// <c>System.Collections</c> → <c>System</c>, calling
+    /// <c>AppDomain.CurrentDomain.GetAssemblies()</c> twice at every level.
+    /// </para>
+    /// <para>
+    /// Per-instance, not static, because the answer depends on <see cref="_imports"/> and
+    /// <see cref="_aliases"/> — two resolvers with different <c>using</c> sets legitimately
+    /// resolve the same name to different types, which is the whole point of
+    /// <c>TS-P2-66</c>. Mutating either clears it.
+    /// </para>
+    /// <para>
+    /// Concurrent because the engine resolves from async continuations, and keyed
+    /// case-insensitively to match every other lookup here.
+    /// </para>
+    /// </remarks>
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, Type?> _resolutionCache =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Assembly count when <see cref="_resolutionCache"/> was last valid. A newly loaded
+    /// assembly can turn a cached failure into a success, and can shadow a cached success
+    /// with a nearer match — <c>TS-P2-48</c> showed emitted assemblies really do appear
+    /// mid-run — so any change in the count drops the cache wholesale. Same guard the
+    /// negative cache already uses, rather than a second theory of invalidation.
+    /// </summary>
+    private int _resolutionCacheAssemblyCount = -1;
+
     public DotNetTypeResolver(bool includeDefaultUsings = true)
     {
         if (includeDefaultUsings)
@@ -146,12 +185,15 @@ public sealed class DotNetTypeResolver : IImportingTypeResolver
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         _imports.Add(path);
+        _resolutionCache.Clear();
     }
 
     public bool RemoveUsing(string path)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
-        return _imports.Remove(path);
+        var removed = _imports.Remove(path);
+        if (removed) { _resolutionCache.Clear(); }
+        return removed;
     }
 
     public void AddAlias(string alias, string path)
@@ -159,12 +201,34 @@ public sealed class DotNetTypeResolver : IImportingTypeResolver
         ArgumentException.ThrowIfNullOrWhiteSpace(alias);
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         _aliases[alias] = path;
+        _resolutionCache.Clear();
     }
 
     public Type? Resolve(string name)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
 
+        // `TS-P1-42`. The search below is expensive enough that repeating it per call made
+        // static member access unusable from script; see `_resolutionCache`.
+        var assemblyCount = AppDomain.CurrentDomain.GetAssemblies().Length;
+
+        if (assemblyCount != _resolutionCacheAssemblyCount)
+        {
+            _resolutionCache.Clear();
+            _resolutionCacheAssemblyCount = assemblyCount;
+        }
+        else if (_resolutionCache.TryGetValue(name, out var cached))
+        {
+            return cached;
+        }
+
+        var resolved = ResolveUncached(name);
+        _resolutionCache[name] = resolved;
+        return resolved;
+    }
+
+    private Type? ResolveUncached(string name)
+    {
         if (TryResolveConstructedType(name, out var constructed))
         {
             return constructed;
