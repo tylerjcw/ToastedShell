@@ -6971,6 +6971,11 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
             throw CreateExpressionDiagnostic(sourceName, sourceText, expressionStage.Expression, exception);
         }
 
+        // `TS-P2-74`: this gate stays. Spreading every list-valued expression head was
+        // tried and is wrong — `[] | to json` must serialize the empty array rather than
+        // send nothing downstream, and eight tests said so, across `to json`, format
+        // round-trips and comprehensions. A pipeline head yields one value; it is each
+        // stage that decides whether a collection means itself or its elements.
         if (ShouldReplayRuntimeNamespaceCollectionAccess(expressionStage.Expression) &&
             ShouldReplayAsPipeline(value) &&
             value is IEnumerable replayable &&
