@@ -14616,138 +14616,91 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
             _ => inputItems.ToArray(),
         });
 
-        if (definition.IsGenerator)
+        // `TS-P1-07`. Every function streams, generator or not. The buffering branch
+        // that used to sit here was labelled "Non-generator functions buffer all output
+        // before yielding" and existed to work around a C# restriction rather than to
+        // express a semantic: `return` raises a signal that has to be caught around the
+        // whole enumeration, and `yield return` is not allowed inside a try-with-catch.
+        // The generator branch had already solved that with a manual enumerator, so both
+        // now share it.
+        //
+        // Measured before and after with an unbounded producer: `gen | first` used to run
+        // the loop forever — 800,000 values in ten seconds without ever short-circuiting —
+        // while `seq 1 20000000 | first` and `yes | first` both returned in 0.25s. A
+        // user-defined function was the only thing in a pipeline that could not be
+        // short-circuited.
+        // Generator functions stream values as they are produced.
+        // C# does not allow yield inside try-with-catch, so we use a manual enumerator.
+        var enumerator = ExecuteBlockAsync(
+            definition.SourceName,
+            definition.SourceText,
+            definition.Body,
+            context.CancellationToken,
+            locals,
+            initialInput,
+            firstCommandArguments)
+            .GetAsyncEnumerator(context.CancellationToken);
+
+        Exception? pendingException = null;
+        IReadOnlyList<object?>? returnValues = null;
+
+        try
         {
-            // Generator functions stream values as they are produced.
-            // C# does not allow yield inside try-with-catch, so we use a manual enumerator.
-            var enumerator = ExecuteBlockAsync(
-                definition.SourceName,
-                definition.SourceText,
-                definition.Body,
-                context.CancellationToken,
-                locals,
-                initialInput,
-                firstCommandArguments)
-                .GetAsyncEnumerator(context.CancellationToken);
-
-            Exception? pendingException = null;
-            IReadOnlyList<object?>? returnValues = null;
-
-            try
+            while (true)
             {
-                while (true)
+                object? current;
+                try
                 {
-                    object? current;
-                    try
-                    {
-                        if (!await enumerator.MoveNextAsync())
-                            break;
-                        current = enumerator.Current;
-                    }
-                    catch (ReturnSignalException signal)
-                    {
-                        returnValues = signal.Values;
+                    if (!await enumerator.MoveNextAsync())
                         break;
-                    }
-                    catch (BreakSignalException signal)
-                    {
-                        pendingException = CreateLoopControlDiagnostic(
-                            definition.SourceName,
-                            definition.SourceText,
-                            signal.Span,
-                            keyword: "break",
-                            code: "tosh.runtime.break_outside_loop",
-                            title: "'break' can only be used inside 'for', 'while', or 'each' blocks.");
-                        break;
-                    }
-                    catch (ContinueSignalException signal)
-                    {
-                        pendingException = CreateLoopControlDiagnostic(
-                            definition.SourceName,
-                            definition.SourceText,
-                            signal.Span,
-                            keyword: "continue",
-                            code: "tosh.runtime.continue_outside_loop",
-                            title: "'continue' can only be used inside 'for', 'while', or 'each' blocks.");
-                        break;
-                    }
-
-                    yield return ConvertFunctionReturnValue(definition, context, current, typeBindings);
+                    current = enumerator.Current;
                 }
-            }
-            finally
-            {
-                await enumerator.DisposeAsync();
-                _functionInputStack.Pop();
-                _functionArgumentsStack.Pop();
-                _functionCallStack.Pop();
-            }
-
-            if (pendingException is not null)
-                throw pendingException;
-
-            if (returnValues is not null)
-            {
-                foreach (var value in returnValues)
+                catch (ReturnSignalException signal)
                 {
-                    yield return ConvertFunctionReturnValue(definition, context, value, typeBindings);
+                    returnValues = signal.Values;
+                    break;
                 }
+                catch (BreakSignalException signal)
+                {
+                    pendingException = CreateLoopControlDiagnostic(
+                        definition.SourceName,
+                        definition.SourceText,
+                        signal.Span,
+                        keyword: "break",
+                        code: "tosh.runtime.break_outside_loop",
+                        title: "'break' can only be used inside 'for', 'while', or 'each' blocks.");
+                    break;
+                }
+                catch (ContinueSignalException signal)
+                {
+                    pendingException = CreateLoopControlDiagnostic(
+                        definition.SourceName,
+                        definition.SourceText,
+                        signal.Span,
+                        keyword: "continue",
+                        code: "tosh.runtime.continue_outside_loop",
+                        title: "'continue' can only be used inside 'for', 'while', or 'each' blocks.");
+                    break;
+                }
+
+                yield return ConvertFunctionReturnValue(definition, context, current, typeBindings);
             }
         }
-        else
+        finally
         {
-            // Non-generator functions buffer all output before yielding.
-            var values = new List<object?>();
+            await enumerator.DisposeAsync();
+            _functionInputStack.Pop();
+            _functionArgumentsStack.Pop();
+            _functionCallStack.Pop();
+        }
 
-            try
-            {
-                await foreach (var value in ExecuteBlockAsync(
-                                   definition.SourceName,
-                                   definition.SourceText,
-                                   definition.Body,
-                                   context.CancellationToken,
-                                   locals,
-                                   initialInput,
-                                   firstCommandArguments)
-                                   .WithCancellation(context.CancellationToken))
-                {
-                    values.Add(value);
-                }
-            }
-            catch (ReturnSignalException signal)
-            {
-                values.AddRange(signal.Values);
-            }
-            catch (BreakSignalException signal)
-            {
-                throw CreateLoopControlDiagnostic(
-                    definition.SourceName,
-                    definition.SourceText,
-                    signal.Span,
-                    keyword: "break",
-                    code: "tosh.runtime.break_outside_loop",
-                    title: "'break' can only be used inside 'for', 'while', or 'each' blocks.");
-            }
-            catch (ContinueSignalException signal)
-            {
-                throw CreateLoopControlDiagnostic(
-                    definition.SourceName,
-                    definition.SourceText,
-                    signal.Span,
-                    keyword: "continue",
-                    code: "tosh.runtime.continue_outside_loop",
-                    title: "'continue' can only be used inside 'for', 'while', or 'each' blocks.");
-            }
-            finally
-            {
-                _functionInputStack.Pop();
-                _functionArgumentsStack.Pop();
-                _functionCallStack.Pop();
-            }
+        if (pendingException is not null)
+            throw pendingException;
 
-            foreach (var value in values)
+        if (returnValues is not null)
+        {
+            foreach (var value in returnValues)
             {
-                context.CancellationToken.ThrowIfCancellationRequested();
                 yield return ConvertFunctionReturnValue(definition, context, value, typeBindings);
             }
         }
