@@ -6910,11 +6910,45 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
             yield break;
         }
 
+        // `TS-P2-73`. A ternary arm could not invoke a multi-value command, because the
+        // parentheses it *requires* are the same parentheses that impose single-value
+        // collapse: unparenthesised arms are a parse error, and a parenthesised arm is a
+        // subexpression, which `EvaluateArgumentAsync` reduces to one value or rejects.
+        // So `func svc(a, s) => ($a == journal) ? (sudo journalctl -u $s) : (...)` failed
+        // with "this subexpression produced 20 values" while the identical `if`/`else`
+        // block streamed all twenty.
+        //
+        // Parentheses mean two things here — grouping and collapse — and an arm needs
+        // only the first. The rule from `TS-P1-20` is unchanged and still applies
+        // wherever a single value is genuinely required; this is a *pipeline stage*, so
+        // the surrounding context streams, exactly as `for x in (pipeline)` already does
+        // under rule 3 of that same list. An argument list is untouched: `echo ($a ? $b :
+        // $c)` still reaches `EvaluateArgumentAsync` and still collapses.
+        var effective = expressionStage.Expression;
+
+        while (effective is ConditionalArgumentSyntax conditional)
+        {
+            var condition = await EvaluateArgumentAsync(sourceName, sourceText, conditional.Condition, cancellationToken);
+            effective = OperatorEvaluator.ToBoolean(condition) ? conditional.WhenTrue : conditional.WhenFalse;
+        }
+
+        if (!ReferenceEquals(effective, expressionStage.Expression) &&
+            effective is SubexpressionArgumentSyntax chosenSubexpression)
+        {
+            await foreach (var item in EvaluatePipelineAsync(
+                sourceName, sourceText, chosenSubexpression.Pipeline, cancellationToken))
+            {
+                yield return item;
+            }
+
+            yield break;
+        }
+
         object? value;
 
         try
         {
-            value = await EvaluateArgumentAsync(sourceName, sourceText, expressionStage.Expression, cancellationToken);
+            value = await EvaluateArgumentAsync(sourceName, sourceText, effective, cancellationToken);
         }
         catch (ToshDiagnosticException)
         {
