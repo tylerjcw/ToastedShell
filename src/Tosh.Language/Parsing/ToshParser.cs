@@ -2816,8 +2816,19 @@ public static class ToshParser
                 docComment);
         }
 
+        /// <summary>
+        /// A modifier that may precede <c>subcommand</c> (<c>TS-P2-23</c>).
+        /// </summary>
+        /// <remarks>
+        /// Asked of <c>LanguageSurface</c> rather than spelled out here. The literal list
+        /// this replaces — <c>eager</c>, <c>hidden</c>, <c>hollow</c>, <c>vital</c>,
+        /// <c>default</c> — was one of the copies that made <c>TS-P2-10</c> necessary:
+        /// the registry gained a <c>SubcommandModifier</c> kind precisely because
+        /// <c>eager</c> and <c>hidden</c> exist nowhere else, and keeping a second list
+        /// here is how the two would drift apart again.
+        /// </remarks>
         private static bool IsSubcommandModifierKeyword(string text) =>
-            text is "eager" or "hidden" or "hollow" or "vital" or "default";
+            LanguageSurface.SubcommandModifiers.Contains(text);
 
         private static bool IsSubcommandKeyword(string text) =>
             text is "subcommand" or "subcmd";
@@ -11785,11 +11796,18 @@ public static class ToshParser
             // so any remaining Bareword Bareword = must be a typed declaration.
             var offset = GetDeclarationModifierOffset();
 
-            // When a declaration modifier keyword (export, global, shy) was NOT consumed
-            // (because it isn't followed by a declaration keyword), don't misinterpret it
-            // as a type name.  e.g. `export FOO = "bar"` is a command, not a typed declaration.
+            // When a declaration modifier keyword was NOT consumed (because it isn't
+            // followed by a declaration keyword), don't misinterpret it as a type name:
+            // `export FOO = "bar"` is a command, not a typed declaration.
+            //
+            // `TS-P2-23`. The visibility family comes from `LanguageSurface`, not from a
+            // second spelling of it here. `ParseDeclarationModifier` is the other place
+            // that decides this, and `LanguageSurfaceParityTests` already asserts the two
+            // agree — that guard was only checking one of them while this copy sat a few
+            // thousand lines away.
             if (offset == 0 && Current.Kind == SyntaxTokenKind.Bareword &&
-                Current.Text is "export" or "global" or "shy")
+                LanguageSurface.Words.TryGetValue(Current.Text, out var visibilityKind) &&
+                visibilityKind.HasFlag(LanguageWordKind.VisibilityModifier))
             {
                 return false;
             }
