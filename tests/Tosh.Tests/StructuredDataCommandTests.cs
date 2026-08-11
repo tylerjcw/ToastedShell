@@ -47,13 +47,19 @@ public sealed class StructuredDataCommandTests
         Assert.Equal(["alpha", "beta"], expandedResults);
     }
 
+    /// <summary>
+    /// `TS-P1-44` moved the XDocument behind `--raw`; it was not removed. Handing over
+    /// the document is how a caller reaches the XML API for namespaces or node-level
+    /// navigation, and this test pinned it — so what changed is which of the two is the
+    /// default, and this now pins the escape hatch.
+    /// </summary>
     [Fact]
-    public async Task From_xml_parses_documents_into_xdocument_values()
+    public async Task From_xml_raw_still_yields_an_xdocument()
     {
         var engine = new ToshEngine();
 
-        var typeResults = await engine.ExecuteToListAsync("echo \"<root><item name=\\\"alpha\\\" /></root>\" | from xml | type-of");
-        var rootNameResults = await engine.ExecuteToListAsync("echo \"<root><item name=\\\"alpha\\\" /></root>\" | from xml | get \"Root.Name.LocalName\"");
+        var typeResults = await engine.ExecuteToListAsync("echo \"<root><item name=\\\"alpha\\\" /></root>\" | from xml --raw | type-of");
+        var rootNameResults = await engine.ExecuteToListAsync("echo \"<root><item name=\\\"alpha\\\" /></root>\" | from xml --raw | get \"Root.Name.LocalName\"");
 
         Assert.Collection(typeResults, item => Assert.Equal(typeof(XDocument), item));
         Assert.Equal(["root"], rootNameResults);

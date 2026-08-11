@@ -26,7 +26,22 @@ public sealed class XmlDataFormat : IDataFormat
             throw new InvalidOperationException($"Could not parse XML input. {exception.Message}");
         }
 
-        yield return document;
+        // `TS-P1-44`. Converted rather than handed over raw: yielding the `XDocument`
+        // meant the display engine reflected over it and printed `NodeType`, `BaseUri`,
+        // `Parent` and `<cycle>` markers, and `to xml | from xml` was the only pair in
+        // the format family that did not round-trip.
+        //
+        // `--raw` keeps the document, because handing it over *was* a deliberate choice —
+        // it is how a caller reaches the XML API for namespaces or node-level navigation,
+        // and a pinned test relied on it. The change is which of the two is the default,
+        // not the removal of one.
+        if (ParsedCommandArguments.Parse(arguments).HasFlag("raw"))
+        {
+            yield return document;
+            yield break;
+        }
+
+        yield return XmlValueConverter.Convert(document);
     }
 
     public async IAsyncEnumerable<object?> SerializeAsync(IReadOnlyList<object?> values, IReadOnlyList<object?> arguments)
