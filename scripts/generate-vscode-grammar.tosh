@@ -1,0 +1,743 @@
+#!/usr/bin/env tosh
+## @summary Regenerate the VS Code TextMate grammar from live metadata.
+## @remarks
+##   ToastScript port of `scripts/generate_vscode_grammar.py` (`TS-P2-10`).
+##
+##   Two things are derived rather than restated, and that is the point of the
+##   port: the built-in command alternation comes from
+##   `--export-command-metadata`, and the keyword and modifier alternations come
+##   from `--export-command-metadata --surface`, which is `LanguageSurface`. The
+##   Python held its own copy of 101 language words and drifted; worse, an edit
+##   written into the *generated* JSON was silently reverted the next time
+##   anyone regenerated (see `TS-P3-12`).
+##
+##   Regex literals use raw single-quoted strings, so one backslash is one
+##   backslash. The Python needed a paragraph of comment explaining that its
+##   literals are escaped twice — by Python and again by `json.dump` — and that
+##   four backslashes would break every string rule. That hazard does not exist
+##   here.
+## @example scripts/generate-vscode-grammar.tosh
+## @flag out - output path; defaults to the extension's syntaxes directory
+## @flag literalWords - use the Python's hand-written word lists instead of the
+##   registry, for proving the port byte-identical against it
+
+using System.IO
+using System.Text.RegularExpressions
+
+flag out: string = ""
+flag literalWords: bool = false
+
+var root = Path.GetFullPath(Path.Combine($tosh.Script.Directory, ".."))
+var output = $out
+if ($output == "") {
+    $output = Path.Combine($root, "editor", "vscode", "tosh.tosh-lang", "syntaxes", "tosh.tmLanguage.json")
+}
+
+## @summary A sort key ordering by code point rather than by collation (`TS-P2-75`).
+func ordinal_key(s: string) {
+    var sb = new System.Text.StringBuilder()
+    for ch in $s.ToCharArray() {
+        $sb.Append(System.Convert.ToInt32($ch).ToString("D5")) | ignore
+    }
+    return $sb.ToString()
+}
+
+## @summary Longest-first, then by code point — the ordering an alternation needs
+##   so `read` cannot shadow `read-file`.
+func alternation_key(s: string) {
+    return (9999 - $s.Length).ToString("D4") + (ordinal_key $s)
+}
+
+## @summary The CLI that owns the metadata. Prefers the build under test.
+func resolve_cli() {
+    for candidate in [
+        Path.Combine($root, "src", "Tosh.Cli", "bin", "Debug", "net10.0", "Tosh.Cli"),
+        Path.Combine($root, "src", "Tosh.Cli", "bin", "Release", "net10.0", "Tosh.Cli")
+    ] {
+        if ((exists $candidate).Exists) { return $candidate }
+    }
+    var onPath = (which tosh | first)
+    if ($onPath != null) { return $onPath.Path }
+    throw "No tosh binary found. Build src/Tosh.Cli or put tosh on PATH."
+}
+
+var cli = resolve_cli
+
+# ── Built-in command names, from the runtime itself ─────────────────────────
+
+var metadataJson = (eval $"{$cli} --export-command-metadata" | join -s "\n")
+var metadata = ($metadataJson | from json)
+
+var builtinNames = {% %}
+for entry in $metadata {
+    $builtinNames[$entry.name] = true
+    if ($entry.aliases != null) {
+        for a in $entry.aliases { $builtinNames[$a] = true }
+    }
+}
+
+var BUILTINS = String.Join("|", ($builtinNames.Keys | sort { alternation_key $_ } | collect))
+
+# ── Language words, from LanguageSurface ────────────────────────────────────
+
+## Words the grammar colours as control/keyword. Composition words
+## (`extends`, `implements`, `uses`, `fulfills`) belong to #type-clause and the
+## literals to #constants, so both are excluded here exactly as the Python did.
+var CONTROL_KINDS = ["Declaration", "TypeDeclaration", "ControlFlow", "Import",
+                     "Interop", "LanguageForm", "Accessor", "HandlerClause",
+                     "Contextual", "OperatorWord"]
+
+var CONTROL = ""
+var MODIFIERS = ""
+
+if ($literalWords) {
+    # The Python's hand-written lists, kept only to prove the port emits the same
+    # bytes. `--literalWords` is not how this script is meant to run.
+    $CONTROL = "if|else|unless|for|in|while|until|break|continue|return|yield|throw|try|catch|" +
+               "finally|defer|switch|case|default|match|when|handles|priority|once|func|var|const|" +
+               "alloc|class|interface|struct|trait|union|module|enum|record|rune|event|prop|type|" +
+               "coerce|subcommand|using|require|native|bind|from|as|out|ref|callconv|global|export|" +
+               "new|nameof|name-of|let|pick|quote|get|set|and|or|not|is|is-not|not-in|is-in|" +
+               "is-not-in|contains|starts-with|ends-with"
+    $MODIFIERS = "shy|private|proud|public|guarded|protected|local|sealed|hollow|abstract|partial|" +
+                 "overrule|override|static|shared|hermit|strict|fluid|leaky|lazy|fixed|readonly|" +
+                 "vital|required|fading|obsolete|raw|eager|hidden"
+} else {
+    var surfaceJson = (eval $"{$cli} --export-command-metadata --surface" | join -s "\n")
+    var surface = ($surfaceJson | from json)
+
+    # `from json` yields a record, and iterating one yields the record itself rather
+    # than key/value pairs; `members` returns nothing and `.Keys` fails. Casting to
+    # `dict` is what exposes the keys.
+    var words = ($surface.words as dict)
+
+    var controlWords = {% %}
+    for word in $words.Keys {
+        var isControl = false
+        for k in $words[$word] {
+            if ($k in $CONTROL_KINDS) { $isControl = true }
+        }
+        if ($isControl) { $controlWords[$word] = true }
+    }
+    # `global` and `export` are visibility modifiers the grammar nonetheless
+    # colours as keywords, exactly as the Python listed them.
+    $controlWords["global"] = true
+    $controlWords["export"] = true
+
+    # Not `$surface.modifiers`: that set is `LanguageSurface.Modifiers`, which includes
+    # the visibility words `global` and `export` — the grammar scopes those as keywords,
+    # not storage modifiers — and omits `eager` and `hidden`, which are subcommand
+    # modifiers. The three modifier *kinds* reproduce the Python's 29 words exactly.
+    #
+    # A word that is *also* control flow keeps its control-flow colour: `default` is a
+    # subcommand modifier and a `switch` arm, and `#storage-modifier` is matched before
+    # `#control-flow`, so admitting it here would scope `default:` in a switch as a
+    # storage modifier. Excluding it reproduces the Python's 29 words exactly.
+    var modifierWords = {% %}
+    for word in $words.Keys {
+        var kinds = $words[$word]
+        var isModifier = false
+        var isFlow = false
+        for k in $kinds {
+            if ($k in ["TypeModifier", "MemberModifier", "SubcommandModifier"]) { $isModifier = true }
+            if ($k == "ControlFlow") { $isFlow = true }
+        }
+        if ($isModifier and not $isFlow) { $modifierWords[$word] = true }
+    }
+
+    $CONTROL = String.Join("|", ($controlWords.Keys | sort { alternation_key $_ } | collect))
+    $MODIFIERS = String.Join("|", ($modifierWords.Keys | sort { alternation_key $_ } | collect))
+}
+
+# ── Fixed vocabulary ────────────────────────────────────────────────────────
+
+## Built-in type aliases (docs/spec §Built-in Type Aliases). Longest-first.
+var TYPE_ALIASES = ["string", "int", "long", "float", "double", "decimal", "bool", "byte", "sbyte",
+    "short", "ushort", "uint", "ulong", "char", "object", "guid", "uri", "datetime",
+    "datetimeoffset", "dateonly", "timeonly", "timespan", "regex", "list", "array",
+    "dict", "hashtable", "set", "table", "dynamicrecord", "tuple", "file", "dir",
+    "directory", "ptr", "ip", "ipaddress", "version", "Vector", "vec", "Matrix",
+    "matrix", "mat", "Complex", "complex", "void", "any", "dynamic"]
+
+var TYPE_ALIAS_RE = String.Join("|", ($TYPE_ALIASES | sort { alternation_key $_ } | collect))
+
+var DOC_TAGS = "summary|remarks|returns|value|example|deprecated|seealso|see|since|" +
+               "exception|throws|para"
+
+var IDENT = '[A-Za-z_][A-Za-z0-9_-]*'
+var TYPE_REF = '[A-Za-z_][A-Za-z0-9_.<>?,-]*'
+
+## Guard for command-position rules, whose matches start on the leading
+## whitespace and would otherwise outrank a keyword match on the word itself.
+var NOT_KEYWORD = '(?!(?:' + $CONTROL + '|' + $MODIFIERS + '|flag|arg|true|false|null|_)\b)'
+
+## Escapes accepted inside double-quoted / interpolated strings. Triple-quoted
+## because the class holds both a double and a single quote.
+var ESCAPE = """\\(?:[\\"'nrtabefv0]|x[0-9a-fA-F]{1,2}|u[0-9a-fA-F]{1,4})"""
+var ANSI_ESCAPE = """\\(?:[\\"'abefnrtv0]|[eE]|x[0-9a-fA-F]{1,2}|u[0-9a-fA-F]{1,4}|0[0-7]{1,3})"""
+
+# ── Rule helpers ────────────────────────────────────────────────────────────
+
+## @summary Colour a captured type reference, preferring the built-in alias scope.
+func type_ref_captures(name: string) {
+    return {% "patterns" => [
+        {% "match" => ('\b(?:' + $TYPE_ALIAS_RE + ')\b'), "name" => "support.type.builtin.tosh" %},
+        {% "match" => '[A-Za-z_][A-Za-z0-9_.]*', "name" => $name %},
+        {% "match" => '[<>]', "name" => "punctuation.definition.generic.tosh" %},
+        {% "match" => '[,?]', "name" => "punctuation.separator.tosh" %}
+    ] %}
+}
+
+func type_ref() => type_ref_captures "entity.name.type.tosh"
+
+## @summary A `<modifiers> <keyword> <Name>` declaration rule.
+func definition(keyword: string, scope: string) {
+    return {%
+        "match" => ('\b((?:(?:' + $MODIFIERS + '|global|export)\s+)*)(' + $keyword + ')\s+(' + $IDENT + ')'),
+        "captures" => {%
+            "1" => {% "patterns" => [{% "include" => "#declaration-modifiers" %}] %},
+            "2" => {% "name" => "keyword.control.tosh" %},
+            "3" => {% "name" => $scope %}
+        %}
+    %}
+}
+
+## @summary The interpolation rules shared by every interpolating string form.
+func interpolation_patterns() {
+    return [
+        {% "name" => "constant.character.escape.tosh", "match" => '\{\{|\}\}' %},
+        {%
+            "comment" => "Dollar-brace interpolation: ${expr}",
+            "name" => "meta.interpolation.tosh",
+            "begin" => '\$\{', "end" => '\}',
+            "beginCaptures" => {% "0" => {% "name" => "punctuation.section.interpolation.begin.tosh" %} %},
+            "endCaptures" => {% "0" => {% "name" => "punctuation.section.interpolation.end.tosh" %} %},
+            "contentName" => "source.tosh.embedded",
+            "patterns" => [{% "include" => "source.tosh" %}]
+        %},
+        {%
+            "comment" => "Bare brace interpolation: {expr}",
+            "name" => "meta.interpolation.tosh",
+            "begin" => '(?<!\{)\{(?!\{)', "end" => '\}',
+            "beginCaptures" => {% "0" => {% "name" => "punctuation.section.interpolation.begin.tosh" %} %},
+            "endCaptures" => {% "0" => {% "name" => "punctuation.section.interpolation.end.tosh" %} %},
+            "contentName" => "source.tosh.embedded",
+            "patterns" => [{% "include" => "source.tosh" %}]
+        %},
+        {%
+            "comment" => "Bare variable interpolation: $name or $env.HOME",
+            "match" => '\$[a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)*',
+            "name" => "variable.other.readwrite.tosh"
+        %}
+    ]
+}
+
+## @summary A begin/end string rule with the standard punctuation captures.
+func string_rule(comment: string, name: string, begin: string, endPattern: string, patterns) {
+    var rule = {% %}
+    if ($comment != "") { $rule["comment"] = $comment }
+    $rule["name"] = $name
+    $rule["begin"] = $begin
+    $rule["end"] = $endPattern
+    $rule["beginCaptures"] = {% "0" => {% "name" => "punctuation.definition.string.begin.tosh" %} %}
+    $rule["endCaptures"] = {% "0" => {% "name" => "punctuation.definition.string.end.tosh" %} %}
+    if ($patterns != null) { $rule["patterns"] = $patterns }
+    return $rule
+}
+
+var TOP_LEVEL = ["shebang", "block-comment", "doc-comment", "comment",
+    "interpolated-triple-string", "interpolated-ansi-triple-string",
+    "raw-triple-string", "ansi-triple-string",
+    "interpolated-string", "ansi-c-string", "double-quoted-string", "single-quoted-string",
+    "command-substitution", "process-substitution",
+    "class-definition", "interface-definition", "struct-definition", "trait-definition",
+    "union-definition", "rune-definition", "event-definition", "module-definition",
+    "enum-definition", "record-definition", "type-definition", "subcommand-definition",
+    "operator-definition", "function-definition", "subcommand-member",
+    "type-clause", "redirection", "variable-declaration",
+    # cast/new must precede control-flow: `new` and `is` are keywords too,
+    # and control-flow would consume them and leave the type name bare.
+    "cast-expression", "new-expression",
+    "storage-modifier", "control-flow", "constants",
+    "generic-arguments", "type-annotations", "parameter-name", "member-declaration",
+    "spread-operator", "caret-escape", "function-reference",
+    "special-variable", "variable-reference", "pipeline-underscore",
+    "builtin-commands", "command-position", "collection-delimiters",
+    "operators", "pipe", "numeric", "member-access", "flags", "punctuation"]
+
+# ── The grammar ─────────────────────────────────────────────────────────────
+
+var repository = {% %}
+
+# Comments ------------------------------------------------------------------
+$repository["shebang"] = {%
+    "comment" => "Only meaningful at byte offset zero.",
+    "match" => '\A#!.*$',
+    "name" => "comment.line.shebang.tosh"
+%}
+$repository["block-comment"] = {%
+    "comment" => "##{ ... }## block comment. Must precede #doc-comment.",
+    "name" => "comment.block.tosh",
+    "begin" => '##\{', "end" => '\}##',
+    "beginCaptures" => {% "0" => {% "name" => "punctuation.definition.comment.begin.tosh" %} %},
+    "endCaptures" => {% "0" => {% "name" => "punctuation.definition.comment.end.tosh" %} %}
+%}
+$repository["doc-comment"] = {% "patterns" => [
+    {%
+        "comment" => "Doc comment with a named tag: @param=name / @typeparam=name",
+        "name" => "comment.line.documentation.tosh",
+        "match" => ('(##)\s*(@(?:param|typeparam)=)(' + $IDENT + ')(.*)$'),
+        "captures" => {%
+            "1" => {% "name" => "punctuation.definition.comment.documentation.tosh" %},
+            "2" => {% "name" => "keyword.other.documentation.tosh" %},
+            "3" => {% "name" => "variable.parameter.tosh" %}
+        %}
+    %},
+    {%
+        "comment" => "Doc comment with a block tag",
+        "name" => "comment.line.documentation.tosh",
+        "match" => ('(##)\s*(@(?:' + $DOC_TAGS + '))\b(.*)$'),
+        "captures" => {%
+            "1" => {% "name" => "punctuation.definition.comment.documentation.tosh" %},
+            "2" => {% "name" => "keyword.other.documentation.tosh" %}
+        %}
+    %},
+    {%
+        "comment" => "Plain doc comment",
+        "name" => "comment.line.documentation.tosh",
+        "match" => '(##).*$',
+        "captures" => {% "1" => {% "name" => "punctuation.definition.comment.documentation.tosh" %} %}
+    %}
+] %}
+$repository["comment"] = {%
+    "comment" => "A lone '#' opens a comment only when it stands alone as a word: at the start of a word and followed by whitespace or end of line. That is what leaves #ff0000, issue#42 and C# as ordinary barewords.",
+    "match" => '(?<![^\s])(#)(?=\s|$).*$',
+    "name" => "comment.line.number-sign.tosh",
+    "captures" => {% "1" => {% "name" => "punctuation.definition.comment.tosh" %} %}
+%}
+
+# Strings -------------------------------------------------------------------
+$repository["interpolated-triple-string"] = string_rule '$"""..."""  — interpolated, multi-line, no escapes' "string.quoted.triple.interpolated.tosh" '\$"""' '"""' (interpolation_patterns)
+$repository["interpolated-ansi-triple-string"] = string_rule "$'''...'''  — interpolated ANSI-C, multi-line" "string.quoted.triple.ansi-c.interpolated.tosh" "\\$'''" "'''" ([{% "name" => "constant.character.escape.tosh", "match" => $ANSI_ESCAPE %}] + (interpolation_patterns))
+$repository["raw-triple-string"] = string_rule '"""..."""  — raw, multi-line, no escapes or interpolation' "string.quoted.triple.tosh" '"""' '"""' null
+$repository["ansi-triple-string"] = string_rule "'''...'''  — ANSI-C escapes, multi-line, no interpolation" "string.quoted.triple.ansi-c.tosh" "'''" "'''" [{% "name" => "constant.character.escape.tosh", "match" => $ANSI_ESCAPE %}]
+$repository["interpolated-string"] = string_rule "" "string.quoted.double.interpolated.tosh" '\$"' '"' ([{% "name" => "constant.character.escape.tosh", "match" => $ESCAPE %}] + (interpolation_patterns))
+$repository["ansi-c-string"] = string_rule "" "string.quoted.single.ansi-c.tosh" "\\$'" "'" [{% "name" => "constant.character.escape.tosh", "match" => $ANSI_ESCAPE %}]
+$repository["double-quoted-string"] = string_rule "" "string.quoted.double.tosh" '"' '"' [{% "name" => "constant.character.escape.tosh", "match" => $ESCAPE %}]
+$repository["single-quoted-string"] = string_rule "Single-quoted strings are literal — no escapes or interpolation" "string.quoted.single.tosh" "'" "'" null
+
+# Embedded ------------------------------------------------------------------
+$repository["command-substitution"] = {%
+    "name" => "meta.command-substitution.tosh",
+    "begin" => '\$\(', "end" => '\)',
+    "beginCaptures" => {% "0" => {% "name" => "punctuation.section.embedded.begin.tosh" %} %},
+    "endCaptures" => {% "0" => {% "name" => "punctuation.section.embedded.end.tosh" %} %},
+    "patterns" => [{% "include" => "source.tosh" %}]
+%}
+$repository["process-substitution"] = {%
+    "comment" => "Input <(...) and output >(...) process substitution",
+    "name" => "meta.process-substitution.tosh",
+    "begin" => '[<>]\(', "end" => '\)',
+    "beginCaptures" => {% "0" => {% "name" => "punctuation.section.embedded.begin.tosh" %} %},
+    "endCaptures" => {% "0" => {% "name" => "punctuation.section.embedded.end.tosh" %} %},
+    "patterns" => [{% "include" => "source.tosh" %}]
+%}
+
+# Declarations --------------------------------------------------------------
+$repository["class-definition"] = definition "class" "entity.name.type.class.tosh"
+$repository["interface-definition"] = definition "interface" "entity.name.type.interface.tosh"
+$repository["struct-definition"] = definition "struct" "entity.name.type.struct.tosh"
+$repository["trait-definition"] = definition "trait" "entity.name.type.trait.tosh"
+$repository["union-definition"] = definition "union" "entity.name.type.union.tosh"
+$repository["rune-definition"] = definition "rune" "entity.name.type.rune.tosh"
+$repository["event-definition"] = definition "event" "entity.name.type.event.tosh"
+$repository["module-definition"] = definition "module" "entity.name.namespace.tosh"
+$repository["enum-definition"] = definition "enum" "entity.name.type.enum.tosh"
+$repository["record-definition"] = definition "record" "entity.name.type.record.tosh"
+
+$repository["type-definition"] = {%
+    "comment" => "Refinement type alias:  type Port = int where (...)",
+    "match" => ('\b((?:(?:' + $MODIFIERS + '|global|export)\s+)*)(type)\s+(' + $IDENT + ')\s*(?==)'),
+    "captures" => {%
+        "1" => {% "patterns" => [{% "include" => "#declaration-modifiers" %}] %},
+        "2" => {% "name" => "keyword.control.tosh" %},
+        "3" => {% "name" => "entity.name.type.tosh" %}
+    %}
+%}
+$repository["subcommand-definition"] = {%
+    "comment" => "subcommand blocks turn a script into a structured CLI",
+    "match" => ('\b((?:(?:eager|hidden|hollow|vital)\s+)*)(subcommand)\s+(' + $IDENT + ')'),
+    "captures" => {%
+        "1" => {% "name" => "storage.modifier.tosh" %},
+        "2" => {% "name" => "keyword.control.tosh" %},
+        "3" => {% "name" => "entity.name.function.subcommand.tosh" %}
+    %}
+%}
+$repository["subcommand-member"] = {%
+    "comment" => "flag / arg declarations inside a subcommand body",
+    "match" => ('^\s*(flag|arg)\s+(' + $IDENT + ')'),
+    "captures" => {%
+        "1" => {% "name" => "keyword.control.tosh" %},
+        "2" => {% "name" => "variable.parameter.tosh" %}
+    %}
+%}
+$repository["operator-definition"] = {%
+    "comment" => "Operator overloads: func +(o), func ==(o), func !=(o). The name is punctuation, so #function-definition's identifier pattern never matches these.",
+    "match" => ('\b((?:(?:' + $MODIFIERS + '|global|export)\s+)*)(func)\s*(\*\*|==|!=|<=|>=|=~|!~|//|\+|-|\*|/|%|<|>)\s*(?=\()'),
+    "captures" => {%
+        "1" => {% "patterns" => [{% "include" => "#declaration-modifiers" %}] %},
+        "2" => {% "name" => "keyword.control.tosh" %},
+        "3" => {% "name" => "entity.name.function.operator.tosh" %}
+    %}
+%}
+$repository["function-definition"] = {%
+    "match" => ('\b((?:(?:' + $MODIFIERS + '|global|export)\s+)*)(func)\s+(' + $IDENT + ')\s*(?=<|\(|=>|$)'),
+    "captures" => {%
+        "1" => {% "patterns" => [{% "include" => "#declaration-modifiers" %}] %},
+        "2" => {% "name" => "keyword.control.tosh" %},
+        "3" => {% "name" => "entity.name.function.tosh" %}
+    %}
+%}
+$repository["declaration-modifiers"] = {%
+    "comment" => "Modifier run before a declaration keyword. `global` and `export` are visibility keywords rather than storage modifiers, so they need their own scope here.",
+    "patterns" => [
+        {% "include" => "#storage-modifier" %},
+        {% "match" => '\b(global|export)\b', "name" => "keyword.control.tosh" %}
+    ]
+%}
+$repository["generic-arguments"] = {%
+    "comment" => "Type arguments glued to a name: Vector2D<T>, dict<string, int>. The no-space lookbehind keeps `a < b` a comparison.",
+    "match" => '(?<=[A-Za-z0-9_])(<)([A-Za-z_][A-Za-z0-9_.,?\s]*)(>)',
+    "captures" => {%
+        "1" => {% "name" => "punctuation.definition.generic.begin.tosh" %},
+        "2" => (type_ref),
+        "3" => {% "name" => "punctuation.definition.generic.end.tosh" %}
+    %}
+%}
+$repository["member-declaration"] = {%
+    "comment" => "Field names in raw struct bodies and native bind signatures: `uptime: long`, `sysname: cstring[65]`.",
+    "match" => ('^\s*(' + $NOT_KEYWORD + $IDENT + ')\s*(?=:(?![:=]))'),
+    "captures" => {% "1" => {% "name" => "variable.other.member.declaration.tosh" %} %}
+%}
+$repository["member-access"] = {%
+    "comment" => "Dotted member access on a bareword receiver: Info.raw_info.uptime. `$`-prefixed paths are already consumed whole by #variable-reference.",
+    "patterns" => [
+        {%
+            "comment" => "Capitalised receiver reads as a type or module",
+            "match" => '\b([A-Z][A-Za-z0-9_]*)(?=\.[A-Za-z_])',
+            "name" => "entity.name.type.tosh"
+        %},
+        {%
+            "match" => '(?<=\.)([A-Za-z_][A-Za-z0-9_]*)',
+            "name" => "variable.other.member.tosh"
+        %}
+    ]
+%}
+$repository["storage-modifier"] = {%
+    "match" => ('\b(' + $MODIFIERS + ')\b'),
+    "name" => "storage.modifier.tosh"
+%}
+$repository["type-clause"] = {%
+    "comment" => "extends, fulfills, implements, uses, where",
+    "patterns" => [
+        {%
+            "match" => ('\b(extends|fulfills|implements|uses)\b\s*(' + $TYPE_REF + ')?'),
+            "captures" => {%
+                "1" => {% "name" => "keyword.control.inheritance.tosh" %},
+                "2" => {% "name" => "entity.other.inherited-class.tosh" %}
+            %}
+        %},
+        {%
+            "comment" => "Generic constraint: where T: Numeric. The optional group keeps a bare `where` (pipeline filter, refinement clause) matching too.",
+            "match" => '\b(where)\b(?:\s+([A-Za-z_][A-Za-z0-9_]*)\s*(?=:(?![:=])))?',
+            "captures" => {%
+                "1" => {% "name" => "keyword.control.constraint.tosh" %},
+                "2" => {% "name" => "entity.name.type.parameter.tosh" %}
+            %}
+        %}
+    ]
+%}
+$repository["control-flow"] = {%
+    "match" => ('\b(' + $CONTROL + ')\b'),
+    "name" => "keyword.control.tosh"
+%}
+$repository["constants"] = {%
+    "match" => '\b(true|false|null)\b',
+    "name" => "constant.language.tosh"
+%}
+
+# Types ---------------------------------------------------------------------
+$repository["cast-expression"] = {%
+    "comment" => "Type-test and cast operators:  $x as int,  $x is not string",
+    "match" => ('\b(as|is-not|is)\s+(not\s+)?(' + $TYPE_REF + ')'),
+    "captures" => {%
+        "1" => {% "name" => "keyword.operator.type.tosh" %},
+        "2" => {% "name" => "keyword.operator.type.tosh" %},
+        "3" => (type_ref)
+    %}
+%}
+$repository["new-expression"] = {%
+    "match" => ('\b(new)\s+(' + $TYPE_REF + ')'),
+    "captures" => {%
+        "1" => {% "name" => "keyword.control.tosh" %},
+        "2" => (type_ref)
+    %}
+%}
+$repository["type-annotations"] = {% "patterns" => [
+    {%
+        "comment" => "Parameter / property type annotation:  name: Type",
+        "match" => '(?<=[a-zA-Z0-9_?])\s*(:)\s*([A-Za-z_][a-zA-Z0-9_.<>?]*)',
+        "captures" => {%
+            "1" => {% "name" => "punctuation.separator.type.tosh" %},
+            "2" => (type_ref)
+        %}
+    %},
+    {%
+        "comment" => "Return type annotation:  -> Type",
+        "match" => '(->)\s*([A-Za-z_][a-zA-Z0-9_.<>?]*)',
+        "captures" => {%
+            "1" => {% "name" => "punctuation.separator.return-type.tosh" %},
+            "2" => (type_ref)
+        %}
+    %},
+    {%
+        "comment" => "Static member access on a CLR type:  String.Join(...)",
+        "match" => '\b([A-Z][A-Za-z0-9_]*(?:\.[A-Z][A-Za-z0-9_]*)*)(\.)([A-Za-z_][A-Za-z0-9_]*)\s*(?=\()',
+        "captures" => {%
+            "1" => {% "name" => "entity.name.type.tosh" %},
+            "2" => {% "name" => "punctuation.accessor.tosh" %},
+            "3" => {% "name" => "entity.name.function.member.tosh" %}
+        %}
+    %},
+    {%
+        "comment" => "Typed variable declaration:  Type name = ...",
+        "match" => '^\s*([A-Z][a-zA-Z0-9_.<>]+)\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*(?==)',
+        "captures" => {%
+            "1" => {% "name" => "entity.name.type.tosh" %},
+            "2" => {% "name" => "variable.other.tosh" %}
+        %}
+    %}
+] %}
+$repository["variable-declaration"] = {%
+    "match" => '\b((?:(?:shy|private|proud|public|local|global|export)\s+)*)(var|const|alloc|prop)\s+([a-zA-Z_][a-zA-Z0-9_-]*)\s*(?=:|=|$|\s)',
+    "captures" => {%
+        "1" => {% "patterns" => [{% "include" => "#declaration-modifiers" %}] %},
+        "2" => {% "name" => "keyword.control.tosh" %},
+        "3" => {% "name" => "variable.other.tosh" %}
+    %}
+%}
+
+# Sigils --------------------------------------------------------------------
+$repository["spread-operator"] = {%
+    "comment" => "Spread / splat:  ...$args",
+    "match" => '(\.\.\.)(\$[a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)*)?',
+    "captures" => {%
+        "1" => {% "name" => "keyword.operator.spread.tosh" %},
+        "2" => {% "name" => "variable.other.readwrite.tosh" %}
+    %}
+%}
+$repository["caret-escape"] = {%
+    "comment" => "Force external command:  ^command",
+    "match" => '(\^)(?=[a-zA-Z_$/])',
+    "captures" => {% "1" => {% "name" => "keyword.operator.caret-escape.tosh" %} %}
+%}
+$repository["function-reference"] = {%
+    "comment" => "&name is a function reference at the start of an expression; a trailing & backgrounds the pipeline.",
+    "patterns" => [
+        {%
+            "match" => ('(?<![A-Za-z0-9_])(&)(' + $IDENT + ')'),
+            "captures" => {%
+                "1" => {% "name" => "keyword.operator.function-reference.tosh" %},
+                "2" => {% "name" => "entity.name.function.tosh" %}
+            %}
+        %},
+        {% "match" => '&\s*$', "name" => "keyword.operator.background.tosh" %}
+    ]
+%}
+$repository["special-variable"] = {% "patterns" => [
+    {%
+        "comment" => "$tosh runtime namespace:  $tosh.Last.Result",
+        "match" => '\$tosh(?:\.[A-Za-z_][A-Za-z0-9_]*)*',
+        "name" => "support.variable.tosh"
+    %},
+    {%
+        "comment" => "$env.NAME environment access",
+        "match" => '(\$env)(\.)([A-Za-z_][A-Za-z0-9_]*)',
+        "captures" => {%
+            "1" => {% "name" => "support.variable.tosh" %},
+            "2" => {% "name" => "punctuation.accessor.tosh" %},
+            "3" => {% "name" => "variable.other.environment.tosh" %}
+        %}
+    %},
+    {%
+        "comment" => "$this is the receiver, so it reads as a member rather than as a language keyword: most themes render variable.language in a bright keyword red, which is wrong for a value you dot into.",
+        "match" => '\$this\b',
+        "name" => "variable.other.member.this.tosh"
+    %},
+    {% "match" => '\$value\b', "name" => "variable.language.tosh" %},
+    {%
+        "comment" => "Positional parameters in arrow functions:  $1, $2",
+        "match" => '\$[0-9]+',
+        "name" => "variable.parameter.positional.tosh"
+    %}
+] %}
+$repository["variable-reference"] = {%
+    "match" => '\$[a-zA-Z_][a-zA-Z0-9_-]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)*',
+    "name" => "variable.other.readwrite.tosh"
+%}
+$repository["pipeline-underscore"] = {% "patterns" => [
+    {%
+        "comment" => "_.Member access on the current pipeline item",
+        "match" => '\b(_)(\.)([a-zA-Z_][a-zA-Z0-9_.()]*)',
+        "captures" => {%
+            "1" => {% "name" => "variable.language.pipeline-item.tosh" %},
+            "2" => {% "name" => "punctuation.accessor.tosh" %},
+            "3" => {% "name" => "variable.other.member.tosh" %}
+        %}
+    %},
+    {% "match" => '\b_\b', "name" => "variable.language.pipeline-item.tosh" %}
+] %}
+
+# Commands ------------------------------------------------------------------
+$repository["builtin-commands"] = {%
+    "comment" => "Built-in commands, highlighted in command position. Alternation is longest-first so 'read' cannot shadow 'read-file'.",
+    "match" => ('(?:^|(?<=[;{(])|(?<=\|)(?<!\{\|)|(?<==>))\s*' + $NOT_KEYWORD + '\b(' + $BUILTINS + ')\b'),
+    "captures" => {% "1" => {% "name" => "support.function.builtin.tosh" %} %}
+%}
+$repository["command-position"] = {%
+    "comment" => "These matches begin at the whitespace before the word, so they start earlier than a keyword match on the word itself and would otherwise win the tie. NOT_KEYWORD keeps `{ return ...` and `for x in ...` from being scoped as command calls.",
+    "patterns" => [
+        {%
+            "comment" => "Command position: start of line, after ; { ( or =>, or after a pipe that is not a {| record opener.",
+            "match" => ('(?:^|(?<=[;{(])|(?<=\|)(?<!\{\|)|(?<==>))\s*(' + $NOT_KEYWORD + $IDENT + ')(?=\s|$|\()'),
+            "captures" => {% "1" => {% "name" => "entity.name.function.call.tosh" %} %}
+        %}
+    ]
+%}
+$repository["parameter-name"] = {%
+    "comment" => "Parameter names in signatures — after '(' or ',', and after the native binding modes 'out' and 'ref'.",
+    "match" => ('(?:(?<=[(,])|(?<=\bout\s)|(?<=\bref\s))\s*(' + $NOT_KEYWORD + $IDENT + ')\s*(?=:(?![:=]))'),
+    "captures" => {% "1" => {% "name" => "variable.parameter.tosh" %} %}
+%}
+$repository["collection-delimiters"] = {%
+    "comment" => "Record {| |}, dictionary {% %} and set {: :} delimiters",
+    "match" => '\{[|:%]|[|:%]\}',
+    "name" => "punctuation.section.collection.tosh"
+%}
+
+# Operators -----------------------------------------------------------------
+$repository["redirection"] = {%
+    "comment" => "Named-stream redirection: out> o>> err> e> o+e> err+out>> and <<<",
+    "patterns" => [
+        {%
+            "match" => '(?<![A-Za-z0-9_-])(?:out\+err|err\+out|o\+e|e\+o|out|err|o|e)>>?',
+            "name" => "keyword.operator.redirect.tosh"
+        %},
+        {% "match" => '<<<', "name" => "keyword.operator.redirect.here-string.tosh" %}
+    ]
+%}
+$repository["operators"] = {% "patterns" => [
+    {% "match" => '=>', "name" => "keyword.operator.arrow.tosh" %},
+    {%
+        "comment" => "Comprehension separator: [body <| for x in ...]",
+        "match" => '<\|',
+        "name" => "keyword.operator.comprehension.tosh"
+    %},
+    {%
+        "match" => '\*\*=|//=|\?\?=|\+=|-=|\*=|/=|%=',
+        "name" => "keyword.operator.assignment.compound.tosh"
+    %},
+    {% "match" => '\?\?|\?\.', "name" => "keyword.operator.null-coalescing.tosh" %},
+    {% "match" => '&&|\|\|', "name" => "keyword.operator.logical.tosh" %},
+    {% "match" => '\*\*', "name" => "keyword.operator.arithmetic.tosh" %},
+    {%
+        "comment" => "Floor division. Spaces required so paths keep their slashes.",
+        "match" => '(?<=\s)//(?=\s)',
+        "name" => "keyword.operator.arithmetic.tosh"
+    %},
+    {% "match" => '\.\.', "name" => "keyword.operator.range.tosh" %},
+    {% "match" => '!~|=~|!=|>=|<=|==', "name" => "keyword.operator.comparison.tosh" %},
+    {% "match" => '[<>]', "name" => "keyword.operator.comparison.tosh" %},
+    {% "match" => '(?<=\s)[-+*/%](?=\s)', "name" => "keyword.operator.arithmetic.tosh" %},
+    {%
+        "match" => '(?<=\s)\?(?=\s)|(?<=\s):(?=\s)',
+        "name" => "keyword.operator.conditional.tosh"
+    %},
+    {% "match" => '=(?!=|>)', "name" => "keyword.operator.assignment.tosh" %}
+] %}
+$repository["pipe"] = {% "match" => '\|(?!\|)', "name" => "keyword.operator.pipe.tosh" %}
+
+# Literals ------------------------------------------------------------------
+$repository["numeric"] = {% "patterns" => [
+    {%
+        "comment" => "Quantity with a unit: 100`m, 9.8`m/s^2, 5`kg",
+        "match" => '\b([0-9][0-9_]*(?:\.[0-9][0-9_]*)?)(`)([A-Za-z][A-Za-z0-9^/*·-]*)',
+        "captures" => {%
+            "1" => {% "name" => "constant.numeric.tosh" %},
+            "2" => {% "name" => "punctuation.definition.unit.tosh" %},
+            "3" => {% "name" => "keyword.other.unit.tosh" %}
+        %}
+    %},
+    {%
+        "comment" => "Imaginary literal: 4i, 2.5i",
+        "match" => '\b[0-9][0-9_]*(?:\.[0-9][0-9_]*)?i\b',
+        "name" => "constant.numeric.imaginary.tosh"
+    %},
+    {%
+        "comment" => "Storage sizes: 1kb, 512mb",
+        "match" => '\b[0-9][0-9_]*(?:\.[0-9][0-9_]*)?(?:b|kb|mb|gb|tb|pb)\b',
+        "name" => "constant.numeric.size.tosh"
+    %},
+    {%
+        "comment" => "ISO temporal instants — must precede the duration rule",
+        "match" => '\b[0-9]{4}-[0-9]{2}-[0-9]{2}(?:T[0-9]{2}:[0-9]{2}(?::[0-9]{2}(?:\.[0-9]{1,7})?)?(?:Z|[+-][0-9]{2}:[0-9]{2})?)?\b',
+        "name" => "constant.numeric.datetime.tosh"
+    %},
+    {%
+        "comment" => "Temporal shorthand: 7d, 30m, 1w2d4h",
+        "match" => '\b(?:[0-9][0-9_]*(?:\.[0-9][0-9_]*)?(?:ns|us|ms|mo|ka|Ma|Ga|Ta|da|s|m|h|d|w|y|c))+\b',
+        "name" => "constant.numeric.duration.tosh"
+    %},
+    {%
+        "comment" => "IPv4 literal — four explicit octets, no leading zeroes",
+        "match" => '\b(?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])(?:\.(?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])){3}\b',
+        "name" => "constant.numeric.ip.tosh"
+    %},
+    {% "match" => '\b0[xX][0-9a-fA-F][0-9a-fA-F_]*\b', "name" => "constant.numeric.hex.tosh" %},
+    {% "match" => '\b0[bB][01][01_]*\b', "name" => "constant.numeric.binary.tosh" %},
+    {% "match" => '\b0[oO][0-7][0-7_]*\b', "name" => "constant.numeric.octal.tosh" %},
+    {% "match" => '\b[0-9][0-9_]*\.[0-9][0-9_]*\b', "name" => "constant.numeric.float.tosh" %},
+    {% "match" => '\b[0-9][0-9_]*\b', "name" => "constant.numeric.integer.tosh" %}
+] %}
+$repository["flags"] = {% "patterns" => [
+    {%
+        "match" => '\s(--[a-zA-Z][a-zA-Z0-9-]*)\b',
+        "captures" => {% "1" => {% "name" => "entity.other.attribute-name.flag.long.tosh" %} %}
+    %},
+    {%
+        "match" => '\s(-[a-zA-Z][a-zA-Z0-9]*)\b',
+        "captures" => {% "1" => {% "name" => "entity.other.attribute-name.flag.short.tosh" %} %}
+    %}
+] %}
+$repository["punctuation"] = {% "patterns" => [
+    {% "match" => '[{}]', "name" => "punctuation.section.block.tosh" %},
+    {% "match" => '[\[\]]', "name" => "punctuation.section.brackets.tosh" %},
+    {% "match" => '[()]', "name" => "punctuation.section.parens.tosh" %},
+    {% "match" => ';', "name" => "punctuation.terminator.tosh" %},
+    {% "match" => ',', "name" => "punctuation.separator.tosh" %},
+    {% "match" => '\.', "name" => "punctuation.accessor.tosh" %}
+] %}
+
+# ── Emit ────────────────────────────────────────────────────────────────────
+
+var grammar = {%
+    "$schema" => "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+    "name" => "TōSh",
+    "scopeName" => "source.tosh",
+    "patterns" => ($TOP_LEVEL | each { {% "include" => $"#{$_}" %} } | collect),
+    "repository" => $repository
+%}
+
+Directory.CreateDirectory(Path.GetDirectoryName($output)) | ignore
+File.WriteAllText($output, ($grammar | to json | join -s "\n") + "\n")
+writeline $"wrote {$output} ({($builtinNames.Keys | count)} built-in names)"

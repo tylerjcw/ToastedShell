@@ -1,4 +1,4 @@
-using System.Diagnostics;
+using System.Reflection;
 using Tosh.Runtime;
 
 namespace Tosh.Tests;
@@ -31,29 +31,31 @@ namespace Tosh.Tests;
 public sealed class TypeResolutionCacheTests
 {
     [Fact]
-    public void A_repeated_resolution_is_much_cheaper_than_the_first()
+    public void A_resolution_is_remembered_rather_than_repeated()
     {
-        // Deliberately a ratio, not a wall-clock budget: an absolute threshold would be a
-        // flake on a loaded machine, and the defect was three orders of magnitude.
+        // Structural, not timed. This was first written as "200 warm resolutions must
+        // cost less than one cold one", which passed alone and failed under full-suite
+        // load — a wall-clock comparison measures the machine as much as the code. The
+        // speedup is real and recorded in the commit (8,337ms to 113ms for 50 calls);
+        // what belongs in the suite is the mechanism, which is observable directly.
         var resolver = new DotNetTypeResolver();
+        var field = typeof(DotNetTypeResolver).GetField(
+            "_resolutionCache",
+            BindingFlags.NonPublic | BindingFlags.Instance)!;
 
-        var cold = Stopwatch.StartNew();
+        var cache = (System.Collections.IDictionary)field.GetValue(resolver)!;
+        Assert.Equal(0, cache.Count);
+
         Assert.NotNull(resolver.Resolve("Path"));
-        cold.Stop();
+        var afterFirst = cache.Count;
+        Assert.True(afterFirst > 0, "resolving a name did not populate the cache");
 
-        var warm = Stopwatch.StartNew();
-        for (var i = 0; i < 200; i++)
+        for (var i = 0; i < 50; i++)
         {
             Assert.NotNull(resolver.Resolve("Path"));
         }
-        warm.Stop();
 
-        // 200 cached lookups must cost less than one uncached one. That holds with room to
-        // spare when the cache works and cannot hold at all when it does not.
-        Assert.True(
-            warm.Elapsed < cold.Elapsed,
-            $"200 warm resolutions took {warm.Elapsed.TotalMilliseconds:F1}ms against "
-            + $"{cold.Elapsed.TotalMilliseconds:F1}ms for one cold one — the cache is not being hit.");
+        Assert.Equal(afterFirst, cache.Count);
     }
 
     [Fact]

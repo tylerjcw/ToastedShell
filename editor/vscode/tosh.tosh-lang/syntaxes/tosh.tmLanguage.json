@@ -7,10 +7,25 @@
       "include": "#shebang"
     },
     {
+      "include": "#block-comment"
+    },
+    {
       "include": "#doc-comment"
     },
     {
       "include": "#comment"
+    },
+    {
+      "include": "#interpolated-triple-string"
+    },
+    {
+      "include": "#interpolated-ansi-triple-string"
+    },
+    {
+      "include": "#raw-triple-string"
+    },
+    {
+      "include": "#ansi-triple-string"
     },
     {
       "include": "#interpolated-string"
@@ -61,10 +76,34 @@
       "include": "#record-definition"
     },
     {
+      "include": "#type-definition"
+    },
+    {
+      "include": "#subcommand-definition"
+    },
+    {
+      "include": "#operator-definition"
+    },
+    {
       "include": "#function-definition"
     },
     {
+      "include": "#subcommand-member"
+    },
+    {
       "include": "#type-clause"
+    },
+    {
+      "include": "#redirection"
+    },
+    {
+      "include": "#variable-declaration"
+    },
+    {
+      "include": "#cast-expression"
+    },
+    {
+      "include": "#new-expression"
     },
     {
       "include": "#storage-modifier"
@@ -76,16 +115,28 @@
       "include": "#constants"
     },
     {
+      "include": "#generic-arguments"
+    },
+    {
       "include": "#type-annotations"
     },
     {
-      "include": "#variable-declaration"
+      "include": "#parameter-name"
+    },
+    {
+      "include": "#member-declaration"
     },
     {
       "include": "#spread-operator"
     },
     {
       "include": "#caret-escape"
+    },
+    {
+      "include": "#function-reference"
+    },
+    {
+      "include": "#special-variable"
     },
     {
       "include": "#variable-reference"
@@ -112,6 +163,9 @@
       "include": "#numeric"
     },
     {
+      "include": "#member-access"
+    },
+    {
       "include": "#flags"
     },
     {
@@ -120,21 +174,38 @@
   ],
   "repository": {
     "shebang": {
-      "match": "^#!.*$",
+      "comment": "Only meaningful at byte offset zero.",
+      "match": "\\A#!.*$",
       "name": "comment.line.shebang.tosh"
+    },
+    "block-comment": {
+      "comment": "##{ ... }## block comment. Must precede #doc-comment.",
+      "name": "comment.block.tosh",
+      "begin": "##\\{",
+      "end": "\\}##",
+      "beginCaptures": {
+        "0": {
+          "name": "punctuation.definition.comment.begin.tosh"
+        }
+      },
+      "endCaptures": {
+        "0": {
+          "name": "punctuation.definition.comment.end.tosh"
+        }
+      }
     },
     "doc-comment": {
       "patterns": [
         {
-          "comment": "Doc comment with @param=name tag",
+          "comment": "Doc comment with a named tag: @param=name / @typeparam=name",
           "name": "comment.line.documentation.tosh",
-          "match": "(##)\\s*(@param=)([a-zA-Z_][a-zA-Z0-9_]*)(.*)",
+          "match": "(##)\\s*(@(?:param|typeparam)=)([A-Za-z_][A-Za-z0-9_-]*)(.*)$",
           "captures": {
             "1": {
               "name": "punctuation.definition.comment.documentation.tosh"
             },
             "2": {
-              "name": "storage.type.annotation.tosh"
+              "name": "keyword.other.documentation.tosh"
             },
             "3": {
               "name": "variable.parameter.tosh"
@@ -142,33 +213,45 @@
           }
         },
         {
-          "comment": "Doc comment with @tag",
+          "comment": "Doc comment with a block tag",
           "name": "comment.line.documentation.tosh",
-          "match": "(##)\\s*(@(?:param|returns|example|see))\\b(.*)",
+          "match": "(##)\\s*(@(?:summary|remarks|returns|value|example|deprecated|seealso|see|since|exception|throws|para))\\b(.*)$",
           "captures": {
             "1": {
               "name": "punctuation.definition.comment.documentation.tosh"
             },
             "2": {
-              "name": "storage.type.annotation.tosh"
+              "name": "keyword.other.documentation.tosh"
             }
           }
         },
         {
           "comment": "Plain doc comment",
           "name": "comment.line.documentation.tosh",
-          "match": "##.*$"
+          "match": "(##).*$",
+          "captures": {
+            "1": {
+              "name": "punctuation.definition.comment.documentation.tosh"
+            }
+          }
         }
       ]
     },
     "comment": {
-      "match": "#.*$",
-      "name": "comment.line.number-sign.tosh"
+      "comment": "A lone '#' opens a comment only when it stands alone as a word: at the start of a word and followed by whitespace or end of line. That is what leaves #ff0000, issue#42 and C# as ordinary barewords.",
+      "match": "(?<![^\\s])(#)(?=\\s|$).*$",
+      "name": "comment.line.number-sign.tosh",
+      "captures": {
+        "1": {
+          "name": "punctuation.definition.comment.tosh"
+        }
+      }
     },
-    "interpolated-string": {
-      "name": "string.quoted.double.interpolated.tosh",
-      "begin": "\\$\"",
-      "end": "\"",
+    "interpolated-triple-string": {
+      "comment": "$\"\"\"...\"\"\"  — interpolated, multi-line, no escapes",
+      "name": "string.quoted.triple.interpolated.tosh",
+      "begin": "\\$\"\"\"",
+      "end": "\"\"\"",
       "beginCaptures": {
         "0": {
           "name": "punctuation.definition.string.begin.tosh"
@@ -182,7 +265,7 @@
       "patterns": [
         {
           "name": "constant.character.escape.tosh",
-          "match": "\\\\(?:[\\\\\"'nrtabefv0]|x[0-9a-fA-F]{1,2}|u[0-9a-fA-F]{1,4})"
+          "match": "\\{\\{|\\}\\}"
         },
         {
           "comment": "Dollar-brace interpolation: ${expr}",
@@ -232,10 +315,193 @@
           "comment": "Bare variable interpolation: $name or $env.HOME",
           "match": "\\$[a-zA-Z_][a-zA-Z0-9_]*(?:\\.[a-zA-Z_][a-zA-Z0-9_]*)*",
           "name": "variable.other.readwrite.tosh"
+        }
+      ]
+    },
+    "interpolated-ansi-triple-string": {
+      "comment": "$'''...'''  — interpolated ANSI-C, multi-line",
+      "name": "string.quoted.triple.ansi-c.interpolated.tosh",
+      "begin": "\\$'''",
+      "end": "'''",
+      "beginCaptures": {
+        "0": {
+          "name": "punctuation.definition.string.begin.tosh"
+        }
+      },
+      "endCaptures": {
+        "0": {
+          "name": "punctuation.definition.string.end.tosh"
+        }
+      },
+      "patterns": [
+        {
+          "name": "constant.character.escape.tosh",
+          "match": "\\\\(?:[\\\\\"'abefnrtv0]|[eE]|x[0-9a-fA-F]{1,2}|u[0-9a-fA-F]{1,4}|0[0-7]{1,3})"
         },
         {
           "name": "constant.character.escape.tosh",
           "match": "\\{\\{|\\}\\}"
+        },
+        {
+          "comment": "Dollar-brace interpolation: ${expr}",
+          "name": "meta.interpolation.tosh",
+          "begin": "\\$\\{",
+          "end": "\\}",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.section.interpolation.begin.tosh"
+            }
+          },
+          "endCaptures": {
+            "0": {
+              "name": "punctuation.section.interpolation.end.tosh"
+            }
+          },
+          "contentName": "source.tosh.embedded",
+          "patterns": [
+            {
+              "include": "source.tosh"
+            }
+          ]
+        },
+        {
+          "comment": "Bare brace interpolation: {expr}",
+          "name": "meta.interpolation.tosh",
+          "begin": "(?<!\\{)\\{(?!\\{)",
+          "end": "\\}",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.section.interpolation.begin.tosh"
+            }
+          },
+          "endCaptures": {
+            "0": {
+              "name": "punctuation.section.interpolation.end.tosh"
+            }
+          },
+          "contentName": "source.tosh.embedded",
+          "patterns": [
+            {
+              "include": "source.tosh"
+            }
+          ]
+        },
+        {
+          "comment": "Bare variable interpolation: $name or $env.HOME",
+          "match": "\\$[a-zA-Z_][a-zA-Z0-9_]*(?:\\.[a-zA-Z_][a-zA-Z0-9_]*)*",
+          "name": "variable.other.readwrite.tosh"
+        }
+      ]
+    },
+    "raw-triple-string": {
+      "comment": "\"\"\"...\"\"\"  — raw, multi-line, no escapes or interpolation",
+      "name": "string.quoted.triple.tosh",
+      "begin": "\"\"\"",
+      "end": "\"\"\"",
+      "beginCaptures": {
+        "0": {
+          "name": "punctuation.definition.string.begin.tosh"
+        }
+      },
+      "endCaptures": {
+        "0": {
+          "name": "punctuation.definition.string.end.tosh"
+        }
+      }
+    },
+    "ansi-triple-string": {
+      "comment": "'''...'''  — ANSI-C escapes, multi-line, no interpolation",
+      "name": "string.quoted.triple.ansi-c.tosh",
+      "begin": "'''",
+      "end": "'''",
+      "beginCaptures": {
+        "0": {
+          "name": "punctuation.definition.string.begin.tosh"
+        }
+      },
+      "endCaptures": {
+        "0": {
+          "name": "punctuation.definition.string.end.tosh"
+        }
+      },
+      "patterns": [
+        {
+          "name": "constant.character.escape.tosh",
+          "match": "\\\\(?:[\\\\\"'abefnrtv0]|[eE]|x[0-9a-fA-F]{1,2}|u[0-9a-fA-F]{1,4}|0[0-7]{1,3})"
+        }
+      ]
+    },
+    "interpolated-string": {
+      "name": "string.quoted.double.interpolated.tosh",
+      "begin": "\\$\"",
+      "end": "\"",
+      "beginCaptures": {
+        "0": {
+          "name": "punctuation.definition.string.begin.tosh"
+        }
+      },
+      "endCaptures": {
+        "0": {
+          "name": "punctuation.definition.string.end.tosh"
+        }
+      },
+      "patterns": [
+        {
+          "name": "constant.character.escape.tosh",
+          "match": "\\\\(?:[\\\\\"'nrtabefv0]|x[0-9a-fA-F]{1,2}|u[0-9a-fA-F]{1,4})"
+        },
+        {
+          "name": "constant.character.escape.tosh",
+          "match": "\\{\\{|\\}\\}"
+        },
+        {
+          "comment": "Dollar-brace interpolation: ${expr}",
+          "name": "meta.interpolation.tosh",
+          "begin": "\\$\\{",
+          "end": "\\}",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.section.interpolation.begin.tosh"
+            }
+          },
+          "endCaptures": {
+            "0": {
+              "name": "punctuation.section.interpolation.end.tosh"
+            }
+          },
+          "contentName": "source.tosh.embedded",
+          "patterns": [
+            {
+              "include": "source.tosh"
+            }
+          ]
+        },
+        {
+          "comment": "Bare brace interpolation: {expr}",
+          "name": "meta.interpolation.tosh",
+          "begin": "(?<!\\{)\\{(?!\\{)",
+          "end": "\\}",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.section.interpolation.begin.tosh"
+            }
+          },
+          "endCaptures": {
+            "0": {
+              "name": "punctuation.section.interpolation.end.tosh"
+            }
+          },
+          "contentName": "source.tosh.embedded",
+          "patterns": [
+            {
+              "include": "source.tosh"
+            }
+          ]
+        },
+        {
+          "comment": "Bare variable interpolation: $name or $env.HOME",
+          "match": "\\$[a-zA-Z_][a-zA-Z0-9_]*(?:\\.[a-zA-Z_][a-zA-Z0-9_]*)*",
+          "name": "variable.other.readwrite.tosh"
         }
       ]
     },
@@ -282,7 +548,7 @@
       ]
     },
     "single-quoted-string": {
-      "comment": "Single-quoted strings are literal — no escape sequences or interpolation",
+      "comment": "Single-quoted strings are literal — no escapes or interpolation",
       "name": "string.quoted.single.tosh",
       "begin": "'",
       "end": "'",
@@ -318,8 +584,9 @@
       ]
     },
     "process-substitution": {
-      "name": "meta.process-substitution.input.tosh",
-      "begin": "<\\(",
+      "comment": "Input <(...) and output >(...) process substitution",
+      "name": "meta.process-substitution.tosh",
+      "begin": "[<>]\\(",
       "end": "\\)",
       "beginCaptures": {
         "0": {
@@ -338,12 +605,12 @@
       ]
     },
     "class-definition": {
-      "match": "\\b((?:(?:shy|private|proud|public|guarded|protected|local|global|export|sealed|hollow|abstract|partial|hermit|strict|static|fluid|leaky)\\s+)*)(class)\\s+([a-zA-Z_][a-zA-Z0-9_-]*)\\b",
+      "match": "\\b((?:(?:protected|abstract|obsolete|override|overrule|readonly|required|guarded|partial|private|fading|hermit|hidden|hollow|public|sealed|shared|static|strict|eager|fixed|fluid|leaky|local|proud|vital|lazy|raw|shy|global|export)\\s+)*)(class)\\s+([A-Za-z_][A-Za-z0-9_-]*)",
       "captures": {
         "1": {
           "patterns": [
             {
-              "include": "#storage-modifier"
+              "include": "#declaration-modifiers"
             }
           ]
         },
@@ -356,12 +623,12 @@
       }
     },
     "interface-definition": {
-      "match": "\\b((?:(?:shy|private|proud|public|local|global|export|partial)\\s+)*)(interface)\\s+([a-zA-Z_][a-zA-Z0-9_-]*)\\b",
+      "match": "\\b((?:(?:protected|abstract|obsolete|override|overrule|readonly|required|guarded|partial|private|fading|hermit|hidden|hollow|public|sealed|shared|static|strict|eager|fixed|fluid|leaky|local|proud|vital|lazy|raw|shy|global|export)\\s+)*)(interface)\\s+([A-Za-z_][A-Za-z0-9_-]*)",
       "captures": {
         "1": {
           "patterns": [
             {
-              "include": "#storage-modifier"
+              "include": "#declaration-modifiers"
             }
           ]
         },
@@ -374,12 +641,12 @@
       }
     },
     "struct-definition": {
-      "match": "\\b((?:(?:shy|private|proud|public|local|global|export|fluid|partial|sealed)\\s+)*)(struct)\\s+([a-zA-Z_][a-zA-Z0-9_-]*)\\b",
+      "match": "\\b((?:(?:protected|abstract|obsolete|override|overrule|readonly|required|guarded|partial|private|fading|hermit|hidden|hollow|public|sealed|shared|static|strict|eager|fixed|fluid|leaky|local|proud|vital|lazy|raw|shy|global|export)\\s+)*)(struct)\\s+([A-Za-z_][A-Za-z0-9_-]*)",
       "captures": {
         "1": {
           "patterns": [
             {
-              "include": "#storage-modifier"
+              "include": "#declaration-modifiers"
             }
           ]
         },
@@ -392,12 +659,12 @@
       }
     },
     "trait-definition": {
-      "match": "\\b((?:(?:shy|private|proud|public|local|global|export|partial)\\s+)*)(trait)\\s+([a-zA-Z_][a-zA-Z0-9_-]*)\\b",
+      "match": "\\b((?:(?:protected|abstract|obsolete|override|overrule|readonly|required|guarded|partial|private|fading|hermit|hidden|hollow|public|sealed|shared|static|strict|eager|fixed|fluid|leaky|local|proud|vital|lazy|raw|shy|global|export)\\s+)*)(trait)\\s+([A-Za-z_][A-Za-z0-9_-]*)",
       "captures": {
         "1": {
           "patterns": [
             {
-              "include": "#storage-modifier"
+              "include": "#declaration-modifiers"
             }
           ]
         },
@@ -410,12 +677,12 @@
       }
     },
     "union-definition": {
-      "match": "\\b((?:(?:shy|private|proud|public|local|global|export)\\s+)*)(union)\\s+([a-zA-Z_][a-zA-Z0-9_-]*)\\b",
+      "match": "\\b((?:(?:protected|abstract|obsolete|override|overrule|readonly|required|guarded|partial|private|fading|hermit|hidden|hollow|public|sealed|shared|static|strict|eager|fixed|fluid|leaky|local|proud|vital|lazy|raw|shy|global|export)\\s+)*)(union)\\s+([A-Za-z_][A-Za-z0-9_-]*)",
       "captures": {
         "1": {
           "patterns": [
             {
-              "include": "#storage-modifier"
+              "include": "#declaration-modifiers"
             }
           ]
         },
@@ -428,12 +695,12 @@
       }
     },
     "rune-definition": {
-      "match": "\\b((?:(?:shy|private|proud|public|local|global|export)\\s+)*)(rune)\\s+([a-zA-Z_][a-zA-Z0-9_-]*)\\b",
+      "match": "\\b((?:(?:protected|abstract|obsolete|override|overrule|readonly|required|guarded|partial|private|fading|hermit|hidden|hollow|public|sealed|shared|static|strict|eager|fixed|fluid|leaky|local|proud|vital|lazy|raw|shy|global|export)\\s+)*)(rune)\\s+([A-Za-z_][A-Za-z0-9_-]*)",
       "captures": {
         "1": {
           "patterns": [
             {
-              "include": "#storage-modifier"
+              "include": "#declaration-modifiers"
             }
           ]
         },
@@ -446,12 +713,12 @@
       }
     },
     "event-definition": {
-      "match": "\\b((?:(?:shy|private|proud|public|local|global|export)\\s+)*)(event)\\s+([a-zA-Z_][a-zA-Z0-9_-]*)\\b",
+      "match": "\\b((?:(?:protected|abstract|obsolete|override|overrule|readonly|required|guarded|partial|private|fading|hermit|hidden|hollow|public|sealed|shared|static|strict|eager|fixed|fluid|leaky|local|proud|vital|lazy|raw|shy|global|export)\\s+)*)(event)\\s+([A-Za-z_][A-Za-z0-9_-]*)",
       "captures": {
         "1": {
           "patterns": [
             {
-              "include": "#storage-modifier"
+              "include": "#declaration-modifiers"
             }
           ]
         },
@@ -464,12 +731,12 @@
       }
     },
     "module-definition": {
-      "match": "\\b((?:(?:shy|private|proud|public|local|global|export|partial)\\s+)*)(module)\\s+([a-zA-Z_][a-zA-Z0-9_-]*)\\b",
+      "match": "\\b((?:(?:protected|abstract|obsolete|override|overrule|readonly|required|guarded|partial|private|fading|hermit|hidden|hollow|public|sealed|shared|static|strict|eager|fixed|fluid|leaky|local|proud|vital|lazy|raw|shy|global|export)\\s+)*)(module)\\s+([A-Za-z_][A-Za-z0-9_-]*)",
       "captures": {
         "1": {
           "patterns": [
             {
-              "include": "#storage-modifier"
+              "include": "#declaration-modifiers"
             }
           ]
         },
@@ -482,12 +749,12 @@
       }
     },
     "enum-definition": {
-      "match": "\\b((?:(?:shy|private|proud|public|local|global|export)\\s+)*)(enum)\\s+([a-zA-Z_][a-zA-Z0-9_-]*)\\b",
+      "match": "\\b((?:(?:protected|abstract|obsolete|override|overrule|readonly|required|guarded|partial|private|fading|hermit|hidden|hollow|public|sealed|shared|static|strict|eager|fixed|fluid|leaky|local|proud|vital|lazy|raw|shy|global|export)\\s+)*)(enum)\\s+([A-Za-z_][A-Za-z0-9_-]*)",
       "captures": {
         "1": {
           "patterns": [
             {
-              "include": "#storage-modifier"
+              "include": "#declaration-modifiers"
             }
           ]
         },
@@ -500,12 +767,12 @@
       }
     },
     "record-definition": {
-      "match": "\\b((?:(?:shy|private|proud|public|local|global|export|sealed|strict|partial)\\s+)*)(record)\\s+([a-zA-Z_][a-zA-Z0-9_-]*)\\b",
+      "match": "\\b((?:(?:protected|abstract|obsolete|override|overrule|readonly|required|guarded|partial|private|fading|hermit|hidden|hollow|public|sealed|shared|static|strict|eager|fixed|fluid|leaky|local|proud|vital|lazy|raw|shy|global|export)\\s+)*)(record)\\s+([A-Za-z_][A-Za-z0-9_-]*)",
       "captures": {
         "1": {
           "patterns": [
             {
-              "include": "#storage-modifier"
+              "include": "#declaration-modifiers"
             }
           ]
         },
@@ -517,13 +784,78 @@
         }
       }
     },
-    "function-definition": {
-      "match": "\\b((?:(?:shy|private|proud|public|guarded|protected|local|global|export|static|shared|hollow|abstract|sealed|overrule|override|partial|fading|obsolete|raw|lazy)\\s+)*)(func)\\s+([a-zA-Z_][a-zA-Z0-9_-]*)\\s*(?=<|\\(|=>)",
+    "type-definition": {
+      "comment": "Refinement type alias:  type Port = int where (...)",
+      "match": "\\b((?:(?:protected|abstract|obsolete|override|overrule|readonly|required|guarded|partial|private|fading|hermit|hidden|hollow|public|sealed|shared|static|strict|eager|fixed|fluid|leaky|local|proud|vital|lazy|raw|shy|global|export)\\s+)*)(type)\\s+([A-Za-z_][A-Za-z0-9_-]*)\\s*(?==)",
       "captures": {
         "1": {
           "patterns": [
             {
-              "include": "#storage-modifier"
+              "include": "#declaration-modifiers"
+            }
+          ]
+        },
+        "2": {
+          "name": "keyword.control.tosh"
+        },
+        "3": {
+          "name": "entity.name.type.tosh"
+        }
+      }
+    },
+    "subcommand-definition": {
+      "comment": "subcommand blocks turn a script into a structured CLI",
+      "match": "\\b((?:(?:eager|hidden|hollow|vital)\\s+)*)(subcommand)\\s+([A-Za-z_][A-Za-z0-9_-]*)",
+      "captures": {
+        "1": {
+          "name": "storage.modifier.tosh"
+        },
+        "2": {
+          "name": "keyword.control.tosh"
+        },
+        "3": {
+          "name": "entity.name.function.subcommand.tosh"
+        }
+      }
+    },
+    "subcommand-member": {
+      "comment": "flag / arg declarations inside a subcommand body",
+      "match": "^\\s*(flag|arg)\\s+([A-Za-z_][A-Za-z0-9_-]*)",
+      "captures": {
+        "1": {
+          "name": "keyword.control.tosh"
+        },
+        "2": {
+          "name": "variable.parameter.tosh"
+        }
+      }
+    },
+    "operator-definition": {
+      "comment": "Operator overloads: func +(o), func ==(o), func !=(o). The name is punctuation, so #function-definition's identifier pattern never matches these.",
+      "match": "\\b((?:(?:protected|abstract|obsolete|override|overrule|readonly|required|guarded|partial|private|fading|hermit|hidden|hollow|public|sealed|shared|static|strict|eager|fixed|fluid|leaky|local|proud|vital|lazy|raw|shy|global|export)\\s+)*)(func)\\s*(\\*\\*|==|!=|<=|>=|=~|!~|//|\\+|-|\\*|/|%|<|>)\\s*(?=\\()",
+      "captures": {
+        "1": {
+          "patterns": [
+            {
+              "include": "#declaration-modifiers"
+            }
+          ]
+        },
+        "2": {
+          "name": "keyword.control.tosh"
+        },
+        "3": {
+          "name": "entity.name.function.operator.tosh"
+        }
+      }
+    },
+    "function-definition": {
+      "match": "\\b((?:(?:protected|abstract|obsolete|override|overrule|readonly|required|guarded|partial|private|fading|hermit|hidden|hollow|public|sealed|shared|static|strict|eager|fixed|fluid|leaky|local|proud|vital|lazy|raw|shy|global|export)\\s+)*)(func)\\s+([A-Za-z_][A-Za-z0-9_-]*)\\s*(?=<|\\(|=>|$)",
+      "captures": {
+        "1": {
+          "patterns": [
+            {
+              "include": "#declaration-modifiers"
             }
           ]
         },
@@ -535,15 +867,82 @@
         }
       }
     },
+    "declaration-modifiers": {
+      "comment": "Modifier run before a declaration keyword. `global` and `export` are visibility keywords rather than storage modifiers, so they need their own scope here.",
+      "patterns": [
+        {
+          "include": "#storage-modifier"
+        },
+        {
+          "match": "\\b(global|export)\\b",
+          "name": "keyword.control.tosh"
+        }
+      ]
+    },
+    "generic-arguments": {
+      "comment": "Type arguments glued to a name: Vector2D<T>, dict<string, int>. The no-space lookbehind keeps `a < b` a comparison.",
+      "match": "(?<=[A-Za-z0-9_])(<)([A-Za-z_][A-Za-z0-9_.,?\\s]*)(>)",
+      "captures": {
+        "1": {
+          "name": "punctuation.definition.generic.begin.tosh"
+        },
+        "2": {
+          "patterns": [
+            {
+              "match": "\\b(?:datetimeoffset|dynamicrecord|directory|hashtable|ipaddress|dateonly|datetime|timeonly|timespan|Complex|complex|decimal|dynamic|version|Matrix|Vector|double|matrix|object|string|ushort|array|float|regex|sbyte|short|table|tuple|ulong|bool|byte|char|dict|file|guid|list|long|uint|void|any|dir|int|mat|ptr|set|uri|vec|ip)\\b",
+              "name": "support.type.builtin.tosh"
+            },
+            {
+              "match": "[A-Za-z_][A-Za-z0-9_.]*",
+              "name": "entity.name.type.tosh"
+            },
+            {
+              "match": "[<>]",
+              "name": "punctuation.definition.generic.tosh"
+            },
+            {
+              "match": "[,?]",
+              "name": "punctuation.separator.tosh"
+            }
+          ]
+        },
+        "3": {
+          "name": "punctuation.definition.generic.end.tosh"
+        }
+      }
+    },
+    "member-declaration": {
+      "comment": "Field names in raw struct bodies and native bind signatures: `uptime: long`, `sysname: cstring[65]`.",
+      "match": "^\\s*((?!(?:starts-with|subcommand|ends-with|interface|is-not-in|callconv|contains|continue|priority|default|finally|handles|name-of|require|coerce|export|global|is-not|module|nameof|native|not-in|record|return|struct|subcmd|switch|unless|alloc|break|catch|class|const|defer|event|is-in|match|quote|throw|trait|union|until|using|where|while|yield|bind|case|else|enum|flag|from|func|once|prop|rune|type|when|and|arg|for|get|let|new|not|out|ref|set|try|var|as|if|in|is|or|protected|abstract|obsolete|override|overrule|readonly|required|guarded|partial|private|fading|hermit|hidden|hollow|public|sealed|shared|static|strict|eager|fixed|fluid|leaky|local|proud|vital|lazy|raw|shy|flag|arg|true|false|null|_)\\b)[A-Za-z_][A-Za-z0-9_-]*)\\s*(?=:(?![:=]))",
+      "captures": {
+        "1": {
+          "name": "variable.other.member.declaration.tosh"
+        }
+      }
+    },
+    "member-access": {
+      "comment": "Dotted member access on a bareword receiver: Info.raw_info.uptime. `$`-prefixed paths are already consumed whole by #variable-reference.",
+      "patterns": [
+        {
+          "comment": "Capitalised receiver reads as a type or module",
+          "match": "\\b([A-Z][A-Za-z0-9_]*)(?=\\.[A-Za-z_])",
+          "name": "entity.name.type.tosh"
+        },
+        {
+          "match": "(?<=\\.)([A-Za-z_][A-Za-z0-9_]*)",
+          "name": "variable.other.member.tosh"
+        }
+      ]
+    },
     "storage-modifier": {
-      "match": "\\b(shy|private|proud|public|guarded|protected|local|sealed|hollow|abstract|partial|overrule|override|static|shared|hermit|strict|fluid|leaky|lazy|fixed|readonly|vital|required|fading|obsolete|raw)\\b",
+      "match": "\\b(protected|abstract|obsolete|override|overrule|readonly|required|guarded|partial|private|fading|hermit|hidden|hollow|public|sealed|shared|static|strict|eager|fixed|fluid|leaky|local|proud|vital|lazy|raw|shy)\\b",
       "name": "storage.modifier.tosh"
     },
     "type-clause": {
-      "comment": "Type clauses on declarations: extends, fulfills, implements, uses, where",
+      "comment": "extends, fulfills, implements, uses, where",
       "patterns": [
         {
-          "match": "\\b(extends|fulfills|implements|uses)\\b\\s*([A-Za-z_][a-zA-Z0-9_.<>,\\s-]*)?",
+          "match": "\\b(extends|fulfills|implements|uses)\\b\\s*([A-Za-z_][A-Za-z0-9_.<>?,-]*)?",
           "captures": {
             "1": {
               "name": "keyword.control.inheritance.tosh"
@@ -554,30 +953,115 @@
           }
         },
         {
-          "match": "\\b(where)\\b",
-          "name": "keyword.control.constraint.tosh"
+          "comment": "Generic constraint: where T: Numeric. The optional group keeps a bare `where` (pipeline filter, refinement clause) matching too.",
+          "match": "\\b(where)\\b(?:\\s+([A-Za-z_][A-Za-z0-9_]*)\\s*(?=:(?![:=])))?",
+          "captures": {
+            "1": {
+              "name": "keyword.control.constraint.tosh"
+            },
+            "2": {
+              "name": "entity.name.type.parameter.tosh"
+            }
+          }
         }
       ]
     },
     "control-flow": {
-      "match": "\\b(if|else|unless|for|in|while|until|break|continue|return|yield|throw|try|catch|finally|defer|switch|case|default|match|when|handles|priority|once|func|var|const|alloc|class|interface|struct|trait|union|module|enum|record|rune|event|prop|using|require|native|bind|from|as|out|ref|callconv|global|export|new|nameof|name-of|let|pick|quote|and|or|not|is|is-not|not-in|is-in|is-not-in|contains|starts-with|ends-with)\\b",
+      "match": "\\b(starts-with|subcommand|ends-with|interface|is-not-in|callconv|contains|continue|priority|default|finally|handles|name-of|require|coerce|export|global|is-not|module|nameof|native|not-in|record|return|struct|subcmd|switch|unless|alloc|break|catch|class|const|defer|event|is-in|match|quote|throw|trait|union|until|using|where|while|yield|bind|case|else|enum|flag|from|func|once|prop|rune|type|when|and|arg|for|get|let|new|not|out|ref|set|try|var|as|if|in|is|or)\\b",
       "name": "keyword.control.tosh"
     },
     "constants": {
       "match": "\\b(true|false|null)\\b",
       "name": "constant.language.tosh"
     },
+    "cast-expression": {
+      "comment": "Type-test and cast operators:  $x as int,  $x is not string",
+      "match": "\\b(as|is-not|is)\\s+(not\\s+)?([A-Za-z_][A-Za-z0-9_.<>?,-]*)",
+      "captures": {
+        "1": {
+          "name": "keyword.operator.type.tosh"
+        },
+        "2": {
+          "name": "keyword.operator.type.tosh"
+        },
+        "3": {
+          "patterns": [
+            {
+              "match": "\\b(?:datetimeoffset|dynamicrecord|directory|hashtable|ipaddress|dateonly|datetime|timeonly|timespan|Complex|complex|decimal|dynamic|version|Matrix|Vector|double|matrix|object|string|ushort|array|float|regex|sbyte|short|table|tuple|ulong|bool|byte|char|dict|file|guid|list|long|uint|void|any|dir|int|mat|ptr|set|uri|vec|ip)\\b",
+              "name": "support.type.builtin.tosh"
+            },
+            {
+              "match": "[A-Za-z_][A-Za-z0-9_.]*",
+              "name": "entity.name.type.tosh"
+            },
+            {
+              "match": "[<>]",
+              "name": "punctuation.definition.generic.tosh"
+            },
+            {
+              "match": "[,?]",
+              "name": "punctuation.separator.tosh"
+            }
+          ]
+        }
+      }
+    },
+    "new-expression": {
+      "match": "\\b(new)\\s+([A-Za-z_][A-Za-z0-9_.<>?,-]*)",
+      "captures": {
+        "1": {
+          "name": "keyword.control.tosh"
+        },
+        "2": {
+          "patterns": [
+            {
+              "match": "\\b(?:datetimeoffset|dynamicrecord|directory|hashtable|ipaddress|dateonly|datetime|timeonly|timespan|Complex|complex|decimal|dynamic|version|Matrix|Vector|double|matrix|object|string|ushort|array|float|regex|sbyte|short|table|tuple|ulong|bool|byte|char|dict|file|guid|list|long|uint|void|any|dir|int|mat|ptr|set|uri|vec|ip)\\b",
+              "name": "support.type.builtin.tosh"
+            },
+            {
+              "match": "[A-Za-z_][A-Za-z0-9_.]*",
+              "name": "entity.name.type.tosh"
+            },
+            {
+              "match": "[<>]",
+              "name": "punctuation.definition.generic.tosh"
+            },
+            {
+              "match": "[,?]",
+              "name": "punctuation.separator.tosh"
+            }
+          ]
+        }
+      }
+    },
     "type-annotations": {
       "patterns": [
         {
-          "comment": "Parameter type annotation:  name: Type  or  name?: Type",
+          "comment": "Parameter / property type annotation:  name: Type",
           "match": "(?<=[a-zA-Z0-9_?])\\s*(:)\\s*([A-Za-z_][a-zA-Z0-9_.<>?]*)",
           "captures": {
             "1": {
               "name": "punctuation.separator.type.tosh"
             },
             "2": {
-              "name": "entity.name.type.tosh"
+              "patterns": [
+                {
+                  "match": "\\b(?:datetimeoffset|dynamicrecord|directory|hashtable|ipaddress|dateonly|datetime|timeonly|timespan|Complex|complex|decimal|dynamic|version|Matrix|Vector|double|matrix|object|string|ushort|array|float|regex|sbyte|short|table|tuple|ulong|bool|byte|char|dict|file|guid|list|long|uint|void|any|dir|int|mat|ptr|set|uri|vec|ip)\\b",
+                  "name": "support.type.builtin.tosh"
+                },
+                {
+                  "match": "[A-Za-z_][A-Za-z0-9_.]*",
+                  "name": "entity.name.type.tosh"
+                },
+                {
+                  "match": "[<>]",
+                  "name": "punctuation.definition.generic.tosh"
+                },
+                {
+                  "match": "[,?]",
+                  "name": "punctuation.separator.tosh"
+                }
+              ]
             }
           }
         },
@@ -589,7 +1073,39 @@
               "name": "punctuation.separator.return-type.tosh"
             },
             "2": {
+              "patterns": [
+                {
+                  "match": "\\b(?:datetimeoffset|dynamicrecord|directory|hashtable|ipaddress|dateonly|datetime|timeonly|timespan|Complex|complex|decimal|dynamic|version|Matrix|Vector|double|matrix|object|string|ushort|array|float|regex|sbyte|short|table|tuple|ulong|bool|byte|char|dict|file|guid|list|long|uint|void|any|dir|int|mat|ptr|set|uri|vec|ip)\\b",
+                  "name": "support.type.builtin.tosh"
+                },
+                {
+                  "match": "[A-Za-z_][A-Za-z0-9_.]*",
+                  "name": "entity.name.type.tosh"
+                },
+                {
+                  "match": "[<>]",
+                  "name": "punctuation.definition.generic.tosh"
+                },
+                {
+                  "match": "[,?]",
+                  "name": "punctuation.separator.tosh"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "comment": "Static member access on a CLR type:  String.Join(...)",
+          "match": "\\b([A-Z][A-Za-z0-9_]*(?:\\.[A-Z][A-Za-z0-9_]*)*)(\\.)([A-Za-z_][A-Za-z0-9_]*)\\s*(?=\\()",
+          "captures": {
+            "1": {
               "name": "entity.name.type.tosh"
+            },
+            "2": {
+              "name": "punctuation.accessor.tosh"
+            },
+            "3": {
+              "name": "entity.name.function.member.tosh"
             }
           }
         },
@@ -608,12 +1124,12 @@
       ]
     },
     "variable-declaration": {
-      "match": "\\b((?:(?:shy|private|proud|public|local|global|export)\\s+)*)(var|const|alloc)\\s+([a-zA-Z_][a-zA-Z0-9_]*)\\s*(?=:|=|$)",
+      "match": "\\b((?:(?:shy|private|proud|public|local|global|export)\\s+)*)(var|const|alloc|prop)\\s+([a-zA-Z_][a-zA-Z0-9_-]*)\\s*(?=:|=|$|\\s)",
       "captures": {
         "1": {
           "patterns": [
             {
-              "include": "#storage-modifier"
+              "include": "#declaration-modifiers"
             }
           ]
         },
@@ -626,8 +1142,8 @@
       }
     },
     "spread-operator": {
-      "comment": "Spread / splat operator: ...$args",
-      "match": "(\\.\\.\\.)(\\$[a-zA-Z_][a-zA-Z0-9_]*(?:\\.[a-zA-Z_][a-zA-Z0-9_]*)*)",
+      "comment": "Spread / splat:  ...$args",
+      "match": "(\\.\\.\\.)(\\$[a-zA-Z_][a-zA-Z0-9_]*(?:\\.[a-zA-Z_][a-zA-Z0-9_]*)*)?",
       "captures": {
         "1": {
           "name": "keyword.operator.spread.tosh"
@@ -638,42 +1154,102 @@
       }
     },
     "caret-escape": {
-      "comment": "Force external command: ^command",
-      "match": "(\\^)(?=[a-zA-Z_$\\/])",
+      "comment": "Force external command:  ^command",
+      "match": "(\\^)(?=[a-zA-Z_$/])",
       "captures": {
         "1": {
           "name": "keyword.operator.caret-escape.tosh"
         }
       }
     },
+    "function-reference": {
+      "comment": "&name is a function reference at the start of an expression; a trailing & backgrounds the pipeline.",
+      "patterns": [
+        {
+          "match": "(?<![A-Za-z0-9_])(&)([A-Za-z_][A-Za-z0-9_-]*)",
+          "captures": {
+            "1": {
+              "name": "keyword.operator.function-reference.tosh"
+            },
+            "2": {
+              "name": "entity.name.function.tosh"
+            }
+          }
+        },
+        {
+          "match": "&\\s*$",
+          "name": "keyword.operator.background.tosh"
+        }
+      ]
+    },
+    "special-variable": {
+      "patterns": [
+        {
+          "comment": "$tosh runtime namespace:  $tosh.Last.Result",
+          "match": "\\$tosh(?:\\.[A-Za-z_][A-Za-z0-9_]*)*",
+          "name": "support.variable.tosh"
+        },
+        {
+          "comment": "$env.NAME environment access",
+          "match": "(\\$env)(\\.)([A-Za-z_][A-Za-z0-9_]*)",
+          "captures": {
+            "1": {
+              "name": "support.variable.tosh"
+            },
+            "2": {
+              "name": "punctuation.accessor.tosh"
+            },
+            "3": {
+              "name": "variable.other.environment.tosh"
+            }
+          }
+        },
+        {
+          "comment": "$this is the receiver, so it reads as a member rather than as a language keyword: most themes render variable.language in a bright keyword red, which is wrong for a value you dot into.",
+          "match": "\\$this\\b",
+          "name": "variable.other.member.this.tosh"
+        },
+        {
+          "match": "\\$value\\b",
+          "name": "variable.language.tosh"
+        },
+        {
+          "comment": "Positional parameters in arrow functions:  $1, $2",
+          "match": "\\$[0-9]+",
+          "name": "variable.parameter.positional.tosh"
+        }
+      ]
+    },
     "variable-reference": {
-      "match": "\\$[a-zA-Z_][a-zA-Z0-9_]*(?:\\.[a-zA-Z_][a-zA-Z0-9_]*)*",
+      "match": "\\$[a-zA-Z_][a-zA-Z0-9_-]*(?:\\.[a-zA-Z_][a-zA-Z0-9_]*)*",
       "name": "variable.other.readwrite.tosh"
     },
     "pipeline-underscore": {
       "patterns": [
         {
-          "comment": "_.Member access on current pipeline item",
-          "match": "\\b(_)(\\.)[a-zA-Z_][a-zA-Z0-9_.()]*",
+          "comment": "_.Member access on the current pipeline item",
+          "match": "\\b(_)(\\.)([a-zA-Z_][a-zA-Z0-9_.()]*)",
           "captures": {
             "1": {
               "name": "variable.language.pipeline-item.tosh"
             },
             "2": {
               "name": "punctuation.accessor.tosh"
+            },
+            "3": {
+              "name": "variable.other.member.tosh"
             }
           }
         },
         {
-          "comment": "Bare _ as current pipeline item",
           "match": "\\b_\\b",
           "name": "variable.language.pipeline-item.tosh"
         }
       ]
     },
     "builtin-commands": {
-      "comment": "TōSh built-in commands — highlighted in command position",
-      "match": "(?:^|(?<=\\|)\\s*|(?<=;)\\s*|(?<=\\{)\\s*)\\b(all|alloc|any|append-file|apropos|as-file|assert|avg|back|basename|bg|call|call-method|cast|cat|cd|chmod|chown|chunk|clear|clone|close|collect|compose|config|constructors|converge|copy-to|count|cp|curry|cut|date|del-prop|describe-type|df|dirname|dirs|distinct|du|each|echo|env|events|exec|exists|exit|export|fg|filter|find|find-index|findmnt|first|flat-map|flatten|flush|forward|free|frequencies|from|get|get-methods|get-prop|get-props|glob|grep|group-by|group-while|guid|has-method|has-prop|hash|head|help|history|history-search|hostname|hostnamectl|http|id|ignore|inspect|interleave|invoke|ip|is-dir|is-file|is-link|iterate|jobs|join-lines|journalctl|kill|last|length|lines|ln|load-assembly|loginctl|ls|lsblk|lscpu|lsfd|lsipc|map|match|max|members|methods|min|mkdir|mkdir-temp|mv|native-free|native-read|native-write|networkctl|new|none|offset-of|open-file|parse|partial|partition|pick|ping|position|prompt-dir|prompt-duration|prompt-exit|prompt-git|prompt-history|prompt-jobs|prompt-newline|prompt-text|prompt-time|prompt-userhost|ps|pwd|raise|raw|read-bytes|read-file|read-from|read-line|read-line-from|read-lines|read-to-end|readlink|realpath|reduce|rename|replace|reverse|rm|scan|seek|select|seq|set-prop|signal|size-of|skip|skip-until|skip-while|sleep|sort|split|stat|styled|sum|summary|systemctl|tail|take-until|take-while|tee|tempfile|template|time|timespan|to|touch|tr|transpose|tree|tui|type-of|types|ulimit|umask|uname|unfold|uniq|unset|uptime|vars|view|wait-for|wc|where|which|whoami|window|write|write-bytes|write-file|write-line-to|write-to|writeline|xargs|zip)\\b",
+      "comment": "Built-in commands, highlighted in command position. Alternation is longest-first so 'read' cannot shadow 'read-file'.",
+      "match": "(?:^|(?<=[;{(])|(?<=\\|)(?<!\\{\\|)|(?<==>))\\s*(?!(?:starts-with|subcommand|ends-with|interface|is-not-in|callconv|contains|continue|priority|default|finally|handles|name-of|require|coerce|export|global|is-not|module|nameof|native|not-in|record|return|struct|subcmd|switch|unless|alloc|break|catch|class|const|defer|event|is-in|match|quote|throw|trait|union|until|using|where|while|yield|bind|case|else|enum|flag|from|func|once|prop|rune|type|when|and|arg|for|get|let|new|not|out|ref|set|try|var|as|if|in|is|or|protected|abstract|obsolete|override|overrule|readonly|required|guarded|partial|private|fading|hermit|hidden|hollow|public|sealed|shared|static|strict|eager|fixed|fluid|leaky|local|proud|vital|lazy|raw|shy|flag|arg|true|false|null|_)\\b)\\b(cartesian-product|native-offsetof|prompt-duration|prompt-userhost|channel-select|history-search|prompt-history|prompt-newline|read-line-from|channel-close|describe-type|load-assembly|native-sizeof|write-line-to|channel-recv|channel-send|combinations|constructors|native-alloc|native-write|permutations|write-buffer|append-file|call-method|frequencies|get-methods|group-while|hostnamectl|intersperse|native-free|native-read|prompt-exit|prompt-jobs|prompt-text|prompt-time|read-buffer|read-to-end|write-bytes|disk-usage|find-index|has-method|interleave|join-lines|journalctl|mkdir-temp|networkctl|percentile|prompt-dir|prompt-git|read-bytes|read-lines|repeatedly|skip-until|skip-while|take-until|take-while|with-retry|write-file|benchmark|enumerate|get-props|offset-of|open-file|partition|read-file|read-from|read-line|summarize|systemctl|transpose|writeline|basename|converge|del-prop|describe|distinct|flat-map|get-prop|group-by|has-prop|hostname|loginctl|parallel|position|readlink|realpath|set-prop|tempfile|template|timespan|variance|wait-for|write-to|apropos|as-file|average|channel|collect|complex|compose|copy-to|dirname|findmnt|flatten|foreach|forward|history|inspect|is-file|is-link|iterate|members|methods|partial|replace|reverse|size-of|sort-by|step-by|summary|timeout|type-of|assert|config|events|exists|export|filter|forget|format|ignore|invoke|is-dir|length|logout|median|mounts|prompt|reduce|rename|repeat|select|settle|signal|source|stddev|styled|ulimit|unfold|unless|uptime|whence|whoami|window|alloc|async|await|chain|chmod|chown|chunk|clear|clone|close|count|curry|cycle|debug|dedup|first|flush|funcs|lines|lsblk|lscpu|lsipc|match|mkdir|parse|props|raise|recur|round|scope|sleep|spawn|split|stdev|touch|types|umask|uname|undef|unset|usage|where|which|write|xargs|back|call|cast|date|dirs|each|echo|edit|eval|exec|exit|find|free|from|glob|grep|guid|hash|head|help|http|hush|jobs|join|kill|last|lsfd|none|pick|ping|race|scan|seek|skip|sort|stat|tail|time|tree|uniq|vars|view|all|any|avg|cat|cut|dbg|env|get|map|mat|max|min|new|pwd|raw|row|seq|sum|tee|tui|vec|zip|bg|cd|cp|df|du|fg|id|ip|ln|ls|mv|ps|rm|to|tr|wc)\\b",
       "captures": {
         "1": {
           "name": "support.function.builtin.tosh"
@@ -681,28 +1257,11 @@
       }
     },
     "command-position": {
+      "comment": "These matches begin at the whitespace before the word, so they start earlier than a keyword match on the word itself and would otherwise win the tie. NOT_KEYWORD keeps `{ return ...` and `for x in ...` from being scoped as command calls.",
       "patterns": [
         {
-          "comment": "Command at start of line (user functions, external commands)",
-          "match": "^\\s*([a-zA-Z_][a-zA-Z0-9_-]*)(?=\\s|$|\\()",
-          "captures": {
-            "1": {
-              "name": "entity.name.function.call.tosh"
-            }
-          }
-        },
-        {
-          "comment": "Command after pipe",
-          "match": "(?<=\\|)\\s*([a-zA-Z_][a-zA-Z0-9_-]*)(?=\\s|$|\\()",
-          "captures": {
-            "1": {
-              "name": "entity.name.function.call.tosh"
-            }
-          }
-        },
-        {
-          "comment": "Command after semicolon or opening brace",
-          "match": "(?<=[;{])\\s*([a-zA-Z_][a-zA-Z0-9_-]*)(?=\\s|$|\\()",
+          "comment": "Command position: start of line, after ; { ( or =>, or after a pipe that is not a {| record opener.",
+          "match": "(?:^|(?<=[;{(])|(?<=\\|)(?<!\\{\\|)|(?<==>))\\s*((?!(?:starts-with|subcommand|ends-with|interface|is-not-in|callconv|contains|continue|priority|default|finally|handles|name-of|require|coerce|export|global|is-not|module|nameof|native|not-in|record|return|struct|subcmd|switch|unless|alloc|break|catch|class|const|defer|event|is-in|match|quote|throw|trait|union|until|using|where|while|yield|bind|case|else|enum|flag|from|func|once|prop|rune|type|when|and|arg|for|get|let|new|not|out|ref|set|try|var|as|if|in|is|or|protected|abstract|obsolete|override|overrule|readonly|required|guarded|partial|private|fading|hermit|hidden|hollow|public|sealed|shared|static|strict|eager|fixed|fluid|leaky|local|proud|vital|lazy|raw|shy|flag|arg|true|false|null|_)\\b)[A-Za-z_][A-Za-z0-9_-]*)(?=\\s|$|\\()",
           "captures": {
             "1": {
               "name": "entity.name.function.call.tosh"
@@ -711,33 +1270,80 @@
         }
       ]
     },
+    "parameter-name": {
+      "comment": "Parameter names in signatures — after '(' or ',', and after the native binding modes 'out' and 'ref'.",
+      "match": "(?:(?<=[(,])|(?<=\\bout\\s)|(?<=\\bref\\s))\\s*((?!(?:starts-with|subcommand|ends-with|interface|is-not-in|callconv|contains|continue|priority|default|finally|handles|name-of|require|coerce|export|global|is-not|module|nameof|native|not-in|record|return|struct|subcmd|switch|unless|alloc|break|catch|class|const|defer|event|is-in|match|quote|throw|trait|union|until|using|where|while|yield|bind|case|else|enum|flag|from|func|once|prop|rune|type|when|and|arg|for|get|let|new|not|out|ref|set|try|var|as|if|in|is|or|protected|abstract|obsolete|override|overrule|readonly|required|guarded|partial|private|fading|hermit|hidden|hollow|public|sealed|shared|static|strict|eager|fixed|fluid|leaky|local|proud|vital|lazy|raw|shy|flag|arg|true|false|null|_)\\b)[A-Za-z_][A-Za-z0-9_-]*)\\s*(?=:(?![:=]))",
+      "captures": {
+        "1": {
+          "name": "variable.parameter.tosh"
+        }
+      }
+    },
     "collection-delimiters": {
-      "comment": "Paired set, record, and dictionary literal delimiters",
+      "comment": "Record {| |}, dictionary {% %} and set {: :} delimiters",
       "match": "\\{[|:%]|[|:%]\\}",
       "name": "punctuation.section.collection.tosh"
+    },
+    "redirection": {
+      "comment": "Named-stream redirection: out> o>> err> e> o+e> err+out>> and <<<",
+      "patterns": [
+        {
+          "match": "(?<![A-Za-z0-9_-])(?:out\\+err|err\\+out|o\\+e|e\\+o|out|err|o|e)>>?",
+          "name": "keyword.operator.redirect.tosh"
+        },
+        {
+          "match": "<<<",
+          "name": "keyword.operator.redirect.here-string.tosh"
+        }
+      ]
     },
     "operators": {
       "patterns": [
         {
-          "comment": "Match arm arrow: pattern => result",
           "match": "=>",
           "name": "keyword.operator.arrow.tosh"
+        },
+        {
+          "comment": "Comprehension separator: [body <| for x in ...]",
+          "match": "<\\|",
+          "name": "keyword.operator.comprehension.tosh"
+        },
+        {
+          "match": "\\*\\*=|//=|\\?\\?=|\\+=|-=|\\*=|/=|%=",
+          "name": "keyword.operator.assignment.compound.tosh"
+        },
+        {
+          "match": "\\?\\?|\\?\\.",
+          "name": "keyword.operator.null-coalescing.tosh"
+        },
+        {
+          "match": "&&|\\|\\|",
+          "name": "keyword.operator.logical.tosh"
+        },
+        {
+          "match": "\\*\\*",
+          "name": "keyword.operator.arithmetic.tosh"
+        },
+        {
+          "comment": "Floor division. Spaces required so paths keep their slashes.",
+          "match": "(?<=\\s)//(?=\\s)",
+          "name": "keyword.operator.arithmetic.tosh"
         },
         {
           "match": "\\.\\.",
           "name": "keyword.operator.range.tosh"
         },
         {
-          "match": "!~|=~|not-in|!=|>=|<=|==",
+          "match": "!~|=~|!=|>=|<=|==",
           "name": "keyword.operator.comparison.tosh"
         },
         {
-          "match": ">>|<<<",
-          "name": "keyword.operator.redirect.tosh"
+          "match": "[<>]",
+          "name": "keyword.operator.comparison.tosh"
         },
         {
-          "match": "\\+=|-=|\\*=|/=|%=|[%><]",
-          "name": "keyword.operator.tosh"
+          "match": "(?<=\\s)[-+*/%](?=\\s)",
+          "name": "keyword.operator.arithmetic.tosh"
         },
         {
           "match": "(?<=\\s)\\?(?=\\s)|(?<=\\s):(?=\\s)",
@@ -756,42 +1362,62 @@
     "numeric": {
       "patterns": [
         {
-          "comment": "Storage sizes: 1kb, 512mb, etc. (with optional _ separators)",
+          "comment": "Quantity with a unit: 100`m, 9.8`m/s^2, 5`kg",
+          "match": "\\b([0-9][0-9_]*(?:\\.[0-9][0-9_]*)?)(`)([A-Za-z][A-Za-z0-9^/*·-]*)",
+          "captures": {
+            "1": {
+              "name": "constant.numeric.tosh"
+            },
+            "2": {
+              "name": "punctuation.definition.unit.tosh"
+            },
+            "3": {
+              "name": "keyword.other.unit.tosh"
+            }
+          }
+        },
+        {
+          "comment": "Imaginary literal: 4i, 2.5i",
+          "match": "\\b[0-9][0-9_]*(?:\\.[0-9][0-9_]*)?i\\b",
+          "name": "constant.numeric.imaginary.tosh"
+        },
+        {
+          "comment": "Storage sizes: 1kb, 512mb",
           "match": "\\b[0-9][0-9_]*(?:\\.[0-9][0-9_]*)?(?:b|kb|mb|gb|tb|pb)\\b",
           "name": "constant.numeric.size.tosh"
         },
         {
-          "comment": "Temporal shorthand: 7d, 30m, 2h, 1w2d4h, 1mo, etc. (with optional _ separators)",
-          "match": "\\b(?:[0-9][0-9_]*(?:\\.[0-9][0-9_]*)?(?:ns|us|ms|s|m|h|d|w|mo|y|da|c|ka|Ma|Ga|Ta))+\\b",
-          "name": "constant.numeric.duration.tosh"
-        },
-        {
-          "comment": "ISO-like date literal",
-          "match": "\\b[0-9]{4}-[0-9]{2}-[0-9]{2}(?:T[0-9]{2}:[0-9]{2}(?::[0-9]{2})?(?:Z|[+-][0-9]{2}:[0-9]{2})?)?\\b",
+          "comment": "ISO temporal instants — must precede the duration rule",
+          "match": "\\b[0-9]{4}-[0-9]{2}-[0-9]{2}(?:T[0-9]{2}:[0-9]{2}(?::[0-9]{2}(?:\\.[0-9]{1,7})?)?(?:Z|[+-][0-9]{2}:[0-9]{2})?)?\\b",
           "name": "constant.numeric.datetime.tosh"
         },
         {
-          "comment": "Hexadecimal integer: 0xFF, 0x1A_2B",
+          "comment": "Temporal shorthand: 7d, 30m, 1w2d4h",
+          "match": "\\b(?:[0-9][0-9_]*(?:\\.[0-9][0-9_]*)?(?:ns|us|ms|mo|ka|Ma|Ga|Ta|da|s|m|h|d|w|y|c))+\\b",
+          "name": "constant.numeric.duration.tosh"
+        },
+        {
+          "comment": "IPv4 literal — four explicit octets, no leading zeroes",
+          "match": "\\b(?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])(?:\\.(?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])){3}\\b",
+          "name": "constant.numeric.ip.tosh"
+        },
+        {
           "match": "\\b0[xX][0-9a-fA-F][0-9a-fA-F_]*\\b",
           "name": "constant.numeric.hex.tosh"
         },
         {
-          "comment": "Binary integer: 0b1010, 0b1111_0000",
           "match": "\\b0[bB][01][01_]*\\b",
           "name": "constant.numeric.binary.tosh"
         },
         {
-          "comment": "Octal integer: 0o77, 0o755",
           "match": "\\b0[oO][0-7][0-7_]*\\b",
           "name": "constant.numeric.octal.tosh"
         },
         {
-          "comment": "Float (with optional _ separators)",
           "match": "\\b[0-9][0-9_]*\\.[0-9][0-9_]*\\b",
           "name": "constant.numeric.float.tosh"
         },
         {
-          "comment": "Integer (with optional _ separators)",
           "match": "\\b[0-9][0-9_]*\\b",
           "name": "constant.numeric.integer.tosh"
         }
@@ -838,6 +1464,10 @@
         {
           "match": ",",
           "name": "punctuation.separator.tosh"
+        },
+        {
+          "match": "\\.",
+          "name": "punctuation.accessor.tosh"
         }
       ]
     }
