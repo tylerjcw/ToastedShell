@@ -9,16 +9,18 @@ namespace Tosh.Stdlib.Pipeline;
 [CommandOption("-n, --numeric", "Use numeric comparison.")]
 [CommandOption("-u, --unique", "Remove duplicate values after sorting.")]
 [CommandOption("-h, --human-numeric", "Human-numeric sort (understands storage sizes).")]
+[CommandOption("-o, --ordinal", "Compare by code point, case-sensitively.")]
 [CommandExample("ps | sort Memory", Title = "Sort by property")]
 [CommandExample("ls -la | sort Modified | reverse", Title = "Sort then reverse")]
 [CommandExample("ps | sort func(p) => ($p.Name.Length)", Title = "Lambda sort key")]
+[CommandExample("$codes | sort --ordinal", Title = "Code-point order, for generated output")]
 [CommandOutput("The input pipeline objects in sorted order.")]
 [PipelineInput(AcceptsScalar = true, Description = "Collects all pipeline objects, sorts them, then re-emits.")]
 [CommandStreaming(StreamingBehavior.Eager)]
 public sealed class SortCommand : ShellCommand
 {
     public SortCommand(string name = "sort")
-        : base(name, "Sorts the current pipeline objects.", $"{name} [-r|--reverse] [-n|--numeric] [-u|--unique] [-h|--human-numeric] [member-path|callable|block]") { }
+        : base(name, "Sorts the current pipeline objects.", $"{name} [-r|--reverse] [-n|--numeric] [-u|--unique] [-h|--human-numeric] [-o|--ordinal] [member-path|callable|block]") { }
 
     public override async IAsyncEnumerable<object?> ExecuteAsync(CommandContext context)
     {
@@ -33,6 +35,14 @@ public sealed class SortCommand : ShellCommand
         var numeric = parsed.HasFlag("n", "numeric");
         var unique = parsed.HasFlag("u", "unique");
         var humanNumeric = parsed.HasFlag("h", "human-numeric");
+
+        // `TS-P2-75`. Default comparison is `OrdinalIgnoreCase`, which is the right
+        // default for a shell — `Apple` and `apple` belong next to each other — but it
+        // has a consequence that surprises: case folding raises lowercase letters above
+        // `_`, so `expected_record_fields` sorts *before* `expected_record_field_default`
+        // while by code point it sorts after. Anything generated and committed wants the
+        // code-point order, and there was no way to ask for it.
+        var ordinal = parsed.HasFlag("o", "ordinal");
         var selector = parsed.Positionals.Count == 0 ? null : parsed.Positionals[0];
 
         if (parsed.Positionals.Count > 0 &&
@@ -48,7 +58,7 @@ public sealed class SortCommand : ShellCommand
                 label: "this selector is not supported");
         }
 
-        var comparer = new ShellSortComparer(numeric, humanNumeric);
+        var comparer = new ShellSortComparer(numeric, humanNumeric, ordinal);
 
         async Task<object?> SelectAsync(object? value)
         {
@@ -134,7 +144,7 @@ public sealed class SortCommand : ShellCommand
             ? keyed.OrderByDescending(entry => entry.Key, comparer)
             : keyed.OrderBy(entry => entry.Key, comparer);
 
-        var seen = unique ? new HashSet<object?>(ShellEqualityComparer.Instance) : null;
+        var seen = unique ? new HashSet<object?>(ordinal ? ShellEqualityComparer.Ordinal : ShellEqualityComparer.Instance) : null;
 
         foreach (var entry in ordered)
         {
@@ -156,11 +166,13 @@ public sealed class SortCommand : ShellCommand
     {
         private readonly bool _numeric;
         private readonly bool _humanNumeric;
+        private readonly StringComparer _strings;
 
-        public ShellSortComparer(bool numeric = false, bool humanNumeric = false)
+        public ShellSortComparer(bool numeric = false, bool humanNumeric = false, bool ordinal = false)
         {
             _numeric = numeric;
             _humanNumeric = humanNumeric;
+            _strings = ordinal ? StringComparer.Ordinal : StringComparer.OrdinalIgnoreCase;
         }
 
         public int Compare(object? x, object? y)
@@ -201,7 +213,7 @@ public sealed class SortCommand : ShellCommand
 
             if (x is string leftText && y is string rightText)
             {
-                return StringComparer.OrdinalIgnoreCase.Compare(leftText, rightText);
+                return _strings.Compare(leftText, rightText);
             }
 
             // Try to convert y to x's type for comparison, but skip the string
@@ -233,7 +245,7 @@ public sealed class SortCommand : ShellCommand
 
             var leftString = x.ToString() ?? xTypeName;
             var rightString = y.ToString() ?? yTypeName;
-            return StringComparer.OrdinalIgnoreCase.Compare(leftString, rightString);
+            return _strings.Compare(leftString, rightString);
         }
 
         private static bool TryGetDouble(object value, out double result)
@@ -256,7 +268,18 @@ public sealed class SortCommand : ShellCommand
 
     private sealed class ShellEqualityComparer : IEqualityComparer<object?>
     {
-        public static readonly ShellEqualityComparer Instance = new();
+        public static readonly ShellEqualityComparer Instance = new(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// The `--unique` counterpart of `--ordinal` (`TS-P2-75`). Deduplication has to
+        /// agree with the comparison it follows, or `-u -o` would fold `Alpha` and
+        /// `alpha` together while the sort had just placed them apart.
+        /// </summary>
+        public static readonly ShellEqualityComparer Ordinal = new(StringComparer.Ordinal);
+
+        private readonly StringComparer _strings;
+
+        private ShellEqualityComparer(StringComparer strings) => _strings = strings;
 
         public new bool Equals(object? x, object? y)
         {
@@ -272,7 +295,7 @@ public sealed class SortCommand : ShellCommand
 
             if (x is string leftText && y is string rightText)
             {
-                return StringComparer.OrdinalIgnoreCase.Equals(leftText, rightText);
+                return _strings.Equals(leftText, rightText);
             }
 
             return x.Equals(y);
@@ -287,7 +310,7 @@ public sealed class SortCommand : ShellCommand
 
             if (obj is string text)
             {
-                return StringComparer.OrdinalIgnoreCase.GetHashCode(text);
+                return _strings.GetHashCode(text);
             }
 
             return obj.GetHashCode();

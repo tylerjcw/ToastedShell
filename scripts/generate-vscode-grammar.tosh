@@ -33,19 +33,16 @@ if ($output == "") {
     $output = Path.Combine($root, "editor", "vscode", "tosh.tosh-lang", "syntaxes", "tosh.tmLanguage.json")
 }
 
-## @summary A sort key ordering by code point rather than by collation (`TS-P2-75`).
-func ordinal_key(s: string) {
-    var sb = new System.Text.StringBuilder()
-    for ch in $s.ToCharArray() {
-        $sb.Append(System.Convert.ToInt32($ch).ToString("D5")) | ignore
-    }
-    return $sb.ToString()
-}
-
 ## @summary Longest-first, then by code point — the ordering an alternation needs
 ##   so `read` cannot shadow `read-file`.
+## @remarks
+##   The length rides in front as a fixed-width number so one `sort --ordinal`
+##   does both keys at once. `--ordinal` is required rather than decorative:
+##   `sort` is case-insensitive by default, and case folding raises lowercase
+##   letters above `_`, which reorders any alternation containing both
+##   (`TS-P2-75`).
 func alternation_key(s: string) {
-    return (9999 - $s.Length).ToString("D4") + (ordinal_key $s)
+    return (9999 - $s.Length).ToString("D4") + $s
 }
 
 ## @summary The CLI that owns the metadata. Prefers the build under test.
@@ -76,7 +73,7 @@ for entry in $metadata {
     }
 }
 
-var BUILTINS = String.Join("|", ($builtinNames.Keys | sort { alternation_key $_ } | collect))
+var BUILTINS = String.Join("|", ($builtinNames.Keys | sort --ordinal { alternation_key $_ } | collect))
 
 # ── Language words, from LanguageSurface ────────────────────────────────────
 
@@ -145,8 +142,8 @@ if ($literalWords) {
         if ($isModifier and not $isFlow) { $modifierWords[$word] = true }
     }
 
-    $CONTROL = String.Join("|", ($controlWords.Keys | sort { alternation_key $_ } | collect))
-    $MODIFIERS = String.Join("|", ($modifierWords.Keys | sort { alternation_key $_ } | collect))
+    $CONTROL = String.Join("|", ($controlWords.Keys | sort --ordinal { alternation_key $_ } | collect))
+    $MODIFIERS = String.Join("|", ($modifierWords.Keys | sort --ordinal { alternation_key $_ } | collect))
 }
 
 # ── Fixed vocabulary ────────────────────────────────────────────────────────
@@ -159,7 +156,7 @@ var TYPE_ALIASES = ["string", "int", "long", "float", "double", "decimal", "bool
     "directory", "ptr", "ip", "ipaddress", "version", "Vector", "vec", "Matrix",
     "matrix", "mat", "Complex", "complex", "void", "any", "dynamic"]
 
-var TYPE_ALIAS_RE = String.Join("|", ($TYPE_ALIASES | sort { alternation_key $_ } | collect))
+var TYPE_ALIAS_RE = String.Join("|", ($TYPE_ALIASES | sort --ordinal { alternation_key $_ } | collect))
 
 var DOC_TAGS = "summary|remarks|returns|value|example|deprecated|seealso|see|since|" +
                "exception|throws|para"
