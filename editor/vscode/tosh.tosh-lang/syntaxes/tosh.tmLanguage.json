@@ -901,6 +901,10 @@
               "name": "punctuation.definition.generic.tosh"
             },
             {
+              "match": "\\[\\]",
+              "name": "punctuation.definition.array.tosh"
+            },
+            {
               "match": "[,?]",
               "name": "punctuation.separator.tosh"
             }
@@ -942,7 +946,7 @@
       "comment": "extends, fulfills, implements, uses, where",
       "patterns": [
         {
-          "match": "\\b(extends|fulfills|implements|uses)\\b\\s*([A-Za-z_][A-Za-z0-9_.<>?,-]*)?",
+          "match": "\\b(extends|fulfills|implements|uses)\\b\\s*([A-Za-z_][A-Za-z0-9_.<>?,\\[\\]-]*)?",
           "captures": {
             "1": {
               "name": "keyword.control.inheritance.tosh"
@@ -976,7 +980,7 @@
     },
     "cast-expression": {
       "comment": "Type-test and cast operators:  $x as int,  $x is not string",
-      "match": "\\b(as|is-not|is)\\s+(not\\s+)?([A-Za-z_][A-Za-z0-9_.<>?,-]*)",
+      "match": "\\b(as|is-not|is)\\s+(not\\s+)?([A-Za-z_][A-Za-z0-9_.<>?,\\[\\]-]*)",
       "captures": {
         "1": {
           "name": "keyword.operator.type.tosh"
@@ -999,6 +1003,10 @@
               "name": "punctuation.definition.generic.tosh"
             },
             {
+              "match": "\\[\\]",
+              "name": "punctuation.definition.array.tosh"
+            },
+            {
               "match": "[,?]",
               "name": "punctuation.separator.tosh"
             }
@@ -1007,7 +1015,7 @@
       }
     },
     "new-expression": {
-      "match": "\\b(new)\\s+([A-Za-z_][A-Za-z0-9_.<>?,-]*)",
+      "match": "\\b(new)\\s+([A-Za-z_][A-Za-z0-9_.<>?,\\[\\]-]*)",
       "captures": {
         "1": {
           "name": "keyword.control.tosh"
@@ -1027,6 +1035,10 @@
               "name": "punctuation.definition.generic.tosh"
             },
             {
+              "match": "\\[\\]",
+              "name": "punctuation.definition.array.tosh"
+            },
+            {
               "match": "[,?]",
               "name": "punctuation.separator.tosh"
             }
@@ -1038,7 +1050,7 @@
       "patterns": [
         {
           "comment": "Parameter / property type annotation:  name: Type",
-          "match": "(?<=[a-zA-Z0-9_?])\\s*(:)\\s*([A-Za-z_][a-zA-Z0-9_.<>?]*)",
+          "match": "(?<=[a-zA-Z0-9_?])\\s*(:)\\s*([A-Za-z_][a-zA-Z0-9_.<>?\\[\\]]*)",
           "captures": {
             "1": {
               "name": "punctuation.separator.type.tosh"
@@ -1058,6 +1070,10 @@
                   "name": "punctuation.definition.generic.tosh"
                 },
                 {
+                  "match": "\\[\\]",
+                  "name": "punctuation.definition.array.tosh"
+                },
+                {
                   "match": "[,?]",
                   "name": "punctuation.separator.tosh"
                 }
@@ -1067,7 +1083,7 @@
         },
         {
           "comment": "Return type annotation:  -> Type",
-          "match": "(->)\\s*([A-Za-z_][a-zA-Z0-9_.<>?]*)",
+          "match": "(->)\\s*([A-Za-z_][a-zA-Z0-9_.<>?\\[\\]]*)",
           "captures": {
             "1": {
               "name": "punctuation.separator.return-type.tosh"
@@ -1085,6 +1101,10 @@
                 {
                   "match": "[<>]",
                   "name": "punctuation.definition.generic.tosh"
+                },
+                {
+                  "match": "\\[\\]",
+                  "name": "punctuation.definition.array.tosh"
                 },
                 {
                   "match": "[,?]",

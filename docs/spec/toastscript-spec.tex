@@ -937,6 +937,7 @@ annotations, casts, and \code{new} expressions.
 \code{regex} & \code{System.Text.RegularExpressions.Regex} & Compiled pattern \\
 \code{list} & \code{System.Collections.Generic.List<object>} & Growable ordered list \\
 \code{array} & \code{System.Object[]} & Fixed-size array \\
+\code{T[]} & \code{T[]} & Array of \code{T} --- see below \\
 \code{dict} & \code{Dictionary<string, object>} & Key-value dictionary \\
 \code{hashtable} & \code{System.Collections.Hashtable} & Non-generic hash table \\
 \code{set} & \code{HashSet<object>} & Unique value set \\
@@ -956,6 +957,37 @@ annotations, casts, and \code{new} expressions.
 \label{tab:types}
 \end{longtable}
 }
+
+\subsection*{Array types}
+\label{sec:array-types}
+
+A postfix \code{[]} names a CLR array of the element type, so \code{string[]}
+is \code{System.String[]}.  It is accepted anywhere a type is: parameter and
+return annotations, variable and class-member declarations, and \code{cast}.
+The suffix repeats for jagged arrays (\code{string[][]}) and may be followed
+by \code{?}.
+
+\begin{lstlisting}
+func names(paths: string[]) -> string[] {
+    return $paths
+}
+
+var files: string[] = ["a.txt", "b.txt"]
+var grid: int[][]   = [[1, 2], [3, 4]]
+var typed = (cast string[] ["a", "b"])
+\end{lstlisting}
+
+\begin{notebox}
+\code{T[]} is an array; \code{list<T>} is a \code{System.Collections.Generic.List<T>}.
+Both are available and they are different types --- \code{array} remains the
+untyped spelling, equivalent to \code{object[]}.
+\end{notebox}
+
+\begin{notebox}
+Only an \emph{empty} bracket pair is a type suffix.  In a \code{native}
+signature a bracket holds a fixed inline capacity instead ---
+\code{buffer[256]}, \code{double[3]} --- and those keep that meaning.
+\end{notebox}
 
 \section{Shell-Specific Types}
 

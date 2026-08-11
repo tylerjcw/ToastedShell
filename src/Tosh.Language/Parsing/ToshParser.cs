@@ -6177,6 +6177,24 @@ public static class ToshParser
                 builder.Append(ParseGenericTypeArguments());
             }
 
+            // `TS-P2-69`. A postfix `[]` makes a CLR array type: `string[]` is
+            // `System.String[]`, the typed form of the `array` alias the language already
+            // has for `System.Object[]`. Repeats for jagged arrays (`string[][]`).
+            //
+            // Only an *empty* bracket pair is a type suffix. In native parameter position
+            // a bracket holds a fixed inline capacity — `buffer[256]`, `double[3]` — and
+            // `ParseNativeBufferSuffix` still claims those, because it runs after this and
+            // sees a number rather than an immediate `]`. Requiring the brackets to be
+            // adjacent to the name keeps an unrelated `[` on the next line out of it.
+            while (Current.Kind == SyntaxTokenKind.OpenBracket &&
+                   Current.Span.Start == Peek(-1).Span.End &&
+                   Peek(1).Kind == SyntaxTokenKind.CloseBracket)
+            {
+                NextToken();
+                NextToken();
+                builder.Append("[]");
+            }
+
             if (Current.Kind == SyntaxTokenKind.Bareword && Current.Text == "?")
             {
                 builder.Append(NextToken().Text);
@@ -12035,6 +12053,18 @@ public static class ToshParser
 
                     position++;
                 }
+            }
+
+            // `TS-P2-69`. The array suffix, so `var y: string[] = […]` is recognised as a
+            // declaration at all. This lookahead runs *before* parsing and decides whether
+            // `var` starts one; it knew `<…>` and `?` but not `[]`, so the whole statement
+            // fell through to command dispatch and reported "Command 'var' was not found"
+            // — a message about `var` for a defect in the type annotation. Repeats for
+            // jagged arrays, and matches the suffix loop in `ParseTypeNameSuffix`.
+            while (Peek(endOffset + 1).Kind == SyntaxTokenKind.OpenBracket &&
+                   Peek(endOffset + 2).Kind == SyntaxTokenKind.CloseBracket)
+            {
+                endOffset += 2;
             }
 
             if (Peek(endOffset + 1).Kind == SyntaxTokenKind.Bareword &&

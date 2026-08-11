@@ -229,6 +229,19 @@ public sealed class DotNetTypeResolver : IImportingTypeResolver
 
     private Type? ResolveUncached(string name)
     {
+        // `TS-P2-69`. A postfix `[]` is an array of the element type, resolved by taking
+        // the suffix off and asking for the element — so `string[]` follows every rule
+        // `string` does, including the import precedence from `TS-P2-66`, rather than
+        // needing its own lookup table. Repeats for jagged arrays.
+        if (name.EndsWith("[]", StringComparison.Ordinal))
+        {
+            var elementName = name[..^2];
+
+            return string.IsNullOrWhiteSpace(elementName)
+                ? null
+                : Resolve(elementName)?.MakeArrayType();
+        }
+
         if (TryResolveConstructedType(name, out var constructed))
         {
             return constructed;

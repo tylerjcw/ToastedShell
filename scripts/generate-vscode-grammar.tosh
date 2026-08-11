@@ -165,7 +165,7 @@ var DOC_TAGS = "summary|remarks|returns|value|example|deprecated|seealso|see|sin
                "exception|throws|para"
 
 var IDENT = '[A-Za-z_][A-Za-z0-9_-]*'
-var TYPE_REF = '[A-Za-z_][A-Za-z0-9_.<>?,-]*'
+var TYPE_REF = '[A-Za-z_][A-Za-z0-9_.<>?,\[\]-]*'
 
 ## Guard for command-position rules, whose matches start on the leading
 ## whitespace and would otherwise outrank a keyword match on the word itself.
@@ -184,6 +184,7 @@ func type_ref_captures(name: string) {
         {% "match" => ('\b(?:' + $TYPE_ALIAS_RE + ')\b'), "name" => "support.type.builtin.tosh" %},
         {% "match" => '[A-Za-z_][A-Za-z0-9_.]*', "name" => $name %},
         {% "match" => '[<>]', "name" => "punctuation.definition.generic.tosh" %},
+        {% "match" => '\[\]', "name" => "punctuation.definition.array.tosh" %},
         {% "match" => '[,?]', "name" => "punctuation.separator.tosh" %}
     ] %}
 }
@@ -486,7 +487,7 @@ $repository["new-expression"] = {%
 $repository["type-annotations"] = {% "patterns" => [
     {%
         "comment" => "Parameter / property type annotation:  name: Type",
-        "match" => '(?<=[a-zA-Z0-9_?])\s*(:)\s*([A-Za-z_][a-zA-Z0-9_.<>?]*)',
+        "match" => '(?<=[a-zA-Z0-9_?])\s*(:)\s*([A-Za-z_][a-zA-Z0-9_.<>?\[\]]*)',
         "captures" => {%
             "1" => {% "name" => "punctuation.separator.type.tosh" %},
             "2" => (type_ref)
@@ -494,7 +495,7 @@ $repository["type-annotations"] = {% "patterns" => [
     %},
     {%
         "comment" => "Return type annotation:  -> Type",
-        "match" => '(->)\s*([A-Za-z_][a-zA-Z0-9_.<>?]*)',
+        "match" => '(->)\s*([A-Za-z_][a-zA-Z0-9_.<>?\[\]]*)',
         "captures" => {%
             "1" => {% "name" => "punctuation.separator.return-type.tosh" %},
             "2" => (type_ref)
