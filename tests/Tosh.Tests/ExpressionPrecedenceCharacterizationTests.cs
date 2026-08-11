@@ -132,16 +132,53 @@ public sealed class ExpressionPrecedenceCharacterizationTests
         Assert.Equal(3, Convert.ToInt32(Assert.Single(results)));
     }
 
-    [Theory]
-    // `TS-P2-76`: `..` binds *tighter* than arithmetic, so these are `1 + (2 .. 5)` and
-    // `(1 .. 2) + 3` and fail on operand types. Pinned as the current behaviour, not
-    // endorsed — every comparable language gives `..` the lower precedence, and the
-    // diagnostic a reader meets talks about `Int32` and `ToshRange` rather than grouping.
-    [InlineData("1 + 2 .. 5")]
-    [InlineData("1 .. 2 + 3")]
-    public async Task Range_currently_outranks_arithmetic_which_is_TS_P2_76(string expression)
+    /// <summary>The values a range expression yields, for cases where it is not a scalar.</summary>
+    private static async Task<IReadOnlyList<object?>> RangeValuesAsync(string expression)
     {
-        await Assert.ThrowsAnyAsync<Exception>(() => EvalAsync(expression));
+        var runtime = ToshRuntime.CreateDefault();
+        var engine = new ToshEngine(runtime);
+        return await engine.ExecuteToListAsync($"var __r = ({expression})\n$__r");
+    }
+
+    [Theory]
+    // `TS-P2-76`, now fixed: `..` sits below arithmetic, so both bounds take a full
+    // expression. These were the two cases that failed with "Operator operands
+    // 'System.Int32' and 'Tosh.Runtime.ToshRange' are not compatible".
+    //
+    // The first version of these asserted the *old* failure via ThrowsAnyAsync and kept
+    // passing after the fix — because `$__r` on a range replays as three values, so the
+    // helper's own `Assert.Single` threw and the test caught that instead of a language
+    // error. A test that cannot tell the defect from its own scaffolding is worse than no
+    // test, which is why these now assert values.
+    [InlineData("1 + 2 .. 5", new object[] { 3L, 4L, 5L })]
+    [InlineData("1 .. 2 + 3", new object[] { 1L, 2L, 3L, 4L, 5L })]
+    [InlineData("(1 + 2) .. 5", new object[] { 3L, 4L, 5L })]
+    public async Task Range_binds_looser_than_arithmetic(string expression, object[] expected)
+    {
+        var values = await RangeValuesAsync(expression);
+
+        Assert.Equal(expected.Select(Convert.ToInt64), values.Select(Convert.ToInt64));
+    }
+
+    [Fact]
+    public async Task A_stepped_range_takes_expressions_too()
+    {
+        // `start .. step .. end`, with the step computed: 1, 4, 7, 10.
+        var values = await RangeValuesAsync("1 .. 2 + 1 .. 10");
+
+        Assert.Equal([1L, 4L, 7L, 10L], values.Select(Convert.ToInt64));
+    }
+
+    [Fact]
+    public async Task Range_still_binds_tighter_than_comparison()
+    {
+        // Below arithmetic but above comparison, so `1 .. 3 == $x` compares the range
+        // rather than ranging over a boolean.
+        var runtime = ToshRuntime.CreateDefault();
+        var engine = new ToshEngine(runtime);
+        var results = await engine.ExecuteToListAsync("var r = ((1 .. 3) == (1 .. 3))\n$r");
+
+        Assert.True(Convert.ToBoolean(Assert.Single(results)));
     }
 
     // ── Parenthesisation is always available ───────────────────────────────────

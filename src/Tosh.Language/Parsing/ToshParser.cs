@@ -7179,15 +7179,24 @@ public static class ToshParser
             return false;
         }
 
+        /// <param name="allowRange">
+        /// Whether a following <c>..</c> is consumed here (<c>TS-P2-76</c>). True in
+        /// *argument* position, where `echo 1..5` has no surrounding expression grammar to
+        /// place the operator in. False when called from the operator chain, which now has
+        /// its own range level — leaving it true there made `..` bind tighter than every
+        /// arithmetic operator, so `1 + 2 .. 5` parsed as `1 + (2 .. 5)` and failed with a
+        /// message about `Int32` and `ToshRange` rather than about grouping.
+        /// </param>
         private ArgumentSyntax? ParseArgument(
             string? commandName = null,
             bool implicitCurrentItem = false,
-            bool allowTypeNameArgument = true)
+            bool allowTypeNameArgument = true,
+            bool allowRange = true)
         {
             var result = ParsePrimaryArgument(commandName, implicitCurrentItem, allowTypeNameArgument);
 
             // Check for range operator: <expr>..<expr> or <expr>..<expr>..<expr>
-            if (result is not null && Current.Kind == SyntaxTokenKind.DotDot)
+            if (allowRange && result is not null && Current.Kind == SyntaxTokenKind.DotDot)
             {
                 if (result is VariableReferenceArgumentSyntax or MemberAccessArgumentSyntax
                     && result.Span.End == Current.Span.Start)
@@ -7207,8 +7216,19 @@ public static class ToshParser
             return result;
         }
 
-        private RangeArgumentSyntax ParseRangeArgument(ArgumentSyntax start, bool implicitCurrentItem)
+        /// <param name="operandsAreExpressions">
+        /// True when called from the range *precedence level*, where `1 .. 2 + 3` must read
+        /// its bound as `2 + 3` rather than as the primary `2` (<c>TS-P2-76</c>).
+        /// </param>
+        private RangeArgumentSyntax ParseRangeArgument(
+            ArgumentSyntax start,
+            bool implicitCurrentItem,
+            bool operandsAreExpressions = false)
         {
+            ArgumentSyntax? ParseOperand() => operandsAreExpressions
+                ? ParseAdditiveExpression(Current.Span.Start, implicitCurrentItem)
+                : ParsePrimaryArgument(implicitCurrentItem: implicitCurrentItem);
+
             NextToken(); // consume first ..
 
             if (!CanStartPrimaryArgument())
@@ -7218,7 +7238,7 @@ public static class ToshParser
                 return new RangeArgumentSyntax(start, Step: null, End: null, span);
             }
 
-            var second = ParsePrimaryArgument(implicitCurrentItem: implicitCurrentItem);
+            var second = ParseOperand();
 
             if (second is null)
             {
@@ -7239,7 +7259,7 @@ public static class ToshParser
                     return new RangeArgumentSyntax(start, second, End: null, stepSpan);
                 }
 
-                var third = ParsePrimaryArgument(implicitCurrentItem: implicitCurrentItem);
+                var third = ParseOperand();
 
                 if (third is null)
                 {
@@ -7851,10 +7871,61 @@ public static class ToshParser
             return new BlockSyntax(Array.Empty<StatementSyntax>(), Current.Span);
         }
 
+        /// <summary>
+        /// True when the parenthesised group starting at the current token runs to the end
+        /// of the source — that is, nothing follows its matching <c>)</c> except the block
+        /// (<c>TS-P2-77</c>).
+        /// </summary>
+        /// <remarks>
+        /// Scans for the matching parenthesis rather than guessing from the opener, so a
+        /// group that is only the *first operand* of a larger expression falls through to
+        /// the bare-source path and is parsed whole.
+        /// </remarks>
+        private bool ParenthesizedGroupIsWholeSource()
+        {
+            var depth = 0;
+
+            for (var offset = 0; ; offset++)
+            {
+                var token = Peek(offset);
+
+                switch (token.Kind)
+                {
+                    case SyntaxTokenKind.OpenParen:
+                        depth++;
+                        break;
+
+                    case SyntaxTokenKind.CloseParen:
+                        depth--;
+
+                        if (depth == 0)
+                        {
+                            var next = Peek(offset + 1).Kind;
+                            return next is SyntaxTokenKind.OpenBrace or SyntaxTokenKind.EndOfFile;
+                        }
+
+                        break;
+
+                    case SyntaxTokenKind.EndOfFile:
+                        // Unbalanced: let the parenthesised branch run so it reports the
+                        // missing `)` rather than this returning a misleading answer.
+                        return true;
+                }
+            }
+        }
+
         private PipelineSyntax ParseParenthesizedPipeline(string owner)
         {
             // Accept both parenthesized `(source)` and bare `source` (stops before `{`).
-            if (Current.Kind == SyntaxTokenKind.OpenParen)
+            //
+            // `TS-P2-77`. The parenthesized branch is taken only when the group *is* the
+            // whole source. It used to be taken whenever the source began with `(`, so it
+            // consumed `(1)` out of `for i in (1) .. 3 { … }`, returned, and left the
+            // caller expecting `{` where `..` stood — reported as `expected_block`, a
+            // message about the body for a defect in the source. A parenthesised left
+            // operand is ordinary (`for i in ($n - 1) .. $n`), and wrapping the whole
+            // range already worked, so this only ever rejected the shorter spelling.
+            if (Current.Kind == SyntaxTokenKind.OpenParen && ParenthesizedGroupIsWholeSource())
             {
                 var openParen = NextToken();
                 var pipeline = ParsePipeline(
@@ -10076,9 +10147,34 @@ public static class ToshParser
             return left;
         }
 
-        private ArgumentSyntax? ParseComparisonExpression(int startPosition, bool implicitCurrentItem)
+        /// <summary>
+        /// The range level: looser than arithmetic, tighter than comparison
+        /// (<c>TS-P2-76</c>).
+        /// </summary>
+        /// <remarks>
+        /// `..` used to be consumed by <see cref="ParseArgument"/> at the primary level,
+        /// which made it bind tighter than everything — so `1 .. $n + 1`, the natural way
+        /// to write a computed bound, failed. Placed here it matches the languages a
+        /// reader is likely to know: `1 + 2 .. 5` is `3 .. 5`, and `1 .. 5 == $x`
+        /// compares the range.
+        /// </remarks>
+        private ArgumentSyntax? ParseRangeExpression(int startPosition, bool implicitCurrentItem)
         {
             var left = ParseAdditiveExpression(startPosition, implicitCurrentItem);
+
+            if (left is not null && Current.Kind == SyntaxTokenKind.DotDot)
+            {
+                var range = ParseRangeArgument(left, implicitCurrentItem, operandsAreExpressions: true);
+                ValidateLiteralRangeOperands(range);
+                return range;
+            }
+
+            return left;
+        }
+
+        private ArgumentSyntax? ParseComparisonExpression(int startPosition, bool implicitCurrentItem)
+        {
+            var left = ParseRangeExpression(startPosition, implicitCurrentItem);
             List<ArgumentSyntax>? chainOperands = null;
             List<string>? chainOperators = null;
             List<TextSpan>? chainOperatorSpans = null;
@@ -10290,7 +10386,7 @@ public static class ToshParser
                 return null;
             }
 
-            return ParseArgument(implicitCurrentItem: implicitCurrentItem);
+            return ParseArgument(implicitCurrentItem: implicitCurrentItem, allowRange: false);
         }
 
         private ArgumentSyntax? ParseCurrentItemExpressionArgument()
