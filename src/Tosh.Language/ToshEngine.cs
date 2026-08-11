@@ -9936,6 +9936,42 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
         return false;
     }
 
+    /// <summary>
+    /// How many values a streamed statement keeps so <c>$tosh.Last.Result</c> can still
+    /// report them (<c>TS-P1-45</c>).
+    /// </summary>
+    /// <remarks>
+    /// Chosen far above any statement whose output someone would go on to inspect, so
+    /// that in practice the last result is unchanged and only a producer large enough to
+    /// have hung the shell before loses it. The budget is what makes streaming free
+    /// rather than a trade: without it the choice was between materializing every
+    /// statement and redefining <c>$tosh.Last.Result</c>.
+    /// </remarks>
+    private const int LastResultRetentionLimit = 10_000;
+
+    /// <summary>
+    /// True when a statement's results can be streamed rather than drained
+    /// (<c>TS-P1-45</c>).
+    /// </summary>
+    /// <remarks>
+    /// The one thing draining is still required for is <em>suppression</em>, which needs
+    /// every value before it can decide to emit none. It applies only to the shape
+    /// <see cref="ShouldSuppressStatementResults"/> tests for — a single-stage expression
+    /// pipeline with no redirections — so every other statement is free to stream.
+    /// Deliberately written against the same shape rather than a second description of
+    /// it, because two descriptions of one rule is how this codebase's drift starts.
+    /// </remarks>
+    private static bool CanStreamStatementResults(StatementSyntax statement) =>
+        statement is not PipelineStatementSyntax
+        {
+            Pipeline:
+            {
+                Stages.Count: 1,
+                Redirections: null or { Count: 0 },
+                Stages: [ExpressionPipelineStageSyntax]
+            }
+        };
+
     private static bool ShouldSuppressStatementResults(StatementSyntax statement, IReadOnlyList<object?> values)
     {
         if (values.Count == 0 || values.Any(value => value is not null))
@@ -14952,6 +14988,70 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
                 }
 
                 pendingInput = null;
+                continue;
+            }
+
+            // `TS-P1-45`. Everything except a single-stage expression pipeline streams,
+            // retaining values only until the `$tosh.Last.Result` budget is spent.
+            //
+            // Draining used to be unconditional, so a bare command inside a block was
+            // materialized whole: `func g() { yes } | first` never terminated, and
+            // `func g() { seq 1 N } | first` scaled linearly — 1.45s at five million,
+            // 4.86s at twenty — while the same loop written as `for i in 1..N { $i }`
+            // short-circuited in 0.28s.
+            //
+            // Two things depended on the drain and only one of them survives as a
+            // constraint. Suppression does not: `ShouldSuppressStatementResults` fires
+            // only for a single-stage *expression* pipeline whose values are all null, so
+            // it can never apply to the statements streamed here — the same reasoning the
+            // yield branch above already uses. `$tosh.Last.Result` does: it holds the
+            // whole array when a statement produced several, which cannot be known
+            // without keeping them.
+            //
+            // So values are kept up to `LastResultRetentionLimit` and the last result is
+            // set from them afterwards. Past the limit the retained copy is dropped and
+            // the last result is cleared rather than left stale — reading a *previous*
+            // statement's output would be worse than reading nothing. The limit is set
+            // far above any statement whose output a person would go on to inspect, so
+            // in practice nothing observable changes; what changes is that the
+            // pathological case streams instead of hanging.
+            if (CanStreamStatementResults(statement))
+            {
+                List<object?>? retained = new();
+
+                await foreach (var value in statementResults.WithCancellation(cancellationToken))
+                {
+                    if (retained is not null)
+                    {
+                        if (retained.Count < LastResultRetentionLimit)
+                        {
+                            retained.Add(value);
+                        }
+                        else
+                        {
+                            retained = null;
+                        }
+                    }
+
+                    yield return value;
+                }
+
+                if (retained is null)
+                {
+                    Runtime.SetLastResult(null);
+                }
+                else
+                {
+                    UpdateLastResultIfAny(retained);
+                }
+
+                pendingInput = null;
+
+                if (statement is PipelineStatementSyntax && pendingFirstCommandArguments is not null)
+                {
+                    pendingFirstCommandArguments = null;
+                }
+
                 continue;
             }
 
