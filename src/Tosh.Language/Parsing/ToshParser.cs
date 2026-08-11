@@ -8535,7 +8535,7 @@ public static class ToshParser
                     continue;
                 }
 
-                var item = ParseArgument(implicitCurrentItem: implicitCurrentItem);
+                var item = ParseCollectionValue(implicitCurrentItem);
 
                 if (item is not null)
                 {
@@ -8786,7 +8786,7 @@ public static class ToshParser
 
                 ConsumeFatArrow();
 
-                var value = ParseArgument(implicitCurrentItem: implicitCurrentItem);
+                var value = ParseCollectionValue(implicitCurrentItem);
 
                 if (value is not null)
                 {
@@ -8979,7 +8979,7 @@ public static class ToshParser
                 {
                     ExpectRecordFieldSeparator("Record fields use '=' or ':' between the field name and value.");
                 }
-                var value = ParseArgument(implicitCurrentItem: implicitCurrentItem);
+                var value = ParseCollectionValue(implicitCurrentItem);
 
                 if (value is not null)
                 {
@@ -9185,6 +9185,92 @@ public static class ToshParser
             return expression;
         }
 
+        /// <summary>
+        /// The expression inside <c>[</c> and <c>]</c> (<c>TS-P2-72</c>).
+        /// </summary>
+        /// <remarks>
+        /// This used to call <c>ParseArgument</c>, which stops before a binary operator,
+        /// so <c>$p[$i - 1]</c> — the obvious way to take the last element — failed with
+        /// "A closing ']' is required here", a message about the bracket rather than
+        /// about the expression. <c>$p[($i - 1)]</c> worked, so the workaround was a
+        /// paren the diagnostic never mentioned.
+        /// <para>
+        /// <c>ParseOperatorExpression</c> stops at <c>,</c> and <c>]</c> because neither
+        /// is an operator, so the <c>[key,]</c> and <c>[,value]</c> lookup forms are
+        /// unaffected. An empty slot still returns null so the caller can raise
+        /// <c>expected_index_expression</c> rather than silently indexing by nothing.
+        /// </para>
+        /// </remarks>
+        /// <summary>
+        /// A value inside a collection literal — an array item, a dict value, a record
+        /// field (<c>TS-P2-72</c>).
+        /// </summary>
+        /// <remarks>
+        /// Same defect as the index slot and found the same way: these called
+        /// <c>ParseArgument</c>, which stops before a binary operator, so
+        /// <c>{% "k" => "a" + $x %}</c> and <c>["a" + $x]</c> failed with a message about
+        /// a missing separator rather than about the expression. Porting the VS Code
+        /// grammar generator needed nineteen such values parenthesised before it would
+        /// parse at all.
+        /// <para>
+        /// The closing delimiters are single tokens — <c>%}</c> is <c>PercentCloseBrace</c>
+        /// and <c>|}</c> is <c>PipeCloseBrace</c> — so an operator parser cannot mistake
+        /// them for <c>%</c> or <c>|</c> and run past the end of the literal.
+        /// </para>
+        /// </remarks>
+        /// <summary>
+        /// True for the <c>%</c> of a mis-spaced <c>%}</c> while parsing a dict value.
+        /// </summary>
+        /// <remarks>
+        /// Letting <see cref="ParseCollectionValue"/> use the operator parser meant
+        /// <c>{% "key" =&gt; 7 % }</c> consumed the <c>%</c> as modulo, so the targeted
+        /// <c>spaced_literal_delimiter</c> diagnostic from <c>TS-P2-25</c> never fired and
+        /// the user got a worse message for the same mistake. <c>|</c> and <c>:</c> need no
+        /// such guard — neither is a binary operator here, which is why only the dict case
+        /// regressed.
+        /// </remarks>
+        private bool IsSpacedDictCloser(SyntaxToken token) =>
+            _collectionValueDepth > 0
+            && token.Kind == SyntaxTokenKind.Bareword
+            && string.Equals(token.Text, "%", StringComparison.Ordinal)
+            && Peek(1).Kind == SyntaxTokenKind.CloseBrace;
+
+        private int _collectionValueDepth;
+
+        private ArgumentSyntax? ParseCollectionValue(bool implicitCurrentItem)
+        {
+            if (Current.Kind is SyntaxTokenKind.Comma
+                or SyntaxTokenKind.CloseBracket
+                or SyntaxTokenKind.PercentCloseBrace
+                or SyntaxTokenKind.PipeCloseBrace
+                or SyntaxTokenKind.CloseBrace
+                or SyntaxTokenKind.EndOfFile)
+            {
+                return null;
+            }
+
+            _collectionValueDepth++;
+
+            try
+            {
+                return ParseOperatorExpression(Current.Span.Start, implicitCurrentItem);
+            }
+            finally
+            {
+                _collectionValueDepth--;
+            }
+        }
+
+        private ArgumentSyntax? ParseIndexOperand(bool implicitCurrentItem)
+        {
+            if (Current.Kind is SyntaxTokenKind.CloseBracket or SyntaxTokenKind.Comma)
+            {
+                return null;
+            }
+
+            return ParseOperatorExpression(Current.Span.Start, implicitCurrentItem);
+        }
+
         private ArgumentSyntax ParseIndexAccess(ArgumentSyntax expression, bool implicitCurrentItem = false)
         {
             var openBracket = NextToken();
@@ -9195,11 +9281,11 @@ public static class ToshParser
             {
                 lookupKind = IndexLookupKind.ByValue;
                 NextToken();
-                index = ParseArgument(implicitCurrentItem: implicitCurrentItem);
+                index = ParseIndexOperand(implicitCurrentItem);
             }
             else
             {
-                index = ParseArgument(implicitCurrentItem: implicitCurrentItem);
+                index = ParseIndexOperand(implicitCurrentItem);
 
                 if (Current.Kind == SyntaxTokenKind.Comma)
                 {
@@ -10097,7 +10183,7 @@ public static class ToshParser
         {
             var left = ParseExponentiationExpression(startPosition, implicitCurrentItem);
 
-            while (IsMultiplicativeOperatorToken(Current))
+            while (IsMultiplicativeOperatorToken(Current) && !IsSpacedDictCloser(Current))
             {
                 var operatorToken = NextToken();
                 var right = ParseExponentiationExpression(startPosition, implicitCurrentItem);
