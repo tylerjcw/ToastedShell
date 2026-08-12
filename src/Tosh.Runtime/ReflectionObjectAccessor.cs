@@ -236,13 +236,15 @@ public sealed class ReflectionObjectAccessor : IObjectAccessor
         }
 
         var targetType = target.GetType();
-        var member = ResolveMember(targetType, segment);
+        var member = ResolveMember(targetType, segment, target);
 
         return member switch
         {
             PropertyInfo property => property.GetValue(target),
             FieldInfo field => field.GetValue(target),
-            _ => throw new InvalidOperationException($"Member '{segment}' was not found on type '{targetType.FullName}'."),
+            // `TS-P2-18`. Named after the value, not its CLR carrier: every ToastScript class
+            // shares `ToshClassInstance`, so the type name alone told the reader nothing.
+            _ => throw new InvalidOperationException(MemberNotFound(target, segment)),
         };
     }
 
@@ -387,7 +389,7 @@ public sealed class ReflectionObjectAccessor : IObjectAccessor
         }
 
         var targetType = target.GetType();
-        var member = ResolveMember(targetType, segment);
+        var member = ResolveMember(targetType, segment, target);
 
         switch (member)
         {
@@ -501,7 +503,11 @@ public sealed class ReflectionObjectAccessor : IObjectAccessor
         new($"Cannot assign to '$env.{segment}' directly. The $env namespace is read-only. "
             + $"Use: export {segment} = \"value\"");
 
-    private static MemberInfo ResolveMember(Type targetType, string segment)
+    /// <param name="target">
+    /// The value being read, when the caller has it. Supplied so a shell object can explain a
+    /// member of its own that exists but was refused — <c>TS-P2-18</c>.
+    /// </param>
+    private static MemberInfo ResolveMember(Type targetType, string segment, object? target = null)
     {
         var flags = BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase;
 
@@ -519,8 +525,23 @@ public sealed class ReflectionObjectAccessor : IObjectAccessor
             return field;
         }
 
-        throw new InvalidOperationException($"Member '{segment}' was not found on type '{targetType.FullName}'.");
+        throw new InvalidOperationException(target is null
+            ? $"Member '{segment}' was not found on type '{ShellTypeNaming.Describe(targetType)}'."
+            : MemberNotFound(target, segment));
     }
+
+    /// <summary>
+    /// Explains a member that could not be reached on <paramref name="target"/> —
+    /// <c>TS-P2-18</c>.
+    /// </summary>
+    /// <remarks>
+    /// A value that knows its own members answers first, so a member that exists but is private
+    /// is described as private rather than as missing. Only when it has nothing to say does this
+    /// fall back to naming the type, which is all the accessor itself knows.
+    /// </remarks>
+    private static string MemberNotFound(object? target, string segment) =>
+        (target as IShellMemberDiagnostics)?.ExplainMissingMember(segment)
+        ?? $"Member '{segment}' was not found on type '{ShellTypeNaming.Describe(target)}'.";
 
     private static object? ConvertAssignedValue(object? value, Type targetType, string segment, Type ownerType)
     {

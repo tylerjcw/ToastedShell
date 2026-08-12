@@ -506,8 +506,15 @@ public static class OperatorEvaluator
             $"Values of type '{DescribeOperandType(actual)}' cannot be compared with '{DescribeOperandType(expected)}'.");
     }
 
-    private static string DescribeOperandType(object? value)
-        => value is null ? "null" : value.GetType().FullName ?? value.GetType().Name;
+    /// <summary>
+    /// Names an operand's type the way the shell does — <c>TS-P2-18</c>.
+    /// </summary>
+    /// <remarks>
+    /// Reported the CLR implementation type, so comparing an enum member said
+    /// <c>'Tosh.Language.ToshEnumValue'</c> — a name the reader never wrote and cannot act on,
+    /// while <c>type-of</c> answered <c>E</c> for the same value.
+    /// </remarks>
+    private static string DescribeOperandType(object? value) => ShellTypeNaming.Describe(value);
 
     /// <summary>
     /// Compares two record-like values field by field, ignoring order. Answers
@@ -1110,7 +1117,8 @@ public static class OperatorEvaluator
             }
         }
 
-        throw new InvalidOperationException($"Operator operands '{left.GetType().FullName}' and '{right.GetType().FullName}' are not compatible.");
+        throw new InvalidOperationException(
+            $"Operator operands '{DescribeOperandType(left)}' and '{DescribeOperandType(right)}' are not compatible.");
     }
 
     // Return the result in the wider of the two integral types, matching C# promotion rules.
@@ -1410,7 +1418,7 @@ public static class OperatorEvaluator
             uint number => new BigInteger(number),
             long number => new BigInteger(number),
             ulong number => new BigInteger(number),
-            _ => throw new InvalidOperationException($"Value of type '{value.GetType().FullName}' cannot be converted to BigInteger."),
+            _ => throw new InvalidOperationException($"Value of type '{DescribeOperandType(value)}' cannot be converted to BigInteger."),
         };
     }
 

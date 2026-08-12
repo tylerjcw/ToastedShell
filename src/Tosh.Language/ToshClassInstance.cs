@@ -5,8 +5,17 @@ namespace Tosh.Language;
 
 public sealed class ToshClassInstance : IShellRecordObject, IShellInvocableObject, IShellTypedObject, IShellEnumerableObject,
     IShellBinaryOperatorObject
-    , ICloneable, IShellTypeCheckable
+    , ICloneable, IShellTypeCheckable, IShellMemberDiagnostics
 {
+    /// <summary>
+    /// Says whether a member exists but was refused — <c>TS-P2-18</c>.
+    /// </summary>
+    /// <remarks>
+    /// Answering null leaves the accessor's generic "was not found", which is the right message
+    /// for a name this class genuinely does not declare.
+    /// </remarks>
+    public string? ExplainMissingMember(string name) => Definition.ExplainHiddenInstanceMember(name);
+
     private readonly Dictionary<string, object?> _values = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _lazyInitialized = new(StringComparer.OrdinalIgnoreCase);
     private readonly object _lazyInitializationLock = new();

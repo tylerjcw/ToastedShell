@@ -1247,6 +1247,63 @@ public sealed class ToshClassDefinition : IShellNamedType
     /// member lookup and both member listings.
     /// </para>
     /// </remarks>
+    /// <summary>
+    /// Why <paramref name="name"/> could not be reached on an instance of this class, or
+    /// <see langword="null"/> when the class simply has no such member — <c>TS-P2-18</c>.
+    /// </summary>
+    /// <remarks>
+    /// The visibility rules answer a single question — can this caller see it? — so a refusal and
+    /// an absence arrive identically at the accessor, which then said "was not found" for both.
+    /// Saying which one it was is the difference between checking the modifier and hunting a
+    /// typo. Walks the inheritance chain, because a member declared on a base class is what the
+    /// reader wrote even though this class does not list it.
+    /// </remarks>
+    internal string? ExplainHiddenInstanceMember(string name)
+    {
+        for (var current = this; current is not null; current = current.BaseClass)
+        {
+            foreach (var property in current.Properties)
+            {
+                if (!string.Equals(property.Name, name, StringComparison.OrdinalIgnoreCase)) continue;
+                if (property.IsStatic)
+                {
+                    return $"'{name}' is a static property of '{current.Name}'. " +
+                           $"Reach it through the class: '{current.Name}.{property.Name}'.";
+                }
+
+                if (property.IsShy)
+                {
+                    return $"Property '{property.Name}' is private to '{current.Name}'.";
+                }
+
+                if (property.IsGuarded)
+                {
+                    return $"Property '{property.Name}' is guarded and is not readable from here.";
+                }
+
+                if (property.IsLocal)
+                {
+                    return $"Property '{property.Name}' is local to '{current.Name}'.";
+                }
+
+                return null;
+            }
+
+            foreach (var method in current.Methods)
+            {
+                if (!string.Equals(method.Name, name, StringComparison.OrdinalIgnoreCase)) continue;
+                if (method.IsShy)
+                {
+                    return $"Method '{method.Name}' is private to '{current.Name}'.";
+                }
+
+                return null;
+            }
+        }
+
+        return null;
+    }
+
     private static bool IsVisibleInstanceProperty(
         ToshClassPropertyDefinition property,
         ToshClassDefinition declaring,
