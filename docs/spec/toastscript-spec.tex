@@ -1654,14 +1654,14 @@ and \code{!\textasciitilde}.
 \end{notebox}
 
 \section{Membership Operators}
-\iop{in}\iop{not in}\iop{is in}\iop{is not in}\iop{contains}\iop{starts-with}\iop{ends-with}
+\iop{in}\iop{not in}\iop{not-in}\iop{is in}\iop{is-in}\iop{is not in}\iop{is-not-in}\iop{contains}\iop{starts-with}\iop{ends-with}
 
 \begin{tabular}{cl}
 \toprule
 \textbf{Operator} & \textbf{Meaning} \\
 \midrule
-\code{in} / \code{is in} & Value exists in collection \\
-\code{not in} / \code{is not in} & Value does not exist in collection \\
+\code{in} / \code{is in} / \code{is-in} & Value exists in collection \\
+\code{not in} / \code{is not in} / \code{not-in} / \code{is-not-in} & Value does not exist in collection \\
 \code{contains} & Collection contains value (also substring check for strings) \\
 \code{starts-with} & String starts with the given prefix \\
 \code{ends-with} & String ends with the given suffix \\
@@ -1673,6 +1673,8 @@ echo ("a" in ["a", "b", "c"])        # true
 echo ("a" is in ["a", "b", "c"])     # equivalent
 echo (5 not in [1, 2, 3])           # true
 echo (5 is not in [1, 2, 3])        # equivalent
+echo (5 not-in [1, 2, 3])           # hyphenated form
+echo (5 is-not-in [1, 2, 3])        # hyphenated form
 echo ("hello" contains "ell")        # true
 echo ([1, 2, 3] contains 2)          # true
 echo ({% "name" => "Ada" %} contains "name") # true: keys

@@ -257,6 +257,7 @@ public sealed class ToshMcpServer
             new { kind = "binary", name = "-", description = "Subtraction.", example = "5 - 3" },
             new { kind = "binary", name = "*", description = "Multiplication. Also repeats strings: `\"ha\" * 3` → `\"hahaha\"`.", example = "3 * 4" },
             new { kind = "binary", name = "/", description = "Division.", example = "10 / 2" },
+            new { kind = "binary", name = "//", description = "Floor division. Requires spaces on both sides, so a path keeps its slashes.", example = "7 // 2" },
             new { kind = "binary", name = "%", description = "Modulo (remainder).", example = "7 % 3" },
             new { kind = "binary", name = "**", description = "Exponentiation.", example = "2 ** 8" },
 
@@ -291,6 +292,32 @@ public sealed class ToshMcpServer
             // Logical
             new { kind = "binary", name = "and", description = "Short-circuit logical AND.", example = "true and false" },
             new { kind = "binary", name = "or",  description = "Short-circuit logical OR.",  example = "false or true" },
+            new { kind = "binary", name = "&&", description = "Symbol form of `and`. Short-circuit logical AND.", example = "true && false" },
+            new { kind = "binary", name = "||", description = "Symbol form of `or`. Short-circuit logical OR.", example = "false || true" },
+
+            // Membership, symbol-free forms of `in`
+            new { kind = "binary", name = "is-in",     description = "Hyphenated form of `is in`.", example = "3 is-in [1,2,3]" },
+            new { kind = "binary", name = "is-not-in", description = "Hyphenated form of `is not in`.", example = "4 is-not-in [1,2,3]" },
+
+            // Null handling
+            new { kind = "binary", name = "??", description = "Null-coalescing. Yields the right operand when the left is null.", example = "$missing ?? \"fallback\"" },
+            new { kind = "binary", name = "?.", description = "Null-safe member access. Yields null instead of failing when the receiver is null.", example = "$maybe?.Length" },
+
+            // Assignment
+            new { kind = "binary", name = "=",   description = "Assignment.", example = "$x = 1" },
+            new { kind = "binary", name = "+=",  description = "Add and assign. Also concatenates strings and appends arrays.", example = "$x += 4" },
+            new { kind = "binary", name = "-=",  description = "Subtract and assign.", example = "$x -= 1" },
+            new { kind = "binary", name = "*=",  description = "Multiply and assign.", example = "$x *= 2" },
+            new { kind = "binary", name = "/=",  description = "Divide and assign.", example = "$x /= 2" },
+            new { kind = "binary", name = "//=", description = "Floor-divide and assign.", example = "$x //= 2" },
+            new { kind = "binary", name = "%=",  description = "Modulo and assign.", example = "$x %= 3" },
+            new { kind = "binary", name = "**=", description = "Raise to a power and assign.", example = "$x **= 2" },
+            new { kind = "binary", name = "??=", description = "Assign only when the target is null.", example = "$x ??= 5" },
+
+            // Range and pipeline
+            new { kind = "binary", name = "..", description = "Range. `start..end`, or `start..step..end` for a stepped range. Binds looser than arithmetic, so `1 .. $n + 1` reads as written.", example = "1 .. 5" },
+            new { kind = "binary", name = "|",  description = "Pipeline separator. Sends each value of the left stage to the right.", example = "ls | where { $_.Size > 1kb }" },
+            new { kind = "binary", name = "<|", description = "Comprehension separator: the body comes before it, the clauses after.", example = "[$x <| for x in 1..3]" },
         };
 
         return new

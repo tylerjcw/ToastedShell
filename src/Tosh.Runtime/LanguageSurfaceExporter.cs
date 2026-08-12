@@ -48,6 +48,14 @@ public static class LanguageSurfaceExporter
             ["memberModifierAliases"] = LanguageSurface.MemberModifierAliases
                 .OrderBy(pair => pair.Key, StringComparer.Ordinal)
                 .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal),
+
+            // `TS-P2-78`. Operators travel with the word surface so a consumer outside
+            // .NET gets one answer about the language rather than two — the VS Code
+            // grammar generator already reads this endpoint for its keyword alternations
+            // and can take operator scopes from the same place.
+            ["operators"] = OperatorSurface.Operators
+                .OrderBy(pair => pair.Key, StringComparer.Ordinal)
+                .ToDictionary(pair => pair.Key, pair => pair.Value.ToString(), StringComparer.Ordinal),
         };
 
         return JsonSerializer.Serialize(payload, new JsonSerializerOptions
