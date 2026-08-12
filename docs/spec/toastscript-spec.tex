@@ -3585,6 +3585,54 @@ Class features:
   \item \textbf{Instantiation}---\code{new ClassName(args)}.
 \end{itemize}
 
+\subsection*{Reaching Members from Inside the Class}
+\ikw{this}
+
+A member is always reached through a qualifier, including from the class's own
+code.  An instance member is reached through \code{\$this.}, a static one through
+the class name:
+
+\begin{lstlisting}
+class Counter {
+    prop Count: int = 0
+    shared prop Limit: int = 10
+
+    func Step() { $this.Count = $this.Count + 1 }   # instance: $this.
+    prop AtLimit => ($this.Count >= Counter.Limit)  # static: class name
+}
+\end{lstlisting}
+
+A bare name in a class body is not a member reference.  It is resolved the way
+any other command head is---against builtins, functions, and \code{\$PATH}---so
+\code{Count} inside \code{Counter} names no member and reports
+\code{tosh.bind.unknown\_command}.  The rule is uniform: a bare name fails from a
+static position and an instance one alike, and the diagnostic names the
+qualified form to write instead.
+
+This is what allows a class to run shell commands in its methods without its own
+members shadowing them: a class declaring \code{prop git} can still call
+\code{git status}.
+
+\begin{lstlisting}[title={A primary-constructor parameter is not a member}]
+class Point(seed: double) {
+    prop X: double = $seed       # in scope here: `$seed` or `seed`
+    func Show() { return $seed } # not in scope: initializers only
+}
+
+var p = new Point(3.0)
+echo $p.X                        # 3
+echo $p.seed                     # error: no member 'seed'
+\end{lstlisting}
+
+A primary-constructor parameter is in scope in property initializers and nowhere
+else in the body, and it does not become a member.  Declare a property from it,
+as \code{prop X: double = \$seed} above does, to reach the value from the rest of
+the class.
+
+Member access is case-insensitive, so \code{\$p.x} above reaches \code{X}.  A
+parameter that differs from a property only in case is therefore easy to mistake
+for a reachable one; the two are unrelated.
+
 \subsection*{Chaining to the Primary Constructor}
 \ikw{this}
 

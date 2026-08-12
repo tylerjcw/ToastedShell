@@ -281,32 +281,49 @@ public static class Binder
             case ClassDefinitionStatementSyntax cls:
                 foreach (var ba in cls.BaseConstructorArgs ?? Array.Empty<PipelineSyntax>())
                     VisitPipeline(ba, context);
-                foreach (var member in cls.Members)
+
+                // `TS-P2-41`. The members are in scope by name from here down, so an unresolved
+                // bare name can be recognised as one of them rather than guessed at.
+                var enclosingBefore = context.EnclosingClass;
+                context.EnclosingClass = cls;
+                try
                 {
-                    switch (member)
+                    foreach (var member in cls.Members)
                     {
-                        case ClassPropertyMemberSyntax prop:
-                            if (prop.Initializer is not null) VisitPipeline(prop.Initializer, context);
-                            context.DeferredDepth++;
-                            try
-                            {
-                                if (prop.GetterBody is not null) VisitBlock(prop.GetterBody, context);
-                                if (prop.SetterBody is not null) VisitBlock(prop.SetterBody, context);
-                            }
-                            finally { context.DeferredDepth--; }
-                            break;
-                        case ClassMethodMemberSyntax method:
-                            context.DeferredDepth++;
-                            try { VisitBlock(method.Method.Body, context); }
-                            finally { context.DeferredDepth--; }
-                            break;
-                        case ClassConstructorMemberSyntax ctor:
-                            context.DeferredDepth++;
-                            try { VisitBlock(ctor.Body, context); }
-                            finally { context.DeferredDepth--; }
-                            break;
+                        switch (member)
+                        {
+                            case ClassPropertyMemberSyntax prop:
+                                if (prop.Initializer is not null)
+                                {
+                                    // A primary-constructor parameter is in scope here and
+                                    // nowhere else in the body, so the suggestion for one is
+                                    // offered only from inside this visit.
+                                    context.InPropertyInitializer = true;
+                                    try { VisitPipeline(prop.Initializer, context); }
+                                    finally { context.InPropertyInitializer = false; }
+                                }
+                                context.DeferredDepth++;
+                                try
+                                {
+                                    if (prop.GetterBody is not null) VisitBlock(prop.GetterBody, context);
+                                    if (prop.SetterBody is not null) VisitBlock(prop.SetterBody, context);
+                                }
+                                finally { context.DeferredDepth--; }
+                                break;
+                            case ClassMethodMemberSyntax method:
+                                context.DeferredDepth++;
+                                try { VisitBlock(method.Method.Body, context); }
+                                finally { context.DeferredDepth--; }
+                                break;
+                            case ClassConstructorMemberSyntax ctor:
+                                context.DeferredDepth++;
+                                try { VisitBlock(ctor.Body, context); }
+                                finally { context.DeferredDepth--; }
+                                break;
+                        }
                     }
                 }
+                finally { context.EnclosingClass = enclosingBefore; }
                 break;
             case ModuleDefinitionStatementSyntax module:
                 VisitBlock(module.Body, context);
@@ -492,6 +509,44 @@ public static class Binder
             return;
         }
 
+        // `TS-P2-41`. Before asking which shell command this looks like, ask whether the
+        // enclosing class already declares it. A member is reported even when no command
+        // resembles the name — the Levenshtein path below gives up silently in that case,
+        // which left a bare sibling reference to be explained by the runtime instead, and
+        // explained no better. An executable of the same name still wins: a class that
+        // declares `prop git` should not stop `git status` in one of its methods.
+        if (context.EnclosingClass is { } enclosing && !context.IsExecutableOnPath(name))
+        {
+            switch (ClassifyEnclosingName(enclosing, name, context.InPropertyInitializer, out var qualified))
+            {
+                case EnclosingName.Member:
+                    context.Diagnostics.Add(new ToshDiagnostic(
+                        Code: "tosh.bind.unknown_command",
+                        Title: EnclosingMemberSuggestion.Title(name, enclosing.Name),
+                        SourceName: context.SourceName,
+                        SourceText: context.SourceText,
+                        Span: command.NameSpan,
+                        Label: EnclosingMemberSuggestion.Label(qualified),
+                        Help: EnclosingMemberSuggestion.Help(enclosing.Name)));
+                    return;
+
+                case EnclosingName.ConstructorParameterInScope:
+                    // It resolves here. Saying otherwise refused a working program.
+                    return;
+
+                case EnclosingName.ConstructorParameterOutOfScope:
+                    context.Diagnostics.Add(new ToshDiagnostic(
+                        Code: "tosh.bind.unknown_command",
+                        Title: EnclosingMemberSuggestion.OutOfScopeTitle(name, enclosing.Name),
+                        SourceName: context.SourceName,
+                        SourceText: context.SourceText,
+                        Span: command.NameSpan,
+                        Label: EnclosingMemberSuggestion.OutOfScopeLabel(name),
+                        Help: EnclosingMemberSuggestion.OutOfScopeHelp(name)));
+                    return;
+            }
+        }
+
         // Unresolved. Try Levenshtein against the registry (canonical names + aliases).
         var suggestions = FindSuggestions(name, context.CommandRegistry);
         if (suggestions.Count == 0) return; // Could be an external; defer silently.
@@ -515,6 +570,63 @@ public static class Binder
             Help: "the binder flags names that look like typos for known commands. " +
                   "If '" + name + "' is meant to invoke an external program, ensure it is on $PATH; " +
                   "set TOSH_DISABLE_BINDER=1 to suppress all binder checks."));
+    }
+
+    /// <summary>
+    /// Finds a member of <paramref name="cls"/> named <paramref name="name"/> — <c>TS-P2-41</c>.
+    /// </summary>
+    /// <remarks>
+    /// Case-sensitive, because the qualified form it goes on to suggest has to be one the reader
+    /// can paste: offering <c>$this.Count</c> for a reference written <c>count</c> would name a
+    /// second problem while claiming to solve the first.
+    /// </remarks>
+    private static EnclosingName ClassifyEnclosingName(
+        ClassDefinitionStatementSyntax cls,
+        string name,
+        bool inPropertyInitializer,
+        out string qualified)
+    {
+        foreach (var candidate in cls.Members)
+        {
+            switch (candidate)
+            {
+                case ClassMethodMemberSyntax method when method.Method.Name == name:
+                    qualified = EnclosingMemberSuggestion.Qualify(cls.Name, name, method.IsStatic, isMethod: true);
+                    return EnclosingName.Member;
+                case ClassPropertyMemberSyntax prop when prop.Name == name:
+                    qualified = EnclosingMemberSuggestion.Qualify(cls.Name, name, prop.IsStatic, isMethod: false);
+                    return EnclosingName.Member;
+            }
+        }
+
+        qualified = "";
+
+        // A primary-constructor parameter is not a member — `$p.x` fails from outside — and it is
+        // in scope in a property initializer and nowhere else. Inside one it *resolves*, so the
+        // binder must stay quiet: `class K(name: string) { prop Y = name }` was rejected before
+        // this, because `name` resembles `uname`, while the same program ran correctly under
+        // TOSH_DISABLE_BINDER=1. Outside one there is no spelling that works, so the honest answer
+        // is where the parameter does reach rather than a nearby command name.
+        foreach (var parameter in cls.PrimaryConstructorParameters)
+        {
+            if (parameter.Name == name)
+            {
+                return inPropertyInitializer
+                    ? EnclosingName.ConstructorParameterInScope
+                    : EnclosingName.ConstructorParameterOutOfScope;
+            }
+        }
+
+        return EnclosingName.None;
+    }
+
+    /// <summary>What an unresolved bare name turns out to be in the class around it.</summary>
+    private enum EnclosingName
+    {
+        None,
+        Member,
+        ConstructorParameterInScope,
+        ConstructorParameterOutOfScope,
     }
 
     private static bool LooksLikeExplicitPath(string name)
@@ -687,5 +799,22 @@ public static class Binder
         // even if the file containing the declaration is loaded
         // non-interactively (profile.tosh, autoload/*.tosh, etc.).
         public int DeferredDepth { get; set; }
+
+        /// <summary>
+        /// The class whose body is being walked, or <see langword="null"/> outside one —
+        /// <c>TS-P2-41</c>, so an unresolved bare name can be checked against its siblings.
+        /// </summary>
+        /// <remarks>
+        /// Saved and restored rather than pushed onto a stack: a nested class definition replaces
+        /// the enclosing one for the duration of its body, which is the scope a bare name in that
+        /// body would be reaching for.
+        /// </remarks>
+        public ClassDefinitionStatementSyntax? EnclosingClass { get; set; }
+
+        /// <summary>
+        /// True while walking a property initializer, the one place a primary-constructor
+        /// parameter is in scope — <c>TS-P2-41</c>.
+        /// </summary>
+        public bool InPropertyInitializer { get; set; }
     }
 }

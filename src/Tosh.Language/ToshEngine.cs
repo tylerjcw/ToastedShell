@@ -7542,6 +7542,18 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
                     Label: $"'{commandSyntax.Name}' does not refer to a runnable program")),
             _ when Runtime.Config.Shell.AutoCd && TryResolveAutoCdDirectory(commandSyntax.Name, out var autoCdPath) =>
                 new AutoCdCommand(autoCdPath),
+            // `TS-P2-41`. A word that names a member of the running class is not an unknown
+            // command, and saying so — then suggesting `bg` — was the whole complaint. Placed
+            // after the external lookup above, so a real program of the same name still wins.
+            _ when TryDescribeEnclosingMember(commandSyntax.Name) is { } memberForm =>
+                throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                    Code: "tosh.runtime.unknown_command",
+                    Title: EnclosingMemberSuggestion.Title(commandSyntax.Name, CurrentClass!.Name),
+                    SourceName: sourceName,
+                    SourceText: sourceText,
+                    Span: commandSyntax.Span,
+                    Label: EnclosingMemberSuggestion.Label(memberForm),
+                    Help: EnclosingMemberSuggestion.Help(CurrentClass!.Name))),
             _ =>
                 throw ToshDiagnosticException.Create(new ToshDiagnostic(
                     Code: "tosh.runtime.unknown_command",
@@ -7566,6 +7578,39 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
     {
         var expansion = PathUtilities.ExpandTilde(name);
         return expansion.Kind == PathUtilities.TildeExpansionKind.Expanded ? expansion.Path : name;
+    }
+
+    /// <summary>
+    /// The qualified spelling of <paramref name="name"/> when it names a member of the class
+    /// whose code is running — <c>TS-P2-41</c>.
+    /// </summary>
+    /// <remarks>
+    /// The engine's half of the answer. The binder reaches this case first for most names, but
+    /// gives up silently when nothing in the registry resembles the word, and a member name
+    /// usually resembles nothing — which is how <c>zog()</c> beside <c>func zog()</c> came to be
+    /// answered "did you mean 'bg'?" by the runtime instead.
+    /// </remarks>
+    private string? TryDescribeEnclosingMember(string name)
+    {
+        if (CurrentClass is not { } cls) return null;
+
+        foreach (var method in cls.Methods)
+        {
+            if (method.Name == name)
+            {
+                return EnclosingMemberSuggestion.Qualify(cls.Name, name, method.IsStatic, isMethod: true);
+            }
+        }
+
+        foreach (var property in cls.Properties)
+        {
+            if (property.Name == name)
+            {
+                return EnclosingMemberSuggestion.Qualify(cls.Name, name, property.IsStatic, isMethod: false);
+            }
+        }
+
+        return null;
     }
 
     private string ResolveUnknownCommandHelp(string name)
