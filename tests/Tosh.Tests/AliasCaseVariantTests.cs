@@ -69,19 +69,16 @@ public sealed class AliasCaseVariantTests : IClassFixture<ToshRuntimeFixture>
     }
 
     [Fact]
-    public async Task The_unqualified_and_qualified_spellings_now_agree()
+    public async Task The_unqualified_and_qualified_spellings_agree()
     {
-        // The point of the fix is that the head resolves to the same type either way. `Tuple.Create`
-        // still fails — generic static inference, `TS-P2-36` — but it must now fail *identically*
-        // to the fully-qualified form rather than against `ToshTuple`, which is what shows the
-        // head was routed correctly.
-        var unqualified = await Assert.ThrowsAsync<ToshDiagnosticException>(
-            async () => await EvalAsync("Tuple.Create(1, 2)"));
-        var qualified = await Assert.ThrowsAsync<ToshDiagnosticException>(
-            async () => await EvalAsync("System.Tuple.Create(1, 2)"));
-
-        Assert.Contains("System.Tuple", unqualified.Diagnostics[0].Title, StringComparison.Ordinal);
-        Assert.Equal(qualified.Diagnostics[0].Title, unqualified.Diagnostics[0].Title);
+        // The point of the fix is that the head resolves to the same type either way. When this
+        // was written `Tuple.Create` still failed on both spellings — identically, against
+        // `System.Tuple` rather than `ToshTuple`, which was what showed the head had been routed
+        // correctly. `TS-P2-36` then supplied the missing type inference, so the agreement is now
+        // visible as a shared *result*, which is the stronger form of the same assertion.
+        Assert.Equal(
+            (await EvalAsync("System.Tuple.Create(1, 2)"))?.ToString(),
+            (await EvalAsync("Tuple.Create(1, 2)"))?.ToString());
     }
 
     // ── what must not move ─────────────────────────────────────────────────────

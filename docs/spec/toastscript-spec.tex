@@ -2894,6 +2894,22 @@ emits nothing:
 await (System.IO.File.WriteAllTextAsync($path, $text))
 \end{lstlisting}
 
+The \code{Task} helpers are reachable, because a generic method infers its type
+arguments from the arguments supplied, as C\# does:
+
+\begin{lstlisting}
+var a = Task.FromResult(1)
+var b = Task.FromResult(2)
+echo (await (Task.WhenAll($a, $b)))   # both results, in order
+\end{lstlisting}
+
+Inference here is narrower than the compiler's: there is no best-common-type
+step, so a type parameter used in more than one position must bind to one type
+or a base of it.  A call that supplies nothing to infer from---
+\code{Array.Empty()}, \code{Enumerable.Empty()}---reports
+\code{Cannot infer type argument 'T'} naming the parameter it could not
+supply, rather than claiming the method has no such overload.
+
 \begin{notebox}
 \code{await} unwraps as many layers as it finds, so a block whose last
 expression is an asynchronous call needs only one \code{await}:
