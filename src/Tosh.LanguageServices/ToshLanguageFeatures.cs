@@ -1,5 +1,6 @@
 using System.Reflection;
 using Tosh.Runtime;
+using Tosh.Runtime.Units;
 using Tosh.Language.Parsing;
 
 namespace Tosh.LanguageServices;
@@ -960,6 +961,13 @@ public sealed class ToshLanguageFeatures
         DeclarationIndex index)
     {
         var word = token.Text;
+
+        if (word.StartsWith('`') &&
+            UnitExpressionParser.TryParseConversion(word[1..], out _, out _, out _))
+        {
+            rawTokens.Add((pos.Line, pos.Character, word.Length, 3, 0)); // number/unit
+            return;
+        }
 
         // Variable reference ($name). For a dotted reference — `$this.X`, `$o.Y` — only the
         // head is the variable: one token across the whole path painted over the grammar's

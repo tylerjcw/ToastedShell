@@ -1,4 +1,5 @@
 using Tosh.Runtime;
+using Tosh.Runtime.Units;
 using Tosh.Language.Parsing;
 using Tosh.Tome.Theme;
 using Tosh.Tui.Editing;
@@ -141,6 +142,8 @@ internal sealed class ToshSyntaxColorizer : ISyntaxColorizer
 
     private static string? BarewordStyle(string text)
     {
+        if (text.StartsWith('`') &&
+            UnitExpressionParser.TryParseConversion(text[1..], out _, out _, out _)) return Number;
         if (ControlFlowKeywords.Contains(text)) return ControlFlow;
         if (Keywords.Contains(text)) return Keyword;
         if (Modifiers.Contains(text)) return Keyword;

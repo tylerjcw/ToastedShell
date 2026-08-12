@@ -1,0 +1,139 @@
+#!/bin/tosh
+# Reactor block calculator for Factorio 2.0.77 + Plutonium Energy 1.8.1
+# Values verified against prototype Lua source:
+#   base/prototypes/entity/entities.lua   (reactor, exchanger, turbine)
+#   base/prototypes/item.lua              (uranium-fuel-cell)
+#   PlutoniumEnergy/prototypes/entity/entities.lua  (MOX, breeder reactors)
+#   PlutoniumEnergy/prototypes/item/items.lua       (fuel cells)
+
+# ── Fuel types (GJ per cell from prototype fuel_value fields) ──────────
+module Fuel {
+    enum Mox: int {
+        Energy = 3
+    }
+
+    enum Uranium: int {
+        Energy = 8
+    }
+
+    enum Breeder: int {
+        Energy = 10
+    }
+
+    enum Plutonium: int {
+        Energy = 20
+    }
+}
+
+# ── Reactor type definition ────────────────────────────────────────────
+class Reactor(name: string, heat: power, percent: double, fuel) {
+    shy fixed prop _fuel               = $fuel
+    fixed prop Name           : string       = $name
+    fixed prop Heat           : power        = $heat
+    fixed prop NeighborPercent: double       = $percent
+    fixed prop FuelName       : string       => $this._fuel.Name
+    fixed prop FuelEnergy     : energy       => $this._fuel.Energy.UnderlyingValue * 1`GJ
+    fixed prop NeighborPower  : power        => ($this.NeighborPercent / 100) * $this.Heat
+    fixed prop BurnTime       : timequantity => $this.FuelEnergy / $this.Heat
+}
+
+# ── Reactor block calculator ──────────────────────────────────────────
+class ReactorBlock(reactorType: Reactor, width: int = 2, height: int = 2, bufferDuration: timequantity = 300`s, tankCapacity: volume = 25000`L) {
+    prop Width         : int          = $width
+    prop Height        : int          = $height
+    prop BufferDuration: timequantity = $bufferDuration
+    prop Type          : Reactor      = $reactorType
+    prop TankCapacity  : volume       = $tankCapacity
+
+    # ── Thermal ────────────────────────────────────────────────────────
+    # Each adjacency link adds the neighbor bonus to BOTH reactors.
+    prop ReactorCount: int   => $this.Width * $this.Height
+    prop Links       : int   => ($this.Width - 1) * $this.Height + ($this.Height - 1) * $this.Width
+    prop OutputPower : power => $this.ReactorCount * $this.Type.Heat + 2 * $this.Type.NeighborPower * $this.Links
+
+    # ── Infrastructure ─────────────────────────────────────────────────
+    # 10 MW per heat exchanger, 5.82 MW per steam turbine (500°C steam)
+    # each pump moves 1200 water/sec, each exchanger needs 10.3 water/sec
+    prop Exchangers     : int   => Math.Ceiling($this.OutputPower / 10`MW)
+    prop Turbines       : int   => Math.Ceiling($this.OutputPower / 5.82`MW)
+    prop Pumps          : int   => Math.Ceiling($this.WaterPerSecond / 1200`L/s)
+    prop ElectricalPower: power => $this.Turbines * 5.82`MW
+
+    # ── Steam buffer ──────────────────────────────────────────────────
+    # Each heat exchanger produces ~103 steam/sec
+    prop WaterPerSecond: flowrate => $this.Exchangers * 10.3`L/s
+    prop SteamPerSecond: flowrate => $this.Exchangers * 103`L/s
+    prop SteamBuffer   : volume   => $this.SteamPerSecond * $this.BufferDuration
+    prop Tanks         : int      => Math.Ceiling($this.SteamBuffer / $this.TankCapacity)
+
+    # ── Fuel logistics ────────────────────────────────────────────────
+    prop BurnTime  : timequantity => $this.Type.BurnTime
+    prop FuelPerMin: double       => (60`s / $this.BurnTime) * $this.ReactorCount
+}
+
+## @summary Calculates the statistics of a Factorio Reactor Block
+## @param=ReactorType Valid types: Nuclear/Uranium, Plutonium, MOX, or Breeder
+## @param=Width Number of reactors wide
+## @param=Height Number of reactors high
+## @param=Seconds Number of seconds the steam buffer should last
+## @param=Capacity Capacity of the steam tanks
+subcommand calc {
+    ## @summary Valid types: Nuclear/Uranium, Plutonium, MOX, or Breeder. Prompts when omitted.
+    arg ReactorType: string = ""
+
+    ## @summary Number of reactors wide
+    arg Width      : int    = 2
+
+    ## @summary Number of reactors high
+    arg Height     : int    = 2
+
+    ## @summary Number of seconds the steam buffer should last
+    arg Seconds    : int    = 300
+
+    ## @summary Capacity of the steam tanks
+    arg Capacity   : int    = 25000
+
+    ## The picker is the fallback, not the only way in: passing the type keeps the script
+    ## runnable non-interactively, where `tui` is unavailable.
+    var chosen = ($ReactorType == "")
+        ? (tui pick "Uranium" "Plutonium" "MOX" "Breeder" --cli)
+        : $ReactorType
+
+    var reactor = match($chosen.ToLower()) {
+        "nuclear"   => new Reactor("Nuclear", 40`MW, 100, Fuel.Uranium  )
+        "uranium"   => new Reactor("Nuclear", 40`MW, 100, Fuel.Uranium  )
+        "plutonium" => new Reactor("Nuclear", 40`MW, 100, Fuel.Plutonium)
+        "mox"       => new Reactor("MOX",     20`MW, 150, Fuel.Mox      )
+        "breeder"   => new Reactor("Breeder", 20`MW, 50,  Fuel.Breeder  )
+        default     => throw $"Unknown reactor type: {$_}. Valid: nuclear, uranium, plutonium, mox, breeder"
+    }
+
+    var rb = new ReactorBlock($reactor, $Width, $Height, $Seconds * 1`s, $Capacity * 1`L)
+
+    writeline $"""
+    {$rb.ReactorCount}x {$rb.Type.Name} Reactors ({$rb.Type.Heat}):
+        Fuel       = {$rb.Type.FuelName} ({$rb.Type.FuelEnergy}, {$rb.Type.BurnTime})
+        Fuel / min = {$rb.FuelPerMin} {$rb.Type.FuelName}/min
+        Bonus      = {$rb.Type.NeighborPercent}% ({$rb.Type.NeighborPower})
+        Dimensions = {$rb.Width}x{$rb.Height} ({$rb.Links} links)
+        Tot. Power = {$rb.OutputPower}
+    
+    {$rb.Pumps}x Offshore Pump(s)
+    
+    {$rb.Exchangers}x Exchangers:
+        Output Heat = {$rb.OutputPower}
+        Water / sec = {$rb.WaterPerSecond}
+    
+    {$rb.Turbines}x Turbines:
+        Energy      = {$rb.ElectricalPower}
+        Steam / sec = {$rb.SteamPerSecond}
+    
+    {$rb.Tanks}x Water Tanks:
+        Capacity = {$rb.TankCapacity * $rb.Tanks} ({$rb.SteamBuffer})
+        Duration = {$rb.BufferDuration.TimeSpan}
+    """
+
+    ## The rendering above is for a reader; the block itself is for a pipeline, so
+    ## `reactor-block.tosh calc Nuclear | get OutputPower` works.
+    $rb
+}

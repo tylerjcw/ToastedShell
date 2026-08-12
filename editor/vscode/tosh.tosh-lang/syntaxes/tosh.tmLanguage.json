@@ -100,6 +100,9 @@
       "include": "#variable-declaration"
     },
     {
+      "include": "#unit-conversion"
+    },
+    {
       "include": "#cast-expression"
     },
     {
@@ -978,6 +981,21 @@
       "match": "\\b(true|false|null)\\b",
       "name": "constant.language.tosh"
     },
+    "unit-conversion": {
+      "comment": "Quantity conversion target: 2`mi as `ft",
+      "match": "\\b(as)(\\s+)(`)([A-Za-z°μΩ1][A-Za-z0-9°μΩ^/*·-]*)",
+      "captures": {
+        "1": {
+          "name": "keyword.operator.type.tosh"
+        },
+        "3": {
+          "name": "punctuation.definition.unit.tosh"
+        },
+        "4": {
+          "name": "keyword.other.unit.tosh"
+        }
+      }
+    },
     "cast-expression": {
       "comment": "Type-test and cast operators:  $x as int,  $x is not string",
       "match": "\\b(as|is-not|is)\\s+(not\\s+)?([A-Za-z_][A-Za-z0-9_.<>?,\\[\\]-]*)",
@@ -1382,8 +1400,20 @@
     "numeric": {
       "patterns": [
         {
+          "comment": "Degree shorthand: 90°, 20°C, 68°F, 90°/s",
+          "match": "(?<![A-Za-z0-9_])([+-]?(?:[0-9][0-9_]*(?:\\.(?:[0-9][0-9_]*)?)?|\\.[0-9][0-9_]*)(?:[eE][+-]?[0-9][0-9_]*)?)(°[A-Za-z0-9^/*·μΩ-]*)",
+          "captures": {
+            "1": {
+              "name": "constant.numeric.tosh"
+            },
+            "2": {
+              "name": "keyword.other.unit.tosh"
+            }
+          }
+        },
+        {
           "comment": "Quantity with a unit: 100`m, 9.8`m/s^2, 5`kg",
-          "match": "\\b([0-9][0-9_]*(?:\\.[0-9][0-9_]*)?)(`)([A-Za-z][A-Za-z0-9^/*·-]*)",
+          "match": "(?<![A-Za-z0-9_])([+-]?(?:[0-9][0-9_]*(?:\\.(?:[0-9][0-9_]*)?)?|\\.[0-9][0-9_]*)(?:[eE][+-]?[0-9][0-9_]*)?)(`)([A-Za-z°μΩ1][A-Za-z0-9°μΩ^/*·-]*)",
           "captures": {
             "1": {
               "name": "constant.numeric.tosh"

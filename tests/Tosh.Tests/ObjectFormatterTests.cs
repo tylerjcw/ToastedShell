@@ -1,5 +1,6 @@
 using Tosh.Language;
 using Tosh.Runtime;
+using Tosh.Runtime.Units;
 using System.Globalization;
 using System.Numerics;
 using System.Text;
@@ -8,6 +9,34 @@ namespace Tosh.Tests;
 
 public sealed class ObjectFormatterTests
 {
+    [Fact]
+    public void Quantities_are_scalar_for_display_and_record_like_for_introspection()
+    {
+        var power = Quantity.FromLiteral(483.06, "MW");
+        var flow = Quantity.FromLiteral(48 * 10.3, "L/s");
+        var dimensionless = new Quantity(2, UnitExpression.Dimensionless, string.Empty);
+
+        Assert.Equal("483.06 MW", ToshValueFormatter.Format(power));
+        Assert.Equal("494.4 L/s", flow.ToString());
+        Assert.Equal("483.1 MW", power.ToString("F1", CultureInfo.InvariantCulture));
+        var roundTripMagnitude = flow.ToString("R", CultureInfo.InvariantCulture).Split(' ', 2)[0];
+        Assert.Equal(flow.Magnitude, double.Parse(roundTripMagnitude, CultureInfo.InvariantCulture));
+        Assert.Equal("2", dimensionless.ToString());
+
+        var display = new DisplayEngine(new ObjectFormatter());
+        Assert.False(display.TryBuildStreamingColumns(
+            power,
+            new DisplayRenderOptions(ObjectRenderStyle.Compact),
+            out _));
+
+        var mixed = StyledText.StripAnsi(display.RenderMany([1, power]));
+        Assert.Contains("483.06 MW", mixed, StringComparison.Ordinal);
+        Assert.DoesNotContain("base-value", mixed, StringComparison.Ordinal);
+
+        Assert.True(ShellRecordUtilities.TryGetFields(power, out var fields));
+        Assert.Contains(fields, field => field.Key == "base-value");
+    }
+
     [Fact]
     public void Default_value_formatter_uses_canonical_scalar_and_collection_text()
     {

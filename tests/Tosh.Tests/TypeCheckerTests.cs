@@ -149,6 +149,20 @@ public sealed class TypeCheckerTests : IClassFixture<ToshRuntimeFixture>
     }
 
     [Fact]
+    public void Quantity_string_boundaries_and_unary_operators_are_known_conversions()
+    {
+        var diags = Check("""
+            func in_feet(distance: length) -> length {
+                return (-$distance as `ft)
+            }
+            in_feet "2mi"
+            """);
+
+        Assert.DoesNotContain(diags, diagnostic => diagnostic.Code is
+            "tosh.type.mismatch" or "tosh.type.operator");
+    }
+
+    [Fact]
     public void Reports_argument_type_mismatch()
     {
         var diags = Check("""

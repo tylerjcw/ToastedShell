@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Collections;
 using System.Net;
 using System.Numerics;
+using Tosh.Runtime.Units;
 
 namespace Tosh.Runtime;
 
@@ -51,6 +52,51 @@ public static class TypeConversion
             {
                 converted = complex;
                 return true;
+            }
+
+            converted = null;
+            return false;
+        }
+
+        // Quantity annotations are real conversion boundaries, not merely runtime
+        // instance checks. This is what lets an OS argv string such as "5km" bind
+        // to a script parameter declared as LengthQuantity.
+        if (typeof(Quantity).IsAssignableFrom(effectiveType))
+        {
+            Quantity? quantity = value switch
+            {
+                Quantity existing => existing,
+                string quantityText when Quantity.TryParse(quantityText, out var parsed) => parsed,
+                TimeSpan span => new DurationQuantity(span.TotalSeconds, "s"),
+                StorageSize size when IsExactlyRepresentableAsDouble(size.Bytes) =>
+                    new DataSizeQuantity(size.Bytes, "B"),
+                _ => null,
+            };
+
+            if (quantity is not null)
+            {
+                if (effectiveType == typeof(Quantity) || effectiveType.IsInstanceOfType(quantity))
+                {
+                    converted = quantity;
+                    return true;
+                }
+
+                // Named quantity subclasses all expose the same (magnitude, unit)
+                // constructor. Recreate the value only when that subtype accepts
+                // the parsed dimension; its base constructor performs the check.
+                var constructor = effectiveType.GetConstructor([typeof(double), typeof(string)]);
+                if (constructor is not null)
+                {
+                    try
+                    {
+                        converted = constructor.Invoke([quantity.Magnitude, quantity.UnitSymbol]);
+                        return true;
+                    }
+                    catch
+                    {
+                        // The requested category has a different dimension.
+                    }
+                }
             }
 
             converted = null;
@@ -226,6 +272,32 @@ public static class TypeConversion
             return true;
         }
 
+        if (effectiveType == typeof(TimeSpan) && value is Quantity durationQuantity &&
+            durationQuantity.Dimension == UnitExpression.Of(UnitDimension.Time))
+        {
+            if (durationQuantity is DurationQuantity duration && duration.TryToTimeSpan(out var bridgedSpan))
+            {
+                converted = bridgedSpan;
+                return true;
+            }
+
+            try
+            {
+                var seconds = durationQuantity.BaseValue;
+                if (double.IsFinite(seconds))
+                {
+                    converted = TimeSpan.FromSeconds(seconds);
+                    return true;
+                }
+            }
+            catch (OverflowException)
+            {
+            }
+
+            converted = null;
+            return false;
+        }
+
         if (effectiveType == typeof(TimeSpan) && value is string timeSpanText && TemporalParser.TryParseDuration(timeSpanText, out var timeSpan))
         {
             converted = timeSpan;
@@ -240,8 +312,22 @@ public static class TypeConversion
 
         if (effectiveType == typeof(TimeSpan) && value is byte or short or int or long or float or double or decimal)
         {
-            converted = TimeSpan.FromSeconds(Convert.ToDouble(value));
-            return true;
+            try
+            {
+                var seconds = Convert.ToDouble(value, CultureInfo.InvariantCulture);
+                if (double.IsFinite(seconds))
+                {
+                    converted = TimeSpan.FromSeconds(seconds);
+                    return true;
+                }
+            }
+            catch (Exception exception) when (
+                exception is OverflowException or ArgumentException or InvalidCastException or FormatException)
+            {
+            }
+
+            converted = null;
+            return false;
         }
 
         if (effectiveType == typeof(TemporalAmount))
@@ -255,6 +341,15 @@ public static class TypeConversion
             if (value is TimeSpan timeSpanValue)
             {
                 converted = TemporalAmount.FromTimeSpan(timeSpanValue);
+                return true;
+            }
+
+            if (value is Quantity durationValue &&
+                durationValue.Dimension == UnitExpression.Of(UnitDimension.Time) &&
+                TryConvert(durationValue, typeof(TimeSpan), out var durationSpan) &&
+                durationSpan is TimeSpan convertedDuration)
+            {
+                converted = TemporalAmount.FromTimeSpan(convertedDuration);
                 return true;
             }
         }
@@ -368,6 +463,29 @@ public static class TypeConversion
 
         if (effectiveType == typeof(StorageSize))
         {
+            if (value is DataSizeQuantity dataSize && dataSize.TryToStorageSize(out var bridgedSize))
+            {
+                converted = bridgedSize;
+                return true;
+            }
+
+            if (value is Quantity dataQuantity &&
+                dataQuantity.Dimension == UnitExpression.Of(UnitDimension.Data))
+            {
+                var bytes = dataQuantity.To("B").Magnitude;
+                if (double.IsFinite(bytes) &&
+                    bytes == Math.Truncate(bytes) &&
+                    bytes >= -9_223_372_036_854_775_808d &&
+                    bytes < 9_223_372_036_854_775_808d)
+                {
+                    converted = StorageSize.FromBytes((long)bytes);
+                    return true;
+                }
+
+                converted = null;
+                return false;
+            }
+
             if (value is string storageSizeText && StorageSize.TryParse(storageSizeText, out var parsedSize))
             {
                 converted = parsedSize;
@@ -452,6 +570,22 @@ public static class TypeConversion
 
         converted = null;
         return false;
+    }
+
+    private static bool IsExactlyRepresentableAsDouble(long value)
+    {
+        if (value == 0) return true;
+
+        // Binary64 has 53 significant bits. Larger integers remain exact only
+        // when enough low bits are zero (for example 2^53 + 2 and long.MinValue).
+        // Avoid casting an out-of-range rounded double back to long.
+        var magnitude = value < 0
+            ? (ulong)(-(value + 1)) + 1UL
+            : (ulong)value;
+        var significantBits =
+            (64 - BitOperations.LeadingZeroCount(magnitude)) -
+            BitOperations.TrailingZeroCount(magnitude);
+        return significantBits <= 53;
     }
 
     private static bool TryConvertEnumerable(IEnumerable enumerable, Type targetType, out object? converted)

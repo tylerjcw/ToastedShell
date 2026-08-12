@@ -687,9 +687,8 @@ internal sealed partial class EmitterImpl
     /// <c>object</c> for every parameter and return <c>object</c>;
     /// args are evaluated and boxed in declaration order. Fully
     /// typed callees use their declared CLR signature directly —
-    /// args are coerced to the typed param shape (numeric widening
-    /// for primitives, Convert.ChangeType + Unbox_Any for other
-    /// value types, castclass for ref types) and the return is
+    /// args are coerced to the typed param shape through the canonical
+    /// annotation conversion boundary, and the return is
     /// produced in its declared CLR type. Statement context pops
     /// the unused return value.
     /// </summary>
@@ -747,14 +746,15 @@ internal sealed partial class EmitterImpl
                 {
                     BoxIfValueType(argType);
                 }
-                else if (target.IsValueType && IsNumericType(target) && IsNumericOrObject(argType))
-                {
-                    ConvertNumeric(argType, target);
-                }
                 else if (target != argType)
                 {
                     if (argType.IsValueType) _il.Emit(OpCodes.Box, argType);
-                    CoerceObjectToTyped(_il, target);
+                    CoerceObjectToTyped(
+                        _il,
+                        target,
+                        entry.Definition.Parameters[i].TypeName,
+                        arg.Value.Span,
+                        $"parameter '{entry.Definition.Parameters[i].Name}'");
                 }
             }
             else

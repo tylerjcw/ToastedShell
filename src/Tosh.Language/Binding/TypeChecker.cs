@@ -1,6 +1,7 @@
 using Tosh.Compiler.IR;
 using Tosh.Language.Parsing;
 using Tosh.Runtime;
+using Tosh.Runtime.Units;
 using System.Reflection;
 
 namespace Tosh.Language.Binding;
@@ -1275,7 +1276,8 @@ public static class TypeChecker
 
         var ok = unary.Operator switch
         {
-            "-" or "+" => operand.ClrType is { } c && NumericRank(c) > 0,
+            "-" or "+" => operand.ClrType is { } c &&
+                (NumericRank(c) > 0 || typeof(Quantity).IsAssignableFrom(c)),
             "!" or "not" => true,
             _ => true,
         };
@@ -1517,6 +1519,11 @@ public static class TypeChecker
         {
             if (fc == tc) return true;
             if (IsNumericWidening(fc, tc)) return true;
+            // Quantity annotations intentionally parse shell/argv strings at
+            // runtime. Treat that documented conversion as assignable so the
+            // preview checker does not warn on `in-feet "2mi"` even though both
+            // interpreted and compiled boundaries accept it.
+            if (fc == typeof(string) && typeof(Quantity).IsAssignableFrom(tc)) return true;
             // A nullable<T> slot accepts T.
             if (to is NullableType nt && nt.Inner.ClrType == fc) return true;
             if (tc.IsAssignableFrom(fc)) return true;

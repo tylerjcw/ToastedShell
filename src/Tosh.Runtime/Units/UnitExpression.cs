@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using System.Text;
 
 namespace Tosh.Runtime.Units;
@@ -11,19 +12,25 @@ public sealed class UnitExpression : IEquatable<UnitExpression>
 {
     public static readonly UnitExpression Dimensionless = new(new Dictionary<UnitDimension, int>());
 
-    private readonly Dictionary<UnitDimension, int> _exponents;
+    private readonly ReadOnlyDictionary<UnitDimension, int> _exponents;
 
     public UnitExpression(Dictionary<UnitDimension, int> exponents)
     {
-        _exponents = new Dictionary<UnitDimension, int>();
+        ArgumentNullException.ThrowIfNull(exponents);
+        var normalized = new Dictionary<UnitDimension, int>();
 
         foreach (var (dim, exp) in exponents)
         {
             if (exp != 0)
             {
-                _exponents[dim] = exp;
+                normalized[dim] = exp;
             }
         }
+
+        // Do not expose a Dictionary behind IReadOnlyDictionary: callers could
+        // cast it back, mutate a value after it became a registry key, and corrupt
+        // every dimension-indexed map (including the shared Dimensionless value).
+        _exponents = new ReadOnlyDictionary<UnitDimension, int>(normalized);
     }
 
     public static UnitExpression Of(UnitDimension dimension, int exponent = 1)
@@ -62,7 +69,7 @@ public sealed class UnitExpression : IEquatable<UnitExpression>
         foreach (var (dim, exp) in other._exponents)
         {
             result.TryGetValue(dim, out var current);
-            result[dim] = current + exp;
+            result[dim] = checked(current + exp);
         }
 
         return new UnitExpression(result);
@@ -78,7 +85,7 @@ public sealed class UnitExpression : IEquatable<UnitExpression>
         foreach (var (dim, exp) in other._exponents)
         {
             result.TryGetValue(dim, out var current);
-            result[dim] = current - exp;
+            result[dim] = checked(current - exp);
         }
 
         return new UnitExpression(result);
@@ -93,7 +100,7 @@ public sealed class UnitExpression : IEquatable<UnitExpression>
 
         foreach (var (dim, exp) in _exponents)
         {
-            result[dim] = exp * power;
+            result[dim] = checked(exp * power);
         }
 
         return new UnitExpression(result);
@@ -108,7 +115,7 @@ public sealed class UnitExpression : IEquatable<UnitExpression>
 
         foreach (var (dim, exp) in _exponents)
         {
-            result[dim] = -exp;
+            result[dim] = checked(-exp);
         }
 
         return new UnitExpression(result);
@@ -161,7 +168,9 @@ public sealed class UnitExpression : IEquatable<UnitExpression>
         [UnitDimension.Temperature] = "K",
         [UnitDimension.AmountOfSubstance] = "mol",
         [UnitDimension.LuminousIntensity] = "cd",
-        [UnitDimension.Data] = "B",
+        // The unit registry's data base is the bit. Bytes are a display unit with
+        // factor 8; spelling the canonical base as B silently scaled derived data.
+        [UnitDimension.Data] = "bit",
         [UnitDimension.Angle] = "rad",
     };
 
@@ -169,6 +178,21 @@ public sealed class UnitExpression : IEquatable<UnitExpression>
     /// Formats as SI base dimensions, e.g. "kg·m/s²".
     /// </summary>
     public string ToSymbolString()
+    {
+        return FormatSymbol(useSuperscripts: true);
+    }
+
+    /// <summary>
+    /// Formats a canonical unit expression that <see cref="UnitExpressionParser"/>
+    /// can read again, e.g. <c>kg·m^2/s^3</c>. Every component is a base unit, so
+    /// the resulting conversion factor is one.
+    /// </summary>
+    public string ToCanonicalUnitSymbol()
+    {
+        return FormatSymbol(useSuperscripts: false);
+    }
+
+    private string FormatSymbol(bool useSuperscripts)
     {
         if (IsDimensionless) return "";
 
@@ -185,7 +209,7 @@ public sealed class UnitExpression : IEquatable<UnitExpression>
             }
             else if (exp < 0)
             {
-                denominator.Add((sym, -exp));
+                denominator.Add((sym, checked(-exp)));
             }
         }
 
@@ -198,29 +222,38 @@ public sealed class UnitExpression : IEquatable<UnitExpression>
 
             if (numerator[i].exp > 1)
             {
-                sb.Append(FormatSuperscript(numerator[i].exp));
+                AppendExponent(sb, numerator[i].exp, useSuperscripts);
             }
         }
 
         if (denominator.Count > 0)
         {
             if (numerator.Count == 0) sb.Append('1');
-            sb.Append('/');
 
+            if (!useSuperscripts)
+            {
+                // The source grammar deliberately has no unit grouping. Repeated
+                // division is left-associative and round-trips every denominator
+                // vector: m/kg/s^2, never the unparseable m/(kg·s^2) or the
+                // dimensionally different m/kg·s^2.
+                foreach (var (sym, exp) in denominator)
+                {
+                    sb.Append('/').Append(sym);
+                    if (exp > 1) AppendExponent(sb, exp, useSuperscripts: false);
+                }
+
+                return sb.ToString();
+            }
+
+            sb.Append('/');
             var needParens = denominator.Count > 1;
             if (needParens) sb.Append('(');
-
             for (var i = 0; i < denominator.Count; i++)
             {
                 if (i > 0) sb.Append('·');
                 sb.Append(denominator[i].sym);
-
-                if (denominator[i].exp > 1)
-                {
-                    sb.Append(FormatSuperscript(denominator[i].exp));
-                }
+                if (denominator[i].exp > 1) AppendExponent(sb, denominator[i].exp, useSuperscripts: true);
             }
-
             if (needParens) sb.Append(')');
         }
 
@@ -228,6 +261,18 @@ public sealed class UnitExpression : IEquatable<UnitExpression>
     }
 
     public override string ToString() => ToSymbolString();
+
+    private static void AppendExponent(StringBuilder builder, int exponent, bool useSuperscripts)
+    {
+        if (useSuperscripts)
+        {
+            builder.Append(FormatSuperscript(exponent));
+        }
+        else
+        {
+            builder.Append('^').Append(exponent);
+        }
+    }
 
     private static string FormatSuperscript(int value)
     {

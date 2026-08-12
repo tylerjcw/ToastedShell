@@ -13,6 +13,6 @@ public enum UnitDimension
     Temperature,       // kelvin (K)
     AmountOfSubstance, // mole (mol)
     LuminousIntensity, // candela (cd)
-    Data,              // byte (B)
+    Data,              // bit (bit)
     Angle,             // radian (rad)
 }

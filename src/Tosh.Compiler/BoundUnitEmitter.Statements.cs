@@ -490,7 +490,12 @@ internal sealed partial class EmitterImpl
                 assign.Value.Span,
                 assign.Name);
         }
-        EmitValueIntoLocalSlot(slot, resultType, assign.Name);
+        EmitValueIntoLocalSlot(
+            slot,
+            resultType,
+            assign.Name,
+            assign.Symbol?.DeclaredTypeName,
+            assign.Value.Span);
     }
 
     private void EmitPlainAssignmentInto(LocalSlot slot, BoundVariableAssignment assign)
@@ -507,13 +512,20 @@ internal sealed partial class EmitterImpl
                 assign.Name);
         }
 
-        EmitValueIntoLocalSlot(slot, producedType, assign.Name);
+        EmitValueIntoLocalSlot(
+            slot,
+            producedType,
+            assign.Name,
+            assign.Symbol?.DeclaredTypeName,
+            assign.Value.Span);
     }
 
     private void EmitValueIntoLocalSlot(
         LocalSlot slot,
         Type producedType,
-        string targetName)
+        string targetName,
+        string? annotationTypeName,
+        TextSpan valueSpan)
     {
         if (producedType != slot.Type)
         {
@@ -527,7 +539,12 @@ internal sealed partial class EmitterImpl
                 // exact dynamic result type is preserved. Reassignment into an
                 // already-established CLR slot still needs the normal declared
                 // type conversion (for example, an int loop counter).
-                CoerceObjectToTyped(_il, slot.Type);
+                CoerceObjectToTyped(
+                    _il,
+                    slot.Type,
+                    annotationTypeName,
+                    valueSpan,
+                    targetName);
             }
             else if (slot.Type == typeof(object))
             {
@@ -1207,19 +1224,17 @@ internal sealed partial class EmitterImpl
                 _il.Emit(OpCodes.Call, s_hostCheckType);
                 t = typeof(object);
             }
-            // Coerce expression CLR type → declared return type.
-            // Numeric returns: stay unboxed, use ConvertNumeric for
-            // primitive widening (e.g. arithmetic widens to long but
-            // declared return is `int`). Other shapes: box to object
-            // and round-trip through Convert.ChangeType / castclass.
-            if (typedReturn.IsValueType && IsNumericType(typedReturn) && IsNumericOrObject(t))
-            {
-                ConvertNumeric(t, typedReturn);
-            }
-            else if (typedReturn != t)
+            // Coerce expression CLR type → declared return type through the
+            // same annotation boundary used by interpreted execution.
+            if (typedReturn != t)
             {
                 if (t.IsValueType) _il.Emit(OpCodes.Box, t);
-                CoerceObjectToTyped(_il, typedReturn);
+                CoerceObjectToTyped(
+                    _il,
+                    typedReturn,
+                    _currentFunctionReturnTypeName,
+                    ret.Span,
+                    "return value");
             }
         }
         else

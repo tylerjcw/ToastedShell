@@ -215,8 +215,12 @@ public sealed class ObjectFormatter
             return true;
         }
 
+        // Some scalar shell values also expose structured members for explicit
+        // introspection. Classify them here before IShellRecordObject is handled,
+        // otherwise interpolation expands a Quantity/ToshVector into a record.
         if (value is IFormattable formattable &&
-            (value.GetType().IsPrimitive || value is decimal || value is Guid || value is TimeSpan || value is BigInteger || value is ToshVector || value is ToshMatrix))
+            (value.GetType().IsPrimitive || value is decimal || value is Guid || value is TimeSpan ||
+             value is BigInteger || value is ToshVector || value is ToshMatrix || value is Units.Quantity))
         {
             text = formattable.ToString(null, CultureInfo.InvariantCulture) ?? value.ToString() ?? value.GetType().Name;
             return true;

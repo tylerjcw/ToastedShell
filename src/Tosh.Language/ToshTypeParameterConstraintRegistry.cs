@@ -1,4 +1,5 @@
 using System.Numerics;
+using System.Reflection;
 
 namespace Tosh.Language;
 
@@ -79,13 +80,17 @@ public static class ToshTypeParameterConstraintRegistry
 
     private static bool HasOperator(Type t, string opMethodName)
     {
-        // op_Addition(t, t) -> t etc., either declared on the type or inherited.
-        var methods = t.GetMethods(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
+        // A derived quantity uses the public operators declared on Quantity.
+        // Operator parameters therefore need to accept T; requiring an exact
+        // (T,T) declaration makes every named quantity subtype falsely fail.
+        var methods = t.GetMethods(BindingFlags.Public | BindingFlags.Static | BindingFlags.FlattenHierarchy);
         foreach (var m in methods)
         {
             if (!string.Equals(m.Name, opMethodName, StringComparison.Ordinal)) continue;
             var ps = m.GetParameters();
-            if (ps.Length == 2 && ps[0].ParameterType == t && ps[1].ParameterType == t)
+            if (ps.Length == 2 &&
+                ps[0].ParameterType.IsAssignableFrom(t) &&
+                ps[1].ParameterType.IsAssignableFrom(t))
             {
                 return true;
             }

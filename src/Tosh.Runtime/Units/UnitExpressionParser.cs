@@ -4,7 +4,7 @@ namespace Tosh.Runtime.Units;
 
 /// <summary>
 /// Parses unit expression strings like "m", "m/s", "kg*m/s^2", "m/s^2".
-/// Supports: multiplication (*,·), division (/), exponentiation (^), and grouping with parentheses.
+/// Supports multiplication (*,·), division (/), and exponentiation (^).
 /// </summary>
 public static class UnitExpressionParser
 {
@@ -13,9 +13,26 @@ public static class UnitExpressionParser
     /// Returns the resolved UnitDefinition if it's a simple symbol,
     /// or constructs a compound dimension + computes the conversion factor.
     /// </summary>
+    [Obsolete("Use TryParseConversion so affine offsets are not discarded.")]
     public static bool TryParse(string text, out double factor, out UnitExpression dimension, out string normalizedSymbol)
     {
-        factor = 1.0;
+        var parsed = TryParseConversion(text, out var conversion, out dimension, out normalizedSymbol);
+        factor = conversion.ToBaseFactor;
+        return parsed && !conversion.IsAffine;
+    }
+
+    /// <summary>
+    /// Parses a unit expression and retains the complete display-to-base transform.
+    /// Affine units are valid only as simple symbols: composing an absolute scale such
+    /// as Celsius into <c>°C/s</c> would incorrectly apply its origin as a multiplier.
+    /// </summary>
+    public static bool TryParseConversion(
+        string text,
+        out UnitConversion conversion,
+        out UnitExpression dimension,
+        out string normalizedSymbol)
+    {
+        conversion = UnitConversion.Identity;
         dimension = UnitExpression.Dimensionless;
         normalizedSymbol = text;
 
@@ -30,14 +47,20 @@ public static class UnitExpressionParser
 
         if (simple is not null)
         {
-            factor = simple.ToBaseFactor;
+            conversion = simple.Conversion;
             dimension = simple.Dimension;
             normalizedSymbol = simple.Symbol;
             return true;
         }
 
         // Compound unit: tokenize and parse
-        return TryParseCompound(text, out factor, out dimension, out normalizedSymbol);
+        if (!TryParseCompound(text, out var factor, out dimension, out normalizedSymbol))
+        {
+            return false;
+        }
+
+        conversion = new UnitConversion(factor);
+        return true;
     }
 
     private static bool TryParseCompound(string text, out double factor, out UnitExpression dimension, out string normalizedSymbol)
@@ -55,12 +78,24 @@ public static class UnitExpressionParser
             return false;
         }
 
-        return index >= tokens.Count;
+        return index >= tokens.Count && double.IsFinite(factor) && factor != 0.0;
     }
 
     private static bool TryParseExpression(List<UnitToken> tokens, ref int index, out double factor, out UnitExpression dimension)
     {
-        if (!TryParseTerm(tokens, ref index, out factor, out dimension))
+        // Numeric one is syntax, not a registered unit. It is accepted only as
+        // the leading numerator of a reciprocal canonical form such as 1/s.
+        // This prevents 5`1, m*1, m/1, and 1^2 from becoming unit expressions.
+        if (index == 0 &&
+            tokens.Count > 2 &&
+            tokens[0] is { Kind: UnitTokenKind.Number, Text: "1" } &&
+            tokens[1].Kind == UnitTokenKind.Divide)
+        {
+            factor = 1.0;
+            dimension = UnitExpression.Dimensionless;
+            index++;
+        }
+        else if (!TryParseTerm(tokens, ref index, out factor, out dimension))
         {
             return false;
         }
@@ -100,22 +135,19 @@ public static class UnitExpressionParser
 
         if (index >= tokens.Count) return false;
 
-        if (tokens[index].Kind == UnitTokenKind.OpenParen)
-        {
-            index++; // consume (
-            if (!TryParseExpression(tokens, ref index, out factor, out dimension))
-                return false;
-            if (index >= tokens.Count || tokens[index].Kind != UnitTokenKind.CloseParen)
-                return false;
-            index++; // consume )
-        }
-        else if (tokens[index].Kind == UnitTokenKind.Symbol)
+        if (tokens[index].Kind == UnitTokenKind.Symbol)
         {
             var symbol = tokens[index].Text;
             index++;
 
             var unit = UnitRegistry.Instance.TryResolve(symbol);
             if (unit is null) return false;
+
+            // A temperature point cannot be multiplied, divided, or raised to
+            // a power. Kelvin and Rankine prove why checking only HasOffset is
+            // insufficient: both have a zero offset but still denote points.
+            // Explicit linear delta units will use UnitRole.Linear later.
+            if (unit.Role == UnitRole.AbsoluteTemperature || unit.HasOffset) return false;
 
             factor = unit.ToBaseFactor;
             dimension = unit.Dimension;
@@ -145,7 +177,7 @@ public static class UnitExpressionParser
 
     #region Tokenizer
 
-    private enum UnitTokenKind { Symbol, Number, Multiply, Divide, Caret, OpenParen, CloseParen }
+    private enum UnitTokenKind { Symbol, Number, Multiply, Divide, Caret }
 
     private readonly record struct UnitToken(UnitTokenKind Kind, string Text);
 
@@ -170,14 +202,6 @@ public static class UnitExpressionParser
                     continue;
                 case '^':
                     tokens.Add(new UnitToken(UnitTokenKind.Caret, "^"));
-                    i++;
-                    continue;
-                case '(':
-                    tokens.Add(new UnitToken(UnitTokenKind.OpenParen, "("));
-                    i++;
-                    continue;
-                case ')':
-                    tokens.Add(new UnitToken(UnitTokenKind.CloseParen, ")"));
                     i++;
                     continue;
             }

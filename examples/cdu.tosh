@@ -1,0 +1,197 @@
+# ── cdu.tosh — Color Disk Usage Analyzer for TōSh (ToastedShell) ────────────────
+#
+# Usage:
+#   tosh examples/cdu.tosh scan --path . --exclude "artifacts, src, bench" --sort
+#   tosh examples/cdu.tosh top --path . --exclude "src, tools" --count 5
+#   tosh examples/cdu.tosh info --path . --exclude "artifacts, docs"
+
+# Helper: Calculate recursive directory size using System.IO
+func get-dir-size(dirPath: string) {
+    var total = 0
+    try {
+        var files = System.IO.Directory.EnumerateFiles($dirPath, "*", System.IO.SearchOption.AllDirectories)
+        for f in $files {
+            try {
+                var fi = new System.IO.FileInfo($f)
+                $total = $total + $fi.Length
+            } catch { }
+        }
+    } catch { }
+    return $total
+}
+
+# Helper: Check if entry name matches any pattern in a comma-separated exclude string
+func is-excluded(name: string, excludeStr: string) {
+    if ($excludeStr == null or ($excludeStr | count) == 0) { return false }
+    var parts = $excludeStr.Split(",", System.StringSplitOptions.RemoveEmptyEntries)
+    for p in $parts {
+        var trimmed = $p.Trim()
+        if ((($trimmed | count) > 0) and ($name.Contains($trimmed))) {
+            return true
+        }
+    }
+    return false
+}
+
+# Helper: Build structured records for a target directory
+func build-cdu-records(targetPath: string, calculateDirSizes: bool, excludePattern: string = "") {
+    var entries = ls $targetPath
+
+    # Apply comma-separated exclude filter if specified
+    if ($excludePattern != null and ($excludePattern | count) > 0) {
+        $entries = ($entries | where { (is-excluded $_.Name $excludePattern) == false } | collect)
+    }
+
+    var entryCount = ($entries | count)
+
+    if ($entryCount == 0) {
+        return []
+    }
+
+    var maxBytes = 1
+    var totalBytes = 0
+    var rawSizes = []
+
+    # First pass: compute actual sizes and overall totals
+    for item in $entries {
+        var bytes = 0
+        var isDir = $item.IsDirectory
+
+        if ($isDir and $calculateDirSizes) {
+            $bytes = (get-dir-size $item.FullName)
+        } else if ($item.Size != null) {
+            $bytes = $item.Size.Bytes
+        }
+
+        $rawSizes = [...$rawSizes, $bytes]
+        $totalBytes = $totalBytes + $bytes
+        if ($bytes > $maxBytes) {
+            $maxBytes = $bytes
+        }
+    }
+
+    if ($maxBytes == 0) { $maxBytes = 1 }
+    if ($totalBytes == 0) { $totalBytes = 1 }
+
+    # Second pass: construct styled output records
+    var result = []
+    var idx = 0
+
+    for item in $entries {
+        var bytes = $rawSizes[$idx]
+        $idx = $idx + 1
+
+        var ratio = ($bytes * 1.0) / ($maxBytes * 1.0)
+        var barLen = (Math.Round($ratio * 20.0) as int)
+        if ($barLen == 0 and $bytes > 0) { $barLen = 1 }
+
+        # Build histogram bar using solid block characters
+        var bar = ""
+        var k = 0
+        while ($k < $barLen) {
+            $bar = $"{$bar}█"
+            $k = $k + 1
+        }
+
+        # Dynamic color coding based on size ratio
+        var styledBar = (if ($ratio > 0.5) { styled $bar --fg bright-red --bold }
+                    else if ($ratio > 0.2) { styled $bar --fg yellow }
+                    else if ($ratio > 0.05) { styled $bar --fg bright-cyan }
+                    else { styled $bar --fg green })
+
+        var pct = Math.Round((($bytes * 100.0) / ($totalBytes * 1.0)), 1)
+        var isDir = $item.IsDirectory
+        var slash = (if ($isDir) { "/" } else { "" })
+        var nameStr = $"{$item.Name}{$slash}"
+
+        $result = [...$result, {|
+            Name = $nameStr,
+            Type = (if ($isDir) { "dir" } else { "file" }),
+            Size = (new Tosh.Runtime.StorageSize($bytes)),
+            Percent = $"{$pct}%",
+            Bar = $styledBar
+        |}]
+    }
+
+    return $result
+}
+
+## @summary Scan a directory and display structured disk usage with visual bar graphs.
+subcommand scan {
+    ## @summary Directory path to inspect (defaults to current directory).
+    flag path: string = "."
+
+    ## @summary Comma-separated list of entry names or substrings to exclude.
+    flag exclude: string = ""
+
+    ## @summary Calculate recursive sizes for directories.
+    flag deep: bool = true
+
+    ## @summary Sort output by size descending.
+    flag sort: bool = false
+
+    var records = (build-cdu-records $path $deep $exclude)
+    if ($sort) {
+        return $records | sort -d Size
+    }
+    return $records
+}
+
+## @summary Display the top largest entries in a directory.
+subcommand top {
+    ## @summary Directory path to inspect (defaults to current directory).
+    flag path: string = "."
+
+    ## @summary Comma-separated list of entry names or substrings to exclude.
+    flag exclude: string = ""
+
+    ## @summary Number of top items to return (defaults to 5).
+    flag count: int = 5
+
+    var records = (build-cdu-records $path true $exclude)
+    return $records | sort -d Size | first $count
+}
+
+## @summary Display summary statistics for a directory.
+subcommand info {
+    ## @summary Directory path to inspect (defaults to current directory).
+    flag path: string = "."
+
+    ## @summary Comma-separated list of entry names or substrings to exclude.
+    flag exclude: string = ""
+
+    var entries = ls $path
+    if ($exclude != null and ($exclude | count) > 0) {
+        $entries = ($entries | where { (is-excluded $_.Name $exclude) == false } | collect)
+    }
+
+    var fileCount = ($entries | where _.IsFile | count)
+    var dirCount = ($entries | where _.IsDirectory | count)
+    var records = (build-cdu-records $path true $exclude)
+
+    var totalBytes = 0
+    for r in $records {
+        $totalBytes = $totalBytes + $r.Size.Bytes
+    }
+
+    return {|
+        Path = $path,
+        Excluded = $exclude,
+        Files = $fileCount,
+        Directories = $dirCount,
+        TotalItems = ($entries | count),
+        TotalSize = (new Tosh.Runtime.StorageSize($totalBytes))
+    |}
+}
+
+## @summary Print usage help for the cdu command.
+subcommand help {
+    echo "cdu — Color Disk Usage Analyzer for TōSh"
+    echo ""
+    echo "Subcommands:"
+    echo "  scan [--path DIR] [--exclude PAT1,PAT2] [--deep] [--sort]  Scan directory disk usage"
+    echo "  top  [--path DIR] [--exclude PAT1,PAT2] [--count N]        Display top N largest items"
+    echo "  info [--path DIR] [--exclude PAT1,PAT2]                    Display summary directory statistics"
+    echo "  help                                                       Show this help text"
+    echo ""
+}

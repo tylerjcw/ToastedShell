@@ -140,6 +140,26 @@ public sealed class SyntaxHighlighterTests
     }
 
     [Fact]
+    public void Quantity_literals_and_conversion_targets_share_unit_highlighting()
+    {
+        var runtime = ToshRuntime.CreateDefault();
+        runtime.Config.Theme.Syntax.UnitLiteral.Foreground = "bright-magenta";
+
+        var highlighted = SyntaxHighlighter.Highlight("2`mi as `ft", runtime);
+
+        Assert.Contains("\x1b[95m2`mi\x1b[0m", highlighted);
+        Assert.Contains("\x1b[95m`ft\x1b[0m", highlighted);
+
+        const string source = "2`mi as `ft";
+        var semanticUnits = DecodeSemanticTokens(source)
+            .Where(token => token.Type == 3)
+            .Select(token => token.Text)
+            .ToArray();
+        Assert.Contains("2`mi", semanticUnits);
+        Assert.Contains("`ft", semanticUnits);
+    }
+
+    [Fact]
     public void Tome_colorizer_treats_each_paired_collection_delimiter_as_one_punctuation_span()
     {
         const string source = "{||} {%%} {::}";

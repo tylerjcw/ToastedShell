@@ -254,6 +254,47 @@ public sealed class BoundUnitEmitterTests : IClassFixture<ToshRuntimeFixture>
     }
 
     [Fact]
+    public void Quantity_literals_annotations_and_as_conversion_compile_together()
+    {
+        var output = CompileAndRun(
+            "func in_feet(distance: length) -> length { return ($distance as `ft) }\n" +
+            "echo (in_feet \"2mi\")");
+
+        Assert.Equal("10560 ft", output.Trim());
+    }
+
+    [Fact]
+    public void Compiled_quantity_display_is_consistent_across_echo_interpolation_and_tostring()
+    {
+        var output = CompileAndRun(
+            "var power = 483.06`MW\n" +
+            "echo $power\n" +
+            "echo $\"{$power}\"\n" +
+            "echo $power.ToString()\n" +
+            "echo $power.ToString(\"F1\")");
+
+        Assert.Equal("483.06 MW\n483.06 MW\n483.06 MW\n483.1 MW", output.Trim());
+    }
+
+    [Fact]
+    public void Compiled_nullable_annotations_preserve_the_source_question_mark()
+    {
+        var output = CompileAndRun(
+            "func identity(value: string?) -> string? { return $value }\n" +
+            "echo ((identity null) ?? \"empty\")");
+
+        Assert.Equal("empty", output.Trim());
+    }
+
+    [Fact]
+    public void Compiled_duration_conversion_preserves_the_selected_display_unit()
+    {
+        var output = CompileAndRun("echo (2`hr as `s)");
+
+        Assert.Equal("7200 s", output.Trim());
+    }
+
+    [Fact]
     public void Compiled_lambda_bad_arity_reports_tosh_diagnostic()
     {
         var ex = Assert.Throws<TargetInvocationException>(() =>

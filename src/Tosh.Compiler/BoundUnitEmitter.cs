@@ -8,6 +8,7 @@ using Tosh.Language.Binding;
 using Tosh.Compiler.IR;
 using Tosh.Language.Parsing;
 using Tosh.Runtime;
+using Tosh.Runtime.Units;
 
 namespace Tosh.Compiler;
 
@@ -22,7 +23,7 @@ namespace Tosh.Compiler;
 /// Currently supported:
 /// • <c>BoundScript</c> with <c>BoundPipelineStatement</c> children
 /// • <c>BoundCommandCall</c> named <c>echo</c> with literal/expression args
-/// • <c>BoundLiteral</c> of int/long/double/bool/string/StorageSize/null
+/// • <c>BoundLiteral</c> of int/long/double/bool/string/StorageSize/Quantity/null
 /// • <c>BoundVariableDeclaration</c> + <c>BoundVariableReference</c>
 /// • <c>BoundBinaryOperator</c> through the canonical runtime operator
 ///   dispatcher, including polymorphic arithmetic, comparison, matching,
@@ -140,6 +141,12 @@ internal sealed partial class EmitterImpl : IDisposable
     /// value to the typed return slot for fully-typed funcs.
     /// </summary>
     private Type? _currentFunctionReturnType;
+    /// <summary>
+    /// Original source spelling of the active return annotation. CLR reference
+    /// types erase ToastScript's trailing <c>?</c>, so conversion diagnostics and
+    /// nullability checks must not reconstruct this solely from <see cref="Type"/>.
+    /// </summary>
+    private string? _currentFunctionReturnTypeName;
     /// <summary>
     /// When the active typed user function declares a refinement
     /// return type (e.g. <c>-> Positive</c>), this carries the
@@ -413,6 +420,10 @@ internal sealed partial class EmitterImpl : IDisposable
         typeof(StorageSize).GetMethod(
             nameof(StorageSize.FromBytes),
             new[] { typeof(long) })!;
+    private static readonly MethodInfo s_quantityFromLiteral =
+        typeof(Quantity).GetMethod(
+            nameof(Quantity.FromLiteral),
+            new[] { typeof(double), typeof(string) })!;
 
     private static readonly Type s_toshHost = typeof(global::Tosh.Compiler.Runtime.ToshHost);
     private static readonly MethodInfo s_hostInitialize =

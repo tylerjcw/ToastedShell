@@ -9,9 +9,13 @@ public sealed class UnitRegistry
     private static readonly Lazy<UnitRegistry> LazyInstance = new(() => new UnitRegistry());
     public static UnitRegistry Instance => LazyInstance.Value;
 
+    private readonly object _gate = new();
     private readonly Dictionary<string, UnitDefinition> _units = new(StringComparer.Ordinal);
     private readonly Dictionary<UnitExpression, string> _dimensionToCategory = new();
+    private readonly Dictionary<UnitExpression, string> _dimensionToCanonicalUnit = new();
     private readonly Dictionary<UnitExpression, Func<double, string, Quantity>> _namedTypeFactories = new();
+    private readonly Dictionary<string, Func<double, string, Quantity>> _categoryTypeFactories =
+        new(StringComparer.OrdinalIgnoreCase);
 
     private UnitRegistry()
     {
@@ -24,13 +28,16 @@ public sealed class UnitRegistry
     /// <summary>Resolve a unit symbol (e.g. "km", "mph", "degC") to its definition.</summary>
     public UnitDefinition? TryResolve(string symbol)
     {
-        if (_units.TryGetValue(symbol, out var unit))
+        lock (_gate)
         {
-            return unit;
-        }
+            if (_units.TryGetValue(symbol, out var unit))
+            {
+                return unit;
+            }
 
-        // Try SI prefix decomposition: e.g. "km" → prefix "k" + base "m"
-        return TryResolvePrefixed(symbol);
+            // Try SI prefix decomposition: e.g. "km" → prefix "k" + base "m"
+            return TryResolvePrefixed(symbol);
+        }
     }
 
     /// <summary>Get the named category for a dimension expression, or null if unknown.</summary>
@@ -40,18 +47,80 @@ public sealed class UnitRegistry
     }
 
     /// <summary>
+    /// Returns a stable base-unit presentation for a dimension. Named SI units
+    /// (J, W, N, and so on) win when one was registered; arbitrary dimensions
+    /// fall back to a parseable expression of base units.
+    /// </summary>
+    public string GetCanonicalUnitSymbol(UnitExpression dimension)
+    {
+        return _dimensionToCanonicalUnit.TryGetValue(dimension, out var symbol)
+            ? symbol
+            : dimension.ToCanonicalUnitSymbol();
+    }
+
+    /// <summary>
     /// Create a properly typed Quantity (Length, Mass, etc.) based on its dimension.
     /// Falls back to raw Quantity if no named type matches.
     /// </summary>
-    public Quantity CreateTyped(double magnitude, UnitExpression dimension, string unitSymbol, bool fromBase = false)
+    public Quantity CreateTyped(double magnitude, UnitExpression dimension, string unitSymbol)
     {
-        if (fromBase)
+        lock (_gate)
         {
-            var targetUnit = TryResolve(unitSymbol);
-            if (targetUnit is not null)
+            return CreateTypedCore(magnitude, dimension, unitSymbol);
+        }
+    }
+
+    /// <summary>
+    /// Creates a displayed quantity from a value already expressed in the
+    /// dimension's base unit. Compound and affine targets retain their complete
+    /// transform.
+    /// </summary>
+    public Quantity CreateTypedFromBase(double baseValue, UnitExpression dimension, string unitSymbol)
+    {
+        lock (_gate)
+        {
+            if (!UnitExpressionParser.TryParseConversion(
+                    unitSymbol,
+                    out var conversion,
+                    out var parsedDimension,
+                    out var normalizedSymbol) ||
+                parsedDimension != dimension)
             {
-                magnitude = targetUnit.FromBase(magnitude);
+                throw new ArgumentException(
+                    $"Unit '{unitSymbol}' does not describe dimension '{dimension}'.",
+                    nameof(unitSymbol));
             }
+
+            return CreateTypedCore(conversion.FromBase(baseValue), dimension, normalizedSymbol);
+        }
+    }
+
+    /// <summary>Compatibility bridge for the former ambiguous boolean factory.</summary>
+    [Obsolete("Use CreateTyped for display magnitudes or CreateTypedFromBase for base values.")]
+    public Quantity CreateTyped(
+        double magnitude,
+        UnitExpression dimension,
+        string unitSymbol,
+        bool fromBase)
+    {
+        return fromBase
+            ? CreateTypedFromBase(magnitude, dimension, unitSymbol)
+            : CreateTyped(magnitude, dimension, unitSymbol);
+    }
+
+    private Quantity CreateTypedCore(double magnitude, UnitExpression dimension, string unitSymbol)
+    {
+
+        // A named unit carries more meaning than its dimensions alone. Nm and J
+        // are dimensionally equal, for example, but the former is torque and the
+        // latter energy. Preserve that category when the display symbol resolves
+        // directly; compound/derived expressions use the dimension fallback.
+        var definition = TryResolve(unitSymbol);
+        if (definition is not null &&
+            definition.Dimension == dimension &&
+            _categoryTypeFactories.TryGetValue(definition.Category, out var categoryFactory))
+        {
+            return categoryFactory(magnitude, unitSymbol);
         }
 
         if (_namedTypeFactories.TryGetValue(dimension, out var factory))
@@ -65,29 +134,53 @@ public sealed class UnitRegistry
     /// <summary>Register a user-defined unit at runtime.</summary>
     public void RegisterUnit(UnitDefinition definition)
     {
-        _units[definition.Symbol] = definition;
+        ArgumentNullException.ThrowIfNull(definition);
+        if (!definition.IsUserDefined)
+        {
+            throw new ArgumentException(
+                "Public unit registration requires IsUserDefined=true.",
+                nameof(definition));
+        }
+
+        lock (_gate)
+        {
+            if (_units.ContainsKey(definition.Symbol))
+            {
+                throw new InvalidOperationException(
+                    $"Unit symbol '{definition.Symbol}' is already registered and cannot be replaced.");
+            }
+
+            _units.Add(definition.Symbol, definition);
+        }
     }
 
     /// <summary>Remove a user-defined unit.</summary>
     public bool RemoveUnit(string symbol)
     {
-        if (_units.TryGetValue(symbol, out var unit) && unit.IsUserDefined)
+        lock (_gate)
         {
-            _units.Remove(symbol);
-            return true;
-        }
+            if (_units.TryGetValue(symbol, out var unit) && unit.IsUserDefined)
+            {
+                _units.Remove(symbol);
+                return true;
+            }
 
-        return false;
+            return false;
+        }
     }
 
     /// <summary>Get all registered units, optionally filtered by category.</summary>
     public IEnumerable<UnitDefinition> GetAllUnits(string? category = null)
     {
-        var units = _units.Values.AsEnumerable();
+        UnitDefinition[] units;
+        lock (_gate)
+        {
+            units = _units.Values.ToArray();
+        }
 
         if (category is not null)
         {
-            units = units.Where(u => string.Equals(u.Category, category, StringComparison.OrdinalIgnoreCase));
+            units = units.Where(u => string.Equals(u.Category, category, StringComparison.OrdinalIgnoreCase)).ToArray();
         }
 
         return units.OrderBy(u => u.Category).ThenBy(u => u.Symbol);
@@ -96,7 +189,15 @@ public sealed class UnitRegistry
     /// <summary>Get all category names.</summary>
     public IEnumerable<string> GetCategories()
     {
-        return _units.Values.Select(u => u.Category).Distinct().OrderBy(c => c);
+        lock (_gate)
+        {
+            return _units.Values
+                .Select(u => u.Category)
+                .Concat(_categoryTypeFactories.Keys)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(c => c, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+        }
     }
 
     #endregion
@@ -126,6 +227,10 @@ public sealed class UnitRegistry
         ("p", 1e-12),
         ("f", 1e-15),
         ("a", 1e-18),
+        ("z", 1e-21),
+        ("y", 1e-24),
+        ("r", 1e-27),
+        ("q", 1e-30),
     ];
 
     private UnitDefinition? TryResolvePrefixed(string symbol)
@@ -144,8 +249,7 @@ public sealed class UnitRegistry
                 continue;
             }
 
-            // Don't apply SI prefixes to units that already have a prefix or non-SI units
-            if (baseUnit.Category is "Temperature" or "Angle") continue;
+            if (!baseUnit.AllowSiPrefixes) continue;
 
             var prefixed = new UnitDefinition(
                 symbol,
@@ -154,10 +258,11 @@ public sealed class UnitRegistry
                 baseUnit.Dimension,
                 baseUnit.ToBaseFactor * prefixFactor,
                 baseUnit.ToBaseOffset,
-                isUserDefined: false);
+                isUserDefined: false,
+                allowSiPrefixes: false,
+                role: baseUnit.Role);
 
-            // Cache for future lookups
-            _units[symbol] = prefixed;
+            // Resolution is a read and must not mutate the process-global registry.
             return prefixed;
         }
 
@@ -222,41 +327,49 @@ public sealed class UnitRegistry
         Register("t", "metric tonne", "Mass", mass, 1000.0);
 
         // ── Time ──────────────────────────────────────────────────
-        Register("s", "second", "Time", time, 1.0);
-        Register("min", "minute", "Time", time, 60.0);
-        Register("hr", "hour", "Time", time, 3600.0);
-        Register("d", "day", "Time", time, 86400.0);
-        Register("wk", "week", "Time", time, 604800.0);
+        Register("s", "second", "Duration", time, 1.0);
+        Register("min", "minute", "Duration", time, 60.0);
+        Register("h", "hour", "Duration", time, 3600.0);
+        Register("hr", "hour", "Duration", time, 3600.0);
+        Register("d", "day", "Duration", time, 86400.0);
+        Register("wk", "week", "Duration", time, 604800.0);
 
         // ── Temperature ───────────────────────────────────────────
-        Register("K", "kelvin", "Temperature", temperature, 1.0);
-        Register("degC", "degree Celsius", "Temperature", temperature, 1.0, 273.15);
-        Register("°C", "degree Celsius", "Temperature", temperature, 1.0, 273.15);
-        Register("degF", "degree Fahrenheit", "Temperature", temperature, 5.0 / 9.0, 459.67 * 5.0 / 9.0);
-        Register("°F", "degree Fahrenheit", "Temperature", temperature, 5.0 / 9.0, 459.67 * 5.0 / 9.0);
-        Register("degR", "degree Rankine", "Temperature", temperature, 5.0 / 9.0);
-        Register("°R", "degree Rankine", "Temperature", temperature, 5.0 / 9.0);
+        Register("K", "kelvin", "Temperature", temperature, 1.0,
+            allowSiPrefixes: true, role: UnitRole.AbsoluteTemperature);
+        Register("degC", "degree Celsius", "Temperature", temperature, 1.0, 273.15,
+            role: UnitRole.AbsoluteTemperature);
+        Register("°C", "degree Celsius", "Temperature", temperature, 1.0, 273.15,
+            role: UnitRole.AbsoluteTemperature);
+        Register("degF", "degree Fahrenheit", "Temperature", temperature, 5.0 / 9.0, 459.67 * 5.0 / 9.0,
+            role: UnitRole.AbsoluteTemperature);
+        Register("°F", "degree Fahrenheit", "Temperature", temperature, 5.0 / 9.0, 459.67 * 5.0 / 9.0,
+            role: UnitRole.AbsoluteTemperature);
+        Register("degR", "degree Rankine", "Temperature", temperature, 5.0 / 9.0,
+            role: UnitRole.AbsoluteTemperature);
+        Register("°R", "degree Rankine", "Temperature", temperature, 5.0 / 9.0,
+            role: UnitRole.AbsoluteTemperature);
 
         // ── Data ──────────────────────────────────────────────────
-        Register("bit", "bit", "Data", data, 1.0);
-        Register("b", "bit", "Data", data, 1.0);               // common alias
-        Register("B", "byte", "Data", data, 8.0);
-        Register("kB", "kilobyte", "Data", data, 8_000.0);
-        Register("KB", "kilobyte", "Data", data, 8_000.0);      // common alias
-        Register("kb", "kilobit", "Data", data, 1_000.0);
-        Register("MB", "megabyte", "Data", data, 8_000_000.0);
-        Register("Mb", "megabit", "Data", data, 1_000_000.0);
-        Register("GB", "gigabyte", "Data", data, 8_000_000_000.0);
-        Register("Gb", "gigabit", "Data", data, 1_000_000_000.0);
-        Register("TB", "terabyte", "Data", data, 8_000_000_000_000.0);
-        Register("Tb", "terabit", "Data", data, 1_000_000_000_000.0);
-        Register("PB", "petabyte", "Data", data, 8_000_000_000_000_000.0);
-        Register("Pb", "petabit", "Data", data, 1_000_000_000_000_000.0);
-        Register("KiB", "kibibyte", "Data", data, 8.0 * 1024);
-        Register("MiB", "mebibyte", "Data", data, 8.0 * 1024 * 1024);
-        Register("GiB", "gibibyte", "Data", data, 8.0 * 1024 * 1024 * 1024);
-        Register("TiB", "tebibyte", "Data", data, 8.0 * 1024 * 1024 * 1024 * 1024);
-        Register("PiB", "pebibyte", "Data", data, 8.0 * 1024 * 1024 * 1024 * 1024 * 1024);
+        Register("bit", "bit", "DataSize", data, 1.0);
+        Register("b", "bit", "DataSize", data, 1.0);               // common alias
+        Register("B", "byte", "DataSize", data, 8.0);
+        Register("kB", "kilobyte", "DataSize", data, 8_000.0);
+        Register("KB", "kilobyte", "DataSize", data, 8_000.0);      // common alias
+        Register("kb", "kilobit", "DataSize", data, 1_000.0);
+        Register("MB", "megabyte", "DataSize", data, 8_000_000.0);
+        Register("Mb", "megabit", "DataSize", data, 1_000_000.0);
+        Register("GB", "gigabyte", "DataSize", data, 8_000_000_000.0);
+        Register("Gb", "gigabit", "DataSize", data, 1_000_000_000.0);
+        Register("TB", "terabyte", "DataSize", data, 8_000_000_000_000.0);
+        Register("Tb", "terabit", "DataSize", data, 1_000_000_000_000.0);
+        Register("PB", "petabyte", "DataSize", data, 8_000_000_000_000_000.0);
+        Register("Pb", "petabit", "DataSize", data, 1_000_000_000_000_000.0);
+        Register("KiB", "kibibyte", "DataSize", data, 8.0 * 1024);
+        Register("MiB", "mebibyte", "DataSize", data, 8.0 * 1024 * 1024);
+        Register("GiB", "gibibyte", "DataSize", data, 8.0 * 1024 * 1024 * 1024);
+        Register("TiB", "tebibyte", "DataSize", data, 8.0 * 1024 * 1024 * 1024 * 1024);
+        Register("PiB", "pebibyte", "DataSize", data, 8.0 * 1024 * 1024 * 1024 * 1024 * 1024);
 
         // ── Area ──────────────────────────────────────────────────
         Register("ha", "hectare", "Area", area, 10_000.0);
@@ -330,8 +443,9 @@ public sealed class UnitRegistry
         Register("gpm", "gallons per minute", "FlowRate", flowRate, 0.003785411784 / 60.0);
 
         // ── Angle ─────────────────────────────────────────────────
-        Register("rad", "radian", "Angle", angle, 1.0);
+        Register("rad", "radian", "Angle", angle, 1.0, allowSiPrefixes: true);
         Register("deg", "degree", "Angle", angle, Math.PI / 180.0);
+        Register("°", "degree", "Angle", angle, Math.PI / 180.0);
         Register("arcmin", "arcminute", "Angle", angle, Math.PI / 10800.0);
         Register("arcsec", "arcsecond", "Angle", angle, Math.PI / 648000.0);
 
@@ -396,6 +510,11 @@ public sealed class UnitRegistry
         var resistance = UnitExpression.Of((UnitDimension.Mass, 1), (UnitDimension.Length, 2), (UnitDimension.Time, -3), (UnitDimension.ElectricCurrent, -2));
         var charge = UnitExpression.Of((UnitDimension.ElectricCurrent, 1), (UnitDimension.Time, 1));
         var flowRate = UnitExpression.Of((UnitDimension.Length, 3), (UnitDimension.Time, -1));
+        var capacitance = UnitExpression.Of((UnitDimension.ElectricCurrent, 2), (UnitDimension.Time, 4), (UnitDimension.Mass, -1), (UnitDimension.Length, -2));
+        var inductance = UnitExpression.Of((UnitDimension.Mass, 1), (UnitDimension.Length, 2), (UnitDimension.Time, -2), (UnitDimension.ElectricCurrent, -2));
+        var substance = UnitExpression.Of(UnitDimension.AmountOfSubstance);
+        var luminosity = UnitExpression.Of(UnitDimension.LuminousIntensity);
+        var angularVelocity = UnitExpression.Of((UnitDimension.Angle, 1), (UnitDimension.Time, -1));
 
         _namedTypeFactories[length] = (mag, sym) => new LengthQuantity(mag, sym);
         _namedTypeFactories[mass] = (mag, sym) => new MassQuantity(mag, sym);
@@ -418,12 +537,74 @@ public sealed class UnitRegistry
         _namedTypeFactories[resistance] = (mag, sym) => new ResistanceQuantity(mag, sym);
         _namedTypeFactories[charge] = (mag, sym) => new ChargeQuantity(mag, sym);
         _namedTypeFactories[flowRate] = (mag, sym) => new FlowRateQuantity(mag, sym);
+        _namedTypeFactories[capacitance] = (mag, sym) => new CapacitanceQuantity(mag, sym);
+        _namedTypeFactories[inductance] = (mag, sym) => new InductanceQuantity(mag, sym);
+        _namedTypeFactories[substance] = (mag, sym) => new SubstanceQuantity(mag, sym);
+        _namedTypeFactories[luminosity] = (mag, sym) => new LuminosityQuantity(mag, sym);
+        _namedTypeFactories[angularVelocity] = (mag, sym) => new AngularVelocityQuantity(mag, sym);
+
+        _categoryTypeFactories["Length"] = (mag, sym) => new LengthQuantity(mag, sym);
+        _categoryTypeFactories["Mass"] = (mag, sym) => new MassQuantity(mag, sym);
+        _categoryTypeFactories["Duration"] = (mag, sym) => new DurationQuantity(mag, sym);
+        _categoryTypeFactories["Temperature"] = (mag, sym) => new TemperatureQuantity(mag, sym);
+        _categoryTypeFactories["DataSize"] = (mag, sym) => new DataSizeQuantity(mag, sym);
+        _categoryTypeFactories["Speed"] = (mag, sym) => new SpeedQuantity(mag, sym);
+        _categoryTypeFactories["Area"] = (mag, sym) => new AreaQuantity(mag, sym);
+        _categoryTypeFactories["Volume"] = (mag, sym) => new VolumeQuantity(mag, sym);
+        _categoryTypeFactories["Force"] = (mag, sym) => new ForceQuantity(mag, sym);
+        _categoryTypeFactories["Energy"] = (mag, sym) => new EnergyQuantity(mag, sym);
+        _categoryTypeFactories["Power"] = (mag, sym) => new PowerQuantity(mag, sym);
+        _categoryTypeFactories["Pressure"] = (mag, sym) => new PressureQuantity(mag, sym);
+        _categoryTypeFactories["Frequency"] = (mag, sym) => new FrequencyQuantity(mag, sym);
+        _categoryTypeFactories["Angle"] = (mag, sym) => new AngleQuantity(mag, sym);
+        _categoryTypeFactories["Acceleration"] = (mag, sym) => new AccelerationQuantity(mag, sym);
+        _categoryTypeFactories["Density"] = (mag, sym) => new DensityQuantity(mag, sym);
+        _categoryTypeFactories["Voltage"] = (mag, sym) => new VoltageQuantity(mag, sym);
+        _categoryTypeFactories["Current"] = (mag, sym) => new CurrentQuantity(mag, sym);
+        _categoryTypeFactories["Resistance"] = (mag, sym) => new ResistanceQuantity(mag, sym);
+        _categoryTypeFactories["Charge"] = (mag, sym) => new ChargeQuantity(mag, sym);
+        _categoryTypeFactories["Torque"] = (mag, sym) => new TorqueQuantity(mag, sym);
+        _categoryTypeFactories["FlowRate"] = (mag, sym) => new FlowRateQuantity(mag, sym);
+        _categoryTypeFactories["Capacitance"] = (mag, sym) => new CapacitanceQuantity(mag, sym);
+        _categoryTypeFactories["Inductance"] = (mag, sym) => new InductanceQuantity(mag, sym);
+        _categoryTypeFactories["Substance"] = (mag, sym) => new SubstanceQuantity(mag, sym);
+        _categoryTypeFactories["Luminosity"] = (mag, sym) => new LuminosityQuantity(mag, sym);
+        _categoryTypeFactories["AngularVelocity"] = (mag, sym) => new AngularVelocityQuantity(mag, sym);
     }
 
-    private void Register(string symbol, string name, string category, UnitExpression dimension, double factor, double offset = 0.0)
+    private void Register(
+        string symbol,
+        string name,
+        string category,
+        UnitExpression dimension,
+        double factor,
+        double offset = 0.0,
+        bool? allowSiPrefixes = null,
+        UnitRole role = UnitRole.Linear)
     {
-        _units[symbol] = new UnitDefinition(symbol, name, category, dimension, factor, offset);
+        _units[symbol] = new UnitDefinition(
+            symbol,
+            name,
+            category,
+            dimension,
+            factor,
+            offset,
+            allowSiPrefixes: allowSiPrefixes ?? IsSiPrefixBaseSymbol(symbol),
+            role: role);
+
+        // The first exact base-scale unit registered for a dimension is its
+        // canonical display. Registration order deliberately puts J before Nm,
+        // preserving energy as the canonical result for dimension-only arithmetic.
+        if (factor == 1.0 && offset == 0.0)
+        {
+            _dimensionToCanonicalUnit.TryAdd(dimension, symbol);
+        }
     }
+
+    private static bool IsSiPrefixBaseSymbol(string symbol) => symbol is
+        "m" or "g" or "s" or "A" or "mol" or "cd" or "bit" or "B" or
+        "L" or "N" or "J" or "W" or "Pa" or "Hz" or "C" or "V" or
+        "ohm" or "Ω" or "F" or "H";
 
     #endregion
 }

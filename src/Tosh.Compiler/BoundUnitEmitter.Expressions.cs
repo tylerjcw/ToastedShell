@@ -8,6 +8,7 @@ using Tosh.Language.Binding;
 using Tosh.Compiler.IR;
 using Tosh.Language.Parsing;
 using Tosh.Runtime;
+using Tosh.Runtime.Units;
 namespace Tosh.Compiler;
 
 internal sealed partial class EmitterImpl
@@ -383,6 +384,12 @@ internal sealed partial class EmitterImpl
                 _il.Emit(OpCodes.Ldc_I8, storageSize.Bytes);
                 _il.Emit(OpCodes.Call, s_storageSizeFromBytes);
                 return typeof(StorageSize);
+
+            case Quantity quantity:
+                _il.Emit(OpCodes.Ldc_R8, quantity.Magnitude);
+                _il.Emit(OpCodes.Ldstr, quantity.UnitSymbol);
+                _il.Emit(OpCodes.Call, s_quantityFromLiteral);
+                return typeof(Quantity);
 
             default:
                 Diagnostics.Add($"unsupported literal type: {literal.Value.GetType().Name}");
@@ -1528,17 +1535,18 @@ internal sealed partial class EmitterImpl
         switch (unOp.Operator)
         {
             case "-":
-                if (operandType == typeof(object))
+                if (operandType == typeof(object) || !IsNumericType(operandType))
                 {
-                    // Coerce to long; users wanting double semantics can
-                    // multiply by a double literal first.
-                    _il.Emit(OpCodes.Call, s_convertToInt64);
-                    operandType = typeof(long);
-                }
-                if (!IsNumericType(operandType))
-                {
-                    Diagnostics.Add($"unary '-' on non-numeric: {operandType.Name}");
-                    return null;
+                    // Dynamic and shell-native numeric families (Quantity,
+                    // vector, matrix, complex, and so on) share the interpreter's
+                    // unary protocol rather than being coerced to Int64 here.
+                    if (operandType.IsValueType) _il.Emit(OpCodes.Box, operandType);
+                    var dynamicOperandLocal = _il.DeclareLocal(typeof(object));
+                    _il.Emit(OpCodes.Stloc, dynamicOperandLocal);
+                    _il.Emit(OpCodes.Ldstr, unOp.Operator);
+                    _il.Emit(OpCodes.Ldloc, dynamicOperandLocal);
+                    _il.Emit(OpCodes.Call, s_opEvaluateUnary);
+                    return typeof(object);
                 }
                 _il.Emit(OpCodes.Neg);
                 return operandType;

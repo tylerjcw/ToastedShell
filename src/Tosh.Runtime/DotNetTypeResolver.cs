@@ -3,6 +3,7 @@ using System.Net;
 using System.Numerics;
 using System.Runtime.Loader;
 using System.Text.RegularExpressions;
+using Tosh.Runtime.Units;
 
 namespace Tosh.Runtime;
 
@@ -24,6 +25,62 @@ public sealed class DotNetTypeResolver : IImportingTypeResolver
         ["decimal"] = typeof(decimal),
         ["double"] = typeof(double),
         ["duration"] = typeof(TemporalAmount),
+        ["quantity"] = typeof(Quantity),
+        ["length"] = typeof(LengthQuantity),
+        ["lengthquantity"] = typeof(LengthQuantity),
+        ["mass"] = typeof(MassQuantity),
+        ["massquantity"] = typeof(MassQuantity),
+        ["durationquantity"] = typeof(DurationQuantity),
+        ["timequantity"] = typeof(DurationQuantity),
+        ["temperature"] = typeof(TemperatureQuantity),
+        ["temperaturequantity"] = typeof(TemperatureQuantity),
+        ["datasize"] = typeof(DataSizeQuantity),
+        ["datasizequantity"] = typeof(DataSizeQuantity),
+        ["storagesize"] = typeof(StorageSize),
+        ["speed"] = typeof(SpeedQuantity),
+        ["speedquantity"] = typeof(SpeedQuantity),
+        ["area"] = typeof(AreaQuantity),
+        ["areaquantity"] = typeof(AreaQuantity),
+        ["volume"] = typeof(VolumeQuantity),
+        ["volumequantity"] = typeof(VolumeQuantity),
+        ["force"] = typeof(ForceQuantity),
+        ["forcequantity"] = typeof(ForceQuantity),
+        ["energy"] = typeof(EnergyQuantity),
+        ["energyquantity"] = typeof(EnergyQuantity),
+        ["power"] = typeof(PowerQuantity),
+        ["powerquantity"] = typeof(PowerQuantity),
+        ["pressure"] = typeof(PressureQuantity),
+        ["pressurequantity"] = typeof(PressureQuantity),
+        ["frequency"] = typeof(FrequencyQuantity),
+        ["frequencyquantity"] = typeof(FrequencyQuantity),
+        ["angle"] = typeof(AngleQuantity),
+        ["anglequantity"] = typeof(AngleQuantity),
+        ["acceleration"] = typeof(AccelerationQuantity),
+        ["accelerationquantity"] = typeof(AccelerationQuantity),
+        ["density"] = typeof(DensityQuantity),
+        ["densityquantity"] = typeof(DensityQuantity),
+        ["voltage"] = typeof(VoltageQuantity),
+        ["voltagequantity"] = typeof(VoltageQuantity),
+        ["current"] = typeof(CurrentQuantity),
+        ["currentquantity"] = typeof(CurrentQuantity),
+        ["resistance"] = typeof(ResistanceQuantity),
+        ["resistancequantity"] = typeof(ResistanceQuantity),
+        ["charge"] = typeof(ChargeQuantity),
+        ["chargequantity"] = typeof(ChargeQuantity),
+        ["torque"] = typeof(TorqueQuantity),
+        ["torquequantity"] = typeof(TorqueQuantity),
+        ["flowrate"] = typeof(FlowRateQuantity),
+        ["flowratequantity"] = typeof(FlowRateQuantity),
+        ["capacitance"] = typeof(CapacitanceQuantity),
+        ["capacitancequantity"] = typeof(CapacitanceQuantity),
+        ["inductance"] = typeof(InductanceQuantity),
+        ["inductancequantity"] = typeof(InductanceQuantity),
+        ["substance"] = typeof(SubstanceQuantity),
+        ["substancequantity"] = typeof(SubstanceQuantity),
+        ["luminosity"] = typeof(LuminosityQuantity),
+        ["luminosityquantity"] = typeof(LuminosityQuantity),
+        ["angularvelocity"] = typeof(AngularVelocityQuantity),
+        ["angularvelocityquantity"] = typeof(AngularVelocityQuantity),
         ["dynamic"] = typeof(object),
         // `Error` is the recommended base class for user-defined
         // error types declared in tosh. Exposed case-insensitively
@@ -115,6 +172,7 @@ public sealed class DotNetTypeResolver : IImportingTypeResolver
         // reference ToshError, TextSpan, ToshDiagnostic, etc.
         // by short name without an explicit `using`.
         "Tosh.Runtime",
+        "Tosh.Runtime.Units",
     ];
 
     private readonly Dictionary<string, string> _aliases = new(StringComparer.OrdinalIgnoreCase);

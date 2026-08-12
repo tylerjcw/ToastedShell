@@ -33,8 +33,8 @@ public static class OperatorEvaluator
             // vectors, matrices, complex, storage sizes — applies unchanged, and an
             // operand that cannot be negated reports the type message they already give
             // instead of a message about the operator.
-            "-" => Subtract(0, operand),
-            "+" => Add(0, operand),
+            "-" => operand is Quantity quantity ? -quantity : Subtract(0, operand),
+            "+" => operand is Quantity quantity ? quantity : Add(0, operand),
 
             _ => throw new InvalidOperationException($"Unsupported unary operator '{@operator}'."),
         };
@@ -708,6 +708,26 @@ public static class OperatorEvaluator
             throw new InvalidOperationException("The 'as' operator requires a type name on the right-hand side.");
         }
 
+        // A leading backtick makes the right operand a unit target rather than a
+        // type name: 2`mi as `ft. This keeps the existing `as Length` contract
+        // intact while giving unit conversion an idiomatic operator spelling.
+        if (typeName[0] == '`')
+        {
+            var targetUnit = typeName[1..];
+            if (string.IsNullOrWhiteSpace(targetUnit))
+            {
+                throw new InvalidOperationException("The 'as `unit' form requires a unit after the backtick.");
+            }
+
+            if (value is not Quantity quantity)
+            {
+                throw new InvalidOperationException(
+                    $"Unit conversion requires a Quantity, not '{value.GetType().Name}'.");
+            }
+
+            return quantity.To(targetUnit);
+        }
+
         // If the value is a Tosh type that's already compatible, return as-is.
         if (value is IShellTypeCheckable checkable && checkable.IsInstanceOf(typeName))
         {
@@ -883,10 +903,15 @@ public static class OperatorEvaluator
         }
 
         // Quantity arithmetic (bridge promotion only when at least one operand is already a Quantity)
-        if ((left is Quantity || right is Quantity)
-            && TryPromoteToQuantity(left, out var leftQ) && TryPromoteToQuantity(right, out var rightQ))
+        if (left is Quantity || right is Quantity)
         {
-            return leftQ + rightQ;
+            if (TryPromoteToQuantity(left, out var leftQ) && TryPromoteToQuantity(right, out var rightQ))
+            {
+                return leftQ + rightQ;
+            }
+
+            throw new InvalidOperationException(
+                "Quantity addition requires a compatible quantity or a losslessly representable shell bridge.");
         }
 
         if (left is string leftText)
@@ -931,7 +956,7 @@ public static class OperatorEvaluator
 
         if (left is StorageSize leftSize && TypeConversion.TryConvert(right, typeof(StorageSize), out var rightSize))
         {
-            return StorageSize.FromBytes(leftSize.Bytes + ((StorageSize)rightSize!).Bytes);
+            return StorageSize.FromBytes(checked(leftSize.Bytes + ((StorageSize)rightSize!).Bytes));
         }
 
         if (left is IEnumerable leftEnumerable and not string && right is IEnumerable rightEnumerable and not string)
@@ -985,10 +1010,15 @@ public static class OperatorEvaluator
         }
 
         // Quantity arithmetic (bridge promotion only when at least one operand is already a Quantity)
-        if ((left is Quantity || right is Quantity)
-            && TryPromoteToQuantity(left, out var leftQ) && TryPromoteToQuantity(right, out var rightQ))
+        if (left is Quantity || right is Quantity)
         {
-            return leftQ - rightQ;
+            if (TryPromoteToQuantity(left, out var leftQ) && TryPromoteToQuantity(right, out var rightQ))
+            {
+                return leftQ - rightQ;
+            }
+
+            throw new InvalidOperationException(
+                "Quantity subtraction requires a compatible quantity or a losslessly representable shell bridge.");
         }
 
         if (left is DateTimeOffset leftOffset)
@@ -1044,7 +1074,7 @@ public static class OperatorEvaluator
 
         if (left is StorageSize leftSize && TypeConversion.TryConvert(right, typeof(StorageSize), out var rightSize))
         {
-            return StorageSize.FromBytes(leftSize.Bytes - ((StorageSize)rightSize!).Bytes);
+            return StorageSize.FromBytes(checked(leftSize.Bytes - ((StorageSize)rightSize!).Bytes));
         }
 
         return EvaluateNumeric(left, right, (lhs, rhs) => lhs - rhs, (lhs, rhs) => lhs - rhs, (lhs, rhs) => lhs - rhs);
@@ -1158,7 +1188,11 @@ public static class OperatorEvaluator
         if (IsNumeric(left) && right is ToshVector rvs) return ToDouble(left) * rvs;
 
         // Quantity * Quantity or Quantity * scalar
-        if (left is Quantity lq && right is Quantity rq) return lq * rq;
+        if (left is Quantity lq && right is Quantity rq)
+        {
+            var product = lq * rq;
+            return product.Dimension.IsDimensionless ? product.BaseValue : product;
+        }
         if (left is Quantity lqs && IsNumeric(right)) return lqs * ToDouble(right);
         if (IsNumeric(left) && right is Quantity rqs) return ToDouble(left) * rqs;
 
@@ -1220,9 +1254,28 @@ public static class OperatorEvaluator
         if (left is ToshVector lv && right is ToshVector rv) return lv / rv;
         if (left is ToshVector lvs && IsNumeric(right)) return lvs / ToDouble(right);
 
-        // Quantity / Quantity or Quantity / scalar
-        if (left is Quantity lq && right is Quantity rq) return lq / rq;
+        // Quantity / Quantity or Quantity / scalar. A cancelled dimension is a
+        // scalar in ToastScript so ordinary numeric APIs can consume ratios.
+        if (left is Quantity lq && right is Quantity rq)
+        {
+            var quotient = lq / rq;
+            return quotient.Dimension.IsDimensionless ? quotient.BaseValue : quotient;
+        }
         if (left is Quantity lqs && IsNumeric(right)) return lqs / ToDouble(right);
+        if (IsNumeric(left) && right is Quantity rqs)
+        {
+            if (rqs.BaseValue == 0) throw new InvalidOperationException("Division by zero quantity.");
+            if (rqs.IsAbsoluteTemperature)
+            {
+                throw new InvalidOperationException(
+                    "Cannot divide by an absolute temperature until temperature-difference units are explicit.");
+            }
+
+            var reciprocalDimension = rqs.Dimension.Reciprocal();
+            var reciprocalMagnitude = ToDouble(left) / rqs.BaseValue;
+            var reciprocalSymbol = UnitRegistry.Instance.GetCanonicalUnitSymbol(reciprocalDimension);
+            return UnitRegistry.Instance.CreateTyped(reciprocalMagnitude, reciprocalDimension, reciprocalSymbol);
+        }
 
         // One rule per numeric family, and the floating one is IEEE (TS-P1-16).
         // Integral and decimal division by zero throws, matching C#; floating division
@@ -1393,12 +1446,19 @@ public static class OperatorEvaluator
                 quantity = new DurationQuantity(ts.TotalSeconds, "s");
                 return true;
             case StorageSize ss:
-                quantity = new DataSizeQuantity(ss.Bytes, "B");
-                return true;
+                if (TypeConversion.TryConvert(ss, typeof(DataSizeQuantity), out var dataSize) &&
+                    dataSize is Quantity convertedDataSize)
+                {
+                    quantity = convertedDataSize;
+                    return true;
+                }
+                break;
             default:
-                quantity = null!;
-                return false;
+                break;
         }
+
+        quantity = null!;
+        return false;
     }
 
     // Numeric CLR types recognised by inline trait fallback for `is Numeric` etc.
@@ -1426,7 +1486,25 @@ public static class OperatorEvaluator
             var n when string.Equals(n, "INumber", StringComparison.OrdinalIgnoreCase) => _numericClrTypes.Contains(type),
             var n when string.Equals(n, "Comparable", StringComparison.OrdinalIgnoreCase) => typeof(IComparable).IsAssignableFrom(type),
             var n when string.Equals(n, "Eq", StringComparison.OrdinalIgnoreCase) => true,
+            var n when string.Equals(n, "Add", StringComparison.OrdinalIgnoreCase) => HasCompatibleOperator(type, "op_Addition"),
+            var n when string.Equals(n, "Sub", StringComparison.OrdinalIgnoreCase) => HasCompatibleOperator(type, "op_Subtraction"),
+            var n when string.Equals(n, "Mul", StringComparison.OrdinalIgnoreCase) => HasCompatibleOperator(type, "op_Multiply"),
+            var n when string.Equals(n, "Div", StringComparison.OrdinalIgnoreCase) => HasCompatibleOperator(type, "op_Division"),
             _ => false,
         };
+    }
+
+    private static bool HasCompatibleOperator(Type type, string methodName)
+    {
+        return type
+            .GetMethods(BindingFlags.Public | BindingFlags.Static | BindingFlags.FlattenHierarchy)
+            .Any(method =>
+            {
+                if (!string.Equals(method.Name, methodName, StringComparison.Ordinal)) return false;
+                var parameters = method.GetParameters();
+                return parameters.Length == 2 &&
+                    parameters[0].ParameterType.IsAssignableFrom(type) &&
+                    parameters[1].ParameterType.IsAssignableFrom(type);
+            });
     }
 }

@@ -1,5 +1,8 @@
 namespace Tosh.Runtime;
 
+using System.Numerics;
+using Tosh.Runtime.Units;
+
 internal static class AggregationUtilities
 {
     internal enum SummaryOperationKind
@@ -68,14 +71,28 @@ internal static class AggregationUtilities
 
         var ops = new HashSet<SummaryOperationKind> { SummaryOperationKind.Count };
 
-        if (TryGetNumbers(nonNull, out _) || TryGetStorageSizes(nonNull, out _) || TryGetTimeSpans(nonNull, out _))
+        if (TryGetNumbers(nonNull, out _) || TryGetStorageSizes(nonNull, out _) ||
+            TryGetTimeSpans(nonNull, out _))
         {
             ops.Add(SummaryOperationKind.Sum);
             ops.Add(SummaryOperationKind.Average);
         }
 
+        if (TryGetCompatibleQuantities(nonNull, out var quantities))
+        {
+            // Averaging and extrema make sense for temperature points. Adding
+            // points does not, so auto-summary must not infer an operation its
+            // explicit Sum path is guaranteed to reject.
+            if (!quantities.Any(quantity => quantity.IsAbsoluteTemperature))
+            {
+                ops.Add(SummaryOperationKind.Sum);
+            }
+            ops.Add(SummaryOperationKind.Average);
+        }
+
         // min/max: numeric, storage, timespan, string, DateTime, DateTimeOffset
-        if (TryGetNumbers(nonNull, out _) || TryGetStorageSizes(nonNull, out _) || TryGetTimeSpans(nonNull, out _) ||
+        if (TryGetNumbers(nonNull, out _) || TryGetStorageSizes(nonNull, out _) ||
+            TryGetTimeSpans(nonNull, out _) || TryGetCompatibleQuantities(nonNull, out _) ||
             nonNull.All(v => v is string) || nonNull.All(v => v is DateTime) || nonNull.All(v => v is DateTimeOffset))
         {
             ops.Add(SummaryOperationKind.Min);
@@ -267,7 +284,8 @@ internal static class AggregationUtilities
             return false;
         }
 
-        if (value is string or char or bool or Guid or Uri or System.Net.IPAddress or StorageSize or TimeSpan or DateTime or DateTimeOffset)
+        if (value is string or char or bool or Guid or Uri or System.Net.IPAddress or
+            StorageSize or TimeSpan or Quantity or DateTime or DateTimeOffset)
         {
             return true;
         }
@@ -360,6 +378,18 @@ internal static class AggregationUtilities
 
     public static object Sum(IReadOnlyList<object?> values)
     {
+        if (TryGetQuantities(values, out var quantities))
+        {
+            var first = quantities[0];
+            if (first.IsAbsoluteTemperature)
+            {
+                throw new InvalidOperationException(
+                    "sum does not add absolute temperatures; convert them or use average/min/max.");
+            }
+
+            return FromBaseInUnit(first, CompensatedSum(quantities.Select(quantity => quantity.BaseValue)));
+        }
+
         if (TryGetStorageSizes(values, out var sizes))
         {
             checked
@@ -389,19 +419,28 @@ internal static class AggregationUtilities
             return numbers.Values.Sum();
         }
 
-        throw new InvalidOperationException("sum expects numeric, storage size, or timespan values.");
+        throw new InvalidOperationException("sum expects numeric, quantity, storage size, or timespan values.");
     }
 
     public static object Average(IReadOnlyList<object?> values)
     {
+        if (TryGetQuantities(values, out var quantities))
+        {
+            var first = quantities[0];
+            var count = quantities.Count;
+            var meanBase = CompensatedSum(
+                quantities.Select(quantity => quantity.BaseValue / count));
+            return FromBaseInUnit(first, meanBase);
+        }
+
         if (TryGetStorageSizes(values, out var sizes))
         {
-            return StorageSize.FromBytes((long)Math.Round(sizes.Average(size => size.Bytes), MidpointRounding.AwayFromZero));
+            return StorageSize.FromBytes(AverageInt64(sizes.Select(size => size.Bytes)));
         }
 
         if (TryGetTimeSpans(values, out var spans))
         {
-            return new TimeSpan((long)Math.Round(spans.Average(span => span.Ticks), MidpointRounding.AwayFromZero));
+            return new TimeSpan(AverageInt64(spans.Select(span => span.Ticks)));
         }
 
         if (TryGetNumbers(values, out var numbers))
@@ -412,7 +451,7 @@ internal static class AggregationUtilities
                 : average;
         }
 
-        throw new InvalidOperationException("average expects numeric, storage size, or timespan values.");
+        throw new InvalidOperationException("average expects numeric, quantity, storage size, or timespan values.");
     }
 
     public static object? Min(IReadOnlyList<object?> values)
@@ -427,6 +466,14 @@ internal static class AggregationUtilities
 
     private static object? Extremum(IReadOnlyList<object?> values, bool max)
     {
+        if (TryGetQuantities(values, out var quantities))
+        {
+            return quantities.Aggregate((best, candidate) =>
+                (max ? candidate.CompareTo(best) > 0 : candidate.CompareTo(best) < 0)
+                    ? candidate
+                    : best);
+        }
+
         if (TryGetStorageSizes(values, out var sizes))
         {
             return max ? sizes.Max() : sizes.Min();
@@ -483,6 +530,97 @@ internal static class AggregationUtilities
 
         spans = Array.Empty<TimeSpan>();
         return false;
+    }
+
+    private static bool TryGetQuantities(IReadOnlyList<object?> values, out IReadOnlyList<Quantity> quantities)
+    {
+        if (!values.All(value => value is Quantity))
+        {
+            quantities = Array.Empty<Quantity>();
+            return false;
+        }
+
+        var parsed = values.Cast<Quantity>().ToArray();
+        if (parsed.Length == 0)
+        {
+            quantities = Array.Empty<Quantity>();
+            return false;
+        }
+
+        if (parsed.Any(quantity => quantity.Dimension != parsed[0].Dimension))
+        {
+            throw new InvalidOperationException(
+                "quantity aggregation requires every value to have the same dimension.");
+        }
+
+        quantities = parsed;
+        return true;
+    }
+
+    private static bool TryGetCompatibleQuantities(
+        IReadOnlyList<object?> values,
+        out IReadOnlyList<Quantity> quantities)
+    {
+        if (!values.All(value => value is Quantity))
+        {
+            quantities = Array.Empty<Quantity>();
+            return false;
+        }
+
+        var parsed = values.Cast<Quantity>().ToArray();
+        if (parsed.Length == 0 || parsed.Any(quantity => quantity.Dimension != parsed[0].Dimension))
+        {
+            quantities = Array.Empty<Quantity>();
+            return false;
+        }
+
+        quantities = parsed;
+        return true;
+    }
+
+    private static Quantity FromBaseInUnit(Quantity template, double baseValue)
+    {
+        return template.WithBaseValue(baseValue);
+    }
+
+    private static double CompensatedSum(IEnumerable<double> values)
+    {
+        var sum = 0.0;
+        var correction = 0.0;
+        foreach (var value in values)
+        {
+            var adjusted = value - correction;
+            var next = sum + adjusted;
+            correction = (next - sum) - adjusted;
+            sum = next;
+        }
+        return sum;
+    }
+
+    private static long AverageInt64(IEnumerable<long> values)
+    {
+        var total = BigInteger.Zero;
+        var count = 0;
+        foreach (var value in values)
+        {
+            total += value;
+            count++;
+        }
+
+        if (count == 0) throw new InvalidOperationException("average requires at least one value.");
+
+        var quotient = BigInteger.DivRem(total, count, out var remainder);
+        if (BigInteger.Abs(remainder) * 2 >= count)
+        {
+            quotient += total.Sign;
+        }
+
+        if (quotient < long.MinValue || quotient > long.MaxValue)
+        {
+            throw new OverflowException("The average is outside the 64-bit range.");
+        }
+
+        return (long)quotient;
     }
 
     private static bool TryGetNumbers(IReadOnlyList<object?> values, out (double[] Values, bool Integral) numbers)

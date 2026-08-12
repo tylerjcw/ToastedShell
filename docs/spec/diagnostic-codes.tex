@@ -10,7 +10,7 @@ Non-error diagnostics can be suppressed with the \texttt{hush} builtin
 (scope-local) or by adding their codes to
 \texttt{\$tosh.Config.Diagnostics.Hushed}.
 
-This chapter lists all 519 diagnostic codes currently emitted by the
+This chapter lists all 521 diagnostic codes currently emitted by the
 implementation, grouped by namespace. It is generated from the source tree
 by \texttt{scripts/extract-diagnostic-codes.tosh} and should be
 regenerated whenever new diagnostics are added.
@@ -30,7 +30,7 @@ regenerated whenever new diagnostics are added.
 \texttt{tosh.help.*} & 1 & Raised by the `help` command. \\
 \texttt{tosh.history.*} & 1 & Raised by the history subsystem (for example, replaying entries when no host is attached). \\
 \texttt{tosh.naming.*} & 2 & --- \\
-\texttt{tosh.parser.*} & 164 & Raised by the lexer or parser before any code runs. Indicates malformed source text. \\
+\texttt{tosh.parser.*} & 166 & Raised by the lexer or parser before any code runs. Indicates malformed source text. \\
 \texttt{tosh.row.*} & 1 & --- \\
 \texttt{tosh.runtime.*} & 318 & Raised by the engine while evaluating a script. The bulk of TōSh diagnostics live here. \\
 \texttt{tosh.tui.*} & 8 & Raised by the `tui` subsystem (terminal UI widgets, screens, providers). \\
@@ -203,6 +203,8 @@ Raised by the lexer or parser before any code runs. Indicates malformed source t
 \item[\texttt{\small tosh.parser.invalid\_splat\_target}] Argument splatting currently requires a variable-style reference.
 \item[\texttt{\small tosh.parser.invalid\_spread\_target}] Spread requires a variable reference.
 \item[\texttt{\small tosh.parser.invalid\_type\_refinement\_clause}] Type refinement blocks only support 'where', 'coerce', and 'if ... coerce' clauses.
+\item[\texttt{\small tosh.parser.invalid\_unit\_literal}] A unit literal contains an unknown or invalid unit expression.
+\item[\texttt{\small tosh.parser.invalid\_unit\_magnitude}] A unit literal must begin with a valid number.
 \item[\texttt{\small tosh.parser.match\_default\_keyword\_required}] Use 'default' instead of '\_' for the wildcard arm.
 \item[\texttt{\small tosh.parser.missing\_argument\_separator}] Arguments must be separated by ','.
 \item[\texttt{\small tosh.parser.missing\_bind\_member\_separator}] Bound functions must be separated by a newline or ';'.

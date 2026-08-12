@@ -1,4 +1,5 @@
 using Tosh.Runtime;
+using Tosh.Runtime.Units;
 using Tosh.Language.Parsing;
 
 namespace Tosh.Cli;
@@ -202,6 +203,12 @@ public static class SyntaxHighlighter
     {
         var text = token.Text;
         var theme = GetTheme(runtime);
+
+        if (text.StartsWith('`') &&
+            UnitExpressionParser.TryParseConversion(text[1..], out _, out _, out _))
+        {
+            return theme.UnitLiteral;
+        }
 
         if (ControlFlowKeywords.Contains(text))
         {

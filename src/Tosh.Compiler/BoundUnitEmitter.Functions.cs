@@ -437,21 +437,55 @@ internal sealed partial class EmitterImpl
     }
 
     /// <summary>
-    /// Stack transition: <c>object → target</c>. For value targets
-    /// uses Convert.ChangeType + Unbox_Any so boxed longs survive
-    /// when the target is int / short / byte / etc. For reference
-    /// targets emits a castclass (skipped when target is object).
+    /// Stack transition: <c>object → target</c>. Routes through the same
+    /// annotation conversion bridge as the interpreter so shell-native types
+    /// (including quantities) and primitives obey one boundary contract.
     /// </summary>
-    private static void CoerceObjectToTyped(ILGenerator il, Type target)
+    private void CoerceObjectToTyped(
+        ILGenerator il,
+        Type target,
+        string? annotationTypeName = null,
+        TextSpan? span = null,
+        string? owner = null)
     {
         if (target == typeof(object)) return;
+
+        // The pure profile promises an artifact carrying no reference to
+        // `Tosh.Compiler.Runtime` (`TS-P1-25`), and `ToshHost.CheckType` needs the whole
+        // engine — it delegates to `ConvertValueToAnnotatedType`, so there is no runtime
+        // primitive to fall back to the way `EmitEnterExecutionFrameCall` has one. The
+        // corelib conversion this replaced is kept for that profile instead.
+        //
+        // Nothing is lost by the split: routing through the annotation boundary exists to
+        // give shell-native types (quantities above all) one conversion contract, and a pure
+        // artifact cannot hold one — those shapes are rejected as tier violations before
+        // emission. `func add(a: int, b: int) -> int` is the case that matters here, and
+        // `Convert.ChangeType` answers it identically.
+        if (_profile == CompileProfile.Pure)
+        {
+            if (target.IsValueType)
+            {
+                il.Emit(OpCodes.Ldtoken, target);
+                il.Emit(OpCodes.Call, typeof(Type).GetMethod(
+                    nameof(Type.GetTypeFromHandle), new[] { typeof(RuntimeTypeHandle) })!);
+                il.Emit(OpCodes.Call, typeof(System.Convert).GetMethod(
+                    nameof(System.Convert.ChangeType), new[] { typeof(object), typeof(Type) })!);
+                il.Emit(OpCodes.Unbox_Any, target);
+                return;
+            }
+
+            il.Emit(OpCodes.Castclass, target);
+            return;
+        }
+
+        il.Emit(OpCodes.Ldstr, annotationTypeName ?? target.FullName ?? target.Name);
+        il.Emit(OpCodes.Ldc_I4, span?.Start ?? 0);
+        il.Emit(OpCodes.Ldc_I4, span?.Length ?? 0);
+        il.Emit(OpCodes.Ldstr, owner ?? "compiled typed boundary");
+        il.Emit(OpCodes.Call, s_hostCheckType);
+
         if (target.IsValueType)
         {
-            il.Emit(OpCodes.Ldtoken, target);
-            il.Emit(OpCodes.Call, typeof(Type).GetMethod(nameof(Type.GetTypeFromHandle), new[] { typeof(RuntimeTypeHandle) })!);
-            il.Emit(OpCodes.Call, typeof(System.Convert).GetMethod(
-                nameof(System.Convert.ChangeType),
-                new[] { typeof(object), typeof(Type) })!);
             il.Emit(OpCodes.Unbox_Any, target);
             return;
         }
@@ -478,6 +512,7 @@ internal sealed partial class EmitterImpl
         var savedParams = _paramSlots;
         var savedTypedLocals = _typedParamLocals;
         var savedReturnType = _currentFunctionReturnType;
+        var savedReturnTypeName = _currentFunctionReturnTypeName;
         var savedReturnRefinement = _currentFunctionReturnRefinement;
         var savedReturnEmissionFrame = _returnEmissionFrame;
         var savedDeferredCleanupFrames = _deferredCleanupFrames;
@@ -488,6 +523,7 @@ internal sealed partial class EmitterImpl
             _paramSlots = new();
             _typedParamLocals = new();
             _currentFunctionReturnType = entry.IsTyped ? entry.ReturnClrType : null;
+            _currentFunctionReturnTypeName = entry.IsTyped ? func.ReturnTypeName : null;
             _currentFunctionReturnRefinement = entry.IsTyped ? func.ReturnType as RefinementType : null;
             _deferredCleanupFrames = new();
             var returnFrame = CreateReturnEmissionFrame(entry.ReturnClrType);
@@ -670,6 +706,7 @@ internal sealed partial class EmitterImpl
             _paramSlots = savedParams;
             _typedParamLocals = savedTypedLocals;
             _currentFunctionReturnType = savedReturnType;
+            _currentFunctionReturnTypeName = savedReturnTypeName;
             _currentFunctionReturnRefinement = savedReturnRefinement;
             _returnEmissionFrame = savedReturnEmissionFrame;
             _deferredCleanupFrames = savedDeferredCleanupFrames;

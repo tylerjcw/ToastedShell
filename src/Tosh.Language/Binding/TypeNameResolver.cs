@@ -215,6 +215,16 @@ public sealed class TypeNameResolver
             return userType;
         }
 
+        // Runtime aliases are part of the language's built-in type surface too.
+        // Consulting the shared table keeps compile-time annotations aligned with
+        // the interpreter even when this syntactic resolver has no CLR fallback.
+        // User types stay ahead of this broad alias table so adding a friendly CLR
+        // alias cannot silently capture an existing source-defined type name.
+        if (DotNetTypeResolver.BuiltInAliases.TryGetValue(name, out var builtIn))
+        {
+            return BoundType.FromClr(builtIn);
+        }
+
         // 3. CLR fallback.
         if (_clrResolver is not null)
         {

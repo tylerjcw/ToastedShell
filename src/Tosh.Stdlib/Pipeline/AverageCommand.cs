@@ -5,14 +5,15 @@ namespace Tosh.Stdlib.Pipeline;
 [CommandCategory("Pipeline")]
 [CommandArgument("member-path", "Optional member path to extract numeric values from each object.", Required = false)]
 [CommandExample("echo 10 20 30 | average", Title = "Average a list of numbers")]
+[CommandExample("echo 1`km 500`m | average", Title = "Average compatible quantities")]
 [CommandExample("ls | average .Length", Title = "Average file sizes")]
-[CommandOutput("The arithmetic mean of the pipeline values. Supports numeric, StorageSize, and TimeSpan types.")]
+[CommandOutput("The arithmetic mean of the pipeline values. Supports numeric, Quantity, StorageSize, and TimeSpan types.")]
 [PipelineInput(AcceptsScalar = true, AcceptsRecord = true, Description = "Consumes the pipeline and returns the arithmetic mean.")]
 [CommandStreaming(StreamingBehavior.Eager)]
 public sealed class AverageCommand : ShellCommand, ICurrentItemMemberPathCommand
 {
     public AverageCommand(string name = "average")
-        : base(name, "Averages numeric, storage size, or timespan values.", $"{name} [member-path]") { }
+        : base(name, "Averages numeric, quantity, storage size, or timespan values.", $"{name} [member-path]") { }
 
     public override async IAsyncEnumerable<object?> ExecuteAsync(CommandContext context)
     {

@@ -8,6 +8,7 @@
 \usepackage[T1]{fontenc}
 \usepackage[utf8]{inputenc}
 \usepackage{lmodern}
+\usepackage{textcomp}
 \usepackage[scaled=0.85]{sourcecodepro}
 \usepackage{microtype}
 
@@ -119,6 +120,9 @@
            {..}{{{\color{toshorange}..}}}2
            {\$}{{{\color{toshblue}\$}}}1
            {ō}{{\=o}}1
+           {°}{{\textdegree}}1
+           {μ}{{\ensuremath{\mu}}}1
+           {Ω}{{\ensuremath{\Omega}}}1
            {»}{{\guillemotright}}1
            {«}{{\guillemotleft}}1,
 }
@@ -934,6 +938,17 @@ annotations, casts, and \code{new} expressions.
 \code{dateonly} & \code{System.DateOnly} & Date without time \\
 \code{timeonly} & \code{System.TimeOnly} & Time without date \\
 \code{timespan} & \code{System.TimeSpan} & Duration \\
+\code{duration} & \code{Tosh.Runtime.TemporalAmount} & Calendar-aware duration \\
+\code{quantity} & \code{Tosh.Runtime.Units.Quantity} & Any physical quantity \\
+\code{length}, \code{mass}, \code{temperature} & Named \code{*Quantity} types & Base physical categories \\
+\code{timequantity} / \code{durationquantity} & \code{DurationQuantity} & Fixed physical duration \\
+\code{datasize} & \code{DataSizeQuantity} & Bit/byte physical data quantity \\
+\code{speed}, \code{area}, \code{volume} & Named \code{*Quantity} types & Common geometry and motion categories \\
+\code{force}, \code{energy}, \code{power}, \code{pressure} & Named \code{*Quantity} types & Common mechanics categories \\
+\code{frequency}, \code{angle}, \code{acceleration}, \code{density} & Named \code{*Quantity} types & Derived physical categories \\
+\code{voltage}, \code{current}, \code{resistance}, \code{charge} & Named \code{*Quantity} types & Electrical categories \\
+\code{torque}, \code{flowrate}, \code{capacitance}, \code{inductance} & Named \code{*Quantity} types & Additional derived categories \\
+\code{substance}, \code{luminosity}, \code{angularvelocity} & Named \code{*Quantity} types & SI and angular categories \\
 \code{regex} & \code{System.Text.RegularExpressions.Regex} & Compiled pattern \\
 \code{list} & \code{System.Collections.Generic.List<object>} & Growable ordered list \\
 \code{array} & \code{System.Object[]} & Fixed-size array \\
@@ -1175,29 +1190,46 @@ echo "3-4i" | cast complex | raw
 TōSh includes a dimensional-analysis unit system inspired by CAS calculators.
 A \emph{quantity} is a numeric value paired with a physical unit. Unit literals
 use backtick syntax: the number is immediately followed by a backtick and the
-unit expression with no intervening whitespace.
+unit expression with no intervening whitespace. The conventional U+00B0 degree
+sign is the one adjacency shorthand and does not require a backtick.
 
 \begin{lstlisting}
 100`m            # Length -- 100 meters
 5`kg             # Mass -- 5 kilograms
 9.8`m/s^2        # Acceleration
 2.5`kWh          # Energy (SI prefix + unit)
+90°              # Angle -- 90 degrees
+20°C             # Absolute temperature -- 20 degrees Celsius
 \end{lstlisting}
 
 \subsubsection{Syntax}
 
 \begin{center}
 \begin{tabular}{rcl}
-$\langle$quantity-literal$\rangle$ & ::= & $\langle$number$\rangle$\textasciigrave{}$\langle$unit-expr$\rangle$ \\
-$\langle$unit-expr$\rangle$ & ::= & $\langle$unit$\rangle$\,(\texttt{*}\,$\langle$unit$\rangle$ $|$ \texttt{/}\,$\langle$unit$\rangle$ $|$ \texttt{\^{}}\,$\langle$int$\rangle$)$^{*}$ \\
+$\langle$quantity-literal$\rangle$ & ::= & $\langle$decimal-real$\rangle$\textasciigrave{}$\langle$unit-expr$\rangle$ $|$ $\langle$decimal-real$\rangle$\textdegree{}$\langle$angle-tail$\rangle$? $|$ $\langle$decimal-real$\rangle$\textdegree{}(\texttt{C}$|$\texttt{F}$|$\texttt{R}) \\
+$\langle$unit-expr$\rangle$ & ::= & $\langle$unit-term$\rangle$\,((\texttt{*}$|$\texttt{/})\,$\langle$unit-term$\rangle$)$^{*}$ $|$ \texttt{1/}$\langle$unit-term$\rangle$\,((\texttt{*}$|$\texttt{/})\,$\langle$unit-term$\rangle$)$^{*}$ \\
+$\langle$unit-term$\rangle$ & ::= & $\langle$unit$\rangle$\,(\texttt{\^{}}\,$\langle$int$\rangle$)? \\
+$\langle$angle-tail$\rangle$ & ::= & (\texttt{*}$|$\texttt{/})\,$\langle$unit-term$\rangle$\,((\texttt{*}$|$\texttt{/})\,$\langle$unit-term$\rangle$)$^{*}$ $|$ \texttt{\^{}}\,$\langle$int$\rangle$ \\
 $\langle$unit$\rangle$ & ::= & $\langle$si-prefix$\rangle$?\,$\langle$base-unit$\rangle$ \\
 \end{tabular}
 \end{center}
 
 \noindent
-Unit expressions may contain multiplication (\code{*}), division (\code{/}),
-and integer exponents (\code{\^{}}). SI prefixes (k, M, G, T, P, m, \textmu{},
-n, p) are resolved automatically for registered base units.
+Here $\langle$decimal-real$\rangle$ is a signed or unsigned decimal floating
+literal (including exponent notation and the ordinary digit-separator rules),
+not a radix integer, imaginary literal, or storage suffix. Unit expressions may
+contain multiplication (\code{*}), division (\code{/}), and integer exponents
+(\code{\^{}}), but no grouping parentheses. SI prefixes from quecto through
+quetta are resolved only for unit definitions that opt into prefixes.
+
+\noindent
+The degree shorthand uses the exact degree sign: \code{90°} is an angle, while
+\code{20°C}, \code{68°F}, and \code{540°R} are temperatures. Kelvin never takes
+a degree sign. Bare \code{C} and \code{F} retain their electrical meanings
+(coulomb and farad), so backtick temperature aliases are written
+\code{degC}, \code{degF}, and \code{degR}. Only the angle form may take a
+compound tail (for example \code{90°/s}); absolute scales such as \code{°C/s}
+are invalid.
 
 \subsubsection{Dimensions}
 
@@ -1213,10 +1245,10 @@ Length            & meter (m)   & \texttt{100\textasciigrave m}, \texttt{5\texta
 Mass              & kilogram (kg) & \texttt{5\textasciigrave kg}, \texttt{150\textasciigrave lb} \\
 Time              & second (s)  & \texttt{30\textasciigrave s}, \texttt{5\textasciigrave min}, \texttt{2\textasciigrave hr} \\
 Electric Current  & ampere (A)  & \texttt{3\textasciigrave A}, \texttt{500\textasciigrave mA} \\
-Temperature       & kelvin (K)  & \texttt{300\textasciigrave K}, \texttt{20\textasciigrave C}, \texttt{72\textasciigrave F} \\
+Temperature       & kelvin (K)  & \texttt{300\textasciigrave K}, \texttt{20°C}, \texttt{72°F} \\
 Amount of Substance & mole (mol) & \texttt{2\textasciigrave mol} \\
 Luminous Intensity & candela (cd) & \texttt{100\textasciigrave cd} \\
-Data              & byte (B)    & \texttt{1\textasciigrave GB}, \texttt{500\textasciigrave kB} \\
+Data              & bit (bit)   & \texttt{1\textasciigrave GB}, \texttt{500\textasciigrave kB} \\
 Angle             & radian (rad) & \texttt{3.14\textasciigrave rad}, \texttt{90\textasciigrave deg} \\
 \bottomrule
 \end{tabular}
@@ -1235,9 +1267,9 @@ in a named type for clearer display and type checking:
 Length        & L            & m, km, mi, ft, in \\
 Mass          & M            & kg, g, lb, oz \\
 Duration      & T            & s, ms, min, hr \\
-Temperature   & $\Theta$     & K, C, F \\
+Temperature   & $\Theta$     & K, degC, °C, degF, °F \\
 DataSize      & D            & B, kB, MB, GB, TB \\
-Speed         & L\,T$^{-1}$       & m/s, km/h, mph \\
+Speed         & L\,T$^{-1}$       & m/s, km/h, kph, mph \\
 Area          & L$^{2}$           & m\textsuperscript{2}, km\textsuperscript{2}, acre \\
 Volume        & L$^{3}$           & m\textsuperscript{3}, L, gal \\
 Acceleration  & L\,T$^{-2}$       & m/s\textsuperscript{2} \\
@@ -1248,11 +1280,16 @@ Pressure      & M\,L$^{-1}$\,T$^{-2}$ & Pa, bar, atm, psi \\
 Frequency     & T$^{-1}$          & Hz, kHz, MHz, GHz \\
 Voltage       & M\,L$^{2}$\,T$^{-3}$\,I$^{-1}$ & V \\
 Resistance    & M\,L$^{2}$\,T$^{-3}$\,I$^{-2}$ & $\Omega$ \\
+Capacitance   & I$^{2}$\,T$^{4}$\,M$^{-1}$\,L$^{-2}$ & F \\
+Inductance    & M\,L$^{2}$\,T$^{-2}$\,I$^{-2}$ & H \\
 Charge        & I\,T           & C, Ah, mAh \\
 Angle         & A              & rad, deg \\
-Torque        & M\,L$^{2}$\,T$^{-2}$ & N*m \\
+Angular Velocity & A\,T$^{-1}$ & rad/s, rpm \\
+Torque        & M\,L$^{2}$\,T$^{-2}$ & Nm \\
 Density       & M\,L$^{-3}$       & kg/m\textsuperscript{3} \\
 Flow Rate     & L$^{3}$\,T$^{-1}$ & L/min, gal/min \\
+Substance     & N              & mol \\
+Luminosity    & J              & cd \\
 \bottomrule
 \end{tabular}
 \end{center}
@@ -1271,6 +1308,32 @@ applied automatically---adding incompatible dimensions is an error:
 \end{lstlisting}
 
 \noindent
+Multiplication and division use base values and return a canonical unit for the
+derived dimension; addition and subtraction preserve the left operand's display
+unit. Dividing equal dimensions yields an ordinary numeric scalar. Absolute
+Celsius, Fahrenheit, Rankine, and Kelvin values are temperature points; until
+temperature-difference units are introduced, arithmetic on those points is
+rejected rather than silently applying an affine offset as though it were a
+scale. Conversion and comparison remain supported.
+
+\subsubsection{Unit Conversion}
+
+The idiomatic conversion form reuses \code{as}; a leading backtick on the right
+marks a unit target rather than a type target:
+
+\begin{lstlisting}
+2`mi as `ft           # 10560 ft
+2`hr as `s            # 7200 s
+10`m/s as `mph        # approximately 22.3694 mph
+20°C as `°F           # 68 °F
+\end{lstlisting}
+
+\noindent
+The method forms \code{value.To("ft")} and \code{value.ConvertTo("ft")} are
+equivalent and are convenient for CLR interop or a dynamically selected target.
+The target must describe the same dimension.
+
+\noindent
 Comparison operators also use base-value comparison with dimension checking:
 
 \begin{lstlisting}
@@ -1286,6 +1349,15 @@ quantity, TōSh automatically promotes it:
 \begin{lstlisting}
 5s + 10`s             # 15 s   (TimeSpan promoted to Duration)
 \end{lstlisting}
+
+\noindent
+Typed script and function boundaries also parse external strings such as
+\code{"5km"}, \code{"2hr"}, and \code{"10m/s"} when the declared type is a
+quantity category. Friendly annotations include \code{quantity}, \code{length},
+\code{mass}, \code{temperature}, \code{datasize}, \code{speed}, \code{energy},
+\code{power}, and the other named categories. The existing \code{duration} alias
+continues to mean calendar-aware \code{TemporalAmount}; fixed physical time uses
+\code{DurationQuantity} or \code{timequantity}.
 
 \subsubsection{Members}
 

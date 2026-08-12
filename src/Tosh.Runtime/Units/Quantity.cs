@@ -9,15 +9,37 @@ namespace Tosh.Runtime.Units;
 /// </summary>
 public class Quantity : IComparable, IComparable<Quantity>, IShellRecordObject, IFormattable
 {
+    private readonly UnitConversion _conversion;
+
     public Quantity(double magnitude, UnitExpression dimension, string unitSymbol)
     {
         Magnitude = magnitude;
         Dimension = dimension;
         UnitSymbol = unitSymbol;
+
+        if (dimension.IsDimensionless && string.IsNullOrEmpty(unitSymbol))
+        {
+            _conversion = UnitConversion.Identity;
+            return;
+        }
+
+        if (!UnitExpressionParser.TryParseConversion(
+                unitSymbol,
+                out var conversion,
+                out var parsedDimension,
+                out _) ||
+            parsedDimension != dimension)
+        {
+            throw new ArgumentException(
+                $"Unit '{unitSymbol}' does not describe dimension '{dimension}'.",
+                nameof(unitSymbol));
+        }
+
+        _conversion = conversion;
     }
 
     /// <summary>The numeric value in the user's original unit.</summary>
-    public double Magnitude { get; }
+    public double Magnitude { get; private set; }
 
     /// <summary>The SI base dimension expression (e.g. {Length:1, Time:-1} for m/s).</summary>
     public UnitExpression Dimension { get; }
@@ -29,20 +51,32 @@ public class Quantity : IComparable, IComparable<Quantity>, IShellRecordObject, 
     /// Creates a Quantity from lexer-parsed components. The magnitude is the user's
     /// original value; routing through UnitRegistry to produce named types.
     /// </summary>
-    public static Quantity FromParsed(double baseValue, double magnitude, UnitExpression dimension, string unitSymbol)
+    public static Quantity FromParsed(double magnitude, UnitExpression dimension, string unitSymbol)
     {
         return UnitRegistry.Instance.CreateTyped(magnitude, dimension, unitSymbol);
     }
 
-    /// <summary>The value converted to SI base units.</summary>
-    public double BaseValue
+    /// <summary>Creates a typed quantity from a magnitude and a unit expression.</summary>
+    public static Quantity FromLiteral(double magnitude, string unitSymbol)
     {
-        get
+        if (!UnitExpressionParser.TryParseConversion(
+                unitSymbol,
+                out _,
+                out var dimension,
+                out var normalizedSymbol))
         {
-            var unit = UnitRegistry.Instance.TryResolve(UnitSymbol);
-            return unit is not null ? unit.ToBase(Magnitude) : Magnitude;
+            throw new FormatException($"Unknown or invalid unit expression '{unitSymbol}'.");
         }
+
+        return UnitRegistry.Instance.CreateTyped(magnitude, dimension, normalizedSymbol);
     }
+
+    /// <summary>The value converted to SI base units.</summary>
+    public double BaseValue => _conversion.ToBase(Magnitude);
+
+    /// <summary>Whether this value is an absolute temperature point.</summary>
+    public bool IsAbsoluteTemperature =>
+        Dimension == UnitExpression.Of(UnitDimension.Temperature);
 
     /// <summary>The category name for display (e.g. "Length", "Speed"). Override in named types.</summary>
     public virtual string CategoryName => UnitRegistry.Instance.GetCategoryForDimension(Dimension) ?? "Quantity";
@@ -54,14 +88,16 @@ public class Quantity : IComparable, IComparable<Quantity>, IShellRecordObject, 
     public static Quantity operator +(Quantity left, Quantity right)
     {
         EnsureCompatibleDimensions(left, right, "+");
-        var rightConverted = ConvertToUnit(right, left.UnitSymbol);
+        EnsureNotAbsoluteTemperature(left, "+");
+        var rightConverted = left._conversion.FromBase(right.BaseValue);
         return left.WithMagnitude(left.Magnitude + rightConverted);
     }
 
     public static Quantity operator -(Quantity left, Quantity right)
     {
         EnsureCompatibleDimensions(left, right, "-");
-        var rightConverted = ConvertToUnit(right, left.UnitSymbol);
+        EnsureNotAbsoluteTemperature(left, "-");
+        var rightConverted = left._conversion.FromBase(right.BaseValue);
         return left.WithMagnitude(left.Magnitude - rightConverted);
     }
 
@@ -69,37 +105,45 @@ public class Quantity : IComparable, IComparable<Quantity>, IShellRecordObject, 
     {
         var newDimension = left.Dimension.Multiply(right.Dimension);
         var newMagnitude = left.BaseValue * right.BaseValue;
-        var newSymbol = CombineSymbols(left.UnitSymbol, right.UnitSymbol, "·");
-        return UnitRegistry.Instance.CreateTyped(newMagnitude, newDimension, newSymbol, fromBase: true);
+        EnsureNotAbsoluteTemperature(left, "*");
+        EnsureNotAbsoluteTemperature(right, "*");
+        var newSymbol = UnitRegistry.Instance.GetCanonicalUnitSymbol(newDimension);
+        return UnitRegistry.Instance.CreateTyped(newMagnitude, newDimension, newSymbol);
     }
 
     public static Quantity operator /(Quantity left, Quantity right)
     {
-        if (right.Magnitude == 0) throw new DivideByZeroException("Cannot divide by zero quantity.");
+        EnsureNotAbsoluteTemperature(left, "/");
+        EnsureNotAbsoluteTemperature(right, "/");
+        if (right.BaseValue == 0) throw new DivideByZeroException("Cannot divide by zero quantity.");
         var newDimension = left.Dimension.Divide(right.Dimension);
         var newMagnitude = left.BaseValue / right.BaseValue;
-        var newSymbol = CombineSymbols(left.UnitSymbol, right.UnitSymbol, "/");
-        return UnitRegistry.Instance.CreateTyped(newMagnitude, newDimension, newSymbol, fromBase: true);
+        var newSymbol = UnitRegistry.Instance.GetCanonicalUnitSymbol(newDimension);
+        return UnitRegistry.Instance.CreateTyped(newMagnitude, newDimension, newSymbol);
     }
 
     public static Quantity operator *(Quantity quantity, double scalar)
     {
+        EnsureNotAbsoluteTemperature(quantity, "*");
         return quantity.WithMagnitude(quantity.Magnitude * scalar);
     }
 
     public static Quantity operator *(double scalar, Quantity quantity)
     {
+        EnsureNotAbsoluteTemperature(quantity, "*");
         return quantity.WithMagnitude(scalar * quantity.Magnitude);
     }
 
     public static Quantity operator /(Quantity quantity, double scalar)
     {
+        EnsureNotAbsoluteTemperature(quantity, "/");
         if (scalar == 0) throw new DivideByZeroException("Cannot divide by zero.");
         return quantity.WithMagnitude(quantity.Magnitude / scalar);
     }
 
     public static Quantity operator -(Quantity quantity)
     {
+        EnsureNotAbsoluteTemperature(quantity, "negate");
         return quantity.WithMagnitude(-quantity.Magnitude);
     }
 
@@ -159,19 +203,81 @@ public class Quantity : IComparable, IComparable<Quantity>, IShellRecordObject, 
     /// <summary>Creates a new Quantity with the same unit but a different magnitude.</summary>
     public virtual Quantity WithMagnitude(double newMagnitude)
     {
-        return UnitRegistry.Instance.CreateTyped(newMagnitude, Dimension, UnitSymbol);
+        // Preserve the exact transform and named runtime subtype already carried
+        // by this value. Reconstructing from UnitSymbol makes an existing value
+        // change meaning after a user-unit registry removal/re-registration.
+        var clone = (Quantity)MemberwiseClone();
+        clone.Magnitude = newMagnitude;
+        return clone;
     }
 
+    /// <summary>Creates the same displayed quantity from a new base-unit value.</summary>
+    public Quantity WithBaseValue(double newBaseValue) =>
+        WithMagnitude(_conversion.FromBase(newBaseValue));
+
     /// <summary>
-    /// Converts the right-hand Quantity to the left-hand unit for same-dimension arithmetic.
-    /// Returns the converted magnitude in the target unit.
+    /// Returns the same physical value displayed in <paramref name="targetUnitSymbol"/>.
     /// </summary>
-    private static double ConvertToUnit(Quantity source, string targetUnitSymbol)
+    public Quantity To(string targetUnitSymbol)
     {
-        var registry = UnitRegistry.Instance;
-        var targetUnit = registry.TryResolve(targetUnitSymbol);
-        if (targetUnit is null) return source.Magnitude;
-        return targetUnit.FromBase(source.BaseValue);
+        ArgumentException.ThrowIfNullOrWhiteSpace(targetUnitSymbol);
+
+        if (!UnitExpressionParser.TryParseConversion(
+                targetUnitSymbol,
+                out var targetConversion,
+                out var targetDimension,
+                out var normalizedSymbol))
+        {
+            throw new InvalidOperationException($"Unknown or invalid target unit '{targetUnitSymbol}'.");
+        }
+
+        if (targetDimension != Dimension)
+        {
+            throw new InvalidOperationException(
+                $"Cannot convert {CategoryName} ({Dimension}) to '{targetUnitSymbol}' ({targetDimension}).");
+        }
+
+        var targetMagnitude = targetConversion.FromBase(BaseValue);
+        return UnitRegistry.Instance.CreateTyped(targetMagnitude, targetDimension, normalizedSymbol);
+    }
+
+    /// <summary>Descriptive alias for <see cref="To(string)"/>.</summary>
+    public Quantity ConvertTo(string targetUnitSymbol) => To(targetUnitSymbol);
+
+    /// <summary>
+    /// Parses a quantity for script and CLR conversion boundaries. Both source-style
+    /// <c>5`km</c> and argument-style <c>5km</c>/<c>5 km</c> are accepted here.
+    /// </summary>
+    public static bool TryParse(string? text, out Quantity quantity)
+    {
+        quantity = null!;
+        if (string.IsNullOrWhiteSpace(text)) return false;
+
+        var candidate = text.Trim();
+        var backtick = candidate.IndexOf('`');
+
+        if (backtick >= 0)
+        {
+            if (backtick == 0 || backtick == candidate.Length - 1 ||
+                candidate.IndexOf('`', backtick + 1) >= 0)
+            {
+                return false;
+            }
+
+            return TryParseParts(candidate[..backtick], candidate[(backtick + 1)..], out quantity);
+        }
+
+        // Prefer the longest numeric prefix so exponent notation such as 1e3m
+        // is not mistaken for magnitude 1 with unit e3m.
+        for (var boundary = candidate.Length - 1; boundary > 0; boundary--)
+        {
+            if (TryParseParts(candidate[..boundary], candidate[boundary..], out quantity))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     #endregion
@@ -194,6 +300,12 @@ public class Quantity : IComparable, IComparable<Quantity>, IShellRecordObject, 
             case "dimension":
                 value = Dimension.ToSymbolString();
                 return true;
+            case "unit-expression":
+                value = UnitSymbol;
+                return true;
+            case "canonical-unit":
+                value = Dimension.ToCanonicalUnitSymbol();
+                return true;
             case "base-value":
                 value = BaseValue;
                 return true;
@@ -212,6 +324,10 @@ public class Quantity : IComparable, IComparable<Quantity>, IShellRecordObject, 
             new("value", Magnitude),
             new("unit", UnitSymbol),
             new("category", CategoryName),
+            new("dimension", Dimension.ToSymbolString()),
+            new("unit-expression", UnitSymbol),
+            new("canonical-unit", Dimension.ToCanonicalUnitSymbol()),
+            new("base-value", BaseValue),
         ];
     }
 
@@ -221,9 +337,17 @@ public class Quantity : IComparable, IComparable<Quantity>, IShellRecordObject, 
 
     public string ToString(string? format, IFormatProvider? formatProvider)
     {
-        var mag = Magnitude.ToString("G", formatProvider ?? CultureInfo.InvariantCulture);
-        return $"{mag} {UnitSymbol}";
+        // Quantities are engineering-facing display values. Fifteen significant
+        // digits suppress ordinary binary64 arithmetic noise (for example,
+        // 48 * 10.3 displaying as 494.40000000000003) while an explicit format
+        // such as "R" remains available when round-trip text is required.
+        var numericFormat = string.IsNullOrEmpty(format) ? "G15" : format;
+        var mag = Magnitude.ToString(numericFormat, formatProvider ?? CultureInfo.InvariantCulture);
+        return string.IsNullOrEmpty(UnitSymbol) ? mag : $"{mag} {UnitSymbol}";
     }
+
+    /// <summary>Formats the magnitude with invariant culture and retains the unit symbol.</summary>
+    public string ToString(string? format) => ToString(format, CultureInfo.InvariantCulture);
 
     public override string ToString()
     {
@@ -243,9 +367,63 @@ public class Quantity : IComparable, IComparable<Quantity>, IShellRecordObject, 
         }
     }
 
-    private static string CombineSymbols(string left, string right, string op)
+    private static void EnsureNotAbsoluteTemperature(Quantity quantity, string op)
     {
-        return $"{left}{op}{right}";
+        if (quantity.IsAbsoluteTemperature)
+        {
+            throw new InvalidOperationException(
+                $"Cannot {op} an absolute temperature until temperature-difference units are explicit; convert or compare it instead.");
+        }
+    }
+
+    private static bool TryParseParts(string magnitudeText, string unitText, out Quantity quantity)
+    {
+        quantity = null!;
+        magnitudeText = magnitudeText.Trim();
+        unitText = unitText.Trim();
+
+        if (magnitudeText.Length == 0 || unitText.Length == 0 ||
+            !HasValidNumericSeparators(magnitudeText))
+        {
+            return false;
+        }
+
+        var numericText = magnitudeText.Contains('_')
+            ? magnitudeText.Replace("_", string.Empty, StringComparison.Ordinal)
+            : magnitudeText;
+
+        if (!double.TryParse(
+                numericText,
+                NumberStyles.Float | NumberStyles.AllowLeadingSign,
+                CultureInfo.InvariantCulture,
+                out var magnitude) ||
+            !UnitExpressionParser.TryParseConversion(
+                unitText,
+                out _,
+                out var dimension,
+                out var normalizedSymbol))
+        {
+            return false;
+        }
+
+        quantity = FromParsed(magnitude, dimension, normalizedSymbol);
+        return true;
+    }
+
+    private static bool HasValidNumericSeparators(string text)
+    {
+        for (var i = 0; i < text.Length; i++)
+        {
+            if (text[i] != '_') continue;
+            if (i == 0 || i + 1 >= text.Length ||
+                !char.IsAsciiDigit(text[i - 1]) ||
+                !char.IsAsciiDigit(text[i + 1]))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     #endregion

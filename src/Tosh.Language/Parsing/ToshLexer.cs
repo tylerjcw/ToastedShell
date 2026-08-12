@@ -1368,23 +1368,60 @@ public sealed class ToshLexer
 
         var text = _source[start.._position];
 
-        // Unit literal: number`unit (e.g. 100`m, 9.8`m/s^2, 1_000`kg)
-        var backtickIndex = text.IndexOf('`');
-        if (backtickIndex > 0 && backtickIndex < text.Length - 1)
+        // Unit literals. The backtick is the general form; U+00B0 is the one
+        // adjacency shorthand (90°, 20°C, 90°/s). Both routes share numeric
+        // separator validation so quantity literals cannot bypass the ordinary
+        // number rules.
+        if (TrySplitUnitLiteral(text, out var numPart, out var unitPart))
         {
-            var numPart = text[..backtickIndex];
-            var unitPart = text[(backtickIndex + 1)..];
+            if (numPart.Contains('_') && !HasValidDigitSeparators(numPart))
+            {
+                throw new LexerDiagnosticException(new SyntaxDiagnostic(
+                    Code: "tosh.parser.invalid_numeric_separator",
+                    Title: "Digit separators must sit between digits.",
+                    Span: new TextSpan(start, numPart.Length),
+                    Label: "'_' may not lead, trail, or repeat inside a number",
+                    Help: "write the quantity as, for example, 1_000`m or 1_000°."));
+            }
 
-            // Strip underscore separators from the numeric part
             var numForParsing = numPart.Contains('_') ? numPart.Replace("_", "", StringComparison.Ordinal) : numPart;
 
-            if (double.TryParse(numForParsing, NumberStyles.Float | NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var magnitude)
-                && UnitExpressionParser.TryParse(unitPart, out var unitFactor, out var dimension, out var normalizedSymbol))
+            if (!double.TryParse(
+                    numForParsing,
+                    NumberStyles.Float | NumberStyles.AllowLeadingSign,
+                    CultureInfo.InvariantCulture,
+                    out var magnitude))
             {
-                var baseValue = magnitude * unitFactor;
-                var quantity = Quantity.FromParsed(baseValue, magnitude, dimension, normalizedSymbol);
-                return new SyntaxToken(SyntaxTokenKind.UnitLiteral, start, text, quantity);
+                throw new LexerDiagnosticException(new SyntaxDiagnostic(
+                    Code: "tosh.parser.invalid_unit_magnitude",
+                    Title: "A unit literal must begin with a valid number.",
+                    Span: new TextSpan(start, numPart.Length),
+                    Label: "this is not a valid numeric magnitude",
+                    Help: "write a decimal magnitude before the unit, for example 5`km or 90°."));
             }
+
+            if (!UnitExpressionParser.TryParseConversion(
+                    unitPart,
+                    out _,
+                    out var dimension,
+                    out var normalizedSymbol))
+            {
+                var unitLength = Math.Max(1, unitPart.Length);
+                var unitStart = unitPart.Length == 0
+                    ? start + text.Length - 1
+                    : start + text.Length - unitPart.Length;
+                throw new LexerDiagnosticException(new SyntaxDiagnostic(
+                    Code: "tosh.parser.invalid_unit_literal",
+                    Title: "A unit literal contains an unknown or invalid unit expression.",
+                    Span: new TextSpan(unitStart, unitLength),
+                    Label: unitPart.Length == 0
+                        ? "a unit is required after the backtick"
+                        : $"'{unitPart}' is not registered or composable",
+                    Help: "use a known unit symbol; absolute temperature scales cannot be used inside compound units."));
+            }
+
+            var quantity = Quantity.FromParsed(magnitude, dimension, normalizedSymbol);
+            return new SyntaxToken(SyntaxTokenKind.UnitLiteral, start, text, quantity);
         }
 
         if (TryParseImaginaryLiteral(text, out var imaginaryValue))
@@ -1498,6 +1535,36 @@ public sealed class ToshLexer
             && char.IsAsciiDigit(text[1]);
     }
 
+    private static bool TrySplitUnitLiteral(string text, out string magnitude, out string unit)
+    {
+        magnitude = string.Empty;
+        unit = string.Empty;
+
+        var backtickIndex = text.IndexOf('`');
+        if (backtickIndex > 0 && LooksLikeUnitMagnitude(text[..backtickIndex]))
+        {
+            magnitude = text[..backtickIndex];
+            unit = text[(backtickIndex + 1)..];
+            return true;
+        }
+
+        var degreeIndex = text.IndexOf('°');
+        if (degreeIndex > 0 && LooksLikeUnitMagnitude(text[..degreeIndex]))
+        {
+            magnitude = text[..degreeIndex];
+            unit = text[degreeIndex..];
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool LooksLikeUnitMagnitude(string text)
+    {
+        if (text.Length == 0 || !text.Any(char.IsAsciiDigit)) return false;
+        return char.IsAsciiDigit(text[0]) || text[0] is '+' or '-' or '.' or '_';
+    }
+
     /// <summary>
     /// Every separator must sit between two digits of the literal's own
     /// radix, so <c>1_000</c> is accepted while <c>1__2</c>, <c>1_</c>,
@@ -1507,6 +1574,7 @@ public sealed class ToshLexer
     {
         var body = text.AsSpan();
         var offset = 0;
+        var radix = '\0';
 
         // Skip a sign and any radix prefix; a separator may not sit
         // immediately after either.
@@ -1515,6 +1583,7 @@ public sealed class ToshLexer
             && body[offset] == '0'
             && char.ToLowerInvariant(body[offset + 1]) is 'x' or 'b' or 'o')
         {
+            radix = char.ToLowerInvariant(body[offset + 1]);
             offset += 2;
         }
 
@@ -1522,16 +1591,21 @@ public sealed class ToshLexer
         {
             if (body[i] != '_') continue;
 
-            var hasLeft = i > offset && IsRadixDigit(body[i - 1]);
-            var hasRight = i + 1 < body.Length && IsRadixDigit(body[i + 1]);
+            var hasLeft = i > offset && IsDigitForRadix(body[i - 1], radix);
+            var hasRight = i + 1 < body.Length && IsDigitForRadix(body[i + 1], radix);
             if (!hasLeft || !hasRight) return false;
         }
 
         return true;
     }
 
-    private static bool IsRadixDigit(char c) =>
-        char.IsAsciiDigit(c) || (char.ToLowerInvariant(c) is >= 'a' and <= 'f');
+    private static bool IsDigitForRadix(char c, char radix) => radix switch
+    {
+        'x' => char.IsAsciiDigit(c) || char.ToLowerInvariant(c) is >= 'a' and <= 'f',
+        'b' => c is '0' or '1',
+        'o' => c is >= '0' and <= '7',
+        _ => char.IsAsciiDigit(c),
+    };
 
     private static LexerDiagnosticException CreateNumericOverflowDiagnostic(
         string text,

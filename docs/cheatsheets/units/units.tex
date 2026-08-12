@@ -78,6 +78,8 @@ ls -la | where _.Size? > 1000 | get Name
 2.5`kWh
 72`degF
 90`deg
+72°F
+90°
 \end{lstlisting}
 
 \tighttable{>{\ttfamily\raggedright\arraybackslash}p{0.28\linewidth}X}{
@@ -87,6 +89,7 @@ Piece & Meaning \\
 \texttt{100`m} & number + backtick + unit expression \\
 \texttt{m/s\^{}2} & division and exponent are allowed \\
 \texttt{km}, \texttt{MB} & SI prefixes resolve automatically \\
+\texttt{90°}, \texttt{72°F} & degree-sign shorthand for angle / temperature \\
 \bottomrule
 }
 
@@ -97,7 +100,19 @@ Piece & Meaning \\
 5`kg * 9.8`m/s^2
 \end{lstlisting}
 
-\note{Quantities enforce dimensional analysis: compatible dimensions add/compare cleanly; incompatible ones raise an error.}
+\note{Quantities enforce dimensional analysis: compatible linear quantities add/compare cleanly; incompatible dimensions raise an error. Absolute temperatures convert and compare, but arithmetic awaits explicit temperature-difference units.}
+
+\section{Convert Units}
+\begin{lstlisting}
+2`mi as `ft
+2`hr as `s
+10`m/s as `mph
+20°C as `°F
+
+$distance.To("km")
+\end{lstlisting}
+
+\note{The backtick after \texttt{as} marks a unit target. Without it, \texttt{as Length} remains an ordinary type conversion.}
 
 \section{Named Quantity Categories}
 \tighttable{>{\ttfamily\raggedright\arraybackslash}p{0.30\linewidth}X}{
@@ -211,8 +226,8 @@ Form & Meaning \\
 
 \begin{itemize}
 \item Use storage literals for files and memory, unit literals for physics and engineering math.
-\item \texttt{date add/sub} accepts a \texttt{TemporalAmount}, so both \texttt{2d} and \texttt{1mo} work.
-\item \texttt{sum} and \texttt{avg} handle numeric, \texttt{StorageSize}, and \texttt{TimeSpan} streams directly.
+\item \texttt{date add/sub} accepts calendar-aware \texttt{TemporalAmount} values and fixed \texttt{DurationQuantity} values; \texttt{1mo} and \texttt{2`hr} keep their distinct meanings.
+\item \texttt{sum} and \texttt{avg} handle numeric, \texttt{Quantity}, \texttt{StorageSize}, and \texttt{TimeSpan} streams directly.
 \end{itemize}
 
 \section{Derived Quantity Families}
@@ -290,7 +305,7 @@ echo 1s 2s 3s | avg
 ls -la | where _.Type == file | summarize --sum Size
 \end{lstlisting}
 
-\note{Aggregation is strongest on shell-native temporal and size types. Quantities are best used for direct formula-style calculations and comparisons.}
+\note{\texttt{sum} and \texttt{avg} accept compatible quantities and preserve the first value's display unit. \texttt{min} and \texttt{max} return the winning original value, including its unit. Summing absolute temperatures is intentionally rejected.}
 
 \section{Display Profiles}
 \begin{lstlisting}

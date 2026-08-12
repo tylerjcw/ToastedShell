@@ -15,6 +15,7 @@ public sealed class NumericLiteralLexingTests
     [InlineData("1_000_000")]
     [InlineData("-1_000")]
     [InlineData("0xFF")]
+    [InlineData("0xFF_FF")]
     [InlineData("0b1010")]
     [InlineData("0o777")]
     [InlineData("42")]
@@ -27,6 +28,8 @@ public sealed class NumericLiteralLexingTests
     [Theory]
     [InlineData("1__2")]
     [InlineData("1_")]
+    [InlineData("1_e2")]
+    [InlineData("1e_2")]
     [InlineData("0x_FF")]
     public void Misplaced_digit_separators_are_diagnosed(string source)
     {

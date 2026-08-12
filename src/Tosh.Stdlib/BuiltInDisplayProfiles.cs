@@ -23,8 +23,6 @@ using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using Tosh.Stdlib.Shell;
 using Tosh.Stdlib.Sys;
-using Tosh.Runtime.Units;
-
 using Tosh.Runtime;
 
 namespace Tosh.Stdlib;
@@ -42,7 +40,6 @@ public static class BuiltInDisplayProfiles
         registry.Register(CreateTimeOnlyProfile(preferences));
         registry.Register(CreateTimeSpanProfile(preferences));
         registry.Register(CreateTemporalAmountProfile(preferences));
-        registry.Register(CreateDurationQuantityProfile(preferences));
         registry.Register(CreateStorageSizeProfile(preferences));
         registry.Register(CreateShellTextLineProfile());
         registry.Register(CreateManagedFileHandleProfile());
@@ -350,24 +347,6 @@ public static class BuiltInDisplayProfiles
                     context.Surface == DisplaySurface.TableCell
                         ? preferences.TimeSpan.TableFormat
                         : preferences.TimeSpan.ScalarFormat));
-    }
-
-    private static DisplayProfile CreateDurationQuantityProfile(DisplayPreferences preferences)
-    {
-        return DisplayProfile
-            .For<DurationQuantity>()
-            .AddValueCase(
-                DisplaySurface.TableCell,
-                context => FormatTimeSpan(
-                    ((DurationQuantity)context.Value).TimeSpan,
-                    preferences.TimeSpan.TableMode,
-                    preferences.TimeSpan.TableFormat))
-            .AddValueCase(
-                DisplaySurface.Root | DisplaySurface.Nested,
-                context => FormatTimeSpan(
-                    ((DurationQuantity)context.Value).TimeSpan,
-                    preferences.TimeSpan.ScalarMode,
-                    preferences.TimeSpan.ScalarFormat));
     }
 
     private static DisplayProfile CreateShellTextLineProfile()

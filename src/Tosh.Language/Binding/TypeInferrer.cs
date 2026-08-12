@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Reflection;
 using Tosh.Compiler.IR;
 using Tosh.Runtime;
+using Tosh.Runtime.Units;
 
 namespace Tosh.Language.Binding;
 
@@ -57,6 +58,7 @@ public static class TypeInferrer
     public static BoundType InferUnary(string op, BoundType operand) => op switch
     {
         "-" or "+" when IsNumeric(operand) => operand,
+        "-" or "+" when operand.ClrType is { } type && typeof(Quantity).IsAssignableFrom(type) => operand,
         "!" or "not" => BoundType.FromClr(typeof(bool)),
         _ => BoundType.Dynamic,
     };
