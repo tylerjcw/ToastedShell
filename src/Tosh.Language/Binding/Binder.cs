@@ -183,6 +183,16 @@ public static class Binder
                     }
                 }
                 break;
+            // `TS-P2-80`. Same rule for a struct body, which was not collected from either.
+            case StructDefinitionStatementSyntax structure:
+                foreach (var member in structure.Members)
+                {
+                    if (member is ClassMethodMemberSyntax method)
+                    {
+                        CollectLocalFunctionsFromBlock(method.Method.Body, sink);
+                    }
+                }
+                break;
             case ModuleDefinitionStatementSyntax module:
                 CollectLocalFunctionsFromBlock(module.Body, sink);
                 break;
@@ -282,48 +292,21 @@ public static class Binder
                 foreach (var ba in cls.BaseConstructorArgs ?? Array.Empty<PipelineSyntax>())
                     VisitPipeline(ba, context);
 
-                // `TS-P2-41`. The members are in scope by name from here down, so an unresolved
-                // bare name can be recognised as one of them rather than guessed at.
-                var enclosingBefore = context.EnclosingClass;
-                context.EnclosingClass = cls;
-                try
-                {
-                    foreach (var member in cls.Members)
-                    {
-                        switch (member)
-                        {
-                            case ClassPropertyMemberSyntax prop:
-                                if (prop.Initializer is not null)
-                                {
-                                    // A primary-constructor parameter is in scope here and
-                                    // nowhere else in the body, so the suggestion for one is
-                                    // offered only from inside this visit.
-                                    context.InPropertyInitializer = true;
-                                    try { VisitPipeline(prop.Initializer, context); }
-                                    finally { context.InPropertyInitializer = false; }
-                                }
-                                context.DeferredDepth++;
-                                try
-                                {
-                                    if (prop.GetterBody is not null) VisitBlock(prop.GetterBody, context);
-                                    if (prop.SetterBody is not null) VisitBlock(prop.SetterBody, context);
-                                }
-                                finally { context.DeferredDepth--; }
-                                break;
-                            case ClassMethodMemberSyntax method:
-                                context.DeferredDepth++;
-                                try { VisitBlock(method.Method.Body, context); }
-                                finally { context.DeferredDepth--; }
-                                break;
-                            case ClassConstructorMemberSyntax ctor:
-                                context.DeferredDepth++;
-                                try { VisitBlock(ctor.Body, context); }
-                                finally { context.DeferredDepth--; }
-                                break;
-                        }
-                    }
-                }
-                finally { context.EnclosingClass = enclosingBefore; }
+                VisitTypeBody(
+                    new EnclosingTypeBody(cls.Name, cls.Members, cls.PrimaryConstructorParameters),
+                    context);
+                break;
+            // `TS-P2-80`. A struct body is walked exactly as a class body is. It was not walked at
+            // all, so `struct S { func g() { f } }` reported nothing where the identical typo in a
+            // class method was caught — and the enclosing-member suggestion `TS-P2-41` added could
+            // never fire inside one.
+            case StructDefinitionStatementSyntax structure:
+                VisitTypeBody(
+                    new EnclosingTypeBody(
+                        structure.Name,
+                        structure.Members,
+                        Array.Empty<FunctionParameterSyntax>()),
+                    context);
                 break;
             case ModuleDefinitionStatementSyntax module:
                 VisitBlock(module.Body, context);
@@ -580,8 +563,60 @@ public static class Binder
     /// can paste: offering <c>$this.Count</c> for a reference written <c>count</c> would name a
     /// second problem while claiming to solve the first.
     /// </remarks>
+    /// <summary>
+    /// Walks the members of a class or struct body — <c>TS-P2-41</c>, <c>TS-P2-80</c>.
+    /// </summary>
+    /// <remarks>
+    /// The members are in scope by name from here down, so an unresolved bare name can be
+    /// recognised as one of them rather than guessed at.
+    /// </remarks>
+    private static void VisitTypeBody(EnclosingTypeBody body, BindContext context)
+    {
+        var enclosingBefore = context.EnclosingClass;
+        context.EnclosingClass = body;
+
+        try
+        {
+            foreach (var member in body.Members)
+            {
+                switch (member)
+                {
+                    case ClassPropertyMemberSyntax prop:
+                        if (prop.Initializer is not null)
+                        {
+                            // A primary-constructor parameter is in scope here and nowhere else
+                            // in the body, so the suggestion for one is offered only from inside
+                            // this visit.
+                            context.InPropertyInitializer = true;
+                            try { VisitPipeline(prop.Initializer, context); }
+                            finally { context.InPropertyInitializer = false; }
+                        }
+                        context.DeferredDepth++;
+                        try
+                        {
+                            if (prop.GetterBody is not null) VisitBlock(prop.GetterBody, context);
+                            if (prop.SetterBody is not null) VisitBlock(prop.SetterBody, context);
+                        }
+                        finally { context.DeferredDepth--; }
+                        break;
+                    case ClassMethodMemberSyntax method:
+                        context.DeferredDepth++;
+                        try { VisitBlock(method.Method.Body, context); }
+                        finally { context.DeferredDepth--; }
+                        break;
+                    case ClassConstructorMemberSyntax ctor:
+                        context.DeferredDepth++;
+                        try { VisitBlock(ctor.Body, context); }
+                        finally { context.DeferredDepth--; }
+                        break;
+                }
+            }
+        }
+        finally { context.EnclosingClass = enclosingBefore; }
+    }
+
     private static EnclosingName ClassifyEnclosingName(
-        ClassDefinitionStatementSyntax cls,
+        EnclosingTypeBody cls,
         string name,
         bool inPropertyInitializer,
         out string qualified)
@@ -619,6 +654,24 @@ public static class Binder
 
         return EnclosingName.None;
     }
+
+    /// <summary>
+    /// The declaration body a bare name sits inside — <c>TS-P2-41</c>, <c>TS-P2-80</c>.
+    /// </summary>
+    /// <param name="Name">The type's name, used to spell a static member's qualifier.</param>
+    /// <param name="Members">Methods and properties declared in the body.</param>
+    /// <param name="PrimaryConstructorParameters">
+    /// Empty for a struct, which has no primary-constructor form.
+    /// </param>
+    /// <remarks>
+    /// A class and a struct carry the same <c>ClassMemberSyntax</c> list but arrive as different
+    /// statement nodes, so the walk was written for one of them and the other went unvisited
+    /// entirely. Naming what the check actually needs is what lets both feed it.
+    /// </remarks>
+    private sealed record EnclosingTypeBody(
+        string Name,
+        IReadOnlyList<ClassMemberSyntax> Members,
+        IReadOnlyList<FunctionParameterSyntax> PrimaryConstructorParameters);
 
     /// <summary>What an unresolved bare name turns out to be in the class around it.</summary>
     private enum EnclosingName
@@ -809,7 +862,7 @@ public static class Binder
         /// the enclosing one for the duration of its body, which is the scope a bare name in that
         /// body would be reaching for.
         /// </remarks>
-        public ClassDefinitionStatementSyntax? EnclosingClass { get; set; }
+        public EnclosingTypeBody? EnclosingClass { get; set; }
 
         /// <summary>
         /// True while walking a property initializer, the one place a primary-constructor

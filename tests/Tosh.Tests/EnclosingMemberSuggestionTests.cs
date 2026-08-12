@@ -157,6 +157,46 @@ public sealed class EnclosingMemberSuggestionTests : IClassFixture<ToshRuntimeFi
         Assert.DoesNotContain("declared by", diagnostic.Title, StringComparison.Ordinal);
     }
 
+    // ── a struct body is walked exactly as a class body is (`TS-P2-80`) ────────
+
+    [Theory]
+    // The same typo in each container. `struct` reported nothing at all: `Binder.VisitStatement`
+    // had a `ClassDefinitionStatementSyntax` case and no struct one, and `CollectLocalFunctions`
+    // had the same gap — so the body was never visited and the suggestion above could not fire
+    // inside one however well it worked elsewhere.
+    [InlineData("func h() { f }")]
+    [InlineData("class K { func g() { f } }")]
+    [InlineData("struct S { func g() { f } }")]
+    [InlineData("module M { func g() { f } }")]
+    public void A_typo_is_caught_in_every_container(string source)
+    {
+        Assert.Contains(Bind(source), d => d.Code == "tosh.bind.unknown_command");
+    }
+
+    [Theory]
+    [InlineData("struct S { func zog() { return 7 }\nfunc g() { return zog() } }", "$this.zog()")]
+    [InlineData("struct S { prop A: int = 0\nprop B: int = A }", "$this.A")]
+    [InlineData("struct S { shared func f() { return 7 }\nfunc g() { return f() } }", "S.f()")]
+    public void A_struct_member_is_suggested_in_its_qualified_form(string source, string expected)
+    {
+        var diagnostic = BindOne(source);
+
+        Assert.Equal($"did you mean '{expected}'?", diagnostic.Label);
+        Assert.Contains("declared by 'S'", diagnostic.Title, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_function_declared_inside_a_struct_method_still_resolves()
+    {
+        // Collecting local functions from struct bodies is the other half of the walk; without
+        // it, visiting the body would newly flag a call that resolves perfectly well.
+        var engine = new ToshEngine(_runtime);
+        var results = await engine.ExecuteToListAsync(
+            "struct S { func g() { func inner() { return 3 }\nreturn inner() } }\nvar s = new S()\n$s.g()");
+
+        Assert.Equal(3, Convert.ToInt32(results.LastOrDefault()));
+    }
+
     [Fact]
     public void A_same_source_top_level_function_still_shadows_the_member()
     {
