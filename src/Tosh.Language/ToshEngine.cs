@@ -4919,14 +4919,28 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
             yield break;
         }
 
-        // Build properties and methods from body members
+        // Build properties, methods and constructors from body members
         var properties = new List<ToshClassPropertyDefinition>();
         var methods = new List<ToshClassMethodDefinition>();
+        var constructors = new List<ToshClassConstructorDefinition>();
 
         foreach (var member in @struct.Members)
         {
             switch (member)
             {
+                // `TS-P2-83`. This switch had no constructor case, so a declared struct
+                // constructor was parsed and then silently dropped.
+                case ClassConstructorMemberSyntax ctor:
+                    constructors.Add(new ToshClassConstructorDefinition(
+                        ctor.Parameters
+                            .Select(p => CreateParameterDefinition(p, sourceName, sourceText))
+                            .ToArray(),
+                        ctor.Body,
+                        sourceName,
+                        sourceText,
+                        ctor.Span,
+                        CaptureVisibleScopes()));
+                    break;
                 case ClassPropertyMemberSyntax property:
                     properties.Add(new ToshClassPropertyDefinition(
                         property.Name,
@@ -4979,7 +4993,8 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
             sourceName,
             sourceText,
             @struct.Span,
-            CaptureVisibleScopes());
+            CaptureVisibleScopes(),
+            constructors);
 
         definition.IsSealed = @struct.IsSealed;
         definition.IsFluid = @struct.IsFluid;

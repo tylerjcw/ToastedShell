@@ -56,6 +56,22 @@ internal static class UserTypeMembers
         _ => true,
     };
 
+    /// <summary>
+    /// The declaration-parameter fields of a struct — <c>TS-P2-79</c>.
+    /// </summary>
+    /// <remarks>
+    /// <c>struct R(a: int, b: int)</c> puts its parameters in <c>Fields</c>, not <c>Members</c>,
+    /// and they are ordinary readable members of the value. Reading only <c>Members</c> made
+    /// <c>$r.a</c> report "Member 'a' was not found on type 'R'" against a struct that answers it
+    /// perfectly well — a false positive shipped in the first cut of this check, missed because
+    /// no swept script used that form with member access.
+    /// </remarks>
+    private static IReadOnlyList<RecordFieldDefinitionSyntax> FieldsOf(BoundType type) => type switch
+    {
+        UserStructType { Definition: StructDefinitionStatementSyntax str } => str.Fields,
+        _ => Array.Empty<RecordFieldDefinitionSyntax>(),
+    };
+
     public static bool TryGetProperty(BoundType type, string name, out ClassPropertyMemberSyntax property)
     {
         foreach (var member in MembersOf(type) ?? Array.Empty<ClassMemberSyntax>())
@@ -118,5 +134,7 @@ internal static class UserTypeMembers
 
     /// <summary>True when a name is declared at all, whatever kind of member it is.</summary>
     public static bool Declares(BoundType type, string name) =>
-        TryGetProperty(type, name, out _) || GetMethods(type, name).Count > 0;
+        TryGetProperty(type, name, out _) ||
+        GetMethods(type, name).Count > 0 ||
+        FieldsOf(type).Any(field => string.Equals(field.Name, name, StringComparison.OrdinalIgnoreCase));
 }

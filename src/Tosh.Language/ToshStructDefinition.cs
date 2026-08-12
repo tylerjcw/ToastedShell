@@ -17,13 +17,15 @@ public sealed class ToshStructDefinition : IShellNamedType
         string sourceName,
         string sourceText,
         TextSpan span,
-        IReadOnlyList<LexicalScope>? capturedScopes)
+        IReadOnlyList<LexicalScope>? capturedScopes,
+        IReadOnlyList<ToshClassConstructorDefinition>? constructors = null)
     {
         _engine = engine;
         Name = name;
         Fields = fields;
         Properties = properties;
         Methods = methods;
+        Constructors = constructors ?? Array.Empty<ToshClassConstructorDefinition>();
         SourceName = sourceName;
         SourceText = sourceText;
         Span = span;
@@ -38,6 +40,17 @@ public sealed class ToshStructDefinition : IShellNamedType
     public IReadOnlyList<ToshClassPropertyDefinition> Properties { get; }
 
     public IReadOnlyList<ToshClassMethodDefinition> Methods { get; }
+
+    /// <summary>
+    /// Explicit constructors declared in the body — <c>TS-P2-83</c>.
+    /// </summary>
+    /// <remarks>
+    /// These were parsed into <c>ClassConstructorMemberSyntax</c> and then dropped on the floor:
+    /// the switch that builds a struct handled properties and methods and had no case for them.
+    /// So `struct S { S(x: int) { … } }` declared a constructor that did not exist, and
+    /// `new S(9)` answered "Struct 'S' expects 0 argument(s)".
+    /// </remarks>
+    public IReadOnlyList<ToshClassConstructorDefinition> Constructors { get; }
 
     public bool IsSealed { get; internal set; }
 
@@ -81,6 +94,17 @@ public sealed class ToshStructDefinition : IShellNamedType
 
     public object CreateInstance(IReadOnlyList<object?> arguments)
     {
+        // `TS-P2-83`. An explicit constructor takes the arguments; the field list is what the
+        // primary-constructor form binds. Choosing by arity mirrors the class rule, and a struct
+        // with no matching constructor falls through to field binding so the existing form and
+        // its diagnostics are untouched.
+        var constructor = SelectConstructor(arguments.Count);
+
+        if (constructor is not null)
+        {
+            return ConstructWithConstructor(constructor, arguments);
+        }
+
         var instance = new ToshStructInstance(this);
         var bound = BindFields(arguments);
 
@@ -97,6 +121,22 @@ public sealed class ToshStructDefinition : IShellNamedType
         //
         // The bound fields serve as locals, so an initialiser may read a primary-constructor
         // parameter — `struct P(x) { prop Doubled = ($x * 2) }` — as a class initialiser can.
+        InitializeDeclaredProperties(instance, bound);
+
+        return instance;
+    }
+
+    /// <summary>
+    /// Runs each stored property's initializer onto <paramref name="instance"/>.
+    /// </summary>
+    /// <param name="locals">
+    /// Bindings the initializers may read — the bound fields, so a primary-constructor parameter
+    /// is in scope as it is for a class initializer.
+    /// </param>
+    private void InitializeDeclaredProperties(
+        ToshStructInstance instance,
+        IReadOnlyDictionary<string, object?>? locals = null)
+    {
         foreach (var property in Properties)
         {
             if (property.IsStatic || property.IsComputed)
@@ -107,17 +147,15 @@ public sealed class ToshStructDefinition : IShellNamedType
             var value = property.Initializer is null
                 ? null
                 : _engine.EvaluateClassPipelineValueSync(
-            null,
+                    null,
                     SourceName,
                     SourceText,
                     property.Initializer,
-                    bound,
+                    locals ?? new Dictionary<string, object?>(StringComparer.Ordinal),
                     CapturedScopes);
 
             instance.SetStoredValue(property.Name, value);
         }
-
-        return instance;
     }
 
     public InvocationResult InvokeStaticMethod(string methodName, IReadOnlyList<object?> arguments)
@@ -246,6 +284,73 @@ public sealed class ToshStructDefinition : IShellNamedType
     }
 
     internal bool TryGetField(string name, out ToshRecordFieldDefinition field) => _fieldsByName.TryGetValue(name, out field!);
+
+    /// <summary>The declared constructor accepting <paramref name="argumentCount"/>, if any.</summary>
+    private ToshClassConstructorDefinition? SelectConstructor(int argumentCount)
+    {
+        foreach (var constructor in Constructors)
+        {
+            var required = constructor.Parameters.Count(p => !p.IsOptional && !p.IsRest && p.DefaultValue is null);
+            var hasRest = constructor.Parameters.Count > 0 && constructor.Parameters[^1].IsRest;
+
+            if (argumentCount >= required && (hasRest || argumentCount <= constructor.Parameters.Count))
+            {
+                return constructor;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Builds an instance by running a declared constructor — <c>TS-P2-83</c>.
+    /// </summary>
+    /// <remarks>
+    /// Fields and non-computed properties are seeded from their initializers first, so the body
+    /// sees the same starting state a class constructor does, and the instance is marked as
+    /// constructing so writing a field of an immutable struct is allowed while building it.
+    /// </remarks>
+    private object ConstructWithConstructor(
+        ToshClassConstructorDefinition constructor,
+        IReadOnlyList<object?> arguments)
+    {
+        var instance = new ToshStructInstance(this);
+        instance.IsConstructing = true;
+
+        try
+        {
+            foreach (var field in Fields)
+            {
+                instance.SetStoredValue(field.Name, null);
+            }
+
+            InitializeDeclaredProperties(instance);
+
+            var locals = new Dictionary<string, object?>(StringComparer.Ordinal);
+
+            for (var i = 0; i < constructor.Parameters.Count; i++)
+            {
+                locals[constructor.Parameters[i].Name] = i < arguments.Count ? arguments[i] : null;
+            }
+
+            locals["this"] = instance;
+
+            _engine.ExecuteClassBlockSync(
+                null,
+                constructor.SourceName,
+                constructor.SourceText,
+                constructor.Body,
+                locals,
+                constructor.CapturedScopes,
+                $"{Name}.{Name}");
+        }
+        finally
+        {
+            instance.IsConstructing = false;
+        }
+
+        return instance;
+    }
 
     internal IAsyncEnumerable<object?> InvokeStructInstanceMethodAsync(
         ToshStructInstance instance,

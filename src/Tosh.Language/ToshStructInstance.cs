@@ -24,19 +24,50 @@ public sealed class ToshStructInstance : IShellRecordObject, IShellTypedObject, 
 
     public bool TrySetMember(string name, object? value)
     {
-        if (!Definition.TryGetField(name, out var field))
+        if (Definition.TryGetField(name, out var field))
         {
-            return false;
+            if (!Definition.IsFluid && !IsConstructing)
+            {
+                throw new InvalidOperationException($"Cannot modify field '{name}' on immutable struct '{Definition.Name}'. Declare the struct as 'fluid' to allow mutation.");
+            }
+
+            _values[field.Name] = Definition.ConvertFieldValue(field, value);
+            return true;
         }
 
-        if (!Definition.IsFluid)
+        // `TS-P2-83`. Declared properties were unreachable for writing: this knew only fields, so
+        // `$s.X = 9` fell through to reflection and reported the member missing on a struct that
+        // reads `$s.X` perfectly well. The same omission `GetMembers` carried until it was fixed
+        // to list properties alongside fields — introspection and behaviour disagreeing, one
+        // method over.
+        foreach (var property in Definition.Properties)
         {
-            throw new InvalidOperationException($"Cannot modify field '{name}' on immutable struct '{Definition.Name}'. Declare the struct as 'fluid' to allow mutation.");
+            if (property.IsStatic || property.IsComputed) continue;
+            if (!string.Equals(property.Name, name, StringComparison.OrdinalIgnoreCase)) continue;
+
+            if (!Definition.IsFluid && !IsConstructing)
+            {
+                throw new InvalidOperationException(
+                    $"Cannot modify property '{property.Name}' on immutable struct '{Definition.Name}'. " +
+                    "Declare the struct as 'fluid' to allow mutation.");
+            }
+
+            _values[property.Name] = value;
+            return true;
         }
 
-        _values[field.Name] = Definition.ConvertFieldValue(field, value);
-        return true;
+        return false;
     }
+
+    /// <summary>
+    /// True while the struct is being constructed — <c>TS-P2-83</c>.
+    /// </summary>
+    /// <remarks>
+    /// A constructor writing its own fields is construction, not mutation, so the immutability
+    /// guard must not refuse it. Field binding already bypassed the guard by writing the backing
+    /// store directly; a constructor body cannot, since it goes through ordinary assignment.
+    /// </remarks>
+    internal bool IsConstructing { get; set; }
 
     public IReadOnlyList<KeyValuePair<string, object?>> GetMembers(bool includeHidden = false)
     {

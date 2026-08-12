@@ -77,6 +77,8 @@ public sealed class UserClassMemberCheckTests : IClassFixture<ToshRuntimeFixture
     [Theory]
     [InlineData("class C { func m(x: int) { return 1 } }\nvar c = new C()\n$c.nope()")]
     [InlineData("class C { prop X: int = 0 }\nvar c = new C()\n$c.Nope")]
+    // A struct field is known, so a name that is not one is still reported.
+    [InlineData("struct R(a: int)\nvar r = new R(1)\n$r.zzz")]
     public void An_undeclared_member_is_reported(string source)
     {
         Assert.True(Reports(source, "tosh.type.member_not_found"), source);
@@ -88,6 +90,12 @@ public sealed class UserClassMemberCheckTests : IClassFixture<ToshRuntimeFixture
     // must stay silent. This is the boundary that keeps the check free of false positives.
     [InlineData("class B { }\nclass C extends B { }\nvar c = new C()\n$c.Inherited")]
     [InlineData("partial class C { }\nvar c = new C()\n$c.Elsewhere")]
+    // `struct R(a: int)` puts its parameters in `Fields`, not `Members`, and they are ordinary
+    // readable members of the value. Reading only `Members` reported them missing against a
+    // struct that answers them — a false positive the first cut of this check shipped, missed
+    // because no swept script used that form with member access.
+    [InlineData("struct R(a: int, b: int)\nvar r = new R(1, 2)\n$r.a")]
+    [InlineData("struct R(a: int, b: int)\nvar r = new R(1, 2)\n$r.b")]
     public void An_incomplete_declaration_reports_no_absence(string source)
     {
         Assert.False(Reports(source, "tosh.type.member_not_found"), source);
