@@ -33,7 +33,11 @@ public sealed class SourceCommand : ShellCommand
             throw new InvalidOperationException("The 'source' command requires a non-empty path.");
         }
 
-        await foreach (var value in _engine.ExecuteScriptFileAsync(rawPath, context.Arguments.Skip(1).ToArray(), isolateScope: false, context.CancellationToken)
+        // `TS-P2-29`. A relative path means "beside the script doing the sourcing", as it already
+        // does for `require`; the working directory stays as the fallback.
+        var path = _engine.ResolveSourcePath(rawPath);
+
+        await foreach (var value in _engine.ExecuteScriptFileAsync(path, context.Arguments.Skip(1).ToArray(), isolateScope: false, context.CancellationToken)
                            .WithCancellation(context.CancellationToken))
         {
             yield return value;

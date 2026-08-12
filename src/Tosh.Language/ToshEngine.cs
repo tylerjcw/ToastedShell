@@ -16650,6 +16650,42 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
         return NativeInteropUtilities.IsSupportedInteropType(type);
     }
 
+    /// <summary>
+    /// The file <c>source</c> means by a relative path — <c>TS-P2-29</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <c>source "./x.tosh"</c> resolved against the working directory, so a script that sourced
+    /// a sibling ran only from its own directory: from anywhere else it looked for the sibling
+    /// beside the *caller*, and reported the file missing. <c>require</c> has always resolved
+    /// against the requiring script and is the behaviour being matched.
+    /// </para>
+    /// <para>
+    /// Unlike <c>require</c>, which resolves against the script directory and stops, a path that
+    /// is not there falls back to the old working-directory resolution — so a caller that
+    /// deliberately sourced something relative to where it was invoked keeps working, and the
+    /// "file not found" message still comes from the same place it used to.
+    /// </para>
+    /// </remarks>
+    internal string ResolveSourcePath(string rawPath)
+    {
+        if (string.IsNullOrWhiteSpace(rawPath) || Path.IsPathRooted(rawPath))
+        {
+            return rawPath;
+        }
+
+        var scriptDirectory = GetExecutionDirectory(GetCurrentScriptPath());
+
+        if (string.Equals(scriptDirectory, Runtime.CurrentDirectory, StringComparison.Ordinal))
+        {
+            return rawPath;
+        }
+
+        var candidate = PathUtilities.ResolvePath(scriptDirectory, rawPath);
+
+        return File.Exists(candidate) ? candidate : rawPath;
+    }
+
     private string GetExecutionDirectory(string sourceName)
     {
         if (!string.IsNullOrWhiteSpace(sourceName) &&

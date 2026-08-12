@@ -3263,6 +3263,28 @@ exports that declares none raises
 \code{tosh.runtime.require\_exports\_nothing}, since importing nothing at all
 is never the intent and used to happen in silence.
 
+\subsection*{How a relative path is resolved}
+\label{sec:relative-load-paths}
+
+Both \code{require} and \code{source} read a relative path as \emph{beside the
+file doing the loading}, not beside the working directory, so a script that
+loads a sibling behaves the same however it is invoked:
+
+\begin{lstlisting}
+# ~/tools/report.tosh
+source "./format.tosh"        # always ~/tools/format.tosh
+require "./stats.tosh"        # always ~/tools/stats.tosh
+\end{lstlisting}
+
+The rule follows the file being executed, so a sourced script reaches its
+\emph{own} siblings rather than those of whatever sourced it.
+
+The two differ in what happens when the path is not there.  \code{require}
+stops.  \code{source} then tries the working directory, so a path deliberately
+written relative to where the shell was invoked still resolves, and a file that
+is simply missing is reported against the directory the reader expects.
+Absolute paths and \code{\textasciitilde} paths are unaffected by either rule.
+
 \section{Native Library Loading}
 \ikw{bind}\ikw{callconv}\ikw{raw}\ikw{from}\ikw{where}
 
