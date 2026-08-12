@@ -7786,6 +7786,24 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
                             return binding.Value;
                         }
 
+                        // `TS-P2-81`. A primary-constructor parameter used outside a stored
+                        // property initializer is not an undeclared variable — it is a name that
+                        // was in scope while the value was being built and is gone once it is.
+                        // "declare it first with 'var x = …'" is the wrong advice for it, and the
+                        // bare spelling of the same mistake already says so (`TS-P2-41`).
+                        if (DescribeOutOfScopeConstructorParameter(variableReference.Name) is { } parameterHelp)
+                        {
+                            throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                                Code: "tosh.runtime.unknown_variable",
+                                Title: $"'${variableReference.Name}' is a constructor parameter of "
+                                     + $"'{CurrentClass!.Name}' and is not in scope here.",
+                                SourceName: sourceName,
+                                SourceText: sourceText,
+                                Span: variableReference.Span,
+                                Label: $"'${variableReference.Name}' is not available once the value is built",
+                                Help: parameterHelp));
+                        }
+
                         throw ToshDiagnosticException.Create(new ToshDiagnostic(
                             Code: "tosh.runtime.unknown_variable",
                             Title: $"Variable '{variableReference.Name}' was not found.",
@@ -11594,6 +11612,32 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
     /// 'var args = ...'" — advice that points away from the answer — and had no path to the real
     /// spelling short of piping <c>$tosh.Script</c> through <c>members</c> (<c>TS-P2-44</c>).
     /// </remarks>
+    /// <summary>
+    /// Explains a primary-constructor parameter referenced where it no longer exists —
+    /// <c>TS-P2-81</c>.
+    /// </summary>
+    /// <remarks>
+    /// Measured, the parameter reaches a *stored* property initializer and a later parameter's
+    /// default, and nothing else: a computed property, a getter block, a method body and a static
+    /// initializer each fail, because each runs after construction while the parameter is a
+    /// constructor local that was never stored. `prop X = $x` is the way to carry it forward.
+    /// </remarks>
+    private string? DescribeOutOfScopeConstructorParameter(string name)
+    {
+        if (CurrentClass is not { } cls) return null;
+
+        foreach (var parameter in cls.PrimaryConstructorParameters)
+        {
+            if (!string.Equals(parameter.Name, name, StringComparison.Ordinal)) continue;
+
+            return "a primary-constructor parameter is in scope in a stored property initializer "
+                 + $"and in a later parameter's default. Declare 'prop {name} = ${name}' to reach "
+                 + "it from the rest of the type.";
+        }
+
+        return null;
+    }
+
     private static string DescribeUnknownVariable(string name)
     {
         foreach (var (spelling, suggestion) in ShellNamespaceSuggestions)

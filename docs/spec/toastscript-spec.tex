@@ -3763,10 +3763,26 @@ echo $p.X                        # 3
 echo $p.seed                     # error: no member 'seed'
 \end{lstlisting}
 
-A primary-constructor parameter is in scope in property initializers and nowhere
-else in the body, and it does not become a member.  Declare a property from it,
-as \code{prop X: double = \$seed} above does, to reach the value from the rest of
+A primary-constructor parameter is in scope in a \emph{stored} property
+initializer and in a later parameter's default, and nowhere else in the body.
+It does not become a member.  Declare a property from it, as
+\code{prop X: double = \$seed} above does, to reach the value from the rest of
 the class.
+
+\begin{lstlisting}[title={Where a primary-constructor parameter reaches}]
+class P(x: int, y: int = 2) {
+    prop A = ($x + $y)        # stored initializer, and a later default: in scope
+    prop B => $x              # computed: evaluated per access, after construction
+    func g() { return $x }    # method body: same
+}
+\end{lstlisting}
+
+The reason is when each runs.  A stored initializer runs \emph{while} the value
+is being built, with the parameters still bound; a computed property, an
+accessor block, a method body and a static initializer all run afterwards, and
+a constructor parameter is a local of the construction that was never stored.
+Referring to one from those positions reports that it is a constructor
+parameter and is not in scope, rather than that the variable is undeclared.
 
 Member access is case-insensitive, so \code{\$p.x} above reaches \code{X}.  A
 parameter that differs from a property only in case is therefore easy to mistake
