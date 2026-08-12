@@ -2726,7 +2726,21 @@ public static class ToshParser
             }
 
             var keyword = NextToken();
-            var condition = ParseArgument();
+
+            // `TS-P2-19`. The condition is a full expression. It used to be a single
+            // argument, so `return "big" if $x > 5` stopped after `$x` and the parser met
+            // `>` where it expected the end of the statement — reported as "Block
+            // statements must be separated by a newline or ';'", a message about
+            // separators for a defect in the condition. The specification's advice that
+            // "non-trivial conditions should be parenthesised" described that limit rather
+            // than a design, and is dropped with it.
+            //
+            // Asking first whether anything can start an expression keeps the documented
+            // `expected_postfix_condition` for an omitted condition: parsing straight into
+            // `}` produced a generic `unexpected_token` ahead of it.
+            var condition = IsExpressionStartToken(Current.Kind)
+                ? ParseOperatorExpression(Current.Span.Start, implicitCurrentItem: false)
+                : null;
 
             if (condition is null)
             {
@@ -8427,7 +8441,14 @@ public static class ToshParser
 
         private ArgumentSyntax ParseDictComprehension(SyntaxToken openBrace, bool implicitCurrentItem)
         {
-            var key = ParseArgument(implicitCurrentItem: implicitCurrentItem)
+            // `TS-P2-17`. The key takes a full expression, as the value already did:
+            // `{% $x % 2 => $x <| for x in 1..4 %}` reported `expected_fat_arrow`, because
+            // `ParseArgument` stopped after `$x` and the parser then met `%` where it
+            // wanted `=>`. Same shape as `TS-P2-72` and `TS-P2-77` — a position parsing a
+            // primary where an expression belongs.
+            var key = (HasTopLevelOperatorBefore(SyntaxTokenKind.FatArrow)
+                          ? ParseOperatorExpression(Current.Span.Start, implicitCurrentItem)
+                          : ParseArgument(implicitCurrentItem: implicitCurrentItem))
                       ?? new BarewordArgumentSyntax("_", Current.Span);
 
             if (!IsFatArrow(Current))
@@ -8497,7 +8518,20 @@ public static class ToshParser
             return new DictComprehensionArgumentSyntax(key, value, clause, openBrace.Span);
         }
 
-        private bool HasTopLevelOperatorBeforeComprehension()
+        private bool HasTopLevelOperatorBeforeComprehension() =>
+            HasTopLevelOperatorBefore(SyntaxTokenKind.LessThanPipe);
+
+        /// <summary>
+        /// True when an operator appears at depth zero before <paramref name="terminator"/>
+        /// (<c>TS-P2-17</c>).
+        /// </summary>
+        /// <remarks>
+        /// Parameterised over the terminator rather than copied per caller. The dict
+        /// comprehension needs the same question asked of <c>=&gt;</c> that the body asks
+        /// of <c>&lt;|</c>, and a second forty-line scan is how the two would answer
+        /// differently later.
+        /// </remarks>
+        private bool HasTopLevelOperatorBefore(SyntaxTokenKind terminator)
         {
             var depth = 0;
 
@@ -8526,11 +8560,13 @@ public static class ToshParser
                         else return false;
                         break;
 
-                    case SyntaxTokenKind.LessThanPipe:
-                        if (depth == 0) return false;
-                        break;
-
                     default:
+                        if (token.Kind == terminator)
+                        {
+                            if (depth == 0) return false;
+                            break;
+                        }
+
                         if (depth == 0 &&
                             (IsTernaryQuestionToken(token) ||
                              IsNullCoalescingOperatorToken(token) ||

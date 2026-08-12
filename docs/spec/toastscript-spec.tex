@@ -2360,6 +2360,7 @@ A jump statement \textemdash{} \code{return}, \code{yield}, \code{throw},
 
 \begin{lstlisting}
 return 5  if   $x == 9
+return 5  if   $x > 3 and $ready
 return 8  unless $ready
 yield $i  if   ($i % 2 == 0)
 throw "bad" unless (validate $input)
@@ -2380,8 +2381,8 @@ Semantics:
         inserted).
 \end{itemize}
 
-The condition is parsed as a single argument expression, so non-trivial
-conditions should be parenthesised.  The postfix form is recognised only
+The condition is a full expression, so \code{return 5 if \$x > 3} needs no
+parentheses; they remain available for clarity.  The postfix form is recognised only
 when the \code{if} or \code{unless} keyword appears on the same logical
 line as the jump statement (no implicit statement boundary in between);
 this avoids ambiguity with a free-standing \code{if} block on the
