@@ -9278,13 +9278,24 @@ public static class ToshParser
                     continue;
                 }
 
-                var argument = HasTopLevelOperatorBeforeCommaOrCloseParen()
-                    ? ParseOperatorExpression(Current.Span.Start, implicitCurrentItem)
-                    : ParseArgument(implicitCurrentItem: implicitCurrentItem);
-
-                if (argument is not null)
+                // `TS-P2-21`. A constructor takes named arguments exactly as a method does.
+                if (TryParseNamedArgument(implicitCurrentItem, out var namedConstructorArgument))
                 {
-                    arguments.Add(argument);
+                    if (namedConstructorArgument is not null)
+                    {
+                        arguments.Add(namedConstructorArgument);
+                    }
+                }
+                else
+                {
+                    var argument = HasTopLevelOperatorBeforeCommaOrCloseParen()
+                        ? ParseOperatorExpression(Current.Span.Start, implicitCurrentItem)
+                        : ParseArgument(implicitCurrentItem: implicitCurrentItem);
+
+                    if (argument is not null)
+                    {
+                        arguments.Add(argument);
+                    }
                 }
 
                 if (Current.Kind == SyntaxTokenKind.Comma)
@@ -9643,21 +9654,11 @@ public static class ToshParser
                     arguments.Add(ParseSplatArgument());
                 }
                 // Named argument: identifier = value
-                else if (Current.Kind == SyntaxTokenKind.Bareword &&
-                    IsValidIdentifier(Current.Text) &&
-                    !Current.Text.StartsWith("$", StringComparison.Ordinal) &&
-                    Peek(1).Kind == SyntaxTokenKind.Bareword && Peek(1).Text == "=")
+                else if (TryParseNamedArgument(implicitCurrentItem, out var namedArgument))
                 {
-                    var nameToken = NextToken();
-                    NextToken(); // consume '='
-                    var value = HasTopLevelOperatorBeforeCommaOrCloseParen()
-                        ? ParseOperatorExpression(Current.Span.Start, implicitCurrentItem)
-                        : ParseArgument(implicitCurrentItem: implicitCurrentItem);
-
-                    if (value is not null)
+                    if (namedArgument is not null)
                     {
-                        arguments.Add(new NamedArgumentSyntax(nameToken.Text, value,
-                            TextSpan.FromBounds(nameToken.Span.Start, value.Span.End)));
+                        arguments.Add(namedArgument);
                     }
                 }
                 else
@@ -9873,21 +9874,11 @@ public static class ToshParser
                 }
 
                 // Named argument: identifier = value
-                if (Current.Kind == SyntaxTokenKind.Bareword &&
-                    IsValidIdentifier(Current.Text) &&
-                    !Current.Text.StartsWith("$", StringComparison.Ordinal) &&
-                    Peek(1).Kind == SyntaxTokenKind.Bareword && Peek(1).Text == "=")
+                if (TryParseNamedArgument(implicitCurrentItem, out var namedItem))
                 {
-                    var nameToken = NextToken();
-                    NextToken(); // consume '='
-                    var value = HasTopLevelOperatorBeforeCommaOrCloseParen()
-                        ? ParseOperatorExpression(Current.Span.Start, implicitCurrentItem)
-                        : ParseArgument(implicitCurrentItem: implicitCurrentItem);
-
-                    if (value is not null)
+                    if (namedItem is not null)
                     {
-                        items.Add(new NamedArgumentSyntax(nameToken.Text, value,
-                            TextSpan.FromBounds(nameToken.Span.Start, value.Span.End)));
+                        items.Add(namedItem);
                     }
                 }
                 else
@@ -12190,6 +12181,56 @@ public static class ToshParser
             }
 
             return false;
+        }
+
+        /// <summary>
+        /// Reads <c>name = value</c> where an argument is expected — <c>TS-P2-21</c>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// The test and the read were written out twice, for method calls and for record-style
+        /// literals, and a third argument list — <c>new</c>'s — simply never got a copy. So
+        /// <c>new D(1, b = 7)</c> fell through to the operator parser, met <c>=</c> where no
+        /// assignment belongs, and reported <c>tosh.parser.assignment_in_predicate</c> — a
+        /// message about predicates for a call that contains no predicate. The rule lives here
+        /// once now, which is what stops a fourth list from repeating it.
+        /// </para>
+        /// <para>
+        /// Returns <see langword="false"/> without consuming anything when the next tokens are
+        /// not a named argument, so the caller's ordinary path is unaffected.
+        /// </para>
+        /// </remarks>
+        private bool TryParseNamedArgument(bool implicitCurrentItem, out ArgumentSyntax? argument)
+        {
+            argument = null;
+
+            if (Current.Kind != SyntaxTokenKind.Bareword ||
+                !IsValidIdentifier(Current.Text) ||
+                Current.Text.StartsWith("$", StringComparison.Ordinal) ||
+                Peek(1).Kind != SyntaxTokenKind.Bareword ||
+                Peek(1).Text != "=")
+            {
+                return false;
+            }
+
+            var nameToken = NextToken();
+            NextToken(); // consume '='
+
+            var value = HasTopLevelOperatorBeforeCommaOrCloseParen()
+                ? ParseOperatorExpression(Current.Span.Start, implicitCurrentItem)
+                : ParseArgument(implicitCurrentItem: implicitCurrentItem);
+
+            if (value is null)
+            {
+                // The name and '=' are consumed either way; the value's own diagnostic stands.
+                return true;
+            }
+
+            argument = new NamedArgumentSyntax(
+                nameToken.Text,
+                value,
+                TextSpan.FromBounds(nameToken.Span.Start, value.Span.End));
+            return true;
         }
 
         private bool LooksLikeNewObjectExpression()

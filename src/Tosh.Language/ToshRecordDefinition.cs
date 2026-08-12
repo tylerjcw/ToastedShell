@@ -298,13 +298,26 @@ public sealed class ToshRecordDefinition : IShellNamedType
     {
         var values = new Dictionary<string, object?>(StringComparer.Ordinal);
 
+        // `TS-P2-21`. A named argument is placed on its field rather than consuming a position,
+        // so `new R("w", Qty = 5)` reaches `Qty` instead of assigning the wrapper to it.
+        var (positional, named) = FieldArgumentPlacement.Split(arguments, "Record", Name);
+        FieldArgumentPlacement.EnsureNamesAreKnown(named, Fields.Select(f => f.Name), "Record", Name);
+
+        var positionalIndex = 0;
+
         for (var index = 0; index < Fields.Count; index++)
         {
             var field = Fields[index];
 
-            if (index < arguments.Count)
+            if (named.TryGetValue(field.Name, out var namedValue))
             {
-                values[field.Name] = ConvertFieldValue(field, arguments[index], typeArgumentBindings);
+                values[field.Name] = ConvertFieldValue(field, namedValue, typeArgumentBindings);
+                continue;
+            }
+
+            if (positionalIndex < positional.Count)
+            {
+                values[field.Name] = ConvertFieldValue(field, positional[positionalIndex++], typeArgumentBindings);
                 continue;
             }
 
@@ -324,9 +337,9 @@ public sealed class ToshRecordDefinition : IShellNamedType
             throw new InvalidOperationException($"No value was provided for required record field '{field.Name}' on '{Name}'.");
         }
 
-        if (arguments.Count > Fields.Count)
+        if (positional.Count + named.Count > Fields.Count)
         {
-            throw new InvalidOperationException($"Record '{Name}' expects {Fields.Count} argument(s) but received {arguments.Count}.");
+            throw new InvalidOperationException($"Record '{Name}' expects {Fields.Count} argument(s) but received {positional.Count + named.Count}.");
         }
 
         return values;
