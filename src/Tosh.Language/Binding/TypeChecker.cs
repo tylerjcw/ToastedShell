@@ -348,6 +348,7 @@ public static class TypeChecker
                     {
                         case BoundClassPropertyMember prop:
                             if (prop.Initializer is not null) CheckPipeline(prop.Initializer, ctx);
+                            CheckMemberAnnotation(prop, ctx);
                             if (prop.GetterBody is not null) Walk(prop.GetterBody, ctx);
                             if (prop.SetterBody is not null) Walk(prop.SetterBody, ctx);
                             break;
@@ -376,6 +377,7 @@ public static class TypeChecker
                     if (member is BoundClassPropertyMember prop)
                     {
                         if (prop.Initializer is not null) CheckPipeline(prop.Initializer, ctx);
+                        CheckMemberAnnotation(prop, ctx);
                         if (prop.GetterBody is not null) Walk(prop.GetterBody, ctx);
                         if (prop.SetterBody is not null) Walk(prop.SetterBody, ctx);
                     }
@@ -1298,6 +1300,52 @@ public static class TypeChecker
         : $"between {required} and {max} argument(s)";
 
     // ── individual checks ─────────────────────────────────────
+
+    /// <summary>
+    /// Resolves member annotations, which arrive as names rather than as bound types
+    /// (<c>TS-P2-22</c>).
+    /// </summary>
+    /// <remarks>
+    /// Built without user types, the way <c>Lowerer</c>'s own probe is: a name this cannot
+    /// resolve comes back as <see cref="BoundType.Dynamic"/> and is skipped, so the pass
+    /// stays free of false positives on class and CLR names it cannot see from here. That
+    /// bounds what this check covers, and is why the item's remaining positions are filed
+    /// rather than half-done.
+    /// </remarks>
+    private static readonly TypeNameResolver MemberTypeResolver = new(userTypes: null);
+
+    /// <summary>
+    /// A class or struct property's annotation is checked against its initializer, with
+    /// the same rule and severity as a <c>var</c> declaration (<c>TS-P2-22</c>).
+    /// </summary>
+    /// <remarks>
+    /// The members were already walked — the initializer *pipeline* was checked — but the
+    /// annotation was never compared against it, so <c>prop X: int = "42"</c> reported
+    /// nothing while <c>var x: int = "42"</c> reported `tosh.type.mismatch`. Silence, not
+    /// disagreement: the runtime converts in both cases, so this was a hole in static
+    /// coverage rather than a semantic split.
+    /// </remarks>
+    private static void CheckMemberAnnotation(BoundClassPropertyMember prop, CheckContext ctx)
+    {
+        if (prop.Initializer is null) return;
+
+        var declared = MemberTypeResolver.Resolve(prop.TypeName);
+        if (declared.IsDynamic) return;
+
+        var actual = TypeInferrer.InferPipelineValue(prop.Initializer);
+        if (IsAssignable(actual, declared, out var reason)) return;
+
+        ctx.Diagnostics.Add(new ToshDiagnostic(
+            Code: "tosh.type.mismatch",
+            Title: $"Cannot assign value of type '{actual.DisplayName}' to property '{prop.Name}' of type '{declared.DisplayName}'.",
+            SourceName: ctx.SourceName,
+            SourceText: ctx.SourceText,
+            Span: prop.Span,
+            Help: reason,
+            Severity: ToshDiagnosticSeverity.Warning,
+            Category: ToshDiagnosticCategory.Type,
+            Lifecycle: ToshDiagnosticLifecycle.Preview));
+    }
 
     private static void CheckVariableDeclaration(BoundVariableDeclaration decl, CheckContext ctx)
     {
