@@ -220,7 +220,16 @@ public sealed record RangeArgumentSyntax(
     ArgumentSyntax? End,
     TextSpan Span) : ArgumentSyntax(Span);
 
-public sealed record NameOfArgumentSyntax(string Identifier, bool IsVariableReference, TextSpan Span) : ArgumentSyntax(Span);
+/// <param name="IsMemberChain">
+/// True when the operand named a member or type path (<c>$foo.Bar</c>, <c>K.S</c>) rather than a
+/// bare name — <c>TS-P2-20</c>. <c>Identifier</c> then holds the last segment, which is not a
+/// variable name, so the "did you mean '$x'?" check must not be applied to it.
+/// </param>
+public sealed record NameOfArgumentSyntax(
+    string Identifier,
+    bool IsVariableReference,
+    TextSpan Span,
+    bool IsMemberChain = false) : ArgumentSyntax(Span);
 
 public sealed record TupleLiteralArgumentSyntax(IReadOnlyList<ArgumentSyntax> Items, TextSpan Span) : ArgumentSyntax(Span);
 

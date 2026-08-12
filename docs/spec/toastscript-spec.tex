@@ -4722,11 +4722,43 @@ new DateTime(2024, 1, 1)          # CLR type
 \end{lstlisting}
 
 \section{Nameof}
+\ikw{nameof}\ikw{name-of}
+
+\code{nameof} reports a name as a string, without evaluating it.
 
 \begin{lstlisting}
 var x = 42
 echo (nameof($x))     # "x"
 \end{lstlisting}
+
+Given a member or type path, it reports the \emph{last} segment---the name the
+expression asks about---as C\# does:
+
+\begin{lstlisting}
+var foo = {| Bar = {| Baz = 1 |} |}
+echo (nameof($foo.Bar))       # "Bar"
+echo (nameof($foo.Bar.Baz))   # "Baz"
+
+class Counter { shared prop Limit: int = 10 }
+echo (nameof(Counter.Limit))  # "Limit"
+echo (nameof(Counter))        # "Counter"
+\end{lstlisting}
+
+The command form \code{name-of \$foo.Bar} reduces its operand the same way.
+
+A bare name that is also a variable in scope is rejected, since \code{nameof(x)}
+beside \code{var x} almost always means \code{nameof(\$x)}:
+
+\begin{lstlisting}
+var x = 42
+echo (nameof(x))      # error: tosh.runtime.nameof_requires_dollar
+\end{lstlisting}
+
+A member path is exempt from that check---its last segment is a member name, and
+a variable that happens to share it says nothing about what was written, so
+\code{nameof(Counter.Limit)} is valid beside a \code{var Limit}.  An operand with
+no name to report, such as a trailing dot, raises
+\code{tosh.parser.nameof\_expects\_a\_name}.
 
 \section{Alloc (Native Buffer)}
 

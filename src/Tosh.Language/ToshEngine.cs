@@ -8603,7 +8603,13 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
                     {
                         // If not a $-prefixed variable reference, check if the bare identifier
                         // actually refers to a variable — if so, require '$'.
-                        if (!nameOf.IsVariableReference && TryGetVariableBinding(nameOf.Identifier, out _))
+                        //
+                        // `TS-P2-20`. A member or type path is exempt: its last segment is a
+                        // member name, and a variable that happens to share it says nothing about
+                        // what was written. Without this, `nameof(K.S)` beside a variable `$S`
+                        // would demand `nameof($S)` — a name the operand never mentioned.
+                        if (!nameOf.IsVariableReference && !nameOf.IsMemberChain &&
+                            TryGetVariableBinding(nameOf.Identifier, out _))
                         {
                             throw ToshDiagnosticException.Create(new ToshDiagnostic(
                                 Code: "tosh.runtime.nameof_requires_dollar",

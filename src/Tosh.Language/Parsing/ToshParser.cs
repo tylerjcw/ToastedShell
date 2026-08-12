@@ -7543,6 +7543,53 @@ public static class ToshParser
             }
         }
 
+        /// <summary>
+        /// Reduces a <c>nameof</c> operand to the name it asks for — <c>TS-P2-20</c>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// The whole chain arrives as one bareword token, dots and all, and both spellings of
+        /// <c>nameof</c> reduce it the same way — so the rule lives here once. It previously kept
+        /// the *first* segment, which made <c>nameof($foo.Bar)</c> answer <c>"foo"</c>: a name the
+        /// operand does mention, so nothing looked wrong, and the wrong string was returned
+        /// silently. C# answers with the last segment and so does this.
+        /// </para>
+        /// </remarks>
+        private bool TryReduceNameOfOperand(
+            SyntaxToken identifierToken,
+            out string identifier,
+            out bool isVariableReference,
+            out bool isMemberChain)
+        {
+            identifier = identifierToken.Text;
+            isVariableReference = identifier.StartsWith('$');
+            if (isVariableReference)
+            {
+                identifier = identifier[1..];
+            }
+
+            var lastDot = identifier.LastIndexOf('.');
+            isMemberChain = lastDot >= 0;
+            if (isMemberChain)
+            {
+                identifier = identifier[(lastDot + 1)..];
+            }
+
+            if (identifier.Length > 0)
+            {
+                return true;
+            }
+
+            // A trailing dot, or a bare `$`. There is no name to report, and answering with the
+            // root segment would be the same silent wrong answer in a new spelling.
+            _diagnostics.Add(new SyntaxDiagnostic(
+                Code: "tosh.parser.nameof_expects_a_name",
+                Title: $"'{identifierToken.Text}' does not name anything.",
+                Span: identifierToken.Span,
+                Label: "nameof takes a variable, member, or type name"));
+            return false;
+        }
+
         private ArgumentSyntax ParseNameOfArgument()
         {
             var start = Current.Span.Start;
@@ -7550,27 +7597,13 @@ public static class ToshParser
             NextToken(); // consume "("
 
             var identifierToken = NextToken();
-            var identifier = identifierToken.Text;
-            var isVariableReference = identifier.StartsWith('$');
-
-            // Strip leading '$' for variable references
-            if (isVariableReference)
-            {
-                identifier = identifier[1..];
-            }
-
-            // Strip any member access (e.g. "$foo.Bar" → just "foo")
-            var dotIndex = identifier.IndexOf('.');
-            if (dotIndex >= 0)
-            {
-                identifier = identifier[..dotIndex];
-            }
+            TryReduceNameOfOperand(identifierToken, out var identifier, out var isVariableReference, out var isMemberChain);
 
             if (Current.Kind == SyntaxTokenKind.CloseParen)
             {
                 var end = Current.Span.End;
                 NextToken(); // consume ")"
-                return new NameOfArgumentSyntax(identifier, isVariableReference, TextSpan.FromBounds(start, end));
+                return new NameOfArgumentSyntax(identifier, isVariableReference, TextSpan.FromBounds(start, end), isMemberChain);
             }
 
             _diagnostics.Add(new SyntaxDiagnostic(
@@ -7579,7 +7612,7 @@ public static class ToshParser
                 Span: Current.Span,
                 Label: "expected ')'"));
 
-            return new NameOfArgumentSyntax(identifier, isVariableReference, TextSpan.FromBounds(start, identifierToken.Span.End));
+            return new NameOfArgumentSyntax(identifier, isVariableReference, TextSpan.FromBounds(start, identifierToken.Span.End), isMemberChain);
         }
 
         private ArgumentSyntax ParseQuoteArgument()
@@ -7622,21 +7655,9 @@ public static class ToshParser
             NextToken(); // consume "name-of"
 
             var identifierToken = NextToken();
-            var identifier = identifierToken.Text;
-            var isVariableReference = identifier.StartsWith('$');
+            TryReduceNameOfOperand(identifierToken, out var identifier, out var isVariableReference, out var isMemberChain);
 
-            if (isVariableReference)
-            {
-                identifier = identifier[1..];
-            }
-
-            var dotIndex = identifier.IndexOf('.');
-            if (dotIndex >= 0)
-            {
-                identifier = identifier[..dotIndex];
-            }
-
-            return new NameOfArgumentSyntax(identifier, isVariableReference, TextSpan.FromBounds(start, identifierToken.Span.End));
+            return new NameOfArgumentSyntax(identifier, isVariableReference, TextSpan.FromBounds(start, identifierToken.Span.End), isMemberChain);
         }
 
         private ArgumentSyntax ParseVariableReferenceArgument()
