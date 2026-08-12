@@ -290,6 +290,7 @@ public static class TypeChecker
             case BoundMemberAssignment ma:
                 WalkExpression(ma.Target, ctx);
                 CheckPipeline(ma.Value, ctx);
+                CheckUserMemberAssignment(ma, ctx);
                 break;
 
             case BoundTupleAssignment ta:
@@ -521,6 +522,7 @@ public static class TypeChecker
 
             case BoundNewObject no:
                 foreach (var arg in no.Arguments) WalkExpression(arg.Value, ctx);
+                CheckNewObject(no, ctx);
                 return;
 
             case BoundMethodCall mc:
@@ -1019,9 +1021,219 @@ public static class TypeChecker
     private static bool MemberChecksAreSound(Type type) =>
         !type.IsInterface && (type.IsValueType || type.IsArray || type.IsSealed);
 
+    /// <summary>
+    /// Checks a call against a method declared on a user class or struct — <c>TS-P2-79</c>.
+    /// </summary>
+    /// <remarks>
+    /// An argument is reported only when *every* arity-matching overload rejects it, which is the
+    /// rule the CLR path already applies: one overload accepting the call makes it good.
+    /// </remarks>
+    /// <summary>
+    /// Checks a constructor call against a user class's parameters — <c>TS-P2-79</c>.
+    /// </summary>
+    private static void CheckNewObject(BoundNewObject newObject, CheckContext ctx)
+    {
+        if (!UserTypeMembers.IsReadable(newObject.Type)) return;
+        if (newObject.Arguments.Any(a => a.IsSplat || a.Name is not null)) return;
+
+        var constructors = UserTypeMembers.GetConstructors(newObject.Type);
+
+        // A class with no declared constructor takes its fields positionally at runtime, which
+        // this does not model — so it is left alone rather than guessed at.
+        if (constructors.Count == 0) return;
+
+        CheckAgainstParameterLists(
+            constructors,
+            newObject.Arguments,
+            $"Constructor of '{newObject.Type.DisplayName}'",
+            newObject.Span,
+            ctx);
+    }
+
+    /// <summary>
+    /// Checks a write to a property of a user class against its annotation — <c>TS-P2-79</c>.
+    /// </summary>
+    /// <remarks>
+    /// Only a plain <c>=</c> is checked. A compound operator (<c>+=</c>, <c>??=</c>) combines the
+    /// existing value with the new one, so the assigned type is not the operand's type and
+    /// reporting on it would be wrong.
+    /// </remarks>
+    private static void CheckUserMemberAssignment(BoundMemberAssignment assignment, CheckContext ctx)
+    {
+        if (!string.Equals(assignment.Operator, "=", StringComparison.Ordinal)) return;
+        if (assignment.Target is not BoundMemberAccess access) return;
+
+        var targetType = access.Target.Type;
+        if (!UserTypeMembers.IsReadable(targetType)) return;
+
+        var segments = access.MemberPath.Split('.', StringSplitOptions.RemoveEmptyEntries);
+        if (segments.Length != 1) return;
+
+        if (!UserTypeMembers.TryGetProperty(targetType, segments[0], out var property)) return;
+
+        var declared = MemberTypeResolver.Resolve(property.TypeName);
+        if (declared.IsDynamic) return;
+
+        var actual = TypeInferrer.InferPipelineValue(assignment.Value);
+        if (actual.IsDynamic || IsAssignable(actual, declared, out _)) return;
+
+        ctx.Diagnostics.Add(new ToshDiagnostic(
+            Code: "tosh.type.mismatch",
+            Title: $"Cannot assign value of type '{actual.DisplayName}' to property " +
+                   $"'{property.Name}' of type '{declared.DisplayName}'.",
+            SourceName: ctx.SourceName,
+            SourceText: ctx.SourceText,
+            Span: assignment.Span,
+            Severity: ToshDiagnosticSeverity.Warning,
+            Category: ToshDiagnosticCategory.Type,
+            Lifecycle: ToshDiagnosticLifecycle.Preview));
+    }
+
+    private static void CheckUserMethodCall(BoundMethodCall call, BoundType targetType, CheckContext ctx)
+    {
+        var overloads = UserTypeMembers.GetMethods(targetType, call.MethodName);
+
+        if (overloads.Count == 0)
+        {
+            // A base class, trait or partial half can carry the member, and none of those are
+            // reachable from here — so absence is only reported when the declaration is complete.
+            if (UserTypeMembers.MayHaveUnseenMembers(targetType)) return;
+
+            ctx.Diagnostics.Add(new ToshDiagnostic(
+                Code: "tosh.type.member_not_found",
+                Title: $"Method '{call.MethodName}' was not found on type '{targetType.DisplayName}'.",
+                SourceName: ctx.SourceName,
+                SourceText: ctx.SourceText,
+                Span: call.Span,
+                Severity: ToshDiagnosticSeverity.Warning,
+                Category: ToshDiagnosticCategory.Type,
+                Lifecycle: ToshDiagnosticLifecycle.Preview));
+            return;
+        }
+
+        var parameterLists = overloads.Select(o => o.Method.Parameters).ToArray();
+        CheckAgainstParameterLists(
+            parameterLists,
+            call.Arguments,
+            $"Method '{call.MethodName}' on '{targetType.DisplayName}'",
+            call.Span,
+            ctx);
+    }
+
+    /// <summary>
+    /// Checks a read of a member declared on a user class or struct — <c>TS-P2-79</c>.
+    /// </summary>
+    private static void CheckUserMemberAccess(BoundMemberAccess access, BoundType targetType, CheckContext ctx)
+    {
+        var segments = access.MemberPath.Split('.', StringSplitOptions.RemoveEmptyEntries);
+        if (segments.Length == 0) return;
+
+        // Only the first segment is checkable: the member's own type is an annotation *name*, and
+        // resolving it back to a declaration needs the registry the checker does not hold.
+        var segment = segments[0];
+
+        if (UserTypeMembers.Declares(targetType, segment)) return;
+        if (UserTypeMembers.MayHaveUnseenMembers(targetType)) return;
+
+        ctx.Diagnostics.Add(new ToshDiagnostic(
+            Code: "tosh.type.member_not_found",
+            Title: $"Member '{segment}' was not found on type '{targetType.DisplayName}'.",
+            SourceName: ctx.SourceName,
+            SourceText: ctx.SourceText,
+            Span: access.Span,
+            Severity: ToshDiagnosticSeverity.Warning,
+            Category: ToshDiagnosticCategory.Type,
+            Lifecycle: ToshDiagnosticLifecycle.Preview));
+    }
+
+    /// <summary>
+    /// Reports an argument no overload accepts — <c>TS-P2-79</c>.
+    /// </summary>
+    /// <remarks>
+    /// Shared by method and constructor calls, which differ only in what they are called. A list
+    /// carrying an optional or rest parameter is skipped rather than guessed at, and an
+    /// unannotated parameter accepts anything, so silence is the answer wherever the declaration
+    /// did not commit to a type.
+    /// </remarks>
+    private static void CheckAgainstParameterLists(
+        IReadOnlyList<IReadOnlyList<FunctionParameterSyntax>> parameterLists,
+        IReadOnlyList<BoundArgument> arguments,
+        string calleeLabel,
+        TextSpan span,
+        CheckContext ctx)
+    {
+        var arityMatch = parameterLists
+            .Where(ps => ps.Count == arguments.Count && !ps.Any(p => p.IsOptional || p.IsRest))
+            .ToArray();
+
+        if (arityMatch.Length == 0)
+        {
+            var fixedArities = parameterLists
+                .Where(ps => !ps.Any(p => p.IsOptional || p.IsRest))
+                .ToArray();
+
+            if (fixedArities.Length == 0 || fixedArities.Length != parameterLists.Count) return;
+
+            ctx.Diagnostics.Add(new ToshDiagnostic(
+                Code: "tosh.type.arity",
+                Title: $"{calleeLabel} does not accept {arguments.Count} argument(s).",
+                SourceName: ctx.SourceName,
+                SourceText: ctx.SourceText,
+                Span: span,
+                Severity: ToshDiagnosticSeverity.Warning,
+                Category: ToshDiagnosticCategory.Type,
+                Lifecycle: ToshDiagnosticLifecycle.Preview));
+            return;
+        }
+
+        for (var index = 0; index < arguments.Count; index++)
+        {
+            var actual = arguments[index].Value.Type;
+            if (actual.IsDynamic) continue;
+
+            string? declaredName = null;
+            var rejectedByAll = true;
+
+            foreach (var parameters in arityMatch)
+            {
+                var declared = MemberTypeResolver.Resolve(parameters[index].TypeName);
+
+                if (declared.IsDynamic || IsAssignable(actual, declared, out _))
+                {
+                    rejectedByAll = false;
+                    break;
+                }
+
+                declaredName ??= declared.DisplayName;
+            }
+
+            if (!rejectedByAll || declaredName is null) continue;
+
+            ctx.Diagnostics.Add(new ToshDiagnostic(
+                Code: "tosh.type.mismatch",
+                Title: $"Cannot pass a value of type '{actual.DisplayName}' as argument " +
+                       $"{index + 1} of {calleeLabel}, which expects '{declaredName}'.",
+                SourceName: ctx.SourceName,
+                SourceText: ctx.SourceText,
+                Span: span,
+                Severity: ToshDiagnosticSeverity.Warning,
+                Category: ToshDiagnosticCategory.Type,
+                Lifecycle: ToshDiagnosticLifecycle.Preview));
+            return;
+        }
+    }
+
     private static void CheckMemberAccess(BoundMemberAccess access, CheckContext ctx)
     {
         var targetType = access.Target.Type;
+
+        // `TS-P2-79`. Same reason as the method-call path: the CLR type is null for a user class.
+        if (UserTypeMembers.IsReadable(targetType))
+        {
+            CheckUserMemberAccess(access, targetType, ctx);
+            return;
+        }
+
         if (!targetType.IsConcrete || targetType.ClrType is null) return;
 
         // MemberPath may be dotted; validate segment-by-segment.
@@ -1059,9 +1271,19 @@ public static class TypeChecker
     private static void CheckMethodCall(BoundMethodCall call, CheckContext ctx)
     {
         var targetType = call.Target.Type;
-        if (!targetType.IsConcrete || targetType.ClrType is null) return;
 
         if (call.Arguments.Any(a => a.IsSplat || a.Name is not null)) return;
+
+        // `TS-P2-79`. A ToastScript class has no CLR type until it executes, so every rule below
+        // used to bail on its first line and a method call against a user class was unchecked.
+        // The declaration carries the annotations; this reads them.
+        if (UserTypeMembers.IsReadable(targetType))
+        {
+            CheckUserMethodCall(call, targetType, ctx);
+            return;
+        }
+
+        if (!targetType.IsConcrete || targetType.ClrType is null) return;
 
         // Same soundness rule as member access: an interface or open class cannot say what the
         // runtime type will offer.
