@@ -817,7 +817,7 @@ public static class Lowerer
 
         BarewordArgumentSyntax bareword =>
             // Barewords are strings at runtime — capture that statically.
-            new BoundLiteral(bareword.Value, bareword.Span, BoundType.FromClr(typeof(string))),
+            new BoundLiteral(bareword.Value, bareword.Span, BoundType.FromClr(typeof(string)), IsBareword: true),
 
         VariableReferenceArgumentSyntax varRef =>
             BuildVariableReference(varRef, ctx),

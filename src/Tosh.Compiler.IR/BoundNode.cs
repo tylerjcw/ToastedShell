@@ -148,7 +148,13 @@ public sealed record BoundVariableDeclaration(
 // ─── Expressions ──────────────────────────────────────────────────────
 
 /// <summary>A literal value (number, string, bool, null).</summary>
-public sealed record BoundLiteral(object? Value, TextSpan Span, BoundType Type)
+/// <param name="IsBareword">
+/// True when the literal was written as a bare word rather than quoted — <c>TS-P2-84</c>. Both
+/// are strings at runtime, but only a quoted one is a string the author *meant*: a bare word in
+/// command position is text whose meaning is decided by the parameter it lands on, so type rules
+/// that would compare it structurally must not.
+/// </param>
+public sealed record BoundLiteral(object? Value, TextSpan Span, BoundType Type, bool IsBareword = false)
     : BoundExpression(Span, Type);
 
 /// <summary>A reference to a variable resolved by the binder.</summary>

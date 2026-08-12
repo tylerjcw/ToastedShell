@@ -659,6 +659,15 @@ public static class TypeChecker
             var declared = param.Symbol.DeclaredType;
             if (declared.IsDynamic) continue;
             var actual = positionals[i].Value.Type;
+
+            // `TS-P2-84`. A bareword in command position is untyped text that the annotation
+            // converts on the way in — `bigFiles 512b` passes the word `512b` and receives a
+            // `StorageSize`, and runs correctly. Typing it `String` and comparing structurally
+            // reported four of the false positives an editor was showing against working
+            // scripts. A word is only ever a word here; what it becomes is the annotation's
+            // business, and the runtime's conversion is not modelled by this pass.
+            if (IsBarewordText(positionals[i].Value)) continue;
+
             if (!IsAssignable(actual, declared, out var reason))
             {
                 ctx.Diagnostics.Add(new ToshDiagnostic(
@@ -674,6 +683,16 @@ public static class TypeChecker
             }
         }
     }
+
+    /// <summary>
+    /// True when an argument is a bare word rather than a typed expression — <c>TS-P2-84</c>.
+    /// </summary>
+    /// <remarks>
+    /// A quoted string is a string and is checked; a bareword is shell text whose meaning is
+    /// decided by the parameter it lands on, so it carries no type worth comparing.
+    /// </remarks>
+    private static bool IsBarewordText(BoundExpression value) =>
+        value is BoundLiteral { Value: string, IsBareword: true };
 
     private static void CheckBuiltinCommandCall(
         BoundCommandCall call,
@@ -975,8 +994,15 @@ public static class TypeChecker
         var isRecord = shape is DictType or UserClassType or UserRecordType or UserStructType;
         var isScalar = !isListLike && !isRecord;
 
-        var accepts = (isListLike && pipeAttr.AcceptsList)
-            || (isRecord && pipeAttr.AcceptsRecord)
+        // `TS-P2-84`. A list piped forward is *enumerated*: the command downstream receives the
+        // elements, not the list, so what it declares about lists says nothing about whether the
+        // pipe is valid. Judging the list shape against `AcceptsList` reported `each`, `where` and
+        // `count` as refusing input they handle perfectly well — three of the false positives an
+        // editor was showing against scripts that run. The shape cannot be judged here, so it is
+        // not judged.
+        if (isListLike) return;
+
+        var accepts = (isRecord && pipeAttr.AcceptsRecord)
             || (isScalar && pipeAttr.AcceptsScalar);
 
         if (!accepts)
@@ -1018,8 +1044,17 @@ public static class TypeChecker
     /// <c>string</c> is sealed, so <c>$s.Trimm()</c> is still caught.
     /// </para>
     /// </remarks>
-    private static bool MemberChecksAreSound(Type type) =>
-        !type.IsInterface && (type.IsValueType || type.IsArray || type.IsSealed);
+    private static bool MemberChecksAreSound(Type type)
+    {
+        // `TS-P2-84`. A type whose members are decided at runtime cannot be checked against its
+        // declaration. `ExpandoObject` is sealed, so it passed the test below and every member of
+        // a dynamic record — `$r.Name` on `{| Name = "a" |}` — was reported missing. Dictionaries
+        // are the same shape: the keys are the members.
+        if (typeof(System.Dynamic.IDynamicMetaObjectProvider).IsAssignableFrom(type)) return false;
+        if (typeof(System.Collections.IDictionary).IsAssignableFrom(type)) return false;
+
+        return !type.IsInterface && (type.IsValueType || type.IsArray || type.IsSealed);
+    }
 
     /// <summary>
     /// Checks a call against a method declared on a user class or struct — <c>TS-P2-79</c>.
@@ -1712,7 +1747,14 @@ public static class TypeChecker
         // coercion.
         if (from.ClrType == typeof(System.Collections.IList)
             && from is not ListType && from is not ArrayType
-            && (to is ListType or ArrayType))
+            && (to is ListType or ArrayType
+                // `TS-P2-84`. An annotation written `-> object[]` resolves to a *concrete* CLR
+                // array rather than to `ArrayType`, so the structured test above missed it and
+                // `func f() -> object[] { return [1,2] }` was reported as returning the wrong
+                // type — while running correctly, since the runtime converts. The same loose
+                // list literal, the same conversion, one shape further out.
+                || (to.ClrType is { } toClr
+                    && (toClr.IsArray || typeof(System.Collections.IList).IsAssignableFrom(toClr)))))
         {
             return true;
         }
