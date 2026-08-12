@@ -495,22 +495,16 @@ public sealed class LanguageSurfaceParityTests
         // derivation rather than a list.
         var engine = new Tosh.Cli.ReplCompletionEngine(ToshRuntime.CreateDefault());
 
-        // `match` and `rune` are offered by the keyword source but lose the ranked
-        // list to the CLR types `Match` and `Rune`, which differ only in case.
-        // That is a completion *ranking* question rather than an identity one, and
-        // it is filed as TS-P2-32 rather than hidden by weakening this check to
-        // something tautological.
-        var rankedOutByAClrType = new[] { "match", "rune" };
-
+        // `TS-P2-32` used to except `match` and `rune` here, on the reading that they were
+        // offered but out-ranked by the CLR types `Match` and `Rune`. Measured, they were not
+        // offered at all: the accumulating dictionary was keyed case-insensitively, so the CLR
+        // pass overwrote the keyword entry before ranking saw it. Every word is checked now.
         var missing = LanguageSurface.Words.Keys
-            .Except(rankedOutByAClrType, StringComparer.Ordinal)
             .Where(word =>
             {
-                // Completed from the word minus its last character. A single
-                // character is too strict a probe: `m` and `r` are crowded by
-                // command names, so `match` and `rune` fell off the ranked list even
-                // though both complete fine from `matc` and `run`. That is the
-                // completion ranking doing its job, not a missing word.
+                // Completed from the word minus its last character. A single character is too
+                // strict a probe: `m` and `r` are crowded by command names, and a word can fall
+                // off the ranked list without being missing.
                 var prefix = word.Length > 1 ? word[..^1] : word;
                 var result = engine.GetCompletions(prefix, prefix.Length);
                 return result is null || !result.Suggestions.Any(

@@ -724,7 +724,14 @@ internal sealed class ReplCompletionEngine
         bool includeClrRoot = true,
         bool includeExternalCommands = false)
     {
-        var suggestions = new Dictionary<string, ReplCompletionSuggestion>(StringComparer.OrdinalIgnoreCase);
+        // `TS-P2-32`. Ordinal, so a keyword and a CLR type differing only in case are two
+        // entries rather than one. Keyed case-insensitively, the CLR pass ran after the keyword
+        // pass and *overwrote* it: typing `match` offered `Match`, `MatchCasing`,
+        // `MatchCollection`, `MatchEvaluator` and `MatchType`, and the keyword `match` was gone
+        // before ranking ever saw it — likewise `rune`, which lost to `Rune`. Filed as a ranking
+        // problem; it was collection. `OrderSuggestions` already de-duplicates ordinally for the
+        // same reason, so this makes the two passes agree.
+        var suggestions = new Dictionary<string, ReplCompletionSuggestion>(StringComparer.Ordinal);
 
         foreach (var command in _runtime.Commands.All)
         {
