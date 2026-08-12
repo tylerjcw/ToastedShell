@@ -2910,6 +2910,21 @@ or a base of it.  A call that supplies nothing to infer from---
 \code{Cannot infer type argument 'T'} naming the parameter it could not
 supply, rather than claiming the method has no such overload.
 
+Where inference cannot reach, write the type arguments:
+
+\begin{lstlisting}
+Array.Empty<int>()                  # an empty int[]
+Enumerable.Empty<string>()
+Task.FromResult<int>(7)
+Tuple.Create<int, int>(1, 2)
+\end{lstlisting}
+
+An instance call takes them in the same position, \code{\$x.m<int>(…)}.
+
+The list must be glued to the method name and closed before the parenthesis,
+which is what tells it apart from a comparison: \code{\$A < 5} is still an
+ordinary \code{<}.
+
 \begin{notebox}
 \code{await} unwraps as many layers as it finds, so a block whose last
 expression is an asynchronous call needs only one \code{await}:

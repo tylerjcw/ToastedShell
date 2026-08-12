@@ -37,7 +37,12 @@ public sealed record NewObjectArgumentSyntax(
 public sealed record StaticMethodCallArgumentSyntax(
     string Path,
     IReadOnlyList<ArgumentSyntax> Arguments,
-    TextSpan Span) : ArgumentSyntax(Span);
+    TextSpan Span,
+    /// <summary>
+    /// Type arguments written at the call site — the <c>int</c> of <c>Array.Empty&lt;int&gt;()</c>
+    /// (<c>TS-P2-82</c>). Null when none were written, which is not the same as an empty list.
+    /// </summary>
+    IReadOnlyList<string>? ExplicitTypeArguments = null) : ArgumentSyntax(Span);
 
 public sealed record StaticMemberAccessArgumentSyntax(string Path, TextSpan Span) : ArgumentSyntax(Span);
 

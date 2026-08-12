@@ -7960,10 +7960,23 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
                 case StaticMethodCallArgumentSyntax staticMethodCall:
                     {
                         var methodArguments = await EvaluateArgumentsAsync(sourceName, sourceText, staticMethodCall.Arguments, cancellationToken);
+
+                        // `TS-P2-82`. Resolved here rather than in the invoker: the names need the
+                        // scope, aliases and declared types the engine holds, and passing names
+                        // down would mean a second, weaker resolver living there.
+                        var typeArguments = staticMethodCall.ExplicitTypeArguments is null
+                            ? null
+                            : ResolveExplicitTypeArguments(
+                                staticMethodCall.ExplicitTypeArguments,
+                                sourceName,
+                                sourceText,
+                                staticMethodCall.Span);
+
                         return await InvokeQualifiedMethodAsync(
                             staticMethodCall.Path,
                             methodArguments,
-                            cancellationToken);
+                            cancellationToken,
+                            typeArguments);
                     }
 
                 case StaticMemberAccessArgumentSyntax staticMemberAccess:
@@ -9389,10 +9402,42 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
         return instanceInvocation.ReturnedVoid ? target : instanceInvocation.Value;
     }
 
+    /// <summary>
+    /// Resolves call-site type-argument names to CLR types — <c>TS-P2-82</c>.
+    /// </summary>
+    private IReadOnlyList<Type> ResolveExplicitTypeArguments(
+        IReadOnlyList<string> names,
+        string sourceName,
+        string sourceText,
+        TextSpan span)
+    {
+        var resolved = new List<Type>(names.Count);
+
+        foreach (var name in names)
+        {
+            if (ResolveTypeName(name) is not { } type)
+            {
+                throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                    Code: "tosh.runtime.unknown_type",
+                    Title: $"Type '{name}' was not found.",
+                    SourceName: sourceName,
+                    SourceText: sourceText,
+                    Span: span,
+                    Label: $"'{name}' is not a type this session can resolve",
+                    Help: "use a fully qualified name, or add a 'using' for its namespace."));
+            }
+
+            resolved.Add(type);
+        }
+
+        return resolved;
+    }
+
     private async ValueTask<object?> InvokeQualifiedMethodAsync(
         string path,
         IReadOnlyList<object?> arguments,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IReadOnlyList<Type>? typeArguments = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -9403,6 +9448,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
                 caseVariantType,
                 caseVariantMembers[0],
                 arguments,
+                typeArguments,
                 cancellationToken);
             return caseVariantCall.ReturnedVoid ? null : caseVariantCall.Value;
         }
@@ -9427,6 +9473,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
                 plan.DeclaringType,
                 plan.MethodName,
                 arguments,
+                typeArguments,
                 cancellationToken);
             return invocation.ReturnedVoid ? null : invocation.Value;
         }

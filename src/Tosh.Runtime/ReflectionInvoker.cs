@@ -209,13 +209,45 @@ public sealed class ReflectionInvoker
         string methodName,
         IReadOnlyList<object?> arguments,
         CancellationToken cancellationToken)
+        => InvokeStaticMethodAsync(type, methodName, arguments, typeArguments: null, cancellationToken);
+
+    /// <summary>
+    /// Invokes a static method, optionally with type arguments written at the call site —
+    /// <c>TS-P2-82</c>.
+    /// </summary>
+    /// <remarks>
+    /// The instance path has taken these since generics were wired; the static path never did, so
+    /// `Array.Empty&lt;int&gt;()` had nowhere to put them even once it parsed.
+    /// </remarks>
+    public ValueTask<InvocationResult> InvokeStaticMethodAsync(
+        Type type,
+        string methodName,
+        IReadOnlyList<object?> arguments,
+        IReadOnlyList<Type>? typeArguments,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(type);
         ArgumentException.ThrowIfNullOrWhiteSpace(methodName);
         ArgumentNullException.ThrowIfNull(arguments);
         cancellationToken.ThrowIfCancellationRequested();
 
-        return ValueTask.FromResult(InvokeStatic(type, methodName, arguments));
+        if (typeArguments is not { Count: > 0 })
+        {
+            return ValueTask.FromResult(InvokeStatic(type, methodName, arguments));
+        }
+
+        var candidates = ConstructGenericCandidates(
+            type.GetMethods(BindingFlags.Static | BindingFlags.Public),
+            methodName,
+            typeArguments,
+            $"'{type.FullName}'");
+
+        return ValueTask.FromResult(Invoke(
+            candidates,
+            target: null,
+            methodName,
+            arguments,
+            $"static method '{methodName}' on '{type.FullName}'"));
     }
 
     public object? GetStaticMember(Type type, string memberName)

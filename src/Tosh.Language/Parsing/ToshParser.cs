@@ -7821,12 +7821,79 @@ public static class ToshParser
         private ArgumentSyntax ParseStaticMethodCallArgument(bool implicitCurrentItem = false)
         {
             var methodToken = NextToken();
+
+            // `TS-P2-82`. Read on the same terms as the instance path: a list is one only when
+            // `(` follows it, and the position is restored otherwise so `A < b` still compares.
+            IReadOnlyList<string>? explicitTypeArguments = null;
+
+            if (Current.Kind == SyntaxTokenKind.LessThan && Current.Span.Start == methodToken.Span.End)
+            {
+                var savedPosition = _position;
+                var savedDiagnosticCount = _diagnostics.Count;
+                var (_, parsedArgs, hasAngles) = ParseGenericTypeArgumentsStructured();
+
+                if (hasAngles && parsedArgs.Count > 0 && Current.Kind == SyntaxTokenKind.OpenParen)
+                {
+                    explicitTypeArguments = parsedArgs;
+                }
+                else
+                {
+                    _position = savedPosition;
+                    if (_diagnostics.Count > savedDiagnosticCount)
+                    {
+                        _diagnostics.RemoveRange(savedDiagnosticCount, _diagnostics.Count - savedDiagnosticCount);
+                    }
+                }
+            }
+
             var arguments = ParseInvocationArguments(implicitCurrentItem);
             var end = arguments.closeParenEnd ?? methodToken.Span.End;
             return new StaticMethodCallArgumentSyntax(
                 methodToken.Text,
                 arguments.arguments,
-                TextSpan.FromBounds(methodToken.Span.Start, end));
+                TextSpan.FromBounds(methodToken.Span.Start, end),
+                explicitTypeArguments);
+        }
+
+        /// <summary>
+        /// True when the current bareword is followed by a type-argument list and then a call —
+        /// <c>TS-P2-82</c>.
+        /// </summary>
+        /// <remarks>
+        /// Scans without consuming, so a lone <c>A &lt; b</c> is untouched. The list must be glued
+        /// to the name and closed before the parenthesis, which is what tells it apart from a
+        /// comparison.
+        /// </remarks>
+        private bool FollowedByTypeArgumentsThenCall()
+        {
+            if (Peek(1).Kind != SyntaxTokenKind.LessThan ||
+                Peek(1).Span.Start != Current.Span.End)
+            {
+                return false;
+            }
+
+            var depth = 0;
+
+            for (var offset = 1; offset < 64; offset++)
+            {
+                switch (Peek(offset).Kind)
+                {
+                    case SyntaxTokenKind.LessThan:
+                        depth++;
+                        break;
+                    case SyntaxTokenKind.GreaterThan:
+                        depth--;
+                        if (depth == 0) return Peek(offset + 1).Kind == SyntaxTokenKind.OpenParen;
+                        break;
+                    case SyntaxTokenKind.EndOfFile:
+                    case SyntaxTokenKind.Pipe:
+                    case SyntaxTokenKind.Semicolon:
+                    case SyntaxTokenKind.OpenBrace:
+                        return false;
+                }
+            }
+
+            return false;
         }
 
         private ArgumentSyntax ParseStaticMemberAccessArgument()
@@ -12329,7 +12396,13 @@ public static class ToshParser
 
         private bool LooksLikeStaticMethodCallExpression()
         {
-            if (Current.Kind != SyntaxTokenKind.Bareword || Peek(1).Kind != SyntaxTokenKind.OpenParen)
+            // `TS-P2-82`. A type-argument list may sit between the name and the parenthesis, so
+            // `Array.Empty<int>()` is a static call as much as `Array.Empty()` is. Requiring `(`
+            // immediately meant the `<` ended the command and the rest reported
+            // `missing_pipeline_separator` — a message about pipelines for a generic call. The
+            // instance path already allowed it; only this one did not.
+            if (Current.Kind != SyntaxTokenKind.Bareword ||
+                (Peek(1).Kind != SyntaxTokenKind.OpenParen && !FollowedByTypeArgumentsThenCall()))
             {
                 return false;
             }
