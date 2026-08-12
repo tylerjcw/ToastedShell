@@ -28,6 +28,16 @@ internal sealed class ScopedTypeResolver : ITypeResolver
         return _baseResolver.Resolve(name);
     }
 
+    /// <summary>
+    /// Forwards to the base resolver, which owns the alias table — <c>TS-P2-37</c>.
+    /// </summary>
+    /// <remarks>
+    /// Scope-local aliases and imports are consulted by <see cref="Resolve"/> first and are the
+    /// user's own declarations, so they are not case-variant collisions and have nothing to add
+    /// here.
+    /// </remarks>
+    public Type? ResolveAliasCaseVariant(string name) => _baseResolver.ResolveAliasCaseVariant(name);
+
     private Type? ResolveDirect(string name)
     {
         return _baseResolver.Resolve(name);

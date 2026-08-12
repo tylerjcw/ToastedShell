@@ -9242,6 +9242,43 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
     /// then did the same thing with the answer, differing only in whether the invocation was
     /// awaited (<c>TS-P1-24</c>).
     /// </remarks>
+    /// <summary>
+    /// Plans a static access whose head is a CLR type spelled differently from the shell alias it
+    /// collides with — <c>TS-P2-37</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <c>File.ReadAllText(...)</c> reported "No overload matched static method 'ReadAllText' on
+    /// 'System.IO.FileInfo'", naming a type the reader never wrote: the alias table is matched
+    /// case-insensitively, so <c>File</c> found <c>file</c>. <c>Array.IndexOf</c> and
+    /// <c>Tuple.Create</c> failed the same way against the shell's own <c>array</c> and
+    /// <c>tuple</c> static types, which are reached through a different lookup — so the check
+    /// runs ahead of both, at the one point they share.
+    /// </para>
+    /// <para>
+    /// Only the *head* of a dotted path is treated this way, which is where a type is used as a
+    /// type. Annotations resolve elsewhere and are untouched, so <c>var f: file</c> still binds
+    /// <c>FileInfo</c>, as does <c>var f: File</c>.
+    /// </para>
+    /// </remarks>
+    private bool TryPlanAliasCaseVariantAccess(string path, out Type type, out string[] members)
+    {
+        type = null!;
+        members = System.Array.Empty<string>();
+
+        var segments = SplitQualifiedPath(path);
+        if (segments.Length < 2) return false;
+
+        if (CreateScopedTypeResolver().ResolveAliasCaseVariant(segments[0]) is not { } resolved)
+        {
+            return false;
+        }
+
+        type = resolved;
+        members = segments[1..];
+        return true;
+    }
+
     private QualifiedInvocationPlan PlanQualifiedInvocation(string path)
     {
         if (ResolveTypeName(path) is not null)
@@ -9280,6 +9317,16 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
 
     private object? InvokeQualifiedMethod(string path, IReadOnlyList<object?> arguments)
     {
+        if (TryPlanAliasCaseVariantAccess(path, out var caseVariantType, out var caseVariantMembers) &&
+            caseVariantMembers.Length == 1)
+        {
+            var caseVariantCall = Runtime.Invoker.InvokeStatic(
+                caseVariantType,
+                caseVariantMembers[0],
+                arguments);
+            return caseVariantCall.ReturnedVoid ? null : caseVariantCall.Value;
+        }
+
         if (TryResolveShellStaticType(path, out _))
         {
             throw ConstructInsteadOfInvoking(path);
@@ -9315,6 +9362,17 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
+
+        if (TryPlanAliasCaseVariantAccess(path, out var caseVariantType, out var caseVariantMembers) &&
+            caseVariantMembers.Length == 1)
+        {
+            var caseVariantCall = await Runtime.Invoker.InvokeStaticMethodAsync(
+                caseVariantType,
+                caseVariantMembers[0],
+                arguments,
+                cancellationToken);
+            return caseVariantCall.ReturnedVoid ? null : caseVariantCall.Value;
+        }
 
         if (TryResolveShellStaticType(path, out _))
         {
@@ -9360,6 +9418,13 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
 
     private bool TryResolveQualifiedAccess(string path, out object? value, out bool matchedType)
     {
+        if (TryPlanAliasCaseVariantAccess(path, out var caseVariantType, out var caseVariantMembers))
+        {
+            matchedType = true;
+            value = ResolveQualifiedMemberChain(caseVariantType, caseVariantMembers);
+            return true;
+        }
+
         if (TryResolveShellSymbolAccess(path, out value))
         {
             matchedType = true;

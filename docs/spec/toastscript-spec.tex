@@ -958,6 +958,35 @@ annotations, casts, and \code{new} expressions.
 \end{longtable}
 }
 
+\subsection*{Aliases and CLR types of the same name}
+\label{sec:alias-case}
+
+The aliases are matched without regard to case, so \code{INT} and \code{Int}
+both name \code{System.Int32}.  Several aliases share a name with a different
+CLR type---\code{file} is \code{FileInfo} while \code{System.IO.File} is the
+static helper class, and \code{array} is \code{object[]} while
+\code{System.Array} is the class carrying \code{IndexOf} and \code{Sort}.
+
+The spelling decides which one a \emph{member access} reaches.  An alias is
+canonically lower-case, so a capitalised head names the CLR type:
+
+\begin{lstlisting}
+File.ReadAllText("/etc/hostname")   # System.IO.File
+Array.IndexOf([1, 2, 3], 2)         # System.Array
+\end{lstlisting}
+
+Everywhere a type is \emph{named} rather than used---annotations, \code{cast},
+and \code{new}---the alias wins regardless of case, so \code{var f: file} and
+\code{var f: File} both bind \code{FileInfo}:
+
+\begin{lstlisting}
+var f: file = (new FileInfo("/etc/hostname"))
+var a: array = [1, 2]               # object[], not System.Array
+new array(1, 2, 3)                  # the shell's array type
+\end{lstlisting}
+
+Fully qualifying the name is always unambiguous, in either position.
+
 \subsection*{Array types}
 \label{sec:array-types}
 

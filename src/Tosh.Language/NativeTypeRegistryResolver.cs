@@ -15,6 +15,9 @@ internal sealed class NativeTypeRegistryResolver : ITypeResolver
     private readonly IDictionary<string, Type> _nativeTypes;
     private readonly IDictionary<string, object?> _modules;
 
+    /// <summary>Forwards to the base resolver, which owns the alias table — <c>TS-P2-37</c>.</summary>
+    public Type? ResolveAliasCaseVariant(string name) => _baseResolver.ResolveAliasCaseVariant(name);
+
     public NativeTypeRegistryResolver(
         ITypeResolver baseResolver,
         IDictionary<string, Type> nativeTypes,

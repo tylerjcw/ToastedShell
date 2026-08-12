@@ -151,6 +151,19 @@ public sealed class DotNetTypeResolver : IImportingTypeResolver
         new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
+    /// Answers already given by <see cref="ResolveAliasCaseVariant"/> — <c>TS-P2-37</c>.
+    /// </summary>
+    /// <remarks>
+    /// Keyed <see cref="StringComparer.Ordinal"/>, unlike every other cache here, because the
+    /// question this one answers *is* the casing: <c>File</c> and <c>file</c> must not share an
+    /// entry. Without it the check ran the full uncached search on every dotted call and cost
+    /// what <c>TS-P1-42</c> measured and removed — 3,000 <c>File.Exists</c> calls took 18.1s
+    /// against 0.41s for an unaffected name, a 44x gap, which is how it was caught.
+    /// </remarks>
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, Type?> _aliasCaseVariantCache =
+        new(StringComparer.Ordinal);
+
+    /// <summary>
     /// Assembly count when <see cref="_resolutionCache"/> was last valid. A newly loaded
     /// assembly can turn a cached failure into a success, and can shadow a cached success
     /// with a nearer match — <c>TS-P2-48</c> showed emitted assemblies really do appear
@@ -186,13 +199,14 @@ public sealed class DotNetTypeResolver : IImportingTypeResolver
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         _imports.Add(path);
         _resolutionCache.Clear();
+        _aliasCaseVariantCache.Clear();
     }
 
     public bool RemoveUsing(string path)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         var removed = _imports.Remove(path);
-        if (removed) { _resolutionCache.Clear(); }
+        if (removed) { _resolutionCache.Clear(); _aliasCaseVariantCache.Clear(); }
         return removed;
     }
 
@@ -202,6 +216,7 @@ public sealed class DotNetTypeResolver : IImportingTypeResolver
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         _aliases[alias] = path;
         _resolutionCache.Clear();
+        _aliasCaseVariantCache.Clear();
     }
 
     public Type? Resolve(string name)
@@ -215,6 +230,7 @@ public sealed class DotNetTypeResolver : IImportingTypeResolver
         if (assemblyCount != _resolutionCacheAssemblyCount)
         {
             _resolutionCache.Clear();
+            _aliasCaseVariantCache.Clear();
             _resolutionCacheAssemblyCount = assemblyCount;
         }
         else if (_resolutionCache.TryGetValue(name, out var cached))
@@ -225,6 +241,102 @@ public sealed class DotNetTypeResolver : IImportingTypeResolver
         var resolved = ResolveUncached(name);
         _resolutionCache[name] = resolved;
         return resolved;
+    }
+
+    /// <summary>
+    /// The CLR type a name asks for when it is spelled differently from the shell alias it
+    /// collides with — <c>TS-P2-37</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The alias table is matched case-insensitively, so <c>File</c> found <c>file</c> and
+    /// resolved to <see cref="FileInfo"/>; every static on <c>System.IO.File</c> then failed with
+    /// a message naming <c>FileInfo</c>, a type the reader never wrote. The same collision hits
+    /// <c>Array</c> (alias <c>array</c>, an <c>object[]</c>) and <c>Tuple</c>.
+    /// </para>
+    /// <para>
+    /// The aliases are the shell's own vocabulary and their canonical spelling is lower-case, so a
+    /// capitalised spelling is a CLR type name and is answered as one — but only where a type is
+    /// being *used* as a type, which is static member access. <c>Resolve</c> is unchanged, so
+    /// <c>var f: file</c> and <c>var f: File</c> both still bind <see cref="FileInfo"/> and
+    /// <c>var q: Queue</c> does not silently become <c>System.Collections.Queue</c>.
+    /// </para>
+    /// <para>
+    /// Returns <see langword="null"/> when the name matches an alias exactly, when it matches none,
+    /// or when no CLR type of that name resolves — in each case the ordinary lookup is right.
+    /// </para>
+    /// </remarks>
+    public Type? ResolveAliasCaseVariant(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return null;
+
+        if (!Aliases.TryGetValue(name, out var alias)) return null;
+
+        // Written exactly as the shell spells it: the alias is what was asked for.
+        if (IsCanonicalAliasSpelling(name)) return null;
+
+        // Same invalidation as `Resolve`: a newly loaded assembly can turn a failure into a
+        // success, so any change in the count drops the cache wholesale.
+        var assemblyCount = AppDomain.CurrentDomain.GetAssemblies().Length;
+
+        if (assemblyCount != _resolutionCacheAssemblyCount)
+        {
+            _resolutionCache.Clear();
+            _aliasCaseVariantCache.Clear();
+            _resolutionCacheAssemblyCount = assemblyCount;
+        }
+        else if (_aliasCaseVariantCache.TryGetValue(name, out var cached))
+        {
+            return cached;
+        }
+
+        var direct = ResolveWithoutAliases(name);
+        var resolved = direct is null || direct == alias ? null : direct;
+        _aliasCaseVariantCache[name] = resolved;
+        return resolved;
+    }
+
+    /// <summary>True when <paramref name="name"/> is spelled as the alias table declares it.</summary>
+    /// <remarks>
+    /// The table's keys are the canonical spelling, and every one of them is lower-case. Comparing
+    /// against the stored key rather than testing for lower-case keeps that an observation about
+    /// the table instead of an assumption about it.
+    /// </remarks>
+    private static bool IsCanonicalAliasSpelling(string name)
+    {
+        foreach (var key in Aliases.Keys)
+        {
+            if (string.Equals(key, name, StringComparison.OrdinalIgnoreCase))
+            {
+                return string.Equals(key, name, StringComparison.Ordinal);
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>The ordinary lookup with the alias table taken out of it.</summary>
+    private Type? ResolveWithoutAliases(string name)
+    {
+        if (TryResolveAliasedPath(name, out var aliasedPath) &&
+            TryResolveDirect(aliasedPath, out var aliasedType))
+        {
+            return aliasedType;
+        }
+
+        var isUnqualified = !name.Contains('.', StringComparison.Ordinal);
+
+        if (isUnqualified && TryResolveFromImports(name, out var importedFirst))
+        {
+            return importedFirst;
+        }
+
+        if (TryResolveDirect(name, out var direct))
+        {
+            return direct;
+        }
+
+        return !isUnqualified && TryResolveFromImports(name, out var imported) ? imported : null;
     }
 
     private Type? ResolveUncached(string name)
