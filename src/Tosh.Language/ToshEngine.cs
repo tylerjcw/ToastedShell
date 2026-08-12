@@ -8200,18 +8200,39 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
 
                 case CallableInvocationArgumentSyntax callableInvocation:
                     {
-                        var target = await EvaluateArgumentAsync(sourceName, sourceText, callableInvocation.Target, cancellationToken);
+                        IShellCallable? callable = null;
 
-                        if (target is not IShellCallable callable)
+                        // `TS-P2-01`. A bareword target names a function rather than
+                        // holding one: in `(f() + 1)` the target is the word `f`, which
+                        // evaluates to the *string* "f" and is not callable. Resolved
+                        // through the same scoped view a command call uses, so a function
+                        // composes in an operator expression the way it already did as a
+                        // statement — `f() + 1` used to report "this value is not
+                        // callable" once the parser learned to build the invocation.
+                        if (callableInvocation.Target is BarewordArgumentSyntax { Value.Length: > 0 } named &&
+                            CreateScopedCommandView().TryGet(named.Value, out var namedCommand) &&
+                            namedCommand is IShellCallable namedCallable)
                         {
-                            throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                                Code: "tosh.runtime.value_not_callable",
-                                Title: "The provided value is not callable.",
-                                SourceName: sourceName,
-                                SourceText: sourceText,
-                                Span: callableInvocation.Target.Span,
-                                Label: "this value cannot be invoked",
-                                Help: "pass a lambda like 'func(x) => ...' or another callable shell value."));
+                            callable = namedCallable;
+                        }
+
+                        if (callable is null)
+                        {
+                            var target = await EvaluateArgumentAsync(sourceName, sourceText, callableInvocation.Target, cancellationToken);
+
+                            if (target is not IShellCallable evaluated)
+                            {
+                                throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                                    Code: "tosh.runtime.value_not_callable",
+                                    Title: "The provided value is not callable.",
+                                    SourceName: sourceName,
+                                    SourceText: sourceText,
+                                    Span: callableInvocation.Target.Span,
+                                    Label: "this value cannot be invoked",
+                                    Help: "pass a lambda like 'func(x) => ...' or another callable shell value."));
+                            }
+
+                            callable = evaluated;
                         }
 
                         var callArguments = await EvaluateCallableInvocationArgumentsAsync(sourceName, sourceText, callableInvocation.Arguments, cancellationToken);

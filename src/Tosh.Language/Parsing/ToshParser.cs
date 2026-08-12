@@ -7434,7 +7434,28 @@ public static class ToshParser
                         }
 
                         var token = NextToken();
-                        return new BarewordArgumentSyntax(token.Text, token.Span);
+                        var bareword = new BarewordArgumentSyntax(token.Text, token.Span);
+
+                        // `TS-P2-01`. A bareword was the one primary that skipped
+                        // `ParsePostfixChain`, so a call could not compose: `(f() + 1)`
+                        // parsed `f` as a word, left `()` for nobody, and reported "this
+                        // operator expression never closes" against the outer paren.
+                        // `(f())` worked only because it has no top-level operator and so
+                        // took the command-subexpression path instead — which is why the
+                        // symptom looked like it was about operators rather than calls.
+                        //
+                        // Same fix the static-member-access case above already carries,
+                        // and scoped the same way: only a *glued* `(` makes this a call,
+                        // and only outside command-argument position, where `f (x)` is an
+                        // argument list rather than an invocation.
+                        if (commandName is null &&
+                            Current.Kind == SyntaxTokenKind.OpenParen &&
+                            Current.Span.Start == token.Span.End)
+                        {
+                            return ParsePostfixChain(bareword, implicitCurrentItem);
+                        }
+
+                        return bareword;
                     }
 
                 case SyntaxTokenKind.String:
@@ -10306,12 +10327,16 @@ public static class ToshParser
 
         private ArgumentSyntax? ParseMultiplicativeExpression(int startPosition, bool implicitCurrentItem)
         {
-            var left = ParseExponentiationExpression(startPosition, implicitCurrentItem);
+            // `TS-P2-02`. Unary sits *above* exponentiation, not below it, so `-2 ** 2`
+            // is `-(2 ** 2)` = -4 rather than `(-2) ** 2` = 4 — the reading Python and
+            // Ruby give, and the one the item calls the right side of the operator.
+            // Exponentiation still takes a unary *right* operand, so `2 ** -1` parses.
+            var left = ParseUnaryExpression(startPosition, implicitCurrentItem);
 
             while (IsMultiplicativeOperatorToken(Current) && !IsSpacedDictCloser(Current))
             {
                 var operatorToken = NextToken();
-                var right = ParseExponentiationExpression(startPosition, implicitCurrentItem);
+                var right = ParseUnaryExpression(startPosition, implicitCurrentItem);
                 var end = right?.Span.End ?? operatorToken.Span.End;
 
                 left = new OperatorArgumentSyntax(
@@ -10327,13 +10352,15 @@ public static class ToshParser
 
         private ArgumentSyntax? ParseExponentiationExpression(int startPosition, bool implicitCurrentItem)
         {
-            var left = ParseUnaryExpression(startPosition, implicitCurrentItem);
+            var left = ParseArgumentOperand(implicitCurrentItem);
 
-            // ** is right-associative: 2 ** 3 ** 2 == 2 ** (3 ** 2) == 512
+            // ** is right-associative: 2 ** 3 ** 2 == 2 ** (3 ** 2) == 512. The right
+            // operand is a *unary* expression so `2 ** -1` still parses, which is the
+            // same asymmetry Python has.
             if (IsExponentiationOperatorToken(Current))
             {
                 var operatorToken = NextToken();
-                var right = ParseExponentiationExpression(startPosition, implicitCurrentItem);
+                var right = ParseUnaryExpression(startPosition, implicitCurrentItem);
                 var end = right?.Span.End ?? operatorToken.Span.End;
 
                 left = new OperatorArgumentSyntax(
@@ -10366,7 +10393,7 @@ public static class ToshParser
                     TextSpan.FromBounds(startPosition, end));
             }
 
-            return ParseArgumentOperand(implicitCurrentItem);
+            return ParseExponentiationExpression(startPosition, implicitCurrentItem);
         }
 
         private ArgumentSyntax? ParseArgumentOperand(bool implicitCurrentItem = false)

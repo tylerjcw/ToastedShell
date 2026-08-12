@@ -24,6 +24,18 @@ public static class OperatorEvaluator
         return @operator switch
         {
             "!" or "not" => !ToBoolean(operand),
+
+            // `TS-P2-02`. Unary `-` and `+` were accepted by the parser
+            // (`IsUnaryOperatorToken` names both) and implemented by nobody, so
+            // `- $x` reached here and reported "Unsupported unary operator '-'".
+            // Expressed through `Subtract` and `Add` rather than as a second numeric
+            // tower: every widening, unit and shell-numeric rule those already carry —
+            // vectors, matrices, complex, storage sizes — applies unchanged, and an
+            // operand that cannot be negated reports the type message they already give
+            // instead of a message about the operator.
+            "-" => Subtract(0, operand),
+            "+" => Add(0, operand),
+
             _ => throw new InvalidOperationException($"Unsupported unary operator '{@operator}'."),
         };
     }

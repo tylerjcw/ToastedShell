@@ -74,13 +74,32 @@ public sealed class OperatorParityTests
         var unaryOps = ExtractOperatorKeys(unarySection);
         Assert.NotEmpty(unaryOps);
 
-        // Currently `not` is the only unary operator. If a new one is added, this test acts
-        // as a tripwire to remind the developer to add a parity probe below.
-        Assert.Equal(new[] { "not" }, unaryOps.OrderBy(o => o, StringComparer.Ordinal).ToArray());
+        // The tripwire did its job: `TS-P2-02` added `-` and `+`, which the parser had
+        // accepted all along while `EvaluateUnary` implemented neither — so `- $x`
+        // reported "Unsupported unary operator '-'". Each new operator gets a probe
+        // below, which is what this assertion is here to force.
+        // `!` shares a case with `not` (`"!" or "not" => …`) and the extractor reports one
+        // key per case, so it does not appear here — which is also why the assertion read
+        // `["not"]` before rather than `["!", "not"]`.
+        Assert.Equal(
+            new[] { "+", "-", "not" },
+            unaryOps.OrderBy(o => o, StringComparer.Ordinal).ToArray());
 
         var engine = new ToshEngine();
-        var collected = engine.EvaluateAsync("echo (not true)", default).ToBlockingEnumerable().ToList();
-        Assert.NotEmpty(collected);
+
+        foreach (var (probe, expected) in new[]
+                 {
+                     ("echo (not true)", "False"),
+                     ("var x = 3\necho (- $x)", "-3"),
+                     ("var x = 3\necho (+ $x)", "3"),
+                     // Glued to a variable, which the lexer used to scan as one word and
+                     // report as `Command '-$x' was not found`.
+                     ("var x = 3\necho (-$x)", "-3"),
+                 })
+        {
+            var collected = engine.EvaluateAsync(probe, default).ToBlockingEnumerable().ToList();
+            Assert.Equal(expected, Assert.Single(collected)?.ToString());
+        }
     }
 
     [Fact]

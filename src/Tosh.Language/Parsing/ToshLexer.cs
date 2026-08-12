@@ -1303,6 +1303,19 @@ public sealed class ToshLexer
             // Restricted to a bare identifier followed by a single '=', so
             // option-style command arguments such as `--opt=value` and the
             // comparison operators keep their greedy behaviour.
+            // `TS-P2-02`. A lone `-` or `+` before a variable is a unary operator, not
+            // the first character of a word: `-$x` was scanned whole and reported as
+            // "Command '-$x' was not found", while the spaced `- $x` parsed. Narrow on
+            // purpose — only when the text so far is exactly one sign character, so
+            // flags (`--name`), paths and `a$b` are untouched — and only in expression
+            // context, where `-$x` cannot be a command's flag.
+            if (Current == '$' && InExpressionContext
+                && _position == start + 1
+                && _source[start] is '-' or '+')
+            {
+                break;
+            }
+
             if (Current == '=' && Peek() != '=' && InExpressionContext
                 && _position > start
                 && IsIdentifierText(_source.AsSpan(start, _position - start)))
