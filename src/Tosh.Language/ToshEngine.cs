@@ -13550,13 +13550,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
                     throw refinementError.Exception;
                 }
 
-                throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                    Code: "tosh.runtime.annotation_conversion_failed",
-                    Title: $"'{owner}' produced a value that could not be converted to '{typeName}'.",
-                    SourceName: sourceName,
-                    SourceText: sourceText,
-                    Span: span,
-                    Label: $"the value does not match '{typeName}'"));
+                throw AnnotationConversionFailure(typeName, value, span, sourceName, sourceText, owner);
             }
         }
 
@@ -13588,13 +13582,50 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
             throw refinementError.Exception;
         }
 
-        throw ToshDiagnosticException.Create(new ToshDiagnostic(
+        throw AnnotationConversionFailure(typeName, value, span, sourceName, sourceText, owner);
+    }
+
+    /// <summary>
+    /// The diagnostic for a value an annotation will not accept.
+    /// </summary>
+    /// <remarks>
+    /// One helper because the message previously existed twice, word for word, on
+    /// the two paths that raise it — the `TS-P1-24` shape, where whoever improves
+    /// one copy improves one copy.
+    ///
+    /// It distinguishes the two refusals, because they call for different fixes
+    /// (`TS-P2-111`). A fractional value refused by an integral annotation is a
+    /// deliberate no-silent-data-loss decision and is answered by rounding;
+    /// "the value does not match 'int'" reads as a type error and names no remedy,
+    /// though the value is a perfectly good number.
+    /// </remarks>
+    private ToshDiagnosticException AnnotationConversionFailure(
+        string typeName,
+        object? value,
+        TextSpan span,
+        string sourceName,
+        string sourceText,
+        string owner)
+    {
+        if (TryResolveTypeName(typeName) is { } annotationType &&
+            TypeConversion.WouldTruncate(value, annotationType))
+        {
+            return ToshDiagnosticException.Create(new ToshDiagnostic(
+                Code: "tosh.runtime.annotation_conversion_failed",
+                Title: $"'{owner}' produced {value}, which cannot become '{typeName}' without discarding its fractional part.",
+                SourceName: sourceName,
+                SourceText: sourceText,
+                Span: span,
+                Label: "round first with Math.Round, Math.Floor, Math.Ceiling or Math.Truncate"));
+        }
+
+        return ToshDiagnosticException.Create(new ToshDiagnostic(
             Code: "tosh.runtime.annotation_conversion_failed",
             Title: $"'{owner}' produced a value that could not be converted to '{typeName}'.",
             SourceName: sourceName,
             SourceText: sourceText,
-                Span: span,
-                Label: $"the value does not match '{typeName}'"));
+            Span: span,
+            Label: $"the value does not match '{typeName}'"));
     }
 
     internal async ValueTask<object?> ConvertAnnotatedValueAsync(

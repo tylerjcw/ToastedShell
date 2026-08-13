@@ -102,6 +102,19 @@ public sealed class CastCommand : ShellCommand
             return converted;
         }
 
+        // `TS-P2-111`. A refusal caused by fraction loss is answered by rounding;
+        // one between unrelated types is not. Saying which is which costs a line
+        // and saves the reader guessing why 7.0 casts and 7.9 does not.
+        if (TypeConversion.WouldTruncate(input, clrType))
+        {
+            throw context.CreateDiagnostic(
+                "tosh.runtime.cast_failed",
+                $"Casting '{Describe(input)}' to {ReflectionMetadataUtilities.GetDisplayName(clrType)} " +
+                "would discard its fractional part.",
+                argumentIndex: 0,
+                label: "round first with Math.Round, Math.Floor, Math.Ceiling or Math.Truncate");
+        }
+
         throw context.CreateDiagnostic(
             "tosh.runtime.cast_failed",
             $"Could not cast '{Describe(input)}' to {ReflectionMetadataUtilities.GetDisplayName(clrType)}.",

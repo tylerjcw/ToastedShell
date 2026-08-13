@@ -552,13 +552,21 @@ public static class TypeConversion
         {
             try
             {
-                if (WouldLoseFractionalPrecision(value, effectiveType))
+                // `TS-P2-111`. A numeric string denotes the same value as the
+                // number it spells, so it has to follow the same rule: `"7.0"`
+                // converts to 7 exactly as `7.0` does, and `"7.9"` is refused
+                // exactly as `7.9` is. Left to `Convert.ChangeType` the spelling
+                // decided the outcome — it rejects `"7.0"` outright, so the string
+                // never reached the fractional guard at all.
+                var probe = NumericProbe(value, effectiveType);
+
+                if (WouldLoseFractionalPrecision(probe, effectiveType))
                 {
                     converted = null;
                     return false;
                 }
 
-                converted = Convert.ChangeType(value, effectiveType, CultureInfo.InvariantCulture);
+                converted = Convert.ChangeType(probe, effectiveType, CultureInfo.InvariantCulture);
                 return true;
             }
             catch
@@ -653,6 +661,58 @@ public static class TypeConversion
             .FirstOrDefault(candidate => candidate.IsGenericType &&
                                          candidate.GetGenericTypeDefinition() == typeof(IEnumerable<>))
             ?.GetGenericArguments()[0];
+    }
+
+    /// <summary>
+    /// Whether a conversion is refused <em>because it would discard a fraction</em>
+    /// rather than because the types are unrelated.
+    /// </summary>
+    /// <remarks>
+    /// The two failures want different messages and different fixes: one is
+    /// answered by rounding, the other means the cast was never going to work.
+    /// Exposed so the cast operators can tell the reader which one they hit
+    /// (`TS-P2-111`) — <c>Cannot convert 'Double' to 'int'</c> reads as "this type
+    /// never converts", when the identical cast succeeds for a whole-valued
+    /// double.
+    /// </remarks>
+    public static bool WouldTruncate(object? value, Type targetType)
+    {
+        if (value is null)
+        {
+            return false;
+        }
+
+        var effectiveType = Nullable.GetUnderlyingType(targetType) ?? targetType;
+        return WouldLoseFractionalPrecision(NumericProbe(value, effectiveType), effectiveType);
+    }
+
+    /// <summary>
+    /// The value a numeric string stands for, when the target is integral.
+    /// </summary>
+    /// <remarks>
+    /// <c>decimal</c> is tried before <c>double</c> deliberately: it carries 28
+    /// significant digits and so represents every value of every integral type
+    /// exactly, where a <c>double</c> probe would quietly round a long past
+    /// 2^53 and convert a value the caller never wrote.
+    /// </remarks>
+    private static object NumericProbe(object value, Type effectiveType)
+    {
+        if (value is not string text || !IsIntegralType(effectiveType))
+        {
+            return value;
+        }
+
+        if (decimal.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var asDecimal))
+        {
+            return asDecimal;
+        }
+
+        if (double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var asDouble))
+        {
+            return asDouble;
+        }
+
+        return value;
     }
 
     private static bool WouldLoseFractionalPrecision(object value, Type targetType)

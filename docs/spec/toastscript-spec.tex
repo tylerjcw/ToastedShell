@@ -1411,6 +1411,29 @@ func double-it(n: int) => $n * 2
 double-it "21"             # "21" auto-converts to 21
 \end{lstlisting}
 
+\subsection*{Narrowing is refused, not truncated}
+
+A conversion to an integral type succeeds when the value has nothing to lose
+and is refused when it does.  Nothing narrows silently:
+
+\begin{lstlisting}
+7.0 as int                 # 7
+"7.0" as int               # 7   - the string spells the same number
+7.9 as int                 # error: would discard its fractional part
+"7.9" as int               # error: the same, for the same reason
+\end{lstlisting}
+
+\noindent The rule is about the \emph{value}, not the type: a \code{double}
+narrows perfectly well when it holds a whole number.  A numeric string follows
+whatever rule the number it spells would follow, so the spelling never decides
+the outcome.
+
+\begin{tipbox}
+The refusal names the fix.  Round explicitly with \code{Math.Round},
+\code{Math.Floor}, \code{Math.Ceiling} or \code{Math.Truncate}, and the
+conversion then has nothing to discard.
+\end{tipbox}
+
 \subsection*{Casting to a declared type}
 \label{sec:cast-declared}
 

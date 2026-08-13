@@ -782,6 +782,17 @@ public static class OperatorEvaluator
             return converted;
         }
 
+        // `TS-P2-111`. Losing a fraction and having unrelated types are different
+        // failures wanting different fixes, and the old message conflated them:
+        // `7.9 as int` said "Cannot convert 'Double' to 'int'", which reads as
+        // "this type never converts" even though `7.0 as int` is 7.
+        if (TypeConversion.WouldTruncate(value, targetType))
+        {
+            throw new InvalidOperationException(
+                $"Converting {value} to '{typeName}' would discard its fractional part. " +
+                "Round first with Math.Round, Math.Floor, Math.Ceiling or Math.Truncate.");
+        }
+
         throw new InvalidOperationException(
             $"Cannot convert '{value?.GetType().Name}' to '{typeName}'.");
     }
