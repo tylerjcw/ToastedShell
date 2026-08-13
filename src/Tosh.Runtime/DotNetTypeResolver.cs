@@ -150,8 +150,16 @@ public sealed class DotNetTypeResolver : IImportingTypeResolver
     // Number of assemblies present in AppDomain when the platform index was built.
     // Assemblies loaded after this count are not yet in the index and must be scanned directly.
     private static volatile int _platformIndexedAssemblyCount;
-    // Names that have been confirmed not to resolve to any type. Avoids repeated failed scans.
-    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, bool> _negativeResultCache =
+    // Names confirmed not to resolve, mapped to the loaded-assembly count at the
+    // moment that was established. A miss is only re-scanned when an assembly has
+    // actually appeared since — previously the guard compared against
+    // `_platformIndexedAssemblyCount`, which is a pre-index snapshot that never
+    // advances, so the negative cache switched itself off the first time anything
+    // loaded and every subsequent miss re-enumerated `Assembly.GetTypes()` over
+    // every assembly beyond the watermark. Module-local names (a `raw struct`, a
+    // class declared in the same file) never resolve as CLR types, so every
+    // annotation mentioning one paid that scan.
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, int> _negativeResultCache =
         new(StringComparer.OrdinalIgnoreCase);
 
     private static readonly string[] DefaultImplicitUsings =
@@ -287,11 +295,30 @@ public sealed class DotNetTypeResolver : IImportingTypeResolver
 
         if (assemblyCount != _resolutionCacheAssemblyCount)
         {
-            _resolutionCache.Clear();
+            // Only *negative* results can be invalidated by a newly loaded
+            // assembly: loading one can make a name resolvable, never make a
+            // resolved name stop resolving. Clearing the positives too meant the
+            // whole cache was discarded every time an assembly appeared — and
+            // loading a module is itself something that loads assemblies, so
+            // during startup the cache was wiped repeatedly at exactly the
+            // moment it was most needed.
+            //
+            // Measured before this: type-name resolution was ~518 ms of the
+            // ~574 ms spent loading a profile's modules, 485 ms of it inside
+            // TryResolveFromImports, because almost every lookup missed.
+            foreach (var entry in _resolutionCache)
+            {
+                if (entry.Value is null)
+                {
+                    _resolutionCache.TryRemove(entry.Key, out _);
+                }
+            }
+
             _aliasCaseVariantCache.Clear();
             _resolutionCacheAssemblyCount = assemblyCount;
         }
-        else if (_resolutionCache.TryGetValue(name, out var cached))
+
+        if (_resolutionCache.TryGetValue(name, out var cached))
         {
             return cached;
         }
@@ -595,8 +622,8 @@ public sealed class DotNetTypeResolver : IImportingTypeResolver
     private static bool TryResolveDirect(string name, out Type? type)
     {
         // Fast negative: previously confirmed as not resolvable and no new assemblies loaded since.
-        if (_negativeResultCache.ContainsKey(name) &&
-            AppDomain.CurrentDomain.GetAssemblies().Length <= _platformIndexedAssemblyCount)
+        if (_negativeResultCache.TryGetValue(name, out var negativeAtCount) &&
+            AppDomain.CurrentDomain.GetAssemblies().Length <= negativeAtCount)
         {
             type = null;
             return false;
@@ -642,7 +669,7 @@ public sealed class DotNetTypeResolver : IImportingTypeResolver
             }
         }
 
-        _negativeResultCache.TryAdd(name, true);
+        _negativeResultCache[name] = AppDomain.CurrentDomain.GetAssemblies().Length;
         type = null;
         return false;
     }
@@ -652,8 +679,8 @@ public sealed class DotNetTypeResolver : IImportingTypeResolver
         var cacheKey = $"{name}`{arity}";
 
         // Fast negative: previously confirmed as not resolvable and no new assemblies loaded since.
-        if (_negativeResultCache.ContainsKey(cacheKey) &&
-            AppDomain.CurrentDomain.GetAssemblies().Length <= _platformIndexedAssemblyCount)
+        if (_negativeResultCache.TryGetValue(cacheKey, out var negativeGenericAtCount) &&
+            AppDomain.CurrentDomain.GetAssemblies().Length <= negativeGenericAtCount)
         {
             type = null;
             return false;
@@ -676,7 +703,7 @@ public sealed class DotNetTypeResolver : IImportingTypeResolver
             if (newMatch is not null) { type = newMatch; return true; }
         }
 
-        _negativeResultCache.TryAdd(cacheKey, true);
+        _negativeResultCache[cacheKey] = AppDomain.CurrentDomain.GetAssemblies().Length;
         type = null;
         return false;
     }
