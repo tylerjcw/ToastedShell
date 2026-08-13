@@ -18,6 +18,21 @@ var engine = new ToshEngine(runtime);
 // errors raised during arg parsing itself.
 args = ApplyDiagnosticFlags(args, runtime.Config.Diagnostics);
 
+// `--serve <socket>` — Phase 0 experiment. Holds a warm engine behind a unix
+// socket so a client pays a round-trip instead of CLR startup plus the ~180 ms
+// platform type index. Stripped before plan resolution so the remaining args
+// resolve to a normal REPL plan, which is what loads config/profile/autoload.
+string? servePath = null;
+{
+    var serveIndex = Array.IndexOf(args, "--serve");
+
+    if (serveIndex >= 0 && serveIndex + 1 < args.Length)
+    {
+        servePath = args[serveIndex + 1];
+        args = args.Where((_, i) => i != serveIndex && i != serveIndex + 1).ToArray();
+    }
+}
+
 var diagnostics = new DiagnosticRenderer(runtime.Config.Theme.Diagnostics, runtime.Config.Diagnostics);
 CliInvocationPlan plan;
 
@@ -114,6 +129,13 @@ await RaiseSessionStartedAsync();
 if (plan.ProfileStartup && runtime.StartupProfile is { } startupProfile)
 {
     PrintStartupProfile(startupProfile);
+}
+
+if (servePath is not null)
+{
+    await RunSocketServerAsync(servePath);
+    await RaiseSessionEndingAsync();
+    return;
 }
 
 if (plan.Kind != CliInvocationKind.Repl)
@@ -945,5 +967,77 @@ static IEnumerable<string> EnumerateSingleFileExtractionDirs()
                  .OrderByDescending(static d => Directory.GetLastWriteTimeUtc(d)))
     {
         yield return dir;
+    }
+}
+
+
+/// <summary>
+/// Serves commands from a unix socket against the already-warm engine.
+///
+/// Deliberately minimal: one command per connection, newline-terminated in,
+/// output back, close. No pty, no job control, no session isolation — this
+/// exists to answer whether a warm engine makes invocation latency disappear,
+/// which is the question that decides whether a native rewrite is worth
+/// starting at all.
+/// </summary>
+async Task RunSocketServerAsync(string socketPath)
+{
+    if (File.Exists(socketPath))
+    {
+        File.Delete(socketPath);
+    }
+
+    using var listener = new System.Net.Sockets.Socket(
+        System.Net.Sockets.AddressFamily.Unix,
+        System.Net.Sockets.SocketType.Stream,
+        System.Net.Sockets.ProtocolType.Unspecified);
+
+    listener.Bind(new System.Net.Sockets.UnixDomainSocketEndPoint(socketPath));
+    listener.Listen(128);
+
+    await Console.Error.WriteLineAsync($"tosh: serving on {socketPath}");
+
+    var stdout = Console.Out;
+
+    while (true)
+    {
+        using var connection = await listener.AcceptAsync();
+        using var stream = new System.Net.Sockets.NetworkStream(connection, ownsSocket: false);
+
+        string? command;
+
+        using (var reader = new StreamReader(stream, Encoding.UTF8, leaveOpen: true))
+        {
+            command = await reader.ReadLineAsync();
+        }
+
+        if (string.IsNullOrWhiteSpace(command))
+        {
+            continue;
+        }
+
+        var captured = new StringWriter();
+        Console.SetOut(captured);
+
+        try
+        {
+            using (engine.PushBinderStrictness(BinderStrictness.Strict))
+            {
+                await ExecuteAndPrintAsync(command);
+            }
+        }
+        catch (Exception exception)
+        {
+            captured.Write(diagnostics.Render(exception));
+        }
+        finally
+        {
+            Console.SetOut(stdout);
+        }
+
+        var payload = Encoding.UTF8.GetBytes(captured.ToString());
+        await stream.WriteAsync(payload);
+        await stream.FlushAsync();
+        connection.Shutdown(System.Net.Sockets.SocketShutdown.Both);
     }
 }
