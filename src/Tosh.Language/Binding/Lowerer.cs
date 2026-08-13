@@ -396,11 +396,22 @@ public static class Lowerer
             ctx.RecordPotentialCapture(symbol);
         }
 
+        var loweredValue = LowerPipeline(assignment.Value, ctx);
+
+        // Only an inferred binding follows its assignments. An annotated one
+        // keeps the type it declared.
+        if (symbol is not null && string.IsNullOrEmpty(symbol.DeclaredTypeName) &&
+            string.Equals(assignment.Operator, "=", StringComparison.Ordinal))
+        {
+            var assigned = TypeInferrer.InferPipelineValue(loweredValue);
+            if (assigned is not null) ctx.RecordRebind(assignment.Name, assigned);
+        }
+
         return new BoundVariableAssignment(
             Name: assignment.Name,
             Symbol: symbol,
             Operator: assignment.Operator,
-            Value: LowerPipeline(assignment.Value, ctx),
+            Value: loweredValue,
             Span: assignment.Span);
     }
 
@@ -1012,6 +1023,7 @@ public static class Lowerer
         // type: inside `_ is Leaf =>` the value is a Leaf regardless of how the
         // variable was declared.
         var type = ctx.LookupNarrowed(varRef.Name)
+                   ?? ctx.LookupRebind(varRef.Name)
                    ?? symbol?.DeclaredType
                    ?? BoundType.Dynamic;
         return new BoundVariableReference(varRef.Name, symbol, varRef.Span, type);
@@ -2103,16 +2115,67 @@ public static class Lowerer
 
         public List<BoundSymbol> Symbols { get; } = new();
 
+        // Types a variable has been *reassigned* to, per scope frame. A symbol
+        // records the type inferred at its declaration and is shared by identity
+        // across every reference, so it cannot carry a value that changes; but
+        // references are lowered in source order, so consulting this as lowering
+        // proceeds gives the flow-sensitive answer — a use before the rebinding
+        // still sees the declaration's type (`TS-P2-87`).
+        // One frame for the outermost scope, which the constructor creates
+        // directly rather than through PushScope.
+        private readonly List<Dictionary<string, BoundType>> _rebinds =
+            new() { new Dictionary<string, BoundType>(StringComparer.Ordinal) };
+
         public void PushScope()
         {
             _scopes.Add(new Dictionary<string, BoundSymbol>(StringComparer.Ordinal));
+            _rebinds.Add(new Dictionary<string, BoundType>(StringComparer.Ordinal));
         }
 
         public void PopScope()
         {
             // Outermost scope is the file-level frame and is never popped.
             if (_scopes.Count <= 1) return;
+
+            // A rebinding inside a branch says nothing certain about the type
+            // after it — the branch may not have run, and a sibling branch may
+            // have assigned something else. Rather than guess, anything an inner
+            // frame reassigned that belongs to an outer one becomes dynamic
+            // there, which suppresses a member check instead of making a wrong
+            // one.
+            var leaving = _rebinds[^1];
+            _rebinds.RemoveAt(_rebinds.Count - 1);
             _scopes.RemoveAt(_scopes.Count - 1);
+
+            if (_rebinds.Count == 0) return;
+
+            foreach (var name in leaving.Keys)
+            {
+                if (LookupSymbol(name) is not null) _rebinds[^1][name] = BoundType.Dynamic;
+            }
+        }
+
+        /// <summary>
+        /// Records the type a variable was reassigned to. Ignored for variables
+        /// carrying an explicit annotation — there the annotation is the
+        /// contract, and an assignment that disagrees is an error to report, not
+        /// a new type to adopt.
+        /// </summary>
+        public void RecordRebind(string name, BoundType type)
+        {
+            if (_rebinds.Count == 0) return;
+            _rebinds[^1][name] = type;
+        }
+
+        /// <summary>The innermost recorded reassignment for a name, if any.</summary>
+        public BoundType? LookupRebind(string name)
+        {
+            for (var i = _rebinds.Count - 1; i >= 0; i--)
+            {
+                if (_rebinds[i].TryGetValue(name, out var rebound)) return rebound;
+            }
+
+            return null;
         }
 
         public BoundSymbol DeclareLocal(
