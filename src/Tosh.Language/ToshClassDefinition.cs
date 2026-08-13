@@ -521,6 +521,38 @@ public sealed class ToshClassDefinition : IShellNamedType
         return lt < 0 ? typeName.Trim() : typeName.Substring(0, lt).Trim();
     }
 
+    /// <summary>
+    /// True when this class, or anything it inherits from, fulfills an interface
+    /// or uses a trait of the given name.
+    ///
+    /// Interfaces and traits are both "contracts a class satisfies" as far as an
+    /// annotation is concerned — `func render(d: Drawable)` should accept any
+    /// class that fulfills `Drawable`, and the same for a trait. Kept separate
+    /// from <see cref="ClassImplementsInterface"/>, which answers only the
+    /// interface half for `is`.
+    /// </summary>
+    internal bool SatisfiesContract(string contractName)
+    {
+        var current = this;
+
+        while (current is not null)
+        {
+            foreach (var iface in current.ImplementedInterfaces)
+            {
+                if (string.Equals(iface.Name, contractName, StringComparison.OrdinalIgnoreCase)) return true;
+            }
+
+            foreach (var trait in current.UsedTraits)
+            {
+                if (string.Equals(trait.Name, contractName, StringComparison.OrdinalIgnoreCase)) return true;
+            }
+
+            current = current.BaseClass;
+        }
+
+        return false;
+    }
+
     private static bool ClassImplementsInterface(ToshClassDefinition cls, string interfaceName)
     {
         var current = cls;

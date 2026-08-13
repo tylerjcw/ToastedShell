@@ -13396,6 +13396,20 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
                 return true;
             }
 
+            // An interface or a trait is a contract, not a shape to convert to:
+            // a value that fulfills it *is* already the annotated type. Without
+            // this, `func render(d: Drawable)` rejected every class that
+            // fulfilled `Drawable`, so a polymorphic signature could not be
+            // annotated at all and had to fall back to duck typing
+            // (`TS-P2-99`).
+            if ((shellType is ToshInterfaceDefinition || shellType is ToshTraitDefinition) &&
+                value is ToshClassInstance contractInstance &&
+                contractInstance.Definition.SatisfiesContract(shellDescriptor.ShellTypeName))
+            {
+                converted = value;
+                return true;
+            }
+
             if (shellType is ToshEnumDefinition enumDefinition &&
                 enumDefinition.TryConvertValue(value, out var enumValue))
             {

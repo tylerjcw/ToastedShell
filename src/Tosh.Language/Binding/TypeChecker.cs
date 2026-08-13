@@ -41,7 +41,8 @@ public static class TypeChecker
         // name -> base-name edges once per check and expose them thread-locally
         // for the duration; parallel test runs each get their own map.
         _classBaseNames = new Dictionary<string, string?>(StringComparer.Ordinal);
-        CollectUserClasses(unit.Root, _classBaseNames);
+        _classContracts = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
+        CollectUserClasses(unit.Root, _classBaseNames, _classContracts);
 
         try
         {
@@ -56,6 +57,7 @@ public static class TypeChecker
         finally
         {
             _classBaseNames = null;
+            _classContracts = null;
         }
     }
 
@@ -65,33 +67,68 @@ public static class TypeChecker
     [ThreadStatic]
     private static Dictionary<string, string?>? _classBaseNames;
 
-    private static void CollectUserClasses(BoundNode node, Dictionary<string, string?> sink)
+    /// <summary>
+    /// name -> the interfaces it fulfills and the traits it uses, for the check
+    /// currently running on this thread.
+    /// </summary>
+    [ThreadStatic]
+    private static Dictionary<string, HashSet<string>>? _classContracts;
+
+    private static void CollectUserClasses(
+        BoundNode node,
+        Dictionary<string, string?> bases,
+        Dictionary<string, HashSet<string>> contracts)
     {
         switch (node)
         {
             case BoundScript s:
-                foreach (var st in s.Statements) CollectUserClasses(st, sink);
+                foreach (var st in s.Statements) CollectUserClasses(st, bases, contracts);
                 break;
             case BoundClassDefinition cls:
-                sink[cls.Name] = cls.BaseClassName;
+                bases[cls.Name] = cls.BaseClassName;
+                var declared = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                if (cls.ImplementedInterfaces is { } ifaces) foreach (var i in ifaces) declared.Add(i);
+                if (cls.UsedTraits is { } traits) foreach (var t in traits) declared.Add(t);
+                contracts[cls.Name] = declared;
                 break;
             case BoundFunctionDefinition fn:
-                CollectUserClasses(fn.Body, sink);
+                CollectUserClasses(fn.Body, bases, contracts);
                 break;
             case BoundBlock b:
-                foreach (var st in b.Statements) CollectUserClasses(st, sink);
+                foreach (var st in b.Statements) CollectUserClasses(st, bases, contracts);
                 break;
             case BoundIfStatement i:
-                CollectUserClasses(i.ThenBlock, sink);
-                if (i.ElseBlock is not null) CollectUserClasses(i.ElseBlock, sink);
+                CollectUserClasses(i.ThenBlock, bases, contracts);
+                if (i.ElseBlock is not null) CollectUserClasses(i.ElseBlock, bases, contracts);
                 break;
             case BoundForStatement f:
-                CollectUserClasses(f.Body, sink);
+                CollectUserClasses(f.Body, bases, contracts);
                 break;
             case BoundWhileStatement w:
-                CollectUserClasses(w.Body, sink);
+                CollectUserClasses(w.Body, bases, contracts);
                 break;
         }
+    }
+
+    /// <summary>
+    /// True when <paramref name="className"/>, or anything it inherits from,
+    /// fulfills an interface or uses a trait called <paramref name="contract"/>.
+    /// </summary>
+    private static bool SatisfiesContract(string className, string contract)
+    {
+        if (_classContracts is not { } contracts) return false;
+
+        var current = className;
+
+        for (var depth = 0; depth < 64; depth++)
+        {
+            if (contracts.TryGetValue(current, out var declared) && declared.Contains(contract)) return true;
+            if (_classBaseNames is not { } bases ||
+                !bases.TryGetValue(current, out var next) || next is null) return false;
+            current = next;
+        }
+
+        return false;
     }
 
     /// <summary>
@@ -1926,6 +1963,16 @@ public static class TypeChecker
         // `TS-P2-109`.
         if (from is UserClassType fromClass && to is UserClassType toClass &&
             DerivesFrom(fromClass.Name, toClass.Name))
+        {
+            return true;
+        }
+
+        // An interface or trait annotation accepts any class that fulfills it —
+        // `func render(d: Drawable)` is the shape of every polymorphic API, and
+        // rejecting it forced such signatures to go unannotated (`TS-P2-99`).
+        if (from is UserClassType contractClass &&
+            to is UserInterfaceType or UserTraitType &&
+            SatisfiesContract(contractClass.Name, to.DisplayName))
         {
             return true;
         }
