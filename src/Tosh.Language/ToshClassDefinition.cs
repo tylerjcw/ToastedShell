@@ -2359,12 +2359,45 @@ public sealed class ToshClassDefinition : IShellNamedType
         return true;
     }
 
+    /// <summary>
+    /// The export table of the module this class was declared in, or null at top
+    /// level. A class body is written inside its module, so an unqualified
+    /// annotation naming a sibling — or the class itself — has to resolve
+    /// against that module. Annotations are checked when a member runs, by which
+    /// time the module scope is long gone from the engine's stack, so the class
+    /// carries the table rather than relying on where the call happens to be.
+    /// </summary>
+    internal ModuleExportTable? DeclaringExports { get; set; }
+
+    /// <summary>
+    /// Makes this class's declaring module visible to annotation resolution for
+    /// the duration of a conversion, then restores whatever was there. Nested —
+    /// a member of one class calling a member of another must not leave the
+    /// wrong module installed.
+    /// </summary>
+    private readonly struct AnnotationScope : IDisposable
+    {
+        private readonly ToshEngine _engine;
+        private readonly ModuleExportTable? _previous;
+
+        public AnnotationScope(ToshEngine engine, ModuleExportTable? exports)
+        {
+            _engine = engine;
+            _previous = engine.AnnotationResolutionExports;
+            if (exports is not null) engine.AnnotationResolutionExports = exports;
+        }
+
+        public void Dispose() => _engine.AnnotationResolutionExports = _previous;
+    }
+
     private object? ConvertPropertyValue(ToshClassInstance? instance, ToshClassPropertyDefinition property, object? value)
     {
         if (TryResolvePropertyValueByBinding(instance, property, value, out var resolved))
         {
             return resolved;
         }
+
+        using var annotationScope = new AnnotationScope(_engine, DeclaringExports);
 
         return _engine.ConvertAnnotatedValue(
             property.TypeName!,
@@ -2386,6 +2419,8 @@ public sealed class ToshClassDefinition : IShellNamedType
         {
             return resolved;
         }
+
+        using var annotationScope = new AnnotationScope(_engine, DeclaringExports);
 
         return await _engine.ConvertAnnotatedValueAsync(
             property.TypeName!,
@@ -2611,6 +2646,11 @@ public sealed class ToshClassDefinition : IShellNamedType
         }
 
         var returnValues = UnwrapValues(values);
+        // A return annotation is written inside the class body, so it resolves
+        // against the module that body lives in — not against wherever the call
+        // happens to be made from.
+        using var annotationScope = new AnnotationScope(_engine, DeclaringExports);
+
         if (effectiveReturnType is null)
         {
             return returnValues;

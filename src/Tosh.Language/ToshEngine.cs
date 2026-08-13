@@ -4033,6 +4033,18 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
             yield break;
         }
 
+        // Capture the module this class is being declared in, so an unqualified
+        // annotation inside its body still resolves when a member runs later and
+        // the module scope is no longer on the stack.
+        foreach (var scope in _scopes)
+        {
+            if (scope.Exports is { } moduleExports)
+            {
+                definition.DeclaringExports = moduleExports;
+                break;
+            }
+        }
+
         // Before DeclareType, so a class the resolver could never construct never enters scope.
         definition.ValidateConstructorSignatures();
 
@@ -11683,8 +11695,23 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
         return false;
     }
 
+    /// <summary>
+    /// The module whose exported types an annotation should resolve against while
+    /// a class member is running. Set by <see cref="ToshClassDefinition"/> around
+    /// member invocation, because by then the declaring module's scope has left
+    /// the stack.
+    /// </summary>
+    internal ModuleExportTable? AnnotationResolutionExports { get; set; }
+
     public bool TryGetNamedType(string name, out IShellNamedType definition)
     {
+        if (AnnotationResolutionExports is { } declaringExports &&
+            declaringExports.Types.TryGetValue(name, out var declaredSibling))
+        {
+            definition = declaredSibling;
+            return true;
+        }
+
         foreach (var scope in _scopes)
         {
             if (scope.Classes.TryGetValue(name, out var scopedDefinition) &&
