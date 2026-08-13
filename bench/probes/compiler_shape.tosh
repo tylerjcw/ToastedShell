@@ -1,0 +1,371 @@
+#!/usr/bin/env tosh
+## @summary Compiler-shaped readiness probe: lexer, recursive-descent parser,
+##          AST hierarchy, and two visitor passes over a small expression
+##          language.
+## @remarks
+##   Deliberately shaped like the real thing rather than written for speed. The
+##   point is to find out which parts of ToastScript fight back when you write
+##   compiler-shaped code, what compiler tier the result reaches, and how fast
+##   it runs interpreted versus compiled.
+##
+##   Grammar:
+##     expr    := 'let' IDENT '=' expr 'in' expr | sum
+##     sum     := product (('+' | '-') product)*
+##     product := unary (('*' | '/') unary)*
+##     unary   := '-' unary | atom
+##     atom    := NUMBER | IDENT | '(' expr ')'
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Tokens
+# ─────────────────────────────────────────────────────────────────────────────
+
+export class Token(kind: string, text: string, pos: int) {
+    prop Kind: string = $kind
+    prop Text: string = $text
+    prop Pos: int = $pos
+
+    func ToString() -> string => $"{$this.Kind}:{$this.Text}"
+}
+
+export class LexError(message: string, pos: int) extends Error {
+    prop Position: int = $pos
+
+    prop Code: string            = "probe.lex.unexpected"
+    prop DiagnosticTitle: string = "Unexpected character"
+    prop Message: string         = $message
+    prop Label: string           => $"at offset {$this.Position}"
+    prop Help: string            = "The probe language accepts digits, identifiers, ( ) + - * / and '='."
+}
+
+export class ParseError(message: string, token) extends Error {
+    prop Token = $token
+
+    prop Code: string            = "probe.parse.unexpected"
+    prop DiagnosticTitle: string = "Unexpected token"
+    prop Message: string         = $message
+    prop Label: string           => $"at {$this.Token.Kind}:{$this.Token.Text}"
+    prop Help: string            = "Check the expression's parentheses and operators."
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Lexer
+# ─────────────────────────────────────────────────────────────────────────────
+
+export class Lexer(source: string) {
+    prop Source: string = $source
+    shy prop pos_: int = 0
+
+    shy prop DIGITS: string = "0123456789"
+    shy prop ALPHA: string = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_"
+
+    prop AtEnd: bool => $this.pos_ >= $this.Source.Length
+
+    shy func Peek() -> string => $this.AtEnd ? "" : $this.Source.Substring($this.pos_, 1)
+
+    shy func Advance() -> string {
+        var c = $this.Peek()
+        $this.pos_ = $this.pos_ + 1
+        return $c
+    }
+
+    shy func IsDigit(c: string) -> bool => ($c != "") and ($this.DIGITS.Contains($c))
+    shy func IsAlpha(c: string) -> bool => ($c != "") and ($this.ALPHA.Contains($c))
+
+    shy func ReadNumber() -> Token {
+        var start = $this.pos_
+        var text = ""
+
+        while ($this.IsDigit($this.Peek())) { $text = $text + $this.Advance() }
+
+        if ($this.Peek() == ".") {
+            $text = $text + $this.Advance()
+            while ($this.IsDigit($this.Peek())) { $text = $text + $this.Advance() }
+        }
+
+        return new Token("number", $text, $start)
+    }
+
+    shy func ReadWord() -> Token {
+        var start = $this.pos_
+        var text = ""
+
+        while ($this.IsAlpha($this.Peek()) or $this.IsDigit($this.Peek())) {
+            $text = $text + $this.Advance()
+        }
+
+        var kind = (($text == "let") or ($text == "in")) ? "keyword" : "ident"
+        return new Token($kind, $text, $start)
+    }
+
+    ## @summary Produces the full token list, ending with an `eof` token.
+    func Tokenize() {
+        var tokens = []
+
+        while (not $this.AtEnd) {
+            var c = $this.Peek()
+
+            if (($c == " ") or ($c == "\t") or ($c == "\n")) {
+                $this.Advance() | ignore
+                continue
+            }
+
+            if ($this.IsDigit($c)) {
+                $tokens = $tokens + [$this.ReadNumber()]
+                continue
+            }
+
+            if ($this.IsAlpha($c)) {
+                $tokens = $tokens + [$this.ReadWord()]
+                continue
+            }
+
+            if ("+-*/()=".Contains($c)) {
+                var start = $this.pos_
+                $tokens = $tokens + [new Token("punct", $this.Advance(), $start)]
+                continue
+            }
+
+            throw new LexError($"unexpected character '{$c}'", $this.pos_)
+        }
+
+        return $tokens + [new Token("eof", "", $this.pos_)]
+    }
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# AST — a small hierarchy, because that is the shape a real compiler has
+# ─────────────────────────────────────────────────────────────────────────────
+
+export class Node {
+    prop Kind: string = "node"
+}
+
+export class NumberNode(value: double) extends Node {
+    prop Kind: string = "number"
+    prop Value: double = $value
+}
+
+export class VarNode(name: string) extends Node {
+    prop Kind: string = "var"
+    prop Name: string = $name
+}
+
+export class UnaryNode(op: string, operand) extends Node {
+    prop Kind: string = "unary"
+    prop Op: string = $op
+    prop Operand = $operand
+}
+
+export class BinaryNode(op: string, left, right) extends Node {
+    prop Kind: string = "binary"
+    prop Op: string = $op
+    prop Left = $left
+    prop Right = $right
+}
+
+export class LetNode(name: string, value, body) extends Node {
+    prop Kind: string = "let"
+    prop Name: string = $name
+    prop Value = $value
+    prop Body = $body
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Parser — recursive descent with precedence levels
+# ─────────────────────────────────────────────────────────────────────────────
+
+export class Parser(tokens) {
+    prop Tokens = $tokens
+    shy prop index_: int = 0
+
+    shy func Current() => $this.Tokens[$this.index_]
+
+    shy func Advance() {
+        var token = $this.Current()
+        $this.index_ = $this.index_ + 1
+        return $token
+    }
+
+    shy func Matches(kind: string, text: string) -> bool {
+        var token = $this.Current()
+        return ($token.Kind == $kind) and ($token.Text == $text)
+    }
+
+    shy func Expect(kind: string, text: string) {
+        if (not $this.Matches($kind, $text)) {
+            throw new ParseError($"expected '{$text}'", $this.Current())
+        }
+
+        return $this.Advance()
+    }
+
+    ## @summary expr := 'let' IDENT '=' expr 'in' expr | sum
+    func ParseExpr() {
+        if ($this.Matches("keyword", "let")) {
+            $this.Advance() | ignore
+
+            var name = $this.Current()
+            if ($name.Kind != "ident") { throw new ParseError("expected a name after 'let'", $name) }
+            $this.Advance() | ignore
+
+            $this.Expect("punct", "=") | ignore
+            var value = $this.ParseExpr()
+            $this.Expect("keyword", "in") | ignore
+            var body = $this.ParseExpr()
+
+            return new LetNode($name.Text, $value, $body)
+        }
+
+        return $this.ParseSum()
+    }
+
+    shy func ParseSum() {
+        var left = $this.ParseProduct()
+
+        while ($this.Matches("punct", "+") or $this.Matches("punct", "-")) {
+            var op = $this.Advance()
+            var right = $this.ParseProduct()
+            $left = new BinaryNode($op.Text, $left, $right)
+        }
+
+        return $left
+    }
+
+    shy func ParseProduct() {
+        var left = $this.ParseUnary()
+
+        while ($this.Matches("punct", "*") or $this.Matches("punct", "/")) {
+            var op = $this.Advance()
+            var right = $this.ParseUnary()
+            $left = new BinaryNode($op.Text, $left, $right)
+        }
+
+        return $left
+    }
+
+    shy func ParseUnary() {
+        if ($this.Matches("punct", "-")) {
+            $this.Advance() | ignore
+            return new UnaryNode("-", $this.ParseUnary())
+        }
+
+        return $this.ParseAtom()
+    }
+
+    shy func ParseAtom() {
+        var token = $this.Current()
+
+        if ($token.Kind == "number") {
+            $this.Advance() | ignore
+            return new NumberNode($token.Text as double)
+        }
+
+        if ($token.Kind == "ident") {
+            $this.Advance() | ignore
+            return new VarNode($token.Text)
+        }
+
+        if ($this.Matches("punct", "(")) {
+            $this.Advance() | ignore
+            var inner = $this.ParseExpr()
+            $this.Expect("punct", ")") | ignore
+            return $inner
+        }
+
+        throw new ParseError("expected a number, name, or '('", $token)
+    }
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Visitor passes — the shape every compiler pass takes
+# ─────────────────────────────────────────────────────────────────────────────
+
+## @summary Folds the tree to a value, carrying an environment.
+export class Evaluator {
+    func Visit(node, scope) => match ($node) {
+        _ is NumberNode => $node.Value
+        _ is VarNode    => $this.LookUp($node.Name, $scope)
+        _ is UnaryNode  => 0.0 - $this.Visit($node.Operand, $scope)
+        _ is BinaryNode => $this.Apply($node.Op, $this.Visit($node.Left, $scope), $this.Visit($node.Right, $scope))
+        _ is LetNode    => $this.VisitLet($node, $scope)
+        default         => throw new Error($"unhandled node kind '{$node.Kind}'")
+    }
+
+    shy func LookUp(name: string, scope) {
+        if (not $scope.ContainsKey($name)) { throw new Error($"undefined name '{$name}'") }
+        return $scope[$name]
+    }
+
+    shy func VisitLet(node, scope) {
+        var inner = new System.Collections.Hashtable($scope)
+        $inner[$node.Name] = $this.Visit($node.Value, $scope)
+        return $this.Visit($node.Body, $inner)
+    }
+
+    shy func Apply(op: string, left: double, right: double) -> double => match ($op) {
+        "+"     => $left + $right
+        "-"     => $left - $right
+        "*"     => $left * $right
+        "/"     => $left / $right
+        default => throw new Error($"unknown operator '{$op}'")
+    }
+}
+
+## @summary Renders the tree back to fully parenthesised source.
+export class Printer {
+    func Visit(node) => match ($node) {
+        _ is NumberNode => $"{$node.Value}"
+        _ is VarNode    => $node.Name
+        _ is UnaryNode  => $"(-{$this.Visit($node.Operand)})"
+        _ is BinaryNode => $"({$this.Visit($node.Left)} {$node.Op} {$this.Visit($node.Right)})"
+        _ is LetNode    => $"(let {$node.Name} = {$this.Visit($node.Value)} in {$this.Visit($node.Body)})"
+        default         => "?"
+    }
+}
+
+## @summary Counts nodes by walking the tree — a trivial analysis pass.
+export class Counter {
+    func Visit(node) => match ($node) {
+        _ is NumberNode => 1
+        _ is VarNode    => 1
+        _ is UnaryNode  => 1 + $this.Visit($node.Operand)
+        _ is BinaryNode => 1 + $this.Visit($node.Left) + $this.Visit($node.Right)
+        _ is LetNode    => 1 + $this.Visit($node.Value) + $this.Visit($node.Body)
+        default         => 0
+    }
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Driver
+# ─────────────────────────────────────────────────────────────────────────────
+
+export func Compile(source: string, scope) {
+    var tokens = (new Lexer($source)).Tokenize()
+    var ast = (new Parser($tokens)).ParseExpr()
+
+    return {|
+        Tokens = ($tokens | count),
+        Nodes  = (new Counter()).Visit($ast),
+        Text   = (new Printer()).Visit($ast),
+        Value  = (new Evaluator()).Visit($ast, $scope)
+    |}
+}
+
+var globals = new System.Collections.Hashtable()
+$globals["x"] = 10.0
+$globals["y"] = 4.0
+
+var cases = [
+    "1 + 2 * 3",
+    "(1 + 2) * 3",
+    "-x + y * 2",
+    "let a = x * 2 in a + y",
+    "let a = 1 in let b = 2 in (a + b) * x"
+]
+
+for src in ($cases) {
+    var r = Compile($src, $globals)
+    writeline $"{$src}"
+    writeline $"    tokens={$r.Tokens} nodes={$r.Nodes} value={$r.Value}"
+    writeline $"    {$r.Text}"
+}
