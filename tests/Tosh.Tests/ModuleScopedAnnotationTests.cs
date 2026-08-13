@@ -114,6 +114,50 @@ public class ModuleScopedAnnotationTests
     }
 
     /// <summary>
+    /// A refinement type declared in a module resolves by its bare name from a
+    /// class in that module — `TS-P2-98`, the same root cause as the class case
+    /// but reached through a separate registry.
+    /// </summary>
+    [Fact]
+    public async Task A_refinement_type_resolves_unqualified_inside_its_module()
+    {
+        var output = await RunAsync(
+            """
+            export partial module R {
+                export type Unit = double where (_ >= 0.0 and _ <= 1.0) coerce Math.Clamp(_, 0.0, 1.0)
+                export class Chan { prop V: Unit = 0.25 }
+            }
+            (new R.Chan()).V
+            """);
+
+        Assert.Equal("0.25", output);
+    }
+
+    /// <summary>
+    /// Resolving the name is not enough — the refinement still has to run. A
+    /// lookup that found the type but dropped its predicate would pass the test
+    /// above and be useless.
+    /// </summary>
+    [Fact]
+    public async Task A_module_local_refinement_still_coerces_on_assignment()
+    {
+        var output = await RunAsync(
+            """
+            export partial module R {
+                export type Unit = double where (_ >= 0.0 and _ <= 1.0) coerce Math.Clamp(_, 0.0, 1.0)
+                export class Chan { prop V: Unit = 0.0 }
+            }
+            var c = new R.Chan()
+            $c.V = 5.0
+            $c.V
+            $c.V = -3.0
+            $c.V
+            """);
+
+        Assert.Equal("1,0", output);
+    }
+
+    /// <summary>
     /// The declaring module must not leak: a genuinely unknown annotation still
     /// has to be reported, and a name that only exists in some *other* module
     /// must not start resolving.

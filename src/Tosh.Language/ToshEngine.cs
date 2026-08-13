@@ -11886,6 +11886,17 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
 
     private bool TryGetRefinementType(string name, out RefinementTypeDefinition definition)
     {
+        // Same reasoning as the class lookup in TryGetNamedType: a refinement
+        // type named inside a class body belongs to the module that body lives
+        // in, and by the time the annotation is checked that module's scope has
+        // left the stack (`TS-P2-98`).
+        if (AnnotationResolutionExports is { } declaringExports &&
+            declaringExports.RefinementTypes.TryGetValue(name, out var declaredRefinement))
+        {
+            definition = declaredRefinement;
+            return true;
+        }
+
         foreach (var scope in _scopes)
         {
             if (scope.RefinementTypes.TryGetValue(name, out var scopedDefinition))
