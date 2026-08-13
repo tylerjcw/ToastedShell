@@ -1454,6 +1454,93 @@ that has not been \code{require}d yet.  A name that resolves but a value that
 will not convert raises \code{tosh.runtime.cast\_failed}, and for an enum the
 message lists the members that do exist.
 
+\section{Type Annotations}
+\label{sec:annotations}
+
+An annotation names the type a value must have: on a variable
+(\code{var x: T}), a parameter (\code{func f(a: T)}), a return
+(\code{-> T}) or a class member (\code{prop P: T}).  It is checked when the
+value is produced, and a value that does not already have the type is put
+through the conversions of \S\ref{sec:conversion} before being rejected.
+
+Annotations differ from \code{cast} in when they run rather than in what they
+accept: \code{cast} converts at the point you write it, an annotation converts
+every value that arrives at the annotated position.
+
+\subsection*{What satisfies an annotation}
+
+\textbf{A subclass satisfies its base class.}  This holds in every annotated
+position, not only in variables:
+
+\begin{lstlisting}
+class Shape  { prop Kind: string = "shape"  }
+class Circle extends Shape { prop Kind: string = "circle" }
+
+var s: Shape = new Circle()            # circle
+func describe(v: Shape) -> string => $v.Kind
+describe (new Circle())                # circle
+func make() -> Shape => new Circle()   # a Circle is a Shape
+\end{lstlisting}
+
+\noindent The relation runs one way only.  \code{var c: Circle = new Shape()}
+raises \code{tosh.type.mismatch}: every Circle is a Shape, and no Shape is
+necessarily a Circle.
+
+\textbf{An interface or trait names a contract}, and an annotation naming one
+accepts any class that declares it with \ikw{fulfills} or \ikw{uses}.  A
+contract declared on a base class counts for its subclasses:
+
+\begin{lstlisting}
+interface Drawable { func Draw() -> string }
+class Box   fulfills Drawable { func Draw() -> string => "box" }
+class Crate extends  Box      { }
+
+func render(d: Drawable) -> string => $d.Draw()
+render (new Box())                     # box
+render (new Crate())                   # box - inherited from Box
+
+trait Named { prop Name = "anon" }
+class Widget uses Named { }
+func label(n: Named) -> string => $n.Name
+label (new Widget())                   # anon
+\end{lstlisting}
+
+\noindent The contract must be \emph{declared}.  A class with a structurally
+identical member but no \ikw{fulfills} clause is rejected with
+\code{tosh.type.mismatch}, because an annotation that accepted it would be duck
+typing with extra syntax, and the annotation would document nothing.
+
+\subsection*{Where an annotation's name is resolved}
+
+A type name in an annotation is resolved against the scope that \emph{declares}
+the annotation, not the scope that happens to be executing when the value
+arrives.  A class inside a module therefore names itself, a sibling, or a
+module-local refinement type by its bare name, with no module path:
+
+\begin{lstlisting}
+export partial module Geometry {
+    export type Unit = double where (_ >= 0.0 and _ <= 1.0) coerce Math.Clamp(_, 0.0, 1.0)
+    export class Node { prop Label: string = "n" }
+
+    export class Tree {
+        prop Root : Node = new Node()      # a sibling, unqualified
+        prop Alpha: Unit = 0.25            # a module-local refinement type
+        static func Empty() -> Tree => new Tree()   # the declaring class itself
+    }
+}
+
+(Geometry.Tree.Empty()).Root.Label         # n
+var t = new Geometry.Tree()
+$t.Alpha = 5.0
+$t.Alpha                                   # 1 - the refinement still coerces
+\end{lstlisting}
+
+\noindent This matters because member annotations are checked when the member
+\emph{runs}, by which time the module scope that declared the class is no
+longer on the engine's stack.  Resolution against the declaring module is what
+makes the bare name mean what it reads as.  Qualified names
+(\S\ref{sec:module-qualified-types}) work from anywhere and are unaffected.
+
 \section{Truthiness}
 \label{sec:truthiness}
 
@@ -1927,6 +2014,32 @@ Variables must be declared with \code{var} before use. Assigning to an
 undeclared name is an error.
 \end{notebox}
 
+\subsection*{Inferred types follow reassignment}
+
+A variable declared without an annotation takes its type from what it holds,
+and reassignment updates it.  A use before the reassignment still sees the
+earlier type, so the rule is positional rather than whole-of-scope:
+
+\begin{lstlisting}
+var x = "hello"
+$x.Length                       # 5  - a string
+$x = [1, 2, 3]
+$x.Length                       # 3  - now an array
+\end{lstlisting}
+
+\noindent An \emph{annotated} variable does not re-infer.  The annotation is a
+contract, so an assignment that disagrees with it is an error to report rather
+than a new type to adopt:
+
+\begin{lstlisting}
+var y: int = 10
+$y = "nope"                     # error: could not be converted to 'int'
+\end{lstlisting}
+
+\noindent A reassignment inside a conditional branch says nothing certain about
+the type after it, because the branch may not have run.  The variable becomes
+dynamic there rather than adopting a type only one path produces.
+
 \section{Constants}
 \ikw{const}
 
@@ -2306,6 +2419,39 @@ match ($n) {
     default    => echo "negative"
 }
 \end{lstlisting}
+
+\section{Type Narrowing}
+\label{sec:narrowing}
+
+Testing a value's type with \ikw{is} \emph{narrows} it: for the branch guarded
+by the test, the value is known to have the tested type, and its members are
+reachable without a cast.  Both \code{if} and a \code{match} arm narrow, and
+they narrow identically:
+
+\begin{lstlisting}
+class Node { prop Kind : string = "node" }
+class Leaf extends Node { prop Value: int = 7 }
+
+func describe(n: Node) -> string => match ($n) {
+    _ is Leaf => $"leaf {$n.Value}"     # Value belongs to Leaf, not Node
+    default   => $n.Kind
+}
+
+func viaIf(n: Node) -> string {
+    if ($n is Leaf) { return $"leaf {$n.Value}" }
+    return $n.Kind
+}
+\end{lstlisting}
+
+\noindent Narrowing applies to the arm or branch only.  Outside it the value
+has its declared type again, and a member that exists on neither the declared
+nor the narrowed type is still reported.
+
+\begin{notebox}
+This is what makes a visitor over a class hierarchy writable: every pass over
+an AST is a \code{match} whose arms test node types and then read the members
+those types add.
+\end{notebox}
 
 \section{Try / Catch / Finally}
 \ikw{try}\ikw{catch}\ikw{finally}
@@ -3653,6 +3799,7 @@ hyphens (\code{kebab-mod.hi}), underscores, or mixed case.  Nested modules
 resolve segment-by-segment (\code{outer.inner.fn}).
 
 \subsection*{Module-Qualified Type Names}
+\label{sec:module-qualified-types}
 
 A type declared inside a module may be named from outside it by its
 qualified path, in every position a type name is accepted---including a
@@ -6636,11 +6783,11 @@ func service-manager() {
     var choice = tui pick "Select service:" ...$services
     var action = tui pick $"Action for {$choice}:" "status" "restart" "stop" "logs"
 
-    match ($action) {
-        "status"  => systemctl status $choice
-        "restart" => systemctl restart $choice
-        "stop"    => systemctl stop $choice
-        "logs"    => journalctl -n 50 -u $choice
+    switch ($action) {
+        case "status"  { systemctl status $choice }
+        case "restart" { systemctl restart $choice }
+        case "stop"    { systemctl stop $choice }
+        case "logs"    { journalctl -n 50 -u $choice }
     }
 }
 \end{lstlisting}
