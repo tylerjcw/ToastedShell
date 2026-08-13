@@ -9552,6 +9552,44 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
     }
 
     /// <summary>
+    /// Invokes a callable that was found in a property rather than declared as a
+    /// method (`TS-P2-93`).
+    /// </summary>
+    /// <remarks>
+    /// Returns an <see cref="InvocationResult"/> because the class dispatch paths
+    /// it serves are method-invocation paths: from the caller's side
+    /// <c>$obj.Fn(9)</c> is a call, and which side of the class the callable was
+    /// stored on is not something the call site should have to know.
+    /// </remarks>
+    internal async ValueTask<InvocationResult> InvokeHeldCallableAsync(
+        IShellCallable callable,
+        IReadOnlyList<object?> arguments,
+        CancellationToken cancellationToken)
+    {
+        var context = new CommandContext(
+            Runtime,
+            AsyncEnumerableExtensions.Empty<object?>(),
+            arguments,
+            cancellationToken,
+            Invocation: null,
+            IsPipelined: false,
+            ScopedTypeResolver: CreateScopedTypeResolver(),
+            BlockExecutor: _ownBlockExecutor,
+            ScopedCommands: CreateScopedCommandView(), ShellTypes: this);
+
+        var results = await AsyncEnumerableExtensions.ToListAsync(
+            callable.InvokeAsync(context),
+            cancellationToken);
+
+        return results.Count switch
+        {
+            0 => new InvocationResult(null, ReturnedVoid: true),
+            1 => new InvocationResult(results[0], ReturnedVoid: false),
+            _ => new InvocationResult(results, ReturnedVoid: false),
+        };
+    }
+
+    /// <summary>
     /// Invokes a callable in expression position, where exactly one value is
     /// expected.
     /// </summary>
@@ -9771,14 +9809,19 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
             return true;
         }
 
-        if (segments.Length == 2 && TryResolveShellStaticType(segments[0], out var shellType))
+        // `TS-P2-92`. This required *exactly* two segments, so `C.Method(...)`
+        // resolved and `C.Prop.Method(...)` did not — a static property's value
+        // could be read (`C.Text.Length` works) but never called. A module has
+        // carried a member chain here all along; a shell static type now does too,
+        // and the two invokers walk it the same way.
+        if (segments.Length >= 2 && TryResolveShellStaticType(segments[0], out var shellType))
         {
             plan = new ShellSymbolPlan(
                 ShellSymbolKind.ShellStatic,
                 Module: null,
                 shellType,
-                segments[1],
-                MemberPath: null);
+                segments[^1],
+                segments.Length > 2 ? string.Join('.', segments[1..^1]) : null);
             return true;
         }
 
@@ -9796,8 +9839,20 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
 
         if (plan.Kind == ShellSymbolKind.ShellStatic)
         {
-            var staticInvocation = Runtime.Invoker.InvokeStatic(plan.StaticType!, plan.MethodName, arguments);
-            value = staticInvocation.ReturnedVoid ? null : staticInvocation.Value;
+            // With no member chain the name is a static method on the type itself;
+            // with one, the chain is walked from the static member and the call
+            // lands on whatever it produced (`TS-P2-92`).
+            if (plan.MemberPath is null)
+            {
+                var staticInvocation = Runtime.Invoker.InvokeStatic(plan.StaticType!, plan.MethodName, arguments);
+                value = staticInvocation.ReturnedVoid ? null : staticInvocation.Value;
+                return true;
+            }
+
+            var staticTarget = Runtime.ObjectAccessor.GetValue(plan.StaticType, plan.MemberPath)
+                               ?? throw CannotInvokeOnNull(plan.MethodName);
+            var chained = Runtime.Invoker.InvokeInstance(staticTarget, plan.MethodName, arguments);
+            value = chained.ReturnedVoid ? staticTarget : chained.Value;
             return true;
         }
 
@@ -9829,12 +9884,27 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
 
         if (plan.Kind == ShellSymbolKind.ShellStatic)
         {
-            var staticInvocation = await Runtime.Invoker.InvokeStaticMethodAsync(
-                plan.StaticType!,
+            if (plan.MemberPath is null)
+            {
+                var staticInvocation = await Runtime.Invoker.InvokeStaticMethodAsync(
+                    plan.StaticType!,
+                    plan.MethodName,
+                    arguments,
+                    cancellationToken);
+                return (true, staticInvocation.ReturnedVoid ? null : staticInvocation.Value);
+            }
+
+            var staticTarget = await Runtime.ObjectAccessor.GetValueAsync(
+                                   plan.StaticType,
+                                   plan.MemberPath,
+                                   cancellationToken)
+                               ?? throw CannotInvokeOnNull(plan.MethodName);
+            var chained = await Runtime.Invoker.InvokeInstanceMethodAsync(
+                staticTarget,
                 plan.MethodName,
                 arguments,
                 cancellationToken);
-            return (true, staticInvocation.ReturnedVoid ? null : staticInvocation.Value);
+            return (true, chained.ReturnedVoid ? staticTarget : chained.Value);
         }
 
         var target = plan.Module!;

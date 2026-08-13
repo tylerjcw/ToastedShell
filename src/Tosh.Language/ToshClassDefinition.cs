@@ -657,6 +657,17 @@ public sealed class ToshClassDefinition : IShellNamedType
                 return await BaseClass.InvokeStaticMethodAsync(methodName, arguments, cancellationToken);
             }
 
+            // `TS-P2-93`, static side: a `shared prop` holding a callable answers
+            // `C.Fn(9)` for the same reason the instance one does.
+            if (TryGetStaticMember(methodName, out var heldStatic) &&
+                heldStatic is IShellCallable staticCallable)
+            {
+                return await _engine.InvokeHeldCallableAsync(
+                    staticCallable,
+                    arguments,
+                    cancellationToken);
+            }
+
             throw new InvalidOperationException($"Static method '{methodName}' was not found on class '{Name}'.");
         }
 
@@ -1727,6 +1738,27 @@ public sealed class ToshClassDefinition : IShellNamedType
                 return await _engine.Runtime.Invoker.InvokeInstanceMethodAsync(
                     instance.ClrBaseObject,
                     methodName,
+                    arguments,
+                    cancellationToken);
+            }
+
+            // `TS-P2-93`. A property may *hold* a callable, and `$obj.Fn(9)` is how
+            // that reads in any other language. The value is already invocable —
+            // assigning it to a variable and calling that has always worked — so
+            // refusing here made the property spelling the one that needed a
+            // temporary. Checked only after every method candidate has failed, so a
+            // real method of the same name still wins.
+            var heldCallable = await TryGetInstanceMemberAsync(
+                instance,
+                methodName,
+                includeHidden,
+                accessor,
+                cancellationToken);
+
+            if (heldCallable is { Found: true, Value: IShellCallable propertyCallable })
+            {
+                return await _engine.InvokeHeldCallableAsync(
+                    propertyCallable,
                     arguments,
                     cancellationToken);
             }
