@@ -8089,6 +8089,33 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
                                 sourceText,
                                 staticMethodCall.Span);
 
+                        // `TS-P2-114`. A bare name here may be a function in scope
+                        // rather than a type. In statement position `Helper(3)`
+                        // parses as a command and resolves against the scope; an
+                        // interpolation hole is re-parsed as a pure expression, where
+                        // the same text becomes a qualified path and went straight to
+                        // CLR resolution — so a module's sibling function was
+                        // unreachable from a hole while `{M.Helper(3)}`, `{$f(3)}` and
+                        // a top-level `{Plain(3)}` all worked.
+                        //
+                        // Resolved through the same scoped view a command call uses,
+                        // which is the rule `TS-P2-01` already established for
+                        // `f() + 1`. Only single-segment paths are considered: a
+                        // dotted path is a qualified name and belongs below.
+                        if (!staticMethodCall.Path.Contains('.', StringComparison.Ordinal) &&
+                            CreateScopedCommandView().TryGet(staticMethodCall.Path, out var scopedCommand) &&
+                            scopedCommand is IShellCallable scopedCallable)
+                        {
+                            return await InvokeCallableInExpressionAsync(
+                                scopedCallable,
+                                methodArguments,
+                                sourceName,
+                                sourceText,
+                                staticMethodCall.Span,
+                                staticMethodCall.Arguments.Select(argument => argument.Span).ToArray(),
+                                cancellationToken);
+                        }
+
                         return await InvokeQualifiedMethodAsync(
                             staticMethodCall.Path,
                             methodArguments,
@@ -8444,41 +8471,15 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
                         }
 
                         var callArguments = await EvaluateCallableInvocationArgumentsAsync(sourceName, sourceText, callableInvocation.Arguments, cancellationToken);
-                        var invocation = new CommandInvocation(
+
+                        return await InvokeCallableInExpressionAsync(
+                            callable,
+                            callArguments,
                             sourceName,
                             sourceText,
-                            callable.CallableName,
                             callableInvocation.Span,
-                            callableInvocation.Arguments.Select(argument => argument.Span).ToArray());
-                        var context = new CommandContext(
-                            Runtime,
-                            AsyncEnumerableExtensions.Empty<object?>(),
-                            callArguments,
-                            cancellationToken,
-                            invocation,
-                            IsPipelined: false,
-                            ScopedTypeResolver: CreateScopedTypeResolver(),
-                            BlockExecutor: _ownBlockExecutor,
-                            ScopedCommands: CreateScopedCommandView(), ShellTypes: this);
-                        var results = await AsyncEnumerableExtensions.ToListAsync(
-                            callable.InvokeAsync(context),
+                            callableInvocation.Arguments.Select(argument => argument.Span).ToArray(),
                             cancellationToken);
-
-                        if (results.Count <= 1)
-                        {
-                            return results.Count == 1 ? results[0] : null;
-                        }
-
-                        throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                            Code: "tosh.runtime.callable_invocation_requires_single_value",
-                            Title: "Callable invocation in expression context must produce exactly one value.",
-                            SourceName: sourceName,
-                            SourceText: sourceText,
-                            Span: callableInvocation.Span,
-                            Label: results.Count == 0
-                                ? "this invocation produced no values"
-                                : $"this invocation produced {results.Count} values",
-                            Help: "ensure the callable returns exactly one value, or use 'invoke' in pipeline context for multi-value output."));
                     }
 
                 case SubexpressionArgumentSyntax subexpression:
@@ -9548,6 +9549,66 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
         }
 
         return resolved;
+    }
+
+    /// <summary>
+    /// Invokes a callable in expression position, where exactly one value is
+    /// expected.
+    /// </summary>
+    /// <remarks>
+    /// One helper for the two parses that reach it. `f() + 1` builds a
+    /// <c>CallableInvocationArgumentSyntax</c>; the same text inside an
+    /// interpolation hole is re-parsed as a pure expression and builds a
+    /// <c>StaticMethodCallArgumentSyntax</c> instead. They are the same call and
+    /// must behave the same way, including the "produced N values" diagnostic —
+    /// duplicating that here is the `TS-P1-24` shape.
+    /// </remarks>
+    private async ValueTask<object?> InvokeCallableInExpressionAsync(
+        IShellCallable callable,
+        IReadOnlyList<object?> arguments,
+        string sourceName,
+        string sourceText,
+        TextSpan span,
+        IReadOnlyList<TextSpan> argumentSpans,
+        CancellationToken cancellationToken)
+    {
+        var invocation = new CommandInvocation(
+            sourceName,
+            sourceText,
+            callable.CallableName,
+            span,
+            argumentSpans);
+
+        var context = new CommandContext(
+            Runtime,
+            AsyncEnumerableExtensions.Empty<object?>(),
+            arguments,
+            cancellationToken,
+            invocation,
+            IsPipelined: false,
+            ScopedTypeResolver: CreateScopedTypeResolver(),
+            BlockExecutor: _ownBlockExecutor,
+            ScopedCommands: CreateScopedCommandView(), ShellTypes: this);
+
+        var results = await AsyncEnumerableExtensions.ToListAsync(
+            callable.InvokeAsync(context),
+            cancellationToken);
+
+        if (results.Count <= 1)
+        {
+            return results.Count == 1 ? results[0] : null;
+        }
+
+        throw ToshDiagnosticException.Create(new ToshDiagnostic(
+            Code: "tosh.runtime.callable_invocation_requires_single_value",
+            Title: "Callable invocation in expression context must produce exactly one value.",
+            SourceName: sourceName,
+            SourceText: sourceText,
+            Span: span,
+            Label: results.Count == 0
+                ? "this invocation produced no values"
+                : $"this invocation produced {results.Count} values",
+            Help: "ensure the callable returns exactly one value, or use 'invoke' in pipeline context for multi-value output."));
     }
 
     private async ValueTask<object?> InvokeQualifiedMethodAsync(

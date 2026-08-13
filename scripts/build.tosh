@@ -2303,10 +2303,7 @@ StartupNotify=false
             if ($job.ExitCode != 0) {
                 throw $"latexmk failed (exit {$job.ExitCode}). See docs/spec/toastscript-spec.log."
             }
-            ## Hoisted rather than called inside the hole: a bare sibling call in
-            ## an interpolation hole resolves as a *type* and fails (`TS-P2-114`).
-            var pdf = PdfPath($root)
-            Helpers.Ok($"Specification PDF written: {$pdf}")
+            Helpers.Ok($"Specification PDF written: {PdfPath($root)}")
             return true
         }
 
