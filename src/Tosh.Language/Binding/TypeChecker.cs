@@ -35,6 +35,16 @@ public static class TypeChecker
     {
         ArgumentNullException.ThrowIfNull(unit);
         var ctx = new CheckContext(unit);
+
+        // `IsAssignable` is static and has no context, but deciding whether one
+        // user class derives from another needs the declarations. Harvest the
+        // name -> base-name edges once per check and expose them thread-locally
+        // for the duration; parallel test runs each get their own map.
+        _classBaseNames = new Dictionary<string, string?>(StringComparer.Ordinal);
+        CollectUserClasses(unit.Root, _classBaseNames);
+
+        try
+        {
         // Pre-pass: harvest user-function signatures so call-site
         // arity/argument checks can fire without forward-reference
         // pain. Function bodies are walked inside this same pass —
@@ -42,6 +52,68 @@ public static class TypeChecker
         CollectUserFunctions(unit.Root, ctx.UserFunctions);
         Walk(unit.Root, ctx);
         return ctx.Diagnostics;
+        }
+        finally
+        {
+            _classBaseNames = null;
+        }
+    }
+
+    /// <summary>
+    /// name -> `extends` target, for the check currently running on this thread.
+    /// </summary>
+    [ThreadStatic]
+    private static Dictionary<string, string?>? _classBaseNames;
+
+    private static void CollectUserClasses(BoundNode node, Dictionary<string, string?> sink)
+    {
+        switch (node)
+        {
+            case BoundScript s:
+                foreach (var st in s.Statements) CollectUserClasses(st, sink);
+                break;
+            case BoundClassDefinition cls:
+                sink[cls.Name] = cls.BaseClassName;
+                break;
+            case BoundFunctionDefinition fn:
+                CollectUserClasses(fn.Body, sink);
+                break;
+            case BoundBlock b:
+                foreach (var st in b.Statements) CollectUserClasses(st, sink);
+                break;
+            case BoundIfStatement i:
+                CollectUserClasses(i.ThenBlock, sink);
+                if (i.ElseBlock is not null) CollectUserClasses(i.ElseBlock, sink);
+                break;
+            case BoundForStatement f:
+                CollectUserClasses(f.Body, sink);
+                break;
+            case BoundWhileStatement w:
+                CollectUserClasses(w.Body, sink);
+                break;
+        }
+    }
+
+    /// <summary>
+    /// True when <paramref name="derivedName"/> reaches <paramref name="baseName"/>
+    /// by following `extends`. Depth-capped so a malformed cycle cannot hang the
+    /// checker — a cycle is a separate diagnostic's problem, not this one's.
+    /// </summary>
+    private static bool DerivesFrom(string derivedName, string baseName)
+    {
+        if (string.Equals(derivedName, baseName, StringComparison.Ordinal)) return true;
+        if (_classBaseNames is not { } bases) return false;
+
+        var current = derivedName;
+
+        for (var depth = 0; depth < 64; depth++)
+        {
+            if (!bases.TryGetValue(current, out var next) || next is null) return false;
+            if (string.Equals(next, baseName, StringComparison.Ordinal)) return true;
+            current = next;
+        }
+
+        return false;
     }
 
     /// <summary>
@@ -1845,6 +1917,17 @@ public static class TypeChecker
             }
             return true;
         notAssignable:;
+        }
+
+        // A subclass is assignable to its base. Without this, an AST-shaped
+        // hierarchy could not be typed at all: `return new LetNode(…)` from a
+        // function declared `-> Node` was rejected, and so was passing one to a
+        // `Node` parameter — `TS-P2-107`, and the runtime half of it,
+        // `TS-P2-109`.
+        if (from is UserClassType fromClass && to is UserClassType toClass &&
+            DerivesFrom(fromClass.Name, toClass.Name))
+        {
+            return true;
         }
 
         reason = "shapes differ.";

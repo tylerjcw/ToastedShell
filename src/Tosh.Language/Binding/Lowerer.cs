@@ -1008,9 +1008,12 @@ public static class Lowerer
         {
             ctx.RecordPotentialCapture(symbol);
         }
-        // If we resolved the symbol, lift its declared type onto the
-        // reference so callers downstream see propagated typing.
-        var type = symbol?.DeclaredType ?? BoundType.Dynamic;
+        // A narrowing from an enclosing `is` pattern wins over the declared
+        // type: inside `_ is Leaf =>` the value is a Leaf regardless of how the
+        // variable was declared.
+        var type = ctx.LookupNarrowed(varRef.Name)
+                   ?? symbol?.DeclaredType
+                   ?? BoundType.Dynamic;
         return new BoundVariableReference(varRef.Name, symbol, varRef.Span, type);
     }
 
@@ -1307,6 +1310,14 @@ public static class Lowerer
             var pattern = arm.Pattern is null ? null : LowerExpression(arm.Pattern, ctx);
             var guard = arm.Guard is null ? null : LowerExpression(arm.Guard, ctx);
 
+            // `_ is T` over a plain variable narrows that variable for the arm.
+            var narrowedName = TryGetNarrowedName(match.Value, arm.Pattern, ctx, out var narrowedType);
+
+            if (narrowedName is not null && narrowedType is not null)
+            {
+                ctx.PushNarrowing(narrowedName, narrowedType);
+            }
+
             BoundBlock body;
             switch (arm.Body)
             {
@@ -1333,10 +1344,48 @@ public static class Lowerer
                     break;
             }
 
+            if (narrowedName is not null && narrowedType is not null)
+            {
+                ctx.PopNarrowing();
+            }
+
             arms.Add(new BoundMatchArm(pattern, guard, body, arm.IsWildcard, arm.Span));
         }
 
         return new BoundMatchExpression(value, arms, match.Span, BoundType.Dynamic);
+    }
+
+    /// <summary>
+    /// The variable a `match` arm narrows, when the matched value is a plain
+    /// variable and the arm pattern is `is T` for a resolvable `T`. Returns null
+    /// for every other shape — guards, destructuring and literal patterns carry
+    /// no type information to propagate.
+    /// </summary>
+    private static string? TryGetNarrowedName(
+        ArgumentSyntax matchValue,
+        ArgumentSyntax? pattern,
+        LowerContext ctx,
+        out BoundType? narrowedType)
+    {
+        narrowedType = null;
+
+        if (matchValue is not VariableReferenceArgumentSyntax variable) return null;
+        if (pattern is not ComparisonPatternSyntax comparison) return null;
+        if (!string.Equals(comparison.Operator, "is", StringComparison.OrdinalIgnoreCase)) return null;
+
+        var typeName = comparison.Operand switch
+        {
+            BarewordArgumentSyntax bareword => bareword.Value,
+            _ => null,
+        };
+
+        if (string.IsNullOrWhiteSpace(typeName)) return null;
+
+        var resolved = ctx.ResolveType(typeName);
+        if (resolved is null || resolved.IsDynamic) return null;
+
+        narrowedType = resolved;
+        return variable.Name;
     }
 
     // ── Phase C-3 helpers ───────────────────────────────────────────
@@ -1970,6 +2019,37 @@ public static class Lowerer
         // Scope-stack of name → symbol. Top of stack is innermost.
         // Mirrors the layout used by VariableBinder.
         private readonly List<Dictionary<string, BoundSymbol>> _scopes = new();
+
+        // Flow-typing stack: name → the type a value is known to have inside the
+        // region currently being lowered. A `match` arm whose pattern is
+        // `_ is T` pushes one of these around the arm body, so a reference to
+        // the matched variable inside that arm is bound with type `T` rather
+        // than its declared type (`TS-P2-108`). Narrowing the *bound* type
+        // rather than patching the checker means inference, overload
+        // resolution and the compiled tier all see it too.
+        private readonly List<Dictionary<string, BoundType>> _narrowings = new();
+
+        public void PushNarrowing(string name, BoundType type)
+        {
+            var frame = new Dictionary<string, BoundType>(StringComparer.OrdinalIgnoreCase)
+            {
+                [name] = type,
+            };
+            _narrowings.Add(frame);
+        }
+
+        public void PopNarrowing() => _narrowings.RemoveAt(_narrowings.Count - 1);
+
+        /// <summary>Innermost narrowing for a name, or null when it is not narrowed.</summary>
+        public BoundType? LookupNarrowed(string name)
+        {
+            for (var i = _narrowings.Count - 1; i >= 0; i--)
+            {
+                if (_narrowings[i].TryGetValue(name, out var narrowed)) return narrowed;
+            }
+
+            return null;
+        }
 
         // Each active lambda frame records the scope-depth at which
         // it was entered plus an ordered set of captures discovered
