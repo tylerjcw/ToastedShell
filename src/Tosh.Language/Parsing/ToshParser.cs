@@ -8719,6 +8719,7 @@ public static class ToshParser
                              IsLogicalOrOperatorToken(token) ||
                              IsLogicalAndOperatorToken(token) ||
                              IsComparisonOperatorToken(token) ||
+                             IsCastOperatorToken(token) ||
                              IsAdditiveOperatorToken(token) ||
                              IsMultiplicativeOperatorToken(token) ||
                              IsExponentiationOperatorToken(token)))
@@ -8773,6 +8774,7 @@ public static class ToshParser
                             IsLogicalOrOperatorToken(token) ||
                             IsLogicalAndOperatorToken(token) ||
                             IsComparisonOperatorToken(token) ||
+                            IsCastOperatorToken(token) ||
                             IsAdditiveOperatorToken(token) ||
                             IsMultiplicativeOperatorToken(token) ||
                             IsExponentiationOperatorToken(token))
@@ -8788,6 +8790,7 @@ public static class ToshParser
                              IsLogicalOrOperatorToken(token) ||
                              IsLogicalAndOperatorToken(token) ||
                              IsComparisonOperatorToken(token) ||
+                             IsCastOperatorToken(token) ||
                              IsAdditiveOperatorToken(token) ||
                              IsMultiplicativeOperatorToken(token) ||
                              IsExponentiationOperatorToken(token)))
@@ -10523,9 +10526,40 @@ public static class ToshParser
             return left;
         }
 
-        private ArgumentSyntax? ParseExponentiationExpression(int startPosition, bool implicitCurrentItem)
+        /// <summary>
+        /// `x as T`, binding tighter than every binary operator and looser than a
+        /// primary term. The type operand is a single primary — never an
+        /// arithmetic expression — which is what stops the cast consuming the
+        /// operator that follows it (`TS-P2-105`).
+        ///
+        /// Sitting *below* exponentiation rather than above multiplicative
+        /// matters: `x as int ** 2` must still find its `**`, and it only does if
+        /// the cast is folded into the exponentiation's left operand.
+        /// </summary>
+        private ArgumentSyntax? ParseCastExpression(int startPosition, bool implicitCurrentItem)
         {
             var left = ParseArgumentOperand(implicitCurrentItem);
+
+            while (IsCastOperatorToken(Current))
+            {
+                var operatorToken = NextToken();
+                var right = ParseArgumentOperand(implicitCurrentItem: false);
+                var end = right?.Span.End ?? operatorToken.Span.End;
+
+                left = new OperatorArgumentSyntax(
+                    left ?? new BarewordArgumentSyntax(string.Empty, operatorToken.Span),
+                    "as",
+                    operatorToken.Span,
+                    right ?? new BarewordArgumentSyntax(string.Empty, operatorToken.Span),
+                    TextSpan.FromBounds(startPosition, end));
+            }
+
+            return left;
+        }
+
+        private ArgumentSyntax? ParseExponentiationExpression(int startPosition, bool implicitCurrentItem)
+        {
+            var left = ParseCastExpression(startPosition, implicitCurrentItem);
 
             // ** is right-associative: 2 ** 3 ** 2 == 2 ** (3 ** 2) == 512. The right
             // operand is a *unary* expression so `2 ** -1` still parses, which is the
@@ -11303,6 +11337,7 @@ public static class ToshParser
                              IsLogicalOrOperatorToken(token) ||
                              IsLogicalAndOperatorToken(token) ||
                              IsComparisonOperatorToken(token) ||
+                             IsCastOperatorToken(token) ||
                              IsAdditiveOperatorToken(token) ||
                              IsMultiplicativeOperatorToken(token) ||
                              IsUnaryOperatorToken(token)))
@@ -11404,6 +11439,7 @@ public static class ToshParser
                              IsLogicalOrOperatorToken(token) ||
                              IsLogicalAndOperatorToken(token) ||
                              IsComparisonOperatorToken(token) ||
+                             IsCastOperatorToken(token) ||
                              IsAdditiveOperatorToken(token) ||
                              IsMultiplicativeOperatorToken(token) ||
                              IsExponentiationOperatorToken(token) ||
@@ -11480,6 +11516,7 @@ public static class ToshParser
                              IsLogicalOrOperatorToken(token) ||
                              IsLogicalAndOperatorToken(token) ||
                              IsComparisonOperatorToken(token) ||
+                             IsCastOperatorToken(token) ||
                              IsAdditiveOperatorToken(token) ||
                              IsMultiplicativeOperatorToken(token) ||
                              IsExponentiationOperatorToken(token) ||
@@ -12598,6 +12635,7 @@ public static class ToshParser
         private bool IsAnyOperatorToken(SyntaxToken token)
         {
             return IsComparisonOperatorToken(token)
+                || IsCastOperatorToken(token)
                 || IsAdditiveOperatorToken(token)
                 || IsMultiplicativeOperatorToken(token)
                 || IsExponentiationOperatorToken(token)
@@ -12647,8 +12685,27 @@ public static class ToshParser
                 or SyntaxTokenKind.BangEqual or SyntaxTokenKind.BangTilde
                 || (!_stopRefinementAtEquals && IsEqualsToken(token))
                 || (token.Kind == SyntaxTokenKind.Bareword && token.Text is
-                    "==" or "=~" or "in" or "contains" or "starts-with" or "ends-with" or "is" or "not" or "as"
+                    "==" or "=~" or "in" or "contains" or "starts-with" or "ends-with" or "is" or "not"
                     or "is-not" or "is-in" or "is-not-in" or "not-in");
+        }
+
+        /// <summary>
+        /// `TS-P2-105`. `as` is a cast, not a comparison, and it parses at its own
+        /// level just above the primary term — so `x as int % 2` is `(x as int) % 2`.
+        ///
+        /// It used to sit in <see cref="IsComparisonOperatorToken"/>, whose right
+        /// operand is a full additive expression, so the cast swallowed the
+        /// arithmetic after it and read `int % 2` as the *type*. The diagnostic
+        /// that came back named `%` and a `String` operand, pointing nowhere near
+        /// the cast.
+        ///
+        /// `is` deliberately stays at comparison level: it yields a boolean, so
+        /// `1 + 2 is int` should test the sum rather than cast-then-add.
+        /// </summary>
+        private static bool IsCastOperatorToken(SyntaxToken token)
+        {
+            return token.Kind == SyntaxTokenKind.Bareword &&
+                   string.Equals(token.Text, "as", StringComparison.OrdinalIgnoreCase);
         }
 
         private static bool IsAdditiveOperatorToken(SyntaxToken token)

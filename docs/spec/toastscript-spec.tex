@@ -1874,26 +1874,33 @@ $x ??= 100      # Still 30 (x isn't null)
 \section{Operator Precedence}
 \label{sec:precedence}
 
-Operators are listed from highest to lowest precedence:
+Operators are listed from highest to lowest precedence.
+
+Note that \code{as} and \code{is} sit at opposite ends of the table although both
+concern types. \code{as} is a cast: it yields a value, so it binds tighter than
+every binary operator and \code{x as int \% 2} means \code{(x as int) \% 2}.
+\code{is} is a test: it yields a boolean, so it binds loosely and
+\code{1 + 2 is int} tests the sum.
 
 \begin{longtable}{C{1.2cm} L{7.5cm} L{4.8cm}}
 \toprule
 \textbf{Level} & \textbf{Operators} & \textbf{Description} \\
 \midrule
 \endhead
-1 & \code{**} & Exponentiation (right-associative) \\
-2 & \code{not}, \code{-} (unary) & Unary NOT, negation \\
-3 & \code{*}, \code{/}, \code{//}, \code{\%} & Multiplicative \\
-4 & \code{+}, \code{-} & Additive \\
-5 & \code{..} & Range \\
-6 & \code{==}, \code{!=}, \code{<}, \code{>}, \code{<=}, \code{>=}, \code{=\textasciitilde}, \code{!\textasciitilde} & Comparison \& regex \\
-7 & \code{is}, \code{is not}, \code{as} & Type testing \& casting \\
-8 & \code{in}, \code{not in}, \code{is in}, \code{is not in}, \code{contains}, \code{starts-with}, \code{ends-with} & Membership \& string testing \\
-9 & \code{and} / \code{\&\&} & Logical AND \\
-10 & \code{or} / \code{||} & Logical OR \\
-11 & \code{?}, \code{:} & Ternary conditional \\
-12 & \code{??} & Null coalescing \\
-13 & \code{=}, \code{+=}, \code{-=}, \code{*=}, \code{**=}, \code{/=}, \code{//=}, \code{\%=}, \code{??=} & Assignment \\
+1 & \code{as} & Type cast \\
+2 & \code{**} & Exponentiation (right-associative) \\
+3 & \code{not}, \code{-} (unary) & Unary NOT, negation \\
+4 & \code{*}, \code{/}, \code{//}, \code{\%} & Multiplicative \\
+5 & \code{+}, \code{-} & Additive \\
+6 & \code{..} & Range \\
+7 & \code{==}, \code{!=}, \code{<}, \code{>}, \code{<=}, \code{>=}, \code{=\textasciitilde}, \code{!\textasciitilde} & Comparison \& regex \\
+8 & \code{is}, \code{is not} & Type testing \\
+9 & \code{in}, \code{not in}, \code{is in}, \code{is not in}, \code{contains}, \code{starts-with}, \code{ends-with} & Membership \& string testing \\
+10 & \code{and} / \code{\&\&} & Logical AND \\
+11 & \code{or} / \code{||} & Logical OR \\
+12 & \code{?}, \code{:} & Ternary conditional \\
+13 & \code{??} & Null coalescing \\
+14 & \code{=}, \code{+=}, \code{-=}, \code{*=}, \code{**=}, \code{/=}, \code{//=}, \code{\%=}, \code{??=} & Assignment \\
 \bottomrule
 \caption{Operator precedence (highest to lowest)}
 \label{tab:precedence}
