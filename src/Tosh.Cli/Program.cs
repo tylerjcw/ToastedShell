@@ -47,6 +47,18 @@ catch (Exception exception)
     return;
 }
 
+// `TS-P2-110`. `--help`, `--version` and `--export-metadata` return before any
+// startup file is read, so the flag has nothing to measure. Saying so beats
+// exiting 0 with no output, which reads as a measurement of zero.
+if (plan.ProfileStartup && plan.Kind is CliInvocationKind.Help
+        or CliInvocationKind.Version or CliInvocationKind.ExportMetadata
+        or CliInvocationKind.Compile)
+{
+    await Console.Error.WriteLineAsync(
+        "tosh: --profile-startup has nothing to report for this invocation — " +
+        "it measures the startup files, and this one does not load them.");
+}
+
 if (plan.Kind == CliInvocationKind.Help)
 {
     await PrintUsageAsync();
@@ -129,6 +141,16 @@ await RaiseSessionStartedAsync();
 if (plan.ProfileStartup && runtime.StartupProfile is { } startupProfile)
 {
     PrintStartupProfile(startupProfile);
+}
+else if (plan.ProfileStartup)
+{
+    // `TS-P2-110`. The flag used to reach only the REPL plan, so every other
+    // invocation accepted it, printed nothing and exited 0 — which reads as
+    // "startup is free" rather than "nothing was measured". Where there is
+    // genuinely no startup to profile, say so instead of staying quiet.
+    await Console.Error.WriteLineAsync(
+        "tosh: --profile-startup has nothing to report for this invocation — " +
+        "it measures the startup files, and this one does not load them.");
 }
 
 if (servePath is not null)

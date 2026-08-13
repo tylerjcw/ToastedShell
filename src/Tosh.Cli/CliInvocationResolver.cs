@@ -52,12 +52,12 @@ internal static class CliInvocationResolver
 
         if (IsHelpSwitch(effectiveArgs[0]))
         {
-            return CliInvocationPlan.Help(skipStartup);
+            return CliInvocationPlan.Help(skipStartup, profileStartup);
         }
 
         if (effectiveArgs[0] is "--version" or "-V")
         {
-            return CliInvocationPlan.Version();
+            return CliInvocationPlan.Version(profileStartup);
         }
 
         if (effectiveArgs[0] is "--compile" or "-C")
@@ -149,7 +149,7 @@ internal static class CliInvocationResolver
                 }
             }
 
-            return CliInvocationPlan.ExportMetadata(format, outputPath);
+            return CliInvocationPlan.ExportMetadata(format, outputPath, profileStartup);
         }
 
         if (effectiveArgs[0] is "-c" or "--command")
@@ -159,7 +159,7 @@ internal static class CliInvocationResolver
                 throw new InvalidOperationException("The '-c'/'--command' flag requires a command string.");
             }
 
-            return CliInvocationPlan.Command(effectiveArgs[1], effectiveArgs.Skip(2).ToArray(), skipStartup, skipProfile, isLoginShell);
+            return CliInvocationPlan.Command(effectiveArgs[1], effectiveArgs.Skip(2).ToArray(), skipStartup, skipProfile, isLoginShell, profileStartup);
         }
 
         var stopFlagParsing = effectiveArgs[0] == "--";
@@ -172,7 +172,7 @@ internal static class CliInvocationResolver
             throw new InvalidOperationException("Expected a command or script path after '--'.");
         }
 
-        if (TryResolveFileInvocation(invocationArgs, currentDirectory, out var plan))
+        if (TryResolveFileInvocation(invocationArgs, currentDirectory, out var plan, skipStartup, profileStartup))
         {
             return plan with { LoadStartup = !skipStartup, SkipProfile = skipProfile, IsLoginShell = isLoginShell };
         }
@@ -182,10 +182,10 @@ internal static class CliInvocationResolver
             throw new InvalidOperationException($"Unknown option '{invocationArgs[0]}'. Use '--' before a command or script path that begins with '-'.");
         }
 
-        return CliInvocationPlan.Command(BuildScript(invocationArgs), Array.Empty<string>(), skipStartup, skipProfile, isLoginShell);
+        return CliInvocationPlan.Command(BuildScript(invocationArgs), Array.Empty<string>(), skipStartup, skipProfile, isLoginShell, profileStartup);
     }
 
-    internal static bool TryResolveFileInvocation(string[] arguments, string currentDirectory, out CliInvocationPlan plan)
+    internal static bool TryResolveFileInvocation(string[] arguments, string currentDirectory, out CliInvocationPlan plan, bool skipStartup = false, bool profileStartup = false)
     {
         plan = default;
 
@@ -205,7 +205,7 @@ internal static class CliInvocationResolver
 
         if (shebang?.IsTosh == true)
         {
-            plan = CliInvocationPlan.ToshScript(candidate, arguments.Skip(1).ToArray());
+            plan = CliInvocationPlan.ToshScript(candidate, arguments.Skip(1).ToArray(), skipStartup, profileStartup);
             return true;
         }
 
@@ -215,13 +215,13 @@ internal static class CliInvocationResolver
                 .Concat([candidate])
                 .Concat(arguments.Skip(1))
                 .ToArray();
-            plan = CliInvocationPlan.ExternalScript(candidate, invocation);
+            plan = CliInvocationPlan.ExternalScript(candidate, invocation, skipStartup, profileStartup);
             return true;
         }
 
         if (ScriptFileDetection.IsToshScript(candidate))
         {
-            plan = CliInvocationPlan.ToshScript(candidate, arguments.Skip(1).ToArray());
+            plan = CliInvocationPlan.ToshScript(candidate, arguments.Skip(1).ToArray(), skipStartup, profileStartup);
             return true;
         }
 
@@ -293,21 +293,21 @@ internal readonly record struct CliInvocationPlan(
     public static CliInvocationPlan Repl(bool skipStartup = false, bool skipProfile = false, bool isLoginShell = false, bool safeMode = false, bool profileStartup = false) =>
         new(CliInvocationKind.Repl, null, Array.Empty<string>(), LoadStartup: !skipStartup, SkipProfile: skipProfile, IsLoginShell: isLoginShell, SafeMode: safeMode, ProfileStartup: profileStartup);
 
-    public static CliInvocationPlan Help(bool skipStartup = false) => new(CliInvocationKind.Help, null, Array.Empty<string>(), LoadStartup: !skipStartup);
+    public static CliInvocationPlan Help(bool skipStartup = false, bool profileStartup = false) => new(CliInvocationKind.Help, null, Array.Empty<string>(), LoadStartup: !skipStartup, ProfileStartup: profileStartup);
 
-    public static CliInvocationPlan Command(string command, string[] arguments, bool skipStartup = false, bool skipProfile = false, bool isLoginShell = false) =>
-        new(CliInvocationKind.Command, command, arguments, LoadStartup: !skipStartup, SkipProfile: skipProfile, IsLoginShell: isLoginShell);
+    public static CliInvocationPlan Command(string command, string[] arguments, bool skipStartup = false, bool skipProfile = false, bool isLoginShell = false, bool profileStartup = false) =>
+        new(CliInvocationKind.Command, command, arguments, LoadStartup: !skipStartup, SkipProfile: skipProfile, IsLoginShell: isLoginShell, ProfileStartup: profileStartup);
 
-    public static CliInvocationPlan ToshScript(string path, string[] arguments, bool skipStartup = false) => new(CliInvocationKind.ToshScript, path, arguments, LoadStartup: !skipStartup);
+    public static CliInvocationPlan ToshScript(string path, string[] arguments, bool skipStartup = false, bool profileStartup = false) => new(CliInvocationKind.ToshScript, path, arguments, LoadStartup: !skipStartup, ProfileStartup: profileStartup);
 
-    public static CliInvocationPlan ExternalScript(string path, string[] invocation, bool skipStartup = false) => new(CliInvocationKind.ExternalScript, path, invocation, LoadStartup: !skipStartup);
+    public static CliInvocationPlan ExternalScript(string path, string[] invocation, bool skipStartup = false, bool profileStartup = false) => new(CliInvocationKind.ExternalScript, path, invocation, LoadStartup: !skipStartup, ProfileStartup: profileStartup);
 
-    public static CliInvocationPlan ExportMetadata(string format, string? outputPath) => new(CliInvocationKind.ExportMetadata, format, outputPath is not null ? [outputPath] : Array.Empty<string>(), LoadStartup: false);
+    public static CliInvocationPlan ExportMetadata(string format, string? outputPath, bool profileStartup = false) => new(CliInvocationKind.ExportMetadata, format, outputPath is not null ? [outputPath] : Array.Empty<string>(), LoadStartup: false, ProfileStartup: profileStartup);
 
     public static CliInvocationPlan Compile(string[] inputPaths, string? outputPath, string? compileProfileName = null, bool compileAllowDynamic = false, bool emitRefasm = false, bool emitAppHost = true, bool publishSingleFile = false) =>
         new(CliInvocationKind.Compile, outputPath, inputPaths, LoadStartup: false, CompileProfileName: compileProfileName, CompileAllowDynamic: compileAllowDynamic, EmitRefasm: emitRefasm, EmitAppHost: emitAppHost, PublishSingleFile: publishSingleFile);
 
-    public static CliInvocationPlan Version() => new(CliInvocationKind.Version, null, Array.Empty<string>(), LoadStartup: false);
+    public static CliInvocationPlan Version(bool profileStartup = false) => new(CliInvocationKind.Version, null, Array.Empty<string>(), LoadStartup: false, ProfileStartup: profileStartup);
 }
 
 internal enum CliInvocationKind

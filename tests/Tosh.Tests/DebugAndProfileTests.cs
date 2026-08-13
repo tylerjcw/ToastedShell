@@ -26,6 +26,70 @@ public sealed class StartupProfileTests
         Assert.False(plan.ProfileStartup);
     }
 
+    /// <summary>
+    /// `TS-P2-110`. The flag was passed only when building a `Repl` plan, so
+    /// `tosh --profile-startup -c "…"` accepted it, printed nothing and exited 0 —
+    /// which reads as "startup is free" rather than "nothing was measured". `-c`
+    /// is the invocation a startup investigation most wants, because it is the one
+    /// a prompt hook or a script pays on every call.
+    /// </summary>
+    [Fact]
+    public void The_profile_startup_flag_survives_plan_resolution()
+    {
+        var command = CliInvocationResolver.Resolve(
+            ["--profile-startup", "-c", "echo hi"], Environment.CurrentDirectory);
+        Assert.Equal(CliInvocationKind.Command, command.Kind);
+        Assert.True(command.ProfileStartup, "--profile-startup was dropped building the Command plan.");
+
+        var repl = CliInvocationResolver.Resolve(["--profile-startup"], Environment.CurrentDirectory);
+        Assert.Equal(CliInvocationKind.Repl, repl.Kind);
+        Assert.True(repl.ProfileStartup);
+
+        // These two cannot profile anything, but they must still carry the flag
+        // so the CLI can say so rather than exiting silently.
+        var version = CliInvocationResolver.Resolve(
+            ["--profile-startup", "--version"], Environment.CurrentDirectory);
+        Assert.Equal(CliInvocationKind.Version, version.Kind);
+        Assert.True(version.ProfileStartup);
+
+        var help = CliInvocationResolver.Resolve(
+            ["--profile-startup", "--help"], Environment.CurrentDirectory);
+        Assert.Equal(CliInvocationKind.Help, help.Kind);
+        Assert.True(help.ProfileStartup);
+    }
+
+    /// <summary>
+    /// A script path resolves through a different method than `-c`, and that
+    /// method did not receive the flag either.
+    /// </summary>
+    [Fact]
+    public void The_profile_startup_flag_reaches_a_script_invocation()
+    {
+        using var tempDir = new TemporaryDirectory();
+        var script = Path.Combine(tempDir.Path, "run.tosh");
+        File.WriteAllText(script, "echo hello\n");
+
+        var plan = CliInvocationResolver.Resolve(
+            ["--profile-startup", script],
+            Environment.CurrentDirectory);
+
+        Assert.Equal(CliInvocationKind.ToshScript, plan.Kind);
+        Assert.True(plan.ProfileStartup);
+    }
+
+    /// <summary>
+    /// The control: the flag must still default off for the same invocations, so
+    /// the assertions above cannot pass by the field being set unconditionally.
+    /// </summary>
+    [Fact]
+    public void An_invocation_without_the_flag_does_not_profile()
+    {
+        Assert.False(CliInvocationResolver.Resolve(
+            ["-c", "echo hi"], Environment.CurrentDirectory).ProfileStartup);
+        Assert.False(CliInvocationResolver.Resolve(
+            ["--version"], Environment.CurrentDirectory).ProfileStartup);
+    }
+
     [Fact]
     public async Task LoadAsync_populates_startup_profile_when_enabled()
     {
