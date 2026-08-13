@@ -3514,6 +3514,77 @@ raw struct PollFd {
 }
 \end{lstlisting}
 
+\section{Raw Callbacks}
+\ikw{raw}\ikw{callback}
+
+A \code{raw callback} declares the C function-pointer type a native signature
+names when the library calls back into TōSh.  Like \code{raw struct} it is a
+named declaration rather than an inline type, which is also how C spells these
+--- nearly always a \code{typedef}.
+
+\begin{lstlisting}
+raw callback Comparator(a: ptr, b: ptr) -> int
+
+bind native "libc.so.6" as LibC {
+    func qsort(base: ptr, count: nuint, size: nuint, compare: Comparator) -> void
+}
+
+func ascending(a, b) {
+    return (read-buffer int32 $a) - (read-buffer int32 $b)
+}
+
+LibC.qsort($buf, 8, 4, &ascending)
+\end{lstlisting}
+
+The name resolves anywhere a native interop type is expected, and a function
+reference (\code{\&name}) is what satisfies it.  \code{callconv} applies as it
+does to a \code{func}.
+
+\subsection{Exactly One Value}
+
+A TōSh function yields a stream; a C callback returns a single value.  A
+callback that produces anything other than exactly one value is an error rather
+than a silent choice, because the failure it would otherwise cause --- a
+mis-sorted array from a comparator, an ignored event --- is invisible at the
+call site.  A \code{void} callback is the exception: it must produce nothing.
+
+Note that \code{writeline} prints rather than yields, so ordinary tracing inside
+a callback does not trip this rule; bare expressions do.
+
+\subsection{Threading}
+
+The engine is single-threaded --- its scope stack is a plain stack, and forks
+clone rather than lock --- so a callback is only supported when the library
+invokes it on the same thread that called in.  That covers the common cases:
+comparators, GLFW's window and error callbacks, and anything dispatched from
+inside a call the script itself made.
+
+A callback arriving on a library's own thread (SDL's audio callback, for
+example) does \emph{not} run.  It cannot throw either, because unwinding through
+native frames is undefined behaviour; instead the violation is recorded and
+rethrown once the native call returns, naming both threads.  Failures raised
+inside a callback are carried the same way, so a \code{catch} around the native
+call sees them.
+
+\subsection{Restrictions}
+
+\code{ref} and \code{out} parameters are rejected: the value would have to be
+written back into the caller's memory after the body ran, and a silently ignored
+\code{out} is worse than a rejected one.  Declare a pointer and use
+\code{read-buffer} / \code{write-buffer} instead.  A \code{buffer[n]} parameter
+is likewise rejected --- it is an inbound decoding convention with nothing to
+decode here.  The success conventions \code{ok} and \code{count} decide whether
+a \emph{call} failed, so they are rejected on a callback, whose return value is
+one it produces.
+
+Callbacks are a control plane, not a data plane.  Each invocation re-enters the
+engine, which is far more expensive than the C call around it --- fine for
+window events and comparisons, unsuitable for per-sample or per-vertex work.
+
+A thunk passed to a library is kept alive for as long as that library is
+loaded, so a callee that stores it (GLFW does) keeps working after the
+registering call returns.
+
 \section{Module Definitions}
 \ikw{module}
 

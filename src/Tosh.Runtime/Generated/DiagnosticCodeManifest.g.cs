@@ -159,7 +159,7 @@ public static class DiagnosticCodeManifest
             Title: "Function '{commandName}' shadows built-in command '{commandName}'.",
             Help: "Rename the function, or hush this code: hush tosh.naming.shadowed_builtin",
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 10693),
+            SourceLine: 10878),
         ["tosh.naming.shadowed_underscore"] = new DiagnosticCodeInfo(
             Code: "tosh.naming.shadowed_underscore",
             Namespace: "naming",
@@ -167,7 +167,7 @@ public static class DiagnosticCodeManifest
             Title: "Redeclaring '_' shadows an existing binding.",
             Help: "Use a different name if this value matters, or hush this code: hush tosh.naming.shadowed_underscore",
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 1969),
+            SourceLine: 1970),
         ["tosh.parser.accidental_double_dot"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.accidental_double_dot",
             Namespace: "parser",
@@ -175,7 +175,7 @@ public static class DiagnosticCodeManifest
             Title: "Did you mean '.' (member access) instead of '..' (range)?",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 7219),
+            SourceLine: 7277),
         ["tosh.parser.assert_does_not_accept_message"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.assert_does_not_accept_message",
             Namespace: "parser",
@@ -183,7 +183,7 @@ public static class DiagnosticCodeManifest
             Title: "Assert no longer accepts a trailing custom message.",
             Help: "rely on the predicate text and diagnostic info instead.",
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 7043),
+            SourceLine: 7101),
         ["tosh.parser.assignment_in_predicate"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.assignment_in_predicate",
             Namespace: "parser",
@@ -191,7 +191,7 @@ public static class DiagnosticCodeManifest
             Title: "Use '==' for equality comparisons, not '='.",
             Help: "try '==', '!=', 'in', '=~', 'and', 'or', or 'not' inside predicate expressions.",
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 10293),
+            SourceLine: 10418),
         ["tosh.parser.const_requires_value"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.const_requires_value",
             Namespace: "parser",
@@ -199,7 +199,7 @@ public static class DiagnosticCodeManifest
             Title: "A 'const' declaration requires an initializer.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 930),
+            SourceLine: 938),
         ["tosh.parser.duplicate_input_redirection"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.duplicate_input_redirection",
             Namespace: "parser",
@@ -207,7 +207,7 @@ public static class DiagnosticCodeManifest
             Title: "Only one input redirection is allowed per pipeline.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 10707),
+            SourceLine: 10832),
         ["tosh.parser.duplicate_subcommand_modifier"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.duplicate_subcommand_modifier",
             Namespace: "parser",
@@ -215,7 +215,7 @@ public static class DiagnosticCodeManifest
             Title: "Subcommand modifier '{modifierToken.Text}' is repeated.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 2895),
+            SourceLine: 2903),
         ["tosh.parser.empty_type_refinement_block"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.empty_type_refinement_block",
             Namespace: "parser",
@@ -223,7 +223,7 @@ public static class DiagnosticCodeManifest
             Title: "Type refinement blocks require at least one clause.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 5699),
+            SourceLine: 5757),
         ["tosh.parser.expected_anonymous_function_body"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.expected_anonymous_function_body",
             Namespace: "parser",
@@ -231,7 +231,7 @@ public static class DiagnosticCodeManifest
             Title: "Anonymous functions require `=>` or a block body.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 5486),
+            SourceLine: 5544),
         ["tosh.parser.expected_anonymous_function_expression"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.expected_anonymous_function_expression",
             Namespace: "parser",
@@ -239,7 +239,7 @@ public static class DiagnosticCodeManifest
             Title: "Anonymous `=>` functions require an expression body.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 5437),
+            SourceLine: 5495),
         ["tosh.parser.expected_assignment_operator"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.expected_assignment_operator",
             Namespace: "parser",
@@ -247,7 +247,7 @@ public static class DiagnosticCodeManifest
             Title: "",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 6543),
+            SourceLine: 6601),
         ["tosh.parser.expected_assignment_target"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.expected_assignment_target",
             Namespace: "parser",
@@ -255,7 +255,7 @@ public static class DiagnosticCodeManifest
             Title: "Assignments require a variable or member path target.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 7783),
+            SourceLine: 7841),
         ["tosh.parser.expected_bind_body"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.expected_bind_body",
             Namespace: "parser",
@@ -271,7 +271,7 @@ public static class DiagnosticCodeManifest
             Title: "Bind blocks only support function bindings.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 1508),
+            SourceLine: 1516),
         ["tosh.parser.expected_block"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.expected_block",
             Namespace: "parser",
@@ -280,6 +280,14 @@ public static class DiagnosticCodeManifest
             Help: null,
             SourceFile: "src/Tosh.Cli/ReplInputClassifier.cs",
             SourceLine: 15),
+        ["tosh.parser.expected_calling_convention"] = new DiagnosticCodeInfo(
+            Code: "tosh.parser.expected_calling_convention",
+            Namespace: "parser",
+            Name: "expected_calling_convention",
+            Title: "A callback needs a calling convention name after 'callconv'.",
+            Help: null,
+            SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
+            SourceLine: 3993),
         ["tosh.parser.expected_catch_variable"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.expected_catch_variable",
             Namespace: "parser",
@@ -287,7 +295,7 @@ public static class DiagnosticCodeManifest
             Title: "Catch clauses require a variable name when parentheses are used.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 1925),
+            SourceLine: 1933),
         ["tosh.parser.expected_class_body"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.expected_class_body",
             Namespace: "parser",
@@ -303,7 +311,7 @@ public static class DiagnosticCodeManifest
             Title: "Expected a member inside class '{className}'.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 4839),
+            SourceLine: 4897),
         ["tosh.parser.expected_closing_paren"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.expected_closing_paren",
             Namespace: "parser",
@@ -311,7 +319,7 @@ public static class DiagnosticCodeManifest
             Title: "A closing ')' is required after the computed property name.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 9091),
+            SourceLine: 9216),
         ["tosh.parser.expected_command_name"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.expected_command_name",
             Namespace: "parser",
@@ -319,7 +327,7 @@ public static class DiagnosticCodeManifest
             Title: "Expected a function name.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 6454),
+            SourceLine: 6512),
         ["tosh.parser.expected_comprehension_for"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.expected_comprehension_for",
             Namespace: "parser",
@@ -327,7 +335,7 @@ public static class DiagnosticCodeManifest
             Title: "Comprehensions require a 'for' clause after '<|'.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 8123),
+            SourceLine: 8248),
         ["tosh.parser.expected_comprehension_in"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.expected_comprehension_in",
             Namespace: "parser",
@@ -335,7 +343,7 @@ public static class DiagnosticCodeManifest
             Title: "Comprehensions require 'in' after the variable name.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 8177),
+            SourceLine: 8302),
         ["tosh.parser.expected_comprehension_operator"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.expected_comprehension_operator",
             Namespace: "parser",
@@ -343,7 +351,7 @@ public static class DiagnosticCodeManifest
             Title: "Expected '<|' in generator comprehension.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 8337),
+            SourceLine: 8462),
         ["tosh.parser.expected_constructor_parenthesis"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.expected_constructor_parenthesis",
             Namespace: "parser",
@@ -351,7 +359,7 @@ public static class DiagnosticCodeManifest
             Title: "Object construction uses C#-style parentheses.",
             Help: "try 'new SomeType(...)' instead of command-style construction.",
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 9257),
+            SourceLine: 9382),
         ["tosh.parser.expected_destructuring_name"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.expected_destructuring_name",
             Namespace: "parser",
@@ -359,7 +367,7 @@ public static class DiagnosticCodeManifest
             Title: "Expected a variable name in the destructuring pattern.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 1015),
+            SourceLine: 1023),
         ["tosh.parser.expected_else_block"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.expected_else_block",
             Namespace: "parser",
@@ -383,7 +391,7 @@ public static class DiagnosticCodeManifest
             Title: "Enum members require a value after '='.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 3757),
+            SourceLine: 3765),
         ["tosh.parser.expected_equals_tuple_assign"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.expected_equals_tuple_assign",
             Namespace: "parser",
@@ -399,7 +407,7 @@ public static class DiagnosticCodeManifest
             Title: "Dict comprehension requires '=>' between key and value.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 8478),
+            SourceLine: 8603),
         ["tosh.parser.expected_for_in"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.expected_for_in",
             Namespace: "parser",
@@ -407,7 +415,7 @@ public static class DiagnosticCodeManifest
             Title: "For loops require 'in' before the source pipeline.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 768),
+            SourceLine: 776),
         ["tosh.parser.expected_function_parameter"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.expected_function_parameter",
             Namespace: "parser",
@@ -415,7 +423,7 @@ public static class DiagnosticCodeManifest
             Title: "Expected a function parameter name.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 5883),
+            SourceLine: 5941),
         ["tosh.parser.expected_function_signature"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.expected_function_signature",
             Namespace: "parser",
@@ -431,7 +439,7 @@ public static class DiagnosticCodeManifest
             Title: "A value is required after '<<<'.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 6608),
+            SourceLine: 6666),
         ["tosh.parser.expected_if_condition"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.expected_if_condition",
             Namespace: "parser",
@@ -439,7 +447,7 @@ public static class DiagnosticCodeManifest
             Title: "If statements require a parenthesized condition.",
             Help: "try 'if (<condition>) { ... }'.",
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 833),
+            SourceLine: 841),
         ["tosh.parser.expected_if_expression_condition"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.expected_if_expression_condition",
             Namespace: "parser",
@@ -447,7 +455,7 @@ public static class DiagnosticCodeManifest
             Title: "If expressions require a parenthesized condition.",
             Help: "try 'if (<condition>) { value } else { value }'.",
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 2409),
+            SourceLine: 2417),
         ["tosh.parser.expected_index_expression"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.expected_index_expression",
             Namespace: "parser",
@@ -455,7 +463,7 @@ public static class DiagnosticCodeManifest
             Title: "Index access requires an expression inside '[' and ']'.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 9504),
+            SourceLine: 9629),
         ["tosh.parser.expected_initializer"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.expected_initializer",
             Namespace: "parser",
@@ -463,7 +471,7 @@ public static class DiagnosticCodeManifest
             Title: "Expected an expression after '=' in the declaration of '{declaredName}'.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 962),
+            SourceLine: 970),
         ["tosh.parser.expected_input_redirection_source"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.expected_input_redirection_source",
             Namespace: "parser",
@@ -471,7 +479,7 @@ public static class DiagnosticCodeManifest
             Title: "A file path is required after an input redirection operator.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 12719),
+            SourceLine: 12864),
         ["tosh.parser.expected_interface_body"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.expected_interface_body",
             Namespace: "parser",
@@ -479,7 +487,7 @@ public static class DiagnosticCodeManifest
             Title: "Interface definitions require a body.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 3488),
+            SourceLine: 3496),
         ["tosh.parser.expected_let_equals"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.expected_let_equals",
             Namespace: "parser",
@@ -487,7 +495,7 @@ public static class DiagnosticCodeManifest
             Title: "Let bindings require '=' between name and value.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 8223),
+            SourceLine: 8348),
         ["tosh.parser.expected_match_arm_arrow"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.expected_match_arm_arrow",
             Namespace: "parser",
@@ -495,7 +503,7 @@ public static class DiagnosticCodeManifest
             Title: "Match arms require `=>` between the pattern and result.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 2552),
+            SourceLine: 2560),
         ["tosh.parser.expected_match_arm_underscore"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.expected_match_arm_underscore",
             Namespace: "parser",
@@ -503,7 +511,7 @@ public static class DiagnosticCodeManifest
             Title: "Match arms must start with '_'",
             Help: "To disambiguate patterns from redirections, write '_ pattern => ...' for arms using is, >, >=, <, <=, or =~.",
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 2513),
+            SourceLine: 2521),
         ["tosh.parser.expected_match_block"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.expected_match_block",
             Namespace: "parser",
@@ -519,7 +527,7 @@ public static class DiagnosticCodeManifest
             Title: "Match guards require a parenthesized condition.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 2542),
+            SourceLine: 2550),
         ["tosh.parser.expected_match_value"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.expected_match_value",
             Namespace: "parser",
@@ -527,7 +535,7 @@ public static class DiagnosticCodeManifest
             Title: "Match expressions require a parenthesized value.",
             Help: "try `match (<value>) { pattern => value; default => fallback }`.",
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 2310),
+            SourceLine: 2318),
         ["tosh.parser.expected_member_assignment_target"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.expected_member_assignment_target",
             Namespace: "parser",
@@ -535,7 +543,7 @@ public static class DiagnosticCodeManifest
             Title: "This assignment needs a member path like '$person.Name'.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 7812),
+            SourceLine: 7870),
         ["tosh.parser.expected_native_calling_convention"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.expected_native_calling_convention",
             Namespace: "parser",
@@ -543,7 +551,7 @@ public static class DiagnosticCodeManifest
             Title: "Native function bindings need a calling convention name after 'callconv'.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 1581),
+            SourceLine: 1589),
         ["tosh.parser.expected_native_library"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.expected_native_library",
             Namespace: "parser",
@@ -551,7 +559,7 @@ public static class DiagnosticCodeManifest
             Title: "A raw function needs a library after 'from'.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 1543),
+            SourceLine: 1551),
         ["tosh.parser.expected_native_symbol_name"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.expected_native_symbol_name",
             Namespace: "parser",
@@ -559,7 +567,7 @@ public static class DiagnosticCodeManifest
             Title: "Native function bindings need a symbol name after 'as'.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 1562),
+            SourceLine: 1570),
         ["tosh.parser.expected_nested_type"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.expected_nested_type",
             Namespace: "parser",
@@ -567,7 +575,7 @@ public static class DiagnosticCodeManifest
             Title: "Expected a type declaration inside class '{className}'.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 4797),
+            SourceLine: 4855),
         ["tosh.parser.expected_operand"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.expected_operand",
             Namespace: "parser",
@@ -575,7 +583,7 @@ public static class DiagnosticCodeManifest
             Title: "Expected an operand in this expression.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 10457),
+            SourceLine: 10582),
         ["tosh.parser.expected_parenthesized_source"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.expected_parenthesized_source",
             Namespace: "parser",
@@ -583,7 +591,7 @@ public static class DiagnosticCodeManifest
             Title: "The '{owner}' statement requires a source.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 8020),
+            SourceLine: 8145),
         ["tosh.parser.expected_postfix_condition"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.expected_postfix_condition",
             Namespace: "parser",
@@ -591,7 +599,7 @@ public static class DiagnosticCodeManifest
             Title: "Postfix '{keyword.Text}' requires a condition.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 2748),
+            SourceLine: 2756),
         ["tosh.parser.expected_priority_value"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.expected_priority_value",
             Namespace: "parser",
@@ -599,7 +607,7 @@ public static class DiagnosticCodeManifest
             Title: "Expected an integer priority value.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 3207),
+            SourceLine: 3215),
         ["tosh.parser.expected_projection_member_path"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.expected_projection_member_path",
             Namespace: "parser",
@@ -607,7 +615,7 @@ public static class DiagnosticCodeManifest
             Title: "Projected fields must be member paths.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 7872),
+            SourceLine: 7997),
         ["tosh.parser.expected_property_accessor"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.expected_property_accessor",
             Namespace: "parser",
@@ -615,7 +623,7 @@ public static class DiagnosticCodeManifest
             Title: "Property accessors must be 'get' or 'set'.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 4967),
+            SourceLine: 5025),
         ["tosh.parser.expected_property_name"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.expected_property_name",
             Namespace: "parser",
@@ -623,7 +631,7 @@ public static class DiagnosticCodeManifest
             Title: "Expected a property name.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 4871),
+            SourceLine: 4929),
         ["tosh.parser.expected_range_separator"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.expected_range_separator",
             Namespace: "parser",
@@ -631,7 +639,7 @@ public static class DiagnosticCodeManifest
             Title: "Type alias ranges use '..' between lower and upper bounds.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 5860),
+            SourceLine: 5918),
         ["tosh.parser.expected_raw_struct_body"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.expected_raw_struct_body",
             Namespace: "parser",
@@ -639,7 +647,7 @@ public static class DiagnosticCodeManifest
             Title: "Raw struct '{nameToken.Text}' requires a body.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 3999),
+            SourceLine: 4057),
         ["tosh.parser.expected_raw_struct_field"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.expected_raw_struct_field",
             Namespace: "parser",
@@ -647,7 +655,7 @@ public static class DiagnosticCodeManifest
             Title: "Expected a field name inside the raw struct body.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 4107),
+            SourceLine: 4165),
         ["tosh.parser.expected_raw_struct_field_default"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.expected_raw_struct_field_default",
             Namespace: "parser",
@@ -655,7 +663,7 @@ public static class DiagnosticCodeManifest
             Title: "Raw struct fields require a value after '='.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 4205),
+            SourceLine: 4263),
         ["tosh.parser.expected_raw_struct_field_type"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.expected_raw_struct_field_type",
             Namespace: "parser",
@@ -663,7 +671,7 @@ public static class DiagnosticCodeManifest
             Title: "Field '{fieldName}' needs a type.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 4139),
+            SourceLine: 4197),
         ["tosh.parser.expected_record_field_default"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.expected_record_field_default",
             Namespace: "parser",
@@ -671,7 +679,7 @@ public static class DiagnosticCodeManifest
             Title: "Record fields require a value after '='.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 4567),
+            SourceLine: 4625),
         ["tosh.parser.expected_record_field_name"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.expected_record_field_name",
             Namespace: "parser",
@@ -679,7 +687,7 @@ public static class DiagnosticCodeManifest
             Title: "Record literals require a field name before '='.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 9148),
+            SourceLine: 9273),
         ["tosh.parser.expected_record_field_separator"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.expected_record_field_separator",
             Namespace: "parser",
@@ -687,7 +695,7 @@ public static class DiagnosticCodeManifest
             Title: "",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 6560),
+            SourceLine: 6618),
         ["tosh.parser.expected_record_fields"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.expected_record_fields",
             Namespace: "parser",
@@ -703,7 +711,7 @@ public static class DiagnosticCodeManifest
             Title: "A file path is required after a redirection operator.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 12676),
+            SourceLine: 12821),
         ["tosh.parser.expected_refinement_coerce_after_if"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.expected_refinement_coerce_after_if",
             Namespace: "parser",
@@ -711,7 +719,7 @@ public static class DiagnosticCodeManifest
             Title: "Guarded refinement clauses require 'coerce' after the condition.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 5786),
+            SourceLine: 5844),
         ["tosh.parser.expected_refinement_coercer"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.expected_refinement_coercer",
             Namespace: "parser",
@@ -719,7 +727,7 @@ public static class DiagnosticCodeManifest
             Title: "Refinement coercers require an expression after 'coerce'.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 5623),
+            SourceLine: 5681),
         ["tosh.parser.expected_refinement_guard"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.expected_refinement_guard",
             Namespace: "parser",
@@ -727,7 +735,7 @@ public static class DiagnosticCodeManifest
             Title: "Refinement coercion guards require an expression after 'if'.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 5773),
+            SourceLine: 5831),
         ["tosh.parser.expected_refinement_predicate"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.expected_refinement_predicate",
             Namespace: "parser",
@@ -735,7 +743,7 @@ public static class DiagnosticCodeManifest
             Title: "Refinements require a predicate after 'where'.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 5608),
+            SourceLine: 5666),
         ["tosh.parser.expected_require_from"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.expected_require_from",
             Namespace: "parser",
@@ -743,7 +751,7 @@ public static class DiagnosticCodeManifest
             Title: "Selective require statements need 'from' before the target path.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 1329),
+            SourceLine: 1337),
         ["tosh.parser.expected_require_target"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.expected_require_target",
             Namespace: "parser",
@@ -751,7 +759,7 @@ public static class DiagnosticCodeManifest
             Title: "Require statements need a ToSh file, module, assembly, or project path.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 1351),
+            SourceLine: 1359),
         ["tosh.parser.expected_script_input_list"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.expected_script_input_list",
             Namespace: "parser",
@@ -759,7 +767,7 @@ public static class DiagnosticCodeManifest
             Title: "Script input lists require '(...)'.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 2778),
+            SourceLine: 2786),
         ["tosh.parser.expected_splat_target"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.expected_splat_target",
             Namespace: "parser",
@@ -767,7 +775,7 @@ public static class DiagnosticCodeManifest
             Title: "Argument splatting requires a variable or collection reference.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 7687),
+            SourceLine: 7745),
         ["tosh.parser.expected_subcommand_name"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.expected_subcommand_name",
             Namespace: "parser",
@@ -775,7 +783,7 @@ public static class DiagnosticCodeManifest
             Title: "The '{keyword.Text}' keyword requires a subcommand name.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 2945),
+            SourceLine: 2953),
         ["tosh.parser.expected_switch_block"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.expected_switch_block",
             Namespace: "parser",
@@ -791,7 +799,7 @@ public static class DiagnosticCodeManifest
             Title: "Switch blocks may only contain 'case' and 'default' entries.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 2156),
+            SourceLine: 2164),
         ["tosh.parser.expected_switch_value"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.expected_switch_value",
             Namespace: "parser",
@@ -799,7 +807,7 @@ public static class DiagnosticCodeManifest
             Title: "Switch statements require a parenthesized value.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 2087),
+            SourceLine: 2095),
         ["tosh.parser.expected_trait_body"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.expected_trait_body",
             Namespace: "parser",
@@ -807,7 +815,7 @@ public static class DiagnosticCodeManifest
             Title: "Trait definitions require a body.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 4235),
+            SourceLine: 4293),
         ["tosh.parser.expected_tuple_assign_name"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.expected_tuple_assign_name",
             Namespace: "parser",
@@ -823,7 +831,7 @@ public static class DiagnosticCodeManifest
             Title: "Expected a native parameter type.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 1693),
+            SourceLine: 1701),
         ["tosh.parser.expected_type_parameter"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.expected_type_parameter",
             Namespace: "parser",
@@ -831,7 +839,7 @@ public static class DiagnosticCodeManifest
             Title: "Expected a type-parameter name after 'where'.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 6139),
+            SourceLine: 6197),
         ["tosh.parser.expected_union_body"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.expected_union_body",
             Namespace: "parser",
@@ -839,7 +847,7 @@ public static class DiagnosticCodeManifest
             Title: "Union definitions require a body.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 3591),
+            SourceLine: 3599),
         ["tosh.parser.expected_using_target"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.expected_using_target",
             Namespace: "parser",
@@ -847,7 +855,7 @@ public static class DiagnosticCodeManifest
             Title: "Using statements require a namespace or type alias target.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 1201),
+            SourceLine: 1209),
         ["tosh.parser.expected_variable_name"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.expected_variable_name",
             Namespace: "parser",
@@ -855,7 +863,7 @@ public static class DiagnosticCodeManifest
             Title: "Expected a variable name.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 908),
+            SourceLine: 916),
         ["tosh.parser.hollow_subcommand_must_be_empty"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.hollow_subcommand_must_be_empty",
             Namespace: "parser",
@@ -863,7 +871,7 @@ public static class DiagnosticCodeManifest
             Title: "Hollow subcommand '{nameToken.Text}' may only contain nested subcommands.",
             Help: "'hollow' declares a namespace-only subcommand whose body is reserved for nested subcommands.",
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 3104),
+            SourceLine: 3112),
         ["tosh.parser.if_expression_requires_else"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.if_expression_requires_else",
             Namespace: "parser",
@@ -871,7 +879,7 @@ public static class DiagnosticCodeManifest
             Title: "If expressions require an else block.",
             Help: "if expressions must produce a value in all branches, so an else block is required.",
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 2425),
+            SourceLine: 2433),
         ["tosh.parser.incompatible_subcommand_modifiers"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.incompatible_subcommand_modifiers",
             Namespace: "parser",
@@ -879,7 +887,7 @@ public static class DiagnosticCodeManifest
             Title: "'eager' and 'hollow' cannot be combined on a subcommand.",
             Help: "'hollow' forbids a body, but 'eager' requires one to run.",
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 2917),
+            SourceLine: 2925),
         ["tosh.parser.invalid_method_name"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.invalid_method_name",
             Namespace: "parser",
@@ -887,7 +895,7 @@ public static class DiagnosticCodeManifest
             Title: "Method calls need a single method name after '.'.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 9610),
+            SourceLine: 9735),
         ["tosh.parser.invalid_numeric_separator"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.invalid_numeric_separator",
             Namespace: "parser",
@@ -903,7 +911,7 @@ public static class DiagnosticCodeManifest
             Title: "Argument splatting currently requires a variable-style reference.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 7699),
+            SourceLine: 7757),
         ["tosh.parser.invalid_spread_target"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.invalid_spread_target",
             Namespace: "parser",
@@ -911,7 +919,7 @@ public static class DiagnosticCodeManifest
             Title: "Spread requires a variable reference.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 7736),
+            SourceLine: 7794),
         ["tosh.parser.invalid_type_refinement_clause"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.invalid_type_refinement_clause",
             Namespace: "parser",
@@ -919,7 +927,7 @@ public static class DiagnosticCodeManifest
             Title: "Type refinement blocks only support 'where', 'coerce', and 'if ... coerce' clauses.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 5838),
+            SourceLine: 5896),
         ["tosh.parser.invalid_unit_literal"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.invalid_unit_literal",
             Namespace: "parser",
@@ -943,7 +951,7 @@ public static class DiagnosticCodeManifest
             Title: "Use 'default' instead of '_' for the wildcard arm.",
             Help: "In tosh, the wildcard match arm uses the 'default' keyword, not '_'.",
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 2493),
+            SourceLine: 2501),
         ["tosh.parser.missing_argument_separator"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.missing_argument_separator",
             Namespace: "parser",
@@ -951,7 +959,7 @@ public static class DiagnosticCodeManifest
             Title: "Arguments must be separated by ','.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 9685),
+            SourceLine: 9810),
         ["tosh.parser.missing_bind_member_separator"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.missing_bind_member_separator",
             Namespace: "parser",
@@ -959,7 +967,7 @@ public static class DiagnosticCodeManifest
             Title: "Bound functions must be separated by a newline or ';'.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 1474),
+            SourceLine: 1482),
         ["tosh.parser.missing_block_separator"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.missing_block_separator",
             Namespace: "parser",
@@ -967,7 +975,7 @@ public static class DiagnosticCodeManifest
             Title: "Block statements must be separated by a newline or ';'.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 8068),
+            SourceLine: 8193),
         ["tosh.parser.missing_class_member_separator"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.missing_class_member_separator",
             Namespace: "parser",
@@ -975,7 +983,7 @@ public static class DiagnosticCodeManifest
             Title: "Class members must be separated by a newline or ';'.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 4656),
+            SourceLine: 4714),
         ["tosh.parser.missing_closing_angle"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.missing_closing_angle",
             Namespace: "parser",
@@ -1039,7 +1047,7 @@ public static class DiagnosticCodeManifest
             Title: "",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 10834),
+            SourceLine: 10959),
         ["tosh.parser.missing_constructor_separator"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.missing_constructor_separator",
             Namespace: "parser",
@@ -1047,7 +1055,7 @@ public static class DiagnosticCodeManifest
             Title: "Constructor arguments must be separated by ','.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 9310),
+            SourceLine: 9435),
         ["tosh.parser.missing_dict_closing_delimiter"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.missing_dict_closing_delimiter",
             Namespace: "parser",
@@ -1055,7 +1063,7 @@ public static class DiagnosticCodeManifest
             Title: "A closing '%}' is required after dict comprehension.",
             Help: "close the dict literal with '%}' after the last entry.",
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 8524),
+            SourceLine: 8649),
         ["tosh.parser.missing_dict_entry_separator"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.missing_dict_entry_separator",
             Namespace: "parser",
@@ -1063,7 +1071,7 @@ public static class DiagnosticCodeManifest
             Title: "Dict entries must be separated by ',' or a newline.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 8995),
+            SourceLine: 9120),
         ["tosh.parser.missing_function_parameter_separator"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.missing_function_parameter_separator",
             Namespace: "parser",
@@ -1071,7 +1079,7 @@ public static class DiagnosticCodeManifest
             Title: "Function parameters must be separated by ','.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 1649),
+            SourceLine: 1657),
         ["tosh.parser.missing_list_separator"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.missing_list_separator",
             Namespace: "parser",
@@ -1079,7 +1087,7 @@ public static class DiagnosticCodeManifest
             Title: "Array items must be separated by ','.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 8732),
+            SourceLine: 8857),
         ["tosh.parser.missing_match_arm_separator"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.missing_match_arm_separator",
             Namespace: "parser",
@@ -1087,7 +1095,7 @@ public static class DiagnosticCodeManifest
             Title: "Match arms must be separated by a newline, ';', or ','.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 2373),
+            SourceLine: 2381),
         ["tosh.parser.missing_pipeline_separator"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.missing_pipeline_separator",
             Namespace: "parser",
@@ -1095,7 +1103,7 @@ public static class DiagnosticCodeManifest
             Title: "Expression pipeline stages must be separated by '|'.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 10808),
+            SourceLine: 10933),
         ["tosh.parser.missing_predicate_separator"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.missing_predicate_separator",
             Namespace: "parser",
@@ -1103,7 +1111,7 @@ public static class DiagnosticCodeManifest
             Title: "Predicate expressions must be separated by ';' or a newline.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 10530),
+            SourceLine: 10655),
         ["tosh.parser.missing_projection_closing_brace"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.missing_projection_closing_brace",
             Namespace: "parser",
@@ -1119,7 +1127,7 @@ public static class DiagnosticCodeManifest
             Title: "Projected member paths must be separated by ','.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 7891),
+            SourceLine: 8016),
         ["tosh.parser.missing_raw_struct_field_separator"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.missing_raw_struct_field_separator",
             Namespace: "parser",
@@ -1127,7 +1135,7 @@ public static class DiagnosticCodeManifest
             Title: "Raw struct fields must be separated by a newline or ';'.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 4047),
+            SourceLine: 4105),
         ["tosh.parser.missing_record_closing_brace"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.missing_record_closing_brace",
             Namespace: "parser",
@@ -1143,7 +1151,7 @@ public static class DiagnosticCodeManifest
             Title: "A closing '|}' is required here.",
             Help: "close the record literal with '|}' after the last field.",
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 9211),
+            SourceLine: 9336),
         ["tosh.parser.missing_record_field_separator"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.missing_record_field_separator",
             Namespace: "parser",
@@ -1151,7 +1159,7 @@ public static class DiagnosticCodeManifest
             Title: "Record fields must be separated by ',' or a newline.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 9188),
+            SourceLine: 9313),
         ["tosh.parser.missing_set_closing_delimiter"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.missing_set_closing_delimiter",
             Namespace: "parser",
@@ -1159,7 +1167,7 @@ public static class DiagnosticCodeManifest
             Title: "A closing ':}' is required after set comprehension.",
             Help: "close the set literal with ':}' after the last item.",
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 8446),
+            SourceLine: 8571),
         ["tosh.parser.missing_set_separator"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.missing_set_separator",
             Namespace: "parser",
@@ -1167,7 +1175,7 @@ public static class DiagnosticCodeManifest
             Title: "Set items must be separated by ','.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 8874),
+            SourceLine: 8999),
         ["tosh.parser.missing_statement_separator"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.missing_statement_separator",
             Namespace: "parser",
@@ -1191,7 +1199,7 @@ public static class DiagnosticCodeManifest
             Title: "Tuple elements must be separated by ','.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 9905),
+            SourceLine: 10030),
         ["tosh.parser.missing_type_argument_separator"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.missing_type_argument_separator",
             Namespace: "parser",
@@ -1199,7 +1207,7 @@ public static class DiagnosticCodeManifest
             Title: "Generic type arguments must be separated by ','.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 6296),
+            SourceLine: 6354),
         ["tosh.parser.missing_type_parameter_separator"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.missing_type_parameter_separator",
             Namespace: "parser",
@@ -1207,7 +1215,7 @@ public static class DiagnosticCodeManifest
             Title: "Type parameters must be separated by ','.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 6100),
+            SourceLine: 6158),
         ["tosh.parser.nameof_expects_a_name"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.nameof_expects_a_name",
             Namespace: "parser",
@@ -1215,7 +1223,7 @@ public static class DiagnosticCodeManifest
             Title: "'{identifierToken.Text}' does not name anything.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 7586),
+            SourceLine: 7644),
         ["tosh.parser.nameof_missing_close_paren"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.nameof_missing_close_paren",
             Namespace: "parser",
@@ -1223,7 +1231,7 @@ public static class DiagnosticCodeManifest
             Title: "Expected ')' after nameof identifier.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 7610),
+            SourceLine: 7668),
         ["tosh.parser.native_buffer_requires_length"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.native_buffer_requires_length",
             Namespace: "parser",
@@ -1231,7 +1239,7 @@ public static class DiagnosticCodeManifest
             Title: "'{typeName}' needs a positive capacity.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 1761),
+            SourceLine: 1769),
         ["tosh.parser.numeric_literal_overflow"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.numeric_literal_overflow",
             Namespace: "parser",
@@ -1247,7 +1255,7 @@ public static class DiagnosticCodeManifest
             Title: "Range bounds and steps must be 32-bit integers.",
             Help: "use an integer from -2147483648 through 2147483647",
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 7311),
+            SourceLine: 7369),
         ["tosh.parser.raw_func_requires_library"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.raw_func_requires_library",
             Namespace: "parser",
@@ -1255,7 +1263,7 @@ public static class DiagnosticCodeManifest
             Title: "A top-level 'raw func' needs a library.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 674),
+            SourceLine: 682),
         ["tosh.parser.raw_struct_array_requires_length"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.raw_struct_array_requires_length",
             Namespace: "parser",
@@ -1263,7 +1271,7 @@ public static class DiagnosticCodeManifest
             Title: "Field '{fieldName}' needs a positive array length.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 4159),
+            SourceLine: 4217),
         ["tosh.parser.raw_struct_clause_requires_integer"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.raw_struct_clause_requires_integer",
             Namespace: "parser",
@@ -1271,7 +1279,7 @@ public static class DiagnosticCodeManifest
             Title: "'{clause}' requires a byte count.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 3983),
+            SourceLine: 4041),
         ["tosh.parser.refinement_requires_expression"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.refinement_requires_expression",
             Namespace: "parser",
@@ -1279,7 +1287,7 @@ public static class DiagnosticCodeManifest
             Title: "Refinement predicates use expression syntax.",
             Help: "try 'where _ > 0' instead of 'where { _ > 0 }'.",
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 5592),
+            SourceLine: 5650),
         ["tosh.parser.rest_parameter_must_be_last"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.rest_parameter_must_be_last",
             Namespace: "parser",
@@ -1287,7 +1295,7 @@ public static class DiagnosticCodeManifest
             Title: "A rest parameter must be the last parameter.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 5526),
+            SourceLine: 5584),
         ["tosh.parser.spaced_literal_delimiter"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.spaced_literal_delimiter",
             Namespace: "parser",
@@ -1295,7 +1303,7 @@ public static class DiagnosticCodeManifest
             Title: "'{delimiter}' must be written without a space.",
             Help: "collection literal delimiters are single tokens; remove the space between them.",
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 8814),
+            SourceLine: 8939),
         ["tosh.parser.subcommand_params_require_arrow"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.subcommand_params_require_arrow",
             Namespace: "parser",
@@ -1303,7 +1311,7 @@ public static class DiagnosticCodeManifest
             Title: "Parameter lists on subcommands require a '=>' body.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 3089),
+            SourceLine: 3097),
         ["tosh.parser.try_requires_handler"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.try_requires_handler",
             Namespace: "parser",
@@ -1311,7 +1319,7 @@ public static class DiagnosticCodeManifest
             Title: "Try statements require a catch block, a finally block, or both.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 1966),
+            SourceLine: 1974),
         ["tosh.parser.unexpected_argument_separator"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.unexpected_argument_separator",
             Namespace: "parser",
@@ -1319,7 +1327,7 @@ public static class DiagnosticCodeManifest
             Title: "An argument is required between commas.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 9644),
+            SourceLine: 9769),
         ["tosh.parser.unexpected_background_operator"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.unexpected_background_operator",
             Namespace: "parser",
@@ -1327,7 +1335,7 @@ public static class DiagnosticCodeManifest
             Title: "Unexpected background operator.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 10663),
+            SourceLine: 10788),
         ["tosh.parser.unexpected_constructor_separator"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.unexpected_constructor_separator",
             Namespace: "parser",
@@ -1335,7 +1343,7 @@ public static class DiagnosticCodeManifest
             Title: "A constructor argument is required between commas.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 9273),
+            SourceLine: 9398),
         ["tosh.parser.unexpected_current_item_expression_tokens"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.unexpected_current_item_expression_tokens",
             Namespace: "parser",
@@ -1343,7 +1351,7 @@ public static class DiagnosticCodeManifest
             Title: "This current-item expression has extra tokens after it.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 7052),
+            SourceLine: 7110),
         ["tosh.parser.unexpected_function_parameter_separator"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.unexpected_function_parameter_separator",
             Namespace: "parser",
@@ -1351,7 +1359,7 @@ public static class DiagnosticCodeManifest
             Title: "A function parameter is required between commas.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 1630),
+            SourceLine: 1638),
         ["tosh.parser.unexpected_get_expression_tokens"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.unexpected_get_expression_tokens",
             Namespace: "parser",
@@ -1359,7 +1367,7 @@ public static class DiagnosticCodeManifest
             Title: "This get expression has extra tokens after it.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 6897),
+            SourceLine: 6955),
         ["tosh.parser.unexpected_interface_member"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.unexpected_interface_member",
             Namespace: "parser",
@@ -1367,7 +1375,7 @@ public static class DiagnosticCodeManifest
             Title: "Interface bodies can only contain method signatures (func name(params)).",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 3559),
+            SourceLine: 3567),
         ["tosh.parser.unexpected_list_separator"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.unexpected_list_separator",
             Namespace: "parser",
@@ -1375,7 +1383,7 @@ public static class DiagnosticCodeManifest
             Title: "An array item is required between commas.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 8696),
+            SourceLine: 8821),
         ["tosh.parser.unexpected_pipeline_separator"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.unexpected_pipeline_separator",
             Namespace: "parser",
@@ -1383,7 +1391,7 @@ public static class DiagnosticCodeManifest
             Title: "Unexpected pipeline separator.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 10620),
+            SourceLine: 10745),
         ["tosh.parser.unexpected_projection_separator"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.unexpected_projection_separator",
             Namespace: "parser",
@@ -1391,7 +1399,7 @@ public static class DiagnosticCodeManifest
             Title: "A projected member path is required between commas.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 7861),
+            SourceLine: 7986),
         ["tosh.parser.unexpected_token"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.unexpected_token",
             Namespace: "parser",
@@ -1399,7 +1407,7 @@ public static class DiagnosticCodeManifest
             Title: "Unexpected token '{Current.Text}'.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 7537),
+            SourceLine: 7595),
         ["tosh.parser.unexpected_trait_member"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.unexpected_trait_member",
             Namespace: "parser",
@@ -1407,7 +1415,7 @@ public static class DiagnosticCodeManifest
             Title: "Trait bodies can contain method signatures (func) and property declarations (prop).",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 4324),
+            SourceLine: 4382),
         ["tosh.parser.unknown_property_accessor"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.unknown_property_accessor",
             Namespace: "parser",
@@ -1415,7 +1423,7 @@ public static class DiagnosticCodeManifest
             Title: "Unknown property accessor '{accessorName}'.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 4989),
+            SourceLine: 5047),
         ["tosh.parser.unknown_subcommand_modifier"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.unknown_subcommand_modifier",
             Namespace: "parser",
@@ -1423,7 +1431,7 @@ public static class DiagnosticCodeManifest
             Title: "Unknown subcommand modifier '{text}'.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 2989),
+            SourceLine: 2997),
         ["tosh.parser.unsupported_double_index_lookup"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.unsupported_double_index_lookup",
             Namespace: "parser",
@@ -1431,7 +1439,7 @@ public static class DiagnosticCodeManifest
             Title: "Index access supports '[value]', '[key,]', or '[,value]'.",
             Help: null,
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 9487),
+            SourceLine: 9612),
         ["tosh.parser.unterminated_ansi_c_string"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.unterminated_ansi_c_string",
             Namespace: "parser",
@@ -1479,7 +1487,7 @@ public static class DiagnosticCodeManifest
             Title: "'using' is reserved for CLR namespaces and aliases.",
             Help: "try 'require {targetToken.Text}'.",
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 1215),
+            SourceLine: 1223),
         ["tosh.parser.variable_references_require_dollar"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.variable_references_require_dollar",
             Namespace: "parser",
@@ -1487,7 +1495,7 @@ public static class DiagnosticCodeManifest
             Title: "Variable assignments must use '$' after declaration.",
             Help: "declare variables with 'var name', then refer to them everywhere else as '$name'.",
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 12861),
+            SourceLine: 13006),
         ["tosh.parser.yield_in_defer"] = new DiagnosticCodeInfo(
             Code: "tosh.parser.yield_in_defer",
             Namespace: "parser",
@@ -1495,7 +1503,7 @@ public static class DiagnosticCodeManifest
             Title: "A deferred block cannot yield.",
             Help: "a deferred block runs while the function unwinds, after the consumer may ",
             SourceFile: "src/Tosh.Language/Parsing/ToshParser.cs",
-            SourceLine: 1987),
+            SourceLine: 1995),
         ["tosh.row.index_out_of_range"] = new DiagnosticCodeInfo(
             Code: "tosh.row.index_out_of_range",
             Namespace: "row",
@@ -1511,7 +1519,7 @@ public static class DiagnosticCodeManifest
             Title: "Allocated buffers cannot have a negative size.",
             Help: null,
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 2168),
+            SourceLine: 2169),
         ["tosh.runtime.alloc_requires_single_value"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.alloc_requires_single_value",
             Namespace: "runtime",
@@ -1519,7 +1527,7 @@ public static class DiagnosticCodeManifest
             Title: "Allocated buffer declarations require exactly one size or type value.",
             Help: "use a byte count or a single interop type name here.",
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 2148),
+            SourceLine: 2149),
         ["tosh.runtime.annotation_conversion_failed"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.annotation_conversion_failed",
             Namespace: "runtime",
@@ -1567,7 +1575,7 @@ public static class DiagnosticCodeManifest
             Title: "Background jobs currently require external command stages.",
             Help: null,
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 1840),
+            SourceLine: 1841),
         ["tosh.runtime.background_pipeline_not_supported"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.background_pipeline_not_supported",
             Namespace: "runtime",
@@ -1575,7 +1583,7 @@ public static class DiagnosticCodeManifest
             Title: "Background jobs currently support an optional input expression followed by external command stages only.",
             Help: null,
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 1827),
+            SourceLine: 1828),
         ["tosh.runtime.background_pipeline_requires_command"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.background_pipeline_requires_command",
             Namespace: "runtime",
@@ -1583,7 +1591,7 @@ public static class DiagnosticCodeManifest
             Title: "Background pipelines require at least one external command stage.",
             Help: null,
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 1812),
+            SourceLine: 1813),
         ["tosh.runtime.base_constructor_already_initialized"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.base_constructor_already_initialized",
             Namespace: "runtime",
@@ -1599,7 +1607,7 @@ public static class DiagnosticCodeManifest
             Title: "Class '{@class.Name}' supplies {@class.BaseTypeArguments.Count} type argument(s) to base class '{baseClassDef.Name}', which expects {baseClassDef.TypeParameterNames.Count}.",
             Help: null,
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 4084),
+            SourceLine: 4100),
         ["tosh.runtime.base_type_argument_missing"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.base_type_argument_missing",
             Namespace: "runtime",
@@ -1607,7 +1615,7 @@ public static class DiagnosticCodeManifest
             Title: "Class '{@class.Name}' extends generic class '{baseClassDef.Name}' without supplying type arguments.",
             Help: null,
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 4116),
+            SourceLine: 4132),
         ["tosh.runtime.bind_target_not_native_module"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.bind_target_not_native_module",
             Namespace: "runtime",
@@ -1615,7 +1623,7 @@ public static class DiagnosticCodeManifest
             Title: "'{statement.ModuleName}' is not a native library module.",
             Help: null,
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 2741),
+            SourceLine: 2742),
         ["tosh.runtime.break_outside_loop"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.break_outside_loop",
             Namespace: "runtime",
@@ -1639,7 +1647,7 @@ public static class DiagnosticCodeManifest
             Title: "Callable invocation in expression context must produce exactly one value.",
             Help: "ensure the callable returns exactly one value, or use 'invoke' in pipeline context for multi-value output.",
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 8310),
+            SourceLine: 8461),
         ["tosh.runtime.callable_named_argument"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.callable_named_argument",
             Namespace: "runtime",
@@ -1743,7 +1751,7 @@ public static class DiagnosticCodeManifest
             Title: "",
             Help: null,
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 16076),
+            SourceLine: 16287),
         ["tosh.runtime.command_windows_unavailable"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.command_windows_unavailable",
             Namespace: "runtime",
@@ -1775,7 +1783,7 @@ public static class DiagnosticCodeManifest
             Title: "Variable '{assignment.Name}' does not have a value yet.",
             Help: null,
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 3129),
+            SourceLine: 3145),
         ["tosh.runtime.const_reassignment"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.const_reassignment",
             Namespace: "runtime",
@@ -1783,7 +1791,7 @@ public static class DiagnosticCodeManifest
             Title: "Cannot reassign constant '{name}'.",
             Help: "use 'var' instead of 'const' if you need to reassign this variable.",
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 9807),
+            SourceLine: 9992),
         ["tosh.runtime.const_redeclaration"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.const_redeclaration",
             Namespace: "runtime",
@@ -1791,7 +1799,7 @@ public static class DiagnosticCodeManifest
             Title: "Cannot redeclare constant '{name}'.",
             Help: "use a different name, or declare the original with 'var' if '{name}' needs to change.",
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 10948),
+            SourceLine: 11133),
         ["tosh.runtime.constructor_cycle"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.constructor_cycle",
             Namespace: "runtime",
@@ -1895,7 +1903,7 @@ public static class DiagnosticCodeManifest
             Title: "Array destructuring requires an array or list value.",
             Help: null,
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 2018),
+            SourceLine: 2019),
         ["tosh.runtime.destructuring_requires_record"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.destructuring_requires_record",
             Namespace: "runtime",
@@ -1903,7 +1911,7 @@ public static class DiagnosticCodeManifest
             Title: "Record destructuring requires a record or dictionary value.",
             Help: null,
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 2087),
+            SourceLine: 2088),
         ["tosh.runtime.duplicate_base_constructor_initializer"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.duplicate_base_constructor_initializer",
             Namespace: "runtime",
@@ -1919,7 +1927,7 @@ public static class DiagnosticCodeManifest
             Title: "Class '{@class.Name}' defines property '{duplicateProperties.Key}' more than once.",
             Help: null,
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 3856),
+            SourceLine: 3872),
         ["tosh.runtime.duplicate_constructor"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.duplicate_constructor",
             Namespace: "runtime",
@@ -1935,7 +1943,7 @@ public static class DiagnosticCodeManifest
             Title: "Function '{name}' defines parameter '{duplicateParameters.Key}' more than once.",
             Help: null,
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 3492),
+            SourceLine: 3508),
         ["tosh.runtime.duplicate_named_argument"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.duplicate_named_argument",
             Namespace: "runtime",
@@ -1959,7 +1967,7 @@ public static class DiagnosticCodeManifest
             Title: "Record '{record.Name}' defines field '{duplicateFields.Key}' more than once.",
             Help: null,
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 4803),
+            SourceLine: 4819),
         ["tosh.runtime.duplicate_rune_parameter"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.duplicate_rune_parameter",
             Namespace: "runtime",
@@ -1967,7 +1975,7 @@ public static class DiagnosticCodeManifest
             Title: "Rune '{rune.Name}' defines parameter '{duplicateParameters.Key}' more than once.",
             Help: null,
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 2338),
+            SourceLine: 2339),
         ["tosh.runtime.duplicate_script_flag"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.duplicate_script_flag",
             Namespace: "runtime",
@@ -1975,7 +1983,7 @@ public static class DiagnosticCodeManifest
             Title: "Script flag '--{optionName}' is inferred for more than one flag.",
             Help: null,
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 1716),
+            SourceLine: 1717),
         ["tosh.runtime.duplicate_script_input"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.duplicate_script_input",
             Namespace: "runtime",
@@ -1983,7 +1991,7 @@ public static class DiagnosticCodeManifest
             Title: "Script input '{parameter.Name}' is declared more than once.",
             Help: null,
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 1392),
+            SourceLine: 1393),
         ["tosh.runtime.duplicate_subcommand"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.duplicate_subcommand",
             Namespace: "runtime",
@@ -2007,7 +2015,7 @@ public static class DiagnosticCodeManifest
             Title: "Enum member '{@enum.Name}.{member.Name}' could not be converted to '{underlyingType.Name}'.",
             Help: null,
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 4718),
+            SourceLine: 4734),
         ["tosh.runtime.enum_member_requires_single_value"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.enum_member_requires_single_value",
             Namespace: "runtime",
@@ -2015,7 +2023,7 @@ public static class DiagnosticCodeManifest
             Title: "Enum member '{@enum.Name}.{member.Name}' must resolve to exactly one value.",
             Help: null,
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 4706),
+            SourceLine: 4722),
         ["tosh.runtime.enum_member_value_required"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.enum_member_value_required",
             Namespace: "runtime",
@@ -2023,7 +2031,7 @@ public static class DiagnosticCodeManifest
             Title: "Enum member '{@enum.Name}.{member.Name}' requires an explicit value.",
             Help: null,
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 4682),
+            SourceLine: 4698),
         ["tosh.runtime.enumerate_too_many_args"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.enumerate_too_many_args",
             Namespace: "runtime",
@@ -2087,7 +2095,7 @@ public static class DiagnosticCodeManifest
             Title: "Class '{@class.Name}' cannot extend sealed class '{@class.BaseClassName}'.",
             Help: null,
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 4068),
+            SourceLine: 4084),
         ["tosh.runtime.external_command_is_directory"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.external_command_is_directory",
             Namespace: "runtime",
@@ -2095,7 +2103,7 @@ public static class DiagnosticCodeManifest
             Title: "'{external.ResolvedPath ?? commandSyntax.Name}' is a directory, not an executable file.",
             Help: "run an executable instead, or `cd` into the directory.",
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 7537),
+            SourceLine: 7657),
         ["tosh.runtime.external_command_not_executable"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.external_command_not_executable",
             Namespace: "runtime",
@@ -2103,7 +2111,7 @@ public static class DiagnosticCodeManifest
             Title: "'{external.ResolvedPath ?? commandSyntax.Name}' is not executable.",
             Help: "run an executable instead, or `cd` into the directory.",
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 7524),
+            SourceLine: 7644),
         ["tosh.runtime.fading_member"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.fading_member",
             Namespace: "runtime",
@@ -2183,7 +2191,7 @@ public static class DiagnosticCodeManifest
             Title: "Function '{definition.Name}' expects {expected} argument(s) but received {context.Arguments.Count}.",
             Help: null,
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 15346),
+            SourceLine: 15557),
         ["tosh.runtime.function_overload_ambiguous"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.function_overload_ambiguous",
             Namespace: "runtime",
@@ -2207,7 +2215,7 @@ public static class DiagnosticCodeManifest
             Title: "'{target.OwnerLabel}' inferred type parameter '{typeParameterName}' as '{bound.Name}', but argument '{parameterName}' is '{clrType.Name}'.",
             Help: null,
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 15856),
+            SourceLine: 16067),
         ["tosh.runtime.generic_constraint_failed"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.generic_constraint_failed",
             Namespace: "runtime",
@@ -2215,7 +2223,7 @@ public static class DiagnosticCodeManifest
             Title: "'{target.OwnerLabel}' requires '{typeParameterName}' to satisfy '{constraintName}', but '{clrType.Name}' does not.",
             Help: null,
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 15877),
+            SourceLine: 16088),
         ["tosh.runtime.generic_return_type_mismatch"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.generic_return_type_mismatch",
             Namespace: "runtime",
@@ -2223,7 +2231,7 @@ public static class DiagnosticCodeManifest
             Title: "Function '{definition.Name}' inferred '{rawReturn}' as '{bound.Name}', but returned a '{value.GetType().Name}'.",
             Help: null,
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 15982),
+            SourceLine: 16193),
         ["tosh.runtime.generic_type_argument_count_mismatch"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.generic_type_argument_count_mismatch",
             Namespace: "runtime",
@@ -2231,7 +2239,7 @@ public static class DiagnosticCodeManifest
             Title: "Function '{definition.Name}' has {typeParamsForSeed.Count} type parameter(s) but received {explicitList.Count} type argument(s).",
             Help: null,
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 15251),
+            SourceLine: 15462),
         ["tosh.runtime.group_by_requires_selector"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.group_by_requires_selector",
             Namespace: "runtime",
@@ -2255,7 +2263,7 @@ public static class DiagnosticCodeManifest
             Title: "Hermit class '{@class.Name}' cannot have constructors.",
             Help: null,
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 4043),
+            SourceLine: 4059),
         ["tosh.runtime.hostnamectl_command_failed"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.hostnamectl_command_failed",
             Namespace: "runtime",
@@ -2311,7 +2319,7 @@ public static class DiagnosticCodeManifest
             Title: "",
             Help: null,
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 3202),
+            SourceLine: 3218),
         ["tosh.runtime.infinite_eager_comprehension"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.infinite_eager_comprehension",
             Namespace: "runtime",
@@ -2319,7 +2327,7 @@ public static class DiagnosticCodeManifest
             Title: "Cannot use an infinite source in a list, set, or dict comprehension. Use a generator comprehension (...) instead of [...] and pipe to '| first N'.",
             Help: null,
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 17548),
+            SourceLine: 17781),
         ["tosh.runtime.input_redirection_source_not_found"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.input_redirection_source_not_found",
             Namespace: "runtime",
@@ -2327,7 +2335,7 @@ public static class DiagnosticCodeManifest
             Title: "Input redirection source '{resolved}' does not exist.",
             Help: null,
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 6654),
+            SourceLine: 6774),
         ["tosh.runtime.input_redirection_source_null"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.input_redirection_source_null",
             Namespace: "runtime",
@@ -2335,7 +2343,7 @@ public static class DiagnosticCodeManifest
             Title: "Input redirection source cannot be null.",
             Help: null,
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 6635),
+            SourceLine: 6755),
         ["tosh.runtime.interface_type_argument_arity_mismatch"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.interface_type_argument_arity_mismatch",
             Namespace: "runtime",
@@ -2343,7 +2351,7 @@ public static class DiagnosticCodeManifest
             Title: "Generic interface '{ifaceDefinition.Name}' expects {ifaceArity} type argument(s) <{string.Join(",
             Help: null,
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 14280),
+            SourceLine: 14491),
         ["tosh.runtime.interface_type_argument_constraint_violation"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.interface_type_argument_constraint_violation",
             Namespace: "runtime",
@@ -2351,7 +2359,7 @@ public static class DiagnosticCodeManifest
             Title: "Generic interface '{ifaceDefinition.Name}' requires type parameter '{clause.TypeParameter}' to satisfy '{constraintName}', but '{argText}' (CLR {bound.FullName ?? bound.Name}) does not.",
             Help: null,
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 14350),
+            SourceLine: 14561),
         ["tosh.runtime.interleave_requires_sequence"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.interleave_requires_sequence",
             Namespace: "runtime",
@@ -2375,7 +2383,7 @@ public static class DiagnosticCodeManifest
             Title: "Assignments to members require a member path target.",
             Help: null,
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 3301),
+            SourceLine: 3317),
         ["tosh.runtime.invalid_regex"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.invalid_regex",
             Namespace: "runtime",
@@ -2479,7 +2487,7 @@ public static class DiagnosticCodeManifest
             Title: "",
             Help: null,
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 8874),
+            SourceLine: 9025),
         ["tosh.runtime.loginctl_command_failed"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.loginctl_command_failed",
             Namespace: "runtime",
@@ -2671,7 +2679,7 @@ public static class DiagnosticCodeManifest
             Title: "",
             Help: null,
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 3325),
+            SourceLine: 3341),
         ["tosh.runtime.missing_base_constructor_initializer"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.missing_base_constructor_initializer",
             Namespace: "runtime",
@@ -2687,7 +2695,7 @@ public static class DiagnosticCodeManifest
             Title: "Class '{@class.Name}' must implement hollow methods from '{parentClass.Name}': {string.Join(",
             Help: null,
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 4301),
+            SourceLine: 4317),
         ["tosh.runtime.missing_hollow_properties"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.missing_hollow_properties",
             Namespace: "runtime",
@@ -2695,7 +2703,7 @@ public static class DiagnosticCodeManifest
             Title: "Class '{@class.Name}' must implement hollow properties from '{parentClass.Name}': {string.Join(",
             Help: null,
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 4313),
+            SourceLine: 4329),
         ["tosh.runtime.missing_interface_methods"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.missing_interface_methods",
             Namespace: "runtime",
@@ -2703,7 +2711,7 @@ public static class DiagnosticCodeManifest
             Title: "Class '{@class.Name}' does not implement all methods of interface '{ifaceName}'. Missing: {string.Join(",
             Help: null,
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 4181),
+            SourceLine: 4197),
         ["tosh.runtime.missing_interface_type_arguments"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.missing_interface_type_arguments",
             Namespace: "runtime",
@@ -2711,7 +2719,7 @@ public static class DiagnosticCodeManifest
             Title: "Class '{@class.Name}' fulfills generic interface '{ifaceDefinition.Name}' without type arguments.",
             Help: null,
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 14253),
+            SourceLine: 14464),
         ["tosh.runtime.missing_overrule"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.missing_overrule",
             Namespace: "runtime",
@@ -2719,7 +2727,7 @@ public static class DiagnosticCodeManifest
             Title: "Method '{method.Name}' in class '{@class.Name}' shadows a parent method but is not marked 'overrule'.",
             Help: null,
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 4351),
+            SourceLine: 4367),
         ["tosh.runtime.missing_script_argument"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.missing_script_argument",
             Namespace: "runtime",
@@ -2743,7 +2751,7 @@ public static class DiagnosticCodeManifest
             Title: "Class '{@class.Name}' does not implement required methods from trait '{traitName}'. Missing: {string.Join(",
             Help: null,
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 4217),
+            SourceLine: 4233),
         ["tosh.runtime.missing_trait_properties"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.missing_trait_properties",
             Namespace: "runtime",
@@ -2751,7 +2759,7 @@ public static class DiagnosticCodeManifest
             Title: "Class '{@class.Name}' does not implement required properties from trait '{traitName}'. Missing: {string.Join(",
             Help: null,
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 4230),
+            SourceLine: 4246),
         ["tosh.runtime.nameof_requires_dollar"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.nameof_requires_dollar",
             Namespace: "runtime",
@@ -2759,7 +2767,7 @@ public static class DiagnosticCodeManifest
             Title: "Variable references in nameof require '$'. Use nameof(${nameOf.Identifier}).",
             Help: "try nameof(${nameOf.Identifier}) to get the variable name.",
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 8615),
+            SourceLine: 8766),
         ["tosh.runtime.native_alloc_argument_count"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.native_alloc_argument_count",
             Namespace: "runtime",
@@ -2791,7 +2799,7 @@ public static class DiagnosticCodeManifest
             Title: "Native function '{ModuleName}.{Name}' expects {callableCount} argument(s) but received {context.Arguments.Count}.",
             Help: null,
             SourceFile: "src/Tosh.Language/Bridge/NativeFunctionCommand.cs",
-            SourceLine: 180),
+            SourceLine: 188),
         ["tosh.runtime.native_argument_type_conversion_failed"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.native_argument_type_conversion_failed",
             Namespace: "runtime",
@@ -2799,7 +2807,7 @@ public static class DiagnosticCodeManifest
             Title: "Argument {argumentIndex + 1} for native function '{ModuleName}.{Name}' could not be converted to '{parameter.TypeName}'.",
             Help: null,
             SourceFile: "src/Tosh.Language/Bridge/NativeFunctionCommand.cs",
-            SourceLine: 250),
+            SourceLine: 281),
         ["tosh.runtime.native_binding_requires_type"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.native_binding_requires_type",
             Namespace: "runtime",
@@ -2807,7 +2815,7 @@ public static class DiagnosticCodeManifest
             Title: "Native {owner} requires an explicit CLR type.",
             Help: null,
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 16523),
+            SourceLine: 16734),
         ["tosh.runtime.native_buffer_range"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.native_buffer_range",
             Namespace: "runtime",
@@ -2815,7 +2823,7 @@ public static class DiagnosticCodeManifest
             Title: "'{parameter.Name}' needs a {required}-byte buffer but received {nativeBuffer.ByteLength} bytes.",
             Help: "Allocate a larger buffer, or drop to a raw pointer if the length is genuinely unknown.",
             SourceFile: "src/Tosh.Language/Bridge/NativeFunctionCommand.cs",
-            SourceLine: 230),
+            SourceLine: 261),
         ["tosh.runtime.native_buffer_requires_out"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.native_buffer_requires_out",
             Namespace: "runtime",
@@ -2823,7 +2831,47 @@ public static class DiagnosticCodeManifest
             Title: "Parameter '{parameter.Name}' must be declared 'out' to use a buffer.",
             Help: "A buffer is memory the callee writes into; it carries no value in.",
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 2886),
+            SourceLine: 2887),
+        ["tosh.runtime.native_callback_buffer_parameter"] = new DiagnosticCodeInfo(
+            Code: "tosh.runtime.native_callback_buffer_parameter",
+            Namespace: "runtime",
+            Name: "native_callback_buffer_parameter",
+            Title: "Callback '{rawCallback.Name}' cannot take a buffer parameter.",
+            Help: "a callback receives whatever the caller passes; declare the pointer and length separately.",
+            SourceFile: "src/Tosh.Language/ToshEngine.cs",
+            SourceLine: 4927),
+        ["tosh.runtime.native_callback_by_reference"] = new DiagnosticCodeInfo(
+            Code: "tosh.runtime.native_callback_by_reference",
+            Namespace: "runtime",
+            Name: "native_callback_by_reference",
+            Title: "A callback cannot be passed by reference.",
+            Help: "a callback already marshals as a pointer; pass it by value.",
+            SourceFile: "src/Tosh.Language/ToshEngine.cs",
+            SourceLine: 16768),
+        ["tosh.runtime.native_callback_by_reference_parameter"] = new DiagnosticCodeInfo(
+            Code: "tosh.runtime.native_callback_by_reference_parameter",
+            Namespace: "runtime",
+            Name: "native_callback_by_reference_parameter",
+            Title: "Callback '{rawCallback.Name}' cannot take a by-reference parameter.",
+            Help: "declare it as a pointer and use native-read / native-write inside the callback.",
+            SourceFile: "src/Tosh.Language/ToshEngine.cs",
+            SourceLine: 4943),
+        ["tosh.runtime.native_callback_expects_function"] = new DiagnosticCodeInfo(
+            Code: "tosh.runtime.native_callback_expects_function",
+            Namespace: "runtime",
+            Name: "native_callback_expects_function",
+            Title: "Parameter '{parameter.Name}' of '{ModuleName}.{Name}' expects the callback '{callbackDefinition.Name}'.",
+            Help: null,
+            SourceFile: "src/Tosh.Language/Bridge/NativeFunctionCommand.cs",
+            SourceLine: 233),
+        ["tosh.runtime.native_callback_return_convention"] = new DiagnosticCodeInfo(
+            Code: "tosh.runtime.native_callback_return_convention",
+            Namespace: "runtime",
+            Name: "native_callback_return_convention",
+            Title: "Callback '{rawCallback.Name}' cannot declare a success convention.",
+            Help: "write the concrete return type, such as '-> int'.",
+            SourceFile: "src/Tosh.Language/ToshEngine.cs",
+            SourceLine: 4969),
         ["tosh.runtime.native_free_requires_buffer"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.native_free_requires_buffer",
             Namespace: "runtime",
@@ -2959,7 +3007,7 @@ public static class DiagnosticCodeManifest
             Title: "Nested type '{member.Name}' in class '{@class.Name}' did not produce a type.",
             Help: null,
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 11083),
+            SourceLine: 11268),
         ["tosh.runtime.networkctl_command_failed"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.networkctl_command_failed",
             Namespace: "runtime",
@@ -2999,7 +3047,7 @@ public static class DiagnosticCodeManifest
             Title: "This match expression did not match any arm.",
             Help: "match expressions should usually end with a `default => ...` arm to cover unmatched values.",
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 8745),
+            SourceLine: 8896),
         ["tosh.runtime.nonzero_exit_code"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.nonzero_exit_code",
             Namespace: "runtime",
@@ -3007,7 +3055,7 @@ public static class DiagnosticCodeManifest
             Title: "Command exited with code {exitCode}.",
             Help: "A command in the pipeline returned a non-zero exit code while Shell.ExitOnError is enabled. ",
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 6883),
+            SourceLine: 7003),
         ["tosh.runtime.not_callable"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.not_callable",
             Namespace: "runtime",
@@ -3023,7 +3071,7 @@ public static class DiagnosticCodeManifest
             Title: "Dict keys cannot be null.",
             Help: null,
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 7985),
+            SourceLine: 8136),
         ["tosh.runtime.overrule_no_base_method"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.overrule_no_base_method",
             Namespace: "runtime",
@@ -3031,7 +3079,7 @@ public static class DiagnosticCodeManifest
             Title: "Method '{method.Name}' in class '{@class.Name}' is marked 'overrule' but no parent class defines '{method.Name}'.",
             Help: null,
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 4328),
+            SourceLine: 4344),
         ["tosh.runtime.parallel_requires_callable_or_block"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.parallel_requires_callable_or_block",
             Namespace: "runtime",
@@ -3047,7 +3095,7 @@ public static class DiagnosticCodeManifest
             Title: "The default value for parameter '{parameter.Name}' could not be converted to '{parameter.TypeName}'.",
             Help: "change the default expression or loosen the parameter's annotation.",
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 13048),
+            SourceLine: 13259),
         ["tosh.runtime.parameter_type_conversion_failed"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.parameter_type_conversion_failed",
             Namespace: "runtime",
@@ -3055,7 +3103,7 @@ public static class DiagnosticCodeManifest
             Title: "Argument '{parameter.Name}' could not be converted to '{parameter.TypeName}'.",
             Help: null,
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 15943),
+            SourceLine: 16154),
         ["tosh.runtime.partial_argument_count_mismatch"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.partial_argument_count_mismatch",
             Namespace: "runtime",
@@ -3071,7 +3119,7 @@ public static class DiagnosticCodeManifest
             Title: "Cannot merge partial record '{record.Name}' with existing non-partial record.",
             Help: null,
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 4783),
+            SourceLine: 4799),
         ["tosh.runtime.partial_merge_non_partial_struct"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.partial_merge_non_partial_struct",
             Namespace: "runtime",
@@ -3079,7 +3127,7 @@ public static class DiagnosticCodeManifest
             Title: "Cannot merge partial struct '{@struct.Name}' with existing non-partial struct.",
             Help: null,
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 4909),
+            SourceLine: 5014),
         ["tosh.runtime.partial_mismatch"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.partial_mismatch",
             Namespace: "runtime",
@@ -3087,7 +3135,7 @@ public static class DiagnosticCodeManifest
             Title: "Cannot extend class '{@class.Name}' as partial: the original class was not declared as partial.",
             Help: null,
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 3997),
+            SourceLine: 4013),
         ["tosh.runtime.partial_requires_callable"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.partial_requires_callable",
             Namespace: "runtime",
@@ -3167,7 +3215,7 @@ public static class DiagnosticCodeManifest
             Title: "Raw function '{statement.Binding.Name}' needs a library.",
             Help: null,
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 2777),
+            SourceLine: 2778),
         ["tosh.runtime.raw_struct_bool_field"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.raw_struct_bool_field",
             Namespace: "runtime",
@@ -3207,7 +3255,7 @@ public static class DiagnosticCodeManifest
             Title: "Raw struct '{rawStruct.Name}' has no fields.",
             Help: null,
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 4847),
+            SourceLine: 4863),
         ["tosh.runtime.raw_struct_size_mismatch"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.raw_struct_size_mismatch",
             Namespace: "runtime",
@@ -3263,7 +3311,7 @@ public static class DiagnosticCodeManifest
             Title: "Redirection targets must resolve to exactly one path.",
             Help: "use a single file path or quote the pattern if you meant a literal name.",
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 6617),
+            SourceLine: 6737),
         ["tosh.runtime.redirection_target_null"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.redirection_target_null",
             Namespace: "runtime",
@@ -3271,7 +3319,7 @@ public static class DiagnosticCodeManifest
             Title: "Redirection target cannot be null.",
             Help: null,
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 6595),
+            SourceLine: 6715),
         ["tosh.runtime.redirection_target_unavailable"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.redirection_target_unavailable",
             Namespace: "runtime",
@@ -3279,7 +3327,7 @@ public static class DiagnosticCodeManifest
             Title: "Cannot open '{redirection.Path}' for redirection: {exception.Message}",
             Help: "check that the directory exists and is writable. Redirection creates the ",
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 6387),
+            SourceLine: 6507),
         ["tosh.runtime.reduce_requires_seed_and_callable"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.reduce_requires_seed_and_callable",
             Namespace: "runtime",
@@ -3303,7 +3351,7 @@ public static class DiagnosticCodeManifest
             Title: "{title} must evaluate to boolean values.",
             Help: null,
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 14119),
+            SourceLine: 14330),
         ["tosh.runtime.refinement_specialization_failed"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.refinement_specialization_failed",
             Namespace: "runtime",
@@ -3311,7 +3359,7 @@ public static class DiagnosticCodeManifest
             Title: "Refinement alias '{genericDefinition.Name}' could not be specialized for '{closedTypeName}'.",
             Help: null,
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 14410),
+            SourceLine: 14621),
         ["tosh.runtime.regex_flags_not_applicable"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.regex_flags_not_applicable",
             Namespace: "runtime",
@@ -3351,7 +3399,7 @@ public static class DiagnosticCodeManifest
             Title: "'{statement.Target}' declares no exports, so this require imports nothing.",
             Help: "mark a declaration with 'export' to make it importable, or use ",
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 16161),
+            SourceLine: 16372),
         ["tosh.runtime.require_failed"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.require_failed",
             Namespace: "runtime",
@@ -3359,7 +3407,7 @@ public static class DiagnosticCodeManifest
             Title: "",
             Help: null,
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 2715),
+            SourceLine: 2716),
         ["tosh.runtime.reserved_variable_name"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.reserved_variable_name",
             Namespace: "runtime",
@@ -3367,7 +3415,7 @@ public static class DiagnosticCodeManifest
             Title: "'{name}' is a {titleSuffix}.",
             Help: null,
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 9882),
+            SourceLine: 10067),
         ["tosh.runtime.return_type_conversion_failed"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.return_type_conversion_failed",
             Namespace: "runtime",
@@ -3375,7 +3423,7 @@ public static class DiagnosticCodeManifest
             Title: "Function '{definition.Name}' returned a value that could not be converted to '{definition.ReturnTypeName}'.",
             Help: null,
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 16016),
+            SourceLine: 16227),
         ["tosh.runtime.scan_requires_seed_and_callable"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.scan_requires_seed_and_callable",
             Namespace: "runtime",
@@ -3399,7 +3447,7 @@ public static class DiagnosticCodeManifest
             Title: "Script flags cannot use rest parameters.",
             Help: null,
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 1406),
+            SourceLine: 1407),
         ["tosh.runtime.script_inputs_must_be_top_level"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.script_inputs_must_be_top_level",
             Namespace: "runtime",
@@ -3407,7 +3455,7 @@ public static class DiagnosticCodeManifest
             Title: "Script input declarations must be top-level statements.",
             Help: null,
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 1171),
+            SourceLine: 1172),
         ["tosh.runtime.script_option_requires_value"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.script_option_requires_value",
             Namespace: "runtime",
@@ -3423,7 +3471,7 @@ public static class DiagnosticCodeManifest
             Title: "A script rest argument must be the last argument.",
             Help: null,
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 1422),
+            SourceLine: 1423),
         ["tosh.runtime.self_unavailable_in_constructor_default"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.self_unavailable_in_constructor_default",
             Namespace: "runtime",
@@ -3431,7 +3479,7 @@ public static class DiagnosticCodeManifest
             Title: "The default for parameter '{parameter.Name}' cannot use '$this'.",
             Help: "constructor defaults bind before this layer's properties are initialised; move the logic into the constructor body, or give the parameter a value that does not depend on the instance.",
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 13021),
+            SourceLine: 13232),
         ["tosh.runtime.serialization_depth_exceeded"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.serialization_depth_exceeded",
             Namespace: "runtime",
@@ -3455,7 +3503,7 @@ public static class DiagnosticCodeManifest
             Title: "Shy using statements require a function, block, or module scope.",
             Help: null,
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 2249),
+            SourceLine: 2250),
         ["tosh.runtime.sort_requires_selector"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.sort_requires_selector",
             Namespace: "runtime",
@@ -3503,7 +3551,7 @@ public static class DiagnosticCodeManifest
             Title: "Cannot splat an infinite range.",
             Help: "add an end value to the range, e.g. 1..10 instead of 1..",
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 7437),
+            SourceLine: 7557),
         ["tosh.runtime.splat_requires_collection"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.splat_requires_collection",
             Namespace: "runtime",
@@ -3511,7 +3559,7 @@ public static class DiagnosticCodeManifest
             Title: "Argument splatting requires a non-null collection value.",
             Help: "use a list, array, range, or tuple value with '...'.",
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 7412),
+            SourceLine: 7532),
         ["tosh.runtime.spread_requires_record"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.spread_requires_record",
             Namespace: "runtime",
@@ -3519,7 +3567,7 @@ public static class DiagnosticCodeManifest
             Title: "Spread in a record literal requires a record or dictionary value.",
             Help: null,
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 8039),
+            SourceLine: 8190),
         ["tosh.runtime.step_by_positive"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.step_by_positive",
             Namespace: "runtime",
@@ -3543,7 +3591,7 @@ public static class DiagnosticCodeManifest
             Title: "Subcommand '{statement.Name}' must be declared at script or parent-subcommand scope.",
             Help: null,
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 1189),
+            SourceLine: 1190),
         ["tosh.runtime.subcommand_required"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.subcommand_required",
             Namespace: "runtime",
@@ -3623,7 +3671,7 @@ public static class DiagnosticCodeManifest
             Title: "",
             Help: null,
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 16948),
+            SourceLine: 17181),
         ["tosh.runtime.time_invalid_target"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.time_invalid_target",
             Namespace: "runtime",
@@ -3719,7 +3767,7 @@ public static class DiagnosticCodeManifest
             Title: "This destructuring has {targetCount} targets but the tuple has {valueCount} elements.",
             Help: "give one target per element, or use '_' to discard one you do not want. ",
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 1006),
+            SourceLine: 1007),
         ["tosh.runtime.type_name_conflict"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.type_name_conflict",
             Namespace: "runtime",
@@ -3727,7 +3775,7 @@ public static class DiagnosticCodeManifest
             Title: "{declaredKind} '{name}' conflicts with an existing refinement alias.",
             Help: "choose a different name so types and refinement aliases stay distinct.",
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 11323),
+            SourceLine: 11508),
         ["tosh.runtime.ulimit_getrlimit_failed"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.ulimit_getrlimit_failed",
             Namespace: "runtime",
@@ -3791,7 +3839,7 @@ public static class DiagnosticCodeManifest
             Title: "",
             Help: null,
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 9134),
+            SourceLine: 9285),
         ["tosh.runtime.unexpected_interface_type_arguments"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.unexpected_interface_type_arguments",
             Namespace: "runtime",
@@ -3799,7 +3847,7 @@ public static class DiagnosticCodeManifest
             Title: "Interface '{ifaceDefinition.Name}' is not generic and does not accept type arguments.",
             Help: null,
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 14269),
+            SourceLine: 14480),
         ["tosh.runtime.unexpected_script_argument"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.unexpected_script_argument",
             Namespace: "runtime",
@@ -3831,7 +3879,7 @@ public static class DiagnosticCodeManifest
             Title: "Variable '{variableReference.Name}' has been declared but not assigned yet.",
             Help: "try '${variableReference.Name} = ...' or assign a member like '${variableReference.Name}.Name = ...'.",
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 7756),
+            SourceLine: 7876),
         ["tosh.runtime.unknown_base_class"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.unknown_base_class",
             Namespace: "runtime",
@@ -3839,7 +3887,7 @@ public static class DiagnosticCodeManifest
             Title: "Class '{@class.Name}' extends unknown class '{@class.BaseClassName}'.",
             Help: null,
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 4135),
+            SourceLine: 4151),
         ["tosh.runtime.unknown_cast_target"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.unknown_cast_target",
             Namespace: "runtime",
@@ -3855,7 +3903,7 @@ public static class DiagnosticCodeManifest
             Title: "Command '{commandSyntax.Name}' was not found.",
             Help: "use `which {target}` to inspect how Tosh resolves this command.",
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 7550),
+            SourceLine: 7670),
         ["tosh.runtime.unknown_enum_underlying_type"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.unknown_enum_underlying_type",
             Namespace: "runtime",
@@ -3863,7 +3911,7 @@ public static class DiagnosticCodeManifest
             Title: "Enum '{@enum.Name}' uses unknown underlying type '{@enum.UnderlyingTypeName}'.",
             Help: null,
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 4662),
+            SourceLine: 4678),
         ["tosh.runtime.unknown_function_reference"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.unknown_function_reference",
             Namespace: "runtime",
@@ -3871,7 +3919,7 @@ public static class DiagnosticCodeManifest
             Title: "Function '{funcRef.Name}' was not found.",
             Help: "define the function first or check the spelling.",
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 8644),
+            SourceLine: 8795),
         ["tosh.runtime.unknown_interface"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.unknown_interface",
             Namespace: "runtime",
@@ -3879,7 +3927,7 @@ public static class DiagnosticCodeManifest
             Title: "Class '{@class.Name}' fulfills unknown interface '{ifaceName}'.",
             Help: null,
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 4159),
+            SourceLine: 4175),
         ["tosh.runtime.unknown_named_argument"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.unknown_named_argument",
             Namespace: "runtime",
@@ -3903,7 +3951,7 @@ public static class DiagnosticCodeManifest
             Title: "'{path}' does not name a static member, because '{head}' names no type.",
             Help: "assign a static member as 'TypeName.Member = value', or a variable's member as '$name.Member = value'.",
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 17362),
+            SourceLine: 17595),
         ["tosh.runtime.unknown_tilde_target"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.unknown_tilde_target",
             Namespace: "runtime",
@@ -3911,7 +3959,7 @@ public static class DiagnosticCodeManifest
             Title: "'~{expansion.Name}' names neither a directory alias nor a user.",
             Help: "'~name' expands to that user's home directory. Write \"~{expansion.Name}\" in quotes for a literal tilde, ",
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 7338),
+            SourceLine: 7458),
         ["tosh.runtime.unknown_trait"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.unknown_trait",
             Namespace: "runtime",
@@ -3919,7 +3967,15 @@ public static class DiagnosticCodeManifest
             Title: "Class '{@class.Name}' uses unknown trait '{traitName}'.",
             Help: null,
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 4204),
+            SourceLine: 4220),
+        ["tosh.runtime.unknown_type"] = new DiagnosticCodeInfo(
+            Code: "tosh.runtime.unknown_type",
+            Namespace: "runtime",
+            Name: "unknown_type",
+            Title: "Type '{name}' was not found.",
+            Help: "use a fully qualified name, or add a 'using' for its namespace.",
+            SourceFile: "src/Tosh.Language/ToshEngine.cs",
+            SourceLine: 9526),
         ["tosh.runtime.unknown_type_argument"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.unknown_type_argument",
             Namespace: "runtime",
@@ -3927,7 +3983,7 @@ public static class DiagnosticCodeManifest
             Title: "Type '{name}' could not be resolved as a type argument for '{methodName}'.",
             Help: null,
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 11124),
+            SourceLine: 11309),
         ["tosh.runtime.unknown_type_name"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.unknown_type_name",
             Namespace: "runtime",
@@ -3935,15 +3991,15 @@ public static class DiagnosticCodeManifest
             Title: "Type '{typeName}' could not be resolved for type parameter '{typeParamsForSeed[i]}' of function '{definition.Name}'.",
             Help: null,
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 15262),
+            SourceLine: 15473),
         ["tosh.runtime.unknown_variable"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.unknown_variable",
             Namespace: "runtime",
             Name: "unknown_variable",
-            Title: "Variable '{variableReference.Name}' was not found.",
+            Title: "'${variableReference.Name}' is a constructor parameter of ",
             Help: "try 'var {name} = ...' the first time you bind this variable.",
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 7775),
+            SourceLine: 7902),
         ["tosh.runtime.unsupported_native_allocation_type"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.unsupported_native_allocation_type",
             Namespace: "runtime",
@@ -3967,7 +4023,7 @@ public static class DiagnosticCodeManifest
             Title: "Native interop does not support calling convention '{name}'.",
             Help: null,
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 16640),
+            SourceLine: 16873),
         ["tosh.runtime.unsupported_native_command_type"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.unsupported_native_command_type",
             Namespace: "runtime",
@@ -3983,7 +4039,7 @@ public static class DiagnosticCodeManifest
             Title: "Native interop does not currently support '{typeName}'.",
             Help: "start with primitive CLR types like int, long, float, double, bool, string, IntPtr, UIntPtr, or a struct with sequential/explicit layout.",
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 16550),
+            SourceLine: 16783),
         ["tosh.runtime.unsupported_native_string_return"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.unsupported_native_string_return",
             Namespace: "runtime",
@@ -3991,7 +4047,7 @@ public static class DiagnosticCodeManifest
             Title: "Native string returns need an explicit interop string type.",
             Help: "plain 'string' is supported for native parameters, but return values need explicit ownership semantics.",
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 16615),
+            SourceLine: 16848),
         ["tosh.runtime.using_export_not_supported"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.using_export_not_supported",
             Namespace: "runtime",
@@ -3999,7 +4055,7 @@ public static class DiagnosticCodeManifest
             Title: "'using' cannot be exported.",
             Help: null,
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 2208),
+            SourceLine: 2209),
         ["tosh.runtime.using_not_supported"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.using_not_supported",
             Namespace: "runtime",
@@ -4007,7 +4063,7 @@ public static class DiagnosticCodeManifest
             Title: "This runtime does not support 'using' statements.",
             Help: null,
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 2226),
+            SourceLine: 2227),
         ["tosh.runtime.value_not_callable"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.value_not_callable",
             Namespace: "runtime",
@@ -4015,7 +4071,7 @@ public static class DiagnosticCodeManifest
             Title: "The provided value is not callable.",
             Help: "pass a lambda like 'func(x) => ...' or another callable shell value.",
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 8271),
+            SourceLine: 8422),
         ["tosh.runtime.variable_reference_requires_dollar"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.variable_reference_requires_dollar",
             Namespace: "runtime",
@@ -4023,7 +4079,7 @@ public static class DiagnosticCodeManifest
             Title: "Variable '{variableName}' exists, but variable references must start with '$'.",
             Help: "declare variables with 'var name', then use '$name' everywhere else in ToSh.",
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 7501),
+            SourceLine: 7621),
         ["tosh.runtime.window_requires_positive_integer"] = new DiagnosticCodeInfo(
             Code: "tosh.runtime.window_requires_positive_integer",
             Namespace: "runtime",
@@ -4119,7 +4175,7 @@ public static class DiagnosticCodeManifest
             Title: "Function '{call.Name}' expects {DescribeArity(required, maxAccepted)} but received {positionals.Count}.",
             Help: null,
             SourceFile: "src/Tosh.Language/Binding/TypeChecker.cs",
-            SourceLine: 638),
+            SourceLine: 640),
         ["tosh.type.command_argument"] = new DiagnosticCodeInfo(
             Code: "tosh.type.command_argument",
             Namespace: "type",
@@ -4127,7 +4183,7 @@ public static class DiagnosticCodeManifest
             Title: "Command '{call.Name}' argument {i + 1} expects '{expected.DisplayName}' but received '{actual.DisplayName}'.",
             Help: null,
             SourceFile: "src/Tosh.Language/Binding/TypeChecker.cs",
-            SourceLine: 732),
+            SourceLine: 753),
         ["tosh.type.command_arity"] = new DiagnosticCodeInfo(
             Code: "tosh.type.command_arity",
             Namespace: "type",
@@ -4135,7 +4191,7 @@ public static class DiagnosticCodeManifest
             Title: "Command '{call.Name}' expects {DescribeArity(required, maxAccepted)} but received {provided}.",
             Help: null,
             SourceFile: "src/Tosh.Language/Binding/TypeChecker.cs",
-            SourceLine: 712),
+            SourceLine: 733),
         ["tosh.type.index"] = new DiagnosticCodeInfo(
             Code: "tosh.type.index",
             Namespace: "type",
@@ -4143,15 +4199,15 @@ public static class DiagnosticCodeManifest
             Title: "Dictionary is keyed by '{BoundType.FromClr(keyType).DisplayName}' but received '{indexType.DisplayName}'.",
             Help: null,
             SourceFile: "src/Tosh.Language/Binding/TypeChecker.cs",
-            SourceLine: 1185),
+            SourceLine: 1442),
         ["tosh.type.member_not_found"] = new DiagnosticCodeInfo(
             Code: "tosh.type.member_not_found",
             Namespace: "type",
             Name: "member_not_found",
-            Title: "Member '{segment}' was not found on type '{clr.Name}'.",
+            Title: "Method '{call.MethodName}' was not found on type '{targetType.DisplayName}'.",
             Help: null,
             SourceFile: "src/Tosh.Language/Binding/TypeChecker.cs",
-            SourceLine: 1038),
+            SourceLine: 1138),
         ["tosh.type.mismatch"] = new DiagnosticCodeInfo(
             Code: "tosh.type.mismatch",
             Namespace: "type",
@@ -4159,7 +4215,7 @@ public static class DiagnosticCodeManifest
             Title: "Argument {i + 1} of '{call.Name}' expects '{declared.DisplayName}' but received '{actual.DisplayName}'.",
             Help: null,
             SourceFile: "src/Tosh.Language/Binding/TypeChecker.cs",
-            SourceLine: 663),
+            SourceLine: 674),
         ["tosh.type.operator"] = new DiagnosticCodeInfo(
             Code: "tosh.type.operator",
             Namespace: "type",
@@ -4167,7 +4223,7 @@ public static class DiagnosticCodeManifest
             Title: "Operator '{op}' is not compatible with operand types '{left.DisplayName}' and '{right.DisplayName}'.",
             Help: null,
             SourceFile: "src/Tosh.Language/Binding/TypeChecker.cs",
-            SourceLine: 1261),
+            SourceLine: 1518),
         ["tosh.type.pipeline_input"] = new DiagnosticCodeInfo(
             Code: "tosh.type.pipeline_input",
             Namespace: "type",
@@ -4175,7 +4231,7 @@ public static class DiagnosticCodeManifest
             Title: "Command '{call.Name}' does not accept pipeline input of type '{previousOutput.DisplayName}'.",
             Help: null,
             SourceFile: "src/Tosh.Language/Binding/TypeChecker.cs",
-            SourceLine: 983),
+            SourceLine: 1011),
         ["tosh.type.unknown_option"] = new DiagnosticCodeInfo(
             Code: "tosh.type.unknown_option",
             Namespace: "type",
@@ -4183,7 +4239,7 @@ public static class DiagnosticCodeManifest
             Title: "Command '{call.Name}' has no option '{text}'.",
             Help: null,
             SourceFile: "src/Tosh.Language/Binding/TypeChecker.cs",
-            SourceLine: 800),
+            SourceLine: 821),
         ["tosh.user.type"] = new DiagnosticCodeInfo(
             Code: "tosh.user.type",
             Namespace: "user",
@@ -4191,11 +4247,11 @@ public static class DiagnosticCodeManifest
             Title: "",
             Help: null,
             SourceFile: "src/Tosh.Language/ToshEngine.cs",
-            SourceLine: 10218),
+            SourceLine: 10403),
     };
 
     /// <summary>Total number of diagnostic codes in the manifest.</summary>
-    public const int Count = 521;
+    public const int Count = 528;
 
     /// <summary>Lookup metadata for a single code (case-insensitive).</summary>
     public static DiagnosticCodeInfo? TryGet(string code)

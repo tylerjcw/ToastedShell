@@ -398,6 +398,25 @@ public sealed record RawStructDefinitionStatementSyntax(
     TextSpan Span = default,
     DocComment? DocComment = null) : StatementSyntax(Span);
 
+/// <summary>
+/// A <c>raw callback Name(…) -&gt; ret</c> declaration: the C function-pointer
+/// type a native signature names when it takes a callback.
+///
+/// Deliberately a named declaration rather than an inline structural type, for
+/// the same reason <c>raw struct</c> is: it keeps
+/// <see cref="NativeFunctionParameterSyntax.TypeName"/> a flat name that the
+/// existing type registry resolves, and it matches how C actually spells these
+/// — a <c>typedef</c>, near-universally.
+/// </summary>
+public sealed record RawCallbackDefinitionStatementSyntax(
+    string Name,
+    IReadOnlyList<NativeFunctionParameterSyntax> Parameters,
+    string? ReturnTypeName,
+    string? CallingConventionName,
+    DeclarationModifier Modifier,
+    TextSpan Span = default,
+    DocComment? DocComment = null) : StatementSyntax(Span);
+
 public sealed record TraitMethodSignatureSyntax(
     string Name,
     IReadOnlyList<FunctionParameterSyntax> Parameters,

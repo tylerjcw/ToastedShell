@@ -79,7 +79,7 @@ Deprecated. Prefer member-access syntax: `\$obj.Method(\$args)`.
 \textit{Library: \code{Tosh.Stdlib.Clr}}
 
 \begin{cmdbox}{cast}
-Casts pipeline values to a CLR type, including constructed generic collection types.
+Casts pipeline values to a CLR type or a type declared in ToastScript.
 
 \begin{signature}
 cast <type> [value ...]
@@ -89,7 +89,7 @@ cast <type> [value ...]
 \toprule
 \textbf{Argument} & \textbf{Description} \\
 \midrule
-type & The target CLR type to cast to, including generic types like list<int>. \\
+type & The target type to cast to: a CLR type including generic types like list<int>, or a type declared in ToastScript. \\
 value & Optional value(s) to cast. If omitted, reads from the pipeline. (optional) \\
 \bottomrule
 \end{tabular}
@@ -102,10 +102,11 @@ value & Optional value(s) to cast. If omitted, reads from the pipeline. (optiona
 \begin{lstlisting}
 echo [1, 2, 3] | cast list<int>  # Cast an array to a typed list
 echo 42 | cast string  # Cast a number to a string
+cast Fuel 8  # Cast a backing value to a declared enum member
 \end{lstlisting}
 
 \begin{notebox}
-Cast converts to CLR target types, including constructed generic collection types like `list<int>`.
+Cast converts to CLR target types, including constructed generic collection types like `list<int>`, and to types declared in ToastScript. A declared enum converts from a member name or a backing value; any other declared type converts only from a value that already is one, because cast does not construct.
 \end{notebox}
 
 \end{cmdbox}
@@ -4311,7 +4312,7 @@ echo 1 2 3 | any func(x) => ($x == 2)  # Check whether any item matches
 \textit{Library: \code{Tosh.Stdlib.Pipeline}}
 
 \begin{cmdbox}{average}
-Averages numeric, storage size, or timespan values.
+Averages numeric, quantity, storage size, or timespan values.
 
 \textit{Aliases:} \code{avg}
 
@@ -4330,10 +4331,11 @@ member-path & Optional member path to extract numeric values from each object. (
 \textbf{Pipeline input:} scalar, record
  --- Consumes the pipeline and returns the arithmetic mean.
 
-\textbf{Output:} The arithmetic mean of the pipeline values. Supports numeric, StorageSize, and TimeSpan types.
+\textbf{Output:} The arithmetic mean of the pipeline values. Supports numeric, Quantity, StorageSize, and TimeSpan types.
 
 \begin{lstlisting}
 echo 10 20 30 | average  # Average a list of numbers
+echo 1`km 500`m | average  # Average compatible quantities
 ls | average .Length  # Average file sizes
 \end{lstlisting}
 
@@ -5736,7 +5738,7 @@ Sorts the current pipeline objects.
 
 \begin{signature}
 sort [-r|--reverse] [-n|--numeric] [-u|--unique] [-h|--human-numeric] \\
-\quad [member-path|callable|block]
+\quad [-o|--ordinal] [member-path|callable|block]
 \end{signature}
 
 \begin{tabular}{@{}>{\ttfamily\small\raggedright\arraybackslash}p{5cm} L{9cm}@{}}
@@ -5756,6 +5758,7 @@ key & A member path, callable, or block to extract the sort key. (optional) \tex
 -n, --numeric & Use numeric comparison. \\
 -u, --unique & Remove duplicate values after sorting. \\
 -h, --human-numeric & Human-numeric sort (understands storage sizes). \\
+-o, --ordinal & Compare by code point, case-sensitively. \\
 \bottomrule
 \end{tabular}
 
@@ -5768,6 +5771,7 @@ key & A member path, callable, or block to extract the sort key. (optional) \tex
 ps | sort Memory  # Sort by property
 ls -la | sort Modified | reverse  # Sort then reverse
 ps | sort func(p) => ($p.Name.Length)  # Lambda sort key
+$codes | sort --ordinal  # Code-point order, for generated output
 \end{lstlisting}
 
 \end{cmdbox}
@@ -5846,7 +5850,7 @@ echo a b c d e f g | step-by 2  # Every other item
 \textit{Library: \code{Tosh.Stdlib.Pipeline}}
 
 \begin{cmdbox}{sum}
-Sums numeric, storage size, or timespan values.
+Sums numeric, quantity, storage size, or timespan values.
 
 \begin{signature}
 sum [member-path]
@@ -5863,10 +5867,11 @@ member-path & Optional member path to extract numeric values from each object. (
 \textbf{Pipeline input:} scalar, record
  --- Consumes the pipeline and returns the total.
 
-\textbf{Output:} The sum of the pipeline values. Supports numeric, StorageSize, and TimeSpan types.
+\textbf{Output:} The sum of the pipeline values. Supports numeric, Quantity, StorageSize, and TimeSpan types.
 
 \begin{lstlisting}
 echo 1 2 3 4 | sum  # Sum a list of numbers
+echo 1`km 500`m | sum  # Sum compatible quantities
 ls | sum .Length  # Total file sizes
 \end{lstlisting}
 
@@ -8580,7 +8585,7 @@ sleep <duration> [duration...]
 \toprule
 \textbf{Argument} & \textbf{Description} \\
 \midrule
-duration & A duration: integer (seconds), decimal, TimeSpan, quantity (e.g. 500`ms`), or string like '1s', '2m'. \\
+duration & A duration: integer (seconds), decimal, TimeSpan, quantity (e.g. 500`ms), or string like '1s', '2m'. \\
 \bottomrule
 \end{tabular}
 
@@ -8588,7 +8593,7 @@ duration & A duration: integer (seconds), decimal, TimeSpan, quantity (e.g. 500`
 
 \begin{lstlisting}
 sleep 2  # Sleep for 2 seconds
-sleep 500`ms`  # Sleep for 500 milliseconds using a unit literal
+sleep 500`ms  # Sleep for 500 milliseconds using a unit literal
 sleep 1 2 3  # Sleep for a total of 6 seconds
 \end{lstlisting}
 

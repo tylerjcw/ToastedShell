@@ -958,6 +958,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
             RecordDefinitionStatementSyntax record => EvaluateRecordDefinitionAsync(sourceName, sourceText, record, cancellationToken),
             StructDefinitionStatementSyntax @struct => EvaluateStructDefinitionAsync(sourceName, sourceText, @struct, cancellationToken),
             RawStructDefinitionStatementSyntax rawStruct => EvaluateRawStructDefinitionAsync(sourceName, sourceText, rawStruct, cancellationToken),
+            RawCallbackDefinitionStatementSyntax rawCallback => EvaluateRawCallbackDefinitionAsync(sourceName, sourceText, rawCallback, cancellationToken),
             RawFunctionStatementSyntax rawFunction => EvaluateRawFunctionStatementAsync(sourceName, sourceText, rawFunction, cancellationToken),
             TraitDefinitionStatementSyntax trait => EvaluateTraitDefinitionAsync(sourceName, sourceText, trait, cancellationToken),
             EventDefinitionStatementSyntax @event => EvaluateEventDefinitionAsync(sourceName, sourceText, @event, cancellationToken),
@@ -2923,11 +2924,26 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
                     continue;
                 }
 
+                var parameterType = ResolveNativeInteropParameterType(parameter.TypeName, parameter.PassingMode, sourceName, sourceText, parameter.Span, $"parameter '{parameter.Name}'");
+
+                // A `raw callback` name resolves to an emitted delegate type;
+                // the declaration is carried alongside so the thunk can convert
+                // arguments using the names the author actually wrote.
+                ToshNativeCallbackDefinition? callback = null;
+
+                if (typeof(Delegate).IsAssignableFrom(parameterType) &&
+                    parameter.TypeName is { } declaredTypeName &&
+                    TryGetNamedType(declaredTypeName.Trim(), out var namedType))
+                {
+                    callback = namedType as ToshNativeCallbackDefinition;
+                }
+
                 parameters.Add(new NativeFunctionParameterDefinition(
                     parameter.Name,
                     parameter.TypeName ?? string.Empty,
-                    ResolveNativeInteropParameterType(parameter.TypeName, parameter.PassingMode, sourceName, sourceText, parameter.Span, $"parameter '{parameter.Name}'"),
-                    parameter.PassingMode));
+                    parameterType,
+                    parameter.PassingMode,
+                    Callback: callback));
             }
             var returnType = ResolveNativeInteropReturnType(function.ReturnTypeName, sourceName, sourceText, function.Span);
             var callingConvention = ResolveNativeCallingConvention(function.CallingConventionName, sourceName, sourceText, function.Span);
@@ -4880,6 +4896,95 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
 
         DeclareType(rawStruct.Name, definition, rawStruct.Modifier, sourceName, sourceText, rawStruct.Span, clrType);
         yield break;
+    }
+
+    /// <summary>
+    /// <c>raw callback Name(…) -&gt; ret</c> — emits the delegate type a native
+    /// signature names when it takes a C function pointer, and registers it
+    /// under <paramref name="rawCallback"/>'s name so
+    /// <see cref="ResolveNativeInteropParameterType"/> finds it like any other
+    /// native type.
+    /// </summary>
+    private IAsyncEnumerable<object?> EvaluateRawCallbackDefinitionAsync(
+        string sourceName,
+        string sourceText,
+        RawCallbackDefinitionStatementSyntax rawCallback,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        EnsureBindingNameIsNotReserved(sourceName, sourceText, rawCallback.Name, rawCallback.Span, "reserved runtime namespace");
+
+        var parameters = new List<NativeFunctionParameterDefinition>(rawCallback.Parameters.Count);
+
+        foreach (var parameter in rawCallback.Parameters)
+        {
+            // A `buffer[n]` collapses into two ABI arguments and is decoded
+            // after the call — an inbound convention with no meaning for a
+            // callback, whose arguments arrive already formed.
+            if (TryParseOutArrayParameter(parameter.TypeName, out _, out _))
+            {
+                throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                    Code: "tosh.runtime.native_callback_buffer_parameter",
+                    Title: $"Callback '{rawCallback.Name}' cannot take a buffer parameter.",
+                    SourceName: sourceName,
+                    SourceText: sourceText,
+                    Span: parameter.Span,
+                    Label: $"'{parameter.Name}' declares '{parameter.TypeName}'",
+                    Help: "a callback receives whatever the caller passes; declare the pointer and length separately."));
+            }
+
+            // A ref/out callback parameter would need the value written back
+            // into the caller's memory after the ToSh body ran. That write-back
+            // has no design yet, and a silently-ignored `out` is worse than a
+            // rejected one.
+            if (parameter.PassingMode != NativeParameterPassingMode.In)
+            {
+                throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                    Code: "tosh.runtime.native_callback_by_reference_parameter",
+                    Title: $"Callback '{rawCallback.Name}' cannot take a by-reference parameter.",
+                    SourceName: sourceName,
+                    SourceText: sourceText,
+                    Span: parameter.Span,
+                    Label: $"'{parameter.Name}' is declared {parameter.PassingMode.ToString().ToLowerInvariant()}",
+                    Help: "declare it as a pointer and use native-read / native-write inside the callback."));
+            }
+
+            parameters.Add(new NativeFunctionParameterDefinition(
+                parameter.Name,
+                parameter.TypeName ?? string.Empty,
+                ResolveNativeInteropParameterType(
+                    parameter.TypeName, parameter.PassingMode, sourceName, sourceText, parameter.Span,
+                    $"callback parameter '{parameter.Name}'"),
+                parameter.PassingMode));
+        }
+
+        var returnType = ResolveNativeInteropReturnType(rawCallback.ReturnTypeName, sourceName, sourceText, rawCallback.Span);
+
+        // `ok` / `count` decide whether a native call *failed*. A callback's
+        // return value is one we produce, so there is nothing to check and the
+        // convention would silently do nothing.
+        if (returnType.Convention != NativeErrorConvention.None)
+        {
+            throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                Code: "tosh.runtime.native_callback_return_convention",
+                Title: $"Callback '{rawCallback.Name}' cannot declare a success convention.",
+                SourceName: sourceName,
+                SourceText: sourceText,
+                Span: rawCallback.Span,
+                Label: $"'{rawCallback.ReturnTypeName}' checks a result rather than producing one",
+                Help: "write the concrete return type, such as '-> int'."));
+        }
+
+        var callingConvention = ResolveNativeCallingConvention(
+            rawCallback.CallingConventionName, sourceName, sourceText, rawCallback.Span);
+
+        var clrType = Bridge.NativeDelegateTypeFactory.GetOrCreate(parameters, returnType.ClrType, callingConvention);
+
+        var definition = new ToshNativeCallbackDefinition(
+            rawCallback.Name, clrType, parameters, returnType, callingConvention);
+
+        DeclareType(rawCallback.Name, definition, rawCallback.Modifier, sourceName, sourceText, rawCallback.Span, clrType);
+        return AsyncEnumerableExtensions.Empty<object?>();
     }
 
     private async IAsyncEnumerable<object?> EvaluateStructDefinitionAsync(
@@ -16648,7 +16753,46 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
             return typeof(string);
         }
 
+        // The scalar table is the single source of truth for the native interop
+        // surface, so consult it before the CLR resolver rather than after.
+        // Without this, `int`, `uint`, `ptr` and `byte` — which are most of what
+        // a bind block declares — each took the full resolution path, scanning
+        // every import. A 28-function SDL block resolves roughly 110 parameter
+        // types, and type resolution was measured at ~518 ms of the ~574 ms
+        // spent loading a profile's modules.
+        if (NativeTypeLexicon.TryResolveScalar(normalized, out var scalar) && scalar != typeof(void))
+        {
+            if (NativeTypeLexicon.ValidateByRef(normalized, isByRef, sourceName, sourceText, span) is { } scalarRejection)
+            {
+                throw ToshDiagnosticException.Create(scalarRejection);
+            }
+
+            return scalar;
+        }
+
         var resolved = ResolveTypeName(normalized);
+
+        // A `raw callback` resolves to an emitted delegate type. It needs no
+        // layout support — the marshaller turns a delegate into a function
+        // pointer by itself — so it is admitted here rather than in
+        // NativeInteropUtilities, which answers a question about memory layout
+        // that `size-of` and `alloc` also ask.
+        if (resolved is not null && typeof(Delegate).IsAssignableFrom(resolved))
+        {
+            if (isByRef)
+            {
+                throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                    Code: "tosh.runtime.native_callback_by_reference",
+                    Title: "A callback cannot be passed by reference.",
+                    SourceName: sourceName,
+                    SourceText: sourceText,
+                    Span: span,
+                    Label: $"{owner} declares '{typeName}' as out/ref",
+                    Help: "a callback already marshals as a pointer; pass it by value."));
+            }
+
+            return resolved;
+        }
 
         if (resolved is null || !IsSupportedNativeInteropType(resolved))
         {

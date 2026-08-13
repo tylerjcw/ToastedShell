@@ -650,6 +650,14 @@ public static class ToshParser
                 return ParseRawStructDefinitionStatement(docTokens);
             }
 
+            // `raw callback` is likewise its own declaration kind, and must be
+            // tested before `raw func` so the shared `raw` prefix does not send
+            // it down the binding path.
+            if (LooksLikeRawCallbackDefinition())
+            {
+                return ParseRawCallbackDefinitionStatement(docTokens);
+            }
+
             // Top-level `raw func name(...) -> ret from "lib"`.
             if (MatchesKeywordAtOffset(GetDeclarationModifierOffset(), "raw"))
             {
@@ -3947,6 +3955,56 @@ public static class ToshParser
                 isPartial,
                 TextSpan.FromBounds(declarationStart, end),
                 DocComment: DocComment.Parse(docTokens ?? Array.Empty<SyntaxToken>()));
+        }
+
+        /// <summary>
+        /// <c>raw callback Name(param: type, …) -&gt; ret [callconv name]</c>
+        ///
+        /// Reuses the bind-block parameter and return parsers verbatim: a
+        /// callback signature is the same grammar as the native function
+        /// signature it is passed to, read in the opposite direction.
+        /// </summary>
+        private StatementSyntax ParseRawCallbackDefinitionStatement(IReadOnlyList<SyntaxToken>? docTokens = null)
+        {
+            var declarationStart = Current.Span.Start;
+            var modifier = ParseDeclarationModifier();
+
+            NextToken(); // consume 'raw'
+            NextToken(); // consume 'callback'
+
+            var nameToken = ExpectVariableName();
+            var parameters = ParseNativeBindingParameters();
+            var returnTypeName = TryParseReturnTypeAnnotation();
+
+            string? callingConventionName = null;
+
+            if (Current.Kind == SyntaxTokenKind.Bareword &&
+                string.Equals(Current.Text, "callconv", StringComparison.OrdinalIgnoreCase))
+            {
+                NextToken();
+
+                if (Current.Kind is SyntaxTokenKind.Bareword or SyntaxTokenKind.String)
+                {
+                    callingConventionName = NextToken().Text.Trim('"');
+                }
+                else
+                {
+                    _diagnostics.Add(new SyntaxDiagnostic(
+                        Code: "tosh.parser.expected_calling_convention",
+                        Title: "A callback needs a calling convention name after 'callconv'.",
+                        Span: Current.Span,
+                        Label: "write something like 'callconv stdcall'"));
+                }
+            }
+
+            return new RawCallbackDefinitionStatementSyntax(
+                nameToken.Text,
+                parameters,
+                returnTypeName,
+                callingConventionName,
+                modifier,
+                TextSpan.FromBounds(declarationStart, Math.Max(Peek(-1).Span.End, nameToken.Span.End)),
+                DocComment.Parse(docTokens ?? Array.Empty<SyntaxToken>()));
         }
 
         /// <summary>
@@ -11861,6 +11919,20 @@ public static class ToshParser
             {
                 return false;
             }
+
+            return Peek(offset + 1).Kind == SyntaxTokenKind.Bareword &&
+                   IsValidIdentifier(Peek(offset + 1).Text);
+        }
+
+        /// <c>raw callback Name(…) -&gt; ret</c>.
+        private bool LooksLikeRawCallbackDefinition()
+        {
+            var offset = GetDeclarationModifierOffset();
+
+            if (!MatchesKeywordAtOffset(offset, "raw")) return false;
+            offset++;
+
+            if (!MatchesKeywordAtOffset(offset, "callback")) return false;
 
             return Peek(offset + 1).Kind == SyntaxTokenKind.Bareword &&
                    IsValidIdentifier(Peek(offset + 1).Text);

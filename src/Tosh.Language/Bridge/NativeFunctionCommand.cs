@@ -25,6 +25,13 @@ namespace Tosh.Language.Bridge;
 /// declaring it literally would mean writing the size twice. Engine-supplied,
 /// so it never appears at the call site or in the result.
 /// </param>
+/// <param name="Callback">
+/// Set when this parameter's declared type is a <c>raw callback</c>. Carried on
+/// the parameter rather than looked up from <see cref="ClrType"/> because
+/// <see cref="NativeDelegateTypeFactory"/> caches by signature — two callbacks
+/// with identical shapes share one emitted type, so the type alone cannot say
+/// which declaration a parameter named.
+/// </param>
 internal sealed record NativeFunctionParameterDefinition(
     string Name,
     string TypeName,
@@ -32,7 +39,8 @@ internal sealed record NativeFunctionParameterDefinition(
     NativeParameterPassingMode PassingMode,
     int? InlineBufferLength = null,
     bool DecodeAsCString = false,
-    bool IsSynthesizedLength = false)
+    bool IsSynthesizedLength = false,
+    ToshNativeCallbackDefinition? Callback = null)
 {
     public bool IsInlineBuffer => InlineBufferLength is not null;
 
@@ -217,6 +225,29 @@ internal sealed class NativeFunctionCommand : IShellCommand, ICommandResolutionM
             var argumentIndex = callerArgumentIndex;
             callerArgumentIndex++;
 
+            if (parameter.Callback is { } callbackDefinition)
+            {
+                if (value is not IShellCallable callable)
+                {
+                    throw context.CreateDiagnostic(
+                        code: "tosh.runtime.native_callback_expects_function",
+                        title: $"Parameter '{parameter.Name}' of '{ModuleName}.{Name}' expects the callback '{callbackDefinition.Name}'.",
+                        argumentIndex: argumentIndex,
+                        label: $"pass a function reference such as '&my_handler'");
+                }
+
+                var thunk = NativeCallbackThunkFactory.Create(
+                    callbackDefinition, callable, context, Environment.CurrentManagedThreadId);
+
+                // Rooted for the life of the library: a callee that stores the
+                // pointer (GLFW's window callbacks) outlives this call, and a
+                // collected thunk leaves native code calling freed memory.
+                NativeCallbackThunkFactory.Root(Binding, thunk);
+
+                convertedArguments[index] = thunk;
+                continue;
+            }
+
             if (parameter.PassingMode == NativeParameterPassingMode.Ref && value is NativeBuffer nativeBuffer)
             {
                 // Both the seeding read and the write-back below go through raw
@@ -259,17 +290,32 @@ internal sealed class NativeFunctionCommand : IShellCommand, ICommandResolutionM
         object? result;
         int errno;
 
-        try
+        // A callback cannot throw across the native frames it runs on, so it
+        // records its failure and returns a default instead. This scope is
+        // where that failure becomes an exception again, once the native frames
+        // are gone and throwing is legal.
+        using (var callbackScope = new NativeCallbackScope())
         {
-            result = _delegate.DynamicInvoke(convertedArguments);
+            try
+            {
+                result = _delegate.DynamicInvoke(convertedArguments);
 
-            // Must be read before any other managed work: the captured value is
-            // per-thread and the next P/Invoke overwrites it.
-            errno = Marshal.GetLastPInvokeError();
-        }
-        catch (TargetInvocationException exception) when (exception.InnerException is not null)
-        {
-            throw new InvalidOperationException(exception.InnerException.Message, exception.InnerException);
+                // Must be read before any other managed work: the captured value is
+                // per-thread and the next P/Invoke overwrites it.
+                errno = Marshal.GetLastPInvokeError();
+            }
+            catch (TargetInvocationException exception) when (exception.InnerException is not null)
+            {
+                throw new InvalidOperationException(exception.InnerException.Message, exception.InnerException);
+            }
+
+            // Takes precedence over the native return value: a call whose
+            // callback failed did not do what the script asked, whatever the
+            // library reported.
+            if (callbackScope.Failure is { } failure)
+            {
+                throw failure;
+            }
         }
 
         foreach (var bufferBackedParameter in bufferBackedParameters)
