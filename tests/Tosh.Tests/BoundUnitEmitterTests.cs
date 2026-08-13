@@ -1666,6 +1666,51 @@ public sealed class BoundUnitEmitterTests : IClassFixture<ToshRuntimeFixture>
     }
 
     [Fact]
+    public void Compiled_typed_function_returns_its_trailing_expression()
+    {
+        // A trailing bare expression is the function's result — that is what an
+        // expression body desugars to, and what the interpreter does. The
+        // emitter used to run the block for effect, drop its value, and fall
+        // through to `default(T)`: `-> int` gave 0, `-> string` gave "", and a
+        // user-class return gave null. Silently, for the most idiomatic way to
+        // write a function in the language (`TS-P2-109`).
+        var script =
+            "export func addExpr(a: int, b: int) -> int => $a + $b\n"
+            + "export func addStmt(a: int, b: int) -> int { return $a + $b }\n"
+            + "export func greet(n: string) -> string => $\"hi {$n}\"\n"
+            + "echo (addExpr 20 22)\n"
+            + "echo (addStmt 20 22)\n"
+            + "echo (greet \"bob\")\n";
+
+        var output = CompileAndRun(script).Trim().Replace("\r", "");
+
+        Assert.Equal("42\n42\nhi bob", output);
+    }
+
+    [Fact]
+    public void Compiled_typed_function_returning_a_user_class_keeps_the_instance()
+    {
+        // Same defect reached through a class: a user-class return type is not
+        // one the emitter can map to a CLR type, so the function was not
+        // "typed" from its point of view and fell through to `Ldnull` instead.
+        // Interpreted, this prints 7; compiled, it threw converting null.
+        var script =
+            "export class Base { prop Kind: string = \"base\" }\n"
+            + "export class Leaf(v: int) extends Base {\n"
+            + "    prop Kind: string = \"leaf\"\n"
+            + "    prop V: int = $v\n"
+            + "}\n"
+            + "export func make(v: int) -> Base => new Leaf($v)\n"
+            + "export func take(n: Base) -> int => 7\n"
+            + "var x: Base = make(3)\n"
+            + "echo (take($x))\n";
+
+        var output = CompileAndRun(script).Trim().Replace("\r", "");
+
+        Assert.Equal("7", output);
+    }
+
+    [Fact]
     public void Compiled_nested_output_redirection_preserves_outer_input_path()
     {
         // Regression: an output-only inner redirection scope used

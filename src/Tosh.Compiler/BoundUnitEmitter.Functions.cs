@@ -682,7 +682,46 @@ internal sealed partial class EmitterImpl
                     _paramSlots[func.Parameters[i].Symbol] = i;
                 }
             }
-            EmitBlock(func.Body);
+            // A trailing bare expression is the function's result — that is
+            // what `func f(a: int) -> int => $a + 1` means, and what the
+            // interpreter does. The parser desugars an expression body into a
+            // block whose last statement is a pipeline, so by here it is
+            // indistinguishable from a block that simply ends in an expression;
+            // both must produce the value.
+            //
+            // Without this the block was emitted for effect, its value dropped,
+            // and the fall-through below returned `default(T)`: `-> int` gave 0,
+            // `-> string` gave "", `-> SomeClass` gave null. Silently, and for
+            // the most idiomatic way to write a function in the language.
+            var body = func.Body;
+
+            // Gated on the *declaration* carrying a return type, not on
+            // `entry.IsTyped` — that flag means "the emitter could map the name
+            // to a CLR type", which is false for a user class, so gating on it
+            // left class-returning functions still yielding null. Gating on
+            // neither is worse: an untyped function yields a stream, and
+            // collapsing its trailing pipeline into a single return breaks
+            // multi-value yields (21 suite failures confirmed it).
+            // `dynamic` is excluded deliberately: the compiler profile demands
+            // an annotation and `dynamic` is the documented way to opt out of
+            // one, so it has to keep the stream semantics an unannotated
+            // function has. `func f() -> dynamic { echo x out> p; cat }` yields
+            // every line `cat` produces, and collapsing that into a single
+            // return value loses all but one.
+            if (func.ReturnTypeName is not null &&
+                !string.Equals(func.ReturnTypeName, "dynamic", StringComparison.OrdinalIgnoreCase) &&
+                body.Statements.Count > 0 &&
+                body.Statements[^1] is BoundPipelineStatement trailing)
+            {
+                var leading = new BoundStatement[body.Statements.Count - 1];
+                for (var i = 0; i < leading.Length; i++) leading[i] = body.Statements[i];
+
+                body = new BoundBlock(
+                    [.. leading, new BoundReturnStatement(trailing.Pipeline, trailing.Span)],
+                    body.Span);
+            }
+
+            EmitBlock(body);
 
             // Fall-through return: typed funcs must produce a default
             // value of the declared return type; untyped funcs keep
