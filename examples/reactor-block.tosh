@@ -93,19 +93,46 @@ subcommand calc {
     ## @summary Capacity of the steam tanks
     arg Capacity   : int    = 25000
 
-    ## The picker is the fallback, not the only way in: passing the type keeps the script
-    ## runnable non-interactively, where `tui` is unavailable.
-    var chosen = ($ReactorType == "")
-        ? (tui pick "Uranium" "Plutonium" "MOX" "Breeder" --cli)
-        : $ReactorType
+    ## `ReactorType` is the first positional, so omitting it shifts every later
+    ## argument one place left: `calc 2 2 300 25000` lands the width in
+    ## `ReactorType`. A leading number is what that looks like, and the arguments
+    ## are shifted back before the picker fills in the type.
+    ##
+    ## The test is a regex rather than a cast on purpose. `"2" as int` succeeds,
+    ## but `"Nuclear" as int` *throws* rather than yielding something falsy, so
+    ## using the cast as the condition fails on exactly the inputs that do not
+    ## need shifting (`TS-P2-111`).
+    if ($ReactorType =~ "^[0-9]+$") {
+        $Capacity    = $Seconds
+        $Seconds     = $Height
+        $Height      = $Width
+        $Width       = $ReactorType as int
+        $ReactorType = ""
+    }
 
-    var reactor = match($chosen.ToLower()) {
+    ## The picker is the fallback, not the only way in: passing the type keeps the
+    ## script runnable non-interactively. `tui` is shell-only and raises when there
+    ## is no interactive session, which is a fine thing to happen at a prompt and a
+    ## useless thing to print from a pipeline — so it is caught and turned into the
+    ## advice the reader can act on.
+    if ($ReactorType == "") {
+        try {
+            $ReactorType = (tui pick "Uranium" "Plutonium" "MOX" "Breeder" --cli)
+        } catch {
+            throw "No reactor type was given and the picker needs an interactive shell. " +
+                  "Pass one: calc <nuclear|plutonium|mox|breeder> [width] [height] [seconds] [capacity]"
+        }
+    }
+
+    ## Folded here rather than at each call site, so a type supplied on the command
+    ## line is matched the same way as one returned by the picker.
+    var reactor = match($ReactorType.ToLower()) {
         "nuclear"   => new Reactor("Nuclear", 40`MW, 100, Fuel.Uranium  )
         "uranium"   => new Reactor("Nuclear", 40`MW, 100, Fuel.Uranium  )
         "plutonium" => new Reactor("Nuclear", 40`MW, 100, Fuel.Plutonium)
         "mox"       => new Reactor("MOX",     20`MW, 150, Fuel.Mox      )
         "breeder"   => new Reactor("Breeder", 20`MW, 50,  Fuel.Breeder  )
-        default     => throw $"Unknown reactor type: {$_}. Valid: nuclear, uranium, plutonium, mox, breeder"
+        default     => throw $"Unknown reactor type '{$ReactorType}'. Valid: nuclear, uranium, plutonium, mox, breeder"
     }
 
     var rb = new ReactorBlock($reactor, $Width, $Height, $Seconds * 1`s, $Capacity * 1`L)
