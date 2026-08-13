@@ -1,0 +1,85 @@
+#!/usr/bin/env tosh
+## @summary Bouncing boxes in SDL2, drawn through ToastLib.Sdl.
+## @remarks
+##   The whole SDL surface — window, renderer, event queue, teardown — comes
+##   from the library, so this file is about the animation and nothing else.
+##   Compare against the pre-library version: roughly 220 lines of `bind
+##   native`, `raw struct`, offset arithmetic and manual cleanup.
+##
+##   `Window.Open` scopes the window to the body, so it is torn down however the
+##   body ends — closed window, error, or frames spent. That matters because
+##   `defer` does not run at top-level script scope.
+## @example examples/sdl_test.tosh
+require ToastLib.Sdl      from "/home/komrad/.config/tosh/lib/Sdl.tosh"      as Sdl
+require ToastLib.Graphics from "/home/komrad/.config/tosh/lib/Graphics.tosh" as Gfx
+
+using System.Drawing
+
+var background = Gfx.FromHex("#141428")
+var accent     = Gfx.FromHex("#f07828")
+var cool       = Gfx.FromHex("#3cc8f0")
+
+## @summary One box moving at its own speed, bouncing off the window edges.
+export class Box {
+    prop Bounds: Rectangle
+    prop Tint: Color
+    prop SpeedX: int = 0
+    prop SpeedY: int = 0
+
+    Box(bounds: Rectangle, tint: Color, dx: int, dy: int) {
+        $this.Bounds = $bounds
+        $this.Tint = $tint
+        $this.SpeedX = $dx
+        $this.SpeedY = $dy
+    }
+
+    ## @summary Advances one step, reflecting off the edges of `field`.
+    func Step(field: Size) {
+        var x = $this.Bounds.X + $this.SpeedX
+        var y = $this.Bounds.Y + $this.SpeedY
+
+        if (($x <= 0) or (($x + $this.Bounds.Width) >= $field.Width)) {
+            $this.SpeedX = 0 - $this.SpeedX
+            $x = $this.Bounds.X + $this.SpeedX
+        }
+
+        if (($y <= 0) or (($y + $this.Bounds.Height) >= $field.Height)) {
+            $this.SpeedY = 0 - $this.SpeedY
+            $y = $this.Bounds.Y + $this.SpeedY
+        }
+
+        $this.Bounds = new Rectangle($x, $y, $this.Bounds.Width, $this.Bounds.Height)
+    }
+}
+
+var field = new Size(640, 480)
+
+var boxes = [
+    new Box(new Rectangle( 40,  60, 90, 90), $accent, 5, 3),
+    new Box(new Rectangle(300, 180, 70, 70), $cool,  -4, 4),
+    new Box(new Rectangle(480, 300, 50, 50), Color.MediumPurple, 3, -5)
+]
+
+Sdl.Window.Open("TōSh SDL Test", $field, func (win) {
+    writeline $"window {$win.Size.Width}x{$win.Size.Height}"
+
+    $win.Frames(600, func (w, frame) {
+        var renderer = $w.Renderer
+        $renderer.Clear($background)
+
+        for box in ($boxes) {
+            $box.Step($field)
+            $renderer.FillRect($box.Bounds, $box.Tint)
+        }
+
+        # A frame counter drawn as a progress bar, since SDL_ttf is not
+        # installed and there is no text rendering to lean on.
+        var progress = new Rectangle(0, 470, (($frame % 120) * 640 / 120) as int, 10)
+        $renderer.FillRect($progress, Color.SlateGray)
+
+        $renderer.DrawRect(new Rectangle(0, 0, 639, 479), Color.DimGray)
+        $renderer.Present()
+    })
+})
+
+writeline "clean exit"

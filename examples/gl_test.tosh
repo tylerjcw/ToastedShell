@@ -1,0 +1,65 @@
+#!/usr/bin/env tosh
+## @summary A rotating Gouraud-shaded triangle in OpenGL, via ToastLib.Gl.
+## @remarks
+##   GL entry points are bound straight from `libGL.so.1` by name — glvnd
+##   exports the whole set, so no `GetProcAddress` loader is needed on Linux.
+##
+##   Input is a real GLFW key callback, not polling: `OnKey` registers a
+##   ToastScript function that GLFW invokes from inside `PollEvents`. That is
+##   the same thread the script is on, which is what makes it legal — a
+##   callback arriving on a library's own thread is refused rather than run.
+##
+##   Press ESC to close, or any other key to recolour the background.
+## @example examples/gl_test.tosh
+require ToastLib.Gl       from "/home/komrad/.config/tosh/lib/Gl.tosh"       as Gl
+require ToastLib.Graphics from "/home/komrad/.config/tosh/lib/Graphics.tosh" as Gfx
+
+using System.Drawing
+
+var palette = [
+    Gfx.FromHex("#101018"),
+    Gfx.FromHex("#181028"),
+    Gfx.FromHex("#102018")
+]
+
+var background = $palette[0]
+var pressed = 0
+
+Gl.OnError(func (code, description) {
+    writeline $"glfw error {$code}: {$description}"
+})
+
+var triangle = Gl.Mesh.Triangle(
+    new Gl.Vertex( 0.0,  0.7, Color.Orange),
+    new Gl.Vertex(-0.7, -0.5, Color.DeepSkyBlue),
+    new Gl.Vertex( 0.7, -0.5, Color.Orchid))
+
+Gl.Window.Open("ToastScript · ToastLib.Gl", new Size(640, 480), func (win) {
+    writeline $"GL_RENDERER = {Gl.State.Renderer}"
+    writeline $"GL_VERSION  = {Gl.State.Version}"
+
+    $win.OnKey(func (w, key, action, mods) {
+        if ($action != Gl.KeyAction.Press.UnderlyingValue) { return }
+
+        if ($key == Gl.Key.Escape.UnderlyingValue) {
+            writeline "escape — closing"
+            $w.RequestClose()
+            return
+        }
+
+        $pressed = $pressed + 1
+        $background = $palette[$pressed % 3]
+        writeline $"key {$key} — background {$pressed % 3}"
+    })
+
+    $win.Frames(1200, func (w, frame) {
+        Gl.State.Clear($background)
+        Gl.State.LoadIdentity()
+        Gl.State.Rotate($frame * 1.5)
+        $triangle.Draw()
+    })
+
+    writeline $"keys handled = {$pressed}"
+})
+
+writeline "gl clean exit"

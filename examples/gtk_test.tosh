@@ -1,0 +1,53 @@
+#!/usr/bin/env tosh
+## @summary A live-updating GTK3 window, driven through ToastLib.Gtk.
+## @remarks
+##   The window closes because GTK said so, not because the script polled a
+##   widget's visibility. `OnDestroy` connects a real `destroy` signal through
+##   `g_signal_connect_data`, which reaches ToastScript via a `raw callback`.
+##
+##   Two handler styles are shown: the library's direct `OnDestroy(func …)`,
+##   and a script-level `event` raised from inside it. The event form decouples
+##   the reaction from the widget, and brings `priority`, `when` and `once`
+##   handler modifiers with it.
+##
+##   `Window.Run` owns the loop and tears the window down on the way out, which
+##   is what makes the cleanup reliable — `defer` does not run at top-level
+##   script scope.
+## @example examples/gtk_test.tosh
+require ToastLib.Gtk from "/home/komrad/.config/tosh/lib/Gtk.tosh" as Gtk
+
+using System.Drawing
+
+## @summary Raised once the GTK window has been destroyed.
+event WindowClosed {
+    Frames = 0
+}
+
+var frames = 0
+
+## Subscribes to the event rather than to the widget.
+func report_close(e) handles WindowClosed {
+    writeline $"window closed after {$e.Frames} frames"
+}
+
+Gtk.Window.Open("ToastScript · ToastLib.Gtk", new Size(460, 220), func (win) {
+    $win.OnDestroy(func (w) {
+        raise $WindowClosed ({| Frames = $frames |})
+    })
+
+    $win.Run(2000, func (w, frame) {
+        $frames = $frame
+
+        var phase = ($frame % 120) / 120.0
+        var tint  = ToastLib.Graphics.ToHex(
+            ToastLib.Graphics.Lerp(Color.Orange, Color.MediumPurple, $phase))
+
+        $w.SetMarkup($"""
+        <span size='20000' weight='bold'>Hello from ToastScript!</span>
+        <span size='15000' weight='bold' foreground='{$tint}'>Powered by TōSh</span>
+        <span size='11000'>ToastLib.Gtk · frame {$frame}</span>
+        """)
+    })
+})
+
+writeline "gtk clean exit"
