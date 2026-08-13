@@ -345,4 +345,90 @@ public class NativeSuccessContractTests
         Assert.Equal(0, Convert.ToInt32(results[0]));
         Assert.True(Assert.IsType<bool>(results[1]));
     }
+
+    /// <summary>
+    /// `TS-P2-88`. A `-&gt; ok` call with **no** out parameters must yield nothing.
+    /// The return value was already spent deciding pass/fail, so emitting it too
+    /// puts a status code into the pipeline: `chdir` produced a bare `0`, and a
+    /// render loop calling `SDL_SetRenderDrawColor` printed a column of zeroes
+    /// under the window. Every call site needed `| ignore` to stay quiet.
+    /// </summary>
+    [Fact]
+    public async Task Ok_convention_with_no_out_parameters_yields_nothing()
+    {
+        if (SkipOffLinux) return;
+
+        var results = await NewEngine().ExecuteToListAsync(
+            """
+            bind native "libc.so.6" as LibC {
+                func chdir(path: cstring) -> ok
+            }
+            LibC.chdir("/tmp")
+            """);
+
+        Assert.Empty(results);
+    }
+
+    /// <summary>
+    /// The rule is about the *convention*, not about having no out parameters, so
+    /// the surrounding pipeline has to stay unpolluted rather than merely shorter.
+    /// </summary>
+    [Fact]
+    public async Task A_zero_out_ok_call_does_not_interrupt_the_values_around_it()
+    {
+        if (SkipOffLinux) return;
+
+        var results = await NewEngine().ExecuteToListAsync(
+            """
+            bind native "libc.so.6" as LibC {
+                func chdir(path: cstring) -> ok
+            }
+            "before"
+            LibC.chdir("/tmp")
+            "after"
+            """);
+
+        Assert.Equal(["before", "after"], results.Select(v => v?.ToString()));
+    }
+
+    /// <summary>
+    /// `count` is the deliberate exception and must keep yielding: the value is a
+    /// genuine result that happens to double as the error signal. A fix that
+    /// silenced every checked convention would pass the test above and break this.
+    /// </summary>
+    [Fact]
+    public async Task Count_convention_with_no_out_parameters_still_yields_its_value()
+    {
+        if (SkipOffLinux) return;
+
+        var results = await NewEngine().ExecuteToListAsync(
+            """
+            bind native "libc.so.6" as LibC {
+                func sysconf(name: int) -> count
+            }
+            LibC.sysconf(30)
+            """);
+
+        Assert.True(Convert.ToInt64(Assert.Single(results)) > 0);
+    }
+
+    /// <summary>
+    /// An unchecked call is untouched — it has no success contract to spend its
+    /// return value on, so the value is the result.
+    /// </summary>
+    [Fact]
+    public async Task An_unchecked_zero_out_call_still_yields_its_return_value()
+    {
+        if (SkipOffLinux) return;
+
+        var results = await NewEngine().ExecuteToListAsync(
+            """
+            bind native "libc.so.6" as LibC {
+                func strlen(s: cstring) -> int
+            }
+            LibC.strlen("hello")
+            """);
+
+        Assert.Equal(5, Convert.ToInt32(Assert.Single(results)));
+    }
 }

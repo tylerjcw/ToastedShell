@@ -3394,7 +3394,12 @@ the convention is still stated explicitly at the declaration site.
 A checked call spends its return value on the success decision, so the out
 parameter becomes the result: with exactly one, it is yielded directly; with
 several, a record keyed by parameter name; an unchecked call yields a record
-carrying \code{ReturnValue} alongside them.
+carrying \code{ReturnValue} alongside them.  With no out parameters at all, a
+checked call yields \emph{nothing} --- the return value was spent on the success
+decision and there is no result left to project, so \code{LibC.chdir("/tmp")}
+emits no pipeline object.  \code{count} is the exception in every position: its
+return value is a genuine count that happens to double as the error signal, so
+it is still yielded.
 
 \begin{lstlisting}
 bind native "libc.so.6" as LibC {

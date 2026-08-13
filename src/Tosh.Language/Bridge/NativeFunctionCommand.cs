@@ -378,7 +378,28 @@ internal sealed class NativeFunctionCommand : IShellCommand, ICommandResolutionM
 
         if (byRefParameters.Length == 0)
         {
-            yield return ConvertReturn(result, _return!);
+            // `TS-P2-88`. A checked call spends its return value on the success
+            // decision above, so yielding it again puts a status code into the
+            // pipeline: `LibC.chdir("/tmp")` emitted `0`, and a render loop
+            // calling `SDL_SetRenderDrawColor` printed a column of zeroes under
+            // the window. The multi-out path had always known this — see
+            // `CreateCompositeResult`, which omits `ReturnValue` for the same
+            // reason — and only this zero-out path disagreed.
+            //
+            // `count` is the deliberate exception, on both paths: a byte count is
+            // a genuine result that happens to double as the error signal.
+            //
+            // `Predicate` (a `where (…)` contract) keeps yielding, which is the
+            // *opposite* of what `CreateCompositeResult` does with it. That
+            // asymmetry is left alone rather than resolved here: a custom
+            // predicate is written precisely when the return is not a standard
+            // status — `-> ptr where (_ != 0)` guards a handle the caller needs —
+            // so dropping it would break the case it exists for.
+            if (convention is not NativeErrorConvention.Ok)
+            {
+                yield return ConvertReturn(result, _return!);
+            }
+
             yield break;
         }
 
