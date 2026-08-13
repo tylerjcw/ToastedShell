@@ -10185,6 +10185,9 @@ public static class ToshParser
                 return new SubexpressionArgumentSyntax(pipeline, openParen.Span);
             }
 
+            var argumentStart = _position;
+            var diagnosticsBefore = _diagnostics.Count;
+
             expression = ParseArgument();
 
             if (Current.Kind == SyntaxTokenKind.CloseParen)
@@ -10193,6 +10196,40 @@ public static class ToshParser
                 return expression is null
                     ? new BarewordArgumentSyntax(string.Empty, TextSpan.FromBounds(openParen.Span.Start, closeParen.Span.End))
                     : expression with { Span = TextSpan.FromBounds(openParen.Span.Start, closeParen.Span.End) };
+            }
+
+            // `TS-P2-112`. A condition is an expression, and a command call becomes
+            // one by being parenthesised — so `if ((is-dir $path))` always worked
+            // while `if (is-dir $path)` did not, and the diagnostic blamed the
+            // condition for a defect in the call inside it.
+            //
+            // Reaching here means one argument was read and the `)` is still not
+            // next, so the remaining tokens are either a command's arguments or an
+            // error. Re-reading the group as a pipeline is the only reading that
+            // makes them arguments; if that fails too, the original diagnostic is
+            // still the right one and is reported below.
+            //
+            // The retry is gated on having consumed a bare word, because that is
+            // what a command name looks like: `if (true)` and `if (Math.Sign(1))`
+            // consume through to the `)` and never arrive here at all.
+            if (expression is BarewordArgumentSyntax { Value.Length: > 0 })
+            {
+                _position = argumentStart;
+                _diagnostics.RemoveRange(diagnosticsBefore, _diagnostics.Count - diagnosticsBefore);
+
+                var invocation = ParsePipeline(
+                    untilCloseParen: true,
+                    untilCloseBrace: false,
+                    untilSemicolon: false,
+                    allowExpressionStart: true);
+
+                if (Current.Kind == SyntaxTokenKind.CloseParen)
+                {
+                    var invocationClose = NextToken();
+                    return new SubexpressionArgumentSyntax(
+                        invocation,
+                        TextSpan.FromBounds(openParen.Span.Start, invocationClose.Span.End));
+                }
             }
 
             _diagnostics.Add(new SyntaxDiagnostic(

@@ -2300,6 +2300,18 @@ var label = if ($count == 1) { "item" } else { "items" }
 echo $"You have {$count} {$label}."
 \end{lstlisting}
 
+A condition may be a command call, written as it would be anywhere else.  The
+call's value is what the condition tests:
+
+\begin{lstlisting}
+if (is-dir $path) { echo "directory" } else { echo "not a directory" }
+
+func positive(n: int) -> bool => ($n > 0)
+while (positive $i) { ... }
+\end{lstlisting}
+
+\noindent The same holds for \code{unless}, \code{while} and \code{until}.
+
 \section{For / In}
 \ikw{for}
 
