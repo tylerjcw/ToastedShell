@@ -88,6 +88,67 @@ public class InvocationSurfaceTests
         => Assert.Equal(expected, await RunAsync(Fixture + body));
 
     /// <summary>
+    /// `TS-P2-94`. `&amp;` reused the *command-name* rule, which forbids a dot, so
+    /// `&amp;M.Exported` and `&amp;C.Static` failed the guard and were reported as a
+    /// stray background operator. The rule was written out in three places — the
+    /// argument parser, the pipeline-start check, and `LiteParser`'s structural
+    /// pass — and all three had to agree or the same text would parse differently
+    /// depending on which pass reached it first.
+    /// </summary>
+    [Theory]
+    [InlineData("var f = &TopLevel\n$f(42)", "42")]
+    [InlineData("var f = &M.Exported\n$f(42)", "42")]
+    [InlineData("var f = &M.Deep.Down\n$f(42)", "42")]
+    [InlineData("var f = &C.Static\n$f(42)", "42")]
+    [InlineData("var f = &C.Pair\n$f(20, 22)", "42")]
+    public async Task A_function_reference_reaches_qualified_names(string body, string expected)
+        => Assert.Equal(expected, await RunAsync(ReferenceFixture + body));
+
+    /// <summary>
+    /// The reference stands for the whole overload set, not one signature, so
+    /// arity is settled at call time by the ordinary dispatcher rather than
+    /// captured here. A second, weaker resolver in the reference is the
+    /// `TS-P1-24` failure mode.
+    /// </summary>
+    [Fact]
+    public async Task A_static_reference_still_resolves_overloads_at_call_time()
+        => Assert.Equal("42,42", await RunAsync(
+            ReferenceFixture +
+            """
+            var f = &C.Over
+            $f(42)
+            $f(20, 22)
+            """));
+
+    [Fact]
+    public async Task A_reference_to_a_name_that_does_not_exist_is_reported()
+    {
+        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+
+        var exception = await Assert.ThrowsAnyAsync<Exception>(
+            () => engine.ExecuteToListAsync(ReferenceFixture + "var f = &C.Nope\n$f(1)"));
+
+        Assert.Contains("Nope", exception.Message);
+    }
+
+    private const string ReferenceFixture = """
+        func TopLevel(x: int) -> int => $x
+
+        module M {
+            export func Exported(x: int) -> int => $x
+            export module Deep { export func Down(x: int) -> int => $x }
+        }
+
+        class C {
+            static func Static(x: int) -> int => $x
+            static func Pair(a: int, b: int) -> int => ($a + $b)
+            static func Over(x: int) -> int => $x
+            static func Over(a: int, b: int) -> int => ($a + $b)
+        }
+
+        """;
+
+    /// <summary>
     /// `TS-P2-92`. A static property's value could be *read* — `C.Text.Length`
     /// answered 5 — but not called, so `C.Text.ToUpper()` reported "Unable to
     /// resolve .NET access path". The planner accepted exactly two segments, so a

@@ -376,7 +376,7 @@ public static class LiteParser
     {
         return ampersandTokenIndex + 1 < tokens.Count &&
                tokens[ampersandTokenIndex + 1].Kind == SyntaxTokenKind.Bareword &&
-               ToshParser.IsValidCommandName(tokens[ampersandTokenIndex + 1].Text) &&
+               ToshParser.IsValidFunctionReferenceName(tokens[ampersandTokenIndex + 1].Text) &&
                tokens[ampersandTokenIndex].Span.End ==
                tokens[ampersandTokenIndex + 1].Span.Start;
     }

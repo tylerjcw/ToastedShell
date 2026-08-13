@@ -627,6 +627,26 @@ public sealed class ToshClassDefinition : IShellNamedType
             .GetResult();
     }
 
+    /// <summary>
+    /// Whether this class (or a base) declares a static method by that name.
+    /// </summary>
+    /// <remarks>
+    /// Exposed for `TS-P2-94`, so <c>&amp;C.Static</c> can be recognised without a
+    /// speculative invocation. Arity is deliberately not consulted: the reference
+    /// stands for the whole overload set, and picking among them is the
+    /// dispatcher's job at call time, not the reference's at capture time.
+    /// </remarks>
+    public bool HasStaticMethod(string methodName)
+    {
+        if (_methodsByName.TryGetValue(methodName, out var candidates) &&
+            candidates.Any(method => method.IsStatic))
+        {
+            return true;
+        }
+
+        return BaseClass is not null && BaseClass.HasStaticMethod(methodName);
+    }
+
     public async ValueTask<InvocationResult> InvokeStaticMethodAsync(
         string methodName,
         IReadOnlyList<object?> arguments,

@@ -8804,6 +8804,31 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
                             return registeredCommand;
                         }
 
+                        // `TS-P2-94`. A dotted name is in neither flat table, so it is
+                        // resolved here.
+                        //
+                        // A static method is tried first, and the order matters: it is
+                        // not a value — reading `C.Method` deliberately raises "call it
+                        // with parentheses" — so letting the value path run first threw
+                        // that error before this branch was ever reached.
+                        if (funcRef.Name.LastIndexOf('.') is var dot and > 0 &&
+                            TryResolveShellStaticType(funcRef.Name[..dot], out var ownerType) &&
+                            ownerType is ToshClassDefinition ownerClass &&
+                            ownerClass.HasStaticMethod(funcRef.Name[(dot + 1)..]))
+                        {
+                            return new ToshStaticMethodReference(ownerClass, funcRef.Name[(dot + 1)..]);
+                        }
+
+                        // A module-qualified function, by contrast, already evaluates
+                        // to a callable through ordinary member access — `var f = M.E`
+                        // has always worked — so it needs only that same resolution.
+                        if (funcRef.Name.Contains('.', StringComparison.Ordinal) &&
+                            TryResolveQualifiedAccess(funcRef.Name, out var qualifiedValue, out _) &&
+                            qualifiedValue is IShellCallable qualifiedCallable)
+                        {
+                            return qualifiedCallable;
+                        }
+
                         throw ToshDiagnosticException.Create(new ToshDiagnostic(
                             Code: "tosh.runtime.unknown_function_reference",
                             Title: $"Function '{funcRef.Name}' was not found.",

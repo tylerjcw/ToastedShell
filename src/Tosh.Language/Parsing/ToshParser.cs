@@ -44,6 +44,35 @@ public static class ToshParser
     /// use this same rule so an adjacent <c>&amp;name</c> is not classified
     /// differently from the recursive parser.
     /// </summary>
+    /// <summary>
+    /// The name predicate for <c>&amp;name</c>, which admits a dotted path where a
+    /// command name does not.
+    /// </summary>
+    /// <remarks>
+    /// `TS-P2-94`. A command name may not contain a dot, and <c>&amp;</c> reused
+    /// that rule — so <c>&amp;M.Exported</c> and <c>&amp;C.Static</c> failed the
+    /// guard, fell through, and were reported as a stray background operator. The
+    /// rule is relaxed here only, because a dotted *command* name is still not a
+    /// thing; each segment must be a valid name on its own.
+    /// </remarks>
+    internal static bool IsValidFunctionReferenceName(string text)
+    {
+        if (string.IsNullOrEmpty(text))
+        {
+            return false;
+        }
+
+        foreach (var segment in text.Split('.'))
+        {
+            if (!IsValidCommandName(segment))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     internal static bool IsValidCommandName(string text)
     {
         if (string.IsNullOrEmpty(text))
@@ -7163,7 +7192,7 @@ public static class ToshParser
         {
             return Current.Kind == SyntaxTokenKind.Ampersand &&
                    Peek(1).Kind == SyntaxTokenKind.Bareword &&
-                   IsValidCommandName(Peek(1).Text) &&
+                   IsValidFunctionReferenceName(Peek(1).Text) &&
                    Current.Span.End == Peek(1).Span.Start;
         }
 
@@ -7575,7 +7604,7 @@ public static class ToshParser
                 case SyntaxTokenKind.OpenBrace:
                     return ParseBlockArgument();
 
-                case SyntaxTokenKind.Ampersand when Peek(1).Kind == SyntaxTokenKind.Bareword && IsValidCommandName(Peek(1).Text) && Current.Span.End == Peek(1).Span.Start:
+                case SyntaxTokenKind.Ampersand when Peek(1).Kind == SyntaxTokenKind.Bareword && IsValidFunctionReferenceName(Peek(1).Text) && Current.Span.End == Peek(1).Span.Start:
                     {
                         var ampToken = NextToken();
                         var nameToken = NextToken();
