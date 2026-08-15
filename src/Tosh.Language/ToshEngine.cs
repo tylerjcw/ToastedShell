@@ -1128,6 +1128,28 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
             script.DocComment,
             cancellationToken);
 
+        // `TS-P2-89`. A top-level `defer` used to dispatch to an empty sequence:
+        // it parsed, bound, reported nothing and never ran, which pushed every
+        // resource-owning script into wrapping its body in a function it did not
+        // otherwise need. The defer machinery lived in `ExecuteBlockAsync`, and the
+        // top level runs its own statement loop rather than going through it.
+        //
+        // Buffering is the cost, and it is why this is gated: cleanup has to run
+        // before the values are handed on, so a script that uses `defer` cannot
+        // stream. A script that does not is untouched — the same trade
+        // `ExecuteBlockAsync` already makes one scope down.
+        if (script.Statements.Any(static s => s is DeferStatementSyntax))
+        {
+            await foreach (var value in EvaluateScriptWithDeferAsync(
+                                   sourceName, sourceText, script, cancellationToken)
+                               .WithCancellation(cancellationToken))
+            {
+                yield return value;
+            }
+
+            yield break;
+        }
+
         foreach (var statement in script.Statements)
         {
             // The top level runs its own statement loop rather than going through
@@ -1161,6 +1183,87 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
                 yield return value;
             }
         }
+    }
+
+    /// <summary>
+    /// The top-level statement loop for a script that registers a <c>defer</c>.
+    /// </summary>
+    /// <remarks>
+    /// `TS-P2-89`. Mirrors what <see cref="ExecuteBlockAsync"/> does one scope
+    /// down, including the reason for buffering: values produced before an exit
+    /// stay visible, but they cannot be yielded until cleanup has run, or a script
+    /// that exits early would emit its output and then its cleanup out of order.
+    ///
+    /// <c>exit</c> is why the deferred blocks are gathered as the loop goes rather
+    /// than collected up front: the loop stops at <c>Runtime.ExitRequested</c>, and
+    /// only the <c>defer</c> statements actually *reached* by then should run —
+    /// registering one that execution never got to would invent cleanup for a
+    /// resource that was never acquired.
+    /// </remarks>
+    private async IAsyncEnumerable<object?> EvaluateScriptWithDeferAsync(
+        string sourceName,
+        string sourceText,
+        ScriptStatementSyntax script,
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        var deferredBlocks = new List<BlockSyntax>();
+        var outputValues = new List<object?>();
+        var deferFailures = new ToshDeferFailureState();
+        System.Runtime.ExceptionServices.ExceptionDispatchInfo? pendingException = null;
+
+        try
+        {
+            foreach (var statement in script.Statements)
+            {
+                if (Runtime.ExitRequested)
+                {
+                    break;
+                }
+
+                if (statement is ScriptInputStatementSyntax)
+                {
+                    continue;
+                }
+
+                if (statement is DeferStatementSyntax deferStatement)
+                {
+                    deferredBlocks.Add(deferStatement.Body);
+                    continue;
+                }
+
+                IReadOnlyList<object?> values = await AsyncEnumerableExtensions.ToListAsync(
+                    EvaluateStatementAsync(sourceName, sourceText, statement, cancellationToken),
+                    cancellationToken);
+
+                if (ShouldSuppressStatementResults(statement, values))
+                {
+                    values = Array.Empty<object?>();
+                }
+
+                UpdateLastResultIfAny(values);
+                outputValues.AddRange(values);
+            }
+        }
+        catch (ShellControlFlowException ex)
+        {
+            pendingException = System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(ex);
+        }
+        catch (Exception ex)
+        {
+            pendingException = System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(ex);
+            ToshDeferFailures.AttachSourceContext(ex, sourceName, sourceText);
+            deferFailures.CaptureBodyFailure(ex);
+        }
+
+        await RunDeferredBlocksAsync(sourceName, sourceText, deferredBlocks, deferFailures);
+
+        foreach (var value in outputValues)
+        {
+            yield return value;
+        }
+
+        deferFailures.ThrowIfCleanupFailed();
+        pendingException?.Throw();
     }
 
     private async IAsyncEnumerable<object?> EvaluateScriptInputStatementAsync(
@@ -15394,37 +15497,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
                 deferFailures.CaptureBodyFailure(ex);
             }
 
-            for (var i = deferredBlocks.Count - 1; i >= 0; i--)
-            {
-                try
-                {
-                    // Cleanup is shielded from the token that caused the
-                    // enclosing scope to exit. This ensures every reached
-                    // defer gets one chance to run; cancellation is resumed
-                    // after cleanup has completed.
-                    await foreach (var value in ExecuteBlockAsync(
-                        sourceName, sourceText, deferredBlocks[i], CancellationToken.None)
-                        .WithCancellation(CancellationToken.None))
-                    {
-                        // Deferred blocks execute for side effects only; output is discarded.
-                    }
-                }
-                catch (ShellControlFlowException)
-                {
-                    // Control flow signals from deferred blocks are suppressed.
-                }
-                catch (Exception cleanupFailure)
-                {
-                    // A failed cleanup must not prevent any earlier cleanup
-                    // from running. The shared state retains the original
-                    // exception instances and their deterministic LIFO order.
-                    ToshDeferFailures.AttachSourceContext(
-                        cleanupFailure,
-                        sourceName,
-                        sourceText);
-                    deferFailures.CaptureCleanupFailure(cleanupFailure);
-                }
-            }
+            await RunDeferredBlocksAsync(sourceName, sourceText, deferredBlocks, deferFailures);
 
             // Match the ordinary streaming path: values produced before an
             // exit remain visible, even though defer requires buffering them
@@ -15448,6 +15521,46 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
                 .WithCancellation(cancellationToken))
             {
                 yield return value;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Runs a scope's deferred blocks, last registered first.
+    /// </summary>
+    /// <remarks>
+    /// Shared by block scopes and by the top-level script scope (`TS-P2-89`),
+    /// because every rule here is one somebody would otherwise have to reproduce:
+    /// cleanup is shielded from the token that ended the enclosing scope so each
+    /// reached <c>defer</c> gets its one chance to run; a control-flow signal from
+    /// inside a deferred block is suppressed rather than allowed to redirect the
+    /// exit; and a failing cleanup does not stop the earlier ones, with the
+    /// original exceptions kept in LIFO order for the aggregate.
+    /// </remarks>
+    private async Task RunDeferredBlocksAsync(
+        string sourceName,
+        string sourceText,
+        List<BlockSyntax> deferredBlocks,
+        ToshDeferFailureState deferFailures)
+    {
+        for (var i = deferredBlocks.Count - 1; i >= 0; i--)
+        {
+            try
+            {
+                await foreach (var value in ExecuteBlockAsync(
+                    sourceName, sourceText, deferredBlocks[i], CancellationToken.None)
+                    .WithCancellation(CancellationToken.None))
+                {
+                    // Deferred blocks execute for side effects only; output is discarded.
+                }
+            }
+            catch (ShellControlFlowException)
+            {
+            }
+            catch (Exception cleanupFailure)
+            {
+                ToshDeferFailures.AttachSourceContext(cleanupFailure, sourceName, sourceText);
+                deferFailures.CaptureCleanupFailure(cleanupFailure);
             }
         }
     }
