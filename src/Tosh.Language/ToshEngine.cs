@@ -7823,21 +7823,29 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
         return costs[b.Length];
     }
 
-    private async Task<IReadOnlyList<object?>> EvaluateArgumentsAsync(
+    /// <summary>
+    /// Evaluates a call's arguments — constructors, instance methods, static and
+    /// qualified calls.
+    /// </summary>
+    /// <remarks>
+    /// `TS-P2-104`. This used to walk the arguments itself, one value per syntax
+    /// node, and so had no notion of a splat: every dotted call —
+    /// `$obj.Sum(...$xs)`, `C.SSum(...$xs)`, `M.MSum(...$xs)`,
+    /// `String.Join("-", ...$xs)` — reported "Unsupported argument syntax:
+    /// SplatArgumentSyntax", while the bare-name form worked because it went
+    /// through the other evaluator. Two argument evaluators, and only one of them
+    /// knew the language had spreading.
+    ///
+    /// It now delegates rather than duplicating. The two names are kept because
+    /// the call sites differ in intent, but there is one implementation, so a
+    /// future argument form cannot reach half the language again.
+    /// </remarks>
+    private Task<IReadOnlyList<object?>> EvaluateArgumentsAsync(
         string sourceName,
         string sourceText,
         IReadOnlyList<ArgumentSyntax> arguments,
         CancellationToken cancellationToken)
-    {
-        var values = new object?[arguments.Count];
-
-        for (var index = 0; index < arguments.Count; index++)
-        {
-            values[index] = await EvaluateArgumentAsync(sourceName, sourceText, arguments[index], cancellationToken);
-        }
-
-        return values;
-    }
+        => EvaluateCallableInvocationArgumentsAsync(sourceName, sourceText, arguments, cancellationToken);
 
     private async Task<IReadOnlyList<object?>> EvaluateCallableInvocationArgumentsAsync(
         string sourceName,
