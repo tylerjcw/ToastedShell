@@ -6,7 +6,7 @@ namespace Tosh.Stdlib.Clr;
 [CommandDeprecated("26.05.0.10")]
 [CommandNote("Deprecated. Prefer member-access syntax: `$obj.Method($args)` or `$callable($args)`.")]
 [CommandArgument("method-name", "The method to invoke (or a type name for static calls).")]
-[CommandArgument("args", "Arguments to pass to the method.", Required = false)]
+[CommandArgument("args", "Arguments to pass to the method.", Required = false, Variadic = true)]
 [CommandExample("\"hello\" | call ToUpper", Title = "Call an instance method on a piped string")]
 [CommandExample("call System.Math Sqrt 144", Title = "Call a static method")]
 [CommandNote("Prefer the fluent `$obj.Method()` expression syntax for instance calls and `TypeName.Method()` for static calls. The `call` command form is a legacy fallback.")]
