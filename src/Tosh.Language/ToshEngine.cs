@@ -3080,16 +3080,29 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
     {
         var requirement = ResolveNativeRequirement(nativeTarget, GetExecutionDirectory(sourceName));
 
-        if (!_requiredNativeLibraries.TryGetValue(requirement.CacheKey, out var binding))
+        if (!_requiredNativeLibraries.TryGetValue(requirement.CacheKey, out var shared))
         {
             var handle = NativeLibrary.Load(requirement.ResolvedPath);
-            binding = new NativeLibraryBinding(
+            shared = new NativeLibraryBinding(
                 requirement.ResolvedPath,
                 requirement.CacheKey,
                 handle,
                 new ModuleExportTable());
-            _requiredNativeLibraries[requirement.CacheKey] = binding;
+            _requiredNativeLibraries[requirement.CacheKey] = shared;
         }
+
+        // `TS-P2-90`. The *handle* is shared per library — loading the same `.so`
+        // twice would be waste, and the handle is what the cache is for — but the
+        // export table must not be. Handing every module the cached table gave two
+        // modules binding the same library one surface between them: `module A`
+        // declaring `abs` could call `labs` through its own alias because `module B`
+        // had declared it, so a library built from several modules over one `.so`
+        // had no encapsulation at all.
+        //
+        // Class-body binds were already isolated, routing through
+        // `SetNativeMember` instead, so this brings module-level binds in line
+        // rather than inventing a rule.
+        var binding = shared with { Exports = new ModuleExportTable() };
 
         var module = new ToshModuleObject(this, moduleName, binding.Exports)
         {
