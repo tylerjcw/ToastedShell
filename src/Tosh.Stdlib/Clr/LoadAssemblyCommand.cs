@@ -39,8 +39,37 @@ public sealed class LoadAssemblyCommand : ShellCommand
                 new KeyValuePair<string, object?>("Name", assembly.GetName().Name),
                 new KeyValuePair<string, object?>("FullName", assembly.FullName),
                 new KeyValuePair<string, object?>("Path", path),
-                new KeyValuePair<string, object?>("Types", assembly.GetTypes().Length),
+                new KeyValuePair<string, object?>("Types", CountTypes(assembly)),
             ]);
+        }
+    }
+
+    /// <summary>
+    /// The number of types the assembly defines, without letting the count decide
+    /// whether the load succeeded.
+    /// </summary>
+    /// <remarks>
+    /// `TS-P2-96`. This was `assembly.GetTypes().Length`, called only to report a
+    /// number — and <see cref="Assembly.GetTypes"/> resolves the whole type
+    /// closure, so it throws when a referenced assembly is not loaded *yet*.
+    /// Loading Avalonia's 25 assemblies alphabetically failed on
+    /// `Avalonia.Controls` because `Avalonia.Remote.Protocol` had not been reached,
+    /// though it sat in the same directory.
+    ///
+    /// The assembly is already in the load context when the throw happens, so the
+    /// load itself had succeeded; only the reporting failed. A partial load carries
+    /// the types it did resolve, so the count degrades to those rather than taking
+    /// the whole command down with it.
+    /// </remarks>
+    private static int CountTypes(Assembly assembly)
+    {
+        try
+        {
+            return assembly.GetTypes().Length;
+        }
+        catch (ReflectionTypeLoadException partial)
+        {
+            return partial.Types.Count(type => type is not null);
         }
     }
 }
