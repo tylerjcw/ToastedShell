@@ -9434,15 +9434,21 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
             return nativeDiagnostic;
         }
 
-        return ToshDiagnosticException.Create(new ToshDiagnostic(
-            Code: exception is InvalidOperationException
-                ? "tosh.runtime.expression_failed"
-                : "tosh.runtime.unexpected_exception",
-            Title: exception.Message,
-            SourceName: sourceName,
-            SourceText: sourceText,
-            Span: span,
-            Label: "while evaluating this expression"));
+        // `TS-P2-95`. The original is kept as the inner exception so a script can
+        // do more than read the sentence: match on the type, or reach the fields
+        // that carry the detail — the file a missing-file error names, the probing
+        // paths a missing native library lists.
+        return ToshDiagnosticException.Create(
+            new ToshDiagnostic(
+                Code: exception is InvalidOperationException
+                    ? "tosh.runtime.expression_failed"
+                    : "tosh.runtime.unexpected_exception",
+                Title: exception.Message,
+                SourceName: sourceName,
+                SourceText: sourceText,
+                Span: span,
+                Label: "while evaluating this expression"),
+            exception);
     }
 
     /// <summary>

@@ -1,3 +1,4 @@
+using System.Runtime.ExceptionServices;
 using System.Reflection;
 
 namespace Tosh.Runtime;
@@ -28,7 +29,7 @@ public sealed class ReflectionInvoker
 
         if (bestConstructor is not null && bestBinding is not null)
         {
-            return bestConstructor.Invoke(bestBinding.Value.BoundArguments);
+            return InvokeUnwrapped(() => bestConstructor.Invoke(bestBinding.Value.BoundArguments));
         }
 
         throw new InvalidOperationException($"No constructor matched '{type.FullName}' with {arguments.Count} argument(s).");
@@ -384,8 +385,38 @@ public sealed class ReflectionInvoker
             throw new InvalidOperationException($"No overload matched {description} with {arguments.Count} argument(s).");
         }
 
-        var value = bestMethod.Invoke(target, bestBinding.Value.BoundArguments);
+        var value = InvokeUnwrapped(() => bestMethod.Invoke(target, bestBinding.Value.BoundArguments));
         return new InvocationResult(value, bestMethod.ReturnType == typeof(void));
+    }
+
+    /// <summary>
+    /// Invokes through reflection, letting the failure the callee actually raised
+    /// escape rather than the wrapper reflection puts around it.
+    /// </summary>
+    /// <remarks>
+    /// `TS-P2-95`. Reflection wraps whatever a target throws in a
+    /// <see cref="TargetInvocationException"/>, whose own message is "Exception has
+    /// been thrown by the target of an invocation" — true, and useless. That is
+    /// what scripts saw for every failing CLR call, with the real cause
+    /// unreachable: a `DllNotFoundException` naming the four paths it probed for
+    /// `libSkiaSharp` arrived as that sentence and nothing else, and recovering it
+    /// took a C# shim. Any interop deeper than one call was undebuggable.
+    ///
+    /// <see cref="ExceptionDispatchInfo"/> rethrows the inner exception with its
+    /// original stack trace intact; a bare <c>throw inner</c> would overwrite the
+    /// one place that says where the fault actually happened.
+    /// </remarks>
+    private static object? InvokeUnwrapped(Func<object?> invoke)
+    {
+        try
+        {
+            return invoke();
+        }
+        catch (TargetInvocationException wrapper) when (wrapper.InnerException is not null)
+        {
+            ExceptionDispatchInfo.Capture(wrapper.InnerException).Throw();
+            throw; // Unreachable; the line above always throws.
+        }
     }
 
     /// <summary>
