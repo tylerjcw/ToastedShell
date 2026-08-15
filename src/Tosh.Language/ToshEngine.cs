@@ -9942,11 +9942,55 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
     /// segments. Both twins then invoked the same way, differing only in awaiting
     /// (<c>TS-P1-24</c>).
     /// </remarks>
+    /// <summary>
+    /// Whether <paramref name="module"/> exports <paramref name="segment"/>, so a
+    /// dotted path beginning with the module's name belongs to it.
+    /// </summary>
+    /// <remarks>
+    /// `TS-P2-100`. The question is asked before the module claims the path,
+    /// rather than answered by letting the walk fail: a failed walk reports
+    /// "member not found on ToshModuleObject", which names the module rather than
+    /// the namespace the reader meant, and leaves no chance to try the CLR.
+    /// </remarks>
+    private bool ModuleClaimsPath(ToshModuleObject module, string head, string segment)
+    {
+        if (module.TryGetMember(segment, out _, includeHidden: true))
+        {
+            return true;
+        }
+
+        // The module does not export it. Yield the path only when there is no
+        // *type* of the module's name to fall through to — that case already
+        // works, and is what `TS-P1-35` built: `module Math` calling `Math.Max`
+        // reaches the shadowed type and answers with its overloads. Skipping the
+        // module branch there would hand the name to a different `Math` and
+        // silently change `Max(3, 7)` from `Int32` to `Double`, which is what the
+        // first attempt at this did.
+        //
+        // A namespace has no such fall-through, and that is the whole of
+        // `TS-P2-100`: nothing named `System` is a type, so the module swallowed
+        // the namespace with no way back.
+        return TryResolveShellStaticType(head, out _) || ResolveTypeName(head) is not null;
+    }
+
     private bool TryPlanShellSymbol(string path, out ShellSymbolPlan plan)
     {
         var segments = SplitQualifiedPath(path);
 
-        if (segments.Length >= 2 && TryGetModule(segments[0], out var module))
+        // `TS-P2-100`. A module claims a dotted path only when it actually exports
+        // the next segment. Claiming it unconditionally made a module named after a
+        // CLR namespace swallow that namespace for the whole session: a profile
+        // declaring `module System { … }` turned `System.Convert.ToInt32(…)` in an
+        // unrelated file into "Member 'Convert' was not found on type
+        // 'ToshModuleObject'".
+        //
+        // This is the rule the specification already states for a module named
+        // after a CLR *type* — its own exports win, and a name it does not export
+        // is looked up on the shadowed type — applied to namespaces, which had no
+        // fall-through at all.
+        if (segments.Length >= 2 &&
+            TryGetModule(segments[0], out var module) &&
+            ModuleClaimsPath(module, segments[0], segments[1]))
         {
             plan = new ShellSymbolPlan(
                 ShellSymbolKind.Module,
@@ -10084,8 +10128,12 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
 
         var segments = SplitQualifiedPath(path);
 
+        // The same rule as `TryPlanShellSymbol` — see `TS-P2-100` there. A bare
+        // module name still resolves to the module; only a dotted path whose next
+        // segment the module does not export is left for CLR resolution.
         if (segments.Length >= 1 &&
-            TryGetModule(segments[0], out var module))
+            TryGetModule(segments[0], out var module) &&
+            (segments.Length == 1 || ModuleClaimsPath(module, segments[0], segments[1])))
         {
             value = segments.Length == 1
                 ? module
