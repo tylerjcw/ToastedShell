@@ -100,39 +100,53 @@ public class TopLevelDeferTests
             """));
 
     /// <summary>
-    /// `exit` does not run deferred blocks — and that is pinned rather than fixed,
-    /// because it is **not** specific to the top level: a function-scope `defer`
-    /// behaves identically, measured before this change. Cleanup is emitted after
-    /// the buffered values, so when the consumer stops pulling on exit it is never
-    /// reached, at any scope. Making the top level differ from a block here would
-    /// have traded one inconsistency for another; the shared behaviour is recorded
-    /// separately.
+    /// `exit` runs the deferred blocks it reached, at every scope.
+    ///
+    /// This test replaces one that pinned the opposite. When `TS-P2-89` landed,
+    /// `exit` skipped cleanup everywhere — top level and inside a function alike —
+    /// so the parity was recorded rather than "fixed" into an inconsistency, and
+    /// `TS-P2-115` was filed for the shared cause. Fixing that tripped this pin,
+    /// which is what a pin is for.
     /// </summary>
     [Fact]
-    public async Task Exit_skips_cleanup_at_the_top_level_exactly_as_it_does_in_a_function()
+    public async Task Exit_runs_cleanup_at_the_top_level_and_inside_a_function()
     {
-        var topLevel = new StringWriter();
-        var topLevelEngine = new ToshEngine(ToshRuntime.CreateDefault(topLevel, topLevel));
-        await topLevelEngine.ExecuteToListAsync(
+        var topLevel = await RunAsync(
             """
             defer { writeline "cleanup" }
             writeline "before"
             exit 0
+            writeline "never"
             """);
 
-        var inFunction = new StringWriter();
-        var functionEngine = new ToshEngine(ToshRuntime.CreateDefault(inFunction, inFunction));
-        await functionEngine.ExecuteToListAsync(
+        Assert.Equal("before\ncleanup", topLevel);
+
+        var nested = await RunAsync(
             """
             func work() {
-                defer { writeline "cleanup" }
-                writeline "before"
+                defer { writeline "inner" }
                 exit 0
             }
+            defer { writeline "outer" }
             work
             """);
 
-        Assert.DoesNotContain("cleanup", topLevel.ToString());
-        Assert.DoesNotContain("cleanup", inFunction.ToString());
+        // Inner scope unwinds first: `work`'s defer runs as it exits, the script's
+        // as the script does.
+        Assert.Equal("inner\nouter", nested);
     }
+
+    /// <summary>
+    /// `exit` still stops the work. Running cleanup must not mean resuming the body
+    /// it was cleaning up after.
+    /// </summary>
+    [Fact]
+    public async Task Exit_still_stops_the_statements_after_it()
+        => Assert.DoesNotContain("never", await RunAsync(
+            """
+            defer { writeline "cleanup" }
+            writeline "before"
+            exit 0
+            writeline "never"
+            """));
 }

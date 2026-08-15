@@ -36,6 +36,16 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
     private readonly Dictionary<string, ToshRequiredScriptArtifact> _requiredScripts = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _currentlyRequiring = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, NativeLibraryBinding> _requiredNativeLibraries = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// How many deferred-cleanup blocks are running, so the `exit` guard can let
+    /// them finish (`TS-P2-115`).
+    /// </summary>
+    /// <remarks>
+    /// A counter rather than a flag because cleanup nests: a deferred block may
+    /// call a function that has deferred blocks of its own.
+    /// </remarks>
+    private int _deferredCleanupDepth;
     private int _commandEventDepth;
     private readonly ToshRuntimeNamespace _toshNamespace;
     private readonly ShellEnvironmentNamespace _environmentNamespace;
@@ -15616,6 +15626,10 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
         List<BlockSyntax> deferredBlocks,
         ToshDeferFailureState deferFailures)
     {
+        _deferredCleanupDepth++;
+
+        try
+        {
         for (var i = deferredBlocks.Count - 1; i >= 0; i--)
         {
             try
@@ -15635,6 +15649,11 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
                 ToshDeferFailures.AttachSourceContext(cleanupFailure, sourceName, sourceText);
                 deferFailures.CaptureCleanupFailure(cleanupFailure);
             }
+        }
+        }
+        finally
+        {
+            _deferredCleanupDepth--;
         }
     }
 
@@ -15656,9 +15675,19 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
             //
             // Checked here because every body — a script, a function, a loop, a branch — runs
             // through this loop, so one check ends them all rather than each remembering to.
-            // Deferred blocks are still run: they are unwinding, which is exactly what should
-            // happen on the way out.
-            if (Runtime.ExitRequested)
+            //
+            // `TS-P2-115`. The exemption for deferred blocks was stated here and not
+            // implemented: cleanup runs through this same loop, with `ExitRequested`
+            // still true, so the guard stopped each deferred block at its first
+            // statement and every `defer` was a no-op on the way out. A lock stayed
+            // held, a temp directory stayed behind, a terminal mode stayed changed —
+            // on the one exit route where cleanup matters most, and silently, because
+            // `throw` unwinds correctly and is the path people test.
+            //
+            // Shielded by depth for the same reason cleanup is shielded from the
+            // cancellation token: the event that ended the scope must not also
+            // prevent the scope from tidying up after itself.
+            if (Runtime.ExitRequested && _deferredCleanupDepth == 0)
             {
                 break;
             }
