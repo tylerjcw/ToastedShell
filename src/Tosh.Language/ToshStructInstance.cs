@@ -19,7 +19,15 @@ public sealed class ToshStructInstance : IShellRecordObject, IShellTypedObject, 
 
     public bool TryGetMember(string name, out object? value, bool includeHidden = false)
     {
-        return _values.TryGetValue(name, out value);
+        if (_values.TryGetValue(name, out value))
+        {
+            return true;
+        }
+
+        // `TS-P2-85`. A computed property has no stored value, so reading one fell
+        // through to "member not found" on a struct whose `members` listing showed
+        // it. Evaluated on access, exactly as the class form does.
+        return Definition.TryEvaluateComputedProperty(this, name, includeHidden, out value);
     }
 
     public bool TrySetMember(string name, object? value)
@@ -91,9 +99,16 @@ public sealed class ToshStructInstance : IShellRecordObject, IShellTypedObject, 
                 continue;
             }
 
+            // A computed property is evaluated for the listing too. Reporting the
+            // absent stored value would have listed it as null beside a `$s.Y` that
+            // now answers 7 — the same disagreement, one column over.
             members.Add(new KeyValuePair<string, object?>(
                 property.Name,
-                _values.TryGetValue(property.Name, out var value) ? value : null));
+                _values.TryGetValue(property.Name, out var value)
+                    ? value
+                    : Definition.TryEvaluateComputedProperty(this, property.Name, includeHidden, out var computed)
+                        ? computed
+                        : null));
         }
 
         return members;

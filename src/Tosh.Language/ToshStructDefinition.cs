@@ -158,6 +158,58 @@ public sealed class ToshStructDefinition : IShellNamedType
         }
     }
 
+    /// <summary>
+    /// Evaluates a computed property (<c>prop Y =&gt; …</c>) against an instance.
+    /// </summary>
+    /// <remarks>
+    /// `TS-P2-85`. A computed property is not stored — <see cref="InitializeDeclaredProperties"/>
+    /// skips it, correctly, because it has no value until it is read — and nothing
+    /// evaluated it on access, so reading one reported "member not found" while
+    /// <c>members</c> listed it. Introspection advertising what reading refuses is
+    /// the `TS-P1-33` shape.
+    ///
+    /// The class form has always worked; this is the same evaluation with the
+    /// struct instance bound as <c>$this</c>, so a body may read the struct's own
+    /// stored fields.
+    /// </remarks>
+    internal bool TryEvaluateComputedProperty(
+        ToshStructInstance instance,
+        string name,
+        bool includeHidden,
+        out object? value)
+    {
+        foreach (var property in Properties)
+        {
+            if (property.IsStatic ||
+                !property.IsComputed ||
+                (property.IsShy && !includeHidden) ||
+                !string.Equals(property.Name, name, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var locals = new Dictionary<string, object?>(StringComparer.Ordinal)
+            {
+                ["this"] = instance,
+            };
+
+            var values = _engine.ExecuteClassBlockSync(
+                null,
+                SourceName,
+                SourceText,
+                property.GetterBody!,
+                locals,
+                CapturedScopes,
+                $"{Name}.{property.Name}.get");
+
+            value = values is null ? null : values.LastOrDefault();
+            return true;
+        }
+
+        value = null;
+        return false;
+    }
+
     public InvocationResult InvokeStaticMethod(string methodName, IReadOnlyList<object?> arguments)
     {
         var method = Methods.FirstOrDefault(m =>
