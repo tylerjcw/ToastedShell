@@ -51,15 +51,38 @@ worst_used_kb=0
 worst_snapshot=""
 alerted=0
 
-# Every process over 100 MB RSS, largest first, with its full command line.
+# Every process over 100 MB of ANONYMOUS memory, largest first.
+#
+# Anonymous, not RSS, and the distinction is the whole point. RSS counts
+# file-backed pages — an mmapped index, a mapped binary — which the kernel drops
+# the instant memory is wanted elsewhere. They cannot exhaust anything.
+#
+# Sorting by RSS is what sent this investigation after the wrong process. The
+# first run of this script named `baloo_file` at 4.4 GB, the largest on the
+# machine, and that became the leading hypothesis. Measured properly it is 704 MB
+# anonymous and 3.7 GB file-backed — the mmap of its own 4.8 GB index, entirely
+# evictable. It was never a candidate.
+#
+# RSS is still shown, because the gap between the two columns is the tell.
 top_consumers() {
-    ps -eo rss=,pid=,comm=,args= --sort=-rss 2>/dev/null \
-        | awk -v min=102400 '$1 >= min {
-            rss = $1; pid = $2; $1 = ""; $2 = "";
-            cmd = substr($0, 3);
-            if (length(cmd) > 120) cmd = substr(cmd, 1, 120) "...";
-            printf "      %8.1f MB  pid %-8s %s\n", rss / 1024, pid, cmd;
-        }' | head -15
+    for status in /proc/[0-9]*/status; do
+        [ -r "$status" ] || continue
+        awk '
+            /^Name:/     { name = $2 }
+            /^Pid:/      { pid = $2 }
+            /^RssAnon:/  { anon = $2 }
+            /^VmRSS:/    { rss = $2 }
+            END {
+                if (anon >= 102400)
+                    printf "%d\t%d\t%s\t%s\n", anon, rss, pid, name;
+            }
+        ' "$status" 2>/dev/null
+    done | sort -rn | head -15 | while IFS=$'\t' read -r anon rss pid name; do
+        cmd=$(tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null | cut -c1-110)
+        [ -n "$cmd" ] || cmd="$name"
+        awk -v a="$anon" -v r="$rss" -v p="$pid" -v c="$cmd" \
+            'BEGIN { printf "      %8.1f MB anon  (%8.1f MB rss)  pid %-8s %s\n", a/1024, r/1024, p, c }'
+    done
 }
 
 sample() {
