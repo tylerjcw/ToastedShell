@@ -691,7 +691,16 @@ public sealed class ToshClassDefinition : IShellNamedType
             throw new InvalidOperationException($"Static method '{methodName}' was not found on class '{Name}'.");
         }
 
-        var staticCandidates = candidates.Where(candidate => candidate.IsStatic && !candidate.IsShy).ToArray();
+        // `TS-P2-103`. `CanSeeShyStatic` answers "is this class's own code asking?"
+        // and was already consulted for nested types and for static properties —
+        // but not here, so a `shy shared func` was unreachable from the class that
+        // declared it. A hermit class has no instance and therefore no `$this` to
+        // carry the accessor, so the qualified name is the *only* spelling
+        // available, and refusing it meant every helper in a hermit class had to be
+        // public.
+        var staticCandidates = candidates
+            .Where(candidate => candidate.IsStatic && (!candidate.IsShy || CanSeeShyStatic()))
+            .ToArray();
 
         if (staticCandidates.Length == 0)
         {
