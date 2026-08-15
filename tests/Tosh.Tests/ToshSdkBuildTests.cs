@@ -335,6 +335,14 @@ public sealed class ToshSdkBuildTests
         var sdkPackagePath = Directory.GetFiles(packageDirectory.Path, "Tosh.Sdk.*.nupkg").Single();
         var sdkPackageVersion = Path.GetFileNameWithoutExtension(sdkPackagePath)["Tosh.Sdk.".Length..];
 
+        // The fallback folder that lets framework ref packs resolve could also
+        // satisfy `Tosh.Sdk` itself, if a build of this exact version were ever
+        // left in the machine cache — and `build.tosh all` does install its own
+        // output there. The test would then pass against a stale SDK while
+        // appearing to prove the freshly packed one works, which is worse than
+        // failing. Cheap to rule out, and loud when it happens.
+        AssertVersionIsNotInMachineCache("Tosh.Sdk", sdkPackageVersion);
+
         await File.WriteAllTextAsync(nugetConfigPath, LocalOnlyNuGetConfig(packageDirectory.Path));
         await File.WriteAllTextAsync(
             appProjectPath,
@@ -824,6 +832,24 @@ public sealed class ToshSdkBuildTests
         return SecurityElement.Escape(value) ?? value;
     }
 
+    /// <summary>
+    /// A NuGet configuration whose only <em>source</em> is the test's own package
+    /// directory, with the machine's package cache as a read-only fallback.
+    /// </summary>
+    /// <remarks>
+    /// The single source is the point of the test: it proves the Tosh SDK really
+    /// flows package references, because nothing else could have supplied them.
+    ///
+    /// The fallback folder is not a weakening of that. .NET 10 resolves framework
+    /// reference packs — <c>Microsoft.AspNetCore.App.Ref</c> and friends — during
+    /// <em>restore</em>, for every <c>net10.0</c> project, whether or not it uses
+    /// them. These tests also redirect <c>NUGET_PACKAGES</c> to an empty directory
+    /// so a stale 1.0.0 from a previous run cannot be mistaken for a fresh one, and
+    /// the two together left restore with nowhere to find framework data: a bare
+    /// project with no package references at all fails the same way. A fallback
+    /// folder is read-only and never receives writes, so the isolation that
+    /// matters — the test's own packages, and their versions — is untouched.
+    /// </remarks>
     private static string LocalOnlyNuGetConfig(string packageDirectory)
     {
         return $$"""
@@ -833,8 +859,45 @@ public sealed class ToshSdkBuildTests
             <clear />
             <add key="local" value="{{Xml(packageDirectory)}}" />
           </packageSources>
+          <fallbackPackageFolders>
+            <clear />
+            <add key="machine" value="{{Xml(MachinePackageCache())}}" />
+          </fallbackPackageFolders>
         </configuration>
         """;
+    }
+
+    /// <summary>
+    /// Fails if the machine cache already holds <paramref name="packageId"/> at
+    /// <paramref name="version"/>, which would let the fallback folder answer for
+    /// a package this test means to supply itself.
+    /// </summary>
+    private static void AssertVersionIsNotInMachineCache(string packageId, string version)
+    {
+        var cached = Path.Combine(MachinePackageCache(), packageId.ToLowerInvariant(), version);
+
+        Assert.False(
+            Directory.Exists(cached),
+            $"'{packageId}' {version} is already in the machine package cache ({cached}). " +
+            "The fallback folder would satisfy the restore from there, so this test would " +
+            "exercise that copy rather than the one it just packed. Remove that directory, " +
+            "or bump the version under test.");
+    }
+
+    /// <summary>
+    /// The machine's real NuGet package cache, which the tests read framework
+    /// reference packs from without writing to it.
+    /// </summary>
+    private static string MachinePackageCache()
+    {
+        var configured = Environment.GetEnvironmentVariable("NUGET_PACKAGES");
+
+        return string.IsNullOrWhiteSpace(configured)
+            ? Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                ".nuget",
+                "packages")
+            : configured;
     }
 
     private static bool HasReferenceAssemblyAttribute(string assemblyPath)
