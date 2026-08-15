@@ -5,6 +5,14 @@ namespace Tosh.Language;
 
 public sealed class ToshInterfaceDefinition : IShellNamedType
 {
+    /// <summary>The declaration's own `##` documentation (`TS-P2-101`).</summary>
+    public DocComment? Documentation { get; internal set; }
+
+    /// <inheritdoc />
+    public string? ShellDocumentation => Documentation?.Description is { Length: > 0 } summary
+        ? summary
+        : null;
+
     public ToshInterfaceDefinition(
         string name,
         IReadOnlyList<InterfaceMethodSignature> methods,
@@ -13,8 +21,10 @@ public sealed class ToshInterfaceDefinition : IShellNamedType
         TextSpan span,
         IReadOnlyList<string>? typeParameterNames = null,
         IReadOnlyList<TypeParameterConstraintSyntax>? typeParameterConstraints = null,
-        IReadOnlyList<TypeParameterVariance>? typeParameterVariances = null)
+        IReadOnlyList<TypeParameterVariance>? typeParameterVariances = null,
+        DocComment? documentation = null)
     {
+        Documentation = documentation;
         Name = name;
         Methods = methods;
         SourceName = sourceName;

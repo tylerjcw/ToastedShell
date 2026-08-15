@@ -5,14 +5,24 @@ namespace Tosh.Language;
 
 public sealed class ToshTraitDefinition : IShellNamedType
 {
+    /// <summary>The declaration's own `##` documentation (`TS-P2-101`).</summary>
+    public DocComment? Documentation { get; internal set; }
+
+    /// <inheritdoc />
+    public string? ShellDocumentation => Documentation?.Description is { Length: > 0 } summary
+        ? summary
+        : null;
+
     public ToshTraitDefinition(
         string name,
         IReadOnlyList<TraitMethodDefinition> methods,
         IReadOnlyList<TraitPropertyDefinition> properties,
         string sourceName,
         string sourceText,
-        TextSpan span)
+        TextSpan span,
+        DocComment? documentation = null)
     {
+        Documentation = documentation;
         Name = name;
         Methods = methods;
         Properties = properties;

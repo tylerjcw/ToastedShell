@@ -35,9 +35,11 @@ public sealed class ToshClassDefinition : IShellNamedType
         TextSpan span,
         IReadOnlyList<LexicalScope>? capturedScopes,
         IReadOnlyList<string>? typeParameters = null,
-        IReadOnlyList<ToshTypeParameterConstraint>? typeParameterConstraints = null)
+        IReadOnlyList<ToshTypeParameterConstraint>? typeParameterConstraints = null,
+        DocComment? documentation = null)
     {
         _engine = engine;
+        Documentation = documentation;
         Name = name;
         TypeParameterNames = typeParameters ?? Array.Empty<string>();
         TypeParameterConstraints = typeParameterConstraints ?? Array.Empty<ToshTypeParameterConstraint>();
@@ -636,6 +638,16 @@ public sealed class ToshClassDefinition : IShellNamedType
     /// stands for the whole overload set, and picking among them is the
     /// dispatcher's job at call time, not the reference's at capture time.
     /// </remarks>
+    /// <summary>
+    /// The class's own `##` documentation, when it was written (`TS-P2-101`).
+    /// </summary>
+    public DocComment? Documentation { get; }
+
+    /// <inheritdoc />
+    public string? ShellDocumentation => Documentation?.Description is { Length: > 0 } summary
+        ? summary
+        : null;
+
     public bool HasStaticMethod(string methodName)
     {
         if (_methodsByName.TryGetValue(methodName, out var candidates) &&

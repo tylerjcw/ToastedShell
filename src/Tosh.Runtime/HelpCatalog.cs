@@ -2051,7 +2051,12 @@ public static class HelpCatalog
             Name: descriptor.ShellTypeName,
             Kind: HelpSubjectKind.Type,
             Category: category,
-            Description: $"ToSh {kindLabel} {descriptor.ShellFullName}.",
+            // `TS-P2-101`. A documented declaration says what it is for; the
+            // synthesised line only restates its name and kind, which the reader
+            // can already see. Prefer the author's words when there are any.
+            Description: descriptor.ShellDocumentation is { Length: > 0 } documented
+                ? documented
+                : $"ToSh {kindLabel} {descriptor.ShellFullName}.",
             Usage: usage,
             Aliases: aliases ?? Array.Empty<string>(),
             Related: ["describe-type", "members", "methods", "constructors", "types", "new"],

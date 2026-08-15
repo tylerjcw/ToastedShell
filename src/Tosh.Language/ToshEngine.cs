@@ -4105,7 +4105,8 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
             @class.Span,
             CaptureVisibleScopes(),
             typeParameters: classTypeParams,
-            typeParameterConstraints: typeParameterConstraints);
+            typeParameterConstraints: typeParameterConstraints,
+            documentation: @class.DocComment);
 
         // Handle partial class merging: if this is a partial class and one already exists, merge members
         if (@class.IsPartial && TryGetNamedType(@class.Name, out var existingType) && existingType is ToshClassDefinition existingDef)
@@ -4632,6 +4633,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
             typeParameterConstraints: @interface.TypeParameterConstraints,
             typeParameterVariances: @interface.TypeParameterVariances);
 
+        definition.Documentation = @interface.DocComment;
         DeclareType(@interface.Name, definition, @interface.Modifier, sourceName, sourceText, @interface.Span);
         yield break;
     }
@@ -4883,6 +4885,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
             sourceText,
             @enum.Span);
 
+        definition.Documentation = @enum.DocComment;
         DeclareType(@enum.Name, definition, @enum.Modifier, sourceName, sourceText, @enum.Span);
         yield break;
     }
@@ -4949,6 +4952,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
             CaptureVisibleScopes(),
             typeParameterNames: record.TypeParameters,
             typeParameterConstraints: record.TypeParameterConstraints);
+        definition.Documentation = record.DocComment;
 
         definition.IsSealed = record.IsSealed;
         definition.IsStrict = record.IsStrict;
@@ -5216,6 +5220,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
             CaptureVisibleScopes(),
             constructors);
 
+        definition.Documentation = @struct.DocComment;
         definition.IsSealed = @struct.IsSealed;
         definition.IsFluid = @struct.IsFluid;
         definition.IsPartial = @struct.IsPartial;
@@ -5255,6 +5260,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
             sourceText,
             trait.Span);
 
+        definition.Documentation = trait.DocComment;
         DeclareType(trait.Name, definition, trait.Modifier, sourceName, sourceText, trait.Span);
         yield break;
     }

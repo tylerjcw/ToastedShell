@@ -5,6 +5,14 @@ namespace Tosh.Language;
 
 public sealed class ToshRecordDefinition : IShellNamedType
 {
+    /// <summary>The declaration's own `##` documentation (`TS-P2-101`).</summary>
+    public DocComment? Documentation { get; internal set; }
+
+    /// <inheritdoc />
+    public string? ShellDocumentation => Documentation?.Description is { Length: > 0 } summary
+        ? summary
+        : null;
+
     private readonly ToshEngine _engine;
     private readonly Dictionary<string, ToshRecordFieldDefinition> _fieldsByName;
 
@@ -17,8 +25,10 @@ public sealed class ToshRecordDefinition : IShellNamedType
         TextSpan span,
         IReadOnlyList<LexicalScope>? capturedScopes,
         IReadOnlyList<string>? typeParameterNames = null,
-        IReadOnlyList<TypeParameterConstraintSyntax>? typeParameterConstraints = null)
+        IReadOnlyList<TypeParameterConstraintSyntax>? typeParameterConstraints = null,
+        DocComment? documentation = null)
     {
+        Documentation = documentation;
         _engine = engine;
         Name = name;
         Fields = fields;

@@ -1,9 +1,18 @@
+using Tosh.Language.Parsing;
 using Tosh.Runtime;
 
 namespace Tosh.Language;
 
 public sealed class ToshEnumDefinition : IShellNamedType
 {
+    /// <summary>The declaration's own `##` documentation (`TS-P2-101`).</summary>
+    public DocComment? Documentation { get; internal set; }
+
+    /// <inheritdoc />
+    public string? ShellDocumentation => Documentation?.Description is { Length: > 0 } summary
+        ? summary
+        : null;
+
     private readonly Dictionary<string, ToshEnumValue> _membersByName;
 
     public ToshEnumDefinition(
@@ -13,8 +22,10 @@ public sealed class ToshEnumDefinition : IShellNamedType
         IReadOnlyList<ToshEnumValue> members,
         string sourceName,
         string sourceText,
-        TextSpan span)
+        TextSpan span,
+        DocComment? documentation = null)
     {
+        Documentation = documentation;
         Name = name;
         UnderlyingTypeName = underlyingTypeName ?? underlyingType.Name;
         UnderlyingType = underlyingType;
