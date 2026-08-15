@@ -116,21 +116,31 @@ public class SplatArgumentTests
     }
 
     /// <summary>
-    /// Pinned because it is pre-existing and easily mistaken for this item: a rest
-    /// parameter spreads a list on its own. Nothing here changed it, and a future
-    /// change to argument evaluation that did would show up as this test failing
-    /// rather than as a puzzling behaviour difference somewhere else.
+    /// A bare list is **one** argument to a rest parameter; `...` is what spreads
+    /// it. That is what makes the splat worth having.
+    ///
+    /// This assertion is the reverse of the one it replaces, and the story is worth
+    /// keeping. The original pinned "a rest parameter already spreads a bare list"
+    /// after measuring `CountArgs($f)` as 3 — before this change as well as after —
+    /// and concluded the behaviour was pre-existing and deliberate. It was
+    /// pre-existing and it was `TS-P2-113`: the binding always passed one argument,
+    /// and the `for` loop *inside* the function expanded it a second time, so the
+    /// count looked like a spread. Fixing the double expansion made the pin fail,
+    /// which is how the misreading was caught.
+    ///
+    /// `$vals.Count` is asserted rather than a loop count, because a loop over the
+    /// rest parameter is precisely what was miscounting.
     /// </summary>
     [Fact]
-    public async Task A_rest_parameter_already_spreads_a_bare_list()
-        => Assert.Equal("3", await RunAsync(
-            Fixture +
-            """
-            func CountArgs(vals...) -> int {
-                var n = 0
-                for v in $vals { $n = ($n + 1) }
-                return $n
-            }
-            (CountArgs($f))
-            """));
+    public async Task A_bare_list_is_one_argument_and_a_splat_is_many()
+    {
+        const string probe = """
+            func Probe(vals...) -> int { return $vals.Count }
+            var f = [1, 2, 3]
+
+            """;
+
+        Assert.Equal("1", await RunAsync(probe + "(Probe($f))"));
+        Assert.Equal("3", await RunAsync(probe + "(Probe(...$f))"));
+    }
 }

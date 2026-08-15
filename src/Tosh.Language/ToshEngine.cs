@@ -5394,6 +5394,12 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
         }
     }
 
+    private static async IAsyncEnumerable<object?> SingleItemAsync(object? item)
+    {
+        await Task.CompletedTask;
+        yield return item;
+    }
+
     private async IAsyncEnumerable<object?> EvaluateForStatementAsync(
         string sourceName,
         string sourceText,
@@ -5405,13 +5411,21 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
         // `for line in curl -s … { … }` consumes the values, so the child's stdout must be
         // captured even at a terminal. The loop still streams — the flag changes how the
         // process is spawned, not how values flow (TS-P1-30).
-        await foreach (var item in EvaluatePipelineAsync(
-                               sourceName, sourceText, statement.Source, cancellationToken,
-                               outputIsCaptured: true)
-                           .WithCancellation(cancellationToken))
+        var source = EvaluatePipelineAsync(
+            sourceName, sourceText, statement.Source, cancellationToken,
+            outputIsCaptured: true);
+
+        // `TS-P2-113`. A stream whose producer already enumerated a collection into
+        // it carries its items directly; expanding each one again is the second
+        // expansion that made `for x in $r` bind three integers where the identical
+        // `for x in [[1, 2, 3]]` bound one array.
+        var alreadyExpanded = source is PreExpandedSequence;
+
+        await foreach (var item in source.WithCancellation(cancellationToken))
         {
-            await foreach (var current in ShellIterationUtilities
-                               .ExpandIterationItemsAsync(item, cancellationToken)
+            await foreach (var current in (alreadyExpanded
+                               ? SingleItemAsync(item)
+                               : ShellIterationUtilities.ExpandIterationItemsAsync(item, cancellationToken))
                                .WithCancellation(cancellationToken))
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -7004,7 +7018,13 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
             current = ExecuteSortFirstFusionAsync(current, sortFirst, cancellationToken);
         }
 
-        return FinalizePipelineExitCodeAsync(current, pipelineExitStatusTracker, ownsTracker, cancellationToken);
+        // `TS-P2-113`. The finaliser is another iterator, so wrapping erases the
+        // `PreExpandedSequence` type that says this stream has already had its
+        // collection enumerated into it. Re-applied here, or every consumer of a
+        // whole pipeline — `for` among them — expands it a second time.
+        var finalized = FinalizePipelineExitCodeAsync(current, pipelineExitStatusTracker, ownsTracker, cancellationToken);
+
+        return current is PreExpandedSequence ? new PreExpandedSequence(finalized) : finalized;
     }
 
     private static int GetStagesConsumed(Tosh.Language.Binding.PipelineFusion fusion) => fusion switch
@@ -7153,11 +7173,20 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
         }
     }
 
-    private async IAsyncEnumerable<object?> ExecuteExpressionStageAsync(
+    /// <summary>
+    /// Runs a pipeline stage that is an expression.
+    /// </summary>
+    /// <remarks>
+    /// Not an iterator itself, so the variable-replay branch can return a
+    /// <see cref="PreExpandedSequence"/> — a stream that has already had its
+    /// collection enumerated into it, and must not be expanded again downstream
+    /// (`TS-P2-113`). The rest of the work stays in the iterator below.
+    /// </remarks>
+    private IAsyncEnumerable<object?> ExecuteExpressionStageAsync(
         string sourceName,
         string sourceText,
         ExpressionPipelineStageSyntax expressionStage,
-        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+        CancellationToken cancellationToken)
     {
         if (expressionStage.Expression is VariableReferenceArgumentSyntax variableReference &&
             TryGetVariableBinding(variableReference.Name, out var binding) &&
@@ -7165,14 +7194,31 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
             binding.Value is IEnumerable enumerable &&
             binding.Value is not string)
         {
-            foreach (var item in enumerable)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                yield return item;
-            }
-
-            yield break;
+            return new PreExpandedSequence(ReplayBindingAsync(enumerable, cancellationToken));
         }
+
+        return ExecuteExpressionStageCoreAsync(sourceName, sourceText, expressionStage, cancellationToken);
+    }
+
+    private static async IAsyncEnumerable<object?> ReplayBindingAsync(
+        IEnumerable source,
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        await Task.CompletedTask;
+
+        foreach (var item in source)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            yield return item;
+        }
+    }
+
+    private async IAsyncEnumerable<object?> ExecuteExpressionStageCoreAsync(
+        string sourceName,
+        string sourceText,
+        ExpressionPipelineStageSyntax expressionStage,
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+    {
 
         // `TS-P2-73`. A ternary arm could not invoke a multi-value command, because the
         // parentheses it *requires* are the same parentheses that impose single-value

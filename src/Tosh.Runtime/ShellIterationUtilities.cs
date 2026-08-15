@@ -159,6 +159,19 @@ public static class ShellIterationUtilities
         IAsyncEnumerable<object?> input,
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
+        // `TS-P2-113`. A stream whose producer already enumerated a collection into
+        // it must not be expanded a second time: the lone item it carries is the
+        // item, not a container to spread.
+        if (input is PreExpandedSequence)
+        {
+            await foreach (var value in input.WithCancellation(cancellationToken))
+            {
+                yield return value;
+            }
+
+            yield break;
+        }
+
         await using var enumerator = input.GetAsyncEnumerator(cancellationToken);
 
         if (!await enumerator.MoveNextAsync())
