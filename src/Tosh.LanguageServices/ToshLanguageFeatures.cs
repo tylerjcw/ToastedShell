@@ -163,11 +163,17 @@ public sealed class ToshLanguageFeatures
         var parseResult = ToshParser.Parse(text, sourceName);
         var map = new TextCoordinateMap(parseResult.SourceText);
 
-        // Collect parse diagnostics
-        var diagnostics = new List<(string Code, string Title, string? Help, TextSpan Span)>();
+        // `TS-P2-09`. Severity is carried rather than discarded. It used to be
+        // dropped here and every diagnostic reported to the editor as
+        // `Severity: 1` — LSP for *Error* — so a warning underlined red and read as
+        // a failure. A surface that calls everything an error trains people to
+        // ignore all of it.
+        var diagnostics = new List<(string Code, string Title, string? Help, TextSpan Span, ToshDiagnosticSeverity Severity)>();
 
+        // A parse diagnostic has no severity field: the parser reports only things
+        // that stop the parse, so Error is the fact rather than a default.
         foreach (var d in parseResult.Diagnostics)
-            diagnostics.Add((d.Code, d.Title, d.Help, d.Span));
+            diagnostics.Add((d.Code, d.Title, d.Help, d.Span, ToshDiagnosticSeverity.Error));
 
         // Run binder pass and collect binder diagnostics
         var binderDiagnostics = Tosh.Language.Binding.Binder.Bind(
@@ -180,7 +186,7 @@ public sealed class ToshLanguageFeatures
         foreach (var d in binderDiagnostics)
         {
             var span = d.Span ?? fileWideSpan;
-            diagnostics.Add((d.Code, d.Title, d.Help, span));
+            diagnostics.Add((d.Code, d.Title, d.Help, span, d.Severity));
         }
 
         // Lower + type-check pass: surfaces builtin arity / argument-type
@@ -195,7 +201,7 @@ public sealed class ToshLanguageFeatures
             foreach (var d in typeDiagnostics)
             {
                 var span = d.Span ?? fileWideSpan;
-                diagnostics.Add((d.Code, d.Title, d.Help, span));
+                diagnostics.Add((d.Code, d.Title, d.Help, span, d.Severity));
             }
         }
         catch
@@ -208,7 +214,7 @@ public sealed class ToshLanguageFeatures
         return diagnostics
             .Select(diagnostic => new LspDiagnostic(
                 map.ToRange(diagnostic.Span.Start, diagnostic.Span.End),
-                Severity: 1,
+                Severity: ToLspSeverity(diagnostic.Severity),
                 Code: diagnostic.Code,
                 Source: "tosh",
                 Message: diagnostic.Help is { Length: > 0 }
@@ -216,6 +222,24 @@ public sealed class ToshLanguageFeatures
                     : diagnostic.Title))
             .ToArray();
     }
+
+    /// <summary>
+    /// Translates a ToastScript severity to the LSP scale.
+    /// </summary>
+    /// <remarks>
+    /// The two enumerations agree on order and differ by one — ToastScript counts
+    /// `Error` from 0, LSP from 1 — so this is an offset rather than a table.
+    /// Written out anyway: a silent `+ 1` in the middle of a projection is the
+    /// kind of thing that survives a renumbering it should not.
+    /// </remarks>
+    private static int ToLspSeverity(ToshDiagnosticSeverity severity) => severity switch
+    {
+        ToshDiagnosticSeverity.Error => 1,
+        ToshDiagnosticSeverity.Warning => 2,
+        ToshDiagnosticSeverity.Info => 3,
+        ToshDiagnosticSeverity.Hint => 4,
+        _ => 1,
+    };
 
     public IReadOnlyList<LspCompletionItem> GetCompletionItems(string text, LspPosition position, string sourceName = "<completion>")
     {

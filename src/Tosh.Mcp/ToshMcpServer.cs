@@ -396,6 +396,12 @@ public sealed class ToshMcpServer
         };
     }
 
+    /// <summary>
+    /// The LSP severity meaning "error". Named because the number appears in a
+    /// condition that decides whether a program is worth running (`TS-P2-09`).
+    /// </summary>
+    private const int LspSeverityError = 1;
+
     private object ExecuteExplainError(JsonElement arguments)
     {
         var text = arguments.GetProperty("text").GetString() ?? string.Empty;
@@ -408,9 +414,15 @@ public sealed class ToshMcpServer
         // Phase 1: collect parse diagnostics via LSP layer
         var parseDiagnostics = _features.GetDiagnostics(text, "<mcp-explain>");
 
-        // Phase 2: if no parse errors, try executing to catch runtime errors
+        // Phase 2: if nothing *blocks* execution, run it to catch runtime errors.
+        //
+        // `TS-P2-09`. This used to require `Count == 0`, so a single warning
+        // suppressed the runtime pass entirely — and warnings are common in
+        // working code, which meant `explain_error` most often declined to explain
+        // the error actually being asked about. Only an error means the program
+        // will not run; a warning is an observation about one that will.
         var runtimeErrors = new List<(string Code, string Message, string? Help)>();
-        if (parseDiagnostics.Count == 0)
+        if (!parseDiagnostics.Any(diagnostic => diagnostic.Severity == LspSeverityError))
         {
             try
             {
