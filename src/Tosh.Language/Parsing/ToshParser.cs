@@ -3736,6 +3736,14 @@ public static class ToshParser
         {
             var declarationStart = Current.Span.Start;
             var modifier = ParseDeclarationModifier();
+
+            var isFlags = Current.Kind == SyntaxTokenKind.Bareword &&
+                          string.Equals(Current.Text, "flags", StringComparison.OrdinalIgnoreCase);
+            if (isFlags)
+            {
+                NextToken(); // flags
+            }
+
             NextToken(); // enum
             var nameToken = Current.Kind == SyntaxTokenKind.Bareword ? NextToken() : ExpectVariableName();
             ParseTypedIdentifierToken(nameToken.Text, out var enumName, out var inlineUnderlyingType, out var expectsFollowingUnderlyingType);
@@ -3764,7 +3772,7 @@ public static class ToshParser
                     Title: "Enum definitions require a body.",
                     Span: Current.Span,
                     Label: $"write '{{ ... }}' after enum '{enumName}'"));
-                return new EnumDefinitionStatementSyntax(enumName, underlyingTypeName, Array.Empty<EnumMemberSyntax>(), modifier, TextSpan.FromBounds(declarationStart, nameToken.Span.End),
+                return new EnumDefinitionStatementSyntax(enumName, underlyingTypeName, Array.Empty<EnumMemberSyntax>(), modifier, IsFlags: isFlags, TextSpan.FromBounds(declarationStart, nameToken.Span.End),
                     DocComment: DocComment.Parse(docTokens ?? Array.Empty<SyntaxToken>()));
             }
 
@@ -3829,7 +3837,7 @@ public static class ToshParser
                     Span: openBrace.Span,
                     Label: "this enum body never closes",
                     Help: "close the enum body with '}' after the last member."));
-                return new EnumDefinitionStatementSyntax(enumName, underlyingTypeName, members, modifier, TextSpan.FromBounds(declarationStart, members.Count == 0 ? nameToken.Span.End : members[^1].Span.End),
+                return new EnumDefinitionStatementSyntax(enumName, underlyingTypeName, members, modifier, IsFlags: isFlags, TextSpan.FromBounds(declarationStart, members.Count == 0 ? nameToken.Span.End : members[^1].Span.End),
                     DocComment: DocComment.Parse(docTokens ?? Array.Empty<SyntaxToken>()));
             }
 
@@ -3839,6 +3847,7 @@ public static class ToshParser
                 underlyingTypeName,
                 members,
                 modifier,
+                isFlags,
                 TextSpan.FromBounds(declarationStart, closeBrace.Span.End),
                 DocComment: DocComment.Parse(docTokens ?? Array.Empty<SyntaxToken>()));
         }
@@ -8749,6 +8758,7 @@ public static class ToshParser
                              IsLogicalAndOperatorToken(token) ||
                              IsComparisonOperatorToken(token) ||
                              IsCastOperatorToken(token) ||
+                             IsBitwiseOperatorToken(token) ||
                              IsAdditiveOperatorToken(token) ||
                              IsMultiplicativeOperatorToken(token) ||
                              IsExponentiationOperatorToken(token)))
@@ -8804,6 +8814,7 @@ public static class ToshParser
                             IsLogicalAndOperatorToken(token) ||
                             IsComparisonOperatorToken(token) ||
                             IsCastOperatorToken(token) ||
+                            IsBitwiseOperatorToken(token) ||
                             IsAdditiveOperatorToken(token) ||
                             IsMultiplicativeOperatorToken(token) ||
                             IsExponentiationOperatorToken(token))
@@ -8820,6 +8831,7 @@ public static class ToshParser
                              IsLogicalAndOperatorToken(token) ||
                              IsComparisonOperatorToken(token) ||
                              IsCastOperatorToken(token) ||
+                             IsBitwiseOperatorToken(token) ||
                              IsAdditiveOperatorToken(token) ||
                              IsMultiplicativeOperatorToken(token) ||
                              IsExponentiationOperatorToken(token)))
@@ -10423,7 +10435,7 @@ public static class ToshParser
         /// </remarks>
         private ArgumentSyntax? ParseRangeExpression(int startPosition, bool implicitCurrentItem)
         {
-            var left = ParseAdditiveExpression(startPosition, implicitCurrentItem);
+            var left = ParseBitwiseOrExpression(startPosition, implicitCurrentItem);
 
             if (left is not null && Current.Kind == SyntaxTokenKind.DotDot)
             {
@@ -10545,6 +10557,87 @@ public static class ToshParser
         /// </summary>
         private static bool IsChainableComparisonOperator(string normalizedOperator)
             => normalizedOperator is "<" or "<=" or ">" or ">=" or "==" or "!=";
+
+        /// <summary>
+        /// The bitwise levels, between additive and range (`TS-P3-14`).
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// All of them bind <em>tighter than comparison</em>, which is a deliberate
+        /// departure from C: there `a &amp; b == c` means `a &amp; (b == c)`, the
+        /// language's best-known precedence trap and the reason C programmers
+        /// parenthesise out of habit. Here `$flags band Mask == 0` means
+        /// `($flags band Mask) == 0` — what the text looks like it says. `as` was
+        /// moved for the same reason in `TS-P2-105`.
+        /// </para>
+        /// <para>
+        /// The order among themselves — shifts, then `band`, then `bxor`, then
+        /// `bor` — is C's, because that part of C is not a trap and is what anyone
+        /// porting a flags expression expects.
+        /// </para>
+        /// </remarks>
+        private ArgumentSyntax? ParseBitwiseOrExpression(int startPosition, bool implicitCurrentItem)
+            => ParseBinaryOperatorLevel(
+                startPosition,
+                implicitCurrentItem,
+                IsBitwiseOrOperatorToken,
+                ParseBitwiseXorExpression);
+
+        private ArgumentSyntax? ParseBitwiseXorExpression(int startPosition, bool implicitCurrentItem)
+            => ParseBinaryOperatorLevel(
+                startPosition,
+                implicitCurrentItem,
+                IsBitwiseXorOperatorToken,
+                ParseBitwiseAndExpression);
+
+        private ArgumentSyntax? ParseBitwiseAndExpression(int startPosition, bool implicitCurrentItem)
+            => ParseBinaryOperatorLevel(
+                startPosition,
+                implicitCurrentItem,
+                IsBitwiseAndOperatorToken,
+                ParseShiftExpression);
+
+        private ArgumentSyntax? ParseShiftExpression(int startPosition, bool implicitCurrentItem)
+            => ParseBinaryOperatorLevel(
+                startPosition,
+                implicitCurrentItem,
+                IsShiftOperatorToken,
+                ParseAdditiveExpression);
+
+        /// <summary>
+        /// One left-associative binary level: parse the tighter side, then fold
+        /// while the operator matches.
+        /// </summary>
+        /// <remarks>
+        /// Shared by the four bitwise levels rather than written out four times.
+        /// The additive and multiplicative levels keep their own copies — each
+        /// carries a condition this does not (`IsSpacedDictCloser`, the `TS-P2-02`
+        /// exponentiation note), and flattening them into this would hide those.
+        /// </remarks>
+        private ArgumentSyntax? ParseBinaryOperatorLevel(
+            int startPosition,
+            bool implicitCurrentItem,
+            Func<SyntaxToken, bool> matches,
+            Func<int, bool, ArgumentSyntax?> parseTighter)
+        {
+            var left = parseTighter(startPosition, implicitCurrentItem);
+
+            while (matches(Current))
+            {
+                var operatorToken = NextToken();
+                var right = parseTighter(startPosition, implicitCurrentItem);
+                var end = right?.Span.End ?? operatorToken.Span.End;
+
+                left = new OperatorArgumentSyntax(
+                    left ?? new BarewordArgumentSyntax(string.Empty, operatorToken.Span),
+                    NormalizeBinaryOperator(operatorToken),
+                    operatorToken.Span,
+                    right ?? new BarewordArgumentSyntax(string.Empty, operatorToken.Span),
+                    TextSpan.FromBounds(startPosition, end));
+            }
+
+            return left;
+        }
 
         private ArgumentSyntax? ParseAdditiveExpression(int startPosition, bool implicitCurrentItem)
         {
@@ -11404,6 +11497,7 @@ public static class ToshParser
                              IsLogicalAndOperatorToken(token) ||
                              IsComparisonOperatorToken(token) ||
                              IsCastOperatorToken(token) ||
+                             IsBitwiseOperatorToken(token) ||
                              IsAdditiveOperatorToken(token) ||
                              IsMultiplicativeOperatorToken(token) ||
                              IsUnaryOperatorToken(token)))
@@ -11506,6 +11600,7 @@ public static class ToshParser
                              IsLogicalAndOperatorToken(token) ||
                              IsComparisonOperatorToken(token) ||
                              IsCastOperatorToken(token) ||
+                             IsBitwiseOperatorToken(token) ||
                              IsAdditiveOperatorToken(token) ||
                              IsMultiplicativeOperatorToken(token) ||
                              IsExponentiationOperatorToken(token) ||
@@ -11583,6 +11678,7 @@ public static class ToshParser
                              IsLogicalAndOperatorToken(token) ||
                              IsComparisonOperatorToken(token) ||
                              IsCastOperatorToken(token) ||
+                             IsBitwiseOperatorToken(token) ||
                              IsAdditiveOperatorToken(token) ||
                              IsMultiplicativeOperatorToken(token) ||
                              IsExponentiationOperatorToken(token) ||
@@ -11821,9 +11917,25 @@ public static class ToshParser
                    Peek(offset + 2).Kind == SyntaxTokenKind.OpenBrace;
         }
 
-        private bool LooksLikeEnumDefinition()
+        /// <summary>
+        /// The offset of the `enum` keyword, stepping over a `flags` modifier.
+        /// </summary>
+        /// <remarks>
+        /// `TS-P3-14`. `flags` sits between the declaration modifier and `enum`
+        /// (`export flags enum Colour`), so it is a modifier of the *declaration
+        /// kind* rather than of visibility — which is why it is read here rather
+        /// than added to `ParseDeclarationModifier`.
+        /// </remarks>
+        private int GetEnumKeywordOffset()
         {
             var offset = GetDeclarationModifierOffset();
+
+            return MatchesKeywordAtOffset(offset, "flags") ? offset + 1 : offset;
+        }
+
+        private bool LooksLikeEnumDefinition()
+        {
+            var offset = GetEnumKeywordOffset();
             if (!MatchesKeywordAtOffset(offset, "enum") ||
                 Peek(offset + 1).Kind != SyntaxTokenKind.Bareword)
             {
@@ -12356,6 +12468,58 @@ public static class ToshParser
             return hasMemberPath && IsAssignmentOperatorToken(Peek(offset));
         }
 
+        /// <summary>
+        /// A stage that opens with a unary operator word: `not $ready`,
+        /// `bnot $mask`, `- $x`.
+        ///
+        /// `TS-P2-116`. Without this the leading word is taken as a command name,
+        /// so `bnot 5` reported `Command 'bnot' was not found` and — worse —
+        /// `var x = not true` bound nothing at all and exited cleanly. The unary
+        /// operators worked only inside parentheses, which is why the gap survived:
+        /// every test and every probe wrote `echo (not true)`.
+        ///
+        /// This is the unary half of the trap `TS-P2-105` describes. The binary
+        /// operators are found by the `HasTopLevelOperator…` scans, which look for
+        /// an operator *after* the leading token; a unary operator is the leading
+        /// token, so no scan could see it.
+        ///
+        /// Requiring an operand is what keeps `-` usable as an ordinary argument:
+        /// a lone `-` with nothing after it on the line is a word, not an
+        /// expression.
+        /// </summary>
+        private bool LooksLikeUnaryOperatorExpression()
+        {
+            if (!IsUnaryOperatorToken(Current))
+            {
+                return false;
+            }
+
+            var next = Peek(1);
+
+            if (HasLineBreakBetween(Current.Span.End, next.Span.Start))
+            {
+                return false;
+            }
+
+            return next.Kind switch
+            {
+                SyntaxTokenKind.Number or
+                SyntaxTokenKind.String or
+                SyntaxTokenKind.InterpolatedString or
+                SyntaxTokenKind.Boolean or
+                SyntaxTokenKind.Null or
+                SyntaxTokenKind.OpenParen or
+                SyntaxTokenKind.DollarOpenParen or
+                SyntaxTokenKind.OpenBracket => true,
+
+                // `not $ready`, and `bnot bnot $x` — a unary operand is itself a
+                // unary expression.
+                SyntaxTokenKind.Bareword => IsVariableReferenceLikeToken(next) ||
+                                            IsUnaryOperatorToken(next),
+                _ => false,
+            };
+        }
+
         private bool LooksLikeExpressionStage()
         {
             return Current.Kind switch
@@ -12383,7 +12547,8 @@ public static class ToshParser
                                             LooksLikeNewObjectExpression() ||
                                             LooksLikeStaticMethodCallExpression() ||
                                             LooksLikeStaticMemberAccessExpression(inCommandPosition: true) ||
-                                            LooksLikeIntrinsicLiteralExpression(),
+                                            LooksLikeIntrinsicLiteralExpression() ||
+                                            LooksLikeUnaryOperatorExpression(),
                 _ => false,
             };
         }
@@ -12702,6 +12867,7 @@ public static class ToshParser
         {
             return IsComparisonOperatorToken(token)
                 || IsCastOperatorToken(token)
+                || IsBitwiseOperatorToken(token)
                 || IsAdditiveOperatorToken(token)
                 || IsMultiplicativeOperatorToken(token)
                 || IsExponentiationOperatorToken(token)
@@ -12752,7 +12918,7 @@ public static class ToshParser
                 || (!_stopRefinementAtEquals && IsEqualsToken(token))
                 || (token.Kind == SyntaxTokenKind.Bareword && token.Text is
                     "==" or "=~" or "in" or "contains" or "starts-with" or "ends-with" or "is" or "not"
-                    or "is-not" or "is-in" or "is-not-in" or "not-in");
+                    or "is-not" or "is-in" or "is-not-in" or "not-in" or "has");
         }
 
         /// <summary>
@@ -12774,6 +12940,75 @@ public static class ToshParser
                    string.Equals(token.Text, "as", StringComparison.OrdinalIgnoreCase);
         }
 
+        /// <summary>
+        /// The bitwise operators are words, not symbols (`TS-P3-14`).
+        /// </summary>
+        /// <remarks>
+        /// `&amp;` is the background operator and the function-reference sigil, and
+        /// `|` separates pipeline stages, so neither is available. Word forms match
+        /// the family the language already has — `and`, `or`, `not`, `is`, `in`,
+        /// `contains` — and all six were confirmed unclaimed: no builtin, no
+        /// function, and no occurrence anywhere except the comment in the user's
+        /// own library explaining that they did not exist.
+        /// </remarks>
+        /// <summary>
+        /// The bitwise operators are words, not symbols (`TS-P3-14`).
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// `&amp;` is the background operator and the function-reference sigil, and
+        /// `|` separates pipeline stages, so neither is available. Word forms match
+        /// the family the language already has — `and`, `or`, `not`, `is`, `in`,
+        /// `contains` — and all six were confirmed unclaimed.
+        /// </para>
+        /// <para>
+        /// Written as block bodies with the words inline, matching
+        /// `IsComparisonOperatorToken`, because `OperatorSurfaceParityTests` reads
+        /// these methods as *text* to check every operator the parser accepts is in
+        /// the registry. An expression body hides the literals from it, and a guard
+        /// that cannot see a predicate cannot police it.
+        /// </para>
+        /// <para>
+        /// Matched case-sensitively, as `in`, `contains`, `is` and `as` are.
+        /// </para>
+        /// </remarks>
+        private static bool IsShiftOperatorToken(SyntaxToken token)
+        {
+            return token.Kind == SyntaxTokenKind.Bareword && token.Text is "shl" or "shr";
+        }
+
+        private static bool IsBitwiseAndOperatorToken(SyntaxToken token)
+        {
+            return token.Kind == SyntaxTokenKind.Bareword && token.Text is "band";
+        }
+
+        private static bool IsBitwiseXorOperatorToken(SyntaxToken token)
+        {
+            return token.Kind == SyntaxTokenKind.Bareword && token.Text is "bxor";
+        }
+
+        private static bool IsBitwiseOrOperatorToken(SyntaxToken token)
+        {
+            return token.Kind == SyntaxTokenKind.Bareword && token.Text is "bor";
+        }
+
+        /// <summary>
+        /// Any of the four bitwise levels, for the scans that enumerate operators.
+        /// </summary>
+        /// <remarks>
+        /// These scans decide "does this look like an expression?", and they are
+        /// written out by hand in seven places. `TS-P2-105` is what happens when
+        /// one of them is missed: `as` was moved out of the comparison set, six
+        /// scans silently lost it, and a cast with no *other* operator beside it
+        /// stopped parsing as an expression at all — while every case with a second
+        /// operator kept working, so the natural corpus missed it entirely.
+        /// </remarks>
+        private static bool IsBitwiseOperatorToken(SyntaxToken token)
+            => IsShiftOperatorToken(token)
+               || IsBitwiseAndOperatorToken(token)
+               || IsBitwiseXorOperatorToken(token)
+               || IsBitwiseOrOperatorToken(token);
+
         private static bool IsAdditiveOperatorToken(SyntaxToken token)
         {
             return token.Kind == SyntaxTokenKind.Bareword && token.Text is "+" or "-";
@@ -12793,6 +13028,7 @@ public static class ToshParser
         {
             return token.Kind == SyntaxTokenKind.Bareword &&
                    (string.Equals(token.Text, "not", StringComparison.OrdinalIgnoreCase) ||
+                    token.Text is "bnot" ||
                     token.Text is "-" or "+");
         }
 
@@ -12826,6 +13062,13 @@ public static class ToshParser
                     "starts-with" => "starts-with",
                     "ends-with" => "ends-with",
                     "as" => "as",
+                    "band" => "band",
+                    "bor" => "bor",
+                    "bxor" => "bxor",
+                    "bnot" => "bnot",
+                    "shl" => "shl",
+                    "shr" => "shr",
+                    "has" => "has",
                     "+" => "+",
                     "-" => "-",
                     "*" => "*",

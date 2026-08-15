@@ -252,6 +252,18 @@ public sealed class ToshMcpServer
             // Unary
             new { kind = "unary", name = "not", description = "Logical negation. Returns `true` if the operand is falsy.", example = "not true" },
 
+            new { kind = "unary", name = "bnot", description = "Bitwise complement of a whole number.", example = "bnot 0" },
+
+            // Bitwise — word forms, because `&` is the background operator and `|`
+            // separates pipeline stages. All bind tighter than comparison, so
+            // `$flags band Mask == 0` groups as `($flags band Mask) == 0`.
+            new { kind = "binary", name = "band", description = "Bitwise AND over whole numbers or enum members.", example = "0x30 band 0x10" },
+            new { kind = "binary", name = "bor", description = "Bitwise OR. Combines flag members of a `flags` enum.", example = "InitFlag.Video bor InitFlag.Audio" },
+            new { kind = "binary", name = "bxor", description = "Bitwise exclusive OR.", example = "0x30 bxor 0x10" },
+            new { kind = "binary", name = "shl", description = "Shift left.", example = "1 shl 5" },
+            new { kind = "binary", name = "shr", description = "Shift right.", example = "32 shr 2" },
+            new { kind = "binary", name = "has", description = "Whether every bit of the right flag is set in the left value.", example = "$flags has InitFlag.Audio" },
+
             // Arithmetic
             new { kind = "binary", name = "+", description = "Addition. Also concatenates strings and appends arrays.", example = "1 + 2" },
             new { kind = "binary", name = "-", description = "Subtraction.", example = "5 - 3" },

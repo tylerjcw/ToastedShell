@@ -42,6 +42,13 @@ public sealed class OperatorSurfaceParityTests
                      "IsMultiplicativeOperatorToken",
                      "IsExponentiationOperatorToken",
                      "IsComparisonOperatorToken",
+                     // `TS-P3-14`. Added with the bitwise operators: a guard that
+                     // does not scan a predicate cannot police it, and these were
+                     // invisible to it until named here.
+                     "IsShiftOperatorToken",
+                     "IsBitwiseAndOperatorToken",
+                     "IsBitwiseXorOperatorToken",
+                     "IsBitwiseOrOperatorToken",
                      "IsAssignmentOperatorToken",
                  })
         {

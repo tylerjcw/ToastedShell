@@ -3,7 +3,7 @@ using Tosh.Runtime;
 
 namespace Tosh.Language;
 
-public sealed class ToshEnumDefinition : IShellNamedType
+public sealed class ToshEnumDefinition : IShellNamedType, IShellFlagsEnum
 {
     /// <summary>The declaration's own `##` documentation (`TS-P2-101`).</summary>
     public DocComment? Documentation { get; internal set; }
@@ -43,6 +43,93 @@ public sealed class ToshEnumDefinition : IShellNamedType
     public Type UnderlyingType { get; }
 
     public IReadOnlyList<ToshEnumValue> Members { get; }
+
+    /// <summary>
+    /// Whether the declaration said <c>flags</c> (`TS-P3-14`).
+    /// </summary>
+    public bool IsFlags { get; internal set; }
+
+    /// <summary>
+    /// The member standing for a combined value.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The name is composed from the bits rather than concatenated when the
+    /// combination is made, so `band` and `bxor` name their results correctly too,
+    /// and the order is always declaration order rather than the order the caller
+    /// happened to write.
+    /// </para>
+    /// <para>
+    /// Zero-valued members are skipped when other bits are present — a `None = 0`
+    /// is covered by every value, and listing it beside real flags would be noise —
+    /// but answer on their own when the value is zero. Bits belonging to no member
+    /// leave the value unnamed and it renders as the number, which is the truthful
+    /// answer for a flag the declaration does not know about.
+    /// </para>
+    /// </remarks>
+    public object FromFlags(long value)
+    {
+        var names = new List<string>();
+        var covered = 0L;
+
+        foreach (var member in Members)
+        {
+            var bits = ToBits(member.UnderlyingValue);
+
+            if (bits == 0)
+            {
+                continue;
+            }
+
+            if ((value & bits) == bits)
+            {
+                names.Add(member.Name);
+                covered |= bits;
+            }
+        }
+
+        if (value == 0)
+        {
+            var zero = Members.FirstOrDefault(
+                member => ToBits(member.UnderlyingValue) == 0);
+
+            return zero.Name is null
+                ? ConvertToUnderlying(value)
+                : new ToshEnumValue(this, zero.Name, zero.UnderlyingValue);
+        }
+
+        return covered == value && names.Count > 0
+            ? new ToshEnumValue(this, string.Join(", ", names), ConvertToUnderlying(value))
+            : ConvertToUnderlying(value);
+    }
+
+    /// <summary>The member's backing value as a whole number, or zero if it has none.</summary>
+    private static long ToBits(object? underlying)
+    {
+        try
+        {
+            return underlying is null
+                ? 0
+                : Convert.ToInt64(underlying, System.Globalization.CultureInfo.InvariantCulture);
+        }
+        catch (Exception exception) when (exception is FormatException or InvalidCastException or OverflowException)
+        {
+            return 0;
+        }
+    }
+
+    /// <summary>Narrows a combined value back to the enum's declared backing type.</summary>
+    private object ConvertToUnderlying(long value)
+    {
+        try
+        {
+            return Convert.ChangeType(value, UnderlyingType, System.Globalization.CultureInfo.InvariantCulture);
+        }
+        catch (Exception exception) when (exception is OverflowException or InvalidCastException)
+        {
+            return value;
+        }
+    }
 
     public string SourceName { get; }
 

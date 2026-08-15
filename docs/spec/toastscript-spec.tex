@@ -104,7 +104,7 @@
             default,break,continue,return,yield,throw,try,catch,finally,using,
             require,bind,alloc,true,false,null,match,when,once,handles,priority,
             new,shy,global,export,static,shared,prop,defer,as,from,native,ref,
-            out,sealed,hollow,hermit,strict,partial,fluid,leaky,fixed,lazy,
+            out,sealed,hollow,hermit,strict,partial,fluid,leaky,fixed,lazy,flags,
             vital,guarded,overrule,fading,local,raw,proud,public,extends,
             fulfills,implements,uses,nameof,name-of,quote,get,set,
             abstract,private,protected,readonly,override,obsolete,fading},
@@ -620,6 +620,7 @@ modifier before \code{class}, a member modifier before \code{prop}, or
   \item \code{finally}
   \item \code{fixed}
   \item \code{flag}
+  \item \code{flags}
   \item \code{fluid}
   \item \code{for}
   \item \code{from}
@@ -1992,6 +1993,13 @@ every binary operator and \code{x as int \% 2} means \code{(x as int) \% 2}.
 \code{is} is a test: it yields a boolean, so it binds loosely and
 \code{1 + 2 is int} tests the sum.
 
+The bitwise operators are spelled as words because the symbols are taken:
+\code{\&} runs a pipeline in the background and takes a function reference, and
+\code{|} separates pipeline stages. They also sit \emph{tighter} than comparison,
+unlike C, so \code{flags band Mask == 0} groups as \code{(flags band Mask) == 0}
+--- the way the line reads. Their order relative to one another follows C, which
+is not the part that surprises people.
+
 \begin{longtable}{C{1.2cm} L{7.5cm} L{4.8cm}}
 \toprule
 \textbf{Level} & \textbf{Operators} & \textbf{Description} \\
@@ -1999,18 +2007,22 @@ every binary operator and \code{x as int \% 2} means \code{(x as int) \% 2}.
 \endhead
 1 & \code{as} & Type cast \\
 2 & \code{**} & Exponentiation (right-associative) \\
-3 & \code{not}, \code{-} (unary) & Unary NOT, negation \\
+3 & \code{not}, \code{bnot}, \code{-} (unary) & Unary NOT, bitwise complement, negation \\
 4 & \code{*}, \code{/}, \code{//}, \code{\%} & Multiplicative \\
 5 & \code{+}, \code{-} & Additive \\
-6 & \code{..} & Range \\
-7 & \code{==}, \code{!=}, \code{<}, \code{>}, \code{<=}, \code{>=}, \code{=\textasciitilde}, \code{!\textasciitilde} & Comparison \& regex \\
-8 & \code{is}, \code{is not} & Type testing \\
-9 & \code{in}, \code{not in}, \code{is in}, \code{is not in}, \code{contains}, \code{starts-with}, \code{ends-with} & Membership \& string testing \\
-10 & \code{and} / \code{\&\&} & Logical AND \\
-11 & \code{or} / \code{||} & Logical OR \\
-12 & \code{?}, \code{:} & Ternary conditional \\
-13 & \code{??} & Null coalescing \\
-14 & \code{=}, \code{+=}, \code{-=}, \code{*=}, \code{**=}, \code{/=}, \code{//=}, \code{\%=}, \code{??=} & Assignment \\
+6 & \code{shl}, \code{shr} & Bit shift \\
+7 & \code{band} & Bitwise AND \\
+8 & \code{bxor} & Bitwise XOR \\
+9 & \code{bor} & Bitwise OR \\
+10 & \code{..} & Range \\
+11 & \code{==}, \code{!=}, \code{<}, \code{>}, \code{<=}, \code{>=}, \code{=\textasciitilde}, \code{!\textasciitilde} & Comparison \& regex \\
+12 & \code{is}, \code{is not} & Type testing \\
+13 & \code{in}, \code{not in}, \code{is in}, \code{is not in}, \code{contains}, \code{starts-with}, \code{ends-with}, \code{has} & Membership \& flag testing \\
+14 & \code{and} / \code{\&\&} & Logical AND \\
+15 & \code{or} / \code{||} & Logical OR \\
+16 & \code{?}, \code{:} & Ternary conditional \\
+17 & \code{??} & Null coalescing \\
+18 & \code{=}, \code{+=}, \code{-=}, \code{*=}, \code{**=}, \code{/=}, \code{//=}, \code{\%=}, \code{??=} & Assignment \\
 \bottomrule
 \caption{Operator precedence (highest to lowest)}
 \label{tab:precedence}
@@ -4723,6 +4735,40 @@ if ($state == StockState.Low) {
     echo "Reorder needed"
 }
 \end{lstlisting}
+
+\subsection{Flag Enums}
+\ikw{flags}
+
+An enum declared \code{flags} is one whose members are meant to be combined. The
+bitwise operators over its members yield a value of the same enum rather than a
+number, and that value names itself from the bits it carries:
+
+\begin{lstlisting}
+flags enum Permissions : int {
+    None    = 0
+    Execute = 1
+    Write   = 2
+    Read    = 4
+}
+
+var access = Permissions.Read bor Permissions.Write
+echo $access                        # Write, Read
+echo ($access as int)               # 6
+echo ($access has Permissions.Read) # true
+\end{lstlisting}
+
+The name is composed from the underlying value in declaration order, so
+\code{band} and \code{bxor} name their results too, and a value whose bits are
+not exactly covered by the members falls back to the number.
+
+Without \code{flags} the same expression yields the underlying integer:
+combining members is a claim about the type that the author has not made, so the
+result is a number and not a member. Combining members of two different enums is
+an error either way.
+
+\code{has} tests that \emph{every} bit of the right operand is set in the left,
+so a composite flag answers true only when it is wholly present. A zero flag is
+vacuously present, matching \code{Enum.HasFlag}.
 
 \section{Event Definitions}
 \ikw{event}\ikw{raise}\ikw{required}

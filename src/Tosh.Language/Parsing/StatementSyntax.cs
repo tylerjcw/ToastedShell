@@ -318,6 +318,7 @@ public sealed record EnumDefinitionStatementSyntax(
     string? UnderlyingTypeName,
     IReadOnlyList<EnumMemberSyntax> Members,
     DeclarationModifier Modifier,
+    bool IsFlags,
     TextSpan Span,
     DocComment? DocComment = null) : StatementSyntax(Span);
 

@@ -186,6 +186,9 @@ public static class LanguageSurface
             ["hermit"] = TypeMod,
             ["strict"] = TypeMod,
             ["partial"] = TypeMod,
+
+            // `TS-P3-14`. Declares an enum whose members combine.
+            ["flags"] = TypeMod,
             ["fluid"] = TypeMod,
             ["leaky"] = TypeMod,
 
@@ -228,6 +231,15 @@ public static class LanguageSurface
             ["require"] = LanguageWordKind.Import,
             ["from"] = LanguageWordKind.Import,
             ["as"] = LanguageWordKind.Import,
+
+            // `TS-P3-14`. Word-form bitwise operators; the symbols are taken.
+            ["band"] = LanguageWordKind.OperatorWord,
+            ["bor"] = LanguageWordKind.OperatorWord,
+            ["bxor"] = LanguageWordKind.OperatorWord,
+            ["bnot"] = LanguageWordKind.OperatorWord,
+            ["shl"] = LanguageWordKind.OperatorWord,
+            ["shr"] = LanguageWordKind.OperatorWord,
+            ["has"] = LanguageWordKind.OperatorWord,
 
             // ── Interop ────────────────────────────────────────────────────────
             ["out"] = LanguageWordKind.Interop,

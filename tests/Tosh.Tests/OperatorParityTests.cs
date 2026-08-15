@@ -82,7 +82,7 @@ public sealed class OperatorParityTests
         // key per case, so it does not appear here — which is also why the assertion read
         // `["not"]` before rather than `["!", "not"]`.
         Assert.Equal(
-            new[] { "+", "-", "not" },
+            new[] { "+", "-", "bnot", "not" },
             unaryOps.OrderBy(o => o, StringComparer.Ordinal).ToArray());
 
         var engine = new ToshEngine();
@@ -95,6 +95,8 @@ public sealed class OperatorParityTests
                      // Glued to a variable, which the lexer used to scan as one word and
                      // report as `Command '-$x' was not found`.
                      ("var x = 3\necho (-$x)", "-3"),
+                     // `TS-P3-14`. Complement, at the same level as `not` and unary `-`.
+                     ("echo (bnot 0)", "-1"),
                  })
         {
             var collected = engine.EvaluateAsync(probe, default).ToBlockingEnumerable().ToList();

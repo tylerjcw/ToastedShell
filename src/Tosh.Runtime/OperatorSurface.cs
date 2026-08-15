@@ -15,6 +15,9 @@ public enum OperatorCategory
     /// <summary><c>and or not &amp;&amp; ||</c></summary>
     Logical,
 
+    /// <summary><c>band bor bxor bnot shl shr has</c> — `TS-P3-14`.</summary>
+    Bitwise,
+
     /// <summary><c>= += -= *= /= //= %= **= ??=</c></summary>
     Assignment,
 
@@ -96,6 +99,18 @@ public static class OperatorSurface
             ["is"] = OperatorCategory.TypeTest,
             ["is-not"] = OperatorCategory.TypeTest,
             ["as"] = OperatorCategory.TypeTest,
+
+            // ── Bitwise ────────────────────────────────────────────────────────
+            // Word forms because the symbols are taken: `&` is the background
+            // operator and the function-reference sigil, `|` separates pipeline
+            // stages (`TS-P3-14`).
+            ["band"] = OperatorCategory.Bitwise,
+            ["bor"] = OperatorCategory.Bitwise,
+            ["bxor"] = OperatorCategory.Bitwise,
+            ["bnot"] = OperatorCategory.Bitwise,
+            ["shl"] = OperatorCategory.Bitwise,
+            ["shr"] = OperatorCategory.Bitwise,
+            ["has"] = OperatorCategory.Bitwise,
 
             // ── Logical ────────────────────────────────────────────────────────
             ["and"] = OperatorCategory.Logical,

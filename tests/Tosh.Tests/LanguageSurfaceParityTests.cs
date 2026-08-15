@@ -114,6 +114,7 @@ public sealed class LanguageSurfaceParityTests
         ["hermit"] = "hermit class C { }",
         ["strict"] = "strict class C { prop X = 1 }",
         ["partial"] = "partial class C { }",
+        ["flags"] = "flags enum E: int { A = 1 }",
         ["fluid"] = "fluid struct S(x: int)",
 
         // Member modifiers.
@@ -164,6 +165,16 @@ public sealed class LanguageSurfaceParityTests
         ["is"] = "1 is Numeric",
         ["is-not"] = "1 is-not Numeric",
         ["not-in"] = "1 not-in [2]",
+
+        // Bitwise words (`TS-P3-14`). `&` is background and `|` pipes, so the
+        // whole family is spelled out.
+        ["band"] = "6 band 3",
+        ["bor"] = "4 bor 2",
+        ["bxor"] = "6 bxor 3",
+        ["bnot"] = "bnot 0",
+        ["shl"] = "1 shl 3",
+        ["shr"] = "8 shr 3",
+        ["has"] = "6 has 2",
 
         // Constants.
         ["true"] = "true",

@@ -36,6 +36,8 @@ public static class OperatorEvaluator
             "-" => operand is Quantity quantity ? -quantity : Subtract(0, operand),
             "+" => operand is Quantity quantity ? quantity : Add(0, operand),
 
+            "bnot" => Bitwise(operand, operand, "bnot", (a, _) => ~a),
+
             _ => throw new InvalidOperationException($"Unsupported unary operator '{@operator}'."),
         };
     }
@@ -83,6 +85,12 @@ public static class OperatorEvaluator
             "as" => CastAs(left, right),
             "is-in" => IsIn(left, right),
             "is-not-in" => !IsIn(left, right),
+            "band" => Bitwise(left, right, "band", (a, b) => a & b),
+            "bor" => Bitwise(left, right, "bor", (a, b) => a | b),
+            "bxor" => Bitwise(left, right, "bxor", (a, b) => a ^ b),
+            "shl" => Shift(left, right, "shl", (a, n) => a << n),
+            "shr" => Shift(left, right, "shr", (a, n) => a >> n),
+            "has" => HasFlag(left, right),
             "and" => ToBoolean(left) && ToBoolean(right),
             "or" => ToBoolean(left) || ToBoolean(right),
             "=" => throw new InvalidOperationException("Assignment operations require a variable."),
@@ -700,6 +708,125 @@ public static class OperatorEvaluator
                ToOperatorString(actual).EndsWith(
                    ToOperatorString(expected),
                    StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A bitwise operation over integers or enum members (`TS-P3-14`).
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Enum members unwrap to their backing value, and the result is given back as
+    /// a member of that enum when — and only when — the enum was declared
+    /// <c>flags</c>. An enum that was not declared combinable has no member
+    /// standing for the combination, so the honest answer there is the number.
+    /// </para>
+    /// <para>
+    /// Combining two <em>different</em> enums is refused, mirroring the rule
+    /// <c>ToshEnumValue.CompareTo</c> already applies to ordering: the values are
+    /// unrelated even when their backing numbers are not.
+    /// </para>
+    /// </remarks>
+    private static object? Bitwise(object? left, object? right, string name, Func<long, long, long> combine)
+    {
+        var (leftBits, leftEnum) = ToBits(left, name);
+        var (rightBits, rightEnum) = ToBits(right, name);
+
+        var definition = RequireSameEnum(leftEnum, rightEnum, name);
+        var result = combine(leftBits, rightBits);
+
+        return definition is { IsFlags: true }
+            ? definition.FromFlags(result)
+            : NarrowBits(result, left, right);
+    }
+
+    private static object? Shift(object? left, object? right, string name, Func<long, int, long> shift)
+    {
+        var (bits, sourceEnum) = ToBits(left, name);
+        var (amountBits, amountEnum) = ToBits(right, name);
+
+        if (amountEnum is not null)
+        {
+            throw new InvalidOperationException($"The right operand of '{name}' is a shift count, not an enum member.");
+        }
+
+        var result = shift(bits, (int)amountBits);
+
+        return sourceEnum is { IsFlags: true }
+            ? sourceEnum.FromFlags(result)
+            : NarrowBits(result, left, right);
+    }
+
+    /// <summary>Whether every bit of <paramref name="flag"/> is set in <paramref name="value"/>.</summary>
+    /// <remarks>
+    /// Tests all of the flag's bits rather than any, so a composite flag answers
+    /// true only when it is wholly present — the reading `has` suggests, and the
+    /// one that makes a multi-bit member such as `ReadWrite` behave.
+    ///
+    /// A zero flag is therefore vacuously present, matching `Enum.HasFlag` and the
+    /// hand-written `Bits.Has` this replaces. An earlier draft special-cased it to
+    /// false, which read well in isolation and disagreed with both.
+    /// </remarks>
+    private static object HasFlag(object? value, object? flag)
+    {
+        var (valueBits, valueEnum) = ToBits(value, "has");
+        var (flagBits, flagEnum) = ToBits(flag, "has");
+
+        RequireSameEnum(valueEnum, flagEnum, "has");
+
+        return (valueBits & flagBits) == flagBits;
+    }
+
+    /// <summary>The integer behind an operand, and the enum it came from if any.</summary>
+    private static (long Bits, IShellFlagsEnum? Enum) ToBits(object? value, string name)
+    {
+        if (value is IShellEnumValue enumValue)
+        {
+            return (Convert.ToInt64(enumValue.UnderlyingValue, CultureInfo.InvariantCulture),
+                    (value as IShellTypedObject)?.ShellTypeDescriptor as IShellFlagsEnum);
+        }
+
+        if (value is bool or char or string or null || value is not IConvertible)
+        {
+            throw new InvalidOperationException(
+                $"Operator '{name}' requires whole numbers or enum members, not '{value?.GetType().Name ?? "null"}'.");
+        }
+
+        try
+        {
+            return (Convert.ToInt64(value, CultureInfo.InvariantCulture), null);
+        }
+        catch (OverflowException)
+        {
+            throw new InvalidOperationException($"Operator '{name}' cannot use '{value}' as a whole number.");
+        }
+    }
+
+    private static IShellFlagsEnum? RequireSameEnum(IShellFlagsEnum? left, IShellFlagsEnum? right, string name)
+    {
+        if (left is not null && right is not null &&
+            !string.Equals(left.ShellTypeName, right.ShellTypeName, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                $"Operator '{name}' cannot combine members of '{left.ShellTypeName}' and '{right.ShellTypeName}'.");
+        }
+
+        return left ?? right;
+    }
+
+    /// <summary>
+    /// Returns the result in the narrowest type the operands were, so `int band
+    /// int` stays an `int` rather than widening every flags expression to `long`.
+    /// </summary>
+    private static object NarrowBits(long result, object? left, object? right)
+    {
+        var wide = left is long or ulong || right is long or ulong;
+
+        // Boxed explicitly: with a bare conditional the two branches unify to
+        // `long`, so the narrowing is undone by type inference and every bitwise
+        // result comes back Int64 however small it is.
+        return wide || result > int.MaxValue || result < int.MinValue
+            ? (object)result
+            : (int)result;
     }
 
     private static object? CastAs(object? value, object? typeSpecifier)

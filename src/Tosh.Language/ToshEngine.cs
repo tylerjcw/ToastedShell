@@ -4896,6 +4896,13 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
             sourceText,
             @enum.Span);
 
+        // `TS-P3-14`. Set before the members are built, not after: each member
+        // captures *this* definition object, and the second construction below
+        // replaces the registered one without changing what the members point at.
+        // Assigning only to the second left every member reporting a descriptor
+        // whose `IsFlags` was false, so combining them produced a number.
+        definition.IsFlags = @enum.IsFlags;
+
         var fixedMembers = definition.Members
             .Select(member => new ToshEnumValue(definition, member.Name, member.UnderlyingValue))
             .ToArray();
@@ -4909,6 +4916,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
             @enum.Span);
 
         definition.Documentation = @enum.DocComment;
+        definition.IsFlags = @enum.IsFlags;
         DeclareType(@enum.Name, definition, @enum.Modifier, sourceName, sourceText, @enum.Span);
         yield break;
     }
