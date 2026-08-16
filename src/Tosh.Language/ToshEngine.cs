@@ -8337,40 +8337,124 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
     }
 
     /// <summary>
-    /// EXPERIMENT: a synchronous pre-dispatch for the argument shapes that cannot
-    /// suspend, so they never enter the async method below.
+    /// Evaluates an argument, taking a synchronous path for the shapes that cannot
+    /// suspend.
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <see cref="EvaluateArgumentSlowAsync"/> handles thirty-nine argument shapes in
+    /// one <c>async</c> method, and an async method's state-machine box carries the
+    /// locals of every branch — so entering it cost about 2,545 bytes whatever the
+    /// expression was. A literal paid for the largest case in the switch
+    /// (<c>TS-P2-125</c>).
+    /// </para>
+    /// <para>
+    /// This wrapper is deliberately not <c>async</c>: that is the whole point, since
+    /// an <c>async</c> wrapper would allocate the very box it exists to avoid.
+    /// </para>
+    /// </remarks>
     private ValueTask<object?> EvaluateArgumentAsync(
         string sourceName,
         string sourceText,
         ArgumentSyntax argument,
         CancellationToken cancellationToken)
+        => TryEvaluateSimpleArgument(sourceName, sourceText, argument, out var value)
+            ? new ValueTask<object?>(value)
+            : EvaluateArgumentSlowAsync(sourceName, sourceText, argument, cancellationToken);
+
+    /// <summary>
+    /// The argument shapes with no suspension point, evaluated in place.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Every case here is a second copy of one in <see cref="EvaluateArgumentSlowAsync"/>,
+    /// which is where the risk lives: a copy that is *nearly* the same silently drops
+    /// whatever the original did in addition. So each one declines rather than guesses,
+    /// and anything needing the original's diagnostics falls through to it.
+    /// </para>
+    /// <para>
+    /// A variable falls through when its binding is declared-but-unassigned, holds a
+    /// rune thunk, or names an out-of-scope constructor parameter — each of which the
+    /// full case reports specifically. An operator falls through unless it is pure
+    /// arithmetic over primitive numbers: comparison, membership and string
+    /// concatenation all await, and either operand being a class instance means a
+    /// user-defined overload that can await too.
+    /// </para>
+    /// </remarks>
+    private bool TryEvaluateSimpleArgument(
+        string sourceName,
+        string sourceText,
+        ArgumentSyntax argument,
+        out object? value)
     {
         switch (argument)
         {
             case LiteralArgumentSyntax literal:
-                return new ValueTask<object?>(literal.Value);
+                value = literal.Value;
+                return true;
 
-            // The same conditions the full case checks, so anything needing its
-            // diagnostics — an unassigned binding, a rune thunk, an out-of-scope
-            // constructor parameter — falls through rather than being answered here.
             case VariableReferenceArgumentSyntax variable
                 when TryGetVariableBinding(variable.Name, out var binding)
                      && !binding.IsAllocatedOnly
                      && binding.Value is not RuneThunk:
-                return new ValueTask<object?>(binding.Value);
+                value = binding.Value;
+                return true;
 
-            // `(expr)` around something simple is the same value; the parentheses
-            // should not cost a pipeline plus two state machines.
-            case SubexpressionArgumentSyntax sub
-                when sub.Pipeline.Stages.Count == 1 &&
-                     sub.Pipeline.Stages[0] is ExpressionPipelineStageSyntax stage &&
-                     stage.Expression is LiteralArgumentSyntax or VariableReferenceArgumentSyntax:
-                return EvaluateArgumentAsync(sourceName, sourceText, stage.Expression, cancellationToken);
+            // `(expr)` is the value of `expr`; the parentheses should not cost a
+            // pipeline and two state machines.
+            case SubexpressionArgumentSyntax subexpression
+                when subexpression.Pipeline.Stages.Count == 1 &&
+                     subexpression.Pipeline.Stages[0] is ExpressionPipelineStageSyntax stage:
+                return TryEvaluateSimpleArgument(sourceName, sourceText, stage.Expression, out value);
+
+            // Already proved constant by the lowering pass.
+            case OperatorArgumentSyntax { FoldedConstant: { } folded }:
+                value = folded.Value;
+                return true;
+
+            case OperatorArgumentSyntax operation
+                when IsSynchronousArithmeticOperator(operation.Operator) &&
+                     TryEvaluateSimpleArgument(sourceName, sourceText, operation.Left, out var left) &&
+                     IsPrimitiveNumber(left) &&
+                     TryEvaluateSimpleArgument(sourceName, sourceText, operation.Right, out var right) &&
+                     IsPrimitiveNumber(right):
+                try
+                {
+                    value = OperatorEvaluator.EvaluateBinary(left, operation.Operator, right);
+                    return true;
+                }
+                catch (ToshDiagnosticException)
+                {
+                    throw;
+                }
+                catch (Exception exception)
+                {
+                    // The same wrapping the full path applies, so an overflow or a
+                    // division by zero still underlines the operator.
+                    throw CreateExpressionDiagnostic(sourceName, sourceText, operation.Span, exception);
+                }
+
+            default:
+                value = null;
+                return false;
         }
-
-        return EvaluateArgumentSlowAsync(sourceName, sourceText, argument, cancellationToken);
     }
+
+    /// <summary>
+    /// Operators whose evaluation never awaits. Comparison, membership and regex all
+    /// do, and `+` awaits when either side is a string, so none of them are here.
+    /// </summary>
+    private static bool IsSynchronousArithmeticOperator(string @operator)
+        => @operator is "+" or "-" or "*" or "/" or "//" or "%" or "**"
+            or "band" or "bor" or "bxor" or "shl" or "shr";
+
+    /// <summary>
+    /// A number the operator evaluator handles without reaching for a class overload,
+    /// a quantity, a vector or a string.
+    /// </summary>
+    private static bool IsPrimitiveNumber(object? value)
+        => value is int or long or double or float or decimal
+            or short or ushort or byte or sbyte or uint or ulong;
 
     private async ValueTask<object?> EvaluateArgumentSlowAsync(
         string sourceName,
