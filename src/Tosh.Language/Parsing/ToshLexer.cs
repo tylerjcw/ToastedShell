@@ -1472,6 +1472,23 @@ public sealed class ToshLexer
         return new SyntaxToken(SyntaxTokenKind.Bareword, start, text, text);
     }
 
+    /// <summary>
+    /// The width suffixes, longest first so <c>ul</c> is tried before <c>u</c>.
+    /// </summary>
+    /// <remarks>
+    /// Static because the array is otherwise rebuilt on every call, and this runs for
+    /// every numeric-looking token in every file the session parses. It showed up as
+    /// the single largest allocation site in a trace, which is a poor showing for a
+    /// table of four constants.
+    /// </remarks>
+    private static readonly (string Text, IntegerSuffix Kind)[] IntegerSuffixes =
+    [
+        ("ul", IntegerSuffix.UnsignedLong),
+        ("lu", IntegerSuffix.UnsignedLong),
+        ("u", IntegerSuffix.Unsigned),
+        ("l", IntegerSuffix.Long),
+    ];
+
     /// <summary>The width a literal's suffix pins it to, if it carries one.</summary>
     private enum IntegerSuffix { None, Unsigned, Long, UnsignedLong }
 
@@ -1493,18 +1510,12 @@ public sealed class ToshLexer
 
         // `u`, `L`, `UL` — case-insensitive, and `LU` for the people who write it
         // that way. Stripped before parsing so every base sees plain digits.
-        foreach (var (text_, kind) in new[]
-                 {
-                     ("ul", IntegerSuffix.UnsignedLong),
-                     ("lu", IntegerSuffix.UnsignedLong),
-                     ("u", IntegerSuffix.Unsigned),
-                     ("l", IntegerSuffix.Long),
-                 })
+        foreach (var (suffixText, kind) in IntegerSuffixes)
         {
-            if (digits.Length > text_.Length &&
-                digits.EndsWith(text_, StringComparison.OrdinalIgnoreCase))
+            if (digits.Length > suffixText.Length &&
+                digits.EndsWith(suffixText, StringComparison.OrdinalIgnoreCase))
             {
-                digits = digits[..^text_.Length];
+                digits = digits[..^suffixText.Length];
                 suffix = kind;
                 break;
             }
