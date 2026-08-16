@@ -1,5 +1,11 @@
 # TōSh Built-in Surface Audit
 
+> **A point-in-time audit, 2026-05-09; not maintained.** A reading of the command
+> surface as it stood, not a live inventory — the surface has changed since and this
+> has not been regenerated. The "BACKLOG item §3" it refers to now lives in
+> `BACKLOG-archive.md`. Regenerate with `tosh --export-command-metadata` rather than
+> trusting the counts below.
+
 **Generated:** 2026-05-09 from `tosh --export-command-metadata` (255 commands).
 **Status:** Initial audit pass (BACKLOG item §3 "Surface-Area Pruning"). Once
 this document is reviewed, dispositions become the authoritative gate for

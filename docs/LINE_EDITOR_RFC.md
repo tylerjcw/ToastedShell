@@ -1,8 +1,11 @@
 # Line Editor RFC
 
-Status: Draft  
+Status: **Implemented.** Shipped as `src/Tosh.Cli/ReplLineEditor.cs` with
+`LineEditorBuffer`, `LineEditorHistory` and `LineEditorHistorySearchState`, covered by
+`ReplLineEditorTests`. Kept as the design record — it explains why the editor has the
+shape it does, which the code does not.  
 Target: ToSh REPL line editor  
-Date: 2026-04-20
+Drafted: 2026-04-20 · Marked implemented: 2026-08-16
 
 ## Summary
 

@@ -1,5 +1,10 @@
 # Editor Support
 
+> **Last touched 2026-08-01; not verified against the code since.** Believed current, but
+> believed is not checked — `ARCHITECTURE.md` was written carefully and still described
+> a deleted project four months later. `PLAN-0001` covers reading this against the code
+> and either correcting it or re-dating it.
+
 TōSh now keeps its VS Code extension source in-repo under [editor/vscode/tosh.tosh-lang](/home/komrad/projects/tosh/editor/vscode/tosh.tosh-lang).
 
 ## Current VS Code Support

@@ -380,9 +380,12 @@ within four months. **Whatever survives this triage needs an owner and a trigger
   prevented it are in `d153eee`. The rendered spec PDFs are now build output rather
   than tracked files — `docs/spec/*.tex` is the source and `buildtosh spec` regenerates
   them.
-- **`Tosh.Dap`** (550 lines) builds, is in the solution, and is referenced by nothing.
-  Keep it — a Debug Adapter server is the natural companion to the LSP — but label it
-  dormant-by-intent so the next reader does not have to work that out.
+- **`Tosh.Dap`** (550 lines) builds and is in the solution. **Correction:** it is not
+  referenced by nothing — `ProtocolSmokeTests` starts a server and drives the
+  initialize handshake, and `Tosh.Tests.csproj` carries a project reference, so it is
+  exercised on every suite run. What it lacks is a *product* caller, which is a
+  different thing and a much weaker argument for removing it. Labelled
+  dormant-by-intent in `ToshDapServer.cs` on 2026-08-16.
 - **Test monoliths too**: `EngineTests.cs` (5,912) and `LanguageFeatureTests.cs`
   (2,841). Splitting them gives a second, independent read on the boundary being drawn
   in `src/`.

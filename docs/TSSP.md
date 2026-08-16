@@ -1,5 +1,10 @@
 # Tosh Structured Stream Protocol (TSSP)
 
+> **Last touched 2026-07-30; not verified against the code since.** Believed current, but
+> believed is not checked — `ARCHITECTURE.md` was written carefully and still described
+> a deleted project four months later. `PLAN-0001` covers reading this against the code
+> and either correcting it or re-dating it.
+
 **Status:** Draft v1 · **Audience:** Tool authors, ToSh evaluator implementers
 
 TSSP lets external programs emit *both* structured records (for piping

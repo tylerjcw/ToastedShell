@@ -1,6 +1,8 @@
 # RFC: Brace Disambiguation (`TS-P2-25`)
 
-**Status:** Accepted with modification — July 28, 2026
+**Status:** Accepted with modification — July 28, 2026. **Implemented**; `TS-P2-25`
+closed as "paired delimiters 2026-07-28" (see `plan/legacy/COMPLETE.md`). Kept as the
+design record for why the rule is what it is.
 **Owning item:** `TS-P2-25`, gating the remainder of parser step 2 (`TS-P2-24`)
 **Prepared:** July 27, 2026
 

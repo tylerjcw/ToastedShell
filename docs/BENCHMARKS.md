@@ -1,5 +1,12 @@
 # Pipeline benchmarks — 2026-04-30
 
+> **Stale — measured 2026-04-30 and not re-run.** These numbers predate the
+> performance work of July and August 2026, some of which moved the same paths by an
+> order of magnitude: interpolation went from 19,562 ns to 996 ns per operation, an
+> annotated one-million-iteration loop from 11.9 s to 1.487 s, and a CLR method call
+> from 4,095 ns to 2,810 ns. Treat every figure below as a historical reading on
+> `a1fa021`, not as current performance. Re-measure before citing.
+
 Hardware: AMD Ryzen 9 9950X · 32 GB · Arch Linux · .NET 10.0.3
 Code: master @ a1fa021 (post precise interpolation spans)
 

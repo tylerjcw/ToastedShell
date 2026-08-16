@@ -1,5 +1,10 @@
 # TōSh CLR ABI v1
 
+> **Last touched 2026-07-27; not verified against the code since.** Believed current, but
+> believed is not checked — `ARCHITECTURE.md` was written carefully and still described
+> a deleted project four months later. `PLAN-0001` covers reading this against the code
+> and either correcting it or re-dating it.
+
 **Status:** Normative. Frozen at v1.0.
 **Stamp:** Every assembly emitted by `tosh` carries `[assembly: Tosh.Runtime.ToshAbi(1)]`.
 

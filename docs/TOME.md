@@ -1,5 +1,9 @@
 # Tōme — the TōSh Terminal Editor
 
+> **As of 2026-05-13; not verified since.** Describes Tōme's editing model and
+> keybindings as designed. Not re-read against `Tosh.Tui.Editing` since, so where the
+> two disagree the code wins. Covered by `PLAN-0001`.
+
 **Tōme** is a small, modal terminal text editor that ships alongside
 TōSh. It is built on the same `Tosh.Tui.Editing` primitives the shell's
 REPL uses, so the editing model — buffer, cursor, selection, undo/redo —

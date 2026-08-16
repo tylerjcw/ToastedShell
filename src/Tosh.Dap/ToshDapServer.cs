@@ -10,6 +10,16 @@ namespace Tosh.Dap;
 /// <summary>
 /// Debug Adapter Protocol server for ToSh. Speaks DAP over stdin/stdout.
 /// VS Code spawns one instance per debug session.
+///
+/// <para>
+/// <b>Dormant by intent, not abandoned.</b> Nothing in the shipped product launches
+/// this; the only caller is <c>ProtocolSmokeTests</c>, which starts a server and
+/// drives the initialize handshake, so it is built and exercised on every run rather
+/// than merely compiling. A debug adapter is the natural companion to the language
+/// server, and the protocol handling is the part that is tedious to write twice —
+/// which is why it is kept rather than deleted. Recorded here so the next reader does
+/// not have to work that out from the absence of callers.
+/// </para>
 /// </summary>
 public sealed class ToshDapServer
 {

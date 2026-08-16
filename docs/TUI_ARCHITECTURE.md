@@ -1,5 +1,10 @@
 # TōSh TUI Architecture
 
+> **As of 2026-04-17; not verified since.** Describes the intended TUI platform
+> design. The `Tosh.Tui` code has moved since, and this has not been re-read against
+> it — treat it as a statement of intent rather than a description of the code.
+> Covered by `PLAN-0001`.
+
 ## Goal
 
 Build a reusable terminal UI platform for TōSh that can support:
