@@ -5,13 +5,11 @@
 require Inventory from "./toastlib.tosh" as Inv
 require Utilities from "./toastlib.tosh"
 
-func item_names => get Name
-
 Utilities.banner("Interop Demo")
 styled "Native process output stays plain text until you choose to parse it." --fg bright-yellow --bold | writeline
 
 var items = Inv.sample_items()
-var namesFile = ($items | item_names | sort | as-file text)
+var namesFile = ($items | get Name | sort | as-file text)
 
 writeline $"Materialized names to: {$namesFile.FullName}"
 
@@ -23,7 +21,7 @@ var firstName = $(/bin/head -n 1 $namesFile)
 writeline $"First sorted item: {$firstName}"
 
 Utilities.banner("Input Process Substitution")
-/bin/cat <($items | item_names | sort) | each { writeline _ }
+/bin/cat <($items | get Name | sort) | each { writeline _ }
 
 Utilities.banner("Final Structured Result")
 $items | get { Name, Quantity, Category } | sort Name | writeline
