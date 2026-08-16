@@ -18,6 +18,29 @@ tmp/
 *.pkg.tar.zst
 *.pkg.tar.xz
 
+# Compiled output beside the examples. `examples/point.tosh` builds to `point`,
+# `point.dll`, `point.deps.json` and `point.runtimeconfig.json`, and a publish
+# drops the runtime assemblies in alongside them; 5.5 MB of stripped ELF plus
+# five DLLs reached history that way and were tracked for months.
+#
+# Written as a whitelist rather than a list of artefact extensions, because the
+# extension list is the thing that goes stale — the next output the compiler
+# learns to emit would be tracked by default under any other spelling. The
+# sources here are `.tosh` files; the demo projects live in subdirectories, which
+# are re-included wholesale since git cannot re-include a file whose parent
+# directory is excluded.
+/examples/*
+!/examples/*/
+!/examples/*.tosh
+!/examples/*.md
+
+# Profiler output. dotnet-trace writes these into the working directory and they
+# run to tens of megabytes each — a .nettrace and its converted .etlx totalling
+# 50 MB were committed from the repository root during a performance session.
+*.nettrace
+*.nettrace.etlx
+*.speedscope.json
+
 # Docs — tracked by default. Only generated output is ignored.
 #
 # This block used to be `docs/*` plus a hand-maintained per-file allowlist, which
@@ -27,7 +50,16 @@ tmp/
 # specification, and docs/spec/diagnostic-codes.tex plus
 # docs/cheatsheets/_shared/preamble.tex, both build inputs. Inverted 2026-07-30 so
 # forgetting is no longer how a document gets lost.
+#
+# The rendered specs are build output, not sources: `docs/spec/*.tex` is the
+# tracked input and `buildtosh spec` regenerates the PDF from it. They were
+# tracked until 2026-08-16, when the two of them accounted for 66 MB of history
+# across 24 revisions — a 2.9 MB binary rewritten on every spec edit, which no
+# diff can compress. They ship as release artefacts instead.
 docs/spec/ToastScript.pdf
+docs/spec/toastscript-spec.pdf
+docs/spec/command-reference.pdf
+docs/spec/diagnostic-codes.pdf
 
 # Scripts are tracked. This was `scripts/*` plus an allowlist naming three files
 # while thirteen existed — the same trap as the docs block above, and it would have
