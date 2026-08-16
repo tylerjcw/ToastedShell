@@ -6,7 +6,6 @@ using System.Runtime.Loader;
 using System.Text;
 using System.Text.RegularExpressions;
 using Tosh.Runtime;
-using Tosh.Stdlib;
 using Tosh.Language.Binding;
 using Tosh.Language.Bridge;
 using Tosh.Language.Bridge.Shell;
@@ -2012,7 +2011,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
 
             var command = ResolveCommand(sourceName, sourceText, commandSyntax);
 
-            if (command is not ExternalProcessCommand externalCommand)
+            if (command is not IExternalProcessCommand externalCommand)
             {
                 throw ToshDiagnosticException.Create(new ToshDiagnostic(
                     Code: "tosh.runtime.background_command_must_be_external",
@@ -8161,8 +8160,18 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
 
         return external.Status switch
         {
+            // The shell supplies the factory; the language only decides that the name
+            // is not anything it owns and so must be a program (`TOAST-0004`).
             ExternalCommandLookupStatus.Found when external.ResolvedPath is not null =>
-                new ExternalProcessCommand(commandSyntax.Name, external.ResolvedPath),
+                Runtime.ExternalCommands?.CreateExternalProcess(commandSyntax.Name, external.ResolvedPath)
+                    ?? throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                        Code: "tosh.runtime.external_commands_unavailable",
+                        Title: $"'{commandSyntax.Name}' is a program on disk, and this host does not run external programs.",
+                        SourceName: sourceName,
+                        SourceText: sourceText,
+                        Span: commandSyntax.Span,
+                        Label: $"resolved to '{external.ResolvedPath}', but nothing is registered to launch it",
+                        Help: "reference Tosh.Stdlib, which registers a launcher automatically, or set Runtime.ExternalCommands to your own IExternalCommandFactory.")),
             ExternalCommandLookupStatus.NotExecutable =>
                 throw ToshDiagnosticException.Create(new ToshDiagnostic(
                     Code: "tosh.runtime.external_command_not_executable",

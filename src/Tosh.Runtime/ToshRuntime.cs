@@ -77,6 +77,18 @@ public sealed class ToshRuntime
 
     public ShellCommandRegistry Commands { get; }
 
+    /// <summary>
+    /// Creates commands that launch programs on disk, or <see langword="null"/> in a
+    /// host that does not run external processes.
+    /// </summary>
+    /// <remarks>
+    /// Set by whichever layer owns process launching — <c>Tosh.Stdlib</c> wires it from
+    /// its module initializer alongside <see cref="DefaultCommandRegistrar"/>. Left null,
+    /// resolving a name to a program on <c>PATH</c> reports that this host does not run
+    /// external commands, which is the honest answer for an embedded Tōast (`TOAST-0004`).
+    /// </remarks>
+    public IExternalCommandFactory? ExternalCommands { get; set; }
+
     public IObjectAccessor ObjectAccessor { get; }
 
     public ITypeResolver TypeResolver { get; }

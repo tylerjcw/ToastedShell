@@ -15,7 +15,13 @@ internal static class StdlibModuleInitializer
     internal static void Initialize()
     {
         ToshRuntime.DefaultCommandRegistrar = static runtime =>
+        {
             BuiltInCommands.RegisterDefaults(runtime.Commands);
+
+            // Launching a program is the shell's job, so the shell supplies the factory
+            // the language calls when a name resolves to something on PATH (`TOAST-0004`).
+            runtime.ExternalCommands = ExternalProcessCommandFactory.Instance;
+        };
 
         DisplayProfileRegistry.DefaultProfileRegistrar = static (registry, preferences) =>
             BuiltInDisplayProfiles.RegisterDefaults(registry, preferences);

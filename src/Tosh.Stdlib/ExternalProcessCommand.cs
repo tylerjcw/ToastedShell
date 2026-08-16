@@ -9,7 +9,7 @@ using Tosh.Stdlib.Tssp;
 
 namespace Tosh.Stdlib;
 
-public sealed class ExternalProcessCommand : IShellCommand, ICommandResolutionMetadata, IImplicitGlobCommand
+public sealed class ExternalProcessCommand : IExternalProcessCommand, ICommandResolutionMetadata, IImplicitGlobCommand
 {
     private readonly string _resolvedPath;
 

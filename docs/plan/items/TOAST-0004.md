@@ -1,10 +1,11 @@
 ---
 id: TOAST-0004
 title: "Invert the ExternalProcessCommand coupling so Tosh.Language no longer depends on the shell's command library"
-status: open
+status: complete
 area: toast
 priority: 1
 opened: 2026-08-16
+closed: 2026-08-16
 ---
 
 ## Problem
@@ -24,15 +25,27 @@ so precisely is what makes the rest of the separation a matter of moving files.
 
 ## Acceptance
 
-- [ ] Both sites go through an interface the shell registers, not a concrete shell type
-- [ ] `Tosh.Language.csproj` no longer references `Tosh.Stdlib` — the check is the reference disappearing, not a code reading
-- [ ] External commands, `&` backgrounding and `PATH` resolution behave identically; the suite passes unchanged
-- [ ] A language-only host with no shell registered gives a clear diagnostic when a script invokes an external program, rather than a null reference
+- [x] Both sites go through an interface the shell registers — `IExternalProcessCommand` for the type test, `IExternalCommandFactory` for construction, both owned by `Tosh.Runtime`
+- [x] `Tosh.Language.csproj` no longer references `Tosh.Stdlib`, and a test asserts the assembly reference is absent so a single `using` cannot restore it unnoticed
+- [x] External commands, `&` backgrounding and `PATH` resolution behave identically; full suite 5,329 passing
+- [x] A language-only host with no launcher reports `tosh.runtime.external_commands_unavailable`, naming the way out, rather than throwing a null reference
+- [x] Negative control run: reverting the change fails exactly the two tests that encode it
 
 ## Notes
 
-Do this **before** any rename (A5), so the rename is a find-and-replace over a tree
-that already compiles in the target shape.
+**Done 2026-08-16.** The measurement held exactly: one `using` in one file, two errors,
+both `ExternalProcessCommand` — a type test in the background-job path needing a
+resolved path, and a construction in command resolution. The shell registers the
+factory from the same module initializer that installs its command set, so the two
+capabilities arrive together, which is the right pairing: a host that has no commands
+has no business launching processes either.
+
+The abstraction is deliberately narrow. `IExternalProcessCommand` adds exactly one
+member to `IShellCommand` — the resolved path — because that is all the language needs
+to build a job specification. Everything else about running a process stayed put.
+
+Done **before** any rename (A5), so the rename is a find-and-replace over a tree that
+already compiles in the target shape.
 
 Pairs with the invariant recorded in the separation plan: nothing under
 `~/.config/tosh` may affect the language. `Tosh.Language` already holds zero reads of

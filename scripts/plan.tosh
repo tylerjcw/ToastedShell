@@ -87,13 +87,13 @@ func load() {
     return $items
 }
 
-var argv = ($tosh.Script.Args | collect)
-var cmd = "counts"
-if (($argv | count) > 0) { $cmd = $argv[0] }
-var rest = ($argv | skip 1 | collect)
+# var argv = ($tosh.Script.Args | collect)
+# var cmd = "counts"
+# if (($argv | count) > 0) { $cmd = $argv[0] }
+# var rest = ($argv | skip 1 | collect)
 
 ## ---------------------------------------------------------------- counts
-if ($cmd == "counts") {
+subcommand counts {
     var items = load()
     for board in $BOARDS {
         var n = ($items | where { $_["board"] == $board } | count)
@@ -103,14 +103,14 @@ if ($cmd == "counts") {
     echo $"total tracked items: {$total}"
     for area in $AREAS {
         var n = ($items | where { $_["area"] == $area } | count)
-        if ($n > 0) { echo $"  area {$area}: {$n}" }
+        if ($n > 0) { echo $"    {$area}: {$n}" }
     }
 }
 
 ## ---------------------------------------------------------------- list
-if ($cmd == "list") {
-    var want = "ACTIVE"
-    if (($rest | count) > 0) { $want = $rest[0].ToUpper() }
+subcommand list {
+    arg want = "ACTIVE"
+    $want = $want.ToUpper()
     var items = (load() | where { $_["board"] == $want } | collect)
     for it in $items {
         var id = $it["id"]
@@ -127,20 +127,17 @@ if ($cmd == "list") {
 }
 
 ## ---------------------------------------------------------------- show
-if ($cmd == "show") {
-    if (($rest | count) == 0) { echo "usage: plan.tosh show <id>" }
-    else {
-        var id = $rest[0]
-        var hits = (load() | where { $_["id"] == $id } | collect)
-        if (($hits | count) == 0) { echo $"no such item: {$id}" }
-        for it in $hits { echo (read-file $it["path"]) }
-    }
+subcommand show {
+    arg id
+    var hits = (load() | where { $_["id"] == $id } | collect)
+    if (($hits | count) == 0) { echo $"no such item: {$id}" }
+    for it in $hits { read-file $it["path"] }
 }
 
 ## ---------------------------------------------------------------- check
 ##
 ## Faults a human edit introduces quietly and a reader would not notice.
-if ($cmd == "check") {
+subcommand check {
     var items = load()
     var faults = 0
     var seen = []
@@ -201,7 +198,7 @@ if ($cmd == "check") {
 ## ---------------------------------------------------------------- index
 ##
 ## Regenerate the four board files. They are outputs; nothing reads them back.
-if ($cmd == "index") {
+subcommand index {
     var items = load()
     for board in $BOARDS {
         var rows = (load() | where { $_["board"] == $board } | collect)
@@ -237,7 +234,7 @@ if ($cmd == "index") {
 ## ---------------------------------------------------------------- orphans
 ##
 ## An ID cited in code but absent from the plan leaves a reader chasing nothing.
-if ($cmd == "orphans") {
+subcommand orphans {
     var known = []
     for it in load() { $known = ($known + [$it["id"]]) }
     for line in (read-file ($PLAN_DIR + "/legacy/COMPLETE.md") | lines) {
