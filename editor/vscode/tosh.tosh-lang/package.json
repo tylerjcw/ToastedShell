@@ -2,7 +2,7 @@
 	"name": "tosh-lang",
 	"displayName": "TōSh (ToastedShell)",
 	"description": "Syntax highlighting, language server, and debugging for TōSh (.tosh) scripts",
-	"version": "26.5.14",
+	"version": "26.8.28",
 	"publisher": "tosh",
 	"engines": {
 		"vscode": "^1.82.0"
@@ -17,7 +17,16 @@
 	],
 	"main": "./extension.js",
 	"activationEvents": [
-		"onDebugResolve:tosh"
+		"onLanguage:tosh",
+		"onLanguage:tome",
+		"onDebugResolve:tosh",
+		"onView:tosh.outline",
+		"onView:tosh.libraryExplorer",
+		"onView:tosh.dependencies",
+		"onView:tosh.servers",
+		"onView:tosh.solution",
+		"onView:tosh.scripts",
+		"onView:tosh.commands"
 	],
 	"contributes": {
 		"viewsContainers": {
@@ -31,6 +40,18 @@
 		},
 		"views": {
 			"tosh-explorer": [
+				{
+					"id": "tosh.outline",
+					"name": "Outline"
+				},
+				{
+					"id": "tosh.libraryExplorer",
+					"name": "Library & Script Object Browser"
+				},
+				{
+					"id": "tosh.dependencies",
+					"name": "Dependencies & Imports"
+				},
 				{
 					"id": "tosh.servers",
 					"name": "Servers"
@@ -108,6 +129,37 @@
 				"language": "tome",
 				"scopeName": "source.tome",
 				"path": "./syntaxes/tome.tmLanguage.json"
+			}
+		],
+		"semanticTokenScopes": [
+			{
+				"language": "tosh",
+				"scopes": {
+					"type": [
+						"entity.name.type.tosh"
+					],
+					"type.declaration": [
+						"entity.name.type.class.tosh"
+					],
+					"type.defaultLibrary": [
+						"support.type.builtin.tosh"
+					],
+					"variable": [
+						"variable.other.tosh"
+					],
+					"variable.defaultLibrary": [
+						"variable.language.tosh"
+					],
+					"function": [
+						"entity.name.function.tosh"
+					],
+					"keyword": [
+						"keyword.control.tosh"
+					],
+					"operator": [
+						"keyword.operator.tosh"
+					]
+				}
 			}
 		],
 		"snippets": [
@@ -292,6 +344,42 @@
 				"category": "TōSh"
 			},
 			{
+				"command": "tosh.outline.refresh",
+				"title": "Refresh",
+				"icon": "$(refresh)",
+				"category": "TōSh"
+			},
+			{
+				"command": "tosh.outline.toggleSort",
+				"title": "Sort Alphabetically / Position",
+				"icon": "$(sort-precedence)",
+				"category": "TōSh"
+			},
+			{
+				"command": "tosh.libraryExplorer.refresh",
+				"title": "Refresh",
+				"icon": "$(refresh)",
+				"category": "TōSh"
+			},
+			{
+				"command": "tosh.dependencies.refresh",
+				"title": "Refresh",
+				"icon": "$(refresh)",
+				"category": "TōSh"
+			},
+			{
+				"command": "tosh.runTreeSymbol",
+				"title": "Run Function",
+				"icon": "$(play)",
+				"category": "TōSh"
+			},
+			{
+				"command": "tosh.debugTreeSymbol",
+				"title": "Debug Function",
+				"icon": "$(debug-alt)",
+				"category": "TōSh"
+			},
+			{
 				"command": "tosh.runSelection",
 				"title": "Run Selection in TōSh Terminal",
 				"icon": "$(run-below)",
@@ -331,6 +419,26 @@
 				{
 					"command": "tosh.scripts.refresh",
 					"when": "view == tosh.scripts",
+					"group": "navigation@1"
+				},
+				{
+					"command": "tosh.outline.refresh",
+					"when": "view == tosh.outline",
+					"group": "navigation@1"
+				},
+				{
+					"command": "tosh.outline.toggleSort",
+					"when": "view == tosh.outline",
+					"group": "navigation@2"
+				},
+				{
+					"command": "tosh.libraryExplorer.refresh",
+					"when": "view == tosh.libraryExplorer",
+					"group": "navigation@1"
+				},
+				{
+					"command": "tosh.dependencies.refresh",
+					"when": "view == tosh.dependencies",
 					"group": "navigation@1"
 				},
 				{
@@ -409,6 +517,16 @@
 					"command": "tosh.runScript",
 					"when": "view == tosh.scripts  && viewItem == script",
 					"group": "inline@1"
+				},
+				{
+					"command": "tosh.runTreeSymbol",
+					"when": "view == tosh.outline && viewItem == function || view == tosh.libraryExplorer && viewItem == function",
+					"group": "inline@1"
+				},
+				{
+					"command": "tosh.debugTreeSymbol",
+					"when": "view == tosh.outline && viewItem == function || view == tosh.libraryExplorer && viewItem == function",
+					"group": "inline@2"
 				}
 			],
 			"editor/title/run": [

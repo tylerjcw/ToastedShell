@@ -104,6 +104,12 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
         Runtime.BlockExecutor = new EngineBlockExecutor(this);
         Runtime.Evaluator = this;
         Runtime.EventSenderFactory = CreateEventSender;
+
+        // `extend` methods are the engine's knowledge — lexically scoped, arriving
+        // with imported modules, written in ToastScript — so the invoker asks for
+        // them rather than knowing about them (`TS-P3-27`). Set beside the other
+        // engine-owned hooks, and for the same reason they are.
+        Runtime.Invoker.ExtensionResolver = TryInvokeExtensionAsync;
         _toshNamespace = new ToshRuntimeNamespace(this);
         Runtime.RuntimeNamespace ??= _toshNamespace;
         _environmentNamespace = new ShellEnvironmentNamespace(Runtime);
@@ -162,6 +168,11 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
         // Own executor — propagated through CommandContext so nested commands
         // (including race/settle/parallel) continue using this fork's engine.
         _ownBlockExecutor = new EngineBlockExecutor(this);
+
+        // `extend` methods are the engine's knowledge — lexically scoped, arriving
+        // with imported modules, written in ToastScript — so the invoker asks for
+        // them rather than knowing about them (`TS-P3-27`).
+        Runtime.Invoker.ExtensionResolver = TryInvokeExtensionAsync;
     }
 
     /// <summary>
@@ -1012,6 +1023,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
             TupleAssignmentStatementSyntax tupleAssign => EvaluateTupleAssignmentAsync(sourceName, sourceText, tupleAssign, cancellationToken),
             FunctionDefinitionStatementSyntax function => EvaluateFunctionDefinitionAsync(sourceName, sourceText, function, cancellationToken),
             RuneDefinitionStatementSyntax rune => EvaluateRuneDefinitionAsync(sourceName, sourceText, rune, cancellationToken),
+            ExtendStatementSyntax extend => EvaluateExtendStatementAsync(sourceName, sourceText, extend, cancellationToken),
             ClassDefinitionStatementSyntax @class => EvaluateClassDefinitionAsync(sourceName, sourceText, @class, cancellationToken),
             InterfaceDefinitionStatementSyntax @interface => EvaluateInterfaceDefinitionAsync(sourceName, sourceText, @interface, cancellationToken),
             UnionDefinitionStatementSyntax union => EvaluateUnionDefinitionAsync(sourceName, sourceText, union, cancellationToken),
@@ -4107,6 +4119,144 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
     {
         await Task.CompletedTask;
         yield break;
+    }
+
+    /// <summary>
+    /// Methods added to types by <c>extend</c>, keyed by the type name written.
+    /// </summary>
+    /// <remarks>
+    /// Registered when the declaration executes, which gives the visibility rule for
+    /// free: a `require`d module runs its statements in this engine, so importing a
+    /// library brings its extensions with it, the way a `using` brings C#'s
+    /// (<c>TS-P3-27</c>).
+    /// </remarks>
+    private readonly Dictionary<string, Dictionary<string, FunctionDefinition>> _extensionMethods =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    private async IAsyncEnumerable<object?> EvaluateExtendStatementAsync(
+        string sourceName,
+        string sourceText,
+        ExtendStatementSyntax extend,
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (!_extensionMethods.TryGetValue(extend.TypeName, out var methods))
+        {
+            methods = new Dictionary<string, FunctionDefinition>(StringComparer.OrdinalIgnoreCase);
+            _extensionMethods[extend.TypeName] = methods;
+        }
+
+        foreach (var member in extend.Members)
+        {
+            if (member is not ClassMethodMemberSyntax method)
+            {
+                throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                    Code: "tosh.runtime.extend_member_not_a_method",
+                    Title: $"'extend {extend.TypeName}' can only declare methods.",
+                    SourceName: sourceName,
+                    SourceText: sourceText,
+                    Span: member.Span,
+                    Label: "only 'func' members are allowed here",
+                    Help: "an extension has nowhere to put state, so it cannot add properties or fields."));
+            }
+
+            methods[method.Method.Name] = CreateFunctionDefinition(
+                method.Method.Name,
+                method.Method.Parameters,
+                method.Method.ReturnTypeName,
+                method.Method.Body,
+                isCommandWrapper: false,
+                sourceName,
+                sourceText,
+                method.Span,
+                method.Method.DocComment);
+        }
+
+        yield break;
+    }
+
+    /// <summary>
+    /// Finds and runs an <c>extend</c> method for a receiver that has none of its own.
+    /// </summary>
+    /// <remarks>
+    /// Matched on the receiver's shell type name and its CLR name, so `extend Color`
+    /// reaches `System.Drawing.Color` and `extend Point` reaches a ToastScript class
+    /// alike. Reached only after ordinary member lookup has failed, so a real member
+    /// always wins.
+    /// </remarks>
+    internal async ValueTask<InvocationResult?> TryInvokeExtensionAsync(
+        object receiver,
+        string methodName,
+        IReadOnlyList<object?> arguments,
+        CancellationToken cancellationToken)
+    {
+        if (_extensionMethods.Count == 0)
+        {
+            return null;
+        }
+
+        FunctionDefinition? definition = null;
+
+        foreach (var name in EnumerateReceiverTypeNames(receiver))
+        {
+            if (_extensionMethods.TryGetValue(name, out var methods) &&
+                methods.TryGetValue(methodName, out definition))
+            {
+                break;
+            }
+        }
+
+        if (definition is null)
+        {
+            return null;
+        }
+
+        var context = new CommandContext(
+            Runtime,
+            AsyncEnumerableExtensions.Empty<object?>(),
+            arguments,
+            cancellationToken,
+            ScopedTypeResolver: CreateScopedTypeResolver(),
+            BlockExecutor: _ownBlockExecutor,
+            ScopedCommands: CreateScopedCommandView(),
+            ShellTypes: this);
+
+        // `$this` is the receiver itself rather than a self-reference: an extension
+        // adds behaviour to a value, and has no instance state of its own to reach.
+        using var scope = PushScope(new Dictionary<string, object?>(StringComparer.Ordinal)
+        {
+            ["this"] = receiver,
+        });
+
+        var results = await AsyncEnumerableExtensions.ToListAsync(
+            ExecuteFunctionAsync(definition, context),
+            cancellationToken);
+
+        return results.Count switch
+        {
+            0 => new InvocationResult(null, ReturnedVoid: true),
+            1 => new InvocationResult(results[0], ReturnedVoid: false),
+            _ => new InvocationResult(results, ReturnedVoid: false),
+        };
+    }
+
+    /// <summary>The names an <c>extend</c> declaration may have used for this value.</summary>
+    private static IEnumerable<string> EnumerateReceiverTypeNames(object receiver)
+    {
+        if (receiver is IShellTypedObject typed)
+        {
+            yield return typed.ShellTypeDescriptor.ShellTypeName;
+            yield return typed.ShellTypeDescriptor.ShellFullName;
+        }
+
+        var clr = receiver.GetType();
+        yield return clr.Name;
+
+        if (clr.FullName is { } full)
+        {
+            yield return full;
+        }
     }
 
     private async IAsyncEnumerable<object?> EvaluateClassDefinitionAsync(

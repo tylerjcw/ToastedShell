@@ -1,97 +1,177 @@
 {
-    "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
-    "name": "Tome Workspace",
-    "scopeName": "source.tome",
-    "patterns": [
-        {
-            "include": "#comment"
-        },
-        {
-            "include": "#section"
-        },
-        {
-            "include": "#keyword"
-        },
-        {
-            "include": "#string"
-        },
-        {
-            "include": "#number"
-        },
-        {
-            "include": "#punctuation"
-        }
-    ],
-    "repository": {
-        "comment": {
-            "patterns": [
-                {
-                    "name": "comment.line.number-sign.tome",
-                    "match": "#.*$"
-                }
-            ]
-        },
-        "section": {
-            "patterns": [
-                {
-                    "name": "entity.name.section.tome",
-                    "match": "^\s*\[([a-zA-Z0-9_-]+)\]"
-                }
-            ]
-        },
-        "keyword": {
-            "patterns": [
-                {
-                    "name": "keyword.control.tome",
-                    "match": "\b(workspace|folder|layout|file|include|exclude|env|var|command|depends|type|name|path|root|settings|open|close|tab|pane|split|horizontal|vertical|group|project|solution|startup|profile|theme|icon|label|title|description|run|args|shell|cwd|before|after|onOpen|onClose|onSave|onBuild|onRun|onTest|onDebug)\b"
-                }
-            ]
-        },
-        "string": {
-            "patterns": [
-                {
-                    "name": "string.quoted.double.tome",
-                    "begin": "\"",
-                    "end": "\""
-                },
-                {
-                    "name": "string.quoted.single.tome",
-                    "begin": "'",
-                    "end": "'"
-                }
-            ]
-        },
-        "number": {
-            "patterns": [
-                {
-                    "name": "constant.numeric.tome",
-                    "match": "\b\d+(?:\.\d+)?\b"
-                }
-            ]
-        },
-        "punctuation": {
-            "patterns": [
-                {
-                    "name": "punctuation.separator.key-value.tome",
-                    "match": ":|="
-                },
-                {
-                    "name": "punctuation.section.brackets.tome",
-                    "match": "[\[\]]"
-                },
-                {
-                    "name": "punctuation.section.braces.tome",
-                    "match": "[{}]"
-                },
-                {
-                    "name": "punctuation.section.parens.tome",
-                    "match": "[()]"
-                },
-                {
-                    "name": "punctuation.comma.tome",
-                    "match": ","
-                }
-            ]
-        }
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Tome Workspace",
+  "scopeName": "source.tome",
+  "patterns": [
+    {
+      "include": "#comment"
+    },
+    {
+      "include": "#workspace"
+    },
+    {
+      "include": "#folder-entry"
+    },
+    {
+      "include": "#list-entry"
+    },
+    {
+      "include": "#layout"
+    },
+    {
+      "include": "#layout-key"
+    },
+    {
+      "include": "#constant"
+    },
+    {
+      "include": "#string"
+    },
+    {
+      "include": "#number"
+    },
+    {
+      "include": "#punctuation"
     }
+  ],
+  "repository": {
+    "comment": {
+      "match": "#.*$",
+      "name": "comment.line.number-sign.tome"
+    },
+    "workspace": {
+      "comment": "workspace \"Name\" { ... }",
+      "match": "^\\s*(workspace)\\s+(?=[\"'])",
+      "captures": {
+        "1": {
+          "name": "keyword.control.tome"
+        }
+      }
+    },
+    "folder-entry": {
+      "comment": "repo/folder \"path\" as \"alias\"",
+      "match": "^\\s*(repo|folder)\\b(?:\\s+(?=[\"']))?",
+      "captures": {
+        "1": {
+          "name": "keyword.control.tome"
+        }
+      }
+    },
+    "list-entry": {
+      "comment": "exclude [...] and open [...]",
+      "match": "^\\s*(exclude|open)\\b",
+      "captures": {
+        "1": {
+          "name": "keyword.control.tome"
+        }
+      }
+    },
+    "layout": {
+      "match": "^\\s*(layout)\\b",
+      "captures": {
+        "1": {
+          "name": "keyword.control.tome"
+        }
+      }
+    },
+    "layout-key": {
+      "comment": "Dotted layout keys: explorer.width = 32",
+      "match": "^\\s*([a-zA-Z_][a-zA-Z0-9_-]*)((?:\\.[a-zA-Z_][a-zA-Z0-9_-]*)*)\\s*(?==)",
+      "captures": {
+        "1": {
+          "name": "variable.other.property.tome"
+        },
+        "2": {
+          "name": "variable.other.member.tome"
+        }
+      }
+    },
+    "constant": {
+      "patterns": [
+        {
+          "match": "\\b(true|false)\\b",
+          "name": "constant.language.tome"
+        },
+        {
+          "comment": "'as' introduces a folder alias",
+          "match": "\\b(as)\\b",
+          "name": "keyword.operator.tome"
+        }
+      ]
+    },
+    "string": {
+      "patterns": [
+        {
+          "name": "string.quoted.double.tome",
+          "begin": "\"",
+          "end": "\"",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.definition.string.begin.tome"
+            }
+          },
+          "endCaptures": {
+            "0": {
+              "name": "punctuation.definition.string.end.tome"
+            }
+          },
+          "patterns": [
+            {
+              "match": "\\\\[nrt\"'\\\\]",
+              "name": "constant.character.escape.tome"
+            }
+          ]
+        },
+        {
+          "name": "string.quoted.single.tome",
+          "begin": "'",
+          "end": "'",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.definition.string.begin.tome"
+            }
+          },
+          "endCaptures": {
+            "0": {
+              "name": "punctuation.definition.string.end.tome"
+            }
+          },
+          "patterns": [
+            {
+              "match": "\\\\[nrt\"'\\\\]",
+              "name": "constant.character.escape.tome"
+            }
+          ]
+        }
+      ]
+    },
+    "number": {
+      "match": "-?\\b\\d+(?:\\.\\d+)?\\b",
+      "name": "constant.numeric.tome"
+    },
+    "punctuation": {
+      "patterns": [
+        {
+          "match": "=",
+          "name": "punctuation.separator.key-value.tome"
+        },
+        {
+          "match": "[{}]",
+          "name": "punctuation.section.braces.tome"
+        },
+        {
+          "match": "[\\[\\]]",
+          "name": "punctuation.section.brackets.tome"
+        },
+        {
+          "match": ",",
+          "name": "punctuation.separator.tome"
+        },
+        {
+          "match": "\\.",
+          "name": "punctuation.accessor.tome"
+        }
+      ]
+    }
+  }
 }

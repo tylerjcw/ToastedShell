@@ -1,20 +1,53 @@
 {
-    "Tome Workspace": {
-        "prefix": "tome-workspace",
-        "body": [
-            "workspace:",
-            "  folder: $1",
-            "  layout: $2"
-        ],
-        "description": "Basic Tome workspace structure"
-    },
-    "Tome Folder": {
-        "prefix": "tome-folder",
-        "body": [
-            "folder:",
-            "  path: $1",
-            "  layout: $2"
-        ],
-        "description": "Tome folder block"
-    }
+  "Tome Workspace": {
+    "prefix": "workspace",
+    "body": [
+      "workspace \"${1:Name}\" {",
+      "\trepo \"${2:/path/to/repo}\" as \"${3:Alias}\"",
+      "\tlayout {",
+      "\t\texplorer.width = ${4:32}",
+      "\t\texplorer.open = ${5|true,false|}",
+      "\t}",
+      "}"
+    ],
+    "description": "A complete .tome workspace file"
+  },
+  "Repo Folder": {
+    "prefix": "repo",
+    "body": [
+      "repo \"${1:/path/to/repo}\" as \"${2:Alias}\""
+    ],
+    "description": "Add a git repository folder to the workspace"
+  },
+  "Plain Folder": {
+    "prefix": "folder",
+    "body": [
+      "folder \"${1:/path/to/folder}\" as \"${2:Alias}\""
+    ],
+    "description": "Add a plain (non-repo) folder to the workspace"
+  },
+  "Open Files": {
+    "prefix": "open",
+    "body": [
+      "open [\"${1:/path/to/file}\"]"
+    ],
+    "description": "Files to open when the workspace loads"
+  },
+  "Exclude Patterns": {
+    "prefix": "exclude",
+    "body": [
+      "exclude [\"${1:node_modules}\", \"${2:bin}\"]"
+    ],
+    "description": "Paths to hide from the explorer"
+  },
+  "Layout Block": {
+    "prefix": "layout",
+    "body": [
+      "layout {",
+      "\texplorer.width = ${1:32}",
+      "\texplorer.open = ${2|true,false|}",
+      "}"
+    ],
+    "description": "Explorer layout settings"
+  }
 }

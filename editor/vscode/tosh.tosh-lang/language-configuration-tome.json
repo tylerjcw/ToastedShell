@@ -4,12 +4,76 @@
   },
   "brackets": [
     [
+      "{",
+      "}"
+    ],
+    [
+      "[",
+      "]"
+    ]
+  ],
+  "autoClosingPairs": [
+    {
+      "open": "{",
+      "close": "}"
+    },
+    {
+      "open": "[",
+      "close": "]"
+    },
+    {
+      "open": "\"",
+      "close": "\"",
+      "notIn": [
+        "string",
+        "comment"
+      ]
+    },
+    {
+      "open": "'",
+      "close": "'",
+      "notIn": [
+        "string",
+        "comment"
+      ]
+    }
+  ],
+  "surroundingPairs": [
+    [
+      "{",
+      "}"
+    ],
+    [
       "[",
       "]"
     ],
     [
-      "{",
-      "}"
+      "\"",
+      "\""
+    ],
+    [
+      "'",
+      "'"
     ]
+  ],
+  "indentationRules": {
+    "increaseIndentPattern": "[{\\[]\\s*$",
+    "decreaseIndentPattern": "^\\s*[}\\]]"
+  },
+  "onEnterRules": [
+    {
+      "beforeText": "\\{\\s*$",
+      "afterText": "^\\s*\\}",
+      "action": {
+        "indent": "indent"
+      }
+    },
+    {
+      "beforeText": "\\[\\s*$",
+      "afterText": "^\\s*\\]",
+      "action": {
+        "indent": "indent"
+      }
+    }
   ]
 }

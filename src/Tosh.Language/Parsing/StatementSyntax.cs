@@ -228,6 +228,23 @@ public sealed record ClassEventMemberSyntax(
     bool IsShy,
     TextSpan Span) : ClassMemberSyntax(IsShy, IsStatic: false, Span);
 
+/// <summary>
+/// <c>extend Color { func ToGl() -&gt; GlColor =&gt; … }</c> — methods added to a type
+/// the author does not own.
+/// </summary>
+/// <remarks>
+/// The members are parsed as class members and reuse that machinery entirely; the
+/// only difference at the declaration is that no type is being *defined*, so there
+/// is no constructor, no base class, and no fields — an extension can only add
+/// behaviour, because it has nowhere to put state (<c>TS-P3-27</c>).
+/// </remarks>
+public sealed record ExtendStatementSyntax(
+    string TypeName,
+    IReadOnlyList<ClassMemberSyntax> Members,
+    DeclarationModifier Modifier,
+    TextSpan Span,
+    DocComment? DocComment = null) : StatementSyntax(Span);
+
 public sealed record ClassDefinitionStatementSyntax(
     string Name,
     IReadOnlyList<FunctionParameterSyntax> PrimaryConstructorParameters,

@@ -109,13 +109,27 @@
     "description": "Read a cstring, byte range, or struct-layout value from native memory"
   },
   "Record Literal": {
-    "prefix": "record",
+    "prefix": "record-literal",
     "body": [
-      "var ${1:name} = {",
-      "\t${2:Field} = ${3:value}",
-      "}"
+      "var ${1:name} = {|",
+      "\t${2:field} = ${3:value}",
+      "|}"
     ],
-    "description": "Declare an anonymous table (dynamic record)"
+    "description": "Anonymous record literal — {| ... |}"
+  },
+  "Dictionary Literal": {
+    "prefix": "dict-literal",
+    "body": [
+      "var ${1:name} = {% ${2:\"key\"} => ${3:value} %}"
+    ],
+    "description": "Dictionary literal with arbitrary keys — {% ... %}"
+  },
+  "Set Literal": {
+    "prefix": "set-literal",
+    "body": [
+      "var ${1:name} = {: ${2:1}, ${3:2} :}"
+    ],
+    "description": "Set literal — {: ... :}"
   },
   "Generic List": {
     "prefix": "newlist",
@@ -446,5 +460,145 @@
       "yield ${1:value}"
     ],
     "description": "Emit a value from a generator function"
+  },
+  "Doc Comment": {
+    "prefix": "doc",
+    "body": [
+      "## ${1:Summary of what this does.}",
+      "## @param=${2:name} ${3:What it is for.}",
+      "## @returns ${4:What comes back.}"
+    ],
+    "description": "Doc comment block above a declaration"
+  },
+  "Doc Comment with Example": {
+    "prefix": "doc-example",
+    "body": [
+      "## ${1:Summary of what this does.}",
+      "## @param=${2:name} ${3:What it is for.}",
+      "## @returns ${4:What comes back.}",
+      "## @example",
+      "##   ${5:usage here}",
+      "## @since ${6:26.7}"
+    ],
+    "description": "Doc comment with a worked example and @since"
+  },
+  "Block Comment": {
+    "prefix": "comment-block",
+    "body": [
+      "##{",
+      "${1:Notes that span lines.}",
+      "}##"
+    ],
+    "description": "Multi-line block comment — ##{ ... }##"
+  },
+  "Module": {
+    "prefix": "module",
+    "body": [
+      "module ${1:Name} {",
+      "\texport func ${2:name}(${3}) {",
+      "\t\t$0",
+      "\t}",
+      "}"
+    ],
+    "description": "Define a named module with an exported function"
+  },
+  "Subcommand": {
+    "prefix": "subcommand",
+    "body": [
+      "subcommand ${1:name} {",
+      "\targ  ${2:target}: ${3:string}",
+      "\tflag ${4:dry-run}: bool = false",
+      "\t$0",
+      "}"
+    ],
+    "description": "Declare a subcommand with a positional arg and a flag"
+  },
+  "Refinement Type": {
+    "prefix": "type",
+    "body": [
+      "type ${1:Name} = ${2:int} where (${3:_ > 0})"
+    ],
+    "description": "Refinement type constrained by a predicate"
+  },
+  "Refinement Type Block": {
+    "prefix": "type-block",
+    "body": [
+      "type ${1:Name} = ${2:string} {",
+      "\twhere ${3:_ != \"\"}",
+      "\tcoerce ${4:\"fallback\"}",
+      "}"
+    ],
+    "description": "Block-form refinement type with a coerce fallback"
+  },
+  "Property with Accessors": {
+    "prefix": "prop-get-set",
+    "body": [
+      "prop ${1:Name}: ${2:string} {",
+      "\tget { return $${3:_backing} }",
+      "\tset { $${3:_backing} = $value }",
+      "}"
+    ],
+    "description": "Property with explicit getter and setter"
+  },
+  "Event Handler": {
+    "prefix": "handles",
+    "body": [
+      "func ${1:on-event}(${2:event}) handles ${3:EventName} {",
+      "\t$0",
+      "}"
+    ],
+    "description": "Register a method as an event handler"
+  },
+  "Comprehension": {
+    "prefix": "comprehension",
+    "body": [
+      "[$${1:x} <| for ${1:x} in ${2:1..10} where ${3:($$1 % 2) == 0}]"
+    ],
+    "description": "List comprehension — body first, then <| and clauses"
+  },
+  "Match Arms": {
+    "prefix": "match-arms",
+    "body": [
+      "match ($${1:value}) {",
+      "\t${2:pattern} => ${3:result}",
+      "\t${4:other} when ${5:guard} => ${6:result}",
+      "\tdefault => ${7:fallback}",
+      "}"
+    ],
+    "description": "Match expression with a guarded arm"
+  },
+  "Async / Await": {
+    "prefix": "async",
+    "body": [
+      "var ${1:handle} = async { $0 }",
+      "await $${1:handle}"
+    ],
+    "description": "Start work in the background and await it"
+  },
+  "Channel": {
+    "prefix": "channel",
+    "body": [
+      "var ${1:ch} = channel",
+      "channel-send $${1:ch} ${2:value}",
+      "channel-close $${1:ch}",
+      "channel-recv $${1:ch}"
+    ],
+    "description": "Create, send on, close and drain a channel"
+  },
+  "Redirect Output": {
+    "prefix": "redirect",
+    "body": [
+      "${1:command} out> ${2:./out.txt}"
+    ],
+    "description": "Named-stream redirection (out>, err>, o+e>)"
+  },
+  "Region": {
+    "prefix": "region",
+    "body": [
+      "# region ${1:Name}",
+      "$0",
+      "# endregion"
+    ],
+    "description": "Foldable region marker"
   }
 }

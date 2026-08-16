@@ -27,6 +27,7 @@
     "enum": "Define a named enum with symbolic members and optional underlying numeric storage.",
     "event": "Declare an event that handlers can subscribe to via `handles`.",
     "export": "Export a module declaration or environment variable.",
+    "extend": "Add methods to an existing type; `$this` is the receiver.",
     "extends": "Declare that a class derives from a base class.",
     "fading": "Mark a member as deprecated; emits a warning on use.",
     "false": "Boolean literal.",

@@ -69,6 +69,7 @@ public static class VsCodeMetadataEmitter
         ["default"] = "Fallback arm for `switch`.",
         ["else"] = "Fallback branch for `if`.",
         ["enum"] = "Define a named enum with symbolic members and optional underlying numeric storage.",
+        ["extend"] = "Add methods to an existing type; `$this` is the receiver.",
         ["export"] = "Export a module declaration or environment variable.",
         ["finally"] = "Always run cleanup code after `try` / `catch`.",
         ["for"] = "Iterate over pipeline output or another enumerable source.",

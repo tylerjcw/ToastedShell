@@ -157,6 +157,7 @@ public sealed class LanguageSurfaceParityTests
         ["uses"] = "trait T { func f() { } }\nclass C uses T { }",
         ["fulfills"] = "interface I { func f() }\nclass C fulfills I { func f() { } }",
         ["extends"] = "class B { }\nclass C extends B { }",
+        ["extend"] = "extend string { func Shout() -> string => $this }",
 
         // Operator words.
         ["and"] = "true and false",

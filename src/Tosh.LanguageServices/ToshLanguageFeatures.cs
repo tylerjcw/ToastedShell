@@ -46,6 +46,7 @@ public sealed class ToshLanguageFeatures
         ["local"] = "Restrict member visibility to the defining assembly (internal).",
         ["raw"] = "Mark a method for unsafe/native interop.",
         ["partial"] = "Allow a class definition to be split across multiple declarations.",
+        ["extend"] = "Add methods to an existing type: `extend Color { func ToGl() -> GlColor => ... }`. `$this` is the receiver. A real member always wins, so an extension can only add a name the type did not have.",
         ["flags"] = "Declare an enum whose members are meant to be combined: bitwise operators over its members yield a value of the same enum, named from the bits it carries. Distinct from `flag`, which declares a script flag.",
         ["proud"] = "Explicitly mark a member as public.",
         ["public"] = "Explicitly mark a member as public (no-op, members are public by default).",

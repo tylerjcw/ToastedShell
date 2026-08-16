@@ -3,6 +3,7 @@
 const childProcess = require("child_process");
 const fs = require("fs");
 const path = require("path");
+const os = require("os");
 const vscode = require("vscode");
 const languageData = require("./language-data.json");
 
@@ -18,6 +19,7 @@ let lspState = "stopped";
 let lspOutputChannel = null;
 let statusBarItem = null;
 let serversProvider = null;
+let outlineProvider = null;
 
 // MCP is managed externally (via Claude Code MCP config); we show it as informational only.
 // mcpExternalRunning is detected opportunistically via process listing.
@@ -38,6 +40,21 @@ async function activate(context) {
     context.subscriptions.push(statusBarItem);
 
     // Register sidebar views
+    outlineProvider = new ToshOutlineProvider(context);
+    context.subscriptions.push(
+        vscode.window.registerTreeDataProvider("tosh.outline", outlineProvider)
+    );
+
+    const libraryExplorerProvider = new ToshLibraryExplorerProvider(context);
+    context.subscriptions.push(
+        vscode.window.registerTreeDataProvider("tosh.libraryExplorer", libraryExplorerProvider)
+    );
+
+    const dependenciesProvider = new ToshDependenciesProvider(context);
+    context.subscriptions.push(
+        vscode.window.registerTreeDataProvider("tosh.dependencies", dependenciesProvider)
+    );
+
     serversProvider = new ToshServersProvider();
     context.subscriptions.push(
         vscode.window.registerTreeDataProvider("tosh.servers", serversProvider)
@@ -97,6 +114,31 @@ async function activate(context) {
     // Scripts commands
     context.subscriptions.push(vscode.commands.registerCommand("tosh.runScript", (node) => runScriptNode(node)));
     context.subscriptions.push(vscode.commands.registerCommand("tosh.scripts.refresh", () => scriptsProvider.refresh()));
+    context.subscriptions.push(vscode.commands.registerCommand("tosh.outline.refresh", () => outlineProvider.refresh()));
+    context.subscriptions.push(vscode.commands.registerCommand("tosh.outline.toggleSort", () => outlineProvider.toggleSort()));
+    context.subscriptions.push(vscode.commands.registerCommand("tosh.libraryExplorer.refresh", () => libraryExplorerProvider.refresh()));
+    context.subscriptions.push(vscode.commands.registerCommand("tosh.dependencies.refresh", () => dependenciesProvider.refresh()));
+
+    context.subscriptions.push(vscode.commands.registerCommand("tosh.runTreeSymbol", (node) => {
+        if (node && node.label) {
+            const editor = vscode.window.activeTextEditor;
+            const program = editor ? editor.document.uri.fsPath : "";
+            const terminal = vscode.window.createTerminal("TōSh Run");
+            terminal.show();
+            terminal.sendText(`tosh ${program} -- ${node.label}`);
+        }
+    }));
+    context.subscriptions.push(vscode.commands.registerCommand("tosh.debugTreeSymbol", (node) => {
+        if (node && node.label && vscode.window.activeTextEditor) {
+            vscode.debug.startDebugging(undefined, {
+                type: "tosh",
+                request: "launch",
+                name: `Debug ${node.label}`,
+                program: vscode.window.activeTextEditor.document.uri.fsPath,
+                args: [String(node.label)]
+            });
+        }
+    }));
 
     // Command reference
     context.subscriptions.push(vscode.commands.registerCommand("tosh.openCommandRef", () => ToshCommandRefPanel.show(context)));
@@ -124,6 +166,17 @@ async function activate(context) {
     // DAP descriptor factory
     context.subscriptions.push(
         vscode.debug.registerDebugAdapterDescriptorFactory("tosh", new ToshDebugAdapterDescriptorFactory())
+    );
+
+    // Folding. Registered unconditionally: Tosh.Lsp does not implement
+    // textDocument/foldingRange, so this is the only structural folding source
+    // whether or not the language server is running. Not restricted to
+    // scheme:file so untitled buffers fold too.
+    context.subscriptions.push(
+        vscode.languages.registerFoldingRangeProvider(
+            { language: "tosh" },
+            new ToshFoldingRangeProvider()
+        )
     );
 
     // CodeLens provider
@@ -187,6 +240,7 @@ async function activate(context) {
 function setLspState(state) {
     lspState = state;
     if (serversProvider) serversProvider.refresh();
+    if (outlineProvider) outlineProvider.refresh();
     if (statusBarItem) updateStatusBar();
 }
 
@@ -585,7 +639,23 @@ function findDapServerPath() {
     const configuredPath = configuration.get("dap.serverPath", "").trim();
     if (configuredPath.length > 0) {
         const resolved = resolveConfiguredPath(configuredPath);
-        if (resolved && fs.existsSync(resolved)) return { dll: resolved, dotnetPath };
+        if (resolved && fs.existsSync(resolved)) {
+            return resolved.endsWith(".dll")
+                ? { command: dotnetPath, args: [resolved] }
+                : { command: resolved, args: [] };
+        }
+    }
+
+    // Prefer system-installed tosh-dap binary
+    const installedCandidates = [
+        "/usr/bin/tosh-dap",
+        "/usr/local/bin/tosh-dap",
+        path.join(process.env.HOME || "", ".local", "bin", "tosh-dap")
+    ];
+    for (const candidate of installedCandidates) {
+        if (fs.existsSync(candidate)) {
+            return { command: candidate, args: [] };
+        }
     }
 
     for (const workspaceFolder of vscode.workspace.workspaceFolders || []) {
@@ -594,7 +664,7 @@ function findDapServerPath() {
             path.join(root, "src", "Tosh.Dap", "bin", "Debug", "net10.0", "Tosh.Dap.dll"),
             path.join(root, "src", "Tosh.Dap", "bin", "Release", "net10.0", "Tosh.Dap.dll")
         ]) {
-            if (fs.existsSync(candidate)) return { dll: candidate, dotnetPath };
+            if (fs.existsSync(candidate)) return { command: dotnetPath, args: [candidate] };
         }
 
         const proj = path.join(root, "src", "Tosh.Dap", "Tosh.Dap.csproj");
@@ -603,7 +673,7 @@ function findDapServerPath() {
                 stdio: "ignore", windowsHide: true, cwd: path.dirname(proj)
             });
             const dll = path.join(path.dirname(proj), "bin", "Debug", "net10.0", "Tosh.Dap.dll");
-            if (fs.existsSync(dll)) return { dll, dotnetPath };
+            if (fs.existsSync(dll)) return { command: dotnetPath, args: [dll] };
         }
     }
 
@@ -619,7 +689,7 @@ class ToshDebugAdapterDescriptorFactory {
             );
             return null;
         }
-        return new vscode.DebugAdapterExecutable(result.dotnetPath, [result.dll]);
+        return new vscode.DebugAdapterExecutable(result.command, result.args || []);
     }
 }
 
@@ -1051,6 +1121,330 @@ class ToshSolutionProvider {
     }
 }
 
+// ─── Sidebar: Document Outline view ───────────────────────────────────────────
+
+class ToshOutlineProvider {
+    constructor(context) {
+        this._onDidChangeTreeData = new vscode.EventEmitter();
+        this.onDidChangeTreeData = this._onDidChangeTreeData.event;
+        this.sortAlphabetically = false;
+
+        context.subscriptions.push(
+            vscode.window.onDidChangeActiveTextEditor(() => this.refresh())
+        );
+        context.subscriptions.push(
+            vscode.workspace.onDidChangeTextDocument(e => {
+                if (vscode.window.activeTextEditor && e.document === vscode.window.activeTextEditor.document) {
+                    this.refresh();
+                }
+            })
+        );
+    }
+
+    toggleSort() {
+        this.sortAlphabetically = !this.sortAlphabetically;
+        this.refresh();
+    }
+
+    refresh() { this._onDidChangeTreeData.fire(); }
+
+    getTreeItem(element) { return element; }
+
+    async getChildren(element) {
+        if (element) {
+            return (element.children || []).map(child => this._createSymbolTreeItem(child));
+        }
+
+        const editor = vscode.window.activeTextEditor;
+        if (!editor || (editor.document.languageId !== "tosh" && editor.document.languageId !== "tome")) {
+            const placeholder = new vscode.TreeItem("No active TōSh script.");
+            placeholder.contextValue = "empty";
+            return [placeholder];
+        }
+
+        let symbols = null;
+        if (lspState === "running") {
+            try {
+                const fetchPromise = vscode.commands.executeCommand(
+                    "vscode.executeDocumentSymbolProvider",
+                    editor.document.uri
+                );
+                const timeoutPromise = new Promise(resolve => setTimeout(() => resolve(null), 400));
+                symbols = await Promise.race([fetchPromise, timeoutPromise]);
+            } catch { }
+        }
+
+        if (!symbols || symbols.length === 0) {
+            const fallbackProvider = new ToshDocumentSymbolProvider();
+            symbols = fallbackProvider.provideDocumentSymbols(editor.document);
+        }
+
+        if (!symbols || symbols.length === 0) {
+            const placeholder = new vscode.TreeItem("No symbols found in current script.");
+            placeholder.contextValue = "empty";
+            return [placeholder];
+        }
+
+        let items = symbols.map(sym => this._createSymbolTreeItem(sym));
+        if (this.sortAlphabetically) {
+            items = items.sort((a, b) => String(a.label).localeCompare(String(b.label)));
+        }
+        return items;
+    }
+
+    _createSymbolTreeItem(sym) {
+        const hasChildren = sym.children && sym.children.length > 0;
+        const item = new vscode.TreeItem(
+            sym.name,
+            hasChildren ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None
+        );
+        item.description = sym.detail || "";
+        item.iconPath = this._getSymbolIcon(sym.kind);
+        item.children = sym.children || [];
+        item.contextValue = (sym.kind === vscode.SymbolKind.Function || sym.kind === vscode.SymbolKind.Method) ? 'function' : 'symbol';
+
+        const tooltipMd = new vscode.MarkdownString();
+        tooltipMd.appendCodeblock(`${sym.name} ${sym.detail || ''}`, 'tosh');
+        if (sym.docComment) {
+            tooltipMd.appendMarkdown(`\n*${sym.docComment}*`);
+        }
+        item.tooltip = tooltipMd;
+
+        const selectionRange = sym.selectionRange || sym.range;
+        if (selectionRange && vscode.window.activeTextEditor) {
+            item.command = {
+                command: "vscode.open",
+                title: "Jump to Symbol",
+                arguments: [
+                    vscode.window.activeTextEditor.document.uri,
+                    { selection: selectionRange }
+                ]
+            };
+        }
+        return item;
+    }
+
+    _getSymbolIcon(kind) {
+        switch (kind) {
+            case vscode.SymbolKind.Module: return new vscode.ThemeIcon("symbol-module");
+            case vscode.SymbolKind.Class: return new vscode.ThemeIcon("symbol-class");
+            case vscode.SymbolKind.Struct: return new vscode.ThemeIcon("symbol-struct");
+            case vscode.SymbolKind.Enum: return new vscode.ThemeIcon("symbol-enum");
+            case vscode.SymbolKind.EnumMember: return new vscode.ThemeIcon("symbol-enum-member");
+            case vscode.SymbolKind.Function: return new vscode.ThemeIcon("symbol-function");
+            case vscode.SymbolKind.Method: return new vscode.ThemeIcon("symbol-method");
+            case vscode.SymbolKind.Property: return new vscode.ThemeIcon("symbol-property");
+            case vscode.SymbolKind.Field: return new vscode.ThemeIcon("symbol-field");
+            case vscode.SymbolKind.Variable: return new vscode.ThemeIcon("symbol-variable");
+            case vscode.SymbolKind.Constant: return new vscode.ThemeIcon("symbol-constant");
+            case vscode.SymbolKind.Interface: return new vscode.ThemeIcon("symbol-interface");
+            default: return new vscode.ThemeIcon("symbol-misc");
+        }
+    }
+}
+
+// ─── Sidebar: Library & Script Object Browser ─────────────────────────
+
+class ToshLibraryExplorerProvider {
+    constructor(context) {
+        this._onDidChangeTreeData = new vscode.EventEmitter();
+        this.onDidChangeTreeData = this._onDidChangeTreeData.event;
+    }
+
+    refresh() { this._onDidChangeTreeData.fire(); }
+
+    getTreeItem(element) { return element; }
+
+    async getChildren(element) {
+        if (element) {
+            if (element.type === "dir") {
+                return this._getDirectoryChildren(element.path);
+            }
+            if (element.type === "file") {
+                return this._getFileSymbols(element.path);
+            }
+            if (element.children) {
+                return element.children.map(child => this._createSymbolTreeItem(child, element.filePath));
+            }
+            return [];
+        }
+
+        const roots = [];
+        const homedir = os.homedir();
+        const userLib = path.join(homedir, ".config", "tosh", "lib");
+        if (fs.existsSync(userLib)) {
+            const item = new vscode.TreeItem("Library (~/.config/tosh/lib)", vscode.TreeItemCollapsibleState.Expanded);
+            item.type = "dir";
+            item.path = userLib;
+            item.iconPath = new vscode.ThemeIcon("library");
+            roots.push(item);
+        }
+
+        if (vscode.workspace.workspaceFolders) {
+            for (const folder of vscode.workspace.workspaceFolders) {
+                const item = new vscode.TreeItem(folder.name, vscode.TreeItemCollapsibleState.Expanded);
+                item.type = "dir";
+                item.path = folder.uri.fsPath;
+                item.iconPath = new vscode.ThemeIcon("folder");
+                roots.push(item);
+            }
+        }
+
+        return roots;
+    }
+
+    async _getDirectoryChildren(dirPath) {
+        try {
+            const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+            const items = [];
+            for (const entry of entries) {
+                if (entry.name.startsWith(".")) continue;
+                const fullPath = path.join(dirPath, entry.name);
+                if (entry.isDirectory()) {
+                    const item = new vscode.TreeItem(entry.name, vscode.TreeItemCollapsibleState.Collapsed);
+                    item.type = "dir";
+                    item.path = fullPath;
+                    item.iconPath = new vscode.ThemeIcon("folder");
+                    items.push(item);
+                } else if (entry.isFile() && entry.name.endsWith(".tosh")) {
+                    const item = new vscode.TreeItem(entry.name, vscode.TreeItemCollapsibleState.Collapsed);
+                    item.type = "file";
+                    item.path = fullPath;
+                    item.iconPath = new vscode.ThemeIcon("file-code");
+                    items.push(item);
+                }
+            }
+            return items;
+        } catch {
+            return [];
+        }
+    }
+
+    async _getFileSymbols(filePath) {
+        try {
+            const uri = vscode.Uri.file(filePath);
+            const doc = await vscode.workspace.openTextDocument(uri);
+            
+            let symbols = null;
+            if (lspState === "running") {
+                try {
+                    symbols = await vscode.commands.executeCommand("vscode.executeDocumentSymbolProvider", uri);
+                } catch { }
+            }
+            if (!symbols || symbols.length === 0) {
+                const fallbackProvider = new ToshDocumentSymbolProvider();
+                symbols = fallbackProvider.provideDocumentSymbols(doc);
+            }
+
+            if (!symbols || symbols.length === 0) {
+                return [new vscode.TreeItem("No symbols declared", vscode.TreeItemCollapsibleState.None)];
+            }
+
+            return symbols.map(sym => this._createSymbolTreeItem(sym, filePath));
+        } catch {
+            return [new vscode.TreeItem("Error loading symbols", vscode.TreeItemCollapsibleState.None)];
+        }
+    }
+
+    _createSymbolTreeItem(sym, filePath) {
+        const hasChildren = sym.children && sym.children.length > 0;
+        const item = new vscode.TreeItem(
+            sym.name,
+            hasChildren ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None
+        );
+        item.description = sym.detail || "";
+        item.iconPath = this._getSymbolIcon(sym.kind);
+        item.children = sym.children || [];
+        item.filePath = filePath;
+        item.contextValue = (sym.kind === vscode.SymbolKind.Function || sym.kind === vscode.SymbolKind.Method) ? 'function' : 'symbol';
+
+        const tooltipMd = new vscode.MarkdownString();
+        tooltipMd.appendCodeblock(`${sym.name} ${sym.detail || ''}`, 'tosh');
+        if (sym.docComment) {
+            tooltipMd.appendMarkdown(`\n*${sym.docComment}*`);
+        }
+        item.tooltip = tooltipMd;
+
+        const range = sym.selectionRange || sym.range;
+        if (range && filePath) {
+            item.command = {
+                command: "vscode.open",
+                title: "Open Symbol",
+                arguments: [
+                    vscode.Uri.file(filePath),
+                    { selection: range }
+                ]
+            };
+        }
+        return item;
+    }
+
+    _getSymbolIcon(kind) {
+        switch (kind) {
+            case vscode.SymbolKind.Module: return new vscode.ThemeIcon("symbol-module");
+            case vscode.SymbolKind.Class: return new vscode.ThemeIcon("symbol-class");
+            case vscode.SymbolKind.Interface: return new vscode.ThemeIcon("symbol-interface");
+            case vscode.SymbolKind.Struct: return new vscode.ThemeIcon("symbol-struct");
+            case vscode.SymbolKind.Enum: return new vscode.ThemeIcon("symbol-enum");
+            case vscode.SymbolKind.EnumMember: return new vscode.ThemeIcon("symbol-enum-member");
+            case vscode.SymbolKind.Function: return new vscode.ThemeIcon("symbol-function");
+            case vscode.SymbolKind.Method: return new vscode.ThemeIcon("symbol-method");
+            case vscode.SymbolKind.Property: return new vscode.ThemeIcon("symbol-property");
+            case vscode.SymbolKind.Field: return new vscode.ThemeIcon("symbol-field");
+            default: return new vscode.ThemeIcon("symbol-misc");
+        }
+    }
+}
+
+// ─── Sidebar: Dependencies & Imports view ────────────────────────────
+
+class ToshDependenciesProvider {
+    constructor(context) {
+        this._onDidChangeTreeData = new vscode.EventEmitter();
+        this.onDidChangeTreeData = this._onDidChangeTreeData.event;
+        context.subscriptions.push(vscode.window.onDidChangeActiveTextEditor(() => this.refresh()));
+    }
+
+    refresh() { this._onDidChangeTreeData.fire(); }
+
+    getTreeItem(element) { return element; }
+
+    async getChildren(element) {
+        if (element) return element.children || [];
+
+        const editor = vscode.window.activeTextEditor;
+        if (!editor || (editor.document.languageId !== "tosh" && editor.document.languageId !== "tome")) {
+            return [new vscode.TreeItem("No active TōSh script.")];
+        }
+
+        const text = editor.document.getText();
+        const lines = text.split(/\r?\n/);
+        const requires = [];
+
+        lines.forEach((line, index) => {
+            const match = line.match(/^\s*require\s+(?:"([^"]+)"|'([^']+)'|([A-Za-z0-9_.-]+))/);
+            if (match) {
+                const target = match[1] || match[2] || match[3];
+                const item = new vscode.TreeItem(target, vscode.TreeItemCollapsibleState.None);
+                item.description = `Line ${index + 1}`;
+                item.iconPath = new vscode.ThemeIcon("references");
+                item.command = {
+                    command: "vscode.open",
+                    title: "Jump to Require",
+                    arguments: [editor.document.uri, { selection: new vscode.Range(index, 0, index, line.length) }]
+                };
+                requires.push(item);
+            }
+        });
+
+        if (requires.length === 0) {
+            return [new vscode.TreeItem("No require statements in script.")];
+        }
+
+        return requires;
+    }
+}
+
 // ─── Sidebar: Scripts view ────────────────────────────────────────────────────
 
 class ToshScriptsProvider {
@@ -1092,7 +1486,7 @@ class ToshScriptsProvider {
         }
 
         return loose.map(uri => {
-            const item = new vscode.TreeItem(path.basename(uri.fsPath));
+            const item = new vscode.TreeItem(path.basename(uri.fsPath), vscode.TreeItemCollapsibleState.None);
             item.resourceUri = uri;
             item.contextValue = "script";
             item.iconPath = new vscode.ThemeIcon("file-code");
@@ -1439,6 +1833,301 @@ class ToshCodeLensProvider {
     }
 }
 
+// ─── Folding ──────────────────────────────────────────────────────────────────
+
+const TRIPLE_DELIMITERS = ['"""', "'''"];
+
+const FOLD_BRACKETS = [
+    { open: "{|", close: "|}" },
+    { open: "{%", close: "%}" },
+    { open: "{:", close: ":}" },
+    { open: "{", close: "}" },
+    { open: "[", close: "]" },
+    { open: "(", close: ")" }
+];
+
+/**
+ * True when the `#` at `index` opens a comment of any form.
+ *
+ * Mirrors `ToshCommentSyntax` in the runtime: `##` is unconditional, while a
+ * lone `#` only opens a comment when it stands alone as a word — at the start
+ * of a word and followed by whitespace or the end of the line. That is what
+ * keeps `#ff0000`, `issue#42` and `C#` out of comment scope.
+ */
+function opensToshComment(text, index) {
+    if (text[index] !== "#") return false;
+    if (text[index + 1] === "#") return true;
+
+    const previous = index > 0 ? text[index - 1] : "";
+    const next = index + 1 < text.length ? text[index + 1] : "";
+    const atWordStart = index === 0 || /\s/.test(previous);
+    const terminated = next === "" || /\s/.test(next);
+    return atWordStart && terminated;
+}
+
+/**
+ * Lexes one line, carrying multi-line string and block-comment state across
+ * calls in `state`. Returns the line's *code* with strings and comments blanked
+ * to spaces, so bracket counting can never be fooled by a `{` inside a string
+ * or a comment, plus the classification the folder needs.
+ */
+function scanToshLine(text, state) {
+    const result = {
+        code: "",
+        commentKind: null,      // "doc" | "line" — a comment this line opens
+        blockCommentOpened: false,
+        blockCommentClosed: false,
+        isBlank: text.trim().length === 0
+    };
+
+    const blank = (count) => " ".repeat(count);
+    let i = 0;
+    const n = text.length;
+
+    while (i < n) {
+        if (state.inBlockComment) {
+            const close = text.indexOf("}##", i);
+            if (close === -1) { result.code += blank(n - i); break; }
+            state.inBlockComment = false;
+            result.blockCommentClosed = true;
+            result.code += blank(close + 3 - i);
+            i = close + 3;
+            continue;
+        }
+
+        if (state.tripleDelim) {
+            const close = text.indexOf(state.tripleDelim, i);
+            if (close === -1) { result.code += blank(n - i); break; }
+            const width = state.tripleDelim.length;
+            state.tripleDelim = null;
+            result.code += blank(close + width - i);
+            i = close + width;
+            continue;
+        }
+
+        const ch = text[i];
+        const isDollar = ch === "$";
+        const quoteAt = isDollar ? i + 1 : i;
+        const triple = text.substr(quoteAt, 3);
+
+        // Triple-quoted forms: """…""", '''…''', $"""…""", $'''…'''
+        if (TRIPLE_DELIMITERS.includes(triple)) {
+            const bodyStart = quoteAt + 3;
+            const close = text.indexOf(triple, bodyStart);
+            if (close === -1) {
+                state.tripleDelim = triple;
+                result.code += blank(n - i);
+                break;
+            }
+            result.code += blank(close + 3 - i);
+            i = close + 3;
+            continue;
+        }
+
+        // Single-line string forms: "…", '…', $"…", $'…'
+        const quoteChar = text[quoteAt];
+        if (quoteChar === '"' || quoteChar === "'") {
+            let j = quoteAt + 1;
+            // Single-quoted strings are literal — no escape processing.
+            const honoursEscapes = quoteChar === '"';
+            while (j < n) {
+                if (honoursEscapes && text[j] === "\\") { j += 2; continue; }
+                if (text[j] === quoteChar) { j++; break; }
+                j++;
+            }
+            result.code += blank(Math.min(j, n) - i);
+            i = j;
+            continue;
+        }
+
+        if (ch === "#") {
+            // `##{` opens a block comment; everything else is a line comment.
+            if (text.startsWith("##{", i)) {
+                const close = text.indexOf("}##", i + 3);
+                if (close === -1) {
+                    state.inBlockComment = true;
+                    result.blockCommentOpened = true;
+                    result.code += blank(n - i);
+                    break;
+                }
+                // Opened and closed on this same line — no folding state changes.
+                result.code += blank(close + 3 - i);
+                i = close + 3;
+                continue;
+            }
+
+            if (opensToshComment(text, i)) {
+                result.commentKind = text[i + 1] === "#" ? "doc" : "line";
+                result.code += blank(n - i);
+                break;
+            }
+        }
+
+        result.code += ch;
+        i++;
+    }
+
+    return result;
+}
+
+/**
+ * Folding for TōSh. The language server does not implement
+ * `textDocument/foldingRange`, so this is the only structural source; VS Code
+ * merges it with the marker rules in language-configuration.json.
+ *
+ * Provides:
+ *   - doc-comment blocks (`##`) above declarations, as Comment ranges so
+ *     "Fold All Block Comments" reaches them
+ *   - `##{ … }##` block comments
+ *   - runs of ordinary `#` comments
+ *   - `# region` / `# endregion` pairs, as Region ranges
+ *   - every bracket pair, including the `{| |}` `{% %}` `{: :}` collection
+ *     literals, counted against string- and comment-masked text
+ */
+class ToshFoldingRangeProvider {
+    provideFoldingRanges(document, _context, cancellation) {
+        const ranges = [];
+        const state = { inBlockComment: false, tripleDelim: null };
+
+        const bracketStack = [];
+        const regionStack = [];
+
+        let commentRunStart = -1;
+        let commentRunKind = null;
+        let blockCommentStart = -1;
+        let tripleStringStart = -1;
+
+        const flushCommentRun = (endLine) => {
+            if (commentRunStart >= 0 && endLine > commentRunStart) {
+                ranges.push(new vscode.FoldingRange(
+                    commentRunStart, endLine, vscode.FoldingRangeKind.Comment));
+            }
+            commentRunStart = -1;
+            commentRunKind = null;
+        };
+
+        for (let line = 0; line < document.lineCount; line++) {
+            if (cancellation && cancellation.isCancellationRequested) return ranges;
+
+            const text = document.lineAt(line).text;
+            const wasInBlockComment = state.inBlockComment;
+            const wasInTripleString = state.tripleDelim !== null;
+            const scan = scanToshLine(text, state);
+
+            // ── Block comments ──
+            if (!wasInBlockComment && state.inBlockComment) {
+                blockCommentStart = line;
+            } else if (wasInBlockComment && !state.inBlockComment) {
+                if (blockCommentStart >= 0 && line > blockCommentStart) {
+                    ranges.push(new vscode.FoldingRange(
+                        blockCommentStart, line, vscode.FoldingRangeKind.Comment));
+                }
+                blockCommentStart = -1;
+            }
+
+            // ── Multi-line strings ──
+            if (!wasInTripleString && state.tripleDelim) {
+                tripleStringStart = line;
+            } else if (wasInTripleString && !state.tripleDelim) {
+                if (tripleStringStart >= 0 && line > tripleStringStart) {
+                    ranges.push(new vscode.FoldingRange(tripleStringStart, line));
+                }
+                tripleStringStart = -1;
+            }
+
+            if (state.inBlockComment || state.tripleDelim || wasInBlockComment || wasInTripleString) {
+                continue;
+            }
+
+            // ── Region markers ──
+            const regionOpen = /^\s*#\s*region\b/.test(text);
+            const regionClose = /^\s*#\s*endregion\b/.test(text);
+            if (regionOpen) {
+                flushCommentRun(line - 1);
+                regionStack.push(line);
+                continue;
+            }
+            if (regionClose) {
+                flushCommentRun(line - 1);
+                const start = regionStack.pop();
+                if (start !== undefined && line > start) {
+                    ranges.push(new vscode.FoldingRange(
+                        start, line, vscode.FoldingRangeKind.Region));
+                }
+                continue;
+            }
+
+            // ── Comment runs ──
+            // A run is a maximal block of consecutive whole-line comments of the
+            // same kind. Doc and plain comments never merge into one range, so a
+            // `##` block above a declaration folds on its own.
+            const isWholeLineComment =
+                scan.commentKind !== null && scan.code.trim().length === 0;
+
+            if (isWholeLineComment) {
+                if (commentRunKind !== scan.commentKind) {
+                    flushCommentRun(line - 1);
+                    commentRunStart = line;
+                    commentRunKind = scan.commentKind;
+                }
+            } else {
+                flushCommentRun(line - 1);
+            }
+
+            // ── Brackets ──
+            const code = scan.code;
+            for (let i = 0; i < code.length; i++) {
+                const two = code.substr(i, 2);
+                const opener = FOLD_BRACKETS.find(b => b.open.length === 2 && b.open === two)
+                    || FOLD_BRACKETS.find(b => b.open.length === 1 && b.open === code[i]);
+                const closer = FOLD_BRACKETS.find(b => b.close.length === 2 && b.close === two)
+                    || FOLD_BRACKETS.find(b => b.close.length === 1 && b.close === code[i]);
+
+                // A two-character collection delimiter wins over the bare brace.
+                if (closer && closer.close.length === 2) {
+                    popBracket(bracketStack, ranges, closer.close, line);
+                    i++;
+                    continue;
+                }
+                if (opener && opener.open.length === 2) {
+                    bracketStack.push({ close: opener.close, line });
+                    i++;
+                    continue;
+                }
+                if (closer) {
+                    popBracket(bracketStack, ranges, closer.close, line);
+                    continue;
+                }
+                if (opener) {
+                    bracketStack.push({ close: opener.close, line });
+                }
+            }
+        }
+
+        flushCommentRun(document.lineCount - 1);
+        if (blockCommentStart >= 0 && document.lineCount - 1 > blockCommentStart) {
+            ranges.push(new vscode.FoldingRange(
+                blockCommentStart, document.lineCount - 1, vscode.FoldingRangeKind.Comment));
+        }
+
+        return ranges;
+    }
+}
+
+function popBracket(stack, ranges, closeToken, line) {
+    // Tolerate mismatches: unwind to the nearest matching opener so one stray
+    // bracket cannot destroy folding for the rest of the file.
+    for (let i = stack.length - 1; i >= 0; i--) {
+        if (stack[i].close !== closeToken) continue;
+        const entry = stack[i];
+        stack.length = i;
+        if (line > entry.line) {
+            ranges.push(new vscode.FoldingRange(entry.line, line - 1));
+        }
+        return;
+    }
+}
+
 // ─── Local language providers (fallback when LSP unavailable) ─────────────────
 
 class ToshCompletionProvider {
@@ -1594,60 +2283,90 @@ function formatRichHover(entry) {
     return parts.join("\n\n");
 }
 
+// Every declaration form the language has, so the outline and the fallback
+// completions stay in step with the grammar. MODIFIER_PREFIX matches any run of
+// leading modifiers, since `shy static overrule func f` is one declaration.
+const MODIFIER_PREFIX =
+    "(?:(?:shy|private|proud|public|guarded|protected|local|global|export|sealed|hollow|" +
+    "abstract|partial|overrule|override|static|shared|hermit|strict|fluid|leaky|lazy|" +
+    "fixed|readonly|vital|required|fading|obsolete|raw|eager|hidden)\\s+)*";
+
+const DECLARATION_FORMS = [
+    { keyword: "class", symbol: "Class", completion: "Class" },
+    { keyword: "interface", symbol: "Interface", completion: "Interface" },
+    { keyword: "struct", symbol: "Struct", completion: "Struct" },
+    { keyword: "trait", symbol: "Interface", completion: "Interface" },
+    { keyword: "union", symbol: "Enum", completion: "Enum" },
+    { keyword: "record", symbol: "Struct", completion: "Struct" },
+    { keyword: "enum", symbol: "Enum", completion: "Enum" },
+    { keyword: "module", symbol: "Module", completion: "Module" },
+    { keyword: "type", symbol: "Struct", completion: "Struct" },
+    { keyword: "rune", symbol: "Function", completion: "Function" },
+    { keyword: "event", symbol: "Event", completion: "Event" },
+    { keyword: "subcommand", symbol: "Function", completion: "Function" },
+    { keyword: "func", symbol: "Function", completion: "Function" },
+    { keyword: "prop", symbol: "Property", completion: "Property" }
+];
+
+function declarationRegex(keyword, flags) {
+    return new RegExp(
+        `^\\s*${MODIFIER_PREFIX}${keyword}\\s+([A-Za-z_][A-Za-z0-9_-]*)`, flags);
+}
+
 class ToshDocumentSymbolProvider {
     provideDocumentSymbols(document) {
-        const symbols = [];
+        const topSymbols = [];
+        const containerStack = [];
         const text = document.getText();
         const lines = text.split(/\r?\n/);
 
-        const patterns = [
-            {
-                regex: /^\s*(?:(?:shy|global|export)\s+)?class\s+([A-Za-z_][A-Za-z0-9_-]*)/,
-                kind: vscode.SymbolKind.Class
-            },
-            {
-                regex: /^\s*(?:(?:shy|global|export)\s+)?module\s+([A-Za-z_][A-Za-z0-9_-]*)/,
-                kind: vscode.SymbolKind.Module
-            },
-            {
-                regex: /^\s*(?:(?:shy|global|export)\s+)?enum\s+([A-Za-z_][A-Za-z0-9_-]*)/,
-                kind: vscode.SymbolKind.Enum
-            },
-            {
-                regex: /^\s*(?:(?:shy|global|export)\s+)?record\s+([A-Za-z_][A-Za-z0-9_-]*)/,
-                kind: vscode.SymbolKind.Struct
-            },
-            {
-                regex: /^\s*(?:(?:shy|global|export)\s+)?func\s+([A-Za-z_][A-Za-z0-9_-]*)/,
-                kind: vscode.SymbolKind.Function
-            },
-            {
-                regex: /^\s*(?:(?:shy|global|export)\s+)?var\s+([A-Za-z_][A-Za-z0-9_]*)/,
-                kind: vscode.SymbolKind.Variable
-            }
-        ];
+        const patterns = DECLARATION_FORMS.map(form => ({
+            keyword: form.keyword,
+            regex: declarationRegex(form.keyword),
+            kind: vscode.SymbolKind[form.symbol]
+        }));
 
         lines.forEach((line, index) => {
+            const trimmed = line.trim();
+            if (!trimmed || trimmed.startsWith("#")) return;
+
             for (const pattern of patterns) {
                 const match = line.match(pattern.regex);
-                if (!match) {
-                    continue;
-                }
+                if (!match) continue;
 
+                const name = match[1];
                 const start = new vscode.Position(index, match.index || 0);
                 const end = new vscode.Position(index, line.length);
-                symbols.push(new vscode.DocumentSymbol(
-                    match[1],
-                    "",
+                const range = new vscode.Range(start, end);
+
+                const sym = new vscode.DocumentSymbol(
+                    name,
+                    pattern.keyword,
                     pattern.kind,
-                    new vscode.Range(start, end),
-                    new vscode.Range(start, end)
-                ));
+                    range,
+                    range
+                );
+
+                const indent = line.search(/\S/);
+                while (containerStack.length > 0 && containerStack[containerStack.length - 1].indent >= indent) {
+                    containerStack.pop();
+                }
+
+                if (containerStack.length > 0) {
+                    containerStack[containerStack.length - 1].symbol.children.push(sym);
+                } else {
+                    topSymbols.push(sym);
+                }
+
+                if (["module", "class", "record", "enum", "subcommand"].includes(pattern.keyword)) {
+                    containerStack.push({ indent, symbol: sym });
+                }
+
                 break;
             }
         });
 
-        return symbols;
+        return topSymbols;
     }
 }
 
@@ -1696,14 +2415,10 @@ function buildSpecialVariableCompletions() {
 function buildDeclaredSymbolCompletions(document) {
     const completions = [];
     const seen = new Set();
-    const patterns = [
-        { regex: /^\s*(?:(?:shy|global|export)\s+)?class\s+([A-Za-z_][A-Za-z0-9_-]*)/gm, kind: vscode.CompletionItemKind.Class },
-        { regex: /^\s*(?:(?:shy|global|export)\s+)?module\s+([A-Za-z_][A-Za-z0-9_-]*)/gm, kind: vscode.CompletionItemKind.Module },
-        { regex: /^\s*(?:(?:shy|global|export)\s+)?enum\s+([A-Za-z_][A-Za-z0-9_-]*)/gm, kind: vscode.CompletionItemKind.Enum },
-        { regex: /^\s*(?:(?:shy|global|export)\s+)?record\s+([A-Za-z_][A-Za-z0-9_-]*)/gm, kind: vscode.CompletionItemKind.Struct },
-        { regex: /^\s*(?:(?:shy|global|export)\s+)?func\s+([A-Za-z_][A-Za-z0-9_-]*)/gm, kind: vscode.CompletionItemKind.Function },
-        { regex: /^\s*(?:(?:shy|global|export)\s+)?var\s+([A-Za-z_][A-Za-z0-9_]*)/gm, kind: vscode.CompletionItemKind.Variable }
-    ];
+    const patterns = DECLARATION_FORMS.map(form => ({
+        regex: declarationRegex(form.keyword, "gm"),
+        kind: vscode.CompletionItemKind[form.completion]
+    }));
 
     for (const pattern of patterns) {
         let match;
@@ -1726,19 +2441,23 @@ function buildDeclaredSymbolCompletions(document) {
 function buildVariableCompletions(document) {
     const completions = [];
     const seen = new Set();
-    const regex = /^\s*(?:(?:shy|global|export)\s+)?var\s+([A-Za-z_][A-Za-z0-9_]*)/gm;
-    let match;
+    // `const` and `prop` bind names referenced as `$name` too, not just `var`.
+    const text = document.getText();
 
-    while ((match = regex.exec(document.getText())) !== null) {
-        const label = `$${match[1]}`;
-        if (seen.has(label)) {
-            continue;
+    for (const keyword of ["var", "const", "prop", "alloc"]) {
+        const regex = declarationRegex(keyword, "gm");
+        let match;
+        while ((match = regex.exec(text)) !== null) {
+            const label = `$${match[1]}`;
+            if (seen.has(label)) {
+                continue;
+            }
+
+            seen.add(label);
+            const item = new vscode.CompletionItem(label, vscode.CompletionItemKind.Variable);
+            item.detail = `Declared with '${keyword}' in current document`;
+            completions.push(item);
         }
-
-        seen.add(label);
-        const item = new vscode.CompletionItem(label, vscode.CompletionItemKind.Variable);
-        item.detail = "Variable declared in current document";
-        completions.push(item);
     }
 
     return completions;

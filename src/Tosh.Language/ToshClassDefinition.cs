@@ -1804,6 +1804,15 @@ public sealed class ToshClassDefinition : IShellNamedType
                     cancellationToken);
             }
 
+            // `extend` methods, last of all: a class's own members — inherited ones
+            // and a callable held in a property included — always win, so an
+            // extension can only ever add a name the class did not have
+            // (`TS-P3-27`).
+            if (await _engine.TryInvokeExtensionAsync(instance, methodName, arguments, cancellationToken) is { } extension)
+            {
+                return extension;
+            }
+
             throw new InvalidOperationException($"Method '{methodName}' was not found on class '{Name}'.");
         }
 

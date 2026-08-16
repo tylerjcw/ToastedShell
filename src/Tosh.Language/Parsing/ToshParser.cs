@@ -642,6 +642,11 @@ public static class ToshParser
                 return ParseRuneDefinitionStatement(docTokens);
             }
 
+            if (LooksLikeExtendDefinition())
+            {
+                return ParseExtendStatement(docTokens);
+            }
+
             if (LooksLikeClassDefinition())
             {
                 return ParseClassDefinitionStatement(docTokens);
@@ -11878,6 +11883,38 @@ public static class ToshParser
                    IsValidCommandName(Peek(offset + 1).Text) &&
                    (Peek(offset + 2).Kind == SyntaxTokenKind.OpenParen ||
                     Peek(offset + 2).Kind == SyntaxTokenKind.OpenBrace);
+        }
+
+        /// <summary>
+        /// <c>extend TypeName {</c>. Distinct from <c>extends</c>, which is the
+        /// inheritance clause — the two are told apart by the whole word, so a class
+        /// named <c>extend</c> is the only thing given up (<c>TS-P3-27</c>).
+        /// </summary>
+        private bool LooksLikeExtendDefinition()
+        {
+            var offset = GetDeclarationModifierOffset();
+
+            return MatchesKeywordAtOffset(offset, "extend") &&
+                   Peek(offset + 1).Kind == SyntaxTokenKind.Bareword &&
+                   IsValidIdentifier(Peek(offset + 1).Text);
+        }
+
+        private StatementSyntax ParseExtendStatement(IReadOnlyList<SyntaxToken>? docTokens = null)
+        {
+            var start = Current.Span.Start;
+            var modifier = ParseDeclarationModifier();
+
+            NextToken(); // extend
+
+            var nameToken = Current.Kind == SyntaxTokenKind.Bareword ? NextToken() : ExpectVariableName();
+            var members = ParseClassBody(nameToken.Text);
+
+            return new ExtendStatementSyntax(
+                nameToken.Text,
+                members,
+                modifier,
+                TextSpan.FromBounds(start, Current.Span.Start),
+                DocComment.Parse(docTokens ?? Array.Empty<SyntaxToken>()));
         }
 
         private bool LooksLikeClassDefinition()

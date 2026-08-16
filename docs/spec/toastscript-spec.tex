@@ -614,6 +614,7 @@ modifier before \code{class}, a member modifier before \code{prop}, or
   \item \code{enum}
   \item \code{event}
   \item \code{export}
+  \item \code{extend}
   \item \code{extends}
   \item \code{fading}
   \item \code{false}
@@ -4837,6 +4838,30 @@ an error either way.
 \code{has} tests that \emph{every} bit of the right operand is set in the left,
 so a composite flag answers true only when it is wholly present. A zero flag is
 vacuously present, matching \code{Enum.HasFlag}.
+
+\section{Extension Methods}
+\ikw{extend}
+
+\code{extend} adds methods to a type it does not own.  \code{\$this} is the
+receiver.
+
+\begin{lstlisting}
+extend Color {
+    func ToGl()  -> GlColor => Gfx.ToGl($this)
+    func Darken(by: double) -> Color => Gfx.Lerp($this, Black, $by)
+}
+
+$tint.ToGl()
+$tint.Darken(0.2)
+\end{lstlisting}
+
+An extension can only ever \emph{add} a name.  Dispatch reaches it last --- after
+the receiver's own methods, after inherited ones, and after a callable held in a
+property --- so no call that already worked can change meaning.
+
+Extensions are registered when the declaration runs, so a \code{require}d module
+brings its extensions with it.  An extension may declare only methods: it has
+nowhere to put state.
 
 \section{Event Definitions}
 \ikw{event}\ikw{raise}\ikw{required}

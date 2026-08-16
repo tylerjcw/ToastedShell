@@ -250,6 +250,9 @@ public static class LanguageSurface
             ["uses"] = LanguageWordKind.Composition,
             ["fulfills"] = LanguageWordKind.Composition,
             ["extends"] = LanguageWordKind.Composition,
+
+            // `TS-P3-27`. The declaration, distinct from the `extends` clause above.
+            ["extend"] = LanguageWordKind.TypeDeclaration,
             ["implements"] = LanguageWordKind.Composition,
 
             // ── Operator words ─────────────────────────────────────────────────

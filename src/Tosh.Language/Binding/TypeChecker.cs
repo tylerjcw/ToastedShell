@@ -44,6 +44,13 @@ public static class TypeChecker
         _classContracts = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
         CollectUserClasses(unit.Root, _classBaseNames, _classContracts);
 
+        // Read from the parse tree rather than the bound one: `extend` adds no
+        // bound node of its own, and the names are all this needs (`TS-P3-27`).
+        if (unit.ParseResult is ParseResult parsed)
+        {
+            CollectExtensionMethodNames(parsed.Statement, ctx.ExtensionMethodNames);
+        }
+
         try
         {
         // Pre-pass: harvest user-function signatures so call-site
@@ -311,6 +318,58 @@ public static class TypeChecker
         public BoundType? CurrentReturnType { get; set; }
         public string? SourceName => (Unit.ParseResult as ParseResult)?.SourceName;
         public string? SourceText => (Unit.ParseResult as ParseResult)?.SourceText;
+
+        /// <summary>
+        /// Method names declared by `extend` blocks in this source.
+        /// </summary>
+        /// <remarks>
+        /// A method reached through an extension is not on the type, so the
+        /// member-not-found check has to know about them or it warns about every
+        /// extension call (`TS-P3-27`). Names only, and not per-type: extensions also
+        /// arrive with imported modules, which are not in this unit, so a check keyed
+        /// on the receiver's type would still be wrong for those — and a warning that
+        /// is right about the type but wrong about the import is no better than one
+        /// that is simply quiet. Being quiet about a name somebody extended somewhere
+        /// is the smaller error.
+        /// </remarks>
+        public HashSet<string> ExtensionMethodNames { get; } = new(StringComparer.OrdinalIgnoreCase);
+    }
+
+    /// <summary>Gathers the method names every <c>extend</c> block declares.</summary>
+    private static void CollectExtensionMethodNames(StatementSyntax? statement, HashSet<string> sink)
+    {
+        switch (statement)
+        {
+            case null:
+                return;
+
+            case ExtendStatementSyntax extend:
+                foreach (var member in extend.Members)
+                {
+                    if (member is ClassMethodMemberSyntax method)
+                    {
+                        sink.Add(method.Method.Name);
+                    }
+                }
+
+                return;
+
+            case ScriptStatementSyntax script:
+                foreach (var child in script.Statements)
+                {
+                    CollectExtensionMethodNames(child, sink);
+                }
+
+                return;
+
+            case ModuleDefinitionStatementSyntax module:
+                foreach (var child in module.Body.Statements)
+                {
+                    CollectExtensionMethodNames(child, sink);
+                }
+
+                return;
+        }
     }
 
     private static void CollectUserFunctions(
@@ -1242,6 +1301,8 @@ public static class TypeChecker
             // A base class, trait or partial half can carry the member, and none of those are
             // reachable from here — so absence is only reported when the declaration is complete.
             if (UserTypeMembers.MayHaveUnseenMembers(targetType)) return;
+            if (ctx.ExtensionMethodNames.Contains(call.MethodName)) return;
+
 
             ctx.Diagnostics.Add(new ToshDiagnostic(
                 Code: "tosh.type.member_not_found",
@@ -1441,6 +1502,8 @@ public static class TypeChecker
 
         if (overloads.Length == 0)
         {
+            if (ctx.ExtensionMethodNames.Contains(call.MethodName)) return;
+
             ctx.Diagnostics.Add(new ToshDiagnostic(
                 Code: "tosh.type.member_not_found",
                 Title: $"Method '{call.MethodName}' was not found on type '{targetType.ClrType.Name}'.",

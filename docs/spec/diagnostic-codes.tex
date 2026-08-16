@@ -10,7 +10,7 @@ Non-error diagnostics can be suppressed with the \texttt{hush} builtin
 (scope-local) or by adding their codes to
 \texttt{\$tosh.Config.Diagnostics.Hushed}.
 
-This chapter lists all 533 diagnostic codes currently emitted by the
+This chapter lists all 534 diagnostic codes currently emitted by the
 implementation, grouped by namespace. It is generated from the source tree
 by \texttt{scripts/extract-diagnostic-codes.tosh} and should be
 regenerated whenever new diagnostics are added.
@@ -33,7 +33,7 @@ regenerated whenever new diagnostics are added.
 \texttt{tosh.native.*} & 3 & --- \\
 \texttt{tosh.parser.*} & 167 & Raised by the lexer or parser before any code runs. Indicates malformed source text. \\
 \texttt{tosh.row.*} & 1 & --- \\
-\texttt{tosh.runtime.*} & 326 & Raised by the engine while evaluating a script. The bulk of TōSh diagnostics live here. \\
+\texttt{tosh.runtime.*} & 327 & Raised by the engine while evaluating a script. The bulk of TōSh diagnostics live here. \\
 \texttt{tosh.tui.*} & 8 & Raised by the `tui` subsystem (terminal UI widgets, screens, providers). \\
 \texttt{tosh.type.*} & 9 & --- \\
 \texttt{tosh.user.*} & 1 & --- \\
@@ -367,6 +367,7 @@ Raised by the engine while evaluating a script. The bulk of TōSh diagnostics li
 \item[\texttt{\small tosh.runtime.exec\_missing\_command}] `exec` needs a command to run.
 \item[\texttt{\small tosh.runtime.exec\_pipeline\_unsupported}] `exec` only works as a standalone command.
 \item[\texttt{\small tosh.runtime.expression\_failed}] Argument '\{parameter.Name\}' could not be converted to '\{parameter.TypeName\}'.
+\item[\texttt{\small tosh.runtime.extend\_member\_not\_a\_method}] 'extend \{extend.TypeName\}' can only declare methods.
 \item[\texttt{\small tosh.runtime.extend\_sealed\_class}] Class '\{@class.Name\}' cannot extend sealed class '\{@class.BaseClassName\}'.
 \item[\texttt{\small tosh.runtime.external\_command\_is\_directory}] '\{external.ResolvedPath ?? commandSyntax.Name\}' is a directory, not an executable file.
 \item[\texttt{\small tosh.runtime.external\_command\_not\_executable}] '\{external.ResolvedPath ?? commandSyntax.Name\}' is not executable.

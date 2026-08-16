@@ -119,6 +119,23 @@ public sealed class ReflectionInvoker
         return ValueTask.FromResult(CreateInstance(type, arguments));
     }
 
+    /// <summary>
+    /// Consulted when a receiver has no method of the given name, so that
+    /// <c>extend</c> declarations can supply one.
+    /// </summary>
+    /// <remarks>
+    /// A delegate rather than a direct call because extensions are the engine's
+    /// knowledge — they live in lexical scope, arrive with imported modules, and are
+    /// written in ToastScript, none of which the invoker can see. Hooking here rather
+    /// than at the engine's several call sites keeps one rule in one place
+    /// (<c>TS-P3-27</c>).
+    /// </remarks>
+    public Func<object, string, IReadOnlyList<object?>, CancellationToken, ValueTask<InvocationResult?>>? ExtensionResolver { get; set; }
+
+    /// <summary>Whether a CLR receiver declares any method of this name.</summary>
+    private bool HasInstanceMethod(object target, string methodName)
+        => MethodsNamed(target.GetType(), isStatic: false, methodName).Length > 0;
+
     public InvocationResult InvokeInstance(object target, string methodName, IReadOnlyList<object?> arguments)
     {
         ArgumentNullException.ThrowIfNull(target);
@@ -191,6 +208,23 @@ public sealed class ReflectionInvoker
             return ValueTask.FromResult(InvokeStatic(staticType, methodName, arguments));
         }
 
+        // An `extend` declaration only ever supplies a method the receiver does not
+        // have, so a real member always wins and an extension cannot change the
+        // meaning of code that already worked (`TS-P3-27`).
+        if (ExtensionResolver is { } resolve && !HasInstanceMethod(target, methodName))
+        {
+            return InvokeExtensionOrFailAsync(resolve, target, methodName, arguments, typeArguments, cancellationToken);
+        }
+
+        return ValueTask.FromResult(InvokeInstanceCore(target, methodName, arguments, typeArguments));
+    }
+
+    private InvocationResult InvokeInstanceCore(
+        object target,
+        string methodName,
+        IReadOnlyList<object?> arguments,
+        IReadOnlyList<Type>? typeArguments)
+    {
         var candidates = MethodsNamed(target.GetType(), isStatic: false, methodName);
 
         if (typeArguments is { Count: > 0 })
@@ -202,12 +236,32 @@ public sealed class ReflectionInvoker
                 $"'{target.GetType().FullName}'");
         }
 
-        return ValueTask.FromResult(Invoke(
+        return Invoke(
             candidates,
             target,
             methodName,
             arguments,
-            $"instance method '{methodName}' on '{target.GetType().FullName}'"));
+            $"instance method '{methodName}' on '{target.GetType().FullName}'");
+    }
+
+    /// <summary>
+    /// Runs the extension the resolver found, or falls through to ordinary dispatch
+    /// so the "no overload matched" diagnostic stays the one the reader sees.
+    /// </summary>
+    private async ValueTask<InvocationResult> InvokeExtensionOrFailAsync(
+        Func<object, string, IReadOnlyList<object?>, CancellationToken, ValueTask<InvocationResult?>> resolve,
+        object target,
+        string methodName,
+        IReadOnlyList<object?> arguments,
+        IReadOnlyList<Type>? typeArguments,
+        CancellationToken cancellationToken)
+    {
+        if (await resolve(target, methodName, arguments, cancellationToken) is { } extension)
+        {
+            return extension;
+        }
+
+        return InvokeInstanceCore(target, methodName, arguments, typeArguments);
     }
 
     /// <summary>
