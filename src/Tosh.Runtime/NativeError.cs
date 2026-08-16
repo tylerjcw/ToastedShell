@@ -28,8 +28,24 @@ public class NativeError : ToshError
         ErrnoName = LookupErrnoName(errno);
     }
 
-    /// <summary>Diagnostic code, e.g. <c>libc.so.6.sysinfo</c>.</summary>
-    public string Code => $"{Library}.{Symbol}";
+    /// <summary>
+    /// Diagnostic code. Constant, because a code is an identifier and not a message.
+    /// </summary>
+    /// <remarks>
+    /// This built the code from the library path and symbol, so a failure in
+    /// <c>/home/…/lib/libprobe.so</c> reported
+    /// <c>tosh.native./home/…/lib/libprobe.so.may_fail</c>. A code is what
+    /// <c>hush</c> matches on and what the diagnostic reference documents, so one
+    /// containing an absolute path could not be hushed portably, could not be
+    /// documented, and differed between machines for the same failure
+    /// (<c>TS-P3-25</c>).
+    ///
+    /// The engine prefixes <c>tosh.native.</c>, so the rendered code is
+    /// <c>tosh.native.call_failed</c>. Nothing is lost: the library and symbol are
+    /// already in <see cref="ToshError.Message"/> and <see cref="Help"/>, which is
+    /// where a reader looks for them.
+    /// </remarks>
+    public string Code => "call_failed";
 
     public string DiagnosticTitle => Message;
 

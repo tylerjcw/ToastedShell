@@ -1463,54 +1463,20 @@ public sealed class ToshLexer
             ? text.Replace("_", "", StringComparison.Ordinal)
             : text;
 
-        // Hex: 0x/0X prefix
-        if (textForParsing.Length > 2 && textForParsing[0] == '0' && textForParsing[1] is 'x' or 'X')
+        // Integer literals — every base, and the optional width suffix.
+        //
+        // `TS-P2-123`. Hex was parsed into a `long`, so sixteen F's became -1 by
+        // two's complement and then *fitted `int`*, leaving `0xFFFFFFFFFFFFFFFF`
+        // an `Int32 -1`: a 64-bit mask silently truncated to 32 bits. Decimal past
+        // `long.MaxValue` fell through to `double`, so the upper half of `ulong`
+        // could not be written at all.
+        //
+        // The rule now is one rule for every base: a literal takes the narrowest of
+        // `int`, `long`, `ulong` that holds it, and one that fits none of them is a
+        // diagnostic rather than a silently different number.
+        if (TryCreateIntegerToken(text, textForParsing, start, out var integerToken))
         {
-            if (long.TryParse(textForParsing.AsSpan(2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var hexValue))
-            {
-                object boxed = hexValue is >= int.MinValue and <= int.MaxValue ? (object)(int)hexValue : hexValue;
-                return new SyntaxToken(SyntaxTokenKind.Number, start, text, boxed);
-            }
-        }
-
-        // Binary: 0b/0B prefix
-        if (textForParsing.Length > 2 && textForParsing[0] == '0' && textForParsing[1] is 'b' or 'B')
-        {
-            try
-            {
-                var binValue = Convert.ToInt64(textForParsing[2..], 2);
-                object boxed = binValue is >= int.MinValue and <= int.MaxValue ? (object)(int)binValue : binValue;
-                return new SyntaxToken(SyntaxTokenKind.Number, start, text, boxed);
-            }
-            catch (FormatException) { /* not a valid binary literal */ }
-            catch (OverflowException)
-            {
-                throw CreateNumericOverflowDiagnostic(text, start, "binary");
-            }
-        }
-
-        // Octal: 0o/0O prefix
-        if (textForParsing.Length > 2 && textForParsing[0] == '0' && textForParsing[1] is 'o' or 'O')
-        {
-            try
-            {
-                var octValue = Convert.ToInt64(textForParsing[2..], 8);
-                object boxed = octValue is >= int.MinValue and <= int.MaxValue ? (object)(int)octValue : octValue;
-                return new SyntaxToken(SyntaxTokenKind.Number, start, text, boxed);
-            }
-            catch (FormatException) { /* not a valid octal literal */ }
-            catch (OverflowException)
-            {
-                throw CreateNumericOverflowDiagnostic(text, start, "octal");
-            }
-        }
-
-        if (long.TryParse(textForParsing, NumberStyles.Integer, CultureInfo.InvariantCulture, out var integerValue))
-        {
-            object boxed = integerValue is >= int.MinValue and <= int.MaxValue
-                ? (object)(int)integerValue
-                : integerValue;
-            return new SyntaxToken(SyntaxTokenKind.Number, start, text, boxed);
+            return integerToken;
         }
 
         if (double.TryParse(textForParsing, NumberStyles.Float | NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var floatingValue))
@@ -1520,6 +1486,156 @@ public sealed class ToshLexer
 
         return new SyntaxToken(SyntaxTokenKind.Bareword, start, text, text);
     }
+
+    /// <summary>The width a literal's suffix pins it to, if it carries one.</summary>
+    private enum IntegerSuffix { None, Unsigned, Long, UnsignedLong }
+
+    /// <summary>
+    /// Classifies an integer literal in any base, honouring a trailing width suffix.
+    /// </summary>
+    /// <remarks>
+    /// Returns <see langword="false"/> for anything that is not an integer literal —
+    /// a decimal point, an exponent, a bareword — so the caller can carry on to the
+    /// floating-point and identifier readings. A literal that *is* an integer but
+    /// fits no integer type throws, rather than quietly becoming a `double`.
+    /// </remarks>
+    private static bool TryCreateIntegerToken(string text, string textForParsing, int start, out SyntaxToken token)
+    {
+        token = default!;
+
+        var digits = textForParsing;
+        var suffix = IntegerSuffix.None;
+
+        // `u`, `L`, `UL` — case-insensitive, and `LU` for the people who write it
+        // that way. Stripped before parsing so every base sees plain digits.
+        foreach (var (text_, kind) in new[]
+                 {
+                     ("ul", IntegerSuffix.UnsignedLong),
+                     ("lu", IntegerSuffix.UnsignedLong),
+                     ("u", IntegerSuffix.Unsigned),
+                     ("l", IntegerSuffix.Long),
+                 })
+        {
+            if (digits.Length > text_.Length &&
+                digits.EndsWith(text_, StringComparison.OrdinalIgnoreCase))
+            {
+                digits = digits[..^text_.Length];
+                suffix = kind;
+                break;
+            }
+        }
+
+        var negative = digits.StartsWith('-');
+        var magnitude = negative || digits.StartsWith('+') ? digits[1..] : digits;
+
+        var radix = 10;
+        if (magnitude.Length > 2 && magnitude[0] == '0')
+        {
+            radix = magnitude[1] switch
+            {
+                'x' or 'X' => 16,
+                'b' or 'B' => 2,
+                'o' or 'O' => 8,
+                _ => 10,
+            };
+
+            if (radix != 10)
+            {
+                magnitude = magnitude[2..];
+            }
+        }
+
+        if (magnitude.Length == 0 || !IsAllDigitsForRadix(magnitude, radix))
+        {
+            return false;
+        }
+
+        ulong value;
+
+        try
+        {
+            value = radix == 10
+                ? ulong.Parse(magnitude, NumberStyles.None, CultureInfo.InvariantCulture)
+                : Convert.ToUInt64(magnitude, radix);
+        }
+        catch (OverflowException)
+        {
+            throw CreateNumericOverflowDiagnostic(text, start, DescribeRadix(radix));
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
+
+        if (negative)
+        {
+            // A signed literal is still bounded by `long`, and `-9223372036854775808`
+            // is legal while its magnitude is not, so the negation is applied before
+            // the range check rather than after.
+            if (value > (ulong)long.MaxValue + 1)
+            {
+                throw CreateNumericOverflowDiagnostic(text, start, DescribeRadix(radix));
+            }
+
+            var signed = value == (ulong)long.MaxValue + 1 ? long.MinValue : -(long)value;
+            token = new SyntaxToken(
+                SyntaxTokenKind.Number,
+                start,
+                text,
+                signed is >= int.MinValue and <= int.MaxValue && suffix is IntegerSuffix.None
+                    ? (object)(int)signed
+                    : signed);
+            return true;
+        }
+
+        object boxed = suffix switch
+        {
+            // Boxed explicitly: `uint` converts implicitly to `ulong`, so the two
+            // branches acquire a natural common type and the narrowing is undone —
+            // `100u` came back a `UInt64`. The other arms have no such conversion
+            // between them, so target-typing already boxes each separately.
+            IntegerSuffix.Unsigned => value <= uint.MaxValue ? (object)(uint)value : value,
+            IntegerSuffix.Long => value <= long.MaxValue
+                ? (long)value
+                : throw CreateNumericOverflowDiagnostic(text, start, DescribeRadix(radix)),
+            IntegerSuffix.UnsignedLong => value,
+            _ => value <= int.MaxValue ? (int)value
+                : value <= long.MaxValue ? (long)value
+                : value,
+        };
+
+        token = new SyntaxToken(SyntaxTokenKind.Number, start, text, boxed);
+        return true;
+    }
+
+    private static bool IsAllDigitsForRadix(string digits, int radix)
+    {
+        foreach (var c in digits)
+        {
+            var ok = radix switch
+            {
+                16 => char.IsAsciiHexDigit(c),
+                8 => c is >= '0' and <= '7',
+                2 => c is '0' or '1',
+                _ => char.IsAsciiDigit(c),
+            };
+
+            if (!ok)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static string DescribeRadix(int radix) => radix switch
+    {
+        16 => "hexadecimal",
+        8 => "octal",
+        2 => "binary",
+        _ => "decimal",
+    };
 
     /// <summary>
     /// True when text is shaped like a number, so digit-separator rules

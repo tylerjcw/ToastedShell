@@ -3140,11 +3140,45 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
         string moduleName,
         DeclarationModifier modifier)
     {
-        var requirement = ResolveNativeRequirement(nativeTarget, GetExecutionDirectory(sourceName));
+        RequireTarget requirement;
+
+        try
+        {
+            requirement = ResolveNativeRequirement(nativeTarget, GetExecutionDirectory(sourceName));
+        }
+        catch (FileNotFoundException notFound)
+        {
+            // `TS-P3-25`. This reached the reader as the generic `tosh.runtime.error`,
+            // so the commonest binding mistake of all had no code to match on.
+            throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                Code: "tosh.native.library_not_found",
+                Title: notFound.Message,
+                SourceName: sourceName,
+                SourceText: string.Empty,
+                Span: default,
+                Label: $"'{nativeTarget}' could not be loaded",
+                Help: "check the path, or give a bare name so the dynamic loader searches for it."));
+        }
 
         if (!_requiredNativeLibraries.TryGetValue(requirement.CacheKey, out var shared))
         {
-            var handle = NativeLibrary.Load(requirement.ResolvedPath);
+            nint handle;
+
+            try
+            {
+                handle = NativeLibrary.Load(requirement.ResolvedPath);
+            }
+            catch (DllNotFoundException notFound)
+            {
+                throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                    Code: "tosh.native.library_not_found",
+                    Title: $"Native library '{nativeTarget}' was not found.",
+                    SourceName: sourceName,
+                    SourceText: string.Empty,
+                    Span: default,
+                    Label: notFound.Message,
+                    Help: "check the name and that the library is installed and on the loader's search path."));
+            }
             shared = new NativeLibraryBinding(
                 requirement.ResolvedPath,
                 requirement.CacheKey,

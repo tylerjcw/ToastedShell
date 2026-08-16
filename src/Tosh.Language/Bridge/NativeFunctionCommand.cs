@@ -121,7 +121,7 @@ internal sealed class NativeFunctionCommand : IShellCommand, ICommandResolutionM
         _return = @return;
         _successPredicate = successPredicate;
         ReturnTypeName = @return?.TypeName;
-        _delegate = CreateDelegate(binding.Handle, symbolName, parameters, @return?.ClrType, callingConvention);
+        _delegate = CreateDelegate(binding.Handle, binding.Target, symbolName, parameters, @return?.ClrType, callingConvention);
     }
 
     public string ModuleName { get; }
@@ -525,12 +525,32 @@ internal sealed class NativeFunctionCommand : IShellCommand, ICommandResolutionM
 
     private static Delegate CreateDelegate(
         IntPtr libraryHandle,
+        string libraryPath,
         string symbolName,
         IReadOnlyList<NativeFunctionParameterDefinition> parameters,
         Type? returnType,
         CallingConvention callingConvention)
     {
-        var export = NativeLibrary.GetExport(libraryHandle, symbolName);
+        IntPtr export;
+
+        try
+        {
+            export = NativeLibrary.GetExport(libraryHandle, symbolName);
+        }
+        catch (EntryPointNotFoundException notFound)
+        {
+            // `TS-P3-25`. A misspelled or mangled symbol is the second commonest
+            // binding mistake, and it reached the reader as `tosh.runtime.error`
+            // with no code of its own to match on.
+            throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                Code: "tosh.native.entry_point_not_found",
+                Title: $"Native library '{libraryPath}' exports no symbol named '{symbolName}'.",
+                SourceName: string.Empty,
+                SourceText: string.Empty,
+                Span: default,
+                Label: notFound.Message,
+                Help: $"check the spelling, and that the symbol is exported — `nm -D --defined-only {libraryPath}` lists what is."));
+        }
         var delegateType = NativeDelegateTypeFactory.GetOrCreate(
             parameters,
             returnType ?? typeof(void),

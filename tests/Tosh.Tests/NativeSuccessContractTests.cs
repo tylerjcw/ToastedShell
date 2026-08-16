@@ -63,9 +63,14 @@ public class NativeSuccessContractTests
                 """));
 
         var diagnostic = Assert.Single(exception.Diagnostics);
-        Assert.Equal("tosh.native.libc.so.6.chdir", diagnostic.Code);
+        // `TS-P3-25`. The code is a stable identifier now — it used to be built from
+        // the library path and symbol, which made it differ per machine for the same
+        // failure. Both are still named, in the places a reader looks.
+        Assert.Equal("tosh.native.call_failed", diagnostic.Code);
         Assert.Contains("chdir failed", diagnostic.Title);
         Assert.Contains("ENOENT", diagnostic.Help);
+        Assert.Contains("chdir", diagnostic.Help);
+        Assert.Contains("libc.so.6", diagnostic.Help);
         Assert.Contains("returned -1", diagnostic.Label);
     }
 
@@ -103,7 +108,7 @@ public class NativeSuccessContractTests
                 LibC.sysconf(-999)
                 """));
 
-        Assert.Equal("tosh.native.libc.so.6.sysconf", Assert.Single(exception.Diagnostics).Code);
+        Assert.Equal("tosh.native.call_failed", Assert.Single(exception.Diagnostics).Code);
     }
 
     /// <summary>
@@ -174,7 +179,7 @@ public class NativeSuccessContractTests
                 LibC.sysconf(30)
                 """));
 
-        Assert.Equal("tosh.native.libc.so.6.sysconf", Assert.Single(exception.Diagnostics).Code);
+        Assert.Equal("tosh.native.call_failed", Assert.Single(exception.Diagnostics).Code);
     }
 
     /// <summary>
@@ -287,7 +292,7 @@ public class NativeSuccessContractTests
                 """));
 
         var diagnostic = Assert.Single(exception.Diagnostics);
-        Assert.Equal("tosh.native.libc.so.6.chdir", diagnostic.Code);
+        Assert.Equal("tosh.native.call_failed", diagnostic.Code);
         Assert.Contains("ENOENT", diagnostic.Help);
         Assert.Contains("returned -1", diagnostic.Label);
 
