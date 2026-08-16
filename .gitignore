@@ -10,6 +10,14 @@ packaging/archlinux/src/
 packaging/archlinux/pkg/
 tmp/
 
+# Downloaded or produced binaries. A 418 MB AppImage reached history before
+# these rules existed and had to be stripped out of it; an ignore rule cannot
+# untrack what is already committed, so the guard has to come first.
+*.AppImage
+*.appimage
+*.pkg.tar.zst
+*.pkg.tar.xz
+
 # Docs — tracked by default. Only generated output is ignored.
 #
 # This block used to be `docs/*` plus a hand-maintained per-file allowlist, which
