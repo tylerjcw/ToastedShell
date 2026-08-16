@@ -21,18 +21,26 @@ namespace Tosh.Language.Parsing;
 public sealed class ParseContext
 {
     /// <summary>
+    /// An absent set. Declared before <see cref="Empty"/> on purpose: static field
+    /// initialisers run in declaration order, so the other way round left
+    /// <see cref="Empty"/> holding three null <see cref="Lazy{T}"/> fields and every
+    /// query on it threw.
+    /// </summary>
+    private static readonly Lazy<IReadOnlySet<string>?> Nothing = new((IReadOnlySet<string>?)null);
+
+    /// <summary>
     /// A context that knows nothing. Parsing stays purely syntactic.
     /// </summary>
-    public static readonly ParseContext Empty = new(null, null, null);
+    public static readonly ParseContext Empty = new(Nothing, Nothing, Nothing);
 
-    private readonly IReadOnlySet<string>? _commandNames;
-    private readonly IReadOnlySet<string>? _moduleNames;
-    private readonly IReadOnlySet<string>? _typeNames;
+    private readonly Lazy<IReadOnlySet<string>?> _commandNames;
+    private readonly Lazy<IReadOnlySet<string>?> _moduleNames;
+    private readonly Lazy<IReadOnlySet<string>?> _typeNames;
 
     private ParseContext(
-        IReadOnlySet<string>? commandNames,
-        IReadOnlySet<string>? moduleNames,
-        IReadOnlySet<string>? typeNames)
+        Lazy<IReadOnlySet<string>?> commandNames,
+        Lazy<IReadOnlySet<string>?> moduleNames,
+        Lazy<IReadOnlySet<string>?> typeNames)
     {
         _commandNames = commandNames;
         _moduleNames = moduleNames;
@@ -48,29 +56,34 @@ public sealed class ParseContext
         IEnumerable<string>? moduleNames = null,
         IEnumerable<string>? typeNames = null)
     {
-        static IReadOnlySet<string>? ToSet(IEnumerable<string>? names)
+        static Lazy<IReadOnlySet<string>?> ToSet(IEnumerable<string>? names)
         {
             if (names is null)
             {
-                return null;
+                return Nothing;
             }
 
-            var set = new HashSet<string>(names, StringComparer.OrdinalIgnoreCase);
-            return set.Count == 0 ? null : set;
+            // Deferred, because building these is not free and the parser often does
+            // not ask. Every runtime `Parse` built all three eagerly — and an
+            // interpolation hole re-parses its text on *every evaluation*, so
+            // `$"x{$i}"` in a loop rebuilt them a million times to answer nothing.
+            // Materialising a set of ~280 command names was 37% of that probe
+            // (`TS-P2-121`).
+            return new Lazy<IReadOnlySet<string>?>(() =>
+            {
+                var set = new HashSet<string>(names, StringComparer.OrdinalIgnoreCase);
+                return set.Count == 0 ? null : set;
+            });
         }
 
-        var commands = ToSet(commandNames);
-        var modules = ToSet(moduleNames);
-        var types = ToSet(typeNames);
-
-        return commands is null && modules is null && types is null
+        return commandNames is null && moduleNames is null && typeNames is null
             ? Empty
-            : new ParseContext(commands, modules, types);
+            : new ParseContext(ToSet(commandNames), ToSet(moduleNames), ToSet(typeNames));
     }
 
     /// <summary>True when the host has a command registered under this name.</summary>
     public bool IsKnownCommand(string? name) =>
-        name is { Length: > 0 } && _commandNames?.Contains(name) == true;
+        name is { Length: > 0 } && _commandNames.Value?.Contains(name) == true;
 
     /// <summary>
     /// True when <paramref name="name"/>'s leading dotted segment names a
@@ -79,17 +92,17 @@ public sealed class ParseContext
     /// </summary>
     public bool IsKnownModuleQualifier(string? name)
     {
-        if (name is not { Length: > 0 } || _moduleNames is null)
+        if (name is not { Length: > 0 } || _moduleNames.Value is null)
         {
             return false;
         }
 
         var separator = name.IndexOf('.');
         var qualifier = separator < 0 ? name : name[..separator];
-        return qualifier.Length > 0 && _moduleNames.Contains(qualifier);
+        return qualifier.Length > 0 && _moduleNames.Value.Contains(qualifier);
     }
 
     /// <summary>True when the host knows a type by this name.</summary>
     public bool IsKnownType(string? name) =>
-        name is { Length: > 0 } && _typeNames?.Contains(name) == true;
+        name is { Length: > 0 } && _typeNames.Value?.Contains(name) == true;
 }
