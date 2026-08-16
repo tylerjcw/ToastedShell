@@ -162,6 +162,43 @@ public sealed class DotNetTypeResolver : IImportingTypeResolver
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, int> _negativeResultCache =
         new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// How many assemblies are loaded, maintained by the runtime's own event rather
+    /// than counted on demand.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The cache-invalidation guards below only need to know whether the set of loaded
+    /// assemblies has *changed* since they last looked, and they were answering that with
+    /// <c>AppDomain.CurrentDomain.GetAssemblies().Length</c> — a call that takes a runtime
+    /// lock and allocates an array of every loaded assembly, purely to read its length.
+    /// On the fast path — a cache *hit* — that was the entire cost of the call.
+    /// </para>
+    /// <para>
+    /// It showed up as `pthread_mutex_lock` and `__tls_get_addr` dominating a profile of
+    /// `var x: int = 0` counting to a million: an annotated assignment resolves its type
+    /// name twice, so a tight loop took the runtime's assembly lock two million times.
+    /// Removing it made that loop about 3x faster (`TS-P2-119`).
+    /// </para>
+    /// <para>
+    /// The count is a generation number, not a population: it only has to differ when
+    /// something new has loaded. Assemblies are never unloaded here, and the snapshot is
+    /// taken before the event is attached, so nothing is missed.
+    /// </para>
+    /// </remarks>
+    private static int _loadedAssemblyCount;
+
+    static DotNetTypeResolver()
+    {
+        AppDomain.CurrentDomain.AssemblyLoad += static (_, _) =>
+            Interlocked.Increment(ref _loadedAssemblyCount);
+
+        _loadedAssemblyCount = AppDomain.CurrentDomain.GetAssemblies().Length;
+    }
+
+    /// <summary>The generation the caches compare against; see <see cref="_loadedAssemblyCount"/>.</summary>
+    private static int LoadedAssemblyCount => Volatile.Read(ref _loadedAssemblyCount);
+
     private static readonly string[] DefaultImplicitUsings =
     [
         "System.Collections",
@@ -291,7 +328,7 @@ public sealed class DotNetTypeResolver : IImportingTypeResolver
 
         // `TS-P1-42`. The search below is expensive enough that repeating it per call made
         // static member access unusable from script; see `_resolutionCache`.
-        var assemblyCount = AppDomain.CurrentDomain.GetAssemblies().Length;
+        var assemblyCount = LoadedAssemblyCount;
 
         if (assemblyCount != _resolutionCacheAssemblyCount)
         {
@@ -362,7 +399,7 @@ public sealed class DotNetTypeResolver : IImportingTypeResolver
 
         // Same invalidation as `Resolve`: a newly loaded assembly can turn a failure into a
         // success, so any change in the count drops the cache wholesale.
-        var assemblyCount = AppDomain.CurrentDomain.GetAssemblies().Length;
+        var assemblyCount = LoadedAssemblyCount;
 
         if (assemblyCount != _resolutionCacheAssemblyCount)
         {
@@ -623,7 +660,7 @@ public sealed class DotNetTypeResolver : IImportingTypeResolver
     {
         // Fast negative: previously confirmed as not resolvable and no new assemblies loaded since.
         if (_negativeResultCache.TryGetValue(name, out var negativeAtCount) &&
-            AppDomain.CurrentDomain.GetAssemblies().Length <= negativeAtCount)
+            LoadedAssemblyCount <= negativeAtCount)
         {
             type = null;
             return false;
@@ -669,7 +706,7 @@ public sealed class DotNetTypeResolver : IImportingTypeResolver
             }
         }
 
-        _negativeResultCache[name] = AppDomain.CurrentDomain.GetAssemblies().Length;
+        _negativeResultCache[name] = LoadedAssemblyCount;
         type = null;
         return false;
     }
@@ -680,7 +717,7 @@ public sealed class DotNetTypeResolver : IImportingTypeResolver
 
         // Fast negative: previously confirmed as not resolvable and no new assemblies loaded since.
         if (_negativeResultCache.TryGetValue(cacheKey, out var negativeGenericAtCount) &&
-            AppDomain.CurrentDomain.GetAssemblies().Length <= negativeGenericAtCount)
+            LoadedAssemblyCount <= negativeGenericAtCount)
         {
             type = null;
             return false;
@@ -703,7 +740,7 @@ public sealed class DotNetTypeResolver : IImportingTypeResolver
             if (newMatch is not null) { type = newMatch; return true; }
         }
 
-        _negativeResultCache[cacheKey] = AppDomain.CurrentDomain.GetAssemblies().Length;
+        _negativeResultCache[cacheKey] = LoadedAssemblyCount;
         type = null;
         return false;
     }
@@ -882,7 +919,7 @@ public sealed class DotNetTypeResolver : IImportingTypeResolver
         // the rescan range — biting hard in single-file publishes where
         // System.Drawing.Primitives & friends load lazily as types
         // referenced by DisplayEngine are touched.
-        var indexedCount = AppDomain.CurrentDomain.GetAssemblies().Length;
+        var indexedCount = LoadedAssemblyCount;
 
         foreach (var assembly in EnumerateTrustedPlatformAssemblies())
         {

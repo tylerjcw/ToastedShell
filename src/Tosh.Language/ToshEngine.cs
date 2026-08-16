@@ -13940,8 +13940,6 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
 
         if (typeName is not null)
         {
-            ThrowIfUnknownAnnotatedType(typeName, span, sourceName, sourceText, owner);
-
             if (!TryConvertAnnotatedValue(typeName, value, out converted))
             {
                 if (converted is AnnotationRefinementFailure refinementFailure)
@@ -13954,13 +13952,30 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
                     throw refinementError.Exception;
                 }
 
+                ThrowIfUnknownAnnotatedType(typeName, span, sourceName, sourceText, owner);
                 throw AnnotationConversionFailure(typeName, value, span, sourceName, sourceText, owner);
+            }
+
+            if (value is null)
+            {
+                ThrowIfUnknownAnnotatedType(typeName, span, sourceName, sourceText, owner);
             }
         }
 
         return EnsureRefinementSatisfied(refinement, converted, span, sourceName, sourceText, owner);
     }
 
+    /// <remarks>
+    /// The unknown-type check runs only when the conversion *fails*. It produces the better
+    /// diagnostic — "unknown type annotation 'itn'" rather than "cannot convert 3 to 'itn'" —
+    /// but it answers its question by resolving the type name, which is exactly what the
+    /// conversion just did. On the success path that was a second full resolution of a name
+    /// already known to resolve, per assignment (`TS-P2-119`).
+    ///
+    /// A `null` accepted by a nullable annotation is the one case that never touches the type
+    /// name, so it is checked explicitly — otherwise `var x: Nonexistent? = null` would bind
+    /// happily against a type that does not exist.
+    /// </remarks>
     internal object? ConvertAnnotatedValue(
         string typeName,
         object? value,
@@ -13969,10 +13984,13 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
         string sourceText,
         string owner)
     {
-        ThrowIfUnknownAnnotatedType(typeName, span, sourceName, sourceText, owner);
-
         if (TryConvertAnnotatedValue(typeName, value, out var converted))
         {
+            if (value is null)
+            {
+                ThrowIfUnknownAnnotatedType(typeName, span, sourceName, sourceText, owner);
+            }
+
             return converted;
         }
 
@@ -13986,6 +14004,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
             throw refinementError.Exception;
         }
 
+        ThrowIfUnknownAnnotatedType(typeName, span, sourceName, sourceText, owner);
         throw AnnotationConversionFailure(typeName, value, span, sourceName, sourceText, owner);
     }
 
