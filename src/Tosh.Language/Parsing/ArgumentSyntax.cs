@@ -213,7 +213,36 @@ public sealed record InterpolatedStringLiteralPart(string Text) : InterpolatedSt
 /// </summary>
 public sealed record InterpolatedStringExpressionPart(
     string Expression,
-    TextSpan ExpressionSpan) : InterpolatedStringPart;
+    TextSpan ExpressionSpan) : InterpolatedStringPart
+{
+    /// <summary>
+    /// The hole's program — parsed, bound and lowered — kept after the first
+    /// evaluation, together with the engine that prepared it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A hole is re-parsed from its text on every evaluation, so `$"x{$i}"` in a
+    /// loop re-ran the lexer, the parser, the binder and the lowering pass a
+    /// million times over the same two characters. Interpolation measured 84x the
+    /// cost of a string concatenation because of it (<c>TS-P2-121</c>).
+    /// </para>
+    /// <para>
+    /// Evaluating one parse tree repeatedly is not new — it is what every loop body
+    /// already does — so the tree is reused rather than the text re-parsed. The
+    /// cache is keyed on the preparing engine because two engines have different
+    /// command, type and module registries, and a hole parsed against one of them
+    /// must not be handed to the other.
+    /// </para>
+    /// <para>
+    /// Only a *successful* preparation is kept: a hole that fails to parse re-parses
+    /// and re-reports on every evaluation, exactly as before.
+    /// </para>
+    /// </remarks>
+    internal ParseResult? PreparedProgram { get; set; }
+
+    /// <summary>The engine <see cref="PreparedProgram"/> was prepared by.</summary>
+    internal object? PreparedBy { get; set; }
+}
 
 public sealed record InterpolatedStringArgumentSyntax(
     IReadOnlyList<InterpolatedStringPart> Parts,

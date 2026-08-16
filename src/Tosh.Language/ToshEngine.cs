@@ -641,6 +641,58 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
         return EvaluateParseResultAsync((ParseResult)unit.ParseResult, cancellationToken);
     }
 
+    /// <summary>
+    /// The program behind an interpolation hole, parsed once and kept on the node.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The hole's text is fixed by the source, so re-parsing it per evaluation
+    /// re-derived a constant. `$"x{$i}"` in a loop ran the lexer, parser, binder and
+    /// lowering pass a million times over `$i`, which is why interpolation cost 84x
+    /// a string concatenation (<c>TS-P2-121</c>).
+    /// </para>
+    /// <para>
+    /// The hole is still parsed lazily, at its first evaluation rather than when the
+    /// enclosing string is parsed. That keeps *when* a bad hole is reported exactly
+    /// where it was — a hole in a branch never taken still never reports — and it
+    /// keeps the parse context the one live at that point, which is what the old
+    /// code used. Parsing every hole eagerly would change both, and neither change
+    /// belongs in a performance fix.
+    /// </para>
+    /// </remarks>
+    private ParseResult PrepareInterpolationHole(
+        InterpolatedStringExpressionPart hole,
+        string sourceName)
+    {
+        if (hole.PreparedProgram is { } prepared && ReferenceEquals(hole.PreparedBy, this))
+        {
+            return prepared;
+        }
+
+        var parseResult = Parse(hole.Expression, sourceName);
+
+        if (parseResult.Diagnostics.Count > 0)
+        {
+            throw new ToshDiagnosticException(parseResult.Diagnostics
+                .Select(diagnostic => new ToshDiagnostic(
+                    Code: diagnostic.Code,
+                    Title: diagnostic.Title,
+                    SourceName: parseResult.SourceName,
+                    SourceText: parseResult.SourceText,
+                    Span: diagnostic.Span,
+                    Label: diagnostic.Label,
+                    Help: diagnostic.Help))
+                .ToArray());
+        }
+
+        ApplyBinder(parseResult);
+        ApplyLowering(parseResult);
+
+        hole.PreparedProgram = parseResult;
+        hole.PreparedBy = this;
+        return parseResult;
+    }
+
     private async IAsyncEnumerable<object?> EvaluateParseResultAsync(
         ParseResult parseResult,
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken,
@@ -8922,9 +8974,8 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
                                         // to print the branch to the terminal and interpolate the
                                         // empty string (TS-P1-32).
                                         var results = await AsyncEnumerableExtensions.ToListAsync(
-                                            EvaluateAsync(
-                                                expression.Expression,
-                                                sourceName,
+                                            EvaluateParseResultAsync(
+                                                PrepareInterpolationHole(expression, sourceName),
                                                 cancellationToken,
                                                 outputIsCaptured: true),
                                             cancellationToken);
