@@ -157,6 +157,29 @@ public static class OperatorEvaluator
             out result);
     }
 
+    /// <summary>
+    /// Whether a CLR type is a compiled ToastScript type, answered from a cache.
+    /// </summary>
+    /// <remarks>
+    /// This is the gate every operator evaluation passes through, and it was asking
+    /// the reflection system directly: `GetCustomAttribute&lt;ToshTypeAttribute&gt;()`
+    /// walks the type's custom-attribute records, and it ran on both operands of every
+    /// operator. `$x += 1` in a loop asked whether `Int32` carries the attribute a
+    /// million times over, and the answer had been the same since the type was loaded —
+    /// custom-attribute machinery was ~5% of a profile of a loop that only increments
+    /// an integer (`TS-P2-119`).
+    ///
+    /// A type's attributes cannot change once it is loaded, so the answer is cached
+    /// permanently. The dictionary is bounded by the number of distinct CLR types that
+    /// reach an operator, which is small and does not grow with the work done.
+    /// </remarks>
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<Type, bool> _isCompiledToshType = new();
+
+    private static bool IsCompiledToshType(Type type)
+        => _isCompiledToshType.GetOrAdd(
+            type,
+            static candidate => candidate.GetCustomAttribute<ToshTypeAttribute>() is not null);
+
     private static bool TryInvokeCompiledSpecialMethod(
         object? instance,
         string methodName,
@@ -165,7 +188,7 @@ public static class OperatorEvaluator
     {
         result = null;
         if (instance is null ||
-            instance.GetType().GetCustomAttribute<ToshTypeAttribute>() is null)
+            !IsCompiledToshType(instance.GetType()))
         {
             return false;
         }
@@ -173,7 +196,7 @@ public static class OperatorEvaluator
         MethodInfo? method = null;
         for (var current = instance.GetType();
              current is not null &&
-             current.GetCustomAttribute<ToshTypeAttribute>() is not null;
+             IsCompiledToshType(current);
              current = current.BaseType)
         {
             method = current
@@ -237,7 +260,7 @@ public static class OperatorEvaluator
         }
 
         var type = value.GetType();
-        if (type.GetCustomAttribute<ToshTypeAttribute>() is null)
+        if (!IsCompiledToshType(type))
         {
             return value.ToString() ?? string.Empty;
         }
