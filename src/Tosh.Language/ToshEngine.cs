@@ -6081,7 +6081,53 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
     /// overload order, cancellation, user throws, and structured diagnostics do
     /// not depend on the syntax that reached the operator.
     /// </summary>
-    private async ValueTask<object?> EvaluateBinaryOperatorAsync(
+    /// <summary>
+    /// Applies a binary operator, taking a synchronous path when neither operand can
+    /// reach an <c>await</c>.
+    /// </summary>
+    /// <remarks>
+    /// Placed here rather than at the call sites so every caller benefits — a compound
+    /// assignment (<c>$x += 1</c>), a chained comparison and an operator argument all
+    /// arrive through this one method (<c>TS-P2-125</c>). It calls the same
+    /// <see cref="OperatorEvaluator.EvaluateBinary"/> the async path reaches, so this
+    /// is a shortcut to the existing implementation and not a second copy of it —
+    /// which is the distinction <c>TS-P1-24</c> is about.
+    /// </remarks>
+    private ValueTask<object?> EvaluateBinaryOperatorAsync(
+        string sourceName,
+        string sourceText,
+        TextSpan span,
+        object? left,
+        string @operator,
+        object? right,
+        CancellationToken cancellationToken)
+    {
+        if (IsSynchronousArithmeticOperator(@operator) &&
+            IsPrimitiveNumber(left) &&
+            IsPrimitiveNumber(right))
+        {
+            try
+            {
+                return new ValueTask<object?>(OperatorEvaluator.EvaluateBinary(left, @operator, right));
+            }
+            catch (ToshDiagnosticException)
+            {
+                throw;
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception exception)
+            {
+                throw CreateExpressionDiagnostic(sourceName, sourceText, span, exception);
+            }
+        }
+
+        return EvaluateBinaryOperatorSlowAsync(sourceName, sourceText, span, left, @operator, right, cancellationToken);
+    }
+
+    private async ValueTask<object?> EvaluateBinaryOperatorSlowAsync(
         string sourceName,
         string sourceText,
         TextSpan span,
