@@ -210,9 +210,131 @@ avoids the work being judged against a target it was never going to reach.
   compared A/B against a worktree build — cross-run comparison produced a false
   regression twice this session.
 
-## Before starting
+## Phase 0 — Decisions now settled
 
-One question is still open: **does the compiled backend stay in scope?** It is
-currently deferred on the board as an experiment, it shares the parse tree, and a
-bound-tree evaluator changes its relationship to the interpreter. Deciding that first
-avoids designing the evaluator twice.
+- **The compiled backend freezes out of the solution** (option C). `Tosh.Compiler`
+  and `Tosh.Compiler.Runtime` leave `Tosh.slnx` and stay in the tree. The IR stays in
+  the build, because the evaluator wants it. A compiler gets written again later
+  against the new bound tree, where it can share the interpreter's decisions instead
+  of re-deriving them.
+- **`.toshproj` packages and runs interpreted** when the emitter is gone. That is what
+  it does at runtime anyway; only the MSBuild `ToshCompile` step goes.
+- **Diagnostic codes take one prefix, `toast.*`**, with `tosh.*` accepted by `hush`
+  indefinitely. A two-prefix split was considered and rejected: `tosh.runtime.*` is
+  **327 of 534 codes** and is the genuinely mixed bucket, holding
+  `annotation_unknown_type` beside `unknown_command`. Splitting means hand-judging 61%
+  of the codes with no mechanical rule, to correctly place the **fourteen** that are
+  unambiguously shell-only (`tui`, `edit`, `config`, `history`, `help`). Move those
+  fourteen later if it ever matters.
+
+## Freezing the compiler costs ~10,000 lines of tests — triage them first
+
+Eight test files touch the compiler, **10,024 lines** in total, plus the
+`Tosh.ParityCheck` tool. They do not all belong to the emitter:
+
+| Freeze with the emitter | Keep in the build |
+|---|---|
+| `BoundUnitEmitterTests` (3,351) | `ConstantFoldingTests` — tests the *lowerer* |
+| `CompiledDeferSemanticsTests` | `MemberCheckSoundnessTests` — tests the *binder* |
+| `DifferentialExecutionTests` (compiled half) | `ChainedComparisonTests` — language semantics |
+
+Triage before freezing, or ~5,000 lines of tests for code that is staying will be
+switched off by accident.
+
+**The differential harness needs replacing, not mourning.** `TS-P3-23` compares
+interpreted against compiled; freezing removes its second side. The evaluator rewrite
+wants a *new* differential — old evaluator against new — which is a better fit anyway,
+since both sides are then present and expected to agree exactly.
+
+## The specification is its own phase
+
+`docs/spec/toastscript-spec.tex` is **7,010 lines across 27 chapters** and currently
+documents the language and the shell together. Separating it means deciding, chapter
+by chapter, which document each belongs to, and it is the user-facing definition of
+Tōast — it cannot lag behind the code. Budget it as real work rather than a
+find-and-replace, and give it its own phase.
+
+## Identity is renamed; paths are not
+
+A brand change must not break working machines. Explicitly **not** renamed:
+
+- `~/.config/tosh` — configs, profiles and libraries live there
+- the `tosh` binary and the Arch package — TōSh keeps its own name regardless
+- `$tosh.` in scripts — `$toast` becomes the preferred spelling, both keep working
+
+Rename for identity. Do not rename what someone has already typed into a file on
+their machine.
+
+---
+
+## Should this be a new solution?
+
+**No — refactor in place, on a branch.** The instinct is understandable and the
+evidence does not support it.
+
+**The fear driving it is already solved.** TōSh is the logon shell, and the worry is
+breaking it. But `/usr/bin/tosh` is a *published artefact*: it changes when
+`buildtosh publish` runs, not when the working tree changes. The tree can be broken
+for weeks without the shell noticing. That safety already exists.
+
+**Measure the mess before deciding it is a mess.** Of ~260,000 lines: two files are
+monolithic (`ToshEngine.cs` 19,318 and `ToshParser.cs` 13,931 — 13% of the tree), the
+docs have drifted, and three stale cache files are tracked. Everything else is in the
+solution, builds, and is covered by **5,324 passing tests**. A codebase whose entire
+language-to-shell coupling is *one type at two call sites* is not architecturally
+dirty. It is a tidy-up, not a teardown.
+
+**The tests are the argument.** 5,324 of them encode behaviour that was expensive to
+learn — this session alone produced pins for pipeline expansion, top-level `defer`,
+unary statements, interpolation caching and literal widths, each subtle and each found
+the hard way. In-place refactoring keeps that suite green at *every step*. A greenfield
+has no green suite until the end, which converts a continuously verified migration into
+one big-bang integration.
+
+**"Selectively copy what we need" is a refactor with the history deleted.** If the code
+is copied, it is the same code — minus `git blame`, minus the commit that explains why
+a branch exists. This codebase leans on that heavily: its comments record *why*, and
+reading them was the only way several decisions this session were made correctly.
+
+**Where a rewrite is right, do it as a replacement inside the working tree.** The
+evaluator genuinely deserves rewriting — that is Phase B — but as an isolated component
+swapped in behind a differential harness, not as a new solution around it.
+
+**To get the clean-slate ergonomics safely:** `git worktree add ../toast-refactor
+refactor/toast-split`. A separate directory to work in, the main tree untouched, full
+history, one command to throw away. And use `git mv` for the moves so history and blame
+follow the files.
+
+---
+
+## Documentation triage
+
+22 documents, ~17,000 lines, last touched between April and today. The rule that makes
+this tractable: **a document is either generated, live, or history — and history should
+say so in its first line.**
+
+| Class | Documents | Action |
+|---|---|---|
+| **Generated** | `diagnostic-codes.md`, the command reference | Leave alone; regenerated by `buildtosh spec` |
+| **Live** | `TOASTSCRIPT_STABILIZATION.md`, `TOAST_SEPARATION_PLAN.md`, `SPEC_STATUS.md` | Keep current through the work |
+| **Needs rewriting** | `ARCHITECTURE.md` | Known stale — still describes `Tosh.Core` as present four months after `9d5b852` deleted it. Rewrite around the new boundary |
+| **Freeze with the compiler** | `COMPILED_TOSH.md` (1,023) | Add a header saying it describes a frozen component |
+| **Decide: merge or archive** | `BACKLOG.md` (1,541) vs the stabilization board (5,440) | Two tracking systems; one should win |
+| **Settled RFCs** | `BRACE_DISAMBIGUATION_RFC`, `LINE_EDITOR_RFC`, `SELF_HOSTING_RFC` | Mark decided-and-implemented, or move to an `rfc/` directory |
+| **Verify then keep** | `CONFIGURATION`, `EDITOR_SUPPORT`, `TSSP`, `CLR_ABI_v1`, `RUNTIME_NAMESPACES` | Read once against the code; correct or date-stamp |
+| **Stale, low risk** | `BENCHMARKS` (April, 100 lines), `TUI_ARCHITECTURE`, `TOME` | Re-measure or mark as of-its-date |
+
+The lesson worth encoding: `ARCHITECTURE.md` was written carefully and still drifted
+within four months. **Whatever survives this triage needs an owner and a trigger** —
+"update when the solution layout changes" — or the same thing happens again.
+
+## Housekeeping found in the sweep
+
+- **Three tracked `.lscache` files.** `*.lscache` is ignored (`.gitignore` line 543),
+  but these were committed before the rule existed and ignoring does not untrack.
+- **`Tosh.Dap`** (550 lines) builds, is in the solution, and is referenced by nothing.
+  Keep it — a Debug Adapter server is the natural companion to the LSP — but label it
+  dormant-by-intent so the next reader does not have to work that out.
+- **Test monoliths too**: `EngineTests.cs` (5,912) and `LanguageFeatureTests.cs`
+  (2,841). Splitting them gives a second, independent read on the boundary being drawn
+  in `src/`.
