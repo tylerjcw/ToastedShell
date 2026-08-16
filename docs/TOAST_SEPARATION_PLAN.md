@@ -265,6 +265,47 @@ A brand change must not break working machines. Explicitly **not** renamed:
 Rename for identity. Do not rename what someone has already typed into a file on
 their machine.
 
+### `~/.config/tosh` belongs to the shell alone
+
+Not merely un-renamed — **out of scope for the language entirely**. Nothing in that
+directory may affect Tōast: no settings, no profile, no library path, nothing. It
+configures TōSh, and a Tōast embedded in some other host must behave identically
+whether or not that directory exists.
+
+This is an invariant to hold, not a migration to perform. It already holds:
+`Tosh.Language` contains **zero** reads of a config directory — the single grep hit is
+the string `"source ~/.config/tosh/profile.tosh"` inside a `[CommandExample]`
+attribute, which is documentation text. The config-reading code lives in
+`Tosh.Runtime` (4 files), `Tosh.Stdlib` (3) and `Tosh.Cli` (1), all of which are shell
+side or split by A3 anyway.
+
+Worth a guard test rather than trust, because this is the kind of coupling that
+arrives by convenience — one lookup of a library path from the language layer and it is
+gone. The cheap form is an assertion that the language assembly never resolves a path
+under `~/.config`.
+
+**A boundary question this turns up.** `src/Tosh.Language/Bridge/Shell/` holds three
+commands — `EvalCommand`, `DebugCommand`, `SourceCommand`. The first two are
+language-level and belong where they are. `source` runs a file into the current
+session, which is a shell verb; it is also the one that names the config directory.
+Decide it during A1 while the boundary is being drawn, not later.
+
+## Packaging: Tōast is its own package
+
+Tōast ships as a package in its own right, and **TōSh, Tōme and Crumb depend on it**
+rather than each vendoring a copy. That is the packaging expression of the same
+boundary A3 draws in the assemblies — if the split is real, the language is
+installable without the shell.
+
+This gives the separation a test no amount of file-moving can fake: a machine with
+Tōast installed and TōSh absent must still run a `.toast` script. Until that works, the
+boundary is a directory layout rather than a dependency.
+
+The Arch packaging under `packaging/archlinux/` currently builds one `tosh` package.
+Splitting it into `toast` plus a `tosh` that depends on it is the concrete deliverable,
+and it wants doing *after* A3 settles which assemblies land on which side — otherwise
+the package split has to be redone when an assembly moves.
+
 ---
 
 ## Should this be a new solution?
@@ -330,8 +371,15 @@ within four months. **Whatever survives this triage needs an owner and a trigger
 
 ## Housekeeping found in the sweep
 
-- **Three tracked `.lscache` files.** `*.lscache` is ignored (`.gitignore` line 543),
-  but these were committed before the rule existed and ignoring does not untrack.
+- ~~**Three tracked `.lscache` files.**~~ Resolved — no `.lscache` file is tracked at
+  `HEAD`. Recorded here as an example of the failure mode rather than as work: they
+  were committed before `*.lscache` was ignored, and an ignore rule does not untrack.
+- **History carried 1.8 GB of build output**, found when a push was rejected for a
+  418 MB AppImage. Stripped 2026-08-16 with `git filter-repo`; `.git` went 1,400 MB →
+  16 MB with all 362 commits and 5,324 passing tests intact. The rules that would have
+  prevented it are in `d153eee`. The rendered spec PDFs are now build output rather
+  than tracked files — `docs/spec/*.tex` is the source and `buildtosh spec` regenerates
+  them.
 - **`Tosh.Dap`** (550 lines) builds, is in the solution, and is referenced by nothing.
   Keep it — a Debug Adapter server is the natural companion to the LSP — but label it
   dormant-by-intent so the next reader does not have to work that out.
