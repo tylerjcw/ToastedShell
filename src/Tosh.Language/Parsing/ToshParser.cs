@@ -1558,7 +1558,7 @@ public static class ToshParser
             NextToken();
             var nameToken = ExpectVariableName();
             var parameters = ParseNativeBindingParameters();
-            var returnTypeName = TryParseReturnTypeAnnotation();
+            var returnTypeName = ParseNativeReturnAnnotation();
             var symbolName = nameToken.Text;
             string? callingConventionName = null;
             string? nativeTarget = null;
@@ -6096,6 +6096,33 @@ public static class ToshParser
             }
 
             return new FunctionParameterSyntax(name, string.IsNullOrWhiteSpace(typeName) ? null : typeName, isOptional || defaultValue is not null, false, defaultValue, nameToken.Span, refinement);
+        }
+
+        /// <summary>
+        /// A native return annotation, including the width-carrying contract forms
+        /// <c>-&gt; int count</c> and <c>-&gt; long count</c>.
+        /// </summary>
+        /// <remarks>
+        /// Bare <c>-&gt; count</c> marshals the return as <c>IntPtr</c>, which is right
+        /// for <c>ssize_t</c> and wrong for the many C APIs that return an <c>int</c>
+        /// count: a -1 failure came back as 4294967295, positive, so the contract's own
+        /// <c>&gt;= 0</c> check passed and no error was raised (<c>TS-P2-124</c>). The
+        /// width is knowable at the declaration site and nowhere else, so that is where
+        /// it is now said.
+        /// </remarks>
+        private string? ParseNativeReturnAnnotation()
+        {
+            var returnTypeName = TryParseReturnTypeAnnotation();
+
+            if (returnTypeName is null ||
+                Current.Kind != SyntaxTokenKind.Bareword ||
+                !string.Equals(Current.Text, "count", StringComparison.OrdinalIgnoreCase))
+            {
+                return returnTypeName;
+            }
+
+            NextToken();
+            return returnTypeName + " count";
         }
 
         private string? TryParseReturnTypeAnnotation()

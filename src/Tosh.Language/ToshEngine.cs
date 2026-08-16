@@ -17435,6 +17435,11 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
         return resolved;
     }
 
+    /// <summary>Whether a CLR type can carry a native count and its -1 failure.</summary>
+    private static bool IsIntegerReturnWidth(Type type) =>
+        type == typeof(int) || type == typeof(long) || type == typeof(short) ||
+        type == typeof(sbyte) || type == typeof(IntPtr) || type == typeof(nint);
+
     private NativeFunctionReturnDefinition ResolveNativeInteropReturnType(
         string? typeName,
         string sourceName,
@@ -17463,6 +17468,35 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
             // as sysconf's long on LP64.
             return new NativeFunctionReturnDefinition(
                 normalized, typeof(IntPtr), NativeFunctionReturnKind.Default, NativeErrorConvention.Count);
+        }
+
+        // `<type> count` — the same contract read at a stated width.
+        //
+        // `TS-P2-124`. Bare `count` assumes `ssize_t`, and bound to a function that
+        // really returns `int32_t` the -1 failure arrived as 4294967295: the low
+        // half read as unsigned, the high half never written by the callee. That is
+        // positive, so the `>= 0` check passed, no `NativeError` was raised, and the
+        // caller got a huge count instead of an error. The width is knowable only at
+        // the declaration site, so it is stated there.
+        if (normalized.EndsWith(" count", StringComparison.OrdinalIgnoreCase))
+        {
+            var widthName = normalized[..^" count".Length].Trim();
+            var width = ResolveNativeInteropReturnType(widthName, sourceName, sourceText, span);
+
+            if (width.ClrType is null || !IsIntegerReturnWidth(width.ClrType))
+            {
+                throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                    Code: "tosh.runtime.native_count_width_not_integer",
+                    Title: $"'{widthName} count' needs an integer width.",
+                    SourceName: sourceName,
+                    SourceText: sourceText,
+                    Span: span,
+                    Label: $"'{widthName}' is not an integer type",
+                    Help: "write the width the C function returns — `int count`, `long count`, or bare `count` for ssize_t."));
+            }
+
+            return new NativeFunctionReturnDefinition(
+                normalized, width.ClrType, NativeFunctionReturnKind.Default, NativeErrorConvention.Count);
         }
 
         // `auto` projects the out parameters of a call that cannot fail. The
