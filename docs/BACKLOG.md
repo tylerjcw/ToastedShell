@@ -6,7 +6,7 @@ Completed items prior to 2026-05-07 live in
 
 > **Active language stabilization:** The prioritized ToastScript repair
 > program, semantic decisions, and acceptance gates live in
-> [TOASTSCRIPT_STABILIZATION.md](TOASTSCRIPT_STABILIZATION.md). Update that
+> [the plan](plan/README.md). Update that
 > document rather than duplicating its item statuses here.
 
 > **Status, July 30, 2026 — feature backlog, frozen; not re-audited.**
@@ -24,7 +24,7 @@ Completed items prior to 2026-05-07 live in
 > [CLR_ABI_v1.md](CLR_ABI_v1.md).
 >
 > Defects, semantic decisions, and the acceptance gates live in
-> [TOASTSCRIPT_STABILIZATION.md](TOASTSCRIPT_STABILIZATION.md). Nothing here
+> [the plan](plan/README.md). Nothing here
 > should be started before that programme's P1 tier is closed.
 
 Last updated: May 7, 2026. Lambda return-type annotations, postfix

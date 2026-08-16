@@ -5,6 +5,7 @@
 | ID | Priority | Status | Progress | Title |
 |---|---|---|---|---|
 | [`TS-P3-04`](items/TS-P3-04.md) | P3 | research | — | Explicit stream/collection shape |
+| [`TOAST-0003`](items/TOAST-0003.md) | P2 | open | 0/12 | Documentation disagrees with the implementation in twelve recorded places |
 | [`TS-P2-120`](items/TS-P2-120.md) | P2 | open | — | A nullable annotation on a built-in type alias will not parse in a `var` declaration |
 | [`TS-P2-104`](items/TS-P2-104.md) | P2 | partial | 0/1 | A splat argument is rejected wherever it would be useful |
 | [`TS-P2-94`](items/TS-P2-94.md) | P2 | partial | 0/1 | `&` cannot reference a method or a module-qualified function |

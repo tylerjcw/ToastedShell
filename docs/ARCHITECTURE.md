@@ -415,7 +415,7 @@ separated from runtime concerns, and `Tosh.Core` — the "reorganize by
 responsibility" target — is out of the build entirely.
 
 Active work is the stabilization programme in
-[TOASTSCRIPT_STABILIZATION.md](TOASTSCRIPT_STABILIZATION.md), which is the source
+[the plan](plan/README.md), which is the source
 of truth for defects, semantic decisions, and acceptance gates. Its governing
 observation is worth repeating at the architecture level, because it is a design
 lesson rather than a bug list: **the recurring root cause is two implementations

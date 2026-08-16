@@ -1,0 +1,4646 @@
+# Progress log
+
+A dated record of how each slice was done — what was measured, what was tried and
+rejected, which controls were weak and why. History: appended to, not edited.
+
+This is the expensive part to rediscover. Several entries record a correction to an
+earlier entry, and those are the most useful ones in the file.
+
+---
+
+## Progress Log
+
+### July 25, 2026
+
+- Completed repository-wide language, runtime, compiler, parser, tooling,
+  and specification review.
+- Reproduced the P0 and P1 defects with focused ToastScript programs.
+- Opened this plan and began the first P0 implementation slice.
+- Made tuple assignment resolve bound symbols and validate every target
+  before committing in both execution modes, preserving annotations,
+  constants, shadowing, captures, and nearest lexical scope. Compiled
+  values are converted into temporaries before any target store.
+- Replaced destructive channel-selection races with non-consuming
+  readiness waits followed by one atomic receive. Losing values and
+  valid null payloads are preserved; cancellation observes all waits.
+- Implemented lazy `??=` for variable, member, and index targets in the
+  interpreter and IL emitter. Assignment-only closure captures are now
+  recorded by lowering.
+- Replaced leaf-scoped class initialization with a recursive,
+  exactly-once construction frame for every class layer. Each constructor
+  binds its own arguments, constructs its base, initializes only its own
+  properties, and then runs its body.
+- Preserved explicit empty `extends Base()` initializers, added implicit
+  zero-argument base construction, and initialized CLR bases before
+  derived properties.
+- Normalized a leading `$super(args)` into the same initializer phase.
+  Mixed, repeated, late, missing, base-less, and repeat-at-runtime forms
+  now fail through structured diagnostics rather than double-running or
+  silently skipping a base.
+- Closed compiler shell hierarchies over their complete source-declared
+  base chain. Unsupported bases retain source replay instead of silently
+  inheriting from `System.Object`; emitted shells now pass real header or
+  leading-`$super` arguments to the base constructor.
+- Migrated the two generic-class fixtures that redundantly combined
+  header arguments with `$super(args)`, and regenerated the 468-code
+  diagnostic reference and runtime manifest.
+- Completed `TS-P0-05` with one shared failure protocol across the
+  interpreter and emitted IL. Reached cleanup registration is distinct
+  from declaration; every cleanup is exhausted in LIFO order; body,
+  cleanup, and nested failures retain deterministic ordering and exact
+  sole-failure identity; cancellation remains outward-facing while
+  cleanup receives a shielded execution attempt.
+- Added stable body/cleanup diagnostics and a public CLR inspection
+  surface. Aggregate construction now enforces competing failures,
+  snapshots mutable or side-effecting input once, ignores invalid
+  external metadata, and preserves empty nested diagnostics through
+  stable fallbacks.
+- Covered pending `return`, `break`, and `continue`, cleanup-local jumps,
+  nested flattening, cancellation metadata, all compiled body roots,
+  reached-only registration, output preservation, and sole/competing
+  failures in both execution modes.
+- The defer-specific part of `TS-P1-07` is covered by this slice. Broader
+  nested-control-flow streaming and materialization remain planned under
+  `TS-P1-07` and `TS-P1-08`.
+- Validation:
+  - focused assignment/channel regressions: 16 passed;
+  - combined stabilization/compiler regression selection: 322 passed;
+  - compiler feature matrix: 146 passed;
+  - surrounding language/concurrency suites: 226 passed;
+  - lowerer/type-checker/compiler audit selection: 184 passed;
+  - broad run excluding the environment-blocked SDK packaging class:
+    2,656 passed with zero failures;
+  - the complete first run reported 2,655 passed and 2 SDK packaging
+    failures. One transient packaged-SDK failure passed alone; the
+    remaining test is blocked by its local-only NuGet source lacking
+    `Microsoft.AspNetCore.App.Ref`, unrelated to this language slice.
+  - class-construction interpreter/compiler regressions: 19 passed;
+  - class, generic, and surrounding language suites: 214 passed;
+  - complete bound-unit emitter suite: 315 passed;
+  - compiler feature matrix: 148 passed;
+  - full solution run: 2,684 passed and one environment-blocked SDK
+    packaging failure (the same local-only
+    `Microsoft.AspNetCore.App.Ref` restore limitation).
+  - defer runtime/interpreter/compiler regressions: 40 passed;
+  - defer plus complete bound-unit emitter, compiler feature-matrix, and
+    legacy defer coverage: 507 passed;
+  - regenerated diagnostic manifest: 470 codes, including only the two
+    public defer diagnostics rather than private exception-metadata keys;
+  - rebuilt 276-page language specification and visually verified the
+    complete defer section;
+  - full solution validation for this slice: 2,724 passed with no skips
+    and one environment-blocked SDK packaging failure. The sole failure
+    is the same local-only NuGet source limitation:
+    `Microsoft.AspNetCore.App.Ref` is unavailable while restoring the
+    packaged-SDK fixture.
+
+### July 25, 2026 — Second review pass
+
+- Ran an independent end-to-end review (specification, lexer, parser,
+  operator runtime, class construction, channels) with live CLI
+  reproductions against the current tree.
+- Verified the completed P0 fixes behaviorally: tuple swap resolves
+  before mutation; `??=` is lazy for non-null targets; three-level class
+  chains construct base-to-leaf with per-layer argument binding;
+  `$super.method()` and virtual dispatch from base constructors behave
+  correctly; channel selection is non-destructive by design.
+- Reconfirmed then-open items live: `TS-P1-04`, `TS-P1-10`, `TS-P1-11`,
+  `TS-P1-12`, `TS-P2-01`, `TS-P2-02`, `TS-P2-04`, `TS-P2-05`, and the
+  `as`-throws documentation drift.
+- Filed the new items `TS-P0-07`–`TS-P0-08`, `TS-P1-14`–`TS-P1-19`,
+  `TS-P2-12`–`TS-P2-20`, and `TS-P3-05`–`TS-P3-07`; recorded the
+  mode-switching-lexer recommendation under `TS-P2-11`; added the
+  fuzzing test-strategy section; expanded the documentation-drift list
+  (precedence table, equality cascade, `entries`, storage suffixes,
+  spec cover-image path) and noted the `Tosh.DevCompanion` SQLite
+  dependency advisory.
+- Full solution run at the end of the review: 2,713 passed, 0 failed,
+  0 skipped in 2m33s, including the previously environment-blocked SDK
+  packaging test.
+
+### July 25, 2026 — Async class execution
+
+- Completed `TS-P0-06` by adding cancellation-aware asynchronous
+  protocols for shell construction, static and instance invocation,
+  record-member access, enumeration, indexing, and reflection access.
+  Existing synchronous interface members remain compatibility adapters.
+- Replaced interpreted class-body blocking bridges with awaited
+  execution for constructors, recursive base construction, methods,
+  static methods, property initialization/getters/setters, refinements,
+  return annotations, operator hooks, interpolation, and `$super`.
+- Routed `new`, fluent access, `call`, `call-method`, destructuring,
+  spread, and string-index operations through the asynchronous protocol.
+  Async lookup misses no longer retry the same shell member
+  synchronously.
+- Made lazy initialization transactional: cancellation or failure clears
+  the in-progress marker without committing the value, successful access
+  commits once, and recursive access is diagnosed. A final concurrency
+  audit replaced the marker with single-flight initialization so
+  unrelated concurrent readers share one computation instead of being
+  mistaken for recursive re-entry.
+- Made user-error wrapping and uncaught diagnostic metadata asynchronous,
+  including computed `Message`, title, code, label, help, and information
+  members. Cancellation is never swallowed while probing optional
+  metadata.
+- Closed the implicit CLR-protocol fallback in `==`, `!=`, membership,
+  and switch matching. Nested collections now await ToastScript
+  `Equals`/`ToString` hooks while preserving symbolic-operator
+  precedence, reference/null shortcuts, left-biased dispatch, and the
+  existing conversion order.
+- Added per-command REPL cancellation. `SIGINT`/`CancelKeyPress` cancels
+  only the active execution, reports exit code 130, and leaves the
+  session ready for the next command. Prompt evaluation itself is now
+  awaited rather than blocked.
+- Validation:
+  - class cancellation, recovery, lazy retry, concurrent lazy
+    single-flight, property/refinement, indexing, enumeration,
+    destructuring, and spread: 27 passed;
+  - equality, membership, switch, and string-conversion cancellation
+    plus semantic guards: 13 passed;
+  - thrown-error cancellation and normal diagnostic mapping: 5 passed;
+  - focused class/operator/MCP/REPL selection: 208 passed;
+  - complete engine and language-feature suites plus focused class,
+    compiler, MCP, and REPL coverage: 703 passed;
+  - complete REPL line-editor/cancellation suite: 78 passed;
+  - focused MCP class-method and constructor timeout cases: 2 passed in
+    616 ms with a 250 ms timeout per request;
+  - solution-wide run after the final lazy-property audit: 2,772 passed,
+    0 skipped, and one
+    environment-blocked packaged-SDK fixture. That fixture's isolated
+    `local` NuGet source could not provide `Microsoft.AspNetCore.App.Ref`;
+    no language or runtime test failed;
+  - parity advisory passed separately with exit code 0. The unmodified
+    solution command's nested parity post-build invocation stalled before
+    launching a test host, so the completed full run disabled the two
+    already-validated post-build advisory/spec hooks;
+  - zero-warning Language and CLI builds, and `git diff --check` passed.
+
+### July 25, 2026 — Structured recursion depth
+
+- Completed `TS-P0-07` with one asynchronous-flow-local execution-depth
+  guard shared by the interpreter, emitted code, and compiler runtime.
+  The default and hard maximum are 128 active ToastScript frames; sessions
+  may select a stricter limit through
+  `$tosh.Config.Shell.MaxRecursionDepth`.
+- Guarded scripts, functions before default-argument evaluation, class
+  methods, constructors, lambdas, nested `eval`/`source`, emitted module
+  and class methods, emitted blocks, and direct compiled constructors.
+  Compiler leases unwind through generated `finally` handlers.
+- Replaced process-killing CLR stack overflow with the stable
+  `tosh.runtime.recursion_limit_exceeded` diagnostic, including the
+  configured limit and a compact innermost-first ToastScript frame
+  summary. A handled diagnostic releases every frame and leaves the
+  engine and REPL usable.
+- Added direct, mutual, default-parameter, lambda, class-method,
+  constructor, `eval`, `source`, recovery, finite-depth, cancellation,
+  configuration, REPL, and direct-compiled regression coverage.
+- Validation:
+  - focused recursion regressions: 15 passed;
+  - complete solution run: 2,787 passed, 0 skipped, and one
+    environment-blocked packaged-SDK fixture. Its isolated `local`
+    NuGet source could not provide `Microsoft.AspNetCore.App.Ref`; no
+    language, runtime, REPL, or compiler test failed;
+  - parity advisory passed separately with exit code 0;
+  - regenerated diagnostic manifest/reference: 471 codes;
+  - rebuilt the 277-page language specification and visually verified
+    the complete recursion-depth section;
+  - `git diff --check` passed.
+
+### July 25, 2026 — Single-channel receive
+
+- Completed `TS-P0-08` with a looping readiness/commit protocol for
+  one-item receives. A consumer that loses an advisory readiness race to
+  another reader waits again rather than returning a fabricated null or
+  completion result.
+- Added public `ShellChannelReceiveResult` and
+  `ReceiveResultAsync`: `HasValue: true, Value: null` is a null payload,
+  while `HasValue: false` is closed-and-drained. The existing
+  `ReceiveAsync` return type remains compatible and now raises
+  `ChannelClosedException` at completion, making every returned null a
+  real payload.
+- Kept `channel-recv` as a stream and `channel-select` on its
+  non-destructive readiness/commit protocol. The command reference now
+  states explicitly that null emits one value and closure emits none.
+- Added structured and legacy receive races, 64-consumer contention,
+  null/closure, cancellation recovery, and command-stream regressions.
+- Validation:
+  - complete focused concurrency and channel selection: 30 passed;
+  - complete solution run: 2,793 passed, 0 skipped, and one
+    environment-blocked packaged-SDK fixture. Its isolated `local`
+    NuGet source could not provide `Microsoft.AspNetCore.App.Ref`; no
+    channel, language, runtime, or compiler test failed;
+  - parity advisory passed separately with exit code 0;
+  - rebuilt the 277-page language specification and visually verified
+    the updated `channel-recv`/`channel-select` reference page;
+  - `git diff --check` passed.
+
+### July 25, 2026 — Canonical truthiness
+
+- Completed `TS-P1-01` with `ToshTruthiness.IsTruthy` as the sole
+  semantic primitive. Interpreter and standard-library conditions,
+  compiler-host and operator compatibility wrappers, emitted control
+  flow, logical operators, match/comprehension guards, event `when`
+  guards, and predicate commands now converge on the same contract.
+- Made null, false, numeric zero, floating/complex NaN, empty strings,
+  and empty synchronous enumerables falsy. Non-zero numerics (including
+  infinities), non-empty strings/enumerables, and all other non-null
+  objects are truthy. General enumerables receive one disposable probe.
+- Kept explicit boolean conversion distinct from truthiness and retained
+  the refinement type system's strict-boolean `where` contract.
+  Refinement coercion guards use broad truthiness.
+- Removed boolean-only condition and predicate diagnostics from the
+  interpreter and type checker. The generated catalog now contains 468
+  codes.
+- Updated command metadata to describe truthy/falsy predicate results,
+  corrected the logical-operator documentation to state that operators
+  return booleans, and documented the complete matrix and single-pass
+  enumerable caveat.
+- Validation:
+  - truthiness conformance corpus: 11 passed;
+  - truthiness, type-checker, and complete bound-unit emitter selection:
+    390 passed;
+  - solution-wide run excluding the one environment-blocked packaged-SDK
+    restore fixture: 2,818 passed with zero failures or skips;
+  - the excluded fixture still fails in isolation because its local-only
+    NuGet source cannot provide `Microsoft.AspNetCore.App.Ref`; a second
+    packaged-SDK process that exited 134 during the first concurrent run
+    passed immediately in isolation;
+  - parity advisory passed independently with exit code 0;
+  - rebuilt the 279-page language specification, visually verified the
+    truthiness, logical-operator, match-guard, and event-guard pages, and
+    confirmed both checked-in PDF names are byte-identical;
+  - zero-warning test-project build and `git diff --check` passed.
+
+### July 25, 2026 — Exact literals and string escapes
+
+- Completed `TS-P2-12`: ordinary single-quoted strings are raw;
+  double-quoted and ANSI-C forms preserve unknown escape pairs; malformed
+  empty `\x`/`\u` pairs no longer inject null characters. All eight quote
+  forms and the documented regex spellings have executable cases.
+- Completed `TS-P2-13`: intrinsic `DateTimeOffset` recognition has an
+  exact ISO-only entry point, while explicit date commands and importers
+  retain the forgiving parser. Canonical IPv4 requires four decimal
+  octets, so dotted numeric typos can become neither dates nor abbreviated
+  addresses.
+- Signed, floating, and radix numeric range heads now split from `..`.
+  Negative integer ranges execute normally; literal fractional or
+  out-of-range bounds report
+  `tosh.parser.range_requires_integer`.
+- Completed `TS-P2-14`: every documented SI/binary storage suffix becomes
+  `StorageSize` in expression context, including declarations,
+  collections, arithmetic, comparison, and emitted code. Raw command
+  arguments intentionally remain strings. Invalid and overflowing forms
+  never silently become expression strings or leak decimal overflow.
+- Validation:
+  - literal-cluster and complete bound-unit emitter selection: 397 passed;
+  - surrounding engine, type-checker, compiler-feature, literal, and
+    bound-unit-emitter selection: 1,030 passed;
+  - focused project build: zero warnings and errors;
+  - local CLI probes confirm `1.2.3` is diagnosed rather than coerced,
+    `1.5..3` receives the range-specific diagnostic, `-1..2` enumerates,
+    and the specification's storage examples produce typed values;
+  - full solution: 2,886 passed and one environment-only packaged-SDK
+    restore fixture failed because its local NuGet source lacks
+    `Microsoft.AspNetCore.App.Ref`;
+  - regenerated 469 diagnostic codes and passed the parity advisory;
+  - rebuilt the 280-page specification, visually checked the affected
+    pages, and confirmed both checked-in PDF names are byte-identical.
+
+### July 25, 2026 — Canonical collection containment
+
+- Completed `TS-P1-02`: `collection contains value` and
+  `value in collection` now share one membership contract instead of
+  stringifying collections.
+- Strings use ordinal substring matching. Dictionaries search keys, not
+  values. CLR enumerables and shell-native collections search elements
+  with canonical equality; scalar left operands return false.
+- Added an explicit shell-enumeration capability marker so user-class
+  scalar iteration is not mistaken for collection containment, while
+  ranges, lazy sequences, trees, and classes with an enumerator retain
+  their collection behavior.
+- Interpreter membership uses the asynchronous equality path, preserving
+  user-defined `Equals` dispatch and cancellation. Emitted code reaches
+  the same runtime protocol.
+- Validation:
+  - containment, equality-cancellation, and complete bound-unit-emitter
+    selection: 361 passed;
+  - full solution: 2,897 passed; one packaged-SDK subprocess that exited
+    134 under the concurrent load passed immediately in isolation, while
+    the only reproducible failure remains the local-only NuGet source
+    missing `Microsoft.AspNetCore.App.Ref`;
+  - parity advisory and `git diff --check` passed;
+  - rebuilt and visually checked the 280-page specification; both
+    checked-in PDF names have SHA-256
+    `cc5c68e1f74e0a7c6cbb64a507ff7ea0dca8c08664ab22632030989ec43f90e0`.
+
+### July 25, 2026 — Canonical operators and compound assignment
+
+- Completed `TS-P1-03` by routing emitted eager binary operators through
+  `Tosh.Runtime.OperatorEvaluator.EvaluateBinaryWithDiagnostics`.
+  Mutable unannotated locals retain runtime type changes; explicit
+  annotations convert on every store; interpreted/source-replayed and
+  emitted CLR classes share left-biased symmetric overload dispatch,
+  inherited special methods, and canonical `Equals`, `ToString`, and
+  record protocols.
+- Added a differential corpus comparing CLR value type, value, formatted
+  stdout, and structured failures. Span-aware diagnostic source text is
+  embedded inline and never depends on executable source registration or
+  replay.
+- Completed `TS-P1-04` by routing ordinary and compound forms through the
+  same operator protocol for variable, captured, member, and index
+  targets, including `**=`/`//=`, post-operation annotation conversion,
+  cancellation, and user-throw identity. `TS-P1-13` remains the owner of
+  evaluation-order differences.
+- Removed the integral-enum qualified-name fallback that could resolve a
+  declared `Color.Green` as `System.Drawing.Color.Green`. Integral enum
+  members now emit directly in Tier 1 and retain stable ToastScript names
+  in formatted output.
+- Synchronized first-use standard-library initialization so concurrent
+  default runtimes/formatters cannot observe an empty command or display
+  profile registry while the module initializer is still running.
+- Validation:
+  - compiler operator differential corpus: 41 passed;
+  - focused compiler, assignment, cancellation, feature-matrix, and
+    formatter closure: 616 passed;
+  - test-project and focused builds: zero warnings and errors;
+  - solution-wide run: 2,952 passed with no skips and one
+    environment-only packaged-SDK restore failure. Its isolated `local`
+    NuGet source cannot provide `Microsoft.AspNetCore.App.Ref`; no
+    language, runtime, compiler, or formatter test failed;
+  - complete solution build and the parity advisory passed. The build's
+    only warning is the existing `NU1903` advisory for the dev-only
+    DevCompanion SQLite native package;
+  - `git diff --check` passed;
+  - rebuilt and visually checked the 280-page specification around the
+    assignment and precedence tables; both checked-in PDF names have
+    SHA-256
+    `eb137ccd696f859da2a3bffdbe62e2e5be435cdfb50fc04825bd00356ff8f9d0`.
+
+### July 26, 2026 — Callable default binding (TS-P1-05)
+
+- Adopted and documented the callable default-binding policy above:
+  call-time evaluation in the callable's lexical environment,
+  left-to-right, earlier bound parameters visible, no evaluation for
+  losing overload candidates, and annotation/refinement conversion of
+  the evaluated value.
+- The callable binder now records pending defaults per candidate
+  instead of nulling them; the single winning overload applies them
+  through one shared `ApplyPendingParameterDefaults(Async)` pair used
+  by free functions, lambdas, instance/static/special class methods,
+  and constructors on both the sync and async selector paths.
+- Reworked the lowerer so parameter defaults are lowered inside the
+  callable's scope immediately before their parameter binds. Compiled
+  defaults now see earlier parameters, and outer references are
+  recorded as captures and promoted to static fields; previously both
+  shapes failed emission with `unresolved variable`.
+- Classes whose constructors or methods declare optional, defaulted, or
+  rest parameters no longer emit a fixed-arity CLR shell — they remain
+  Tier-3 source replay, so compiled `new` and member dispatch resolve
+  through the engine's binder instead of failing reflection arity
+  matching. `runtime`/`pure` profiles reject those shapes with the
+  ordinary tier diagnostic.
+- Added `tosh.runtime.parameter_default_conversion_failed` and
+  regenerated the diagnostic manifest (470 codes).
+- Added `ToshHost.NormalizePackedArguments` and a packed-argument
+  prologue so a compiled call that mixes named arguments with declared
+  defaults lands each value in its own slot. The prologue keeps the
+  normalized array in a local rather than overwriting argument 0; an
+  earlier `Starg_S` form produced invalid IL for callables with more
+  than one defaulted parameter.
+- Filed `TS-P1-21` for `$this` visibility inside method and
+  constructor defaults. This slice turned the previous silent null into
+  an explicit unknown-variable failure; whether a constructor default
+  may observe a partially-constructed instance is a semantics decision
+  and was deliberately not settled inside a bug-fix slice.
+- Filed `TS-P1-20` for a pre-existing compiled/interpreted divergence
+  found while validating this slice: a value-context pipeline seeded
+  from a variable (`var n = ($xs | count)`) skips its stages in
+  compiled mode. It is independent of default binding and is not
+  addressed here.
+- Coverage: sixteen interpreter regressions
+  (`CallableDefaultBindingTests`) spanning free functions, lambdas,
+  methods, static methods, primary and explicit constructors,
+  left-to-right chains, named-argument gaps, call-time re-evaluation,
+  side-effect suppression for provided arguments and losing overloads,
+  annotation conversion, forward-reference rejection, and rest
+  interplay; four compiled conformance rows and two tier-expectation
+  rows in the compiler feature matrix.
+- Validation:
+  - focused callable/compiler/class selection
+    (`CallableDefaultBinding`, `CompilerFeatureMatrix`,
+    `BoundUnitEmitter`, `ClassConstruction`, `GenericClass`,
+    `FunctionOverload`, `Lambda`): 546 passed with zero failures;
+  - full solution run: 2,975 passed, zero failed, zero skipped in
+    2m34s, including the packaged-SDK fixture that earlier runs
+    reported as environment-blocked;
+  - interpreted/compiled differential spot checks for defaulted,
+    named, chained, rest, and named/positional-overlap calls agreed on
+    every shape;
+  - `git diff --check` passed;
+  - regenerated the diagnostic reference (470 codes) and rebuilt the
+    280-page specification, visually confirming the new
+    default-value-semantics section.
+
+### July 26, 2026 — Compiled pipeline value semantics (TS-P1-20)
+
+- Adopted and documented the pipeline value-context policy above.
+- Added `ToshHost.DrainSubexpressionValue`, which applies the
+  interpreter's rule (none → `null`, one → the item, several → the
+  shared `tosh.runtime.subexpression_requires_single_value`
+  diagnostic), and threaded an `asSequence` flag through
+  `EmitPipeline`/`EmitPipelineCore`/`EmitMultiStagePipeline` and the
+  redirection wrapper so only iteration sources keep the list shape.
+- `for … in (pipeline)` now emits through `EmitPipelineAsSequence`;
+  every other value context collapses. `DrainValue` is retained for the
+  sequence path and its stale rationale comment was corrected.
+- The defect predated `TS-P1-05` and is unrelated to defaults: it
+  affected literal, variable, and command-seeded pipelines equally, and
+  only multi-stage ones, because single-stage value pipelines already
+  collapsed through `InvokeValue`.
+- Coverage: four compiled conformance rows plus
+  `CompiledPipelineValueTests`, which asserts the collapse for one-item,
+  empty, multi-item, typed, and iteration-source shapes and compares one
+  case directly against the interpreter's own result.
+- Validation:
+  - targeted selection (`CompiledPipelineValue`, `CompilerFeatureMatrix`,
+    `CallableDefaultBinding`): 184 passed with zero failures;
+  - full solution run: 2,987 passed, zero failed, zero skipped in 2m37s;
+  - differential spot checks confirmed identical behaviour for
+    one-item, empty, multi-item, typed, `first`-bounded, tuple-assignment,
+    and `for`-source shapes;
+  - `git diff --check` passed.
+- Observation for later: `ScopeAndChannelTests`
+  `Scope_kills_jobs_and_rethrows_when_block_throws` failed once under
+  heavy machine load and then passed three times in isolation and in a
+  clean full re-run. It spawns an external `dotnet --version` job and
+  asserts no job remains running, so it is timing-sensitive rather than
+  a semantic regression; worth making deterministic if it recurs.
+
+### July 26, 2026 — Named-argument validation (TS-P1-06)
+
+- Duplicate names are rejected before any binding decision: a name
+  supplied twice is invalid for every candidate, so treating it as an
+  overload mismatch would produce a misleading "no overload matched"
+  failure. `ValidateNamedArgumentUniqueness` runs at the free-function
+  binder and at both overload selectors.
+- Unknown names are handled in two layers so overload resolution keeps
+  working. During selection an unmatched name makes that candidate lose
+  (a sibling overload may declare the parameter), and when no candidate
+  bound, a name that matches no parameter of *any* candidate produces
+  `tosh.runtime.unknown_named_argument` naming the declared parameters.
+  A single concrete definition reports the same diagnostic directly.
+- The compiled packed-argument prologue applies both rules in
+  `NormalizePackedArguments`, so compiled and interpreted calls fail
+  with the same codes and messages.
+- Ordinary arity failures are unchanged, and command-wrapper functions
+  that forward arbitrary arguments are exempt from the unknown-name
+  check.
+- Added `tosh.runtime.unknown_named_argument` and
+  `tosh.runtime.duplicate_named_argument`; regenerated the diagnostic
+  manifest (472 codes).
+- Filed `TS-P2-21`: a `new` expression cannot parse named arguments at
+  all, so constructor named-argument validation is unreachable until the
+  parser accepts the form. Function and method calls are unaffected.
+- Coverage: `NamedArgumentBindingTests` covers unknown and duplicate
+  names on functions and methods, overload selection by named argument
+  for both, out-of-order binding, rest receiving only unconsumed
+  positional values in source order, and an arity failure remaining an
+  arity failure.
+- Validation:
+  - named-argument, default-binding, and pipeline-value selection:
+    33 passed with zero failures;
+  - full solution run: 2,996 passed, zero failed, zero skipped in 2m38s;
+  - interpreted and compiled calls confirmed to report identical
+    unknown/duplicate diagnostics;
+  - `git diff --check` passed.
+
+### July 26, 2026 — Comparison semantics (TS-P1-14)
+
+- Adopted the strict, symmetric comparison decision recorded above.
+- Ordering now rejects booleans outright and refuses to order a string
+  against a non-string, which removes the silent lexicographic answer
+  that made `"10" < 9` evaluate to `true`. Conversion is attempted in
+  both directions, so `"abc" < 5` and `5 > "abc"` now behave the same
+  instead of one answering `false` while the other threw.
+- Equality dropped its case-insensitive `ToString` fallback. Case
+  sensitivity is now uniform: previously mixed-type equality folded case
+  while string-to-string equality did not. Conversion-backed equality is
+  deliberately unchanged, so numeric strings still parse (`1 == "1"`),
+  CLR enums still match their member names, and a value still equals the
+  exact text form `TypeConversion` produces for it.
+- Aligned `TypeChecker.CheckBinaryOperator` with the same rule. It
+  previously permitted ordering only between two numerics, which made
+  the specified and working expression `"a" < "b"` a hard compile error,
+  so string comparison could not be compiled at all. It now rejects
+  exactly what the runtime rejects and defers every other pair to the
+  runtime's convertibility check.
+- One consequence worth noting: invalid orderings are now caught at
+  compile time rather than at run time. Both modes still refuse them, so
+  the parity contract holds — the compiler simply reports earlier.
+- Coverage: `ComparisonSemanticsTests` covers string-versus-number in
+  both directions, symmetry of the same operand pair, boolean rejection,
+  string-to-string and numeric-widening ordering, numeric-string
+  equality, uniform case sensitivity, conversion-backed equality in both
+  directions, element-wise collection equality, and null ordering.
+- Validation: comparison selection 14 passed; full solution run 3,010
+  passed, zero failed, zero skipped in 2m37s. The suite was also green at
+  2,996 before the new tests were added, confirming the removed
+  fallbacks were not load-bearing anywhere in the existing suite.
+- Filed `TS-P1-22` for the accepted chained-comparison behaviour, which
+  is a language-surface addition rather than part of this repair.
+
+### July 26, 2026 — Enum comparability (TS-P1-15)
+
+- `ToshEnumValue` now implements `IComparable`/`IComparable<T>` and the
+  new `Tosh.Runtime.IShellEnumValue`, so ordering and equality can be
+  resolved without the runtime assembly depending on the language
+  assembly. `ShellEnumComparison` holds the single rule for reducing a
+  member to its backing value.
+- Members order by their backing value (`E.Low < E.High`), compare equal
+  to that value in both directions (`E.Mid == 1` and `1 == E.Mid`), and
+  keep their existing name-based equality against a string. Explicit
+  values such as `enum Permissions : int { Read = 4 }` behave the same
+  way, and `sort` orders members numerically rather than alphabetically.
+- Two different enums are not one ordered domain. Members of `E` and `F`
+  that share a backing value neither compare equal nor order against
+  each other; attempting to order them is a structured failure. The
+  guard lives in the evaluator as well as in `CompareTo`, because the
+  evaluator's enum branch would otherwise unwrap both operands to plain
+  numbers before `CompareTo` was ever reached.
+- Applying this exposed that the interpreter kept its own
+  `AreEqualAsync` alongside `OperatorEvaluator.AreEqual`, so the
+  `TS-P1-14` equality change had landed on only one surface. Both now
+  carry the same enum rule and the same removal of the case-insensitive
+  `ToString` fallback. This duplication is the class of problem the
+  stabilization programme exists to remove and is worth revisiting.
+- Coverage: `EnumComparisonTests` covers ordering, backing-value
+  equality in both directions, symmetry, member identity within and
+  across enums, name equality, explicit backing values, sort order, and
+  rejection of cross-enum ordering.
+- Validation: enum and comparison selection 31 passed; full solution run
+  3,027 passed, zero failed, zero skipped in 2m41s.
+
+### July 26, 2026 — Withdrawing TS-P1-17, closing TS-P1-23
+
+- `TS-P1-17` claimed `{}` produced an internal type-definition object
+  rather than an empty record. That was wrong. In expression position
+  `var r = {}` yields an `ExpandoObject` — the same CLR type as
+  `{ a = 1 }` — and record spread (`{ ...$e, a = 1 }`) and member
+  assignment (`$e.x = 5`) both work on it. The item is withdrawn rather
+  than "fixed", since there was nothing to repair.
+- Two accurate observations sat behind the misfiling. The first is now
+  `TS-P1-23`: `type-of` returns a shell type descriptor, but
+  `BuiltInShellTypeDefinition` had no `ToString`, so displaying one
+  printed its own CLR class name. `type-of [1, 2]` reported
+  `Tosh.Runtime.BuiltInShellTypes+BuiltInShellTypeDefinition`; it now
+  reports `array<int>`. This affected every display of a built-in shell
+  type descriptor, not just `type-of`, and is the same
+  internal-name-leak family as `TS-P2-18`.
+- The second is that `{}` means different things by position: an empty
+  record in expression position, but a block (`ShellBlock`) as a bare
+  command argument. That is the brace-overload ambiguity already raised
+  in the review's design notes and is left for the parser work rather
+  than being resolved here.
+- Validation: full solution run 3,027 passed, zero failed, zero skipped
+  in 2m38s.
+- Method: this is a reminder that a filed symptom is not a diagnosis.
+  The original note recorded what was printed, not what was verified;
+  confirming the underlying value's CLR type first would have caught it.
+
+### July 26, 2026 — `$this` in method parameter defaults (TS-P1-21)
+
+- Implements the accepted decision: an instance method's parameter
+  default may reference `$this` (and `$super`), because the instance
+  exists by the time the call binds. Constructor defaults may not, since
+  they bind before that layer's properties are initialised.
+- The callable default binder now takes an ambient binding set that
+  seeds the default scope before parameters are added, so a default sees
+  `$this`, `$super`, and every earlier bound parameter —
+  `func m(a, b = $this.V + $a)` resolves all three. Inherited properties
+  resolve through the ordinary member path.
+- The instance is threaded through the instance-method and
+  special-method selectors, including the recursive base-class lookups,
+  so a method found on a base class still receives the derived
+  instance. Static methods and constructors pass no bindings.
+- A constructor default that reaches for `$this` now fails with
+  `tosh.runtime.self_unavailable_in_constructor_default`, explaining
+  that the instance is still under construction, instead of the generic
+  unknown-variable error. Detection keys on the evaluator's
+  unknown-variable diagnostic; the regression test asserts the code and
+  label so a change to that diagnostic breaks loudly rather than
+  silently falling back to the generic message.
+- Regenerated the diagnostic manifest (473 codes).
+- Coverage: `SelfInParameterDefaultTests` covers reading an instance
+  property, combining `$this` with an earlier parameter, reading an
+  inherited property, the constructor rejection, unaffected ordinary and
+  static defaults, and a constructor default that does not use `$this`.
+- Validation: default-binding selection 22 passed; full solution run
+  3,033 passed, zero failed, zero skipped in 2m36s.
+
+### July 26, 2026 — Chained comparison (TS-P1-22)
+
+- Implements the accepted decision. `a < b < c` now means
+  `(a < b) and (b < c)`: `1 < 2 < 3` is `true` where it previously
+  compared `true < 3` and silently answered `false`.
+- The chain is carried as its own node — `ChainedComparisonArgumentSyntax`
+  and `BoundChainedComparison` — rather than being desugared into `and`.
+  A syntax-level rewrite would duplicate every interior operand, so
+  `1 < (mid) < 3` would call `mid` twice. Both execution modes evaluate
+  each operand at most once and short-circuit: a failing pair never
+  evaluates the operands after it.
+- Only relational operators chain (`<`, `<=`, `>`, `>=`, `==`, `!=`). A
+  run containing `is`, `in`, `contains`, or a regex operator keeps the
+  previous left-associative shape, since those have no useful chained
+  reading. Single comparisons are structurally unchanged.
+- Compiled emission holds each operand in a local and branches between
+  pairwise comparisons, which is where the single-evaluation guarantee
+  actually comes from; the interpreter mirrors it by threading the
+  previous operand's value forward.
+- Coverage: `ChainedComparisonTests` covers two-, three-, and
+  four-operand chains, mixed directions, equality chains, plain
+  comparisons, non-chaining operators, and — in both interpreted and
+  compiled modes — single evaluation of an interior operand and
+  short-circuit of a later one.
+- Documented in the specification's operator chapter as
+  "Chained Comparison", including both guarantees and the list of
+  operators that chain; the 280-page PDF was rebuilt.
+- Validation: chained-comparison selection 17 passed; full solution run
+  3,050 passed, zero failed, zero skipped in 2m36s.
+
+### July 26, 2026 — Duplicated-semantics audit
+
+Prompted by two slices in which a semantic fix landed on only one
+surface, the interpreter's sync/async twin methods were inventoried
+mechanically rather than discovered incident by incident.
+
+- Method: extract every method whose name has an `…Async` sibling, take
+  the larger body, and classify it as *delegating* when it calls its own
+  async twin or as a *parallel implementation* when it does not. Then
+  count reachable call sites, excluding each method's own declaration,
+  to separate live copies from dead ones.
+- Result across `ToshEngine` and `ToshClassDefinition`: 23 parallel
+  implementations against 6 delegations. Eighteen parallel copies are
+  reachable; five are dead. `ToshClassDefinition` is the better-behaved
+  of the two — every `Invoke*`/`Create*` entry point delegates — while
+  `ToshEngine` had no delegating twins at all. Filed as `TS-P1-24` with
+  the full breakdown; the scan is a lower bound, since twins whose
+  signatures differ in shape (for example a `ValueTask` tuple return)
+  are not matched by name alone.
+- Divergence probe: the two highest-exposure areas were exercised for
+  *current* disagreement rather than theoretical risk. Refinement types
+  (`type Port = int where … coerce 80`) behave identically across seven
+  contexts — variable annotation, function parameter, function return,
+  class property initialiser, constructor parameter, method parameter,
+  and property assignment — and annotated conversion (`int` from the
+  string `"42"`) yields the same value in all of them. No live runtime
+  divergence was found, so `TS-P1-24` is latent risk rather than present
+  breakage.
+- The probe did surface a separate real gap, filed as `TS-P2-22`: the
+  type checker never visits class-member annotations, so `var x: int =
+  "42"` reports `tosh.type.mismatch` while the same mistake on a
+  property, constructor parameter, method parameter, or property
+  assignment reports nothing at all. Runtime conversion is consistent;
+  only static coverage is missing.
+- Recommendation for sequencing: converging `TS-P1-24` is worth more
+  than the next individual P1 repair, because every remaining semantic
+  item is at risk of the same half-landing. The five dead parallel
+  copies can go first — the suite proves nothing reaches them — which
+  removes the traps at zero behavioural cost.
+
+### July 26, 2026 — Removing the dead parallel copies (TS-P1-24, first slice)
+
+- Deleted the seven unreachable sync twins the audit identified, 132
+  lines in total: `ToshEngine.FormatInterpolatedValue`, and
+  `ToshClassDefinition`'s `EvaluateBaseConstructorArgs`,
+  `InitializeClrBase`, `RunConstructorInitializer`, `RunConstructor`,
+  `SelectConstructor`, and `SelectMethod`.
+- Each was verified unreferenced across `src/`, `tests/`, `bench/`,
+  `tools/`, and `examples/` before removal — every one had exactly one
+  occurrence, its own declaration — and the two `internal` members were
+  checked for cross-assembly use as well.
+- These were the residue of `TS-P0-06`'s move to asynchronous class
+  invocation. Leaving them in place was the actual hazard: they encoded
+  pre-`TS-P0-03`/`TS-P1-05` construction and binding semantics, so
+  reviving one would have silently reintroduced behaviour the programme
+  had already corrected, and they made the class file read as though two
+  construction protocols were still supported.
+- Validation: full solution run 3,050 passed, zero failed, zero skipped
+  in 2m38s — unchanged from before the deletion, which is the intended
+  evidence that nothing reached this code.
+- Remaining under `TS-P1-24`: the eighteen *live* parallel pairs, led by
+  `ConvertAnnotatedValue` (12 call sites), and a guard that fails when a
+  new parallel sync/async pair appears.
+
+### July 26, 2026 — Correcting the audit, and the drift guard (TS-P1-24)
+
+The first pass of this audit was wrong in two ways, both worth recording
+because they changed which work looked worthwhile.
+
+- The classifier only asked whether a *sync* method calls its async twin.
+  Delegation runs the other way in this codebase: a method may implement
+  the asynchronous case and hand every other case to the synchronous
+  implementation. Checking one direction reported those pairs as
+  duplicated.
+- The declaration pattern required a return type containing no
+  parentheses, so every method returning a tuple — which is most of the
+  `Try…Async` family — was skipped entirely.
+
+The consequence was a concrete mistake: `TryConvertAnnotatedValue` was
+reported as the largest duplicated pair, 147 lines over 12 call sites,
+and slated for extraction. It is in fact **already converged**. Its
+asynchronous overload resolves the refinement case and delegates every
+non-refinement annotation straight to the synchronous method, so only
+the refinement branch — roughly twenty lines — exists twice. The
+extraction was cancelled rather than performed against a false premise.
+
+Corrected counts are 23 truly parallel pairs against 6 converged, with
+the same totals as the first pass but materially different membership.
+The largest genuine duplication is the refinement cluster —
+`EnsureRefinementSatisfied` (98 lines) plus its predicate, coercer, and
+boolean-expression helpers, about 154 lines together — followed by
+`ThrowDetailedSingleConstructorMismatch`, `TryGetInstanceMember`, and
+`ApplyPendingParameterDefaults`. Five pairs the first scan missed
+entirely (`TryInvokeShellSymbol`, `TryGetInstanceMember`,
+`GetInstanceMembers`, `TryInvokeEnumerator`,
+`TryInvokeSpecialInstanceMethod`) are now included.
+
+What was kept from the slice:
+
+- `AnnotatedConversionParityTests`, a drift guard that runs one corpus
+  through both conversion paths and asserts identical success and
+  identical converted shape. It covers primitives, widening, string
+  parsing, failures, nullable annotations, collections,
+  trait-constraint names, refinements with and without `coerce`, and
+  nested refinements. It passes against the current implementations,
+  which confirms the two paths agree today, and it now guards the
+  refinement branch that genuinely is duplicated.
+- `InternalsVisibleTo Include="Tosh.Tests"` on `Tosh.Language`, so the
+  guard can compare the two primitives directly rather than inferring
+  which path a script reached. This matches `Tosh.Client`, `Tosh.Cli`,
+  and `Tosh.Crumb`.
+
+Method note: an audit heuristic needs its own negative control. Both
+flaws would have been caught by checking the classifier against one
+pair whose structure was already known by reading it.
+
+### July 26, 2026 — Lexer characterization corpus (TS-P2-11 groundwork)
+
+Before reworking the bareword-versus-token boundary, the current
+tokenization was pinned so the rework's effect is visible rather than
+incidental.
+
+- `LexerCharacterizationTests` renders the token stream for a corpus and
+  asserts it exactly. It is explicitly a characterization suite, not a
+  correctness suite: entries that encode a known defect name the item
+  that will change them, so those expectations are updated in the same
+  change as the fix.
+- Three groups: shapes that already tokenize as intended; shapes whose
+  tokenization *is* the root cause of a filed defect (`TS-P2-04`
+  `$x?.Length`, `TS-P2-02` `-$x`, `TS-P2-15` `f(a="z")`, `TS-P2-05`
+  `1__2`); and command-position barewords (`ls -la`, `./script.tosh`,
+  `*.txt`, `read-file`) that a mode-switching lexer must keep working
+  while it starts treating operators as tokens in expression position.
+- One test states the thesis directly: `$x?.Length` and `$x ?. Length`
+  do not tokenize the same way, and neither do `f(a=1)` and
+  `f(a = 1)`. The same expression changing meaning with whitespace is
+  what identifies this as a lexer problem before it is a parser problem.
+- Evidence gathered while writing it: `-$x` fails while `(0 - $x)`
+  works, `f(a="z")` drops the name while `f(a = "z")` binds it, and
+  `$x?.Length` prints literally while `$x ?. Length` yields 3.
+- One assumption did not survive contact: `1.5..3` was expected to
+  collapse into a bareword, and in fact tokenizes correctly as
+  `Number DotDot Number`. The `range_requires_integer` error it produces
+  comes from the accepted integer-only `ToshRange` decision, enforced
+  above the lexer. The entry moved to the correctly-tokenized group.
+
+### July 26, 2026 — Mode-tracking lexer, first slice (TS-P2-11, closing TS-P2-04 and TS-P2-15)
+
+The accepted approach is a lexer that tracks its own mode. The parser
+cannot drive it: lexing completes before parsing begins, and the parser
+relies on 222 `Peek(n)` lookaheads plus direct indexing over the
+finished token list, so a token's mode cannot depend on a parse decision
+that has not happened yet.
+
+- The lexer now tracks bracket nesting (`_expressionDepth`) to
+  distinguish command position, where greedy barewords must survive, from
+  expression position, where operators must be real tokens. This extends
+  a pattern the lexer already used — `IsRangeOperatorContext` decides
+  `..` from the previous token.
+- `TS-P2-04`: a bareword that began as a variable reference now breaks
+  before `?.`, so `$x?.Length` tokenizes as `$x` `?.` `Length` and
+  evaluates to 3 instead of printing itself. Nullable spellings such as
+  `string?` and `name?`, and any `?` not followed by `.`, are untouched
+  because the rule requires a leading `$`.
+- `TS-P2-15`: inside a parenthesised or bracketed context, an identifier
+  followed by a single `=` breaks, and `=` is emitted as its own token,
+  so `f(a="z")` binds the parameter exactly like `f(a = "z")`. The rule
+  requires a plain identifier, leaving option-style arguments such as
+  `--opt=value` greedy, and excludes `==`, `=~`, and `=>` so comparison,
+  regex match, lambdas, and match arms keep their spellings.
+- Both defects were pure tokenization: their spaced forms already worked
+  end to end, so no evaluator change was needed. `TS-P2-02` (`-$x`) was
+  deliberately left out of this slice — its spaced form `- $x` also
+  fails, so it needs runtime work beyond tokenization and is not a
+  lexer-only fix.
+- The characterization corpus did its job: the two entries moved from the
+  known-defective group to the correctly-tokenized group with their new
+  expectations, in the same change as the fix, and the thesis test now
+  asserts that `$x?.Length` and `$x ?. Length` tokenize *identically*
+  rather than differently.
+- Validation: lexer corpus 21 passed; full solution run 3,100 passed,
+  zero failed, zero skipped in 2m34s.
+
+### July 26, 2026 — Numeric literal lexing (TS-P2-05)
+
+- Digit separators are now validated: each `_` must sit between two
+  digits of the literal's own radix, so `1_000` and `1_000_000` still
+  fold away while `1__2`, `1_`, and `0x_FF` report
+  `tosh.parser.invalid_numeric_separator`.
+- A leading underscore now names an identifier instead of being stripped
+  into a number. `_1` previously lexed as the literal `1`, which is why
+  `var _1 = 99` failed with an unknown-command error for `var`; it now
+  binds and reads back 99. Validation is confined to numeric-looking
+  text, so `my_var`, `_count`, and `read_file` are untouched.
+- Binary and octal literals that exceed 64 bits report
+  `tosh.parser.numeric_literal_overflow` rather than escaping as the
+  CLR's raw "Value was either too large or too small for a UInt64"
+  under a generic runtime code. The previous handler caught only
+  `FormatException`, so `OverflowException` passed straight through.
+- Coverage: `NumericLiteralLexingTests` covers valid separator and radix
+  forms, each misplaced-separator shape, underscore-led identifiers, and
+  both oversized radix literals. The characterization corpus moved
+  `1__2` out of the pinned-defect group and gained `1_000` and `_1`.
+- Regenerated the diagnostic manifest (475 codes).
+- Validation: lexer selection 38 passed; full solution run 3,117 passed,
+  zero failed, zero skipped in 2m33s.
+
+### July 26, 2026 — Module dispatch casing (TS-P2-16)
+
+- Root cause was a one-line heuristic: `LooksLikeQualifiedDotNetAccess`
+  ended in `char.IsUpper(firstSegment[0])`, so any dotted name starting
+  with a capital was assumed to be a CLR static member access. `Geo.area
+  2` therefore parsed as an expression and left `2` unattached, failing
+  with a pipeline-separator error, while `geo.area 2` dispatched fine.
+- At the start of a stage, a dotted name followed by a value argument on
+  the same line is now treated as a command invocation, leaving the
+  engine — which does have the module table — to resolve it against
+  modules and CLR types alike. Operators are excluded, so `Math.PI + 1`
+  keeps its static reading, as do `Math.PI` alone and `Math.Sqrt(16)`.
+- The first attempt applied the rule everywhere and regressed
+  `echo Config.version Config.maxRetries`: in *argument* position a
+  following bareword is a sibling argument, not an argument to the
+  dotted name. The check is now confined to command position, and that
+  case is covered by a regression test.
+- Coverage: `ModuleDispatchCasingTests` covers upper, lower, all-caps,
+  kebab, and snake module names; static CLR access alone, in arithmetic,
+  and as a call; and the sibling-argument case.
+- Validation: module-dispatch selection 7 passed; full solution run
+  3,117 passed, zero failed, zero skipped in 2m33s.
+- Note for `TS-P2-11`: this fix replaces one weak heuristic with a
+  narrower one rather than removing the guess. The guess exists because
+  the parser has no command or module table — `ToshParser.Parse` takes
+  only source text, while `Lowerer.Lower` receives the registry. Making
+  resolution table-driven rather than spelling-driven is the structural
+  answer and is recorded under `TS-P2-11`.
+
+### July 26, 2026 — Declaration table: identity from facts (TS-P2-23 step 1, closing TS-P2-08)
+
+First step of the parser roadmap: replace spelling-based identity with a
+table the parser builds from the source it is parsing.
+
+- `ScanUserFunctionNames` became `ScanDeclarations`, collecting declared
+  function *and* module names. A keyword now only counts at a statement
+  start — first token, or after `;`, `{`, `}`, `|`, or a line break —
+  with declaration modifiers (`export`, `shy`, `shared`, …) skipped so
+  `export func f()` still registers. That closes `TS-P2-08`: the old raw
+  scan registered any bareword following the word `func`, so
+  `echo func bar` made `bar` look declared.
+- The table now decides an identity that capitalization was getting
+  wrong. A capitalized user function was read as a static call on a CLR
+  type of the same name: `func Foo(x)` followed by `Foo(1)` failed,
+  while the byte-identical lowercase `foo(1)` returned 3. A name this
+  source declares is no longer a candidate CLR type at any casing.
+- Scope correction during the work: the first attempt excluded declared
+  modules from qualified access entirely, which broke seven tests.
+  `LooksLikeStaticMemberAccessExpression` is not CLR-only — module
+  member access (`Lib.greeting`) travels the same qualified path, and
+  the engine resolves both. The table is now consulted only where the
+  decision is genuinely command-versus-expression, and the exclusion is
+  documented in place so the next reader does not repeat it.
+- What remains under `TS-P2-23`: the table covers this source's
+  declarations only. Imported modules and CLR types still fall back to
+  `char.IsUpper`, because `ToshParser.Parse` receives no registry. The
+  fallback is now a genuine last resort rather than the primary rule,
+  but removing it needs the registries at parse time.
+- Coverage: `DeclarationTableIdentityTests` covers declared functions at
+  four casings, unaffected CLR static access, module member access,
+  keyword-as-argument poisoning, and modifiers preceding a declaration.
+- Validation: identity selection 8 passed; full solution run 3,132
+  passed, zero failed, zero skipped in 2m33s.
+
+### July 26, 2026 — ParseContext: registries at parse time (TS-P2-23 step 1b)
+
+- Added `ParseContext`, carrying the command names, module names, and
+  type names a host already knows, and threaded it through
+  `ToshParser.Parse(source, sourceName, context)`. The engine builds one
+  from `Runtime.Commands.AllNames` plus the modules visible in its scope
+  chain.
+- `ParseContext.Empty` is a legitimate value rather than a compatibility
+  shim. The formatter, the REPL continuation classifier, and
+  interpolation-hole parsing genuinely have no environment, and parsing
+  purely syntactically is the right behaviour for them. Names absent
+  from the context fall through to the ordinary bareword reading and
+  the engine reports an unresolved name at run time.
+- The context is what recognises an *imported* module. The declaration
+  table added in the previous slice only sees modules the source itself
+  declares; `require Inventory from "./lib.tosh"` puts nothing in the
+  text being parsed. Likewise a host-registered command with a
+  capitalized name is no longer mistaken for a CLR type.
+- Ordering caveat worth recording: for a single-shot script the whole
+  source is parsed before `require` executes, so the context cannot yet
+  know that module. Same-source modules are covered by the declaration
+  table, and the command-position rule from `TS-P2-16` covers the rest,
+  so the three mechanisms are complementary rather than redundant. The
+  context's full value appears wherever parsing happens with state
+  already loaded, which is the REPL and incremental tooling.
+- Verified directly rather than through the CLI, where the require
+  ordering above would have made a passing result misleading about which
+  mechanism did the work: the new tests parse the same source with and
+  without a context and assert on the result.
+- Coverage: `DeclarationTableIdentityTests` gained host-supplied module
+  dispatch, a host-supplied command not being read as a CLR type, and
+  `ParseContext.Empty` keeping parsing syntactic.
+- Validation: identity selection 11 passed; full solution run 3,135
+  passed, zero failed, zero skipped in 2m36s.
+- Remaining under `TS-P2-23`: `char.IsUpper` still exists as the final
+  fallback for names no table covers. Deleting it outright is safe only
+  once shape-driven argument parsing (step 3) removes the need to guess
+  at all.
+
+### July 26, 2026 — Statement starts and block comments (TS-P2-06, step 2 groundwork)
+
+- An unterminated `##{` block comment consumed the rest of the file in
+  silence. Every statement after it simply never ran and nothing
+  reported why, which is the worst shape a defect can take: not a wrong
+  answer but no answer. It now raises
+  `tosh.parser.unterminated_block_comment` pointing at the opening
+  delimiter.
+- Expression-start recognition is now one predicate,
+  `ToshParser.IsExpressionStartToken`. Statement-boundary detection
+  carried its own shorter list that omitted interpolated strings,
+  command substitution (`$(`), process substitution (`<(`), and function
+  references (`&f`). No failing case was reproducible at top level or
+  inside a block — the pipeline parser stops earlier on the paths tried
+  — so this is consolidation against a latent divergence rather than a
+  demonstrated bug, and it is recorded as such.
+- The predicate is the first piece of the structural layer step 2 needs:
+  boundary decisions should consult one table rather than each site
+  re-enumerating token kinds.
+- Regenerated the diagnostic manifest (476 codes).
+- Coverage: `BlockCommentAndStatementStartTests` covers the unterminated
+  and terminated comment forms, every expression-start kind and several
+  non-start kinds, and new lines beginning with an interpolated string,
+  a command substitution, a number, and a function reference.
+- Validation: focused selection 24 passed; full solution run 3,159
+  passed, zero failed, zero skipped in 2m35s.
+
+### July 26, 2026 — Lite-parse structural pass (TS-P2-24, step 2)
+
+- Added `LiteParser`, a structural pre-pass modelled on Nushell's
+  `lite_parser`. It produces `LiteScript` → `LiteStatement` →
+  `LiteStage` as token-index ranges with spans, and assigns no meaning
+  to any token. Bracket depth is tracked so a `;` or `|` inside a
+  subexpression, list, or block belongs to that nested construct rather
+  than splitting the enclosing statement.
+- It consumes the shared `IsExpressionStartToken` table from `TS-P2-06`
+  for implicit line-break boundaries, so the structural pass and the
+  parser cannot drift apart on what may begin a statement.
+- Landed alongside the existing parser rather than replacing anything.
+  Nothing consumes it yet; that is deliberate. The pass is only worth
+  building if it agrees with the structure the current parser reaches
+  through scattered lookahead, so agreement is established first and the
+  heuristics are retired afterwards.
+- Coverage: `LiteParserTests` is differential where it can be. Statement
+  and stage counts are asserted against what `ToshParser` actually
+  produced for the same source, across nine construct families —
+  variables, functions, classes, modules, loops, try/catch, match,
+  redirection, and multi-stage pipelines — plus nested-separator cases,
+  empty sources, and span accuracy. 27 tests, all passing on the first
+  run, which is the evidence that the structural model matches.
+- Validation: lite selection 27 passed; full solution run 3,186 passed,
+  zero failed, zero skipped in 2m34s.
+- Next under `TS-P2-24`: have the parser consume the lite structure for
+  statement and stage boundaries, then delete the helpers that only
+  existed to re-derive it. That is the change that shrinks the 56
+  `LooksLike*` heuristics rather than merely duplicating them.
+
+### July 26, 2026 — Recovery: skip only when no progress was made (TS-P2-24, step 2b)
+
+An attempt to drive error recovery from the structural pass failed, and
+the failure pointed at a better fix.
+
+- The attempt: on a `missing_statement_separator`, resynchronise to the
+  next lite statement start instead of scanning tokens. This *lost*
+  work. Lite boundaries are line-granular, so for
+  `func f() {…} func g() {…}` — one lite statement, since nothing
+  separates the two declarations — recovery jumped to the following
+  line and `g` never reached the tree. Reverted.
+- Measuring the revert exposed the real defect. With the skip disabled
+  entirely, more statements survived than with either recovery strategy:
+  `SkipToStageBoundary` was itself discarding the rest of the line. The
+  parser, having already parsed `f`, was sitting exactly on `func g` —
+  the correct place to continue — and the scan moved it past.
+- The fix is to skip only when the statement parse made no progress,
+  which is the condition that actually guarantees termination. When the
+  parser advanced it is already positioned at the next construct, so
+  continuing recovers it. `func f() {…} func g() {…}` now yields both
+  declarations and one diagnostic; four same-line class declarations
+  yield all four and two diagnostics rather than one and a truncated
+  tree.
+- `LiteParser` remains as built and validated; nothing consumes it yet.
+  Driving recovery from it needs finer candidate boundaries than
+  top-level statement starts — mid-line declaration starts in
+  particular — which is recorded as remaining work.
+- Method note: the regression was only visible because the recovery
+  tests asserted on *surviving statements* rather than only on
+  diagnostic counts. A test that checked "one diagnostic" alone would
+  have passed against a tree missing half its content.
+- Validation: lite selection 29 passed; full solution run 3,188 passed,
+  zero failed, zero skipped in 2m33s.
+
+### July 26, 2026 — Traversal exhaustiveness (TS-P2-07)
+
+Nothing enforced that a new syntax node be added to the walkers that
+visit the tree. Adding `ChainedComparisonArgumentSyntax` earlier today
+required remembering to extend `VariableBinder` by hand; forgetting would
+have produced no error, only a subtree that capture analysis silently
+skipped.
+
+- `SyntaxTraversalExhaustivenessTests` makes that mechanical. Reflection
+  enumerates the syntax node types and decides which own child nodes — a
+  node whose properties carry no other syntax node is a leaf and needs no
+  traversal — then checks the walker covers each one. A new node type
+  fails the test until it is traversed or explicitly acknowledged with a
+  reason, and a second test rejects allowlist entries that no longer name
+  a real type.
+- It found a genuine gap on its first run: `ComparisonPatternSyntax` was
+  not visited, so a variable referenced in a match arm's pattern
+  (`_ > $limit`) was invisible to capture analysis. Now traversed. The
+  defect was latent rather than live — the cases reachable today put such
+  variables at top level, where they are promoted to static fields and
+  need no capture — but it would have become real the moment a pattern
+  referenced a captured local.
+- It also produced a false positive that corrected the test rather than
+  the code. The first version demanded the `Lowerer` name every node
+  type; the lowerer is instead total *by construction*, ending in a
+  fallback that wraps anything unrecognised in a `BoundDynamicExpression`
+  carrying the original syntax, which is how comprehensions reach the
+  engine and how the compiler reports them precisely. The assertion now
+  protects that fallback, which is the actual invariant.
+- Seven nodes are acknowledged rather than traversed, each with its
+  reason recorded in the test: the four comprehension forms, refinement
+  clauses, static method calls, and member projections.
+- Validation: exhaustiveness selection 4 passed; full solution run 3,192
+  passed, zero failed, zero skipped in 2m33s.
+
+### July 26, 2026 — Candidate boundaries, and the limit they expose (TS-P2-24 step 2c)
+
+- `LiteParser.CandidateBoundaries` reports every position where a
+  statement could begin, at any brace depth, with the kind of separator
+  that signalled it and the brace depth it sits at. Grouping suppression
+  still applies inside parentheses and brackets, where a line break
+  continues an expression.
+- This is what the earlier recovery attempt lacked. Top-level statement
+  starts are line-granular and cannot resynchronise inside a line or
+  inside a block; candidates can.
+- Verified differentially: for a function body, the number of candidates
+  inside the braces equals the number of statements the parser actually
+  produced for that block.
+- The slice also established a hard limit, which is filed as
+  `TS-P2-25`. Brace-enclosed candidates cannot be promoted to real
+  boundaries structurally, because `{` opens either a block — where a
+  line break separates statements — or a record literal, where it must
+  not. `var r = {\n a = 1\n b = 2\n}` parses correctly today and is
+  token-for-token identical in shape to a two-statement block body. The
+  pass reports depth rather than filtering, so a consumer that knows
+  which construct it is reading can decide.
+- That ambiguity is now the gating item for the rest of step 2: any
+  attempt to have the parser consume structure inherits it. Resolving it
+  is a grammar change and needs a decision before implementation.
+- Validation: lite selection 34 passed; full solution run 3,197 passed,
+  zero failed, zero skipped in 2m34s.
+
+### July 27, 2026 — Committing the program, and item bookkeeping
+
+The whole stabilization program existed only as uncommitted working-tree
+changes: the last commit predated it by two months, and every slice from
+`TS-P0-01` onward sat in a single snapshot. One `git checkout` would have
+cost all of it. Committed to `stabilization/july-2026` as ten
+subsystem-ordered commits.
+
+- Exact per-slice commits were not recoverable. A snapshot no longer
+  records which slice changed what, and the files that matter most span
+  many slices — `ToshEngine.cs` alone is +6,435/−3,741 across roughly
+  thirteen. Splitting it by hunk would have produced commits that do not
+  compile. The commits are therefore grouped by subsystem in dependency
+  order, each message carrying the relevant slice narrative from this
+  log. The solution build is verified clean at the final commit;
+  intermediate commits are review units, not build points. The suite was
+  last recorded green at 3,197 on July 26 and was not re-run here — a
+  full run exhausted the editor's memory — so that figure is carried
+  forward rather than reconfirmed.
+- Recorded so the Definition of Done can absorb it: an item is not
+  durable until it is committed. Twenty-one slices of validated work
+  were one command away from loss for two months, which no amount of
+  test coverage protects against.
+- `examples/point_custom_error.tosh` was not stabilization work. It had
+  been overwritten on 2026-07-25 by a 3.3 MB ImageMagick PostScript
+  dump — 42,768 of the working tree's 56,487 insertions, with no
+  ToastScript content left. Restored from `HEAD`; the stray PostScript
+  was set aside rather than discarded.
+
+Item bookkeeping, all of it clerical rather than semantic:
+
+- `TS-P1-20` had been assigned twice: to the closed compiled
+  pipeline-value item and, separately, to an open item recording that
+  the pure compiler profile can report a Tier-1-clean artifact while
+  emitted IL still calls into `ToshHost`. The second is renumbered
+  `TS-P1-25`. It was effectively invisible — the previous Active Work
+  summary listed remaining P1 work as `TS-P1-07`–`TS-P1-13` and
+  `TS-P1-16`–`TS-P1-19`, excluding it along with `TS-P1-24`. Verified
+  still live before renumbering: `EmitExecutionFrameEntry` calls
+  `ToshHost.EnterExecutionFrame` and `Main` calls
+  `RegisterCompiledAssembly`, neither guarded by profile.
+- `TS-P2-22` was filed in the P1 table; moved to the P2 table.
+- Blank lines had split `TS-P2-21`, `-23`, `-24`, and `-25` into four
+  separate one-row tables that render without headers. Rejoined.
+- Both tables are now sorted by item number; they previously ran
+  ...14, 15, 16, 17, 23, 18, 19, 20, 24, P2-22, 22, 21, 20. Row content
+  is unchanged: 50 rows before and after, differing only in the
+  renumbered ID.
+- Active Work is regenerated from the tables and now states what it is
+  derived from, so the next drift is a visible inconsistency rather than
+  stale prose.
+
+Three loose ends noted, not addressed: `LiteParserTests` raises three
+`xUnit2029` analyzer warnings against the zero-warning standard the
+earlier slices held to; the `Tosh.DevCompanion` SQLite advisory
+(`NU1903`) is still the solution build's only other warning; and
+`scripts/build.tosh` carries an unrelated one-line doc-comment change
+left uncommitted.
+
+### July 27, 2026 — Converging the refinement cluster (TS-P1-24)
+
+The largest genuine duplication in the audit, now reduced to one
+implementation. `ToshEngine.cs` loses 251 lines net.
+
+- The synchronous cluster is gone: `TryApplyGuardedRefinementCoercion`,
+  `TryEvaluateRefinementPredicate`, `EvaluateRefinementPredicate`,
+  `EvaluateRefinementCoercer`, and `EvaluateRefinementBooleanExpression`
+  are deleted, and `EnsureRefinementSatisfied` and
+  `TryApplyRefinementWithOptionalCoercion` are now thin adapters over
+  their asynchronous twins. The guard, predicate, and coercion semantics
+  exist once.
+- No new blocking was introduced. Each deleted leaf already ended in
+  `EvaluateArgumentAsync(...).GetAwaiter().GetResult()` with
+  `CancellationToken.None`; the bridge moved from inside five bodies to
+  two delegation points. `_scopes` is a plain instance stack rather than
+  an `AsyncLocal`, so pushing the refinement scope inside the async
+  method rather than outside it is not observable.
+- `CreateRefinementFailedDiagnostic` is extracted so the
+  `refinement_failed` help text is built once, and the comment
+  explaining why guarded `coerce` clauses thread their value forward
+  moved to the surviving asynchronous method rather than being deleted
+  with the copy that carried it.
+
+The interesting part is a claim that did not survive its own check.
+
+- Reading the two copies showed a real difference: a non-diagnostic
+  exception raised by the predicate *after* fallback coercion was
+  attributed to the coercer's span in `EnsureRefinementSatisfied` and to
+  the predicate's span everywhere else. That was reported here as a live
+  divergence.
+- Running the new regression against the pre-convergence engine
+  contradicted it: the test passed. `ConvertAnnotatedValue` only reaches
+  `EnsureRefinementSatisfied` after `TryConvertAnnotatedValue` has
+  already completed the sequence *without* throwing and returned an
+  unsatisfied result. A deterministic predicate cannot throw on the
+  re-run having not thrown on the first pass, so the diverging line was
+  unreachable without a side-effecting predicate. The audit's original
+  reading — latent risk, not present breakage — was right, and the live
+  claim was wrong.
+- The convergence stands on its own merits regardless: the difference
+  can no longer be reached by any future change that makes a predicate
+  non-deterministic, and there is one implementation to fix instead of
+  two.
+- Method note, and the second time this programme has earned it: the
+  negative control is what produced the correct answer. Reading two
+  implementations tells you they differ; only executing the old one
+  tells you whether anything could observe the difference. The earlier
+  `TryConvertAnnotatedValue` mistake and this one share a shape —
+  a difference confirmed by inspection and its reachability assumed.
+
+Coverage: `AnnotatedConversionParityTests` gains
+`Post_coercion_predicate_failure_blames_the_same_span_on_both_paths`,
+the first case in that guard to compare diagnostics rather than
+converted values, asserting both that the two paths agree and that they
+agree on the predicate rather than the coercer. Its scope limitation is
+recorded in the test itself.
+
+Validation: refinement, conversion, type-checker, truthiness,
+class-cancellation, and compiler-feature-matrix selection 283 passed,
+zero failed; `Tosh.Language` builds with zero warnings. The full suite
+was not run in this session — an earlier attempt exhausted the editor's
+memory — so it remains outstanding for this slice.
+
+### July 27, 2026 — Re-verifying TS-P1-23 across every display path
+
+Asked to confirm the July 26 fix held everywhere rather than only for
+`type-of`, it did not. The item is now genuinely closed.
+
+- What the original fix covered: `BuiltInShellTypeDefinition` gained a
+  `ToString`, which corrected every path that *stringifies* a
+  descriptor — string concatenation, the table header, property access.
+  The `Tosh.Runtime.BuiltInShellTypes+BuiltInShellTypeDefinition` leak
+  the item was filed for was gone from all of them.
+- What it missed: the paths that render *structurally*. A descriptor
+  exposes `Name`, `FullName`, `Namespace` and the rest as ordinary
+  readable properties, so `ObjectFormatter`'s record-field branch
+  claimed it before the `Type` branch could. Interpolation —
+  `echo $"{$t}"`, plausibly the most common way to display a type —
+  produced `{ Name = "array<int>", FullName = "ToSh.array<int>",
+  Namespace = "ToSh", ... }` instead of `array<int>`, as did a
+  descriptor nested in a list or record.
+- Fix: `FormatValue` recognises `IShellNamedType` above the record-field
+  check and renders it as its shell type name, which is the rule the CLR
+  `Type` branch immediately below already applied. CLR values are
+  untouched — `type-of 5` still reports `System.Int32` — because
+  `System.Type` does not implement the shell interface.
+- Verified across list, set, tuple, dict, record, and CLR values in
+  direct, interpolated, nested-in-list, nested-in-record, concatenated,
+  and property-access positions.
+- Method note: the original close was evidenced by `type-of` printing
+  the right thing. One correct output was taken for the whole class of
+  outputs, and the acceptance criterion — "displaying a built-in shell
+  type descriptor shows the shell type name" — was read as satisfied by
+  one display. Enumerating the display paths first would have caught it,
+  and the same habit is what the July 26 note about a filed symptom not
+  being a diagnosis was pointing at.
+
+Coverage: `ObjectFormatterTests` gains
+`Shell_type_descriptors_display_as_their_shell_type_name`, a theory over
+list, set, and tuple asserting both interpolated and nested-in-record
+rendering, and `Clr_type_values_are_unaffected_by_the_shell_descriptor_rule`
+for the other half of the acceptance. Run against the unfixed formatter,
+three of the four cases fail and the CLR case passes, which is the
+expected shape.
+
+Observation for a separate item: `type-of` on a record literal
+(`{ a = 1 }`) reports `table`. That may be intentional, since records
+and single-row tables share a representation, but it reads oddly next to
+`array<int>` and `dict<object, object>`. Not changed here.
+
+Validation: formatter, class, display, type-name, introspection, and
+generic selection 442 passed, zero failed; formatter selection 24
+passed. Full suite still outstanding for this session.
+
+### July 27, 2026 — Pure-profile dependency audit (TS-P1-25, first slice)
+
+The acceptance asks for an audit that fails independently of `RequireTier`.
+Building it first turns an invisible defect into a visible one and
+establishes exactly how much work the fix is.
+
+- The premise, now asserted: a program of only tier-1 shapes
+  (`func add(a: int, b: int) -> int`) emits clean under the pure profile.
+  `RequireTier` reasons about the shapes present in the *source*, so it
+  cannot see what the emitter unconditionally writes into every artifact.
+  Nothing in the profile's own gate was ever going to catch this.
+- `PureProfileDependencyAuditTests` reads the emitted PE metadata rather
+  than trusting the emit result — `AssemblyReferences` for the coarse
+  question and `MemberReferences` for which host entry points are called.
+- Measured rather than assumed, which narrowed the item usefully. The
+  emitted IL references exactly four assemblies: `System.Console`,
+  `System.Private.CoreLib`, `Tosh.Compiler.Runtime`, and `Tosh.Runtime`.
+  `Tosh.Language` is *not* among them. Only three unconditional
+  `ToshHost` members — `Initialize` and `RegisterCompiledAssembly` from
+  `Main`, `EnterExecutionFrame` from every function, method, lambda, and
+  block — stand between the artifact and purity. `Tosh.Runtime` is
+  permitted by the acceptance, which is where the recursion guard is
+  expected to move.
+- A separate problem surfaced and is *not* part of this item: the
+  generated `deps.json` declares `Tosh.Compiler.IR`, `Tosh.Compiler.Runtime`,
+  `Tosh.Language`, `Tosh.Runtime`, `Tosh.Stdlib`, and `Tosh.Tui` — the
+  toolchain's own closure rather than the artifact's actual needs. A pure
+  artifact would still ship alongside the interpreter even once its IL is
+  clean. Worth its own item once the IL half lands.
+- The four tests are characterizations, following `LexerCharacterizationTests`:
+  they assert the defect and name this item, so the expectations invert in
+  the same commit as the fix. One of them is a negative control on the
+  audit itself — pure and permissive currently emit identical reference
+  sets, and that equality is both the finding and the thing the fix must
+  change.
+
+Remaining under `TS-P1-25`: make bootstrap conditional or omit it, move
+recursion guarding to a `Tosh.Runtime` primitive, and invert the four
+characterizations.
+
+Validation: audit selection 4 passed. Full suite still outstanding for
+this session.
+
+### July 27, 2026 — Brace disambiguation options (TS-P2-25)
+
+`docs/BRACE_DISAMBIGUATION_RFC.md` records the options, their costs, and a
+recommendation. Measuring the current behaviour contradicted the item as
+filed in three ways worth carrying back here.
+
+- **Four forms, not five.** A predicate is not a distinct parse — it is a
+  block a command consumes as one, separated only by a hardcoded
+  `commandName == "where"` test in `ParseCommandArgument`. `filter { … }`
+  reaches the ordinary block path and behaves identically, so the special
+  case is not load-bearing.
+- **Position already decides, totally.** In expression position `{` is
+  always a literal and a block does not parse at all
+  (`var b = { echo hi }` is a syntax error). In command-argument position
+  `{` is always a block unless it is set- or dict-shaped, so a record is
+  unreachable there — `echo (type-of { a = 1 })` fails. The two contexts
+  are disjoint today; the defect is that `{ a = 1 }` means different
+  things in each.
+- **The claimed indistinguishable case is not the real one.** The item
+  cites `{ a = 1 \n b = 2 }` as token-identical to a two-statement block,
+  but assignment targets require `$`, so a block is `$a = 1 \n $b = 2`.
+  The genuine ambiguity is that shape: `var b = { $x = 1 }` yields a
+  *record* keyed by `$x`, because `$x` lexes as a bareword and satisfies
+  the record rule at `Peek(2)`. It is a live silent misparse, not a
+  theoretical one.
+
+Consequently the decision splits in two: how the structural pass decides
+(cheap, no grammar change needed) and whether `{` should keep meaning two
+things (the actual design choice). Recommendation is Option B — `{`
+becomes block-only and literals take an `@{` sigil — on the grounds that
+the migration is ~57 grep-findable sites, it is the only option meeting
+the item's first acceptance clause, and it leaves the structural pass
+needing no lookahead at all.
+
+Method note: the RFC's first draft proposed `#{` for literals. Reading
+the lexer rather than borrowing from other languages caught that any `#`
+begins a comment, so `#{ a = 1 }` would have lexed as a line comment and
+silently deleted the record. `@{` was then checked against the lexer
+before being proposed — `@(` is already special-cased, and `@` occurs in
+the corpus only inside doc comments.
+
+### July 28, 2026 — `take-while` exhausts system memory (TS-P1-08 reproduction)
+
+Two full-suite runs took down a 128 GB desktop. The first was recorded as an
+environment limit and worked around; that was wrong, and treating it as evidence
+of a defect instead found one immediately.
+
+- Method: full suite serialised (`xUnit.MaxParallelThreads=1`,
+  `ParallelizeTestCollections=false`) with total RSS across dotnet processes
+  sampled every second, so a peak attributes to one test rather than to whatever
+  collections happened to be co-resident.
+- Result: flat at **3,867 MB for 900 seconds** across 597 passing tests, then a
+  steady climb beginning one second after the last test output, reaching
+  **104,741 MB in 57 seconds**. No further test ever reported.
+- Attribution: the last completed test was
+  `LazySequenceTests.Iterate_with_take_while`; the next by source order is
+  `Recur_fibonacci_take_while`,
+  `recur (0, 1) func(a, b) => ($a + $b) | take-while { _ < 100 }`.
+- Mechanism: `take-while` never short-circuits the infinite `recur`. It should
+  stop at 89. Because Fibonacci values are arbitrary-precision integers whose
+  digit count grows linearly, total allocation grows quadratically — which is
+  the curve observed.
+- Corroboration: `Iterate_with_take_while` pairs the same `take-while` with
+  `iterate` and fails rather than hangs, reporting `'iterate' operations must
+  produce exactly one value per input item`. Two failure modes, one common
+  factor.
+
+**Severity.** `TS-P1-08` is filed as a streaming-efficiency concern — "`first`/
+`any` do not evaluate an unnecessary next item". It is not. It exhausts system
+memory and takes the machine down, which is the severity class of `TS-P0-07`
+(stack overflow killing the process), and that was P0. A re-rating to P0 is
+proposed on the item rather than applied, since moving an item between priority
+tables is a judgement call for the programme owner.
+
+**Open question, deliberately not answered here.** The suite was recorded green
+at 3,197 on July 26, so `Iterate_with_take_while` passed then and fails now.
+Whether the recent commits regressed it or parallel scheduling had been masking
+it needs a bisect. That bisect must run under a hard memory cap.
+
+**Operational note.** The full suite is not currently usable as a verification
+gate. Do not invoke `dotnet test` during ordinary stabilization validation while
+this item remains open. If a deliberate reproduction or bisect is explicitly
+needed, run it inside a bounded cgroup so the test fails instead of the machine,
+and disable both post-build targets. Disabling only the specification build is
+insufficient: `ToshParityCheck` otherwise launches a nested `dotnet run`, which
+can fan out additional MSBuild workers even for a filtered test:
+
+```
+systemd-run --user --scope -p MemoryMax=4G -- \
+  dotnet test … \
+  -p:DisableToshSpecBuild=true \
+  -p:DisableToshParityCheck=true
+```
+
+Method note, and the second time in two days: an unfinished measurement was
+reported as a result. At 11 minutes this run looked "well-behaved at 4 GB"; its
+failure mode began at 15. A run that has not finished is not evidence about the
+part that has not run.
+
+### July 28, 2026 — Paired collection delimiters (TS-P2-25)
+
+The RFC's structural principle was accepted with modified spelling.
+Ordinary `{ ... }` is now a block; records use `{| ... |}`,
+dictionaries `{% ... %}`, and sets `{: ... :}`. Grammar-owned plain
+braces such as member lists, match arms, destructuring, projections, and
+accessors retain their existing role.
+
+- **Stage 1 — tokens and lexer.** The six paired open/close delimiters
+  are real tokens. Adjacency is lexical (`|}` wins before `||`), paired
+  openers enter expression mode, and an ordered brace-context stack keeps
+  a nested plain block from prematurely leaving a literal. A malformed
+  spaced closer still restores command-mode tokenization after its plain
+  `}` recovery.
+- **Stage 2 — parser and corpus.** Literal dispatch depends only on the
+  opener. The set/dictionary/record `LooksLike*` classifiers and generic
+  brace collection parser are gone; plain braces take the block path in
+  ordinary expression and argument grammar. New diagnostics name spaced,
+  missing, and mismatched paired closers. Tests, examples, command
+  metadata, compiler comments, README/backlog examples, and generated
+  diagnostic/command-reference surfaces use the accepted syntax.
+- **Stage 3 — structural boundaries.** `LiteParser` now uses ordered
+  delimiter frames. Every candidate inside a plain brace carries its
+  exact `OwnerOpenTokenIndex`; `PromoteBoundariesForBlock` selects only a
+  parser-proven block's candidates, so the structural pass does not
+  recreate the fourteen specialized brace grammars. Nested groups and
+  literals suppress their own candidates while a real nested block can
+  re-enable them. An independent review caught two recovery defects
+  before closure — a deeper exact closer could be lost behind a
+  mismatched frame, and a multiline pipeline stage could be promoted as
+  a statement. Paired-exact-closer-first unwinding and owner-scoped
+  pipeline state now cover both; the plain-`}` recovery exception is
+  refined in the `TS-P2-24` entry below.
+- **Stage 4 — tooling and contract.** CLI/Tome colorizers, LSP semantic
+  tokens, VS Code TextMate/configuration, and GtkSourceView recognize the
+  paired delimiters. The editor audit also found and fixed a pre-existing
+  reversed TōSh/Tome language-configuration mapping in the VS Code
+  manifest. The specification and collection, syntax, and interop
+  cheatsheets document adjacency and empty forms (`{||}`, `{%%}`,
+  `{::}`); their PDFs were rebuilt and visually inspected. The accepted
+  RFC is the decision record, and `TS-P3-08` carries the future
+  parser-owned typed-region design.
+
+Validation was intentionally bounded. The Stage 2 parser/corpus
+selection passed 560 tests; the final Stage 3 `LiteParserTests` passed
+82; the Stage 4 highlighter/semantic-token selection passed 20 and its
+fresh test-project build succeeded. The main specification is 280 A4
+pages, both copies are byte-identical (SHA-256
+`fcb75e11b86cf95df361b99952e3b62c3173e17a2ef3068e49c42b20ec261363`),
+and all affected specification and cheatsheet pages render without
+clipping, overlap, or broken delimiter glyphs.
+
+A later combined filtered `dotnet test` attempt produced no result and
+is not counted: its post-build parity target fanned out nested MSBuild
+workers, and it was cancelled at the user's direction as memory began to
+grow. The full suite was not run, in accordance with the `TS-P1-08`
+operational note above.
+
+### July 28, 2026 — Exact-owner block boundary consumption (TS-P2-24)
+
+The completed paired-delimiter work was first checkpointed as commit
+`48499e3`. The next parser-roadmap slice then connected the recursive
+parser to the structural candidates prepared by `LiteParser`.
+
+- `InternalParser` computes candidate boundaries once and indexes them by
+  token position. `ParseBlock` captures the exact opening-brace token
+  before consuming it and maintains a nested owner stack.
+- The `ParseBlock` separator and recovery paths accept a structural
+  boundary only when its `OwnerOpenTokenIndex` matches the active block.
+  Grammar-local command, pipeline, grouping, literal, and specialized
+  brace separators deliberately retain their existing rules in this
+  slice; making them inherit an outer block owner changed nested command
+  substitution behavior and was rejected during review.
+- Block recovery now mirrors top-level recovery: it scans only when
+  statement parsing made no progress, and any structural recovery scan
+  consumes the offending token before stopping at the next promoted
+  boundary. This preserves a later same-line declaration instead of
+  discarding it.
+- Review found four defects before integration: multiline pipe-forward
+  (`|>`) cleared structural pending-stage state at its adjacent `>` token;
+  both recursive-parser pipe-forward branches skipped their post-stage
+  statement-boundary check; `LiteParser.Parse` treated `>` as a stage
+  opener; and repeated unmatched closers rescanned the entire delimiter
+  stack quadratically. Pipe-forward is now one structural separator and
+  observes the following statement boundary in both parser paths.
+  Closing-kind counts make unsuccessful recovery lookup constant-time
+  while successful unwinding remains amortized linear.
+- A further recovery review rejected brace-family interchangeability.
+  Exact paired closers no longer close unrelated literals. Plain `}` is
+  the sole substitution: it recovers the nearest brace region, so
+  `{| value = 1 }` can be diagnosed and resumed without also popping an
+  enclosing function block.
+- Differential coverage pins newline and explicit boundaries, ordinary
+  and pipe-forward continuation, independent nested owners, doc-comment
+  starts, specialized class-member separators inside a function,
+  same-line declaration recovery, and the repeated-unmatched-closer path.
+
+Validation remains bounded by the `TS-P1-08` operational note. A
+single-worker, 2 GB-capped compile of `Tosh.Language` succeeded with zero
+warnings and errors; the test project then compiled with project
+reference builds and all post-build fan-out disabled, also with zero
+warnings and errors. No tests were executed. Next: consume top-level
+`LiteScript` statement/stage ranges, then retire only the structural
+lookahead helpers proven redundant by the differential corpus.
+
+### July 28, 2026 — Correcting the `take-while` attribution
+
+A capped re-run (`MemoryMax=12G`, swap disabled) narrows and partly contradicts
+the entry above. The cap did its job: the suite reported
+`System.OutOfMemoryException` instead of taking the machine down, which is the
+configuration any future run of this suite should use.
+
+- The entry above concluded "two failure modes, one common factor" and named
+  `take-while`. That is not established. Under the cap, `first`-based cases fail
+  too — `Iterate_powers_of_2` (`iterate … | first 8`), `Recur_fibonacci`
+  (`recur … | first 10`), and `Recur_single_seed` (`recur … | first 5`).
+- But cause and collateral are *not* separated by this run. All tests share one
+  process, so once any test exhausts the cap every later allocation fails with
+  `OutOfMemoryException` as well. `EngineTests.Parser_supports_anonymous_function_arguments`,
+  `FormatterTests.Lambda_arrow_form_in_assignment_round_trips`, and three
+  `HelpBrowserScreenTests` appear in the failure list and are almost certainly
+  victims rather than causes.
+- One hypothesis was checked and rejected: every failing `LazySequenceTests` case
+  uses `func(x) => …` while `Recur_with_block` (block form) passes, which
+  suggested the brace/lexer work had broken anonymous-function parsing. It has
+  not — `var f = func(x) => ($x * 2)` still yields a `ToshLambda`.
+- What remains true and load-bearing: an infinite generator (`iterate`/`recur`)
+  combined with a bounded consumer allocates without limit. Whether `first` is
+  independently affected or merely downstream of the first exhaustion needs each
+  test run in its own process.
+
+Next diagnostic, deliberately not run here: execute each `LazySequenceTests`
+case in a separate capped process to separate the originating failure from the
+collateral. Until that is done, `TS-P1-08`'s scope should be read as "bounded
+consumers over infinite generators" rather than as `take-while` specifically.
+
+### July 28, 2026 — Capped full-suite result, and where the generator defect sits
+
+The capped run completed, which supersedes the claim that the suite is
+unusable. It is usable — under a cap.
+
+- **3,319 passed, 12 failed, 0 skipped of 3,331 in 3m06s**
+  (`MemoryMax=12G`, `MemorySwapMax=0`). The suite has grown from 3,197 on
+  July 26 as the parser work added coverage.
+- Failures: six `LazySequenceTests` (`Iterate_powers_of_2`,
+  `Iterate_with_take_while`, `Recur_fibonacci`, `Recur_fibonacci_take_while`,
+  `Recur_single_seed`, `Recur_tribonacci`),
+  `IteratorCommandTests.Repeatedly_evaluates_each_time`,
+  `EngineTests.Parser_supports_anonymous_function_arguments`,
+  `FormatterTests.Lambda_arrow_form_in_assignment_round_trips`, and three
+  `HelpBrowserScreenTests`.
+- Eight report `OutOfMemoryException`. Two carry the diagnostic that actually
+  localises the defect: `'iterate' operations must produce exactly one value
+  per input item` and the same for `'recur'`. Two are ordinary assertion
+  failures (`Strings differ`, `Collection was not empty`).
+
+Narrowing, with one more hypothesis rejected. The generator lambda is not at
+fault: `[1,2] | map (func(x) => ($x * 2))` yields exactly one value per input
+and the correct values. An earlier check here was too weak — it confirmed
+`func(x) => …` *parses* to a `ToshLambda` without confirming what invoking it
+yields, and those are different claims.
+
+So the defect sits in how `IterateCommand` and `RecurCommand` invoke the
+generator and count its results, not in lambdas, `take-while`, or `first`.
+`FunctionalCommandUtilities.RequireSingleResultAsync` is where the
+"exactly one value" contract is enforced and is the place to start.
+
+Remaining before the suite is green: that generator-invocation defect, and
+the two assertion failures around anonymous-function formatting, which have
+not been examined and may be unrelated.
+
+### July 28, 2026 — The memory exhaustion was a parser regression, not `TS-P1-08`
+
+The suite is green: **3,331 passed, 0 failed, 0 skipped in 2m36s** under
+`MemoryMax=12G`. Getting there overturned the diagnosis filed earlier today,
+and the proposed P0 re-rating of `TS-P1-08` is withdrawn with it.
+
+Root cause. `ParseAnonymousFunctionArrowBody` parsed the body of an
+argument-position `=>` lambda as a full pipeline. That was a deliberate widening
+under `TS-P2-26`, made so `func (x) => $x + 1` would bind the whole operator
+expression rather than just `$x`. It over-corrected: the body then also consumed
+whatever followed it.
+
+```
+$xs | map func(x) => ($x * 2) | count     → 1, 1, 1   (should be 3)
+```
+
+The `| count` was parsed *into* the lambda, so each invocation counted its own
+single value and the enclosing stage never ran. Applied to
+`iterate 1 func(x) => ($x * 2) | first 8`, the `| first 8` vanished into the
+body — leaving the generator unbounded. That is where 104 GB came from. Nothing
+was wrong with `take-while`, with `first`, or with streaming.
+
+Fix. `ParsePipeline` gained a `singleExpressionBody` flag. An argument-position
+`=>` body parses exactly one stage and stops, so a following `|` or a following
+argument belongs to the enclosing command. `TS-P2-26`'s operator-expression
+behaviour is preserved — verified directly, `map func(x) => $x + 1` still binds
+the whole expression.
+
+A second, smaller regression from the same widening: the body's span started at
+the body expression rather than at the `=>`, and the formatter identifies this
+form by checking that the body begins with `=>`. So
+`$f = func(x) => ($x + 1)` round-tripped as a block body. The span now includes
+the arrow.
+
+Two of the twelve failures were therefore real and ten were collateral — the
+three `HelpBrowserScreenTests` and the rest simply allocated after the cap was
+already exhausted, exactly as suspected but not proven earlier.
+
+Method note, and the one worth keeping from this whole sequence. Three
+successive diagnoses were wrong — `take-while`, then lambdas generally, then
+`TS-P1-08` — and each was corrected only by executing something rather than
+reading it. The memory cap is what made executing safe: it converted a defect
+that killed the machine into a test failure with a stack trace. It should be
+standard for this suite regardless of this fix:
+
+```
+systemd-run --user --scope -p MemoryMax=12G -p MemorySwapMax=0 -- dotnet test …
+```
+
+`TS-P1-08` remains open and P1 on its original grounds — nested generator
+materialization and short-circuit consumers peeking an extra item. It simply had
+nothing to do with this.
+
+### July 28, 2026 — Block boundaries consumed, and sizing what is left (TS-P2-24)
+
+`HasStatementBoundaryAfter` now consults `IsCurrentPromotedStatementBlockBoundary`
+before falling back to the line-break heuristic, so inside a block the parser
+takes the answer the structural pass already computed instead of re-deriving it.
+The change is additive — it can only add boundaries — and the suite is unchanged
+at 3,330 of 3,331, the single failure being the packaged-SDK fixture that exits
+134 under concurrent load and passes 6 of 6 in isolation.
+
+The more useful result came from measuring rather than declaring. With the
+line-break fallback stubbed to `return false`, the parser, lite, engine, and
+language-feature selection fails **57 of 947**. So the fallback still answers the
+large majority of boundary questions, and the lite structure covers only
+top-level statements and promoted in-block candidates.
+
+That materially resizes the item. The previous status read "ordinary `ParseBlock`
+statement paths now consume exact-owner promoted candidates; top-level and stage
+integration remain", which implies two remaining integrations. The measurement
+says the remaining work is most of the boundary surface, not two endpoints —
+`ParsePipeline` stage division, argument and expression continuation, and every
+nested construct that currently answers the question locally.
+
+Suggested method for the rest, since the 57 are a ready-made worklist: keep the
+stub as a temporary harness, take the failures in groups, and move each group's
+decision onto the structural pass until the stub passes. The item is done when
+the fallback can be deleted rather than when the last integration point is
+wired — that is the difference between consuming the structure and consulting it.
+
+### July 28, 2026 — Member lists become boundary owners (TS-P2-24)
+
+Working the fallback stub as a harness rather than guessing which call sites
+mattered. With the line-break fallback disabled, full-suite failures went
+**113 → 16 → 6** across two changes.
+
+- Root cause of the bulk: only `ParseBlock` ever pushed onto
+  `_statementBlockOpenTokenIndices`. Every other brace-delimited member list
+  called `HasStatementBoundaryAfter` without registering its opener, so
+  `IsCurrentPromotedStatementBlockBoundary` could not match and the line-break
+  heuristic was the only thing answering. Class bodies alone accounted for
+  113 → 16 — the 13 direct `missing_class_member_separator` failures plus a
+  large cascade of downstream misparses.
+- `PushBoundaryOwner` now expresses the registration as a `using` scope, and
+  class bodies, native bind blocks, and match arm lists use it. That took the
+  remainder to 6.
+- `StructuralBoundaryFallbackDisabled` is kept as an internal test hook,
+  defaulted off. It is the only honest way to tell whether the item is
+  finished: the fallback being *unused* is the goal, and that cannot be seen by
+  reading call sites.
+
+The residual 6 are principled rather than missed. Three are paired collection
+literals — `LiteParserTests.Multi_line_paired_literals_yield_no_statement_boundaries`
+asserts by name that the structural pass reports **no** statement boundaries
+inside `{| |}` and `{% %}`. Record fields and dict entries separate by newline
+but are not statements, so they need their own boundary concept rather than the
+statement one. That is a design question, not a wiring gap, and is the next
+decision this item needs.
+
+Suite green with the hook off: 3,331 passed, 0 failed, 0 skipped in 2m35s.
+
+### July 29, 2026 — The element-boundary model (TS-P2-24)
+
+Adopts option C from the boundary-model choice: paired collection literals reuse
+the existing ownership mechanism, and the vocabulary is renamed to match what it
+actually describes. Fallback dependence measured down from 113 to **4**.
+
+The distinction that was missing. `CandidateBoundaries` suppressed candidates
+inside grouping constructs and paired literals alike, but they suppress for
+opposite reasons: inside `(...)` a line break continues an expression, while
+inside `{| ... |}` it separates one entry from the next. Collapsing both into
+"not a boundary" is what left record and dict parsing on the line-break
+heuristic.
+
+Two corrections were needed along the way, both found by measuring rather than
+reasoning:
+
+- Enabling every boundary kind inside literals took the count **up**, 6 to 10,
+  and broke `Semicolons_inside_paired_literals_are_suppressed`. A `;` is not an
+  entry separator in a record or a dict. Only line breaks are, so only line
+  breaks are enabled.
+- Sets are not entry lists at all. `{: 1, 2 :}` separates by comma, and a line
+  break inside one is whitespace. `BoundaryFrameRole` now distinguishes
+  `EntryList` (`{|`, `{%`) from `Literal` (`{:`), and the test that previously
+  asserted all three behave alike is split to say what is actually true of each.
+
+Renaming, since the concept was never statement-specific. `LiteBoundary` now
+documents a position where the next *element* may begin — a statement in a
+block, a member in a class body, an arm in a match, a function in a bind block,
+an entry in a record or dict. `HasStatementBoundaryAfter` becomes
+`HasElementBoundaryAfter` (27 sites), `IsBoundaryOwnedByBlock` becomes
+`IsBoundaryOwnedBy`, `PromoteBoundariesForBlock` becomes
+`PromoteBoundariesForOwner`, and the owner stack drops its block-specific name.
+
+Remaining 4, and they are a different sub-problem. `EngineTests`'
+class-definition and computed-property cases fail with
+`missing_pipeline_separator`, with a cancellation test failing downstream of
+them. Those are stage division rather than element division — a computed
+property whose body is a pipeline — which is the part of step 2 that has not
+been started.
+
+Validation: 3,331 passed, 0 failed, 0 skipped in 2m42s with the hook off.
+
+### July 29, 2026 — The line-break fallback is deleted (TS-P2-24)
+
+The element-boundary half of the item is finished on its real criterion: the
+re-derivation is *gone*, not merely unused. `113 → 4 → 0`.
+
+Last owner registered: `ParsePropertyAccessorBlock`. A property's accessor list
+owns the boundary between `get` and `set` exactly as a class body owns the one
+between members, and without the owner `get => $this.X` had no boundary after it
+and its arrow body ran on into the following `set`.
+
+That was the whole of the remaining 4. The previous entry called them "stage
+division ... which has not been started", inferred from the
+`missing_pipeline_separator` code without reading the source. Wrong, and wrong
+the same way as the `take-while` attribution: a diagnostic code names the
+symptom, not the cause.
+
+With the harness then reporting a clean suite, the fallback was deleted rather
+than left disabled, `HasElementBoundaryAfter(previousEnd)` became
+`IsAtElementBoundary()` — the parameter was dead once the line-break test went,
+and 23 call sites lost the argument — and `StructuralBoundaryFallbackDisabled`
+was removed, its job done.
+
+`HasElementBoundaryAfter` now consults only the structural pass. Constructs that
+register as owners: blocks, class bodies, match arm lists, native bind blocks,
+property accessor lists, and record/dict literals. A construct that forgets to
+register no longer silently falls back to a heuristic — it gets no boundaries at
+all, which fails loudly.
+
+Remaining under `TS-P2-24`: stage division. `LiteParser` records
+`LiteSeparatorKind.Pipe`/`PipeForward` per stage, but `ParsePipeline` still
+decides stage division itself except for the pipe-forward check. That is a
+genuinely separate integration, and this time the claim is based on reading
+`ParsePipeline` rather than on a diagnostic code.
+
+Validation: 3,331 passed, 0 failed, 0 skipped in 2m49s; zero warnings.
+
+### July 29, 2026 — Closed-item audit, first pass
+
+Auditing closed items for the `TS-P1-23` failure mode: closed on one observation
+rather than on an enumeration of the surfaces the acceptance names. Of 23 closed
+P1/P2 items, seven use universal language ("every", "all", "each",
+"identical"). Three were checked.
+
+**`TS-P2-07` — confirmed, strongest form.** "One exhaustive syntax walker visits
+every child" is enforced mechanically by `SyntaxTraversalExhaustivenessTests`: a
+new node type fails the suite until it is traversed or acknowledged with a
+reason. This is the only closed item that cannot silently regress, and it is
+worth treating as the model for what "every" should mean.
+
+**`TS-P2-14` — confirmed, with evidence.** "Suffix forms lex as typed literals in
+every expression position." Twelve positions enumerated: variable initializer,
+arithmetic, comparison, list element, record field, dict value, return value,
+interpolation, ternary arm, set element, and parameter default all yield
+`StorageSize`. One differs — `takes 10kb` in command-argument position yields
+`String` — and that is the documented exception, since the decision reads
+"typed in expression context but remain strings as raw command arguments".
+`takes(10kb)` and `takes (10kb)` both yield `StorageSize`. The claim holds; it
+is now evidenced rather than assumed.
+
+**`TS-P2-06` — did not hold; fixed.** "All expression-start tokens share one
+source of truth." There were three sources. `IsExpressionStartToken` listed 16
+kinds; `CanStartCommandSubexpressionArgument` and `CanStartPrimaryArgument` each
+listed the same 16 plus `Bang`, as independent switch statements. Nothing was
+missing from any of them, so no defect was visible — they agreed only because
+someone had maintained all three in step.
+
+That is precisely the drift hazard the item was filed to remove, and it has a
+near-term cost: `TS-P3-09` moves `Bang` into the canonical set when `!` becomes a
+prefix operator, and three places to remember is how such a change gets
+half-done. Both argument predicates now read
+`kind == Bang || IsExpressionStartToken(kind)`, so the relationship is explicit
+and the sets cannot diverge.
+
+Method note: the scan that found this also produced false positives —
+`CanStartPrimaryArgument` was reported as missing `OpenBracePercent` when the
+token was simply past the scanner's window. A crude scan is a way to find
+candidates, not a source of findings; each one still has to be read.
+
+Remaining unaudited of the seven: `TS-P1-14`, `TS-P1-22`, `TS-P2-12`,
+`TS-P2-15`.
+
+Validation: 3,331 passed, 0 failed, 0 skipped; zero warnings.
+
+### July 29, 2026 — Closed-item audit, second pass
+
+The remaining four items with universal acceptance language. Suite now 3,381.
+
+**`TS-P2-12` — confirmed.** "Every quote form has a conformance case." Twelve
+forms enumerated: single-quoted is raw (`'a\nb'` is 4 characters), double-quoted
+processes escapes (3), unknown double escapes keep the backslash, triple-quoted
+and ANSI-C and all three interpolated variants behave as documented. Both
+specification examples that originally motivated the item — `("a1" =~ "\d")` and
+`"file.cs" =~ "\.cs$"` — return true.
+
+**`TS-P2-15` — confirmed.** "`name=value` and `name = value` parse identically."
+Checked across free functions, instance methods, and static methods rather than
+free functions alone; all three agree, and option-style `--flag=value` stays
+greedy.
+
+**`TS-P1-22` — confirmed.** Each operand evaluated once and later pairs
+short-circuited: `1 < (mid()) < 3` calls `mid` once, and `5 < (mid()) < 3` stops
+after the failing pair. Compiled mode is covered by
+`Compiled_chains_match_the_interpreter` and
+`Compiled_chains_evaluate_each_operand_once_and_short_circuit`, so the
+"interpreted and compiled" clause holds.
+
+**`TS-P1-14` — behaviour holds, but the "implemented once" clause does not, and
+a real defect was hiding behind it.**
+
+The matrix is implemented twice — `OperatorEvaluator.AreEqual` and
+`ToshEngine.AreEqualAsync` — because a user-defined `Equals` may be
+asynchronous, so the async path cannot delegate. They agree only because someone
+maintains them in step, which is the `TS-P2-06` shape again. Worse, they had
+already drifted once: `TS-P1-15` records finding the engine still carrying the
+old rule after `TS-P1-14` had been applied to the evaluator alone. It was fixed
+without adding a test, so nothing prevented a recurrence.
+
+`EqualityParityTests` is that test, the equality counterpart of
+`AnnotatedConversionParityTests`, and `AreEqualAsync` became `internal` for it on
+the precedent `TS-P1-24` set. It found a defect on its first run, filed as
+`TS-P1-26`: `true == "true"` is `true` while `"true" == true` is `false`.
+Numeric-against-string and bool-against-number are symmetric in both directions,
+so only this one pairing fails to coerce, and both implementations share it —
+one rule applied in one direction rather than a drift. It survived `TS-P1-14`
+because that item promised symmetry explicitly for ordering and never stated it
+for equality.
+
+Audit result across all seven: five confirmed, two gaps — `TS-P2-06`'s three
+rival lists (fixed) and this. The `TS-P1-23` hypothesis that prompted the audit
+is supported: "Complete" has meant "the named example works", not "the named
+surfaces were enumerated".
+
+Validation: 3,381 passed, 0 failed, 0 skipped in 2m40s; zero warnings.
+
+### July 29, 2026 — Symmetric equality (TS-P1-26)
+
+Filed as needing a semantics decision — which coercion direction was intended —
+and that framing was wrong. Reading the cascade showed a plain defect with an
+unambiguous fix.
+
+`AreEqual` already attempted both directions. It returned on the first
+successful *conversion* rather than the first successful *equality*:
+
+```
+"true" == true    converts true to "True", compares against "true",
+                  returns false — never trying string-to-bool
+true == "true"    converts "true" to true, matches
+```
+
+`bool` renders as `"True"`, and `TS-P1-14` removed the case-insensitive
+`ToString` fallback that had been masking this. So no coercion policy needed
+choosing: testing both directions and holding equality when *either* matches
+makes the result independent of operand order by construction, because the same
+two conversions are attempted whichever operand comes first.
+
+The first attempt at that broke `ClassEqualityCancellationTests`, and the
+failure was instructive. The single early return had been load-bearing for a
+second reason: it prevented the fall-through to the tail, which dispatches a
+user-defined `Equals`. With it removed, `"PROBE" == $left` tried harder, reached
+the tail, and invoked `ValueProbe.Equals("PROBE")` — whose body reads
+`$other.Value` off a `string` and throws. Both directions are now tried, but a
+successful conversion still decides the answer, so the shield is explicit rather
+than accidental.
+
+Applied to both implementations. That is the point of the guard that found this:
+`EqualityParityTests` would have failed had the fix landed on one surface, which
+is exactly how `TS-P1-14` originally went in.
+
+Method note: the value here came from an existing test, not the new one. The new
+guard found the asymmetry; the old suite caught the over-broad fix. Neither
+would have been enough alone.
+
+Validation: 3,383 passed, 0 failed, 0 skipped in 2m37s; zero warnings.
+
+### July 29, 2026 — An untested branch found by measuring before refactoring (TS-P2-24)
+
+Stage division is the remaining half of `TS-P2-24`. Measuring its scope before
+starting found something more important than the refactor.
+
+`HasTopLevelPipeBeforeCloseParen` answers one structural question — does this
+parenthesised group contain a top-level `|` — at two call sites: an if-condition
+chooses between a pipeline and an operator expression, and an
+implicit-current-item group chooses between a pipeline and a `where` predicate.
+
+**Stubbing it to `return false` left the entire suite passing at 3,383.** Its
+`true` branch had no coverage whatsoever. `if (ls | count)` could have been
+broken outright and nothing would have reported it.
+
+The behaviour itself is fine — `if ([1,2,3] | any { $_ > 2 })` takes the true
+branch, `if ([] | count)` takes the false one, and the predicate form still
+works. This was a coverage gap, not a defect.
+
+It is, however, exactly the gap that would have made the planned refactor
+unverifiable. `TS-P2-24` intends to replace this helper with a structural-pass
+query; done against the suite as it stood, that change could have removed
+pipeline-in-condition support entirely and stayed green.
+
+`PipelineInParenthesesTests` closes it: five cases over the `true` branch —
+single- and multi-stage pipelines, both truthiness outcomes — and three over the
+`false` branch, since a helper that chooses between two readings needs both
+pinned or the other rots. Verified by negative control: with the helper stubbed,
+five fail and the three false-branch cases correctly do not.
+
+Method note. The order mattered more than the work. Had the refactor come first
+it would have passed its own tests, passed the suite, and silently deleted a
+feature. "Measure before refactoring" earned its keep here in a way that reading
+the code could not have — the helper looks obviously load-bearing, and it is;
+what was missing was any test saying so.
+
+Remaining under `TS-P2-24`: the refactor itself, now safe to attempt.
+`LiteParser.Parse` computes stages only at top level, so answering this from the
+structural pass needs stage divisions tracked per delimiter frame and exposed by
+owner token index — the same ownership shape the element boundaries already use.
+
+Validation: 3,391 passed, 0 failed, 0 skipped in 2m38s; zero warnings.
+
+### July 29, 2026 — Stage divisions from the structural pass (TS-P2-24)
+
+The first stage-division heuristic is retired. `HasTopLevelPipeBeforeCloseParen`
+re-scanned the token stream from the parser's position with a private
+bracket-depth counter; it is replaced by `GroupOwnsStageDivision`, a lookup
+against the structural pass.
+
+`LiteStageDivision` records every `|` and `|>` with the innermost frame that
+owns it. Ownership is by innermost frame whatever its role, which differs from
+`LiteBoundary` — a pipe inside `(...)` belongs to those parentheses, while a
+boundary inside them is suppressed. Both come from the same walk: the frame
+stack that decides boundary ownership is the stack that decides which construct
+a `|` divides, and computing them separately would mean two implementations of
+delimiter pairing to keep in step.
+
+Order, deliberately: the capability and its differential tests landed before
+either call site changed, matching how the element boundaries were done — agree
+first, retire the heuristic second. `LiteStageDivisionTests` covers top-level
+pipes, nested frames owning their own, a pipe inside a block not being
+attributed to the enclosing parens, `|>`, paired literals, and the owner query
+in the exact shapes the two call sites ask. Sixteen cases, passing on the first
+run, which is the evidence the model matches.
+
+The two call sites hold the opening token rather than its index, so a span-to-index
+map resolves one to the other rather than changing their signatures.
+
+This was only safe because of the previous entry. The branch had no coverage at
+all, so this refactor could have deleted pipeline-in-condition support and left
+the suite green.
+
+Remaining under `TS-P2-24`: `HasTopLevelOperatorBeforeStageBoundary` (one call
+site) is the other structural stage helper. The rest of the `HasTopLevel*` family
+answers semantic questions — is there an operator, a comma, a comprehension
+before some delimiter — and legitimately stays.
+
+Validation: 3,407 passed, 0 failed, 0 skipped in 2m37s; zero warnings.
+
+### July 29, 2026 — Measuring the last stage helper, and where TS-P2-24 stands
+
+`HasTopLevelOperatorBeforeStageBoundary` is the remaining stage-related helper.
+Measured before touching it, and the result argues against touching it.
+
+| stub | suite |
+|---|---|
+| `return false` | **115 failures** |
+| `return true` | **0 failures** |
+
+So the `true` branch is heavily exercised and the `false` branch is not
+distinguished by any test: always taking `ParseOperatorExpression` instead of
+`ParseArgument` is indistinguishable from correct behaviour. Probing the
+no-operator shapes that reach this call site — a bare list, record, string,
+spread, match — shows all of them working, which is consistent with
+`ParseOperatorExpression` being a superset for these inputs.
+
+**Not acted on.** "The suite passes when stubbed" is exactly the reasoning that
+would have deleted pipeline-in-condition support two entries ago. That the
+distinction is untested is evidence about the tests, not about the code. The
+possible redundancy is recorded here as a simplification candidate for whoever
+picks it up with a way to prove it.
+
+It is also arguably out of scope. The acceptance targets helpers that answer
+*only* structural questions; this one asks a semantic question ("is there an
+operator") with a structural qualifier ("before the stage boundary"), which is
+not the same thing.
+
+**Where the item stands.** Of the eight surviving `HasTopLevel*` helpers, seven
+ask semantic questions — is there a comma, an operator, a comprehension before
+some delimiter — and legitimately remain. The only purely structural one,
+`HasTopLevelPipeBeforeCloseParen`, is retired. The `LooksLike*` family stands at
+54 against the 56 recorded at filing, and is predominantly grammatical ("what
+construct is this") rather than structural ("where does this end"), so it is
+largely not what the clause targets either.
+
+Against the three acceptance clauses:
+
+1. *The parser consumes the lite structure instead of re-deriving it.* Element
+   boundaries: done, the fallback is deleted rather than unused. Stage division:
+   the structural helper is retired.
+2. *Helpers that only answered structural questions are removed.* The one that
+   did is gone.
+3. *Structure agrees with today's parser, evidenced by differential tests.*
+   `LiteParserTests` and `LiteStageDivisionTests`.
+
+That reads as closeable, but the judgement on clause 2 — whether the hybrid
+helper counts — belongs to the programme owner rather than to me, so the status
+is left in progress with this assessment recorded.
+
+Validation: 3,407 passed, 0 failed, 0 skipped; zero warnings; working tree clean.
+
+### July 29, 2026 — Displayed collections round-trip again (TS-P2-25 follow-up)
+
+Found by demonstrating the new literals rather than by a failing test: after
+`TS-P2-25`, displaying a record or dict produced text the parser rejects.
+
+```
+var r = { name = "Ada" }    → tosh.parser.variable_references_require_dollar
+var d = { "ada" => 36 }     → tosh.parser.missing_pipeline_separator
+```
+
+Records rendered as `{ name = "Ada" }` and dicts as `{ "ada" => 36 }` — the
+pre-decision spellings. A bare `{` now opens a block, so neither could be pasted
+back. Sets were already correct because `{: :}` did not change spelling, which
+is why nothing looked wrong at a glance.
+
+The scope is wider than the REPL: anything that displays a record or dict shows
+it — diagnostics, logs, `echo`, table cells. Every one of them was emitting
+syntax the shell would refuse.
+
+Fixed in the two places that render them: `ObjectFormatter.FormatRecordFields`
+and the object-keyed dictionary display profile, including the truncated and
+empty forms (`{| ... |}`, `{||}`, `{%%}`). Verified by feeding each rendered
+form back in — record, dict, set, nested record, and all three empties parse and
+evaluate.
+
+Worth noting how it surfaced. The suite was green throughout; the tests assert
+what the formatter produces, not that what it produces is valid input. A
+round-trip property — *format, re-parse, compare* — would have caught it
+mechanically, and is the shape worth adding if this recurs.
+
+One test needed updating: `ObjectFormatterTests` had hardcoded the old record
+spelling in its nested assertion, which is the correct kind of failure — the
+expectation moved in the same change as the behaviour.
+
+Validation: 3,407 passed, 0 failed, 0 skipped in 2m43s; zero warnings.
+
+### July 29, 2026 — Full board review and re-verification of closed items
+
+Board: **32 complete**, 1 withdrawn (`TS-P1-17`), 5 in progress (`TS-P1-24`,
+`TS-P1-25`, `TS-P2-11`, `TS-P2-23`, `TS-P2-24`), 1 partial (`TS-P1-07`),
+20 planned, 7 proposed, 2 research — 68 items.
+
+Thirty of the thirty-two closed items were re-verified behaviourally through the
+CLI, independently of the suite. **All hold.**
+
+- P0: tuple swap resolves before mutating; base-to-leaf construction runs each
+  layer once; `??=` is lazy for a non-null target and eager for null; defer runs
+  LIFO with body output preserved; recursion raises a structured diagnostic and
+  the session survives, limit 128; `channel-recv` emits a null payload as a value
+  and ends on closure without an extra one.
+- P1: all thirteen — truthiness table, element containment, compound assignment,
+  chained defaults and named gaps, unknown-name diagnosis, strict symmetric
+  ordering, enum ordering and backing-value equality, value-context collapse,
+  `$this` in a method default, chained comparison, type-descriptor display,
+  equality symmetry.
+- P2: fused `?.`, numeric separators, keyword-argument non-poisoning, all quote
+  forms, negative ranges, storage suffixes typed in expression context, named
+  arguments with and without spaces, module dispatch at every casing, and the
+  paired delimiters.
+
+Not spot-checked: `TS-P0-02` (non-destructive `channel-select`) and `TS-P0-06`
+(async class cancellation). Both are race and cancellation properties that a
+one-liner cannot meaningfully exercise; they rest on their dedicated tests.
+
+**Three apparent regressions were my own errors**, worth recording because each
+looked like a real failure:
+
+- `($a, $b) = ($b, $a)` assigned a tuple rather than swapping. The right-hand
+  side must be a collection (`[$b, $a]`); `(…, …)` is a tuple literal.
+- A verification class declared both a primary and an explicit constructor of
+  the same arity and failed with a self-ambiguity error. That is `TS-P1-18`,
+  which is *planned and open* — the script reproduced a known defect rather
+  than finding a new one.
+- `type-of 10kb` reported `String`. Command-argument position, which is
+  `TS-P2-14`'s documented exception. In expression position it is `StorageSize`.
+
+One acceptance clause needed re-reading rather than re-fixing. `TS-P2-16` says
+dispatch is "independent of module-name casing", which sounds like call casing
+need not match the declaration — it need not, and does not. The specification's
+wording is "works for any module-name casing", meaning whatever casing you
+*declare* dispatches; and plain functions are equally case-sensitive, since
+`func Foo` is not callable as `foo`. The item holds; the acceptance wording is
+looser than the spec it implements.
+
+Observations logged, none acted on:
+
+- `type-of` on a record reports `table`.
+- A dict piped to `count` yields 1, the `TS-P3-04` asymmetry, seen live.
+- `tosh.type.index` anchors its span to line 1 regardless of where the indexing
+  is, so the diagnostic points at unrelated source.
+- `channel-recv` warns `expects 1 argument(s) but received 0` when the channel
+  arrives by pipeline, then works correctly.
+- Sets require commas while records and dicts also accept newlines. Faithful to
+  each parser, but an inconsistency a user meets before any of the internals.
+
+Validation: 3,407 passed, 0 failed, 0 skipped; zero warnings.
+
+### July 29, 2026 — A format round-trip property
+
+`FormatRoundTripTests` states one property — a rendering must parse back and
+render identically — and lets it find its own instances. It exists because the
+`TS-P2-25` display defect was invisible to the suite: every formatter test
+asserts what the formatter *produces*, and none asserted that what it produces
+is valid *input*. The bug surfaced only because the literals were being
+demonstrated by hand.
+
+Running it immediately established that the property is narrower than assumed.
+Five of twenty-five cases failed, and only one was a defect:
+
+- Arrays and lists render with a CLR type header over multiple lines
+  (`Int32[] [\n  1\n  2\n]`). That is a display form and does not pretend to be
+  source, so it is not a violation — it means round-trip is not a contract the
+  formatter offers across the board. The property is scoped to where it is
+  offered, and the split is filed as `TS-P3-10` rather than assumed away or
+  "fixed" by stripping a header that may be deliberate.
+- The empty dict rendered `{%%} (empty)` where the empty record and set render
+  `{||}` and `{::}`. The annotation was redundant — `{%%}` already says empty —
+  and it made the rendering unparseable. Removed. This one was mine: the
+  suffix was carried over unexamined when the delimiters were fixed.
+
+Also established: a bare string renders unquoted at the root, which is right for
+display, so strings are exercised nested inside a container where the quoted
+form is used.
+
+The negative control asserts that `{ a = 1 }` — the pre-fix record rendering —
+now fails to parse, so the property demonstrably catches the class of defect it
+was built for.
+
+Method note. Scoping a property after seeing it fail is the step where a guard
+quietly becomes worthless, so the exclusion is recorded in the test itself and
+filed as an item rather than left as a shrug. The distinction that matters:
+arrays were excluded because the contract does not cover them, not because the
+test was inconvenient.
+
+Validation: 3,428 passed, 0 failed, 0 skipped in 2m37s; zero warnings.
+
+### July 29, 2026 — Two diagnostic defects from the board review
+
+Both were logged as observations during the closed-item review; both turned out
+to be wider than the symptom recorded.
+
+**Every diagnostic raised inside an interpolation hole pointed at line 1.**
+Logged as "`tosh.type.index` anchors to line 1", but the index warning was
+incidental. `Lowerer.TryLowerInterpolationHole` re-parses a hole's source text
+standalone, so every span it produces is hole-relative — while the renderer
+resolves spans against the *outer* source. Anything diagnosed inside `$"{…}"`
+therefore landed at position 0.
+
+```
+$d["k"]        outside a hole  →  4:6   correct
+$"{$d["k"]}"   inside          →  1:1   points at an unrelated line
+```
+
+The hole is now parsed at its true offset, so spans come out absolute. Left
+padding is the cheapest route given `ToshParser` accepts only a source string;
+the padding is whitespace the lexer skips and contains no line breaks, so
+nothing about how the hole parses changes.
+
+**A dictionary indexed by a string warned that it expected an integer.**
+`CheckIndexAccess` assumed positional indexing for anything that was not
+dynamic or a record object, so `$d["k"]` — the ordinary way to read a dict —
+warned every time. It now resolves the dictionary's key type and checks against
+that; an `object` key accepts anything, so the check only bites when the key
+type is specific. Array-by-string still warns, and now with an accurate span.
+
+**A command taking its subject from the pipe warned about arity.**
+`$ch | channel-recv` supplies the channel through the pipeline, so no positional
+argument is written, but the check counted only what was written and reported
+"expects 1 argument(s) but received 0". `CheckPipeline` already knows the stage
+index, so a stage after the first now discounts one required argument. A genuine
+over-arity still warns.
+
+Filed rather than fixed: `TS-P3-11`, that `type-of` reports `table` for what the
+syntax calls a record. Both words are already in circulation — `dynamicrecord`
+is an alias, and `table`'s constructor signature mentions `record` — so it is a
+naming decision about the type system, not a defect.
+
+Validation: 3,428 passed, 0 failed, 0 skipped in 2m37s; the only build warnings
+remain the DevCompanion SQLite advisory.
+
+### July 29, 2026 — Specification conformance corpus (Test Strategy §1)
+
+The strategy section records that four specification examples were failing as
+written, and that extracting them into fixtures "would have caught all four
+mechanically". Built, and it found two more.
+
+Extraction, by `scratchpad/spec_probe.py`: 188 `lstlisting` blocks, 242 lines
+carrying a trailing comment — but most comments are prose ("Variable", "int
+(System.Int32)") rather than expected results. Only **24** annotate a value.
+Those are replayed with the lines that preceded them in their own block, so
+`$x`, `$fn`, and friends exist.
+
+Two genuine defects, and both are the kind only an executable corpus finds.
+
+**The specification could not work as written.** The CLR-interop overload
+examples were written `$"one:$a"` and `$"two:$a+$b"`, expecting `one:1` and
+`two:1+2`. A ToastScript hole is braced, so those return the literal text
+`one:$a`. Four occurrences corrected to `{$a}`. The unbraced form is now pinned
+as a test in its own right, so the correction cannot regress into the old
+spelling.
+
+**Quantity equality was not unit-aware, while ordering was.**
+
+```
+5`s              → 5 seconds
+5000`ms          → 5 seconds        same normalised value
+5`s > 4000`ms    → true             ordering is dimension-aware
+5`s == 5000`ms   → false            equality was not
+```
+
+`Quantity` implements `IComparable`, which is why ordering worked, but never
+overrode `Equals` — so equality fell through to reference identity. The
+specification is explicit that "comparison operators also use base-value
+comparison with dimension checking" and lists `5`s == 5000`ms` as an example.
+`Equals` and `GetHashCode` now match `CompareTo`: base value plus dimension.
+Mismatched dimensions are unequal rather than an error, since `==` is a question
+where ordering is a request with no meaningful cross-dimension answer.
+
+This is the third instance of one shape: `TS-P1-15` found enums ordered but not
+equal, `TS-P1-26` found equality asymmetric for bool against string, and this
+finds quantities ordered but not equal. Ordering and equality are implemented
+apart, and a type taught to one is not thereby taught the other. Worth a
+standing check rather than a third individual repair.
+
+Curated rather than extracted at test time: a generic extractor cannot tell a
+documented value from a description, and fails on shapes that are not
+expressions at all — `$x += 5` among them. `SpecConformanceTests` holds the
+checkable examples; the probe script regenerates candidates when the
+specification changes.
+
+Validation: 3,441 passed, 0 failed, 0 skipped in 2m41s.
+
+### July 29, 2026 — Ordering and equality must agree (standing check)
+
+Three repairs have had one shape. `TS-P1-15` found enum members ordered but not
+equal to their backing value; `TS-P1-26` found equality asymmetric for bool
+against string; the conformance corpus found quantities ordered but not equal.
+The cause is structural — ordering and equality are implemented apart, so a type
+taught one is not thereby taught the other — so the fourth instance is worth
+preventing rather than repairing.
+
+`OrderingEqualityAgreementTests` states the invariant instead of enumerating
+types. For any pair the language agrees to order, exactly one of `a < b`,
+`a == b`, `a > b` holds, and `a < b` agrees with `b > a`. A pair the language
+declines to order is out of scope, which keeps the property about types that do
+order rather than about which pairs are orderable.
+
+Corpus built through the engine rather than constructed directly, so the values
+are exactly what a script produces: numerics across CLR types, strings, enum
+members against each other and against backing values, quantities within and
+across units, storage sizes, and temporals. A third case asserts the two
+equality implementations agree on all of them, since `TS-P1-24` leaves those
+separate.
+
+Verified by negative control: with `Quantity.Equals` disabled, both cross-unit
+pairs report "0 of three hold", naming the defect rather than merely failing.
+
+Operational note: one full run aborted at 1,813 tests and passed cleanly on
+re-run at 3,444. That matches two earlier entries — a packaged-SDK subprocess
+exiting 134 under concurrent load, and `ScopeAndChannelTests` failing once then
+passing in isolation. Recorded rather than dismissed; if it recurs it is worth
+tracing rather than retrying.
+
+Validation: 3,444 passed, 0 failed, 0 skipped in 2m41s.
+
+### July 29, 2026 — The pure profile is pure (TS-P1-25)
+
+The emitter wrote three `ToshHost` calls into every artifact regardless of
+profile, so a program of only tier-1 shapes compiled clean and still carried the
+compiler host. `RequireTier` could never catch it: that gate reasons about the
+shapes in the *source*, not about what the emitter writes unconditionally.
+
+All three are now profile-aware.
+
+- `ToshHost.Initialize` exists to give the host a runtime for builtin dispatch.
+  A pure artifact dispatches nothing through the host — builtin dispatch is a
+  tier-2 feature the profile already rejects — so the bootstrap was initialising
+  a host that is never called while forcing the reference that made the artifact
+  impure. Omitted.
+- `ToshHost.RegisterCompiledAssembly` serves host-backed module static access and
+  the `NewObject` fallback, both of which a pure artifact cannot reach for the
+  same reason. Omitted.
+- `ToshHost.EnterExecutionFrame` is a thin wrapper that reads the session's
+  configured depth limit and delegates to
+  `ToshExecutionDepthGuard.Enter`. The pure profile now calls that primitive
+  directly at `DefaultMaximumDepth` — the same ceiling, minus the ability to
+  lower it per session. Dropping the host does not drop the guard, and a test
+  asserts the guard is still present rather than only that the host is gone.
+
+Measured on a real compiled artifact, not just an in-memory emit. Before, it
+referenced `System.Console`, `System.Private.CoreLib`, `Tosh.Compiler.Runtime`,
+and `Tosh.Runtime`. Now `Tosh.Compiler.Runtime` is absent, `ToshHost` appears
+zero times, `ToshExecutionDepthGuard` appears, and the artifact runs to exit 0.
+A permissive build of the same source still carries the host, so the two
+profiles genuinely differ.
+
+The four characterizations written when the audit was built are inverted, which
+is the point of having written them that way: `Pure_artifact_still_references_the_compiler_host`
+became `Pure_artifact_references_no_forbidden_assembly`, and the negative
+control that asserted pure and permissive emit *identical* references now
+asserts they differ.
+
+Not addressed, and still worth its own item: the generated `deps.json` declares
+the toolchain's whole closure — `Tosh.Compiler.IR`, `Tosh.Compiler.Runtime`,
+`Tosh.Language`, `Tosh.Runtime`, `Tosh.Stdlib`, `Tosh.Tui` — so a pure artifact
+would still ship alongside the interpreter even though its IL no longer
+references it. That is packaging rather than emission.
+
+Validation: 3,445 passed, 0 failed, 0 skipped in 2m39s.
+
+### July 29, 2026 — Three decisions taken: collection rendering, the record's name, and closing step 2
+
+Three items were sitting on a decision rather than on work. Taking them together
+kept the answers consistent, since two of them are about what a displayed value
+calls itself.
+
+**`TS-P3-10` — header at root, source-like nested.** `FormatRoundTripTests` had
+been scoped around arrays because they render with a CLR type header
+(`Int32[] [ 1, 2, 3 ]`) that is display rather than source. The decision does not
+pick one style over the other; it makes the choice positional, which is the split
+strings already had — a bare string renders unquoted at the root and quoted when
+nested, because the two positions want different things. So `isRoot` is threaded
+into `FormatEnumerable` and the type name is emitted only there. At the root the
+element type is the informative part and nothing is going to be pasted back;
+nested, the type name is noise on every field and makes the whole enclosing value
+unparseable.
+
+That brought nested arrays into the round-trip property, and the property
+immediately earned its keep again by exposing a second defect:
+
+**Indentation was counted twice per level.** `FormatContainer` re-indents every
+line of every item it holds, *and* indented itself by its own depth — so a nested
+container's items drifted a level further right at each level, with its closing
+bracket following. Three levels of array rendered items at 2, 6, and 12 spaces
+instead of 2, 4, and 6. The `depth` parameter existed only to compute that
+indent, so removing the arithmetic removed the parameter from all three call
+sites. This was never new; the type header made it look like decoration rather
+than misalignment.
+
+**`TS-P3-11` — `record` wins.** `type-of {| a = 1 |}` answered `table` while the
+syntax, the specification, and the help text all said record. The descriptor is
+renamed and `table` and `dynamicrecord` stay registered as aliases, so existing
+annotations keep working. Three places had to move together, and the second was
+found only by running the first: the shell-type registry (`type-of`), the
+annotation resolver (`var r: record = …` — a name is not an annotation until
+`DotNetTypeResolver` knows it), and `GetFriendlyTypeName`. `dynamicrecord` was
+documented as an alias but had never been resolvable as an annotation at all;
+it is now.
+
+The specification's own type table was wrong in a way unrelated to the rename:
+it mapped `table` to `ToSh.DataTable`, "structured tabular data". The type is
+`System.Dynamic.ExpandoObject` and always has been.
+
+The rename also found a way an alias can be honoured everywhere except where it
+matters. `DisplayPreferences` resolves a user's column overrides by shell type
+name, and yielded only the descriptor's *current* name as a candidate — so a
+profile keyed `table`, which is what anyone's config would say, silently stopped
+applying the moment the type answered `record`. Nothing threw; the columns just
+went back to default. `BuiltInShellTypes.AliasesFor` now supplies every name a
+type answers to, and preference resolution offers all of them, which fixes the
+same latent problem for `map` against `dict`. The test that found it is left
+keyed on the alias, with a comment saying why, and a companion keyed on `record`
+proves the primary name still resolves — an alias guard that passes because
+nothing resolves is the failure mode worth guarding against.
+
+Not renamed: `type-of` on a CLR `Type` and the `ObjectInspector` member kind
+already used `record` for the *named* record declaration, so the two senses of
+the word — a declared shape and an anonymous one — now share a name the way C#'s
+`record` and an anonymous type do not. Recorded rather than resolved; if it turns
+out to confuse, the anonymous form is the one to qualify.
+
+**`TS-P2-24` — closed.** The July 29 assessment left the item open on one
+judgement: whether `HasTopLevelOperatorBeforeStageBoundary`, which asks a
+semantic question with a structural qualifier, counts against the clause about
+removing structural helpers. Resolved as no. Element boundaries consume the lite
+structure with the fallback deleted rather than merely unused; the one purely
+structural helper is retired; `LiteParserTests` and `LiteStageDivisionTests`
+carry the differential evidence. The remaining `HasTopLevel*` helpers ask what a
+construct *is*, which is grammar, not structure.
+
+### July 29, 2026 — The twin inventory, and why TS-P1-24's first clause cannot be met
+
+Built the guard the acceptance asks for, and building it corrected the audit the
+item rests on.
+
+**The count was wrong, twice, for the same reason.** The item records "23 truly
+parallel pairs against 6 that delegate", measured by text search. A regex audit
+run today over `Tosh.Language` and `Tosh.Runtime` said 29 parallel and 10
+delegating. Reflection says **63** pairs. Both text-based numbers missed the same
+things: interface declarations, explicit implementations, and any pair whose
+declaration spans lines the pattern did not anticipate. A third measurement
+disagreeing with the first two is the point at which the method, not the number,
+is the problem — so the guard measures by reflection, where the answer is exact
+and cannot drift with formatting.
+
+**What the real inventory shows is not a long tail.** Grouped by cause:
+
+- **9 declarations in the project's own dual-surface interfaces** —
+  `IShellRecordObject.TryGetMember`/`TryGetMemberAsync`,
+  `IObjectAccessor.GetValue`, `IShellInvocableObject.InvokeInstanceMethod`,
+  `IShellEnumerableObject.EnumerateShellItems`,
+  `IShellStaticType.CreateInstance`, and their siblings.
+- **21 implementations of those declarations**, across `ToshClassInstance`,
+  `ToshClassDefinition`, the three reference kinds, and
+  `ReflectionObjectAccessor`.
+- **4 already converged** — the refinement cluster and the annotated-conversion
+  pair, listed so that *un*-converging them fails.
+- **29 genuinely parallel internals**, which is the convergeable remainder.
+
+So the first acceptance clause — "each pair either delegates to one
+implementation or is removed" — is unreachable for 30 of the 63 as long as the
+interfaces declare both members. An implementer *cannot* delegate: the contract
+demands both.
+
+**And the largest of them cannot be converged even in principle without changing
+semantics.** `ShellIndexingUtilities.GetIndexedValue` (84 lines) against
+`GetIndexedValueAsync` is not a copy with `await` sprinkled in. The async branch
+awaits `IShellRecordObject.TryGetMemberAsync` and then deliberately avoids
+re-entering the synchronous record API, with a comment saying so. Making the sync
+path delegate would block on a user-defined property getter that may itself be
+asynchronous; making the async path delegate would drop asynchronous member
+dispatch. Either direction is a behaviour change, so neither is a refactor. This
+is the shape the whole contract-imposed group has.
+
+**Decision required, and it is not mine.** Either the dual-surface interfaces are
+deliberate — the interpreter genuinely needs to serve synchronous and
+asynchronous callers with different member-dispatch semantics, in which case the
+acceptance should say so and scope itself to the 29 internals — or the
+synchronous surface should be retired in favour of one asynchronous
+implementation with a single blocking bridge at the boundary, which is a much
+larger change than the item describes and would want its own item.
+
+Recorded rather than resolved. What did land is the ratchet: `KnownTwins` pins
+all 63 with a note on each group, a new twin fails until it is listed, and a
+converged twin fails until it is struck off. Neither direction is silent, which
+is the property the two earlier one-pair repairs lacked.
+
+Method note. The guard excludes twins imposed from outside the codebase —
+`IAsyncDisposable`, `TextWriter` — by checking whether the base or interface
+declaration lives in a `Tosh.*` assembly. Without that filter the inventory was
+dominated by `Dispose`/`DisposeAsync` and `Write`/`WriteAsync`, which no decision
+here can affect, and the pairs that matter were buried among them.
+
+### July 29, 2026 — The type table was never filled (TS-P2-23 step 2)
+
+`ParseContext` was given a `typeNames` set and an `IsKnownType` query on July 26.
+Nothing ever populated it. `CreateParseContext` passed commands and modules and
+left types null, so `IsKnownType` answered `false` for every name, and the single
+call site that consulted it —
+`_context.IsKnownCommand(Current.Text) && !_context.IsKnownType(Current.Text)` —
+was vacuously true in its second half. The mechanism existed, was tested for the
+cases that did not need it, and did nothing.
+
+The consequence was a live, user-visible defect:
+
+```
+> int.Parse("42")
+✖ error tosh.runtime.unknown_command — Command 'int.Parse' was not found.
+                                       help: did you mean 'intersperse'?
+```
+
+`long.Parse`, `bool.Parse`, `double.Parse`, and `char.ToUpper` all failed the same
+way. Static access on a *lower-case* type alias did not work at all.
+
+The tell was sitting in the predicate. `LooksLikeQualifiedDotNetAccess` ended:
+
+```csharp
+return char.IsUpper(firstSegment[0]) || string.Equals(firstSegment, "string", StringComparison.Ordinal);
+```
+
+That `"string"` is not a design decision, it is a patch. Someone hit this exact
+class of failure once, and fixed the one name in front of them rather than the
+rule — which is the shape `TS-P2-23` exists to remove.
+
+`CreateParseContext` now fills the table from what the engine already has:
+declared classes in each scope, `Runtime.Classes`,
+`DotNetTypeResolver.BuiltInAliases`, and any `using X = Y` aliases. Both casing
+predicates became instance methods and consult the table first. The `"string"`
+special case is deleted — not because it was wrong about `string`, but because
+`string` is one entry in `BuiltInAliases` alongside every other lower-case alias
+that used to fail.
+
+Casing survives as the fallback, deliberately and documented in the method: the
+platform type index holds thousands of names and is not worth materializing per
+parse, so an unqualified `System.Text.Encoding.UTF8` still resolves the old way.
+A test pins that, so deleting the fallback stays a deliberate act.
+
+Verified with a negative control rather than by assertion alone — the same
+programs run against `HEAD` before the change produce `unknown_command`, which is
+what establishes that the table is load-bearing and not decorative. A second
+negative control parses `int.Parse("42")` with and without a type table and
+asserts the resulting *trees* differ, since both parse cleanly and only the shape
+tells them apart.
+
+**The table had to be narrowed, and the suite is what narrowed it.** The first
+version consulted it for bare names too, and `Function_call_single_arg_no_tuple`
+failed: it declares `func double(x)` and calls `double(5)`, and `double` is a
+built-in alias, so the call was read as a constructor — "Construct instances with
+`new double(...)`". The same trap was set for `map` and `set`, which are commands
+*and* aliases for `Dictionary` and `HashSet`, and for `list`.
+
+The fix is a precedence rule worth stating plainly: a bare name is where a
+declaration wins, and a qualified name is where the type table belongs.
+`int.Parse` names a type because of the dot, not because of the spelling. So
+`LooksLikeQualifiedDotNetAccess` consults the table on the leading segment and
+`LooksLikePotentialClrTypeName` does not consult it at all for the unqualified
+case, where casing is unchanged. Four alias collisions are pinned as a theory so
+the narrowing cannot be quietly undone.
+
+Worth noting about the near-miss: had that test not existed, the type table would
+have shipped claiming `double`, `map`, `set`, and `list` from every user who
+declared a function by those names. The table was populated and the predicate
+widened in the same edit, and only one of the two was wrong.
+
+**Where the item stands.** Clause 1 (identity from a table rather than
+capitalization) and clause 3 (a capitalized module and a lower-case CLR type both
+resolve) are met and tested. Clause 2 — keyword recognition driven by the
+generated language-surface registry — is blocked, because `TS-P2-10` is still
+Planned and there is no registry to drive it from. 182 `Current.Text == "…"`
+comparisons remain, up from the 160 recorded at filing, which is drift in the
+wrong direction and an argument for `TS-P2-10` moving up the order. `TS-P2-23`
+cannot close before it.
+
+### July 29, 2026 — Running the specification's worked examples for the first time
+
+A step-back review of the shell surface, done by executing it rather than reading
+it. Most of what was tried works: typed pipelines, the paired collection
+literals, unit equality across scales, list and set comprehensions with a `where`
+clause, classes with methods calling into CLR statics, `try`/`catch (e)`, and
+`select` followed by `to csv`.
+
+What did not work were the specification's **worked examples** — the multi-line
+pipelines in the appendix, which is what a new user copies first. Of the two
+tried, both were broken, and the CSV one in three separate ways:
+
+- `from-csv` and `to-csv` do not exist. The commands are `from csv` and `to csv`.
+  `from-json` and `to-json` in the JSON example are wrong the same way.
+- `select Date, Customer, Amount` does not parse — `unexpected_token ','`.
+  Arguments are space-separated, as in every shell. Written with commas twice.
+- With those corrected the pipeline still fails: `from csv` yields every column as
+  `string`, so `where _.Amount > 100` reports "Values of type 'System.String' and
+  'System.Int32' cannot be ordered" and needs an explicit `cast int`.
+
+The first two are corrected in the specification. The third is filed as
+`TS-P2-27` because it is a decision — NuShell infers CSV column types, PowerShell
+does not, and this shell's stated design points one way while its implementation
+points the other. Notably `from json` *does* produce typed values, so the
+inconsistency is internal, not just against the document.
+
+**Why the conformance corpus missed all of it**, which is the more useful finding.
+`SpecConformanceTests` was built by harvesting specification lines that carry a
+*documented expected value* — 24 of 242 candidates. That method structurally
+excludes every multi-line pipeline, because a pipeline's result is not written as
+a trailing comment. So the corpus covers the examples that were easiest to check
+and skips the ones most likely to be copied. Filed as `TS-P2-26`.
+
+This is the third time the specification's own examples have been found wrong by
+running them, after `TS-P2-12`'s regex cases and the `$"one:$a"` interpolation
+defect. The pattern is consistent enough to state as a rule: an example that has
+never been executed should be assumed broken, and the corpus should be measured by
+what fraction of examples it *runs*, not by how many assertions it holds.
+
+Two syntax errors in the probe were mine rather than the language's — `catch e {`
+instead of `catch (e) {`, and `cast $value int` instead of `cast int $value` —
+recorded so the finding is not overstated. Both produced targeted diagnostics that
+named the fix, which is the diagnostic work paying off.
+
+### July 29, 2026 — Partial declarations across files (TS-P2-28), and a question that was not a feature request
+
+Asked whether partial modules exist and whether they can be split across imported
+files. Both answers were yes, which made this a defect slice rather than the
+feature implementation it looked like.
+
+**What already worked**, and is better built than expected: `ModuleDefinitionStatementSyntax`
+carries `IsPartial`, and `EvaluateModuleDefinitionAsync` merges by *sharing* the
+existing `ModuleExportTable` rather than copying into it — so every
+`ToshModuleObject` view observes the merged state automatically, and prior exports
+are pre-seeded into the new body's scope, which is what lets a later part call into
+an earlier one.
+
+**What did not work** was the named import form:
+
+```tosh
+require Sys from "./a.tosh"
+require Sys from "./b.tosh"
+✖ tosh.runtime.require_failed — Export 'Sys' was not found in '…/b.tosh'
+```
+
+Whichever file came second failed, in either order, while bare
+`require "./b.tosh"` worked. The cause is four lines that all look harmless:
+
+```csharp
+existingDef.MergePartial(...);
+yield break;              // ← before DeclareType/DeclareModule
+```
+
+Merge, then return before declaring. The contributing file therefore exported
+nothing under that name, and `ImportRequiredArtifact` — which reads
+`artifact.Exports.Modules[name]` — found nothing and threw. The bare form worked
+only because it never looks a name up; the merge had already happened as a side
+effect. So the diagnostic said the export was missing at the exact moment the
+merge had succeeded.
+
+**The scope grew twice while measuring, both times outward.**
+
+- It is not module-specific. Classes, records, and structs share the identical
+  shape, and a partial *class* split across two files fails the same way —
+  confirmed live before assuming it. One fix pattern, four sites.
+- Modules were missing a check the other three have. `module Sys { … }` followed
+  by `partial module Sys { … }` merged silently; the class equivalent raises
+  `tosh.runtime.partial_mismatch`. `ToshModuleObject` had no `IsPartial` to check
+  against, so it now carries one.
+
+**What was deliberately left alone.** A plain non-partial redeclaration *replaces*
+the previous one and its members are gone — `module Sys` twice keeps only the
+second, and `class Box` twice behaves identically. That looks like the same class
+of silent loss, and it is consistent across all four kinds, and it is what a REPL
+wants when you redefine something at the prompt. It is pinned by a test that says
+so, precisely so a later reader does not "fix" it, and stated in the
+specification as the reason `partial` is required rather than inferred.
+
+**Also found and filed separately** as `TS-P2-29`: `source "./x.tosh"` resolves
+relative to the working directory rather than the sourcing script's directory,
+where `require` resolves correctly. A script that sources a sibling only works
+when run from its own directory.
+
+Negative control: 8 of the 16 new cases fail against the unfixed engine, and the 8
+that pass are the ones covering behaviour that already worked — the bare form,
+the same-file split, a lone partial, and plain redeclaration. A guard where every
+case fails before the fix would have been the more suspicious result here, since
+half the surface was already correct.
+
+Documentation: partial modules had no entry at all — `partial` was documented for
+classes and structs only, so a working feature was undiscoverable. The module
+section now covers merging, declaration order, the cross-file split with both
+import forms, and the replace-versus-merge rule.
+
+### July 29, 2026 — Three decisions taken, and CSV columns arrive typed
+
+**`TS-P1-24` — the dual surface stays; the item rescopes.** `IShellRecordObject`,
+`IObjectAccessor`, `IShellInvocableObject`, `IShellEnumerableObject`, and
+`IShellStaticType` each declare a sync and an async member because the interpreter
+serves both kinds of caller with genuinely different dispatch semantics —
+`GetIndexedValueAsync` avoids re-entering the synchronous record API on purpose,
+with a comment saying so. So the 30 contract-imposed pairs are intended and the
+convergence clause applies to the **29 parallel internals**, led by
+`ThrowDetailedSingleConstructorMismatch` (55 lines) and
+`ApplyPendingParameterDefaults` (50). Retiring the synchronous surface behind one
+blocking bridge was considered and rejected as a larger change than this item
+describes; it would get its own item. The inventory guard's comments now record the
+decision rather than the open question, so a later reader does not re-litigate it.
+
+**`TS-P2-27` — `from csv` infers numbers and booleans.** The narrow option, and
+the interesting part is what it declines.
+
+- **Per column, not per cell.** This was the substantive design choice. Typing
+  only the cells that parse would put an `int` beside a `string` in one column, so
+  values in that column could not be compared *with each other* — a failure that
+  appears only on the rows that differ, which is worse than leaving the column
+  textual. A column is typed only when every non-empty cell agrees.
+- **Leading zeros stay text.** `007`, `01234` — an identifier, and converting it
+  destroys the zero irreversibly. One such cell keeps its whole column textual.
+- **No thousands separators**, because the comma is also the delimiter.
+- **No dates**, because `01/02/26` is three different days by locale, and guessing
+  wrong there corrupts data silently rather than loudly.
+- **Empty cells are not evidence** and become `null` in a typed column, not the
+  empty string a textual column keeps.
+- `--raw` / `--no-infer` returns everything as text. `tsv` gets the same rules,
+  sharing the format implementation.
+
+The specification's CSV worked example — the one that found this — now runs exactly
+as written, and is asserted end to end rather than by column type, because "the
+documented pipeline runs" is the actual claim.
+
+Two things worth recording from the testing rather than the implementation.
+
+The first assertion attempt measured the wrong thing: `| each { $_.n }` over a
+column with a gap reported two values rather than three, because a block yielding
+`null` contributes nothing to the pipeline — PowerShell's rule, and orthogonal to
+inference. Reading the rows directly is what makes the assertion about the thing it
+claims to be about. Worth knowing that `each` cannot map a column with gaps; not
+chased here, and not obviously wrong.
+
+Three of the probe failures across this session were my own syntax rather than the
+language's — `catch e {`, `cast $value int`, `select A, B` — and every one produced
+a targeted diagnostic naming the fix. That is the diagnostic work paying off, and
+it is the reason the two genuine spec defects were separable from my mistakes.
+
+**Next: `TS-P2-10`**, the language-surface registry, chosen as the only Planned
+item another in-progress item cannot proceed without.
+
+### July 29, 2026 — The language-surface registry (TS-P2-10, first slice)
+
+Chosen because it was the only Planned item another in-progress item could not
+proceed without. Measuring it first was worth more than the implementation.
+
+**The drift, measured.** Eight consumers keep their own idea of what a keyword is.
+Between them they name **115 distinct words, of which 7 appear in all eight**:
+
+| consumer | words |
+|---|---|
+| LSP feature table | 93 |
+| help catalogue | 77 |
+| VS Code metadata | 68 |
+| CLI highlighter | 59 |
+| binder suggestion pool | 40 |
+| REPL completion | 36 |
+| Tome colorizer | 21 |
+| REPL classifier | 15 |
+
+The consequences are ordinary rather than exotic. `const`, `defer`, `yield`,
+`union`, `rune`, `event`, and `import` are real keywords that went unhighlighted at
+the prompt. `interface` was the sharpest: it sat in the highlighter's
+`TypeDeclarationKeywords` without being in `Keywords`, so the identifier *after* it
+was coloured as a type while the keyword itself was not coloured at all — a
+disagreement inside one file. The Tome colorizer coloured no control-flow keyword
+at all, so `if` and `while` were highlighted in the terminal and plain in the Tome.
+
+**Membership is established by executing each word, and that mattered twice.**
+
+The first validation pass was a source scan: does the word appear as a literal the
+parser compares against? It said all 115 were genuine. That check is too weak, and
+running the words showed it: `let x = 5` fails, `quote` is an unknown command, and
+`once` is not a member modifier — yet all three are documented in the LSP feature
+table as keywords. `let` is not merely absent, it is a *proposal*, `TS-P3-02`. The
+registry now carries a probe per word — the smallest program in which it does its
+job — and a word cannot enter without one.
+
+The second time was the reverse error, and it was mine. Having found `abstract` and
+`private` in `IsDeclarationModifierWord`, I probed `abstract class C { }` and
+`private var x = 1`, saw both fail, and reported that the parser listed two
+modifiers the language did not have. Wrong: they are **member** modifiers, part of
+an undocumented family of C#-familiar aliases parsed alongside their ToastScript
+spellings — `private`/`shy`, `abstract`/`hollow`, `readonly`/`fixed`,
+`required`/`vital`, `override`/`overrule`, `protected`/`guarded`,
+`obsolete`/`fading`, `shared`/`static`, `public`/`proud`. Nine working spellings,
+documented nowhere; filed as `TS-P2-30`. Trying a word in the wrong position and
+concluding it is not real is a distinct failure from reading a predicate and
+assuming it fires, and this session produced one of each.
+
+`IsDeclarationModifierWord` does still list `abstract` and `private` among
+*declaration* modifiers, where they genuinely do not work. Those two entries are
+dead, and the item records the choice between removing them and honouring them.
+
+**A guard is only as wide as its pattern.** The consumer-subset check passed for the
+Tome colorizer while missing nine words, because the colorizer keeps its modifiers
+in a set named `Modifiers` and the pattern only matched sets named `Keywords`,
+`ControlFlowKeywords`, and friends. That is the least visible way for a guard to be
+worthless — it reports success over the part it cannot see. Widened to `Modifiers`,
+`Constants`, and `KeywordSuggestionPool`, and now covering five consumers.
+
+**Landed:** `LanguageSurface` with 95 words by category, nine probes' worth of
+aliases included; the CLI highlighter and Tome colorizer derive from it rather than
+holding lists; the guard checks both directions plus the exact agreement of the
+visibility family with `ParseDeclarationModifier`.
+
+**Not landed:** the three prose-carrying consumers — help catalogue, LSP hover text,
+VS Code metadata — still hold their own key sets. Their descriptions are editorial
+and differ legitimately, so unifying them means separating identity from prose
+rather than deleting one of them, which is its own slice. Operators and document
+symbols are untouched. `TS-P2-23`'s clause 2 needs the keyword-recognition side,
+which is the next step here.
+
+### July 29, 2026 — Correction: the LSP was right and the registry was wrong (TS-P2-10)
+
+The previous entry reported that the LSP feature table documented three keywords
+that do not exist — `let`, `quote`, and `once` — and treated that as evidence for
+validating the registry by execution. **All three are real.** So are the other
+thirteen words the first registry draft was missing. The LSP was the most complete
+consumer, and the registry was the incomplete one.
+
+- `let` is a **comprehension clause**:
+  `[$y <| for x in 1..3 let y = ($x * 2)]` yields `[2, 4, 6]`. `TS-P3-02` proposes
+  general `let` *bindings*, which is a different feature; `let x = 5` failing does
+  not mean `let` is absent.
+- `quote` takes a **block in argument position**: `echo (quote { $x + 1 })` returns
+  a syntax object. `quote foo` is an unknown command because the form needs a brace.
+- `once` is an **event-handler clause**: `func f(e) handles X once { }`. The probe
+  that condemned it put it in member position.
+
+Sixteen words were missing from the first draft and every one is genuine:
+`contains`, `starts-with`, `ends-with`, `is-in`, `is-not-in` (operator words);
+`get`, `set` (property accessors); `handles`, `priority`, `when`, `once` (handler
+clauses); `let`, `where` (comprehension clauses); `implements` (composition);
+`leaky` (type modifier); `quote` (expression form). The registry is now 103 words
+across three new categories the first draft did not know existed — accessors,
+handler clauses, and contextual keywords.
+
+**The methodological point, which is the durable part.** Execution validation is
+**directional**. A passing probe proves a word is real. A failing probe proves
+nothing about the word — only that the probe is wrong. This slice produced *three*
+false accusations from that single confusion, plus one earlier in the same slice
+(`abstract` and `private` reported as fictional when they are member-modifier
+aliases). Four instances of one mistake in one item.
+
+The pattern is now specific enough to state as a rule: **a word absent from the
+registry is a claim about the registry, never about the language.** The guard's
+consumer-subset check is deliberately one-way for that reason, and the negative
+control that asserted `let` was not real is withdrawn rather than quietly deleted,
+with its reason recorded in the test.
+
+Also corrected: the parser's spelling comparisons went 182 → 142 in this slice, not
+by deleting checks but by replacing `ParseClassMember`'s 22-branch modifier chain —
+each alias written out twice, once to enter the loop and once to set its flag — with
+one registry lookup and a switch on canonical spellings.
+
+**And one live regression, caught by running the shell rather than the suite.**
+Categorising `shy` as visibility-only broke `shy prop X = 1`, which broke a user
+autoload file on the next launch. `shy` is the one word in two families — a
+declaration modifier *and* a member modifier — and its probe (`shy func f() { }`)
+kept passing throughout, because that is a real use of the other family. A word in
+two families needs a probe per family; `Every_member_modifier_works_in_member_position`
+is that check, and `hollow` turned out to need it too.
+
+### July 29, 2026 — Reading the specification first, and what that found
+
+Last entry closed with a note that this slice should have started by reading the
+specification's own keyword enumeration instead of guessing. Doing that took
+minutes and settled everything the four wrong guesses had cost:
+
+- The spec's §Keywords itemize lists **81** words; its `lstdefinelanguage`
+  colouring list lists **80**. Every one of them is now in the registry — **zero
+  missing in either direction**, which is the first time any two lists in this
+  programme have agreed exactly.
+- The registry held 22 the §Keywords section did not. Eleven are operator words,
+  and their absence is *correct*: the spec says so explicitly — "The words `and`,
+  `or`, and `not` are operators, not keywords" — and documents them in the operator
+  section instead. The remaining eleven were genuine gaps.
+
+That comparison is now `The_specification_keyword_list_matches_the_registry`,
+which makes the specification a checked consumer rather than a hand-maintained one,
+directly against the item's "spec tables ... have drifted" clause. It also caught
+that the spec's two lists had drifted from *each other*: `fading` appeared in the
+colouring list and not in the reader's list.
+
+**`TS-P2-30` closes on its documentation half.** The Member Modifiers section now
+pairs each C#-familiar alias with the word it means — `shy`/`private`,
+`fixed`/`readonly`, `vital`/`required`, `guarded`/`protected`,
+`overrule`/`override`, `fading`/`obsolete`, `hollow`/`abstract` — and states that
+both spellings mean the same thing. Nine working spellings stop being
+undiscoverable. `IsDeclarationModifierWord`'s two dead entries stay open for a
+deliberate call, since honouring `abstract` and `private` at type level is the other
+reasonable answer.
+
+**`TS-P2-31`, found by asking whether the spec documented `get` and `set`.** It did
+not, and the reason nobody had noticed is that the brace-bodied accessor silently
+did the wrong thing:
+
+```tosh
+prop X { get => ($this.b * 2) }        ## 10
+prop X { get { return $this.b * 2 } }  ## ShellBlock, no diagnostic
+```
+
+Two correct changes met and produced a defect. Accessor bodies went through
+`ParseArrowStatementBlock`, whose `ConsumeFatArrow` consumes an arrow if present and
+shrugs otherwise — reasonable on its own. `TS-P2-25` made `{` block-only
+everywhere — also reasonable. Together, a braced accessor body fell through the
+shrug into `ParseStatement` and became a first-class block *value*. Neither change
+was wrong; the combination was, and nothing was watching the intersection.
+
+Decided to support the brace form rather than diagnose it: a getter restricted to
+one expression pushes anything conditional into a helper method, and `{ ... }` is
+what a method body already looks like. `ParseAccessorBody` routes a brace to
+`ParseRequiredBlock`, so both forms work and the choice of body syntax is not
+observable — asserted as a property rather than as two expectations, because that
+is the actual claim. Negative control: 4 of 6 cases fail against the unfixed parser,
+and the 2 that pass are the arrow form and the unknown-accessor diagnostic, which
+already worked.
+
+Also worth recording: this is the second feature this session found working but
+undocumented, after partial modules in `TS-P2-28`. Both were found by checking
+whether the documentation covered something rather than by a failing test, and in
+both cases the missing documentation was the reason a defect had survived — nobody
+had written the example that would have failed.
+
+### July 29, 2026 — Completion gains two thirds of the language (TS-P2-10)
+
+Measured the four prose-carrying consumers against the registry. The REPL
+completion engine was by far the worst and the most visible:
+
+| consumer | words | missing |
+|---|---|---|
+| LSP feature table | 93 | 11 |
+| help catalogue | 77 | 45 (plus 19 legitimate topic pages) |
+| VS Code metadata | 68 | 35 |
+| REPL completion | 36 | **67** |
+
+Two thirds of the language could not be tab-completed. Typing `def` and pressing
+tab did not offer `defer`; nor `const`, `interface`, `union`, `partial`, `sealed`,
+`abstract`, or any of the nine aliases. The engine's map is now derived from the
+registry, with the completion label computed from the word's category — operator,
+constant, modifier, or keyword — so the ordering of that computation is the only
+hand-written part left.
+
+`Repl_completion_offers_every_word_in_the_language` asserts the result through the
+real completion API rather than against the derived map, because asserting a
+derivation against itself is a tautology.
+
+**That guard immediately found a second defect, and the guard's own first two
+attempts were wrong in an instructive way.** Probing each word from its single first
+character reported `match` and `rune` missing; that looked like ranking, so the
+probe moved to the word minus its last character — and both were *still* missing.
+Only then did printing the actual suggestions show why: `matc` offers `Match`,
+`MatchCasing`, `MatchCollection`, `MatchEvaluator`, `MatchType`, and the executable
+`match_parens`, but not the keyword `match`. `rune` offers only the CLR type `Rune`.
+Both words are present in the completion source, so a keyword is losing to a BCL
+type that differs from it only in case. Filed as `TS-P2-32`.
+
+The two are excluded from the guard with that reason stated in the test, rather than
+the guard being weakened until it passed. The distinction matters and it is the same
+one this programme keeps returning to: scoping a property after seeing it fail is
+the step where a guard quietly becomes worthless, so the exclusion names a filed
+item and the 101 other words stay checked.
+
+Method note, third instance this session: two wrong diagnoses in a row from
+reasoning about a mechanism instead of printing what it produced. "Ranking crowded
+it out" was plausible, cheap to believe, and wrong twice. One `Assert.True(false)`
+with the actual suggestions settled it immediately.
+
+### July 30, 2026 — `import` is not a word, and the guard that should have known
+
+Corrected by the programme owner mid-slice: `import` is not ToastScript. It resolves
+to `/usr/bin/import`, ImageMagick's screenshot tool. It had been added to the
+registry, given a probe, and — worse — **written into the specification's keyword
+list and its PDF colouring list** on the strength of that entry.
+
+The provenance is the useful part. `import` reached the registry from exactly one
+place: `Binder.KeywordSuggestionPool`, a list whose purpose is mapping typos like
+`rquire` onto `require`. It is not a claim about the language, and treating a
+consumer as authoritative is what this whole item exists to stop. Neither the LSP
+nor the VS Code metadata documents `import`; both were right.
+
+And the probe passed. `import System.Text` parses cleanly **because any bareword line
+parses** — it is a command invocation as far as the parser is concerned. That trap
+was recorded two entries ago for `quote foo` and then not applied here. Three
+attempts to prove `import` real by behaviour also failed to distinguish it, because
+`new CultureInfo("en-US")` works with no import statement at all: the type resolver
+scans the whole platform index, so `using` and `import` and nothing look identical
+from the outside.
+
+**The missing check was a necessary condition, and it is now a test.** A word the
+parser and lexer never *name* cannot be syntax, whatever a probe does. `import`
+appears zero times in either. The two checks are complementary and neither suffices
+alone:
+
+- source presence rejects `import`, which the probes accepted;
+- probes accept `let`, `quote`, and `once`, which appear in parser source for
+  unrelated reasons and which source presence alone would have wrongly admitted.
+
+**That new guard was itself wrong on its first run**, and instructively so. It
+flagged `obsolete`, `override`, `protected`, and `readonly` — the four aliases whose
+22-branch `string.Equals` chain had just been replaced by a registry lookup. The
+parser no longer names them *because the conversion succeeded*. So the check now
+legitimizes an alias through its canonical spelling being real parser syntax, which
+still bottoms out in the parser and cannot be satisfied by editing the registry
+alone.
+
+Removed from: the registry, the probe table, `Binder.KeywordSuggestionPool` — where
+suggesting a non-word for a typo is its own small defect — and both specification
+lists.
+
+Also filed, from reading the LSP's entries closely rather than counting them
+(`TS-P2-33`): its `let`, `pick`, and `get` hover texts all describe a leading-`for`
+comprehension — `[for x in $items pick x * 2]` — which does not parse. Comprehensions
+are body-first with `<|`. And `pick` is a builtin *command*, an alias for the `get`
+projection command, so its entry is wrong in category as well as syntax. Editor
+guidance that fails when followed is worse than none.
+
+### July 30, 2026 — Two defects from one library, and a third implementation nobody knew about
+
+Reported from a real library rather than found by inspection: modules nested to form
+a namespace-like structure, imported as
+`require ToastLib.Shell from "…" as ToastShell`, with helpers invoked as
+`ToastShell.HasPipe { … }`. Twelve parse errors and one require failure, from two
+unrelated causes. Worth recording because the reporter's first question was whether
+they were using the language wrongly, and they were not.
+
+**`TS-P2-34` — a qualified command took values and refused structures.**
+
+```tosh
+M.F 5            ## worked
+M.F "text"       ## worked
+M.F (1 + 2)      ## worked
+M.F { … }        ## missing_pipeline_separator
+M.F [1, 2]       ## missing_pipeline_separator
+M.F {| a = 1 |}  ## missing_pipeline_separator
+```
+
+`LooksLikeStaticMemberAccessExpression` reads a dotted name in command position as a
+CLR member access *unless* the next token starts a command argument, and
+`NextTokenStartsCommandArgument` enumerated `Number`, `String`,
+`InterpolatedString`, `Boolean`, `Null`, `UnitLiteral`, `Bareword` — and no
+delimiter opener at all. So the block was left as a separate stage and the diagnostic
+pointed at the brace, which is exactly why it read as a limitation of blocks rather
+than a hole in a token list. The reported case used a `rune`, which was a red herring:
+the callee kind was never involved.
+
+This is the same family as `TS-P2-16`, which fixed `Geo.area 2` — the value case —
+and left the delimited case behind. A fix that enumerates tokens is a fix that will
+be incomplete again the next time a token kind is added, and the paired delimiters
+from `TS-P2-25` are precisely the tokens that arrived after that list was written.
+
+**`TS-P2-35` — dotted import paths, and a third implementation.**
+
+The interesting part is not the feature, it is that the first fix appeared correct
+and changed nothing. `ToshEngine` carries **two** `ImportRequiredArtifact` overloads
+twelve thousand lines apart — one taking name/alias arrays, one iterating
+`statement.Imports` — and the `require` statement path uses the second. The
+implementation sat compiled, tested by nothing, and unreachable, while the
+behaviour was identical to before.
+
+That is `TS-P1-24`'s failure mode on an axis that item does not cover. `TS-P1-24` is
+scoped to sync/async twins; this is two implementations of one operation with no
+async involved, which the twin inventory cannot see because neither name ends in
+`Async`. The inventory measures a *shape*, and duplication does not always take that
+shape.
+
+Both now route through one resolver, with the modifier parameterized so the two
+callers keep their own visibility semantics.
+
+**Method note.** The dotted import was verified against the reporter's own library
+rather than only a fixture — `ToastLib.Filesystem.GetExtension("/tmp/x.tar.gz")`
+returns `.gz` through the whole chain, with `Filesystem.tosh` requiring
+`ToastLib.Shell` from another file. A synthetic fixture would have passed after the
+first, unreachable fix, because a fixture written alongside a fix tends to exercise
+the path the fix is on.
+
+**Also cleaned up:** two 12 MB PostScript files in the repository root, which were
+screen captures. They came from probing whether `import` was a keyword by running
+`import System.Text` — on Linux that is `/usr/bin/import`, ImageMagick's screen
+grabber, and it did exactly what it is for. The lesson is narrower than "be careful":
+a probe for whether a word is a keyword must never be a bare command line, because
+that is the one shape that can execute something.
+
+**Flake note.** `ScopeAndChannelTests.Scope_awaits_spawned_jobs_and_returns_completions`
+failed once in the full run and passed 3/3 in isolation and on the next full run.
+That is the recurrence of the observation already recorded twice in this log, so it
+stays an observation rather than becoming an item — but it has now been seen a third
+time under parallel load, which is the point at which "intermittent" starts to mean
+"unfixed".
+
+### July 30, 2026 — CLR-compatible `await` (TS-P1-27)
+
+Reported from real code, and the report was right to suspect the language rather
+than the author:
+
+```tosh
+var p = new Ping()
+var reply = async { $p.SendPingAsync("8.8.8.8", 1000) }
+await $reply        ## AsyncStateMachineBox`1[…PingReply…]
+```
+
+**Two systems that never met.** `async` and `await` are *builtin commands* — they
+appear zero times in the lexer, parser, and specification — operating over
+`ShellFuture`. A CLR method returning `Task`/`Task<T>` was never awaited by
+anything: the task flowed into the pipeline untouched, `await` refused it with
+`await_requires_future`, and `.Result` was the only route to a value. The display
+was a symptom rather than the defect: `Task` does not override `ToString`, so the
+formatter fell back to the runtime type, which is the compiler's state machine box.
+
+The directive was that ToastScript's async/await be the same as, or compatible with,
+the CLR's. Two decisions followed.
+
+**Explicit, C#-identical.** A task-returning call yields a task; you await it.
+Auto-awaiting at the call site was considered and rejected for two reasons, the
+second architectural: it removes the ability to hold a task and start work
+concurrently, which is the reason tasks exist; and member invocation lives on *both*
+surfaces of the dual-surface interfaces, so the change would have had to land twice —
+the shape that hid three duplication bugs in the preceding days. A test asserts the
+concurrency the decision preserves, by timing two overlapping delays rather than by
+description.
+
+**`await` flattens.** One `await` unwraps a future whose output is a task, so the
+reported code works as written. C# needs `Task.Unwrap` here; a future-of-task has no
+use, and leaving it unflattened is precisely the trap that produced the report.
+
+Three details that were easy to get wrong:
+
+- **The awaited type comes from the declared generic argument, not from a `Result`
+  property.** A method declared to return plain `Task` compiles to
+  `AsyncStateMachineBox<VoidTaskResult>`, whose inherited `Result` holds an internal
+  struct meaning "no value". Trusting the property would make every void async method
+  emit garbage. `await (File.WriteAllTextAsync(…))` emits nothing, and a test says so.
+- **Cancellation** goes through `task.WaitAsync(token)` — the same call
+  `ShellFuture.AwaitAsync` already used — so Ctrl-C during an await behaves alike on
+  both paths. The first draft awaited bare and would have hung.
+- **A faulted task raises its own message**, not `AggregateException`'s "One or more
+  errors occurred", because the reported code wraps this in `catch (e)` and
+  `$e.Message` is what a user reads. One layer is unwrapped.
+
+The specification gains an Asynchrony section; it had none, which is why the
+limitation was undiscoverable — the third feature this week found working-but-
+undocumented, after partial modules and accessor blocks. `async`/`await` are
+deliberately **not** added to `LanguageSurface`: they are commands, not word-shaped
+syntax, the same distinction that keeps `pick` out.
+
+**A process failure worth recording.** The first negative control reported 10 of 10
+passing against "unfixed" code, which should have been impossible. `git stash push`
+had silently failed — `ClrAwaitable.cs` was untracked, and stderr was redirected to
+`/dev/null` — so nothing was stashed and the control ran against the fix. The
+subsequent `git stash pop` then applied a *pre-existing* stash from the abandoned
+`TS-P2-25` attempt, leaving merge-conflict markers in three parser files. Repaired by
+restoring them from `HEAD`, which already carries the committed fixes; the old stash
+entry was never consumed and remains in the list.
+
+Two lessons, both narrow enough to act on: a negative control that *passes* is a
+broken control, not a reassuring result — the whole point is that it must fail. And
+suppressing stderr on a state-changing git command turns a loud failure into a silent
+one. The second control, done by copying files aside instead of stashing, failed 6 of
+10 as it should.
+
+**One more of my own, caught by the full suite.** The test asserting that tasks stay
+first-class timed two 200ms delays against a 380ms budget. It passed alone and failed
+inside the parallel run — a wall-clock assertion under parallel test load measures the
+machine, not the code. Replaced with the property it was standing in for: two
+un-awaited tasks held as values simultaneously, checked in C# with
+`ClrAwaitable.IsAwaitable`. Overlap follows from that deterministically. A flaky test
+is worse than no test, and a timing budget is a flaky test with extra steps.
+
+**Filed alongside**, both surfaced by this work and both sharpened by it:
+`TS-P2-36`, generic static methods not inferring their type argument — which now
+matters more, since explicit `await` invites exactly the `Task.WhenAll`/`FromResult`
+helpers that are unreachable; and `TS-P2-37`, the `file` alias shadowing
+`System.IO.File` in member-access position.
+
+### July 30, 2026 — The suite's memory, measured rather than endured (TS-P2-38)
+
+The full suite took a 128 GB machine down three times in one session, and the editor
+with it. Twice I worked around it and once I made it worse by dropping the capped-run
+discipline I had adopted earlier in the session and going back to bare `dotnet test`.
+That was the wrong response to a repeating symptom.
+
+**The multiplier, found.** There was no `xunit.runner.json`, so xUnit ran at default
+parallelism — one thread per core, **32** on this machine — with every collection
+constructing its own engines. Capped to 8 threads the suite peaks at **6,357 MB** and
+passes clean, measured by sampling total `dotnet`/`testhost` RSS under a 10 GB cgroup
+cap so a recurrence would kill the run rather than the machine.
+
+**The cap is a mitigation, and 6.2 GB is still the finding.** That is a lot for 3,554
+tests, so bounding concurrency limits the blast radius without explaining the growth.
+Two open items would produce exactly this if they fire mid-run — `TS-P1-08`, nested
+generator statements materializing, and `TS-P1-19`, an infinite generator in command
+position — and an earlier memory bomb this programme fixed was precisely that shape,
+peaking at 104 GB from a lambda swallowing its `| first N`. Filed as `TS-P2-38` with
+the root cause open rather than declared solved by the cap.
+
+**A second finding, honestly graded.** Two unrelated tests fail only under parallel
+load and pass 3/3 in isolation: `ScopeAndChannelTests` (three sightings now) and
+`GenericClassTests.Generic_class_user_interface_constraint_accepts_implementing_class`.
+Two subsystems failing only when concurrent points at shared mutable static state.
+
+The suspect is specific: `DotNetTypeResolver._negativeResultCache` is a process-wide
+dictionary of names confirmed unresolvable, never cleared, invalidated only when the
+loaded-assembly count grows — which a ToastScript-declared type does not do. If a name
+is cached negative before it is declared, declaring it cannot clear the entry. That
+would also be a *product* defect, not merely a test artifact: a long REPL session that
+references a name before defining it would inherit the stale answer.
+
+**It did not reproduce.** Resolving `IShape` through a failing annotation, then
+declaring `interface IShape` and using it as a generic constraint, produced the correct
+answer — so either that path does not populate the cache or constraint resolution does
+not consult it. Recorded as a suspect with the failed reproduction attached, so the
+next person does not spend the same hour on it, and filed as `TS-P2-39` rather than
+asserted.
+
+**Standing instruction until `TS-P2-38` has a root cause:** run the full suite under a
+memory cap.
+
+```
+systemd-run --user --scope -p MemoryMax=10G -p MemorySwapMax=0 -- dotnet test Tosh.slnx --no-build
+```
+
+### July 30, 2026 — Correction: the test suite was not the memory culprit (TS-P2-38)
+
+The previous entry said the multiplier had been found — no `xunit.runner.json`, so 32
+threads on a 32-core machine — and reported a 6,357 MB peak after capping to 8. Both
+halves of that are wrong, and tracing RSS over time rather than sampling a maximum is
+what showed it.
+
+**The shape, not the maximum, was the informative measurement.**
+
+| time | RSS |
+|---|---|
+| 0s | 174 MB |
+| 3s | 2,588 MB |
+| 15–21s | ~3,860 MB (transient) |
+| 24s → 154s | **2,744 MB, dead flat** |
+
+Flat for 130 seconds while 3,500 tests run. The tests retain nothing; the memory is
+committed in the first three seconds. That is a working set, not a leak — and the
+earlier "6,357 MB" was a maximum caught during the transient with build processes
+still alive, reported without the curve that would have made it interpretable.
+
+**Parallelism is not a multiplier.** Re-running with the old 32-thread default under a
+12 GB cap: peak **3,737 MB**, mean 2,760 MB — indistinguishable from 8 threads
+(3,860 MB / 2,744 MB), with identical wall time, 2m33s against 2m34s. So the cap I
+committed does nothing for memory. It is kept for a weaker and honestly-stated reason
+— the two tests that have flaked did so only under parallel load — and the csproj
+comment now says that instead of the disproven claim.
+
+**So the suite cannot be what exhausted 128 GB.** A single shell invocation is 174 MB.
+A single test in the host is 196 MB. The whole suite is 2.8 GB steady. Three orders of
+magnitude short.
+
+**What actually did it is unknown**, and the measurement that would have told me was
+one I never took: my sampler matched only `dotnet` and `testhost`, so it could not see
+VS Code, its Roslyn host — measured at 1.27 GB in a single process while I was working
+— the KDE file indexer at 2.1 GB, or the MSBuild node-reuse workers that reached 21
+processes at one point. I attributed the crashes to the suite because the suite was
+what I was running, which is availability rather than evidence.
+
+Two candidates remain, and both stay open: a rare unbounded path firing occasionally
+(`TS-P1-08`, nested generators materializing; `TS-P1-19`, an infinite generator in
+command position) would show as an occasional spike rather than in the steady state
+these traces measure — which is exactly the signature the traces cannot rule out. Or
+the consumer was never `dotnet` at all.
+
+**The lesson is about the instrument.** A peak number without a curve invited the wrong
+conclusion, and a process filter chosen for convenience made a whole class of causes
+invisible. The corrected acceptance asks for total-system sampling on the next
+occurrence, so the consumer is identified rather than assumed. A capped run remains the
+standing instruction regardless — not because the suite is guilty, but because a cgroup
+cap converts a machine-wide failure into one killed process.
+
+### July 30, 2026 — One symptom, two defects, and a rule that is not one (TS-P1-28, TS-P2-40)
+
+Reported from a real library: a `hermit class State` whose static functions worked while
+its static properties "do not work, at all" and "do not even show up in autocomplete".
+That is one sentence describing two unrelated defects and one correct language rule, and
+separating them mattered more than fixing either.
+
+**`TS-P1-28` — computed static properties were never evaluated.** Static properties were
+only ever *initialized*. Both initialization sites read
+`IsStatic && Initializer is not null && !IsComputed`, so a computed property never
+entered `_staticValues`, and `TryGetStaticMember` fell through to a line whose comment
+was already the whole bug:
+
+```csharp
+if (_staticValues.TryGetValue(memberName, out var stored)) { value = stored; return true; }
+return true; // null default        ← every computed static property landed here
+```
+
+`static prop Y => 7` answered `null`. So did an accessor-block form. No diagnostic. The
+fix mirrors the instance path — `CreateLocals` already accepts a null instance and omits
+`$this`, so evaluating a static getter needed no new plumbing.
+
+Stored static properties worked the whole time, which is exactly why the report read as
+"static properties don't work" instead of "computed ones don't". Isolating that took four
+probes and was the difference between a one-line fix and a search.
+
+**`TS-P2-40` — completion dropped members differing only in case.** Nothing to do with
+static-ness. The reporter's class held `func icmp()` beside `prop Icmp`, and
+`OrderSuggestions` ran `DistinctBy(Label, OrdinalIgnoreCase)` *before* `OrderBy`, so one
+of the pair vanished and *which* one depended on enumeration order. Fixing the two
+suggestion dictionaries alone was not enough — it flipped the winner rather than keeping
+both, which is how the second dedupe was found. Ordinal throughout now; an exact
+duplicate spelling still collapses, which is what de-duplication is for.
+
+**And a rule that is not a defect.** `static prop Icmp => icmp()` fails, and should:
+members are reached through `ClassName.` or `$this.`, never bare. Bare `f()` fails from
+an instance method too, so the rule is uniform. What is wrong is the diagnostic —
+"Command 'f' is not a registered builtin … did you mean 'df', 'fg', or 'if'?" — which
+names three unrelated shell commands while a member of the enclosing class sits one
+qualifier away. Filed as `TS-P2-41` rather than fixed here, because the fix belongs with
+the suggestion machinery and not with static properties.
+
+Verified against the reporter's own file rather than a fixture:
+`ToastLib.Network.State.Icmp` now returns `true`, running a real ICMP ping through two
+nested partial modules and a `require`. Their `IsNetworkUp` still needs one change of its
+own — it calls `State.Icmp()` with parentheses, which asks for a method and reports
+"Static method 'Icmp' was not found on class 'State'"; a property is read without them.
+Worth noting that this diagnostic is *good*: it says exactly what was looked for and
+where.
+
+### July 30, 2026 — Two diagnostics that pointed the wrong way (TS-P2-41, TS-P2-33)
+
+Both of these are cases where the language was right and the thing *describing* the
+language was wrong. Neither changes behaviour; both change what a user is told.
+
+**`TS-P2-41` — a bare member reference now names its missing qualifier.** Writing
+`static prop Icmp => icmp()` beside `static func icmp()` reported:
+
+```
+Command 'icmp' is not a registered builtin or function declared in this source.
+  did you mean 'df', 'fg', or 'if'?
+```
+
+Three unrelated shell commands, while a member of the enclosing class sat one qualifier
+away. The rule is not the defect — members are reached through the type name or `$this`,
+and bare `f()` fails from an instance method too — so the fix is the message:
+
+```
+'icmp' is a member of 'State' and cannot be called as a bare name.
+  write 'State.icmp' or '$this.icmp'
+```
+
+The binder now tracks the class bodies it is walking with the member names each declares,
+and consults that **before** the Levenshtein path. That ordering is the part worth
+keeping: the old path only reported when it happened to find a near-miss command, so
+`icmp` was flagged only because `df`, `fg`, and `if` exist. A member named `zzqqxx`
+produced **no diagnostic at all** — silence, not a wrong suggestion. Four probes confirmed
+the new check covers methods, properties, static and instance position, and that a
+genuine command typo still gets command suggestions.
+
+**`TS-P2-33` — five LSP hover entries described syntax the language does not have.**
+`let`, `pick`, and `get` all documented a leading-`for` comprehension,
+`[for x in $items pick x * 2]`, which does not parse — comprehensions are body-first with
+`<|`. `pick` is not a comprehension clause at all but a pipeline command. `when`'s example
+omitted the parameter list its form requires.
+
+Every replacement was verified by parsing it before being written, which caught that
+`func f handles X when { … }` fails without `(event)`.
+
+**The durable half is `HoverExampleParityTests`**: every backticked `Example:` in the
+keyword table must parse. Its negative control names all three fictional comprehensions
+against the uncorrected table, so it demonstrably catches the class of defect rather than
+passing vacuously. Same shape as the specification keyword guard — a document that makes
+claims about the language is a consumer, and a consumer can be checked.
+
+Worth recording why this was missed for so long: counting entries made the LSP table look
+like the *best*-covered consumer at 93 words. Reading three of them found wrong syntax in
+all three. Coverage and correctness are different measurements, and only one of them was
+ever taken.
+
+**Flake note.** `GenericClassTests.Generic_class_user_interface_constraint_accepts_implementing_class`
+failed in the verification run and passed 2/2 in isolation — the second sighting of that
+specific test and the fourth overall across three subsystems, all under parallel load.
+`TS-P2-39` holds the suspicion of shared static state, still unreproduced deterministically.
+Distinguishing it from the `TS-P2-41` regression mattered: that one also looked like a flake
+until it failed in isolation, which is the only signal that separated a real defect from
+this noise.
+
+### July 30, 2026 — Three P1 semantics repairs, and one that had to be narrowed twice
+
+All three had the same shape: the language held two answers for one question.
+
+**`TS-P1-10` — record equality ignored nothing, including order.**
+`{| a = 1, b = 2 |} == {| b = 2, a = 1 |}` was `false`. `AreEqual` opens with an
+element-wise enumerable comparison, and an `ExpandoObject` is an
+`IEnumerable<KeyValuePair<…>>`, so two records were compared as *ordered sequences*.
+Insertion order is not part of a record's identity. Fixed by comparing field by field
+ahead of the sequence path, keys matched case-insensitively because member lookup is.
+
+**The first fix changed nothing, and the second broke eleven tests.** Both errors are
+worth recording because both were predictable.
+
+The first landed only on `OperatorEvaluator.AreEqual`. `==` goes through
+`ToshEngine.AreEqualAsync` — the parallel twin `TS-P1-24` exists for — so the defect
+survived a change that looked complete and verified. The two now share one helper rather
+than carrying two copies of the rule; the second implementation delegates.
+
+The second used `ShellRecordUtilities.IsRecordLike`, which also matches
+`ToshClassInstance`. That made *class instances* structurally equal and broke left-biased
+equality dispatch, so a user's own `Equals` stopped being consulted — 11 failures, led by
+`ClassEqualityCancellationTests.Equality_dispatch_is_left_biased`, a test written to
+protect exactly that. Narrowed to string-keyed dictionaries, which is what an anonymous
+record is. A declared class decides its own identity; that is the point of letting it
+define `Equals`.
+
+Arrays stay order-*sensitive*, asserted explicitly — both records and arrays are
+`IEnumerable`, which is how records came to be compared as sequences in the first place.
+
+**`TS-P1-11` — `_` both discarded and bound.** `var [a, _, c] = [1, 2, 3]` left `$_`
+holding `2`. Worse than a leaked name: `_` is the current pipeline item, so a destructuring
+inside a predicate silently changed what `_` meant downstream. Both destructuring forms now
+skip it. The specification already promised this — "Skip elements with `_`" — so the
+runtime was behind its own documentation, which is the third time this week.
+
+**`TS-P1-16` — division by zero, and the item's framing was wrong.** Filed as depending on
+the zero operand's type. It does not: the split is **folded versus evaluated**. Literal
+operands are constant-folded with C# semantics and give `Infinity`; the same doubles in
+variables reach `OperatorEvaluator`, whose floating lambda threw. `TS-P1-24`'s shape on the
+arithmetic axis, and the third instance of it in this one slice.
+
+One rule per family now: integral and decimal division by zero throw, matching C#;
+floating division is IEEE — `±Infinity`, `NaN` for `0.0/0.0` and for floating modulo. The
+folded and evaluated paths are asserted to agree rather than each asserted separately.
+
+**Filed:** `TS-P1-29`. `ShellRecordUtilities.TryGetFields` throws on an object-keyed
+dictionary — its `IDictionary` branch iterates as `DictionaryEntry`, which only the
+non-generic enumerator yields. A `{% … %}` literal is object-keyed, so any caller handing
+one over crashes with `unexpected_exception` instead of a diagnostic. Found because
+`TS-P1-10`'s first draft called it on dicts; the fix was narrowed away from that rather
+than growing to cover it.
+
+Negative control: 13 of 24 new cases fail against the unfixed runtime.
+
+### July 30, 2026 — TS-P1-08: half already fixed, half measurable
+
+Opened this expecting the 104 GB memory bomb. It is gone, and has been for most of this
+programme — but the item still said otherwise, which is its own kind of defect.
+
+**The headline symptom no longer reproduces.** `recur (0, 1) func(a, b) => ($a + $b) |
+take-while { _ < 100 }` yields `0, 1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89` and stops. The
+sibling `iterate 1 func(x) => ($x * 2) | take-while { _ <= 64 }` yields `1, 2, 4, 8, 16, 32,
+64` with no "must produce exactly one value per input item" error.
+`LazySequenceTests.Recur_fibonacci_take_while` asserts exactly that and is green — it has
+been green since the parser repair earlier in this programme, which found that
+`ParseAnonymousFunctionArrowBody` was **swallowing `| take-while …` into the lambda body**
+and leaving the generator unbounded. The 104 GB was the consequence of a parse error, not
+of the iteration machinery.
+
+That also closes a loop on `TS-P2-38`: the 104 GB event was a *test* in this suite, so
+before that repair a full run could balloon exactly that far. The suite's measured 2.8 GB
+today is the same suite after the fix. It does not explain the later crashes — the suite
+was already innocent by then — but it explains the shape of the first one.
+
+**The second clause was real, and is now measured.** Short-circuit consumers pulled one
+item more than they needed:
+
+| consumer | pulled before | pulled now | needed |
+|---|---|---|---|
+| `first 1` | 2 | **1** | 1 |
+| `first 2` | 2 | 2 | 2 |
+| `any { _ > 0 }` | 2 | **1** | 1 |
+| `take-while { _ < 3 }` | 3 | 3 | 3 — inherent |
+
+`first 2` pulling exactly two ruled out a simple off-by-one and pointed away from
+`FirstCommand`, which is correct: it breaks the moment it has emitted its last item. The
+surplus was in `ShellIterationUtilities.ReplaySingleInputCollectionAsync`, which pulls a
+second item to decide whether the input is a *lone* collection to expand element-wise.
+
+That lookahead only earns its cost when the first item is expandable. Expanding a scalar
+yields the scalar, so for a generator of numbers the second pull answered a question with
+no consequence — while costing a unit of the producer's work and surfacing an error if the
+surplus item threw. It is now taken only when the first item is actually expandable, and
+every expansion behaviour is pinned: a lone array still expands, two arrays stay two items,
+records and strings stay atoms.
+
+`take-while` is included in the table at 3 deliberately. It *must* evaluate the item that
+fails its predicate to know to stop, so three is correct rather than surplus, and recording
+that stops a later reader "optimising" it.
+
+**Method note.** The first attempt to measure pull counts used `echo` inside the generator
+and measured nothing — those values *are* the pipeline, so `first 1` consumed them and the
+evidence disappeared into the thing being tested. `writeline` writes directly, which is what
+makes the count visible. Negative control: 2 of 12 cases fail against the unfixed runtime,
+and the 10 that pass are the expansion semantics, which is the right split — the fix was
+meant to change pull counts and nothing else.
+
+### July 30, 2026 — Capturing external output, and a fix proposed for a defect that did not exist
+
+Reported from an interactive session: `var x = git rev-parse --show-toplevel` printed the
+path and left `$x` as `null`. Five forms behaved that way; `| collect` did not.
+
+**The cause was one question answered by the wrong flag.**
+`ExternalProcessCommand.DetermineSpawnMode` asked "is my output being consumed?" and read
+`context.IsPipelined`, which is true only when a **downstream stage** exists. So
+`git … | collect` captured, while assignment, `( … )`, `$( … )`, `return`, and a `for`
+source all consumed the value without being pipelined and took
+`SpawnMode.TerminalPassthrough`, where stdout is inherited and nothing is captured.
+
+`CommandContext` now carries `OutputIsCaptured` alongside `IsPipelined` — deliberately
+separate, because the two answer different questions and other code reads `IsPipelined` to
+decide about *input*. It threads from `EvaluatePipelineAsync` through
+`ExecuteCommandSyntaxAsync`, the same path `isPipelined` already took, and is set at the
+13 sites that collect a pipeline's values.
+
+**The mode was already there.** A capturing context routes to the existing `SpawnMode.Hybrid`
+— `RedirectStandardOutput = true`, stdin and stderr inherited — so `var x = $(fzf)` still
+draws its UI and `curl`'s progress meter still appears while the value is captured. The
+code's own NOTE described this hybrid as the intended destination; it existed but was
+reachable only through an opt-in allowlist.
+
+**Why 3,602 tests missed it, and what that demanded of the fix.** A test process has no TTY,
+so `hasTerminal` is false and the same code captures correctly. Every test exercised the
+branch that worked. `TtyCaptureTests` therefore runs the built CLI under a real pty via
+`script(1)` — without that it would re-verify the working branch and prove nothing. Negative
+control: 5 of 8 fail against the unfixed runtime, and the 3 that pass are `| collect`,
+top-level display, and the interpolation characterization.
+
+**Part two of the approved plan was withdrawn after measuring it.** The plan proposed making
+`ShellTextLine` string-like, on the evidence that `TypeConversion` has no entry for it. That
+reading was correct and worthless: the conversion happens elsewhere, and on a single
+`ShellTextLine` all of `.Trim()`, `.Length`, `.ToUpper()`, `.Split()`, `== "…"`,
+`var y: string = $x` and `cast string $x` already work. I proposed a fix for a defect that
+did not exist, from a mechanism I had not run — the same error this log keeps recording, and
+the fourth instance of it in two days.
+
+What the reporter actually hit was two things: capture failing (above), so `.Trim()` ran on
+an empty value; and `collect` yielding an **array**, so `$x` was an array of one
+`ShellTextLine` and `.Trim()` failed with "No overload matched instance method 'Trim' on
+'System.Object[]'". A subexpression `( … | collect)` unwraps a single value, which is why
+that spelling behaved differently and made the type look inconsistent.
+
+One real finding survives from the detour, filed as `TS-P1-33`: `members` on a
+`ShellTextLine` lists only `Text` while the whole string surface is callable. Introspection
+contradicting behaviour is what convinced both of us the type was broken.
+
+**Left open, `TS-P1-32`:** an interpolation hole still does not capture. It re-parses its text
+and runs it as a whole statement through `EvaluateAsync`, reaching the pipeline via
+`EvaluateStatementAsync` — the engine's hottest dispatch — rather than any marked consuming
+site. Four defaultable signatures would carry the flag there; it wants its own slice rather
+than riding along at the end of a long one. Pinned as a characterization so the gap is
+visible and flipping it later is a deliberate edit.
+
+### July 30, 2026 — A qualified name, and the defect it was hiding (TS-P1-34, TS-P1-35)
+
+Reported as "I can not access `type`s defined inside of modules that I am requiring":
+
+```
+❯ var x: ToastLib.Math.IntPercent = 60
+✖ error tosh.runtime.annotation_unknown_type
+  'x' uses unknown type annotation 'ToastLib.Math.IntPercent'.
+```
+
+**The report understated it.** Probing before editing anything established that the bare
+`IntPercent` worked *and enforced* — `150` clamped to `100` — while both `ToastLib.Math.IntPercent`
+and an `as`-aliased `M.IntPercent` failed. So this was not a missing type, it was a name that
+could not be spelled. One more probe widened it past the report: a qualified **class**
+annotation failed identically, `var v: Outer.Inner.Widget = (new Outer.Inner.Widget())`. That
+one probe decided where the fix went. Had it not been run, the natural move was to teach
+`TryGetRefinementType` about dotted names and declare the reported symptom fixed, leaving
+classes and records broken in exactly the same way for the next report to find.
+
+The cause was uniform and unremarkable: **every** lookup on the annotation path took a flat
+name. So the fix is one walk, `TryResolveQualifiedModuleMember`, hung beneath the flat lookups
+in both `TryGetNamedType` and `TryGetRefinementType` — unqualified names never reach it, and
+dotted ones resolve through `ExportTable.Modules` to the leaf. Fixing the *lookups* rather than
+`IsKnownAnnotatedType` is the part that matters. Making the check permissive would have made
+the annotation accepted; making the lookup work makes it resolve to the actual definition,
+which is why `Outer.Inner.SmallInt = 99` coerces to `10` and `Outer.Inner.Port = 0` still fails.
+An annotation that is known but toothless would have looked like a fix and been worse than the
+error.
+
+**Then the fix exposed a second defect — the reporter's own case still failed.**
+
+```
+✖ error Member 'Clamp' was not found on module 'Math'.
+  4 │ export type IntPercent = int where (…) coerce Math.Clamp(_, 0, 100)
+```
+
+Their coercion calls `Math.Clamp` from inside `module Math`, so the module name shadows
+`System.Math`. This had never worked; it had only never been *reached*. While the qualified
+annotation was broken, the refinement was only usable through the name that leaked unqualified
+into the requiring scope — and there `Math` is not a bound module, so it fell through to the CLR
+type. Resolving the qualified name evaluates the coercion with the module in scope, and the
+shadow became visible. Worth stating plainly: for one probe cycle the fix appeared to have
+broken the reporter's file, when it had exposed a second defect standing behind the first.
+
+Filed as `TS-P1-35` and fixed rather than deferred, because deferring would have handed the
+reporter a different error for the same line. `ToshModuleObject.InvokeInstanceMethod` now falls
+back to the shadowed CLR type **on a miss only**, so a module's own export still wins — asserted
+first, since that is what the fallback must not break — and a miss on a module shadowing nothing
+still errors, so mistakes are not swallowed into a silent null. This is `TS-P2-37`'s collision
+(`file` versus `System.IO.File`) answered for the general case; that item should now be re-checked
+against this rule rather than fixed separately.
+
+**Validation.** Fourteen new assertions in `QualifiedModuleTypeTests`, including the reported
+route end to end through a required file with `partial module`, since partial merging declares
+through a different path (`TS-P2-28`) than a plain module. The negative control — restored by
+**file copy**, after a `git stash` silently no-opped earlier in this programme — failed 8 and
+passed 6 against the unfixed code, and the split is the one it should be: every assertion of new
+behaviour failed, and the six that passed are exactly the preservation assertions (four
+unknown-name rejections, two shadowing controls). A control where those six had also failed would
+have meant the tests were asserting the walk's mechanics rather than its behaviour. Full suite
+3,624 passing, 1 skipped.
+
+**Noted, not fixed:** exported names leak inconsistently. A `partial module`'s exported refinement
+types resolve unqualified in the requiring scope, while a plain `module`'s do not — `var d: SmallInt`
+fails where the reporter's `var x: IntPercent` succeeds. Both are now reachable qualified, which is
+the spelling that should always have worked, so this is no longer blocking anyone; but two module
+forms with different name-visibility rules is a semantic decision that has never been made
+deliberately. It wants its own item and a decision, not a quiet patch.
+
+### July 30, 2026 — Reachability beats size (TS-P1-24, first convergence slice)
+
+The item lists its remaining work by *size*: `ThrowDetailedSingleConstructorMismatch` at 55 lines,
+`TryGetInstanceMember` at 51, and so on down. Working that list top-down turned out to be the wrong
+order, and the reason is worth recording because it applies to the 26 that remain.
+
+**Two of the three biggest were dead.** After converging `ConvertPropertyValue` and
+`ConvertConstructorParameterValue` by hand, a reachability check found that
+`ThrowDetailedSingleConstructorMismatch` had **no callers**, that its only caller of
+`ConvertConstructorParameterValue` was itself, and that `InvokeConstructorOnInstance` — 115 lines,
+the largest single entry in the inventory — had no callers either. The public construction surface
+converges at `CreateInstanceCoreAsync`, and `CreateInstance` is a four-line wrapper that blocks on
+it, so the entire synchronous constructor path underneath had become unreachable at some point and
+nobody noticed.
+
+That is the worst shape this item exists to address, worse than an ordinary duplicate: a maintainer
+fixing a constructor bug could edit the dead copy, run the suite, watch it stay green, and conclude
+the fix worked. Deleted rather than refactored — which clause 1 explicitly allows, and which is the
+better answer whenever it applies.
+
+**A fourth family is safe for a different reason.** `EvaluatePropertyGetter`,
+`ExecutePropertySetter`, `GetInitialPropertyValue` and `ExecuteMethodBlock` all bottom out on
+`ExecuteClassBlockSync`, which itself does `ExecuteBlockAsync(…).GetAwaiter().GetResult()`. Their
+twins are 3–5 line wrappers over one shared implementation, so no semantics are duplicated and they
+cannot drift. Counting them as "parallel internals" overstates the risk; they should be
+reclassified rather than converged.
+
+So the sort key for the remaining 26 is **reachability first, then whether the sync body contains a
+decision that could diverge** — not line count.
+
+**What did converge.** `ConvertPropertyValue` and its twin now share
+`TryResolvePropertyValueByBinding`. Both sides are live, and the pair had *already* drifted: the
+asynchronous copy had lost the synchronous one's explanatory comments entirely. Documentation drift
+before behavioural drift is exactly the early symptom the item predicts.
+
+**Three process errors worth recording**, since this programme's practice is to record them:
+
+1. **Refactored before measuring.** Two of the three methods converged by hand were then deleted as
+   unreachable. Reachability is cheap to check and should have come first.
+2. **A bulk deletion overreached.** Removing three methods by brace-matching also removed two live
+   `…Async` twins next to them — 227 lines gone where ~160 were intended. The compiler caught it
+   immediately, and both were recovered byte-identical from `HEAD`; a method-list diff against
+   `HEAD` then confirmed the final change removed exactly the three intended and added exactly the
+   two intended helpers. Worth stating plainly: the safety here came from the build and from
+   version control, not from the script being right.
+3. **The first parity test was vacuous.** It asserted that `CreateInstance` and
+   `CreateInstanceAsync` agree — but `CreateInstance` blocks on `CreateInstanceAsync`, so it
+   compared one implementation with itself and would have passed against any defect. Rewritten
+   against `TrySetMember`/`TrySetMemberAsync`, which are genuinely distinct, and a negative control
+   that diverged only the synchronous surface failed exactly the two conversion assertions.
+
+**Also filed:** a fifth `TS-P2-39` sighting, this one with a visible mechanism — a test asserting
+that the bare name `Widget` does not resolve, in a process where `Tosh.LspFixture` declares a CLR
+`Widget` that another test loads at runtime. Running the two classes together did not reproduce it,
+so the mechanism is consistent rather than proven, but the lesson holds either way: an assertion
+that a name is *unresolvable* is load-order dependent unless that name is unique in the process.
+
+## `TS-P1-19` — an endless generator now streams (August 2)
+
+Fixed, along with two further defects found while confirming it.
+
+**The report was half right, and the half that was wrong mattered.** The item recorded two
+different symptoms: command position (`gen | first 3`) "silently produces no output and exits
+cleanly", call position (`gen() | first 3`) hangs. Measured today, both forms hang identically —
+the parser repair in `TS-P1-08` had already removed the difference between them. The "silent
+empty" was never a behaviour: it was a process killed by a timeout before its output buffer
+flushed. Two probes established this, one measuring exit status alongside the output rather than
+the output alone, and one comparing an in-process side-effect count against what reached the
+terminal. Reading output without reading exit status is how an infinite loop disguises itself as
+an empty stream.
+
+**The cause was not in the generator machinery.** Both loop evaluators and the generator
+invocation path were already lazy — each yields per iteration and suspends when nobody pulls.
+The drain was one line up, in `ExecuteBlockAsync`:
+
+```csharp
+IReadOnlyList<object?> values = await AsyncEnumerableExtensions.ToListAsync(statementResults, …);
+```
+
+Every statement was materialised before a single value left the block. A bare `yield` escaped
+this through its own earlier branch, which is exactly why `yield 1; yield 2` streamed while the
+same yields wrapped in a loop did not — a loop is *one statement*, and listing every value it
+will ever produce does not finish. The asymmetry was measurable before the cause was found:
+`first 1` against a 50-iteration generator ran all 50, against a 10-iteration `for` ran all 10,
+and against five bare yields ran one.
+
+Statements that can yield are now streamed instead. Neither step being skipped is lost: result
+suppression only ever fires for a single-stage pipeline statement, which cannot contain a yield,
+and the last result is maintained by the body's own block execution — matching what a bare
+`yield` already did. The predicate is cached per syntax node in a weak table, because the answer
+is fixed at parse time while the question is asked on every iteration.
+
+**Two defects behind the first.**
+
+1. **`return` discarded the values its own iteration had yielded.** The loop evaluators buffer an
+   iteration (C# forbids `yield` inside a try-with-catch) and flush it after, but the signal
+   escaped past the buffer. `break` was always correct — it is stashed in a flag and the buffer
+   flushed first — so `return` now takes the same route. Before the streaming fix this lost
+   *every* value, not just the last: `for i in [1,2,3,4] { yield $i; if ($i == 2) { return } }`
+   produced nothing at all, then produced `1`, and now produces `1 2`.
+2. **`until` was missing from the yield-detecting walk.** `if`, `for`, `while`, `try` and `switch`
+   were all handled; `until` was not. It cost twice, because the same predicate classifies a
+   function as a generator: a function whose only `yield` sat in an `until` loop was not a
+   generator at all, *and* its loop was collected rather than streamed. The finite case masked it
+   perfectly — collecting a bounded loop terminates and returns the right values — so only the
+   endless form exposed it, which is the shape nobody writes until the endless form works.
+
+**Verification.** 20 tests in `InfiniteGeneratorTests`, every one under a cancellation deadline,
+since the failure signature is non-termination and a regression must fail rather than hang the
+suite behind it. The negative control against the unfixed engine failed 13 of 20; the 7 that
+passed are precisely those written as controls — bare-yield laziness, `break`, finite drain
+across all three loop forms, a non-yielding loop, and `return` from an ordinary function. Full
+capped suite: 3,942 passing, 1 skipped, with the one failure being `TS-P2-48`'s LSP fixture
+flake, which passed 3 of 3 in isolation.
+
+**Noticed, not fixed.** `defer { yield 9 }` drops the deferred value rather than adding it to the
+stream. It terminates cleanly and is a separate question — whether a deferred block should
+contribute to a generator's output at all — so it was left alone rather than decided in passing.
+Separately, `>> file` does not create the file when it does not already exist; found while
+building a probe, unrelated to this item.
+
+## `TS-P1-09` — what a class inherits (August 2, partial)
+
+Four of the item's five claims were probed before any code was changed, and the probing
+rewrote the list. Three are fixed; one does not exist; one remains.
+
+**"Generic bindings are lost" — did not reproduce.** The specification's own `Point2D` example
+runs correctly, as do three-level chains, a base fixed to a concrete type, a constrained base,
+and reordered type parameters. Four earlier probes *appeared* to confirm the claim and every one
+of them was a fault in the probe — a missing `$super(…)`, a constructor colliding with its own
+primary under `TS-P1-18`, quotes nested inside an interpolation. Those cases are now
+characterization tests, because a claim this plausible will otherwise be re-filed.
+
+Two genuine defects did surface from those failed probes, both in the *parser* rather than in
+hierarchy lookup, and both filed separately: explicit type arguments at a member call site
+(`TS-P2-49`) and a comma inside `<…>` followed by `(` (`TS-P2-50`).
+
+**Statics were not inherited at all** — "partial statics" understated it. Every instance lookup
+walked `BaseClass`; not one of the four static entry points did, so `D.s()` reported "Static
+method 's' was not found on class 'D'" while `B.s()` worked. The walk is now the same one the
+instance paths take: the base answers for its own members, which keeps both the storage and the
+`shy` rule with the class that declared them rather than copying either downward. A `shy static`
+also stopped claiming to be "an instance method", which described neither what was declared nor
+why the call was refused.
+
+Assignment is the one static surface still missing, and it is missing everywhere rather than
+just through a subclass: `B.S = 5` does not parse. The write path's base walk is therefore
+correct by symmetry with the read but unreachable today, which is filed as `TS-P2-51` rather
+than claimed as fixed here.
+
+**`vital` was validated against `Properties`** — what the class itself declares — so
+`class D extends B { }` constructed happily with B's required property unset. Validation now
+walks the chain and names the declaring class.
+
+**Overload sets were lost in two separate places, and fixing one alone would have been a trap.**
+The declaration check asked only whether the *name* existed in the hierarchy, so any same-named
+method demanded `overrule`: a subclass could not add `f(a: string)` beside an inherited
+`f(a: int)`, nor even `f(a: int, b: int)`. Matching the full signature fixes that — but doing
+only that turned a rejected declaration into an accepted one that then misbehaved, because
+resolution gathered candidates from the nearest class declaring the name and never merged the
+rest. Measured immediately after the first half: `$d.f(1)` returned `str`, binding the string
+overload by coercion, and the different-arity call failed outright. Accepting a declaration whose
+calls then resolve wrongly is worse than rejecting it, so the second half is part of the same
+change.
+
+The overload set is now gathered across the chain, a nearer class replacing a base method of the
+same signature and a different signature joining the set. The winner then runs **in the class
+that declared it**, not the one the call arrived at — a base method executed from the subclass's
+definition would be handed the subclass's base as its `$super` and skip a level of the chain.
+That is asserted directly rather than assumed.
+
+**Still open: `shy` is visible to subclasses.** A `shy` property or method on a base is readable
+from a derived class's own methods, which private membership should forbid. It is not a
+one-line fix, and the reason is worth recording: `$this` resolves through
+`ToshClassSelfReference`, which starts every lookup at `_instance.Definition` — the *most
+derived* class — with `includeHidden: true`. There is no notion of which class's code is
+executing, so a base method reading its own `shy` member is indistinguishable from a subclass
+reading it. Starting the walk at the executing class instead would fix visibility and break
+override dispatch, since `$this.X` from a base method must still find a subclass's override.
+The fix is to carry the *accessing* class through the lookup and treat `shy` as visible only to
+its declaring class — which means threading it through both halves of every sync/async twin in
+that path. Left for its own change rather than bolted onto this one.
+
+**Verification.** 23 tests in `ClassHierarchyLookupTests`, including the two controls that
+matter — an inherited-only overload set, which always worked, and `overrule` still winning for a
+matching signature. Full capped suite: 3,965 passing, 1 skipped, the single failure being
+`TS-P2-48`'s LSP fixture flake, confirmed by 2 isolated runs and a clean run of all 39 tests in
+its class.
+
+## `TS-P1-09` — `shy` is private to the class that declared it (August 2)
+
+The last of the item's claims, and the one that could not be fixed cheaply. A `shy` property or
+method on a base class was readable from a subclass's own methods.
+
+**Why the obvious fix is wrong.** The walk hands `includeHidden` unchanged to the base, so the
+`true` that lets a class see its own private members also unlocked its parent's. Passing `false`
+when crossing a class boundary looks like a one-line repair and breaks a legitimate case
+immediately: lookups start at the *instance's* class, so a base method reading its own private
+member on a subclass instance crosses that same boundary. Starting the walk at the executing
+class instead trades one defect for another — `$this.X` inside a base method must still find a
+subclass's override.
+
+Both cases are now tests, because either shortcut passes the defect's own test while breaking
+something else.
+
+**What was actually missing was the accessing class.** `$this` resolves through
+`ToshClassSelfReference`, which knew the instance but not whose code was running — so a base
+method reading its own private and a subclass reading that same private were the same query.
+`CreateLocals` is an instance method of the definition, so the executing class was available at
+the point the binding is made; it simply was not carried. `$this` and `$super` now carry it, and
+visibility is decided per class as the walk passes through it:
+
+- `shy` — visible only when the accessing class *is* the declaring class.
+- `guarded` — visible to the declaring class and anything derived from it, which is the whole
+  difference between the two and had to keep working while `shy` was tightened.
+
+The walk still starts at the instance's class, so override dispatch is untouched.
+
+A null accessor means the caller did not say whose code is running and falls back to the previous
+`includeHidden` behaviour. That is deliberate: it keeps introspection surfaces such as REPL
+completion working exactly as before, and confines the new rule to the two references that
+genuinely know the answer. Access from outside a class passes null and was already correct.
+
+**On the threading itself.** The parameter was made required rather than defaulted, so the
+compiler enumerated all 24 call sites instead of leaving one silently on the old behaviour — the
+sync/async twins of every read, write, invoke and listing among them. `GetInstanceMembersAsync`
+is exactly the twin that a defaulted parameter would have missed, since it reaches the visibility
+predicate by its own route. One predicate pair, `CanSeeShy` and `CanSeeGuarded`, serves property
+lookup, member listing and method resolution, so a future modifier cannot be honoured on two
+surfaces out of three (`TS-P1-24`).
+
+**Verification.** 34 tests in `ClassHierarchyLookupTests` now. The negative control reverted the
+four source files while keeping the tests: exactly the two defect cases failed and all 32
+controls passed — including the base-method-reads-its-own-private case and override dispatch,
+which are there to fail against the shortcuts rather than against the defect. Full capped suite
+fully green: 3,977 passing, 1 skipped, no failures.
+
+## `TS-P1-12` — `const` is an immutable binding, and the specification now says so (August 2)
+
+Filed as "`const` accepts arbitrary runtime pipelines and behaves as a readonly binding rather
+than a constant", with a plan to enforce constant-expression rules and give runtime immutability
+to `let`. Two findings changed the shape of the work before any of it was written.
+
+**`let` is not available.** It is already the comprehension binding keyword —
+`[$y for x in $xs let y = ($x * 2) where ($y > 4)]` — specified and implemented. The item's plan
+assumed a free keyword, and there was not one. Discovered by reading what the parser does with
+`let` after `let X = 5` failed with `tosh.runtime.annotation_unknown_type`, which is not a
+diagnostic anyone would connect to comprehensions.
+
+**Decision: correct the specification rather than the implementation.** The specification claimed
+`const` "declares a compile-time constant", that initialisers "must be a literal or constant
+expression", and that "the name resolves to the literal value at use sites rather than through a
+variable lookup". The implementation did none of the three, and the binding form is the more
+useful of the two — `const StartedAt = (date)` says exactly what it means, and enforcing the
+older wording would have broken it with no replacement spelling to offer. A compile-time constant
+stays possible later under its own keyword; if it arrives, the constant-expression rule is
+literals, operators over them, and references to other such constants.
+
+**The real defect was narrower, and probing found it.** Reassignment was refused; *redeclaration*
+was not. `const X = 5` followed by `const X = 6` replaced the constant, and followed by
+`var X = 6` it laundered the constant into a mutable binding that then accepted `$X = 7`. A
+guarantee that any later line can step around by writing one more line is not a guarantee. Six
+other routes were probed and all held: compound assignment, assignment from inside a function,
+assignment from inside a block, and shadowing in nested and function scopes, which is legitimate
+and had to stay legal.
+
+The guard asks its question of the *table the declaration is about to be written to*, not of the
+scope chain, which is what keeps nested shadowing working. That target is resolved by a helper
+shared with `DeclareVariable` rather than by a second copy of the same five-way branch — the
+`TS-P1-24` failure shape, where a guard and the write it guards answer for different destinations
+and drift the first time a modifier is added.
+
+**Immutability is of the binding, not the value.** `$Config.retries = 5` on a constant record is
+allowed; `$Config = {| … |}` is not. Documented and pinned by tests rather than changed: freezing
+values is a different and much larger feature, since every collection and record would need an
+immutable form.
+
+**Verification.** 20 tests in `ConstantBindingTests`; the negative control failed exactly the
+three redeclaration cases and passed the other 17. The rewritten specification section's examples
+were added to the `SpecConformanceTests` corpus, so the prose is executed rather than trusted —
+the corpus is curated rather than harvested, so a new section does not enter it on its own. The
+new `tosh.runtime.const_redeclaration` code carries a source span and code frame like the
+reassignment refusal beside it, and the generated diagnostic reference was regenerated. Full
+capped suite fully green: 4,000 passing, 1 skipped.
+
+## `TS-P2-50` — two defects wearing one symptom (August 2)
+
+Filed a day earlier from probing `TS-P1-09`, as "a comma inside `<…>` immediately followed by `(`
+mis-parses", with two failing spellings offered as evidence of one cause. They had two, and the
+filed diagnosis was right about only one of them. Narrowing each spelling separately is what
+separated them — varying one thing at a time, where the original probe had varied two.
+
+**A base constructor could be given exactly one argument, and generics had nothing to do with it.**
+`extends P<X, Y>($a, $b)` failed; so did `extends P0($a, $b)`, with no type argument anywhere in
+the line; while `extends P<int, int>($a)` parsed. The trigger was the second *argument*. Each was
+read as a pipeline running until the close paren, so the separating comma was neither a terminator
+that pipeline recognised nor a valid continuation of it, and the parse died with "missing pipeline
+separator" pointing at the comma. `$super($a, $b)` and `$this($a, $b)` were unaffected throughout,
+because they are ordinary invocations and take a different path — which is why this survived: the
+spelling most people use for the same job worked.
+
+Arguments are now read the way every other parenthesised argument list is read, stopping at the
+separating comma.
+
+**The tuple confusion was the other half, and was as filed.** In `(new P<int, int>(3, 4)).A` the
+comma between the type arguments read as a top-level separator, so the parenthesised expression
+became a tuple and the member access reported `Member 'A' was not found on type 'ToshTuple'`. One
+type argument parsed, having no comma to misread.
+
+The scanner that decides tuple-or-not now steps over a type argument list. It is worth naming what
+that fix was: the rule existed in **three** scanners and was right in two — both siblings already
+called `SkipAdjacentGenericTypeArguments` at depth zero, and this one did not. Not a new rule,
+then, but the third copy of an existing one catching up (`TS-P1-24`).
+
+**Verification.** 17 tests. The negative control failed 9 of them and passed 8. One case had to be
+moved while writing them up: `extends P0(1, 2)` was placed among the "already worked" controls and
+is a two-argument list, so it was a defect case wearing a control's label — the control run is what
+exposed it, by failing a test that was supposed to pass. Tuples, tuple element access and
+parenthesised comparisons are pinned beside the type-argument cases, since comparison operators are
+the reason angle brackets are ambiguous at all. Full capped suite: 4,017 passing, 1 skipped, no
+failures.
+
+**Still open:** `TS-P2-49`, explicit type arguments at a member call site (`$a.m<int>(11)`), is
+untouched by this. It is not a scanner gap: `MethodCallArgumentSyntax` has no type-argument slot at
+all, so it needs the parser, the syntax node, and the binding path together — its own change.
+
+## Help and doc-comments — a review (August 2)
+
+Reported from use: "`arg` doc comments do not appear in the built in `--help` system." Reviewing
+that path found four defects, each of which discards authored documentation without saying so.
+Three more were found and filed rather than fixed.
+
+**A script had no `--help` at all.** A script declaring `arg`/`flag` inputs answered `--help` with
+`tosh.runtime.unknown_script_flag` — the flag reached the ordinary lookup and missed. The
+descriptions written above each declaration were parsed, stored on the parameter, and had nowhere
+to go. The parser's own comment on the file-level doc-block says it is "surfaced in `--help`",
+which was true of nothing. A script now prints its summary, a usage line spelling required,
+optional and rest arguments differently, and both sections with their descriptions.
+
+Two rules bound it. A script declaring its own `help` or `h` flag keeps it — the built-in answer is
+a default for scripts that have not spoken, never an override of one that has. And arguments after
+a bare `--` are data, for the same reason the ordinary flag parser stops there.
+
+Answering `--help` needed a way to *not run the body*, and there wasn't one: `exit` does not stop a
+script. That is filed as `TS-P2-52`, and a signal exception carries the unwind in the meantime.
+
+**`@param <name>` was swallowed into the description.** The specification teaches `@param=<name>`
+in its doc-comment section and `@param <name>` in its comments section; only the first was
+understood. The second was not dropped but *absorbed*, leaving `Adds two numbers. @param a first
+value` as the summary — which is why it reads as a formatting slip rather than a lost tag. Both
+spellings are now accepted and the specification says so.
+
+**A trailing `@example` block was lost.** The flush that ends an example block at the end of a
+doc-comment sat *inside* the token loop, where it could never fire: the branch accumulating example
+lines ends in `continue`, and every branch reaching the bottom has already closed the block and
+cleared the flag. Dead code. The same block followed by any other tag survived — saved by the code
+that ends a block — which is what made the trailing case look like it worked.
+
+**Documented functions got no structured help.** Parameters were pre-rendered into the `Notes`
+string with embedded newlines. The panel cannot split such a cell into rows, so the text spilled
+past the box border and the closing edge appeared mid-paragraph; `help <name> | to json` reported
+`Arguments: null` for a function that documented its arguments. `@deprecated`, `@since`, `@throws`
+and `@see` were parsed by `DocComment` and then dropped on the way to the topic, so a function
+could declare itself deprecated and `help` would never mention it. All of them now populate the
+fields the renderer already knew how to lay out — the structured slots existed and went unfilled.
+
+**Filed, not fixed:** `TS-P2-52` (`exit` does not stop a script), `TS-P2-53` (`Related` suggestions
+are noise — `help add` proposes `xbox · benchmark · compress`), `TS-P2-54` (a `require`d function
+is invisible to `help`, so a library's doc-comments are unreachable).
+
+**Verification.** 23 tests; the negative control failed 19 and passed 4, those four being the
+genuine controls. One existing test needed updating rather than satisfying: it asserted that
+`Notes` contained the parameter text, which is the pre-rendered shape that broke the panel. Full
+capped suite: 4,058 passing, 1 skipped. The one failure, `Document_symbols_group_same_scope_
+function_overloads`, is in uncommitted `Tosh.LanguageServices` work and was confirmed to fail with
+every change here set aside.
+
+## `TS-P2-60` — addendum: a bare `~` (August 8)
+
+Reported alongside the expansion gap, and a distinct shape. A `~` on its own at the prompt is
+read as a *command name*, not a path:
+
+```
+❯ ~
+⚠  warn  tosh.bind.unknown_command
+│  Command '~' is not a registered builtin or function declared in this source.
+│      ╰─▶ did you mean 'f'?
+```
+
+Two things wrong with that, beyond the expansion itself. The binder's suggestion — "did you mean
+'f'?" — is noise: `~` is not a misspelling of anything, and offering the nearest single-letter
+command for a punctuation token makes the diagnostic read as though the shell has misunderstood
+something subtler than it has. Any suggestion machinery keyed on edit distance should decline to
+answer when the input is not identifier-shaped.
+
+The behaviour itself needs a decision rather than a fix, and it is the one this addendum exists to
+record. A bare `~` could reasonably:
+
+- change to the home directory, the way an `auto_cd`-style shell treats a bare path — which is
+  what the prompt's own `~tosh` abbreviation suggests a reader would expect;
+- evaluate to the home directory *as a value*, printing it the way `pwd` does, which composes
+  with pipelines (`~ | ls`) and keeps `cd ~` as the way to move; or
+- remain an error, but one that names the real problem — "`~` is a path, not a command" — with
+  the suggestion machinery held back.
+
+The third is the minimum. The first two are language decisions, and the choice between them
+should be made deliberately rather than arrived at by whichever the expansion fix happens to
+produce.
+
+## `TS-P2-51` — a static could be initialized and never written again (August 8)
+
+`B.S = 5` did not fail at runtime. It failed to *parse*, with
+`tosh.parser.variable_references_require_dollar` — "write `$B.S = ...` here" — which reads the
+target as a variable someone had forgotten to spell with a `$`. Every static property was
+therefore read-only after its initializer, on the declaring class as much as through a subclass.
+`TrySetStaticMember`, base walk and all, had exactly one caller: the declaration's own
+initialization. Nothing a user could write reached it.
+
+**The parser cannot decide this, and that is the whole shape of the fix.** `B.S = 5` and
+`person.Name = "x"` are the same tokens in the same order. The parser has no symbol table to tell
+a class from a variable, and capitalization is not an answer either — `TS-P2-16` settled that when
+`Geo.area 2` and `geo.area 2` had to behave alike. So the target is now handed over unresolved and
+the engine, which does know, either performs the static assignment or raises the missing-`$` hint
+itself.
+
+That is a phase move, not a lost diagnostic, and it lands where the matching *read* already
+answered: `person.Name` on its own has always produced
+`tosh.runtime.variable_reference_requires_dollar` at runtime. A write now diagnoses where its read
+does instead of one phase earlier, which is one fewer rule rather than one more.
+
+**The suite caught the precedence question that reading the code did not.** Resolving the head as
+a type first looked obviously right, and passed in isolation. Under the full suite it failed:
+`person.Name = "x"` stopped reporting the forgotten `$` and reported a static assignment failure
+instead, because a compiler test had emitted an unrelated CLR `Person` into the process and type
+resolution matches simple names across every loaded assembly, ignoring case. So the variable table
+is asked first and wins. A wrong hint costs a message; a wrong static write mutates state nobody
+asked to change. The collision is now a test that asserts both halves — that the type really does
+resolve, and that the assignment still names the `$` — because a precedence test whose collision
+has quietly stopped existing is a test that passes for the wrong reason.
+
+**The rules governing the write are the instance rules, deliberately.** A custom setter runs, a
+getter-only property refuses, `fixed` refuses after initialization. `ResolveInstanceMemberAssignment`
+already made those three decisions for instance properties and the static path now makes the same
+ones; a static that answered differently would be a second set of rules to remember for no reason.
+Declaration-time initialization goes through its own entry point rather than a boolean flag, so
+`fixed static prop S = 1` can still reach 1 — the two callers mean genuinely different things, and
+a flag invites passing the wrong one.
+
+**The CLR half came with it, because leaving it out would have created a new bad path.** Reading a
+CLR static has always worked; the write had no branch at all in `AssignSegment`, so once the
+parser stopped rejecting `System.Console.Title = "x"` the expression would have reached reflection
+looking for an *instance* member on `System.RuntimeType` and reported it as missing. Assignment now
+mirrors `ResolveSegment`'s static branches in the same order, splitting the path at the longest
+prefix that names a type — which is what makes `System.Math.PI` find the type rather than stop at
+the namespace, and `Outer.Inner.V` find the nested class rather than treat `Inner.V` as a member
+path. A `const` or `readonly` field is reported as read-only rather than missing, since it can
+still be read; the same question is asked of a shell type before it answers, so `F.A = 2` on an
+enum says read-only instead of sending the user to look for a typo.
+
+**Found on the way, not fixed here.** A `shy static prop` is readable from outside the class that
+declared it — `TryGetStaticMember` checks `shy` for nested types and not for properties. Writes
+now inherit that leak rather than closing it, because a `shy` static that refuses writes while
+permitting reads would be a worse asymmetry than the one already there. Filed as `TS-P2-61`.
+
+Also regenerated: `docs/diagnostic-codes.md`, its LaTeX appendix, and the C# manifest had drifted
+several commits behind the source. Three of the four codes the regeneration adds
+(`tosh.parser.expected_nested_type`, `tosh.runtime.nested_type_not_declared`,
+`tosh.runtime.unknown_type_argument`) belong to the nesting and type-argument work already
+committed; only `tosh.runtime.unknown_static_assignment_target` is new here.
+
+## `TS-P2-60` — the tilde, and a claim that was wrong (August 8)
+
+Filed as "`~` is expanded for external commands but not for builtins". Measuring it first, before
+touching anything, showed that reading was inverted:
+
+```
+❯ echo ~              → ~            (builtin, literal)
+❯ /bin/echo ~         → ~            (external, literal)
+❯ realpath ~          → /home/komrad
+❯ which realpath      → realpath  builtin
+                         realpath  external  /usr/bin/realpath
+```
+
+`realpath` resolves as a *builtin* that path-resolves its own arguments, which is the only reason
+it looked like the external route worked. Nothing expanded a tilde at the shell's own argument
+layer at all. `cd`, `ls`, `realpath` and `read-file` expanded one because each calls
+`PathUtilities.ResolvePath`; `echo` and every external process did not, because nothing on the way
+to them ever looked. So the rule was not "builtins versus externals" — it was that **whether `~`
+means the home directory was decided separately by every command that happened to take a path**,
+and a command with no interest in paths could never see one.
+
+**Expansion now happens once, where globbing already happened.** The argument-expansion step ran
+only for commands implementing the implicit-glob contract; it now runs for every command, applying
+tilde expansion to all of them and globbing to the ones that asked. Tilde first, so `~/*.log`
+names a real directory before there is anywhere to look. Only barewords: `echo "~"` stays literal,
+and so does a variable holding one, matching every POSIX shell — expansion is lexical, so it
+applies to the word as written.
+
+**`~name` resolves, and an unresolvable one is refused.** A configured directory alias wins,
+because someone wrote it down on purpose and the accounts on the machine are not their doing;
+otherwise the name is looked up in the passwd file, parsed rather than shelled out to, since a
+shell that spawns `getent` to expand an argument pays for it on every word. A name matching
+neither is `tosh.runtime.unknown_tilde_target`, per the decision recorded for this item, rather
+than two characters and a name handed to a command that will report whatever it makes of them.
+
+**One rule, two policies.** The expansion itself lives in a single function that reports what it
+did — expanded, not a tilde, or an unknown name — and both callers read the same answer. Argument
+expansion refuses an unknown name; path resolution inside a command leaves it alone, and a command
+head leaves it alone too, because resolution has its own account of a name it cannot find and two
+diagnostics competing to explain one word is worse than either. The *rule* existing once is what
+matters; the policy differing by caller is a decision, not a divergence (`TS-P1-24`).
+
+**The bare `~` was a second defect, in a third place.** `Binder.LooksLikeExplicitPath` knew `/` and
+`.` but not `~`, so `~/projects` passed only by containing a separator while a bare `~` fell
+through to the typo machinery. That is where "did you mean 'f'?" came from — the reporter has a
+`func f` in their profile, and `~` is one edit from `f`.
+
+**And the first draft of that test was worthless.** It bound `~` against a default registry, found
+no diagnostic, and passed — against the *unfixed* binder too, because a default registry has
+nothing within one edit of a single punctuation character. The test now registers a one-character
+command first and asserts the collision is real before asserting the rule declines it. A test whose
+premise has quietly stopped holding is a test that passes for the wrong reason, which is the whole
+argument for running controls.
+
+**Writing the specification found two more.** The section claims a bare `~` behaves like the
+absolute path it stands for. Executing that claim with `auto_cd` off showed it did not: `/tmp`
+reported `external_command_is_directory` while `~` reported `unknown_command`, because command
+*heads* were never expanded — one input, described two different ways depending on how it was
+spelled. And the accompanying help said "did you mean 'bg'?", which located a **second** suggestion
+machine: `ToshEngine.ResolveUnknownCommandHelp` has its own Levenshtein search, and fixing the
+binder's had left it answering. The name-shape rule now lives on the command registry that both of
+them already hold.
+
+The help text also named `$tosh.Config.DirectoryAliases`, which does not exist — the real spelling
+is `$tosh.Config.Shell.Dirs`. Caught by running the advice rather than reading it, and there is now
+a test that executes the spelling the diagnostic suggests, because advice that does not work costs
+a reader more than the original error did.
+
+**Deliberately not expanded:** a tilde anywhere but the first character. `notes.txt~` is a backup
+file, and `--out=~/x` keeps its tilde — POSIX expands after `=` in some assignments, and matching
+that is a separate decision rather than something to arrive at by widening a condition.
+
+## `TS-P2-54` and `TS-P2-53` — what a script can see of itself (August 8)
+
+`TS-P2-54` was filed as "a `require`d function is invisible to `help`, although the function is
+callable". Measuring it first corrected the reading twice over.
+
+```
+main.tosh:                          -c:
+  ## Doc.                             ## Doc.
+  func localfn() { return 1 }         func localfn() { return 1 }
+  localfn        → 1                  localfn        → 1
+  help localfn   → not found          help localfn   → the panel
+```
+
+`require` had nothing to do with it. A function declared in a **script file** is invisible to
+`help` however it got there — required, sourced, or written on the line above — while the identical
+source pasted at `-c` works. And `help` was not alone: `which localfn` printed nothing at all, and
+`time "localfn"` reported that the target was not executable, both for a function the same script
+had just called.
+
+**The cause is one line of scoping.** `DeclareCommand` registers a `func` without `global` or
+`export` into the innermost lexical scope; running a script pushes one; `HelpCatalog` reads
+`runtime.Commands`, the global registry. At `-c` the scope stack is empty, so the same declaration
+goes global — which is exactly why the defect vanished when the script was pasted rather than run.
+
+So the fix is not in `help`. `CommandContext` now carries an `IScopedCommandView`, the command-side
+twin of the `ScopedTypeResolver` it already carries for precisely this reason, and `help`, `which`,
+`apropos` and `time` read it instead of the registry. `ShellCommandRegistry` implements the
+interface itself, so a caller with no lexical scope — the prompt, the TUI, the language server —
+passes the registry rather than a wrapper. The view is a snapshot taken per invocation, so a
+command reports the scopes it was called from rather than whatever has been pushed since.
+
+**The filed premise was also wrong about `require`.** A plain `func` in a required file is not
+callable afterwards at all: `require` imports `artifact.Exports`, and only `export func` populates
+those. The specification says `require "./utils.tosh"` executes the script in the current scope,
+which is what `source` does and `require` does not. Filed as `TS-P2-62` rather than decided here —
+it is a question about what `require` is for, not a defect with an obvious answer.
+
+**The first draft of these tests was worthless, and the control caught it.** The harness called
+`ExecuteToListAsync(text, scriptPath)` — passing a script *path* as the source name, which changes
+nothing: that is the `-c` path, where the defect never appeared. Six of the seven tests passed
+against the unfixed sources. Running the file through `ExecuteScriptFileAsync`, which is what
+pushes the scope, is the difference between reproducing the defect and describing it. That is twice
+in two days that a test harness has failed to recreate the condition it was written for, and both
+times the negative control was the only thing that said so.
+
+### `TS-P2-53` — a relationship has to be earned
+
+Same review, different mechanism. `ScoreRelated` gave 40 points for sharing a category, 8 for
+sharing a kind, and 8 per shared word — so two topics that shared *nothing but a category* scored
+48 and qualified. Every user-defined function lands in `Scripting`, which is why a two-line
+`func add` came back related to `xbox · benchmark · compress · cpu-info · dbg`. All 342 shipped
+topics had a Related list, whether or not they had anything to relate to.
+
+Content is now the gate: two topics sharing no distinctive word score zero, whatever else they have
+in common. Category and kind still rank candidates that qualify — the job they can actually do.
+"Distinctive" is measured against the corpus rather than a hand-kept stopword list: a word in more
+than a tenth of all topics is furniture, and a shared one has to appear in at least two places
+before it counts. Usage strings were dropped as a token source, because they are mostly type words
+— two unrelated commands both taking an `int` is not a relationship.
+
+Three thresholds were tried and measured rather than reasoned about:
+
+| rule | `add` | `each` | `min` | topics with relations |
+|---|---|---|---|---|
+| before | `benchmark, dbg, unless, with-retry, assert` | `parallel, flat-map, map, where, filter` | `max, frequencies, median, percentile, stdev` | 342 / 342 |
+| idf-weighted, usage included | `is, set-prop, cast, constructors, date` | `parallel, from, to, lsblk, require` | — | 342 / 342 |
+| ≥2 rare shared, rare ≤ ¼, no usage | `∅` | `parallel, flat-map, map, where, filter` | — | 337 / 342 |
+| ≥2 rare shared, rare ≤ ⅒, no usage | `∅` | `parallel, flat-map, map, where, filter` | `∅` | 318 / 342 |
+| **rare OR proportional (Dice ≥ 0.45)** | **`∅`** | **`parallel, flat-map, map, where, filter`** | **`all, any, max, median`** | **328 / 342** |
+
+The second row is why weighting by rarity alone was abandoned: rare words outranked category so
+heavily that `each` lost `map` and `where` and gained `lsblk`.
+
+**The fourth row shipped, and it was wrong — caught by being asked to demonstrate it.** Describing
+the two dozen newly-empty topics as "terse one-liners with nothing genuine to point at" was
+generous to my own change and false about the important ones. `min`'s old list was
+`max · frequencies · median · percentile · stdev`, which is exactly what a reader of `min` wants.
+It vanished because `min` and `max` are documented as "Returns the minimum/maximum pipeline value"
+— *every* word they share is the shell's house vocabulary, so a rarity filter discards all of it.
+Rarity measures the wrong thing for a corpus with a documentation style.
+
+Hence two routes to qualifying, in the shipped row. Rare shared words remain the strong signal for
+topics that describe the same subject in their own words. Proportional overlap — the Dice
+coefficient of the two token sets — catches the opposite case: descriptions that are *mostly the
+same words*, however common those words are. `min` and `max` share four of the six they have;
+`add` and `xbox` share almost none. Dice is scale-free, so a formulaic one-liner is not penalised
+for being short. 0.45 was measured, not picked: at 0.5 `min` reaches `max` but not `median`, whose
+description says "values" where `min` says "value"; at 0.4 `first` and `last` crowd `median` out.
+
+Fourteen topics still end with no computed relations — `cp`, `ln`, `chown`, `sleep`, `tr`, `ping`
+and other single-purpose commands with nothing in the corpus to point at, plus `add` itself, which
+is the reported case. That is the trade this item asked for. A topic wanting relations the corpus
+cannot infer declares `@see`.
+
+**Also found, not fixed:** a `HelpTopic` renders as a bare `[HelpTopic]` type header rather than its
+panel whenever it is not the only value a script produces. `help ls` alone panels; `echo one`
+followed by `help ls` does not. Pre-existing — the installed binary does the same — and the same
+root/nested split `TS-P3-10` decided for collections, except that the nested form here loses the
+rendering rather than choosing a terser one. Filed as `TS-P2-63`.
+
+## `TS-P2-55` — casting to a declared type, and two defects behind it (August 8)
+
+`cast Fuel 8` failed with "Unable to resolve type 'Fuel'". `cast` resolved its target through CLR
+type lookup alone, and a name declared in ToastScript is never a CLR type, so the conversion path
+was never reached at all. Casting an enum member *to* a number had been fixed earlier; this is the
+direction that was still missing, and the pair is what lets an enum leave the type system and come
+back.
+
+**Two conversions exist, and no more.** An enum converts from a member name or a backing value.
+Every other declared kind — class, struct, record, union, interface, trait — converts only from a
+value that already is one, subclasses included, decided by the same walk `is` uses so the two
+cannot come to disagree. `cast` is not a constructor, and "turn this record into that class" is a
+language decision rather than a repair.
+
+**Resolution is CLR-first, and that ordering was learned rather than chosen.** Asking the
+declaration side first broke the command's own first documented example: `cast list<int>` resolves
+to a *shell* descriptor for the builtin list type, so it stopped converting and started reporting
+"this value is not a 'list<int>'". Declared types now fill the gap where the CLR resolver finds
+nothing, which is exactly the gap this item is about, and a declaration cannot silently change what
+an existing script's `cast String` means.
+
+**Failures are told apart.** "I misspelled the type" and "this value will not convert" arrived as
+the same `command_failed` before, so neither could be distinguished from the diagnostic.
+`tosh.runtime.unknown_cast_target` names the first; `tosh.runtime.cast_failed` names the second,
+and for an enum it lists the members that do exist:
+
+```
+❯ cast Fuel "Plutonium"
+✖  error  tosh.runtime.cast_failed
+│  Could not cast 'Plutonium' to 'Fuel': 'Fuel' has no member named 'Plutonium'
+│  (members: Mox, Uranium).
+```
+
+### Two defects found underneath
+
+**A declared type is invisible to a command when declared in a script.** `describe-type Fuel`
+answered "Unable to resolve type 'Fuel'" for an enum two lines above it in the same file, and
+worked when the same source was pasted at `-c`. This is the type-side twin of `TS-P2-54`, found the
+same day and for the same reason: `runtime.Classes` holds *top-level* declarations, and a script's
+land in its scope. `CommandContext` now carries an `IShellNamedTypeView`, which the engine
+implements over the same `TryGetNamedType` that resolves a type name in source — one rule, not a
+second walk that would drift. Unlike the command view it resolves live rather than from a snapshot,
+because a command resolves a type name while the scopes are still the caller's.
+
+**`cast`'s value arguments were being parsed as type names.** The parser keeps a list of commands
+whose bareword arguments name types — `describe-type`, `members`, `methods`, `constructors`,
+`help`. `cast` was in it, and `cast` is the odd one out: it takes a type and *then values*. So
+`cast int Fuel.Uranium` handed the conversion the literal text "Fuel.Uranium", while
+`echo Fuel.Uranium` resolved the very same spelling to the enum member. Not an enum quirk —
+`cast double Math.PI` was equally literal. The rule is now asked about a position, and the two
+argument loops that know which position they are at are the only callers that opt out.
+
+That one was found by writing the specification and executing its examples, which is the third
+time this week that running the documentation rather than reading it has turned up a defect the
+implementation work had not.
+
+## `TS-P2-59` — three defects behind one wrong premise, and `TS-P2-57` withdrawn (August 8)
+
+### `TS-P2-57` does not reproduce
+
+Filed as "`>>` does not create the file it appends to". It does — `out>>`, `o>>`, `err>>` and
+`o+e>>` all create a missing target, from `-c` and from a script, at absolute and relative paths,
+and identically on the installed binary. The filed repro, `"x" | to text >> missing.txt`, combined
+two mistakes: bare `>>` is not a redirection operator in this language (the spec lists `out>>` and
+`o>>`, because `>` is a comparison), and `to text` is not a format, so the pipeline failed before
+any redirect ran. The recorded "no such file or directory" most likely came from redirecting into a
+missing *directory*, which is correctly a diagnostic and which the item's own intent line already
+excluded.
+
+Two real findings came out of checking, both pre-existing: redirection writes a **UTF-8 BOM**
+(`ef bb bf` before the first byte of text, so a redirected `#!` script is not executable), filed as
+`TS-P2-64`; and a redirection failure reports **`TOSH400`** rather than a `tosh.*` code, which keeps
+it out of the generated diagnostic reference and out of reach of `hush`, filed as `TS-P2-65`.
+
+### `TS-P2-59` was also wrong about what was broken
+
+Filed as "tuple destructuring does not parse". `var [a, b] = (1, 2)` already bound 1 and 2, and
+`var { a, b } = …` already existed. Three narrower things were actually wrong, and the third was
+invisible.
+
+**The parenthesised declaring form did not exist.** `(a, b) = …` already assigned to existing
+variables, and `(1, 2)` is how a tuple is written, so `var (a, b) = (1, 2)` is the spelling a
+reader reaches for first. It failed with `tosh.bind.unknown_command` for `var` — a diagnostic that
+names nothing about the actual problem. Parentheses now parse as a positional pattern exactly as
+brackets do, routed through the same destructuring rather than a parallel one.
+
+**The two destructurings disagreed about tuples.** The declaring form unpacked arrays, lists,
+tuples and any enumerable; the assigning form unpacked arrays alone. So `var [a, b] = (1, 2)` bound
+1 and 2, while `(a, b) = (1, 2)` bound the whole tuple to `a` and null to `b`, silently. One
+language, two destructurings, different answers — and the consequence nobody had noticed is that
+**a swap was broken**: `(a, b) = ($b, $a)` builds a tuple, so it set `a` to the pair and `b` to
+null. One unpacking rule now serves both (`TS-P1-24`).
+
+**`const` was accepted and ignored.** `const [A, B] = [1, 2]` declared two perfectly mutable
+bindings, so `$A = 9` succeeded. The keyword parsed, reached the declaration, and was dropped on
+the floor — pre-existing in the bracket and brace forms, and something the new parenthesised form
+would have inherited.
+
+### The arity decision, and the test that argued against it
+
+The item asked for an arity mismatch to be reported. Implementing that broke
+`LanguageFeatureTests.TupleAssignment_handles_extra_and_missing`, which deliberately pinned the
+opposite: `($x, $y, $z) = [1, 2]` leaving `$z` null, and `($x, $y) = [100, 200, 300]` dropping the
+300. Reading further, the specification documents the same leniency as a feature —
+`var [first, second] = $fiveItems` is a worked example.
+
+Rewriting that test to demand a diagnostic was the first attempt and it was wrong: it would have
+made the specification's own example an error. The distinction that resolves the conflict is a real
+one rather than a compromise. **An array is variable-length**, so reading a prefix of one is a
+meaningful request and stays legal. **A tuple has a fixed, declared shape**, so naming two targets
+for three elements is a miscount every time, and absorbing it silently is what turns that miscount
+into a `null` reported three lines later. The check applies to tuples alone, in both the declaring
+and the assigning form, and the pre-existing test keeps its original assertions with a note saying
+why it still holds.
+
+## `TS-P2-61` – `TS-P2-65` — five small items, and one that grew (August 8)
+
+Four of these were contained. `shy` was not.
+
+**`TS-P2-64`, the BOM.** `Encoding.UTF8` is a `UTF8Encoding` constructed to emit the identifier,
+so every redirected file began `ef bb bf`. `write-file` was already writing clean UTF-8, so the two
+disagreed and only redirection was wrong. The test asserts leading *bytes* rather than text on
+purpose: read back as a string the BOM compares equal, which is exactly how three junk bytes went
+unnoticed in front of every redirected file. The concrete cost, now a test: a redirected `#!`
+script would not execute.
+
+**`TS-P2-65`, the code.** `TOSH400` sat outside the `tosh.<namespace>.<name>` scheme, so
+`extract_diagnostic_codes.py` — which scans for exactly that shape — never saw it, and `hush
+<code>` could not reach it. Both emit sites now raise `tosh.runtime.redirection_target_unavailable`
+with help naming the usual cause: redirection creates the file but not the directories above it.
+No other `TOSH<nnn>` codes remain.
+
+**`TS-P2-63`, the help panel.** Two causes, not one. `DisplayEngine.RenderMany` fired the bespoke
+renderer only when a help topic was the *sole* value; and `StreamingTableSink` checked for bespoke
+types only inside its `!_isTable` branch, so a topic arriving after a table had started was
+flattened into it. A batch of nothing but help topics still tabulates — that is how two topics are
+compared, it reads well, and it was deliberate.
+
+**`TS-P2-62`, decided.** `require` imports exports; the specification's "executes the script in the
+current scope" was simply wrong. Keeping it that way is what makes `export` mean anything, and
+`source` already provides the other behaviour — that is the difference between the two spellings. A
+file required for its exports that declares none now says so.
+
+Proving that turned up a second defect: **the binder refused to run a call to an imported
+function.** It resolves command names against the registry plus the functions declared in the same
+source, and a require's exports are in neither, so `require "./lib.tosh"` followed by `shared`
+reported `tosh.bind.unknown_command` — for a function that was present and callable. `echo (shared)`
+worked, because only command position is inspected, which made it look like a resolution problem
+rather than a binder one. The binder now holds back for any source that imports: a missed typo
+costs a worse runtime message, a false positive costs a program that will not run. Reading the
+required file to learn its exports is the real fix and belongs with `TS-P3-12`, where the language
+server's index needs to chase the same targets.
+
+### `TS-P2-61` — and the parameter that found what the first fix missed
+
+`shy` was checked for a nested type and ignored for a static property, so
+`class B { shy static prop S = 1 }` answered `B.S` from anywhere, and accepted `B.S = 9` too. One
+modifier cannot mean two things depending on which kind of static member wears it.
+
+Instance visibility is decided by *how the object was reached*: `$this` carries the declaring class
+as its accessor, and a reference obtained from outside carries none. A static access has no such
+carrier — `B.S` looks identical wherever it is written — so the engine has to answer "who is
+asking?" itself. It now tracks the class whose code is running.
+
+**The first attempt marked only method bodies and construction, and the suite found the hole.**
+Four tests failed, all of the shape `shared prop ViaProp: int => Holder.p.X` — a computed static
+property whose getter reads a shy static. A property accessor is class code too, and so are
+property initialisers, and so is a default-value expression.
+
+Rather than hunt for the rest by hand, the declaring class became a **required parameter** on all
+four class-code entry points, so the compiler enumerated the callers. It found thirteen, including
+three in `ToshStructDefinition`, `ToshRecordDefinition` and `ToshEventDefinition` — which are not
+classes at all, and correctly pass nothing. That is the third time this programme has used a
+required parameter to make the compiler do the searching, and the third time it found a site that
+reading would have missed.
+
+The nested-type check turned out to be wrong in the opposite direction: it threw whenever the type
+was shy, with no notion of the accessor, so a class could not reach its own shy nested type by
+qualified name. Both now ask the same question.
+
+**A note on the board:** three items are marked `Withdrawn`, and `stabilization-counts.tosh` counts
+anything not starting with `Complete` as open. The "open" figure therefore includes items that need
+no work.
+
+## `TS-P2-58`, `TS-P2-48`, `TS-P3-13` — a decision, a collision, and twenty broken rows (August 8)
+
+### `TS-P2-58` — refused, not delivered
+
+A `yield` inside `defer` produced nothing, and the deferred block ran, so its side effects landed
+while its value vanished. That combination is what made the silence look like correct behaviour.
+
+Refused at parse time, per the decision recorded for the item. A deferred block runs while the
+function unwinds, after a consumer may have stopped pulling; there is no stream for it to join and
+no ordering that could be written down honestly. The diagnostic points at the `yield` and says so.
+A `yield` inside a function *declared* in the deferred block belongs to that function and is left
+alone, which is the one distinction the walk has to make.
+
+### `TS-P2-48` — the filed cause was wrong, and so were my first two theories
+
+Filed as a build shelled out from inside a parallel run. That is not it: the build is a `Lazy` and
+happens once per process.
+
+**First theory: the negative-result cache.** Plausible, and wrong. **Second theory: the resolver's
+new-assembly rescan**, which walks `GetAssemblies()` from a remembered *count* — an offset into an
+array whose order the runtime does not promise, in a list the index de-duplicates by name. That
+reasoning still looks sound to me, and the fix I wrote for it made the suite *worse*: it widened
+the rescan enough that `cast` on a declared class started resolving to unrelated CLR types. Withdrawn.
+
+**Instrumenting the failing run answered it in one line.** `Tosh.LspFixture.Widget` resolved
+perfectly; the fixture assembly was loaded; the negative cache was empty of it — and completion
+still returned five members of `System.Object` plus a `Name` field. So resolution was not failing.
+Something else was answering.
+
+`CrossTestTypeLeakTests` emits `class Widget { prop Name = "emitted" }` into the default load
+context, permanently, and the LSP resolves the bare name `Widget` against loaded assemblies. That
+file's own doc comment records the collision as "the fifth sighting" — it had been seen and written
+down, and the probe kept the name anyway.
+
+Two repairs. The probe is renamed, because a test that emits a type claims that name for the rest
+of the process and must not take one another test wants. And **this session's own tests had the
+same defect**: `CastToDeclaredTypeTests` used `class B` and `class D`, which is the worst possible
+choice for a `cast` that resolves CLR-first — it was the last failure standing after the first fix,
+and it was mine. Twelve consecutive parallel full-suite runs are green.
+
+The defect underneath is real and now filed as `TS-P2-66`: `Resolve` consults an explicit `using`
+only *after* an unqualified global scan, so a stated intention loses to an incidental match.
+Reordering it is a broad change — `DefaultImplicitUsings` carries a dozen namespaces — and after
+one over-broad resolver change had already bitten me today, it belongs in its own item with its own
+measurements rather than in the corner of a flake fix.
+
+### `TS-P3-13` — twenty rows, not one
+
+The item recorded one truncated row. Counting found **20 of 126 malformed**, and the consequence is
+worse than a rendering glitch: `close-items.tosh` and `append-to-item.tosh` address cells by
+position, so in every damaged row they were writing to the wrong cell.
+
+The interface was the defect. A caller that hands over a finished `| a | b | c |` cannot say which
+pipe is a separator and which is content, so `file-item.tosh` now takes the cells separately,
+escapes each, and refuses to write a row that is not six cells. That guard immediately caught a bug
+in its own first draft: `Split("|")` counts an escaped `\|` as a separator too, so the count was
+wrong until separators were counted as pipes *not* preceded by a backslash — the same correction
+`append-to-item.tosh` and the new `check-table-rows.tosh` needed.
+
+All 20 rows are repaired. Nine split cleanly at the last separator; three had pipes inside the
+*intent* as well and were done by hand from a field dump rather than by a rule that would have
+guessed wrong. `TS-P1-33` had lost its intent cell entirely — recovered from the commit that filed
+it, which is the argument for a checker that runs before the damage is a year old.
+
+## `TS-P2-68` — the layer the last fix stopped short of (August 8)
+
+Reported from use, against a real library rather than a probe:
+
+```
+❯ ToastLib.Filesystem.GetExtension "~/.config/tosh/profile.tosh"
+.tosh
+❯ help ToastLib.Filesystem.GetFileName
+✖  Help topic 'ToastLib.Filesystem.GetFileName' was not found.
+```
+
+Callable and invisible at the same time. `which` on the same name printed nothing, the bare
+`GetFileName` failed too, and `help ToastLib` had no topic — so a library organised as nested
+modules could not be explored from the shell that was running it.
+
+**This is `TS-P2-54` one layer out, and the earlier fix is the reason it was worth filing rather
+than guessing at.** That change gave introspection a view of the caller's lexical scopes because
+`HelpCatalog` read only the global registry. A module's exports live in neither: they are in the
+module's own export table, which the engine reaches through
+`TryResolveModuleQualifiedCommand`. The view now carries them, resolved by that same walk rather
+than a second one written beside it — the whole point of the exercise being that two resolution
+rules are how they come to disagree.
+
+**Two decisions, both taken by the reporter.** A bare member name resolves when exactly one module
+exports it; when two do, it is refused rather than guessed at, because qualifying is always
+available and choosing silently answers a question nobody asked. And a module now has a topic of
+its own, listing its commands, nested modules, types and variables — there was none before, so a
+reader had to already know a member's name to ask about anything.
+
+**One surprise in the fixing.** `help ToastLib.Filesystem.GetFileName` worked as soon as the view
+did, but `which` on the identical name still printed nothing — while `which "…"` in quotes worked
+perfectly. The parser keeps a list of commands whose bareword arguments are read as *names* rather
+than evaluated, and `help` was on it while `which` was not. So `which` was being handed the
+resolved command object and asking it for a name. It joined the list.
+
+Also confirmed while testing, and worth recording because it bears on `TS-P2-67`: the `@param=name`
+separator works correctly for functions. The `=` breakage filed there is confined to `@arg` and
+`@flag` in the subcommand path, so the reporter's own `## @param=path The path to the file` renders
+as written now that the topic can be found at all.
+
+## `TS-P2-67` — the tags worked in one place, and the filing was wrong about which (August 8)
+
+Found by executing a session summary's examples instead of restating them. `@arg` and `@flag`
+resolved in exactly one placement, and everywhere else the doc-comment's *summary* became the
+description of every input — so a script documenting three arguments showed one sentence three
+times, and the tags a reader had written were parsed and discarded.
+
+**The filing got the separator half wrong, and measuring again fixed the description before the
+code.** It recorded `@arg name=description` as "the `=` separator the design named first". It was
+not: `=` had always belonged between the *tag* and the body — `@arg=name description` — and the
+name-to-description separator was a space and only a space. Which is exactly the distinction no
+reader would guess, and the reason both spellings now work.
+
+Three causes, none of them the one filed:
+
+- **A comment belongs to the declaration that follows it.** So a block documenting several inputs
+  reached only the first: `## @flag clean - remove artefacts` written above `arg target` described
+  nothing at all, because the tag lived on the argument's comment while the flag was a separate
+  statement. Tags are now gathered from every declaration in a level and overlaid with the block's
+  own comment, which keeps the precedence already decided — a subcommand-level tag wins.
+- **A subcommand-free script never applied its own tags.** The subcommand path had
+  `ApplyDocumentedDescriptions`; the plain-script usage writer did not call it.
+- **The name ended at the first space.** `@arg name=description` therefore read
+  `name=description`'s first word as the name and matched no input; `@arg name - description` kept
+  the hyphen, and the rendered help read "- what to build".
+
+**One test-harness correction worth recording.** Three of the subcommand tests failed on first
+run, and the code was right: a subcommand answers `--help` with a `HelpTopic` *value* that the CLI
+renders through the display engine, while a plain script writes its usage straight to the output
+stream. Asserting only on the output stream tested nothing for half the cases. The harness now
+reduces both shapes to text.
+
+## `TS-P2-66` — measuring a change that touches every type name (August 8)
+
+`Resolve` asked the unqualified global scan first and the imports only when it found nothing. That
+scan reaches the platform index and every loaded assembly, private nested implementation types
+included, so a `using` — a statement of intent — lost to whatever the runtime happened to be
+holding:
+
+```
+Complex     → System.Threading.PortableThreadPool+HillClimbing+Complex
+BigInteger  → System.Number+BigInteger
+SpinLock    → System.Threading.ReaderWriterLockSlim+SpinLock
+Error       → Interop+Error
+```
+
+**The measurement came first, and it is the reason this was safe to change.** The reorder touches
+every type name in the language and `DefaultImplicitUsings` carries a dozen namespaces, so the
+question was not "is imports-first more correct" — obviously it is — but "what else moves". A probe
+compared both orders across the 16,727 simple names the platform index knows:
+
+| | count |
+|---|---|
+| both orders resolve, to **different** types | 33 |
+| resolve through the direct scan only | 15,544 |
+| resolve through the imports only | 0 |
+| both orders agree | 1,150 |
+
+Every one of the 33 moved toward the public type an import names. Nothing resolves through imports
+alone, so putting them first cannot take an answer away — it can only change which of two answers
+is given. That is a blast radius of 33 names, all improvements, and it is why this landed in one
+change rather than the incremental widening that went wrong the first time this file was touched.
+
+Three of the 33 do not end at the imported type after the change: `Error` answers
+`Tosh.Runtime.ToshError` and `Complex` answers the builtin `ToSh.Complex`, because an earlier
+import and the shell's own types are consulted first. Both are the intended precedence rather than
+exceptions to it.
+
+**A test that proved nothing, caught by the control.** The first version asserted `BigInteger`
+alongside `SpinLock` and `FileStatus`. The control showed it passing against the unfixed resolver:
+the direct scan and the imports did disagree about it, but `Resolve` already reached
+`System.Numerics.BigInteger` by another route. It moved to the "unchanged" theory, where it is
+true, rather than staying where it looked like evidence.
