@@ -818,8 +818,7 @@ public sealed class ToshSdkBuildTests
 
     private static string GetCliPath(string projectRoot)
     {
-        var cliName = OperatingSystem.IsWindows() ? "Tosh.Cli.exe" : "Tosh.Cli";
-        return Path.Combine(projectRoot, "src", "Tosh.Cli", "bin", "Debug", "net10.0", cliName);
+        return ToshCli.ExecutablePath;
     }
 
     private static string AppHostFileName(string assemblyName)

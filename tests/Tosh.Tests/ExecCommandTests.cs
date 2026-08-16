@@ -166,8 +166,7 @@ public sealed class ExecCommandTests
     private static string GetCliPath()
     {
         var projectRoot = GetProjectRoot();
-        var cliName = OperatingSystem.IsWindows() ? "Tosh.Cli.exe" : "Tosh.Cli";
-        return Path.Combine(projectRoot, "src", "Tosh.Cli", "bin", "Debug", "net10.0", cliName);
+        return ToshCli.ExecutablePath;
     }
 
     private static string GetProjectRoot()

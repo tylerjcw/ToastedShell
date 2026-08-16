@@ -49,7 +49,7 @@ public sealed class TtyCaptureTests
             "script(1) is required to allocate a pty; without one these tests would only "
             + "re-verify the non-TTY path that already worked");
 
-        Assert.True(File.Exists(CliPath), $"CLI not built at {CliPath}");
+        ToshCli.RequireBuilt(CliPath);
         return false;
     }
 
@@ -72,8 +72,7 @@ public sealed class TtyCaptureTests
     private static string ProjectRoot =>
         Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../"));
 
-    private static string CliPath =>
-        Path.Combine(ProjectRoot, "src", "Tosh.Cli", "bin", "Debug", "net10.0", "Tosh.Cli");
+    private static string CliPath => ToshCli.ExecutablePath;
 
     /// <summary>
     /// Runs <paramref name="script"/> through the CLI with a pty attached, returning

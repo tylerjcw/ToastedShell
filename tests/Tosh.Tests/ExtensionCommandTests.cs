@@ -133,7 +133,7 @@ public sealed class ExtensionCommandTests
     {
         var engine = new ToshEngine(ToshRuntime.CreateDefault());
         var projectRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../"));
-        var dllPath = Path.Combine(projectRoot, "src", "Tosh.Cli", "bin", "Debug", "net10.0", "Tosh.Cli.dll");
+        var dllPath = ToshCli.AssemblyPath;
 
         var results = await engine.ExecuteToListAsync($"echo {Quote(dllPath)} | load-assembly | get Name");
 

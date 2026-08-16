@@ -2161,7 +2161,7 @@ public sealed class EngineTests
     {
         var engine = new ToshEngine(ToshRuntime.CreateDefault());
         var projectRoot = GetProjectRoot();
-        var dllPath = System.IO.Path.Combine(projectRoot, "src", "Tosh.Cli", "bin", "Debug", "net10.0", "Tosh.Cli.dll");
+        var dllPath = ToshCli.AssemblyPath;
 
         var results = await engine.ExecuteToListAsync($"require {dllPath}\nusing Tosh.Cli\ndescribe-type ReplInputClassifier | get FullName");
 
@@ -4815,7 +4815,7 @@ $output");
     public async Task Cli_host_returns_last_external_exit_code_for_command_invocations()
     {
         var projectRoot = GetProjectRoot();
-        var cliPath = System.IO.Path.Combine(projectRoot, "src", "Tosh.Cli", "bin", "Debug", "net10.0", "Tosh.Cli.dll");
+        var cliPath = ToshCli.AssemblyPath;
         using var configDirectory = new TemporaryDirectory();
 
         using var process = new System.Diagnostics.Process();
