@@ -116,7 +116,8 @@ internal sealed class NativeFunctionCommand : IShellCommand, ICommandResolutionM
         NativeFunctionReturnDefinition? @return,
         CallingConvention callingConvention,
         Func<object?, CancellationToken, ValueTask<bool>>? successPredicate = null,
-        bool isVariadic = false)
+        bool isVariadic = false,
+        Action<string, string, string>? warn = null)
     {
         ModuleName = moduleName;
         Name = name;
@@ -128,6 +129,7 @@ internal sealed class NativeFunctionCommand : IShellCommand, ICommandResolutionM
         ReturnTypeName = @return?.TypeName;
         IsVariadic = isVariadic;
         _callingConvention = callingConvention;
+        _warn = warn;
 
         // A variadic binding has no single signature to bind to: the tail is only
         // known at the call site, so the delegate is built there and cached by shape
@@ -143,6 +145,7 @@ internal sealed class NativeFunctionCommand : IShellCommand, ICommandResolutionM
     public bool IsVariadic { get; }
 
     private readonly CallingConvention _callingConvention;
+    private readonly Action<string, string, string>? _warn;
 
     public string ModuleName { get; }
 
@@ -401,6 +404,8 @@ internal sealed class NativeFunctionCommand : IShellCommand, ICommandResolutionM
         // `count` carries the true length of an inline buffer. readlink(2) does
         // not NUL-terminate its output, so without this the decoded string would
         // trail whatever was previously in the buffer.
+        WarnIfCountLooksLikeANarrowFailure(result);
+
         var bufferLength = convention == NativeErrorConvention.Count ? ToInt32(result) : (int?)null;
 
         if ((_return is null || _return.ClrType == typeof(void)) && byRefParameters.Length == 0)
@@ -461,6 +466,59 @@ internal sealed class NativeFunctionCommand : IShellCommand, ICommandResolutionM
                                                await _successPredicate(result, cancellationToken),
             _ => true,
         };
+    }
+
+    /// <summary>
+    /// Flags the one case where a bare <c>count</c> cannot be trusted.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Bare <c>-&gt; count</c> reads the return as <c>ssize_t</c>. Bound to a function
+    /// that really returns <c>int32_t</c>, a <c>-1</c> failure arrives as
+    /// <c>4294967295</c>: writing <c>EAX</c> zeroes the upper half of <c>RAX</c>, so the
+    /// sign never reaches the high bits. That is non-negative, the contract's
+    /// <c>&gt;= 0</c> check passes, and a failed call is reported as an enormous count
+    /// (<c>TS-P2-124</c>).
+    /// </para>
+    /// <para>
+    /// Which is undetectable in general — a shared object carries no C signature to
+    /// check the declaration against. But the *window* is detectable, and on Linux it
+    /// is unreachable by the functions <c>count</c> exists for: <c>read</c> and
+    /// <c>write</c> transfer at most <c>0x7ffff000</c> bytes, just below where a
+    /// 32-bit negative lands. So a bare <c>count</c> yielding a value in
+    /// <c>[2^31, 2^32)</c> is almost certainly a misdeclared width, and saying so
+    /// costs a warning on a genuine multi-gigabyte count that no POSIX call returns.
+    /// </para>
+    /// <para>
+    /// A warning rather than an error because the value is genuinely ambiguous, and
+    /// because a library outside POSIX may legitimately return one. It names the fix,
+    /// and it is hushable.
+    /// </para>
+    /// </remarks>
+    private void WarnIfCountLooksLikeANarrowFailure(object? result)
+    {
+        if (_warn is null ||
+            _return is not { Convention: NativeErrorConvention.Count, ClrType: var width } ||
+            width != typeof(IntPtr))
+        {
+            return;
+        }
+
+        var value = ToInt64(result);
+
+        if (value is < int.MaxValue + 1L or > uint.MaxValue)
+        {
+            return;
+        }
+
+        var asNarrow = unchecked((int)value);
+
+        _warn(
+            "tosh.native.count_width_suspect",
+            $"'{ModuleName}.{Name}' returned {value}, which is {asNarrow} read as a 32-bit value.",
+            $"'{SymbolName}' may return `int` rather than `ssize_t`. Declare it `-> int count` so the "
+            + "failure is detected; bare `count` reads a pointer-sized return, and a 32-bit -1 arrives "
+            + "as 4294967295. If the count is genuine: hush tosh.native.count_width_suspect");
     }
 
     private static long ToInt64(object? value) => value switch

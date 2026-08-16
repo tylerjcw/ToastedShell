@@ -136,6 +136,50 @@ public class NativeCountWidthTests
     }
 
     /// <summary>
+    /// Bare `count` cannot be made safe — a shared object carries no C signature to
+    /// check a declaration against — but the *window* where it goes wrong is
+    /// detectable, so it is reported rather than silently returned.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Writing `EAX` zeroes the upper half of `RAX`, so an `int32_t` -1 lands at
+    /// exactly 4294967295. On Linux nothing `count` exists for can legitimately reach
+    /// that window: `read` and `write` transfer at most `0x7ffff000`, just below where
+    /// a 32-bit negative appears.
+    /// </para>
+    /// <para>
+    /// **There is no test here for the warning firing, deliberately.** Reaching the
+    /// window needs a library that leaves the upper half clear, and libc does not:
+    /// glibc's `open` sign-extends, so bare `count` detects its -1 correctly and
+    /// throws. Building a C library inside the suite to force it would test the
+    /// compiler's register allocation as much as this code. It was verified by hand
+    /// against a gcc-built `int32_t posix_count(int)`, which yields 4294967295 and
+    /// warns; what is asserted below is the half that can be tested honestly — that
+    /// ordinary counts stay silent, since a warning firing on real use would be worse
+    /// than the defect it reports.
+    /// </para>
+    /// </remarks>
+    /// <summary>An ordinary count is silent — the warning must not fire on real use.</summary>
+    [Fact]
+    public async Task An_ordinary_count_warns_about_nothing()
+    {
+        if (SkipOffLinux) return;
+
+        var output = new StringWriter();
+        var engine = new ToshEngine(ToshRuntime.CreateDefault(output, output));
+
+        await engine.ExecuteToListAsync(
+            """
+            bind native "libc.so.6" as C {
+                func sysconf(name: int) -> count
+            }
+            C.sysconf(30) | ignore
+            """);
+
+        Assert.DoesNotContain("count_width_suspect", output.ToString(), StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// The contract still only applies where it is written: a plain `-&gt; int`
     /// return is unchecked, so -1 is just -1 and no error is raised. Without this
     /// the width form could be "working" by making every int return checked.

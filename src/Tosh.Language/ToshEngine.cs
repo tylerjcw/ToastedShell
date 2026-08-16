@@ -3153,7 +3153,9 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
                 returnType,
                 callingConvention,
                 successPredicate,
-                isVariadic);
+                isVariadic,
+                warn: (code, title, help) => WriteWarning(
+                    code, title, help, category: ToshDiagnosticCategory.Runtime));
         }
     }
 
