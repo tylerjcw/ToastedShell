@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Globalization;
 using System.Dynamic;
 using System.Linq.Expressions;
 using System.Reflection;
@@ -98,10 +99,13 @@ internal sealed record NativeFunctionReturnDefinition(
 
 internal sealed class NativeFunctionCommand : IShellCommand, ICommandResolutionMetadata
 {
-    private readonly Delegate _delegate;
+    private readonly Delegate? _delegate;
     private readonly IReadOnlyList<NativeFunctionParameterDefinition> _parameters;
     private readonly NativeFunctionReturnDefinition? _return;
     private readonly Func<object?, CancellationToken, ValueTask<bool>>? _successPredicate;
+
+    /// <summary>Delegates for variadic call shapes already seen, keyed by the tail.</summary>
+    private readonly ConcurrentDictionary<string, Delegate> _variadicDelegates = new(StringComparer.Ordinal);
 
     public NativeFunctionCommand(
         string moduleName,
@@ -111,7 +115,8 @@ internal sealed class NativeFunctionCommand : IShellCommand, ICommandResolutionM
         IReadOnlyList<NativeFunctionParameterDefinition> parameters,
         NativeFunctionReturnDefinition? @return,
         CallingConvention callingConvention,
-        Func<object?, CancellationToken, ValueTask<bool>>? successPredicate = null)
+        Func<object?, CancellationToken, ValueTask<bool>>? successPredicate = null,
+        bool isVariadic = false)
     {
         ModuleName = moduleName;
         Name = name;
@@ -121,8 +126,23 @@ internal sealed class NativeFunctionCommand : IShellCommand, ICommandResolutionM
         _return = @return;
         _successPredicate = successPredicate;
         ReturnTypeName = @return?.TypeName;
-        _delegate = CreateDelegate(binding.Handle, binding.Target, symbolName, parameters, @return?.ClrType, callingConvention);
+        IsVariadic = isVariadic;
+        _callingConvention = callingConvention;
+
+        // A variadic binding has no single signature to bind to: the tail is only
+        // known at the call site, so the delegate is built there and cached by shape
+        // (`TS-P3-24`). A fixed binding still resolves its symbol here, so a
+        // misspelling is reported when the binding is first reached rather than
+        // whenever it happens to be called.
+        _delegate = isVariadic
+            ? null
+            : CreateDelegate(binding.Handle, binding.Target, symbolName, parameters, @return?.ClrType, callingConvention);
     }
+
+    /// <summary>Whether the binding ends in a C <c>...</c> tail.</summary>
+    public bool IsVariadic { get; }
+
+    private readonly CallingConvention _callingConvention;
 
     public string ModuleName { get; }
 
@@ -177,20 +197,24 @@ internal sealed class NativeFunctionCommand : IShellCommand, ICommandResolutionM
         // the callee reads them (poll's `events`, select's `fd_set`).
         var callableCount = _parameters.Count(static parameter => !parameter.IsEngineSupplied);
 
-        if (context.Arguments.Count != callableCount)
+        // A variadic binding fixes only its leading parameters; the tail is whatever
+        // the call site pushed, so "too many" is the normal case (`TS-P3-24`).
+        if (IsVariadic ? context.Arguments.Count < callableCount : context.Arguments.Count != callableCount)
         {
             var outCount = _parameters.Count - callableCount;
+            var atLeast = IsVariadic ? "at least " : string.Empty;
             var hint = outCount == 0
-                ? $"'{ModuleName}.{Name}' requires {callableCount} argument(s)"
-                : $"'{ModuleName}.{Name}' requires {callableCount} argument(s); its {outCount} 'out' parameter(s) are supplied by the engine";
+                ? $"'{ModuleName}.{Name}' requires {atLeast}{callableCount} argument(s)"
+                : $"'{ModuleName}.{Name}' requires {atLeast}{callableCount} argument(s); its {outCount} 'out' parameter(s) are supplied by the engine";
 
             throw context.CreateDiagnostic(
                 code: "tosh.runtime.native_argument_count_mismatch",
-                title: $"Native function '{ModuleName}.{Name}' expects {callableCount} argument(s) but received {context.Arguments.Count}.",
+                title: $"Native function '{ModuleName}.{Name}' expects {atLeast}{callableCount} argument(s) but received {context.Arguments.Count}.",
                 label: hint);
         }
 
-        var convertedArguments = new object?[_parameters.Count];
+        var variadicCount = IsVariadic ? context.Arguments.Count - callableCount : 0;
+        var convertedArguments = new object?[_parameters.Count + variadicCount];
         var bufferBackedParameters = new List<(int Index, NativeFunctionParameterDefinition Parameter, NativeBuffer Buffer)>();
         var callerArgumentIndex = 0;
 
@@ -287,6 +311,23 @@ internal sealed class NativeFunctionCommand : IShellCommand, ICommandResolutionM
             convertedArguments[index] = converted;
         }
 
+        // The variadic tail. These have no declared parameter to convert against, so
+        // they are promoted the way C promotes them and passed as they are — the
+        // delegate built for this call shape has matching slots (`TS-P3-24`).
+        for (var index = 0; index < variadicCount; index++)
+        {
+            var argument = context.Arguments[callableCount + index];
+            convertedArguments[_parameters.Count + index] = argument switch
+            {
+                bool flag => flag ? 1 : 0,
+                byte or sbyte or short or ushort or char => Convert.ToInt32(argument, CultureInfo.InvariantCulture),
+                float single => (double)single,
+                NativeBuffer buffer => buffer.Pointer,
+                null => IntPtr.Zero,
+                _ => argument,
+            };
+        }
+
         object? result;
         int errno;
 
@@ -298,7 +339,7 @@ internal sealed class NativeFunctionCommand : IShellCommand, ICommandResolutionM
         {
             try
             {
-                result = _delegate.DynamicInvoke(convertedArguments);
+                result = ResolveDelegate(convertedArguments).DynamicInvoke(convertedArguments);
 
                 // Must be read before any other managed work: the captured value is
                 // per-thread and the next P/Invoke overwrites it.
@@ -521,6 +562,75 @@ internal sealed class NativeFunctionCommand : IShellCommand, ICommandResolutionM
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// The delegate to call with these arguments.
+    /// </summary>
+    /// <remarks>
+    /// A fixed binding has one delegate, built when the binding was reached. A
+    /// variadic one cannot: C reads its tail according to what the caller pushed, so
+    /// the signature is a property of the call and not of the declaration. The shape
+    /// is derived from the converted arguments, cached, and handed to the same
+    /// emitter a fixed binding uses — which is why this works at all, and why it is
+    /// no riskier than the concrete-arity declarations it replaces (<c>TS-P3-24</c>).
+    /// </remarks>
+    private Delegate ResolveDelegate(object?[] arguments)
+    {
+        if (_delegate is not null)
+        {
+            return _delegate;
+        }
+
+        var tail = arguments.Skip(_parameters.Count)
+            .Select(static argument => PromoteVariadicArgument(argument))
+            .ToArray();
+
+        var key = string.Join(
+            "|",
+            tail.Select(static parameter => parameter.ClrType.AssemblyQualifiedName));
+
+        return _variadicDelegates.GetOrAdd(key, _ => CreateDelegate(
+            Binding.Handle,
+            Binding.Target,
+            SymbolName,
+            [.. _parameters, .. tail],
+            _return?.ClrType,
+            _callingConvention));
+    }
+
+    /// <summary>
+    /// The parameter a variadic argument is passed as, after C's default argument
+    /// promotions.
+    /// </summary>
+    /// <remarks>
+    /// C promotes anything narrower than <c>int</c> to <c>int</c>, and <c>float</c> to
+    /// <c>double</c>, before a variadic call — <c>va_arg(ap, int)</c> is what the
+    /// callee reads for a <c>char</c>. Passing the narrow type would put the wrong
+    /// number of bytes in the wrong place, so the promotions are applied here rather
+    /// than left to whatever the value happened to be.
+    /// </remarks>
+    private static NativeFunctionParameterDefinition PromoteVariadicArgument(object? argument)
+    {
+        var type = argument switch
+        {
+            null => typeof(IntPtr),
+            bool or byte or sbyte or short or ushort or char or int => typeof(int),
+            uint => typeof(uint),
+            long => typeof(long),
+            ulong => typeof(ulong),
+            float or double => typeof(double),
+            string => typeof(string),
+            IntPtr => typeof(IntPtr),
+            NativeBuffer => typeof(IntPtr),
+            _ => argument.GetType(),
+        };
+
+        return new NativeFunctionParameterDefinition(
+            "…",
+            type.Name,
+            type,
+            NativeParameterPassingMode.In);
     }
 
     private static Delegate CreateDelegate(

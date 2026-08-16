@@ -2071,7 +2071,10 @@ public sealed class DisplayEngine
     {
         columns = Array.Empty<DisplayTableColumn>();
 
-        if (rows.Count == 0 || rows.Any(row => !ShellRecordUtilities.IsRecordLike(row)))
+        if (rows.Count == 0 ||
+            rows.Any(row =>
+                !ShellRecordUtilities.IsRecordLike(row) ||
+                ObjectFormatter.TryFormatSimple(row, isRoot: true, out _)))
         {
             return false;
         }

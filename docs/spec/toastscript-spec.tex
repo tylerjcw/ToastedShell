@@ -804,6 +804,22 @@ Total: {$items | sum Price}
 -2.5i       # imaginary literal (Complex: 0 - 2.5i)
 \end{lstlisting}
 
+An integer literal takes the narrowest type that holds it --- \code{int}, then
+\code{long}, then \code{ulong} --- and the rule is the same in every base, so
+\code{0xFFFFFFFFFFFFFFFF} is a \code{ulong} and not a truncated \code{int}. A
+literal too large for \code{ulong} is an error rather than a silently different
+number.
+
+A suffix pins the type where inference is not what is wanted:
+
+\begin{lstlisting}
+100u        # uint  (ulong when too large for uint)
+100L        # long
+100UL       # ulong
+\end{lstlisting}
+
+Suffixes are case-insensitive, and \code{lu} is accepted alongside \code{ul}.
+
 \section{Collection Literals}
 
 Record, dictionary, and set literals use the paired delimiters
@@ -3560,6 +3576,24 @@ reads and writes the same memory (\code{poll}, \code{select}, \code{ioctl}
 with \code{TCSETS}).  Passing a native buffer to a \code{ref} parameter writes
 the result back into unmanaged memory.
 
+\subsection{Variadic Parameters}
+
+A binding may end in \code{...}, C's variadic tail:
+
+\begin{lstlisting}
+bind native "libc.so.6" as LibC {
+    func snprintf(dst: ptr, n: long, fmt: cstring, ...) -> int
+}
+
+LibC.snprintf($buf, 256, "i=%d s=%s f=%.1f", 42, "hi", 2.5)
+\end{lstlisting}
+
+The tail is whatever the call site passes, so the call signature is built from
+the actual arguments and cached per shape.  C's default argument promotions
+apply, because the callee reads them: anything narrower than \code{int} is passed
+as \code{int}, and \code{float} as \code{double}.  Nothing may follow \code{...},
+and the fixed parameters before it are still required.
+
 \subsection{Return Conventions}
 
 A native call declares how success is decided.  This is orthogonal to what a
@@ -3571,13 +3605,26 @@ successful call yields.
 \textbf{Return} & \textbf{Meaning} \\
 \midrule
 \code{-> ok}    & \code{int}; \code{0} is success, anything else throws \\
-\code{-> count} & \code{>= 0} is success \emph{and is the value} \\
+\code{-> count} & \code{>= 0} is success \emph{and is the value}; \code{ssize\_t} \\
+\code{-> int count} & the same, read at a stated width (\code{int}, \code{long}) \\
 \code{-> auto}  & no checking; project the out parameters \\
 \code{-> T where (\_)} & custom predicate over the return value \\
 \code{-> T}     & raw, unchecked \\
 \bottomrule
 \end{tabular}
 \end{center}
+
+Bare \code{count} marshals the return as \code{ssize\_t}, which is pointer-sized.
+Bound to a function that really returns \code{int}, a \code{-1} failure is read at
+the wrong width and can arrive as \code{4294967295} --- non-negative, so the
+failure goes undetected. Whether that happens depends on what the callee left in
+the upper half of the return register, so it varies by library. State the width
+when the C function does not return \code{ssize\_t}:
+
+\begin{lstlisting}
+func read(fd: int, buf: ptr, n: long) -> count        # ssize_t
+func open(path: cstring, flags: int)  -> int count    # int32_t, -1 detected
+\end{lstlisting}
 
 \code{where} is the same keyword, placeholder and meaning as a refinement
 type, with \code{\_} bound to the native return value.  \code{ok} and

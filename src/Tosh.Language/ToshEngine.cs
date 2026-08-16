@@ -3039,9 +3039,31 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
     {
         {
             var parameters = new List<NativeFunctionParameterDefinition>(function.Parameters.Count);
+            var isVariadic = false;
 
             foreach (var parameter in function.Parameters)
             {
+                // `...` — the C variadic tail. It names no type, so it is recognised
+                // here rather than sent to the type resolver, which used to reject it
+                // with "Native interop does not currently support '...'" (`TS-P3-24`).
+                if (parameter.TypeName is "..." || parameter.Name is "...")
+                {
+                    if (!ReferenceEquals(parameter, function.Parameters[^1]))
+                    {
+                        throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                            Code: "tosh.runtime.native_variadic_not_last",
+                            Title: "'...' must be the last parameter.",
+                            SourceName: sourceName,
+                            SourceText: sourceText,
+                            Span: parameter.Span,
+                            Label: "move '...' to the end of the parameter list",
+                            Help: "C reads the variadic tail after every fixed parameter, so nothing can follow it."));
+                    }
+
+                    isVariadic = true;
+                    continue;
+                }
+
                 // Out-array parameters: `buffer[n]` for C's output-string idiom,
                 // or a typed `T[n]` such as getloadavg's `double[3]`.
                 if (TryParseOutArrayParameter(parameter.TypeName, out var elementName, out var arrayLength))
@@ -3130,7 +3152,8 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
                 parameters,
                 returnType,
                 callingConvention,
-                successPredicate);
+                successPredicate,
+                isVariadic);
         }
     }
 
