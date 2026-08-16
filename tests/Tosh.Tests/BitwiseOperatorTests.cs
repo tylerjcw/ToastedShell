@@ -147,6 +147,26 @@ public class BitwiseOperatorTests
     public async Task A_combined_value_names_itself_from_its_bits(string expression, string expected)
         => Assert.Equal(expected, await RunAsync(Flags + expression));
 
+    /// <summary>
+    /// `flags` composes with the other declaration modifiers, the way `hermit`
+    /// composes with `class`.
+    ///
+    /// It has to be listed among the words a modifier may precede, or the modifier
+    /// scan stops at `export` and the declaration is read as something else
+    /// entirely: `export flags enum` reported
+    /// `tosh.parser.variable_references_require_dollar` pointing at the *first
+    /// member*, because the body was being parsed as ordinary statements. Every
+    /// real flag enum is exported, so the bare form working proved very little.
+    /// </summary>
+    [Theory]
+    [InlineData("flags enum E: int { A = 1, B = 2 }\nE.A bor E.B", "A, B")]
+    [InlineData("export flags enum E: int { A = 1, B = 2 }\nE.A bor E.B", "A, B")]
+    [InlineData("module M { export flags enum E: int { A = 1, B = 2 } }\nM.E.A bor M.E.B", "A, B")]
+    // A `uint` underlying type, which is what every FFI flag enum uses.
+    [InlineData("export flags enum E: uint { A = 0x10, B = 0x20 }\n(E.A bor E.B) as uint", "48")]
+    public async Task The_flags_modifier_composes_with_the_others(string source, string expected)
+        => Assert.Equal(expected, await RunAsync(source));
+
     /// <summary>`has` in both directions — one alone would pass on a constant.</summary>
     [Fact]
     public async Task Has_tests_membership()

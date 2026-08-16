@@ -12388,6 +12388,12 @@ public static class ToshParser
                     string.Equals(Peek(1).Text, "class", StringComparison.Ordinal) ||
                     string.Equals(Peek(1).Text, "module", StringComparison.Ordinal) ||
                     string.Equals(Peek(1).Text, "enum", StringComparison.Ordinal) ||
+
+                    // `TS-P3-14`. `flags` precedes `enum` the way `hermit`
+                    // precedes `class`, so `export flags enum` has to be seen
+                    // here or the modifier scan stops at `export` and the whole
+                    // declaration is read as something else.
+                    string.Equals(Peek(1).Text, "flags", StringComparison.Ordinal) ||
                     string.Equals(Peek(1).Text, "record", StringComparison.Ordinal) ||
                     string.Equals(Peek(1).Text, "sealed", StringComparison.Ordinal) ||
                     string.Equals(Peek(1).Text, "hollow", StringComparison.Ordinal) ||
