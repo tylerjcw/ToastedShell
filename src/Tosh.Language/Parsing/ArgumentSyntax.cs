@@ -211,9 +211,20 @@ public sealed record InterpolatedStringLiteralPart(string Text) : InterpolatedSt
 /// trimmed of surrounding whitespace so diagnostics can underline the exact
 /// hole rather than the entire string literal.
 /// </summary>
+/// <param name="Format">
+/// The clause after a top-level <c>:</c> — <c>$"{$n:F2}"</c> — handed to the
+/// value's own <see cref="IFormattable"/> implementation. Null when the hole
+/// carries none (<c>TS-P3-06</c>).
+/// </param>
+/// <param name="Alignment">
+/// The clause after a top-level <c>,</c> — <c>$"{$n,8}"</c>. Positive pads on the
+/// left, negative on the right, as in C# and .NET composite formatting.
+/// </param>
 public sealed record InterpolatedStringExpressionPart(
     string Expression,
-    TextSpan ExpressionSpan) : InterpolatedStringPart
+    TextSpan ExpressionSpan,
+    string? Format = null,
+    int? Alignment = null) : InterpolatedStringPart
 {
     /// <summary>
     /// The hole's program — parsed, bound and lowered — kept after the first

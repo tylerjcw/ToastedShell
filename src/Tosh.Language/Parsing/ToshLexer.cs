@@ -786,12 +786,7 @@ public sealed class ToshLexer
                 var exprStart = _position;
                 SkipInterpolatedExpression();
 
-                var rawExpression = _source[exprStart.._position];
-                var (trimmedStart, trimmedLength) = TrimSpan(rawExpression, exprStart);
-                var expression = rawExpression.Trim();
-                parts.Add(new InterpolatedStringExpressionPart(
-                    expression,
-                    new TextSpan(trimmedStart, trimmedLength)));
+                parts.Add(CreateInterpolationHolePart(exprStart));
 
                 if (!IsAtEnd) _position++; // skip closing }
                 continue;
@@ -1032,12 +1027,7 @@ public sealed class ToshLexer
                 var exprStart = _position;
                 SkipInterpolatedExpression();
 
-                var rawExpression = _source[exprStart.._position];
-                var (trimmedStart, trimmedLength) = TrimSpan(rawExpression, exprStart);
-                var expression = rawExpression.Trim();
-                parts.Add(new InterpolatedStringExpressionPart(
-                    expression,
-                    new TextSpan(trimmedStart, trimmedLength)));
+                parts.Add(CreateInterpolationHolePart(exprStart));
                 if (!IsAtEnd) _position++; // skip closing }
                 continue;
             }
@@ -1111,12 +1101,7 @@ public sealed class ToshLexer
                 var exprStart = _position;
                 SkipInterpolatedExpression();
 
-                var rawExpression = _source[exprStart.._position];
-                var (trimmedStart, trimmedLength) = TrimSpan(rawExpression, exprStart);
-                var expression = rawExpression.Trim();
-                parts.Add(new InterpolatedStringExpressionPart(
-                    expression,
-                    new TextSpan(trimmedStart, trimmedLength)));
+                parts.Add(CreateInterpolationHolePart(exprStart));
                 if (!IsAtEnd) _position++; // skip closing }
                 continue;
             }
@@ -1911,6 +1896,149 @@ public sealed class ToshLexer
         var trailing = raw.Length;
         while (trailing > leading && char.IsWhiteSpace(raw[trailing - 1])) trailing--;
         return (rawStart + leading, trailing - leading);
+    }
+
+    /// <summary>
+    /// Builds the hole part between <paramref name="exprStart"/> and the current
+    /// position, splitting off its alignment and format clauses.
+    /// </summary>
+    /// <remarks>
+    /// One helper because there are three interpolated-string forms — plain, triple
+    /// and ANSI — and the block was copied into each. A format clause that worked in
+    /// one and not the others would be exactly the kind of drift this project keeps
+    /// finding (<c>TS-P3-06</c>).
+    /// </remarks>
+    private InterpolatedStringExpressionPart CreateInterpolationHolePart(int exprStart)
+    {
+        var rawExpression = _source[exprStart.._position];
+        var (trimmedStart, trimmedLength) = TrimSpan(rawExpression, exprStart);
+        var (expressionText, alignment, format) = SplitInterpolationClauses(rawExpression);
+        var expression = expressionText.Trim();
+
+        // The span covers the expression rather than the whole hole, so a diagnostic
+        // underlines what the reader wrote and not the format clause after it.
+        var span = new TextSpan(trimmedStart, Math.Min(trimmedLength, Math.Max(expression.Length, 1)));
+
+        return new InterpolatedStringExpressionPart(expression, span, format, alignment);
+    }
+
+    /// <summary>
+    /// Splits a hole into its expression, alignment and format clauses:
+    /// <c>{expr,align:format}</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Only *top-level* separators count — inside parentheses, brackets, braces or a
+    /// string they belong to the expression, which is what keeps <c>{f(a, b)}</c> and
+    /// <c>{$d["a:b"]}</c> whole.
+    /// </para>
+    /// <para>
+    /// A ternary is the one real ambiguity, and C# has it too: in
+    /// <c>{$x > 0 ? "a" : "b"}</c> the colon belongs to the conditional. It is told
+    /// apart by counting <c>?</c> at the same level — a colon with an open question
+    /// mark before it closes that conditional rather than starting a format clause.
+    /// The null-coalescing <c>??</c> is not a conditional, so it opens nothing.
+    /// </para>
+    /// </remarks>
+    private static (string Expression, int? Alignment, string? Format) SplitInterpolationClauses(string hole)
+    {
+        var depth = 0;
+        var pendingConditionals = 0;
+        var alignmentStart = -1;
+        var formatStart = -1;
+
+        for (var index = 0; index < hole.Length; index++)
+        {
+            var ch = hole[index];
+
+            if (ch is '(' or '[' or '{')
+            {
+                depth++;
+                continue;
+            }
+
+            if (ch is ')' or ']' or '}')
+            {
+                depth--;
+                continue;
+            }
+
+            if (ch is '"' or '\'')
+            {
+                index = SkipQuotedRun(hole, index, ch);
+                continue;
+            }
+
+            if (depth != 0)
+            {
+                continue;
+            }
+
+            if (ch == '?')
+            {
+                // `??` is null-coalescing, not a conditional, and opens nothing.
+                if (index + 1 < hole.Length && hole[index + 1] == '?')
+                {
+                    index++;
+                    continue;
+                }
+
+                pendingConditionals++;
+                continue;
+            }
+
+            if (ch == ':')
+            {
+                if (pendingConditionals > 0)
+                {
+                    pendingConditionals--;
+                    continue;
+                }
+
+                formatStart = index;
+                break;
+            }
+
+            if (ch == ',' && alignmentStart < 0)
+            {
+                alignmentStart = index;
+            }
+        }
+
+        var expressionEnd = formatStart >= 0 ? formatStart : hole.Length;
+        var format = formatStart >= 0 ? hole[(formatStart + 1)..].Trim() : null;
+
+        if (alignmentStart >= 0 && alignmentStart < expressionEnd)
+        {
+            var alignmentText = hole[(alignmentStart + 1)..expressionEnd].Trim();
+
+            if (int.TryParse(alignmentText, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var alignment))
+            {
+                return (hole[..alignmentStart], alignment, format);
+            }
+        }
+
+        return (hole[..expressionEnd], null, format);
+    }
+
+    /// <summary>Index of the closing quote of a run starting at <paramref name="start"/>.</summary>
+    private static int SkipQuotedRun(string text, int start, char quote)
+    {
+        for (var index = start + 1; index < text.Length; index++)
+        {
+            if (text[index] == '\\')
+            {
+                index++;
+                continue;
+            }
+
+            if (text[index] == quote)
+            {
+                return index;
+            }
+        }
+
+        return text.Length - 1;
     }
 
     private void SkipInterpolatedExpression()

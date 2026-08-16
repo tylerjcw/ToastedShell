@@ -821,6 +821,29 @@ A suffix pins the type where inference is not what is wanted:
 
 Suffixes are case-insensitive, and \code{lu} is accepted alongside \code{ul}.
 
+\subsection{Format and Alignment}
+
+An interpolation hole may carry an alignment and a format clause,
+\code{\{expr,align:format\}}:
+
+\begin{lstlisting}
+$"pi is {$n:F2}"          # pi is 3.14
+$"hex {$i:X}"             # hex 2A
+$"[{$i,6}]"               # [    42]   right-aligned in six columns
+$"[{$i,-6}]"              # [42    ]   left-aligned
+$"{$when:yyyy-MM-dd}"     # 2026-08-16
+\end{lstlisting}
+
+The clause is handed to the value's own formatter, so every .NET format string
+works.  A clause a value cannot honour leaves it rendered plainly rather than
+failing.
+
+Only separators at the top level of the hole are clauses: inside parentheses,
+brackets, braces or a string they belong to the expression.  A conditional's
+colon is recognised as its own, so \code{\$"\{\$x > 0 ? "a" : "b"\}"} needs no
+parentheses --- though a conditional that wants a format clause does:
+\code{\$"\{(\$x > 0 ? 1.5 : 2.5):F1\}"}.
+
 \section{Collection Literals}
 
 Record, dictionary, and set literals use the paired delimiters

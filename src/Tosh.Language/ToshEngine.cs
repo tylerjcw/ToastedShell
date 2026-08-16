@@ -9210,10 +9210,12 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
 
                                         if (results.Count == 1)
                                         {
-                                            builder.Append(
+                                            builder.Append(ApplyInterpolationClauses(
                                                 await FormatInterpolatedValueAsync(
                                                     results[0],
-                                                    cancellationToken));
+                                                    cancellationToken,
+                                                    expression.Format),
+                                                expression.Alignment));
                                         }
                                         else if (results.Count > 1)
                                         {
@@ -9222,10 +9224,15 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
                                             {
                                                 formatted[index] = await FormatInterpolatedValueAsync(
                                                     results[index],
-                                                    cancellationToken);
+                                                    cancellationToken,
+                                                    expression.Format);
                                             }
 
-                                            builder.Append(string.Join(" ", formatted));
+                                            // Alignment pads the joined text, not each item:
+                                            // the clause describes the field the hole occupies.
+                                            builder.Append(ApplyInterpolationClauses(
+                                                string.Join(" ", formatted),
+                                                expression.Alignment));
                                         }
 
                                         break;
@@ -10770,15 +10777,48 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
 
     private async ValueTask<string> FormatInterpolatedValueAsync(
         object? value,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? format = null)
     {
         if (value is ToshClassInstance classInstance && classInstance.HasCustomToString())
         {
             return await ToOperatorStringAsync(classInstance, cancellationToken);
         }
 
+        // `$"{$n:F2}"`. The clause is handed to the value's own IFormattable, which is
+        // what makes every .NET format string work — numeric, date, enum — without
+        // this knowing any of them (`TS-P3-06`). A value that cannot format itself
+        // keeps its ordinary rendering rather than failing: the clause is a request,
+        // and a shell that refused to print because a format did not apply would be
+        // worse than one that prints plainly.
+        if (format is { Length: > 0 } && value is IFormattable formattable)
+        {
+            try
+            {
+                return formattable.ToString(format, System.Globalization.CultureInfo.CurrentCulture);
+            }
+            catch (FormatException)
+            {
+                // An unrecognised clause for this type — fall through to plain.
+            }
+        }
+
         return Runtime.Formatter.Format(value);
     }
+
+    /// <summary>Pads a formatted hole to its declared field width.</summary>
+    /// <remarks>
+    /// Positive pads on the left, negative on the right, as .NET composite formatting
+    /// has it — <c>$"{$n,8}"</c> right-aligns in eight columns, <c>$"{$n,-8}"</c>
+    /// left-aligns. A value wider than the field is never truncated.
+    /// </remarks>
+    private static string ApplyInterpolationClauses(string text, int? alignment)
+        => alignment switch
+        {
+            null or 0 => text,
+            > 0 => text.PadLeft(alignment.Value),
+            _ => text.PadRight(-alignment.Value),
+        };
 
     private static string FormatTraceArgument(object? value)
     {
