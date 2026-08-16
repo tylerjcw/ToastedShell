@@ -1,5 +1,13 @@
 # TōSh as a first-class .NET language — status & roadmap
 
+> **Frozen.** This is the roadmap for the compiled backend, which the separation plan
+> freezes (`TOAST_SEPARATION_PLAN.md`, Phase 0). Its waves are not tracked as plan
+> items; they describe work on a component leaving the build.
+>
+> Three things from its deferred list *were* still live and are now filed separately:
+> `TOAST-0011` (native callbacks), `TOAST-0012` (`Span<T>`/`Memory<T>` native shapes)
+> and `PLAN-0002` (suite flakiness). Accurate as of 2026-07-30; not maintained.
+
 Snapshot of where compiled tosh stands on the path to a "real .NET
 citizen," and what's left. Companion to [COMPILED_TOSH.md](COMPILED_TOSH.md),
 which tracks the per-feature emit table.

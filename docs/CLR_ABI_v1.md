@@ -534,4 +534,4 @@ Debug.Assert(abi?.Version == 1);
 
 - [`COMPILED_TOSH.md`](COMPILED_TOSH.md) — full pipeline, refasm, profiles, and ABI rationale.
 - [`ARCHITECTURE.md`](ARCHITECTURE.md) — emitter, binder, evaluator structure.
-- [`BACKLOG.md`](BACKLOG.md) — wave plan, including the items that gated v1.
+- [`BACKLOG-archive.md`](BACKLOG-archive.md) — wave plan, including the items that gated v1.

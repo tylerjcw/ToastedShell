@@ -1,5 +1,15 @@
 # Compiled ToastScript: Design Considerations
 
+> **Frozen.** This document describes the compiled backend, which the separation
+> plan takes out of the solution (`TOAST_SEPARATION_PLAN.md`, Phase 0). `Tosh.Compiler`
+> and `Tosh.Compiler.Runtime` stay in the tree but leave the build; the IR remains,
+> because the bound-tree evaluator (`TOAST-0009`) wants it. A compiler gets written
+> again later against the new bound tree, where it can share the interpreter's
+> decisions instead of re-deriving them.
+>
+> Kept as the record of what was built and what it could emit. Accurate as of
+> 2026-08-09; not maintained.
+
 > **Status as of July 30, 2026 — experiment, not a goal yet.** The interpreted
 > language takes priority until it is rock-solid; see the standing priority
 > decision in [ROADMAP.md](ROADMAP.md). The compiler stays building and its

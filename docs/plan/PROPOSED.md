@@ -6,6 +6,7 @@
 |---|---|---|---|---|
 | [`TOAST-0010`](items/TOAST-0010.md) | P3 | proposed | 0/5 | Separate the specification into a language document and a shell document |
 | [`TOAST-0009`](items/TOAST-0009.md) | P2 | proposed | 0/6 | Replace the switch-based evaluator with a bound-tree evaluator |
+| [`TOAST-0012`](items/TOAST-0012.md) | P3 | proposed | 0/4 | Span<T> and Memory<T> are not recognised as native parameter shapes, and marshalling cannot be overridden |
 | [`TS-P3-22`](items/TS-P3-22.md) | P3 | proposed | — | Native backend emitting C |
 | [`TS-P3-08`](items/TS-P3-08.md) | P3 | proposed | — | Parser-owned typed structural regions |
 | [`TS-P3-16`](items/TS-P3-16.md) | P3 | proposed | — | ToastScript-owned core types and their conformance corpus |

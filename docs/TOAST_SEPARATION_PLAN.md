@@ -360,7 +360,7 @@ say so in its first line.**
 | **Live** | `plan/` (the item boards), `TOAST_SEPARATION_PLAN.md`, `SPEC_STATUS.md` | Keep current through the work |
 | **Needs rewriting** | `ARCHITECTURE.md` | Known stale — still describes `Tosh.Core` as present four months after `9d5b852` deleted it. Rewrite around the new boundary |
 | **Freeze with the compiler** | `COMPILED_TOSH.md` (1,023) | Add a header saying it describes a frozen component |
-| **Decide: merge or archive** | `BACKLOG.md` (1,541) vs the stabilization board (5,440) | Two tracking systems; one should win |
+| ~~**Decide: merge or archive**~~ | Resolved 2026-08-16 | Both dissolved into `plan/`; live work filed as items, remainder archived, speculation moved to `IDEAS.md` |
 | **Settled RFCs** | `BRACE_DISAMBIGUATION_RFC`, `LINE_EDITOR_RFC`, `SELF_HOSTING_RFC` | Mark decided-and-implemented, or move to an `rfc/` directory |
 | **Verify then keep** | `CONFIGURATION`, `EDITOR_SUPPORT`, `TSSP`, `CLR_ABI_v1`, `RUNTIME_NAMESPACES` | Read once against the code; correct or date-stamp |
 | **Stale, low risk** | `BENCHMARKS` (April, 100 lines), `TUI_ARCHITECTURE`, `TOME` | Re-measure or mark as of-its-date |

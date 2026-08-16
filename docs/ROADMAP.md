@@ -1,6 +1,6 @@
 # TōSh Roadmap
 
-For open work items by area, see [BACKLOG.md](BACKLOG.md).
+For open work items by area, see [the plan](plan/README.md).
 
 The active language-semantics program is tracked in
 [the plan](plan/README.md). It is the
@@ -147,7 +147,7 @@ This should eventually live in shell configuration, profiles, or modules.
 
 Phases 1–7 shipped the core shell, language, display system, CLR interop, TUI platform, and extensibility model. Phase 8 is about making TōSh reliable and complete enough to be a default login shell.
 
-The work is tracked in [BACKLOG.md](BACKLOG.md) and falls into these areas:
+The work is tracked in [the plan](plan/README.md) and falls into these areas:
 
 ### Remaining work
 

@@ -182,7 +182,7 @@ Full numbers: [docs/BENCHMARKS.md](docs/BENCHMARKS.md). The IL backend (`tosh --
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/CONFIGURATION.md](docs/CONFIGURATION.md), [docs/EDITOR_SUPPORT.md](docs/EDITOR_SUPPORT.md)
 - [docs/COMPILED_TOSH.md](docs/COMPILED_TOSH.md), [docs/CLR_ABI_v1.md](docs/CLR_ABI_v1.md)
 - [docs/RUNTIME_NAMESPACES.md](docs/RUNTIME_NAMESPACES.md), [docs/TUI_ARCHITECTURE.md](docs/TUI_ARCHITECTURE.md), [docs/diagnostic-codes.md](docs/diagnostic-codes.md)
-- [docs/ROADMAP.md](docs/ROADMAP.md), [docs/BACKLOG.md](docs/BACKLOG.md) (history: [docs/BACKLOG-archive.md](docs/BACKLOG-archive.md))
+- [docs/ROADMAP.md](docs/ROADMAP.md), [docs/plan/](docs/plan/README.md) (history: [docs/BACKLOG-archive.md](docs/BACKLOG-archive.md))
 
 In-shell help is also a primary source of truth:
 
@@ -199,7 +199,7 @@ TōSh is mature as an exploratory REPL, a scripting shell, and a daily
 side shell for real work. It is not yet hardened as a default login
 shell — open work centres on startup / login-shell edge cases, common-command
 parity polish, and the IL backend. See [docs/ROADMAP.md](docs/ROADMAP.md)
-and [docs/BACKLOG.md](docs/BACKLOG.md).
+and [docs/plan/](docs/plan/README.md).
 
 ## License
 
