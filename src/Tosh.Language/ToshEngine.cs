@@ -8336,7 +8336,43 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
         return values;
     }
 
-    private async Task<object?> EvaluateArgumentAsync(
+    /// <summary>
+    /// EXPERIMENT: a synchronous pre-dispatch for the argument shapes that cannot
+    /// suspend, so they never enter the async method below.
+    /// </summary>
+    private ValueTask<object?> EvaluateArgumentAsync(
+        string sourceName,
+        string sourceText,
+        ArgumentSyntax argument,
+        CancellationToken cancellationToken)
+    {
+        switch (argument)
+        {
+            case LiteralArgumentSyntax literal:
+                return new ValueTask<object?>(literal.Value);
+
+            // The same conditions the full case checks, so anything needing its
+            // diagnostics — an unassigned binding, a rune thunk, an out-of-scope
+            // constructor parameter — falls through rather than being answered here.
+            case VariableReferenceArgumentSyntax variable
+                when TryGetVariableBinding(variable.Name, out var binding)
+                     && !binding.IsAllocatedOnly
+                     && binding.Value is not RuneThunk:
+                return new ValueTask<object?>(binding.Value);
+
+            // `(expr)` around something simple is the same value; the parentheses
+            // should not cost a pipeline plus two state machines.
+            case SubexpressionArgumentSyntax sub
+                when sub.Pipeline.Stages.Count == 1 &&
+                     sub.Pipeline.Stages[0] is ExpressionPipelineStageSyntax stage &&
+                     stage.Expression is LiteralArgumentSyntax or VariableReferenceArgumentSyntax:
+                return EvaluateArgumentAsync(sourceName, sourceText, stage.Expression, cancellationToken);
+        }
+
+        return EvaluateArgumentSlowAsync(sourceName, sourceText, argument, cancellationToken);
+    }
+
+    private async ValueTask<object?> EvaluateArgumentSlowAsync(
         string sourceName,
         string sourceText,
         ArgumentSyntax argument,
