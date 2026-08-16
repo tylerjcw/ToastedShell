@@ -154,6 +154,15 @@
       "include": "#command-position"
     },
     {
+      "include": "#record-literal"
+    },
+    {
+      "include": "#dict-literal"
+    },
+    {
+      "include": "#set-literal"
+    },
+    {
       "include": "#collection-delimiters"
     },
     {
@@ -788,8 +797,8 @@
       }
     },
     "type-definition": {
-      "comment": "Refinement type alias:  type Port = int where (...)",
-      "match": "\\b((?:(?:protected|abstract|obsolete|override|overrule|readonly|required|guarded|partial|private|fading|hermit|hidden|hollow|public|sealed|shared|static|strict|eager|fixed|flags|fluid|leaky|local|proud|vital|lazy|raw|shy|global|export)\\s+)*)(type)\\s+([A-Za-z_][A-Za-z0-9_-]*)\\s*(?==)",
+      "comment": "Refinement type alias:  type Port = int where (...). The base type on the right is captured too — it is a type reference in the one place the reader most needs it, and stopping at `(?==)` left `int`, `string` and `TrimmedString` unscoped in every alias.",
+      "match": "\\b((?:(?:protected|abstract|obsolete|override|overrule|readonly|required|guarded|partial|private|fading|hermit|hidden|hollow|public|sealed|shared|static|strict|eager|fixed|flags|fluid|leaky|local|proud|vital|lazy|raw|shy|global|export)\\s+)*)(type)\\s+([A-Za-z_][A-Za-z0-9_-]*)\\s*(=)\\s*([A-Za-z_][a-zA-Z0-9_.<>?\\[\\]]*)?",
       "captures": {
         "1": {
           "patterns": [
@@ -803,6 +812,33 @@
         },
         "3": {
           "name": "entity.name.type.tosh"
+        },
+        "4": {
+          "name": "keyword.operator.assignment.tosh"
+        },
+        "5": {
+          "patterns": [
+            {
+              "match": "\\b(?:datetimeoffset|dynamicrecord|directory|hashtable|ipaddress|dateonly|datetime|timeonly|timespan|Complex|complex|decimal|dynamic|version|Matrix|Vector|double|matrix|object|string|ushort|array|float|regex|sbyte|short|table|tuple|ulong|bool|byte|char|dict|file|guid|list|long|uint|void|any|dir|int|mat|ptr|set|uri|vec|ip)\\b",
+              "name": "support.type.builtin.tosh"
+            },
+            {
+              "match": "[A-Za-z_][A-Za-z0-9_.]*",
+              "name": "entity.name.type.tosh"
+            },
+            {
+              "match": "[<>]",
+              "name": "punctuation.definition.generic.tosh"
+            },
+            {
+              "match": "\\[\\]",
+              "name": "punctuation.definition.array.tosh"
+            },
+            {
+              "match": "[,?]",
+              "name": "punctuation.separator.tosh"
+            }
+          ]
         }
       }
     },
@@ -835,8 +871,8 @@
     },
     "operator-definition": {
       "comment": "Operator overloads: func +(o), func ==(o), func !=(o). The name is punctuation, so #function-definition's identifier pattern never matches these.",
-      "match": "\\b((?:(?:protected|abstract|obsolete|override|overrule|readonly|required|guarded|partial|private|fading|hermit|hidden|hollow|public|sealed|shared|static|strict|eager|fixed|flags|fluid|leaky|local|proud|vital|lazy|raw|shy|global|export)\\s+)*)(func)\\s*(\\*\\*|==|!=|<=|>=|=~|!~|//|\\+|-|\\*|/|%|<|>)\\s*(?=\\()",
-      "captures": {
+      "begin": "\\b((?:(?:protected|abstract|obsolete|override|overrule|readonly|required|guarded|partial|private|fading|hermit|hidden|hollow|public|sealed|shared|static|strict|eager|fixed|flags|fluid|leaky|local|proud|vital|lazy|raw|shy|global|export)\\s+)*)(func)\\s*(\\*\\*|==|!=|<=|>=|=~|!~|//|\\+|-|\\*|/|%|<|>)\\s*(\\()",
+      "beginCaptures": {
         "1": {
           "patterns": [
             {
@@ -849,26 +885,165 @@
         },
         "3": {
           "name": "entity.name.function.operator.tosh"
+        },
+        "4": {
+          "name": "punctuation.section.parens.tosh"
         }
-      }
+      },
+      "end": "\\)",
+      "endCaptures": {
+        "0": {
+          "name": "punctuation.section.parens.tosh"
+        }
+      },
+      "patterns": [
+        {
+          "include": "#signature-body"
+        }
+      ]
     },
     "function-definition": {
-      "match": "\\b((?:(?:protected|abstract|obsolete|override|overrule|readonly|required|guarded|partial|private|fading|hermit|hidden|hollow|public|sealed|shared|static|strict|eager|fixed|flags|fluid|leaky|local|proud|vital|lazy|raw|shy|global|export)\\s+)*)(func)\\s+([A-Za-z_][A-Za-z0-9_-]*)\\s*(?=<|\\(|=>|$)",
-      "captures": {
-        "1": {
+      "patterns": [
+        {
+          "begin": "\\b((?:(?:protected|abstract|obsolete|override|overrule|readonly|required|guarded|partial|private|fading|hermit|hidden|hollow|public|sealed|shared|static|strict|eager|fixed|flags|fluid|leaky|local|proud|vital|lazy|raw|shy|global|export)\\s+)*)(func)\\s+([A-Za-z_][A-Za-z0-9_-]*)\\s*((?:<[^<>()]*>)?)\\s*(\\()",
+          "beginCaptures": {
+            "1": {
+              "patterns": [
+                {
+                  "include": "#declaration-modifiers"
+                }
+              ]
+            },
+            "2": {
+              "name": "keyword.control.tosh"
+            },
+            "3": {
+              "name": "entity.name.function.tosh"
+            },
+            "4": {
+              "patterns": [
+                {
+                  "include": "#generic-arguments"
+                }
+              ]
+            },
+            "5": {
+              "name": "punctuation.section.parens.tosh"
+            }
+          },
+          "end": "\\)",
+          "endCaptures": {
+            "0": {
+              "name": "punctuation.section.parens.tosh"
+            }
+          },
           "patterns": [
             {
-              "include": "#declaration-modifiers"
+              "include": "#signature-body"
             }
           ]
         },
+        {
+          "comment": "`func f => 1`, or a name at end of line.",
+          "match": "\\b((?:(?:protected|abstract|obsolete|override|overrule|readonly|required|guarded|partial|private|fading|hermit|hidden|hollow|public|sealed|shared|static|strict|eager|fixed|flags|fluid|leaky|local|proud|vital|lazy|raw|shy|global|export)\\s+)*)(func)\\s+([A-Za-z_][A-Za-z0-9_-]*)\\s*(?=<|=>|$)",
+          "captures": {
+            "1": {
+              "patterns": [
+                {
+                  "include": "#declaration-modifiers"
+                }
+              ]
+            },
+            "2": {
+              "name": "keyword.control.tosh"
+            },
+            "3": {
+              "name": "entity.name.function.tosh"
+            }
+          }
+        }
+      ]
+    },
+    "nested-parens": {
+      "comment": "A balanced paren pair inside a signature, so an inner ')' cannot close the signature.",
+      "begin": "\\(",
+      "end": "\\)",
+      "beginCaptures": {
+        "0": {
+          "name": "punctuation.section.parens.tosh"
+        }
+      },
+      "endCaptures": {
+        "0": {
+          "name": "punctuation.section.parens.tosh"
+        }
+      },
+      "patterns": [
+        {
+          "include": "#signature-body"
+        }
+      ]
+    },
+    "signature-parameter": {
+      "comment": "A parameter name: at the head of the list, after a comma, or after the native binding modes `out` and `ref`. The trailing `?` is part of the name — an optional marker left `path?` unscoped entirely, because the name class excludes `?`.",
+      "match": "(?:(?<=\\()|(?<=,)|(?<=\\bout\\s)|(?<=\\bref\\s))(\\s*)((?!(?:starts-with|subcommand|ends-with|interface|is-not-in|callconv|contains|continue|priority|default|finally|handles|name-of|require|coerce|export|global|is-not|module|nameof|native|not-in|record|return|struct|subcmd|switch|unless|alloc|break|catch|class|const|defer|event|is-in|match|quote|throw|trait|union|until|using|where|while|yield|band|bind|bnot|bxor|case|else|enum|flag|from|func|once|prop|rune|type|when|and|arg|bor|for|get|has|let|new|not|out|ref|set|shl|shr|try|var|as|if|in|is|or|protected|abstract|obsolete|override|overrule|readonly|required|guarded|partial|private|fading|hermit|hidden|hollow|public|sealed|shared|static|strict|eager|fixed|flags|fluid|leaky|local|proud|vital|lazy|raw|shy|flag|arg|true|false|null|_)\\b)[A-Za-z_][A-Za-z0-9_-]*\\??)",
+      "captures": {
         "2": {
-          "name": "keyword.control.tosh"
-        },
-        "3": {
-          "name": "entity.name.function.tosh"
+          "name": "variable.parameter.tosh"
         }
       }
+    },
+    "signature-body": {
+      "patterns": [
+        {
+          "include": "#nested-parens"
+        },
+        {
+          "include": "#comment"
+        },
+        {
+          "include": "#interpolated-string"
+        },
+        {
+          "include": "#double-quoted-string"
+        },
+        {
+          "include": "#single-quoted-string"
+        },
+        {
+          "include": "#type-annotations"
+        },
+        {
+          "include": "#generic-arguments"
+        },
+        {
+          "include": "#constants"
+        },
+        {
+          "include": "#storage-modifier"
+        },
+        {
+          "include": "#signature-parameter"
+        },
+        {
+          "include": "#spread-operator"
+        },
+        {
+          "include": "#special-variable"
+        },
+        {
+          "include": "#variable-reference"
+        },
+        {
+          "include": "#numeric"
+        },
+        {
+          "include": "#operators"
+        },
+        {
+          "include": "#punctuation"
+        }
+      ]
     },
     "declaration-modifiers": {
       "comment": "Modifier run before a declaration keyword. `global` and `export` are visibility keywords rather than storage modifiers, so they need their own scope here.",
@@ -1317,8 +1492,86 @@
         }
       }
     },
+    "record-literal": {
+      "comment": "Record literal {| key = value |}",
+      "begin": "\\{\\|",
+      "end": "\\|\\}",
+      "beginCaptures": {
+        "0": {
+          "name": "punctuation.section.collection.tosh"
+        }
+      },
+      "endCaptures": {
+        "0": {
+          "name": "punctuation.section.collection.tosh"
+        }
+      },
+      "patterns": [
+        {
+          "include": "#collection-key"
+        },
+        {
+          "include": "$self"
+        }
+      ]
+    },
+    "dict-literal": {
+      "comment": "Dictionary literal {% key = value %}",
+      "begin": "\\{%",
+      "end": "%\\}",
+      "beginCaptures": {
+        "0": {
+          "name": "punctuation.section.collection.tosh"
+        }
+      },
+      "endCaptures": {
+        "0": {
+          "name": "punctuation.section.collection.tosh"
+        }
+      },
+      "patterns": [
+        {
+          "include": "#collection-key"
+        },
+        {
+          "include": "$self"
+        }
+      ]
+    },
+    "set-literal": {
+      "comment": "Set literal {: value :}",
+      "begin": "\\{:",
+      "end": ":\\}",
+      "beginCaptures": {
+        "0": {
+          "name": "punctuation.section.collection.tosh"
+        }
+      },
+      "endCaptures": {
+        "0": {
+          "name": "punctuation.section.collection.tosh"
+        }
+      },
+      "patterns": [
+        {
+          "include": "#collection-key"
+        },
+        {
+          "include": "$self"
+        }
+      ]
+    },
+    "collection-key": {
+      "comment": "A key inside a collection literal: the name before `=`, at the head of the literal or after a comma. The leading whitespace is inside the match rather than in the lookbehind, so this rule starts earlier than the command rules and wins the leftmost tie-break — the same trick #command-position documents for itself.",
+      "match": "(?:(?<=\\{\\|)|(?<=\\{%)|(?<=\\{:)|(?<=,))(\\s*)([A-Za-z_][A-Za-z0-9_-]*)(?=\\s*=(?![=~]))",
+      "captures": {
+        "2": {
+          "name": "variable.other.member.tosh"
+        }
+      }
+    },
     "collection-delimiters": {
-      "comment": "Record {| |}, dictionary {% %} and set {: :} delimiters",
+      "comment": "Delimiters that reached here without opening a literal region — an unpaired or stray one.",
       "match": "\\{[|:%]|[|:%]\\}",
       "name": "punctuation.section.collection.tosh"
     },

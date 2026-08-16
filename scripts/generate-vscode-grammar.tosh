@@ -62,7 +62,7 @@ var cli = resolve_cli
 
 # ── Built-in command names, from the runtime itself ─────────────────────────
 
-var metadataJson = (eval $"{$cli} --export-command-metadata" | join -s "\n")
+var metadataJson = (eval $"{$cli} --export-command-metadata" | join "\n")
 var metadata = ($metadataJson | from json)
 
 var builtinNames = {% %}
@@ -100,7 +100,7 @@ if ($literalWords) {
                  "overrule|override|static|shared|hermit|strict|fluid|leaky|lazy|fixed|readonly|" +
                  "vital|required|fading|obsolete|raw|eager|hidden"
 } else {
-    var surfaceJson = (eval $"{$cli} --export-command-metadata --surface" | join -s "\n")
+    var surfaceJson = (eval $"{$cli} --export-command-metadata --surface" | join "\n")
     var surface = ($surfaceJson | from json)
 
     # `from json` yields a record, and iterating one yields the record itself rather
@@ -255,12 +255,15 @@ var TOP_LEVEL = ["shebang", "block-comment", "doc-comment", "comment",
     "type-clause", "redirection", "variable-declaration",
     # cast/new must precede control-flow: `new` and `is` are keywords too,
     # and control-flow would consume them and leave the type name bare.
-    "cast-expression", "new-expression",
+    "unit-conversion", "cast-expression", "new-expression",
     "storage-modifier", "control-flow", "constants",
     "generic-arguments", "type-annotations", "parameter-name", "member-declaration",
     "spread-operator", "caret-escape", "function-reference",
     "special-variable", "variable-reference", "pipeline-underscore",
-    "builtin-commands", "command-position", "collection-delimiters",
+    "builtin-commands", "command-position",
+    # The literal regions come before the bare delimiter match, which is now only
+    # a fallback for a stray delimiter that opened no region.
+    "record-literal", "dict-literal", "set-literal", "collection-delimiters",
     "operators", "pipe", "numeric", "member-access", "flags", "punctuation"]
 
 # ── The grammar ─────────────────────────────────────────────────────────────
@@ -354,12 +357,14 @@ $repository["enum-definition"] = definition "enum" "entity.name.type.enum.tosh"
 $repository["record-definition"] = definition "record" "entity.name.type.record.tosh"
 
 $repository["type-definition"] = {%
-    "comment" => "Refinement type alias:  type Port = int where (...)",
-    "match" => ('\b((?:(?:' + $MODIFIERS + '|global|export)\s+)*)(type)\s+(' + $IDENT + ')\s*(?==)'),
+    "comment" => "Refinement type alias:  type Port = int where (...). The base type on the right is captured too — it is a type reference in the one place the reader most needs it, and stopping at `(?==)` left `int`, `string` and `TrimmedString` unscoped in every alias.",
+    "match" => ('\b((?:(?:' + $MODIFIERS + '|global|export)\s+)*)(type)\s+(' + $IDENT + ')\s*(=)\s*([A-Za-z_][a-zA-Z0-9_.<>?\[\]]*)?'),
     "captures" => {%
         "1" => {% "patterns" => [{% "include" => "#declaration-modifiers" %}] %},
         "2" => {% "name" => "keyword.control.tosh" %},
-        "3" => {% "name" => "entity.name.type.tosh" %}
+        "3" => {% "name" => "entity.name.type.tosh" %},
+        "4" => {% "name" => "keyword.operator.assignment.tosh" %},
+        "5" => (type_ref)
     %}
 %}
 $repository["subcommand-definition"] = {%
@@ -379,23 +384,95 @@ $repository["subcommand-member"] = {%
         "2" => {% "name" => "variable.parameter.tosh" %}
     %}
 %}
+## @summary The parameter list of a declaration, as a region.
+## @remarks
+##   Untyped parameters — `func +(o)`, `func f(other)` — were the largest single
+##   cluster of uncoloured tokens in real code. The old rule required a following
+##   `:`, which is what kept it from mis-scoping a command call: from a regex
+##   alone, `(o)` in a signature and `(greet)` in an expression are identical.
+##
+##   Knowing which of the two you are looking at is exactly what a region gives,
+##   so the declaration rules now open one at their `(` and close it at the
+##   matching `)`. `#nested-parens` is what makes "matching" true: a parameter
+##   whose own type is a function — `cb: func(int) -> int` — would otherwise end
+##   the signature at its inner `)` and leak parameter colouring into the body.
 $repository["operator-definition"] = {%
     "comment" => "Operator overloads: func +(o), func ==(o), func !=(o). The name is punctuation, so #function-definition's identifier pattern never matches these.",
-    "match" => ('\b((?:(?:' + $MODIFIERS + '|global|export)\s+)*)(func)\s*(\*\*|==|!=|<=|>=|=~|!~|//|\+|-|\*|/|%|<|>)\s*(?=\()'),
-    "captures" => {%
+    "begin" => ('\b((?:(?:' + $MODIFIERS + '|global|export)\s+)*)(func)\s*(\*\*|==|!=|<=|>=|=~|!~|//|\+|-|\*|/|%|<|>)\s*(\()'),
+    "beginCaptures" => {%
         "1" => {% "patterns" => [{% "include" => "#declaration-modifiers" %}] %},
         "2" => {% "name" => "keyword.control.tosh" %},
-        "3" => {% "name" => "entity.name.function.operator.tosh" %}
-    %}
+        "3" => {% "name" => "entity.name.function.operator.tosh" %},
+        "4" => {% "name" => "punctuation.section.parens.tosh" %}
+    %},
+    "end" => '\)',
+    "endCaptures" => {% "0" => {% "name" => "punctuation.section.parens.tosh" %} %},
+    "patterns" => [{% "include" => "#signature-body" %}]
 %}
-$repository["function-definition"] = {%
-    "match" => ('\b((?:(?:' + $MODIFIERS + '|global|export)\s+)*)(func)\s+(' + $IDENT + ')\s*(?=<|\(|=>|$)'),
+
+## A declaration that opens a parameter list, and one that does not. The optional
+## generic clause is consumed by the first so `func f<T>(x)` reaches the region.
+var functionWithParameters = {%
+    "begin" => ('\b((?:(?:' + $MODIFIERS + '|global|export)\s+)*)(func)\s+(' + $IDENT + ')\s*((?:<[^<>()]*>)?)\s*(\()'),
+    "beginCaptures" => {%
+        "1" => {% "patterns" => [{% "include" => "#declaration-modifiers" %}] %},
+        "2" => {% "name" => "keyword.control.tosh" %},
+        "3" => {% "name" => "entity.name.function.tosh" %},
+        "4" => {% "patterns" => [{% "include" => "#generic-arguments" %}] %},
+        "5" => {% "name" => "punctuation.section.parens.tosh" %}
+    %},
+    "end" => '\)',
+    "endCaptures" => {% "0" => {% "name" => "punctuation.section.parens.tosh" %} %},
+    "patterns" => [{% "include" => "#signature-body" %}]
+%}
+
+var functionWithoutParameters = {%
+    "comment" => "`func f => 1`, or a name at end of line.",
+    "match" => ('\b((?:(?:' + $MODIFIERS + '|global|export)\s+)*)(func)\s+(' + $IDENT + ')\s*(?=<|=>|$)'),
     "captures" => {%
         "1" => {% "patterns" => [{% "include" => "#declaration-modifiers" %}] %},
         "2" => {% "name" => "keyword.control.tosh" %},
         "3" => {% "name" => "entity.name.function.tosh" %}
     %}
 %}
+
+$repository["function-definition"] = {%
+    "patterns" => [$functionWithParameters, $functionWithoutParameters]
+%}
+
+$repository["nested-parens"] = {%
+    "comment" => "A balanced paren pair inside a signature, so an inner ')' cannot close the signature.",
+    "begin" => '\(',
+    "end" => '\)',
+    "beginCaptures" => {% "0" => {% "name" => "punctuation.section.parens.tosh" %} %},
+    "endCaptures" => {% "0" => {% "name" => "punctuation.section.parens.tosh" %} %},
+    "patterns" => [{% "include" => "#signature-body" %}]
+%}
+
+$repository["signature-parameter"] = {%
+    "comment" => "A parameter name: at the head of the list, after a comma, or after the native binding modes `out` and `ref`. The trailing `?` is part of the name — an optional marker left `path?` unscoped entirely, because the name class excludes `?`.",
+    "match" => ('(?:(?<=\()|(?<=,)|(?<=\bout\s)|(?<=\bref\s))(\s*)(' + $NOT_KEYWORD + $IDENT + '\??)'),
+    "captures" => {% "2" => {% "name" => "variable.parameter.tosh" %} %}
+%}
+
+$repository["signature-body"] = {% "patterns" => [
+    {% "include" => "#nested-parens" %},
+    {% "include" => "#comment" %},
+    {% "include" => "#interpolated-string" %},
+    {% "include" => "#double-quoted-string" %},
+    {% "include" => "#single-quoted-string" %},
+    {% "include" => "#type-annotations" %},
+    {% "include" => "#generic-arguments" %},
+    {% "include" => "#constants" %},
+    {% "include" => "#storage-modifier" %},
+    {% "include" => "#signature-parameter" %},
+    {% "include" => "#spread-operator" %},
+    {% "include" => "#special-variable" %},
+    {% "include" => "#variable-reference" %},
+    {% "include" => "#numeric" %},
+    {% "include" => "#operators" %},
+    {% "include" => "#punctuation" %}
+] %}
 $repository["declaration-modifiers"] = {%
     "comment" => "Modifier run before a declaration keyword. `global` and `export` are visibility keywords rather than storage modifiers, so they need their own scope here.",
     "patterns" => [
@@ -465,6 +542,15 @@ $repository["constants"] = {%
 %}
 
 # Types ---------------------------------------------------------------------
+$repository["unit-conversion"] = {%
+    "comment" => "Quantity conversion target: 2`mi as `ft",
+    "match" => '\b(as)(\s+)(`)([A-Za-z°μΩ1][A-Za-z0-9°μΩ^/*·-]*)',
+    "captures" => {%
+        "1" => {% "name" => "keyword.operator.type.tosh" %},
+        "3" => {% "name" => "punctuation.definition.unit.tosh" %},
+        "4" => {% "name" => "keyword.other.unit.tosh" %}
+    %}
+%}
 $repository["cast-expression"] = {%
     "comment" => "Type-test and cast operators:  $x as int,  $x is not string",
     "match" => ('\b(as|is-not|is)\s+(not\s+)?(' + $TYPE_REF + ')'),
@@ -617,8 +703,44 @@ $repository["parameter-name"] = {%
     "match" => ('(?:(?<=[(,])|(?<=\bout\s)|(?<=\bref\s))\s*(' + $NOT_KEYWORD + $IDENT + ')\s*(?=:(?![:=]))'),
     "captures" => {% "1" => {% "name" => "variable.parameter.tosh" %} %}
 %}
+## @summary A record / dictionary / set literal as a real region, so the names
+##   inside it can be coloured as keys.
+## @remarks
+##   A plain `match` rule cannot do this. A key is a bareword followed by `=`,
+##   and so is a defaulted parameter in `func f(a, b = 2)` — telling them apart
+##   needs to know which region you are in, which is what begin/end gives.
+##
+##   Without the key rule each name took whatever colour its *spelling* implied:
+##   in one literal `local` read as a storage modifier, `config` as a builtin
+##   command and `data` as a function call — three colours for three things of
+##   one kind. `$self` carries the rest of the grammar inside, which is also what
+##   makes a nested literal work.
+func collection_literal(open: string, close: string, comment: string) {
+    return {%
+        "comment" => $comment,
+        "begin" => $open,
+        "end" => $close,
+        "beginCaptures" => {% "0" => {% "name" => "punctuation.section.collection.tosh" %} %},
+        "endCaptures" => {% "0" => {% "name" => "punctuation.section.collection.tosh" %} %},
+        "patterns" => [
+            {% "include" => "#collection-key" %},
+            {% "include" => "$self" %}
+        ]
+    %}
+}
+
+$repository["record-literal"] = collection_literal '\{\|' '\|\}' "Record literal {| key = value |}"
+$repository["dict-literal"]   = collection_literal '\{%' '%\}' "Dictionary literal {% key = value %}"
+$repository["set-literal"]    = collection_literal '\{:' ':\}' "Set literal {: value :}"
+
+$repository["collection-key"] = {%
+    "comment" => "A key inside a collection literal: the name before `=`, at the head of the literal or after a comma. The leading whitespace is inside the match rather than in the lookbehind, so this rule starts earlier than the command rules and wins the leftmost tie-break — the same trick #command-position documents for itself.",
+    "match" => ('(?:(?<=\{\|)|(?<=\{%)|(?<=\{:)|(?<=,))(\s*)(' + $IDENT + ')(?=\s*=(?![=~]))'),
+    "captures" => {% "2" => {% "name" => "variable.other.member.tosh" %} %}
+%}
+
 $repository["collection-delimiters"] = {%
-    "comment" => "Record {| |}, dictionary {% %} and set {: :} delimiters",
+    "comment" => "Delimiters that reached here without opening a literal region — an unpaired or stray one.",
     "match" => '\{[|:%]|[|:%]\}',
     "name" => "punctuation.section.collection.tosh"
 %}
@@ -668,8 +790,16 @@ $repository["pipe"] = {% "match" => '\|(?!\|)', "name" => "keyword.operator.pipe
 # Literals ------------------------------------------------------------------
 $repository["numeric"] = {% "patterns" => [
     {%
+        "comment" => "Degree shorthand: 90°, 20°C, 68°F, 90°/s",
+        "match" => '(?<![A-Za-z0-9_])([+-]?(?:[0-9][0-9_]*(?:\.(?:[0-9][0-9_]*)?)?|\.[0-9][0-9_]*)(?:[eE][+-]?[0-9][0-9_]*)?)(°[A-Za-z0-9^/*·μΩ-]*)',
+        "captures" => {%
+            "1" => {% "name" => "constant.numeric.tosh" %},
+            "2" => {% "name" => "keyword.other.unit.tosh" %}
+        %}
+    %},
+    {%
         "comment" => "Quantity with a unit: 100`m, 9.8`m/s^2, 5`kg",
-        "match" => '\b([0-9][0-9_]*(?:\.[0-9][0-9_]*)?)(`)([A-Za-z][A-Za-z0-9^/*·-]*)',
+        "match" => '(?<![A-Za-z0-9_])([+-]?(?:[0-9][0-9_]*(?:\.(?:[0-9][0-9_]*)?)?|\.[0-9][0-9_]*)(?:[eE][+-]?[0-9][0-9_]*)?)(`)([A-Za-z°μΩ1][A-Za-z0-9°μΩ^/*·-]*)',
         "captures" => {%
             "1" => {% "name" => "constant.numeric.tosh" %},
             "2" => {% "name" => "punctuation.definition.unit.tosh" %},
@@ -737,5 +867,5 @@ var grammar = {%
 %}
 
 Directory.CreateDirectory(Path.GetDirectoryName($output)) | ignore
-File.WriteAllText($output, ($grammar | to json | join -s "\n") + "\n")
+File.WriteAllText($output, ($grammar | to json | join "\n") + "\n")
 writeline $"wrote {$output} ({($builtinNames.Keys | count)} built-in names)"

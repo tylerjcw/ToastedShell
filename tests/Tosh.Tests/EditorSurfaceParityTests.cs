@@ -105,6 +105,66 @@ public sealed class EditorSurfaceParityTests
         }
     }
 
+    /// <summary>
+    /// The grammar rules that colour constructs a regex alone cannot recognise.
+    ///
+    /// These exist because of a specific way this has gone wrong twice. A fix
+    /// written into `tosh.tmLanguage.json` — which is *generated* — survives until
+    /// the next regeneration and then vanishes without a trace, and the vanishing
+    /// looks exactly like the fix never having been made. Record keys and the
+    /// `path?` optional marker were both recorded as fixed on `TS-P3-12` and were
+    /// both measurably unscoped afterwards, for that reason.
+    ///
+    /// So this asserts the rules are present in the *checked-in artefact*, which
+    /// is what the editor actually loads. A regeneration that loses them fails
+    /// here rather than quietly shipping.
+    /// </summary>
+    [Theory]
+    // A parameter list is a region, so an untyped `func f(other)` can be told from
+    // a call `greet(name)` — which a regex cannot do.
+    [InlineData("signature-body")]
+    [InlineData("signature-parameter")]
+    // Balanced inner parens, so `cb: func(int) -> int` cannot end the signature early.
+    [InlineData("nested-parens")]
+    // Collection literals are regions, so a key can be told from a defaulted parameter.
+    [InlineData("record-literal")]
+    [InlineData("collection-key")]
+    public void The_structural_grammar_rules_are_present(string ruleName)
+    {
+        using var grammar = JsonDocument.Parse(File.ReadAllText(
+            Path.Combine(RepositoryRoot(), "editor/vscode/tosh.tosh-lang/syntaxes/tosh.tmLanguage.json")));
+
+        Assert.True(
+            grammar.RootElement.GetProperty("repository").TryGetProperty(ruleName, out _),
+            $"The grammar has no '{ruleName}' rule. If it was just regenerated, the fix was "
+            + "written into the generated JSON rather than into "
+            + "scripts/generate-vscode-grammar.tosh, and regenerating dropped it.");
+    }
+
+    /// <summary>
+    /// The specific regression that made the parameter rule useless: it demanded a
+    /// following <c>:</c>, so every untyped parameter stayed uncoloured — 243 tokens
+    /// in the user's own libraries. Asserting the rule merely *exists* would pass on
+    /// a rule that had quietly regained the requirement.
+    /// </summary>
+    [Fact]
+    public void The_parameter_rule_does_not_require_a_type_annotation()
+    {
+        using var grammar = JsonDocument.Parse(File.ReadAllText(
+            Path.Combine(RepositoryRoot(), "editor/vscode/tosh.tosh-lang/syntaxes/tosh.tmLanguage.json")));
+
+        var match = grammar.RootElement
+            .GetProperty("repository")
+            .GetProperty("signature-parameter")
+            .GetProperty("match")
+            .GetString();
+
+        Assert.NotNull(match);
+        Assert.DoesNotContain("(?=:", match);
+        // And the optional marker is part of the name, or `path?` goes unscoped.
+        Assert.Contains(@"\??", match);
+    }
+
     private static string RepositoryRoot() =>
         Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../"));
 }
