@@ -5,6 +5,78 @@ namespace Tosh.Runtime;
 
 public sealed class ReflectionInvoker
 {
+    /// <summary>
+    /// The public methods of a type, by whether they are static, cached permanently.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Every call went through <c>GetMethods(...)</c>, which allocates an array of
+    /// <em>every</em> public method the type has and then gets linear-scanned for a
+    /// name match. `"abc".ToUpper()` built an array of all ~80 methods on
+    /// <see cref="string"/> and compared names down it, on every call — 3,975 ns per
+    /// invocation, with `StelemRef` array stores and
+    /// `String.Equals(…, StringComparison)` visible in the profile (<c>TS-P2-122</c>).
+    /// </para>
+    /// <para>
+    /// A loaded type's members cannot change, so the arrays are kept for the process.
+    /// The cache is bounded by the number of distinct types a program calls into.
+    /// Callers only read the arrays — <c>Invoke</c> takes an
+    /// <see cref="IEnumerable{T}"/> and <c>ConstructGenericCandidates</c> builds a new
+    /// list — so one shared array per type is safe.
+    /// </para>
+    /// </remarks>
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<(Type Type, bool Static), MethodInfo[]> _methodsByType = new();
+
+    private static MethodInfo[] PublicMethods(Type type, bool isStatic)
+        => _methodsByType.GetOrAdd(
+            (type, isStatic),
+            static key => key.Type.GetMethods(
+                BindingFlags.Public | (key.Static ? BindingFlags.Static : BindingFlags.Instance)));
+
+    /// <summary>
+    /// The overloads of one name, cached — so overload selection scans two or three
+    /// methods instead of every method the type has.
+    /// </summary>
+    /// <remarks>
+    /// <c>Invoke</c> filters the candidates by name itself and uses that same filtered
+    /// set for its diagnostics, so handing it a pre-filtered array changes nothing it
+    /// can observe. It was scanning ~80 methods per call on <see cref="string"/>, which
+    /// left `String.Equals(…, StringComparison)` at 2% of a profile that does nothing
+    /// but call `ToUpper` (<c>TS-P2-122</c>).
+    /// </remarks>
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<(Type Type, bool Static, string Name), MethodInfo[]> _methodsByName =
+        new(MethodKeyComparer.Instance);
+
+    private static MethodInfo[] MethodsNamed(Type type, bool isStatic, string name)
+        => _methodsByName.GetOrAdd(
+            (type, isStatic, name),
+            static key => Array.FindAll(
+                PublicMethods(key.Type, key.Static),
+                candidate => string.Equals(candidate.Name, key.Name, StringComparison.OrdinalIgnoreCase)));
+
+    /// <summary>
+    /// Compares the name case-insensitively without lowercasing it, which would
+    /// allocate a string on every lookup and undo the point of the cache.
+    /// </summary>
+    private sealed class MethodKeyComparer : IEqualityComparer<(Type Type, bool Static, string Name)>
+    {
+        public static readonly MethodKeyComparer Instance = new();
+
+        public bool Equals((Type Type, bool Static, string Name) x, (Type Type, bool Static, string Name) y)
+            => x.Type == y.Type &&
+               x.Static == y.Static &&
+               string.Equals(x.Name, y.Name, StringComparison.OrdinalIgnoreCase);
+
+        public int GetHashCode((Type Type, bool Static, string Name) key)
+            => HashCode.Combine(key.Type, key.Static, StringComparer.OrdinalIgnoreCase.GetHashCode(key.Name));
+    }
+
+    /// <summary>The public constructors of a type, cached for the same reason.</summary>
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<Type, ConstructorInfo[]> _constructorsByType = new();
+
+    private static ConstructorInfo[] PublicConstructors(Type type)
+        => _constructorsByType.GetOrAdd(type, static candidate => candidate.GetConstructors());
+
     public object CreateInstance(Type type, IReadOnlyList<object?> arguments)
     {
         ArgumentNullException.ThrowIfNull(type);
@@ -13,7 +85,7 @@ public sealed class ReflectionInvoker
         CandidateBinding? bestBinding = null;
         ConstructorInfo? bestConstructor = null;
 
-        foreach (var constructor in type.GetConstructors())
+        foreach (var constructor in PublicConstructors(type))
         {
             if (!TryBindParameters(constructor.GetParameters(), arguments, out var binding))
             {
@@ -69,7 +141,7 @@ public sealed class ReflectionInvoker
         }
 
         return Invoke(
-            target.GetType().GetMethods(BindingFlags.Instance | BindingFlags.Public),
+            MethodsNamed(target.GetType(), isStatic: false, methodName),
             target,
             methodName,
             arguments,
@@ -119,7 +191,7 @@ public sealed class ReflectionInvoker
             return ValueTask.FromResult(InvokeStatic(staticType, methodName, arguments));
         }
 
-        var candidates = target.GetType().GetMethods(BindingFlags.Instance | BindingFlags.Public);
+        var candidates = MethodsNamed(target.GetType(), isStatic: false, methodName);
 
         if (typeArguments is { Count: > 0 })
         {
@@ -198,7 +270,7 @@ public sealed class ReflectionInvoker
         ArgumentNullException.ThrowIfNull(arguments);
 
         return Invoke(
-            type.GetMethods(BindingFlags.Static | BindingFlags.Public),
+            MethodsNamed(type, isStatic: true, methodName),
             target: null,
             methodName,
             arguments,
@@ -238,7 +310,7 @@ public sealed class ReflectionInvoker
         }
 
         var candidates = ConstructGenericCandidates(
-            type.GetMethods(BindingFlags.Static | BindingFlags.Public),
+            MethodsNamed(type, isStatic: true, methodName),
             methodName,
             typeArguments,
             $"'{type.FullName}'");
