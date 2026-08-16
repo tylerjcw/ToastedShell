@@ -1,85 +1,88 @@
 #!/usr/bin/env tosh
-## @summary Work the plan boards in docs/plan — list, inspect and check items.
+## @summary Work the plan — list, inspect, check and index the items in docs/plan.
 ## @remarks
-##   Replaces five separate scripts (append-to-item, check-table-rows, close-items,
-##   file-item, stabilization-counts) that each re-implemented the same table parse
-##   against the same document. Modelled on scripts/build.tosh: one entry point,
-##   subcommands underneath.
+##   Replaces five scripts (append-to-item, check-table-rows, close-items, file-item,
+##   stabilization-counts) that each re-implemented the same markdown-table parse.
+##   Modelled on scripts/build.tosh: one entry point, subcommands underneath.
 ##
-##   The counts this prints are **derived every time**. The board they replaced kept
-##   a hand-written snapshot with the instruction "when a status changes there,
-##   change it here in the same edit", and it drifted twenty items out of date
-##   because that is what hand-maintained summaries do.
-##
-##   Rows are single lines of up to several thousand characters and may contain
-##   escaped pipes inside prose, so cells are split on unescaped `|` only.
+##   Everything printed here is derived on the spot. The board this replaced kept a
+##   hand-written snapshot carrying the instruction "when a status changes there,
+##   change it here in the same edit"; it drifted twenty items out of date, because
+##   that is what hand-maintained summaries do.
 ## @example
 ##   scripts/plan.tosh counts
 ##   scripts/plan.tosh list active
 ##   scripts/plan.tosh show TS-P2-117
 ##   scripts/plan.tosh check
-## @returns Depends on the subcommand; `check` and `orphans` exit non-zero on a fault.
+##   scripts/plan.tosh index
+## @returns Depends on the subcommand; `check` reports a fault count.
 var PLAN_DIR = "docs/plan"
-var BOARDS = ["ACTIVE", "PROPOSED", "COMPLETE", "DEFERRED"]
+var ITEMS_DIR = "docs/plan/items"
 
-## The controlled status vocabulary. A status cell may carry any amount of detail
-## after an em dash; the leading word must be one of these, so that state is a fact
-## rather than a reading.
-var STATES = ["Open", "Proposed", "Research", "In progress", "Partial", "Complete", "Deferred", "Withdrawn"]
+var STATES = ["proposed", "open", "research", "in-progress", "partial", "complete", "deferred", "withdrawn"]
+var AREAS = ["toast", "tosh", "tome", "crumb", "plan", "legacy"]
+var REQUIRED = ["id", "title", "status", "area", "priority"]
 
-## Which board each state belongs on. `check` uses this to catch a half-finished
-## move — a row whose status says Complete while it still sits in ACTIVE.md.
-var HOME = {%
-    "Open" => "ACTIVE", "Research" => "ACTIVE", "In progress" => "ACTIVE", "Partial" => "ACTIVE",
-    "Proposed" => "PROPOSED",
-    "Complete" => "COMPLETE", "Withdrawn" => "COMPLETE",
-    "Deferred" => "DEFERRED"
+## Which index a status appears on.
+var BOARD = {%
+    "proposed" => "PROPOSED",
+    "open" => "ACTIVE", "research" => "ACTIVE", "in-progress" => "ACTIVE", "partial" => "ACTIVE",
+    "deferred" => "DEFERRED",
+    "complete" => "COMPLETE", "withdrawn" => "COMPLETE"
 %}
 
-## Stand-in for an escaped pipe while a row is being split. Any string that cannot
-## occur in the prose will do; this one is checked for by `check`.
-var SENTINEL = "@@ESCAPED_PIPE@@"
+var BOARDS = ["ACTIVE", "PROPOSED", "DEFERRED", "COMPLETE"]
 
-## Split a table row into cells on unescaped pipes. A prose cell may contain `\|`
-## — 39 rows do — and splitting naively would shift every later cell.
-func cells(line) {
-    var safe = $line.Replace("\\|", $SENTINEL)
-    var parts = $safe.Split("|")
-    var out = []
-    for p in $parts { $out = ($out + [$p.Replace($SENTINEL, "\\|")]) }
-    return $out
-}
+## Read one item file into a dictionary of its frontmatter, plus the counts that
+## `check` needs: how many acceptance boxes are ticked and how many are not.
+func read_item(path) {
+    var fields = {% %}
+    var infront = false
+    var seen_front = false
+    var open_boxes = 0
+    var done_boxes = 0
 
-## The leading status word, with detail and emphasis stripped.
-func lead(cell) {
-    var s = $cell.Trim().Replace("**", "")
-    for sep in ["—", "–", ";", ","] {
-        var i = $s.IndexOf($sep)
-        if ($i >= 0) { $s = $s.Substring(0, $i) }
+    for line in (read-file $path | lines) {
+        if ($line.Trim() == "---") {
+            if (not $seen_front) { $infront = true; $seen_front = true }
+            else { $infront = false }
+            continue
+        }
+        if ($infront) {
+            var i = $line.IndexOf(":")
+            if ($i > 0) {
+                var key = $line.Substring(0, $i).Trim()
+                var value = $line.Substring(($i + 1)).Trim()
+                if ($value.StartsWith("\"")) { $value = $value.Trim("\"") }
+                $fields[$key] = $value
+            }
+            continue
+        }
+        var t = $line.Trim()
+        if ($t.StartsWith("- [ ]")) { $open_boxes = ($open_boxes + 1) }
+        if ($t.StartsWith("- [x]")) { $done_boxes = ($done_boxes + 1) }
     }
-    return $s.Trim()
+
+    $fields["path"] = $path
+    $fields["open_boxes"] = $open_boxes
+    $fields["done_boxes"] = $done_boxes
+    return $fields
 }
 
-## Every item row across every board, as dictionaries.
+## Every item. `find` by absolute path because `ls` is a TōSh builtin returning
+## objects, and a plain list of paths is all this needs.
+##
+## The board is resolved here rather than by a helper called from inside a `where`
+## closure: a free function invoked as `f($_)` inside a closure resolves as an
+## *instance method on the pipeline item* and fails. Filed as TOAST-0001.
 func load() {
     var items = []
-    for board in $BOARDS {
-        var path = ($PLAN_DIR + "/" + $board + ".md")
-        var tier = ""
-        for line in (read-file $path | lines) {
-            if ($line.StartsWith("## P")) { $tier = $line.Substring(3, 2) }
-            if (not ($line =~ "^\\| `TS-P[0-3]-[0-9]+` \\|")) { continue }
-            var c = cells($line)
-            $items = ($items + [{%
-                "id" => $line.Split("`")[1],
-                "board" => $board,
-                "tier" => $tier,
-                "status" => $c[2].Trim(),
-                "state" => lead($c[2]),
-                "cellcount" => ($c | count),
-                "line" => $line
-            %}])
-        }
+    for path in (/usr/bin/find $ITEMS_DIR -name "*.md" | lines) {
+        if ($path.Trim() == "") { continue }
+        var it = read_item($path.Trim())
+        var s = $it["status"]
+        if ($s in $STATES) { $it["board"] = $BOARD[$s] } else { $it["board"] = "UNKNOWN" }
+        $items = ($items + [$it])
     }
     return $items
 }
@@ -96,11 +99,11 @@ if ($cmd == "counts") {
         var n = ($items | where { $_["board"] == $board } | count)
         echo $"{$board}: {$n}"
     }
-    echo $"total: {($items | count)}"
-    for tier in ["P0", "P1", "P2", "P3"] {
-        var all = ($items | where { $_["tier"] == $tier } | count)
-        var done = ($items | where { ($_["tier"] == $tier) and ($_["board"] == "COMPLETE") } | count)
-        if ($all > 0) { echo $"{$tier}: {$done}/{$all} complete" }
+    var total = ($items | count)
+    echo $"total tracked items: {$total}"
+    for area in $AREAS {
+        var n = ($items | where { $_["area"] == $area } | count)
+        if ($n > 0) { echo $"  area {$area}: {$n}" }
     }
 }
 
@@ -111,73 +114,82 @@ if ($cmd == "list") {
     var items = (load() | where { $_["board"] == $want } | collect)
     for it in $items {
         var id = $it["id"]
-        var state = $it["state"]
-        var tier = $it["tier"]
-        echo $"{$id}  [{$state}]  {$tier}"
+        var status = $it["status"]
+        var title = $it["title"]
+        var ob = $it["open_boxes"]
+        var db = $it["done_boxes"]
+        var boxes = ""
+        if (($ob + $db) > 0) { $boxes = $" ({$db}/{($ob + $db)})" }
+        echo $"{$id}  [{$status}]{$boxes}  {$title}"
     }
     var n = ($items | count)
-    echo $"({$n} items on {$want})"
+    echo $"({$n} on {$want})"
 }
 
 ## ---------------------------------------------------------------- show
 if ($cmd == "show") {
     if (($rest | count) == 0) { echo "usage: plan.tosh show <id>" }
-    var id = $rest[0]
-    var hits = (load() | where { $_["id"] == $id } | collect)
-    if (($hits | count) == 0) { echo $"no such item: {$id}" }
-    for it in $hits {
-        var c = cells($it["line"])
-        var board = $it["board"]
-        var tier = $it["tier"]
-        var status = $c[2].Trim()
-        var problem = $c[3].Trim()
-        var acceptance = $c[4].Trim()
-        echo $"{$id} — {$board} / {$tier}"
-        echo $"status: {$status}"
-        echo ""
-        echo $"problem: {$problem}"
-        echo ""
-        echo $"acceptance: {$acceptance}"
+    else {
+        var id = $rest[0]
+        var hits = (load() | where { $_["id"] == $id } | collect)
+        if (($hits | count) == 0) { echo $"no such item: {$id}" }
+        for it in $hits { echo (read-file $it["path"]) }
     }
 }
 
 ## ---------------------------------------------------------------- check
 ##
-## The integrity pass. Everything here is a fault a human edit can introduce and a
-## reader would not notice: a duplicated ID, a status word outside the vocabulary,
-## a row with the wrong number of cells, or a row sitting on the wrong board
-## because a move was only half done.
+## Faults a human edit introduces quietly and a reader would not notice.
 if ($cmd == "check") {
     var items = load()
     var faults = 0
     var seen = []
 
     for it in $items {
-        var id = $it["id"]
-        var board = $it["board"]
-        var state = $it["state"]
-        var cellcount = $it["cellcount"]
+        var path = $it["path"]
 
-        if ($id in $seen) {
-            echo $"duplicate id: {$id} (again on {$board})"
-            $faults = ($faults + 1)
-        }
-        $seen = ($seen + [$id])
-
-        if (not ($state in $STATES)) {
-            echo $"uncontrolled status: {$id} — '{$state}'"
-            $faults = ($faults + 1)
-        } else {
-            var home = $HOME[$state]
-            if ($home != $board) {
-                echo $"misfiled: {$id} is '{$state}' but sits on {$board}, belongs on {$home}"
+        for field in $REQUIRED {
+            if (not $it.ContainsKey($field)) {
+                echo $"missing field '{$field}': {$path}"
                 $faults = ($faults + 1)
             }
         }
 
-        if ($cellcount != 6) {
-            var actual = ($cellcount - 2)
-            echo $"malformed row: {$id} has {$actual} cells, expected 4"
+        var id = $it["id"]
+        var status = $it["status"]
+        var area = $it["area"]
+
+        if ($id in $seen) {
+            echo $"duplicate id: {$id} ({$path})"
+            $faults = ($faults + 1)
+        }
+        $seen = ($seen + [$id])
+
+        if (not ($status in $STATES)) {
+            echo $"unknown status '{$status}': {$id}"
+            $faults = ($faults + 1)
+        }
+        if (not ($area in $AREAS)) {
+            echo $"unknown area '{$area}': {$id}"
+            $faults = ($faults + 1)
+        }
+
+        ## The sub-task rule: an item is not complete while a box is unticked.
+        ## The old board had no way to say this, so authors said it in a column
+        ## markdown never rendered.
+        if (($status == "complete") and ($it["open_boxes"] > 0)) {
+            var n = $it["open_boxes"]
+            echo $"{$id} is 'complete' with {$n} unchecked acceptance box(es) — use 'partial'"
+            $faults = ($faults + 1)
+        }
+        if (($status == "partial") and ($it["open_boxes"] == 0)) {
+            echo $"{$id} is 'partial' but nothing is left unchecked — close it or record what remains"
+            $faults = ($faults + 1)
+        }
+
+        var expected = ($ITEMS_DIR + "/" + $id + ".md")
+        if ($path != $expected) {
+            echo $"filename does not match id: {$path} (expected {$expected})"
             $faults = ($faults + 1)
         }
     }
@@ -186,24 +198,62 @@ if ($cmd == "check") {
     echo $"checked {$total} items, {$faults} faults"
 }
 
+## ---------------------------------------------------------------- index
+##
+## Regenerate the four board files. They are outputs; nothing reads them back.
+if ($cmd == "index") {
+    var items = load()
+    for board in $BOARDS {
+        var rows = (load() | where { $_["board"] == $board } | collect)
+        var out = [
+            $"# {$board.Substring(0, 1)}{$board.Substring(1).ToLower()}",
+            "",
+            "<!-- Generated by scripts/plan.tosh index. Do not edit; edit docs/plan/items/. -->",
+            "",
+            "| ID | Priority | Status | Progress | Title |",
+            "|---|---|---|---|---|"
+        ]
+        for it in $rows {
+            var id = $it["id"]
+            var title = $it["title"]
+            var status = $it["status"]
+            var priority = $it["priority"]
+            var ob = $it["open_boxes"]
+            var db = $it["done_boxes"]
+            var progress = "—"
+            if (($ob + $db) > 0) { $progress = $"{$db}/{($ob + $db)}" }
+            $out = ($out + [$"| [`{$id}`](items/{$id}.md) | P{$priority} | {$status} | {$progress} | {$title} |"])
+        }
+        if (($rows | count) == 0) { $out = ($out + ["| — | | | | *(none)* |"]) }
+        if ($board == "COMPLETE") {
+            $out = ($out + ["", "Items closed under the old stabilization board are frozen in [legacy/COMPLETE.md](legacy/COMPLETE.md)."])
+        }
+        write-file ($PLAN_DIR + "/" + $board + ".md") (($out | join "\n") + "\n") | ignore
+        var n = ($rows | count)
+        echo $"{$board}.md: {$n} items"
+    }
+}
+
 ## ---------------------------------------------------------------- orphans
 ##
-## Item IDs are cited in source and test comments — 853 references across 251 files
-## when the boards were split. An ID deleted from the board while those citations
-## remain leaves a reader chasing an item that no longer exists.
+## An ID cited in code but absent from the plan leaves a reader chasing nothing.
 if ($cmd == "orphans") {
     var known = []
     for it in load() { $known = ($known + [$it["id"]]) }
+    for line in (read-file ($PLAN_DIR + "/legacy/COMPLETE.md") | lines) {
+        if ($line =~ "^\\| `TS-P[0-3]-[0-9]+` \\|") { $known = ($known + [$line.Split("`")[1]]) }
+    }
 
-    ## `/usr/bin/grep` by absolute path deliberately: `grep` alone resolves to the
-    ## TōSh builtin, which has its own option set and no `-o`.
     var cited = []
-    for id in (/usr/bin/grep -roh --include="*.cs" --include="*.tosh" "TS-P[0-3]-[0-9]\\+" src tests scripts | lines) {
+    ## Includes are unquoted deliberately: TōSh passes `--include="*.cs"` through to
+    ## an external command with the quote characters still in it, so grep looks for a
+    ## file literally named "*.cs" and matches nothing. Filed as TOSH-0001.
+    for id in (/usr/bin/grep -roh --include=*.cs --include=*.tosh "TS-P[0-3]-[0-9]\\+" src tests scripts | lines) {
         if (not ($id in $cited)) { $cited = ($cited + [$id]) }
     }
 
     var missing = ($cited | where { not ($_ in $known) } | collect)
-    for m in $missing { echo $"cited in code but not on any board: {$m}" }
+    for m in $missing { echo $"cited in code but not in the plan: {$m}" }
     var nc = ($cited | count)
     var nm = ($missing | count)
     echo $"{$nc} distinct ids cited, {$nm} orphaned"
