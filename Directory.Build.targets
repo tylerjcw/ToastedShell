@@ -18,7 +18,8 @@
     `dotnet clean` now removes:
       - The normal bin/ and obj/ (built-in)
       - artifacts/test-results/   (hang dumps, coverage, xml reports)
-      - artifacts/publish/        (published single-file binaries)
+      - artifacts/publish/        (published single-file binaries, unless
+                                   PreserveToshPublishArtifacts=true)
   -->
 
   <Target Name="CleanTestResults" AfterTargets="Clean"
@@ -28,7 +29,8 @@
   </Target>
 
   <Target Name="CleanPublishArtifacts" AfterTargets="Clean"
-          Condition="Exists('$(ArtifactsRoot)publish')">
+          Condition="'$(PreserveToshPublishArtifacts)' != 'true'
+                     and Exists('$(ArtifactsRoot)publish')">
     <RemoveDir Directories="$(ArtifactsRoot)publish" />
     <Message Importance="high" Text="Cleaned publish artifacts: $(ArtifactsRoot)publish" />
   </Target>

@@ -2,16 +2,46 @@
 #
 # Split package: produces tosh, tosh-lsp, tosh-mcp, tome, crumb, tosh-devcompanion from a single source tree.
 #
-# TOSH_TARGETS may be set by the caller (scripts/build.tosh) to a comma-
+# TOSH_TARGETS may be set by the build orchestrator to a comma-
 # separated subset of {tosh,lsp,mcp,tome,crumb,devcompanion}. The selected names drive
 # both the pkgname=() array (so makepkg only produces the requested
 # .pkg.tar.zst files) and which projects build() actually publishes.
-# Empty / unset => tosh, tosh-lsp, tosh-mcp, tome, crumb (devcompanion is opt-in, dev-only).
+# Unset => tosh, tosh-lsp, tosh-mcp, tome, crumb (devcompanion is opt-in, dev-only).
+# Explicitly empty or unknown selections fail closed.
+#
+# TOSH_PREBUILT_ROOT is an orchestration-only fast path used by
+# scripts/build.tosh. It must point at a validated release bundle below
+# artifacts/publish; incompatible or altered bundles fail instead of rebuilding.
 
-_targets="${TOSH_TARGETS:-tosh,lsp,mcp,tome,crumb}"
-_want_tosh=0; _want_lsp=0; _want_mcp=0; _want_tome=0; _want_crumb=0; _want_dc=0
+_target_fail() {
+  printf '==> ERROR: Invalid TOSH_TARGETS: %s\n' "$1" >&2
+  return 1
+}
+
+if [[ -v TOSH_TARGETS ]]; then
+  _targets="$TOSH_TARGETS"
+  [[ -n "${_targets//[[:space:]]/}" ]] || {
+    _target_fail 'selection is empty'
+    return 1
+  }
+  [[ "$_targets" != ,* && "$_targets" != *, && "$_targets" != *,,* ]] || {
+    _target_fail 'selection contains an empty target'
+    return 1
+  }
+else
+  _targets='tosh,lsp,mcp,tome,crumb'
+fi
+_want_tosh=0; _want_lsp=0; _want_mcp=0; _want_tome=0; _want_crumb=0; _want_dc=0; _want_dap=0
 IFS=',' read -ra _t <<< "$_targets"
 for _x in "${_t[@]}"; do
+  # Trim token edges, preserving internal whitespace so malformed names
+  # such as "to sh" remain invalid rather than becoming "tosh".
+  _x="${_x#"${_x%%[![:space:]]*}"}"
+  _x="${_x%"${_x##*[![:space:]]}"}"
+  [[ -n "$_x" ]] || {
+    _target_fail 'selection contains an empty target'
+    return 1
+  }
   case "${_x,,}" in
     tosh|cli)                    _want_tosh=1 ;;
     lsp)                         _want_lsp=1 ;;
@@ -19,6 +49,11 @@ for _x in "${_t[@]}"; do
     tome|editor)                 _want_tome=1 ;;
     crumb|pkg)                   _want_crumb=1 ;;
     devcompanion|dc|companion)   _want_dc=1 ;;
+    dap|debug)                   _want_dap=1 ;;
+    *)
+      _target_fail "unknown target '$_x'"
+      return 1
+      ;;
   esac
 done
 unset _t _x
@@ -30,14 +65,16 @@ _pkgs=()
 (( _want_tome ))  && _pkgs+=('tome')
 (( _want_crumb )) && _pkgs+=('crumb')
 (( _want_dc   ))  && _pkgs+=('tosh-devcompanion')
+(( _want_dap  ))  && _pkgs+=('tosh-dap')
 [[ ${#_pkgs[@]} -eq 0 ]] && {
-  _pkgs=('tosh' 'tosh-lsp' 'tosh-mcp' 'tome' 'crumb')
-  _want_tosh=1; _want_lsp=1; _want_mcp=1; _want_tome=1; _want_crumb=1
+  _target_fail 'selection resolved to no packages'
+  return 1
 }
+_selected_count=${#_pkgs[@]}
 
 pkgbase=tosh
 pkgname=("${_pkgs[@]}")
-pkgver=26.7.16.10
+pkgver=26.8.31.10
 pkgrel=1
 arch=('x86_64')
 url='https://github.com/komrad/tosh'
@@ -47,24 +84,253 @@ options=('!strip')  # .NET single-file bundles append assemblies after the ELF s
 source=()
 sha256sums=()
 
-_publish_args=(
-  -c Release
-  -r linux-x64
-  -p:PublishSingleFile=true
-  -p:PublishReadyToRun=true
-  -p:SelfContained=true
-  -p:EnableCompressionInSingleFile=false
-  -p:DebugType=None
-  -p:DebugSymbols=false
-  -p:DisableToshVsCodeExtensionSync=true
-)
+_prebuilt_root="${TOSH_PREBUILT_ROOT:-}"
+_prebuilt_manifest=''
+
+_prebuilt_fail() {
+  printf '==> ERROR: Invalid TOSH_PREBUILT_ROOT: %s\n' "$1" >&2
+  return 1
+}
+
+_manifest_value() {
+  local key="$1" line value='' found=0
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    if [[ "$line" == "$key="* ]]; then
+      [[ $found -eq 0 ]] || return 1
+      value="${line#*=}"
+      found=1
+    fi
+  done < "$_prebuilt_manifest"
+  [[ $found -eq 1 && -n "$value" ]] || return 1
+  printf '%s' "$value"
+}
+
+_manifest_expect() {
+  local key="$1" expected="$2" actual
+  actual="$(_manifest_value "$key")" || {
+    _prebuilt_fail "manifest key '$key' is missing or duplicated"
+    return 1
+  }
+  [[ "$actual" == "$expected" ]] || {
+    _prebuilt_fail "manifest $key is '$actual', expected '$expected'"
+    return 1
+  }
+}
+
+_prebuilt_filename() {
+  case "$1" in
+    tosh)         printf 'tosh' ;;
+    lsp)          printf 'Tosh.Lsp' ;;
+    mcp)          printf 'Tosh.Mcp' ;;
+    tome)         printf 'tome' ;;
+    crumb)        printf 'crumb' ;;
+    devcompanion) printf 'Tosh.DevCompanion' ;;
+    dap)          printf 'Tosh.Dap' ;;
+    *) return 1 ;;
+  esac
+}
+
+_target_wanted() {
+  case "$1" in
+    tosh)         [[ $_want_tosh -eq 1 ]] ;;
+    lsp)          [[ $_want_lsp -eq 1 ]] ;;
+    mcp)          [[ $_want_mcp -eq 1 ]] ;;
+    tome)         [[ $_want_tome -eq 1 ]] ;;
+    crumb)        [[ $_want_crumb -eq 1 ]] ;;
+    devcompanion) [[ $_want_dc -eq 1 ]] ;;
+    dap)          [[ $_want_dap -eq 1 ]] ;;
+    *) return 1 ;;
+  esac
+}
+
+_target_project() {
+  case "$1" in
+    tosh)         printf 'src/Tosh.Cli/Tosh.Cli.csproj' ;;
+    lsp)          printf 'src/Tosh.Lsp/Tosh.Lsp.csproj' ;;
+    mcp)          printf 'src/Tosh.Mcp/Tosh.Mcp.csproj' ;;
+    tome)         printf 'src/Tosh.Tome/Tosh.Tome.csproj' ;;
+    crumb)        printf 'src/Tosh.Crumb/Tosh.Crumb.csproj' ;;
+    devcompanion) printf 'tools/Tosh.DevCompanion/Tosh.DevCompanion.csproj' ;;
+    dap)          printf 'src/Tosh.Dap/Tosh.Dap.csproj' ;;
+    *) return 1 ;;
+  esac
+}
+
+_validate_prebuilt() {
+  local requested="$_prebuilt_root" repo_root allowed target filename file expected actual
+  local version_output version_expected version_year version_month version_publish version_dotnet
+  [[ -d "$requested" && ! -L "$requested" ]] || {
+    _prebuilt_fail "bundle root is missing, not a directory, or is a symlink"
+    return 1
+  }
+
+  repo_root="$(realpath -e -- "$startdir/../..")" || {
+    _prebuilt_fail "repository root cannot be resolved"
+    return 1
+  }
+  allowed="$repo_root/artifacts/publish"
+  _prebuilt_root="$(realpath -e -- "$requested")" || {
+    _prebuilt_fail "bundle root cannot be resolved"
+    return 1
+  }
+  [[ "$_prebuilt_root" == "$allowed/"* ]] || {
+    _prebuilt_fail "bundle must be below $allowed"
+    return 1
+  }
+
+  _prebuilt_manifest="$_prebuilt_root/.tosh-publish-manifest"
+  [[ -f "$_prebuilt_manifest" && ! -L "$_prebuilt_manifest" ]] || {
+    _prebuilt_fail "manifest is missing or is a symlink"
+    return 1
+  }
+  _manifest_expect format 2 || return 1
+  _manifest_expect version "$pkgver" || return 1
+  _manifest_expect rid linux-x64 || return 1
+  _manifest_expect mode single-file || return 1
+  _manifest_expect self_contained true || return 1
+  _manifest_expect trimmed false || return 1
+  _manifest_expect ready_to_run true || return 1
+  _manifest_expect include_all_content_for_self_extract true || return 1
+  _manifest_expect dotnet_major 10 || return 1
+  _manifest_expect artifact_count 5 || return 1
+
+  for target in tosh lsp mcp tome crumb devcompanion dap; do
+    _target_wanted "$target" || continue
+    filename="$(_prebuilt_filename "$target")" || return 1
+    file="$_prebuilt_root/$filename"
+    [[ -f "$file" && ! -L "$file" && -x "$file" ]] || {
+      _prebuilt_fail "$filename is missing, unsafe, or not executable"
+      return 1
+    }
+    expected="$(_manifest_value "${target}_sha256")" || {
+      _prebuilt_fail "checksum for $target is missing or duplicated"
+      return 1
+    }
+    [[ "$expected" =~ ^[0-9a-f]{64}$ ]] || {
+      _prebuilt_fail "checksum for $target is malformed"
+      return 1
+    }
+    actual="$(sha256sum -- "$file")" || {
+      _prebuilt_fail "could not hash $filename"
+      return 1
+    }
+    actual="${actual%% *}"
+    [[ "$actual" == "$expected" ]] || {
+      _prebuilt_fail "checksum mismatch for $filename"
+      return 1
+    }
+  done
+
+  IFS='.' read -r version_year version_month version_publish version_dotnet <<< "$pkgver"
+  version_expected="$version_year.$version_month-$version_publish-$version_dotnet"
+  version_output="$("$_prebuilt_root/tosh" --version)" || {
+    _prebuilt_fail 'published CLI version probe failed'
+    return 1
+  }
+  [[ "$version_output" == *"$version_expected" ]] || {
+    _prebuilt_fail "published CLI reports '$version_output', expected '*$version_expected'"
+    return 1
+  }
+}
+
+_stage_prebuilt() {
+  local target="$1" source output_dir output_name destination expected actual
+  source="$_prebuilt_root/$(_prebuilt_filename "$target")" || return 1
+  case "$target" in
+    tosh)         output_dir="$srcdir/out-cli";   output_name='Tosh.Cli' ;;
+    lsp)          output_dir="$srcdir/out-lsp";   output_name='Tosh.Lsp' ;;
+    mcp)          output_dir="$srcdir/out-mcp";   output_name='Tosh.Mcp' ;;
+    tome)         output_dir="$srcdir/out-tome";  output_name='tome' ;;
+    crumb)        output_dir="$srcdir/out-crumb"; output_name='crumb' ;;
+    devcompanion) output_dir="$srcdir/out-dc";    output_name='Tosh.DevCompanion' ;;
+    dap)          output_dir="$srcdir/out-dap";   output_name='Tosh.Dap' ;;
+    *) return 1 ;;
+  esac
+  mkdir -p "$output_dir"
+  destination="$output_dir/$output_name"
+  cp --reflink=auto --preserve=mode,timestamps -- "$source" "$destination" || return 1
+
+  # Validate the staged copy as well as the source. This closes the window
+  # between manifest validation and copying when makepkg is invoked directly.
+  [[ -f "$destination" && ! -L "$destination" && -x "$destination" ]] || {
+    _prebuilt_fail "staged $output_name is missing, unsafe, or not executable"
+    return 1
+  }
+  expected="$(_manifest_value "${target}_sha256")" || {
+    _prebuilt_fail "checksum for staged target $target is missing or duplicated"
+    return 1
+  }
+  actual="$(sha256sum -- "$destination")" || {
+    _prebuilt_fail "could not hash staged $output_name"
+    return 1
+  }
+  actual="${actual%% *}"
+  [[ "$actual" == "$expected" ]] || {
+    _prebuilt_fail "checksum mismatch after staging $output_name"
+    return 1
+  }
+}
 
 build() {
   cd "$startdir/../.."
 
-  dotnet clean Tosh.slnx -c Release --verbosity quiet || true
-  rm -rf "$srcdir/out-cli" "$srcdir/out-lsp" "$srcdir/out-mcp" "$srcdir/out-tome" "$srcdir/out-crumb" "$srcdir/out-dc"
-  dotnet restore Tosh.slnx --force
+  _build_artifacts="$srcdir/dotnet-artifacts"
+  _publish_args=(
+    -c Release
+    -r linux-x64
+    --artifacts-path "$_build_artifacts"
+    --no-restore
+    -m:1
+    -p:PublishSingleFile=true
+    -p:PublishReadyToRun=true
+    -p:SelfContained=true
+    -p:IncludeAllContentForSelfExtract=true
+    -p:EnableCompressionInSingleFile=false
+    -p:DebugType=None
+    -p:DebugSymbols=false
+    -p:DisableToshSpecBuild=true
+    -p:DisableToshParityCheck=true
+    -p:DisableToshVsCodeExtensionSync=true
+  )
+
+  rm -rf "$srcdir/out-cli" "$srcdir/out-lsp" "$srcdir/out-mcp" "$srcdir/out-tome" "$srcdir/out-crumb" "$srcdir/out-dc" "$srcdir/out-dap"
+  if [[ -n "$_prebuilt_root" ]]; then
+    _validate_prebuilt || return 1
+    printf '==> Reusing validated publish bundle: %s\n' "$_prebuilt_root"
+    for target in tosh lsp mcp tome crumb devcompanion dap; do
+      _target_wanted "$target" || continue
+      _stage_prebuilt "$target" || return 1
+    done
+    return 0
+  fi
+
+  # Standalone makepkg remains a clean source build. The outer release path
+  # sets TOSH_PREBUILT_ROOT and never enters this branch.
+  local restore_target='Tosh.slnx'
+  if (( _selected_count == 1 )); then
+    for target in tosh lsp mcp tome crumb devcompanion dap; do
+      _target_wanted "$target" || continue
+      restore_target="$(_target_project "$target")" || return 1
+      break
+    done
+  fi
+
+  dotnet clean "$restore_target" -c Release --verbosity quiet \
+    --artifacts-path "$_build_artifacts" \
+    -m:1 \
+    -p:PreserveToshPublishArtifacts=true \
+    -p:DisableToshSpecBuild=true \
+    -p:DisableToshParityCheck=true \
+    -p:DisableToshVsCodeExtensionSync=true || true
+  dotnet restore "$restore_target" --artifacts-path "$_build_artifacts" \
+    -p:RuntimeIdentifier=linux-x64 \
+    -m:1 \
+    -p:Configuration=Release \
+    -p:SelfContained=true \
+    -p:PublishReadyToRun=true \
+    -p:DisableToshSpecBuild=true \
+    -p:DisableToshParityCheck=true \
+    -p:DisableToshVsCodeExtensionSync=true
 
   (( _want_tosh ))  && dotnet publish src/Tosh.Cli/Tosh.Cli.csproj "${_publish_args[@]}" -o "$srcdir/out-cli"
   (( _want_lsp  ))  && dotnet publish src/Tosh.Lsp/Tosh.Lsp.csproj "${_publish_args[@]}" -o "$srcdir/out-lsp"
@@ -72,6 +338,7 @@ build() {
   (( _want_tome ))  && dotnet publish src/Tosh.Tome/Tosh.Tome.csproj "${_publish_args[@]}" -o "$srcdir/out-tome"
   (( _want_crumb )) && dotnet publish src/Tosh.Crumb/Tosh.Crumb.csproj "${_publish_args[@]}" -o "$srcdir/out-crumb"
   (( _want_dc   ))  && dotnet publish tools/Tosh.DevCompanion/Tosh.DevCompanion.csproj "${_publish_args[@]}" -p:IsPublishable=true -p:IncludeNativeLibrariesForSelfExtract=true -o "$srcdir/out-dc"
+  (( _want_dap  ))  && dotnet publish src/Tosh.Dap/Tosh.Dap.csproj "${_publish_args[@]}" -o "$srcdir/out-dap"
   return 0
 }
 
@@ -119,5 +386,12 @@ package_tosh-devcompanion() {
   pkgdesc='AI companion memory store for TōSh development (dev tool, not for distribution)'
   depends=('icu')
   install -Dm755 "$srcdir/out-dc/Tosh.DevCompanion" "$pkgdir/usr/bin/tosh-devcompanion"
+  _install_license
+}
+
+package_tosh-dap() {
+  pkgdesc='Debug Adapter Protocol server for ToastedShell (TōSh)'
+  depends=('icu')
+  install -Dm755 "$srcdir/out-dap/Tosh.Dap" "$pkgdir/usr/bin/tosh-dap"
   _install_license
 }

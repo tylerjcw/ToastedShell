@@ -17,9 +17,9 @@ require ToastLib.Graphics from "/home/komrad/.config/tosh/lib/Graphics.tosh" as 
 using System.Drawing
 
 var palette = [
-    Gfx.FromHex("#101018"),
-    Gfx.FromHex("#181028"),
-    Gfx.FromHex("#102018")
+    Gfx.FromHex("#0b0b3d"),
+    Gfx.FromHex("#2e1e50"),
+    Gfx.FromHex("#116355")
 ]
 
 var background = $palette[0]
@@ -39,9 +39,9 @@ Gl.Window.Open("ToastScript · ToastLib.Gl", new Size(640, 480), func (win) {
     writeline $"GL_VERSION  = {Gl.State.Version}"
 
     $win.OnKey(func (w, key, action, mods) {
-        if ($action != Gl.KeyAction.Press.UnderlyingValue) { return }
+        if ($action != Gl.KeyAction.Press as int) { return }
 
-        if ($key == Gl.Key.Escape.UnderlyingValue) {
+        if ($key == Gl.Key.Escape as int) {
             writeline "escape — closing"
             $w.RequestClose()
             return
@@ -52,7 +52,7 @@ Gl.Window.Open("ToastScript · ToastLib.Gl", new Size(640, 480), func (win) {
         writeline $"key {$key} — background {$pressed % 3}"
     })
 
-    $win.Frames(1200, func (w, frame) {
+    $win.Frames(12000, func (w, frame) {
         Gl.State.Clear($background)
         Gl.State.LoadIdentity()
         Gl.State.Rotate($frame * 1.5)

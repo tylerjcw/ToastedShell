@@ -51,27 +51,36 @@ public sealed class McpMemoryServer(IMemoryStore store)
 
     private async Task DispatchAsync(JsonElement msg, Stream stdout, CancellationToken ct)
     {
-        var id = msg.TryGetProperty("id", out var idEl) ? idEl : default;
+        var hasId = msg.TryGetProperty("id", out var idEl) && idEl.ValueKind != JsonValueKind.Undefined && idEl.ValueKind != JsonValueKind.Null;
         var method = msg.TryGetProperty("method", out var methodEl) ? methodEl.GetString() : null;
         var @params = msg.TryGetProperty("params", out var paramsEl) ? paramsEl : default;
 
-        object? result;
+        // Ignore JSON-RPC notifications (messages without an ID)
+        if (!hasId || string.IsNullOrEmpty(method) || method.StartsWith("notifications/"))
+        {
+            return;
+        }
+
         try
         {
-            result = method switch
+            object result = method switch
             {
                 "initialize" => await InitializeAsync(ct),
+                "ping" => new { },
                 "tools/list" => new { tools = ToolDefinitions },
                 "tools/call" => await HandleToolCallAsync(@params, ct),
-                _ => throw new InvalidOperationException($"Unknown method '{method}'.")
+                "resources/list" => new { resources = Array.Empty<object>() },
+                "resources/templates/list" => new { resourceTemplates = Array.Empty<object>() },
+                "prompts/list" => new { prompts = Array.Empty<object>() },
+                _ => throw new InvalidOperationException($"Method '{method}' is not supported.")
             };
+
+            await WriteResponseAsync(idEl, result, stdout, ct);
         }
         catch (Exception ex)
         {
-            result = ErrorContent(ex.Message);
+            await WriteErrorResponseAsync(idEl, -32601, ex.Message, stdout, ct);
         }
-
-        await WriteResponseAsync(id, result, stdout, ct);
     }
 
     private async Task<object> InitializeAsync(CancellationToken ct)
@@ -443,6 +452,27 @@ public sealed class McpMemoryServer(IMemoryStore store)
 
         if (result is not null)
             response["result"] = JsonSerializer.SerializeToNode(result, EnvelopeOptions);
+
+        var bytes = System.Text.Encoding.UTF8.GetBytes(response.ToJsonString() + "\n");
+        await _writeLock.WaitAsync(ct);
+        try { await stdout.WriteAsync(bytes, ct); await stdout.FlushAsync(ct); }
+        finally { _writeLock.Release(); }
+    }
+
+    private async Task WriteErrorResponseAsync(JsonElement id, int code, string message, Stream stdout, CancellationToken ct)
+    {
+        if (id.ValueKind == JsonValueKind.Undefined) return;
+
+        var response = new JsonObject
+        {
+            ["jsonrpc"] = "2.0",
+            ["id"] = JsonNode.Parse(id.GetRawText()),
+            ["error"] = new JsonObject
+            {
+                ["code"] = code,
+                ["message"] = message
+            }
+        };
 
         var bytes = System.Text.Encoding.UTF8.GetBytes(response.ToJsonString() + "\n");
         await _writeLock.WaitAsync(ct);

@@ -63,7 +63,7 @@ var boxes = [
 Sdl.Window.Open("TōSh SDL Test", $field, func (win) {
     writeline $"window {$win.Size.Width}x{$win.Size.Height}"
 
-    $win.Frames(600, func (w, frame) {
+    $win.Frames(60000, func (w, frame) {
         var renderer = $w.Renderer
         $renderer.Clear($background)
 
