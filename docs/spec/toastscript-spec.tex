@@ -3570,6 +3570,27 @@ var r = LibC.gettimeofday(0)   # one argument, not two
 $r.tv.tv_sec
 \end{lstlisting}
 
+\code{cstring} may be passed by reference, which is C's \code{char**}: the
+callee replaces the pointer rather than the characters.
+
+\begin{lstlisting}
+bind native "libc.so.6" as LibC {
+    func strtol(s: cstring, out endptr: cstring, base: int) -> long
+    func strsep(ref stringp: cstring, delim: cstring)       -> cstring
+}
+
+var r = LibC.strtol("42abc", 10)
+$r.ReturnValue    # 42
+$r.endptr         # "abc"
+\end{lstlisting}
+
+The pointer the callee leaves is \emph{copied} into a string and the bytes
+behind it are left alone: TōSh frees only memory TōSh allocated, because the
+callee's allocator cannot be known from a shared object.  A caller who must
+free the callee's buffer declares \code{ptr} and frees it explicitly.  A managed
+\code{string} cannot be passed by reference, since writing one back would mean
+guessing the encoding as well as the allocator.
+
 Use \code{out} when the callee fills a structure and reads nothing
 (\code{sysinfo}, \code{uname}, \code{gettimeofday}); use \code{ref} when it
 reads and writes the same memory (\code{poll}, \code{select}, \code{ioctl}

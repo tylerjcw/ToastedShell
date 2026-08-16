@@ -113,9 +113,15 @@ public static class NativeTypeLexicon
     /// The by-ref-string rule, previously duplicated across three sites.
     /// Returns a diagnostic when the combination is rejected, else <c>null</c>.
     ///
-    /// <c>out</c>/<c>ref</c> string marshalling has no ownership story — the
-    /// callee would have to allocate with an allocator the marshaller cannot
-    /// know — so it needs an explicit pointer type instead.
+    /// <c>out</c>/<c>ref cstring</c> is a <c>char**</c> and is supported: the
+    /// pointer the callee leaves is decoded, and the bytes behind it are left
+    /// alone, because tosh never frees memory it did not allocate and the
+    /// callee's allocator is unknowable from here (<c>TS-P3-26</c>).
+    ///
+    /// Plain <c>string</c> stays rejected by reference. It is a *managed* string,
+    /// and the marshaller would have to decide the callee's encoding and
+    /// allocator to write one back — the ownership problem `cstring` sidesteps by
+    /// being a pointer the caller only reads.
     /// </summary>
     public static ToshDiagnostic? ValidateByRef(
         string? typeName,
@@ -124,14 +130,15 @@ public static class NativeTypeLexicon
         string? sourceText = null,
         TextSpan? span = null)
     {
-        if (!isByRef || !IsStringLikeName(typeName))
+        if (!isByRef || !IsStringLikeName(typeName) || IsCStringName(typeName))
         {
             return null;
         }
 
-        var help = IsCStringName(typeName)
-            ? "borrowed `cstring` works for input parameters and returns, but `out`/`ref` string marshalling is not supported yet."
-            : "plain `string` is only supported for input parameters today.";
+        const string help =
+            "write `cstring` for a `char**` the callee fills in — its pointer is decoded and its bytes "
+            + "are left to the callee. A managed `string` cannot be written back, because the encoding "
+            + "and the allocator would both have to be guessed.";
 
         return new ToshDiagnostic(
             Code: "tosh.runtime.unsupported_native_byref_string",
@@ -139,7 +146,7 @@ public static class NativeTypeLexicon
             SourceName: sourceName,
             SourceText: sourceText,
             Span: span,
-            Label: "use 'nint', 'ptr', or a buffer-backed struct type here",
+            Label: "use 'cstring', 'nint', 'ptr', or a buffer-backed struct type here",
             Help: help);
     }
 }

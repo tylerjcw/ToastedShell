@@ -96,16 +96,30 @@ public class NativeTypeLexiconTests
 
     // --- the by-ref-string rule, previously duplicated across three sites ---
 
-    [Theory]
-    [InlineData("string")]
-    [InlineData("cstring")]
-    [InlineData("cstr")]
-    public void By_ref_strings_are_rejected(string typeName)
+    /// <summary>
+    /// A managed `string` still cannot be written back: the marshaller would have to
+    /// guess both the callee's encoding and its allocator (`TS-P3-26`).
+    /// </summary>
+    [Fact]
+    public void A_managed_string_by_reference_is_rejected()
     {
-        var diagnostic = NativeTypeLexicon.ValidateByRef(typeName, isByRef: true);
+        var diagnostic = NativeTypeLexicon.ValidateByRef("string", isByRef: true);
 
         Assert.NotNull(diagnostic);
         Assert.Equal("tosh.runtime.unsupported_native_byref_string", diagnostic.Code);
+        Assert.Contains("cstring", diagnostic.Help, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// `cstring` by reference is a `char**` and is supported now — the pointer the
+    /// callee leaves is decoded, and its bytes are left alone.
+    /// </summary>
+    [Theory]
+    [InlineData("cstring")]
+    [InlineData("cstr")]
+    public void A_cstring_by_reference_is_accepted(string typeName)
+    {
+        Assert.Null(NativeTypeLexicon.ValidateByRef(typeName, isByRef: true));
     }
 
     [Theory]
@@ -131,14 +145,16 @@ public class NativeTypeLexiconTests
     /// input-only support.
     /// </summary>
     [Fact]
-    public void By_ref_rejection_help_distinguishes_cstring_from_string()
+    public void The_rejection_points_at_the_spelling_that_works()
     {
-        var cstring = NativeTypeLexicon.ValidateByRef("cstring", isByRef: true);
         var plain = NativeTypeLexicon.ValidateByRef("string", isByRef: true);
 
-        Assert.NotNull(cstring?.Help);
         Assert.NotNull(plain?.Help);
-        Assert.NotEqual(cstring.Help, plain.Help);
+
+        // The help has to name `cstring`, since that is now the answer rather than a
+        // second thing that also fails.
+        Assert.Contains("cstring", plain.Help, StringComparison.Ordinal);
+        Assert.Contains("cstring", plain.Label, StringComparison.Ordinal);
     }
 
     // --- calling conventions ---

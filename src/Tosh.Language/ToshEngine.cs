@@ -3130,8 +3130,27 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
                     parameter.TypeName ?? string.Empty,
                     parameterType,
                     parameter.PassingMode,
+                    IsCStringPointer: parameter.PassingMode != NativeParameterPassingMode.In &&
+                                      NativeTypeLexicon.IsCStringName(parameter.TypeName),
                     Callback: callback));
             }
+            // A binding with a by-ref `cstring` takes ownership of its input strings
+            // too: the pointer a callee hands back commonly points into one of them,
+            // and the default marshaller's temporary is gone by the time it could be
+            // decoded (`TS-P3-26`).
+            if (parameters.Any(static parameter => parameter.IsCStringPointer))
+            {
+                for (var index = 0; index < parameters.Count; index++)
+                {
+                    if (parameters[index] is { IsCStringPointer: false, ClrType: var type } input &&
+                        type == typeof(string) &&
+                        input.PassingMode == NativeParameterPassingMode.In)
+                    {
+                        parameters[index] = input with { ClrType = typeof(IntPtr), OwnsCStringInput = true };
+                    }
+                }
+            }
+
             var returnType = ResolveNativeInteropReturnType(function.ReturnTypeName, sourceName, sourceText, function.Span);
             var callingConvention = ResolveNativeCallingConvention(function.CallingConventionName, sourceName, sourceText, function.Span);
 
@@ -17395,7 +17414,11 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
                 throw ToshDiagnosticException.Create(cstringRejection);
             }
 
-            return typeof(string);
+            // By reference, a `cstring` is a `char**`: the slot holds a pointer the
+            // callee replaces, not characters it writes over. The parameter carries
+            // `IsCStringPointer` so the pointer is decoded after the call
+            // (`TS-P3-26`).
+            return isByRef ? typeof(IntPtr) : typeof(string);
         }
 
         // The scalar table is the single source of truth for the native interop
