@@ -5,7 +5,7 @@ using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Text;
 
-namespace Tosh.Runtime;
+namespace Tosh.Stdlib.Net;
 
 public sealed class HttpFileServerHandle : IDisposable, IAsyncDisposable
 {

@@ -1,4 +1,5 @@
 using Tosh.Runtime;
+using Tosh.Stdlib.Net;
 
 namespace Tosh.Stdlib.Filesystem;
 

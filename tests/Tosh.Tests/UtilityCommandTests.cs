@@ -5,6 +5,7 @@ using System.Net.Http.Headers;
 using System.Text;
 using Tosh.Runtime;
 using Tosh.Language;
+using Tosh.Stdlib.Net;
 
 namespace Tosh.Tests;
 

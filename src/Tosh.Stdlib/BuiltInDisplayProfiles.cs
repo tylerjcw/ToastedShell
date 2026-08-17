@@ -24,6 +24,7 @@ using System.Xml.Linq;
 using Tosh.Stdlib.Shell;
 using Tosh.Stdlib.Sys;
 using Tosh.Runtime;
+using Tosh.Stdlib.Net;
 
 namespace Tosh.Stdlib;
 
