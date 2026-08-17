@@ -7,6 +7,24 @@
 
 const DefaultDotnetMajor = 10
 
+## MSBuild keeps its worker nodes alive after a build so the next one starts faster.
+## Over a working session that accumulates: 110 idle nodes holding 19.4 GB were found
+## resident on 2026-08-16, none of them doing anything, and `dotnet build-server
+## shutdown` does not reclaim them — they have to be killed directly.
+##
+## Measured with it disabled: a build leaves **zero** nodes behind, the full suite
+## leaves zero rather than 26, and peak memory during an unlimited-thread test run
+## falls from ~8.9 GB to ~4.5 GB, because much of that was nodes piling up mid-run.
+##
+## The cost is that each build re-launches its workers. That is the right trade here:
+## this script is run by hand and by CI, not in a tight loop, and TōSh is somebody's
+## logon shell — leaking gigabytes into their session to save a second is not a bargain.
+##
+## Kept as an environment variable rather than a `-nr:false` switch so it reaches every
+## nested `dotnet` invocation, including restore and publish, without each having to
+## remember it.
+$env.MSBUILDDISABLENODEREUSE = "1"
+
 module Build {
     ## @summary Types for the build system
     module Types {
