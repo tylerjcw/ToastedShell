@@ -1,969 +1,1090 @@
-# Self-Hosting ToastScript — Design Notes
+# Self-Hosting Tōast — Architecture RFC
 
-**Status:** Exploratory discussion. Not scheduled. Assumes TōSh/ToastScript is
-first finished and polished.
-**Started:** 2026-08-13
+**Status:** Exploratory design. Not scheduled. Assumes Tōast and TōSh are
+finished, stable, and supported by a comprehensive conformance corpus before
+bootstrap work begins.
 
-## The proposal, as stated
+## Summary
 
-Rewrite the core of ToastScript in a lower-level language (C, C++, Rust, or
-assembly), write a lexer/parser/compiler alongside it, then use that toolchain
-to rewrite the language in itself — making ToastScript a self-hosted, "native"
-language. **Full .NET compatibility must be retained.** Compiled language
-first, then self-hosting, then rebuild the tools (shell, MCP, LSP, DAP).
+Tōast can become a self-hosting language with two compilation targets and one
+front end:
 
-## Positions reached
-
-- **Seam A was chosen out of .NET familiarity, and is withdrawn.** A compiler
-  flag cannot paper over semantic divergence; the conflict is behavioural, not
-  nominal.
-- **Dynamic vs strict typing should be two explicit modes behind a flag** — this
-  was the original motivation for the compiler, and it is also the gate on
-  native mode.
-- **Whether the shell carries CLR objects or ToastScript objects is unresolved,
-  and is the one genuinely open question.** The CLR is expansive and already
-  known by millions; owning the objects gives finer control and a native path.
-  See "deferring the object-model decision" below — it does not have to be
-  answered now, provided the core types are *specified* in ToastScript's terms
-  starting now.
-
-## Answers to the follow-up questions
-
-### A. Can a compiler written in ToastScript emit real, non-CLR native binaries?
-
-**Yes.** A compiler's implementation language is independent of its target — it
-is a program that reads text and writes bytes. TypeScript's compiler is written
-in TypeScript and emits JavaScript; rustc is Rust emitting machine code.
-
-Practical route: **emit C and invoke the system compiler.** That avoids writing
-ELF/Mach-O/PE object writers, relocations, DWARF and a linker, and inherits
-every platform's optimiser. Nim and Vala both ship this way.
-
-The bootstrap then removes .NET from the build too:
-
-- **Stage 0** — ToastScript compiler, written in ToastScript, running on the
-  CLR, emitting C → native.
-- **Stage 1** — it compiles itself, producing a native compiler binary that
-  needs no .NET.
-- **Stage 2** — the native binary compiles itself; assert stage 2 is identical
-  to stage 1.
-
-### B. A shell with no .NET startup cost that still carries .NET objects?
-
-**No — those are mutually exclusive, and the earlier wording should not be read
-as saying otherwise.** If the pipeline holds CLR objects, a CLR is running in
-the process, and .NET startup *is* the cost of getting one running. A natively
-compiled shell would not carry CLR objects.
-
-What actually fixes the pain:
-
-- **Interactive startup is paid once per terminal.** Laziness recovers most of
-  it (see the measurements) — this is not the real problem.
-- **Scripted invocation is the real problem**: prompts, hooks and subshells pay
-  ~120 ms *every* call. The fix is a **resident server plus a thin client** — a
-  long-lived tosh process holding a warm CLR, and a tiny native client that
-  connects over a unix socket, turning ~120 ms into ~1 ms. This is what nailgun
-  does for the JVM and what `dotnet build-server` does for Roslyn.
-- **ReadyToRun** would cut JIT time from the floor without breaking reflection,
-  unlike NativeAOT.
-
-The thin client is small enough to be ~100 lines of C. It could be written in
-ToastScript only once native mode exists.
-
-Hard part for an interactive shell specifically: handing the pty to the server,
-plus cwd/env propagation, isolation and daemon lifetime.
-
-### C. Two separate products, or one language with two targets?
-
-**One language, two targets, one front end.** Splitting into "Native
-ToastScript" and "T#" means two stdlibs, two doc sets, two test suites and two
-communities, permanently — and for a single maintainer that is the more likely
-failure mode than any technical risk. It also destroys the strongest story the
-project has: *the same language scripts your shell and compiles to a binary*.
-
-The instinct behind the question is still right, though: the two targets **will**
-have different capability sets, and that should be explicit and named. The model
-to copy is Rust's `no_std` — native mode is **`no_clr`**, a restricted profile of
-one language, not a different language.
-
-Naming them as separate languages (T#, ToastScript.NET) makes a promise that
-cannot be walked back; naming them as profiles stays reversible.
-
-### Deferring the object-model decision safely
-
-The lock-in is not "which objects the pipeline carries today" — it is **whether
-scripts and docs depend on CLR-specific semantics**. If the stdlib and
-specification are written against ToastScript-defined types (`str`, `list`,
-`date`), the underlying implementation can be the BCL now and something native
-later. If they are written against `System.String` and `List<T>`, the choice is
-already made.
-
-**Actionable now, cheap now:** specify the core types in ToastScript's own terms
-while continuing to implement them with the BCL. That preserves the option
-without costing a rewrite.
-
-## The target design, stated plainly
-
-ToastScript owns itself. It has its own object model and its own core types, and
-**two peer foreign-function interfaces**:
-
-- a **C ABI** for native interop, and
-- a **.NET bridge** for CLR interop,
-
-both seamless, neither privileged. TōSh and ToastScript are written in
-ToastScript. Cross-platform.
-
-This is Seam B. The important consequence is that **.NET stops being *the* world
-and becomes *a* world** — one of two foreign systems the language talks to.
-
-**Both FFIs already exist.** `bind native` / `raw struct` / `raw callback` is a
-real C ABI binding layer with calling conventions, struct layout, buffers and
-callbacks; the CLR bridge is mature. The missing piece is not either FFI — it is
-**ToastScript's own object model in the middle of them**. Today the CLR object
-model occupies that position, which is exactly why .NET cannot currently be
-demoted to a peer.
-
-### Cross-platform consequences
-
-- **Reinforces "emit C".** C compilers exist on every target. LLVM needs
-  per-platform plumbing; hand-written codegen needs a backend per architecture.
-- **The C ABI layer needs a portability story**: `libc.so.6` vs
-  `libSystem.dylib` vs `msvcrt.dll`, and library-name resolution generally. The
-  calling-convention support (`cdecl`/`stdcall`/`winapi`) shows the design
-  already anticipates this.
-- **The language will be portable long before the shell is.** The spec currently
-  describes TōSh as Linux-native, and the shell leans on POSIX throughout —
-  ptys, signals, `umask`, ownership. Windows needs ConPTY and much else. Expect
-  ToastScript-the-language and TōSh-the-shell to reach cross-platform at
-  different times, and plan them as separate milestones.
-- Boehm GC is cross-platform, so the GC choice does not conflict.
-
-## What self-hosting actually requires
-
-### 1. The compiler must be *compiled*, not interpreted
-
-This is the critical path and it is easy to miss. A compiler is an
-allocation-heavy tree-walker; 50k lines of ToastScript running under the
-interpreter would be far too slow to use. So the existing compiler has to be
-able to compile the ToastScript-written compiler.
-
-**The readiness dashboard already exists.**
-`tests/Tosh.Tests/CompilerFeatureMatrixTests.cs` records, per feature, whether it
-reaches Tier 1 (pure IL), Tier 2 (runtime-hosted) or Tier 3 (source replay) —
-and its own summary calls it "a baseline, not an aspirational test", updated as
-features move up.
-
-So **"self-hosting readiness" has a precise definition**: every feature the
-compiler-writing subset uses must be out of Tier 3. That is measurable today.
-
-### 2. Language gaps that block writing a compiler at all
-
-- **Interfaces and traits cannot be used as type annotations** (`TS-P2-99`).
-  `func visit(node: AstNode)` is the shape of every compiler pass.
-- **`&` cannot reference a method** (`TS-P2-94`) and **a callable in a property
-  cannot be invoked directly** (`TS-P2-93`). Between them, dispatch tables and
-  visitor patterns — a compiler's bread and butter — are awkward.
-- **A class cannot name itself in a return annotation** (`TS-P2-106`). Static
-  factories on AST nodes are ubiquitous.
-- **No bitwise operators** (`TS-P3-14`). Flag sets and hashing.
-- Recursion depth and stability under deep ASTs needs verifying.
-
-### 3. Daily papercuts that become a tax at 50k lines
-
-`TS-P2-89` (top-level `defer`), `TS-P2-92` (`T.Prop.Method()`), `TS-P2-98`
-(unqualified refinement types), `TS-P2-103` (`shy shared func`), `TS-P2-104`
-(splat), `TS-P2-105` (`as` precedence). None individually blocking; collectively
-they decide whether writing the compiler is pleasant or miserable.
-
-### 4. Tooling and verification
-
-A debugger that works on compiled ToastScript (`Tosh.Dap` exists), and the
-differential interpreted-vs-compiled corpus already described in the test
-strategy — which becomes the mechanism that keeps two backends honest later.
-
-## Proposed next step: measure readiness instead of estimating it
-
-Write a **compiler-shaped probe** in ToastScript — a tokeniser, recursive-descent
-parser, AST, and a visitor pass over a small expression language, in roughly
-300 lines. It is deliberately the shape of the real thing.
-
-It answers three questions at once:
-
-1. Which papercuts actually bite when writing compiler-shaped code?
-2. What tier does it compile to — or does it fall to Tier 3 source replay?
-3. How fast is it, interpreted vs compiled?
-
-That converts "is the language ready to host itself" from a judgement call into
-a measurement, which is how everything else in this session has gone.
-
-## Probe results, 2026-08-13
-
-A ~370-line compiler-shaped probe was written in ToastScript: lexer, token
-type, five-node AST hierarchy under a `Node` base class, recursive-descent
-parser with precedence levels, and three visitor passes (evaluate, print,
-count), plus custom `Error` subclasses for lex and parse failures.
-
-**Interpreted, it works and is correct.** Operator precedence, unary minus,
-parenthesisation and nested `let` scoping all produce the right answers:
-
-```
-1 + 2 * 3                              -> 7    (1 + (2 * 3))
-(1 + 2) * 3                            -> 9    ((1 + 2) * 3)
--x + y * 2                             -> -2   ((-x) + (y * 2))
-let a = x * 2 in a + y                 -> 24
-let a = 1 in let b = 2 in (a + b) * x  -> 30
+```text
+Tōast source
+    │
+    ▼
+syntax → binding → typed semantic IR → lowered target-neutral IR
+                                      ├── .NET IL backend
+                                      └── native C backend → system C compiler
 ```
 
-So the language can *express* a compiler today. Class hierarchies, `match` on
-node type, recursion, custom diagnostics and primary constructors all behave.
-
-**Compiled, it does not build.** Three checker gaps stop it, and all three are
-precisely what compiler code does:
-
-1. **Untyped locals are rejected** (`tosh.compile.implicit_dynamic`). The
-   compiler enforces annotations — which is the strict mode already envisaged,
-   working as intended. `--compile-allow-dynamic` relaxes it.
-2. **A subclass is not accepted where its base is declared** (`TS-P2-107`).
-   `return new LetNode(…)` from `-> Node` is a type mismatch, even for a
-   subclass adding nothing. The expression-bodied form does not warn; the
-   `return` form does.
-3. **`match` arms do not narrow** (`TS-P2-108`). `_ is LetNode => $node.Value`
-   reports `Member 'Value' was not found on type 'Node'`. The probe produced
-   **26 instances of this single error**. Notably `if ($n is Leaf) { $n.V }`
-   *does* narrow — so the checker is inconsistent between the two forms, and an
-   `if`-chain visitor is a viable if ugly workaround.
-
-**The encouraging part: these are checker bugs, not semantic ones.** The
-runtime does the right thing in every case — dispatch, narrowing and
-inheritance all behave correctly at execution time. The language design is not
-in question; the type checker has to catch up with it. That is a far better
-result than discovering the object model or dispatch semantics were wrong.
-
-**Consequence for sequencing.** `TS-P2-107` and `TS-P2-108` are the first two
-hard prerequisites for self-hosting, ahead of any backend work — without them
-no compiler-shaped program compiles at all, so the interpreted-vs-compiled
-performance question cannot even be asked yet.
-
-## Can the compiler emit native code today? No.
-
-`--compile` produces:
-
-| artefact | what it is |
-|---|---|
-| `out.dll` | PE32 .NET assembly — IL |
-| `out` | the stock .NET **apphost**: an ELF stub linking `libstdc++`/`libm`/`hostfxr` that boots the CLR. Contains none of the program. |
-| `out.deps.json` | framework resolution data |
-
-There is no NativeAOT wiring anywhere in the tree.
-
-**The compiled output also still calls the engine at runtime.** A compiled binary
-faulted with a stack through `Tosh.Language.ToshEngine.ConvertAnnotatedValue` —
-so compiled ToastScript needs the whole tosh runtime, not merely .NET.
-
-### The tier system answers "what would it take" precisely
-
-| tier | meaning | retargetable to native? |
-|---|---|---|
-| **Tier 1** | pure IL, no `ToshHost` call at runtime | **yes** |
-| **Tier 2** | runtime-hosted; calls `ToshHost`/`ToshEngine` | only by porting the engine |
-| **Tier 3** | source replay — re-runs the interpreter | needs the entire engine |
-
-So the requirement is **not** "write a native backend". It is **move the target
-subset from Tier 2/3 down to Tier 1**, which is language work, not backend work.
-Per the feature matrix, much sits at Tier 2 today: builtin command dispatch,
-regex literals, redirections, annotated variable writes, refinement
-conversions, `async`/`await`, `require`.
-
-Ordered requirements:
-
-1. `TS-P2-107` / `TS-P2-108` — no compiler-shaped program compiles at all today.
-2. Push the target subset from Tier 2/3 to Tier 1. **The bulk of the work.**
-3. A native runtime: GC, `str`/`list`/`dict`, the Native Core Library.
-4. A backend emitting C. Genuinely the smallest of the four.
-
-## "Doesn't our own runtime just recreate the startup cost?"
-
-**No — and the distinction matters.** The CLR's ~120 ms is not the price of
-*having* a runtime; it is the price of a specific set of activities:
-
-- `hostfxr`/`hostpolicy` resolving the framework, reading `runtimeconfig.json`
-  and `.deps.json`, probing paths
-- mapping several megabytes of `libcoreclr`
-- type-system and AppDomain initialisation
-- assembly loading and metadata parsing, per assembly
-- **JIT-compiling everything on the startup path** — the dominant term
-
-A native runtime does none of it. The code is already machine code, there is no
-metadata to parse, no framework to resolve, and the "runtime" is a statically
-linked library — an allocator, a GC, and the core type implementations.
-
-For scale: Go ships a substantial runtime (GC *and* a scheduler) and its
-binaries start in 1–2 ms. Boehm GC initialisation is microseconds.
-
-**"Runtime" is not "virtual machine."** The only way to reintroduce the cost is
-to make the native runtime dynamically load things at startup — keep it
-statically linked and lazy and it stays in the single-digit milliseconds.
-
-## Finish all of stabilisation first, or only what is needed?
-
-**Only what is needed — but the board is not currently organised to say which
-items those are.** The recommendation is to partition it into three buckets:
-
-1. **Blocks self-hosting** — type checker, compiled-mode tiers, differential
-   interpreted-vs-compiled correctness, core language semantics. Must be done:
-   writing 50k lines in the language means every papercut compounds, and once
-   self-hosted, fixing a language bug requires the language.
-2. **Blocks going native** — Tier 1 coverage for the target subset, and the
-   definition of the no-CLR subset.
-3. **Neither** — shell UX, TUI, REPL, editor and LSP polish. Genuinely
-   deferrable; none of it constrains the language core.
-
-Finish 1 and 2; defer 3. Note that `TS-P2-107`, `TS-P2-108` and `TS-P2-109` all
-landed in the type checker, discovered by the first serious attempt to write
-compiler-shaped code — which suggests that neighbourhood is under-tested and
-likely holds more.
-
-**A better gate than "the board is empty":** the probe compiles to Tier 1 and
-runs fast. That is a measurable acceptance test for "ready to self-host", and it
-is the one that actually matters.
-
-## Board triage, 2026-08-13
-
-45 open rows, of which 5 are withdrawn, superseded or resolved-as-not-recommended
-(`TS-P1-17`, `TS-P1-36`, `TS-P2-46`, `TS-P2-57`, `TS-P2-11`). ~40 genuinely open.
-
-### Bucket 1 — blocks self-hosting (~20 items)
-
-**Critical — nothing compiler-shaped compiles until these land:**
-
-| id | why it blocks |
-|---|---|
-| `TS-P2-107` | subclass not assignable to base — an AST hierarchy cannot be typed |
-| `TS-P2-108` | `match` arms do not narrow — every visitor pass fails to check |
-| `TS-P2-109` | interpreted/compiled divergence on the same program |
-
-**Type-system soundness — a compiler stresses exactly this area:**
-`TS-P2-87` (rebound variable keeps its first inferred type), `TS-P2-99`
-(interfaces unusable as annotations), `TS-P2-85` (computed property on a
-struct), `TS-P2-106` (class cannot name itself in its own return annotation).
-
-**Dispatch and higher-order code — visitors and dispatch tables:**
-`TS-P2-93` (callable in a property), `TS-P2-94` (`&` on a method),
-`TS-P2-92` (`T.Prop.Method()`), `TS-P2-103` (`shy shared func`).
-
-**Backend agreement — the discipline that makes multiple backends survivable:**
-`TS-P1-13` (compiled vs interpreted assignment order), `TS-P1-40` (two live
-index-assignment implementations).
-
-**Ergonomics that compound at 50k lines:**
-`TS-P2-89`, `TS-P2-98`, `TS-P2-104`, `TS-P2-105`, `TS-P2-91`, `TS-P3-14`
-(bitwise — flag sets and hashing), `TS-P3-05` (thrown-value protocol),
-`TS-P3-02` (`let` bindings), `TS-P3-04` (explicit stream/collection shape —
-compiler code wants lists, not streams).
-
-### Bucket 2 — blocks going native (~4 items, and a gap)
-
-`TS-P2-90` (native export tables shared per library path — the C ABI is a peer
-FFI in the target design, so this is correctness), `TS-P2-88` (`-> ok` yields
-its return value), `TS-P3-01` (`tosh check`).
-
-**The gap: there are no board items for tier coverage or the no-CLR subset at
-all.** The single largest piece of native work — moving the target subset from
-Tier 2/3 down to Tier 1 — is entirely unfiled. That should be remedied before
-any scheduling conversation, because it is the item that dominates the estimate.
-
-### Bucket 3 — neither; defer (~15 items)
-
-Shell, tooling and CLR-interop polish: `TS-P2-09`, `TS-P2-26`, `TS-P2-95`,
-`TS-P2-96`, `TS-P2-97`, `TS-P2-100`, `TS-P2-101`, `TS-P2-86`, `TS-P3-03`,
-`TS-P3-06`, `TS-P3-07`, `TS-P3-08`, `TS-P3-09`, `TS-P3-12`. Plus `TS-P2-38`
-(suite memory exhaustion) which blocks nothing but hurts daily development.
-
-Note `TS-P2-96`/`TS-P2-97` are CLR-interop items — they matter for .NET mode
-and are irrelevant to native mode, which is itself a useful signal about how the
-board will split as the two targets diverge.
-
-## Going native: what is gained and what is given up
-
-### Gained
-
-- **Startup: ~120 ms → 1–5 ms.** The transformative one for a shell. Prompts,
-  hooks, subshells and CI scripts stop paying a per-invocation tax.
-- **Memory**: a CLR process floor is tens of megabytes; a native tosh could be
-  single-digit. Matters for many concurrent shells and for containers.
-- **Distribution**: one static binary. `scp tosh server:` and it works — no
-  runtime install, no version matching. For a *shell*, this is a big deal.
-- **Predictable latency**: no JIT warmup on first execution of a path, and a GC
-  sized for the workload rather than for enterprise services.
-- **Embedding**: a native tosh with a C ABI can be embedded in other programs as
-  a scripting engine. Currently embedding tosh means embedding .NET.
-- **Pipeline throughput**: owning the object layout removes reflection from
-  member access, which is the hot path today.
-
-### Given up
-
-- **The BCL.** Thirty years of batteries: `Regex`, `DateTime` with the timezone
-  database, `HttpClient`, JSON, compression, cryptography, ICU-backed
-  globalisation. Each is reimplemented, bound from C, or absent.
-- **The .NET ecosystem in native mode.** No NuGet, no `load-assembly`. This is
-  arguably tosh's biggest current differentiator, and native mode does not have
-  it.
-- **Reflection.** `describe-type`, `members`, `methods` and dynamic member
-  access are core to how the shell *feels*, and they are CLR reflection today. A
-  native ToastScript needs its own metadata and reflection system.
-- **GC quality.** The CLR's collector is generational, concurrent and tuned over
-  decades. Boehm is conservative: weaker pauses, no compaction, and false
-  retention. For a long-running interactive shell this is a real regression.
-- **Tooling.** DAP, profilers and crash dumps come free with .NET. Native means
-  DWARF, a native debug adapter, and owning the whole chain.
-- **Two implementations, permanently.** Two runtimes, two stdlibs, two sets of
-  semantics, and a differential corpus that must never be allowed to rot. Two
-  backends already disagree today (`TS-P2-109`).
-- **Development velocity.** C# with its tooling is fast to work in. Every bug in
-  your allocator, GC or string implementation becomes yours.
-
-### The honest framing
-
-The sacrifice is scoped by the dual-target design: **native mode gives up .NET;
-.NET mode keeps everything.** So the real cost is not "losing the BCL" — it is
-*maintaining two worlds*, forever, alone.
-
-Which makes the decisive question: **is ~120 ms worth two implementations?**
-
-**Falsify it cheaply first.** The resident-server-plus-thin-client architecture
-recovers most of the startup win for a fraction of the effort and keeps the
-entire BCL. If a warm server makes `tosh -c` feel instant, the strongest
-motivation for going native evaporates, and the project narrows to
-*distribution* and *embedding* — both real, but far narrower goals that might be
-served by a much smaller native subset rather than a full second world.
-
-That experiment costs days. The native path costs years. Run the experiment
-first.
-
-## The plan
-
-Sequenced so that **every phase is independently valuable and each one can
-cancel the next.** No phase asks for a leap of faith, and the expensive
-commitment is deferred until the evidence is in.
-
-### Phase 0 — INCOMPLETE; question answered, implementation deferred
-
-**Status: the decision Phase 0 existed to make is made. The server itself is a
-prototype and is not being productionised now.**
-
-Why deferred rather than finished:
-
-- **Its purpose was to decide, and it decided.** Everything past the
-  measurement is product work, not decision input.
-- **The expensive remaining piece serves the case that needs it least.** Pty
-  handoff, job control and session lifetime are for *interactive* use — and
-  interactive startup is paid once per terminal, now 245 ms. The 350 ms that
-  actually hurts is repeated non-interactive `tosh -c`, whose client needs only
-  cwd, environment, the three standard streams and an exit code. No pty.
-- **There is an unresolved semantic question in front of the easy slice.** Every
-  `tosh -c` is a fresh process today. A shared engine would leak variables, cwd
-  and imports between invocations unless each request gets its own scope. That
-  is a semantics change, and getting it wrong is a subtle correctness bug rather
-  than a slow path.
-- **It is a local privilege boundary.** A socket that executes arbitrary
-  commands as the user needs 0700/0600 permissions and an auth token before it
-  ships. Not polish.
-- **Phase 1 outranks it.** `TS-P2-107`/`108`/`109` are correctness bugs
-  affecting anyone writing class hierarchies today, not merely self-hosting
-  gates.
-
-If the non-interactive slice is ever picked up, it is roughly a day: client
-sends cwd + env + command, server isolates per-request scope, streams stdout and
-stderr separately, returns an exit code, and auto-starts on a missing socket.
-
-The `--serve` prototype stays in the tree as the evidence for the decision.
-
-### Phase 0 — measured result, 2026-08-13
-
-**A warm engine behind a unix socket answers in 1.9 ms — which is entirely the
-client's own process spawn.**
-
-| | latency |
-|---|---|
-| cold `tosh -c 'echo hi'` (full profile) | **350.8 ms** |
-| warm, over a unix socket | **1.9 ms** |
-| `socat` overhead alone, against `/bin/cat` | **1.9 ms** |
-
-The warm figure is indistinguishable from the control: tosh's contribution is
-below the measurement floor, and the whole 1.9 ms is `socat` starting up. A
-purpose-built client would be faster still.
-
-Implementation was `--serve <socket>` in `src/Tosh.Cli/Program.cs`: strip the
-flag before plan resolution so the remaining args resolve to a normal REPL plan
-(which is what loads config, profile and autoload), then after startup serve one
-newline-terminated command per connection against the already-warm engine. About
-60 lines. Full suite 4,842 passing.
-
-**What this means for the native project.**
-
-The startup argument — the strongest motivation for going native, and the one
-that made a years-long rewrite look justified — **is fully answered without any
-native code.** Invocation latency drops by a factor of ~185, and the residual is
-the client, not the shell.
-
-So the native goal narrows to what it always actually was underneath:
-**distribution** (one static binary, no runtime install) and **embedding** (a C
-ABI scripting engine inside another program). Both are real. Neither requires
-giving up the BCL, maintaining two object models, or writing a GC — and neither
-is urgent.
-
-**Recommended revision to the plan:** treat Phases 1–4 (type checker, backend
-agreement, self-hosting on IL, specifying the core types) as the real roadmap,
-and treat Phase 5 as optional and evidence-gated. Self-hosting on IL delivers
-"ToastScript written in ToastScript" with full .NET compatibility preserved; a
-native target after that is a distribution decision, not a performance one.
-
-**Follow-up work the prototype does not cover** (none of it on the critical path
-for the decision, all of it needed before this ships): pty handoff for
-interactive use, cwd and environment propagation, per-client session isolation,
-daemon lifetime and restart, socket permissions, and concurrent clients.
-
-### Phase 0 — Falsify the premise (days) — original plan
-
-Build the resident-server + thin-client. Measure `tosh -c` before and after.
-
-The whole native project is motivated by ~120 ms of CLR startup. If a warm
-server makes scripted invocation feel instant, that motivation is gone and the
-native goal narrows to *distribution* and *embedding* — both real, both far
-smaller, both plausibly served by a modest subset rather than a second world.
-
-**Attempted 2026-08-13: lazy `bind native` — a modest win, not the fix.**
-`NativeFunctionCommand` now creates its delegate on first call rather than at
-declaration (`Lazy<Delegate>`). Measured Release-to-Release, three runs each:
-
-| | eager | lazy |
-|---|---|---|
-| whole profile | ~571 ms | ~575 ms |
-| `Sdl.tosh` alone | ~406 ms | ~376 ms |
-
-So roughly **7 % off the SDL module and nothing measurable on the profile**. The
-prediction that this would recover "most of the ~600 ms" was wrong.
-
-A synthetic bind block of 15 functions did drop from 159 ms to 55 ms, which is
-what motivated the change — but that improvement does not reproduce on the real
-modules, so delegate emission is not the dominant term after all. Full suite
-4,842 passing. The change is retained on its own merits (do not do work that may
-never be needed) but it carries a real trade: **a missing export now fails on
-first call rather than at declaration.**
-
-**Where the time actually goes is still unknown.** Per-module, in-process,
-Release:
-
-```
-MathTypes 16   Point 14   Vector 2   Native 1
-Graphics  65   Sdl  297   Gl 113     Gtk 61      TOTAL ~571 ms
+The language owns its value model, core types, observable semantics, metadata,
+and portable standard library. The .NET runtime and the C ABI are peer foreign
+systems:
+
+- the .NET target provides first-class CLR interop;
+- both targets provide first-class native C interop;
+- the native target does not load or depend on the CLR.
+
+The bootstrap proceeds through IL before native code:
+
+1. The existing C# compiler compiles a compiler written in Tōast.
+2. That compiler compiles itself to IL until it reaches a reproducible fixed
+   point.
+3. The self-hosted compiler gains a C emitter and targets the native runtime.
+4. The resulting native compiler compiles itself without .NET.
+
+Self-hosting means that the compiler and portable libraries are written in
+Tōast. A small foreign substrate remains necessary for allocation, garbage
+collection integration, operating-system entry points, and C ABI operations.
+
+## Goals
+
+- One language, grammar, type system, semantic model, and front end.
+- A self-hosted compiler that can compile itself to IL and native code.
+- Tōast-owned core types whose behavior does not depend on CLR definitions.
+- A native runtime that has no .NET installation or startup dependency.
+- First-class CLR interop on the .NET target.
+- First-class C ABI interop on both targets.
+- Deterministic compiler behavior and cross-backend semantic conformance.
+- A gradual path that improves the existing compiler before native work begins.
+- A portable language even where TōSh remains platform-specific.
+
+## Non-goals
+
+- Replacing the existing compiler or runtime before Tōast is mature.
+- Treating the native target as a second language or dialect.
+- Reimplementing the CLR, BCL, or arbitrary NuGet packages for native mode.
+- Making a native executable carry arbitrary CLR objects without running a CLR.
+- Writing a garbage collector, linker, object-file writer, or machine-code
+  backend as the first native implementation.
+- Rewriting TōSh, the LSP, DAP, MCP server, and every tool before the compiler
+  can self-host.
+- Using assembly as the implementation language for the compiler or runtime.
+
+## Compilation targets and profiles
+
+Target selection and capability selection are separate concepts:
+
+```text
+--target dotnet --profile clr
+--target dotnet --profile no_clr
+--target native
 ```
 
-Hypotheses tested and rejected so far: `dlopen` of the native libraries, enum
-declarations, `raw struct` emission, module nesting, class-body versus
-module-level `bind`, and now delegate emission. Confirmed contributors are only
-`using System.Drawing` (~70 ms, one-time) and the first `raw callback` in a
-process (~120 ms, one-time).
+`--target native` implies `no_clr`.
 
-**The profiler found it in one run.** `dotnet-trace collect --format speedscope`
-around a module load, inclusive time per frame:
+### `dotnet` with `clr`
 
-| frame | inclusive |
+- Emits .NET IL.
+- Uses CLR garbage collection and managed runtime services.
+- May load assemblies and use CLR reflection.
+- Exchanges Tōast and CLR values through the .NET bridge.
+- Uses the C ABI through native interop.
+
+### `dotnet` with `no_clr`
+
+- Emits .NET IL as a bootstrap and verification target.
+- Uses the CLR only as its physical execution host.
+- Rejects source and dependencies that require CLR-specific capabilities.
+- Observes the same portable semantics required by the native target.
+- Proves portable-source separation before native code generation exists.
+
+### `native`
+
+- Emits C from the same lowered IR used by the IL backend.
+- Invokes the platform C compiler and linker.
+- Links the Tōast native runtime and selected portable libraries.
+- Provides Tōast reflection metadata without CLR reflection.
+- Supports the C ABI but rejects CLR capabilities.
+- Runs without CoreCLR, `hostfxr`, managed assemblies, or a .NET installation.
+
+## Capability model
+
+`no_clr` is enforced by the binder and verifier, not by scanning source text
+for forbidden imports. Capabilities are attached to symbols, calls, types,
+modules, intrinsics, and foreign values in the typed semantic IR.
+
+The initial capability set includes:
+
+| Capability | Meaning |
 |---|---|
-| `ToshEngine.ResolveTypeName` | 518 ms |
-| `DotNetTypeResolver.ResolveUncached` | 514 ms |
-| `DotNetTypeResolver.TryResolveFromImports` | 485 ms |
+| `core` | Portable Tōast semantics available on every target |
+| `os` | Portable operating-system abstraction implemented per platform |
+| `native` | C ABI calls and native layout operations |
+| `unsafe` | Unchecked pointers, raw memory, and lifetime-sensitive operations |
+| `clr` | CLR types, reflection, assemblies, managed callbacks, or managed APIs |
 
-**Type-name resolution was ~90 % of module load.** Seven hypotheses had been
-tested by bisection and all seven were wrong; the profiler answered it
-immediately. The lesson is worth keeping: bisection is good at falsifying a
-named suspect and useless at finding an unnamed one.
+A `no_clr` compilation verifies the transitive dependency graph. It rejects:
 
-**Root cause.** `ResolveNativeInteropParameterType` consulted
-`NativeTypeLexicon.IsCStringName` and then fell through to full CLR type
-resolution — so `int`, `uint`, `ptr` and `byte`, which are most of what a bind
-block declares, each scanned every import. `NativeTypeLexicon.TryResolveScalar`
-exists precisely for these names and was never called. A 28-function SDL block
-resolves roughly 110 parameter types this way.
+- direct use of CLR types or namespaces;
+- `load-assembly` and CLR reflection;
+- calls to functions whose effects include `clr`;
+- generic instantiations whose implementation requires `clr`;
+- dynamic values whose origin or possible operations include CLR objects;
+- portable modules that expose CLR-backed values through `Any` or an
+  apparently portable interface.
 
-**Fix.** Consult the scalar table before the CLR resolver. Also narrowed the
-resolver's cache invalidation: loading an assembly can make a name resolvable
-but never make a resolved name stop resolving, so only *negative* entries are
-now dropped when the assembly count changes, rather than the whole cache.
+The diagnostic identifies the capability, the operation that introduced it,
+and the dependency path by which it reached the `no_clr` compilation.
 
-**Measured, Release to Release:**
+## Architectural layers
 
-| | before | after |
-|---|---|---|
-| `Gl.tosh` | 113 ms | **7 ms** |
-| `Gtk.tosh` | 61 ms | **8 ms** |
-| `Sdl.tosh` | 297 ms | 212 ms |
-| all eight modules | 571 ms | **329 ms** |
-| **`tosh -c 'echo hi'` with the full profile** | **0.73 s** | **0.58 s** |
+The core is divided into four layers so language semantics are not confused
+with runtime machinery.
 
-Full suite 4,842 passing. Roughly **200 ms off every shell start**, and the
-modules that are almost pure `bind` blocks got 8–16× faster to load.
+### Runtime kernel
 
-### Second profiler run: the negative cache was switched off
+The kernel supplies operations that cannot initially be ordinary Tōast:
 
-`Sdl.tosh` remained the outlier at 212 ms. Profiling it alone put
-`DotNetTypeResolver.SafeGetTypes` at 296 ms inclusive — `Assembly.GetTypes()`
-over every assembly loaded since the platform index was built.
+- process and module startup;
+- allocation and garbage-collector integration;
+- object headers and type descriptors;
+- primitive arithmetic and conversion intrinsics;
+- string and contiguous-storage allocation;
+- write barriers and reference tracing;
+- exception propagation and stack metadata;
+- scheduler and suspension hooks;
+- C ABI calls, callbacks, and raw layout;
+- operating-system calls needed by the portable platform layer.
 
-**Root cause.** `TryResolveDirect` guarded its negative cache with
+The kernel is managed code for the .NET target and a small C runtime for the
+native target.
 
-```csharp
-_negativeResultCache.ContainsKey(name) &&
-AppDomain.CurrentDomain.GetAssemblies().Length <= _platformIndexedAssemblyCount
+### Portable core library
+
+The public core API is written primarily in Tōast and is identical across
+targets:
+
+- collection APIs and algorithms;
+- iterators and streams;
+- `Option`, `Result`, and errors;
+- comparison, hashing, formatting, and parsing;
+- numeric helpers and Unicode text algorithms;
+- core reflection descriptors;
+- task, future, and channel protocols.
+
+Storage, allocation, and a small number of hot operations may be intrinsics,
+but public behavior is defined by Tōast source and the language specification.
+
+### Portable standard library
+
+The standard library contains higher-level types and services:
+
+- regular expressions;
+- temporal and calendar types;
+- paths, filesystem, serialization, and structured data;
+- URI, IP, and identifier types;
+- quantities, complex numbers, vectors, and matrices;
+- compression, cryptography, networking, and process APIs where portable
+  implementations or stable platform adapters exist.
+
+### Platform and interop libraries
+
+Target-specific libraries expose intentionally foreign capabilities:
+
+- CLR types, assemblies, delegates, tasks, and reflection;
+- C pointers, handles, callbacks, calling conventions, structs, and unions;
+- POSIX, Win32, and other platform-specific facilities;
+- terminal, job-control, process, and signal behavior used by TōSh.
+
+## Core value model
+
+Tōast defines observable behavior. Backends may use different physical
+representations when they preserve the same semantics.
+
+### Fundamental values
+
+| Type | Contract |
+|---|---|
+| `never` | Has no values; used for expressions that cannot complete normally |
+| `nothing` | The single successful no-result value; internally `Unit` |
+| `null` | The absence singleton; distinct from `nothing` |
+| `bool` | `true` or `false` |
+| `Any` | A boxed value whose concrete Tōast type is known at runtime |
+| `Type` | A Tōast type descriptor independent of CLR `System.Type` |
+| `Error` | The root of language-level exceptional values |
+
+`void` is an ABI concept for functions returning no machine value. A Tōast
+function that completes without producing a result has type `nothing`.
+
+Portable typed code uses explicit nullability. `T?` admits `null`; an ordinary
+`T` does not. `Any` may contain `null` in dynamic code. `Option<T>` represents
+domain-level optionality, and `Result<T, E>` represents expected failure.
+
+`object` may remain an ergonomic spelling for `Any`, but it does not require
+every value to have heap identity. Machine integers and booleans remain unboxed
+until a dynamic boundary requires boxing.
+
+### Integer types
+
+The portable integer family has explicit widths:
+
+- `i8`, `i16`, `i32`, `i64`, `isize`
+- `u8`, `u16`, `u32`, `u64`, `usize`
+
+Familiar names remain aliases:
+
+| Alias | Canonical type |
+|---|---|
+| `sbyte` | `i8` |
+| `byte` | `u8` |
+| `short` | `i16` |
+| `ushort` | `u16` |
+| `int` | `i32` |
+| `uint` | `u32` |
+| `long` | `i64` |
+| `ulong` | `u64` |
+
+Integer literals default to `int` when representable, then to a wider type
+according to suffix and value. Arithmetic overflow is checked by default on
+every backend. Wrapping and saturating operations are explicit. Division,
+remainder, shifts, and narrowing conversions have one specified behavior.
+
+`isize` and `usize` are for storage sizes, indices, pointer arithmetic, and ABI
+boundaries. Ordinary arithmetic prefers fixed-width types so behavior does not
+change with target architecture.
+
+### Floating-point and decimal types
+
+| Type | Contract |
+|---|---|
+| `f32` / `float` | IEEE 754 binary32 |
+| `f64` / `double` | IEEE 754 binary64 |
+| `decimal` / `dec` | Base-10 value with Tōast-defined decimal semantics |
+
+The specification defines NaN comparison and hashing, signed zero, infinity,
+rounding, parsing, and shortest round-trip formatting.
+
+`decimal` uses a sign, a 96-bit coefficient, and a scale from 0 through 28.
+Operations are checked and use round-to-nearest-even unless another mode is
+named. This is compatible with `System.Decimal` without making the BCL its
+normative definition. Native code may use 128-bit integer operations internally.
+
+`BigInt` and `Complex` are portable-library types rather than primitives.
+
+### Text and binary values
+
+| Type | Contract |
+|---|---|
+| `rune` | A valid Unicode scalar value |
+| `string` / `str` | Immutable Unicode text |
+| `bytes` | Immutable binary data |
+| `buffer` | Mutable binary storage |
+
+Native strings use validated UTF-8. The .NET implementation may use
+`System.String`, but observable operations follow the Tōast Unicode contract.
+Crossing the CLR boundary performs required UTF-8/UTF-16 conversion.
+
+Text APIs distinguish byte, rune, and grapheme length and iteration. String
+indexing, where accepted, addresses Unicode scalar positions and never exposes
+UTF-8 bytes or UTF-16 code units. Byte-oriented algorithms use `bytes`, and
+grapheme-aware display and editing use explicit grapheme APIs.
+
+Core parsing, comparison, and serialization are culture-invariant. Locale-aware
+behavior is explicit. String containment and default comparison are ordinal.
+
+Compiler source spans use UTF-8 byte offsets. A source line map translates byte
+offsets to line, column, rune, and display positions.
+
+`char16` exists only where CLR or foreign ABI interop requires a UTF-16 code
+unit. It is not the portable text atom.
+
+### Collections and products
+
+| Type | Contract |
+|---|---|
+| `array<T>` | Fixed-length contiguous mutable storage |
+| `list<T>` | Growable mutable sequence |
+| `slice<T>` | Bounds-checked view over contiguous storage |
+| `tuple<T...>` | Immutable fixed-arity structural product |
+| `dict<K, V>` | Insertion-ordered hash dictionary |
+| `set<T>` | Insertion-ordered unique collection |
+| `range` | Integer range as defined by its syntax |
+| named `record` | Nominal named-field product |
+| anonymous record | Immutable structural named-field product |
+| `Row` | Dynamic insertion-ordered string-field object for shell data |
+
+`dict<K, V>` accepts keys satisfying `Hash` and `Eq`; it is not limited to
+strings. Iteration order is insertion order, ensuring stable shell output and
+compiler behavior independently of table layout or hash randomization.
+
+Mutable collections have reference identity. Tuples and immutable records use
+structural equality. A named record remains nominal when another record has the
+same fields. `Row` is the explicit escape hatch for late-bound fields and
+schema-changing pipeline data.
+
+Language ranges remain integer-based. Other progressions belong in portable
+libraries rather than changing range-literal semantics.
+
+Slices retain or otherwise protect their owner. A safe slice cannot outlive its
+storage or become invalid after collection growth. Borrowed raw spans used by
+interop are `unsafe` and cannot escape their verified scope.
+
+### User-defined type forms
+
+- `class` defines a nominal reference type with identity and inheritance.
+- `record` defines a nominal data type with value-oriented equality.
+- `struct` defines a nominal value type with explicit layout only when requested.
+- `union` defines a closed tagged sum suitable for exhaustive matching.
+- `enum` defines a closed named set with a specified ABI representation where
+  required.
+- `interface` defines a behavioral contract and dynamic dispatch surface.
+- Generic constraints are Tōast protocols, not CLR interface tests.
+
+Closed compiler trees prefer unions and records because matches can be
+exhaustive and native layouts are predictable. Open application object models
+may use classes and interfaces.
+
+### Core protocols
+
+The portable core defines at least:
+
+- `Eq`
+- `Hash`
+- `Comparable<T>`
+- `Formattable`
+- `Iterable<T>`
+- `Iterator<T>`
+- `Stream<T>`
+- `Callable<Args..., Result>`
+- `Future<T>`
+- `Disposable`
+
+Equality, containment, hashing, truthiness, conversion, and formatting route
+through one semantic implementation per target and one shared conformance
+corpus. String containment is ordinal; dictionary containment tests keys; and
+collection containment uses canonical Tōast equality.
+
+### Pipelines, iteration, and asynchronous values
+
+A collection is one scalar value. Iteration and streaming are explicit:
+
+- `Iterable<T>` supplies synchronous pull-based iteration.
+- `Stream<T>` supplies asynchronous values over time.
+- `Future<T>` supplies one asynchronous completion.
+- `Channel<T>` supplies coordinated asynchronous communication with an
+  explicit closed/end result.
+
+Function execution carries an output stream and a completion result. Emitted
+values remain visible when a later `return` terminates the function, and a
+return value may contribute one final value according to the function contract.
+
+The compiler never guesses stream cardinality because a value is enumerable.
+Adaptation from a collection to a stream is explicit in the bound tree even
+where pipeline syntax makes it concise.
+
+### Errors and diagnostics
+
+`Error` is a Tōast object with a stable identifier, message, cause, structured
+data, and portable stack frames. Foreign exceptions are wrapped with their
+identity and details preserved by the interop layer.
+
+`Diagnostic` is data rather than an exception. It contains a stable diagnostic
+ID, severity, message parameters, source span, related spans, notes, and
+optional fix information.
+
+Expected lexer, parser, binder, and type-checker failures accumulate diagnostics
+and return `Result`. Exceptions represent internal compiler faults or explicit
+language throws.
+
+`defer` executes all cleanup actions in last-in, first-out order on normal
+completion, return, throw, break, and cancellation. Cleanup failures are
+preserved in execution order rather than stopping remaining cleanup.
+
+### Time and calendar types
+
+| Type | Meaning |
+|---|---|
+| `date` | Civil calendar date without time or zone |
+| `time` | Wall-clock time without date or zone |
+| `LocalDateTime` | Civil date and time without a global instant |
+| `Instant` | A point on the UTC timeline |
+| `OffsetDateTime` | Date and time paired with a numeric UTC offset |
+| `duration` | Fixed elapsed time |
+| `Period` | Calendar-relative amount such as months or years |
+| `TimeZone` | Named timezone rules supplied by the standard library |
+
+Intrinsic date literals remain exact ISO forms. Parsing and arithmetic are
+specified independently of `System.DateTime`, and timezone database behavior is
+versioned by the standard library.
+
+### Regular expressions
+
+`regex` uses a specified portable Tōast dialect. Syntax, matching, capture,
+replacement, Unicode, and option behavior are identical across targets.
+
+The portable implementation favors a Tōast-written NFA engine for the regular
+subset. Backtracking, backreferences, and advanced lookaround are included only
+when their complexity and worst-case behavior are deliberately accepted.
+CLR-specific regex remains a foreign CLR value in the `clr` profile and does
+not define portable semantics.
+
+## Runtime implementation model
+
+### Intrinsics and the core manifest
+
+Public core types and methods are declared in Tōast source. Irreducible runtime
+operations use stable intrinsic IDs rather than backend class or method names.
+
+A versioned core manifest records:
+
+- canonical type and intrinsic IDs;
+- public names and aliases;
+- generic arity and constraints;
+- layout class and ABI requirements;
+- capability requirements;
+- compiler-known lowering rules;
+- conformance version.
+
+The bootstrap compiler consumes a precompiled core module. Both runtimes
+implement the manifest, while ordinary methods compile from shared Tōast source.
+For example, list algorithms and formatting are Tōast, while allocation,
+capacity growth, and GC barriers are intrinsics. Unicode algorithms are mostly
+Tōast, while validated string allocation may be intrinsic.
+
+### Static and dynamic representation
+
+Statically typed operations use unboxed values where possible. Dynamic
+boundaries box values into a simple tagged representation:
+
+```text
+Value
+├── tag and flags
+└── immediate payload or managed object pointer
 ```
 
-but `_platformIndexedAssemblyCount` is deliberately a *pre-index snapshot* that
-never advances, so the guard became permanently false the moment anything
-loaded. The negative cache therefore switched itself off early in startup, and
-every subsequent miss re-enumerated the full type list of every assembly past
-the watermark.
+The initial native representation should use two machine words rather than NaN
+boxing. Small integers, booleans, `nothing`, and `null` can be immediate.
+Strings, collections, classes, closures, and boxed structs use heap objects.
 
-Module-local names are the ones that miss: a `raw struct`, an `enum` or a class
-declared in the same file is never a CLR type, so **every annotation mentioning
-one paid a full assembly scan.**
+Boxing occurs at explicit boundaries:
 
-**Fix.** Record the assembly count alongside each negative entry and compare
-against *that*, so a repeated miss is O(1) unless an assembly has genuinely
-appeared since. A global "already scanned" watermark would have been incorrect —
-a name never looked up before would skip assemblies scanned on another name's
-behalf.
+- conversion to `Any`;
+- heterogeneous collections;
+- dynamic shell pipelines;
+- reflection and dynamic dispatch;
+- foreign interop.
 
-**Cumulative result**, in-process module load, same binary shape throughout:
+The representation is an internal ABI detail. Public native APIs use opaque
+handles or versioned ABI structures so layout optimization does not break
+extensions.
 
-| module | original | + scalar fast path | + negative cache |
-|---|---|---|---|
-| `Graphics.tosh` | 106 ms | 110 ms | **49 ms** |
-| `Sdl.tosh` | 297 ms | 180 ms | **99 ms** |
-| `Gl.tosh` | 113 ms | 7 ms | 7 ms |
-| `Gtk.tosh` | 61 ms | 8 ms | 9 ms |
-| **all eight** | **571 ms** | **323 ms** | **199 ms** |
+### Object and type layout
 
-**~65 % off module load.** Full suite 4,842 passing after each change.
+A native heap object contains a compact header followed by its payload. The
+header identifies a Tōast type descriptor and carries collector state or flags.
 
-### Verified end to end, after installing the build
+A type descriptor contains:
 
+- stable type identity and display name;
+- size, alignment, and GC reference map;
+- base type and implemented interfaces;
+- generic arguments;
+- member and method metadata;
+- equality, hashing, comparison, conversion, and formatting operations;
+- dispatch tables;
+- source and debug metadata where retained.
+
+Reflection is a Tōast facility. `type-of`, `members`, dynamic calls, debugger
+inspection, and shell display use emitted Tōast metadata. Compilation may offer
+metadata-retention levels, but shell and tooling builds retain the complete
+dynamic surface.
+
+### Generic implementation
+
+The native backend initially monomorphizes generic code whose value layouts need
+specialization. It may share code for compatible reference representations when
+type descriptors preserve generic arguments. Interface calls use emitted
+witness or dispatch tables.
+
+The IL backend may use CLR generics as an implementation technique, but Tōast
+defines constraint checking, variance, equality, and reflection behavior.
+
+### Garbage collection and resources
+
+The first native runtime uses the Boehm collector behind a narrow allocation
+interface. It supports cycles, is cross-platform, and avoids making a custom
+collector a prerequisite for self-hosting.
+
+All managed allocation and root registration pass through the runtime ABI so a
+future precise collector can replace Boehm without changing Tōast source or the
+public object model.
+
+Scarce resources use deterministic disposal. Files, sockets, terminal state,
+foreign handles, and locks are released through `Disposable`, lexical cleanup,
+or `defer`; GC finalization is only a fallback.
+
+### Control flow, exceptions, generators, and async
+
+The target-neutral lowered IR explicitly represents:
+
+- normal and exceptional exits;
+- cleanup regions and ordered `defer` execution;
+- catch and finally edges;
+- generator suspension and resumption;
+- async suspension, cancellation, and completion;
+- function output streams separately from completion values.
+
+The IL backend maps these operations to CLR mechanisms. The C backend lowers
+them to state machines, landing pads, and runtime unwind frames. Generated C
+does not depend on C++ exceptions.
+
+### Module initialization and startup
+
+The compiler emits an explicit initialization graph. Modules initialize once in
+dependency order, detect initialization cycles, and distinguish compile-time
+data from runtime initialization.
+
+The native runtime is statically linked where practical and performs no package
+resolution, framework probing, managed assembly loading, or JIT compilation at
+startup. Native shell and command-line binaries target single-digit-millisecond
+startup on supported systems.
+
+## Interoperability
+
+### Native C ABI
+
+Native interop remains explicit about layout, ownership, and safety:
+
+- `ptr<T>` and `mut_ptr<T>` for borrowed raw pointers;
+- `handle<T>` for opaque owned or reference-counted foreign handles;
+- `cstr` and explicit-length byte or string views;
+- fixed-size arrays and ABI-specific scalar aliases;
+- `raw struct` and `raw union` for C-compatible layout;
+- calling conventions and variadic restrictions;
+- `bind native` and raw callbacks;
+- explicit allocation, pinning, copying, and release behavior.
+
+Portable objects never acquire C layout accidentally. Crossing the ABI uses an
+explicit raw representation or generated marshalling adapter. Unsafe pointers
+cannot be stored in safe values without an ownership wrapper.
+
+Library resolution accounts for platform naming and ABI differences without
+embedding Linux-specific library names in portable modules.
+
+### .NET bridge
+
+The .NET bridge exposes CLR objects as foreign values carrying the `clr`
+capability. Surface syntax may remain concise, including fluent member access,
+but the binder retains the distinction between a Tōast type and a CLR type.
+
+The bridge specifies conversions for:
+
+- Tōast strings and `System.String`;
+- numeric types, including checked narrowing and decimal conversion;
+- arrays, lists, dictionaries, and enumerable adapters;
+- delegates and Tōast callables;
+- `Task<T>` and `Future<T>`;
+- `IAsyncEnumerable<T>` and `Stream<T>`;
+- CLR exceptions and Tōast `Error`;
+- managed object identity and GC handles;
+- nullable values and `Option<T>`;
+- reflected metadata and Tōast type descriptors.
+
+Conversions are explicit in the bound tree even where syntax inserts them
+implicitly. Collection adapters document whether they copy, wrap, pin, or
+stream. A CLR object never silently becomes a portable Tōast object.
+
+## Compiler architecture
+
+### Shared front end
+
+The self-hosted compiler is a library with a thin command-line host. Its passes
+are:
+
+1. source loading and Unicode validation;
+2. lexing;
+3. parsing into a lossless syntax tree;
+4. declaration and module binding;
+5. name and overload resolution;
+6. type, flow, capability, and effect checking;
+7. lowering into typed target-neutral IR;
+8. semantics-preserving optimization;
+9. IL or C emission;
+10. artifact, metadata, and diagnostic production.
+
+The interpreter consumes the same bound representation where practical. It is
+not an independent definition of language semantics.
+
+### Compiler data model
+
+The compiler-writing subset supports strongly typed forms of:
+
+- `SourceText`, `SourceSpan`, and line maps;
+- `Diagnostic` and `DiagnosticBag`;
+- `TokenKind` and `Token`;
+- closed syntax-node unions;
+- symbols and parent-linked scopes;
+- Tōast type and constraint representations;
+- bound-node unions and control-flow graphs;
+- lowered IR instructions and blocks;
+- modules and dependency graphs;
+- compiler options and target profiles;
+- artifacts and emitted metadata;
+- `Result<Artifact, list<Diagnostic>>`.
+
+Tokens retain source spans instead of allocating a string for every lexeme.
+Trees are predominantly immutable. Scopes use typed maps with parent links
+rather than cloned dynamic hash tables. Expected source errors accumulate
+diagnostics; internal invariant failures throw compiler errors.
+
+### Backend contract
+
+Both backends consume the same lowered IR and intrinsic contract.
+Backend-specific nodes are isolated after semantic checking and cannot redefine
+language behavior.
+
+The IL backend emits managed metadata and resolves intrinsic IDs to the managed
+runtime. The C backend emits readable C, source mappings, module metadata, and
+calls into the native runtime ABI.
+
+The C backend delegates optimization, object-file generation, debug format,
+relocation, and linking to the platform toolchain. LLVM or direct machine-code
+emission may be added later without changing the front end or semantic IR.
+
+### Compiler-subset requirements
+
+Every feature used by the compiler must compile without source replay or calls
+back into the interpreter. Runtime calls are permitted only through stable core
+intrinsics available on both runtimes.
+
+The readiness gate requires:
+
+- no source replay;
+- no `ToshEngine` dependency in compiler artifacts;
+- no CLR-only host dispatch in `no_clr` modules;
+- no implicit dynamic locals or members in compiler code;
+- no backend-specific semantic fallback;
+- all required behavior represented in typed and lowered IR.
+
+## Compiler-shaped readiness probes
+
+[`bench/probes/compiler_shape.tosh`](../bench/probes/compiler_shape.tosh)
+contains a lexer, parser, AST hierarchy, visitors, evaluator, scoped variables,
+and structured lex and parse errors. Its interpreted cases produce:
+
+```text
+1 + 2 * 3                              → 7
+(1 + 2) * 3                            → 9
+-x + y * 2                             → -2
+let a = x * 2 in a + y                 → 24
+let a = 1 in let b = 2 in (a + b) * x  → 30
 ```
-Startup Profile          before        after
-  Total:                 648.7 ms  →  245.7 ms
-  Profile:               628.3 ms  →  224.8 ms
+
+This establishes that Tōast can express compiler-shaped code. It is an
+expressiveness probe rather than the portable gate because it contains implicit
+dynamic types, an unannotated compile boundary, `System.Collections.Hashtable`,
+and allocation-heavy substring and list-concatenation patterns.
+
+The portable readiness probe requires:
+
+- no `System.*` references or CLR-derived values;
+- fully annotated parameters, fields, locals, and returns;
+- typed token kinds and source spans;
+- a closed typed syntax tree;
+- a typed symbol table and parent scopes;
+- structured diagnostic accumulation and a typed compile result;
+- Unicode, invalid-source, large-input, and deep-tree cases;
+- interpreted and compiled semantic equivalence;
+- clean `dotnet/no_clr` compilation without source replay;
+- a negative case proving that CLR capability leakage is rejected.
+
+Native readiness additionally requires:
+
+- compilation and execution against the native runtime;
+- identical diagnostics and results under both backends;
+- stable generated IR and C for identical inputs;
+- allocation and throughput budgets representative of compiler workloads;
+- sanitizer and leak checks for the native runtime.
+
+## Bootstrap
+
+### Prerequisites
+
+Bootstrap begins only after:
+
+- portable core semantics and their conformance corpus are authoritative;
+- the compiler subset compiles without interpreter fallback;
+- the interpreter and IL backend pass the differential corpus;
+- the canonical semantic and lowered IRs support both emitters;
+- `no_clr` verification passes the portable probe;
+- diagnostics, modules, generics, unions, interfaces, higher-order calls,
+  bitwise operations, and deep recursion are production-ready.
+
+### IL bootstrap
+
+```text
+Existing C# compiler
+        │ compiles
+        ▼
+Tōast compiler IL-0
+        │ compiles its own source
+        ▼
+Tōast compiler IL-1
+        │ compiles its own source
+        ▼
+Tōast compiler IL-2
 ```
 
-**2.6× faster startup, 403 ms saved per invocation.**
+IL-1 and IL-2 produce equivalent artifacts. Reproducible build inputs eliminate
+timestamps, random identifiers, absolute paths, unstable hash iteration, and
+environment-dependent metadata so artifacts can be compared directly.
 
-### Where the remaining time goes, and why to stop here
+The IL bootstrap establishes self-hosting independently of native work. It also
+exercises the compiler on a large typed program while CLR debugging and tooling
+remain available.
 
-A third profiler run on the fixed build:
+### Native bootstrap
+
+```text
+Self-hosted IL compiler
+        │ emits C for compiler and portable core
+        ▼
+System C compiler builds native N-0
+        │ compiles its own source
+        ▼
+Native compiler N-1
+        │ compiles its own source
+        ▼
+Native compiler N-2
+```
 
-| frame | inclusive |
-|---|---|
-| `DotNetTypeResolver.SafeGetTypes` | 187 ms |
-| `WarmUpPlatformTypeIndex` | 180 ms |
-| `BuildPlatformTypeIndex` | 178 ms |
+N-1 and N-2 emit equivalent semantic IR and C. Binary comparison is required
+when the selected C toolchain supports reproducible output; otherwise toolchain
+build IDs and platform metadata are separately accounted for.
 
-The remainder is **building the platform type index itself** —
-`EnumerateTrustedPlatformAssemblies` walks the entire
-`TRUSTED_PLATFORM_ASSEMBLIES` list, loading ~200 runtime assemblies and calling
-`GetTypes()` on each. That is not a bug; it is what buys the ability to resolve
-any BCL type by name without a `using`.
+The native kernel and system C toolchain form the bootstrap substrate. They do
+not prevent the compiler and portable library from being self-hosted.
 
-It is already started on a background thread at `ToshRuntime` construction
-(`ToshRuntime.cs:628`), so it is as overlapped as it can be — module loading
-needs type resolution almost immediately and blocks on it.
+## Delivery sequence
 
-That leaves roughly 70 ms of everything-else, so **further in-process
-optimisation has clearly hit diminishing returns.** The two remaining ideas are
-narrowing what gets indexed (a semantic regression — BCL types would stop
-resolving until referenced) or persisting the index to disk keyed by runtime
-version (real, but invalidation-prone).
+### Phase A — Specify portable semantics
 
-**And a ~180 ms one-time-per-process index is exactly what a resident server
-amortises to zero.** The remaining cost has become the argument for the next
-phase rather than a target for this one.
+- Define the core value model and source-level contracts.
+- Establish the core manifest and intrinsic boundary.
+- Create conformance tests independent of BCL names and behavior.
+- Resolve equality, hashing, ordering, nullability, overflow, Unicode,
+  formatting, collection shape, streaming, and exception semantics.
+- Implement those semantics on the existing .NET runtime.
 
-Note on end-to-end numbers: a plain `Release` build and the published
-single-file binary have different floors (~0.25 s versus ~0.15 s for
-`--no-profile`), so process-level before/after comparisons are only meaningful
-between identically-shaped builds. The in-process figures above are the reliable
-measurement.
+Related plan item: [`TS-P3-16`](plan/items/TS-P3-16.md).
 
-Also worth filing: `--profile-startup` is only wired for
-`CliInvocationKind.Repl` (`CliInvocationResolver.cs:294`), so it silently does
-nothing for `tosh --profile-startup -c '…'`, which is the invocation a startup
-investigation most wants.
+**Exit:** core behavior is specified in Tōast terms and enforced by a
+backend-neutral corpus.
 
-**Exit:** a measured number, and an explicit decision to continue or to stop at
-"fast shell, one world."
+### Phase B — Make compiler-shaped code production-ready
 
-### Phase 1 — Unblock compiler-shaped code (weeks)
+- Complete type-system support needed by compiler data structures.
+- Remove compiler-subset source replay and implicit dynamic fallbacks.
+- Make higher-order calls, interfaces, unions, narrowing, generics, and method
+  references reliable.
+- Define compiler diagnostics and performance budgets.
+- Establish the typed portable readiness probe.
 
-`TS-P2-107`, `TS-P2-108`, `TS-P2-109`, then the rest of Gate A's type-system
-stream.
+**Exit:** the probe compiles and runs through the normal IL path without an
+interpreter dependency.
 
-**Acceptance is already written**: the probe in `docs/SELF_HOSTING_RFC.md`
-compiles clean and runs. Today it fails with 26 instances of one error.
+### Phase C — Establish backend-neutral compilation
 
-Valuable regardless of any native decision — these are correctness bugs in the
-type checker that affect every user writing class hierarchies today.
+- Freeze the canonical bound tree and lowered IR contracts.
+- Make interpreter and IL behavior pass the differential corpus.
+- Define and enforce the `no_clr` capability graph.
+- Move compiler-subset builtins, default parameters, annotated writes,
+  refinement behavior, and regex onto portable runtime contracts.
 
-### Phase 2 — Make the backends agree (weeks)
+Related plan items:
 
-`TS-P3-23` differential corpus, `TS-P1-13`, `TS-P1-40`.
+- [`TS-P3-15`](plan/items/TS-P3-15.md)
+- [`TS-P3-17`](plan/items/TS-P3-17.md)
+- [`TS-P3-18`](plan/items/TS-P3-18.md)
+- [`TS-P3-19`](plan/items/TS-P3-19.md)
+- [`TS-P3-20`](plan/items/TS-P3-20.md)
 
-Two backends currently disagree on nine lines with no dynamic features. Until
-that discipline exists, adding a third backend multiplies an unmeasured problem.
-This is the phase that makes everything after it safe.
+**Exit:** the compiler subset passes `dotnet/no_clr`, has no source replay, and
+has no backend-specific semantic path.
 
-### Phase 3 — Self-host on IL (months)
+### Phase D — Self-host on IL
 
-Rewrite the compiler in ToastScript, targeting IL. Stage 0 → 1 → 2 fixpoint.
+- Write the compiler library and thin CLI in Tōast.
+- Build it with the existing compiler.
+- Execute the IL-0 → IL-1 → IL-2 bootstrap.
+- Establish reproducible compiler output.
+- Run the complete language and diagnostic corpus under the self-hosted compiler.
 
-**Full .NET compatibility is preserved for free** — the CLR is never left. This
-delivers the "written in itself" goal with no native code at all, and it is the
-ultimate dogfooding: 50k lines will surface every remaining papercut faster than
-any audit.
+**Exit:** Tōast compiles its own compiler to a stable IL fixed point.
 
-**Exit:** ToastScript compiles ToastScript, bit-identical across stages 1 and 2.
+### Phase E — Build the native runtime
 
-### Phase 4 — Specify the core (parallel with 1–3, cheap now)
+- Implement the versioned runtime ABI and core manifest.
+- Integrate Boehm GC behind the allocation interface.
+- Implement `Value`, object headers, type descriptors, strings, arrays,
+  collections, closures, errors, metadata, and module initialization.
+- Implement state-machine and unwind support.
+- Port the portable core and the compiler's required standard-library subset.
+- Establish startup, memory, sanitizer, and conformance gates.
 
-`TS-P3-16`: write the specification of `str`, `list`, `date`, `regex` and the
-rest in ToastScript's own terms, while they keep their BCL implementations.
+Related plan item: [`TS-P3-21`](plan/items/TS-P3-21.md).
 
-This is the option-preserving move. It costs little today and cannot be
-retrofitted cheaply: every doc and script written against `System.String`
-semantics is lock-in. Doing this early is what keeps the native door open
-without committing to walking through it.
+**Exit:** target-neutral compiler IR executes against the native runtime without
+CLR components.
 
-### Phase 5 — Native, if Phase 0 said yes (years)
+### Phase F — Emit C and bootstrap natively
 
-Gate B in order: `TS-P3-15` subset definition → `TS-P3-17`/`18`/`19` tier
-promotion → `TS-P3-20`/`21` runtime → `TS-P3-22` backend.
+- Implement the C backend over the shared lowered IR.
+- Emit source mappings and versioned runtime calls.
+- Build with supported platform C toolchains.
+- Execute the N-0 → N-1 → N-2 bootstrap.
+- Compare semantic IR, generated C, diagnostics, and reproducible binaries.
 
-Note the ordering is the reverse of intuition: the C backend is the *last* and
-*smallest* item. The work is in defining the subset and promoting the language
-out of Tier 2, not in code generation.
+Related plan item: [`TS-P3-22`](plan/items/TS-P3-22.md).
 
-Encouraging datum: **57 of 72 tracked features already reach Tier 1**, with only
-2 at Tier 3. The tier gap is much narrower than the original framing assumed.
+**Exit:** the native compiler compiles itself without .NET.
 
-### What not to do
+### Phase G — Port TōSh and tooling incrementally
 
-- Do not rewrite the lexer or parser in a lower-level language. Measured: 2,502
-  lines parse, bind and declare in 30 ms. It is the fastest part of the system.
-- Do not split into two products. One language, two targets, `no_clr` as a
-  profile.
-- Do not write the native backend first. It is gated by everything above it.
-
-## Open questions driving the discussion
-
-1. Which goal is the real driver — self-hosting, native distribution, or
-   performance? They have different solutions and only partly overlap.
-2. What does "full .NET compatibility" mean precisely: the pipeline carries CLR
-   objects and any assembly can be `load-assembly`'d at runtime? Or the weaker
-   "can call into .NET when asked"?
-3. Does "native" require no CLR in the process, or is a hosted CoreCLR
-   acceptable?
-
-## Working notes
-
-_(appended as the discussion proceeds)_
-
-### Three goals hiding in one question
-
-- **(a) Self-hosting** — the language is written in itself. A dogfooding and
-  credibility goal.
-- **(b) Native distribution** — a tosh program runs with no .NET install.
-- **(c) Performance** — the shell and its scripts get faster.
-
-These are separable, and each has a cheaper answer than "rewrite the core in
-Rust":
-
-- (a) can be reached **without leaving .NET at all** — the existing compiler
-  already emits IL, so a ToastScript-written compiler that emits IL is a
-  complete bootstrap. Full .NET compatibility is preserved for free, because
-  you never leave the CLR.
-- (b) is what **NativeAOT** already does for .NET — but see the hard constraint
-  below.
-- (c) is almost certainly not bounded by the implementation language. See
-  "where the time actually goes".
-
-### Hard constraint: AOT and `load-assembly` are mutually exclusive
-
-A fully ahead-of-time native binary has no JIT, so it cannot load and execute
-IL that was not known at build time. `load-assembly`, the CLR bridge's
-reflection-driven dispatch, and `Reflection.Emit` (which the native-callback
-thunks and delegate factories rely on) all require a JIT.
-
-So: **native single binary** and **load arbitrary .NET assemblies at runtime**
-cannot both hold, unless the native process *hosts CoreCLR* — which brings the
-JIT, the GC and the startup cost back with it.
-
-### The crux: tosh's identity is the CLR object model
-
-The pipeline carries .NET objects. `$x.Length` is reflection over a CLR type;
-a class can `extends System.Text.StringBuilder`; values are `System.Drawing.Color`
-and friends. That is not "tosh calls .NET" — the object model *is* the CLR's.
-
-A native core therefore has to choose:
-
-1. **Host CoreCLR, CLR objects as the only value model.** Native code holds
-   handles; every member access is a managed call. The "native" core becomes a
-   thin shell over managed work, paying boundary costs for little gain.
-2. **Host CoreCLR, dual value model.** Native fast path for primitives, strings
-   and pipeline plumbing; box into CLR only at the interop boundary. Realistic,
-   but you now maintain two type systems and their conversion and identity
-   rules.
-3. **Native core, no CLR.** Stops being tosh — the .NET object pipeline is the
-   product.
-
-### Measured startup, 2026-08-13 (Release build, AMD Ryzen 9 9950X)
-
-| invocation | wall time |
-|---|---|
-| `bash -c 'echo hi'` / `zsh -f -c` | ~0.00 s |
-| `tosh --version` | 0.05–0.06 s |
-| `tosh --no-profile -c 'echo hi'` | 0.12–0.15 s |
-| `tosh -c 'echo hi'` (full profile) | **0.74–0.78 s** |
-
-Marginal cost of each library in the profile (baseline 0.12 s):
-
-| module | total | marginal |
-|---|---|---|
-| MathTypes, StringTypes, Point, Vector, Shell, System, Network, Filesystem, Bluetooth, Git | ~0.12 | ~0 |
-| Graphics | 0.26 | +0.14 |
-| Sdl | 0.53 | +0.41 |
-| Gtk | 0.71 | +0.59 |
-| Gl | 0.82 | +0.70 |
-
-**Hypotheses tested and rejected:**
-
-- *`dlopen` of the native libraries is the cost* — no. Binding one function from
-  `libGL`, `libgtk-3` or `libSDL2` costs 0.11–0.14 s, i.e. within noise of the
-  0.12 s baseline.
-- *`Reflection.Emit` of one delegate type per native signature is the cost* — no.
-  A bind block with 40 distinct signatures costs +0.02 s over one with a single
-  function.
-
-**Confirmed contributor:** assembly loading. `using System.Drawing` plus one
-`new Size(1,2)` costs **+0.07 s** over a bare script. Each additional BCL
-assembly a module touches pays similarly.
-
-**Is it parse time? No — decisively.** A generated 2,502-line file declaring 500
-functions and 500 classes lexes, parses, binds and declares in **0.15 s against a
-0.12 s baseline — +0.03 s**. The entire profile is ~1,500 lines across 15 files
-and costs ~0.62 s. Parsing is roughly twenty times cheaper than what the profile
-actually spends.
-
-**More hypotheses tested and rejected:** module-level `bind native` vs
-class-body `proud bind native` (both free at 40 signatures); enum declarations
-(five 40-member enums, free).
-
-**Second confirmed contributor — and it is one-time, not per-declaration:**
-
-| `raw callback` declarations in a file | wall time |
-|---|---|
-| 0 | 0.12 s |
-| 1 | 0.24 s |
-| 2 | 0.26 s |
-| 5 | 0.26 s |
-| 10 | 0.28 s |
-
-The *first* `raw callback` in a process costs ~0.12 s; each additional one is
-nearly free. Something on that path performs a one-time initialization that a
-plain `bind native` does not trigger. This is new in this session and worth
-finding.
-
-**Conclusions.**
-
-1. ~0.12 s is the CLR + tosh-init floor; `--version` at 0.05 s suggests roughly
-   half of it is tosh's own startup (command registry and friends) rather than
-   raw CLR.
-2. The remaining ~0.6 s of a real session is *profile evaluation*, and it is
-   dominated by assembly loads and per-declaration work — not by executing
-   ToastScript.
-3. **A native rewrite would not fix (2).** Loading `System.Drawing` costs what
-   it costs whoever asks for it. It *would* fix (1).
-4. The graphics modules added in this session are most of the current profile
-   cost. Lazy binding — deferring both the native library load and the delegate
-   creation to first call — is the obvious lever, and is worth doing regardless
-   of any rewrite.
-
-### Compiler modes — the proposal, and the seam it forces
-
-Proposed: `--target native` and `--target dotnet`; importing .NET in native mode
-is a compile error; a small "Native Core Library" mirrors the shape of the .NET
-core library.
-
-The profile machinery for this **already exists in part** —
-`docs/COMPILED_TOSH.md` defines Bucket A (pure language), Bucket B (library),
-Bucket C (shell-only) and proposes ToastScript-Shell vs ToastScript-Lang
-profiles. Native mode is Bucket A + Bucket B with a different backend.
-
-The unresolved question is where the type seam is cut. There are two answers and
-they are not variations of each other:
-
-**Seam A — same names, two implementations.** `string.Replace`, `Math.Clamp`,
-`DateTime.Now` exist in both modes; native gets a hand-written version, .NET
-gets the BCL. Attractive because scripts look identical in both modes.
-
-The problem is that semantic divergence is guaranteed and unbounded:
-`String.Format` specifiers, culture-aware comparison (see `TS-P2-75`), `double`
-round-tripping, `DateTime` timezone rules, and the whole .NET `Regex` dialect.
-Each is a place where one script silently produces different output depending on
-the target. Matching .NET `Regex` alone is plausibly harder than the compiler.
-
-**Seam B — ToastScript owns its core types; .NET is a foreign world.**
-ToastScript specifies `str`, `int`, `dec`, `list`, `dict`, `date`, `duration`,
-`regex` with its own semantics, implemented once per backend against one
-conformance corpus. CLR values are a distinct kind, converted at the boundary.
-
-Seam B is the design the "call into .NET when asked" fallback describes, and it
-is stronger than Seam A rather than a concession: one specification you control,
-one corpus that must pass under both targets, and a native implementation that
-implements *your* string rather than chasing Microsoft's.
-
-**Seam B is cheaper than it looks, because the indirection already exists.**
-The pipeline does not cast to `System.Drawing.Color` and read `.R` — it goes
-through `IShellRecordObject`, `ReflectionObjectAccessor`, `ShellIndexingUtilities`
-and `TypeConversion`. Member access is already a protocol, not a field load.
-
-### The real gate: native mode needs to prove no CLR value escapes into it
-
-`--target native` cannot simply reject `load-assembly` and `using`. `$x.Length`
-must work when `$x` is a string and must fail to compile when `$x` is a CLR
-object — which requires knowing statically which values are CLR-backed. Today
-the language is largely dynamic, so an unknown type would have to be rejected
-conservatively, which could be extremely noisy.
-
-**This makes the typing discipline the gate on native mode, more than codegen.**
-It is also the part that most affects the language everyone writes today.
-
-### Runtime questions that follow from a native target
-
-- **GC.** Closures, cyclic object graphs and shell allocation patterns need one.
-  Boehm is the pragmatic start; refcounting leaks cycles; writing one is a
-  project. In .NET mode the CLR GC already exists, so the two targets are best
-  understood as **two runtimes behind one front end**, not one runtime with a
-  switch.
-- **String encoding.** .NET strings are UTF-16; a native ToastScript would
-  sanely be UTF-8. Every string crossing the boundary transcodes, and a shell
-  pipes a lot of text.
-- **Codegen target.** Emitting C is the pragmatic first backend — every
-  platform's optimiser for free, easy bootstrapping and debugging (Nim and Vala
-  do this). LLVM IR is better codegen for a much larger dependency.
-
-### Assembly is the one option to rule out
-
-Not portability-theatre — concrete reasons: a compiler is a large, allocation-
-heavy tree-walker whose performance comes from data structure choices, not
-instruction selection; you would hand-write exception unwinding, calling
-conventions and register allocation; there is no ecosystem for the unglamorous
-parts (Unicode, hashing, TLS); and hosting CoreCLR means driving a C API
-(`nethost`/`hostfxr`) whose marshalling glue would dwarf the compiler. Assembly
-earns its place in hot kernels — SIMD scanning in the lexer, say — not as an
-implementation language.
+- Move portable standard-library modules to Tōast.
+- Separate shell-specific OS capabilities from the language core.
+- Build native TōSh components after their runtime dependencies exist.
+- Reuse the compiler library from the LSP, formatter, documentation generator,
+  package tooling, MCP server, and DAP.
+- Retain the .NET target and bridge as a supported peer target.
+
+**Exit:** each tool selects the target appropriate to its capabilities and
+deployment needs without forking the language.
+
+## Verification strategy
+
+### Semantic conformance
+
+Every core operation has backend-independent positive, negative, boundary, and
+property tests. The same corpus runs against:
+
+- the interpreter;
+- IL with the `clr` profile;
+- IL with the `no_clr` profile;
+- the native backend.
+
+The corpus includes Unicode boundaries, numeric overflow, decimal rounding, NaN
+and signed zero, equality and hashing, ordered collections, exception cleanup,
+async cancellation, reflection metadata, and foreign conversion behavior.
+
+### Differential execution
+
+The harness compares yielded values and order, completion status, stdout and
+stderr, structured diagnostics, source spans, exceptions, cleanup failures, and
+serialized reflection metadata. Target-specific behavior requires an explicit
+capability and target-specific test.
+
+### Reproducible bootstrap
+
+Compiler stages use stable source ordering, dictionary iteration, path mapping,
+timestamps, identifiers, locale, timezone, target versions, flags, and C
+toolchain identity. Fixed-point checks compare normalized artifacts, semantic
+IR, generated C, and diagnostics.
+
+### Native runtime verification
+
+Native tests use platform sanitizers and stress:
+
+- allocation and collection with cyclic graphs;
+- roots across callbacks, threads, and suspension points;
+- exception unwinding and ordered cleanup;
+- malformed foreign text and Unicode validation;
+- collection mutation during iteration;
+- foreign ownership, pinning, and callback lifetime;
+- deep syntax trees and large compiler inputs;
+- module initialization cycles;
+- ABI compatibility across runtime versions.
+
+## Performance and distribution
+
+Native compilation is justified primarily by deployment independence,
+embedding, predictable latency, and control over representation. Repeated shell
+invocation can also use a resident process, so startup alone does not determine
+whether a native target is worthwhile.
+
+Native release gates include:
+
+- single-digit-millisecond startup for a minimal command on supported systems;
+- explicit memory-floor and compiler peak-memory budgets;
+- compiler throughput on representative projects;
+- pipeline throughput for structured objects and text;
+- binary-size budgets for minimal, compiler, and shell profiles;
+- no runtime package resolution or JIT dependency;
+- self-contained distribution where platform policy permits it.
+
+Representation optimizations, a precise collector, code sharing, direct
+machine-code emission, and vectorized kernels remain implementation choices and
+cannot change language semantics.
+
+## Cross-platform model
+
+The language, compiler, runtime, and TōSh have separate portability milestones.
+The C backend and runtime target supported platform ABIs. TōSh additionally
+requires terminal, process, signal, job-control, and filesystem behavior that
+differs substantially across operating systems.
+
+The portable platform layer defines stable capabilities and data types. Platform
+adapters implement them through POSIX, Win32, or another native API. A module
+requiring a platform capability declares it and cannot be mistaken for portable
+`no_clr` code.
+
+## Risks
+
+### Semantic divergence
+
+Two runtimes can drift in Unicode, numeric conversion, reflection, exceptions,
+and collections. The core specification, shared Tōast source, and differential
+corpus are release gates.
+
+### Runtime and library scope
+
+Strings, metadata, exceptions, async execution, and garbage collection are a
+larger effort than C emission. The kernel remains small, with higher-level
+behavior in portable Tōast. Native libraries are prioritized by the compiler
+and portable tooling instead of attempting immediate BCL parity.
+
+### Dynamic-language pressure
+
+Unrestricted `Any`, reflection, and late-bound access can hide CLR dependencies
+and force pervasive boxing. The typed compiler subset, capability tracking, and
+emitted metadata keep dynamic behavior explicit without removing shell
+ergonomics.
+
+### Garbage-collector limitations
+
+A conservative collector may retain objects falsely and cannot match all CLR
+collector behavior. The runtime ABI permits a later precise collector, while
+deterministic disposal protects scarce resources from GC timing.
+
+### Maintainer load
+
+Two targets require continuous conformance and tooling work. The IL self-host,
+portable core, and target-neutral IR are independently useful checkpoints. The
+native target begins only after those foundations prevent semantic duplication.
+
+## Required design decisions
+
+The following contracts must be settled before the portable core is frozen:
+
+1. Integer overflow, conversion, shift, and division rules.
+2. Float NaN, signed-zero, comparison, hashing, parsing, and formatting.
+3. Decimal representation, scale, overflow, and rounding.
+4. Unicode indexing, normalization, casing, comparison, and graphemes.
+5. `nothing`, `null`, `T?`, `Option<T>`, and foreign-null conversion.
+6. Collection mutability, identity, equality, hashing, and iteration order.
+7. Named records, anonymous records, and dynamic `Row` behavior.
+8. Function output streams, returns, iterators, futures, and channels.
+9. Errors, stack traces, cancellation, `defer`, and cleanup failure.
+10. Type descriptors, reflection retention, dispatch, and generic metadata.
+11. Portable regex syntax and worst-case execution guarantees.
+12. Temporal types, calendar arithmetic, timezone data, and serialization.
+13. C ownership, pointer lifetime, callbacks, and ABI versioning.
+14. CLR conversion, identity, task, exception, and collection-adapter rules.
+15. Capability inference for unresolved dynamic code.
+
+## Completion criteria
+
+Tōast is self-hosting on .NET when:
+
+- the compiler is written in Tōast;
+- the existing compiler can build it;
+- the produced compiler can compile its own source;
+- successive IL stages reach a reproducible fixed point;
+- no source replay or interpreter dependency exists in the compiler artifact;
+- the portable conformance corpus passes.
+
+Tōast is self-hosting natively when:
+
+- the native runtime implements the versioned core contract;
+- the self-hosted compiler emits C for its source and portable dependencies;
+- the system C compiler produces a compiler requiring no .NET components;
+- successive native stages reach an IR and generated-C fixed point;
+- the native compiler passes the portable conformance corpus;
+- `no_clr` verification proves no CLR capability enters the artifact;
+- the runtime passes memory, sanitizer, startup, and ABI gates.
+
+TōSh can then be rebuilt incrementally in Tōast against either target. The
+language becomes self-hosting before every shell component and development tool
+is rewritten.
+
+---
+
+## Review notes — 2026-08-17
+
+An engineering review of this document, recorded here rather than in a commit message
+so the questions travel with the design. Nothing below is a decision; each is either a
+gap to close or a risk to name.
+
+### The status line contradicts the content
+
+The header says *"Exploratory design. Not scheduled."* but Phases A–C map onto plan
+items that are live now — `TS-P3-15`–`TS-P3-20` are on the board and referenced by name
+from the delivery sequence. Either this is exploratory and those should not be worked,
+or it is the plan of record. It reads like the latter.
+
+Related: **"Assumes Tōast and TōSh are finished, stable"** is a precondition that never
+arrives. Software is not finished. Phase A already names real gates — specified core
+semantics, a backend-neutral corpus — and those are a better precondition than a word
+that in practice means *never start*.
+
+### Bootstrap provenance is unspecified
+
+The IL bootstrap begins `Existing C# compiler → Tōast compiler IL-0`. After IL-1
+exists, what happens to the C# compiler? Every self-hosted language has to answer this:
+Nim ships `csources`, Rust ships a stage0 binary, Go kept a C bootstrap until 1.4.
+
+The question is not academic — it is *how does someone rebuild this from source in ten
+years*. Options are roughly: keep the C# compiler maintained as a peer, freeze it as a
+checked-in bootstrap artifact, or check in a generated C snapshot of the native
+compiler. Each has different long-term costs, and choosing now is far cheaper than
+choosing after the C# compiler has bit-rotted.
+
+### The `Any` leak is the highest-risk part of the capability model
+
+The capability section correctly identifies the hard case — *"portable modules that
+expose CLR-backed values through `Any` or an apparently portable interface"* — but the
+model is described as static verification over the typed IR, and a dynamic value's
+origin is not always statically known.
+
+If closing that hole requires runtime capability tagging on dynamic values, it has a
+throughput cost and touches the core value model. That is a large enough consequence to
+deserve its own section rather than a bullet, because the answer changes both the
+performance story and Phase C's exit criteria.
+
+### There is no stop criterion
+
+For a multi-year programme this document names exits for every phase but no condition
+under which a phase should be re-scoped or abandoned. If Phase C establishes that
+capability enforcement costs 30% throughput, or Phase E finds conservative GC
+unworkable with FFI callbacks across threads, what happens? Naming those in advance is
+how a long programme avoids sunk-cost reasoning later.
+
+### Smaller notes
+
+- **Boehm GC** is conservative and non-moving. Behind an allocation interface it is a
+  reasonable first choice, and §Native runtime verification already stresses *"roots
+  across callbacks, threads, and suspension points"* — which is exactly where
+  conservative collection plus FFI goes wrong. Worth stating explicitly that the
+  interface exists so it can be replaced, not merely wrapped.
+- **Runtime ABI stability across the bootstrap** is implied by `N-0 → N-1 → N-2` but
+  only tested ("ABI compatibility across runtime versions"). The chain requires the ABI
+  to be stable across compiler versions; that is a constraint worth stating where the
+  bootstrap is defined.
+- **`dotnet` + `no_clr` as a verification target is the strongest idea in the
+  document.** It proves portable-source separation before any native code generation
+  exists, using infrastructure that already exists. That deserves to be called out in
+  the Summary rather than only appearing in the target table.
+
+### How current work relates
+
+`TOAST-0006` is already building the boundary this document's §Architectural layers
+describes: `ICommandTable`, `IToastHostSignals`, `IToastDiagnosticSink` and
+`ToastOptions` are early instances of the platform-and-interop seam, and `ToastRuntime`
+is the runtime-kernel/portable-core split beginning. The two efforts converge rather
+than compete, which is the main reason to trust the direction.
+
+The one place they disagree is recorded and resolved: `TOAST_SEPARATION_PLAN.md` had
+frozen the compiled backend, while this document puts the existing compiler on the
+critical path. The freeze was reversed on 2026-08-17 and had never been executed.

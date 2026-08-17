@@ -212,11 +212,23 @@ avoids the work being judged against a target it was never going to reach.
 
 ## Phase 0 — Decisions now settled
 
-- **The compiled backend freezes out of the solution** (option C). `Tosh.Compiler`
-  and `Tosh.Compiler.Runtime` leave `Tosh.slnx` and stay in the tree. The IR stays in
-  the build, because the evaluator wants it. A compiler gets written again later
-  against the new bound tree, where it can share the interpreter's decisions instead
-  of re-deriving them.
+- ~~**The compiled backend freezes out of the solution** (option C).~~ **Reversed
+  2026-08-17, and never executed** — `Tosh.Compiler`, `Tosh.Compiler.IR` and
+  `Tosh.Compiler.Runtime` are all still in `Tosh.slnx`, so this was a recorded decision
+  rather than a performed one.
+
+  The reversal is not a change of mind about compiler *work*; it is that the freeze and
+  the stated end goal pointed in opposite directions and nobody had reconciled them.
+  `SELF_HOSTING_RFC.md` puts the existing compiler on the critical path in its very
+  first requirement — *"the existing compiler has to be able to compile the
+  ToastScript-written compiler"* — and its IL bootstrap begins
+  `Existing C# compiler → Tōast compiler IL-0`. Freezing the compiler freezes the route
+  to self-hosting.
+
+  What survives is the sequencing, and the RFC agrees with it: the canonical bound tree
+  and lowered IR are frozen in **Phase C**, and a self-hosted compiler is written
+  against them in Phase D. The compiler is not rewritten now — it is kept building,
+  kept tested, and improved where Phase B requires.
 - **`.toshproj` packages and runs interpreted** when the emitter is gone. That is what
   it does at runtime anyway; only the MSBuild `ToshCompile` step goes.
 - **Diagnostic codes take one prefix, `toast.*`**, with `tosh.*` accepted by `hush`

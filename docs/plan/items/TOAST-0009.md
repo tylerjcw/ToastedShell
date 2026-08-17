@@ -42,6 +42,24 @@ rewrite.
 - [ ] Generators, cancellation and `NativeCallbackScope` re-entrancy all preserved
 - [ ] Allocation per iteration measured before and after, A/B against a worktree build
 
+## Where this sits, corrected 2026-08-17
+
+Two readings of this item were offered and both were wrong.
+
+It is **not** the gateway to self-hosting. `SELF_HOSTING_RFC.md` defines readiness
+precisely — the existing compiler compiling a Tōast-written one, plus Tier-1 feature
+coverage — and the evaluator appears nowhere in it.
+
+It is **not** merely a performance item either. The RFC's §Shared front end says *"The
+interpreter consumes the same bound representation where practical. It is not an
+independent definition of language semantics"*, and Phase C's first task is *"Freeze the
+canonical bound tree and lowered IR contracts."* That is this item.
+
+So this is **Phase C work** and should be sequenced with Phase C rather than by its
+allocation numbers. Its prerequisite is Phase B — the compiler-subset gaps — not the
+25% expression win that first motivated it. The allocation improvement is a consequence
+of routing evaluation through the bound tree, not the reason to do it.
+
 ## Notes
 
 **Do this last.** It rewrites semantics-carrying code and wants small reviewable files

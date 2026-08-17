@@ -136,6 +136,49 @@ So the question a language-only host asks — "what is `MaxRecursionDepth` when 
 no TōSh?" — currently has no answer. `ToastOptions` gives it one: the language declares
 its settings with defaults, and TōSh copies values in at startup.
 
+## "Streams" meant three things, and only one of them is this item's
+
+The decision above was recorded as "no `TextWriter` in `Tosh.Language`", which reads as
+though Tōast should not have stream I/O at all. It should. Three separate things were
+being called streams:
+
+1. **The session's output** — `Runtime.Output`/`Runtime.Error`, meaning "where this
+   REPL's text goes": a terminal, a `StringWriter` in a test, a pipe. Shell session
+   state, and the only one this item touches.
+2. **File and stream I/O as a language capability** — open, read, write, seek, close.
+   C has `FILE*`; C# has `Stream`. **Tōast needs this and always did.**
+   `ManagedFileHandle` already lives on the value-model side, which is correct.
+3. **Redirection** — `cmd > file`. Parsed by `ToshParser`, so it is language syntax, and
+   it stays in Tōast.
+
+What changes for (3) is its *target*, not its home. It currently swaps `Runtime.Output`
+— the session writer — for a composite writer. It should redirect to a **Tōast stream
+handle**, which is a language concept, so redirection works identically in a `no_clr`
+host with no shell present.
+
+This matters beyond tidiness because the end goal is a self-hosting Tōast with native
+targets and TōSh rewritten in it. A language that cannot open a file cannot compile
+itself.
+
+## `ReflectionInvoker` must become an interface, and 2d is where it is decided
+
+`no_clr` needs the value model to work without .NET reflection. Two of the three core
+abstractions already permit that; one does not:
+
+| | |
+|---|---|
+| `IObjectAccessor` | interface — a `no_clr` implementation can be substituted |
+| `ITypeResolver` | interface — likewise |
+| **`ReflectionInvoker`** | **sealed class, and the language's most-used member at 26 references** |
+
+The reflection weight behind them is not the problem — `DotNetTypeResolver` has 122
+reflection uses and `TypeConversion` 58 — because those are *the CLR implementation*
+behind an interface. The problem is that `Invoker` is typed as the concrete class, so a
+native target has nowhere to plug in.
+
+Small while `ToastRuntime`'s member types are being decided; painful afterwards. So it
+belongs in 2d rather than in a later `no_clr` item.
+
 ## Staging
 
 Two stages, because 182 references is not one commit.
@@ -150,7 +193,7 @@ Two stages, because 182 references is not one commit.
 | Member | Decision |
 |---|---|
 | `Commands` (14) | **One `ICommandTable` of the six members the language uses** — `TryGet`, `All`, `AllNames`, `RegisterOrReplace`, `Remove`, `GetAliasMap`. Done 2026-08-17. The original decision was to split reads from writes, and it rested on my incorrect claim that the language never registers: a `global` or `export` function declaration must put a name in the runtime table, so a read-only view would not have compiled |
-| `Output`/`Error` (16) | **The language emits values; the shell renders.** No `TextWriter` in `Tosh.Language` |
+| `Output`/`Error` (16) | **The language emits values; the shell renders.** Scoped 2026-08-17 to the *session's* output only — see the note below, because "no streams in the language" was the wrong way to say it |
 | `Events` (10) | **Language-side.** `event` is language syntax and the language calls `Register` and `MarkRequired`, not only `Raise`, so the bus goes with it |
 | `ExitRequested` (4), `ExportedEnvironmentVariables` (1) | **`IToastHostSignals`** — done 2026-08-17. Membership differs from the plan: the language *reads* ExitRequested in four loop-stop checks and requests exit in exactly one place (the `--help` path, `TS-P2-52`), and exports were already shell-side — `ExportCommand` writes them, the language only asks `IsExported` once, in `forget` |
 | `CurrentDirectory` (15) | **Passed per evaluation**, not held on any runtime. 14 of the 15 are path resolution; the single write is the AutoCd path, gated on `Config.Shell.AutoCd` and therefore shell behaviour by its own configuration |
