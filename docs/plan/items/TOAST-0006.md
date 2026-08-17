@@ -142,10 +142,43 @@ Two stages, because 182 references is not one commit.
 
 1. **`ToastOptions`** — extract the language settings. Self-contained, and it is the part
    that holds the invariant, so it is worth having even if the rest waits.
-2. **`ToastRuntime`** — the composition split. Needs a decision on the borderline
-   members: `Commands` (the language uses only `TryGet`/`All`/`AllNames`/`Remove`, so an
-   `ICommandResolver` rather than the registry), `Events`, `ExitRequested`,
-   `ExportedEnvironmentVariables` and `Output`/`Error`.
+2. **`ToastRuntime`** — the composition split. The borderline members were decided
+   2026-08-17; see below.
+
+## Stage 2 decisions, taken 2026-08-17
+
+| Member | Decision |
+|---|---|
+| `Commands` (14) | **Split reads from writes.** `ICommandResolver` with `TryGet`/`All`/`AllNames`; `Remove` is a mutation used by `forget` and goes through a separate capability, so the language cannot quietly gain the ability to unregister commands |
+| `Output`/`Error` (16) | **The language emits values; the shell renders.** No `TextWriter` in `Tosh.Language` |
+| `Events` (10) | **Language-side.** `event` is language syntax and the language calls `Register` and `MarkRequired`, not only `Raise`, so the bus goes with it |
+| `ExitRequested` (4), `ExportedEnvironmentVariables` (1) | **Host capability the language signals** — `IToastHostSignals`, which an embedder may refuse |
+| `CurrentDirectory` (15) | **Passed per evaluation**, not held on any runtime. 14 of the 15 are path resolution; the single write is the AutoCd path, gated on `Config.Shell.AutoCd` and therefore shell behaviour by its own configuration |
+
+**These are consistently the strictest option available, and that is a coherent choice
+rather than an accidental one — but it changes the size of stage 2.** The original
+estimate was "182 references to re-point", which described a *relocation*. Two of these
+decisions change the language's **interface to its host** instead:
+
+- *Emitting rather than writing* means every site that writes to a stream has to become a
+  value or a reported diagnostic. `echo` is already yielded and rendered by the host, so
+  the shape exists; script tracing and diagnostic output are not.
+- *Per-evaluation directory* means threading a context through to fifteen call sites deep
+  in the engine. It is mechanical, but it is invasive, and it is the one decision with a
+  benefit beyond tidiness: two concurrent evaluations can have different working
+  directories, which is not expressible today.
+
+So stage 2 is not one commit. Proposed order, each independently verifiable:
+
+  2a  ICommandResolver + the removal capability      smallest, no behaviour change
+  2b  IToastHostSignals for exit and export          five references
+  2c  Events onto ToastRuntime                       a move
+  2d  ToastRuntime itself, composed into ToshRuntime the bulk of the 182
+  2e  Streams: emit rather than write                behaviour surface
+  2f  CurrentDirectory per evaluation                threads a context
+
+2e and 2f are the two that deserve their own scrutiny, and both are better done after
+2d, when there is a `ToastRuntime` for the new shapes to live on.
 
 ## Notes
 
