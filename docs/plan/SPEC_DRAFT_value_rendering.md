@@ -194,13 +194,43 @@ The type name is required. Today a class renders `{| N = 5 |}`, which is *exactl
 literal, so a class and a record with the same fields render identically and a reader cannot
 tell a `Point` from a `{| X, Y |}`.
 
-**A class that defines `ToString` renders through it**, and this already works. That is the
-extension point: a type that wants a rendering says so, and the default is a structural dump
-for types that have not.
+**A type controls its own rendering by implementing the `Display` trait** — decided
+2026-08-17:
 
-> **Open:** should the method be named `ToString`, which is a BCL name in a spec that is
-> meant to be BCL-independent? A Tōast-native spelling — `str`, `render`, `to-string` — with
-> `ToString` kept as an accepted alias, would be more consistent. See Appendix B.
+```tosh
+trait Display { func render() -> string }
+
+class Temperature uses Display {
+    prop Celsius: dec = 0
+    func render() -> string => $"{$this.Celsius}°C"
+}
+```
+
+A trait rather than a magic method name, because rendering is a *capability a type
+declares*: the compiler can check it, a native target can dispatch it without reflection,
+and it reads as a contract rather than a convention. `ToString` continues to work as a
+fallback so no existing class breaks, but `Display` is what the spec teaches.
+
+**Traits do not apply to CLR-backed values.** `42 is Show` is `false` even with an
+`extend Int32` supplying the member. That is why §3–§5 specify built-in rules for scalars
+and containers: the trait is the *user* extension point, layered above rules the renderer
+always has.
+
+> **Gap, filed as `TOAST-0019`:** a trait member cannot declare a return type today, so
+> `func render() -> string` does not parse. The trait can be declared as `func render()`
+> and the result checked at runtime, but the spec would then describe a contract whose
+> return type the language cannot state. Worth closing before this lands.
+
+**A class with no `Display` and no `ToString`** renders as `TypeName { Field = value, … }`
+— decided 2026-08-17:
+
+```
+R { N = 5 }
+```
+
+The type name is required. Today a class renders `{| N = 5 |}`, which is *exactly* a
+record literal, so a class and a record with the same fields render identically and a
+reader cannot tell a `Point` from a `{| X, Y |}`.
 
 **Struct instance** follows the class rule.
 
@@ -250,9 +280,14 @@ target it may be unsupported. A program that stays inside the core set renders i
 everywhere; a program that goes outside it has made a target-specific choice, and the spec
 says so rather than pretending otherwise.
 
-> **Open:** today, a clause a value cannot honour is *silently ignored* and the value renders
-> plainly. That is a silent-wrong-answer shape — the same shape as `TOSH-0001`. I would make
-> an unhonourable clause an error. It is a breaking change. See Appendix B.
+**A clause the value cannot honour is an error** — decided 2026-08-17. Today it is
+silently ignored and the value renders plainly, which is the same silent-wrong-answer shape
+as `TOSH-0001`: the program succeeds and produces text nobody asked for. `$"{$name:F2}"` on
+a string is a mistake, and a mistake that renders is a mistake that ships.
+
+This is a breaking change, and the failure lands at runtime in the middle of building a
+string. It is accepted anyway: a clause is an explicit instruction, and ignoring an explicit
+instruction is worse than refusing it.
 
 ---
 
@@ -365,14 +400,12 @@ agreed.
 
 ## Appendix B — what I could not decide alone
 
-1. **`ToString` or a Tōast-native name?** The extension point works and is well understood,
-   but `ToString` is a BCL name sitting in the middle of a BCL-independent spec. Options:
-   keep it; rename to `str`/`render`/`to-string` with `ToString` as an accepted alias; or
-   define a trait. A trait would be the most Tōast-shaped answer and the most work.
+1. ~~**`ToString` or a Tōast-native name?**~~ **Decided 2026-08-17: a `Display` trait**,
+   with `ToString` kept working as a fallback. Blocked in one respect — `TOAST-0019`, a
+   trait member cannot declare a return type — so the contract's own signature is not
+   currently expressible.
 
-2. **Is an unhonourable format clause an error?** Today it is silently ignored. Erroring is
-   more honest and catches typos; it is also a breaking change, and the failure surfaces at
-   runtime in the middle of building a string.
+2. ~~**Is an unhonourable format clause an error?**~~ **Decided 2026-08-17: error.**
 
 3. **Is serialisation the same contract?** `ToshEngine.Pipelines.cs:270` renders a value on
    its way to a redirect target. If `run-report > out.txt` should write the same text a hole
@@ -380,12 +413,16 @@ agreed.
    stream wants a serialisation format, it is a second contract and that site stays behind.
    This decides whether `TOAST-0015` inherits a fourth call site or three.
 
-4. **Does a class default to a structural dump at all?** `R { N = 5 }` exposes every readable
-   property of every object anyone interpolates, which is a small information-disclosure
-   surface and a large "why is my log line 4KB" surface. The alternative — a class with no
-   `ToString` renders `R` and nothing else — is safer and less useful. Today's behaviour is
-   the dump.
+4. ~~**Does a class default to a structural dump at all?**~~ **Decided 2026-08-17:
+   `R { N = 5 }`**, type name plus fields. Accepts the disclosure surface in exchange for
+   keeping the default useful for logging and debugging, and fixes a class being
+   indistinguishable from a record.
 
-5. **How much of §3–§7 lands as one change?** Nine output changes at once is a large diff
-   against 160 pinned tests. Staging them — containers first, then named values, then
-   `DateTime` — is safer but means the bare hole's output changes three times.
+5. ~~**How much of §3–§7 lands as one change?**~~ **Resolved by the implementation shape:**
+   the renderer is built and tested *unused*, then the call sites flip in one revertible
+   commit. The output changes land together, but nothing depends on the renderer until it
+   is complete and pinned against this document.
+
+**Still open: question 3 above** — whether serialisation is the same contract. It decides
+whether `ToshEngine.Pipelines.cs:270` flips with the other three call sites, and it is
+needed before stage 2, not before stage 1.
