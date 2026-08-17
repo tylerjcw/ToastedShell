@@ -37,9 +37,6 @@ public sealed class ToshRuntime : IToastHostSignals, IToastDiagnosticSink
         _currentDirectory = initialDirectory;
         PushDirectory(initialDirectory);
         Commands = new ShellCommandRegistry();
-        ObjectAccessor = new ReflectionObjectAccessor();
-        TypeResolver = new DotNetTypeResolver();
-        Invoker = new ReflectionInvoker();
         DisplayPreferences = new DisplayPreferences();
         DisplayProfiles = DisplayProfileRegistry.CreateDefault(DisplayPreferences);
         Formatter = new ObjectFormatter(DisplayProfiles);
@@ -52,11 +49,6 @@ public sealed class ToshRuntime : IToastHostSignals, IToastDiagnosticSink
         PathUtilities.DirectoryAliases = Config.Shell.Dirs;
         Display.TableTheme = Config.Theme.Tables;
         History = new List<CommandHistoryEntry>();
-        Variables = new Dictionary<string, object?>(StringComparer.Ordinal);
-        Classes = new Dictionary<string, object?>(StringComparer.Ordinal);
-        NativeTypes = new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase);
-        Modules = new Dictionary<string, object?>(StringComparer.Ordinal);
-        LoadedModules = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         ExportedEnvironmentVariables = new HashSet<string>(StringComparer.Ordinal);
         InvocationArguments = Array.Empty<object?>();
         ExecHandler = new DefaultShellExecHandler();
@@ -75,6 +67,13 @@ public sealed class ToshRuntime : IToastHostSignals, IToastDiagnosticSink
         set => _currentDirectory = value;
     }
 
+    /// <summary>
+    /// The language's own runtime. TōSh composes one rather than being one: the members
+    /// below that read <c>Language.</c> are the shell's view of language state, kept so
+    /// <c>$tosh.Vars</c> and friends still work (`TOAST-0006`).
+    /// </summary>
+    public ToastRuntime Language { get; } = new();
+
     public ShellCommandRegistry Commands { get; }
 
     /// <summary>
@@ -89,11 +88,11 @@ public sealed class ToshRuntime : IToastHostSignals, IToastDiagnosticSink
     /// </remarks>
     public IExternalCommandFactory? ExternalCommands { get; set; }
 
-    public IObjectAccessor ObjectAccessor { get; }
+    public IObjectAccessor ObjectAccessor => Language.ObjectAccessor;
 
-    public ITypeResolver TypeResolver { get; }
+    public ITypeResolver TypeResolver => Language.TypeResolver;
 
-    public ReflectionInvoker Invoker { get; }
+    public ReflectionInvoker Invoker => Language.Invoker;
 
     public DisplayPreferences DisplayPreferences { get; }
 
@@ -117,11 +116,11 @@ public sealed class ToshRuntime : IToastHostSignals, IToastDiagnosticSink
     /// <c>$tosh.Config.Shell.MaxRecursionDepth = 5</c> working from script while the
     /// language reads nothing from a config file.
     /// </remarks>
-    public ToastOptions Options { get; } = new();
+    public ToastOptions Options => Language.Options;
 
     public IList<CommandHistoryEntry> History { get; }
 
-    public IDictionary<string, object?> Variables { get; }
+    public IDictionary<string, object?> Variables => Language.Variables;
 
     /// <summary>
     /// The live runtime namespace object exposed as <c>$tosh</c> by the language engine.
@@ -129,7 +128,7 @@ public sealed class ToshRuntime : IToastHostSignals, IToastDiagnosticSink
     /// </summary>
     public object? RuntimeNamespace { get; set; }
 
-    public IDictionary<string, object?> Classes { get; }
+    public IDictionary<string, object?> Classes => Language.Classes;
 
     /// <summary>
     /// CLR types emitted for globally-declared <c>raw struct</c>s, keyed by
@@ -137,11 +136,11 @@ public sealed class ToshRuntime : IToastHostSignals, IToastDiagnosticSink
     /// <c>LexicalScope.NativeTypes</c>; consulted by the type resolver so a
     /// global raw struct is nameable in native signatures.
     /// </summary>
-    public IDictionary<string, Type> NativeTypes { get; }
+    public IDictionary<string, Type> NativeTypes => Language.NativeTypes;
 
-    public IDictionary<string, object?> Modules { get; }
+    public IDictionary<string, object?> Modules => Language.Modules;
 
-    public ISet<string> LoadedModules { get; }
+    public ISet<string> LoadedModules => Language.LoadedModules;
 
     public ISet<string> ExportedEnvironmentVariables { get; }
 

@@ -220,7 +220,16 @@ So stage 2 is not one commit. Proposed order, each independently verifiable:
   2e  Streams: emit rather than write                PART DONE 2026-08-17
       diagnostics + trace done; value formatting -> TOAST-0014 (Phase A);
       redirection retargets to a Tōast stream handle, still to do
-  2f  CurrentDirectory per evaluation                threads a context
+  2f  CurrentDirectory per evaluation                DEFERRED 2026-08-17
+      Measured: none of the 15 sites has a context parameter and only two have
+      even a CancellationToken, so "pass it per evaluation" means adding a
+      parameter to a dozen synchronous helpers deep in the engine, with no
+      useful half-way state — two sources of truth is worse than either end.
+      The benefit chosen for it, concurrent evaluations with different working
+      directories, is real but future-facing and unexercised today. Held on
+      ToastRuntime for now; revisit when concurrent evaluation is on the table,
+      at which point the context probably threads alongside something else
+      rather than alone.
 
 2e and 2f are the two that deserve their own scrutiny, and both are better done after
 2d, when there is a `ToastRuntime` for the new shapes to live on.
