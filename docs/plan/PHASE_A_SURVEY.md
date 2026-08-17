@@ -35,7 +35,27 @@ echo $"as local: {$d}"                              # 2026-08-17 08:00:00
 runtime, mid-script.** This is the acceptance test the item asks for, and it already
 passes as a demonstration of the bug.
 
-There is a second, quieter half. The compiled path formats through
+### The specifier path is already portable
+
+`$"{x}"` has a second form — `$"{$d:HH:mm:ss}"` — and it does **not** consult display
+profiles:
+
+| | `$tosh.Config.Display.DateTime.ScalarMode` = default | = `Unix` |
+|---|---|---|
+| `$"{$d}"` | `2026-08-17 08:34:56` | `1786984496` |
+| `$"{$d:HH:mm:ss}"` | `12:34:56` | `12:34:56` |
+
+**The architecture Phase A wants already exists on one of the two paths.** The bare hole
+is the one that needs to join it, which makes the change far smaller than "design a
+portable formatting protocol" suggests: a bare hole becomes a specifier hole with a
+specified default.
+
+It also exposes a defect of its own — the two holes disagree about the same value, and
+the bare one shifts an `Unspecified` `DateTime` by the local offset. Filed as
+`TOAST-0017`, to be fixed **with** `TOAST-0014` rather than before it, since both change
+what the bare hole produces.
+
+There is a third, quieter half. The compiled path formats through
 `ToshValueFormatter` (`src/Tosh.Runtime/ToshValueFormatter.cs`, 13 lines) — a static
 wrapper over `new ObjectFormatter()`, which builds its registry from a **fresh**
 `DisplayPreferences` rather than the shell's live one. So interpreted and compiled
@@ -211,10 +231,11 @@ the mechanical diff — the discipline the whole separation has run on.
 
 ## 7. Open questions before any edit
 
-1. **Does `$"{x}"` render a `DateTime` as ISO, or as the local-time form it produces
-   today?** Today's default is `Local` via profile; the compiled path gives `"O"`. Whatever
-   is chosen becomes a language guarantee, and one of the two current behaviours has to
-   change.
+1. ~~**Does `$"{x}"` render a `DateTime` as ISO, or as the local-time form?**~~
+   **Answered 2026-08-17: local time by default, with format specifiers honoured.** The
+   specifier path already works and is already configuration-independent, so the rule is
+   that a bare hole is a specifier hole with a default rather than a different mechanism.
+   `TOAST-0017` covers the `Kind` handling that default has to get right.
 
 2. **Does the portable core live in `Tosh.Runtime` or move to `Tosh.Language`?**
    `TOAST-0006` divides `Tosh.Runtime` anyway. Deciding this now avoids moving the file
