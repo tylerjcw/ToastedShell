@@ -1343,6 +1343,7 @@ public static partial class ToshParser
                              IsBitwiseOperatorToken(token) ||
                              IsAdditiveOperatorToken(token) ||
                              IsMultiplicativeOperatorToken(token) ||
+                             IsExponentiationOperatorToken(token) ||
                              IsUnaryOperatorToken(token)))
                         {
                             return true;
