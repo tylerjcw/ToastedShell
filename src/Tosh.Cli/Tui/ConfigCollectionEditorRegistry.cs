@@ -1,7 +1,9 @@
 using System.Collections;
 using System.Globalization;
 
-namespace Tosh.Runtime;
+using Tosh.Runtime;
+
+namespace Tosh.Cli.Tui;
 
 public sealed record ConfigCollectionEditorItem(
     string Key,

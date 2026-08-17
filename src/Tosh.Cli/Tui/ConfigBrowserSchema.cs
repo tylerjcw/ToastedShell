@@ -3,7 +3,9 @@ global using ConfigBrowseRequest = Tosh.Tui.Requests.ConfigBrowseRequest;
 using System.Reflection;
 using System.Text;
 
-namespace Tosh.Runtime;
+using Tosh.Runtime;
+
+namespace Tosh.Cli.Tui;
 
 public enum ConfigBrowserNodeKind
 {
