@@ -27,14 +27,14 @@ namespace Tosh.Language;
 internal sealed class ScopedCommandView : IScopedCommandView
 {
     private readonly IReadOnlyList<LexicalScope> _scopes;
-    private readonly ShellCommandRegistry _registry;
+    private readonly ICommandTable _registry;
     private readonly IReadOnlyList<ShellModuleSummary> _modules;
     private readonly ToshEngine _engine;
     private IReadOnlyList<KeyValuePair<string, IShellCommand>>? _qualified;
 
     internal ScopedCommandView(
         IReadOnlyList<LexicalScope> scopes,
-        ShellCommandRegistry registry,
+        ICommandTable registry,
         IReadOnlyList<ShellModuleSummary> modules,
         ToshEngine engine)
     {

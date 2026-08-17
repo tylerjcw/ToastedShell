@@ -26,7 +26,7 @@ namespace Tosh.Language.Binding;
 /// </summary>
 public static class Lowerer
 {
-    public static BoundUnit Lower(ParseResult parseResult, ShellCommandRegistry commands)
+    public static BoundUnit Lower(ParseResult parseResult, ICommandTable commands)
     {
         ArgumentNullException.ThrowIfNull(parseResult);
         ArgumentNullException.ThrowIfNull(commands);
@@ -2073,7 +2073,7 @@ public static class Lowerer
         private readonly List<(int EntryDepth, HashSet<BoundSymbol> Seen, List<BoundSymbol> Order)> _lambdaFrames = new();
 
         public LowerContext(
-            ShellCommandRegistry commands,
+            ICommandTable commands,
             IReadOnlyDictionary<string, BoundType>? userTypes = null,
             IReadOnlyDictionary<string, List<int>>? localFunctionOverloads = null)
         {
@@ -2091,7 +2091,7 @@ public static class Lowerer
             TypeResolver = new TypeNameResolver(userTypes: userTypes);
         }
 
-        public ShellCommandRegistry Commands { get; }
+        public ICommandTable Commands { get; }
 
         /// <summary>
         /// Maps each top-level function name to the ordered list of

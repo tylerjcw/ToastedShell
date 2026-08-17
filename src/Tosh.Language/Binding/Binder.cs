@@ -57,7 +57,7 @@ public static class Binder
     /// </param>
     public static IReadOnlyList<ToshDiagnostic> Bind(
         ParseResult parseResult,
-        ShellCommandRegistry commandRegistry,
+        ICommandTable commandRegistry,
         bool isInteractive = false,
         Func<string, bool>? isExecutableOnPath = null)
     {
@@ -758,7 +758,7 @@ public static class Binder
         return false;
     }
 
-    private static IReadOnlyList<string> FindSuggestions(string name, ShellCommandRegistry registry)
+    private static IReadOnlyList<string> FindSuggestions(string name, ICommandTable registry)
     {
         // `TS-P2-60`. Edit distance answers any question it is asked, including nonsensical
         // ones: a bare `~` scored within one character of the command `f` and was offered as a
@@ -838,7 +838,7 @@ public static class Binder
     private sealed record BindContext(
         string SourceName,
         string SourceText,
-        ShellCommandRegistry CommandRegistry,
+        ICommandTable CommandRegistry,
         HashSet<string> LocalFunctions,
         bool IsInteractive,
         Func<string, bool> IsExecutableOnPath,

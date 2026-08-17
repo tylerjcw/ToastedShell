@@ -4726,7 +4726,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
         return command;
     }
 
-    private IShellCommand RegisterCommand(ShellCommandRegistry commands, IShellCommand command)
+    private IShellCommand RegisterCommand(ICommandTable commands, IShellCommand command)
     {
         if (commands.TryGet(command.Name, out var existing) &&
             TryMergeFunctionOverload(existing, command, out var merged))

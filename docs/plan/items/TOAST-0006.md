@@ -149,7 +149,7 @@ Two stages, because 182 references is not one commit.
 
 | Member | Decision |
 |---|---|
-| `Commands` (14) | **Split reads from writes.** `ICommandResolver` with `TryGet`/`All`/`AllNames`; `Remove` is a mutation used by `forget` and goes through a separate capability, so the language cannot quietly gain the ability to unregister commands |
+| `Commands` (14) | **One `ICommandTable` of the six members the language uses** — `TryGet`, `All`, `AllNames`, `RegisterOrReplace`, `Remove`, `GetAliasMap`. Done 2026-08-17. The original decision was to split reads from writes, and it rested on my incorrect claim that the language never registers: a `global` or `export` function declaration must put a name in the runtime table, so a read-only view would not have compiled |
 | `Output`/`Error` (16) | **The language emits values; the shell renders.** No `TextWriter` in `Tosh.Language` |
 | `Events` (10) | **Language-side.** `event` is language syntax and the language calls `Register` and `MarkRequired`, not only `Raise`, so the bus goes with it |
 | `ExitRequested` (4), `ExportedEnvironmentVariables` (1) | **Host capability the language signals** — `IToastHostSignals`, which an embedder may refuse |
@@ -170,7 +170,7 @@ decisions change the language's **interface to its host** instead:
 
 So stage 2 is not one commit. Proposed order, each independently verifiable:
 
-  2a  ICommandResolver + the removal capability      smallest, no behaviour change
+  2a  ICommandTable                                  DONE 2026-08-17
   2b  IToastHostSignals for exit and export          five references
   2c  Events onto ToastRuntime                       a move
   2d  ToastRuntime itself, composed into ToshRuntime the bulk of the 182
