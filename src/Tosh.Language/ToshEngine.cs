@@ -2902,7 +2902,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
             OutputIsCaptured: outputIsCaptured,
             ScopedCommands: CreateScopedCommandView(), ShellTypes: this);
 
-        if (Runtime.Config.Shell.Trace)
+        if (Runtime.Options.Trace)
         {
             var traceArgs = string.Join(" ", arguments.Select(FormatTraceArgument));
             var traceLine = string.IsNullOrEmpty(traceArgs)
@@ -3059,7 +3059,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
                     Help: external.IsExplicitPath
                         ? $"make it executable, for example with `chmod +x {commandSyntax.Name}`, or run it with an interpreter."
                         : "check the file permissions or invoke it through an interpreter.")),
-            ExternalCommandLookupStatus.IsDirectory when Runtime.Config.Shell.AutoCd =>
+            ExternalCommandLookupStatus.IsDirectory when Runtime.Options.AutoCd =>
                 new AutoCdCommand(external.ResolvedPath ?? commandSyntax.Name),
             ExternalCommandLookupStatus.IsDirectory =>
                 throw ToshDiagnosticException.Create(new ToshDiagnostic(
@@ -3069,7 +3069,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
                     SourceText: sourceText,
                     Span: commandSyntax.Span,
                     Label: $"'{commandSyntax.Name}' does not refer to a runnable program")),
-            _ when Runtime.Config.Shell.AutoCd && TryResolveAutoCdDirectory(commandSyntax.Name, out var autoCdPath) =>
+            _ when Runtime.Options.AutoCd && TryResolveAutoCdDirectory(commandSyntax.Name, out var autoCdPath) =>
                 new AutoCdCommand(autoCdPath),
             // `TS-P2-41`. A word that names a member of the running class is not an unknown
             // command, and saying so — then suggesting `bg` — was the whole complaint. Placed
@@ -7378,7 +7378,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
         }
 
         // Script trace: emit "+ <line>: <statement>" to stderr (like set -x).
-        if (Runtime.Config.Shell.ScriptTrace && statementText is not null)
+        if (Runtime.Options.ScriptTrace && statementText is not null)
         {
             var prefix = line.HasValue ? $"+ {sourceName}:{line}" : $"+ {sourceName}";
             await Diagnostics.TraceAsync($"{prefix}: {statementText}", cancellationToken);

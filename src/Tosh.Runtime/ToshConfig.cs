@@ -83,15 +83,40 @@ public sealed class ToshShellConfig : IResettableShellConfig
         _options = options;
     }
 
-    public bool Pipefail { get; set; }
+    /// <summary>The shell's view of a language setting; storage is on <see cref="ToastOptions"/> (`TOAST-0006`).</summary>
+    public bool Pipefail
+    {
+        get => _options.Pipefail;
+        set => _options.Pipefail = value;
+    }
 
-    public bool ExitOnError { get; set; }
+    /// <summary>The shell's view of a language setting; storage is on <see cref="ToastOptions"/> (`TOAST-0006`).</summary>
+    public bool ExitOnError
+    {
+        get => _options.ExitOnError;
+        set => _options.ExitOnError = value;
+    }
 
-    public bool Trace { get; set; }
+    /// <summary>The shell's view of a language setting; storage is on <see cref="ToastOptions"/> (`TOAST-0006`).</summary>
+    public bool Trace
+    {
+        get => _options.Trace;
+        set => _options.Trace = value;
+    }
 
-    public bool ScriptTrace { get; set; }
+    /// <summary>The shell's view of a language setting; storage is on <see cref="ToastOptions"/> (`TOAST-0006`).</summary>
+    public bool ScriptTrace
+    {
+        get => _options.ScriptTrace;
+        set => _options.ScriptTrace = value;
+    }
 
-    public bool AutoCd { get; set; }
+    /// <summary>The shell's view of a language setting; storage is on <see cref="ToastOptions"/> (`TOAST-0006`).</summary>
+    public bool AutoCd
+    {
+        get => _options.AutoCd;
+        set => _options.AutoCd = value;
+    }
 
     /// <summary>
     /// The evaluator's recursion limit. Storage lives on <see cref="ToastOptions"/> —

@@ -74,6 +74,38 @@ public sealed class ToastOptionsTests
     }
 
     /// <summary>
+    /// The five shell-named execution settings write through to the language options in
+    /// both directions, like MaxRecursionDepth.
+    /// </summary>
+    /// <remarks>
+    /// These arrived as shell options — pipefail, set -e, set -x, auto_cd — but each
+    /// changes what the *language* does, so the storage is the language's and
+    /// $tosh.Config.Shell is the view. AutoCd is the most debatable and is included
+    /// deliberately: it decides what an unresolved bare word means, which is a dispatch
+    /// rule.
+    /// </remarks>
+    [Fact]
+    public void The_execution_settings_are_shared_in_both_directions()
+    {
+        var runtime = ToshRuntime.CreateDefault();
+
+        runtime.Config.Shell.Pipefail = true;
+        runtime.Config.Shell.ExitOnError = true;
+        runtime.Config.Shell.Trace = true;
+        runtime.Config.Shell.ScriptTrace = true;
+        runtime.Config.Shell.AutoCd = true;
+
+        Assert.True(runtime.Options.Pipefail);
+        Assert.True(runtime.Options.ExitOnError);
+        Assert.True(runtime.Options.Trace);
+        Assert.True(runtime.Options.ScriptTrace);
+        Assert.True(runtime.Options.AutoCd);
+
+        runtime.Options.Pipefail = false;
+        Assert.False(runtime.Config.Shell.Pipefail);
+    }
+
+    /// <summary>
     /// Validation stays with the storage rather than the view, so an invalid depth is
     /// refused however it is set.
     /// </summary>

@@ -1549,7 +1549,7 @@ public sealed partial class ToshEngine
             }
 
             // Debug hook / script trace: fire before each statement executes.
-            if (DebugHook is not null || Runtime.Config.Shell.ScriptTrace)
+            if (DebugHook is not null || Runtime.Options.ScriptTrace)
             {
                 var action = await InvokeDebugHookAsync(sourceName, sourceText, statement, cancellationToken);
                 if (action == DebugAction.Abort)

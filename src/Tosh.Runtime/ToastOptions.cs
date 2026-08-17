@@ -45,6 +45,38 @@ public sealed class ToastOptions
     }
 
     /// <summary>
+    /// A pipeline's exit status is the first non-zero stage's rather than the last
+    /// stage's — `set -o pipefail`.
+    /// </summary>
+    /// <remarks>
+    /// A pipeline is language syntax in Tōast, so how its exit status is computed is
+    /// language semantics. It arrived as a shell option because that is where pipelines
+    /// came from, not because a shell is required to have an opinion about it.
+    /// </remarks>
+    public bool Pipefail { get; set; }
+
+    /// <summary>Stop executing after a stage exits non-zero — `set -e`.</summary>
+    public bool ExitOnError { get; set; }
+
+    /// <summary>Emit each command before running it — `set -x`.</summary>
+    public bool Trace { get; set; }
+
+    /// <summary>Emit each statement of a script before running it.</summary>
+    public bool ScriptTrace { get; set; }
+
+    /// <summary>
+    /// A bare word naming a directory changes to it instead of reporting an unknown
+    /// command.
+    /// </summary>
+    /// <remarks>
+    /// The most debatable of these. It arrived as a shell convenience — zsh's `AUTO_CD` —
+    /// and it is the one a reader is most likely to call shell behaviour. It is here
+    /// because it is a *dispatch rule*: it decides what an unresolved name means, which
+    /// the language does. A host with no session can leave it off, which is the default.
+    /// </remarks>
+    public bool AutoCd { get; set; }
+
+    /// <summary>
     /// Diagnostic codes suppressed by <c>hush</c>. Language syntax, so the set belongs to
     /// the language even though TōSh also exposes it as <c>$tosh.Config.Diagnostics.Hushed</c>.
     /// </summary>

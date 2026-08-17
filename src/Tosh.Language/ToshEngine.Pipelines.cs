@@ -504,7 +504,7 @@ public sealed partial class ToshEngine
         bool outputIsCaptured = false)
     {
         var ownsTracker = pipelineExitStatusTracker is null;
-        pipelineExitStatusTracker ??= new PipelineExitStatusTracker(Runtime.Config.Shell.Pipefail);
+        pipelineExitStatusTracker ??= new PipelineExitStatusTracker(Runtime.Options.Pipefail);
         IAsyncEnumerable<object?> current = initialInput ?? AsyncEnumerableExtensions.Empty<object?>();
         IReadOnlyList<object?>? pendingFirstCommandArguments = firstCommandArguments;
         var isPipelined = pipeline.Stages.Count > 1 || initialInput is not null;
@@ -590,7 +590,7 @@ public sealed partial class ToshEngine
                 var exitCode = tracker.GetFinalExitCode();
                 Runtime.SetLastExitCode(exitCode);
 
-                if (exitCode != 0 && Runtime.Config.Shell.ExitOnError)
+                if (exitCode != 0 && Runtime.Options.ExitOnError)
                 {
                     throw ToshDiagnosticException.Create(new ToshDiagnostic(
                         Code: "tosh.runtime.nonzero_exit_code",
