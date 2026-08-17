@@ -15,7 +15,6 @@ public sealed class ToshRuntime : IToastHostSignals, IToastDiagnosticSink
     private readonly Dictionary<object, DisplayColumnSelection> _displaySelections = new(ReferenceEqualityComparer.Instance);
     private bool _historyStorageInitialized;
     private bool _historyWriteThroughEnabled;
-    private string _currentDirectory = null!;
     private bool _directoryStackStorageInitialized;
     private string? _directoryStackFilePath;
 
@@ -34,12 +33,11 @@ public sealed class ToshRuntime : IToastHostSignals, IToastDiagnosticSink
             initialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         }
 
-        _currentDirectory = initialDirectory;
         PushDirectory(initialDirectory);
         Commands = new ShellCommandRegistry();
         // One table, two views: the language resolves and registers through
         // ICommandTable, the shell keeps the registry's alias and lookup members.
-        Language = new ToastRuntime { Commands = Commands };
+        Language = new ToastRuntime { Commands = Commands, CurrentDirectory = initialDirectory };
         DisplayPreferences = new DisplayPreferences();
         DisplayProfiles = DisplayProfileRegistry.CreateDefault(DisplayPreferences);
         Formatter = new ObjectFormatter(DisplayProfiles);
@@ -66,8 +64,8 @@ public sealed class ToshRuntime : IToastHostSignals, IToastDiagnosticSink
 
     public string CurrentDirectory
     {
-        get => _currentDirectory;
-        set => _currentDirectory = value;
+        get => Language.CurrentDirectory;
+        set => Language.CurrentDirectory = value;
     }
 
     /// <summary>

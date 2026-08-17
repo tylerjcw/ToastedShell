@@ -38,6 +38,7 @@ public sealed class ToastRuntimeTests
         Assert.NotNull(language.NativeTypes);
         Assert.NotNull(language.Events);
         Assert.NotNull(language.Commands);
+        Assert.False(string.IsNullOrEmpty(language.CurrentDirectory));
 
         Assert.True(language.Options.MaxRecursionDepth > 0);
     }
@@ -71,6 +72,9 @@ public sealed class ToastRuntimeTests
         // language sees only ICommandTable, but it must be the same instance or
         // `export func` and `which` would disagree.
         Assert.Same(runtime.Language.Commands, runtime.Commands);
+
+        runtime.CurrentDirectory = "/tmp";
+        Assert.Equal("/tmp", runtime.Language.CurrentDirectory);
     }
 
     /// <summary>

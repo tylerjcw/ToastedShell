@@ -69,6 +69,40 @@ public sealed class ToastRuntime
     /// </remarks>
     public ICommandTable Commands { get; init; } = new ShellCommandRegistry();
 
+    /// <summary>
+    /// The working directory relative paths resolve against.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Held here rather than threaded per evaluation, which was the original decision and
+    /// is deferred rather than abandoned (`TOAST-0006`, stage 2f). Threading it would mean
+    /// adding a parameter to a dozen synchronous helpers deep in the engine — none of the
+    /// fifteen call sites has a context parameter and only two have a
+    /// <see cref="CancellationToken"/> — for a benefit, concurrent evaluations with
+    /// different working directories, that nothing exercises yet.
+    /// </para>
+    /// <para>
+    /// The language reads this for path resolution and glob expansion. TōSh keeps the
+    /// process directory in step and owns the navigation *stack* that `back` and
+    /// `forward` use, which is history rather than state a program needs.
+    /// </para>
+    /// </remarks>
+    public string CurrentDirectory { get; set; } = ResolveInitialDirectory();
+
+    private static string ResolveInitialDirectory()
+    {
+        try
+        {
+            return Environment.CurrentDirectory;
+        }
+        catch (Exception)
+        {
+            // A deleted or unreadable working directory is not a reason to fail
+            // construction; the home directory is somewhere paths can resolve from.
+            return Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        }
+    }
+
     /// <summary>Global variables.</summary>
     public IDictionary<string, object?> Variables { get; } =
         new Dictionary<string, object?>(StringComparer.Ordinal);
