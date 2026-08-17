@@ -30,10 +30,26 @@ namespace Tosh.Tests;
 /// </remarks>
 public sealed class ParserRegistryDrivenTests
 {
-    private static string ParserSource() => File.ReadAllText(
-        Path.Combine(
+    /// <summary>
+    /// The parser's source across every partial file it is split into.
+    /// </summary>
+    /// <remarks>
+    /// `TOAST-0005` divided ToshParser.cs by concern. A scan bound to one path silently
+    /// stops seeing whatever moved, and reports that as a pass or a failure depending on
+    /// which way the comparison runs — neither of which is about the invariant.
+    /// </remarks>
+    private static string ParserSource()
+    {
+        var directory = Path.Combine(
             Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../")),
-            "src/Tosh.Language/Parsing/ToshParser.cs"));
+            "src/Tosh.Language/Parsing");
+
+        return string.Join(
+            "\n",
+            Directory.EnumerateFiles(directory, "ToshParser*.cs")
+                .OrderBy(path => path, StringComparer.Ordinal)
+                .Select(File.ReadAllText));
+    }
 
     [Fact]
     public void The_subcommand_modifier_family_is_not_spelled_out_again()

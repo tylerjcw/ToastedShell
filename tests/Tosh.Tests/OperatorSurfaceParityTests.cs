@@ -33,7 +33,15 @@ public sealed class OperatorSurfaceParityTests
     /// <summary>Symbols named by one of the parser's operator predicates.</summary>
     private static HashSet<string> ParserOperatorSymbols()
     {
-        var source = ReadSource("src/Tosh.Language/Parsing/ToshParser.cs");
+        // Every ToshParser*.cs: `TOAST-0005` split the parser into partial files, so a
+        // single path silently stops seeing whatever moved. This is a source scan and is
+        // therefore coupled to file layout in a way a behavioural test is not.
+        var directory = Path.Combine(RepositoryRoot(), "src/Tosh.Language/Parsing");
+        var source = string.Join(
+            "\n",
+            Directory.EnumerateFiles(directory, "ToshParser*.cs")
+                .OrderBy(path => path, StringComparer.Ordinal)
+                .Select(File.ReadAllText));
         var symbols = new HashSet<string>(StringComparer.Ordinal);
 
         foreach (var predicate in new[]
