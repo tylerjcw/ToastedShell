@@ -90,8 +90,25 @@ module Build {
         }
 
         ## @summary MSBuild switches that keep validation deterministic and side-effect free.
+        ## @remarks
+        ##   `-nr:false` is the switch form of `MSBUILDDISABLENODEREUSE`, and both are
+        ##   kept because **the switch alone is not enough**. Measured on a full solution
+        ##   build from a clean node count:
+        ##
+        ##   | mechanism | nodes left behind |
+        ##   |---|---|
+        ##   | `-nr:false` alone | 4 |
+        ##   | `MSBUILDDISABLENODEREUSE=1` alone | 0 |
+        ##   | both | 0 |
+        ##
+        ##   The switch reaches the invocation it is written on; the environment variable
+        ##   reaches nested `dotnet` processes this build spawns, which is where those
+        ##   four came from. So the variable is the guard and this is documentation —
+        ##   worth keeping, because a reader of the command line can see the intent, but
+        ##   not worth relying on.
         func MsbuildSafetyArgs() -> array => [
             "-m:1",
+            "-nr:false",
             "-p:DisableToshSpecBuild=true",
             "-p:DisableToshParityCheck=true",
             "-p:DisableToshVsCodeExtensionSync=true",
