@@ -518,6 +518,88 @@ public sealed partial class ToshEngine
     /// the call sites differ in intent, but there is one implementation, so a
     /// future argument form cannot reach half the language again.
     /// </remarks>
+    /// <summary>
+    /// Whether <paramref name="target"/> declares anything reachable by
+    /// <paramref name="name"/> — asked, never invoked.
+    /// </summary>
+    /// <remarks>
+    /// Every receiver that cannot answer honestly answers "yes", so the only names that
+    /// reach the function fallback are the ones a receiver has positively disclaimed.
+    /// </remarks>
+    private bool ReceiverHasInstanceMember(object target, string name) => target switch
+    {
+        IShellInvocableObject invocable => invocable.HasInstanceMember(name),
+        IShellStaticType or Type => true,
+        _ => Runtime.Invoker.HasInstanceMethod(target, name),
+    };
+
+    /// <summary>
+    /// Whether an <c>extend</c> method would supply <paramref name="name"/> for this
+    /// receiver.
+    /// </summary>
+    /// <remarks>
+    /// Asked so the fallback sits *after* extension dispatch rather than beside it. An
+    /// extension already resolves only where the receiver has no such member
+    /// (<c>TS-P3-27</c>); a free function is one step further out again, which keeps a
+    /// single order — member, extension, function — instead of a third rule.
+    /// </remarks>
+    private ValueTask<bool> HasExtensionMethodAsync(object receiver, string name)
+    {
+        if (_extensionMethods.Count == 0)
+        {
+            return ValueTask.FromResult(false);
+        }
+
+        foreach (var typeName in EnumerateReceiverTypeNames(receiver))
+        {
+            if (_extensionMethods.TryGetValue(typeName, out var methods) && methods.ContainsKey(name))
+            {
+                return ValueTask.FromResult(true);
+            }
+        }
+
+        return ValueTask.FromResult(false);
+    }
+
+    /// <summary>
+    /// Calls the function the bare name meant, or reports that neither reading resolved.
+    /// </summary>
+    /// <remarks>
+    /// The diagnostic names both readings deliberately. At this point the name is known not
+    /// to be a member, not to be an extension, and not to be in scope — and a reader who
+    /// meant either one is helped only by being told about the other.
+    /// </remarks>
+    private async Task<object?> InvokeImplicitItemFallbackAsync(
+        string sourceName,
+        string sourceText,
+        MethodCallArgumentSyntax methodCall,
+        object target,
+        IReadOnlyList<object?> arguments,
+        CancellationToken cancellationToken)
+    {
+        if (CreateScopedCommandView().TryGet(methodCall.MethodName, out var command) &&
+            command is IShellCallable callable)
+        {
+            return await InvokeCallableInExpressionAsync(
+                callable,
+                arguments,
+                sourceName,
+                sourceText,
+                methodCall.Span,
+                methodCall.Arguments.Select(argument => argument.Span).ToArray(),
+                cancellationToken);
+        }
+
+        throw ToshDiagnosticException.Create(new ToshDiagnostic(
+            Code: "tosh.runtime.unknown_implicit_call",
+            Title: $"Nothing named '{methodCall.MethodName}' is in scope, and the current item has no such method.",
+            SourceName: sourceName,
+            SourceText: sourceText,
+            Span: methodCall.Span,
+            Label: $"'{target.GetType().Name}' has no '{methodCall.MethodName}'",
+            Help: "define a function of that name, or write '$_.<member>' for a member of the current item."));
+    }
+
     private Task<IReadOnlyList<object?>> EvaluateArgumentsAsync(
         string sourceName,
         string sourceText,
@@ -1213,6 +1295,25 @@ public sealed partial class ToshEngine
                             sourceName,
                             sourceText,
                             methodCall.Span);
+
+                        // `TOAST-0001`. Inside a closure a bare name is implicit member
+                        // access, so `where { double($_) }` arrives here as `$_.double($_)`
+                        // and reported a missing method on Int32 — an error about a
+                        // construct the reader had not written. Only the *synthesized*
+                        // receiver may mean something else, and only once the item has been
+                        // asked first.
+                        if (methodCall.ImplicitCurrentItem &&
+                            !ReceiverHasInstanceMember(target, methodCall.MethodName) &&
+                            !await HasExtensionMethodAsync(target, methodCall.MethodName))
+                        {
+                            return await InvokeImplicitItemFallbackAsync(
+                                sourceName,
+                                sourceText,
+                                methodCall,
+                                target,
+                                methodArguments,
+                                cancellationToken);
+                        }
 
                         var invocation = await Runtime.Invoker.InvokeInstanceMethodAsync(
                             target,

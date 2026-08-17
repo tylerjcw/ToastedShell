@@ -10,6 +10,7 @@
 | [`TOAST-0003`](items/TOAST-0003.md) | P2 | open | 0/12 | Documentation disagrees with the implementation in twelve recorded places |
 | [`TS-P2-120`](items/TS-P2-120.md) | P2 | open | — | A nullable annotation on a built-in type alias will not parse in a `var` declaration |
 | [`PLAN-0001`](items/PLAN-0001.md) | P3 | open | 6/10 | Triage the remaining documentation: date what is stale, mark what is frozen, rewrite only what the split will not move |
+| [`TOAST-0016`](items/TOAST-0016.md) | P2 | open | 0/5 | `extend` matches only CLR type names, so `extend int` silently never applies |
 | [`TS-P2-104`](items/TS-P2-104.md) | P2 | partial | 0/1 | A splat argument is rejected wherever it would be useful |
 | [`TOSH-0001`](items/TOSH-0001.md) | P1 | open | 0/6 | Quotes inside an argument are passed through to external commands instead of being stripped |
 | [`TS-P2-118`](items/TS-P2-118.md) | P2 | open | — | Calling a callable held in a property warns `member_not_found`, then works |
@@ -18,7 +19,6 @@
 | [`TOAST-0008`](items/TOAST-0008.md) | P3 | open | 0/7 | Rename the language surface from Tosh to Toast, keeping every existing spelling working |
 | [`TOAST-0014`](items/TOAST-0014.md) | P2 | open | 0/5 | String interpolation renders through the display stack, so its output depends on shell configuration |
 | [`TS-P3-12`](items/TS-P3-12.md) | P3 | in-progress | — | Type highlighting misses real contexts, differently per surface |
-| [`TOAST-0001`](items/TOAST-0001.md) | P1 | open | 0/5 | A free function called inside a closure resolves as an instance method on the pipeline item |
 | [`TOSH-0003`](items/TOSH-0003.md) | P3 | open | 0/5 | Ship Toast as its own package that TōSh, Tōme and Crumb depend on |
 | [`TOAST-0015`](items/TOAST-0015.md) | P2 | open | 0/6 | Redirection rebinds the session's writer instead of targeting a Tōast stream handle |
 | [`TOAST-0011`](items/TOAST-0011.md) | P2 | open | 0/6 | A TōSh closure cannot be passed where C wants a function pointer |

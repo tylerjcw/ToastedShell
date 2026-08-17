@@ -139,6 +139,9 @@ public sealed class ToshClassInstance : IShellRecordObject, IShellInvocableObjec
 
     public ToshClassDefinition Definition { get; }
 
+    /// <inheritdoc />
+    public bool HasInstanceMember(string name) => Definition.HasInstanceMember(name);
+
     /// <summary>
     /// Resolved type-argument bindings for this instance, keyed by the
     /// class type-parameter name (e.g. <c>"T1"</c> → <c>typeof(int)</c>).

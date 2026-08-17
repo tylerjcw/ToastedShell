@@ -100,7 +100,15 @@ public sealed record MethodCallArgumentSyntax(
     /// Type arguments written at the call site — the <c>int</c> of <c>$a.m&lt;int&gt;(11)</c>.
     /// Null when none were written, which is not the same as an empty list.
     /// </summary>
-    IReadOnlyList<string>? ExplicitTypeArguments = null) : ArgumentSyntax(Span);
+    IReadOnlyList<string>? ExplicitTypeArguments = null,
+    /// <summary>
+    /// The receiver was <em>synthesized</em> from the enclosing closure's current item
+    /// rather than written — <c>where { f($_) }</c> parses as <c>$_.f($_)</c>, because
+    /// inside a predicate a bare name is implicit member access (<c>TOAST-0001</c>).
+    /// An explicitly written <c>$_.f(...)</c> does not set this, and does not fall back:
+    /// there the reader asked for a member.
+    /// </summary>
+    bool ImplicitCurrentItem = false) : ArgumentSyntax(Span);
 
 public sealed record CallableInvocationArgumentSyntax(
     ArgumentSyntax Target,

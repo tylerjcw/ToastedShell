@@ -37,4 +37,15 @@ public interface IShellInvocableObject
 
         return InvokeInstanceMethodAsync(methodName, arguments, cancellationToken);
     }
+
+    /// <summary>
+    /// Whether this receiver declares anything reachable by this name.
+    /// </summary>
+    /// <remarks>
+    /// Answers <c>true</c> by default — "assume it does" — so an implementer that has not
+    /// considered the question keeps behaving exactly as it did. Only a receiver that can
+    /// answer honestly should override, because the answer is used to decide whether a
+    /// name may mean something *other* than one of its members (<c>TOAST-0001</c>).
+    /// </remarks>
+    bool HasInstanceMember(string name) => true;
 }

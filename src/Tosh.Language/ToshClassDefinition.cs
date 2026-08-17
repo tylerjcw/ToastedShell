@@ -648,6 +648,32 @@ public sealed class ToshClassDefinition : IShellNamedType
         ? summary
         : null;
 
+    /// <summary>
+    /// Whether an instance of this class has anything reachable by <paramref name="name"/>.
+    /// </summary>
+    /// <remarks>
+    /// A *lookup*, never an evaluation: `TryGetInstanceMember` runs property getters, so it
+    /// cannot be used to ask a question. A class with a CLR base answers `true` for anything
+    /// it does not declare itself, because the real check there needs the base object and
+    /// this is asked without one — erring toward "it has it" keeps a name from being read as
+    /// something else on a maybe.
+    /// </remarks>
+    internal bool HasInstanceMember(string name)
+    {
+        if (_methodsByName.TryGetValue(name, out var candidates) &&
+            candidates.Any(method => !method.IsStatic))
+        {
+            return true;
+        }
+
+        if (_propertiesByName.ContainsKey(name) || ClrBaseType is not null)
+        {
+            return true;
+        }
+
+        return BaseClass is not null && BaseClass.HasInstanceMember(name);
+    }
+
     public bool HasStaticMethod(string methodName)
     {
         if (_methodsByName.TryGetValue(methodName, out var candidates) &&

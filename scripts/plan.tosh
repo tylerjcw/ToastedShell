@@ -97,10 +97,6 @@ func read_item(path) {
 
 ## Every item. `find` by absolute path because `ls` is a TōSh builtin returning
 ## objects, and a plain list of paths is all this needs.
-##
-## The board is resolved here rather than by a helper called from inside a `where`
-## closure: a free function invoked as `f($_)` inside a closure resolves as an
-## *instance method on the pipeline item* and fails. Filed as TOAST-0001.
 func load() {
     var items = []
     var paths = find $ITEMS_DIR -name "*.md" | get FullName | each _.Trim()

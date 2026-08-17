@@ -1580,7 +1580,14 @@ public static partial class ToshParser
         {
             var memberToken = NextToken();
             ArgumentSyntax expression = new VariableReferenceArgumentSyntax("_", memberToken.Span);
-            return ApplyQualifiedMemberChain(expression, memberToken.Text, memberToken.Span, implicitCurrentItem: true);
+            var chain = ApplyQualifiedMemberChain(expression, memberToken.Text, memberToken.Span, implicitCurrentItem: true);
+
+            // Only the head of the chain is marked, and only when it is a call. `$_.Deep.f()`
+            // is a member chain the reader wrote; `f($_)` is the one the parser invented a
+            // receiver for, and the only one that may fall back to a function (`TOAST-0001`).
+            return chain is MethodCallArgumentSyntax call && ReferenceEquals(call.Target, expression)
+                ? call with { ImplicitCurrentItem = true }
+                : chain;
         }
 
         private ArgumentSyntax ParseBlockArgument()

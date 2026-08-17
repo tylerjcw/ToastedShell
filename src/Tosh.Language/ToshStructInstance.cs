@@ -13,6 +13,11 @@ public sealed class ToshStructInstance : IShellRecordObject, IShellTypedObject, 
 
     public ToshStructDefinition Definition { get; }
 
+    /// <inheritdoc />
+    public bool HasInstanceMember(string name)
+        => Definition.Fields.Any(field => field.Name == name) ||
+           Definition.Methods.Any(method => method.Name == name);
+
     public IShellTypeDescriptor ShellTypeDescriptor => Definition;
 
     public string ShellTypeName => Definition.Name;

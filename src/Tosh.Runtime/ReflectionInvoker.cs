@@ -133,7 +133,12 @@ public sealed class ReflectionInvoker
     public Func<object, string, IReadOnlyList<object?>, CancellationToken, ValueTask<InvocationResult?>>? ExtensionResolver { get; set; }
 
     /// <summary>Whether a CLR receiver declares any method of this name.</summary>
-    private bool HasInstanceMethod(object target, string methodName)
+    /// <remarks>
+    /// Public because two rules need the same answer: an <c>extend</c> method may only
+    /// supply what the receiver lacks (<c>TS-P3-27</c>), and a bare call inside a closure
+    /// may only mean a free function when the item has no such method (<c>TOAST-0001</c>).
+    /// </remarks>
+    public bool HasInstanceMethod(object target, string methodName)
         => MethodsNamed(target.GetType(), isStatic: false, methodName).Length > 0;
 
     public InvocationResult InvokeInstance(object target, string methodName, IReadOnlyList<object?> arguments)
