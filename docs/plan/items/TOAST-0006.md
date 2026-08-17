@@ -215,7 +215,7 @@ So stage 2 is not one commit. Proposed order, each independently verifiable:
 
   2a  ICommandTable                                  DONE 2026-08-17
   2b  IToastHostSignals                              DONE 2026-08-17
-  2c  Events onto ToastRuntime                       a move
+  2c  Events onto ToastRuntime                       DONE 2026-08-17
   2d  ToastRuntime itself, composed into ToshRuntime the bulk of the 182
   2e  Streams: emit rather than write                PART DONE 2026-08-17
       diagnostics + trace done; value formatting -> TOAST-0014 (Phase A);

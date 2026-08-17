@@ -154,9 +154,13 @@ public sealed class ToshRuntime : IToastHostSignals, IToastDiagnosticSink
 
     public ICommandLineInsertionSink? CommandLineInsertion { get; set; }
 
-    public ShellEventBus Events { get; } = new();
+    public ShellEventBus Events => Language.Events;
 
-    public Func<ShellEventSender>? EventSenderFactory { get; set; }
+    public Func<ShellEventSender>? EventSenderFactory
+    {
+        get => Language.EventSenderFactory;
+        set => Language.EventSenderFactory = value;
+    }
 
     public IShellBlockExecutor? BlockExecutor { get; set; }
 

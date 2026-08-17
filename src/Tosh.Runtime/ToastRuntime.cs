@@ -72,4 +72,24 @@ public sealed class ToastRuntime
     /// </summary>
     public IDictionary<string, Type> NativeTypes { get; } =
         new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The event bus. `event` is language syntax, and the language does not merely raise
+    /// on it — it registers handlers and marks events required — so the bus belongs here
+    /// rather than being a port the language raises through (`TOAST-0006`, stage 2c).
+    /// </summary>
+    /// <remarks>
+    /// The six types behind it — `ShellEventBus`, `ShellEvent`, `ShellEventSender`,
+    /// `ShellEventHandler`, `IShellEventFactory` and `BuiltInEvents`, 663 lines — name no
+    /// shell-side type between them, so nothing had to be untangled for this to move.
+    /// TōSh and the standard library remain consumers, which is the ordinary direction:
+    /// a shell subscribes to its language's events.
+    /// </remarks>
+    public ShellEventBus Events { get; } = new();
+
+    /// <summary>
+    /// Builds the sender attached to a raised event. Supplied by the engine, which knows
+    /// how to give a handler a way to call back into evaluation.
+    /// </summary>
+    public Func<ShellEventSender>? EventSenderFactory { get; set; }
 }

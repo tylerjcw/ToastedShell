@@ -36,6 +36,7 @@ public sealed class ToastRuntimeTests
         Assert.NotNull(language.Modules);
         Assert.NotNull(language.LoadedModules);
         Assert.NotNull(language.NativeTypes);
+        Assert.NotNull(language.Events);
 
         Assert.True(language.Options.MaxRecursionDepth > 0);
     }
@@ -63,6 +64,7 @@ public sealed class ToastRuntimeTests
         Assert.Same(runtime.Language.Invoker, runtime.Invoker);
         Assert.Same(runtime.Language.ObjectAccessor, runtime.ObjectAccessor);
         Assert.Same(runtime.Language.TypeResolver, runtime.TypeResolver);
+        Assert.Same(runtime.Language.Events, runtime.Events);
     }
 
     /// <summary>
