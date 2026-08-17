@@ -5,7 +5,7 @@
 | ID | Priority | Status | Progress | Title |
 |---|---|---|---|---|
 | [`TS-P3-04`](items/TS-P3-04.md) | P3 | research | — | Explicit stream/collection shape |
-| [`TOAST-0006`](items/TOAST-0006.md) | P2 | open | 0/4 | Divide the assemblies along the language/shell boundary |
+| [`TOAST-0006`](items/TOAST-0006.md) | P2 | open | 2/5 | Divide the assemblies along the language/shell boundary |
 | [`PLAN-0002`](items/PLAN-0002.md) | P2 | open | 4/7 | Suite reliability on a clean checkout: the Debug-CLI race is fixed, one parallel flake remains |
 | [`TOAST-0003`](items/TOAST-0003.md) | P2 | open | 0/12 | Documentation disagrees with the implementation in twelve recorded places |
 | [`TS-P2-120`](items/TS-P2-120.md) | P2 | open | — | A nullable annotation on a built-in type alias will not parse in a `var` declaration |
