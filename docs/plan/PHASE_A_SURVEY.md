@@ -245,9 +245,10 @@ the mechanical diff — the discipline the whole separation has run on.
    They are already special-cased *above* the generic object path, so turning them into
    profiles would be the uniform answer — but it changes `help`, `ls` and history output.
 
-4. **Is Phase A scoped to formatting and streaming for now, with `TS-P3-16` rewritten to
-   carry the rest as a separate arc?** The RFC's ten concerns are more than one work item,
-   and only two are filed.
+4. ~~**Is Phase A scoped to formatting and streaming, with the rest as a separate arc?**~~
+   **Answered 2026-08-17: yes.** Phase A is `TOAST-0014` + `TOAST-0017` (formatting) and
+   `TOAST-0015` (streaming). The other eight concerns are `TOAST-0018`, which supersedes
+   `TS-P3-16`. Recorded in `DECISIONS.md`.
 
 5. **`ToshEngine.Pipelines.cs:270`** — the item already flags this as possibly a different
    question: it formats a value on its way to a stream, which is serialisation rather than

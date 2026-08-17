@@ -9,9 +9,9 @@
 | [`TOAST-0012`](items/TOAST-0012.md) | P3 | proposed | 0/4 | Span<T> and Memory<T> are not recognised as native parameter shapes, and marshalling cannot be overridden |
 | [`TS-P3-22`](items/TS-P3-22.md) | P3 | proposed | — | Native backend emitting C |
 | [`TS-P3-08`](items/TS-P3-08.md) | P3 | proposed | — | Parser-owned typed structural regions |
-| [`TS-P3-16`](items/TS-P3-16.md) | P3 | proposed | — | ToastScript-owned core types and their conformance corpus |
 | [`TS-P3-15`](items/TS-P3-15.md) | P3 | proposed | — | Define the `no_clr` language subset |
 | [`TS-P3-18`](items/TS-P3-18.md) | P3 | proposed | — | Defaulted constructor and method parameters off Tier 3 |
+| [`TOAST-0018`](items/TOAST-0018.md) | P2 | proposed | 0/10 | Portable core semantics: the eight Phase A concerns outside formatting and streaming |
 | [`TS-P3-20`](items/TS-P3-20.md) | P3 | proposed | — | A regex engine for the native target |
 | [`TOSH-0004`](items/TOSH-0004.md) | P3 | proposed | 0/5 | Rebuild the examples as one library with calling scripts, and run them in CI |
 | [`TS-P3-17`](items/TS-P3-17.md) | P3 | proposed | — | Builtin command dispatch at Tier 1 |

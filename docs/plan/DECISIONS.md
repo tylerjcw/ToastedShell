@@ -314,3 +314,28 @@ is what both modes actually implement.
   parsing, formatting, and language services. Do not evolve the
   structural pass into a second brace grammar.
 
+### August 17, 2026 — Phase A is scoped to formatting and streaming
+
+- `SELF_HOSTING_RFC.md` Phase A names ten concerns. **Phase A is scoped to two of
+  them**: formatting (`TOAST-0014`, `TOAST-0017`) and streaming (`TOAST-0015`).
+- The other eight — equality, hashing, ordering, nullability, overflow, Unicode,
+  collection shape, exception semantics — become `TOAST-0018`, which supersedes
+  `TS-P3-16`. They are enumerated and measured there so the narrower scope cannot
+  quietly lose them.
+- The two chosen are what block `TOAST-0006`: all four language uses of
+  `Runtime.Formatter` and all eleven of `Runtime.Output`/`Error` are language→shell
+  references, and the assembly split cannot finish around them.
+- They are also the cheapest. The survey found profile dependence is a **single**
+  early-exit in `ObjectFormatter`, not a woven concern; and `ManagedFileHandle`
+  already is the stream handle `TOAST-0015` assumed had to be invented.
+- **A bare interpolation hole is a specifier hole with a default.** `$"{$d:HH:mm:ss}"`
+  already ignores display profiles, so the portable path exists — the bare form joins
+  it rather than a new protocol being designed. Default for `DateTime` is local time,
+  with format specifiers honoured.
+- **The separation stops being refactoring and becomes specification.** `TOAST-0006`
+  and `TOAST-0007` are outcomes, not tasks: no further code is moved to tidy
+  assemblies. Where a thing lives is decided once, by the spec, and moved once.
+- TōSh is **not** parked or rewritten. The RFC lists "rewriting TōSh… before the
+  compiler can self-host" as a non-goal, and Phase G ports it incrementally while
+  retaining the .NET target as a peer. The shell continues to receive bug fixes and
+  no architectural investment.
