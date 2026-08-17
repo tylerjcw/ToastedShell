@@ -18021,6 +18021,28 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
         return Runtime.CurrentDirectory;
     }
 
+    /// <summary>
+    /// The build configuration this host was compiled in, used when `require` has to
+    /// build a project.
+    /// </summary>
+    /// <remarks>
+    /// Previously no configuration was passed at all, so MSBuild applied its default and
+    /// `require` always resolved and built **Debug** — including from a published
+    /// Release shell, which would silently build and load Debug output. Matching the
+    /// host is the least surprising rule: the assembly you are about to load into this
+    /// process is built the same way this process was.
+    ///
+    /// It also removes a cost that looked like flakiness. A Release test run used to
+    /// trigger a from-scratch Debug build of the whole dependency chain, because the
+    /// Debug output it asked for did not exist; the Release output already did
+    /// (`PLAN-0002`).
+    /// </remarks>
+    private static readonly string HostBuildConfiguration =
+        typeof(ToshEngine).Assembly.GetCustomAttribute<AssemblyConfigurationAttribute>()?.Configuration
+            is { Length: > 0 } configuration
+            ? configuration
+            : "Debug";
+
     private static async Task<string> BuildProjectAndResolveAssemblyPathAsync(
         string projectPath,
         CancellationToken cancellationToken)
@@ -18030,20 +18052,25 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
             throw new FileNotFoundException($"Project '{projectPath}' was not found.", projectPath);
         }
 
+        // `-p:Configuration=` rather than `-c`: the latter is a `dotnet build` shorthand
+        // and `dotnet msbuild` rejects it outright ("Switch: -c"), while both accept the
+        // property form.
+        var configuration = $"-p:Configuration={QuoteArgument(HostBuildConfiguration)}";
+
         var targetPath = await RunDotNetForOutputAsync(
-            $"msbuild {QuoteArgument(projectPath)} -nologo -getProperty:TargetPath",
+            $"msbuild {QuoteArgument(projectPath)} -nologo {configuration} -getProperty:TargetPath",
             Path.GetDirectoryName(projectPath) ?? Environment.CurrentDirectory,
             cancellationToken);
 
         if (!File.Exists(targetPath))
         {
             await RunDotNetAsync(
-                $"build {QuoteArgument(projectPath)} -nologo -clp:ErrorsOnly",
+                $"build {QuoteArgument(projectPath)} -nologo {configuration} -clp:ErrorsOnly",
                 Path.GetDirectoryName(projectPath) ?? Environment.CurrentDirectory,
                 cancellationToken);
 
             targetPath = await RunDotNetForOutputAsync(
-                $"msbuild {QuoteArgument(projectPath)} -nologo -getProperty:TargetPath",
+                $"msbuild {QuoteArgument(projectPath)} -nologo {configuration} -getProperty:TargetPath",
                 Path.GetDirectoryName(projectPath) ?? Environment.CurrentDirectory,
                 cancellationToken);
         }
