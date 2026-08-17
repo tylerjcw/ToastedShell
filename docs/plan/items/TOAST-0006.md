@@ -217,7 +217,9 @@ So stage 2 is not one commit. Proposed order, each independently verifiable:
   2b  IToastHostSignals                              DONE 2026-08-17
   2c  Events onto ToastRuntime                       a move
   2d  ToastRuntime itself, composed into ToshRuntime the bulk of the 182
-  2e  Streams: emit rather than write                behaviour surface
+  2e  Streams: emit rather than write                PART DONE 2026-08-17
+      diagnostics + trace done; value formatting -> TOAST-0014 (Phase A);
+      redirection retargets to a Tōast stream handle, still to do
   2f  CurrentDirectory per evaluation                threads a context
 
 2e and 2f are the two that deserve their own scrutiny, and both are better done after
