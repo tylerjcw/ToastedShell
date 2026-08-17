@@ -4,7 +4,7 @@ using Tosh.Runtime;
 
 namespace Tosh.Language.Parsing;
 
-public static class ToshParser
+public static partial class ToshParser
 {
     /// <summary>
     /// The single source of truth for "can a statement or expression
@@ -146,7 +146,7 @@ public static class ToshParser
         }
     }
 
-    private sealed class InternalParser
+    private sealed partial class InternalParser
     {
         private enum PendingPipelineSeparator
         {
