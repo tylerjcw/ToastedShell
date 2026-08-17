@@ -1,7 +1,7 @@
 ---
 id: TOAST-0002
 title: "Statement dispatch is decided by scattered lookahead predicates that must agree by hand"
-status: proposed
+status: partial
 area: toast
 priority: 2
 opened: 2026-08-16
@@ -44,11 +44,49 @@ Three defects of the same shape, each found by hand, each after the fact.
 
 ## Acceptance
 
-- [ ] Establish what the real invariant is — most likely "every operator token is known to every site that asks whether something is an expression"
-- [ ] Make it hold **by construction or by test**, not by review: a single table the scans consult, or a tripwire that fails when a token is known to one site and not another
-- [ ] Adding a new operator requires editing one place, demonstrated by adding one
-- [ ] The three defects above are covered by the guard, checked by reverting each fix and confirming the guard fires
-- [ ] No accepted syntax changes; the characterization corpus from `TS-P2-11` passes unchanged
+- [x] The invariant established and stated behaviourally: **every operator in `OperatorSurface` must parse in every syntactic position**, rather than "every site lists every predicate" — the sites legitimately differ, and comparing their lists would fail on correct code
+- [x] A tripwire exists: `OperatorStatementCorpusTests`, 276 assertions driven from the registry, failing in both directions if an operator gains or loses a probe
+- [x] It found a live defect immediately — `f($a ** $b, 1)` did not parse, exponentiation missing from the comma scan. Fixed, with the corpus as its regression test
+- [ ] **Coverage is 3 of 7 scan sites**, measured by deleting `IsCastOperatorToken` from each in turn. Raise it, or establish that the remaining four are redundant
+- [ ] Determine which of sites 667, 684, 1524 and 1543 are *redundant* rather than uncovered — deleting each changes no observable behaviour, which is itself worth knowing
+- [ ] Adding a new operator requires editing one place, demonstrated by adding one — **not attempted**; the corpus makes an omission *visible*, it does not make it *impossible*
+- [ ] `TS-P2-116`'s shape (unary at statement start) covered — currently blocked behind `TS-P2-117`, which the corpus found and which exempts `not`
+- [x] No accepted syntax changes; the full suite passes at 5,604
+
+## What the guard actually covers, measured
+
+Deleting `IsCastOperatorToken` from each of the seven scan sites in turn:
+
+| Site | Method | Caught |
+|---|---|---|
+| 611 | `HasTopLevelOperatorBefore` | yes |
+| 667, 684 | `HasTopLevelOperatorBeforeComprehensionKeywordOrClose` | no |
+| 1342 | `HasTopLevelOperatorBeforeCommaOrCloseParen` | yes |
+| 1446 | `HasTopLevelOperatorBeforeStageBoundary` | yes |
+| 1524 | `HasTopLevelOperatorBeforeCloseParen` | no |
+| 1543 | `IsAnyOperatorToken` | no |
+
+**3 of 7.** A single bare probe caught none of six, which is why the position matrix
+exists at all. The four misses are the open question: site 1524 governs the close-paren
+position and the corpus *does* probe `($a as int)`, yet deleting it changes nothing — so
+that site is either redundant or the decision is reached another way first. Redundant
+scan sites would be worth knowing about on their own, since a site nothing depends on is
+a site that can drift unnoticed forever.
+
+## Two errors made while building it
+
+Recorded because both are about the *oracle*, and a guard with a bad oracle is worse
+than no guard.
+
+The corpus first reported 24 failures. **Twenty-three were the probe's fault**: the
+call-argument position used `func add(x, y) => ($x + $y)`, which fails at *runtime* when
+handed a boolean, and "any exception" could not tell a parse failure from a runtime one.
+The probe function is now deliberately type-agnostic.
+
+Separately, `($a as int)` briefly appeared to be broken in the shell — the source had
+been restored after a control experiment without rebuilding, so the binary still had the
+predicate removed. The same "measured the fix against itself" trap this programme has
+hit before.
 
 ## Notes
 

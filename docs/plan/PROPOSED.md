@@ -20,7 +20,6 @@
 | [`TOSH-0002`](items/TOSH-0002.md) | P2 | proposed | 0/4 | Tosh.DevCompanion floats its Microsoft.Data.Sqlite reference, so its dependency set is whatever restore last chose |
 | [`TS-P3-09`](items/TS-P3-09.md) | P3 | proposed | — | Prefix `!` negation |
 | [`TS-P3-01`](items/TS-P3-01.md) | P3 | proposed | — | `tosh check <file>` |
-| [`TOAST-0002`](items/TOAST-0002.md) | P2 | proposed | 0/5 | Statement dispatch is decided by scattered lookahead predicates that must agree by hand |
 | [`TS-P3-03`](items/TS-P3-03.md) | P3 | proposed | — | Reverse/static operator hooks |
 | [`TS-P3-05`](items/TS-P3-05.md) | P3 | proposed | — | Uniform thrown-value protocol |
 | [`TS-P3-02`](items/TS-P3-02.md) | P3 | proposed | — | `let` bindings |

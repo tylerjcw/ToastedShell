@@ -21,6 +21,7 @@
 | [`TOAST-0001`](items/TOAST-0001.md) | P1 | open | 0/5 | A free function called inside a closure resolves as an instance method on the pipeline item |
 | [`TOSH-0003`](items/TOSH-0003.md) | P3 | open | 0/5 | Ship Toast as its own package that TōSh, Tōme and Crumb depend on |
 | [`TOAST-0011`](items/TOAST-0011.md) | P2 | open | 0/6 | A TōSh closure cannot be passed where C wants a function pointer |
+| [`TOAST-0002`](items/TOAST-0002.md) | P2 | partial | 4/8 | Statement dispatch is decided by scattered lookahead predicates that must agree by hand |
 | [`TS-P3-07`](items/TS-P3-07.md) | P3 | in-progress | — | Unify `StorageSize`/`TemporalAmount` with the Quantity unit system |
 | [`TS-P2-117`](items/TS-P2-117.md) | P2 | open | — | A line beginning with a unary operator is absorbed into the previous line's expression |
 | [`TS-P2-101`](items/TS-P2-101.md) | P2 | partial | 0/1 | Class and member doc comments never reach `help` |
