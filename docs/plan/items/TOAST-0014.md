@@ -1,7 +1,7 @@
 ---
 id: TOAST-0014
 title: "String interpolation renders through the display stack, so its output depends on shell configuration"
-status: open
+status: partial
 area: toast
 priority: 2
 opened: 2026-08-17
@@ -61,6 +61,46 @@ the nearest thing to a portable core that exists and already takes no profile.
 **160 existing test cases** across eleven files pin today's behaviour *including* the
 profile dependence. Deciding which of them assert language semantics and which assert
 display is part of the work, not a side effect of it.
+
+## Stage 1 complete — 2026-08-17
+
+`src/Tosh.Runtime/ToastRenderer.cs` implements the contract in
+`docs/plan/SPEC_DRAFT_value_rendering.md` §3–§8, with 38 cases in
+`ToastRendererTests` written **from the specification**, not from current behaviour.
+
+**Nothing calls it.** That is the point: the renderer is complete and pinned before any
+call site moves, so the behaviour change lands as one reviewable flip rather than as a
+rewrite argued from a diff.
+
+It cannot consult display configuration *by construction* — static, no registry, no
+preferences, no reference to `DisplayProfileRegistry`, `DisplayPreferences`, `DisplayEngine`
+or `ObjectFormatter`. A test asserts the absence structurally, because a rule held by
+discipline is a rule that erodes.
+
+The `Display` trait dispatches through `IShellTypeCheckable.IsInstanceOf`, so a value
+answers for itself and the renderer needs neither the engine nor a registered hook. A
+method merely *named* `render` on a type that does not implement the trait is not the
+extension point, and a test pins that.
+
+Four shapes needed explicit routing, each found by a failing test rather than by reading:
+`ExpandoObject` (what a `{| … |}` literal actually is — it implements
+`IDictionary<string, object>` but not the non-generic `IDictionary`, so it fell into the
+sequence writer), `ToshTuple` (an `IShellRecordObject` whose members are `Count`, `Item1`,
+`Item2`, so the record writer produced exactly the ValueTuple leak this fixes), `ToshRange`,
+and `IShellEnumValue`.
+
+**Recorded gap:** `IShellTypeDescriptor.ShellIsClass` is `true` for records *and* classes,
+so it cannot tell them apart. The renderer discriminates on whether the value carries
+methods (`IShellInvocableObject`), which is a proxy for the question rather than the
+question. Worth a real discriminator on the descriptor.
+
+### Stages remaining
+
+- [ ] **Stage 2** — flip the language call sites; triage the 160 pinned test cases
+- [ ] **Stage 3** — `ObjectFormatter` delegates to the renderer, so display and rendering
+      cannot disagree; this also fixes the table cells
+- [ ] **Stage 4** — `Formatter` leaves the language's required set, `ToshValueFormatter`
+      points at the renderer, and a differential test pins interpreted against compiled
 
 ## Acceptance
 
