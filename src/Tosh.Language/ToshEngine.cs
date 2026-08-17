@@ -653,7 +653,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
     {
         cancellationToken.ThrowIfCancellationRequested();
         using var executionFrame = ToshExecutionDepthGuard.Enter(
-            Runtime.Config.Shell.MaxRecursionDepth,
+            Runtime.Options.MaxRecursionDepth,
             $"script {parseResult.SourceName}",
             parseResult.SourceName,
             parseResult.SourceText,
@@ -6188,7 +6188,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
     {
         context.CancellationToken.ThrowIfCancellationRequested();
         using var executionFrame = ToshExecutionDepthGuard.Enter(
-            Runtime.Config.Shell.MaxRecursionDepth,
+            Runtime.Options.MaxRecursionDepth,
             definition.Name,
             context.Invocation?.SourceName ?? definition.SourceName,
             context.Invocation?.SourceText ?? definition.SourceText,

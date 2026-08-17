@@ -46,7 +46,7 @@ public sealed class ToshRuntime
         Display = new DisplayEngine(Formatter);
         Display.Preferences = DisplayPreferences;
         Inspector = new ObjectInspector(Formatter);
-        Config = new ToshConfig(Display, DisplayPreferences, ToshConfigDefaults.GetDefaultConfigDirectory());
+        Config = new ToshConfig(Display, DisplayPreferences, ToshConfigDefaults.GetDefaultConfigDirectory(), Options);
         Config.Shell.Usings.Bind((DotNetTypeResolver)TypeResolver);
         TerminalGlyphs.Initialize(Config.Tty);
         PathUtilities.DirectoryAliases = Config.Shell.Dirs;
@@ -106,6 +106,18 @@ public sealed class ToshRuntime
     public ObjectInspector Inspector { get; }
 
     public ToshConfig Config { get; }
+
+    /// <summary>
+    /// Settings the language owns, independent of any shell (`TOAST-0006`).
+    /// </summary>
+    /// <remarks>
+    /// Created before <see cref="Config"/> and passed into it, because the config
+    /// sections that expose these values delegate here rather than holding their own
+    /// storage. That ordering is what keeps
+    /// <c>$tosh.Config.Shell.MaxRecursionDepth = 5</c> working from script while the
+    /// language reads nothing from a config file.
+    /// </remarks>
+    public ToastOptions Options { get; } = new();
 
     public IList<CommandHistoryEntry> History { get; }
 

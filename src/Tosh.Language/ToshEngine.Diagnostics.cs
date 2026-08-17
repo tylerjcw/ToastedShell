@@ -181,7 +181,7 @@ public sealed partial class ToshEngine
             }
         }
 
-        return Runtime.Config.Diagnostics.IsHushed(code, severity);
+        return Runtime.Options.IsHushed(code, severity);
     }
 
     /// <summary>
@@ -201,7 +201,7 @@ public sealed partial class ToshEngine
             return;
         }
 
-        Runtime.Config.Diagnostics.Hushed.Add(trimmed);
+        Runtime.Options.HushedDiagnostics.Add(trimmed);
     }
 
     /// <summary>Public <see cref="IShellEvaluator"/> entry point for the <c>hush</c> builtin.</summary>

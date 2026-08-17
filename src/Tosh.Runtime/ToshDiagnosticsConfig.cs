@@ -7,12 +7,24 @@ namespace Tosh.Runtime;
 /// </summary>
 public sealed class ToshDiagnosticsConfig : IResettableShellConfig
 {
+    private readonly ToastOptions _options;
+
+    public ToshDiagnosticsConfig(ToastOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        _options = options;
+    }
+
     /// <summary>
     /// Codes (e.g. <c>tosh.runtime.fading_member</c>) that should be suppressed
     /// at process scope. Only diagnostics with severity <see cref="ToshDiagnosticSeverity.Warning"/>
     /// or lower can be hushed; errors always surface.
     /// </summary>
-    public ToshHushedDiagnosticList Hushed { get; } = new();
+    /// <summary>
+    /// Suppressed diagnostic codes. Storage lives on <see cref="ToastOptions"/>; `hush`
+    /// is language syntax, and this is the shell's view of it (`TOAST-0006`).
+    /// </summary>
+    public ToshHushedDiagnosticList Hushed => _options.HushedDiagnostics;
 
     /// <summary>
     /// Optional base URL used to render diagnostic codes as hyperlinks

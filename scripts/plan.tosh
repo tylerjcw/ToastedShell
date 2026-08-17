@@ -9,26 +9,42 @@
 ##   hand-written snapshot carrying the instruction "when a status changes there,
 ##   change it here in the same edit"; it drifted twenty items out of date, because
 ##   that is what hand-maintained summaries do.
-## @example
-##   scripts/plan.tosh counts
-##   scripts/plan.tosh list active
-##   scripts/plan.tosh show TS-P2-117
-##   scripts/plan.tosh check
-##   scripts/plan.tosh index
+## @example scripts/plan.tosh counts
+## @example scripts/plan.tosh list active
+## @example scripts/plan.tosh show TS-P2-117
+## @example scripts/plan.tosh check
+## @example scripts/plan.tosh index
 ## @returns Depends on the subcommand; `check` reports a fault count.
-var PLAN_DIR = "docs/plan"
-var ITEMS_DIR = "docs/plan/items"
 
-var STATES = ["proposed", "open", "research", "in-progress", "partial", "complete", "deferred", "withdrawn"]
-var AREAS = ["toast", "tosh", "tome", "crumb", "plan", "legacy"]
-var REQUIRED = ["id", "title", "status", "area", "priority"]
+## @summary Refinement type for paths that must already exist as a directory.
+type DirectoryPath = string where (is-dir _).IsDirectory
+
+## @summary Resolves the absolute path of the repository root.
+## @returns The repository root directory as a `DirectoryPath`.
+func RepoRoot() -> DirectoryPath {
+    var result = (spawn git rev-parse --show-toplevel | wait-for | first)
+    if ($result.ExitCode != 0) { throw "Run this command from inside the TōSh repository." }
+    return ($result.Output | first).ToString().Trim()
+}
+
+
+var PLAN_DIR = $"{RepoRoot()}/docs/plan"
+var ITEMS_DIR = $"{RepoRoot()}/docs/plan/items"
+
+var STATES   = [ "proposed", "open" , "research", "in-progress", "partial" , "complete", "deferred", "withdrawn" ]
+var AREAS    = [ "toast"   , "tosh" , "tome"    , "crumb"      , "plan"    , "legacy" ]
+var REQUIRED = [ "id"      , "title", "status"  , "area"       , "priority" ]
 
 ## Which index a status appears on.
 var BOARD = {%
-    "proposed" => "PROPOSED",
-    "open" => "ACTIVE", "research" => "ACTIVE", "in-progress" => "ACTIVE", "partial" => "ACTIVE",
-    "deferred" => "DEFERRED",
-    "complete" => "COMPLETE", "withdrawn" => "COMPLETE"
+    "proposed"    => "PROPOSED",
+    "open"        => "ACTIVE"  ,
+    "research"    => "ACTIVE"  ,
+    "in-progress" => "ACTIVE"  ,
+    "partial"     => "ACTIVE"  ,
+    "deferred"    => "DEFERRED",
+    "complete"    => "COMPLETE",
+    "withdrawn"   => "COMPLETE"
 %}
 
 var BOARDS = ["ACTIVE", "PROPOSED", "DEFERRED", "COMPLETE"]
@@ -87,9 +103,10 @@ func read_item(path) {
 ## *instance method on the pipeline item* and fails. Filed as TOAST-0001.
 func load() {
     var items = []
-    for path in (/usr/bin/find $ITEMS_DIR -name "*.md" | lines) {
-        if ($path.Trim() == "") { continue }
-        var it = read_item($path.Trim())
+    var paths = find $ITEMS_DIR -name "*.md" | get FullName | each _.Trim()
+    for path in $paths {
+        if ($path == "") { continue }
+        var it = read_item($path)
         var s = $it["status"]
         if ($s in $STATES) { $it["board"] = $BOARD[$s] } else { $it["board"] = "UNKNOWN" }
         $items = ($items + [$it])
@@ -102,7 +119,7 @@ func load() {
 # if (($argv | count) > 0) { $cmd = $argv[0] }
 # var rest = ($argv | skip 1 | collect)
 
-## ---------------------------------------------------------------- counts
+## @summary Gives the counts of items acrossed each state and target
 subcommand counts {
     var items = load()
     for board in $BOARDS {
@@ -117,11 +134,12 @@ subcommand counts {
     }
 }
 
-## ---------------------------------------------------------------- list
+## @summary Lists items with the specified state.
 subcommand list {
-    arg want = "ACTIVE"
-    $want = $want.ToUpper()
-    var items = (load() | where { $_["board"] == $want } | collect)
+    ## @summary ACTIVE, PROPOSED, DEFERRED, or COMPLETE (case insensitive)
+    arg status: string = "ACTIVE"
+    $status = $status.ToUpper()
+    var items = (load() | where { $_["board"] == $status } | collect)
     for it in $items {
         var id = $it["id"]
         var status = $it["status"]
@@ -133,20 +151,19 @@ subcommand list {
         echo $"{$id}  [{$status}]{$boxes}  {$title}"
     }
     var n = ($items | count)
-    echo $"({$n} on {$want})"
+    echo $"({$n} on {$status})"
 }
 
-## ---------------------------------------------------------------- show
+## @summary Returns the summary and details of a single item, specified by id
 subcommand show {
-    arg id
+    ## @summary The id of the item in question
+    arg id: string
     var hits = (load() | where { $_["id"] == $id } | collect)
     if (($hits | count) == 0) { echo $"no such item: {$id}" }
     for it in $hits { read-file $it["path"] }
 }
 
-## ---------------------------------------------------------------- check
-##
-## Faults a human edit introduces quietly and a reader would not notice.
+## @summary Checks items for introduced faults
 subcommand check {
     var items = load()
     var faults = 0
@@ -211,9 +228,7 @@ subcommand check {
     echo $"checked {$total} items, {$faults} faults"
 }
 
-## ---------------------------------------------------------------- index
-##
-## Regenerate the four board files. They are outputs; nothing reads them back.
+## @summary Regenerate the four board files from the item files.
 subcommand index {
     var items = load()
     for board in $BOARDS {
@@ -247,9 +262,7 @@ subcommand index {
     }
 }
 
-## ---------------------------------------------------------------- orphans
-##
-## An ID cited in code but absent from the plan leaves a reader chasing nothing.
+## @summary Scan for orphaned IDs (cited in code but absent from the plan).
 subcommand orphans {
     var known = []
     for it in load() { $known = ($known + [$it["id"]]) }

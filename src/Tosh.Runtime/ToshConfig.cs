@@ -7,8 +7,13 @@ public interface IResettableShellConfig
 
 public sealed class ToshConfig : IResettableShellConfig
 {
-    public ToshConfig(DisplayEngine display, DisplayPreferences displayPreferences, string startupRootDirectory)
+    public ToshConfig(
+        DisplayEngine display,
+        DisplayPreferences displayPreferences,
+        string startupRootDirectory,
+        ToastOptions options)
     {
+        ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(display);
         ArgumentNullException.ThrowIfNull(displayPreferences);
         ArgumentException.ThrowIfNullOrWhiteSpace(startupRootDirectory);
@@ -17,11 +22,11 @@ public sealed class ToshConfig : IResettableShellConfig
         Display = new ToshDisplayConfig(display, displayPreferences);
         Repl = new ToshReplConfig();
         Prompt = new ToshPromptConfig(Theme.Prompt);
-        Shell = new ToshShellConfig();
+        Shell = new ToshShellConfig(options);
         History = new ToshHistoryConfig(ToshConfigDefaults.GetDefaultStateDirectory());
         Startup = new ToshStartupConfig(startupRootDirectory);
         Tty = new ToshTtyConfig();
-        Diagnostics = new ToshDiagnosticsConfig();
+        Diagnostics = new ToshDiagnosticsConfig(options);
         Renderers = new ToshRenderersConfig();
         Schemas = new ToshSchemasConfig();
         External = new ToshExternalConfig();
@@ -70,7 +75,13 @@ public sealed class ToshConfig : IResettableShellConfig
 
 public sealed class ToshShellConfig : IResettableShellConfig
 {
-    private int _maxRecursionDepth = ToshExecutionDepthGuard.DefaultMaximumDepth;
+    private readonly ToastOptions _options;
+
+    public ToshShellConfig(ToastOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        _options = options;
+    }
 
     public bool Pipefail { get; set; }
 
@@ -82,14 +93,15 @@ public sealed class ToshShellConfig : IResettableShellConfig
 
     public bool AutoCd { get; set; }
 
+    /// <summary>
+    /// The evaluator's recursion limit. Storage lives on <see cref="ToastOptions"/> —
+    /// this is the shell's *view* of a language setting, kept so
+    /// <c>$tosh.Config.Shell.MaxRecursionDepth</c> still reads and writes it (`TOAST-0006`).
+    /// </summary>
     public int MaxRecursionDepth
     {
-        get => _maxRecursionDepth;
-        set
-        {
-            ToshExecutionDepthGuard.ValidateMaximumDepth(value);
-            _maxRecursionDepth = value;
-        }
+        get => _options.MaxRecursionDepth;
+        set => _options.MaxRecursionDepth = value;
     }
 
     public ToshDirectoryAliasConfig Dirs { get; } = new();

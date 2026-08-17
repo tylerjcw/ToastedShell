@@ -134,7 +134,7 @@ public sealed class DiagnosticRendererTests
     [Fact]
     public void Diagnostic_renderer_emits_osc8_hyperlink_when_help_uri_base_set()
     {
-        var diagnosticsConfig = new ToshDiagnosticsConfig
+        var diagnosticsConfig = new ToshDiagnosticsConfig(new ToastOptions())
         {
             HelpUriBase = "https://tosh.dev/d",
         };
