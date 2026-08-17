@@ -62,9 +62,27 @@ public static partial class ToshParser
             return false;
         }
 
-        foreach (var segment in text.Split('.'))
+        var segments = text.Split('.');
+
+        // `&$obj.Method` — a reference bound to a receiver (`TS-P2-94`). The first
+        // segment may be a variable, and only then: `&$f` alone is not a function
+        // reference, because a variable already holding a callable needs no `&`, and
+        // treating it as one would quietly change what a bare `&$x` means.
+        var start = 0;
+
+        if (segments.Length > 1 && segments[0].StartsWith('$') && segments[0].Length > 1)
         {
-            if (!IsValidCommandName(segment))
+            if (!IsValidCommandName(segments[0][1..]))
+            {
+                return false;
+            }
+
+            start = 1;
+        }
+
+        for (var index = start; index < segments.Length; index++)
+        {
+            if (!IsValidCommandName(segments[index]))
             {
                 return false;
             }

@@ -1615,6 +1615,22 @@ public sealed partial class ToshEngine
                             return new ToshStaticMethodReference(ownerClass, funcRef.Name[(dot + 1)..]);
                         }
 
+                        // `&$obj.Method` — bound to a receiver. Tried before the
+                        // qualified-value path because `$obj.Method` on a class instance
+                        // is not a value either: reading a method without parentheses
+                        // raises the same "call it" error a static does, so the value
+                        // path would throw before this branch was reached.
+                        if (funcRef.Name.StartsWith('$') &&
+                            funcRef.Name.IndexOf('.', StringComparison.Ordinal) is var receiverDot and > 0 &&
+                            TryGetVariableValue(funcRef.Name[1..receiverDot], out var receiver) &&
+                            receiver is not null)
+                        {
+                            return new ToshBoundMethodReference(
+                                receiver,
+                                funcRef.Name[(receiverDot + 1)..],
+                                Runtime.Invoker);
+                        }
+
                         // A module-qualified function, by contrast, already evaluates
                         // to a callable through ordinary member access — `var f = M.E`
                         // has always worked — so it needs only that same resolution.

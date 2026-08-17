@@ -105,6 +105,68 @@ public class InvocationSurfaceTests
         => Assert.Equal(expected, await RunAsync(ReferenceFixture + body));
 
     /// <summary>
+    /// The half `TS-P2-94` left unbuilt: a reference bound to a *receiver*. The other
+    /// four forms name something that already exists — a command, a module member, a
+    /// static method — while this one has to carry the instance with it.
+    /// </summary>
+    [Theory]
+    [InlineData("var o = new R()\nvar f = &$o.Get\n$f()", "42")]
+    [InlineData("var o = new R()\nvar f = &$o.Add\n$f(2)", "44")]
+    [InlineData("var o = new R()\nvar f = &$o.Over\n$f(20, 22)", "42")]
+    [InlineData("var s = \"ab\"\nvar f = &$s.ToUpper\n$f()", "AB")]
+    public async Task A_function_reference_binds_to_a_receiver(string body, string expected)
+        => Assert.Equal(expected, await RunAsync(ReferenceFixture + body));
+
+    /// <summary>
+    /// The receiver is captured when the reference is taken, not when it is called.
+    /// Rebinding the variable afterwards must not follow — that is what makes the
+    /// callable safe to hand somewhere else, and a re-read would be a different feature.
+    /// </summary>
+    [Fact]
+    public async Task The_receiver_is_captured_when_the_reference_is_taken()
+        => Assert.Equal("42", await RunAsync(
+            ReferenceFixture +
+            """
+            var o = new R()
+            var f = &$o.Get
+            var other = new R()
+            $other.N = 7
+            $o = $other
+            $f()
+            """));
+
+    /// <summary>
+    /// A bound reference resolves overloads at call time for the same reason a static
+    /// one does: it stands for the member, not for one signature.
+    /// </summary>
+    [Fact]
+    public async Task A_bound_reference_still_resolves_overloads_at_call_time()
+        => Assert.Equal("42,42", await RunAsync(
+            ReferenceFixture +
+            """
+            var o = new R()
+            var f = &$o.Over
+            $f(42)
+            $f(20, 22)
+            """));
+
+    /// <summary>
+    /// `&amp;$x` with no member is **not** a function reference and must keep its old
+    /// meaning — a stray background operator. A variable already holding a callable
+    /// needs no `&amp;`, so admitting the bare form would quietly change what it means.
+    /// </summary>
+    [Fact]
+    public async Task A_bare_variable_after_the_sigil_is_still_not_a_reference()
+    {
+        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+
+        var exception = await Assert.ThrowsAnyAsync<Exception>(
+            () => engine.ExecuteToListAsync("var p = 1\nvar f = &$p"));
+
+        Assert.Contains("background", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
     /// The reference stands for the whole overload set, not one signature, so
     /// arity is settled at call time by the ordinary dispatcher rather than
     /// captured here. A second, weaker resolver in the reference is the
@@ -137,6 +199,14 @@ public class InvocationSurfaceTests
         module M {
             export func Exported(x: int) -> int => $x
             export module Deep { export func Down(x: int) -> int => $x }
+        }
+
+        class R {
+            prop N: int = 42
+            func Get() -> int => $this.N
+            func Add(k: int) -> int => ($this.N + $k)
+            func Over(x: int) -> int => $x
+            func Over(a: int, b: int) -> int => ($a + $b)
         }
 
         class C {

@@ -11,7 +11,6 @@
 | [`TS-P2-120`](items/TS-P2-120.md) | P2 | open | — | A nullable annotation on a built-in type alias will not parse in a `var` declaration |
 | [`PLAN-0001`](items/PLAN-0001.md) | P3 | open | 6/10 | Triage the remaining documentation: date what is stale, mark what is frozen, rewrite only what the split will not move |
 | [`TS-P2-104`](items/TS-P2-104.md) | P2 | partial | 0/1 | A splat argument is rejected wherever it would be useful |
-| [`TS-P2-94`](items/TS-P2-94.md) | P2 | partial | 0/1 | `&` cannot reference a method or a module-qualified function |
 | [`TOSH-0001`](items/TOSH-0001.md) | P1 | open | 0/6 | Quotes inside an argument are passed through to external commands instead of being stripped |
 | [`TS-P2-118`](items/TS-P2-118.md) | P2 | open | — | Calling a callable held in a property warns `member_not_found`, then works |
 | [`TOAST-0007`](items/TOAST-0007.md) | P2 | open | 0/4 | Split Tosh.Stdlib into language-level and shell-level commands |
