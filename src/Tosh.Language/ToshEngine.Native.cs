@@ -659,4 +659,38 @@ public sealed partial class ToshEngine
     {
         return NativeInteropUtilities.IsSupportedInteropType(type);
     }
+
+
+    private async IAsyncEnumerable<object?> EvaluateBindStatementAsync(
+        string sourceName,
+        string sourceText,
+        BindStatementSyntax statement,
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        if (statement.NativeTarget is not null)
+        {
+            EnsureNativeModuleAvailable(sourceName, statement.NativeTarget, statement.ModuleName, DeclarationModifier.Default);
+        }
+
+        if (!TryGetModule(statement.ModuleName, out var module) ||
+            module.NativeLibraryBinding is null)
+        {
+            throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                Code: "tosh.runtime.bind_target_not_native_module",
+                Title: $"'{statement.ModuleName}' is not a native library module.",
+                SourceName: sourceName,
+                SourceText: sourceText,
+                Span: statement.Span,
+                Label: $"load a native library with 'require native ... as {statement.ModuleName}' first"));
+        }
+
+        foreach (var function in statement.Functions)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            module.SetCommand(BuildNativeFunctionCommand(
+                sourceName, sourceText, statement.ModuleName, module.NativeLibraryBinding, function));
+        }
+
+        yield break;
+    }
 }
