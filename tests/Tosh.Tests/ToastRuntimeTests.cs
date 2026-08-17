@@ -37,6 +37,7 @@ public sealed class ToastRuntimeTests
         Assert.NotNull(language.LoadedModules);
         Assert.NotNull(language.NativeTypes);
         Assert.NotNull(language.Events);
+        Assert.NotNull(language.Commands);
 
         Assert.True(language.Options.MaxRecursionDepth > 0);
     }
@@ -65,6 +66,11 @@ public sealed class ToastRuntimeTests
         Assert.Same(runtime.Language.ObjectAccessor, runtime.ObjectAccessor);
         Assert.Same(runtime.Language.TypeResolver, runtime.TypeResolver);
         Assert.Same(runtime.Language.Events, runtime.Events);
+
+        // One table, two views — the shell keeps the registry's extra members while the
+        // language sees only ICommandTable, but it must be the same instance or
+        // `export func` and `which` would disagree.
+        Assert.Same(runtime.Language.Commands, runtime.Commands);
     }
 
     /// <summary>

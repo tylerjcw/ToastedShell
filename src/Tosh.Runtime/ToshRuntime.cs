@@ -37,6 +37,9 @@ public sealed class ToshRuntime : IToastHostSignals, IToastDiagnosticSink
         _currentDirectory = initialDirectory;
         PushDirectory(initialDirectory);
         Commands = new ShellCommandRegistry();
+        // One table, two views: the language resolves and registers through
+        // ICommandTable, the shell keeps the registry's alias and lookup members.
+        Language = new ToastRuntime { Commands = Commands };
         DisplayPreferences = new DisplayPreferences();
         DisplayProfiles = DisplayProfileRegistry.CreateDefault(DisplayPreferences);
         Formatter = new ObjectFormatter(DisplayProfiles);
@@ -72,7 +75,7 @@ public sealed class ToshRuntime : IToastHostSignals, IToastDiagnosticSink
     /// below that read <c>Language.</c> are the shell's view of language state, kept so
     /// <c>$tosh.Vars</c> and friends still work (`TOAST-0006`).
     /// </summary>
-    public ToastRuntime Language { get; } = new();
+    public ToastRuntime Language { get; }
 
     public ShellCommandRegistry Commands { get; }
 

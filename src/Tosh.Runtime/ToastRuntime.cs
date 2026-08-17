@@ -51,6 +51,24 @@ public sealed class ToastRuntime
     /// <summary>Settings the language owns, independent of any shell config file.</summary>
     public ToastOptions Options { get; } = new();
 
+    /// <summary>
+    /// The command table: names the language can resolve, and the two mutations it needs.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Typed as <see cref="ICommandTable"/> — six members — rather than the shell's
+    /// eleven-member `ShellCommandRegistry`, so `RegisterAlias`, `GetAliases`, `Get` and
+    /// `Register` stay shell-only (`TOAST-0006`, stage 2a).
+    /// </para>
+    /// <para>
+    /// It is **shared, not moved**. TōSh creates the registry and hands the same instance
+    /// here, because both halves must see one table: `export func greet()` registers
+    /// through the language and `which greet` resolves through the shell. A default is
+    /// supplied so a language-only host still has somewhere for declarations to go.
+    /// </para>
+    /// </remarks>
+    public ICommandTable Commands { get; init; } = new ShellCommandRegistry();
+
     /// <summary>Global variables.</summary>
     public IDictionary<string, object?> Variables { get; } =
         new Dictionary<string, object?>(StringComparer.Ordinal);
