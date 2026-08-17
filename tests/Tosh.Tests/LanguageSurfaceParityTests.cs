@@ -279,7 +279,7 @@ public sealed class LanguageSurfaceParityTests
         // `let`, `quote`, and `once`, which appear in parser source for unrelated
         // reasons; the probes accept those correctly. Source presence rejects
         // `import`, which the probes accepted. Both, together.
-        var source = File.ReadAllText(LocateParserSource())
+        var source = ReadParserSource()
             + File.ReadAllText(Path.Combine(RepositoryRoot(), "src/Tosh.Language/Parsing/ToshLexer.cs"));
 
         // One exemption, and it is not a loophole. `ParseClassMember` used to name
@@ -393,7 +393,7 @@ public sealed class LanguageSurfaceParityTests
         // IsDeclarationModifierWord skip-list is deliberately *not* the authority:
         // it names `abstract` and `private`, which are not modifiers in this
         // language at all — `abstract class C { }` reports unknown_command.
-        var parserSource = File.ReadAllText(LocateParserSource());
+        var parserSource = ReadParserSource();
         var match = Regex.Match(
             parserSource,
             @"private DeclarationModifier ParseDeclarationModifier\(\).*?return Current\.Text switch\s*\{(.*?)\};",
@@ -617,6 +617,26 @@ public sealed class LanguageSurfaceParityTests
     private static string RepositoryRoot() =>
         Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../"));
 
-    private static string LocateParserSource() =>
-        Path.Combine(RepositoryRoot(), "src/Tosh.Language/Parsing/ToshParser.cs");
+    /// <summary>
+    /// The parser's source text, across every partial file it is split into.
+    /// </summary>
+    /// <remarks>
+    /// `TOAST-0005` divided ToshParser.cs into partial files by concern, and the word
+    /// literals this scan looks for moved with the members that name them. Reading a
+    /// single path made the test fail deterministically while the invariant it checks
+    /// stayed true — the words were still named in the parser, just not in that file.
+    ///
+    /// A source-scanning test is coupled to file layout in a way a behavioural test is
+    /// not, and nothing in its failure says so.
+    /// </remarks>
+    private static string ReadParserSource()
+    {
+        var directory = Path.Combine(RepositoryRoot(), "src/Tosh.Language/Parsing");
+
+        return string.Join(
+            "\n",
+            Directory.EnumerateFiles(directory, "ToshParser*.cs")
+                .OrderBy(path => path, StringComparer.Ordinal)
+                .Select(File.ReadAllText));
+    }
 }

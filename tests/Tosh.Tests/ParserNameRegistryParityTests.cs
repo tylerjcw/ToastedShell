@@ -17,8 +17,16 @@ public sealed class ParserNameRegistryParityTests
     [Fact]
     public void Every_hardcoded_command_name_in_ToshParser_resolves_via_the_registry()
     {
-        var parserPath = LocateParserSource();
-        var source = File.ReadAllText(parserPath);
+        // Every ToshParser*.cs, not just the one: `TOAST-0005` split the parser into
+        // partial files by concern, and a comparison site moving between them must not
+        // change what this scan sees. A source-scanning test is coupled to file layout
+        // in a way a behavioural test is not.
+        var parserDirectory = Path.GetDirectoryName(LocateParserSource())!;
+        var source = string.Join(
+            "\n",
+            Directory.EnumerateFiles(parserDirectory, "ToshParser*.cs")
+                .OrderBy(path => path, StringComparer.Ordinal)
+                .Select(File.ReadAllText));
 
         // Capture string literals on the right-hand side of `string.Equals(commandName, "X", …)`
         // and `string.Equals(nameToken.Text, "X", …)`. These are the parser's command-name
@@ -39,13 +47,20 @@ public sealed class ParserNameRegistryParityTests
         var engine = new ToshEngine();
         var registry = engine.Runtime.Commands;
 
+        // Non-vacuity guard. This is a source scan, so it fails open: if the comparison
+        // sites move somewhere the glob does not read, an empty set looks like a clean
+        // bill of health. `TOAST-0005` moved parser members between files once already.
+        Assert.True(hardcodedNames.Count > 0,
+            "No hardcoded command names found in the parser source — the scan is probably " +
+            "no longer reading the files that contain them.");
+
         var unresolved = hardcodedNames
             .Where(name => !registry.TryGet(name, out _))
             .ToList();
 
         Assert.True(
             unresolved.Count == 0,
-            $"The following names are hardcoded in {Path.GetFileName(parserPath)} but do not resolve via the command registry:\n  - " +
+            "The following names are hardcoded in the parser source but do not resolve via the command registry:\n  - " +
             string.Join("\n  - ", unresolved) +
             "\nEither register the missing command/alias, or remove the stale parser branch.");
     }

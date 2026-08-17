@@ -128,8 +128,7 @@ public sealed class OperatorParityTests
         // a token (e.g. `//`) is added to the parser's operator predicates but the
         // evaluator switch was never updated, producing a runtime "Unsupported operator"
         // for code that looks valid.
-        var parserPath = LocateParserSource();
-        var parserSource = File.ReadAllText(parserPath);
+        var parserSource = ReadParserSource();
 
         var evaluatorPath = LocateEvaluatorSource();
         var evaluatorSource = File.ReadAllText(evaluatorPath);
@@ -165,8 +164,7 @@ public sealed class OperatorParityTests
         // Compound assignments like `+=`, `//=`, `**=` are lowered to a binary op by
         // ToshEngine before dispatching to OperatorEvaluator. Ensure every assignment
         // operator the parser accepts is in that lowering map.
-        var parserPath = LocateParserSource();
-        var parserSource = File.ReadAllText(parserPath);
+        var parserSource = ReadParserSource();
         var assignBody = ExtractMethodBody(parserSource, "NormalizeAssignmentOperator");
         var assignOps = new HashSet<string>(StringComparer.Ordinal);
         foreach (Match m in Regex.Matches(assignBody, "\"([^\"\\\\]+)\"\\s*=>"))
@@ -350,7 +348,28 @@ public sealed class OperatorParityTests
         throw new FileNotFoundException("Could not locate src/Tosh.Runtime/OperatorEvaluator.cs.");
     }
 
-    private static string LocateParserSource() => LocateRepoFile("src/Tosh.Language/Parsing/ToshParser.cs");
+    /// <summary>
+    /// The parser's source text, across every partial file it is split into.
+    /// </summary>
+    /// <remarks>
+    /// `TOAST-0005` divided ToshParser.cs into partial files by concern, and the word
+    /// literals this scan looks for moved with the members that name them. Reading a
+    /// single path made the test fail deterministically while the invariant it checks
+    /// stayed true — the words were still named in the parser, just not in that file.
+    ///
+    /// A source-scanning test is coupled to file layout in a way a behavioural test is
+    /// not, and nothing in its failure says so.
+    /// </remarks>
+    private static string ReadParserSource()
+    {
+        var directory = Path.GetDirectoryName(LocateRepoFile("src/Tosh.Language/Parsing/ToshParser.cs"))!;
+
+        return string.Join(
+            "\n",
+            Directory.EnumerateFiles(directory, "ToshParser*.cs")
+                .OrderBy(path => path, StringComparer.Ordinal)
+                .Select(File.ReadAllText));
+    }
 
     /// <summary>
     /// The engine's source text, across every partial file it is split into.
