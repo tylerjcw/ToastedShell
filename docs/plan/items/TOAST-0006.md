@@ -102,11 +102,50 @@ keeps display, help, jobs, system services and the composition root, and roughly
 twenty-four references across eleven types are the coupling to resolve — the same order
 of magnitude as `TOAST-0004`'s two, not a rewrite.
 
-**The one structural question left** is `ToshEngine(ToshRuntime)`. The engine takes the
-shell's runtime object, which holds `Commands`, `Display`, `History` and `Config`
-alongside the value model. Splitting it means deciding what a *language* runtime is and
-letting the shell extend it. That is a design decision rather than a move, and it should
-be taken deliberately rather than discovered halfway through an assembly split.
+## Decision taken 2026-08-17: composition, and a ToastOptions
+
+`ToshRuntime` has **38 public members**. The language touches 24 across 182 references
+and **never touches 14** — the display stack (`Display`, `DisplayPreferences`,
+`DisplayProfiles`, `Inspector`), terminal and session (`Terminal`, `ExecHandler`,
+`InlinePrompts`, `CommandLineInsertion`, `History`), and the `$tosh.Last` state
+(`LastExitCode`, `LastResult`, `LastError`, `LastDiagnostic`, `LastCommandDuration`).
+A third of the object is already cleanly shell-only.
+
+**Chosen: composition.** A `ToastRuntime` in the language layer holds what the language
+needs; `ToshRuntime` holds one as a field and adds the shell's own. `ToshEngine` takes a
+`ToastRuntime`. Rejected: an interface (separates the contract but not the code, leaving
+`ToshRuntime` one large class) and inheritance (every future member needs a judgement
+about which class it lands in — the judgement that produced
+`Config.Shell.MaxRecursionDepth` in the first place). Composition costs the most churn
+and is the only one where a language-only host constructs a `ToastRuntime` and nothing
+else.
+
+**Chosen: a `ToastOptions` the language owns and TōSh populates.** This is what actually
+holds the `~/.config/tosh` invariant, and it is worth being precise that the invariant is
+**not held today**: `Tosh.Language` never reads the config *directory* — that was checked
+in August and is true — but it does read values the shell loaded from one.
+
+```
+Config.Shell.MaxRecursionDepth   x4   a language limit, filed under "Shell"
+Config.Diagnostics.Hushed        x2   `hush`, a language feature
+Config.Theme.Diagnostics         x3   shell: how diagnostics are coloured
+Config.Shell.Pipefail            x2   genuinely shell semantics
+```
+
+So the question a language-only host asks — "what is `MaxRecursionDepth` when there is
+no TōSh?" — currently has no answer. `ToastOptions` gives it one: the language declares
+its settings with defaults, and TōSh copies values in at startup.
+
+## Staging
+
+Two stages, because 182 references is not one commit.
+
+1. **`ToastOptions`** — extract the language settings. Self-contained, and it is the part
+   that holds the invariant, so it is worth having even if the rest waits.
+2. **`ToastRuntime`** — the composition split. Needs a decision on the borderline
+   members: `Commands` (the language uses only `TryGet`/`All`/`AllNames`/`Remove`, so an
+   `ICommandResolver` rather than the registry), `Events`, `ExitRequested`,
+   `ExportedEnvironmentVariables` and `Output`/`Error`.
 
 ## Notes
 
