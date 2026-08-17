@@ -2593,16 +2593,40 @@ public static partial class ToshParser
                 {
                     var propStart = Current.Span.Start;
                     NextToken(); // consume 'prop'
-                    var propName = ExpectVariableName();
 
-                    // Optional type: prop name: Type
-                    string? typeName = null;
-                    if (Current.Kind == SyntaxTokenKind.Bareword && Current.Text == ":")
+                    // Read the name the way a *class* property does, rather than with a
+                    // bare `ExpectVariableName`. `TOAST-0019`: the lexer glues `X:` into
+                    // one bareword, so `prop X: int` arrived here as the name `X:` and was
+                    // rejected as an invalid identifier — a trait could not type a required
+                    // property at all, while a class two lines away could.
+                    var propNameToken = Current.Kind == SyntaxTokenKind.Bareword
+                        ? NextToken()
+                        : ExpectVariableName();
+
+                    ParseTypedIdentifierToken(
+                        propNameToken.Text,
+                        out var propName,
+                        out var inlineTypeName,
+                        out var expectsFollowingTypeName);
+
+                    var typeName = inlineTypeName;
+
+                    if (expectsFollowingTypeName)
                     {
-                        NextToken(); // consume ':'
-                        var typeToken = ExpectVariableName();
-                        typeName = typeToken.Text;
+                        typeName = ParseTypeName("property type");
                     }
+                    else if (Current.Kind == SyntaxTokenKind.Bareword && Current.Text == ":")
+                    {
+                        NextToken();
+                        typeName = ParseTypeName("property type");
+                    }
+                    else if (Current.Kind == SyntaxTokenKind.Bareword &&
+                             Current.Text.StartsWith(":", StringComparison.Ordinal))
+                    {
+                        typeName = NextToken().Text[1..];
+                    }
+
+                    typeName = ParseTypeNameSuffix(typeName);
 
                     // Optional default value: prop name = expr
                     PipelineSyntax? defaultValue = null;
@@ -2613,10 +2637,10 @@ public static partial class ToshParser
                     }
 
                     properties.Add(new TraitPropertySignatureSyntax(
-                        propName.Text,
+                        propName,
                         typeName,
                         defaultValue,
-                        TextSpan.FromBounds(propStart, propName.Span.End)));
+                        TextSpan.FromBounds(propStart, propNameToken.Span.End)));
                 }
                 else if (Current.Kind == SyntaxTokenKind.Bareword && string.Equals(Current.Text, "func", StringComparison.OrdinalIgnoreCase))
                 {
@@ -2627,18 +2651,27 @@ public static partial class ToshParser
                         ? ParseFunctionParameters()
                         : Array.Empty<FunctionParameterSyntax>();
 
-                    // Optional return type: func name(params): Type
-                    string? returnTypeName = null;
-                    if (Current.Kind == SyntaxTokenKind.Bareword && Current.Text == ":")
+                    // Optional return type. `->` first, through the same helper every
+                    // other declaration uses, so `func render() -> string` means here what
+                    // it means on a class (`TOAST-0019`). The `:` form is still accepted:
+                    // it was the only spelling traits took, and breaking it would be a
+                    // second defect rather than a fix.
+                    var returnTypeName = TryParseReturnTypeAnnotation();
+
+                    if (returnTypeName is null &&
+                        Current.Kind == SyntaxTokenKind.Bareword && Current.Text == ":")
                     {
                         NextToken(); // consume ':'
-                        var typeToken = ExpectVariableName();
-                        returnTypeName = typeToken.Text;
+                        returnTypeName = ParseTypeName("return type");
                     }
 
-                    // Optional default body: func name(params) { ... }
+                    // Optional default body, in either form a class method accepts.
                     BlockSyntax? defaultBody = null;
-                    if (Current.Kind == SyntaxTokenKind.OpenBrace)
+                    if (IsFatArrow(Current))
+                    {
+                        defaultBody = ParseFunctionArrowBody(methodName.Text, allowExpressionStart: true);
+                    }
+                    else if (Current.Kind == SyntaxTokenKind.OpenBrace)
                     {
                         defaultBody = ParseRequiredBlock("trait method default body");
                     }

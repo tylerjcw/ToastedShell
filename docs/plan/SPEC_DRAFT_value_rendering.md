@@ -216,10 +216,17 @@ fallback so no existing class breaks, but `Display` is what the spec teaches.
 and containers: the trait is the *user* extension point, layered above rules the renderer
 always has.
 
-> **Gap, filed as `TOAST-0019`:** a trait member cannot declare a return type today, so
-> `func render() -> string` does not parse. The trait can be declared as `func render()`
-> and the result checked at runtime, but the spec would then describe a contract whose
-> return type the language cannot state. Worth closing before this lands.
+> **`TOAST-0019` closed 2026-08-17**, so `trait Display { func render() -> string }` parses
+> exactly as written above. The item's original claim — that a return type could not be
+> declared at all — was wrong; it could, spelled `: T`. The real defect was that traits
+> accepted different syntax from every other declaration, and they now share the same
+> parser helpers.
+>
+> **Still open, `TOAST-0020`:** the declared return type is not *enforced*. A class may
+> satisfy `render() -> string` with an implementation returning `int`. Not blocking — a
+> wrong return type fails where the renderer uses it — but the contract is a declaration
+> rather than a guarantee until that lands, and enforcement needs a variance rule written
+> down first.
 
 **A class with no `Display` and no `ToString`** renders as `TypeName { Field = value, … }`
 — decided 2026-08-17:

@@ -19,7 +19,7 @@
 | [`TOAST-0008`](items/TOAST-0008.md) | P3 | open | 0/7 | Rename the language surface from Tosh to Toast, keeping every existing spelling working |
 | [`TOAST-0014`](items/TOAST-0014.md) | P2 | open | 0/5 | String interpolation renders through the display stack, so its output depends on shell configuration |
 | [`TS-P3-12`](items/TS-P3-12.md) | P3 | in-progress | — | Type highlighting misses real contexts, differently per surface |
-| [`TOAST-0019`](items/TOAST-0019.md) | P2 | open | 0/6 | A trait member cannot declare a return type |
+| [`TOAST-0020`](items/TOAST-0020.md) | P2 | open | 0/8 | A trait's declared member types are not enforced on the implementing class |
 | [`TOSH-0003`](items/TOSH-0003.md) | P3 | open | 0/5 | Ship Toast as its own package that TōSh, Tōme and Crumb depend on |
 | [`TOAST-0017`](items/TOAST-0017.md) | P2 | open | 0/5 | A bare interpolation hole shifts an unspecified DateTime by the local offset |
 | [`TOAST-0015`](items/TOAST-0015.md) | P2 | open | 0/6 | Redirection rebinds the session's writer instead of targeting a Tōast stream handle |
