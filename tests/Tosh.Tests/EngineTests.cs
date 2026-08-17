@@ -3030,7 +3030,10 @@ public sealed class EngineTests
         var inspection = Assert.IsType<ObjectInspection>(Assert.Single(results));
         Assert.Equal("System.Text.StringBuilder", inspection.TypeName);
         Assert.Contains(inspection.Members, member => member.Name == "Length");
-        Assert.Contains("StringBuilder", inspection.Display, StringComparison.Ordinal);
+        // The preview is the value's rendering — a StringBuilder's own `ToString` is its
+        // contents. Its *type* is asserted above, from `TypeName`, which is where it
+        // belongs.
+        Assert.Contains("hello", inspection.Display, StringComparison.Ordinal);
     }
 
     [Fact]

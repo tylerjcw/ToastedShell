@@ -225,8 +225,16 @@ public static class ToastRenderer
             // value, unit and category as readable members — so without naming them here
             // the container walk claims them and `$"{$power}"` gives
             // `{| value = 483.06, unit = "MW", … |}` where the reader wanted `483.06 MW`.
-            case Units.Quantity or ToshVector or ToshMatrix:
+            case Units.Quantity or ToshVector or ToshMatrix or StorageSize or TemporalAmount:
                 builder.Append(FormatInvariant(value, format));
+                return true;
+
+            // A line of text from a command *is* its text. It had only a display profile,
+            // so once rendering stopped going through the formatter a redirected line
+            // became `ShellTextLine { Text = "alpha" }` — the wrapper, not the line.
+            case ShellTextLine line:
+                RejectFormat(format, "text line");
+                WriteString(builder, line.Text, format: null, nested);
                 return true;
 
             // A type used as a value names itself. `TS-P1-23`: a descriptor exposes Name,
@@ -395,19 +403,29 @@ public static class ToastRenderer
     /// its readable state.
     /// </summary>
     /// <remarks>
-    /// **Readable state wins over an overridden <c>ToString</c>**, and only a type with no
-    /// readable properties falls back to it. That looks backwards until you try the other
-    /// order: a C# <c>record</c> generates a <c>ToString</c> that renders its strings
-    /// unquoted, so deferring to it produced <c>Name = toaster</c> inside a structure whose
-    /// every other string was quoted. A CLR type that genuinely knows how it reads says so
-    /// through a display profile, which is consulted before this.
+    /// **A type that overrides <c>ToString</c> is taken at its word, whole.** That is the
+    /// CLR's own way of saying how a value reads, and overruling it produced nonsense:
+    /// <c>pwd</c> returns a <c>DirectoryInfo</c>, whose <c>ToString</c> is the path, and
+    /// walking its properties instead gave <c>DirectoryInfo { Attributes = Directory, … }</c>
+    /// where a program wanted <c>/home/…</c>.
     ///
-    /// The property count is capped, because an interpolation hole is a sentence and a
-    /// value with two hundred properties should not silently become a paragraph.
+    /// Taken *whole* is the important half: a C# <c>record</c>'s generated <c>ToString</c>
+    /// renders its strings unquoted, and the answer is to accept its rendering entirely
+    /// rather than to mix its conventions into ours.
+    ///
+    /// Only a type that has not overridden it is walked, and the property count is capped —
+    /// an interpolation hole is a sentence, and a value with two hundred properties should
+    /// not silently become a paragraph.
     /// </remarks>
     private static void WriteClrObject(StringBuilder builder, object value, int depth, HashSet<object>? visited)
     {
         var type = value.GetType();
+
+        if (type.GetMethod(nameof(ToString), Type.EmptyTypes)?.DeclaringType != typeof(object))
+        {
+            builder.Append(value.ToString() ?? type.Name);
+            return;
+        }
 
         var properties = type
             .GetProperties(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public)

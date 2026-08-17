@@ -43,7 +43,10 @@ public sealed class ObjectFormatterTests
         Assert.Equal("null", ToshValueFormatter.Format(null));
         Assert.Equal("true", ToshValueFormatter.Format(true));
         Assert.Equal("[1, 2]", ToshValueFormatter.Format(new object?[] { 1, 2 }));
-        Assert.Equal("ToastColor.Green", ToshValueFormatter.Format(ToastColor.Green));
+        // `TOAST-0014` §6: an enum member renders as its *name*. It was type-qualified
+        // here and bare for a ToastScript enum; one rule now covers both, which is what
+        // makes a compiled enum and an interpreted one agree.
+        Assert.Equal("Green", ToshValueFormatter.Format(ToastColor.Green));
     }
 
     [Theory]
@@ -134,9 +137,13 @@ public sealed class ObjectFormatterTests
 
         var text = formatter.Format(new DemoObject("toaster", 2));
 
+        // `DemoObject` is a C# record, so it renders through its own generated
+        // `ToString` — taken whole rather than mixed with our quoting conventions
+        // (`TOAST-0014`). Overruling a type's `ToString` is what made `pwd` render
+        // `DirectoryInfo { Attributes = Directory, … }` instead of a path.
         Assert.Contains("DemoObject {", text, StringComparison.Ordinal);
         Assert.Contains("Count = 2", text, StringComparison.Ordinal);
-        Assert.Contains("Name = \"toaster\"", text, StringComparison.Ordinal);
+        Assert.Contains("Name = toaster", text, StringComparison.Ordinal);
     }
 
     [Fact]

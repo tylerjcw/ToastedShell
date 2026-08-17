@@ -61,6 +61,24 @@ public sealed class DifferentialExecutionTests : IClassFixture<ToshRuntimeFixtur
             "trailing-expression-after-statements",
             "func f(a: int) -> int {\n    var doubled = $a * 2\n    $doubled + 1\n}\necho (f 5)");
 
+        // ── Rendering: one contract, both backends (`TOAST-0014` stage 4) ──
+        //
+        // The compiled path formatted through its own ObjectFormatter, built from a
+        // *fresh* DisplayPreferences, while the interpreter used the shell's live one.
+        // The two agreed only while nothing was configured, and nothing compared them —
+        // which is the exact shape TS-P2-109 had, and the reason this file exists.
+        yield return Case("render-list", "echo $\"{[1, 2, 3]}\"");
+        yield return Case("render-nested-list", "echo $\"{[[1, 2], [3]]}\"");
+        yield return Case("render-record", "echo $\"{{| N = 5, S = \\\"a b\\\" |}}\"");
+        yield return Case("render-null-and-bool", "echo $\"{null} {true}\"");
+        yield return Case("render-float-specials", "echo $\"{(0.0 / 0.0)} {(1.0 / 0.0)}\"");
+        // A literal, not a variable: a hole is evaluated as a pipeline, so a variable
+        // holding a collection spreads into several results and is space-joined rather
+        // than rendered. That is `TOAST-0023`, and it is a question about holes rather
+        // than about rendering.
+        yield return Case("render-nested-string-quoting", "echo $\"{[1, 2, 3]}\" ");
+        yield return Case("render-enum", "enum DiffHue { Red, Green }\necho $\"{DiffHue.Red}\"");
+
         // ── Class hierarchies: where the bugs lived ────────────────────────
         yield return Case(
             "subclass-returned-as-base",
@@ -123,6 +141,31 @@ public sealed class DifferentialExecutionTests : IClassFixture<ToshRuntimeFixtur
         yield return Divergence(
             "TS-P1-47", "base-annotated-variable-rejects-subclass",
             Hierarchy + "var b: DiffBase = new DiffLeaf(4)\necho $b.Kind");
+
+        // A compiled class is a real emitted CLR type rather than a ToshClassInstance, so
+        // it never answers `TryGetOwnRendering` and its `Display` implementation is not
+        // reached: `21deg` interpreted, `DiffTemp` compiled.
+        yield return Divergence(
+            "TOAST-0022", "render-class-with-display",
+            "trait Display { func render() -> string }\n"
+            + "class DiffTemp uses Display {\n"
+            + "    prop C: int = 21\n"
+            + "    func render() -> string => $\"{$this.C}deg\"\n"
+            + "}\n"
+            + "echo $\"{(new DiffTemp())}\"");
+
+        // The emitter drops an interpolation hole's format clause entirely, so
+        // `$"{42:X}"` is `2A` interpreted and `42` compiled.
+        yield return Divergence(
+            "TOAST-0022", "render-format-clause",
+            "echo $\"{42:X} {3.14159:F2}\"");
+
+        // A hole holding a *variable* that holds a collection spreads it: the interpreter
+        // evaluates the hole as a pipeline, gets several results and joins them with
+        // spaces, where the compiled backend renders the collection.
+        yield return Divergence(
+            "TOAST-0023", "hole-spreads-a-collection-variable",
+            "var xs = [\"a b\", \"c\"]\necho $\"{$xs}\"");
     }
 
     private static object[] Divergence(string boardItem, string name, string source) =>

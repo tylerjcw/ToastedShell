@@ -1,7 +1,7 @@
 ---
 id: TOAST-0014
 title: "String interpolation renders through the display stack, so its output depends on shell configuration"
-status: partial
+status: complete
 area: toast
 priority: 2
 opened: 2026-08-17

@@ -6,6 +6,7 @@
 |---|---|---|---|---|
 | [`TS-P2-94`](items/TS-P2-94.md) | P2 | complete | 1/1 | `&` cannot reference a method or a module-qualified function |
 | [`TOAST-0004`](items/TOAST-0004.md) | P1 | complete | 5/5 | Invert the ExternalProcessCommand coupling so Tosh.Language no longer depends on the shell's command library |
+| [`TOAST-0014`](items/TOAST-0014.md) | P2 | complete | 0/7 | String interpolation renders through the display stack, so its output depends on shell configuration |
 | [`TS-P3-16`](items/TS-P3-16.md) | P3 | withdrawn | — | ToastScript-owned core types and their conformance corpus |
 | [`TOAST-0001`](items/TOAST-0001.md) | P1 | complete | 5/5 | A free function called inside a closure resolves as an instance method on the pipeline item |
 | [`TOAST-0019`](items/TOAST-0019.md) | P2 | complete | 6/6 | A trait member is not written the way a class member is |

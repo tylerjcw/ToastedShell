@@ -1944,7 +1944,7 @@ public static class ToshHost
                 collected.Add(current);
                 if (printItems)
                 {
-                    Console.WriteLine(Runtime.Formatter.Format(current));
+                    Console.WriteLine(ToastRenderer.Render(current));
                 }
             }
         }
@@ -2697,7 +2697,7 @@ public static class ToshHost
         var task = s_engine!.ExecuteToListAsync(s_sourceText, s_sourceName ?? "<compiled>");
         foreach (var value in task.GetAwaiter().GetResult())
         {
-            Console.WriteLine(Runtime.Formatter.Format(value));
+            Console.WriteLine(ToastRenderer.Render(value));
         }
     }
 

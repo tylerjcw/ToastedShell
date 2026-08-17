@@ -1975,8 +1975,8 @@ public sealed class BoundUnitEmitterTests : IClassFixture<ToshRuntimeFixture>
         Assert.NotNull(value);
         Assert.True(value.GetType().IsEnum, $"actual type: {value.GetType().FullName}");
         Assert.Equal("Green", value.ToString());
-        Assert.Equal("Color.Green", ToshValueFormatter.Format(value));
-        Assert.Equal("Color.Green", output.Trim());
+        Assert.Equal("Green", ToshValueFormatter.Format(value));
+        Assert.Equal("Green", output.Trim());
     }
 
     [Fact]

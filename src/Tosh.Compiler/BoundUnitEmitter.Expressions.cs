@@ -1624,11 +1624,25 @@ internal sealed partial class EmitterImpl
         if (t.IsValueType) _il.Emit(OpCodes.Box, t);
     }
 
+    /// <summary>
+    /// Emits the conversion of an interpolation hole to its text.
+    /// </summary>
+    /// <remarks>
+    /// `TOAST-0014` stage 4. This emitted <c>object.ToString()</c>, so a compiled program
+    /// and an interpreted one produced different strings for the same value:
+    /// <c>$"{[1, 2, 3]}"</c> gave <c>System.Collections.Generic.List`1[System.Object]</c>
+    /// compiled, and <c>NaN ∞</c> where the interpreter gave <c>NaN Infinity</c> — the
+    /// current culture's infinity symbol, since <c>ToString()</c> is culture-sensitive.
+    ///
+    /// It now emits a call to <see cref="ToshValueFormatter.Format"/>, which is the same
+    /// renderer the interpreter reaches. Rendering is one contract, and a backend is not
+    /// free to have its own.
+    /// </remarks>
     private void ConvertToString(Type t)
     {
         if (t == typeof(string)) return;
-        if (t.IsValueType) _il.Emit(OpCodes.Box, t);
-        _il.Emit(OpCodes.Callvirt, s_objectToString);
+        BoxIfValueType(t);
+        _il.Emit(OpCodes.Call, s_formatValue);
     }
 
 }

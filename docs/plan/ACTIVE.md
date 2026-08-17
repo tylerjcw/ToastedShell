@@ -17,12 +17,13 @@
 | [`TOAST-0007`](items/TOAST-0007.md) | P2 | open | 0/4 | Split Tosh.Stdlib into language-level and shell-level commands |
 | [`CRUMB-0001`](items/CRUMB-0001.md) | P3 | partial | 4/11 | Crumb polish: config file, conflict-resolution UX, and four optional features |
 | [`TOAST-0008`](items/TOAST-0008.md) | P3 | open | 0/7 | Rename the language surface from Tosh to Toast, keeping every existing spelling working |
-| [`TOAST-0014`](items/TOAST-0014.md) | P2 | partial | 0/7 | String interpolation renders through the display stack, so its output depends on shell configuration |
+| [`TOAST-0023`](items/TOAST-0023.md) | P2 | open | 0/5 | An interpolation hole spreads a variable holding a collection |
 | [`TS-P3-12`](items/TS-P3-12.md) | P3 | in-progress | — | Type highlighting misses real contexts, differently per surface |
 | [`TOAST-0020`](items/TOAST-0020.md) | P2 | open | 0/8 | A trait's declared member types are not enforced on the implementing class |
 | [`TOSH-0003`](items/TOSH-0003.md) | P3 | open | 0/5 | Ship Toast as its own package that TōSh, Tōme and Crumb depend on |
 | [`TOAST-0021`](items/TOAST-0021.md) | P2 | open | 0/6 | DisplayEngine walks values itself, so a table cell shows an enum's implementation |
 | [`TOAST-0015`](items/TOAST-0015.md) | P2 | open | 0/6 | Redirection rebinds the session's writer instead of targeting a Tōast stream handle |
+| [`TOAST-0022`](items/TOAST-0022.md) | P2 | open | 0/6 | Compiled interpolation drops format clauses and cannot reach a class's Display |
 | [`TOAST-0011`](items/TOAST-0011.md) | P2 | open | 0/6 | A TōSh closure cannot be passed where C wants a function pointer |
 | [`TOAST-0002`](items/TOAST-0002.md) | P2 | partial | 4/8 | Statement dispatch is decided by scattered lookahead predicates that must agree by hand |
 | [`TS-P3-07`](items/TS-P3-07.md) | P3 | in-progress | — | Unify `StorageSize`/`TemporalAmount` with the Quantity unit system |

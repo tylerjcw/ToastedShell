@@ -457,8 +457,13 @@ public sealed class CompilerOperatorParityTests
         Assert.True(
             OperatorEvaluator.AreEqual(interpreted, emitted),
             $"{label}: interpreted '{FormatValue(interpreted)}' but emitted '{FormatValue(emitted)}'.");
+        // Against the *renderer*, not the shell's formatter. `TOAST-0014` separated the
+        // two: `runtime.Formatter` applies display profiles, so it renders a StorageSize
+        // as `12 kB` and a DateTimeOffset in ISO — presentation a compiled program with no
+        // shell has no access to and should not be held to. What a compiled program prints
+        // must equal what the *language* renders, which is what this now asserts.
         Assert.Equal(
-            runtime.Formatter.Format(interpreted) + Environment.NewLine,
+            ToastRenderer.Render(interpreted) + Environment.NewLine,
             output.ToString());
     }
 
