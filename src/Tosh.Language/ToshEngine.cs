@@ -440,11 +440,9 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
                 var typeDiagnostics = Tosh.Language.Binding.TypeChecker.Check(unit);
                 if (typeDiagnostics.Count > 0 && !IsInteractiveSession)
                 {
-                    var renderer = new DiagnosticRenderer(
-                        Runtime.Config.Theme.Diagnostics, Runtime.Config.Diagnostics);
                     foreach (var d in typeDiagnostics)
                     {
-                        Runtime.Error.WriteLine(renderer.RenderWarning(d));
+                        Diagnostics.ReportWarning(d);
                     }
                 }
             }
@@ -477,10 +475,9 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
             case BinderStrictness.Lenient:
                 return;
             case BinderStrictness.Warn:
-                var renderer = new DiagnosticRenderer(Runtime.Config.Theme.Diagnostics, Runtime.Config.Diagnostics);
                 foreach (var diagnostic in diagnostics)
                 {
-                    Runtime.Error.WriteLine(renderer.RenderWarning(diagnostic));
+                    Diagnostics.ReportWarning(diagnostic);
                 }
                 return;
             case BinderStrictness.Strict:
@@ -2911,7 +2908,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
             var traceLine = string.IsNullOrEmpty(traceArgs)
                 ? $"+ {commandSyntax.Name}"
                 : $"+ {commandSyntax.Name} {traceArgs}";
-            await Runtime.Error.WriteLineAsync(traceLine);
+            await Diagnostics.TraceAsync(traceLine, cancellationToken);
         }
 
         var exitCodeCountBefore = pipelineExitStatusTracker?.ExitCodeCount ?? 0;
@@ -6903,6 +6900,12 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
     /// </remarks>
     private IToastHostSignals Host => Runtime;
 
+    /// <summary>
+    /// Where warnings and trace lines go. The language decides there is something to say;
+    /// the host decides how it looks and where it lands (`TOAST-0006`).
+    /// </summary>
+    private IToastDiagnosticSink Diagnostics => Runtime;
+
     public string ResolveSourcePath(string rawPath)
     {
         if (string.IsNullOrWhiteSpace(rawPath) || Path.IsPathRooted(rawPath))
@@ -7378,7 +7381,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
         if (Runtime.Config.Shell.ScriptTrace && statementText is not null)
         {
             var prefix = line.HasValue ? $"+ {sourceName}:{line}" : $"+ {sourceName}";
-            await Runtime.Error.WriteLineAsync($"{prefix}: {statementText}");
+            await Diagnostics.TraceAsync($"{prefix}: {statementText}", cancellationToken);
         }
 
         // Debug hook: invoke the delegate if present.

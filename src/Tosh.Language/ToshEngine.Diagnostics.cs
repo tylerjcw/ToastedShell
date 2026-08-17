@@ -153,8 +153,7 @@ public sealed partial class ToshEngine
             }
         }
 
-        var renderer = new DiagnosticRenderer(Runtime.Config.Theme.Diagnostics, Runtime.Config.Diagnostics);
-        Runtime.Error.WriteLine(renderer.RenderWarning(title, help, info));
+        Diagnostics.ReportWarning(title, help, info);
         _ = category; // reserved for future renderer use
     }
 

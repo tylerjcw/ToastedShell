@@ -2,7 +2,7 @@ using System.Collections.Concurrent;
 
 namespace Tosh.Runtime;
 
-public sealed class ToshRuntime : IToastHostSignals
+public sealed class ToshRuntime : IToastHostSignals, IToastDiagnosticSink
 {
     private int _nextJobId;
     private long _nextHistoryId;
@@ -555,6 +555,28 @@ public sealed class ToshRuntime : IToastHostSignals
     /// membership test the language needs for `forget` (`TOAST-0006`).
     /// </summary>
     public bool IsExported(string name) => ExportedEnvironmentVariables.Contains(name);
+
+    /// <summary>
+    /// Renders a warning the language reported and writes it to the error stream
+    /// (<see cref="IToastDiagnosticSink"/>). Theme and destination are the shell's, which
+    /// is the point of the language not doing this itself (`TOAST-0006`).
+    /// </summary>
+    public void ReportWarning(ToshDiagnostic diagnostic)
+        => Error.WriteLine(new DiagnosticRenderer(Config.Theme.Diagnostics, Config.Diagnostics)
+            .RenderWarning(diagnostic));
+
+    /// <inheritdoc cref="ReportWarning(ToshDiagnostic)"/>
+    public void ReportWarning(string title, string? help, string? info)
+        => Error.WriteLine(new DiagnosticRenderer(Config.Theme.Diagnostics, Config.Diagnostics)
+            .RenderWarning(title, help, info));
+
+    /// <summary>
+    /// Writes a trace line to the error stream. Whether tracing is on at all is still the
+    /// language's question — it knows what it is about to do; this decides where the line
+    /// goes.
+    /// </summary>
+    public async ValueTask TraceAsync(string line, CancellationToken cancellationToken = default)
+        => await Error.WriteLineAsync(line.AsMemory(), cancellationToken);
 
     public void SetLastExitCode(int exitCode)
     {
