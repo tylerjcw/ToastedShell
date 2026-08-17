@@ -210,7 +210,7 @@ public sealed partial class ToshEngine
             // ExecuteBlockAsync, so the check that stops a body on `exit` has to be made here
             // too — the first attempt at this fixed only the block executor and a plain script
             // carried on exactly as before.
-            if (Runtime.ExitRequested)
+            if (Host.ExitRequested)
             {
                 break;
             }
@@ -269,7 +269,7 @@ public sealed partial class ToshEngine
         {
             foreach (var statement in script.Statements)
             {
-                if (Runtime.ExitRequested)
+                if (Host.ExitRequested)
                 {
                     break;
                 }
@@ -1537,7 +1537,7 @@ public sealed partial class ToshEngine
             // Shielded by depth for the same reason cleanup is shielded from the
             // cancellation token: the event that ended the scope must not also
             // prevent the scope from tidying up after itself.
-            if (Runtime.ExitRequested && _deferredCleanupDepth == 0)
+            if (Host.ExitRequested && _deferredCleanupDepth == 0)
             {
                 break;
             }

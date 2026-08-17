@@ -4555,7 +4555,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
             commandScope = "Global";
         }
 
-        var removedEnvironment = Runtime.ExportedEnvironmentVariables.Contains(name) ||
+        var removedEnvironment = Host.IsExported(name) ||
                                  Environment.GetEnvironmentVariable(name) is not null;
         Runtime.RemoveExportedEnvironmentVariable(name);
 
@@ -6893,6 +6893,16 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
     /// "file not found" message still comes from the same place it used to.
     /// </para>
     /// </remarks>
+    /// <summary>
+    /// Session facts the language observes — see <see cref="IToastHostSignals"/>.
+    /// </summary>
+    /// <remarks>
+    /// Routed through the interface rather than read off <c>Runtime</c> directly so the
+    /// dependency is the three members the language actually needs, not the whole runtime.
+    /// When `TOAST-0006` stage 2d introduces a ToastRuntime, only this line changes.
+    /// </remarks>
+    private IToastHostSignals Host => Runtime;
+
     public string ResolveSourcePath(string rawPath)
     {
         if (string.IsNullOrWhiteSpace(rawPath) || Path.IsPathRooted(rawPath))

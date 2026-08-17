@@ -152,7 +152,7 @@ Two stages, because 182 references is not one commit.
 | `Commands` (14) | **One `ICommandTable` of the six members the language uses** — `TryGet`, `All`, `AllNames`, `RegisterOrReplace`, `Remove`, `GetAliasMap`. Done 2026-08-17. The original decision was to split reads from writes, and it rested on my incorrect claim that the language never registers: a `global` or `export` function declaration must put a name in the runtime table, so a read-only view would not have compiled |
 | `Output`/`Error` (16) | **The language emits values; the shell renders.** No `TextWriter` in `Tosh.Language` |
 | `Events` (10) | **Language-side.** `event` is language syntax and the language calls `Register` and `MarkRequired`, not only `Raise`, so the bus goes with it |
-| `ExitRequested` (4), `ExportedEnvironmentVariables` (1) | **Host capability the language signals** — `IToastHostSignals`, which an embedder may refuse |
+| `ExitRequested` (4), `ExportedEnvironmentVariables` (1) | **`IToastHostSignals`** — done 2026-08-17. Membership differs from the plan: the language *reads* ExitRequested in four loop-stop checks and requests exit in exactly one place (the `--help` path, `TS-P2-52`), and exports were already shell-side — `ExportCommand` writes them, the language only asks `IsExported` once, in `forget` |
 | `CurrentDirectory` (15) | **Passed per evaluation**, not held on any runtime. 14 of the 15 are path resolution; the single write is the AutoCd path, gated on `Config.Shell.AutoCd` and therefore shell behaviour by its own configuration |
 
 **These are consistently the strictest option available, and that is a coherent choice
@@ -171,7 +171,7 @@ decisions change the language's **interface to its host** instead:
 So stage 2 is not one commit. Proposed order, each independently verifiable:
 
   2a  ICommandTable                                  DONE 2026-08-17
-  2b  IToastHostSignals for exit and export          five references
+  2b  IToastHostSignals                              DONE 2026-08-17
   2c  Events onto ToastRuntime                       a move
   2d  ToastRuntime itself, composed into ToshRuntime the bulk of the 182
   2e  Streams: emit rather than write                behaviour surface

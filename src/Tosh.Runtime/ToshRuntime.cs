@@ -2,7 +2,7 @@ using System.Collections.Concurrent;
 
 namespace Tosh.Runtime;
 
-public sealed class ToshRuntime
+public sealed class ToshRuntime : IToastHostSignals
 {
     private int _nextJobId;
     private long _nextHistoryId;
@@ -548,6 +548,13 @@ public sealed class ToshRuntime
     {
         ExitRequested = true;
     }
+
+    /// <summary>
+    /// Whether <paramref name="name"/> has been exported to the process environment
+    /// (<see cref="IToastHostSignals"/>). The set itself stays shell-side; this is the
+    /// membership test the language needs for `forget` (`TOAST-0006`).
+    /// </summary>
+    public bool IsExported(string name) => ExportedEnvironmentVariables.Contains(name);
 
     public void SetLastExitCode(int exitCode)
     {
