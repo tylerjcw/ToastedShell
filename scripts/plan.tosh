@@ -41,6 +41,7 @@ func read_item(path) {
     var seen_front = false
     var open_boxes = 0
     var done_boxes = 0
+    var bad_boxes = 0
 
     for line in (read-file $path | lines) {
         if ($line.Trim() == "---") {
@@ -61,11 +62,20 @@ func read_item(path) {
         var t = $line.Trim()
         if ($t.StartsWith("- [ ]")) { $open_boxes = ($open_boxes + 1) }
         if ($t.StartsWith("- [x]")) { $done_boxes = ($done_boxes + 1) }
+
+        ## A checkbox that is neither ticked nor unticked counts as neither, so a typo
+        ## silently exempts an item from the rule that `complete` needs every box ticked.
+        ## Found by writing `- [~]` in TOAST-0005 to mean "not met" and watching `check`
+        ## report zero faults.
+        if (($t.StartsWith("- [")) and (not $t.StartsWith("- [ ]")) and (not $t.StartsWith("- [x]"))) {
+            $bad_boxes = ($bad_boxes + 1)
+        }
     }
 
     $fields["path"] = $path
     $fields["open_boxes"] = $open_boxes
     $fields["done_boxes"] = $done_boxes
+    $fields["bad_boxes"] = $bad_boxes
     return $fields
 }
 
@@ -179,6 +189,12 @@ subcommand check {
             echo $"{$id} is 'complete' with {$n} unchecked acceptance box(es) — use 'partial'"
             $faults = ($faults + 1)
         }
+        if ($it["bad_boxes"] > 0) {
+            var b = $it["bad_boxes"]
+            echo $"{$id} has {$b} malformed checkbox(es) — only '- [ ]' and '- [x]' are counted"
+            $faults = ($faults + 1)
+        }
+
         if (($status == "partial") and ($it["open_boxes"] == 0)) {
             echo $"{$id} is 'partial' but nothing is left unchecked — close it or record what remains"
             $faults = ($faults + 1)

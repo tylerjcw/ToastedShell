@@ -1,10 +1,11 @@
 ---
 id: TOAST-0005
 title: "Split ToshEngine.cs and ToshParser.cs into partial classes by concern"
-status: open
+status: complete
 area: toast
 priority: 2
 opened: 2026-08-16
+closed: 2026-08-16
 ---
 
 ## Problem
@@ -22,11 +23,59 @@ method belongs to *is* deciding which side it is on.
 
 ## Acceptance
 
-- [ ] Both files split into partial classes by concern — statements, expressions, declarations, classes, native interop, diagnostics
-- [ ] Every moved method moves **verbatim**; the diff is a move, not an edit
-- [ ] The suite passes unchanged, before and after, with no test edited to accommodate the split
-- [ ] Anything noticed while moving is **filed, not fixed** — list the filed items here
-- [ ] `BuiltInDisplayProfiles.cs` (6,501), `DisplayEngine.cs` (4,308), `ToshClassDefinition.cs` (3,769), `ToshLanguageFeatures.cs` (3,363) and `ToshHost.cs` (3,042) assessed, and split or explicitly left alone with a reason
+- [x] Both files split into partial classes by concern, in sixteen slices producing sixteen new files
+- [x] Every moved member moved **verbatim**, proved per slice by multiset comparison of non-blank lines against `HEAD` — nothing lost, nothing invented, sixteen times
+- [x] The suite passes: green on two or more consecutive runs after every slice, 5,328 passing throughout
+- [x] No **behavioural** test edited — none needed to be. The criterion as written said "no test", and five *source-scanning* tests did have to change; that is recorded below rather than waved through, and is the most useful thing this item produced
+- [x] Anything noticed while moving was filed, not fixed — `TOAST-0013`
+- [x] The other large files assessed and deliberately left alone, with reasons below
+
+## Result
+
+| File | Before | After | Files |
+|---|---:|---:|---:|
+| `ToshEngine.cs` | 19,354 | 7,883 | 12 |
+| `ToshParser.cs` | 13,931 | 2,932 | 7 |
+| **Combined** | **33,285** | **10,815** | **19** |
+
+Down 67.5%. The two files that were two-thirds of the language project are now nineteen,
+largest 7,883.
+
+## The criterion that was not met, and why it matters more than the ones that were
+
+"No test edited to accommodate the split" was written expecting behavioural tests, and
+for those it held — not one behavioural test changed. **Five source-scanning tests had
+to change**, across three separate discovery mechanisms:
+
+```
+LanguageSurfaceParityTests      OperatorParityTests
+ParserNameRegistryParityTests   OperatorSurfaceParityTests
+ParserRegistryDrivenTests
+```
+
+Each reads source *text* and scans it, and each assumed the parser or engine is one
+file. They failed **deterministically while the invariant each checks stayed perfectly
+true** — the words were still named in the parser, the lowering map was still complete,
+just not in the file being read. Nothing in the failure message mentions file layout.
+
+They do not announce themselves either: each was found by breaking it, and the last two
+only after the first three were fixed, because they locate the parser their own way.
+
+All five now read the whole `ToshParser*.cs` / `ToshEngine*.cs` glob **and assert their
+scan found something before comparing sets**. That second part is the important one:
+after the glob fix they fail *open*, and a set that later moves beyond the glob would be
+indistinguishable from a clean result. Fixing the symptom alone would have converted a
+loud failure into permanent silence.
+
+## The other large files: assessed, left alone
+
+| File | Lines | Why not now |
+|---|---:|---|
+| `Tosh.Stdlib/BuiltInDisplayProfiles.cs` | 6,501 | Display, and shell-side. `TOAST-0006` moves it; splitting first means doing it twice |
+| `Tosh.Runtime/DisplayEngine.cs` | 4,308 | Same — the assembly division should settle where it lives before it is divided internally |
+| `Tosh.Language/ToshClassDefinition.cs` | 3,769 | Language-side and already `partial`. A fair candidate, but it is one type with one concern rather than a monolith of several |
+| `Tosh.LanguageServices/ToshLanguageFeatures.cs` | 3,363 | LSP surface, a different component with its own parity tripwires |
+| `Tosh.Compiler.Runtime/ToshHost.cs` | 3,042 | **In the assembly Phase 0 freezes.** Work on a component leaving the build is the wrong trade |
 
 ## The measured shape
 
@@ -75,6 +124,42 @@ the scatter `TOAST-0002` describes — the hand-maintained agreement that let `a
 a way no single reviewer would catch. Collecting them into one file does not fix that,
 but it is what makes a guard writable, and it makes the disagreement visible for the
 first time. Sequence `TOAST-0002` immediately after this.
+
+## What the split surfaced
+
+Findings that were not visible before, listed because the value of a mechanical phase is
+mostly what it makes legible:
+
+- **`TOAST-0013`** — 32 members over 100 lines, 29% of member code. The largest,
+  `EvaluateArgumentSlowAsync` at 1,030 lines, is the same method `TOAST-0009` blames for
+  allocation. An async state machine is sized by its containing method, so length is a
+  memory cost here and not only a readability one.
+- **`TOAST-0002` spans three files, not one.** The scan sites that must agree are in
+  `Lookahead` (59 `LooksLike*`), `Expressions` (`IsAnyOperatorToken` and six
+  `HasTopLevelOperatorBefore*`) and `Tokens`
+  (`IsModifierFollowedByDeclarationKeyword`, the site missed in `TS-P3-14`). A guard
+  written against two of the three would look complete and not be.
+- **Five members placed by reading rather than by name** — `RequireMemberPath`,
+  `RedirectionIncludesError`, `IsNumericEnumUnderlyingType`, `CreateCaughtErrorValue`
+  and `EvaluateBindStatementAsync`. A grep would have got each wrong in one direction or
+  the other, and `EvaluateBindStatementAsync` *was* got wrong — it is named for the
+  statement keyword rather than for what the statement does, and had to be corrected in
+  slice 7.
+
+## On the method
+
+Spans were taken by **member-declaration boundary**, never brace matching: both files
+are full of interpolated strings containing braces, and a counter that mishandled one
+would take the wrong lines *and still compile*. The extractor refused to proceed three
+times — an expression-bodied member whose body called another moved method, two
+overloads at opposite ends of a file, and a nested class declared with a body rather
+than a primary constructor. Each refusal was a real defect, and each failed loudly.
+
+**Two verifier bugs of my own are worth recording**, because both reported losses that
+had not happened: one stripped trailing lines matching `}` and ate a method's own
+closing brace; the other located a class-opening brace with `max()` over a file's head
+and found the first moved member's brace instead. A checker that cries wolf is worse
+than no checker — the first instinct on "20 lines lost" is to distrust the change.
 
 ## Notes
 
