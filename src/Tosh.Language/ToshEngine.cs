@@ -3235,7 +3235,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
             null => string.Empty,
             ShellTextLine textLine => textLine.Text,
             string text => text,
-            _ => Runtime.Formatter.Format(value),
+            _ => ToastRenderer.Render(value),
         };
     }
 
@@ -4150,35 +4150,33 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
     }
 
 
-    private async ValueTask<string> FormatInterpolatedValueAsync(
+    /// <summary>
+    /// The text of an interpolation hole — <c>$"{x}"</c> and <c>$"{x:F2}"</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// `TOAST-0014` stage 2. This produced its text through <c>Runtime.Formatter</c>, which
+    /// is built from a <c>DisplayProfileRegistry</c> — so the string a *program* built moved
+    /// when the *shell's* display settings did, changeable mid-script. It now renders
+    /// through <see cref="ToastRenderer"/>, which has no way to reach a profile.
+    /// </para>
+    /// <para>
+    /// Three behaviours moved with it, and each was its own defect. The clause path used
+    /// <c>CultureInfo.CurrentCulture</c>, so <c>$"{3.14159:F2}"</c> was <c>3.14</c> here and
+    /// <c>3,14</c> on a German machine; rendering is invariant. A clause the value could not
+    /// honour was silently dropped and the value printed plainly, which is a program
+    /// succeeding while producing text nobody asked for; it now raises. And the custom
+    /// <c>ToString</c> special case is gone because the renderer already dispatches to
+    /// <c>Display</c> and then <c>ToString</c>, so the rule lives in one place.
+    /// </para>
+    /// </remarks>
+    private ValueTask<string> FormatInterpolatedValueAsync(
         object? value,
         CancellationToken cancellationToken,
         string? format = null)
     {
-        if (value is ToshClassInstance classInstance && classInstance.HasCustomToString())
-        {
-            return await ToOperatorStringAsync(classInstance, cancellationToken);
-        }
-
-        // `$"{$n:F2}"`. The clause is handed to the value's own IFormattable, which is
-        // what makes every .NET format string work — numeric, date, enum — without
-        // this knowing any of them (`TS-P3-06`). A value that cannot format itself
-        // keeps its ordinary rendering rather than failing: the clause is a request,
-        // and a shell that refused to print because a format did not apply would be
-        // worse than one that prints plainly.
-        if (format is { Length: > 0 } && value is IFormattable formattable)
-        {
-            try
-            {
-                return formattable.ToString(format, System.Globalization.CultureInfo.CurrentCulture);
-            }
-            catch (FormatException)
-            {
-                // An unrecognised clause for this type — fall through to plain.
-            }
-        }
-
-        return Runtime.Formatter.Format(value);
+        cancellationToken.ThrowIfCancellationRequested();
+        return ValueTask.FromResult(ToastRenderer.Render(value, format));
     }
 
     /// <summary>Pads a formatted hole to its declared field width.</summary>

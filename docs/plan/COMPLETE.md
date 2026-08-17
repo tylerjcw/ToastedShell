@@ -10,6 +10,7 @@
 | [`TOAST-0001`](items/TOAST-0001.md) | P1 | complete | 5/5 | A free function called inside a closure resolves as an instance method on the pipeline item |
 | [`TOAST-0019`](items/TOAST-0019.md) | P2 | complete | 6/6 | A trait member is not written the way a class member is |
 | [`TOAST-0005`](items/TOAST-0005.md) | P2 | complete | 6/6 | Split ToshEngine.cs and ToshParser.cs into partial classes by concern |
+| [`TOAST-0017`](items/TOAST-0017.md) | P2 | complete | 5/5 | A bare interpolation hole shifts an unspecified DateTime by the local offset |
 | [`TS-P2-11`](items/TS-P2-11.md) | P2 | complete | 3/3 | Parser expression layers rely on scattered lookahead and special cases |
 | [`TS-P1-44`](items/TS-P1-44.md) | P1 | complete | 3/3 | from xml returns a CLR XDocument instead of shell data, so to xml | from xml does not round-trip |
 

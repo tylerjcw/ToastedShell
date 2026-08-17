@@ -267,7 +267,13 @@ public sealed partial class ToshEngine
                     var text = value switch
                     {
                         ShellTextLine line => line.Text,
-                        _ => Runtime.Formatter.Format(value),
+                        // Same contract as an interpolation hole (`TOAST-0014`, Appendix B
+                        // question 3). Decided by measuring what this wrote: a nested list
+                        // put a CLR type name and *newlines* into the file, and an enum put
+                        // seven lines of its own implementation there. That is not a
+                        // serialisation format worth preserving, and multi-line values
+                        // corrupt every line-oriented reader downstream.
+                        _ => ToastRenderer.Render(value),
                     };
 
                     await Runtime.Output.WriteLineAsync(text);

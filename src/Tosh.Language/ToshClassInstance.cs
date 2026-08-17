@@ -331,6 +331,32 @@ public sealed class ToshClassInstance : IShellRecordObject, IShellInvocableObjec
         return RuntimeHelpers.GetHashCode(this);
     }
 
+    /// <inheritdoc />
+    /// <remarks>
+    /// <c>Display</c> first, then a declared <c>ToString</c>. Both are invoked with the
+    /// class itself as the accessor, so a <c>shy</c> declaration is reachable: rendering a
+    /// value is the type describing itself, not an outside caller reaching in.
+    /// </remarks>
+    public bool TryGetOwnRendering(out object? rendered)
+    {
+        var method =
+            IsInstanceOf(ToastRenderer.DisplayTraitName) && Definition.HasInstanceMember(ToastRenderer.DisplayMethodName)
+                ? ToastRenderer.DisplayMethodName
+                : HasCustomToString() ? nameof(ToString) : null;
+
+        if (method is null)
+        {
+            rendered = null;
+            return false;
+        }
+
+        var result = Definition.InvokeInstanceMethod(
+            this, method, Array.Empty<object?>(), includeHidden: true, accessor: Definition);
+
+        rendered = result.Value;
+        return !result.ReturnedVoid;
+    }
+
     internal bool HasCustomToString()
     {
         return Definition.HasSpecialInstanceMethod(nameof(ToString), Array.Empty<object?>());

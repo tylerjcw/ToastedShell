@@ -381,6 +381,20 @@ On a UTC−4 machine, `new DateTime(2026,8,17,12,0,0)` with `Kind = Unspecified`
 The default path calls `ToLocalTime()`, and .NET's `ToLocalTime` treats `Unspecified` as
 UTC. A wall-clock literal is shifted by the local offset, and the two holes disagree.
 
+### A.8b The clause path is locale-dependent
+
+Recorded 2026-08-17, and it corrects §1's claim that the specifier path is "already
+portable". It is immune to *display configuration*, not to *locale*:
+
+```
+$"{3.14159:F2}"    →  3.14   under en_US
+                   →  3,14   under de_DE
+```
+
+`FormatInterpolatedValueAsync` handed the clause to `CultureInfo.CurrentCulture`. The bare
+path was already invariant. So the two paths were each broken in a different way, and
+neither was a model for the other.
+
 ### A.9 Configuration changes what a program builds
 
 ```
@@ -414,7 +428,11 @@ agreed.
 
 2. ~~**Is an unhonourable format clause an error?**~~ **Decided 2026-08-17: error.**
 
-3. **Is serialisation the same contract?** `ToshEngine.Pipelines.cs:270` renders a value on
+3. ~~**Is serialisation the same contract?**~~ **Decided 2026-08-17: yes**, and decided by
+   measuring what the redirect path actually wrote. A nested list put a CLR type name and
+   *newlines* into the file; an enum put seven lines of its own implementation there. That
+   is not a serialisation format worth preserving, and multi-line values corrupt every
+   line-oriented reader downstream. Four call sites, all flipped. Original question: `ToshEngine.Pipelines.cs:270` renders a value on
    its way to a redirect target. If `run-report > out.txt` should write the same text a hole
    would produce, it is one contract and that call site moves with the other three. If a
    stream wants a serialisation format, it is a second contract and that site stays behind.

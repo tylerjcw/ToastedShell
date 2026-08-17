@@ -90,13 +90,32 @@ public class InterpolationFormatTests
         => Assert.Equal(expected, await RunAsync(source));
 
     /// <summary>
-    /// A clause the value cannot honour leaves the value readable rather than failing.
-    /// A shell that refused to print because a format did not apply would be worse
-    /// than one that prints plainly.
+    /// A clause the value cannot honour is reported — `TOAST-0014`.
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// **This test asserted the opposite until 2026-08-17**, on the reasoning that a shell
+    /// refusing to print because a format did not apply would be worse than one that prints
+    /// plainly. That reasoning was about a *shell*. For a language it is the wrong trade:
+    /// `$"{$name:F2}"` is a mistake, and silently dropping the clause makes the program
+    /// succeed while producing text nobody asked for — the same silent-wrong-answer shape
+    /// as `TOSH-0001`, where a quoted `--include` made `grep` match nothing and report
+    /// success.
+    /// </para>
+    /// <para>
+    /// A clause is an explicit instruction. Refusing one is worse than ignoring one only if
+    /// nobody reads the output, and the whole point of building a string is that something
+    /// downstream does.
+    /// </para>
+    /// </remarks>
     [Fact]
-    public async Task An_inapplicable_format_falls_back_to_plain_text()
-        => Assert.Equal("hi", await RunAsync("var s = \"hi\"\n$\"{$s:F2}\""));
+    public async Task An_inapplicable_format_is_reported()
+    {
+        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+
+        await Assert.ThrowsAnyAsync<Exception>(
+            () => engine.ExecuteToListAsync("var s = \"hi\"\n$\"{$s:F2}\""));
+    }
 
     /// <summary>
     /// Dates carry their own formats, and are the case that shows the clause is not

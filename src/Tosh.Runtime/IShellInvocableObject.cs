@@ -48,4 +48,22 @@ public interface IShellInvocableObject
     /// name may mean something *other* than one of its members (<c>TOAST-0001</c>).
     /// </remarks>
     bool HasInstanceMember(string name) => true;
+
+    /// <summary>
+    /// The receiver's own rendering, if it declares one.
+    /// </summary>
+    /// <remarks>
+    /// Asked by <see cref="ToastRenderer"/> before it falls back to a structural rendering.
+    /// The receiver answers rather than the renderer inspecting it, because *whether* a
+    /// declaration counts is a question only the receiver can answer: a ToastScript class
+    /// may declare its rendering method <c>shy</c>, which is visible to the class and to
+    /// nobody else, so a caller reaching in from outside is told the method does not exist.
+    /// Returns the value the declaration produced — normally a string, and rendered as an
+    /// ordinary nested value when it is not.
+    /// </remarks>
+    bool TryGetOwnRendering(out object? rendered)
+    {
+        rendered = null;
+        return false;
+    }
 }

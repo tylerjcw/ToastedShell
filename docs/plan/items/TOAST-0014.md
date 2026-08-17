@@ -94,9 +94,47 @@ so it cannot tell them apart. The renderer discriminates on whether the value ca
 methods (`IShellInvocableObject`), which is a proxy for the question rather than the
 question. Worth a real discriminator on the descriptor.
 
-### Stages remaining
+## Stage 2 complete — 2026-08-17
 
-- [ ] **Stage 2** — flip the language call sites; triage the 160 pinned test cases
+All four language call sites now render through `ToastRenderer`. **Six tests failed**, not
+the 160-case triage the survey projected — the pinned formatting tests mostly exercise
+`ObjectFormatter` directly, which stage 2 does not touch.
+
+Four of the six were gaps in the renderer, each found by a failing test rather than by
+reading: `Quantity` (record-shaped, so `$"{$power}"` gave `{| value = 483.06, unit = "MW" |}`
+instead of `483.06 MW`), `IShellNamedType` and `Type` (`TS-P1-23`, a descriptor exposes
+`Name`/`FullName` as readable properties and the record walk claimed it), and a **`shy`
+`ToString`**.
+
+That last one moved a design decision. A hidden `ToString` is visible to a probe but
+refused by invocation, so the renderer inspecting the receiver was the wrong shape: whether
+a declaration counts is a question only the receiver can answer. `IShellInvocableObject`
+gained `TryGetOwnRendering`, and `ToshClassInstance` answers it by invoking `Display` or
+`ToString` with the class itself as accessor — rendering is a type describing itself, not
+an outside caller reaching in.
+
+The remaining two were intended: an unhonourable format clause now raises, and
+`InterpolationFormatTests.An_inapplicable_format_falls_back_to_plain_text` is renamed and
+inverted with its old reasoning recorded.
+
+### A second defect, found in the flip
+
+The clause path used `CultureInfo.CurrentCulture`, so `$"{3.14159:F2}"` was `3.14` here and
+`3,14` on a German machine. The survey's claim that "the specifier path is already
+portable" was true only of display configuration. Rendering is invariant, and both paths
+now are.
+
+### Verified end to end
+
+| | Before | After |
+|---|---|---|
+| `$"{$d}"` after a config change | `1786982400` | `2026-08-17 12:00:00` |
+| `$"{$d}"` vs `$"{$d:HH:mm:ss}"` | `08:00:00` vs `12:00:00` | agree |
+| `$"{3.14159:F2}"` under `de_DE` | `3,14` | `3.14` |
+| `echo Color.Red out> f` | 7 lines of `ToshEnumValue` | `Red` |
+| `$"{[[1, 2], [3]]}"` | `Int32[] [⏎ 1⏎ …` | `[[1, 2], [3]]` |
+
+### Stages remaining
 - [ ] **Stage 3** — `ObjectFormatter` delegates to the renderer, so display and rendering
       cannot disagree; this also fixes the table cells
 - [ ] **Stage 4** — `Formatter` leaves the language's required set, `ToshValueFormatter`

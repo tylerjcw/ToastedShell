@@ -573,7 +573,7 @@ public sealed partial class ToshEngine
             return await ToOperatorStringAsync(instance, cancellationToken);
         }
 
-        return Runtime.Formatter.Format(value);
+        return ToastRenderer.Render(value);
     }
 
     private sealed record AnnotationRefinementError(ToshDiagnosticException Exception);

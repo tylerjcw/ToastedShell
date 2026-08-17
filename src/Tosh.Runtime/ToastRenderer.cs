@@ -58,7 +58,8 @@ public static class ToastRenderer
     /// </remarks>
     public const string DisplayTraitName = "Display";
 
-    private const string DisplayMethodName = "render";
+    /// <summary>The method <see cref="DisplayTraitName"/> requires.</summary>
+    public const string DisplayMethodName = "render";
 
     /// <summary>Renders <paramref name="value"/> with its default format.</summary>
     public static string Render(object? value) => Render(value, format: null);
@@ -189,8 +190,51 @@ public static class ToastRenderer
                 builder.Append(FormatInvariant(value, format));
                 return true;
 
+            // Temporal defaults are named rather than inherited. The invariant culture's
+            // own default is `08/17/2026 12:00:00` — month-first, which is a locale
+            // convention wearing "invariant" as a disguise. A specified default has to be
+            // one an author in any country reads the same way.
+            case DateTime dateTime when string.IsNullOrEmpty(format):
+                builder.Append(dateTime.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture));
+                return true;
+
+            case DateTimeOffset dateTimeOffset when string.IsNullOrEmpty(format):
+                builder.Append(dateTimeOffset.ToString("yyyy-MM-dd HH:mm:sszzz", CultureInfo.InvariantCulture));
+                return true;
+
+            case DateOnly dateOnly when string.IsNullOrEmpty(format):
+                builder.Append(dateOnly.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+                return true;
+
+            case TimeOnly timeOnly when string.IsNullOrEmpty(format):
+                builder.Append(timeOnly.ToString("HH:mm:ss", CultureInfo.InvariantCulture));
+                return true;
+
             case DateTime or DateTimeOffset or DateOnly or TimeOnly or TimeSpan or Guid:
                 builder.Append(FormatInvariant(value, format));
+                return true;
+
+            // Value types that are their own rendering. Each is `IFormattable` with a
+            // meaningful `ToString`, and each is *also* record-shaped — a Quantity exposes
+            // value, unit and category as readable members — so without naming them here
+            // the container walk claims them and `$"{$power}"` gives
+            // `{| value = 483.06, unit = "MW", … |}` where the reader wanted `483.06 MW`.
+            case Units.Quantity or ToshVector or ToshMatrix:
+                builder.Append(FormatInvariant(value, format));
+                return true;
+
+            // A type used as a value names itself. `TS-P1-23`: a descriptor exposes Name,
+            // FullName and Namespace as ordinary readable properties, so the record walk
+            // claimed it and interpolation rendered a structure where the reader wrote a
+            // type.
+            case IShellNamedType namedType:
+                RejectFormat(format, "type");
+                builder.Append(((IShellStaticType)namedType).ShellTypeName);
+                return true;
+
+            case Type clrType:
+                RejectFormat(format, "type");
+                builder.Append(clrType.FullName ?? clrType.Name);
                 return true;
 
             case Uri uri:
@@ -301,7 +345,7 @@ public static class ToastRenderer
                 WriteSequence(builder, EnumerateTuple(tuple), "(", ")", depth, visited);
                 return;
 
-            case IShellInvocableObject invocable when TryWriteDeclaredRendering(builder, value, invocable, depth, visited):
+            case IShellInvocableObject invocable when TryWriteDeclaredRendering(builder, invocable, depth, visited):
                 return;
 
             // Records before dictionaries, and `ExpandoObject` named outright, because a
@@ -383,42 +427,25 @@ public static class ToastRenderer
     /// </remarks>
     private static bool TryWriteDeclaredRendering(
         StringBuilder builder,
-        object value,
         IShellInvocableObject invocable,
         int depth,
         HashSet<object>? visited)
     {
-        string method;
-
-        if (value is IShellTypeCheckable checkable &&
-            checkable.IsInstanceOf(DisplayTraitName) &&
-            invocable.HasInstanceMember(DisplayMethodName))
-        {
-            method = DisplayMethodName;
-        }
-        else if (invocable.HasInstanceMember(nameof(ToString)))
-        {
-            method = nameof(ToString);
-        }
-        else
+        if (!invocable.TryGetOwnRendering(out var rendered))
         {
             return false;
         }
 
-        var result = invocable.InvokeInstanceMethod(method, Array.Empty<object?>());
-
-        if (result.ReturnedVoid)
-        {
-            return false;
-        }
-
-        if (result.Value is string text)
+        if (rendered is string text)
         {
             builder.Append(text);
             return true;
         }
 
-        Write(builder, result.Value, format: null, depth + 1, nested: false, visited);
+        // Written as a nested value at the next depth rather than pasted in, so a
+        // declaration that returns its own receiver elides through the cycle guard instead
+        // of recursing forever.
+        Write(builder, rendered, format: null, depth + 1, nested: false, visited);
         return true;
     }
 

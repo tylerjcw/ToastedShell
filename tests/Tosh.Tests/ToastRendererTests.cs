@@ -340,12 +340,17 @@ public sealed class ToastRendererTests
     /// And an unspecified `DateTime` is not shifted by the local offset — `TOAST-0017`.
     /// Writing `12:00` and reading back `08:00` is wrong whatever the configuration says.
     /// </summary>
+    /// <remarks>
+    /// Asserted exactly, not with `Contains`. A `Contains("12:00:00")` check passed while
+    /// the date rendered `08/17/2026` — the invariant culture's month-first default, which
+    /// is a locale convention wearing "invariant" as a disguise. The weak assertion hid it.
+    /// </remarks>
     [Fact]
-    public void An_unspecified_datetime_is_not_shifted()
+    public void A_datetime_renders_in_a_named_format_and_is_not_shifted()
     {
-        var rendered = ToastRenderer.Render(new DateTime(2026, 8, 17, 12, 0, 0));
-
-        Assert.Contains("12:00:00", rendered);
+        Assert.Equal("2026-08-17 12:00:00", ToastRenderer.Render(new DateTime(2026, 8, 17, 12, 0, 0)));
+        Assert.Equal("2026-08-17", ToastRenderer.Render(new DateOnly(2026, 8, 17)));
+        Assert.Equal("12:00:00", ToastRenderer.Render(new TimeOnly(12, 0, 0)));
     }
 
     /// <summary>

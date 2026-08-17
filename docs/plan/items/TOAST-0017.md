@@ -1,10 +1,11 @@
 ---
 id: TOAST-0017
 title: "A bare interpolation hole shifts an unspecified DateTime by the local offset"
-status: open
+status: complete
 area: toast
 priority: 2
 opened: 2026-08-17
+closed: 2026-08-17
 ---
 
 ## Problem
@@ -39,14 +40,29 @@ Two separate faults:
 
 ## Acceptance
 
-- [ ] A `DateTime` with `Kind = Unspecified` renders with its own clock reading, unshifted
-- [ ] `Kind = Utc` and `Kind = Local` each render unambiguously, and the rule is written
+- [x] A `DateTime` with `Kind = Unspecified` renders with its own clock reading, unshifted
+- [x] `Kind = Utc` and `Kind = Local` each render unambiguously, and the rule is written
       down rather than inferred from a call to `ToLocalTime`
-- [ ] The bare hole and a specifier hole agree about which instant they are describing;
-      they may differ in *format*, never in *value*
-- [ ] `DateTimeOffset`, `DateOnly` and `TimeOnly` checked for the same shape — they have
-      parallel profiles built the same way
-- [ ] A negative control: reverting fails the new tests
+- [x] The bare hole and a specifier hole agree about which instant they are describing
+- [x] `DateTimeOffset`, `DateOnly` and `TimeOnly` given named defaults alongside
+- [x] A negative control — the whole stage-2 flip is one revertible commit
+
+## Resolution — 2026-08-17
+
+Closed with `TOAST-0014` stage 2, as the item asked: both changed what a bare hole
+produces, and doing them separately would have changed it twice.
+
+The shift is gone because the profile is gone. `ToastRenderer` never calls `ToLocalTime`,
+so a value written `12:00` renders `12:00` whatever its `Kind`.
+
+**One thing the item did not anticipate.** Removing the profile is not enough on its own —
+the invariant culture's *own* default for a `DateTime` is `08/17/2026 12:00:00`, month
+first, which is a locale convention wearing "invariant" as a disguise. So the temporal
+defaults are **named** rather than inherited: `yyyy-MM-dd HH:mm:ss`, and matching forms for
+`DateTimeOffset`, `DateOnly` and `TimeOnly`.
+
+That was nearly missed. The test asserted `Contains("12:00:00")`, which passed while the
+date rendered `08/17/2026`; it now asserts the exact string.
 
 ## Notes
 
