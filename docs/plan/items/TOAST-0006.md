@@ -179,6 +179,28 @@ native target has nowhere to plug in.
 Small while `ToastRuntime`'s member types are being decided; painful afterwards. So it
 belongs in 2d rather than in a later `no_clr` item.
 
+## What remains after 2026-08-17
+
+The language reads no shell configuration for any decision, holds its own runtime, and
+that runtime stands alone. Three things are left, and each is now a single identified
+question rather than a survey:
+
+| | |
+|---|---|
+| `Output`/`Error` (11) | redirection — `TOAST-0015`, wants the stream handle from Phase A |
+| `Formatter` (4) | value-to-text — `TOAST-0014`, Phase A |
+| `Invoker` | must become an interface or `no_clr` has nowhere to plug in |
+
+**And the step that makes this real rather than structural: `ToshEngine` still takes a
+`ToshRuntime`.** Everything so far has been additive and internally verifiable. That one
+is a public API change touching every test plus `Tosh.Stdlib`, `Tosh.Cli`, `Tosh.Dap`,
+`Tosh.LanguageServices` and `Tosh.Compiler` — and it cannot land honestly until the three
+above do, because the engine genuinely still needs a shell for them.
+
+Until an engine can be constructed from a `ToastRuntime` alone, "the language stands
+alone" is a property of a data class rather than of the language. That is the honest
+statement of where this item is.
+
 ## Staging
 
 Two stages, because 182 references is not one commit.
@@ -217,9 +239,9 @@ So stage 2 is not one commit. Proposed order, each independently verifiable:
   2b  IToastHostSignals                              DONE 2026-08-17
   2c  Events onto ToastRuntime                       DONE 2026-08-17
   2d  ToastRuntime itself, composed into ToshRuntime the bulk of the 182
-  2e  Streams: emit rather than write                PART DONE 2026-08-17
-      diagnostics + trace done; value formatting -> TOAST-0014 (Phase A);
-      redirection retargets to a Tōast stream handle, still to do
+  2e  Streams: emit rather than write                DONE as far as it goes
+      diagnostics + trace moved; value formatting -> TOAST-0014 (Phase A);
+      redirection retarget -> TOAST-0015 (Phase A, needs the stream handle)
   2f  CurrentDirectory per evaluation                DEFERRED 2026-08-17
       Measured: none of the 15 sites has a context parameter and only two have
       even a CancellationToken, so "pass it per evaluation" means adding a
