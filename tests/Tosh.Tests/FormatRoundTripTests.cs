@@ -108,16 +108,31 @@ public sealed class FormatRoundTripTests
         await AssertRoundTripsAsync($"{{| v = {element} |}}");
     }
 
+    /// <summary>
+    /// A root collection renders like any other — **the type header is gone**.
+    /// </summary>
+    /// <remarks>
+    /// This asserted `Int32[] [ 1, 2, 3 ]` until 2026-08-17, as the other half of the
+    /// `TS-P3-10` decision: at the root the element type was held to be the informative
+    /// part, and the rendering display rather than source.
+    ///
+    /// `TOAST-0014` reverses it. `Format` is a *language* operation now — it is what
+    /// `$"{x}"`, `tee`, `template` and a compiled program's stdout produce — and a BCL type
+    /// name has no place in a string a portable program builds. The table view is
+    /// unaffected: `DisplayEngine` builds its own structure and never asks the formatter
+    /// for a container, which is why the header was invisible in practice.
+    ///
+    /// The round-trip property is **wider** for it: a root collection now parses back and
+    /// re-renders identically, where before it was a documented exception.
+    /// </remarks>
     [Fact]
-    public async Task A_root_collection_keeps_its_type_header()
+    public async Task A_root_collection_no_longer_carries_a_type_header()
     {
-        // The other half of the TS-P3-10 decision, pinned so the header is not
-        // dropped everywhere by a later reading of this file: at the root the
-        // element type is the informative part, and the rendering is display.
         var engine = new ToshEngine(ToshRuntime.CreateDefault());
         var (_, text) = await EvaluateAndFormatAsync(engine, "[1, 2, 3]");
 
-        Assert.Equal("Int32[] [ 1, 2, 3 ]", text);
+        Assert.Equal("[1, 2, 3]", text);
+        await AssertRoundTripsAsync("[1, 2, 3]");
     }
 
     [Fact]
@@ -126,15 +141,26 @@ public sealed class FormatRoundTripTests
         var engine = new ToshEngine(ToshRuntime.CreateDefault());
         var (_, text) = await EvaluateAndFormatAsync(engine, "{| v = [1, 2, 3] |}");
 
-        Assert.Equal("{| v = [ 1, 2, 3 ] |}", text);
+        Assert.Equal("{| v = [1, 2, 3] |}", text);
     }
 
+    /// <summary>
+    /// A nested container stays on one line — **the detail style no longer expands
+    /// containers**.
+    /// </summary>
+    /// <remarks>
+    /// This asserted a multi-line, once-per-level indented rendering with `Int32[][]`
+    /// headers until 2026-08-17. `TOAST-0014` makes `Format` a language operation, and a
+    /// rendered value must be safe to put on a stream: the multi-line form wrote newlines
+    /// into a redirected file, so `cmd out> f | wc -l` counted a value's *shape* rather
+    /// than its values.
+    ///
+    /// Depth is still bounded — see `ToastRendererTests.Depth_is_bounded` — so a deep
+    /// structure elides rather than becoming an unreadable line.
+    /// </remarks>
     [Fact]
-    public async Task Nested_containers_indent_once_per_level()
+    public async Task A_nested_container_stays_on_one_line()
     {
-        // A container re-indents every line of every item, so a nested one that
-        // also indented by its own depth was counted twice. Asserted on the
-        // detail style, which is the only place the arithmetic is visible.
         var engine = new ToshEngine(ToshRuntime.CreateDefault());
         var value = Assert.Single(await engine.ExecuteToListAsync("[[1, 2], [3]]"));
 
@@ -142,19 +168,8 @@ public sealed class FormatRoundTripTests
             value,
             new ObjectFormattingOptions(ObjectRenderStyle.Detail));
 
-        Assert.Equal(
-            """
-            Int32[][] [
-              [
-                1
-                2
-              ]
-              [
-                3
-              ]
-            ]
-            """.ReplaceLineEndings("\n"),
-            text.ReplaceLineEndings("\n"));
+        Assert.Equal("[[1, 2], [3]]", text);
+        Assert.DoesNotContain("\n", text);
     }
 
     [Fact]

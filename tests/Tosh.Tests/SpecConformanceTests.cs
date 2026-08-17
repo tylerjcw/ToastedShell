@@ -103,7 +103,7 @@ public sealed class SpecConformanceTests
         // name, which would have compared a type against a value.
         var engine = new ToshEngine(ToshRuntime.CreateDefault());
         var squares = Assert.Single(await engine.ExecuteToListAsync("[$x * $x <| for x in 1..5]"));
-        Assert.Equal("Int32[] [ 1, 4, 9, 16, 25 ]", engine.Runtime.Formatter.Format(squares));
+        Assert.Equal("[1, 4, 9, 16, 25]", engine.Runtime.Formatter.Format(squares));
 
         var doubled = await engine.ExecuteToListAsync("[1, 2, 3] | map func(x) => ($x * 2)");
         Assert.Equal(["2", "4", "6"], doubled.Select(v => v?.ToString()));

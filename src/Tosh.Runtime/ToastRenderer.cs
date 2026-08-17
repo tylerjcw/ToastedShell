@@ -47,6 +47,12 @@ public static class ToastRenderer
     public const int MaximumDepth = 8;
 
     /// <summary>
+    /// How many properties a CLR object shows before the rest are dropped. An
+    /// interpolation hole is a sentence, not a report.
+    /// </summary>
+    public const int MaximumProperties = 24;
+
+    /// <summary>
     /// The trait a type implements to control its own rendering, and the method it
     /// requires.
     /// </summary>
@@ -348,11 +354,16 @@ public static class ToastRenderer
             case IShellInvocableObject invocable when TryWriteDeclaredRendering(builder, invocable, depth, visited):
                 return;
 
-            // Records before dictionaries, and `ExpandoObject` named outright, because a
-            // `{| … |}` literal *is* one. It implements `IDictionary<string, object>` but
-            // not the non-generic `IDictionary`, so without this it fell past the pair
-            // writer into the sequence writer and rendered as a list of key-value pairs.
-            case IShellRecordObject or System.Dynamic.ExpandoObject:
+            // Records before dictionaries. A `{| … |}` literal is an `ExpandoObject`, and
+            // **a string-keyed dictionary is a record** — that is the existing convention,
+            // encoded in `ShellRecordUtilities`, and a Tōast dictionary literal is
+            // object-keyed (`Dictionary<object, object>`) precisely so the two are
+            // distinguishable. Getting this backwards rendered `{| power = 483.06 MW |}` as
+            // `{% "power" => 483.06 MW %}`.
+            case IShellRecordObject
+                 or System.Dynamic.ExpandoObject
+                 or IDictionary<string, object?>
+                 or IReadOnlyDictionary<string, object?>:
                 WriteRecordLike(builder, value, depth, visited);
                 return;
 
@@ -364,10 +375,80 @@ public static class ToastRenderer
                 WriteSequence(builder, sequence.Cast<object?>(), "[", "]", depth, visited);
                 return;
 
+            // An exception is a value a program can hold — `catch` binds one — so it
+            // renders like any other named value rather than as its `ToString`, which is a
+            // stack trace and belongs in a diagnostic, not in a sentence.
+            case Exception exception:
+                builder.Append(TypeNameOf(exception)).Append(" { Message = ");
+                WriteString(builder, exception.Message, format: null, nested: true);
+                builder.Append(" }");
+                return;
+
             default:
-                builder.Append(value.ToString() ?? value.GetType().Name);
+                WriteClrObject(builder, value, depth, visited);
                 return;
         }
+    }
+
+    /// <summary>
+    /// A CLR object with no rendering of its own renders like a class: its type name and
+    /// its readable state.
+    /// </summary>
+    /// <remarks>
+    /// **Readable state wins over an overridden <c>ToString</c>**, and only a type with no
+    /// readable properties falls back to it. That looks backwards until you try the other
+    /// order: a C# <c>record</c> generates a <c>ToString</c> that renders its strings
+    /// unquoted, so deferring to it produced <c>Name = toaster</c> inside a structure whose
+    /// every other string was quoted. A CLR type that genuinely knows how it reads says so
+    /// through a display profile, which is consulted before this.
+    ///
+    /// The property count is capped, because an interpolation hole is a sentence and a
+    /// value with two hundred properties should not silently become a paragraph.
+    /// </remarks>
+    private static void WriteClrObject(StringBuilder builder, object value, int depth, HashSet<object>? visited)
+    {
+        var type = value.GetType();
+
+        var properties = type
+            .GetProperties(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public)
+            .Where(property => property.CanRead && property.GetIndexParameters().Length == 0)
+            .OrderBy(property => property.Name, StringComparer.Ordinal)
+            .Take(MaximumProperties)
+            .ToArray();
+
+        if (properties.Length == 0)
+        {
+            var text = value.ToString();
+            builder.Append(string.Equals(text, type.FullName, StringComparison.Ordinal) || text is null
+                ? type.Name
+                : text);
+            return;
+        }
+
+        builder.Append(type.Name).Append(" { ");
+
+        for (var index = 0; index < properties.Length; index++)
+        {
+            if (index > 0) { builder.Append(", "); }
+            builder.Append(properties[index].Name).Append(" = ");
+
+            object? propertyValue;
+
+            try
+            {
+                propertyValue = properties[index].GetValue(value);
+            }
+            catch (Exception error)
+            {
+                // A getter that throws is the property's problem, not the reader's, and
+                // rendering is total.
+                propertyValue = $"<{error.GetType().Name}>";
+            }
+
+            Write(builder, propertyValue, format: null, depth + 1, nested: true, visited);
+        }
+
+        builder.Append(" }");
     }
 
     private static void WriteSequence(

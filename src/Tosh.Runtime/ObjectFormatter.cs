@@ -54,11 +54,6 @@ public sealed class ObjectFormatter
             return profileText;
         }
 
-        if (TryFormatSimple(value, isRoot, out var simpleText))
-        {
-            return simpleText;
-        }
-
         if (value is ShellCommandDescriptor descriptor)
         {
             return FormatShellCommandDescriptor(descriptor);
@@ -94,21 +89,6 @@ public sealed class ObjectFormatter
             return FormatFileSystemInfo(fileSystemInfo, options);
         }
 
-        // A shell type descriptor names a type, so displaying one shows that
-        // name — the same rule the CLR `Type` case below applies. This must sit
-        // above the record-field check: a descriptor exposes Name, FullName,
-        // Namespace and friends as ordinary readable properties, so it would
-        // otherwise render as a record dump. Giving the descriptor a `ToString`
-        // fixed the paths that stringify, but not the structural ones, which is
-        // where interpolation and nested rendering go (TS-P1-23).
-        // The cast picks IShellStaticType's ShellTypeName: IShellNamedType
-        // inherits the name from both of its bases, so the reference is
-        // otherwise ambiguous.
-        if (value is IShellNamedType shellType)
-        {
-            return ((IShellStaticType)shellType).ShellTypeName;
-        }
-
         // An un-awaited CLR task. Without this it renders as its runtime type —
         // `AsyncStateMachineBox`1` — because Task does not override ToString and the
         // compiler's state machine box is what a task actually is at run time. That
@@ -119,56 +99,13 @@ public sealed class ObjectFormatter
             return ClrAwaitable.Describe(value);
         }
 
-        if (ShellRecordUtilities.TryGetFields(value, out var recordFields))
-        {
-            return FormatRecordFields(recordFields, options, depth, visited);
-        }
-
-        if (value is Type type)
-        {
-            return type.FullName ?? type.Name;
-        }
-
-        if (value is Exception exception)
-        {
-            return $"{GetTypeName(exception.GetType())} {{ Message = {QuoteString(exception.Message)} }}";
-        }
-
-        var runtimeType = value.GetType();
-
-        if (depth >= options.MaxDepth)
-        {
-            return $"{GetTypeName(runtimeType)} {{ ... }}";
-        }
-
-        var trackReferences = !runtimeType.IsValueType;
-
-        if (trackReferences && !visited.Add(value))
-        {
-            return "<cycle>";
-        }
-
-        try
-        {
-            if (value is IDictionary dictionary)
-            {
-                return FormatDictionary(dictionary, options, depth, visited);
-            }
-
-            if (value is IEnumerable enumerable and not string)
-            {
-                return FormatEnumerable(enumerable, runtimeType, options, depth, visited, isRoot);
-            }
-
-            return FormatObject(value, runtimeType, options, depth, visited);
-        }
-        finally
-        {
-            if (trackReferences)
-            {
-                visited.Remove(value);
-            }
-        }
+        // Everything else is the *language's* answer, not display's — `TOAST-0014`
+        // stage 3. Display keeps what is genuinely its own above this line: profiles,
+        // and the seven shell-owned value kinds a program never constructs. Below it,
+        // asking the renderer is what stops the two from drifting into disagreeing
+        // about what a value looks like, which is how `$"{$x}"` and a table cell came
+        // to render the same list three different ways.
+        return ToastRenderer.Render(value);
     }
 
     internal static bool TryFormatSimple(object value, bool isRoot, out string text)

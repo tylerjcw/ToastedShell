@@ -42,7 +42,7 @@ public sealed class ObjectFormatterTests
     {
         Assert.Equal("null", ToshValueFormatter.Format(null));
         Assert.Equal("true", ToshValueFormatter.Format(true));
-        Assert.Equal("Object[] [ 1, 2 ]", ToshValueFormatter.Format(new object?[] { 1, 2 }));
+        Assert.Equal("[1, 2]", ToshValueFormatter.Format(new object?[] { 1, 2 }));
         Assert.Equal("ToastColor.Green", ToshValueFormatter.Format(ToastColor.Green));
     }
 
@@ -121,7 +121,10 @@ public sealed class ObjectFormatterTests
 
         var text = formatter.Format(new[] { "alpha", "beta" });
 
-        Assert.Equal("String[] [ \"alpha\", \"beta\" ]", text);
+        // `TOAST-0014`: no CLR type header, and no padding inside the brackets. The
+        // rendering is a language value's text now, so it reads as the literal that
+        // produced it.
+        Assert.Equal("[\"alpha\", \"beta\"]", text);
     }
 
     [Fact]
