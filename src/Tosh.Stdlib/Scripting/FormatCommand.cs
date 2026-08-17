@@ -1,7 +1,7 @@
 using Tosh.Language.Formatting;
 using Tosh.Runtime;
 
-namespace Tosh.Language.Bridge.Scripting;
+namespace Tosh.Stdlib.Scripting;
 
 /// <summary>
 /// <c>format</c> — pretty-print one or more tosh source files.

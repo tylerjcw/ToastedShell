@@ -1,6 +1,8 @@
 using Tosh.Runtime;
 
-namespace Tosh.Language.Bridge.Shell;
+using Tosh.Language;
+
+namespace Tosh.Stdlib.Shell;
 
 [Stdlib(StdlibCategory.Shell)]
 [CommandCategory("Shell")]
@@ -11,12 +13,10 @@ namespace Tosh.Language.Bridge.Shell;
 [CommandOutput("Streams whatever values the sourced script emits.")]
 public sealed class SourceCommand : ShellCommand
 {
-    private readonly ToshEngine _engine;
 
-    public SourceCommand(ToshEngine engine)
+    public SourceCommand()
         : base("source", "Executes a Tosh script file in the current session and lets it affect the caller scope.", "source <path> [arg...]")
     {
-        _engine = engine;
     }
 
     public override async IAsyncEnumerable<object?> ExecuteAsync(CommandContext context)
@@ -35,12 +35,24 @@ public sealed class SourceCommand : ShellCommand
 
         // `TS-P2-29`. A relative path means "beside the script doing the sourcing", as it already
         // does for `require`; the working directory stays as the fallback.
-        var path = _engine.ResolveSourcePath(rawPath);
+        var path = RequireHost(context).ResolveSourcePath(rawPath);
 
-        await foreach (var value in _engine.ExecuteScriptFileAsync(path, context.Arguments.Skip(1).ToArray(), isolateScope: false, context.CancellationToken)
+        await foreach (var value in RequireHost(context).ExecuteScriptFileAsync(path, context.Arguments.Skip(1).ToArray(), isolateScope: false, context.CancellationToken)
                            .WithCancellation(context.CancellationToken))
         {
             yield return value;
         }
     }
+
+    /// <summary>
+    /// The engine, reached through the runtime at execute time rather than taken at
+    /// construction — which is what lets this command be registered before an engine
+    /// exists (`TOAST-0006`).
+    /// </summary>
+    private static IToshScriptHost RequireHost(CommandContext context)
+        => context.Runtime.Evaluator as IToshScriptHost
+           ?? throw new InvalidOperationException(
+               "This host cannot run scripts. Register a ToastScript engine on the runtime " +
+               "before using script-running commands.");
+
 }

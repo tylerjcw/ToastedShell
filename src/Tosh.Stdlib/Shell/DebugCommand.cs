@@ -1,7 +1,9 @@
 using Tosh.Runtime;
 using Tosh.Language.Debugging;
 
-namespace Tosh.Language.Bridge.Shell;
+using Tosh.Language;
+
+namespace Tosh.Stdlib.Shell;
 
 [Stdlib(StdlibCategory.Shell)]
 [CommandCategory("Shell")]
@@ -12,12 +14,10 @@ namespace Tosh.Language.Bridge.Shell;
 [CommandOutput("Streams whatever the wrapped pipeline produces; emits diagnostic events as a side effect.")]
 public sealed class DebugCommand : ShellCommand
 {
-    private readonly ToshEngine _engine;
 
-    public DebugCommand(ToshEngine engine)
+    public DebugCommand()
         : base("debug", "Runs a Tosh script with interactive step-through debugging.", "debug <path> [args...]")
     {
-        _engine = engine;
     }
 
     public override async IAsyncEnumerable<object?> ExecuteAsync(CommandContext context)
@@ -42,8 +42,8 @@ public sealed class DebugCommand : ShellCommand
         var scriptArgs = context.Arguments.Skip(1).ToArray();
         var stepping = true;
 
-        var previousHook = _engine.DebugHook;
-        _engine.DebugHook = async stepContext =>
+        var previousHook = RequireHost(context).DebugHook;
+        RequireHost(context).DebugHook = async stepContext =>
         {
             if (!stepping)
             {
@@ -82,7 +82,7 @@ public sealed class DebugCommand : ShellCommand
                     case "q" or "quit" or "abort":
                         return DebugAction.Abort;
                     case "vars" or "variables" or "locals":
-                        PrintLocals(_engine, context.Runtime);
+                        PrintLocals(context.Runtime);
                         await context.Runtime.Error.WriteAsync("(debug) ");
                         continue;
                     default:
@@ -100,7 +100,7 @@ public sealed class DebugCommand : ShellCommand
         try
         {
             results = await AsyncEnumerableExtensions.ToListAsync(
-                _engine.ExecuteScriptFileAsync(path, scriptArgs, cancellationToken: context.CancellationToken),
+                RequireHost(context).ExecuteScriptFileAsync(path, scriptArgs, isolateScope: true, context.CancellationToken),
                 context.CancellationToken);
         }
         catch (DebugAbortException)
@@ -110,7 +110,7 @@ public sealed class DebugCommand : ShellCommand
         }
         finally
         {
-            _engine.DebugHook = previousHook;
+            RequireHost(context).DebugHook = previousHook;
         }
 
         foreach (var value in results)
@@ -130,9 +130,10 @@ public sealed class DebugCommand : ShellCommand
         return Console.ReadLine();
     }
 
-    private static void PrintLocals(ToshEngine engine, ToshRuntime runtime)
+    private static void PrintLocals(ToshRuntime runtime)
     {
-        var variables = engine.GetVisibleVariables();
+        // GetVisibleVariables is on IShellEvaluator, so this needs no engine of its own.
+        var variables = runtime.Evaluator?.GetVisibleVariables() ?? [];
 
         if (variables.Count == 0)
         {
@@ -162,4 +163,16 @@ public sealed class DebugCommand : ShellCommand
             _ => value.ToString() ?? "null",
         };
     }
+
+    /// <summary>
+    /// The engine, reached through the runtime at execute time rather than taken at
+    /// construction — which is what lets this command be registered before an engine
+    /// exists (`TOAST-0006`).
+    /// </summary>
+    private static IToshScriptHost RequireHost(CommandContext context)
+        => context.Runtime.Evaluator as IToshScriptHost
+           ?? throw new InvalidOperationException(
+               "This host cannot run scripts. Register a ToastScript engine on the runtime " +
+               "before using script-running commands.");
+
 }

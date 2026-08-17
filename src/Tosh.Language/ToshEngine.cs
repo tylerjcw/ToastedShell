@@ -8,13 +8,12 @@ using System.Text.RegularExpressions;
 using Tosh.Runtime;
 using Tosh.Language.Binding;
 using Tosh.Language.Bridge;
-using Tosh.Language.Bridge.Shell;
 using Tosh.Language.Debugging;
 using Tosh.Language.Parsing;
 
 namespace Tosh.Language;
 
-public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
+public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, IToshScriptHost
 {
     private readonly record struct CapturedEnumeratorMove(
         bool HasValue,
@@ -110,25 +109,11 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
         _toshNamespace = new ToshRuntimeNamespace(this);
         Runtime.RuntimeNamespace ??= _toshNamespace;
         _environmentNamespace = new ShellEnvironmentNamespace(Runtime);
-        if (!Runtime.Commands.TryGet("source", out _))
-        {
-            Runtime.Commands.Register(new SourceCommand(this));
-        }
-
-        if (!Runtime.Commands.TryGet("eval", out _))
-        {
-            Runtime.Commands.Register(new EvalCommand(this));
-        }
-
-        if (!Runtime.Commands.TryGet("debug", out _))
-        {
-            Runtime.Commands.Register(new DebugCommand(this));
-        }
-
-        if (!Runtime.Commands.TryGet("format", out _))
-        {
-            Runtime.Commands.Register(new Bridge.Scripting.FormatCommand());
-        }
+        // `source`, `eval`, `debug` and `format` used to be constructed and registered
+        // here, which made the *language* own a set of commands. A command is a shell
+        // concept: the language exposes what it can do — see `IToshScriptHost` — and TōSh
+        // decides what to call it. They now live in Tosh.Stdlib and are registered with
+        // the rest of the built-ins (`TOAST-0006`).
 
         // Load built-in rune definitions
         LoadBuiltinRunesAsync().GetAwaiter().GetResult();
@@ -521,7 +506,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
         return ExecuteScriptFileAsync(path, arguments, isolateScope: true, cancellationToken);
     }
 
-    internal IAsyncEnumerable<object?> ExecuteScriptFileAsync(
+    public IAsyncEnumerable<object?> ExecuteScriptFileAsync(
         string path,
         IReadOnlyList<object?>? arguments,
         bool isolateScope,
@@ -6908,7 +6893,7 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView
     /// "file not found" message still comes from the same place it used to.
     /// </para>
     /// </remarks>
-    internal string ResolveSourcePath(string rawPath)
+    public string ResolveSourcePath(string rawPath)
     {
         if (string.IsNullOrWhiteSpace(rawPath) || Path.IsPathRooted(rawPath))
         {

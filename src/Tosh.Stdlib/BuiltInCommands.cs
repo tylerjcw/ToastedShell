@@ -336,6 +336,15 @@ public static class BuiltInCommands
         commands.RegisterAlias("offset-of", "native-offsetof");
 
         // ── Scripting (assert, raise, undef) ──
+        //
+        // `source`, `eval`, `debug` and `format` joined this list in `TOAST-0006`. The
+        // ToshEngine constructor used to register them, which made the language own a set
+        // of commands; a command is a shell concept, so the language exposes the
+        // capability through `IToshScriptHost` and these name it.
+        commands.Register(new SourceCommand());
+        commands.Register(new EvalCommand());
+        commands.Register(new DebugCommand());
+        commands.Register(new FormatCommand());
         commands.Register(new AssertCommand());
         commands.Register(new RaiseCommand());
         commands.Register(new UndefCommand());

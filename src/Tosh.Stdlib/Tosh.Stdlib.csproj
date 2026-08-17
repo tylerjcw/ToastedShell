@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
+    <ProjectReference Include="..\Tosh.Language\Tosh.Language.csproj" />
     <ProjectReference Include="..\Tosh.Runtime\Tosh.Runtime.csproj" />
     <ProjectReference Include="..\Tosh.Tui\Tosh.Tui.csproj" />
   </ItemGroup>
