@@ -178,12 +178,21 @@ public sealed class OperatorParityTests
         // `??=` is null-coalescing; intentionally not lowered to a binary arith op.
         assignOps.Remove("??=");
 
-        var enginePath = LocateEngineSource();
-        var engineSource = File.ReadAllText(enginePath);
+        var engineSource = ReadEngineSource();
         // Find the "compound -> binary" map; matches lines like `"+=" => "+",`.
         var compoundMap = Regex.Matches(engineSource, "\"([+\\-*/%]+=)\"\\s*=>\\s*\"([^\"]+)\"")
             .Select(m => m.Groups[1].Value)
             .ToHashSet(StringComparer.Ordinal);
+
+        // Non-vacuity guard. This test scans source text, so it fails open: if the
+        // lowering map moves somewhere the scan no longer reads, `compoundMap` is empty,
+        // every operator looks unmapped — or, had the sets been compared the other way,
+        // everything would look fine. `TOAST-0005` moved this map out of ToshEngine.cs
+        // once already and the test failed deterministically while the invariant held.
+        Assert.True(compoundMap.Count > 0,
+            "No compound-assignment lowerings found in the engine source. The map has probably " +
+            "moved to a file ReadEngineSource() does not scan — this test is a source scan and " +
+            "is coupled to file layout.");
 
         var missing = assignOps.Where(o => !compoundMap.Contains(o)).ToList();
         Assert.True(missing.Count == 0,
@@ -343,7 +352,31 @@ public sealed class OperatorParityTests
 
     private static string LocateParserSource() => LocateRepoFile("src/Tosh.Language/Parsing/ToshParser.cs");
 
-    private static string LocateEngineSource() => LocateRepoFile("src/Tosh.Language/ToshEngine.cs");
+    /// <summary>
+    /// The engine's source text, across every partial file it is split into.
+    /// </summary>
+    /// <remarks>
+    /// This was a single path to <c>ToshEngine.cs</c> until `TOAST-0005` divided the
+    /// engine into partial files by concern. The compound-assignment lowering map this
+    /// test scans for moved to <c>ToshEngine.Variables.cs</c>, and the test began
+    /// failing deterministically while the invariant it checks remained perfectly true
+    /// — the map was still complete, just not in the file being read.
+    ///
+    /// Worth noting before writing another test like this one: a test that scans source
+    /// text is coupled to file *layout* in a way a behavioural test is not, and nothing
+    /// about its failure says so. Reading every <c>ToshEngine*.cs</c> makes it survive
+    /// the remaining slices and any later re-division.
+    /// </remarks>
+    private static string ReadEngineSource()
+    {
+        var directory = Path.GetDirectoryName(LocateRepoFile("src/Tosh.Language/ToshEngine.cs"))!;
+
+        return string.Join(
+            "\n",
+            Directory.EnumerateFiles(directory, "ToshEngine*.cs")
+                .OrderBy(path => path, StringComparer.Ordinal)
+                .Select(File.ReadAllText));
+    }
 
     private static string LocateRepoFile(string relative)
     {
