@@ -9,6 +9,34 @@ Appendix B is what I could not decide alone.
 
 ---
 
+## 0. This is a language question, not a shell question
+
+Two different things happen to a value, and only the first is specified here.
+
+```tosh
+var xs = [1, 2, 3]
+
+$xs                  # DISPLAY — TōSh paints a table on a terminal
+                     # ┌───┬───┐
+                     # │ 0 │ 1 │  … not specified here, not changing
+
+var s = $"{$xs}"     # RENDERING — a Tōast program builds a string
+                     # "1 2 3"    … this is what this document is about
+```
+
+The second one is the value of a **language expression**. The program can write it to a
+file, send it over a socket, compare it, or return it. Nothing about a terminal is
+involved, and a `no_clr` Tōast program with no shell at all still has to know what it is.
+
+**The reason this currently looks like a shell question is the defect.** `$"{x}"` is
+language syntax, but its result is produced by `ObjectFormatter`, which is constructed from
+a `DisplayProfileRegistry` and changes when `$tosh.Config.Display` changes. So today the
+string a program builds really is decided by the shell. This document is how that stops.
+
+Everything measured in Appendix A was measured through the TōSh CLI, because it is the only
+host that exists. The values measured — lists, records, enums, tuples — are **language**
+values, and the strings recorded are what a program gets back, not what a terminal shows.
+
 ## 1. Scope
 
 **Rendering** is the language operation that turns a value into a string. It is reached by:
