@@ -3558,6 +3558,14 @@ public sealed class DisplayEngine
             return simpleText;
         }
 
+        // `TOAST-0021`. A value the *language* renders as a scalar goes in the cell as that
+        // scalar. Display's structural view is for things with parts; an enum member has
+        // readable properties but is not one of them.
+        if (ToastRenderer.RendersAsScalar(value))
+        {
+            return ToastRenderer.Render(value);
+        }
+
         if (TryFormatNestedStructuredTableCellValue(value, options, out var nestedStructuredText))
         {
             return nestedStructuredText;
@@ -3726,6 +3734,13 @@ public sealed class DisplayEngine
         }
 
         if (ObjectFormatter.TryFormatSimple(value, isRoot: false, out _))
+        {
+            return false;
+        }
+
+        // Same rule one level down, so a scalar nested inside a record is not expanded
+        // either (`TOAST-0021`).
+        if (ToastRenderer.RendersAsScalar(value))
         {
             return false;
         }

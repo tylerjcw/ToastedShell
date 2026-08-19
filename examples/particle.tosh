@@ -21,17 +21,16 @@ var width: int = Math.Max(20, System.Console.WindowWidth  - 1)
 var height: int = Math.Max(20, System.Console.WindowHeight - 1)
 System.Console.CursorVisible = false
 
-func ApplyForces(p: Particle)
-{
-    double centerX = $width  / 2
-    double centerY = $height / 2
-    double dist = Math.sqrt(($p.Position.X ** 2) + ($p.Position.Y ** 2))
-    double time = Environment.TickCount / 1000.0
-    double oscillation = Math.Sin($time * 0.8) # Oscillation over time
-    double factor = $oscillation * 0.1 # Force factor oscillates between attraction and repulsion
+func ApplyForces(p: Particle) {
+    var centerX: double = $width  / 2
+    var centerY: double = $height / 2
+    var dist: double = Math.sqrt(($p.Position.X ** 2) + ($p.Position.Y ** 2))
+    var time: double = Environment.TickCount / 1000.0
+    var oscillation: double = Math.Sin($time * 0.8)  # Oscillation over time
+    var factor: double = $oscillation * 0.1  # Force factor oscillates between attraction and repulsion
     $p.Velocity.X += ($centerX - $p.Position.X) * $factor
     $p.Velocity.Y += ($centerY - $p.Position.Y) * $factor
-    $p.Velocity.X *= 0.97 # Moderate damping
+    $p.Velocity.X *= 0.97  # Moderate damping
     $p.Velocity.Y *= 0.97
 }
 
@@ -40,12 +39,12 @@ for i in 0..39 { $particles.Add(new Particle<int>(Random.Shared.Next($width), Ra
 while (not(System.Console.KeyAvailable)) {
     clear
     for particle in $particles {
-        ApplyForces($particle)
+        ApplyForces($particle
         $particle.Position.X = ($particle.Position.X + $particle.Velocity.X + $width)  % $width
         $particle.Position.Y = ($particle.Position.Y + $particle.Velocity.Y + $height) % $height
         System.Console.SetCursorPosition(Math.Round($particle.Position.X, 0), Math.Round($particle.Position.Y, 0))
         System.Console.ForegroundColor = $particle.Color
         System.Console.Write($particle.Symbol)
     }
-    sleep(0.07)
+    sleep(0.07
 }

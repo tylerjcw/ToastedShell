@@ -71,6 +71,27 @@ public static class ToastRenderer
     public static string Render(object? value) => Render(value, format: null);
 
     /// <summary>
+    /// Whether the language renders <paramref name="value"/> as a scalar — a thing with a
+    /// name rather than a structure with parts.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Asked by display, so that one place decides what a scalar is instead of two guessing
+    /// separately. `TOAST-0021`: `DisplayEngine` expanded anything with readable properties,
+    /// and an enum member has them — so a `Color.Red` cell became a nested table of
+    /// <c>EnumTypeName</c>, <c>ShellTypeDescriptor</c> and <c>UnderlyingValue</c>, which is
+    /// the value's implementation rather than the value.
+    /// </para>
+    /// <para>
+    /// Implemented by *running* the scalar writer rather than by restating its cases, which
+    /// costs a small builder per call and buys the guarantee that the two can never
+    /// disagree. A restated list is a list that drifts.
+    /// </para>
+    /// </remarks>
+    public static bool RendersAsScalar(object? value)
+        => value is not null && TryWriteScalar(new StringBuilder(), value, format: null, nested: false);
+
+    /// <summary>
     /// Renders <paramref name="value"/>, optionally with a format clause.
     /// </summary>
     /// <remarks>
