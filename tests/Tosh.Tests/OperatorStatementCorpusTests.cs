@@ -139,10 +139,12 @@ public sealed class OperatorStatementCorpusTests
     /// item breaks this test until the entry is removed.
     /// </para>
     /// </remarks>
-    private static readonly Dictionary<string, string> KnownFailures = new(StringComparer.Ordinal)
-    {
-        ["not"] = "TS-P2-117",
-    };
+    /// <remarks>
+    /// Empty since 2026-08-17: `not` was the only entry, owned by `TS-P2-117`, and that item
+    /// is fixed. The guard reported it the moment the defect went away, which is what the
+    /// "exemption cannot rot" paragraph above exists to make happen.
+    /// </remarks>
+    private static readonly Dictionary<string, string> KnownFailures = new(StringComparer.Ordinal);
 
     /// <summary>
     /// Binary operators as (left, right) operand pairs, so each can be placed in several

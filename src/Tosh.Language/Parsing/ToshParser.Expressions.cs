@@ -873,7 +873,7 @@ public static partial class ToshParser
         {
             var left = ParseLogicalAndExpression(startPosition, implicitCurrentItem);
 
-            while (IsLogicalOrOperatorToken(Current))
+            while (IsLogicalOrOperatorToken(Current) && !CurrentBeginsLineAsWordOperator())
             {
                 var operatorToken = NextToken();
                 var right = ParseLogicalAndExpression(startPosition, implicitCurrentItem);
@@ -894,7 +894,7 @@ public static partial class ToshParser
         {
             var left = ParseComparisonExpression(startPosition, implicitCurrentItem);
 
-            while (IsLogicalAndOperatorToken(Current))
+            while (IsLogicalAndOperatorToken(Current) && !CurrentBeginsLineAsWordOperator())
             {
                 var operatorToken = NextToken();
                 var right = ParseComparisonExpression(startPosition, implicitCurrentItem);
@@ -945,7 +945,7 @@ public static partial class ToshParser
             var chainIsPure = true;
             var chainEnd = startPosition;
 
-            while (IsComparisonOperatorToken(Current))
+            while (IsComparisonOperatorToken(Current) && !CurrentBeginsLineAsWordOperator())
             {
                 var operatorToken = NextToken();
                 var normalizedOperator = NormalizeBinaryOperator(operatorToken);
@@ -1132,7 +1132,7 @@ public static partial class ToshParser
         {
             var left = ParseMultiplicativeExpression(startPosition, implicitCurrentItem);
 
-            while (IsAdditiveOperatorToken(Current))
+            while (IsAdditiveOperatorToken(Current) && !CurrentBeginsLineAsWordOperator())
             {
                 var operatorToken = NextToken();
                 var right = ParseMultiplicativeExpression(startPosition, implicitCurrentItem);
@@ -1157,7 +1157,7 @@ public static partial class ToshParser
             // Exponentiation still takes a unary *right* operand, so `2 ** -1` parses.
             var left = ParseUnaryExpression(startPosition, implicitCurrentItem);
 
-            while (IsMultiplicativeOperatorToken(Current) && !IsSpacedDictCloser(Current))
+            while (IsMultiplicativeOperatorToken(Current) && !IsSpacedDictCloser(Current) && !CurrentBeginsLineAsWordOperator())
             {
                 var operatorToken = NextToken();
                 var right = ParseUnaryExpression(startPosition, implicitCurrentItem);
@@ -1188,7 +1188,7 @@ public static partial class ToshParser
         {
             var left = ParseArgumentOperand(implicitCurrentItem);
 
-            while (IsCastOperatorToken(Current))
+            while (IsCastOperatorToken(Current) && !CurrentBeginsLineAsWordOperator())
             {
                 var operatorToken = NextToken();
                 var right = ParseArgumentOperand(implicitCurrentItem: false);
@@ -1535,6 +1535,66 @@ public static partial class ToshParser
             }
 
             return false;
+        }
+
+        /// <summary>
+        /// Whether <see cref="Current"/> is a word operator that *begins a line*, and so
+        /// starts a new statement rather than continuing the previous one.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// `TS-P2-117`. `var r = true` followed by `not $r` parsed as one expression across
+        /// the break, so the binding never happened and the error named `r` as undeclared —
+        /// on the line that declared it. `and`, `not`, `bnot` and a leading `+` all did it.
+        /// </para>
+        /// <para>
+        /// The language's continuation rule is that **the line that ends signals it**: a
+        /// trailing operator continues (`1 +` then `2` is 3) and so does an unclosed
+        /// bracket. A leading operator was continuing too, which is the inconsistency —
+        /// and the reason this needed no new rule, only the existing one applied.
+        /// </para>
+        /// <para>
+        /// An unclosed `(` or `[` exempts it, because there the expression genuinely is
+        /// still open and a leading operator is ordinary style. Braces are **not** counted:
+        /// a block holds statements, so a line inside one begins a statement exactly as a
+        /// line outside it does.
+        /// </para>
+        /// </remarks>
+        private bool CurrentBeginsLineAsWordOperator()
+        {
+            if (Current.Kind != SyntaxTokenKind.Bareword || _position <= 0)
+            {
+                return false;
+            }
+
+            var previous = _tokens[_position - 1];
+            var gapStart = Math.Min(previous.Span.End, _sourceText.Length);
+            var gapEnd = Math.Min(Current.Span.Start, _sourceText.Length);
+
+            if (gapEnd <= gapStart ||
+                _sourceText.AsSpan(gapStart, gapEnd - gapStart).IndexOf('\n') < 0)
+            {
+                return false;
+            }
+
+            var depth = 0;
+
+            for (var index = 0; index < _position; index++)
+            {
+                switch (_tokens[index].Kind)
+                {
+                    case SyntaxTokenKind.OpenParen:
+                    case SyntaxTokenKind.OpenBracket:
+                        depth++;
+                        break;
+                    case SyntaxTokenKind.CloseParen:
+                    case SyntaxTokenKind.CloseBracket:
+                        if (depth > 0) depth--;
+                        break;
+                }
+            }
+
+            return depth == 0;
         }
 
         private bool IsAnyOperatorToken(SyntaxToken token)
