@@ -113,8 +113,15 @@ public class InterpolationFormatTests
     {
         var engine = new ToshEngine(ToshRuntime.CreateDefault());
 
-        await Assert.ThrowsAnyAsync<Exception>(
+        var error = await Assert.ThrowsAnyAsync<Exception>(
             () => engine.ExecuteToListAsync("var s = \"hi\"\n$\"{$s:F2}\""));
+
+        // Reported as the decision it is. Left to escape as a bare `FormatException` it
+        // surfaced as `tosh.runtime.unexpected_exception` — and "unexpected" is exactly
+        // what an error the language chose to raise is not, so a reader would take it for
+        // a bug in the shell rather than in their format string.
+        Assert.Contains("F2", error.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("unexpected", error.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>

@@ -676,5 +676,5 @@ public static class ToastRenderer
     }
 
     private static FormatException UnhonourableFormat(string? format, string kindName)
-        => new($"'{format}' is not a format {kindName} can honour.");
+        => new($"A value of type '{kindName}' cannot be formatted with '{format}'.");
 }

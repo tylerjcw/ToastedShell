@@ -1642,7 +1642,10 @@ public sealed partial class ToshEngine
                                                 await FormatInterpolatedValueAsync(
                                                     results[0],
                                                     cancellationToken,
-                                                    expression.Format),
+                                                    expression.Format,
+                                                    sourceName,
+                                                    sourceText,
+                                                    expression.ExpressionSpan),
                                                 expression.Alignment));
                                         }
                                         else if (results.Count > 1)
@@ -1653,7 +1656,10 @@ public sealed partial class ToshEngine
                                                 formatted[index] = await FormatInterpolatedValueAsync(
                                                     results[index],
                                                     cancellationToken,
-                                                    expression.Format);
+                                                    expression.Format,
+                                                    sourceName,
+                                                    sourceText,
+                                                    expression.ExpressionSpan);
                                             }
 
                                             // Alignment pads the joined text, not each item:

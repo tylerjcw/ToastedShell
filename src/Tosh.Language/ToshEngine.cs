@@ -4173,10 +4173,35 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
     private ValueTask<string> FormatInterpolatedValueAsync(
         object? value,
         CancellationToken cancellationToken,
-        string? format = null)
+        string? format = null,
+        string? sourceName = null,
+        string? sourceText = null,
+        TextSpan? span = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        return ValueTask.FromResult(ToastRenderer.Render(value, format));
+
+        try
+        {
+            return ValueTask.FromResult(ToastRenderer.Render(value, format));
+        }
+        catch (FormatException error)
+        {
+            // A refused clause is a decision, not an accident, so it reports as one. Left
+            // to escape it surfaced as `tosh.runtime.unexpected_exception` — "unexpected"
+            // being exactly what an error the language chose to raise is not, and the
+            // reader would reasonably read that as a bug in the shell rather than in their
+            // format string.
+            throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                Code: "tosh.runtime.invalid_format_clause",
+                Title: error.Message,
+                SourceName: sourceName,
+                SourceText: sourceText,
+                Span: span,
+                Label: $"'{format}' does not apply to this value",
+                Help: "use a format the value's type supports, or drop the clause. A clause "
+                    + "that cannot be honoured is refused rather than ignored, so a "
+                    + "mistyped one is not silently dropped."));
+        }
     }
 
     /// <summary>Pads a formatted hole to its declared field width.</summary>
