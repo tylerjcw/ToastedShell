@@ -37,8 +37,8 @@ a formatter or a compiler wants to make.
 - [x] A class that satisfies the declaration exactly is unaffected, pinned as a control
 - [x] `TraitMemberSyntaxTests` flips from asserting `42` to asserting a diagnostic
 - [x] A negative control: 2 of 9 fail with the check reverted
-- [ ] The same for a required property's declared type — **not done**, see below
-- [ ] Interfaces checked for the same gap — **not done**, see below
+- [x] The same for a required property's declared type — **invariant**, decided separately
+- [x] Interfaces checked for the same gap, with the same rule
 - [ ] The compiler path agrees — **not done**, see below
 
 ## Decision — 2026-08-17
@@ -69,13 +69,29 @@ that limitation itself — while the engine holds both the trait and the class. 
 asks `SatisfiesContract`, the walk that already answers "does this class fulfil that
 contract" for interfaces and traits alike, and then walks the base chain.
 
+## Properties and interfaces — 2026-08-17
+
+**A trait property's type is invariant.** Decided separately from the method rule and for a
+reason that only applies to properties: a property is *written* as well as read. Narrowing
+it is unsound in a way narrowing a return is not — code holding the trait could assign the
+declared type into what the class narrowed, and the class's own annotation would try to
+coerce it and fail, at the assignment and nowhere near the declaration that permitted it.
+C# and Java keep fields invariant for the same reason. A test pins the asymmetry directly:
+the *same* narrowing is refused in property position and accepted in return position.
+
+**Interfaces get the same rule as traits.** They are methods-only — `interface I { prop N }`
+is refused by the parser — so covariant returns and exact parameters is the whole of it for
+them. They had the identical gap and sat one block away; two neighbouring constructs
+behaving differently would need a stated reason, and there was none.
+
+The three call sites share `ThrowOnContractTypeMismatch`, which names the contract kind in
+its help text, so a trait and an interface each say what they are.
+
 ## Remaining
 
-Three acceptance boxes are deliberately not done, and each is its own piece of work:
-a required **property's** declared type, the same check for **interfaces** (which sit beside
-traits in that block and have the identical gap), and the **compiler** path, where traits
-are emitted by `BoundUnitEmitter.TypeDeclarations` and a compiled class is a real CLR type
-rather than a `ToshClassInstance` — the same divergence `TOAST-0022` records.
+One acceptance box is left: the **compiler** path, where traits are emitted by
+`BoundUnitEmitter.TypeDeclarations` and a compiled class is a real CLR type rather than a
+`ToshClassInstance` — the same divergence `TOAST-0022` records.
 
 ## The decision this needs first
 

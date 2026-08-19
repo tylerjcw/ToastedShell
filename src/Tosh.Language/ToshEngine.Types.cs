@@ -370,6 +370,17 @@ public sealed partial class ToshEngine
                     ifaceDefinition,
                     ifaceName);
 
+                // `TOAST-0020`. The same rule traits get, decided 2026-08-17 — interfaces
+                // are methods-only, so this is the whole of it for them. They had the
+                // identical gap and sit one block away; leaving them out would have left two
+                // neighbouring constructs behaving differently for no stated reason.
+                foreach (var signature in ifaceDefinition.Methods)
+                {
+                    ThrowOnContractTypeMismatch(
+                        sourceName, sourceText, @class, ifaceName, "interface", signature.Name,
+                        ResolveMemberTypeMismatch(definition, signature.Name, signature.Parameters, signature.ReturnTypeName));
+                }
+
                 var missing = ifaceDefinition.GetMissingMethods(definition);
                 if (missing.Count > 0)
                 {
@@ -428,23 +439,20 @@ public sealed partial class ToshEngine
                 // relation, and the checker holds annotation *names* while the engine holds
                 // the declarations — this is the one place that already has both the trait
                 // and the class in hand.
-                foreach (var traitMethod in traitDefinition.Methods)
+                foreach (var method in traitDefinition.Methods)
                 {
-                    if (ResolveTraitMemberMismatch(definition, traitMethod) is not { } mismatch)
-                    {
-                        continue;
-                    }
+                    ThrowOnContractTypeMismatch(
+                        sourceName, sourceText, @class, traitName, "trait", method.Name,
+                        ResolveMemberTypeMismatch(definition, method.Name, method.Parameters, method.ReturnTypeName));
+                }
 
-                    throw ToshDiagnosticException.Create(new ToshDiagnostic(
-                        Code: "tosh.runtime.trait_member_type_mismatch",
-                        Title: $"Class '{@class.Name}' implements '{traitName}.{traitMethod.Name}' with an incompatible {mismatch.What}.",
-                        SourceName: sourceName,
-                        SourceText: sourceText,
-                        Span: @class.Span,
-                        Label: $"trait declares {mismatch.Expected}, class declares {mismatch.Actual}",
-                        Help: mismatch.What == "return type"
-                            ? "a class may return the declared type or one derived from it, but not an unrelated one."
-                            : "a parameter must name the same type the trait declares."));
+                // Properties are checked **invariantly** — see `ResolvePropertyTypeMismatch`
+                // for why a writable member cannot narrow the way a return can.
+                foreach (var property in traitDefinition.Properties)
+                {
+                    ThrowOnContractTypeMismatch(
+                        sourceName, sourceText, @class, traitName, "trait", property.Name,
+                        ResolvePropertyTypeMismatch(definition, property));
                 }
 
                 // Check required properties (those without default values)
@@ -1274,12 +1282,14 @@ public sealed partial class ToshEngine
     /// the trait — it has only declined to repeat it.
     /// </para>
     /// </remarks>
-    private (string What, string Expected, string Actual)? ResolveTraitMemberMismatch(
+    private (string What, string Expected, string Actual)? ResolveMemberTypeMismatch(
         ToshClassDefinition definition,
-        TraitMethodDefinition traitMethod)
+        string memberName,
+        IReadOnlyList<FunctionParameterDefinition> contractParameters,
+        string? contractReturnTypeName)
     {
         var implementation = definition.Methods
-            .FirstOrDefault(method => string.Equals(method.Name, traitMethod.Name, StringComparison.OrdinalIgnoreCase));
+            .FirstOrDefault(method => string.Equals(method.Name, memberName, StringComparison.OrdinalIgnoreCase));
 
         if (implementation is null)
         {
@@ -1288,18 +1298,18 @@ public sealed partial class ToshEngine
             return null;
         }
 
-        if (traitMethod.ReturnTypeName is { Length: > 0 } expectedReturn &&
+        if (contractReturnTypeName is { Length: > 0 } expectedReturn &&
             implementation.ReturnTypeName is { Length: > 0 } actualReturn &&
             !IsCovariantWith(actualReturn, expectedReturn))
         {
             return ("return type", expectedReturn, actualReturn);
         }
 
-        var shared = Math.Min(traitMethod.Parameters.Count, implementation.Parameters.Count);
+        var shared = Math.Min(contractParameters.Count, implementation.Parameters.Count);
 
         for (var index = 0; index < shared; index++)
         {
-            if (traitMethod.Parameters[index].TypeName is { Length: > 0 } expectedParameter &&
+            if (contractParameters[index].TypeName is { Length: > 0 } expectedParameter &&
                 implementation.Parameters[index].TypeName is { Length: > 0 } actualParameter &&
                 !NamesSameType(actualParameter, expectedParameter))
             {
@@ -1308,6 +1318,70 @@ public sealed partial class ToshEngine
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Reports a contract-type disagreement, or does nothing when there is none.
+    /// </summary>
+    /// <remarks>
+    /// Shared by traits and interfaces (`TOAST-0020`), which sit in neighbouring blocks and
+    /// had the identical gap. One rule for both contract kinds means one thing to learn and
+    /// one implementation to keep correct.
+    /// </remarks>
+    private void ThrowOnContractTypeMismatch(
+        string sourceName,
+        string sourceText,
+        ClassDefinitionStatementSyntax @class,
+        string contractName,
+        string contractKind,
+        string memberName,
+        (string What, string Expected, string Actual)? mismatch)
+    {
+        if (mismatch is not { } found)
+        {
+            return;
+        }
+
+        throw ToshDiagnosticException.Create(new ToshDiagnostic(
+            Code: "tosh.runtime.contract_member_type_mismatch",
+            Title: $"Class '{@class.Name}' implements '{contractName}.{memberName}' with an incompatible {found.What}.",
+            SourceName: sourceName,
+            SourceText: sourceText,
+            Span: @class.Span,
+            Label: $"the {contractKind} declares {found.Expected}, the class declares {found.Actual}",
+            Help: found.What == "return type"
+                ? $"a class may return the type the {contractKind} declares, or one derived from it, but not an unrelated one."
+                : $"this member must name the same type the {contractKind} declares. Only a return type may narrow."));
+    }
+
+    /// <summary>
+    /// Whether a class's property disagrees with the type a trait declares for it.
+    /// </summary>
+    /// <remarks>
+    /// **Invariant, decided 2026-08-17** — unlike a method's return. A property is written as
+    /// well as read, so narrowing it is unsound: code holding the trait could assign the
+    /// declared type into what the class narrowed, and the class's own annotation would try
+    /// to coerce it and fail. The failure would land at the assignment, nowhere near the
+    /// declaration that permitted it. C# and Java keep fields invariant for the same reason.
+    /// </remarks>
+    private (string What, string Expected, string Actual)? ResolvePropertyTypeMismatch(
+        ToshClassDefinition definition,
+        TraitPropertyDefinition traitProperty)
+    {
+        if (traitProperty.TypeName is not { Length: > 0 } expected)
+        {
+            return null;
+        }
+
+        var implementation = definition.Properties
+            .FirstOrDefault(property => string.Equals(property.Name, traitProperty.Name, StringComparison.OrdinalIgnoreCase));
+
+        if (implementation?.TypeName is not { Length: > 0 } actual || NamesSameType(actual, expected))
+        {
+            return null;
+        }
+
+        return ($"property '{implementation.Name}'", expected, actual);
     }
 
     /// <summary>Whether <paramref name="actual"/> is <paramref name="expected"/> or derives from it.</summary>

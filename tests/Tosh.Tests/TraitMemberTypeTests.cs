@@ -143,4 +143,118 @@ public sealed class TraitMemberTypeTests
             class TmtV uses TmtU { }
             (new TmtV()).r()
             """));
+
+    // ── properties are invariant ───────────────────────────────────────────────
+
+    /// <summary>
+    /// A property's type must match **exactly**, unlike a return.
+    /// </summary>
+    /// <remarks>
+    /// Decided 2026-08-17. A property is written as well as read, so narrowing it is
+    /// unsound in a way a return is not — see the covariance test below for the shape that
+    /// would break.
+    /// </remarks>
+    [Fact]
+    public async Task A_mismatched_property_type_is_refused()
+    {
+        var error = await RefusedAsync(
+            """
+            trait TmtNamed { prop Name: string }
+            class TmtBadProp uses TmtNamed { prop Name: int = 1 }
+            """);
+
+        Assert.Contains("Name", error.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>A matching property agrees.</summary>
+    [Fact]
+    public async Task A_matching_property_agrees()
+        => Assert.Equal("p", await RunAsync(
+            """
+            trait TmtNamed { prop Name: string }
+            class TmtGoodProp uses TmtNamed { prop Name: string = "p" }
+            (new TmtGoodProp()).Name
+            """));
+
+    /// <summary>
+    /// **A narrowed property is refused even though the narrowing is a real subtype.** This
+    /// is the case that separates a property from a return: code holding the trait could
+    /// assign a `TmtPBase` into what the class declared as `TmtPLeaf`, and the class's own
+    /// annotation would try to coerce it and fail — at the assignment, nowhere near the
+    /// declaration that permitted it.
+    /// </summary>
+    [Fact]
+    public async Task A_narrowed_property_is_refused_although_the_same_narrowing_is_allowed_for_a_return()
+    {
+        await RefusedAsync(
+            """
+            class TmtPBase { prop K: string = "b" }
+            class TmtPLeaf extends TmtPBase { }
+            trait TmtShaped { prop Shape: TmtPBase }
+            class TmtNarrow uses TmtShaped { prop Shape: TmtPLeaf = new TmtPLeaf() }
+            """);
+
+        // The same narrowing, in return position, is accepted — which is the whole point of
+        // the distinction rather than an inconsistency.
+        Assert.Equal("b", await RunAsync(
+            """
+            class TmtPBase { prop K: string = "b" }
+            class TmtPLeaf extends TmtPBase { }
+            trait TmtFact { func make() -> TmtPBase }
+            class TmtWide uses TmtFact { func make() -> TmtPLeaf => new TmtPLeaf() }
+            (new TmtWide()).make().K
+            """));
+    }
+
+    // ── interfaces get the same rule ───────────────────────────────────────────
+
+    /// <summary>
+    /// An interface is checked exactly as a trait is. They had the identical gap and sit in
+    /// neighbouring blocks; two neighbouring constructs behaving differently would need a
+    /// stated reason, and there is none.
+    /// </summary>
+    [Fact]
+    public async Task An_interface_return_mismatch_is_refused()
+    {
+        var error = await RefusedAsync(
+            """
+            interface TmtIface { func f() -> string }
+            class TmtIBad implements TmtIface { func f() -> int => 42 }
+            """);
+
+        // The contract and member, not the word "interface" — that lives in the Help text,
+        // which is not part of the message.
+        Assert.Contains("TmtIface.f", error.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>An interface return may narrow, like a trait's.</summary>
+    [Fact]
+    public async Task An_interface_return_may_narrow()
+        => Assert.Equal("leaf", await RunAsync(
+            """
+            class TmtIBase { prop K: string = "base" }
+            class TmtILeaf extends TmtIBase { prop K: string = "leaf" }
+            interface TmtIFactory { func make() -> TmtIBase }
+            class TmtIMaker implements TmtIFactory { func make() -> TmtILeaf => new TmtILeaf() }
+            (new TmtIMaker()).make().K
+            """));
+
+    /// <summary>And an interface parameter must match exactly.</summary>
+    [Fact]
+    public async Task An_interface_parameter_mismatch_is_refused()
+        => await RefusedAsync(
+            """
+            interface TmtIP { func take(v: string) -> string }
+            class TmtIQ implements TmtIP { func take(v: int) -> string => "x" }
+            """);
+
+    /// <summary>A conforming interface implementation is unaffected.</summary>
+    [Fact]
+    public async Task A_conforming_interface_implementation_agrees()
+        => Assert.Equal("x", await RunAsync(
+            """
+            interface TmtIOk { func f(v: string) -> string }
+            class TmtIGood implements TmtIOk { func f(v: string) -> string => "x" }
+            (new TmtIGood()).f("a")
+            """));
 }
