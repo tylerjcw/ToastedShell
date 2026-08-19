@@ -1303,6 +1303,19 @@ public static class TypeChecker
             if (UserTypeMembers.MayHaveUnseenMembers(targetType)) return;
             if (ctx.ExtensionMethodNames.Contains(call.MethodName)) return;
 
+            // A *property* of that name can hold a callable, and calling one is legal —
+            // `TS-P2-93` taught the `$this.Handler(…)` path that rule, and this one was not
+            // covered. `TS-P2-118`: the runtime was right and the checker was wrong, which
+            // is the worst pairing, because the code works and the warning is noise. Noise
+            // is what teaches people to stop reading warnings.
+            //
+            // Asked through the same `UserTypeMembers` lookup the member-access check uses,
+            // rather than restating what "callable property" means. Whether the property's
+            // *value* is callable cannot be known here — the checker holds annotation names,
+            // not declarations, as `CheckUserMemberAccess` records two methods below — so a
+            // declared property suppresses the warning outright. That trades a warning
+            // nobody was getting for one nobody wanted.
+            if (UserTypeMembers.TryGetProperty(targetType, call.MethodName, out _)) return;
 
             ctx.Diagnostics.Add(new ToshDiagnostic(
                 Code: "tosh.type.member_not_found",
