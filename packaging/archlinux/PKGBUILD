@@ -74,7 +74,7 @@ _selected_count=${#_pkgs[@]}
 
 pkgbase=tosh
 pkgname=("${_pkgs[@]}")
-pkgver=26.8.32.10
+pkgver=26.8.33.10
 pkgrel=1
 arch=('x86_64')
 url='https://github.com/komrad/tosh'

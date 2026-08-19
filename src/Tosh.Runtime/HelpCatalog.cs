@@ -1195,6 +1195,14 @@ public static class HelpCatalog
             return shellTopic;
         }
 
+        // `TS-P2-101`. `help Swatch.Name` — a member of a documented type. Tried after the
+        // whole name has failed every other lookup, so a type that genuinely contains a dot
+        // is never shadowed by a member reading of it.
+        if (TryResolveShellMemberTopic(runtime, name, out var memberTopic))
+        {
+            return memberTopic;
+        }
+
         var type = runtime.TypeResolver.Resolve(name);
 
         if (type is not null)
@@ -1967,6 +1975,84 @@ public static class HelpCatalog
                 _ => HelpSubjectKind.BuiltIn,
             }
             : HelpSubjectKind.BuiltIn;
+    }
+
+    /// <summary>
+    /// Resolves <c>Type.Member</c> to the member's own help — `TS-P2-101`.
+    /// </summary>
+    /// <remarks>
+    /// Split at the **last** dot, so a namespaced type keeps its name and only the trailing
+    /// segment is read as a member. The member's summary is the topic's description when it
+    /// has one; without a comment it still gets a synthesised line, because an empty help
+    /// entry is worse than a generic one — the same rule the type-level half settled on.
+    /// </remarks>
+    private static bool TryResolveShellMemberTopic(ToshRuntime runtime, string name, out HelpTopic topic)
+    {
+        topic = null!;
+
+        var split = name.LastIndexOf('.');
+
+        if (split <= 0 || split == name.Length - 1)
+        {
+            return false;
+        }
+
+        var typeName = name[..split];
+        var memberName = name[(split + 1)..];
+
+        if (!runtime.Classes.TryGetValue(typeName, out var raw) ||
+            raw is not IShellTypeDescriptor descriptor)
+        {
+            return false;
+        }
+
+        foreach (var method in descriptor.GetShellMethods(includeHidden: false))
+        {
+            if (!string.Equals(method.Name, memberName, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            topic = new HelpTopic(
+                Name: $"{descriptor.ShellTypeName}.{method.Name}",
+                Kind: HelpSubjectKind.Type,
+                Category: "Types",
+                Description: method.Documentation is { Length: > 0 } methodSummary
+                    ? methodSummary
+                    : $"Method '{method.Name}' on {descriptor.ShellTypeName}.",
+                Usage: method.Signature,
+                Aliases: Array.Empty<string>(),
+                Related: [descriptor.ShellTypeName],
+                Examples: Array.Empty<string>(),
+                Path: null,
+                Notes: null);
+            return true;
+        }
+
+        foreach (var member in descriptor.GetShellMembers(includeHidden: false))
+        {
+            if (!string.Equals(member.Name, memberName, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            topic = new HelpTopic(
+                Name: $"{descriptor.ShellTypeName}.{member.Name}",
+                Kind: HelpSubjectKind.Type,
+                Category: "Types",
+                Description: member.Documentation is { Length: > 0 } memberSummary
+                    ? memberSummary
+                    : $"{member.Kind} '{member.Name}' on {descriptor.ShellTypeName}.",
+                Usage: $"{descriptor.ShellTypeName}.{member.Name}: {member.TypeName}",
+                Aliases: Array.Empty<string>(),
+                Related: [descriptor.ShellTypeName],
+                Examples: Array.Empty<string>(),
+                Path: null,
+                Notes: null);
+            return true;
+        }
+
+        return false;
     }
 
     private static bool TryResolveShellTopic(ToshRuntime runtime, string name, out HelpTopic topic)

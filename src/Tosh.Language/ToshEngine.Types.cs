@@ -85,7 +85,8 @@ public sealed partial class ToshEngine
                 property.IsLocal,
                 property.IsAbstract,
                 property.Span,
-                CreateRefinementAnnotation(sourceName, sourceText, property.Refinement)))
+                CreateRefinementAnnotation(sourceName, sourceText, property.Refinement),
+                property.DocComment))
             .ToArray();
 
         var runtimeMethods = @class.Members
@@ -132,7 +133,8 @@ public sealed partial class ToshEngine
                 // call time (see ToshClassDefinition.ExecuteMethodBlock).
                 RawReturnTypeName: method.Method.ReturnTypeName,
                 TypeParameters: methodTypeParams,
-                TypeParameterConstraints: methodConstraints);
+                TypeParameterConstraints: methodConstraints,
+                Documentation: method.Method.DocComment);
             })
             .ToArray();
 

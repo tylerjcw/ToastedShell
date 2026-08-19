@@ -6,4 +6,6 @@ public sealed record ShellMemberDescriptor(
     string TypeName,
     bool IsStatic,
     bool IsWritable,
-    bool IsHidden = false);
+    bool IsHidden = false,
+    /// <inheritdoc cref="ShellMethodDescriptor.Documentation" />
+    string? Documentation = null);

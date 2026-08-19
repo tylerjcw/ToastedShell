@@ -1033,7 +1033,8 @@ public sealed class ToshClassDefinition : IShellNamedType
                 TypeName: GetAnnotationDisplayName(property.TypeName),
                 IsStatic: property.IsStatic,
                 IsWritable: property.IsWritable,
-                IsHidden: property.IsShy))
+                IsHidden: property.IsShy,
+                Documentation: property.Documentation?.Description))
             .ToArray();
     }
 
@@ -1047,7 +1048,8 @@ public sealed class ToshClassDefinition : IShellNamedType
                 IsStatic: method.IsStatic,
                 ParameterCount: method.Parameters.Count,
                 Signature: FormatMethodSignature(method),
-                IsHidden: method.IsShy));
+                IsHidden: method.IsShy,
+                Documentation: method.Documentation?.Description));
 
         // Native bindings are real callable members, so `methods` must show the
         // proud ones — otherwise `proud bind` and `shy bind` would look identical

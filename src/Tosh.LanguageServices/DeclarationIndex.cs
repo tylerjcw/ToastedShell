@@ -765,6 +765,7 @@ public sealed class DeclarationIndex
         Function,
         Class,
         Interface,
+        Trait,
         Module,
         Enum,
         Record,
@@ -966,6 +967,37 @@ public sealed class DeclarationIndex
                     foreach (var method in @interface.Methods)
                     {
                         AddDeclaration(method.Name, DeclarationKind.ClassMethod, method.Span, interfaceSpan, depth + 1);
+                    }
+                    break;
+
+                // `TS-P2-101`. A trait was absent from this index entirely, so a documented
+                // trait had no hover, no go-to-definition and no symbol — the one declaration
+                // kind that fell out of the editor completely. Mirrors the interface case
+                // above, which is the nearest shape: a name plus required members.
+                case TraitDefinitionStatementSyntax trait:
+                    var traitEnd = trait.Span.End;
+
+                    if (trait.Methods.Count > 0)
+                    {
+                        traitEnd = Math.Max(traitEnd, trait.Methods.Max(m => m.Span.End));
+                    }
+
+                    if (trait.Properties.Count > 0)
+                    {
+                        traitEnd = Math.Max(traitEnd, trait.Properties.Max(p => p.Span.End));
+                    }
+
+                    var traitSpan = TextSpan.FromBounds(trait.Span.Start, traitEnd);
+                    AddDeclaration(trait.Name, DeclarationKind.Trait, traitSpan, scopeSpan, depth, trait.DocComment);
+
+                    foreach (var traitMethod in trait.Methods)
+                    {
+                        AddDeclaration(traitMethod.Name, DeclarationKind.ClassMethod, traitMethod.Span, traitSpan, depth + 1);
+                    }
+
+                    foreach (var traitProperty in trait.Properties)
+                    {
+                        AddDeclaration(traitProperty.Name, DeclarationKind.Property, traitProperty.Span, traitSpan, depth + 1);
                     }
                     break;
 
@@ -1409,6 +1441,13 @@ public sealed class DeclarationIndex
 
                 case FunctionDefinitionStatementSyntax function:
                     AddImported(function.Name, DeclarationKind.Function, importScope, depth, requireSpan, function.DocComment);
+                    break;
+
+                // A trait imported from another file is a symbol like any other type
+                // (`TS-P2-101`). This switch records imports; the declaring switch above
+                // records the members.
+                case TraitDefinitionStatementSyntax trait:
+                    AddImported(trait.Name, DeclarationKind.Trait, importScope, depth, requireSpan);
                     break;
 
                 case ModuleDefinitionStatementSyntax module:

@@ -22,4 +22,6 @@ public sealed record ToshClassMethodDefinition(
     IReadOnlyList<LexicalScope>? CapturedScopes = null,
     string? RawReturnTypeName = null,
     IReadOnlyList<string>? TypeParameters = null,
-    IReadOnlyList<ToshTypeParameterConstraint>? TypeParameterConstraints = null);
+    IReadOnlyList<ToshTypeParameterConstraint>? TypeParameterConstraints = null,
+    /// <inheritdoc cref="ToshClassPropertyDefinition.Documentation" />
+    DocComment? Documentation = null);

@@ -21,6 +21,5 @@
 | [`TOAST-0011`](items/TOAST-0011.md) | P2 | open | 0/6 | A TōSh closure cannot be passed where C wants a function pointer |
 | [`TOAST-0002`](items/TOAST-0002.md) | P2 | partial | 4/8 | Statement dispatch is decided by scattered lookahead predicates that must agree by hand |
 | [`TS-P3-07`](items/TS-P3-07.md) | P3 | in-progress | — | Unify `StorageSize`/`TemporalAmount` with the Quantity unit system |
-| [`TS-P2-101`](items/TS-P2-101.md) | P2 | partial | 0/1 | Class and member doc comments never reach `help` |
 | [`PLAN-0003`](items/PLAN-0003.md) | P2 | research | 0/5 | MSBuild node accumulation is a candidate cause for the unexplained development-time memory exhaustion |
 | [`TS-P2-125`](items/TS-P2-125.md) | P2 | in-progress | — | A lexical scope allocated ten collections it almost never used |
