@@ -143,4 +143,66 @@ public class SplatArgumentTests
         Assert.Equal("1", await RunAsync(probe + "(Probe($f))"));
         Assert.Equal("3", await RunAsync(probe + "(Probe(...$f))"));
     }
+
+    // ── the two parser gaps, `TS-P2-104`'s remaining half ──────────────────────
+
+    /// <summary>
+    /// A constructor spreads exactly as a method does.
+    /// </summary>
+    /// <remarks>
+    /// The constructor argument loop is its own and had no splat branch — the same "two
+    /// walkers, one of which knows the language has spreading" shape this item's first half
+    /// fixed in the *evaluator*, reappearing in the parser. Without it `...$pair` arrived as
+    /// the **literal string** `"...$pair"`, which is why the failure read as a constructor
+    /// arity error rather than as anything to do with splatting.
+    /// </remarks>
+    [Fact]
+    public async Task A_constructor_spreads_a_splatted_list()
+        => Assert.Equal("2", await RunAsync(
+            """
+            class SplatP {
+                prop B: int = 0
+                SplatP(a: int, b: int) { $this.B = $b }
+            }
+            var pair = [1, 2]
+            (new SplatP(...$pair)).B
+            """));
+
+    /// <summary>
+    /// A collection *literal* can be splatted, not only a variable holding one.
+    /// </summary>
+    /// <remarks>
+    /// The lookahead required the target to be glued into the same token, and a `[` breaks
+    /// the bareword — so `...` arrived alone and was not recognised at all. It is now
+    /// accepted when an opening delimiter follows, narrowly: a bare `...` is also a
+    /// rest-parameter marker and a native binding's variadic tail, and neither is followed
+    /// by one.
+    /// </remarks>
+    [Theory]
+    [InlineData("(SplatSum(...[1, 2, 3]))", "6")]
+    [InlineData("(SplatSum(...[]))", "0")]
+    public async Task A_collection_literal_can_be_splatted(string call, string expected)
+        => Assert.Equal(expected, await RunAsync(
+            "func SplatSum(vals...) -> int {\n    var total = 0\n    for v in $vals { $total = ($total + $v) }\n    return $total\n}\n" + call));
+
+    /// <summary>
+    /// A bare `...` that is *not* a splat still means what it meant — a rest parameter.
+    /// This is the control for widening the lookahead.
+    /// </summary>
+    [Fact]
+    public async Task A_rest_parameter_is_unaffected()
+        => Assert.Equal("3", await RunAsync(
+            "func SplatCount(vals...) -> int { return $vals.Count }\nSplatCount 1 2 3"));
+
+    /// <summary>
+    /// Ordinary leading arguments still combine with a splat.
+    /// </summary>
+    [Fact]
+    public async Task Leading_arguments_still_combine_with_a_splat()
+        => Assert.Equal("12", await RunAsync(
+            """
+            func SplatLead(a: int, rest...) -> int { return ($a + $rest.Count) }
+            var v = [1, 2]
+            SplatLead(10, ...$v)
+            """));
 }

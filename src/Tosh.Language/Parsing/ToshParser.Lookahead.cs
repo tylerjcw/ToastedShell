@@ -999,9 +999,26 @@ public static partial class ToshParser
 
         private bool LooksLikeSplatArgument()
         {
-            return Current.Kind == SyntaxTokenKind.Bareword &&
-                   Current.Text.StartsWith("...", StringComparison.Ordinal) &&
-                   Current.Text.Length > 3;
+            if (Current.Kind != SyntaxTokenKind.Bareword ||
+                !Current.Text.StartsWith("...", StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            // `...$values` — the target is glued into the same token, which is the
+            // realistic spelling and the only one that ever worked.
+            if (Current.Text.Length > 3)
+            {
+                return true;
+            }
+
+            // `...[1, 2]` — a collection *literal* breaks the bareword at its opening
+            // bracket, so `...` arrives alone and the length test above rejected it
+            // (`TS-P2-104`). Narrowed to an opening delimiter on purpose: a bare `...` is
+            // also a rest-parameter marker and a native binding's variadic tail, and
+            // neither of those is followed by one.
+            return Peek(1).Kind is SyntaxTokenKind.OpenBracket
+                or SyntaxTokenKind.OpenParen;
         }
 
         /// <summary>

@@ -1455,6 +1455,17 @@ public static partial class ToshParser
         private ArgumentSyntax ParseSplatArgument()
         {
             var splatToken = NextToken();
+
+            // `...` alone, with its target in the tokens that follow — `...[1, 2]`.
+            if (splatToken.Text.Length == 3)
+            {
+                var target = ParseArgument(implicitCurrentItem: false);
+
+                return new SplatArgumentSyntax(
+                    target ?? new BarewordArgumentSyntax(string.Empty, splatToken.Span),
+                    splatToken.Span);
+            }
+
             var innerText = splatToken.Text[3..];
             var innerSpan = new TextSpan(splatToken.Span.Start + 3, innerText.Length);
 
@@ -2219,8 +2230,17 @@ public static partial class ToshParser
                     continue;
                 }
 
+                // `TS-P2-104`. A constructor spreads exactly as a method does. This loop is
+                // the constructor's own, and it had no splat branch — the same "two walkers,
+                // one of which knows the language has spreading" shape the item's first half
+                // fixed in the evaluator, reappearing in the parser. Without it `...$pair`
+                // reached the constructor as the *literal string* `"...$pair"`.
+                if (LooksLikeSplatArgument())
+                {
+                    arguments.Add(ParseSplatArgument());
+                }
                 // `TS-P2-21`. A constructor takes named arguments exactly as a method does.
-                if (TryParseNamedArgument(implicitCurrentItem, out var namedConstructorArgument))
+                else if (TryParseNamedArgument(implicitCurrentItem, out var namedConstructorArgument))
                 {
                     if (namedConstructorArgument is not null)
                     {
