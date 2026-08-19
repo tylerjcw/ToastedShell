@@ -874,6 +874,22 @@ public static partial class ToshParser
                 return false;
             }
 
+            // `TS-P2-120`. A nullable suffix does not change whether a name *is* a type
+            // name, and the lexer keeps it inside the bareword — so `int?` arrived here
+            // whole and failed `IsValidIdentifier` on the `?`. `Int32?` passed only because
+            // the CLR-name heuristic below accepts a capitalised word, which is why the
+            // defect looked like it was about built-in aliases specifically: the alias
+            // spellings are lowercase and nothing else would take them.
+            //
+            // The cost was out of all proportion to the cause. This predicate decides
+            // whether `var` opens a *declaration*, so a false answer did not report a bad
+            // annotation — it reported `Command 'var' is not a registered builtin`, at
+            // column 1, naming neither the type nor the annotation.
+            if (text.Length > 1 && text[^1] == '?')
+            {
+                text = text[..^1];
+            }
+
             return IsValidIdentifier(text) ||
                    LooksLikeQualifiedDotNetAccess(text) ||
                    LooksLikePotentialClrTypeName(text);
