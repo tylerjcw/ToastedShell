@@ -115,21 +115,27 @@ public sealed class TraitMemberSyntaxTests
             """));
 
     /// <summary>
-    /// A trait member's type is a *declaration*, not a check — a class may still return
-    /// something else, and nothing reports it.
+    /// A trait member's declared type is now a **check** — `TOAST-0020`.
     /// </summary>
     /// <remarks>
-    /// Pinned deliberately rather than left undiscovered. Enforcement needs a rule for what
-    /// "compatible" means — exact name, alias, subclass, interface — and that is a variance
-    /// decision, not a parser change. Filed as `TOAST-0020`. When it lands, this test is the
-    /// one that must flip, and its failure is the signal that it did.
+    /// This asserted the opposite until 2026-08-17, pinning that a class could satisfy
+    /// `render() -> string` with an implementation returning `int` and nothing would report
+    /// it. The note said "when it lands, this test is the one that must flip, and its
+    /// failure is the signal that it did" — and that is exactly how it was noticed, in the
+    /// run after the check went in.
     /// </remarks>
     [Fact]
-    public async Task A_declared_return_type_is_not_yet_enforced()
-        => Assert.Equal("42", await RunAsync(
+    public async Task A_declared_return_type_is_enforced()
+    {
+        var engine = new ToshEngine(ToshRuntime.CreateDefault());
+
+        var error = await Assert.ThrowsAnyAsync<Exception>(() => engine.ExecuteToListAsync(
             """
             trait D { func render() -> string }
             class T uses D { func render() -> int => 42 }
             (new T()).render()
             """));
+
+        Assert.Contains("render", error.Message, StringComparison.Ordinal);
+    }
 }

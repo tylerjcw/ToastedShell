@@ -1,7 +1,7 @@
 ---
 id: TOAST-0020
 title: "A trait's declared member types are not enforced on the implementing class"
-status: open
+status: partial
 area: toast
 priority: 2
 opened: 2026-08-17
@@ -29,18 +29,53 @@ a formatter or a compiler wants to make.
 
 ## Acceptance
 
-- [ ] A class whose method returns a type incompatible with the trait's declaration is
+- [x] A class whose method returns a type incompatible with the trait's declaration is
       reported at class definition, naming the trait, the member, the expected type and
       the actual one
-- [ ] The same for a required property's declared type
-- [ ] **The compatibility rule is written down before it is implemented** — see below
-- [ ] A class that satisfies the declaration exactly is unaffected, pinned as a control
-- [ ] Interfaces checked for the same gap; `ToshInterfaceDefinition` sits beside
-      `ToshTraitDefinition` in the same validation block
-- [ ] The compiler path agrees — traits are emitted by `BoundUnitEmitter.TypeDeclarations`
-- [ ] `TraitMemberSyntaxTests.A_declared_return_type_is_not_yet_enforced` flips from
-      asserting `42` to asserting a diagnostic
-- [ ] A negative control: reverting fails the new tests
+- [x] **The compatibility rule is written down before it is implemented** — decided
+      2026-08-17, recorded below
+- [x] A class that satisfies the declaration exactly is unaffected, pinned as a control
+- [x] `TraitMemberSyntaxTests` flips from asserting `42` to asserting a diagnostic
+- [x] A negative control: 2 of 9 fail with the check reverted
+- [ ] The same for a required property's declared type — **not done**, see below
+- [ ] Interfaces checked for the same gap — **not done**, see below
+- [ ] The compiler path agrees — **not done**, see below
+
+## Decision — 2026-08-17
+
+**Covariant returns, exact parameters, reported at class definition.**
+
+A class may return the declared type or one derived from it, because narrowing a result
+never surprises a caller holding the trait. A parameter must name the same type:
+contravariance would be sound, but it is rarely wanted, frequently misread, and half a
+variance rule is worse than a simple one. An **undeclared** type on either side agrees with
+anything — a trait that says nothing constrains nothing, and a class that says nothing has
+not contradicted the trait, it has only declined to repeat it. An alias and its CLR
+spelling name one type and agree.
+
+### What measuring changed about the question
+
+The item read as "add checking to an unchecked language". It is not. A class's own
+annotations already **coerce**: `func f() -> string => 42` yields `"42"`, a parameter
+`f(x: string)` given `42` receives `"42"`, and an uncoercible value raises. The *trait's*
+annotations were the only ones that did nothing at all, in either position. So the question
+was never whether the language checks types — it was why one declaration site was inert.
+
+### Where it is checked, and why not in the checker
+
+In the engine's trait-conformance block, beside `GetMissingMethods`. The rule needs a
+subtype relation; `TypeChecker` holds annotation *names* and not declarations — it records
+that limitation itself — while the engine holds both the trait and the class. `IsCovariantWith`
+asks `SatisfiesContract`, the walk that already answers "does this class fulfil that
+contract" for interfaces and traits alike, and then walks the base chain.
+
+## Remaining
+
+Three acceptance boxes are deliberately not done, and each is its own piece of work:
+a required **property's** declared type, the same check for **interfaces** (which sit beside
+traits in that block and have the identical gap), and the **compiler** path, where traits
+are emitted by `BoundUnitEmitter.TypeDeclarations` and a compiled class is a real CLR type
+rather than a `ToshClassInstance` — the same divergence `TOAST-0022` records.
 
 ## The decision this needs first
 

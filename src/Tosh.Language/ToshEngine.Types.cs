@@ -418,6 +418,35 @@ public sealed partial class ToshEngine
                         Label: $"missing: {string.Join(", ", missingMethods)}"));
                 }
 
+                // `TOAST-0020`. A trait declares what its members give back and take, and
+                // nothing checked it — a class could satisfy `render() -> string` with an
+                // implementation returning `int`, so the trait was a naming convention
+                // rather than a contract.
+                //
+                // Decided 2026-08-17: **covariant returns, exact parameters**, reported
+                // here. Here rather than in `TypeChecker` because the rule needs a subtype
+                // relation, and the checker holds annotation *names* while the engine holds
+                // the declarations — this is the one place that already has both the trait
+                // and the class in hand.
+                foreach (var traitMethod in traitDefinition.Methods)
+                {
+                    if (ResolveTraitMemberMismatch(definition, traitMethod) is not { } mismatch)
+                    {
+                        continue;
+                    }
+
+                    throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                        Code: "tosh.runtime.trait_member_type_mismatch",
+                        Title: $"Class '{@class.Name}' implements '{traitName}.{traitMethod.Name}' with an incompatible {mismatch.What}.",
+                        SourceName: sourceName,
+                        SourceText: sourceText,
+                        Span: @class.Span,
+                        Label: $"trait declares {mismatch.Expected}, class declares {mismatch.Actual}",
+                        Help: mismatch.What == "return type"
+                            ? "a class may return the declared type or one derived from it, but not an unrelated one."
+                            : "a parameter must name the same type the trait declares."));
+                }
+
                 // Check required properties (those without default values)
                 var missingProps = traitDefinition.GetMissingProperties(definition);
                 if (missingProps.Count > 0)
@@ -1225,5 +1254,106 @@ public sealed partial class ToshEngine
                type == typeof(uint) ||
                type == typeof(long) ||
                type == typeof(ulong);
+    }
+
+    /// <summary>
+    /// The first way a class's implementation disagrees with the trait member it satisfies,
+    /// or null when they agree — `TOAST-0020`.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// **Covariant returns, exact parameters.** A class may return the declared type or one
+    /// derived from it, because narrowing a result never surprises a caller holding the
+    /// trait. A parameter must match exactly: contravariance would be sound, but it is
+    /// rarely wanted and frequently misread, and half a variance rule is worse than a
+    /// simple one.
+    /// </para>
+    /// <para>
+    /// An **undeclared** type on either side agrees with anything. A trait that says nothing
+    /// about a return constrains nothing, and a class that says nothing has not contradicted
+    /// the trait — it has only declined to repeat it.
+    /// </para>
+    /// </remarks>
+    private (string What, string Expected, string Actual)? ResolveTraitMemberMismatch(
+        ToshClassDefinition definition,
+        TraitMethodDefinition traitMethod)
+    {
+        var implementation = definition.Methods
+            .FirstOrDefault(method => string.Equals(method.Name, traitMethod.Name, StringComparison.OrdinalIgnoreCase));
+
+        if (implementation is null)
+        {
+            // Absent, or inherited, or supplied by the trait's own default — all of which
+            // the missing-member check above has already had its say about.
+            return null;
+        }
+
+        if (traitMethod.ReturnTypeName is { Length: > 0 } expectedReturn &&
+            implementation.ReturnTypeName is { Length: > 0 } actualReturn &&
+            !IsCovariantWith(actualReturn, expectedReturn))
+        {
+            return ("return type", expectedReturn, actualReturn);
+        }
+
+        var shared = Math.Min(traitMethod.Parameters.Count, implementation.Parameters.Count);
+
+        for (var index = 0; index < shared; index++)
+        {
+            if (traitMethod.Parameters[index].TypeName is { Length: > 0 } expectedParameter &&
+                implementation.Parameters[index].TypeName is { Length: > 0 } actualParameter &&
+                !NamesSameType(actualParameter, expectedParameter))
+            {
+                return ($"parameter '{implementation.Parameters[index].Name}'", expectedParameter, actualParameter);
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>Whether <paramref name="actual"/> is <paramref name="expected"/> or derives from it.</summary>
+    private bool IsCovariantWith(string actual, string expected)
+    {
+        if (NamesSameType(actual, expected))
+        {
+            return true;
+        }
+
+        if (TryGetNamedType(StripGenericTypeArguments(actual), out var namedActual) &&
+            namedActual is ToshClassDefinition actualClass)
+        {
+            // A class satisfies the expected name by inheriting it, implementing it as an
+            // interface, or using it as a trait — the same three routes an annotation
+            // accepts, asked through the walk that already answers them.
+            if (actualClass.SatisfiesContract(expected))
+            {
+                return true;
+            }
+
+            for (var current = actualClass.BaseClass; current is not null; current = current.BaseClass)
+            {
+                if (NamesSameType(current.Name, expected))
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Whether two annotations name the same type, so an alias and its CLR spelling agree.
+    /// </summary>
+    private bool NamesSameType(string left, string right)
+    {
+        if (string.Equals(left, right, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        var leftType = ResolveTypeName(StripGenericTypeArguments(left));
+        var rightType = ResolveTypeName(StripGenericTypeArguments(right));
+
+        return leftType is not null && rightType is not null && leftType == rightType;
     }
 }
