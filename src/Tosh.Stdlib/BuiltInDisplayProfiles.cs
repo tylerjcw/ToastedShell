@@ -5448,7 +5448,14 @@ public static class BuiltInDisplayProfiles
         return mode switch
         {
             TemporalDisplayMode.Iso => value.ToString("O", CultureInfo.InvariantCulture),
-            TemporalDisplayMode.Local => value.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture),
+            // Through `ToDisplayInstant` rather than `value.ToLocalTime()` — `TOSH-0006`.
+            // .NET's `ToLocalTime` assumes an `Unspecified` kind means UTC and converts from
+            // it, so a value written `12:00` displayed as `08:00`. `ToDisplayInstant` reads
+            // `Unspecified` as local, which is what a wall-clock literal means, and is what
+            // the `Relative` and `Unix` modes below already use: one mode was disagreeing
+            // with the other three about the same question.
+            TemporalDisplayMode.Local => ToDisplayInstant(value).ToLocalTime()
+                .ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture),
             TemporalDisplayMode.Relative => FormatRelativeTime(ToDisplayInstant(value), nowProvider()),
             TemporalDisplayMode.Unix => ToDisplayInstant(value).ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture),
             TemporalDisplayMode.Custom => value.ToString(format ?? "O", CultureInfo.InvariantCulture),

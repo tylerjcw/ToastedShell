@@ -17,8 +17,8 @@ export class Particle<T>
 }
 
 var particles: list = new list()
-var width: int = Math.Max(20, System.Console.WindowWidth  - 1)
-var height: int = Math.Max(20, System.Console.WindowHeight - 1)
+var width: int = Math.Max(10, System.Console.WindowWidth  - 1)
+var height: int = Math.Max(10, System.Console.WindowHeight - 1)
 System.Console.CursorVisible = false
 
 func ApplyForces(p: Particle) {
@@ -34,17 +34,19 @@ func ApplyForces(p: Particle) {
     $p.Velocity.Y *= 0.97
 }
 
-for i in 0..39 { $particles.Add(new Particle<int>(Random.Shared.Next($width), Random.Shared.Next($height))) }
+for i in 0..39 {
+    $particles.Add(new Particle<int>(Random.Shared.Next($width), Random.Shared.Next($height)))
+}
 
 while (not(System.Console.KeyAvailable)) {
     clear
     for particle in $particles {
-        ApplyForces($particle
+        ApplyForces($particle)
         $particle.Position.X = ($particle.Position.X + $particle.Velocity.X + $width)  % $width
         $particle.Position.Y = ($particle.Position.Y + $particle.Velocity.Y + $height) % $height
         System.Console.SetCursorPosition(Math.Round($particle.Position.X, 0), Math.Round($particle.Position.Y, 0))
         System.Console.ForegroundColor = $particle.Color
         System.Console.Write($particle.Symbol)
     }
-    sleep(0.07
+    sleep(0.07)
 }
