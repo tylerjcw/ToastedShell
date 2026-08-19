@@ -61,6 +61,26 @@ public sealed class SyncAsyncTwinInventoryTests
         "IShellStaticType.CreateInstance",
         "IShellStaticType.InvokeStaticMethod",
 
+        // ── IToastStream, `TOAST-0015` ─────────────────────────────────────────
+        // A write destination is a file, a pipe, a buffer or a terminal, and the cost of
+        // each differs by orders of magnitude. A buffer's async write is pure overhead; a
+        // file's sync write blocks a pipeline stage. Both callers exist — redirection
+        // writes asynchronously per value, and a display profile formats synchronously —
+        // so the pair is the contract rather than an accident.
+        //
+        // The duplication is bounded: the async members carry default implementations that
+        // delegate to the sync ones, so an implementer writes three methods and overrides
+        // async only where it can do better. `ManagedFileHandle` takes the default;
+        // `TextWriterStream` overrides, because a TextWriter's async path is real.
+        "IToastStream.Flush",
+        "IToastStream.WriteText",
+        "IToastStream.WriteTextLine",
+        "TextWriterStream.Flush",
+        "TextWriterStream.WriteText",
+        "TextWriterStream.WriteTextLine",
+        "CompositeStream.Flush",
+        "CompositeStream.WriteTextLine",
+
         // ── Implementations of the above ───────────────────────────────────────
         // Mechanically required by the contracts listed above, which are staying.
         "ReflectionObjectAccessor.GetValue",

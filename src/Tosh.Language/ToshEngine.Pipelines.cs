@@ -183,8 +183,10 @@ public sealed partial class ToshEngine
         var disposableWriters = new List<TextWriter>();
         var outputTargets = new List<TextWriter>();
         var errorTargets = new List<TextWriter>();
-        TextWriter? originalOutput = null;
-        TextWriter? originalError = null;
+        IToastStream? originalOutput = null;
+        IToastStream? originalError = null;
+        TextWriter? originalSessionOutput = null;
+        TextWriter? originalSessionError = null;
 
         try
         {
@@ -242,15 +244,34 @@ public sealed partial class ToshEngine
                 }
             }
 
+            // `TOAST-0015`. The destination is a Tōast stream on the *language* runtime,
+            // not the shell session's `TextWriter`. A host with no session redirects the
+            // same way, because there is nothing shell-shaped left in the path — the
+            // session's writer is one destination among files, pipes and buffers rather
+            // than the thing being replaced.
             if (outputTargets.Count > 0)
             {
-                originalOutput = Runtime.Output;
+                originalOutput = Runtime.Language.Output;
+                Runtime.Language.Output = ToastStreams.Composite(
+                    outputTargets.Select(ToastStreams.FromWriter).ToArray());
+
+                // The session's writer is moved too, and that half is a **shell**
+                // mechanism rather than a language one: TōSh commands write diagnostics
+                // and passthrough text to `Runtime.Error`/`Runtime.Output`, and an
+                // external process inherits handles decided from them. The language no
+                // longer reads either — it writes to the stream above — so a host with no
+                // session redirects with this whole branch inert.
+                originalSessionOutput = Runtime.Output;
                 Runtime.Output = CreateCompositeWriter(outputTargets);
             }
 
             if (errorTargets.Count > 0)
             {
-                originalError = Runtime.Error;
+                originalError = Runtime.Language.Error;
+                Runtime.Language.Error = ToastStreams.Composite(
+                    errorTargets.Select(ToastStreams.FromWriter).ToArray());
+
+                originalSessionError = Runtime.Error;
                 Runtime.Error = CreateCompositeWriter(errorTargets);
             }
 
@@ -276,8 +297,8 @@ public sealed partial class ToshEngine
                         _ => ToastRenderer.Render(value),
                     };
 
-                    await Runtime.Output.WriteLineAsync(text);
-                    await Runtime.Output.FlushAsync(cancellationToken);
+                    await Runtime.Language.Output.WriteTextLineAsync(text, cancellationToken);
+                    await Runtime.Language.Output.FlushAsync(cancellationToken);
                 }
                 else
                 {
@@ -288,14 +309,28 @@ public sealed partial class ToshEngine
         }
         finally
         {
+            // Session first, language second, and the order matters: assigning
+            // `Runtime.Output` re-derives `Language.Output` from the writer, so restoring
+            // the language destination first would leave an equivalent-but-different
+            // adapter in place instead of the exact one that was saved.
+            if (originalSessionOutput is not null)
+            {
+                Runtime.Output = originalSessionOutput;
+            }
+
+            if (originalSessionError is not null)
+            {
+                Runtime.Error = originalSessionError;
+            }
+
             if (originalOutput is not null)
             {
-                Runtime.Output = originalOutput;
+                Runtime.Language.Output = originalOutput;
             }
 
             if (originalError is not null)
             {
-                Runtime.Error = originalError;
+                Runtime.Language.Error = originalError;
             }
 
             await FlushBufferedPipelineRedirectionsAsync(bufferedPlans.Values, cancellationToken);

@@ -26,13 +26,26 @@ namespace Tosh.Runtime;
 /// </para>
 /// <para>
 /// This first slice carries the members whose side is not in question. `Commands`,
-/// `Config`, `Output`, `Error`, `CurrentDirectory`, `Events` and `Formatter` are still
-/// reached through `ToshRuntime`; each has an open question recorded on the item and
-/// moves when its answer does.
+/// `Config`, `CurrentDirectory` and `Events` are still reached through `ToshRuntime`; each
+/// has an open question recorded on the item and moves when its answer does. `Formatter`
+/// left with `TOAST-0014` — the language renders through `ToastRenderer` and no longer asks
+/// the shell how a value reads — and `Output`/`Error` are here as of `TOAST-0015`.
 /// </para>
 /// </remarks>
 public sealed class ToastRuntime
 {
+    /// <summary>Where a program's ordinary output goes.</summary>
+    /// <remarks>
+    /// A destination the language owns, not the shell's <c>TextWriter</c> — `TOAST-0015`.
+    /// Defaults to <see cref="ToastStreams.Null"/> so a host that supplies none can still
+    /// run a program that writes: a `no_clr` program has no terminal, and "there is nowhere
+    /// to write" is a legitimate configuration rather than an error.
+    /// </remarks>
+    public IToastStream Output { get; set; } = ToastStreams.Null;
+
+    /// <summary>Where a program's diagnostics go.</summary>
+    public IToastStream Error { get; set; } = ToastStreams.Null;
+
     /// <summary>Invokes members on values. See `TOAST-0006` on why this is not yet an interface.</summary>
     /// <remarks>
     /// The one member whose concrete type forecloses a `no_clr` target:

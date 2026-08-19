@@ -37,7 +37,13 @@ public sealed class ToshRuntime : IToastHostSignals, IToastDiagnosticSink
         Commands = new ShellCommandRegistry();
         // One table, two views: the language resolves and registers through
         // ICommandTable, the shell keeps the registry's alias and lookup members.
-        Language = new ToastRuntime { Commands = Commands, CurrentDirectory = initialDirectory };
+        Language = new ToastRuntime
+        {
+            Commands = Commands,
+            CurrentDirectory = initialDirectory,
+            Output = ToastStreams.FromWriter(_output),
+            Error = ToastStreams.FromWriter(_error),
+        };
         DisplayPreferences = new DisplayPreferences();
         DisplayProfiles = DisplayProfileRegistry.CreateDefault(DisplayPreferences);
         Formatter = new ObjectFormatter(DisplayProfiles);
@@ -58,9 +64,41 @@ public sealed class ToshRuntime : IToastHostSignals, IToastDiagnosticSink
         SetLastResult(null);
     }
 
-    public TextWriter Output { get; set; }
+    private TextWriter _output = TextWriter.Null;
+    private TextWriter _error = TextWriter.Null;
 
-    public TextWriter Error { get; set; }
+    /// <summary>The session's stdout.</summary>
+    /// <remarks>
+    /// `TOAST-0015`. The writer stays the shell's, and the language sees it as one
+    /// destination among files, pipes and buffers — <see cref="ToastRuntime.Output"/> is
+    /// kept in step here rather than duplicated, so a host that assigns this still redirects
+    /// correctly and the language never reaches for a <c>TextWriter</c>.
+    /// </remarks>
+    public TextWriter Output
+    {
+        get => _output;
+        set
+        {
+            _output = value;
+
+            // Null-guarded because the constructor assigns the writers before it builds
+            // `Language`, and reordering that is worse than tolerating one check: the
+            // registry the language runtime is composed from is built in between.
+            if (Language is not null) { Language.Output = ToastStreams.FromWriter(value); }
+        }
+    }
+
+    /// <summary>The session's stderr, mirrored to the language the same way.</summary>
+    public TextWriter Error
+    {
+        get => _error;
+        set
+        {
+            _error = value;
+
+            if (Language is not null) { Language.Error = ToastStreams.FromWriter(value); }
+        }
+    }
 
     public string CurrentDirectory
     {

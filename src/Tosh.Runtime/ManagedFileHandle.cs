@@ -4,7 +4,7 @@ using System.Text;
 
 namespace Tosh.Runtime;
 
-public sealed class ManagedFileHandle : IDisposable, IAsyncDisposable
+public sealed class ManagedFileHandle : IDisposable, IAsyncDisposable, IToastStream
 {
     private static readonly UTF8Encoding Utf8NoBom = new(encoderShouldEmitUTF8Identifier: false);
     private static readonly ConcurrentDictionary<int, ManagedFileHandle> OpenHandles = new();
@@ -194,7 +194,8 @@ public sealed class ManagedFileHandle : IDisposable, IAsyncDisposable
         return memory.ToArray();
     }
 
-    internal void WriteText(string text)
+    /// <inheritdoc />
+    public void WriteText(string text)
     {
         EnsureOpen();
 
@@ -206,7 +207,8 @@ public sealed class ManagedFileHandle : IDisposable, IAsyncDisposable
         _writer.Write(text);
     }
 
-    internal void WriteTextLine(string text)
+    /// <inheritdoc />
+    public void WriteTextLine(string text)
     {
         EnsureOpen();
 

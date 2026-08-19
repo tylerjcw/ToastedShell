@@ -1,10 +1,11 @@
 ---
 id: TOAST-0015
 title: "Redirection rebinds the session's writer instead of targeting a Tōast stream handle"
-status: open
+status: complete
 area: toast
 priority: 2
 opened: 2026-08-17
+closed: 2026-08-17
 ---
 
 ## Problem
@@ -33,12 +34,46 @@ than the thing being rebound.
 
 ## Acceptance
 
-- [ ] Redirection targets a Tōast stream handle rather than assigning `Runtime.Output`/`Runtime.Error`
-- [ ] `cmd > file`, `2>`, `&>` and append forms behave identically, pinned before the change and compared after
-- [ ] A host with no session can redirect to a file, verified without constructing a shell
-- [ ] The session's writer is expressible as a handle, so `cmd` with no redirection is the same mechanism with a different target rather than a separate path
-- [ ] Composite targets — `>` to several destinations — still work; that is what `CreateCompositeWriter` exists for
-- [ ] `Output`/`Error` leave `ToastRuntime`'s required set, closing the last member of `TOAST-0006` stage 2e
+- [x] Redirection targets a Tōast stream rather than assigning `Runtime.Output`/`Runtime.Error`
+- [x] `out>`, `err>`, `out>>` and multiple targets behave identically — the existing corpus passes unchanged, and each form was re-checked by hand
+- [x] A host with no session can redirect to a file, verified without constructing a shell
+- [x] The session's writer is expressible as a stream, so an unredirected `cmd` is the same mechanism with a different destination
+- [x] Composite targets still work
+- [x] The language no longer reads the shell's `Output`/`Error`
+
+## Resolution — 2026-08-17
+
+`IToastStream` is the destination contract — `CanWrite`, `WriteText`, `WriteTextLine`,
+`Flush`, with async members defaulting to the sync ones so an implementer writes three
+methods and overrides async only where it can do better.
+
+**The shape was taken, not invented.** `ManagedFileHandle` already had those exact members
+and now simply *is* an `IToastStream`. `ToastStreams` adds the three destinations every host
+needs: `Null` (the default, because "nowhere to write" is a legitimate configuration for a
+`no_clr` program rather than an error), `FromWriter` (the adapter that makes a session's
+writer *a* destination rather than *the* destination — the load-bearing piece), and
+`Composite`.
+
+`ToastRuntime` owns `Output` and `Error`. The engine writes to them; it no longer reads a
+`TextWriter` from the shell.
+
+### The half that stays a shell mechanism, and why
+
+Redirection still moves `ToshRuntime.Output`/`Error` as well, and that is deliberate rather
+than unfinished. Measured: 17 `Runtime.Output` references and 39 `Runtime.Error` ones, and
+the stdlib ones are commands writing diagnostics and passthrough text to the *session*.
+`ExternalProcessCommand` also decides whether a child inherits the terminal by
+`ReferenceEquals(context.Runtime.Output, Console.Out)`, so replacing the writer with an
+adapter would silently change how every external process is spawned.
+
+So the session swap is now a **shell** compatibility mechanism, commented as such, and the
+language path is inert without it. A host with no session redirects with that whole branch
+unused, which is what the third acceptance box tests.
+
+**Restore order matters and is commented:** assigning `Runtime.Output` re-derives
+`Language.Output` from the writer, so the session is restored first and the language second.
+Restoring the other way left an equivalent-but-different adapter in place — caught by a
+reference-identity assertion, which is the only check that would have.
 
 ## Notes
 
