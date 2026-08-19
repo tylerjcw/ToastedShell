@@ -11,8 +11,8 @@ export class Particle<T>
         $this.Position.Y = $y
         $this.Velocity.X = (Random.Shared.NextDouble() * 0.8 - 0.4)
         $this.Velocity.Y = (Random.Shared.NextDouble() * 0.8 - 0.4)
-        $this.Symbol = "●★♦■◆▲"[Random.Shared.Next(6)];
-        $this.Color = Random.Shared.Next(9, 15) as ConsoleColor
+        $this.Symbol     = "●★♦■◆▲"[Random.Shared.Next(6)];
+        $this.Color      = Random.Shared.Next(9, 15) as ConsoleColor
     }
 }
 

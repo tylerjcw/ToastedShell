@@ -77,6 +77,14 @@ public sealed class DifferentialExecutionTests : IClassFixture<ToshRuntimeFixtur
         // than rendered. That is `TOAST-0023`, and it is a question about holes rather
         // than about rendering.
         yield return Case("render-nested-string-quoting", "echo $\"{[1, 2, 3]}\" ");
+
+        // `TOAST-0023`, moved here from `KnownDivergences` when it was fixed: a hole is one
+        // value, so a variable holding a collection renders rather than spreading, and the
+        // two backends agree. The compiled side always rendered; it was the interpreter
+        // that spread.
+        yield return Case(
+            "hole-with-a-collection-variable",
+            "var xs = [\"a b\", \"c\"]\necho $\"{$xs}\"");
         yield return Case("render-enum", "enum DiffHue { Red, Green }\necho $\"{DiffHue.Red}\"");
 
         // ── Class hierarchies: where the bugs lived ────────────────────────
@@ -160,12 +168,7 @@ public sealed class DifferentialExecutionTests : IClassFixture<ToshRuntimeFixtur
             "TOAST-0022", "render-format-clause",
             "echo $\"{42:X} {3.14159:F2}\"");
 
-        // A hole holding a *variable* that holds a collection spreads it: the interpreter
-        // evaluates the hole as a pipeline, gets several results and joins them with
-        // spaces, where the compiled backend renders the collection.
-        yield return Divergence(
-            "TOAST-0023", "hole-spreads-a-collection-variable",
-            "var xs = [\"a b\", \"c\"]\necho $\"{$xs}\"");
+
     }
 
     private static object[] Divergence(string boardItem, string name, string source) =>

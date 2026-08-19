@@ -211,7 +211,12 @@ public sealed class ScriptHelpAndDocCommentTests
             """,
             "--", "--help");
 
-        Assert.Contains("got: --help", output, StringComparison.Ordinal);
+        // `["--help"]`, not `--help`: `TOAST-0023` made an interpolation hole one value, so
+        // a rest argument's *list* renders as a list rather than spreading into its
+        // elements. What this test is about is unchanged — the flag after `--` is data and
+        // not a request for help — and the rendering is the decided behaviour, not a
+        // regression in that.
+        Assert.Contains("got: [\"--help\"]", output, StringComparison.Ordinal);
         Assert.DoesNotContain("Usage:", output, StringComparison.Ordinal);
     }
 

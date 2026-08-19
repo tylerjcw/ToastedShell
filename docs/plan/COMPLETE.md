@@ -12,6 +12,7 @@
 | [`TOSH-0001`](items/TOSH-0001.md) | P1 | complete | 6/6 | Quotes inside an argument are passed through to external commands instead of being stripped |
 | [`TS-P2-118`](items/TS-P2-118.md) | P2 | complete | — | Calling a callable held in a property warns `member_not_found`, then works |
 | [`TS-P3-16`](items/TS-P3-16.md) | P3 | withdrawn | — | ToastScript-owned core types and their conformance corpus |
+| [`TOAST-0023`](items/TOAST-0023.md) | P2 | complete | 5/5 | An interpolation hole spreads a variable holding a collection |
 | [`TOAST-0001`](items/TOAST-0001.md) | P1 | complete | 5/5 | A free function called inside a closure resolves as an instance method on the pipeline item |
 | [`TOAST-0019`](items/TOAST-0019.md) | P2 | complete | 6/6 | A trait member is not written the way a class member is |
 | [`TOAST-0005`](items/TOAST-0005.md) | P2 | complete | 6/6 | Split ToshEngine.cs and ToshParser.cs into partial classes by concern |

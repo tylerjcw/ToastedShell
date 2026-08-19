@@ -14,7 +14,6 @@
 | [`CRUMB-0001`](items/CRUMB-0001.md) | P3 | partial | 4/11 | Crumb polish: config file, conflict-resolution UX, and four optional features |
 | [`TOAST-0008`](items/TOAST-0008.md) | P3 | open | 0/7 | Rename the language surface from Tosh to Toast, keeping every existing spelling working |
 | [`TOAST-0014`](items/TOAST-0014.md) | P2 | partial | 5/6 | String interpolation renders through the display stack, so its output depends on shell configuration |
-| [`TOAST-0023`](items/TOAST-0023.md) | P2 | open | 0/5 | An interpolation hole spreads a variable holding a collection |
 | [`TS-P3-12`](items/TS-P3-12.md) | P3 | in-progress | — | Type highlighting misses real contexts, differently per surface |
 | [`TOAST-0020`](items/TOAST-0020.md) | P2 | open | 0/8 | A trait's declared member types are not enforced on the implementing class |
 | [`TOSH-0003`](items/TOSH-0003.md) | P3 | open | 0/5 | Ship Toast as its own package that TōSh, Tōme and Crumb depend on |

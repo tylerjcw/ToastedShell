@@ -1629,9 +1629,42 @@ public sealed partial class ToshEngine
                                         // rather than inherited — `echo $"{git rev-parse …}"` used
                                         // to print the branch to the terminal and interpolate the
                                         // empty string (TS-P1-32).
+                                        var hole = PrepareInterpolationHole(expression, sourceName);
+
+                                        // `TOAST-0023`. **A hole is one value unless it
+                                        // contains a pipeline.** `$"{$xs}"` where `$xs`
+                                        // holds a list gave `1 2 3`, because the hole was
+                                        // run as a pipeline and a collection yields its
+                                        // elements — while `$"{[1, 2, 3]}"` and `$"{($xs)}"`
+                                        // both rendered `[1, 2, 3]`. Three spellings of the
+                                        // same value, two answers, and the compiled backend
+                                        // rendered in all three.
+                                        //
+                                        // The parenthesised form already took this path;
+                                        // an expression hole now takes it too, so the
+                                        // difference is a `|` the reader can see rather than
+                                        // whether a variable happened to hold something
+                                        // enumerable.
+                                        if (TryGetHolePipeline(hole) is { } holePipeline &&
+                                            await TryEvaluateRawExpressionPipelineAsync(
+                                                sourceName, sourceText, holePipeline, cancellationToken)
+                                                is { Matched: true } single)
+                                        {
+                                            builder.Append(ApplyInterpolationClauses(
+                                                await FormatInterpolatedValueAsync(
+                                                    single.Value,
+                                                    cancellationToken,
+                                                    expression.Format,
+                                                    sourceName,
+                                                    sourceText,
+                                                    expression.ExpressionSpan),
+                                                expression.Alignment));
+                                            break;
+                                        }
+
                                         var results = await AsyncEnumerableExtensions.ToListAsync(
                                             EvaluateParseResultAsync(
-                                                PrepareInterpolationHole(expression, sourceName),
+                                                hole,
                                                 cancellationToken,
                                                 outputIsCaptured: true),
                                             cancellationToken);

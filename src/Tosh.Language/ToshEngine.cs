@@ -643,6 +643,25 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
         return parseResult;
     }
 
+    /// <summary>
+    /// The single pipeline a hole's program consists of, when it consists of exactly one.
+    /// </summary>
+    /// <remarks>
+    /// `TOAST-0023`. Used to decide whether a hole is an *expression* — one value — or a
+    /// pipeline whose results join. Anything that is not a lone pipeline statement (a
+    /// declaration, several statements, a control-flow form) returns null and takes the
+    /// pipeline path, which is what it did before.
+    /// </remarks>
+    private static PipelineSyntax? TryGetHolePipeline(ParseResult hole) => hole.Statement switch
+    {
+        // A hole's program is a bare pipeline statement, not a script wrapping one — which
+        // an earlier attempt at this assumed, and the assumption failed silently: the
+        // pattern simply never matched and the hole kept its old behaviour.
+        PipelineStatementSyntax pipeline => pipeline.Pipeline,
+        ScriptStatementSyntax { Statements: [PipelineStatementSyntax single] } => single.Pipeline,
+        _ => null,
+    };
+
     private async IAsyncEnumerable<object?> EvaluateParseResultAsync(
         ParseResult parseResult,
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken,

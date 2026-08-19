@@ -1,10 +1,11 @@
 ---
 id: TOAST-0023
 title: "An interpolation hole spreads a variable holding a collection"
-status: open
+status: complete
 area: toast
 priority: 2
 opened: 2026-08-17
+closed: 2026-08-17
 ---
 
 ## Problem
@@ -28,15 +29,41 @@ and `["a", "b", "c"]` both interpolate to `a b c`.
 
 ## Acceptance
 
-- [ ] `$"{$xs}"` renders the collection the variable holds
-- [ ] A hole containing a genuine multi-value *pipeline* — `$"{ls | get Name}"` — keeps
-      whatever behaviour is decided for it, and that decision is written down rather than
-      inherited from how the branch happens to work
-- [ ] The two are distinguishable in the spec: what a hole does with several results is a
-      rule, not an accident of pipeline evaluation
-- [ ] Interpreted and compiled agree; the case moves from
-      `DifferentialExecutionTests.KnownDivergences()` into `Corpus()`
-- [ ] A negative control: reverting fails the new tests
+- [x] `$"{$xs}"` renders the collection the variable holds
+- [x] A hole containing a genuine multi-value pipeline joins its results with a **single
+      space**, decided rather than inherited
+- [x] The two are distinguishable by a rule a reader can apply: a `|` in the source
+- [x] Interpreted and compiled agree; the case moved from `KnownDivergences()` into `Corpus()`
+- [x] A negative control: 3 of 11 fail with the change reverted
+
+## Decision and resolution — 2026-08-17
+
+**A hole is one value unless it contains a pipeline.** An expression renders; a pipeline
+joins its results with a single space. The line is a `|` the reader can see in the source,
+rather than a runtime property of whatever the value turned out to be.
+
+Three options were weighed and rejected. *Always join* would have made `$"{[1, 2, 3]}"` give
+`1 2 3` too — consistent, but it contradicts the container syntax `TOAST-0014` had just
+specified and leaves no way to interpolate a collection at all. *Strictly one value*, with a
+multi-result hole refused, is the most consistent and breaks every `$"{ls | get Name}"`.
+*Leave and document* costs nothing now and leaves the two backends disagreeing forever.
+
+The mechanism was already there: `TryEvaluateRawExpressionPipelineAsync` is what makes
+`$"{($xs)}"` render, and the hole now takes that path first. So the parenthesised spelling
+stopped being a workaround and became the same thing written twice.
+
+### Two things worth keeping
+
+**An earlier attempt failed silently.** `TryGetHolePipeline` matched
+`ScriptStatementSyntax { Statements: [PipelineStatementSyntax] }`, and a hole's program is a
+bare `PipelineStatementSyntax` — so the pattern never matched, the branch never ran, and the
+behaviour was unchanged with no error anywhere. A probe found it in one run; reading would
+not have.
+
+**The most visible consequence is a rest argument.** `func f(items...)` interpolating
+`$"{$items}"` now gives `["a", "b"]` rather than `a b`. That is the decision applied
+consistently, and it is the shape most likely to appear in a real script, so it has its own
+test.
 
 ## Notes
 
