@@ -125,9 +125,16 @@ public sealed class NativeBuffer : IDisposable
             throw new ArgumentOutOfRangeException(nameof(count));
         }
 
-        if (offset + count > ByteLength)
+        // Written as a subtraction rather than `offset + count > ByteLength`, which can
+        // *overflow* and pass: `native-alloc` is script-reachable, so a script chooses
+        // `ByteLength`, and a large offset and count sum to a negative number that satisfies
+        // the check. The subtraction cannot overflow, because `ByteLength` is a length and
+        // so non-negative while `offset` is already known to be — their difference always
+        // fits. Note this is the only bound on `offset`: an offset past the end is caught
+        // here rather than above, which is why it reports as a range error.
+        if (count > ByteLength - offset)
         {
-            throw new InvalidOperationException($"Buffer range {offset}..{offset + count} exceeds native buffer size {ByteLength}.");
+            throw new InvalidOperationException($"Buffer range {offset}..{(long)offset + count} exceeds native buffer size {ByteLength}.");
         }
     }
 
