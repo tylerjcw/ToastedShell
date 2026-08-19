@@ -75,8 +75,6 @@ fixed that for *rendering*; the display profile has the same wart and is out of 
 
 ## Notes
 
-## Notes
-
 This is a **TōSh** item, not a Tōast one, which is why it is filed separately rather than
 folded into `TOAST-0014`. What goes in a table cell is display; what `$"{x}"` produces is
 language. The two should agree wherever display has no opinion, and today they cannot,
