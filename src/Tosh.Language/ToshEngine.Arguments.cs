@@ -328,9 +328,17 @@ public sealed partial class ToshEngine
         {
             var evaluatedArgument = evaluatedArguments[index];
 
+            // A word that was quoted is not a glob candidate, and the check is against the
+            // *syntax* rather than the value: `TOSH-0001` strips the quotes during
+            // evaluation, so by here `x"*"y` and `x*y` are the same string and only the
+            // written form still knows which one suppressed expansion.
+            var wasQuoted = evaluatedArgument.Syntax is BarewordArgumentSyntax quotedWord &&
+                            ShellWordQuoting.ContainsQuote(quotedWord.Value);
+
             if (evaluatedArgument.Syntax is BarewordArgumentSyntax or SplatArgumentSyntax &&
                 evaluatedArgument.Value is string text &&
                 !string.IsNullOrWhiteSpace(text) &&
+                !wasQuoted &&
                 !text.StartsWith("-", StringComparison.Ordinal))
             {
                 // Tilde before glob: `~/*.tosh` has to name a real directory before there is
@@ -745,7 +753,10 @@ public sealed partial class ToshEngine
             switch (argument)
             {
                 case BarewordArgumentSyntax bareword:
-                    return bareword.Value;
+                    // `TOSH-0001`. A word beginning with a quote is lexed as a string and
+                    // arrives here unquoted; one that merely *contains* a quote is lexed
+                    // whole and kept its quote characters all the way to the callee.
+                    return ShellWordQuoting.StripBalancedQuotes(bareword.Value);
 
                 case LiteralArgumentSyntax literal:
                     return literal.Value;

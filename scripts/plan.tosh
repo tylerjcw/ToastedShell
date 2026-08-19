@@ -267,9 +267,10 @@ subcommand orphans {
     }
 
     var cited = []
-    ## Includes are unquoted deliberately: TōSh passes `--include="*.cs"` through to
-    ## an external command with the quote characters still in it, so grep looks for a
-    ## file literally named "*.cs" and matches nothing. Filed as TOSH-0001.
+    ## Includes are unquoted, and either spelling is correct since `TOSH-0001` — a quoted
+    ## `--include="*.cs"` no longer reaches grep with its quote characters attached. The
+    ## unquoted form is kept because it also works under an *older* installed tosh, and this
+    ## script is run with whichever one is on PATH.
     for id in (/usr/bin/grep -roh --include=*.cs --include=*.tosh "TS-P[0-3]-[0-9]\\+" src tests scripts | lines) {
         if (not ($id in $cited)) { $cited = ($cited + [$id]) }
     }

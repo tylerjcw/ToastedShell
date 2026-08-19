@@ -1260,6 +1260,33 @@ public sealed class ToshLexer
                 continue;
             }
 
+            // `TOSH-0001`. A quote *inside* a word protects what it encloses, spaces
+            // included, so `--opt="a b"` is one argument rather than two. Consumed inline
+            // like the glob alternation above, so the whitespace break at the top of this
+            // loop never sees the inside of the quotes.
+            //
+            // Only when the partner is on the same line. An apostrophe in `don't` or an
+            // inch mark in `5" pipe` has none, and swallowing the rest of the line looking
+            // for one would be a worse defect than the one being fixed — these are words
+            // people type at an interactive prompt.
+            if (Current is '"' or '\'' && _position > start && HasMatchingQuoteOnLine(Current))
+            {
+                var quote = Current;
+                _position++;
+
+                while (!IsAtEnd && Current != quote && Current != '\n')
+                {
+                    _position++;
+                }
+
+                if (!IsAtEnd && Current == quote)
+                {
+                    _position++;
+                }
+
+                continue;
+            }
+
             // Break on '..' range operator when the text so far is numeric,
             // so that '2..10' lexes as Number DotDot Number instead of one bareword.
             // Signed and floating-point prefixes still split here so the parser can
@@ -1767,6 +1794,32 @@ public sealed class ToshLexer
 
         value = new Complex(0d, coefficient);
         return true;
+    }
+
+    /// <summary>
+    /// Whether <paramref name="quote"/> has a partner before the end of the current line.
+    /// </summary>
+    /// <remarks>
+    /// `TOSH-0001`. The lookahead is what keeps an apostrophe usable: `don't` has no closing
+    /// quote, so the mark stays an ordinary character and the word still breaks at
+    /// whitespace exactly as before.
+    /// </remarks>
+    private bool HasMatchingQuoteOnLine(char quote)
+    {
+        for (var index = _position + 1; index < _source.Length; index++)
+        {
+            if (_source[index] == '\n')
+            {
+                return false;
+            }
+
+            if (_source[index] == quote)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private void ReadGlobAlternation()
