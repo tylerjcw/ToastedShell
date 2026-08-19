@@ -386,6 +386,29 @@ internal static class UnixSystemServices
     private static extern int statvfs([MarshalAs(UnmanagedType.LPStr)] string path, ref Statvfs buf);
 
     [StructLayout(LayoutKind.Sequential)]
+    /// <summary>
+    /// glibc's <c>struct statvfs</c>, in full.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// **The trailing spare words are load-bearing.** Without them this declared 88 bytes
+    /// while glibc's struct is 112, so every <c>statvfs()</c> call wrote 24 bytes past the
+    /// buffer. The field offsets were right — <c>f_flag</c> at 72 and <c>f_namemax</c> at 80
+    /// match — so the readings were correct and only the memory after them was destroyed,
+    /// which is why it survived so long.
+    /// </para>
+    /// <para>
+    /// It surfaced as <c>AccessViolationException</c> inside <c>TryGetInodeInfo</c> in the
+    /// **published** single-file build, deterministically, while a Release build ran the
+    /// same source without complaint. That difference is luck about what sits after the
+    /// buffer, not a difference in correctness: the overflow was always there.
+    /// </para>
+    /// <para>
+    /// Verified against the platform rather than assumed — a three-line C program reports
+    /// <c>sizeof(struct statvfs) = 112</c>, and <see cref="System.Runtime.InteropServices.Marshal.SizeOf{T}()"/>
+    /// of this type must agree.
+    /// </para>
+    /// </remarks>
     private struct Statvfs
     {
         public ulong f_bsize;
@@ -399,6 +422,16 @@ internal static class UnixSystemServices
         public ulong f_fsid;
         public ulong f_flag;
         public ulong f_namemax;
+
+        // `int __f_spare[6]` — never read, and the reason the struct is 112 bytes rather
+        // than 88. Named individually because a fixed buffer would make the type unsafe for
+        // no gain.
+        private int __f_spare0;
+        private int __f_spare1;
+        private int __f_spare2;
+        private int __f_spare3;
+        private int __f_spare4;
+        private int __f_spare5;
     }
 
     private static FileSystemUsageInfo CreateUsageInfo(
