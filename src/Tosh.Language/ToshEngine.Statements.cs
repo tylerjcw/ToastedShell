@@ -744,10 +744,44 @@ public sealed partial class ToshEngine
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        if (!_extensionMethods.TryGetValue(extend.TypeName, out var methods))
+        // `TOAST-0016`. Registered under every name the receiver can answer to, not just
+        // the one that was written. Lookup offers a value's CLR names — `Int32`,
+        // `System.Int32` — and never the shell alias, so `extend int` was accepted, stored,
+        // and then matched nothing: a declaration that failed silently at the point of
+        // *use*, in a place that looked unrelated.
+        var registrationKeys = new List<string> { extend.TypeName };
+
+        if (ResolveTypeName(extend.TypeName) is { } resolvedClrType)
         {
-            methods = new Dictionary<string, FunctionDefinition>(StringComparer.OrdinalIgnoreCase);
-            _extensionMethods[extend.TypeName] = methods;
+            registrationKeys.Add(resolvedClrType.Name);
+
+            if (resolvedClrType.FullName is { } fullName)
+            {
+                registrationKeys.Add(fullName);
+            }
+        }
+
+        Dictionary<string, FunctionDefinition>? methods = null;
+
+        foreach (var key in registrationKeys)
+        {
+            if (_extensionMethods.TryGetValue(key, out var existing))
+            {
+                // An alias and its CLR name are the same type, so `extend int` and
+                // `extend Int32` must add to one table rather than two that shadow.
+                methods ??= existing;
+                continue;
+            }
+
+            methods ??= new Dictionary<string, FunctionDefinition>(StringComparer.OrdinalIgnoreCase);
+            _extensionMethods[key] = methods;
+        }
+
+        methods ??= new Dictionary<string, FunctionDefinition>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var key in registrationKeys)
+        {
+            _extensionMethods[key] = methods;
         }
 
         foreach (var member in extend.Members)

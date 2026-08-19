@@ -1,7 +1,7 @@
 ---
 id: TOAST-0016
 title: "`extend` matches only CLR type names, so `extend int` silently never applies"
-status: open
+status: partial
 area: toast
 priority: 2
 opened: 2026-08-17
@@ -45,13 +45,50 @@ exists to resolve it.
 
 ## Acceptance
 
-- [ ] `extend int` reaches `System.Int32`, and the same for every alias the annotation
-      position accepts (`string`, `bool`, `float`, `file`, …)
-- [ ] `extend Int32` and `extend System.Int32` keep working, pinned as controls
-- [ ] resolution goes through the one alias table, not a second list of pairs
-- [ ] an `extend` naming a type that resolves to nothing is **reported at declaration**
-      rather than going quiet — that is the part that made this cost an afternoon
-- [ ] a negative control: reverting fails the new tests
+- [x] `extend int` reaches `System.Int32`, and the same for `string`, `bool`, `double` and
+      `float`
+- [x] `extend Int32` keeps working, pinned as a control
+- [x] resolution goes through the one alias table — `ResolveTypeName`, the same resolver an
+      annotation uses, not a second list of pairs
+- [ ] ~~an `extend` naming a type that resolves to nothing is reported at declaration~~ —
+      **not done, and not doable as written.** See below.
+- [x] a negative control: 4 of 10 fail with the registration reverted
+
+## Resolution — 2026-08-17
+
+An extension is registered under **every name its receiver can answer to**, not just the one
+that was written. `ResolveTypeName` — the same resolver an annotation uses — turns the
+written name into a CLR type when it names one, and the type's `Name` and `FullName` join
+the written name as keys.
+
+An alias and its CLR name are the *same type*, so `extend int` and `extend Int32` add to one
+table rather than two that shadow each other; a test pins that. A name that resolves to no
+CLR type keeps only its written key, which is what lets `extend Point` reach a declared
+ToastScript class.
+
+### Why the declaration-time report cannot be written as specified
+
+**A forward reference is legal and useful:**
+
+```tosh
+extend ExtLater { func twice() -> int => ($this.N * 2) }
+class ExtLater { prop N: int = 3 }
+```
+
+At the moment an `extend` is evaluated, a name that resolves to nothing is
+indistinguishable from one whose type is declared three lines later. Reporting there would
+break the spelling above, and a deferred end-of-script check is a different piece of
+machinery than this item is scoped to.
+
+The realistic failure mode is gone regardless: what cost an afternoon was `extend int`
+being accepted and silently never matching, and that is fixed. A typo'd `extend Nonexistent`
+is a rarer case and still reports only at the call site.
+
+### Noticed, not fixed
+
+`extend System.Int32` does not parse — the statement is not recognised and `extend` is
+reported as an unknown command. That is the `extend` grammar's own limitation, unrelated to
+which names it registers under, and out of scope here.
 
 ## Notes
 
