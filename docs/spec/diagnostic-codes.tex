@@ -10,7 +10,7 @@ Non-error diagnostics can be suppressed with the \texttt{hush} builtin
 (scope-local) or by adding their codes to
 \texttt{\$tosh.Config.Diagnostics.Hushed}.
 
-This chapter lists all 535 diagnostic codes currently emitted by the
+This chapter lists all 538 diagnostic codes currently emitted by the
 implementation, grouped by namespace. It is generated from the source tree
 by \texttt{scripts/extract-diagnostic-codes.tosh} and should be
 regenerated whenever new diagnostics are added.
@@ -33,7 +33,7 @@ regenerated whenever new diagnostics are added.
 \texttt{tosh.native.*} & 3 & --- \\
 \texttt{tosh.parser.*} & 167 & Raised by the lexer or parser before any code runs. Indicates malformed source text. \\
 \texttt{tosh.row.*} & 1 & --- \\
-\texttt{tosh.runtime.*} & 328 & Raised by the engine while evaluating a script. The bulk of TōSh diagnostics live here. \\
+\texttt{tosh.runtime.*} & 331 & Raised by the engine while evaluating a script. The bulk of TōSh diagnostics live here. \\
 \texttt{tosh.tui.*} & 8 & Raised by the `tui` subsystem (terminal UI widgets, screens, providers). \\
 \texttt{tosh.type.*} & 9 & --- \\
 \texttt{tosh.user.*} & 1 & --- \\
@@ -142,11 +142,11 @@ Raised by the lexer or parser before any code runs. Indicates malformed source t
 \item[\texttt{\small tosh.parser.expected\_comprehension\_operator}] Expected '<|' in generator comprehension.
 \item[\texttt{\small tosh.parser.expected\_constructor\_parenthesis}] Object construction uses C\#-style parentheses.
 \item[\texttt{\small tosh.parser.expected\_destructuring\_name}] Expected a variable name in the destructuring pattern.
-\item[\texttt{\small tosh.parser.expected\_else\_block}] Else clauses require a block or nested if statement.
+\item[\texttt{\small tosh.parser.expected\_else\_block}] Else clauses require a block or nested if expression.
 \item[\texttt{\small tosh.parser.expected\_enum\_body}] Enum definitions require a body.
 \item[\texttt{\small tosh.parser.expected\_enum\_member\_value}] Enum members require a value after '='.
 \item[\texttt{\small tosh.parser.expected\_equals\_tuple\_assign}] Tuple assignment requires '=' after the variable list.
-\item[\texttt{\small tosh.parser.expected\_fat\_arrow}] Dict comprehension requires '=>' between key and value.
+\item[\texttt{\small tosh.parser.expected\_fat\_arrow}] Dict entries require '=>' between key and value.
 \item[\texttt{\small tosh.parser.expected\_for\_in}] For loops require 'in' before the source pipeline.
 \item[\texttt{\small tosh.parser.expected\_function\_parameter}] Expected a function parameter name.
 \item[\texttt{\small tosh.parser.expected\_function\_signature}] Function definitions require a parameter list or '=>'.
@@ -221,14 +221,14 @@ Raised by the lexer or parser before any code runs. Indicates malformed source t
 \item[\texttt{\small tosh.parser.missing\_class\_member\_separator}] Class members must be separated by a newline or ';'.
 \item[\texttt{\small tosh.parser.missing\_closing\_angle}] A closing '>' is required here.
 \item[\texttt{\small tosh.parser.missing\_closing\_brace}] A closing '\}' is required here.
-\item[\texttt{\small tosh.parser.missing\_closing\_bracket}] A closing ']' is required after list comprehension.
+\item[\texttt{\small tosh.parser.missing\_closing\_bracket}] A closing ']' is required here.
 \item[\texttt{\small tosh.parser.missing\_closing\_paren}] A closing ')' is required here.
 \item[\texttt{\small tosh.parser.missing\_closing\_paren\_tuple\_assign}] A closing ')' is required for tuple assignment.
 \item[\texttt{\small tosh.parser.missing\_closing\_parenthesis}] A native function binding requires a parameter list.
 \item[\texttt{\small tosh.parser.missing\_command\_after\_pipe}] \textit{(see source)}
 \item[\texttt{\small tosh.parser.missing\_command\_after\_pipe\_forward}] \textit{(see source)}
 \item[\texttt{\small tosh.parser.missing\_constructor\_separator}] Constructor arguments must be separated by ','.
-\item[\texttt{\small tosh.parser.missing\_dict\_closing\_delimiter}] A closing '\%\}' is required after dict comprehension.
+\item[\texttt{\small tosh.parser.missing\_dict\_closing\_delimiter}] A closing '\%\}' is required here.
 \item[\texttt{\small tosh.parser.missing\_dict\_entry\_separator}] Dict entries must be separated by ',' or a newline.
 \item[\texttt{\small tosh.parser.missing\_function\_parameter\_separator}] Function parameters must be separated by ','.
 \item[\texttt{\small tosh.parser.missing\_list\_separator}] Array items must be separated by ','.
@@ -241,7 +241,7 @@ Raised by the lexer or parser before any code runs. Indicates malformed source t
 \item[\texttt{\small tosh.parser.missing\_record\_closing\_brace}] \textit{(see source)}
 \item[\texttt{\small tosh.parser.missing\_record\_closing\_delimiter}] A closing '|\}' is required here.
 \item[\texttt{\small tosh.parser.missing\_record\_field\_separator}] Record fields must be separated by ',' or a newline.
-\item[\texttt{\small tosh.parser.missing\_set\_closing\_delimiter}] A closing ':\}' is required after set comprehension.
+\item[\texttt{\small tosh.parser.missing\_set\_closing\_delimiter}] A closing ':\}' is required here.
 \item[\texttt{\small tosh.parser.missing\_set\_separator}] Set items must be separated by ','.
 \item[\texttt{\small tosh.parser.missing\_statement\_separator}] Top-level statements must be separated by a newline or ';'.
 \item[\texttt{\small tosh.parser.missing\_ternary\_colon}] A ternary expression requires ':'.
@@ -298,7 +298,7 @@ Raised by the engine while evaluating a script. The bulk of TōSh diagnostics li
 \item[\texttt{\small tosh.runtime.alloc\_negative\_size}] Allocated buffers cannot have a negative size.
 \item[\texttt{\small tosh.runtime.alloc\_requires\_single\_value}] Allocated buffer declarations require exactly one size or type value.
 \item[\texttt{\small tosh.runtime.annotation\_conversion\_failed}] '\{owner\}' produced a value that could not be converted to '\{typeName\}'.
-\item[\texttt{\small tosh.runtime.annotation\_unknown\_type}] '\{owner\}' uses unknown type annotation '\{typeName\}'.
+\item[\texttt{\small tosh.runtime.annotation\_unknown\_type}] Argument '\{parameter.Name\}' could not be converted to '\{parameter.TypeName\}'.
 \item[\texttt{\small tosh.runtime.assert\_requires\_predicate}] The 'assert' command requires a predicate block or callable.
 \item[\texttt{\small tosh.runtime.assertion\_failed}] \textit{(see source)}
 \item[\texttt{\small tosh.runtime.await\_requires\_future}] 'await' expects a future or a CLR Task.
@@ -334,6 +334,7 @@ Raised by the engine while evaluating a script. The bulk of TōSh diagnostics li
 \item[\texttt{\small tosh.runtime.constructor\_cycle}] Constructor cycle detected while initializing class '\{Name\}'.
 \item[\texttt{\small tosh.runtime.constructor\_parameter\_type\_conversion\_failed}] Constructor argument '\{parameter.Name\}' could not be converted to '\{parameter.TypeName\}'.
 \item[\texttt{\small tosh.runtime.continue\_outside\_loop}] 'continue' can only be used inside 'for', 'while', or 'each' blocks.
+\item[\texttt{\small tosh.runtime.contract\_member\_type\_mismatch}] Class '\{@class.Name\}' implements '\{contractName\}.\{memberName\}' with an incompatible \{found.What\}.
 \item[\texttt{\small tosh.runtime.converge\_requires\_seed\_and\_callable}] 'converge' requires a seed value and a callable value or block.
 \item[\texttt{\small tosh.runtime.curry\_argument\_count\_mismatch}] Curried callable '\{\_inner.CallableName\}' accepts \{\_targetArity\} total argument(s) but received \{combinedArguments.Length\}.
 \item[\texttt{\small tosh.runtime.curry\_requires\_callable}] The 'curry' command requires exactly one callable value.
@@ -405,6 +406,7 @@ Raised by the engine while evaluating a script. The bulk of TōSh diagnostics li
 \item[\texttt{\small tosh.runtime.interface\_type\_argument\_constraint\_violation}] Generic interface '\{ifaceDefinition.Name\}' requires type parameter '\{clause.TypeParameter\}' to satisfy '\{constraintName\}', but '\{argText\}' (CLR \{bound.FullName ?? bound.Name\}) does not.
 \item[\texttt{\small tosh.runtime.interleave\_requires\_sequence}] 'interleave' requires exactly one array argument.
 \item[\texttt{\small tosh.runtime.intersperse\_requires\_separator}] 'intersperse' requires exactly one separator argument.
+\item[\texttt{\small tosh.runtime.invalid\_format\_clause}] \textit{(see source)}
 \item[\texttt{\small tosh.runtime.invalid\_member\_assignment\_target}] Assignments to members require a member path target.
 \item[\texttt{\small tosh.runtime.invalid\_regex}] The regular expression is invalid. \{exception.Message\}
 \item[\texttt{\small tosh.runtime.invoke\_requires\_callable}] The 'invoke' command requires a callable value.
@@ -501,7 +503,7 @@ Raised by the engine while evaluating a script. The bulk of TōSh diagnostics li
 \item[\texttt{\small tosh.runtime.partial\_argument\_count\_mismatch}] Callable '\{\_inner.CallableName\}' accepts at most \{maximum\} argument(s) but received \{combinedArguments.Length\}.
 \item[\texttt{\small tosh.runtime.partial\_merge\_non\_partial\_record}] Cannot merge partial record '\{record.Name\}' with existing non-partial record.
 \item[\texttt{\small tosh.runtime.partial\_merge\_non\_partial\_struct}] Cannot merge partial struct '\{@struct.Name\}' with existing non-partial struct.
-\item[\texttt{\small tosh.runtime.partial\_mismatch}] Cannot extend class '\{@class.Name\}' as partial: the original class was not declared as partial.
+\item[\texttt{\small tosh.runtime.partial\_mismatch}] Cannot extend module '\{module.Name\}' as partial: the original module was not declared as partial.
 \item[\texttt{\small tosh.runtime.partial\_requires\_callable}] The 'partial' command requires a callable value.
 \item[\texttt{\small tosh.runtime.partition\_requires\_callable\_or\_block}] 'partition' requires exactly one callable value or block.
 \item[\texttt{\small tosh.runtime.permutations\_args}] 'permutations' accepts at most one integer argument (k).
@@ -527,7 +529,7 @@ Raised by the engine while evaluating a script. The bulk of TōSh diagnostics li
 \item[\texttt{\small tosh.runtime.redirection\_target\_null}] Redirection target cannot be null.
 \item[\texttt{\small tosh.runtime.redirection\_target\_unavailable}] Cannot open '\{redirection.Path\}' for redirection: \{exception.Message\}
 \item[\texttt{\small tosh.runtime.reduce\_requires\_seed\_and\_callable}] 'reduce' requires a seed value and a callable value or block.
-\item[\texttt{\small tosh.runtime.refinement\_failed}] Value for '\{owner\}' does not satisfy its refinement.
+\item[\texttt{\small tosh.runtime.refinement\_failed}] Argument '\{parameter.Name\}' could not be converted to '\{parameter.TypeName\}'.
 \item[\texttt{\small tosh.runtime.refinement\_requires\_boolean}] \{title\} must evaluate to boolean values.
 \item[\texttt{\small tosh.runtime.refinement\_specialization\_failed}] Refinement alias '\{genericDefinition.Name\}' could not be specialized for '\{closedTypeName\}'.
 \item[\texttt{\small tosh.runtime.regex\_flags\_not\_applicable}] Regex option flags only apply to string patterns.
@@ -589,9 +591,9 @@ Raised by the engine while evaluating a script. The bulk of TōSh diagnostics li
 \item[\texttt{\small tosh.runtime.ulimit\_unsupported}] `ulimit` is not supported on Windows.
 \item[\texttt{\small tosh.runtime.umask\_invalid}] Invalid umask value '\{arg\}'.
 \item[\texttt{\small tosh.runtime.umask\_unsupported}] `umask` is not supported on Windows.
-\item[\texttt{\small tosh.runtime.unexpected\_exception}] \textit{(see source)}
+\item[\texttt{\small tosh.runtime.unexpected\_exception}] Function '\{commandName\}' shadows built-in command '\{commandName\}'.
 \item[\texttt{\small tosh.runtime.unexpected\_interface\_type\_arguments}] Interface '\{ifaceDefinition.Name\}' is not generic and does not accept type arguments.
-\item[\texttt{\small tosh.runtime.unexpected\_script\_argument}] Unexpected \{(node.Name is null ? 
+\item[\texttt{\small tosh.runtime.unexpected\_script\_argument}] Unexpected script argument '\{FormatScriptArgumentForDiagnostic(unexpected.Value)\}'.
 \item[\texttt{\small tosh.runtime.unfold\_requires\_pair\_or\_null}] 'unfold' callable must return a [value, next-state] pair or null to stop.
 \item[\texttt{\small tosh.runtime.unfold\_requires\_seed\_and\_callable}] 'unfold' requires a seed value and a callable value or block.
 \item[\texttt{\small tosh.runtime.uninitialized\_variable}] Variable '\{variableReference.Name\}' has been declared but not assigned yet.
@@ -600,6 +602,7 @@ Raised by the engine while evaluating a script. The bulk of TōSh diagnostics li
 \item[\texttt{\small tosh.runtime.unknown\_command}] Command '\{commandSyntax.Name\}' was not found.
 \item[\texttt{\small tosh.runtime.unknown\_enum\_underlying\_type}] Enum '\{@enum.Name\}' uses unknown underlying type '\{@enum.UnderlyingTypeName\}'.
 \item[\texttt{\small tosh.runtime.unknown\_function\_reference}] Function '\{funcRef.Name\}' was not found.
+\item[\texttt{\small tosh.runtime.unknown\_implicit\_call}] Nothing named '\{methodCall.MethodName\}' is in scope, and the current item has no such method.
 \item[\texttt{\small tosh.runtime.unknown\_interface}] Class '\{@class.Name\}' fulfills unknown interface '\{ifaceName\}'.
 \item[\texttt{\small tosh.runtime.unknown\_named\_argument}] There is no parameter named '\{namedArgument.Name\}'.
 \item[\texttt{\small tosh.runtime.unknown\_script\_flag}] Unknown script flag '--\{optionName\}'.

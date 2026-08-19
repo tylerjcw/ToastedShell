@@ -2332,12 +2332,35 @@ StartupNotify=false
                 return false
             }
 
-            var job = spawn latexmk -cd -pdf -interaction=nonstopmode -halt-on-error (DocumentPath($root))
+            ## A LaTeX run that fails leaves *poisoned auxiliary files* — a truncated
+            ## `.out` or `.aux` that the next run chokes on with "File ended while
+            ## scanning use of \BKM@entry" at `\begin{document}`, naming nothing about
+            ## the edit that caused it. So one genuine error made every later build fail
+            ## until someone thought to clean by hand, which made the specification
+            ## painful to change and is its own reason documentation drifts.
+            ##
+            ## Measured, not assumed: this happens with and without `-halt-on-error`, so
+            ## dropping that flag — tried first — does not fix it. What fixes it is
+            ## *recovering*: clean the auxiliary state and try once more. A second failure
+            ## is a real error and is reported.
+            var job = spawn latexmk -cd -pdf -interaction=nonstopmode (DocumentPath($root))
                 | wait-for
                 | first
+
             if ($job.ExitCode != 0) {
-                throw $"latexmk failed (exit {$job.ExitCode}). See docs/spec/toastscript-spec.log."
+                Helpers.Warn("latexmk failed; cleaning auxiliary files and retrying once.")
+
+                var clean = spawn latexmk -C -cd (DocumentPath($root)) | wait-for | first
+
+                var retry = spawn latexmk -cd -pdf -interaction=nonstopmode (DocumentPath($root))
+                    | wait-for
+                    | first
+
+                if ($retry.ExitCode != 0) {
+                    throw $"latexmk failed (exit {$retry.ExitCode}), including after a clean retry. See docs/spec/toastscript-spec.log."
+                }
             }
+
             Helpers.Ok($"Specification PDF written: {PdfPath($root)}")
             return true
         }

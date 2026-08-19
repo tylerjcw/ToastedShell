@@ -10,7 +10,7 @@ a non-error diagnostic with `hush <code>` (scope-local) or by adding it to
 `$tosh.Config.Diagnostics.Hushed` from `profile.tosh`. The tables below
 enumerate every code currently emitted by the implementation.
 
-**Total diagnostic codes:** 535
+**Total diagnostic codes:** 538
 
 ## Namespace summary
 
@@ -29,7 +29,7 @@ enumerate every code currently emitted by the implementation.
 | `tosh.native.*` | 3 | — |
 | `tosh.parser.*` | 167 | Raised by the lexer or parser before any code runs. Indicates malformed source text. |
 | `tosh.row.*` | 1 | — |
-| `tosh.runtime.*` | 328 | Raised by the engine while evaluating a script. The bulk of TōSh diagnostics live here. |
+| `tosh.runtime.*` | 331 | Raised by the engine while evaluating a script. The bulk of TōSh diagnostics live here. |
 | `tosh.tui.*` | 8 | Raised by the `tui` subsystem (terminal UI widgets, screens, providers). |
 | `tosh.type.*` | 9 | — |
 | `tosh.user.*` | 1 | — |
@@ -75,9 +75,9 @@ Raised by the configuration loader or by the `config` command.
 
 | Code | Title | First emit site |
 |---|---|---|
-| `tosh.format.file_not_found` | format: file '{path}' does not exist. | [src/Tosh.Language/Bridge/Scripting/FormatCommand.cs:71](src/Tosh.Language/Bridge/Scripting/FormatCommand.cs#L71) |
-| `tosh.format.no_paths` | format requires at least one file path or '-' for stdin. | [src/Tosh.Language/Bridge/Scripting/FormatCommand.cs:40](src/Tosh.Language/Bridge/Scripting/FormatCommand.cs#L40) |
-| `tosh.format.parse_error` | Cannot format input: it does not parse. | [src/Tosh.Language/Bridge/Scripting/FormatCommand.cs:53](src/Tosh.Language/Bridge/Scripting/FormatCommand.cs#L53) |
+| `tosh.format.file_not_found` | format: file '{path}' does not exist. | [src/Tosh.Stdlib/Scripting/FormatCommand.cs:71](src/Tosh.Stdlib/Scripting/FormatCommand.cs#L71) |
+| `tosh.format.no_paths` | format requires at least one file path or '-' for stdin. | [src/Tosh.Stdlib/Scripting/FormatCommand.cs:40](src/Tosh.Stdlib/Scripting/FormatCommand.cs#L40) |
+| `tosh.format.parse_error` | Cannot format input: it does not parse. | [src/Tosh.Stdlib/Scripting/FormatCommand.cs:53](src/Tosh.Stdlib/Scripting/FormatCommand.cs#L53) |
 
 ## `tosh.get.*`
 
@@ -107,8 +107,8 @@ Raised by the history subsystem (for example, replaying entries when no host is 
 
 | Code | Title | First emit site |
 |---|---|---|
-| `tosh.naming.shadowed_builtin` | Function '{commandName}' shadows built-in command '{commandName}'. | [src/Tosh.Language/ToshEngine.cs:11788](src/Tosh.Language/ToshEngine.cs#L11788) |
-| `tosh.naming.shadowed_underscore` | Redeclaring '_' shadows an existing binding. | [src/Tosh.Language/ToshEngine.cs:2146](src/Tosh.Language/ToshEngine.cs#L2146) |
+| `tosh.naming.shadowed_builtin` | Function '{commandName}' shadows built-in command '{commandName}'. | [src/Tosh.Language/ToshEngine.Diagnostics.cs:116](src/Tosh.Language/ToshEngine.Diagnostics.cs#L116) |
+| `tosh.naming.shadowed_underscore` | Redeclaring '_' shadows an existing binding. | [src/Tosh.Language/ToshEngine.Variables.cs:147](src/Tosh.Language/ToshEngine.Variables.cs#L147) |
 
 ## `tosh.native.*`
 
@@ -116,7 +116,7 @@ Raised by the history subsystem (for example, replaying entries when no host is 
 |---|---|---|
 | `tosh.native.count_width_suspect` | _(see source)_ | [src/Tosh.Language/Bridge/NativeFunctionCommand.cs:607](src/Tosh.Language/Bridge/NativeFunctionCommand.cs#L607) |
 | `tosh.native.entry_point_not_found` | Native library '{libraryPath}' exports no symbol named '{symbolName}'. | [src/Tosh.Language/Bridge/NativeFunctionCommand.cs:815](src/Tosh.Language/Bridge/NativeFunctionCommand.cs#L815) |
-| `tosh.native.library_not_found` | Native library '{nativeTarget}' was not found. | [src/Tosh.Language/ToshEngine.cs:3209](src/Tosh.Language/ToshEngine.cs#L3209) |
+| `tosh.native.library_not_found` | Native library '{nativeTarget}' was not found. | [src/Tosh.Language/ToshEngine.Native.cs:249](src/Tosh.Language/ToshEngine.Native.cs#L249) |
 
 ## `tosh.parser.*`
 
@@ -124,173 +124,173 @@ Raised by the lexer or parser before any code runs. Indicates malformed source t
 
 | Code | Title | First emit site |
 |---|---|---|
-| `tosh.parser.accidental_double_dot` | Did you mean '.' (member access) instead of '..' (range)? | [src/Tosh.Language/Parsing/ToshParser.cs:7347](src/Tosh.Language/Parsing/ToshParser.cs#L7347) |
-| `tosh.parser.assert_does_not_accept_message` | Assert no longer accepts a trailing custom message. | [src/Tosh.Language/Parsing/ToshParser.cs:7171](src/Tosh.Language/Parsing/ToshParser.cs#L7171) |
-| `tosh.parser.assignment_in_predicate` | Use '==' for equality comparisons, not '='. | [src/Tosh.Language/Parsing/ToshParser.cs:10531](src/Tosh.Language/Parsing/ToshParser.cs#L10531) |
-| `tosh.parser.const_requires_value` | A 'const' declaration requires an initializer. | [src/Tosh.Language/Parsing/ToshParser.cs:972](src/Tosh.Language/Parsing/ToshParser.cs#L972) |
-| `tosh.parser.duplicate_input_redirection` | Only one input redirection is allowed per pipeline. | [src/Tosh.Language/Parsing/ToshParser.cs:11057](src/Tosh.Language/Parsing/ToshParser.cs#L11057) |
-| `tosh.parser.duplicate_subcommand_modifier` | Subcommand modifier '{modifierToken.Text}' is repeated. | [src/Tosh.Language/Parsing/ToshParser.cs:2937](src/Tosh.Language/Parsing/ToshParser.cs#L2937) |
-| `tosh.parser.empty_type_refinement_block` | Type refinement blocks require at least one clause. | [src/Tosh.Language/Parsing/ToshParser.cs:5800](src/Tosh.Language/Parsing/ToshParser.cs#L5800) |
-| `tosh.parser.expected_anonymous_function_body` | Anonymous functions require `=>` or a block body. | [src/Tosh.Language/Parsing/ToshParser.cs:5587](src/Tosh.Language/Parsing/ToshParser.cs#L5587) |
-| `tosh.parser.expected_anonymous_function_expression` | Anonymous `=>` functions require an expression body. | [src/Tosh.Language/Parsing/ToshParser.cs:5538](src/Tosh.Language/Parsing/ToshParser.cs#L5538) |
-| `tosh.parser.expected_assignment_operator` | _(see source)_ | [src/Tosh.Language/Parsing/ToshParser.cs:6671](src/Tosh.Language/Parsing/ToshParser.cs#L6671) |
-| `tosh.parser.expected_assignment_target` | Assignments require a variable or member path target. | [src/Tosh.Language/Parsing/ToshParser.cs:7911](src/Tosh.Language/Parsing/ToshParser.cs#L7911) |
+| `tosh.parser.accidental_double_dot` | Did you mean '.' (member access) instead of '..' (range)? | [src/Tosh.Language/Parsing/ToshParser.Arguments.cs:1090](src/Tosh.Language/Parsing/ToshParser.Arguments.cs#L1090) |
+| `tosh.parser.assert_does_not_accept_message` | Assert no longer accepts a trailing custom message. | [src/Tosh.Language/Parsing/ToshParser.Expressions.cs:418](src/Tosh.Language/Parsing/ToshParser.Expressions.cs#L418) |
+| `tosh.parser.assignment_in_predicate` | Use '==' for equality comparisons, not '='. | [src/Tosh.Language/Parsing/ToshParser.Expressions.cs:988](src/Tosh.Language/Parsing/ToshParser.Expressions.cs#L988) |
+| `tosh.parser.const_requires_value` | A 'const' declaration requires an initializer. | [src/Tosh.Language/Parsing/ToshParser.Statements.cs:500](src/Tosh.Language/Parsing/ToshParser.Statements.cs#L500) |
+| `tosh.parser.duplicate_input_redirection` | Only one input redirection is allowed per pipeline. | [src/Tosh.Language/Parsing/ToshParser.Commands.cs:1163](src/Tosh.Language/Parsing/ToshParser.Commands.cs#L1163) |
+| `tosh.parser.duplicate_subcommand_modifier` | Subcommand modifier '{modifierToken.Text}' is repeated. | [src/Tosh.Language/Parsing/ToshParser.Statements.cs:1312](src/Tosh.Language/Parsing/ToshParser.Statements.cs#L1312) |
+| `tosh.parser.empty_type_refinement_block` | Type refinement blocks require at least one clause. | [src/Tosh.Language/Parsing/ToshParser.Commands.cs:340](src/Tosh.Language/Parsing/ToshParser.Commands.cs#L340) |
+| `tosh.parser.expected_anonymous_function_body` | Anonymous functions require `=>` or a block body. | [src/Tosh.Language/Parsing/ToshParser.Arguments.cs:377](src/Tosh.Language/Parsing/ToshParser.Arguments.cs#L377) |
+| `tosh.parser.expected_anonymous_function_expression` | Anonymous `=>` functions require an expression body. | [src/Tosh.Language/Parsing/ToshParser.cs:1817](src/Tosh.Language/Parsing/ToshParser.cs#L1817) |
+| `tosh.parser.expected_assignment_operator` | _(see source)_ | [src/Tosh.Language/Parsing/ToshParser.Expressions.cs:297](src/Tosh.Language/Parsing/ToshParser.Expressions.cs#L297) |
+| `tosh.parser.expected_assignment_target` | Assignments require a variable or member path target. | [src/Tosh.Language/Parsing/ToshParser.Commands.cs:827](src/Tosh.Language/Parsing/ToshParser.Commands.cs#L827) |
 | `tosh.parser.expected_bind_body` | Bind statements require a body. | [src/Tosh.Cli/ReplInputClassifier.cs:21](src/Tosh.Cli/ReplInputClassifier.cs#L21) |
-| `tosh.parser.expected_bind_function` | Bind blocks only support function bindings. | [src/Tosh.Language/Parsing/ToshParser.cs:1550](src/Tosh.Language/Parsing/ToshParser.cs#L1550) |
+| `tosh.parser.expected_bind_function` | Bind blocks only support function bindings. | [src/Tosh.Language/Parsing/ToshParser.cs:692](src/Tosh.Language/Parsing/ToshParser.cs#L692) |
 | `tosh.parser.expected_block` | The '{owner}' statement requires a block. | [src/Tosh.Cli/ReplInputClassifier.cs:15](src/Tosh.Cli/ReplInputClassifier.cs#L15) |
-| `tosh.parser.expected_calling_convention` | A callback needs a calling convention name after 'callconv'. | [src/Tosh.Language/Parsing/ToshParser.cs:4036](src/Tosh.Language/Parsing/ToshParser.cs#L4036) |
-| `tosh.parser.expected_catch_variable` | Catch clauses require a variable name when parentheses are used. | [src/Tosh.Language/Parsing/ToshParser.cs:1967](src/Tosh.Language/Parsing/ToshParser.cs#L1967) |
+| `tosh.parser.expected_calling_convention` | A callback needs a calling convention name after 'callconv'. | [src/Tosh.Language/Parsing/ToshParser.Statements.cs:2411](src/Tosh.Language/Parsing/ToshParser.Statements.cs#L2411) |
+| `tosh.parser.expected_catch_variable` | Catch clauses require a variable name when parentheses are used. | [src/Tosh.Language/Parsing/ToshParser.Statements.cs:909](src/Tosh.Language/Parsing/ToshParser.Statements.cs#L909) |
 | `tosh.parser.expected_class_body` | Class definitions require a body. | [src/Tosh.Cli/ReplInputClassifier.cs:16](src/Tosh.Cli/ReplInputClassifier.cs#L16) |
-| `tosh.parser.expected_class_member` | Expected a member inside class '{className}'. | [src/Tosh.Language/Parsing/ToshParser.cs:4940](src/Tosh.Language/Parsing/ToshParser.cs#L4940) |
-| `tosh.parser.expected_closing_paren` | A closing ')' is required after the computed property name. | [src/Tosh.Language/Parsing/ToshParser.cs:9292](src/Tosh.Language/Parsing/ToshParser.cs#L9292) |
-| `tosh.parser.expected_command_name` | Expected a function name. | [src/Tosh.Language/Parsing/ToshParser.cs:6582](src/Tosh.Language/Parsing/ToshParser.cs#L6582) |
-| `tosh.parser.expected_comprehension_for` | Comprehensions require a 'for' clause after '<\|'. | [src/Tosh.Language/Parsing/ToshParser.cs:8318](src/Tosh.Language/Parsing/ToshParser.cs#L8318) |
-| `tosh.parser.expected_comprehension_in` | Comprehensions require 'in' after the variable name. | [src/Tosh.Language/Parsing/ToshParser.cs:8372](src/Tosh.Language/Parsing/ToshParser.cs#L8372) |
-| `tosh.parser.expected_comprehension_operator` | Expected '<\|' in generator comprehension. | [src/Tosh.Language/Parsing/ToshParser.cs:8532](src/Tosh.Language/Parsing/ToshParser.cs#L8532) |
-| `tosh.parser.expected_constructor_parenthesis` | Object construction uses C#-style parentheses. | [src/Tosh.Language/Parsing/ToshParser.cs:9458](src/Tosh.Language/Parsing/ToshParser.cs#L9458) |
-| `tosh.parser.expected_destructuring_name` | Expected a variable name in the destructuring pattern. | [src/Tosh.Language/Parsing/ToshParser.cs:1057](src/Tosh.Language/Parsing/ToshParser.cs#L1057) |
-| `tosh.parser.expected_else_block` | Else clauses require a block or nested if statement. | [src/Tosh.Cli/ReplInputClassifier.cs:23](src/Tosh.Cli/ReplInputClassifier.cs#L23) |
+| `tosh.parser.expected_class_member` | Expected a member inside class '{className}'. | [src/Tosh.Language/Parsing/ToshParser.Commands.cs:183](src/Tosh.Language/Parsing/ToshParser.Commands.cs#L183) |
+| `tosh.parser.expected_closing_paren` | A closing ')' is required after the computed property name. | [src/Tosh.Language/Parsing/ToshParser.Arguments.cs:2043](src/Tosh.Language/Parsing/ToshParser.Arguments.cs#L2043) |
+| `tosh.parser.expected_command_name` | Expected a function name. | [src/Tosh.Language/Parsing/ToshParser.Commands.cs:618](src/Tosh.Language/Parsing/ToshParser.Commands.cs#L618) |
+| `tosh.parser.expected_comprehension_for` | Comprehensions require a 'for' clause after '<\|'. | [src/Tosh.Language/Parsing/ToshParser.cs:2127](src/Tosh.Language/Parsing/ToshParser.cs#L2127) |
+| `tosh.parser.expected_comprehension_in` | Comprehensions require 'in' after the variable name. | [src/Tosh.Language/Parsing/ToshParser.cs:2181](src/Tosh.Language/Parsing/ToshParser.cs#L2181) |
+| `tosh.parser.expected_comprehension_operator` | Expected '<\|' in generator comprehension. | [src/Tosh.Language/Parsing/ToshParser.cs:2292](src/Tosh.Language/Parsing/ToshParser.cs#L2292) |
+| `tosh.parser.expected_constructor_parenthesis` | Object construction uses C#-style parentheses. | [src/Tosh.Language/Parsing/ToshParser.Arguments.cs:2209](src/Tosh.Language/Parsing/ToshParser.Arguments.cs#L2209) |
+| `tosh.parser.expected_destructuring_name` | Expected a variable name in the destructuring pattern. | [src/Tosh.Language/Parsing/ToshParser.cs:499](src/Tosh.Language/Parsing/ToshParser.cs#L499) |
+| `tosh.parser.expected_else_block` | Else clauses require a block or nested if expression. | [src/Tosh.Cli/ReplInputClassifier.cs:23](src/Tosh.Cli/ReplInputClassifier.cs#L23) |
 | `tosh.parser.expected_enum_body` | Enum definitions require a body. | [src/Tosh.Cli/ReplInputClassifier.cs:17](src/Tosh.Cli/ReplInputClassifier.cs#L17) |
-| `tosh.parser.expected_enum_member_value` | Enum members require a value after '='. | [src/Tosh.Language/Parsing/ToshParser.cs:3807](src/Tosh.Language/Parsing/ToshParser.cs#L3807) |
-| `tosh.parser.expected_equals_tuple_assign` | Tuple assignment requires '=' after the variable list. | [src/Tosh.Language/Parsing/ToshParser.cs:558](src/Tosh.Language/Parsing/ToshParser.cs#L558) |
-| `tosh.parser.expected_fat_arrow` | Dict comprehension requires '=>' between key and value. | [src/Tosh.Language/Parsing/ToshParser.cs:8673](src/Tosh.Language/Parsing/ToshParser.cs#L8673) |
-| `tosh.parser.expected_for_in` | For loops require 'in' before the source pipeline. | [src/Tosh.Language/Parsing/ToshParser.cs:810](src/Tosh.Language/Parsing/ToshParser.cs#L810) |
-| `tosh.parser.expected_function_parameter` | Expected a function parameter name. | [src/Tosh.Language/Parsing/ToshParser.cs:5984](src/Tosh.Language/Parsing/ToshParser.cs#L5984) |
+| `tosh.parser.expected_enum_member_value` | Enum members require a value after '='. | [src/Tosh.Language/Parsing/ToshParser.Statements.cs:2182](src/Tosh.Language/Parsing/ToshParser.Statements.cs#L2182) |
+| `tosh.parser.expected_equals_tuple_assign` | Tuple assignment requires '=' after the variable list. | [src/Tosh.Language/Parsing/ToshParser.Statements.cs:86](src/Tosh.Language/Parsing/ToshParser.Statements.cs#L86) |
+| `tosh.parser.expected_fat_arrow` | Dict entries require '=>' between key and value. | [src/Tosh.Language/Parsing/ToshParser.Arguments.cs:1910](src/Tosh.Language/Parsing/ToshParser.Arguments.cs#L1910) |
+| `tosh.parser.expected_for_in` | For loops require 'in' before the source pipeline. | [src/Tosh.Language/Parsing/ToshParser.Statements.cs:338](src/Tosh.Language/Parsing/ToshParser.Statements.cs#L338) |
+| `tosh.parser.expected_function_parameter` | Expected a function parameter name. | [src/Tosh.Language/Parsing/ToshParser.Arguments.cs:478](src/Tosh.Language/Parsing/ToshParser.Arguments.cs#L478) |
 | `tosh.parser.expected_function_signature` | Function definitions require a parameter list or '=>'. | [src/Tosh.Cli/ReplInputClassifier.cs:22](src/Tosh.Cli/ReplInputClassifier.cs#L22) |
-| `tosh.parser.expected_here_string_value` | A value is required after '<<<'. | [src/Tosh.Language/Parsing/ToshParser.cs:6736](src/Tosh.Language/Parsing/ToshParser.cs#L6736) |
-| `tosh.parser.expected_if_condition` | If statements require a parenthesized condition. | [src/Tosh.Language/Parsing/ToshParser.cs:875](src/Tosh.Language/Parsing/ToshParser.cs#L875) |
-| `tosh.parser.expected_if_expression_condition` | If expressions require a parenthesized condition. | [src/Tosh.Language/Parsing/ToshParser.cs:2451](src/Tosh.Language/Parsing/ToshParser.cs#L2451) |
-| `tosh.parser.expected_index_expression` | Index access requires an expression inside '[' and ']'. | [src/Tosh.Language/Parsing/ToshParser.cs:9705](src/Tosh.Language/Parsing/ToshParser.cs#L9705) |
-| `tosh.parser.expected_initializer` | Expected an expression after '=' in the declaration of '{declaredName}'. | [src/Tosh.Language/Parsing/ToshParser.cs:1004](src/Tosh.Language/Parsing/ToshParser.cs#L1004) |
-| `tosh.parser.expected_input_redirection_source` | A file path is required after an input redirection operator. | [src/Tosh.Language/Parsing/ToshParser.cs:13300](src/Tosh.Language/Parsing/ToshParser.cs#L13300) |
-| `tosh.parser.expected_interface_body` | Interface definitions require a body. | [src/Tosh.Language/Parsing/ToshParser.cs:3530](src/Tosh.Language/Parsing/ToshParser.cs#L3530) |
-| `tosh.parser.expected_let_equals` | Let bindings require '=' between name and value. | [src/Tosh.Language/Parsing/ToshParser.cs:8418](src/Tosh.Language/Parsing/ToshParser.cs#L8418) |
-| `tosh.parser.expected_match_arm_arrow` | Match arms require `=>` between the pattern and result. | [src/Tosh.Language/Parsing/ToshParser.cs:2594](src/Tosh.Language/Parsing/ToshParser.cs#L2594) |
-| `tosh.parser.expected_match_arm_underscore` | Match arms must start with '_' | [src/Tosh.Language/Parsing/ToshParser.cs:2555](src/Tosh.Language/Parsing/ToshParser.cs#L2555) |
+| `tosh.parser.expected_here_string_value` | A value is required after '<<<'. | [src/Tosh.Language/Parsing/ToshParser.Commands.cs:646](src/Tosh.Language/Parsing/ToshParser.Commands.cs#L646) |
+| `tosh.parser.expected_if_condition` | If statements require a parenthesized condition. | [src/Tosh.Language/Parsing/ToshParser.Statements.cs:403](src/Tosh.Language/Parsing/ToshParser.Statements.cs#L403) |
+| `tosh.parser.expected_if_expression_condition` | If expressions require a parenthesized condition. | [src/Tosh.Language/Parsing/ToshParser.Expressions.cs:160](src/Tosh.Language/Parsing/ToshParser.Expressions.cs#L160) |
+| `tosh.parser.expected_index_expression` | Index access requires an expression inside '[' and ']'. | [src/Tosh.Language/Parsing/ToshParser.cs:2609](src/Tosh.Language/Parsing/ToshParser.cs#L2609) |
+| `tosh.parser.expected_initializer` | Expected an expression after '=' in the declaration of '{declaredName}'. | [src/Tosh.Language/Parsing/ToshParser.Statements.cs:532](src/Tosh.Language/Parsing/ToshParser.Statements.cs#L532) |
+| `tosh.parser.expected_input_redirection_source` | A file path is required after an input redirection operator. | [src/Tosh.Language/Parsing/ToshParser.cs:2803](src/Tosh.Language/Parsing/ToshParser.cs#L2803) |
+| `tosh.parser.expected_interface_body` | Interface definitions require a body. | [src/Tosh.Language/Parsing/ToshParser.Statements.cs:1905](src/Tosh.Language/Parsing/ToshParser.Statements.cs#L1905) |
+| `tosh.parser.expected_let_equals` | Let bindings require '=' between name and value. | [src/Tosh.Language/Parsing/ToshParser.cs:2227](src/Tosh.Language/Parsing/ToshParser.cs#L2227) |
+| `tosh.parser.expected_match_arm_arrow` | Match arms require `=>` between the pattern and result. | [src/Tosh.Language/Parsing/ToshParser.Tokens.cs:168](src/Tosh.Language/Parsing/ToshParser.Tokens.cs#L168) |
+| `tosh.parser.expected_match_arm_underscore` | Match arms must start with '_' | [src/Tosh.Language/Parsing/ToshParser.Tokens.cs:129](src/Tosh.Language/Parsing/ToshParser.Tokens.cs#L129) |
 | `tosh.parser.expected_match_block` | Match expressions require an arm block. | [src/Tosh.Cli/ReplInputClassifier.cs:19](src/Tosh.Cli/ReplInputClassifier.cs#L19) |
-| `tosh.parser.expected_match_guard_condition` | Match guards require a parenthesized condition. | [src/Tosh.Language/Parsing/ToshParser.cs:2584](src/Tosh.Language/Parsing/ToshParser.cs#L2584) |
-| `tosh.parser.expected_match_value` | Match expressions require a parenthesized value. | [src/Tosh.Language/Parsing/ToshParser.cs:2352](src/Tosh.Language/Parsing/ToshParser.cs#L2352) |
-| `tosh.parser.expected_member_assignment_target` | This assignment needs a member path like '$person.Name'. | [src/Tosh.Language/Parsing/ToshParser.cs:7940](src/Tosh.Language/Parsing/ToshParser.cs#L7940) |
-| `tosh.parser.expected_native_calling_convention` | Native function bindings need a calling convention name after 'callconv'. | [src/Tosh.Language/Parsing/ToshParser.cs:1623](src/Tosh.Language/Parsing/ToshParser.cs#L1623) |
-| `tosh.parser.expected_native_library` | A raw function needs a library after 'from'. | [src/Tosh.Language/Parsing/ToshParser.cs:1585](src/Tosh.Language/Parsing/ToshParser.cs#L1585) |
-| `tosh.parser.expected_native_symbol_name` | Native function bindings need a symbol name after 'as'. | [src/Tosh.Language/Parsing/ToshParser.cs:1604](src/Tosh.Language/Parsing/ToshParser.cs#L1604) |
-| `tosh.parser.expected_nested_type` | Expected a type declaration inside class '{className}'. | [src/Tosh.Language/Parsing/ToshParser.cs:4898](src/Tosh.Language/Parsing/ToshParser.cs#L4898) |
-| `tosh.parser.expected_operand` | Expected an operand in this expression. | [src/Tosh.Language/Parsing/ToshParser.cs:10807](src/Tosh.Language/Parsing/ToshParser.cs#L10807) |
-| `tosh.parser.expected_parenthesized_source` | The '{owner}' statement requires a source. | [src/Tosh.Language/Parsing/ToshParser.cs:8215](src/Tosh.Language/Parsing/ToshParser.cs#L8215) |
-| `tosh.parser.expected_postfix_condition` | Postfix '{keyword.Text}' requires a condition. | [src/Tosh.Language/Parsing/ToshParser.cs:2790](src/Tosh.Language/Parsing/ToshParser.cs#L2790) |
-| `tosh.parser.expected_priority_value` | Expected an integer priority value. | [src/Tosh.Language/Parsing/ToshParser.cs:3249](src/Tosh.Language/Parsing/ToshParser.cs#L3249) |
-| `tosh.parser.expected_projection_member_path` | Projected fields must be member paths. | [src/Tosh.Language/Parsing/ToshParser.cs:8067](src/Tosh.Language/Parsing/ToshParser.cs#L8067) |
-| `tosh.parser.expected_property_accessor` | Property accessors must be 'get' or 'set'. | [src/Tosh.Language/Parsing/ToshParser.cs:5068](src/Tosh.Language/Parsing/ToshParser.cs#L5068) |
-| `tosh.parser.expected_property_name` | Expected a property name. | [src/Tosh.Language/Parsing/ToshParser.cs:4972](src/Tosh.Language/Parsing/ToshParser.cs#L4972) |
-| `tosh.parser.expected_range_separator` | Type alias ranges use '..' between lower and upper bounds. | [src/Tosh.Language/Parsing/ToshParser.cs:5961](src/Tosh.Language/Parsing/ToshParser.cs#L5961) |
-| `tosh.parser.expected_raw_struct_body` | Raw struct '{nameToken.Text}' requires a body. | [src/Tosh.Language/Parsing/ToshParser.cs:4100](src/Tosh.Language/Parsing/ToshParser.cs#L4100) |
-| `tosh.parser.expected_raw_struct_field` | Expected a field name inside the raw struct body. | [src/Tosh.Language/Parsing/ToshParser.cs:4208](src/Tosh.Language/Parsing/ToshParser.cs#L4208) |
-| `tosh.parser.expected_raw_struct_field_default` | Raw struct fields require a value after '='. | [src/Tosh.Language/Parsing/ToshParser.cs:4306](src/Tosh.Language/Parsing/ToshParser.cs#L4306) |
-| `tosh.parser.expected_raw_struct_field_type` | Field '{fieldName}' needs a type. | [src/Tosh.Language/Parsing/ToshParser.cs:4240](src/Tosh.Language/Parsing/ToshParser.cs#L4240) |
-| `tosh.parser.expected_record_field_default` | Record fields require a value after '='. | [src/Tosh.Language/Parsing/ToshParser.cs:4668](src/Tosh.Language/Parsing/ToshParser.cs#L4668) |
-| `tosh.parser.expected_record_field_name` | Record literals require a field name before '='. | [src/Tosh.Language/Parsing/ToshParser.cs:9349](src/Tosh.Language/Parsing/ToshParser.cs#L9349) |
-| `tosh.parser.expected_record_field_separator` | _(see source)_ | [src/Tosh.Language/Parsing/ToshParser.cs:6688](src/Tosh.Language/Parsing/ToshParser.cs#L6688) |
+| `tosh.parser.expected_match_guard_condition` | Match guards require a parenthesized condition. | [src/Tosh.Language/Parsing/ToshParser.Tokens.cs:158](src/Tosh.Language/Parsing/ToshParser.Tokens.cs#L158) |
+| `tosh.parser.expected_match_value` | Match expressions require a parenthesized value. | [src/Tosh.Language/Parsing/ToshParser.Arguments.cs:168](src/Tosh.Language/Parsing/ToshParser.Arguments.cs#L168) |
+| `tosh.parser.expected_member_assignment_target` | This assignment needs a member path like '$person.Name'. | [src/Tosh.Language/Parsing/ToshParser.Commands.cs:856](src/Tosh.Language/Parsing/ToshParser.Commands.cs#L856) |
+| `tosh.parser.expected_native_calling_convention` | Native function bindings need a calling convention name after 'callconv'. | [src/Tosh.Language/Parsing/ToshParser.cs:765](src/Tosh.Language/Parsing/ToshParser.cs#L765) |
+| `tosh.parser.expected_native_library` | A raw function needs a library after 'from'. | [src/Tosh.Language/Parsing/ToshParser.cs:727](src/Tosh.Language/Parsing/ToshParser.cs#L727) |
+| `tosh.parser.expected_native_symbol_name` | Native function bindings need a symbol name after 'as'. | [src/Tosh.Language/Parsing/ToshParser.cs:746](src/Tosh.Language/Parsing/ToshParser.cs#L746) |
+| `tosh.parser.expected_nested_type` | Expected a type declaration inside class '{className}'. | [src/Tosh.Language/Parsing/ToshParser.Commands.cs:141](src/Tosh.Language/Parsing/ToshParser.Commands.cs#L141) |
+| `tosh.parser.expected_operand` | Expected an operand in this expression. | [src/Tosh.Language/Parsing/ToshParser.Arguments.cs:2655](src/Tosh.Language/Parsing/ToshParser.Arguments.cs#L2655) |
+| `tosh.parser.expected_parenthesized_source` | The '{owner}' statement requires a source. | [src/Tosh.Language/Parsing/ToshParser.Commands.cs:912](src/Tosh.Language/Parsing/ToshParser.Commands.cs#L912) |
+| `tosh.parser.expected_postfix_condition` | Postfix '{keyword.Text}' requires a condition. | [src/Tosh.Language/Parsing/ToshParser.cs:985](src/Tosh.Language/Parsing/ToshParser.cs#L985) |
+| `tosh.parser.expected_priority_value` | Expected an integer priority value. | [src/Tosh.Language/Parsing/ToshParser.Statements.cs:1624](src/Tosh.Language/Parsing/ToshParser.Statements.cs#L1624) |
+| `tosh.parser.expected_projection_member_path` | Projected fields must be member paths. | [src/Tosh.Language/Parsing/ToshParser.Arguments.cs:1631](src/Tosh.Language/Parsing/ToshParser.Arguments.cs#L1631) |
+| `tosh.parser.expected_property_accessor` | Property accessors must be 'get' or 'set'. | [src/Tosh.Language/Parsing/ToshParser.cs:1407](src/Tosh.Language/Parsing/ToshParser.cs#L1407) |
+| `tosh.parser.expected_property_name` | Expected a property name. | [src/Tosh.Language/Parsing/ToshParser.Commands.cs:215](src/Tosh.Language/Parsing/ToshParser.Commands.cs#L215) |
+| `tosh.parser.expected_range_separator` | Type alias ranges use '..' between lower and upper bounds. | [src/Tosh.Language/Parsing/ToshParser.Commands.cs:501](src/Tosh.Language/Parsing/ToshParser.Commands.cs#L501) |
+| `tosh.parser.expected_raw_struct_body` | Raw struct '{nameToken.Text}' requires a body. | [src/Tosh.Language/Parsing/ToshParser.Statements.cs:2475](src/Tosh.Language/Parsing/ToshParser.Statements.cs#L2475) |
+| `tosh.parser.expected_raw_struct_field` | Expected a field name inside the raw struct body. | [src/Tosh.Language/Parsing/ToshParser.cs:1027](src/Tosh.Language/Parsing/ToshParser.cs#L1027) |
+| `tosh.parser.expected_raw_struct_field_default` | Raw struct fields require a value after '='. | [src/Tosh.Language/Parsing/ToshParser.cs:1125](src/Tosh.Language/Parsing/ToshParser.cs#L1125) |
+| `tosh.parser.expected_raw_struct_field_type` | Field '{fieldName}' needs a type. | [src/Tosh.Language/Parsing/ToshParser.cs:1059](src/Tosh.Language/Parsing/ToshParser.cs#L1059) |
+| `tosh.parser.expected_record_field_default` | Record fields require a value after '='. | [src/Tosh.Language/Parsing/ToshParser.cs:1272](src/Tosh.Language/Parsing/ToshParser.cs#L1272) |
+| `tosh.parser.expected_record_field_name` | Record literals require a field name before '='. | [src/Tosh.Language/Parsing/ToshParser.Arguments.cs:2100](src/Tosh.Language/Parsing/ToshParser.Arguments.cs#L2100) |
+| `tosh.parser.expected_record_field_separator` | _(see source)_ | [src/Tosh.Language/Parsing/ToshParser.Tokens.cs:287](src/Tosh.Language/Parsing/ToshParser.Tokens.cs#L287) |
 | `tosh.parser.expected_record_fields` | Record definitions require a field list. | [src/Tosh.Cli/ReplInputClassifier.cs:18](src/Tosh.Cli/ReplInputClassifier.cs#L18) |
-| `tosh.parser.expected_redirection_target` | A file path is required after a redirection operator. | [src/Tosh.Language/Parsing/ToshParser.cs:13257](src/Tosh.Language/Parsing/ToshParser.cs#L13257) |
-| `tosh.parser.expected_refinement_coerce_after_if` | Guarded refinement clauses require 'coerce' after the condition. | [src/Tosh.Language/Parsing/ToshParser.cs:5887](src/Tosh.Language/Parsing/ToshParser.cs#L5887) |
-| `tosh.parser.expected_refinement_coercer` | Refinement coercers require an expression after 'coerce'. | [src/Tosh.Language/Parsing/ToshParser.cs:5724](src/Tosh.Language/Parsing/ToshParser.cs#L5724) |
-| `tosh.parser.expected_refinement_guard` | Refinement coercion guards require an expression after 'if'. | [src/Tosh.Language/Parsing/ToshParser.cs:5874](src/Tosh.Language/Parsing/ToshParser.cs#L5874) |
-| `tosh.parser.expected_refinement_predicate` | Refinements require a predicate after 'where'. | [src/Tosh.Language/Parsing/ToshParser.cs:5709](src/Tosh.Language/Parsing/ToshParser.cs#L5709) |
-| `tosh.parser.expected_require_from` | Selective require statements need 'from' before the target path. | [src/Tosh.Language/Parsing/ToshParser.cs:1371](src/Tosh.Language/Parsing/ToshParser.cs#L1371) |
-| `tosh.parser.expected_require_target` | Require statements need a ToSh file, module, assembly, or project path. | [src/Tosh.Language/Parsing/ToshParser.cs:1393](src/Tosh.Language/Parsing/ToshParser.cs#L1393) |
-| `tosh.parser.expected_script_input_list` | Script input lists require '(...)'. | [src/Tosh.Language/Parsing/ToshParser.cs:2820](src/Tosh.Language/Parsing/ToshParser.cs#L2820) |
-| `tosh.parser.expected_splat_target` | Argument splatting requires a variable or collection reference. | [src/Tosh.Language/Parsing/ToshParser.cs:7815](src/Tosh.Language/Parsing/ToshParser.cs#L7815) |
-| `tosh.parser.expected_subcommand_name` | The '{keyword.Text}' keyword requires a subcommand name. | [src/Tosh.Language/Parsing/ToshParser.cs:2987](src/Tosh.Language/Parsing/ToshParser.cs#L2987) |
+| `tosh.parser.expected_redirection_target` | A file path is required after a redirection operator. | [src/Tosh.Language/Parsing/ToshParser.cs:2772](src/Tosh.Language/Parsing/ToshParser.cs#L2772) |
+| `tosh.parser.expected_refinement_coerce_after_if` | Guarded refinement clauses require 'coerce' after the condition. | [src/Tosh.Language/Parsing/ToshParser.Commands.cs:427](src/Tosh.Language/Parsing/ToshParser.Commands.cs#L427) |
+| `tosh.parser.expected_refinement_coercer` | Refinement coercers require an expression after 'coerce'. | [src/Tosh.Language/Parsing/ToshParser.Commands.cs:393](src/Tosh.Language/Parsing/ToshParser.Commands.cs#L393) |
+| `tosh.parser.expected_refinement_guard` | Refinement coercion guards require an expression after 'if'. | [src/Tosh.Language/Parsing/ToshParser.Commands.cs:414](src/Tosh.Language/Parsing/ToshParser.Commands.cs#L414) |
+| `tosh.parser.expected_refinement_predicate` | Refinements require a predicate after 'where'. | [src/Tosh.Language/Parsing/ToshParser.Commands.cs:373](src/Tosh.Language/Parsing/ToshParser.Commands.cs#L373) |
+| `tosh.parser.expected_require_from` | Selective require statements need 'from' before the target path. | [src/Tosh.Language/Parsing/ToshParser.Statements.cs:751](src/Tosh.Language/Parsing/ToshParser.Statements.cs#L751) |
+| `tosh.parser.expected_require_target` | Require statements need a ToSh file, module, assembly, or project path. | [src/Tosh.Language/Parsing/ToshParser.Statements.cs:773](src/Tosh.Language/Parsing/ToshParser.Statements.cs#L773) |
+| `tosh.parser.expected_script_input_list` | Script input lists require '(...)'. | [src/Tosh.Language/Parsing/ToshParser.Statements.cs:1244](src/Tosh.Language/Parsing/ToshParser.Statements.cs#L1244) |
+| `tosh.parser.expected_splat_target` | Argument splatting requires a variable or collection reference. | [src/Tosh.Language/Parsing/ToshParser.Arguments.cs:1475](src/Tosh.Language/Parsing/ToshParser.Arguments.cs#L1475) |
+| `tosh.parser.expected_subcommand_name` | The '{keyword.Text}' keyword requires a subcommand name. | [src/Tosh.Language/Parsing/ToshParser.Statements.cs:1362](src/Tosh.Language/Parsing/ToshParser.Statements.cs#L1362) |
 | `tosh.parser.expected_switch_block` | Switch statements require a case block. | [src/Tosh.Cli/ReplInputClassifier.cs:20](src/Tosh.Cli/ReplInputClassifier.cs#L20) |
-| `tosh.parser.expected_switch_case` | Switch blocks may only contain 'case' and 'default' entries. | [src/Tosh.Language/Parsing/ToshParser.cs:2198](src/Tosh.Language/Parsing/ToshParser.cs#L2198) |
-| `tosh.parser.expected_switch_value` | Switch statements require a parenthesized value. | [src/Tosh.Language/Parsing/ToshParser.cs:2129](src/Tosh.Language/Parsing/ToshParser.cs#L2129) |
-| `tosh.parser.expected_trait_body` | Trait definitions require a body. | [src/Tosh.Language/Parsing/ToshParser.cs:4336](src/Tosh.Language/Parsing/ToshParser.cs#L4336) |
-| `tosh.parser.expected_tuple_assign_name` | Expected a variable name in tuple assignment. | [src/Tosh.Language/Parsing/ToshParser.cs:527](src/Tosh.Language/Parsing/ToshParser.cs#L527) |
-| `tosh.parser.expected_type_name` | Expected a native parameter type. | [src/Tosh.Language/Parsing/ToshParser.cs:1735](src/Tosh.Language/Parsing/ToshParser.cs#L1735) |
-| `tosh.parser.expected_type_parameter` | Expected a type-parameter name after 'where'. | [src/Tosh.Language/Parsing/ToshParser.cs:6267](src/Tosh.Language/Parsing/ToshParser.cs#L6267) |
-| `tosh.parser.expected_union_body` | Union definitions require a body. | [src/Tosh.Language/Parsing/ToshParser.cs:3633](src/Tosh.Language/Parsing/ToshParser.cs#L3633) |
-| `tosh.parser.expected_using_target` | Using statements require a namespace or type alias target. | [src/Tosh.Language/Parsing/ToshParser.cs:1243](src/Tosh.Language/Parsing/ToshParser.cs#L1243) |
-| `tosh.parser.expected_variable_name` | Expected a variable name. | [src/Tosh.Language/Parsing/ToshParser.cs:950](src/Tosh.Language/Parsing/ToshParser.cs#L950) |
-| `tosh.parser.hollow_subcommand_must_be_empty` | Hollow subcommand '{nameToken.Text}' may only contain nested subcommands. | [src/Tosh.Language/Parsing/ToshParser.cs:3146](src/Tosh.Language/Parsing/ToshParser.cs#L3146) |
-| `tosh.parser.if_expression_requires_else` | If expressions require an else block. | [src/Tosh.Language/Parsing/ToshParser.cs:2467](src/Tosh.Language/Parsing/ToshParser.cs#L2467) |
-| `tosh.parser.incompatible_subcommand_modifiers` | 'eager' and 'hollow' cannot be combined on a subcommand. | [src/Tosh.Language/Parsing/ToshParser.cs:2959](src/Tosh.Language/Parsing/ToshParser.cs#L2959) |
-| `tosh.parser.invalid_method_name` | Method calls need a single method name after '.'. | [src/Tosh.Language/Parsing/ToshParser.cs:9811](src/Tosh.Language/Parsing/ToshParser.cs#L9811) |
-| `tosh.parser.invalid_numeric_separator` | Digit separators must sit between digits. | [src/Tosh.Language/Parsing/ToshLexer.cs:1365](src/Tosh.Language/Parsing/ToshLexer.cs#L1365) |
-| `tosh.parser.invalid_splat_target` | Argument splatting currently requires a variable-style reference. | [src/Tosh.Language/Parsing/ToshParser.cs:7827](src/Tosh.Language/Parsing/ToshParser.cs#L7827) |
-| `tosh.parser.invalid_spread_target` | Spread requires a variable reference. | [src/Tosh.Language/Parsing/ToshParser.cs:7864](src/Tosh.Language/Parsing/ToshParser.cs#L7864) |
-| `tosh.parser.invalid_type_refinement_clause` | Type refinement blocks only support 'where', 'coerce', and 'if ... coerce' clauses. | [src/Tosh.Language/Parsing/ToshParser.cs:5939](src/Tosh.Language/Parsing/ToshParser.cs#L5939) |
-| `tosh.parser.invalid_unit_literal` | A unit literal contains an unknown or invalid unit expression. | [src/Tosh.Language/Parsing/ToshLexer.cs:1399](src/Tosh.Language/Parsing/ToshLexer.cs#L1399) |
-| `tosh.parser.invalid_unit_magnitude` | A unit literal must begin with a valid number. | [src/Tosh.Language/Parsing/ToshLexer.cs:1381](src/Tosh.Language/Parsing/ToshLexer.cs#L1381) |
-| `tosh.parser.match_default_keyword_required` | Use 'default' instead of '_' for the wildcard arm. | [src/Tosh.Language/Parsing/ToshParser.cs:2535](src/Tosh.Language/Parsing/ToshParser.cs#L2535) |
-| `tosh.parser.missing_argument_separator` | Arguments must be separated by ','. | [src/Tosh.Language/Parsing/ToshParser.cs:9886](src/Tosh.Language/Parsing/ToshParser.cs#L9886) |
-| `tosh.parser.missing_bind_member_separator` | Bound functions must be separated by a newline or ';'. | [src/Tosh.Language/Parsing/ToshParser.cs:1516](src/Tosh.Language/Parsing/ToshParser.cs#L1516) |
-| `tosh.parser.missing_block_separator` | Block statements must be separated by a newline or ';'. | [src/Tosh.Language/Parsing/ToshParser.cs:8263](src/Tosh.Language/Parsing/ToshParser.cs#L8263) |
-| `tosh.parser.missing_class_member_separator` | Class members must be separated by a newline or ';'. | [src/Tosh.Language/Parsing/ToshParser.cs:4757](src/Tosh.Language/Parsing/ToshParser.cs#L4757) |
+| `tosh.parser.expected_switch_case` | Switch blocks may only contain 'case' and 'default' entries. | [src/Tosh.Language/Parsing/ToshParser.Statements.cs:1106](src/Tosh.Language/Parsing/ToshParser.Statements.cs#L1106) |
+| `tosh.parser.expected_switch_value` | Switch statements require a parenthesized value. | [src/Tosh.Language/Parsing/ToshParser.Statements.cs:1037](src/Tosh.Language/Parsing/ToshParser.Statements.cs#L1037) |
+| `tosh.parser.expected_trait_body` | Trait definitions require a body. | [src/Tosh.Language/Parsing/ToshParser.Statements.cs:2567](src/Tosh.Language/Parsing/ToshParser.Statements.cs#L2567) |
+| `tosh.parser.expected_tuple_assign_name` | Expected a variable name in tuple assignment. | [src/Tosh.Language/Parsing/ToshParser.Statements.cs:55](src/Tosh.Language/Parsing/ToshParser.Statements.cs#L55) |
+| `tosh.parser.expected_type_name` | Expected a native parameter type. | [src/Tosh.Language/Parsing/ToshParser.Arguments.cs:113](src/Tosh.Language/Parsing/ToshParser.Arguments.cs#L113) |
+| `tosh.parser.expected_type_parameter` | Expected a type-parameter name after 'where'. | [src/Tosh.Language/Parsing/ToshParser.cs:1957](src/Tosh.Language/Parsing/ToshParser.cs#L1957) |
+| `tosh.parser.expected_union_body` | Union definitions require a body. | [src/Tosh.Language/Parsing/ToshParser.Statements.cs:2008](src/Tosh.Language/Parsing/ToshParser.Statements.cs#L2008) |
+| `tosh.parser.expected_using_target` | Using statements require a namespace or type alias target. | [src/Tosh.Language/Parsing/ToshParser.Statements.cs:657](src/Tosh.Language/Parsing/ToshParser.Statements.cs#L657) |
+| `tosh.parser.expected_variable_name` | Expected a variable name. | [src/Tosh.Language/Parsing/ToshParser.Statements.cs:478](src/Tosh.Language/Parsing/ToshParser.Statements.cs#L478) |
+| `tosh.parser.hollow_subcommand_must_be_empty` | Hollow subcommand '{nameToken.Text}' may only contain nested subcommands. | [src/Tosh.Language/Parsing/ToshParser.Statements.cs:1521](src/Tosh.Language/Parsing/ToshParser.Statements.cs#L1521) |
+| `tosh.parser.if_expression_requires_else` | If expressions require an else block. | [src/Tosh.Language/Parsing/ToshParser.Expressions.cs:176](src/Tosh.Language/Parsing/ToshParser.Expressions.cs#L176) |
+| `tosh.parser.incompatible_subcommand_modifiers` | 'eager' and 'hollow' cannot be combined on a subcommand. | [src/Tosh.Language/Parsing/ToshParser.Statements.cs:1334](src/Tosh.Language/Parsing/ToshParser.Statements.cs#L1334) |
+| `tosh.parser.invalid_method_name` | Method calls need a single method name after '.'. | [src/Tosh.Language/Parsing/ToshParser.Commands.cs:993](src/Tosh.Language/Parsing/ToshParser.Commands.cs#L993) |
+| `tosh.parser.invalid_numeric_separator` | Digit separators must sit between digits. | [src/Tosh.Language/Parsing/ToshLexer.cs:1392](src/Tosh.Language/Parsing/ToshLexer.cs#L1392) |
+| `tosh.parser.invalid_splat_target` | Argument splatting currently requires a variable-style reference. | [src/Tosh.Language/Parsing/ToshParser.Arguments.cs:1487](src/Tosh.Language/Parsing/ToshParser.Arguments.cs#L1487) |
+| `tosh.parser.invalid_spread_target` | Spread requires a variable reference. | [src/Tosh.Language/Parsing/ToshParser.cs:2075](src/Tosh.Language/Parsing/ToshParser.cs#L2075) |
+| `tosh.parser.invalid_type_refinement_clause` | Type refinement blocks only support 'where', 'coerce', and 'if ... coerce' clauses. | [src/Tosh.Language/Parsing/ToshParser.Commands.cs:479](src/Tosh.Language/Parsing/ToshParser.Commands.cs#L479) |
+| `tosh.parser.invalid_unit_literal` | A unit literal contains an unknown or invalid unit expression. | [src/Tosh.Language/Parsing/ToshLexer.cs:1426](src/Tosh.Language/Parsing/ToshLexer.cs#L1426) |
+| `tosh.parser.invalid_unit_magnitude` | A unit literal must begin with a valid number. | [src/Tosh.Language/Parsing/ToshLexer.cs:1408](src/Tosh.Language/Parsing/ToshLexer.cs#L1408) |
+| `tosh.parser.match_default_keyword_required` | Use 'default' instead of '_' for the wildcard arm. | [src/Tosh.Language/Parsing/ToshParser.Tokens.cs:109](src/Tosh.Language/Parsing/ToshParser.Tokens.cs#L109) |
+| `tosh.parser.missing_argument_separator` | Arguments must be separated by ','. | [src/Tosh.Language/Parsing/ToshParser.Arguments.cs:2354](src/Tosh.Language/Parsing/ToshParser.Arguments.cs#L2354) |
+| `tosh.parser.missing_bind_member_separator` | Bound functions must be separated by a newline or ';'. | [src/Tosh.Language/Parsing/ToshParser.cs:658](src/Tosh.Language/Parsing/ToshParser.cs#L658) |
+| `tosh.parser.missing_block_separator` | Block statements must be separated by a newline or ';'. | [src/Tosh.Language/Parsing/ToshParser.Statements.cs:2806](src/Tosh.Language/Parsing/ToshParser.Statements.cs#L2806) |
+| `tosh.parser.missing_class_member_separator` | Class members must be separated by a newline or ';'. | [src/Tosh.Language/Parsing/ToshParser.cs:1361](src/Tosh.Language/Parsing/ToshParser.cs#L1361) |
 | `tosh.parser.missing_closing_angle` | A closing '>' is required here. | [src/Tosh.Cli/ReplInputClassifier.cs:28](src/Tosh.Cli/ReplInputClassifier.cs#L28) |
 | `tosh.parser.missing_closing_brace` | A closing '}' is required here. | [src/Tosh.Cli/ReplInputClassifier.cs:24](src/Tosh.Cli/ReplInputClassifier.cs#L24) |
-| `tosh.parser.missing_closing_bracket` | A closing ']' is required after list comprehension. | [src/Tosh.Cli/ReplInputClassifier.cs:27](src/Tosh.Cli/ReplInputClassifier.cs#L27) |
+| `tosh.parser.missing_closing_bracket` | A closing ']' is required here. | [src/Tosh.Cli/ReplInputClassifier.cs:27](src/Tosh.Cli/ReplInputClassifier.cs#L27) |
 | `tosh.parser.missing_closing_paren` | A closing ')' is required here. | [src/Tosh.Cli/ReplInputClassifier.cs:25](src/Tosh.Cli/ReplInputClassifier.cs#L25) |
-| `tosh.parser.missing_closing_paren_tuple_assign` | A closing ')' is required for tuple assignment. | [src/Tosh.Language/Parsing/ToshParser.cs:546](src/Tosh.Language/Parsing/ToshParser.cs#L546) |
+| `tosh.parser.missing_closing_paren_tuple_assign` | A closing ')' is required for tuple assignment. | [src/Tosh.Language/Parsing/ToshParser.Statements.cs:74](src/Tosh.Language/Parsing/ToshParser.Statements.cs#L74) |
 | `tosh.parser.missing_closing_parenthesis` | A native function binding requires a parameter list. | [src/Tosh.Cli/ReplInputClassifier.cs:26](src/Tosh.Cli/ReplInputClassifier.cs#L26) |
 | `tosh.parser.missing_command_after_pipe` | _(see source)_ | [src/Tosh.Cli/ReplInputClassifier.cs:31](src/Tosh.Cli/ReplInputClassifier.cs#L31) |
-| `tosh.parser.missing_command_after_pipe_forward` | _(see source)_ | [src/Tosh.Language/Parsing/ToshParser.cs:11184](src/Tosh.Language/Parsing/ToshParser.cs#L11184) |
-| `tosh.parser.missing_constructor_separator` | Constructor arguments must be separated by ','. | [src/Tosh.Language/Parsing/ToshParser.cs:9511](src/Tosh.Language/Parsing/ToshParser.cs#L9511) |
-| `tosh.parser.missing_dict_closing_delimiter` | A closing '%}' is required after dict comprehension. | [src/Tosh.Language/Parsing/ToshParser.cs:8719](src/Tosh.Language/Parsing/ToshParser.cs#L8719) |
-| `tosh.parser.missing_dict_entry_separator` | Dict entries must be separated by ',' or a newline. | [src/Tosh.Language/Parsing/ToshParser.cs:9196](src/Tosh.Language/Parsing/ToshParser.cs#L9196) |
-| `tosh.parser.missing_function_parameter_separator` | Function parameters must be separated by ','. | [src/Tosh.Language/Parsing/ToshParser.cs:1691](src/Tosh.Language/Parsing/ToshParser.cs#L1691) |
-| `tosh.parser.missing_list_separator` | Array items must be separated by ','. | [src/Tosh.Language/Parsing/ToshParser.cs:8933](src/Tosh.Language/Parsing/ToshParser.cs#L8933) |
-| `tosh.parser.missing_match_arm_separator` | Match arms must be separated by a newline, ';', or ','. | [src/Tosh.Language/Parsing/ToshParser.cs:2415](src/Tosh.Language/Parsing/ToshParser.cs#L2415) |
-| `tosh.parser.missing_pipeline_separator` | Expression pipeline stages must be separated by '\|'. | [src/Tosh.Language/Parsing/ToshParser.cs:11158](src/Tosh.Language/Parsing/ToshParser.cs#L11158) |
-| `tosh.parser.missing_predicate_separator` | Predicate expressions must be separated by ';' or a newline. | [src/Tosh.Language/Parsing/ToshParser.cs:10880](src/Tosh.Language/Parsing/ToshParser.cs#L10880) |
+| `tosh.parser.missing_command_after_pipe_forward` | _(see source)_ | [src/Tosh.Language/Parsing/ToshParser.Commands.cs:1290](src/Tosh.Language/Parsing/ToshParser.Commands.cs#L1290) |
+| `tosh.parser.missing_constructor_separator` | Constructor arguments must be separated by ','. | [src/Tosh.Language/Parsing/ToshParser.Arguments.cs:2271](src/Tosh.Language/Parsing/ToshParser.Arguments.cs#L2271) |
+| `tosh.parser.missing_dict_closing_delimiter` | A closing '%}' is required here. | [src/Tosh.Language/Parsing/ToshParser.Arguments.cs:1970](src/Tosh.Language/Parsing/ToshParser.Arguments.cs#L1970) |
+| `tosh.parser.missing_dict_entry_separator` | Dict entries must be separated by ',' or a newline. | [src/Tosh.Language/Parsing/ToshParser.Arguments.cs:1947](src/Tosh.Language/Parsing/ToshParser.Arguments.cs#L1947) |
+| `tosh.parser.missing_function_parameter_separator` | Function parameters must be separated by ','. | [src/Tosh.Language/Parsing/ToshParser.Arguments.cs:69](src/Tosh.Language/Parsing/ToshParser.Arguments.cs#L69) |
+| `tosh.parser.missing_list_separator` | Array items must be separated by ','. | [src/Tosh.Language/Parsing/ToshParser.Arguments.cs:1727](src/Tosh.Language/Parsing/ToshParser.Arguments.cs#L1727) |
+| `tosh.parser.missing_match_arm_separator` | Match arms must be separated by a newline, ';', or ','. | [src/Tosh.Language/Parsing/ToshParser.Arguments.cs:231](src/Tosh.Language/Parsing/ToshParser.Arguments.cs#L231) |
+| `tosh.parser.missing_pipeline_separator` | Expression pipeline stages must be separated by '\|'. | [src/Tosh.Language/Parsing/ToshParser.Commands.cs:1264](src/Tosh.Language/Parsing/ToshParser.Commands.cs#L1264) |
+| `tosh.parser.missing_predicate_separator` | Predicate expressions must be separated by ';' or a newline. | [src/Tosh.Language/Parsing/ToshParser.Arguments.cs:2702](src/Tosh.Language/Parsing/ToshParser.Arguments.cs#L2702) |
 | `tosh.parser.missing_projection_closing_brace` | A closing '}' is required here. | [src/Tosh.Cli/ReplInputClassifier.cs:29](src/Tosh.Cli/ReplInputClassifier.cs#L29) |
-| `tosh.parser.missing_projection_separator` | Projected member paths must be separated by ','. | [src/Tosh.Language/Parsing/ToshParser.cs:8086](src/Tosh.Language/Parsing/ToshParser.cs#L8086) |
-| `tosh.parser.missing_raw_struct_field_separator` | Raw struct fields must be separated by a newline or ';'. | [src/Tosh.Language/Parsing/ToshParser.cs:4148](src/Tosh.Language/Parsing/ToshParser.cs#L4148) |
+| `tosh.parser.missing_projection_separator` | Projected member paths must be separated by ','. | [src/Tosh.Language/Parsing/ToshParser.Arguments.cs:1650](src/Tosh.Language/Parsing/ToshParser.Arguments.cs#L1650) |
+| `tosh.parser.missing_raw_struct_field_separator` | Raw struct fields must be separated by a newline or ';'. | [src/Tosh.Language/Parsing/ToshParser.Statements.cs:2523](src/Tosh.Language/Parsing/ToshParser.Statements.cs#L2523) |
 | `tosh.parser.missing_record_closing_brace` | _(see source)_ | [src/Tosh.Cli/ReplInputClassifier.cs:30](src/Tosh.Cli/ReplInputClassifier.cs#L30) |
-| `tosh.parser.missing_record_closing_delimiter` | A closing '\|}' is required here. | [src/Tosh.Language/Parsing/ToshParser.cs:9412](src/Tosh.Language/Parsing/ToshParser.cs#L9412) |
-| `tosh.parser.missing_record_field_separator` | Record fields must be separated by ',' or a newline. | [src/Tosh.Language/Parsing/ToshParser.cs:9389](src/Tosh.Language/Parsing/ToshParser.cs#L9389) |
-| `tosh.parser.missing_set_closing_delimiter` | A closing ':}' is required after set comprehension. | [src/Tosh.Language/Parsing/ToshParser.cs:8641](src/Tosh.Language/Parsing/ToshParser.cs#L8641) |
-| `tosh.parser.missing_set_separator` | Set items must be separated by ','. | [src/Tosh.Language/Parsing/ToshParser.cs:9075](src/Tosh.Language/Parsing/ToshParser.cs#L9075) |
-| `tosh.parser.missing_statement_separator` | Top-level statements must be separated by a newline or ';'. | [src/Tosh.Language/Parsing/ToshParser.cs:453](src/Tosh.Language/Parsing/ToshParser.cs#L453) |
+| `tosh.parser.missing_record_closing_delimiter` | A closing '\|}' is required here. | [src/Tosh.Language/Parsing/ToshParser.Arguments.cs:2163](src/Tosh.Language/Parsing/ToshParser.Arguments.cs#L2163) |
+| `tosh.parser.missing_record_field_separator` | Record fields must be separated by ',' or a newline. | [src/Tosh.Language/Parsing/ToshParser.Arguments.cs:2140](src/Tosh.Language/Parsing/ToshParser.Arguments.cs#L2140) |
+| `tosh.parser.missing_set_closing_delimiter` | A closing ':}' is required here. | [src/Tosh.Language/Parsing/ToshParser.Arguments.cs:1849](src/Tosh.Language/Parsing/ToshParser.Arguments.cs#L1849) |
+| `tosh.parser.missing_set_separator` | Set items must be separated by ','. | [src/Tosh.Language/Parsing/ToshParser.Arguments.cs:1826](src/Tosh.Language/Parsing/ToshParser.Arguments.cs#L1826) |
+| `tosh.parser.missing_statement_separator` | Top-level statements must be separated by a newline or ';'. | [src/Tosh.Language/Parsing/ToshParser.cs:425](src/Tosh.Language/Parsing/ToshParser.cs#L425) |
 | `tosh.parser.missing_ternary_colon` | A ternary expression requires ':'. | [src/Tosh.Cli/ReplInputClassifier.cs:32](src/Tosh.Cli/ReplInputClassifier.cs#L32) |
-| `tosh.parser.missing_tuple_separator` | Tuple elements must be separated by ','. | [src/Tosh.Language/Parsing/ToshParser.cs:10106](src/Tosh.Language/Parsing/ToshParser.cs#L10106) |
-| `tosh.parser.missing_type_argument_separator` | Generic type arguments must be separated by ','. | [src/Tosh.Language/Parsing/ToshParser.cs:6424](src/Tosh.Language/Parsing/ToshParser.cs#L6424) |
-| `tosh.parser.missing_type_parameter_separator` | Type parameters must be separated by ','. | [src/Tosh.Language/Parsing/ToshParser.cs:6228](src/Tosh.Language/Parsing/ToshParser.cs#L6228) |
-| `tosh.parser.nameof_expects_a_name` | '{identifierToken.Text}' does not name anything. | [src/Tosh.Language/Parsing/ToshParser.cs:7714](src/Tosh.Language/Parsing/ToshParser.cs#L7714) |
-| `tosh.parser.nameof_missing_close_paren` | Expected ')' after nameof identifier. | [src/Tosh.Language/Parsing/ToshParser.cs:7738](src/Tosh.Language/Parsing/ToshParser.cs#L7738) |
-| `tosh.parser.native_buffer_requires_length` | '{typeName}' needs a positive capacity. | [src/Tosh.Language/Parsing/ToshParser.cs:1803](src/Tosh.Language/Parsing/ToshParser.cs#L1803) |
-| `tosh.parser.numeric_literal_overflow` | This {radix} literal is too large for a 64-bit integer. | [src/Tosh.Language/Parsing/ToshLexer.cs:1728](src/Tosh.Language/Parsing/ToshLexer.cs#L1728) |
-| `tosh.parser.range_requires_integer` | Range bounds and steps must be 32-bit integers. | [src/Tosh.Language/Parsing/ToshParser.cs:7439](src/Tosh.Language/Parsing/ToshParser.cs#L7439) |
-| `tosh.parser.raw_func_requires_library` | A top-level 'raw func' needs a library. | [src/Tosh.Language/Parsing/ToshParser.cs:716](src/Tosh.Language/Parsing/ToshParser.cs#L716) |
-| `tosh.parser.raw_struct_array_requires_length` | Field '{fieldName}' needs a positive array length. | [src/Tosh.Language/Parsing/ToshParser.cs:4260](src/Tosh.Language/Parsing/ToshParser.cs#L4260) |
-| `tosh.parser.raw_struct_clause_requires_integer` | '{clause}' requires a byte count. | [src/Tosh.Language/Parsing/ToshParser.cs:4084](src/Tosh.Language/Parsing/ToshParser.cs#L4084) |
-| `tosh.parser.refinement_requires_expression` | Refinement predicates use expression syntax. | [src/Tosh.Language/Parsing/ToshParser.cs:5693](src/Tosh.Language/Parsing/ToshParser.cs#L5693) |
-| `tosh.parser.rest_parameter_must_be_last` | A rest parameter must be the last parameter. | [src/Tosh.Language/Parsing/ToshParser.cs:5627](src/Tosh.Language/Parsing/ToshParser.cs#L5627) |
-| `tosh.parser.spaced_literal_delimiter` | '{delimiter}' must be written without a space. | [src/Tosh.Language/Parsing/ToshParser.cs:9015](src/Tosh.Language/Parsing/ToshParser.cs#L9015) |
-| `tosh.parser.subcommand_params_require_arrow` | Parameter lists on subcommands require a '=>' body. | [src/Tosh.Language/Parsing/ToshParser.cs:3131](src/Tosh.Language/Parsing/ToshParser.cs#L3131) |
-| `tosh.parser.try_requires_handler` | Try statements require a catch block, a finally block, or both. | [src/Tosh.Language/Parsing/ToshParser.cs:2008](src/Tosh.Language/Parsing/ToshParser.cs#L2008) |
-| `tosh.parser.unexpected_argument_separator` | An argument is required between commas. | [src/Tosh.Language/Parsing/ToshParser.cs:9845](src/Tosh.Language/Parsing/ToshParser.cs#L9845) |
-| `tosh.parser.unexpected_background_operator` | Unexpected background operator. | [src/Tosh.Language/Parsing/ToshParser.cs:11013](src/Tosh.Language/Parsing/ToshParser.cs#L11013) |
-| `tosh.parser.unexpected_constructor_separator` | A constructor argument is required between commas. | [src/Tosh.Language/Parsing/ToshParser.cs:9474](src/Tosh.Language/Parsing/ToshParser.cs#L9474) |
-| `tosh.parser.unexpected_current_item_expression_tokens` | This current-item expression has extra tokens after it. | [src/Tosh.Language/Parsing/ToshParser.cs:7180](src/Tosh.Language/Parsing/ToshParser.cs#L7180) |
-| `tosh.parser.unexpected_function_parameter_separator` | A function parameter is required between commas. | [src/Tosh.Language/Parsing/ToshParser.cs:1672](src/Tosh.Language/Parsing/ToshParser.cs#L1672) |
-| `tosh.parser.unexpected_get_expression_tokens` | This get expression has extra tokens after it. | [src/Tosh.Language/Parsing/ToshParser.cs:7025](src/Tosh.Language/Parsing/ToshParser.cs#L7025) |
-| `tosh.parser.unexpected_interface_member` | Interface bodies can only contain method signatures (func name(params)). | [src/Tosh.Language/Parsing/ToshParser.cs:3601](src/Tosh.Language/Parsing/ToshParser.cs#L3601) |
-| `tosh.parser.unexpected_list_separator` | An array item is required between commas. | [src/Tosh.Language/Parsing/ToshParser.cs:8897](src/Tosh.Language/Parsing/ToshParser.cs#L8897) |
-| `tosh.parser.unexpected_pipeline_separator` | Unexpected pipeline separator. | [src/Tosh.Language/Parsing/ToshParser.cs:10970](src/Tosh.Language/Parsing/ToshParser.cs#L10970) |
-| `tosh.parser.unexpected_projection_separator` | A projected member path is required between commas. | [src/Tosh.Language/Parsing/ToshParser.cs:8056](src/Tosh.Language/Parsing/ToshParser.cs#L8056) |
-| `tosh.parser.unexpected_token` | Unexpected token '{Current.Text}'. | [src/Tosh.Language/Parsing/ToshParser.cs:7665](src/Tosh.Language/Parsing/ToshParser.cs#L7665) |
-| `tosh.parser.unexpected_trait_member` | Trait bodies can contain method signatures (func) and property declarations (prop). | [src/Tosh.Language/Parsing/ToshParser.cs:4425](src/Tosh.Language/Parsing/ToshParser.cs#L4425) |
-| `tosh.parser.unknown_property_accessor` | Unknown property accessor '{accessorName}'. | [src/Tosh.Language/Parsing/ToshParser.cs:5090](src/Tosh.Language/Parsing/ToshParser.cs#L5090) |
-| `tosh.parser.unknown_subcommand_modifier` | Unknown subcommand modifier '{text}'. | [src/Tosh.Language/Parsing/ToshParser.cs:3031](src/Tosh.Language/Parsing/ToshParser.cs#L3031) |
-| `tosh.parser.unsupported_double_index_lookup` | Index access supports '[value]', '[key,]', or '[,value]'. | [src/Tosh.Language/Parsing/ToshParser.cs:9688](src/Tosh.Language/Parsing/ToshParser.cs#L9688) |
+| `tosh.parser.missing_tuple_separator` | Tuple elements must be separated by ','. | [src/Tosh.Language/Parsing/ToshParser.Arguments.cs:2538](src/Tosh.Language/Parsing/ToshParser.Arguments.cs#L2538) |
+| `tosh.parser.missing_type_argument_separator` | Generic type arguments must be separated by ','. | [src/Tosh.Language/Parsing/ToshParser.Arguments.cs:748](src/Tosh.Language/Parsing/ToshParser.Arguments.cs#L748) |
+| `tosh.parser.missing_type_parameter_separator` | Type parameters must be separated by ','. | [src/Tosh.Language/Parsing/ToshParser.Arguments.cs:658](src/Tosh.Language/Parsing/ToshParser.Arguments.cs#L658) |
+| `tosh.parser.nameof_expects_a_name` | '{identifierToken.Text}' does not name anything. | [src/Tosh.Language/Parsing/ToshParser.cs:2057](src/Tosh.Language/Parsing/ToshParser.cs#L2057) |
+| `tosh.parser.nameof_missing_close_paren` | Expected ')' after nameof identifier. | [src/Tosh.Language/Parsing/ToshParser.Arguments.cs:1398](src/Tosh.Language/Parsing/ToshParser.Arguments.cs#L1398) |
+| `tosh.parser.native_buffer_requires_length` | '{typeName}' needs a positive capacity. | [src/Tosh.Language/Parsing/ToshParser.cs:810](src/Tosh.Language/Parsing/ToshParser.cs#L810) |
+| `tosh.parser.numeric_literal_overflow` | This {radix} literal is too large for a 64-bit integer. | [src/Tosh.Language/Parsing/ToshLexer.cs:1755](src/Tosh.Language/Parsing/ToshLexer.cs#L1755) |
+| `tosh.parser.range_requires_integer` | Range bounds and steps must be 32-bit integers. | [src/Tosh.Language/Parsing/ToshParser.cs:2010](src/Tosh.Language/Parsing/ToshParser.cs#L2010) |
+| `tosh.parser.raw_func_requires_library` | A top-level 'raw func' needs a library. | [src/Tosh.Language/Parsing/ToshParser.Statements.cs:244](src/Tosh.Language/Parsing/ToshParser.Statements.cs#L244) |
+| `tosh.parser.raw_struct_array_requires_length` | Field '{fieldName}' needs a positive array length. | [src/Tosh.Language/Parsing/ToshParser.cs:1079](src/Tosh.Language/Parsing/ToshParser.cs#L1079) |
+| `tosh.parser.raw_struct_clause_requires_integer` | '{clause}' requires a byte count. | [src/Tosh.Language/Parsing/ToshParser.Statements.cs:2459](src/Tosh.Language/Parsing/ToshParser.Statements.cs#L2459) |
+| `tosh.parser.refinement_requires_expression` | Refinement predicates use expression syntax. | [src/Tosh.Language/Parsing/ToshParser.cs:1848](src/Tosh.Language/Parsing/ToshParser.cs#L1848) |
+| `tosh.parser.rest_parameter_must_be_last` | A rest parameter must be the last parameter. | [src/Tosh.Language/Parsing/ToshParser.Arguments.cs:417](src/Tosh.Language/Parsing/ToshParser.Arguments.cs#L417) |
+| `tosh.parser.spaced_literal_delimiter` | '{delimiter}' must be written without a space. | [src/Tosh.Language/Parsing/ToshParser.Tokens.cs:435](src/Tosh.Language/Parsing/ToshParser.Tokens.cs#L435) |
+| `tosh.parser.subcommand_params_require_arrow` | Parameter lists on subcommands require a '=>' body. | [src/Tosh.Language/Parsing/ToshParser.Statements.cs:1506](src/Tosh.Language/Parsing/ToshParser.Statements.cs#L1506) |
+| `tosh.parser.try_requires_handler` | Try statements require a catch block, a finally block, or both. | [src/Tosh.Language/Parsing/ToshParser.Statements.cs:950](src/Tosh.Language/Parsing/ToshParser.Statements.cs#L950) |
+| `tosh.parser.unexpected_argument_separator` | An argument is required between commas. | [src/Tosh.Language/Parsing/ToshParser.Arguments.cs:2313](src/Tosh.Language/Parsing/ToshParser.Arguments.cs#L2313) |
+| `tosh.parser.unexpected_background_operator` | Unexpected background operator. | [src/Tosh.Language/Parsing/ToshParser.Commands.cs:1119](src/Tosh.Language/Parsing/ToshParser.Commands.cs#L1119) |
+| `tosh.parser.unexpected_constructor_separator` | A constructor argument is required between commas. | [src/Tosh.Language/Parsing/ToshParser.Arguments.cs:2225](src/Tosh.Language/Parsing/ToshParser.Arguments.cs#L2225) |
+| `tosh.parser.unexpected_current_item_expression_tokens` | This current-item expression has extra tokens after it. | [src/Tosh.Language/Parsing/ToshParser.Expressions.cs:427](src/Tosh.Language/Parsing/ToshParser.Expressions.cs#L427) |
+| `tosh.parser.unexpected_function_parameter_separator` | A function parameter is required between commas. | [src/Tosh.Language/Parsing/ToshParser.Arguments.cs:50](src/Tosh.Language/Parsing/ToshParser.Arguments.cs#L50) |
+| `tosh.parser.unexpected_get_expression_tokens` | This get expression has extra tokens after it. | [src/Tosh.Language/Parsing/ToshParser.Arguments.cs:1022](src/Tosh.Language/Parsing/ToshParser.Arguments.cs#L1022) |
+| `tosh.parser.unexpected_interface_member` | Interface bodies can only contain method signatures (func name(params)). | [src/Tosh.Language/Parsing/ToshParser.Statements.cs:1976](src/Tosh.Language/Parsing/ToshParser.Statements.cs#L1976) |
+| `tosh.parser.unexpected_list_separator` | An array item is required between commas. | [src/Tosh.Language/Parsing/ToshParser.Arguments.cs:1691](src/Tosh.Language/Parsing/ToshParser.Arguments.cs#L1691) |
+| `tosh.parser.unexpected_pipeline_separator` | Unexpected pipeline separator. | [src/Tosh.Language/Parsing/ToshParser.Commands.cs:1076](src/Tosh.Language/Parsing/ToshParser.Commands.cs#L1076) |
+| `tosh.parser.unexpected_projection_separator` | A projected member path is required between commas. | [src/Tosh.Language/Parsing/ToshParser.Arguments.cs:1620](src/Tosh.Language/Parsing/ToshParser.Arguments.cs#L1620) |
+| `tosh.parser.unexpected_token` | Unexpected token '{Current.Text}'. | [src/Tosh.Language/Parsing/ToshParser.Arguments.cs:1372](src/Tosh.Language/Parsing/ToshParser.Arguments.cs#L1372) |
+| `tosh.parser.unexpected_trait_member` | Trait bodies can contain method signatures (func) and property declarations (prop). | [src/Tosh.Language/Parsing/ToshParser.Statements.cs:2689](src/Tosh.Language/Parsing/ToshParser.Statements.cs#L2689) |
+| `tosh.parser.unknown_property_accessor` | Unknown property accessor '{accessorName}'. | [src/Tosh.Language/Parsing/ToshParser.cs:1429](src/Tosh.Language/Parsing/ToshParser.cs#L1429) |
+| `tosh.parser.unknown_subcommand_modifier` | Unknown subcommand modifier '{text}'. | [src/Tosh.Language/Parsing/ToshParser.Statements.cs:1406](src/Tosh.Language/Parsing/ToshParser.Statements.cs#L1406) |
+| `tosh.parser.unsupported_double_index_lookup` | Index access supports '[value]', '[key,]', or '[,value]'. | [src/Tosh.Language/Parsing/ToshParser.cs:2592](src/Tosh.Language/Parsing/ToshParser.cs#L2592) |
 | `tosh.parser.unterminated_ansi_c_string` | ANSI-C string literals must be terminated. | [src/Tosh.Language/Parsing/ToshLexer.cs:847](src/Tosh.Language/Parsing/ToshLexer.cs#L847) |
 | `tosh.parser.unterminated_block_comment` | Block comments must be closed. | [src/Tosh.Language/Parsing/ToshLexer.cs:651](src/Tosh.Language/Parsing/ToshLexer.cs#L651) |
 | `tosh.parser.unterminated_interpolated_string` | Interpolated string literals must be terminated. | [src/Tosh.Language/Parsing/ToshLexer.cs:811](src/Tosh.Language/Parsing/ToshLexer.cs#L811) |
 | `tosh.parser.unterminated_string` | String literals must be terminated. | [src/Tosh.Language/Parsing/ToshLexer.cs:705](src/Tosh.Language/Parsing/ToshLexer.cs#L705) |
 | `tosh.parser.unterminated_triple_quoted_string` | Triple-quoted string literals must be terminated. | [src/Tosh.Language/Parsing/ToshLexer.cs:947](src/Tosh.Language/Parsing/ToshLexer.cs#L947) |
-| `tosh.parser.using_requires_namespace` | 'using' is reserved for CLR namespaces and aliases. | [src/Tosh.Language/Parsing/ToshParser.cs:1257](src/Tosh.Language/Parsing/ToshParser.cs#L1257) |
-| `tosh.parser.variable_references_require_dollar` | Variable assignments must use '$' after declaration. | [src/Tosh.Language/Parsing/ToshParser.cs:13442](src/Tosh.Language/Parsing/ToshParser.cs#L13442) |
-| `tosh.parser.yield_in_defer` | A deferred block cannot yield. | [src/Tosh.Language/Parsing/ToshParser.cs:2029](src/Tosh.Language/Parsing/ToshParser.cs#L2029) |
+| `tosh.parser.using_requires_namespace` | 'using' is reserved for CLR namespaces and aliases. | [src/Tosh.Language/Parsing/ToshParser.Statements.cs:671](src/Tosh.Language/Parsing/ToshParser.Statements.cs#L671) |
+| `tosh.parser.variable_references_require_dollar` | Variable assignments must use '$' after declaration. | [src/Tosh.Language/Parsing/ToshParser.cs:2827](src/Tosh.Language/Parsing/ToshParser.cs#L2827) |
+| `tosh.parser.yield_in_defer` | A deferred block cannot yield. | [src/Tosh.Language/Parsing/ToshParser.Statements.cs:971](src/Tosh.Language/Parsing/ToshParser.Statements.cs#L971) |
 
 ## `tosh.row.*`
 
@@ -304,23 +304,23 @@ Raised by the engine while evaluating a script. The bulk of TōSh diagnostics li
 
 | Code | Title | First emit site |
 |---|---|---|
-| `tosh.runtime.alloc_negative_size` | Allocated buffers cannot have a negative size. | [src/Tosh.Language/ToshEngine.cs:2345](src/Tosh.Language/ToshEngine.cs#L2345) |
-| `tosh.runtime.alloc_requires_single_value` | Allocated buffer declarations require exactly one size or type value. | [src/Tosh.Language/ToshEngine.cs:2325](src/Tosh.Language/ToshEngine.cs#L2325) |
-| `tosh.runtime.annotation_conversion_failed` | '{owner}' produced a value that could not be converted to '{typeName}'. | [src/Tosh.Language/ToshClassDefinition.cs:3433](src/Tosh.Language/ToshClassDefinition.cs#L3433) |
-| `tosh.runtime.annotation_unknown_type` | '{owner}' uses unknown type annotation '{typeName}'. | [src/Tosh.Language/ToshClassDefinition.cs:3006](src/Tosh.Language/ToshClassDefinition.cs#L3006) |
+| `tosh.runtime.alloc_negative_size` | Allocated buffers cannot have a negative size. | [src/Tosh.Language/ToshEngine.Statements.cs:406](src/Tosh.Language/ToshEngine.Statements.cs#L406) |
+| `tosh.runtime.alloc_requires_single_value` | Allocated buffer declarations require exactly one size or type value. | [src/Tosh.Language/ToshEngine.Statements.cs:386](src/Tosh.Language/ToshEngine.Statements.cs#L386) |
+| `tosh.runtime.annotation_conversion_failed` | '{owner}' produced a value that could not be converted to '{typeName}'. | [src/Tosh.Language/ToshClassDefinition.cs:3461](src/Tosh.Language/ToshClassDefinition.cs#L3461) |
+| `tosh.runtime.annotation_unknown_type` | Argument '{parameter.Name}' could not be converted to '{parameter.TypeName}'. | [src/Tosh.Language/ToshClassDefinition.cs:3034](src/Tosh.Language/ToshClassDefinition.cs#L3034) |
 | `tosh.runtime.assert_requires_predicate` | The 'assert' command requires a predicate block or callable. | [src/Tosh.Stdlib/Scripting/AssertCommand.cs:21](src/Tosh.Stdlib/Scripting/AssertCommand.cs#L21) |
 | `tosh.runtime.assertion_failed` | _(see source)_ | [src/Tosh.Stdlib/Scripting/AssertCommand.cs:41](src/Tosh.Stdlib/Scripting/AssertCommand.cs#L41) |
 | `tosh.runtime.await_requires_future` | 'await' expects a future or a CLR Task. | [src/Tosh.Stdlib/Concurrency/AwaitCommand.cs:113](src/Tosh.Stdlib/Concurrency/AwaitCommand.cs#L113) |
-| `tosh.runtime.background_command_must_be_external` | Background jobs currently require external command stages. | [src/Tosh.Language/ToshEngine.cs:2017](src/Tosh.Language/ToshEngine.cs#L2017) |
-| `tosh.runtime.background_pipeline_not_supported` | Background jobs currently support an optional input expression followed by external command stages only. | [src/Tosh.Language/ToshEngine.cs:2004](src/Tosh.Language/ToshEngine.cs#L2004) |
-| `tosh.runtime.background_pipeline_requires_command` | Background pipelines require at least one external command stage. | [src/Tosh.Language/ToshEngine.cs:1989](src/Tosh.Language/ToshEngine.cs#L1989) |
-| `tosh.runtime.base_constructor_already_initialized` | CLR base class '{ClrBaseType!.FullName}' has already been initialized for this instance. | [src/Tosh.Language/ToshClassDefinition.cs:2268](src/Tosh.Language/ToshClassDefinition.cs#L2268) |
-| `tosh.runtime.base_type_argument_arity` | Class '{@class.Name}' supplies {@class.BaseTypeArguments.Count} type argument(s) to base class '{baseClassDef.Name}', which expects {baseClassDef.TypeParameterNames.Count}. | [src/Tosh.Language/ToshEngine.cs:4518](src/Tosh.Language/ToshEngine.cs#L4518) |
-| `tosh.runtime.base_type_argument_missing` | Class '{@class.Name}' extends generic class '{baseClassDef.Name}' without supplying type arguments. | [src/Tosh.Language/ToshEngine.cs:4550](src/Tosh.Language/ToshEngine.cs#L4550) |
-| `tosh.runtime.bind_target_not_native_module` | '{statement.ModuleName}' is not a native library module. | [src/Tosh.Language/ToshEngine.cs:2918](src/Tosh.Language/ToshEngine.cs#L2918) |
-| `tosh.runtime.break_outside_loop` | 'break' can only be used inside 'for', 'while', or 'each' blocks. | [src/Tosh.Language/ToshEngine.cs:789](src/Tosh.Language/ToshEngine.cs#L789) |
+| `tosh.runtime.background_command_must_be_external` | Background jobs currently require external command stages. | [src/Tosh.Language/ToshEngine.Pipelines.cs:82](src/Tosh.Language/ToshEngine.Pipelines.cs#L82) |
+| `tosh.runtime.background_pipeline_not_supported` | Background jobs currently support an optional input expression followed by external command stages only. | [src/Tosh.Language/ToshEngine.Pipelines.cs:69](src/Tosh.Language/ToshEngine.Pipelines.cs#L69) |
+| `tosh.runtime.background_pipeline_requires_command` | Background pipelines require at least one external command stage. | [src/Tosh.Language/ToshEngine.Pipelines.cs:54](src/Tosh.Language/ToshEngine.Pipelines.cs#L54) |
+| `tosh.runtime.base_constructor_already_initialized` | CLR base class '{ClrBaseType!.FullName}' has already been initialized for this instance. | [src/Tosh.Language/ToshClassDefinition.cs:2296](src/Tosh.Language/ToshClassDefinition.cs#L2296) |
+| `tosh.runtime.base_type_argument_arity` | Class '{@class.Name}' supplies {@class.BaseTypeArguments.Count} type argument(s) to base class '{baseClassDef.Name}', which expects {baseClassDef.TypeParameterNames.Count}. | [src/Tosh.Language/ToshEngine.Types.cs:280](src/Tosh.Language/ToshEngine.Types.cs#L280) |
+| `tosh.runtime.base_type_argument_missing` | Class '{@class.Name}' extends generic class '{baseClassDef.Name}' without supplying type arguments. | [src/Tosh.Language/ToshEngine.Types.cs:312](src/Tosh.Language/ToshEngine.Types.cs#L312) |
+| `tosh.runtime.bind_target_not_native_module` | '{statement.ModuleName}' is not a native library module. | [src/Tosh.Language/ToshEngine.Native.cs:59](src/Tosh.Language/ToshEngine.Native.cs#L59) |
+| `tosh.runtime.break_outside_loop` | 'break' can only be used inside 'for', 'while', or 'each' blocks. | [src/Tosh.Language/ToshEngine.Modules.cs:1022](src/Tosh.Language/ToshEngine.Modules.cs#L1022) |
 | `tosh.runtime.callable_argument_count_mismatch` | Callable '{callable.CallableName}' expects at least {callable.RequiredParameterCount} argument(s) but received {argumentCount}. | [src/Tosh.Compiler.Runtime/ToshHost.cs:370](src/Tosh.Compiler.Runtime/ToshHost.cs#L370) |
-| `tosh.runtime.callable_invocation_requires_single_value` | Callable invocation in expression context must produce exactly one value. | [src/Tosh.Language/ToshEngine.cs:10327](src/Tosh.Language/ToshEngine.cs#L10327) |
+| `tosh.runtime.callable_invocation_requires_single_value` | Callable invocation in expression context must produce exactly one value. | [src/Tosh.Language/ToshEngine.cs:3749](src/Tosh.Language/ToshEngine.cs#L3749) |
 | `tosh.runtime.callable_named_argument` | Callable '{CallableName}' has no parameter named '{named.Key}'. | [src/Tosh.Runtime/CompiledLambdaCallable.cs:126](src/Tosh.Runtime/CompiledLambdaCallable.cs#L126) |
 | `tosh.runtime.cartesian_product_args` | 'cartesian-product' requires a second sequence and an optional combiner. | [src/Tosh.Stdlib/Pipeline/CartesianProductCommand.cs:25](src/Tosh.Stdlib/Pipeline/CartesianProductCommand.cs#L25) |
 | `tosh.runtime.cast_failed` | _(see source)_ | [src/Tosh.Stdlib/Clr/CastCommand.cs:92](src/Tosh.Stdlib/Clr/CastCommand.cs#L92) |
@@ -333,16 +333,17 @@ Raised by the engine while evaluating a script. The bulk of TōSh diagnostics li
 | `tosh.runtime.chunk_requires_size` | 'chunk' requires exactly one integer size argument. | [src/Tosh.Stdlib/Pipeline/ChunkCommand.cs:22](src/Tosh.Stdlib/Pipeline/ChunkCommand.cs#L22) |
 | `tosh.runtime.combinations_k_non_negative` | k must be non-negative. | [src/Tosh.Stdlib/Pipeline/CombinationsCommand.cs:31](src/Tosh.Stdlib/Pipeline/CombinationsCommand.cs#L31) |
 | `tosh.runtime.combinations_requires_k` | 'combinations' requires exactly one integer argument (k). | [src/Tosh.Stdlib/Pipeline/CombinationsCommand.cs:22](src/Tosh.Stdlib/Pipeline/CombinationsCommand.cs#L22) |
-| `tosh.runtime.command_failed` | _(see source)_ | [src/Tosh.Language/ToshEngine.cs:17316](src/Tosh.Language/ToshEngine.cs#L17316) |
+| `tosh.runtime.command_failed` | _(see source)_ | [src/Tosh.Language/ToshEngine.Diagnostics.cs:317](src/Tosh.Language/ToshEngine.Diagnostics.cs#L317) |
 | `tosh.runtime.command_windows_unavailable` | '{Name}' is not available on Windows. | [src/Tosh.Stdlib/Processes/LsfdCommand.cs:62](src/Tosh.Stdlib/Processes/LsfdCommand.cs#L62) |
 | `tosh.runtime.compose_requires_callable` | Argument {i + 1} is not callable. | [src/Tosh.Stdlib/Functional/ComposeCommand.cs:36](src/Tosh.Stdlib/Functional/ComposeCommand.cs#L36) |
 | `tosh.runtime.compose_requires_two_callables` | The 'compose' command requires at least two callable values. | [src/Tosh.Stdlib/Functional/ComposeCommand.cs:24](src/Tosh.Stdlib/Functional/ComposeCommand.cs#L24) |
-| `tosh.runtime.compound_assignment_requires_value` | Variable '{assignment.Name}' does not have a value yet. | [src/Tosh.Language/ToshEngine.cs:3412](src/Tosh.Language/ToshEngine.cs#L3412) |
-| `tosh.runtime.const_reassignment` | Cannot reassign constant '{name}'. | [src/Tosh.Language/ToshEngine.cs:10869](src/Tosh.Language/ToshEngine.cs#L10869) |
-| `tosh.runtime.const_redeclaration` | Cannot redeclare constant '{name}'. | [src/Tosh.Language/ToshEngine.cs:12043](src/Tosh.Language/ToshEngine.cs#L12043) |
-| `tosh.runtime.constructor_cycle` | Constructor cycle detected while initializing class '{Name}'. | [src/Tosh.Language/ToshClassDefinition.cs:3134](src/Tosh.Language/ToshClassDefinition.cs#L3134) |
-| `tosh.runtime.constructor_parameter_type_conversion_failed` | Constructor argument '{parameter.Name}' could not be converted to '{parameter.TypeName}'. | [src/Tosh.Language/ToshClassDefinition.cs:3020](src/Tosh.Language/ToshClassDefinition.cs#L3020) |
-| `tosh.runtime.continue_outside_loop` | 'continue' can only be used inside 'for', 'while', or 'each' blocks. | [src/Tosh.Language/ToshEngine.cs:798](src/Tosh.Language/ToshEngine.cs#L798) |
+| `tosh.runtime.compound_assignment_requires_value` | Variable '{assignment.Name}' does not have a value yet. | [src/Tosh.Language/ToshEngine.Variables.cs:225](src/Tosh.Language/ToshEngine.Variables.cs#L225) |
+| `tosh.runtime.const_reassignment` | Cannot reassign constant '{name}'. | [src/Tosh.Language/ToshEngine.Variables.cs:628](src/Tosh.Language/ToshEngine.Variables.cs#L628) |
+| `tosh.runtime.const_redeclaration` | Cannot redeclare constant '{name}'. | [src/Tosh.Language/ToshEngine.cs:4886](src/Tosh.Language/ToshEngine.cs#L4886) |
+| `tosh.runtime.constructor_cycle` | Constructor cycle detected while initializing class '{Name}'. | [src/Tosh.Language/ToshClassDefinition.cs:3162](src/Tosh.Language/ToshClassDefinition.cs#L3162) |
+| `tosh.runtime.constructor_parameter_type_conversion_failed` | Constructor argument '{parameter.Name}' could not be converted to '{parameter.TypeName}'. | [src/Tosh.Language/ToshClassDefinition.cs:3048](src/Tosh.Language/ToshClassDefinition.cs#L3048) |
+| `tosh.runtime.continue_outside_loop` | 'continue' can only be used inside 'for', 'while', or 'each' blocks. | [src/Tosh.Language/ToshEngine.Modules.cs:1032](src/Tosh.Language/ToshEngine.Modules.cs#L1032) |
+| `tosh.runtime.contract_member_type_mismatch` | Class '{@class.Name}' implements '{contractName}.{memberName}' with an incompatible {found.What}. | [src/Tosh.Language/ToshEngine.Types.cs:1346](src/Tosh.Language/ToshEngine.Types.cs#L1346) |
 | `tosh.runtime.converge_requires_seed_and_callable` | 'converge' requires a seed value and a callable value or block. | [src/Tosh.Stdlib/Functional/ConvergeCommand.cs:20](src/Tosh.Stdlib/Functional/ConvergeCommand.cs#L20) |
 | `tosh.runtime.curry_argument_count_mismatch` | Curried callable '{_inner.CallableName}' accepts {_targetArity} total argument(s) but received {combinedArguments.Length}. | [src/Tosh.Runtime/CurriedShellCallable.cs:40](src/Tosh.Runtime/CurriedShellCallable.cs#L40) |
 | `tosh.runtime.curry_requires_callable` | The 'curry' command requires exactly one callable value. | [src/Tosh.Stdlib/Functional/CurryCommand.cs:23](src/Tosh.Stdlib/Functional/CurryCommand.cs#L23) |
@@ -352,36 +353,36 @@ Raised by the engine while evaluating a script. The bulk of TōSh diagnostics li
 | `tosh.runtime.dedup_too_many_args` | 'dedup' accepts at most one member path argument. | [src/Tosh.Stdlib/Pipeline/DedupCommand.cs:23](src/Tosh.Stdlib/Pipeline/DedupCommand.cs#L23) |
 | `tosh.runtime.defer_body_failed` | Deferred scope body failed: {failure.Message} | [src/Tosh.Runtime/ToshDeferFailures.cs:482](src/Tosh.Runtime/ToshDeferFailures.cs#L482) |
 | `tosh.runtime.defer_cleanup_failed` | Deferred cleanup #{cleanupIndex} failed: {item.Title} | [src/Tosh.Runtime/ToshDeferFailures.cs:512](src/Tosh.Runtime/ToshDeferFailures.cs#L512) |
-| `tosh.runtime.destructuring_requires_array` | Array destructuring requires an array or list value. | [src/Tosh.Language/ToshEngine.cs:2195](src/Tosh.Language/ToshEngine.cs#L2195) |
-| `tosh.runtime.destructuring_requires_record` | Record destructuring requires a record or dictionary value. | [src/Tosh.Language/ToshEngine.cs:2264](src/Tosh.Language/ToshEngine.cs#L2264) |
-| `tosh.runtime.duplicate_base_constructor_initializer` | Constructor '{Name}()' calls '$super(...)' more than once. | [src/Tosh.Language/ToshClassDefinition.cs:2125](src/Tosh.Language/ToshClassDefinition.cs#L2125) |
-| `tosh.runtime.duplicate_class_property` | Class '{@class.Name}' defines property '{duplicateProperties.Key}' more than once. | [src/Tosh.Language/ToshEngine.cs:4277](src/Tosh.Language/ToshEngine.cs#L4277) |
+| `tosh.runtime.destructuring_requires_array` | Array destructuring requires an array or list value. | [src/Tosh.Language/ToshEngine.cs:1362](src/Tosh.Language/ToshEngine.cs#L1362) |
+| `tosh.runtime.destructuring_requires_record` | Record destructuring requires a record or dictionary value. | [src/Tosh.Language/ToshEngine.cs:1431](src/Tosh.Language/ToshEngine.cs#L1431) |
+| `tosh.runtime.duplicate_base_constructor_initializer` | Constructor '{Name}()' calls '$super(...)' more than once. | [src/Tosh.Language/ToshClassDefinition.cs:2153](src/Tosh.Language/ToshClassDefinition.cs#L2153) |
+| `tosh.runtime.duplicate_class_property` | Class '{@class.Name}' defines property '{duplicateProperties.Key}' more than once. | [src/Tosh.Language/ToshEngine.Types.cs:37](src/Tosh.Language/ToshEngine.Types.cs#L37) |
 | `tosh.runtime.duplicate_constructor` | _(see source)_ | [src/Tosh.Language/ToshClassDefinition.cs:196](src/Tosh.Language/ToshClassDefinition.cs#L196) |
-| `tosh.runtime.duplicate_function_parameter` | Function '{name}' defines parameter '{duplicateParameters.Key}' more than once. | [src/Tosh.Language/ToshEngine.cs:3775](src/Tosh.Language/ToshEngine.cs#L3775) |
+| `tosh.runtime.duplicate_function_parameter` | Function '{name}' defines parameter '{duplicateParameters.Key}' more than once. | [src/Tosh.Language/ToshEngine.cs:1631](src/Tosh.Language/ToshEngine.cs#L1631) |
 | `tosh.runtime.duplicate_named_argument` | Named argument '{namedArgument.Name}' was supplied more than once. | [src/Tosh.Compiler.Runtime/ToshHost.cs:140](src/Tosh.Compiler.Runtime/ToshHost.cs#L140) |
-| `tosh.runtime.duplicate_primary_constructor_chain` | Constructor '{Name}()' calls '$this(...)' more than once. | [src/Tosh.Language/ToshClassDefinition.cs:2077](src/Tosh.Language/ToshClassDefinition.cs#L2077) |
-| `tosh.runtime.duplicate_record_field` | Record '{record.Name}' defines field '{duplicateFields.Key}' more than once. | [src/Tosh.Language/ToshEngine.cs:5247](src/Tosh.Language/ToshEngine.cs#L5247) |
-| `tosh.runtime.duplicate_rune_parameter` | Rune '{rune.Name}' defines parameter '{duplicateParameters.Key}' more than once. | [src/Tosh.Language/ToshEngine.cs:2515](src/Tosh.Language/ToshEngine.cs#L2515) |
-| `tosh.runtime.duplicate_script_flag` | Script flag '--{optionName}' is inferred for more than one flag. | [src/Tosh.Language/ToshEngine.cs:1893](src/Tosh.Language/ToshEngine.cs#L1893) |
-| `tosh.runtime.duplicate_script_input` | Script input '{parameter.Name}' is declared more than once. | [src/Tosh.Language/ToshEngine.cs:1569](src/Tosh.Language/ToshEngine.cs#L1569) |
+| `tosh.runtime.duplicate_primary_constructor_chain` | Constructor '{Name}()' calls '$this(...)' more than once. | [src/Tosh.Language/ToshClassDefinition.cs:2105](src/Tosh.Language/ToshClassDefinition.cs#L2105) |
+| `tosh.runtime.duplicate_record_field` | Record '{record.Name}' defines field '{duplicateFields.Key}' more than once. | [src/Tosh.Language/ToshEngine.cs:2018](src/Tosh.Language/ToshEngine.cs#L2018) |
+| `tosh.runtime.duplicate_rune_parameter` | Rune '{rune.Name}' defines parameter '{duplicateParameters.Key}' more than once. | [src/Tosh.Language/ToshEngine.cs:1514](src/Tosh.Language/ToshEngine.cs#L1514) |
+| `tosh.runtime.duplicate_script_flag` | Script flag '--{optionName}' is inferred for more than one flag. | [src/Tosh.Language/ToshEngine.cs:1281](src/Tosh.Language/ToshEngine.cs#L1281) |
+| `tosh.runtime.duplicate_script_input` | Script input '{parameter.Name}' is declared more than once. | [src/Tosh.Language/ToshEngine.cs:957](src/Tosh.Language/ToshEngine.cs#L957) |
 | `tosh.runtime.duplicate_subcommand` | Subcommand '{childNode.Name}' is declared more than once at this level. | [src/Tosh.Language/ToshEngine.Subcommands.cs:84](src/Tosh.Language/ToshEngine.Subcommands.cs#L84) |
 | `tosh.runtime.each_requires_callable_or_block` | 'each' requires exactly one callable value or block. | [src/Tosh.Stdlib/Pipeline/EachCommand.cs:23](src/Tosh.Stdlib/Pipeline/EachCommand.cs#L23) |
-| `tosh.runtime.enum_member_conversion_failed` | Enum member '{@enum.Name}.{member.Name}' could not be converted to '{underlyingType.Name}'. | [src/Tosh.Language/ToshEngine.cs:5153](src/Tosh.Language/ToshEngine.cs#L5153) |
-| `tosh.runtime.enum_member_requires_single_value` | Enum member '{@enum.Name}.{member.Name}' must resolve to exactly one value. | [src/Tosh.Language/ToshEngine.cs:5141](src/Tosh.Language/ToshEngine.cs#L5141) |
-| `tosh.runtime.enum_member_value_required` | Enum member '{@enum.Name}.{member.Name}' requires an explicit value. | [src/Tosh.Language/ToshEngine.cs:5117](src/Tosh.Language/ToshEngine.cs#L5117) |
+| `tosh.runtime.enum_member_conversion_failed` | Enum member '{@enum.Name}.{member.Name}' could not be converted to '{underlyingType.Name}'. | [src/Tosh.Language/ToshEngine.Types.cs:706](src/Tosh.Language/ToshEngine.Types.cs#L706) |
+| `tosh.runtime.enum_member_requires_single_value` | Enum member '{@enum.Name}.{member.Name}' must resolve to exactly one value. | [src/Tosh.Language/ToshEngine.Types.cs:694](src/Tosh.Language/ToshEngine.Types.cs#L694) |
+| `tosh.runtime.enum_member_value_required` | Enum member '{@enum.Name}.{member.Name}' requires an explicit value. | [src/Tosh.Language/ToshEngine.Types.cs:670](src/Tosh.Language/ToshEngine.Types.cs#L670) |
 | `tosh.runtime.enumerate_too_many_args` | 'enumerate' accepts at most one argument (the starting index). | [src/Tosh.Stdlib/Pipeline/EnumerateCommand.cs:22](src/Tosh.Stdlib/Pipeline/EnumerateCommand.cs#L22) |
 | `tosh.runtime.error` | _(see source)_ | [src/Tosh.Runtime/DiagnosticRenderer.cs:58](src/Tosh.Runtime/DiagnosticRenderer.cs#L58) |
 | `tosh.runtime.exception` | _(see source)_ | [src/Tosh.Mcp/ToshMcpServer.cs:457](src/Tosh.Mcp/ToshMcpServer.cs#L457) |
 | `tosh.runtime.exec_invalid_command` | `exec` needs a non-empty command name. | [src/Tosh.Stdlib/Shell/ExecCommand.cs:90](src/Tosh.Stdlib/Shell/ExecCommand.cs#L90) |
 | `tosh.runtime.exec_missing_command` | `exec` needs a command to run. | [src/Tosh.Stdlib/Shell/ExecCommand.cs:42](src/Tosh.Stdlib/Shell/ExecCommand.cs#L42) |
 | `tosh.runtime.exec_pipeline_unsupported` | `exec` only works as a standalone command. | [src/Tosh.Stdlib/Shell/ExecCommand.cs:24](src/Tosh.Stdlib/Shell/ExecCommand.cs#L24) |
-| `tosh.runtime.expression_failed` | Argument '{parameter.Name}' could not be converted to '{parameter.TypeName}'. | [src/Tosh.Language/ToshClassDefinition.cs:3008](src/Tosh.Language/ToshClassDefinition.cs#L3008) |
-| `tosh.runtime.extend_member_not_a_method` | 'extend {extend.TypeName}' can only declare methods. | [src/Tosh.Language/ToshEngine.cs:4154](src/Tosh.Language/ToshEngine.cs#L4154) |
-| `tosh.runtime.extend_sealed_class` | Class '{@class.Name}' cannot extend sealed class '{@class.BaseClassName}'. | [src/Tosh.Language/ToshEngine.cs:4502](src/Tosh.Language/ToshEngine.cs#L4502) |
-| `tosh.runtime.external_command_is_directory` | '{external.ResolvedPath ?? commandSyntax.Name}' is a directory, not an executable file. | [src/Tosh.Language/ToshEngine.cs:8190](src/Tosh.Language/ToshEngine.cs#L8190) |
-| `tosh.runtime.external_command_not_executable` | '{external.ResolvedPath ?? commandSyntax.Name}' is not executable. | [src/Tosh.Language/ToshEngine.cs:8177](src/Tosh.Language/ToshEngine.cs#L8177) |
-| `tosh.runtime.external_commands_unavailable` | '{commandSyntax.Name}' is a program on disk, and this host does not run external programs. | [src/Tosh.Language/ToshEngine.cs:8168](src/Tosh.Language/ToshEngine.cs#L8168) |
-| `tosh.runtime.fading_member` | Property '{property.Name}' on class '{Name}' is fading (deprecated). | [src/Tosh.Language/ToshClassDefinition.cs:1100](src/Tosh.Language/ToshClassDefinition.cs#L1100) |
+| `tosh.runtime.expression_failed` | Argument '{parameter.Name}' could not be converted to '{parameter.TypeName}'. | [src/Tosh.Language/ToshClassDefinition.cs:3036](src/Tosh.Language/ToshClassDefinition.cs#L3036) |
+| `tosh.runtime.extend_member_not_a_method` | 'extend {extend.TypeName}' can only declare methods. | [src/Tosh.Language/ToshEngine.Statements.cs:792](src/Tosh.Language/ToshEngine.Statements.cs#L792) |
+| `tosh.runtime.extend_sealed_class` | Class '{@class.Name}' cannot extend sealed class '{@class.BaseClassName}'. | [src/Tosh.Language/ToshEngine.Types.cs:264](src/Tosh.Language/ToshEngine.Types.cs#L264) |
+| `tosh.runtime.external_command_is_directory` | '{external.ResolvedPath ?? commandSyntax.Name}' is a directory, not an executable file. | [src/Tosh.Language/ToshEngine.cs:3085](src/Tosh.Language/ToshEngine.cs#L3085) |
+| `tosh.runtime.external_command_not_executable` | '{external.ResolvedPath ?? commandSyntax.Name}' is not executable. | [src/Tosh.Language/ToshEngine.cs:3072](src/Tosh.Language/ToshEngine.cs#L3072) |
+| `tosh.runtime.external_commands_unavailable` | '{commandSyntax.Name}' is a program on disk, and this host does not run external programs. | [src/Tosh.Language/ToshEngine.cs:3063](src/Tosh.Language/ToshEngine.cs#L3063) |
+| `tosh.runtime.fading_member` | Property '{property.Name}' on class '{Name}' is fading (deprecated). | [src/Tosh.Language/ToshClassDefinition.cs:1128](src/Tosh.Language/ToshClassDefinition.cs#L1128) |
 | `tosh.runtime.filter_requires_callable_or_block` | 'filter' requires exactly one callable value or block. | [src/Tosh.Stdlib/Pipeline/FilterCommand.cs:22](src/Tosh.Stdlib/Pipeline/FilterCommand.cs#L22) |
 | `tosh.runtime.find_index_requires_callable_or_block` | 'find-index' requires exactly one callable value or block. | [src/Tosh.Stdlib/Pipeline/FindIndexCommand.cs:21](src/Tosh.Stdlib/Pipeline/FindIndexCommand.cs#L21) |
 | `tosh.runtime.findmnt_command_failed` | _(see source)_ | [src/Tosh.Stdlib/Filesystem/FindmntCommand.cs:88](src/Tosh.Stdlib/Filesystem/FindmntCommand.cs#L88) |
@@ -390,31 +391,32 @@ Raised by the engine while evaluating a script. The bulk of TōSh diagnostics li
 | `tosh.runtime.findmnt_json_parse_failed` | Could not parse structured 'findmnt' output. {exception.Message} | [src/Tosh.Stdlib/Filesystem/FindmntCommand.cs:103](src/Tosh.Stdlib/Filesystem/FindmntCommand.cs#L103) |
 | `tosh.runtime.flat_map_requires_callable_or_block` | 'flat-map' requires exactly one callable value or block. | [src/Tosh.Stdlib/Pipeline/FlatMapCommand.cs:22](src/Tosh.Stdlib/Pipeline/FlatMapCommand.cs#L22) |
 | `tosh.runtime.frequencies_too_many_args` | 'frequencies' accepts at most one member path argument. | [src/Tosh.Stdlib/Pipeline/FrequenciesCommand.cs:21](src/Tosh.Stdlib/Pipeline/FrequenciesCommand.cs#L21) |
-| `tosh.runtime.function_argument_count_mismatch` | Function '{definition.Name}' expects {expected} argument(s) but received {context.Arguments.Count}. | [src/Tosh.Language/ToshEngine.cs:16586](src/Tosh.Language/ToshEngine.cs#L16586) |
+| `tosh.runtime.function_argument_count_mismatch` | Function '{definition.Name}' expects {expected} argument(s) but received {context.Arguments.Count}. | [src/Tosh.Language/ToshEngine.Arguments.cs:2438](src/Tosh.Language/ToshEngine.Arguments.cs#L2438) |
 | `tosh.runtime.function_overload_ambiguous` | Multiple overloads matched function '{Name}' with {arguments.Count} argument(s). | [src/Tosh.Language/Bridge/OverloadedFunctionCommand.cs:155](src/Tosh.Language/Bridge/OverloadedFunctionCommand.cs#L155) |
 | `tosh.runtime.function_overload_not_found` | No overload matched function '{Name}' with {arguments.Count} argument(s). | [src/Tosh.Language/Bridge/OverloadedFunctionCommand.cs:162](src/Tosh.Language/Bridge/OverloadedFunctionCommand.cs#L162) |
-| `tosh.runtime.generic_argument_type_mismatch` | '{target.OwnerLabel}' inferred type parameter '{typeParameterName}' as '{bound.Name}', but argument '{parameterName}' is '{clrType.Name}'. | [src/Tosh.Language/ToshEngine.cs:17096](src/Tosh.Language/ToshEngine.cs#L17096) |
-| `tosh.runtime.generic_constraint_failed` | '{target.OwnerLabel}' requires '{typeParameterName}' to satisfy '{constraintName}', but '{clrType.Name}' does not. | [src/Tosh.Language/ToshEngine.cs:17117](src/Tosh.Language/ToshEngine.cs#L17117) |
-| `tosh.runtime.generic_return_type_mismatch` | Function '{definition.Name}' inferred '{rawReturn}' as '{bound.Name}', but returned a '{value.GetType().Name}'. | [src/Tosh.Language/ToshEngine.cs:17222](src/Tosh.Language/ToshEngine.cs#L17222) |
-| `tosh.runtime.generic_type_argument_count_mismatch` | Function '{definition.Name}' has {typeParamsForSeed.Count} type parameter(s) but received {explicitList.Count} type argument(s). | [src/Tosh.Language/ToshEngine.cs:16491](src/Tosh.Language/ToshEngine.cs#L16491) |
+| `tosh.runtime.generic_argument_type_mismatch` | '{target.OwnerLabel}' inferred type parameter '{typeParameterName}' as '{bound.Name}', but argument '{parameterName}' is '{clrType.Name}'. | [src/Tosh.Language/ToshEngine.cs:6667](src/Tosh.Language/ToshEngine.cs#L6667) |
+| `tosh.runtime.generic_constraint_failed` | '{target.OwnerLabel}' requires '{typeParameterName}' to satisfy '{constraintName}', but '{clrType.Name}' does not. | [src/Tosh.Language/ToshEngine.cs:6688](src/Tosh.Language/ToshEngine.cs#L6688) |
+| `tosh.runtime.generic_return_type_mismatch` | Function '{definition.Name}' inferred '{rawReturn}' as '{bound.Name}', but returned a '{value.GetType().Name}'. | [src/Tosh.Language/ToshEngine.cs:6752](src/Tosh.Language/ToshEngine.cs#L6752) |
+| `tosh.runtime.generic_type_argument_count_mismatch` | Function '{definition.Name}' has {typeParamsForSeed.Count} type parameter(s) but received {explicitList.Count} type argument(s). | [src/Tosh.Language/ToshEngine.Arguments.cs:2343](src/Tosh.Language/ToshEngine.Arguments.cs#L2343) |
 | `tosh.runtime.group_by_requires_selector` | 'group-by' requires exactly one member path, callable, or block. | [src/Tosh.Stdlib/Pipeline/GroupByCommand.cs:20](src/Tosh.Stdlib/Pipeline/GroupByCommand.cs#L20) |
 | `tosh.runtime.group_while_requires_callable_or_block` | 'group-while' requires exactly one callable value or block. | [src/Tosh.Stdlib/Pipeline/GroupWhileCommand.cs:22](src/Tosh.Stdlib/Pipeline/GroupWhileCommand.cs#L22) |
-| `tosh.runtime.hermit_has_constructor` | Hermit class '{@class.Name}' cannot have constructors. | [src/Tosh.Language/ToshEngine.cs:4477](src/Tosh.Language/ToshEngine.cs#L4477) |
+| `tosh.runtime.hermit_has_constructor` | Hermit class '{@class.Name}' cannot have constructors. | [src/Tosh.Language/ToshEngine.Types.cs:239](src/Tosh.Language/ToshEngine.Types.cs#L239) |
 | `tosh.runtime.hostnamectl_command_failed` | _(see source)_ | [src/Tosh.Stdlib/Sys/HostnamectlCommand.cs:61](src/Tosh.Stdlib/Sys/HostnamectlCommand.cs#L61) |
 | `tosh.runtime.hostnamectl_command_missing` | The system 'hostnamectl' command was not found. | [src/Tosh.Stdlib/Sys/HostnamectlCommand.cs:116](src/Tosh.Stdlib/Sys/HostnamectlCommand.cs#L116) |
 | `tosh.runtime.hostnamectl_command_start_failed` | Failed to start the system 'hostnamectl' command. | [src/Tosh.Stdlib/Sys/HostnamectlCommand.cs:248](src/Tosh.Stdlib/Sys/HostnamectlCommand.cs#L248) |
 | `tosh.runtime.hostnamectl_json_parse_failed` | Could not parse structured 'hostnamectl status' output. {exception.Message} | [src/Tosh.Stdlib/Sys/HostnamectlCommand.cs:79](src/Tosh.Stdlib/Sys/HostnamectlCommand.cs#L79) |
 | `tosh.runtime.http_request_failed` | The HTTP request failed. {exception.Message} | [src/Tosh.Stdlib/Net/HttpCommand.cs:307](src/Tosh.Stdlib/Net/HttpCommand.cs#L307) |
 | `tosh.runtime.http_status_failed` | HTTP request returned {(int)response.StatusCode} {response.ReasonPhrase ?? string.Empty} | [src/Tosh.Stdlib/Net/HttpCommand.cs:335](src/Tosh.Stdlib/Net/HttpCommand.cs#L335) |
-| `tosh.runtime.index_assignment_failed` | _(see source)_ | [src/Tosh.Language/ToshEngine.cs:3485](src/Tosh.Language/ToshEngine.cs#L3485) |
-| `tosh.runtime.infinite_eager_comprehension` | Cannot use an infinite source in a list, set, or dict comprehension. Use a generator comprehension (...) instead of [...] and pipe to '\| first N'. | [src/Tosh.Language/ToshEngine.cs:18865](src/Tosh.Language/ToshEngine.cs#L18865) |
-| `tosh.runtime.input_redirection_source_not_found` | Input redirection source '{resolved}' does not exist. | [src/Tosh.Language/ToshEngine.cs:7265](src/Tosh.Language/ToshEngine.cs#L7265) |
-| `tosh.runtime.input_redirection_source_null` | Input redirection source cannot be null. | [src/Tosh.Language/ToshEngine.cs:7246](src/Tosh.Language/ToshEngine.cs#L7246) |
-| `tosh.runtime.interface_type_argument_arity_mismatch` | Generic interface '{ifaceDefinition.Name}' expects {ifaceArity} type argument(s) <{string.Join( | [src/Tosh.Language/ToshEngine.cs:15491](src/Tosh.Language/ToshEngine.cs#L15491) |
-| `tosh.runtime.interface_type_argument_constraint_violation` | Generic interface '{ifaceDefinition.Name}' requires type parameter '{clause.TypeParameter}' to satisfy '{constraintName}', but '{argText}' (CLR {bound.FullName ?? bound.Name}) does not. | [src/Tosh.Language/ToshEngine.cs:15561](src/Tosh.Language/ToshEngine.cs#L15561) |
+| `tosh.runtime.index_assignment_failed` | _(see source)_ | [src/Tosh.Language/ToshEngine.Variables.cs:298](src/Tosh.Language/ToshEngine.Variables.cs#L298) |
+| `tosh.runtime.infinite_eager_comprehension` | Cannot use an infinite source in a list, set, or dict comprehension. Use a generator comprehension (...) instead of [...] and pipe to '\| first N'. | [src/Tosh.Language/ToshEngine.cs:7461](src/Tosh.Language/ToshEngine.cs#L7461) |
+| `tosh.runtime.input_redirection_source_not_found` | Input redirection source '{resolved}' does not exist. | [src/Tosh.Language/ToshEngine.Pipelines.cs:526](src/Tosh.Language/ToshEngine.Pipelines.cs#L526) |
+| `tosh.runtime.input_redirection_source_null` | Input redirection source cannot be null. | [src/Tosh.Language/ToshEngine.Pipelines.cs:507](src/Tosh.Language/ToshEngine.Pipelines.cs#L507) |
+| `tosh.runtime.interface_type_argument_arity_mismatch` | Generic interface '{ifaceDefinition.Name}' expects {ifaceArity} type argument(s) <{string.Join( | [src/Tosh.Language/ToshEngine.Types.cs:998](src/Tosh.Language/ToshEngine.Types.cs#L998) |
+| `tosh.runtime.interface_type_argument_constraint_violation` | Generic interface '{ifaceDefinition.Name}' requires type parameter '{clause.TypeParameter}' to satisfy '{constraintName}', but '{argText}' (CLR {bound.FullName ?? bound.Name}) does not. | [src/Tosh.Language/ToshEngine.Types.cs:1068](src/Tosh.Language/ToshEngine.Types.cs#L1068) |
 | `tosh.runtime.interleave_requires_sequence` | 'interleave' requires exactly one array argument. | [src/Tosh.Stdlib/Pipeline/InterleaveCommand.cs:21](src/Tosh.Stdlib/Pipeline/InterleaveCommand.cs#L21) |
 | `tosh.runtime.intersperse_requires_separator` | 'intersperse' requires exactly one separator argument. | [src/Tosh.Stdlib/Pipeline/IntersperseCommand.cs:22](src/Tosh.Stdlib/Pipeline/IntersperseCommand.cs#L22) |
-| `tosh.runtime.invalid_member_assignment_target` | Assignments to members require a member path target. | [src/Tosh.Language/ToshEngine.cs:3584](src/Tosh.Language/ToshEngine.cs#L3584) |
+| `tosh.runtime.invalid_format_clause` | _(see source)_ | [src/Tosh.Language/ToshEngine.cs:4214](src/Tosh.Language/ToshEngine.cs#L4214) |
+| `tosh.runtime.invalid_member_assignment_target` | Assignments to members require a member path target. | [src/Tosh.Language/ToshEngine.Variables.cs:397](src/Tosh.Language/ToshEngine.Variables.cs#L397) |
 | `tosh.runtime.invalid_regex` | The regular expression is invalid. {exception.Message} | [src/Tosh.Runtime/ShellRegexUtilities.cs:130](src/Tosh.Runtime/ShellRegexUtilities.cs#L130) |
 | `tosh.runtime.invoke_requires_callable` | The 'invoke' command requires a callable value. | [src/Tosh.Stdlib/Functional/InvokeCommand.cs:23](src/Tosh.Stdlib/Functional/InvokeCommand.cs#L23) |
 | `tosh.runtime.ip_command_failed` | _(see source)_ | [src/Tosh.Stdlib/Net/IpCommand.cs:104](src/Tosh.Stdlib/Net/IpCommand.cs#L104) |
@@ -427,7 +429,7 @@ Raised by the engine while evaluating a script. The bulk of TōSh diagnostics li
 | `tosh.runtime.journalctl_command_missing` | The system 'journalctl' command was not found. | [src/Tosh.Stdlib/Sys/JournalctlCommand.cs:70](src/Tosh.Stdlib/Sys/JournalctlCommand.cs#L70) |
 | `tosh.runtime.journalctl_command_start_failed` | Failed to start the system 'journalctl' command. | [src/Tosh.Stdlib/Sys/JournalctlCommand.cs:188](src/Tosh.Stdlib/Sys/JournalctlCommand.cs#L188) |
 | `tosh.runtime.journalctl_json_parse_failed` | Could not parse structured journal output. {exception.Message} | [src/Tosh.Stdlib/Sys/JournalctlCommand.cs:219](src/Tosh.Stdlib/Sys/JournalctlCommand.cs#L219) |
-| `tosh.runtime.list_materialization_failed` | _(see source)_ | [src/Tosh.Language/ToshEngine.cs:9718](src/Tosh.Language/ToshEngine.cs#L9718) |
+| `tosh.runtime.list_materialization_failed` | _(see source)_ | [src/Tosh.Language/ToshEngine.cs:3334](src/Tosh.Language/ToshEngine.cs#L3334) |
 | `tosh.runtime.loginctl_command_failed` | _(see source)_ | [src/Tosh.Stdlib/Sys/LoginctlCommand.cs:84](src/Tosh.Stdlib/Sys/LoginctlCommand.cs#L84) |
 | `tosh.runtime.loginctl_command_missing` | The system 'loginctl' command was not found. | [src/Tosh.Stdlib/Sys/LoginctlCommand.cs:204](src/Tosh.Stdlib/Sys/LoginctlCommand.cs#L204) |
 | `tosh.runtime.loginctl_command_start_failed` | Failed to start the system 'loginctl' command. | [src/Tosh.Stdlib/Sys/LoginctlCommand.cs:573](src/Tosh.Stdlib/Sys/LoginctlCommand.cs#L573) |
@@ -451,32 +453,32 @@ Raised by the engine while evaluating a script. The bulk of TōSh diagnostics li
 | `tosh.runtime.lsipc_command_start_failed` | Failed to start the system 'lsipc' command. | [src/Tosh.Stdlib/Sys/LsipcCommand.cs:274](src/Tosh.Stdlib/Sys/LsipcCommand.cs#L274) |
 | `tosh.runtime.lsipc_json_parse_failed` | Could not parse structured 'lsipc' output. {exception.Message} | [src/Tosh.Stdlib/Sys/LsipcCommand.cs:93](src/Tosh.Stdlib/Sys/LsipcCommand.cs#L93) |
 | `tosh.runtime.map_requires_callable_or_block` | 'map' requires exactly one callable value or block. | [src/Tosh.Stdlib/Pipeline/MapCommand.cs:22](src/Tosh.Stdlib/Pipeline/MapCommand.cs#L22) |
-| `tosh.runtime.member_assignment_failed` | _(see source)_ | [src/Tosh.Language/ToshEngine.cs:3608](src/Tosh.Language/ToshEngine.cs#L3608) |
-| `tosh.runtime.missing_base_constructor_initializer` | Class '{requestedBy.Name}' must initialize base class '{Name}' with constructor arguments. | [src/Tosh.Language/ToshClassDefinition.cs:3156](src/Tosh.Language/ToshClassDefinition.cs#L3156) |
-| `tosh.runtime.missing_hollow_methods` | Class '{@class.Name}' must implement hollow methods from '{parentClass.Name}': {string.Join( | [src/Tosh.Language/ToshEngine.cs:4735](src/Tosh.Language/ToshEngine.cs#L4735) |
-| `tosh.runtime.missing_hollow_properties` | Class '{@class.Name}' must implement hollow properties from '{parentClass.Name}': {string.Join( | [src/Tosh.Language/ToshEngine.cs:4747](src/Tosh.Language/ToshEngine.cs#L4747) |
-| `tosh.runtime.missing_interface_methods` | Class '{@class.Name}' does not implement all methods of interface '{ifaceName}'. Missing: {string.Join( | [src/Tosh.Language/ToshEngine.cs:4615](src/Tosh.Language/ToshEngine.cs#L4615) |
-| `tosh.runtime.missing_interface_type_arguments` | Class '{@class.Name}' fulfills generic interface '{ifaceDefinition.Name}' without type arguments. | [src/Tosh.Language/ToshEngine.cs:15464](src/Tosh.Language/ToshEngine.cs#L15464) |
-| `tosh.runtime.missing_overrule` | Method '{method.Name}' in class '{@class.Name}' shadows a parent method but is not marked 'overrule'. | [src/Tosh.Language/ToshEngine.cs:4785](src/Tosh.Language/ToshEngine.cs#L4785) |
-| `tosh.runtime.missing_script_argument` | Missing required script argument '{parameter.Name}'. | [src/Tosh.Language/ToshEngine.Subcommands.cs:326](src/Tosh.Language/ToshEngine.Subcommands.cs#L326) |
-| `tosh.runtime.missing_script_flag` | Missing required script flag '{parameter.Name}'. | [src/Tosh.Language/ToshEngine.Subcommands.cs:277](src/Tosh.Language/ToshEngine.Subcommands.cs#L277) |
-| `tosh.runtime.missing_trait_methods` | Class '{@class.Name}' does not implement required methods from trait '{traitName}'. Missing: {string.Join( | [src/Tosh.Language/ToshEngine.cs:4651](src/Tosh.Language/ToshEngine.cs#L4651) |
-| `tosh.runtime.missing_trait_properties` | Class '{@class.Name}' does not implement required properties from trait '{traitName}'. Missing: {string.Join( | [src/Tosh.Language/ToshEngine.cs:4664](src/Tosh.Language/ToshEngine.cs#L4664) |
-| `tosh.runtime.nameof_requires_dollar` | Variable references in nameof require '$'. Use nameof(${nameOf.Identifier}). | [src/Tosh.Language/ToshEngine.cs:9434](src/Tosh.Language/ToshEngine.cs#L9434) |
+| `tosh.runtime.member_assignment_failed` | _(see source)_ | [src/Tosh.Language/ToshEngine.Variables.cs:421](src/Tosh.Language/ToshEngine.Variables.cs#L421) |
+| `tosh.runtime.missing_base_constructor_initializer` | Class '{requestedBy.Name}' must initialize base class '{Name}' with constructor arguments. | [src/Tosh.Language/ToshClassDefinition.cs:3184](src/Tosh.Language/ToshClassDefinition.cs#L3184) |
+| `tosh.runtime.missing_hollow_methods` | Class '{@class.Name}' must implement hollow methods from '{parentClass.Name}': {string.Join( | [src/Tosh.Language/ToshEngine.Types.cs:534](src/Tosh.Language/ToshEngine.Types.cs#L534) |
+| `tosh.runtime.missing_hollow_properties` | Class '{@class.Name}' must implement hollow properties from '{parentClass.Name}': {string.Join( | [src/Tosh.Language/ToshEngine.Types.cs:546](src/Tosh.Language/ToshEngine.Types.cs#L546) |
+| `tosh.runtime.missing_interface_methods` | Class '{@class.Name}' does not implement all methods of interface '{ifaceName}'. Missing: {string.Join( | [src/Tosh.Language/ToshEngine.Types.cs:388](src/Tosh.Language/ToshEngine.Types.cs#L388) |
+| `tosh.runtime.missing_interface_type_arguments` | Class '{@class.Name}' fulfills generic interface '{ifaceDefinition.Name}' without type arguments. | [src/Tosh.Language/ToshEngine.Types.cs:971](src/Tosh.Language/ToshEngine.Types.cs#L971) |
+| `tosh.runtime.missing_overrule` | Method '{method.Name}' in class '{@class.Name}' shadows a parent method but is not marked 'overrule'. | [src/Tosh.Language/ToshEngine.Types.cs:584](src/Tosh.Language/ToshEngine.Types.cs#L584) |
+| `tosh.runtime.missing_script_argument` | Missing required script argument '{parameter.Name}'. | [src/Tosh.Language/ToshEngine.Arguments.cs:184](src/Tosh.Language/ToshEngine.Arguments.cs#L184) |
+| `tosh.runtime.missing_script_flag` | Missing required script flag '{parameter.Name}'. | [src/Tosh.Language/ToshEngine.Arguments.cs:128](src/Tosh.Language/ToshEngine.Arguments.cs#L128) |
+| `tosh.runtime.missing_trait_methods` | Class '{@class.Name}' does not implement required methods from trait '{traitName}'. Missing: {string.Join( | [src/Tosh.Language/ToshEngine.Types.cs:424](src/Tosh.Language/ToshEngine.Types.cs#L424) |
+| `tosh.runtime.missing_trait_properties` | Class '{@class.Name}' does not implement required properties from trait '{traitName}'. Missing: {string.Join( | [src/Tosh.Language/ToshEngine.Types.cs:463](src/Tosh.Language/ToshEngine.Types.cs#L463) |
+| `tosh.runtime.nameof_requires_dollar` | Variable references in nameof require '$'. Use nameof(${nameOf.Identifier}). | [src/Tosh.Language/ToshEngine.Arguments.cs:1726](src/Tosh.Language/ToshEngine.Arguments.cs#L1726) |
 | `tosh.runtime.native_alloc_argument_count` | native-alloc expects exactly one argument. | [src/Tosh.Stdlib/Clr/NativeAllocCommand.cs:20](src/Tosh.Stdlib/Clr/NativeAllocCommand.cs#L20) |
 | `tosh.runtime.native_alloc_negative_size` | native-alloc cannot allocate a negative number of bytes. | [src/Tosh.Stdlib/Clr/NativeAllocCommand.cs:30](src/Tosh.Stdlib/Clr/NativeAllocCommand.cs#L30) |
 | `tosh.runtime.native_alloc_requires_size_or_type` | A native allocation needs a byte count or a supported interop type name. | [src/Tosh.Runtime/NativeCommandUtilities.cs:47](src/Tosh.Runtime/NativeCommandUtilities.cs#L47) |
 | `tosh.runtime.native_argument_count_mismatch` | Native function '{ModuleName}.{Name}' expects {atLeast}{callableCount} argument(s) but received {context.Arguments.Count}. | [src/Tosh.Language/Bridge/NativeFunctionCommand.cs:231](src/Tosh.Language/Bridge/NativeFunctionCommand.cs#L231) |
 | `tosh.runtime.native_argument_type_conversion_failed` | Argument {argumentIndex + 1} for native function '{ModuleName}.{Name}' could not be converted to '{parameter.TypeName}'. | [src/Tosh.Language/Bridge/NativeFunctionCommand.cs:367](src/Tosh.Language/Bridge/NativeFunctionCommand.cs#L367) |
-| `tosh.runtime.native_binding_requires_type` | Native {owner} requires an explicit CLR type. | [src/Tosh.Language/ToshEngine.cs:17763](src/Tosh.Language/ToshEngine.cs#L17763) |
+| `tosh.runtime.native_binding_requires_type` | Native {owner} requires an explicit CLR type. | [src/Tosh.Language/ToshEngine.Native.cs:461](src/Tosh.Language/ToshEngine.Native.cs#L461) |
 | `tosh.runtime.native_buffer_range` | '{parameter.Name}' needs a {required}-byte buffer but received {nativeBuffer.ByteLength} bytes. | [src/Tosh.Language/Bridge/NativeFunctionCommand.cs:347](src/Tosh.Language/Bridge/NativeFunctionCommand.cs#L347) |
-| `tosh.runtime.native_buffer_requires_out` | Parameter '{parameter.Name}' must be declared 'out' to use a buffer. | [src/Tosh.Language/ToshEngine.cs:3085](src/Tosh.Language/ToshEngine.cs#L3085) |
-| `tosh.runtime.native_callback_buffer_parameter` | Callback '{rawCallback.Name}' cannot take a buffer parameter. | [src/Tosh.Language/ToshEngine.cs:5356](src/Tosh.Language/ToshEngine.cs#L5356) |
-| `tosh.runtime.native_callback_by_reference` | A callback cannot be passed by reference. | [src/Tosh.Language/ToshEngine.cs:17818](src/Tosh.Language/ToshEngine.cs#L17818) |
-| `tosh.runtime.native_callback_by_reference_parameter` | Callback '{rawCallback.Name}' cannot take a by-reference parameter. | [src/Tosh.Language/ToshEngine.cs:5372](src/Tosh.Language/ToshEngine.cs#L5372) |
+| `tosh.runtime.native_buffer_requires_out` | Parameter '{parameter.Name}' must be declared 'out' to use a buffer. | [src/Tosh.Language/ToshEngine.Native.cs:125](src/Tosh.Language/ToshEngine.Native.cs#L125) |
+| `tosh.runtime.native_callback_buffer_parameter` | Callback '{rawCallback.Name}' cannot take a buffer parameter. | [src/Tosh.Language/ToshEngine.cs:2127](src/Tosh.Language/ToshEngine.cs#L2127) |
+| `tosh.runtime.native_callback_by_reference` | A callback cannot be passed by reference. | [src/Tosh.Language/ToshEngine.Native.cs:516](src/Tosh.Language/ToshEngine.Native.cs#L516) |
+| `tosh.runtime.native_callback_by_reference_parameter` | Callback '{rawCallback.Name}' cannot take a by-reference parameter. | [src/Tosh.Language/ToshEngine.cs:2143](src/Tosh.Language/ToshEngine.cs#L2143) |
 | `tosh.runtime.native_callback_expects_function` | Parameter '{parameter.Name}' of '{ModuleName}.{Name}' expects the callback '{callbackDefinition.Name}'. | [src/Tosh.Language/Bridge/NativeFunctionCommand.cs:280](src/Tosh.Language/Bridge/NativeFunctionCommand.cs#L280) |
-| `tosh.runtime.native_callback_return_convention` | Callback '{rawCallback.Name}' cannot declare a success convention. | [src/Tosh.Language/ToshEngine.cs:5398](src/Tosh.Language/ToshEngine.cs#L5398) |
-| `tosh.runtime.native_count_width_not_integer` | '{widthName} count' needs an integer width. | [src/Tosh.Language/ToshEngine.cs:17902](src/Tosh.Language/ToshEngine.cs#L17902) |
+| `tosh.runtime.native_callback_return_convention` | Callback '{rawCallback.Name}' cannot declare a success convention. | [src/Tosh.Language/ToshEngine.cs:2169](src/Tosh.Language/ToshEngine.cs#L2169) |
+| `tosh.runtime.native_count_width_not_integer` | '{widthName} count' needs an integer width. | [src/Tosh.Language/ToshEngine.Native.cs:595](src/Tosh.Language/ToshEngine.Native.cs#L595) |
 | `tosh.runtime.native_free_requires_buffer` | native-free needs at least one native buffer. | [src/Tosh.Stdlib/Clr/NativeFreeCommand.cs:42](src/Tosh.Stdlib/Clr/NativeFreeCommand.cs#L42) |
 | `tosh.runtime.native_free_requires_native_buffer` | native-free only accepts buffers created by native-alloc. | [src/Tosh.Stdlib/Clr/NativeFreeCommand.cs:55](src/Tosh.Stdlib/Clr/NativeFreeCommand.cs#L55) |
 | `tosh.runtime.native_offsetof_argument_count` | {Name} expects a type name and a field name. | [src/Tosh.Stdlib/Clr/NativeOffsetOfCommand.cs:23](src/Tosh.Stdlib/Clr/NativeOffsetOfCommand.cs#L23) |
@@ -489,95 +491,95 @@ Raised by the engine while evaluating a script. The bulk of TōSh diagnostics li
 | `tosh.runtime.native_read_requires_source` | native-read needs a native buffer or pointer source. | [src/Tosh.Stdlib/Clr/NativeReadCommand.cs:48](src/Tosh.Stdlib/Clr/NativeReadCommand.cs#L48) |
 | `tosh.runtime.native_sizeof_requires_type` | native-sizeof requires at least one type name. | [src/Tosh.Stdlib/Clr/NativeSizeOfCommand.cs:22](src/Tosh.Stdlib/Clr/NativeSizeOfCommand.cs#L22) |
 | `tosh.runtime.native_type_name_required` | A native interop type name is required here. | [src/Tosh.Runtime/NativeCommandUtilities.cs:65](src/Tosh.Runtime/NativeCommandUtilities.cs#L65) |
-| `tosh.runtime.native_variadic_not_last` | '...' must be the last parameter. | [src/Tosh.Language/ToshEngine.cs:3065](src/Tosh.Language/ToshEngine.cs#L3065) |
+| `tosh.runtime.native_variadic_not_last` | '...' must be the last parameter. | [src/Tosh.Language/ToshEngine.Native.cs:105](src/Tosh.Language/ToshEngine.Native.cs#L105) |
 | `tosh.runtime.native_write_argument_count` | native-write expects a target, a value, and an optional offset. | [src/Tosh.Stdlib/Clr/NativeWriteCommand.cs:44](src/Tosh.Stdlib/Clr/NativeWriteCommand.cs#L44) |
 | `tosh.runtime.native_write_offset_requires_int` | native-write offsets must be integers. | [src/Tosh.Stdlib/Clr/NativeWriteCommand.cs:190](src/Tosh.Stdlib/Clr/NativeWriteCommand.cs#L190) |
 | `tosh.runtime.native_write_requires_value` | native-write requires a non-null value. | [src/Tosh.Stdlib/Clr/NativeWriteCommand.cs:124](src/Tosh.Stdlib/Clr/NativeWriteCommand.cs#L124) |
 | `tosh.runtime.native_write_unsupported_value` | native-write does not know how to write values of type '{runtimeType.Name}'. | [src/Tosh.Stdlib/Clr/NativeWriteCommand.cs:143](src/Tosh.Stdlib/Clr/NativeWriteCommand.cs#L143) |
-| `tosh.runtime.nested_type_not_declared` | Nested type '{member.Name}' in class '{@class.Name}' did not produce a type. | [src/Tosh.Language/ToshEngine.cs:12178](src/Tosh.Language/ToshEngine.cs#L12178) |
+| `tosh.runtime.nested_type_not_declared` | Nested type '{member.Name}' in class '{@class.Name}' did not produce a type. | [src/Tosh.Language/ToshEngine.cs:4996](src/Tosh.Language/ToshEngine.cs#L4996) |
 | `tosh.runtime.networkctl_command_failed` | _(see source)_ | [src/Tosh.Stdlib/Sys/NetworkctlCommand.cs:81](src/Tosh.Stdlib/Sys/NetworkctlCommand.cs#L81) |
 | `tosh.runtime.networkctl_command_missing` | The system 'networkctl' command was not found. | [src/Tosh.Stdlib/Sys/NetworkctlCommand.cs:119](src/Tosh.Stdlib/Sys/NetworkctlCommand.cs#L119) |
 | `tosh.runtime.networkctl_command_start_failed` | Failed to start the system 'networkctl' command. | [src/Tosh.Stdlib/Sys/NetworkctlCommand.cs:262](src/Tosh.Stdlib/Sys/NetworkctlCommand.cs#L262) |
 | `tosh.runtime.networkctl_parse_failed` | Could not parse structured 'networkctl list' output. {exception.Message} | [src/Tosh.Stdlib/Sys/NetworkctlCommand.cs:99](src/Tosh.Stdlib/Sys/NetworkctlCommand.cs#L99) |
-| `tosh.runtime.non_exhaustive_match` | This match expression did not match any arm. | [src/Tosh.Language/ToshEngine.cs:9589](src/Tosh.Language/ToshEngine.cs#L9589) |
-| `tosh.runtime.nonzero_exit_code` | Command exited with code {exitCode}. | [src/Tosh.Language/ToshEngine.cs:7500](src/Tosh.Language/ToshEngine.cs#L7500) |
+| `tosh.runtime.non_exhaustive_match` | This match expression did not match any arm. | [src/Tosh.Language/ToshEngine.Statements.cs:1303](src/Tosh.Language/ToshEngine.Statements.cs#L1303) |
+| `tosh.runtime.nonzero_exit_code` | Command exited with code {exitCode}. | [src/Tosh.Language/ToshEngine.Pipelines.cs:637](src/Tosh.Language/ToshEngine.Pipelines.cs#L637) |
 | `tosh.runtime.not_callable` | Value of type '{(target?.GetType().Name ??  | [src/Tosh.Compiler.Runtime/ToshHost.cs:340](src/Tosh.Compiler.Runtime/ToshHost.cs#L340) |
-| `tosh.runtime.null_dict_key` | Dict keys cannot be null. | [src/Tosh.Language/ToshEngine.cs:8824](src/Tosh.Language/ToshEngine.cs#L8824) |
-| `tosh.runtime.overrule_no_base_method` | Method '{method.Name}' in class '{@class.Name}' is marked 'overrule' but no parent class defines '{method.Name}'. | [src/Tosh.Language/ToshEngine.cs:4762](src/Tosh.Language/ToshEngine.cs#L4762) |
+| `tosh.runtime.null_dict_key` | Dict keys cannot be null. | [src/Tosh.Language/ToshEngine.Arguments.cs:1058](src/Tosh.Language/ToshEngine.Arguments.cs#L1058) |
+| `tosh.runtime.overrule_no_base_method` | Method '{method.Name}' in class '{@class.Name}' is marked 'overrule' but no parent class defines '{method.Name}'. | [src/Tosh.Language/ToshEngine.Types.cs:561](src/Tosh.Language/ToshEngine.Types.cs#L561) |
 | `tosh.runtime.parallel_requires_callable_or_block` | 'parallel' requires a callable value or block. | [src/Tosh.Stdlib/Pipeline/ParallelCommand.cs:115](src/Tosh.Stdlib/Pipeline/ParallelCommand.cs#L115) |
-| `tosh.runtime.parameter_default_conversion_failed` | The default value for parameter '{parameter.Name}' could not be converted to '{parameter.TypeName}'. | [src/Tosh.Language/ToshEngine.cs:14195](src/Tosh.Language/ToshEngine.cs#L14195) |
-| `tosh.runtime.parameter_type_conversion_failed` | Argument '{parameter.Name}' could not be converted to '{parameter.TypeName}'. | [src/Tosh.Language/ToshEngine.cs:17183](src/Tosh.Language/ToshEngine.cs#L17183) |
+| `tosh.runtime.parameter_default_conversion_failed` | The default value for parameter '{parameter.Name}' could not be converted to '{parameter.TypeName}'. | [src/Tosh.Language/ToshEngine.Diagnostics.cs:230](src/Tosh.Language/ToshEngine.Diagnostics.cs#L230) |
+| `tosh.runtime.parameter_type_conversion_failed` | Argument '{parameter.Name}' could not be converted to '{parameter.TypeName}'. | [src/Tosh.Language/ToshEngine.Arguments.cs:2527](src/Tosh.Language/ToshEngine.Arguments.cs#L2527) |
 | `tosh.runtime.partial_argument_count_mismatch` | Callable '{_inner.CallableName}' accepts at most {maximum} argument(s) but received {combinedArguments.Length}. | [src/Tosh.Runtime/PartialShellCallable.cs:38](src/Tosh.Runtime/PartialShellCallable.cs#L38) |
-| `tosh.runtime.partial_merge_non_partial_record` | Cannot merge partial record '{record.Name}' with existing non-partial record. | [src/Tosh.Language/ToshEngine.cs:5227](src/Tosh.Language/ToshEngine.cs#L5227) |
-| `tosh.runtime.partial_merge_non_partial_struct` | Cannot merge partial struct '{@struct.Name}' with existing non-partial struct. | [src/Tosh.Language/ToshEngine.cs:5443](src/Tosh.Language/ToshEngine.cs#L5443) |
-| `tosh.runtime.partial_mismatch` | Cannot extend class '{@class.Name}' as partial: the original class was not declared as partial. | [src/Tosh.Language/ToshEngine.cs:4419](src/Tosh.Language/ToshEngine.cs#L4419) |
+| `tosh.runtime.partial_merge_non_partial_record` | Cannot merge partial record '{record.Name}' with existing non-partial record. | [src/Tosh.Language/ToshEngine.cs:1998](src/Tosh.Language/ToshEngine.cs#L1998) |
+| `tosh.runtime.partial_merge_non_partial_struct` | Cannot merge partial struct '{@struct.Name}' with existing non-partial struct. | [src/Tosh.Language/ToshEngine.cs:2214](src/Tosh.Language/ToshEngine.cs#L2214) |
+| `tosh.runtime.partial_mismatch` | Cannot extend module '{module.Name}' as partial: the original module was not declared as partial. | [src/Tosh.Language/ToshEngine.Modules.cs:411](src/Tosh.Language/ToshEngine.Modules.cs#L411) |
 | `tosh.runtime.partial_requires_callable` | The 'partial' command requires a callable value. | [src/Tosh.Stdlib/Functional/PartialCommand.cs:24](src/Tosh.Stdlib/Functional/PartialCommand.cs#L24) |
 | `tosh.runtime.partition_requires_callable_or_block` | 'partition' requires exactly one callable value or block. | [src/Tosh.Stdlib/Pipeline/PartitionCommand.cs:22](src/Tosh.Stdlib/Pipeline/PartitionCommand.cs#L22) |
 | `tosh.runtime.permutations_args` | 'permutations' accepts at most one integer argument (k). | [src/Tosh.Stdlib/Pipeline/PermutationsCommand.cs:22](src/Tosh.Stdlib/Pipeline/PermutationsCommand.cs#L22) |
 | `tosh.runtime.permutations_k_non_negative` | k must be non-negative. | [src/Tosh.Stdlib/Pipeline/PermutationsCommand.cs:41](src/Tosh.Stdlib/Pipeline/PermutationsCommand.cs#L41) |
 | `tosh.runtime.predicate_expression_required` | 'skip-until' requires a predicate expression. | [src/Tosh.Stdlib/Pipeline/SkipUntilCommand.cs:21](src/Tosh.Stdlib/Pipeline/SkipUntilCommand.cs#L21) |
-| `tosh.runtime.primary_chain_arguments` | '$this(...)' does not match the primary constructor of '{Name}'. | [src/Tosh.Language/ToshClassDefinition.cs:3082](src/Tosh.Language/ToshClassDefinition.cs#L3082) |
-| `tosh.runtime.primary_chain_must_be_first` | '$this(...)' must be the first executable statement in a constructor. | [src/Tosh.Language/ToshClassDefinition.cs:2090](src/Tosh.Language/ToshClassDefinition.cs#L2090) |
-| `tosh.runtime.primary_chain_without_primary` | Class '{Name}' cannot call '$this(...)' because it has no primary constructor. | [src/Tosh.Language/ToshClassDefinition.cs:2101](src/Tosh.Language/ToshClassDefinition.cs#L2101) |
+| `tosh.runtime.primary_chain_arguments` | '$this(...)' does not match the primary constructor of '{Name}'. | [src/Tosh.Language/ToshClassDefinition.cs:3110](src/Tosh.Language/ToshClassDefinition.cs#L3110) |
+| `tosh.runtime.primary_chain_must_be_first` | '$this(...)' must be the first executable statement in a constructor. | [src/Tosh.Language/ToshClassDefinition.cs:2118](src/Tosh.Language/ToshClassDefinition.cs#L2118) |
+| `tosh.runtime.primary_chain_without_primary` | Class '{Name}' cannot call '$this(...)' because it has no primary constructor. | [src/Tosh.Language/ToshClassDefinition.cs:2129](src/Tosh.Language/ToshClassDefinition.cs#L2129) |
 | `tosh.runtime.race_requires_multiple_operations` | 'race' requires at least two callable values or blocks. | [src/Tosh.Stdlib/Concurrency/RaceCommand.cs:19](src/Tosh.Stdlib/Concurrency/RaceCommand.cs#L19) |
-| `tosh.runtime.raw_func_requires_library` | Raw function '{statement.Binding.Name}' needs a library. | [src/Tosh.Language/ToshEngine.cs:2954](src/Tosh.Language/ToshEngine.cs#L2954) |
+| `tosh.runtime.raw_func_requires_library` | Raw function '{statement.Binding.Name}' needs a library. | [src/Tosh.Language/ToshEngine.Statements.cs:545](src/Tosh.Language/ToshEngine.Statements.cs#L545) |
 | `tosh.runtime.raw_struct_bool_field` | Raw struct '{structName}' field '{field.Name}' cannot be 'bool'. | [src/Tosh.Language/Bridge/RawStructPlanBuilder.cs:71](src/Tosh.Language/Bridge/RawStructPlanBuilder.cs#L71) |
 | `tosh.runtime.raw_struct_cstring_requires_length` | Raw struct '{structName}' field '{field.Name}' needs an inline buffer length. | [src/Tosh.Language/Bridge/RawStructPlanBuilder.cs:87](src/Tosh.Language/Bridge/RawStructPlanBuilder.cs#L87) |
 | `tosh.runtime.raw_struct_duplicate_field` | Raw struct '{syntax.Name}' declares '{field.Name}' more than once. | [src/Tosh.Language/Bridge/RawStructPlanBuilder.cs:36](src/Tosh.Language/Bridge/RawStructPlanBuilder.cs#L36) |
 | `tosh.runtime.raw_struct_not_blittable` | Raw struct '{plan.Name}' does not have a valid native layout. | [src/Tosh.Language/Bridge/NativeStructTypeFactory.cs:131](src/Tosh.Language/Bridge/NativeStructTypeFactory.cs#L131) |
-| `tosh.runtime.raw_struct_requires_fields` | Raw struct '{rawStruct.Name}' has no fields. | [src/Tosh.Language/ToshEngine.cs:5292](src/Tosh.Language/ToshEngine.cs#L5292) |
+| `tosh.runtime.raw_struct_requires_fields` | Raw struct '{rawStruct.Name}' has no fields. | [src/Tosh.Language/ToshEngine.cs:2063](src/Tosh.Language/ToshEngine.cs#L2063) |
 | `tosh.runtime.raw_struct_size_mismatch` | Raw struct '{plan.Name}' is {actualSize} bytes, but 'size {declared}' was declared. | [src/Tosh.Language/Bridge/NativeStructTypeFactory.cs:142](src/Tosh.Language/Bridge/NativeStructTypeFactory.cs#L142) |
 | `tosh.runtime.raw_struct_unsupported_array_element` | Raw struct '{structName}' field '{field.Name}' cannot be an array of '{typeName}'. | [src/Tosh.Language/Bridge/RawStructPlanBuilder.cs:114](src/Tosh.Language/Bridge/RawStructPlanBuilder.cs#L114) |
 | `tosh.runtime.raw_struct_unsupported_field_type` | Raw struct '{structName}' field '{field.Name}' has an unsupported type '{typeName}'. | [src/Tosh.Language/Bridge/RawStructPlanBuilder.cs:155](src/Tosh.Language/Bridge/RawStructPlanBuilder.cs#L155) |
 | `tosh.runtime.recur_empty_seeds` | 'recur' requires at least one seed value. | [src/Tosh.Stdlib/Functional/RecurCommand.cs:34](src/Tosh.Stdlib/Functional/RecurCommand.cs#L34) |
 | `tosh.runtime.recur_requires_seeds_and_callable` | 'recur' requires seed values and a callable. | [src/Tosh.Stdlib/Functional/RecurCommand.cs:22](src/Tosh.Stdlib/Functional/RecurCommand.cs#L22) |
 | `tosh.runtime.recursion_limit_exceeded` | Maximum ToastScript recursion depth was exceeded. | [src/Tosh.Runtime/ToshExecutionDepthGuard.cs:86](src/Tosh.Runtime/ToshExecutionDepthGuard.cs#L86) |
-| `tosh.runtime.redirection_target_not_single_path` | Redirection targets must resolve to exactly one path. | [src/Tosh.Language/ToshEngine.cs:7228](src/Tosh.Language/ToshEngine.cs#L7228) |
-| `tosh.runtime.redirection_target_null` | Redirection target cannot be null. | [src/Tosh.Language/ToshEngine.cs:7206](src/Tosh.Language/ToshEngine.cs#L7206) |
-| `tosh.runtime.redirection_target_unavailable` | Cannot open '{redirection.Path}' for redirection: {exception.Message} | [src/Tosh.Language/ToshEngine.cs:6998](src/Tosh.Language/ToshEngine.cs#L6998) |
+| `tosh.runtime.redirection_target_not_single_path` | Redirection targets must resolve to exactly one path. | [src/Tosh.Language/ToshEngine.Pipelines.cs:489](src/Tosh.Language/ToshEngine.Pipelines.cs#L489) |
+| `tosh.runtime.redirection_target_null` | Redirection target cannot be null. | [src/Tosh.Language/ToshEngine.Pipelines.cs:467](src/Tosh.Language/ToshEngine.Pipelines.cs#L467) |
+| `tosh.runtime.redirection_target_unavailable` | Cannot open '{redirection.Path}' for redirection: {exception.Message} | [src/Tosh.Language/ToshEngine.Pipelines.cs:223](src/Tosh.Language/ToshEngine.Pipelines.cs#L223) |
 | `tosh.runtime.reduce_requires_seed_and_callable` | 'reduce' requires a seed value and a callable value or block. | [src/Tosh.Stdlib/Pipeline/ReduceCommand.cs:23](src/Tosh.Stdlib/Pipeline/ReduceCommand.cs#L23) |
-| `tosh.runtime.refinement_failed` | Value for '{owner}' does not satisfy its refinement. | [src/Tosh.Language/ToshClassDefinition.cs:3007](src/Tosh.Language/ToshClassDefinition.cs#L3007) |
-| `tosh.runtime.refinement_requires_boolean` | {title} must evaluate to boolean values. | [src/Tosh.Language/ToshEngine.cs:15330](src/Tosh.Language/ToshEngine.cs#L15330) |
-| `tosh.runtime.refinement_specialization_failed` | Refinement alias '{genericDefinition.Name}' could not be specialized for '{closedTypeName}'. | [src/Tosh.Language/ToshEngine.cs:15621](src/Tosh.Language/ToshEngine.cs#L15621) |
+| `tosh.runtime.refinement_failed` | Argument '{parameter.Name}' could not be converted to '{parameter.TypeName}'. | [src/Tosh.Language/ToshClassDefinition.cs:3035](src/Tosh.Language/ToshClassDefinition.cs#L3035) |
+| `tosh.runtime.refinement_requires_boolean` | {title} must evaluate to boolean values. | [src/Tosh.Language/ToshEngine.Refinements.cs:1135](src/Tosh.Language/ToshEngine.Refinements.cs#L1135) |
+| `tosh.runtime.refinement_specialization_failed` | Refinement alias '{genericDefinition.Name}' could not be specialized for '{closedTypeName}'. | [src/Tosh.Language/ToshEngine.Refinements.cs:1265](src/Tosh.Language/ToshEngine.Refinements.cs#L1265) |
 | `tosh.runtime.regex_flags_not_applicable` | Regex option flags only apply to string patterns. | [src/Tosh.Runtime/ShellRegexUtilities.cs:95](src/Tosh.Runtime/ShellRegexUtilities.cs#L95) |
 | `tosh.runtime.repeat_negative_count` | Repeat count cannot be negative. | [src/Tosh.Stdlib/Functional/RepeatCommand.cs:36](src/Tosh.Stdlib/Functional/RepeatCommand.cs#L36) |
 | `tosh.runtime.repeat_requires_value` | 'repeat' requires a value and an optional count. | [src/Tosh.Stdlib/Functional/RepeatCommand.cs:22](src/Tosh.Stdlib/Functional/RepeatCommand.cs#L22) |
 | `tosh.runtime.repeatedly_requires_callable` | 'repeatedly' requires a callable or block. | [src/Tosh.Stdlib/Functional/RepeatedlyCommand.cs:22](src/Tosh.Stdlib/Functional/RepeatedlyCommand.cs#L22) |
-| `tosh.runtime.require_exports_nothing` | '{statement.Target}' declares no exports, so this require imports nothing. | [src/Tosh.Language/ToshEngine.cs:17401](src/Tosh.Language/ToshEngine.cs#L17401) |
-| `tosh.runtime.require_failed` | _(see source)_ | [src/Tosh.Language/ToshEngine.cs:2892](src/Tosh.Language/ToshEngine.cs#L2892) |
-| `tosh.runtime.reserved_variable_name` | '{name}' is a {titleSuffix}. | [src/Tosh.Language/ToshEngine.cs:10944](src/Tosh.Language/ToshEngine.cs#L10944) |
-| `tosh.runtime.return_type_conversion_failed` | Function '{definition.Name}' returned a value that could not be converted to '{definition.ReturnTypeName}'. | [src/Tosh.Language/ToshEngine.cs:17256](src/Tosh.Language/ToshEngine.cs#L17256) |
+| `tosh.runtime.require_exports_nothing` | '{statement.Target}' declares no exports, so this require imports nothing. | [src/Tosh.Language/ToshEngine.Modules.cs:877](src/Tosh.Language/ToshEngine.Modules.cs#L877) |
+| `tosh.runtime.require_failed` | _(see source)_ | [src/Tosh.Language/ToshEngine.Modules.cs:378](src/Tosh.Language/ToshEngine.Modules.cs#L378) |
+| `tosh.runtime.reserved_variable_name` | '{name}' is a {titleSuffix}. | [src/Tosh.Language/ToshEngine.cs:4163](src/Tosh.Language/ToshEngine.cs#L4163) |
+| `tosh.runtime.return_type_conversion_failed` | Function '{definition.Name}' returned a value that could not be converted to '{definition.ReturnTypeName}'. | [src/Tosh.Language/ToshEngine.cs:6786](src/Tosh.Language/ToshEngine.cs#L6786) |
 | `tosh.runtime.scan_requires_seed_and_callable` | 'scan' requires a seed value and a callable value or block. | [src/Tosh.Stdlib/Pipeline/ScanCommand.cs:23](src/Tosh.Stdlib/Pipeline/ScanCommand.cs#L23) |
 | `tosh.runtime.scope_requires_block` | 'scope' requires a block argument. | [src/Tosh.Stdlib/Concurrency/ScopeCommand.cs:22](src/Tosh.Stdlib/Concurrency/ScopeCommand.cs#L22) |
-| `tosh.runtime.script_flag_cannot_be_rest` | Script flags cannot use rest parameters. | [src/Tosh.Language/ToshEngine.cs:1583](src/Tosh.Language/ToshEngine.cs#L1583) |
-| `tosh.runtime.script_inputs_must_be_top_level` | Script input declarations must be top-level statements. | [src/Tosh.Language/ToshEngine.cs:1348](src/Tosh.Language/ToshEngine.cs#L1348) |
+| `tosh.runtime.script_flag_cannot_be_rest` | Script flags cannot use rest parameters. | [src/Tosh.Language/ToshEngine.cs:971](src/Tosh.Language/ToshEngine.cs#L971) |
+| `tosh.runtime.script_inputs_must_be_top_level` | Script input declarations must be top-level statements. | [src/Tosh.Language/ToshEngine.Statements.cs:329](src/Tosh.Language/ToshEngine.Statements.cs#L329) |
 | `tosh.runtime.script_option_requires_value` | Option '--{optionName}' requires a value. | [src/Tosh.Language/ToshEngine.Subcommands.cs:444](src/Tosh.Language/ToshEngine.Subcommands.cs#L444) |
-| `tosh.runtime.script_rest_argument_must_be_last` | A script rest argument must be the last argument. | [src/Tosh.Language/ToshEngine.cs:1599](src/Tosh.Language/ToshEngine.cs#L1599) |
-| `tosh.runtime.self_unavailable_in_constructor_default` | The default for parameter '{parameter.Name}' cannot use '$this'. | [src/Tosh.Language/ToshEngine.cs:14168](src/Tosh.Language/ToshEngine.cs#L14168) |
+| `tosh.runtime.script_rest_argument_must_be_last` | A script rest argument must be the last argument. | [src/Tosh.Language/ToshEngine.cs:987](src/Tosh.Language/ToshEngine.cs#L987) |
+| `tosh.runtime.self_unavailable_in_constructor_default` | The default for parameter '{parameter.Name}' cannot use '$this'. | [src/Tosh.Language/ToshEngine.Diagnostics.cs:215](src/Tosh.Language/ToshEngine.Diagnostics.cs#L215) |
 | `tosh.runtime.serialization_depth_exceeded` | Value nests deeper than {MaxDepth} levels and cannot be serialized. | [src/Tosh.Runtime/ShellDataSerializer.cs:75](src/Tosh.Runtime/ShellDataSerializer.cs#L75) |
 | `tosh.runtime.settle_requires_operation` | 'settle' requires at least one callable value or block. | [src/Tosh.Stdlib/Concurrency/SettleCommand.cs:19](src/Tosh.Stdlib/Concurrency/SettleCommand.cs#L19) |
-| `tosh.runtime.shy_using_requires_scope` | Shy using statements require a function, block, or module scope. | [src/Tosh.Language/ToshEngine.cs:2426](src/Tosh.Language/ToshEngine.cs#L2426) |
+| `tosh.runtime.shy_using_requires_scope` | Shy using statements require a function, block, or module scope. | [src/Tosh.Language/ToshEngine.Statements.cs:487](src/Tosh.Language/ToshEngine.Statements.cs#L487) |
 | `tosh.runtime.sort_requires_selector` | 'sort' selectors must be a member path, callable value, or block. | [src/Tosh.Stdlib/Pipeline/SortCommand.cs:55](src/Tosh.Stdlib/Pipeline/SortCommand.cs#L55) |
 | `tosh.runtime.spawn_requires_command` | 'spawn' requires an external command name or path. | [src/Tosh.Stdlib/Concurrency/SpawnCommand.cs:43](src/Tosh.Stdlib/Concurrency/SpawnCommand.cs#L43) |
 | `tosh.runtime.spawn_target_is_directory` | '{commandName}' resolves to a directory, not an executable. | [src/Tosh.Stdlib/Concurrency/SpawnCommand.cs:115](src/Tosh.Stdlib/Concurrency/SpawnCommand.cs#L115) |
 | `tosh.runtime.spawn_target_not_executable` | '{commandName}' exists but is not executable. | [src/Tosh.Stdlib/Concurrency/SpawnCommand.cs:110](src/Tosh.Stdlib/Concurrency/SpawnCommand.cs#L110) |
 | `tosh.runtime.spawn_target_not_found` | External command '{commandName}' was not found. | [src/Tosh.Stdlib/Concurrency/SpawnCommand.cs:120](src/Tosh.Stdlib/Concurrency/SpawnCommand.cs#L120) |
-| `tosh.runtime.splat_infinite_range` | Cannot splat an infinite range. | [src/Tosh.Language/ToshEngine.cs:8080](src/Tosh.Language/ToshEngine.cs#L8080) |
-| `tosh.runtime.splat_requires_collection` | Argument splatting requires a non-null collection value. | [src/Tosh.Language/ToshEngine.cs:8055](src/Tosh.Language/ToshEngine.cs#L8055) |
-| `tosh.runtime.spread_requires_record` | Spread in a record literal requires a record or dictionary value. | [src/Tosh.Language/ToshEngine.cs:8878](src/Tosh.Language/ToshEngine.cs#L8878) |
+| `tosh.runtime.splat_infinite_range` | Cannot splat an infinite range. | [src/Tosh.Language/ToshEngine.Arguments.cs:485](src/Tosh.Language/ToshEngine.Arguments.cs#L485) |
+| `tosh.runtime.splat_requires_collection` | Argument splatting requires a non-null collection value. | [src/Tosh.Language/ToshEngine.Arguments.cs:460](src/Tosh.Language/ToshEngine.Arguments.cs#L460) |
+| `tosh.runtime.spread_requires_record` | Spread in a record literal requires a record or dictionary value. | [src/Tosh.Language/ToshEngine.Arguments.cs:1112](src/Tosh.Language/ToshEngine.Arguments.cs#L1112) |
 | `tosh.runtime.step_by_positive` | 'step-by' requires n >= 1. | [src/Tosh.Stdlib/Pipeline/StepByCommand.cs:31](src/Tosh.Stdlib/Pipeline/StepByCommand.cs#L31) |
 | `tosh.runtime.step_by_requires_n` | 'step-by' requires exactly one integer argument. | [src/Tosh.Stdlib/Pipeline/StepByCommand.cs:22](src/Tosh.Stdlib/Pipeline/StepByCommand.cs#L22) |
-| `tosh.runtime.subcommand_must_be_script_scoped` | Subcommand '{statement.Name}' must be declared at script or parent-subcommand scope. | [src/Tosh.Language/ToshEngine.cs:1366](src/Tosh.Language/ToshEngine.cs#L1366) |
+| `tosh.runtime.subcommand_must_be_script_scoped` | Subcommand '{statement.Name}' must be declared at script or parent-subcommand scope. | [src/Tosh.Language/ToshEngine.Statements.cs:347](src/Tosh.Language/ToshEngine.Statements.cs#L347) |
 | `tosh.runtime.subcommand_required` | _(see source)_ | [src/Tosh.Language/ToshEngine.Subcommands.cs:622](src/Tosh.Language/ToshEngine.Subcommands.cs#L622) |
 | `tosh.runtime.subexpression_requires_single_value` | Subexpressions used as arguments must produce exactly one value. | [src/Tosh.Compiler.Runtime/ToshHost.cs:1926](src/Tosh.Compiler.Runtime/ToshHost.cs#L1926) |
-| `tosh.runtime.super_initializer_must_be_first` | '$super(...)' must be the first executable statement in a constructor. | [src/Tosh.Language/ToshClassDefinition.cs:2142](src/Tosh.Language/ToshClassDefinition.cs#L2142) |
-| `tosh.runtime.super_without_base_class` | Class '{Name}' cannot call '$super(...)' because it has no base class. | [src/Tosh.Language/ToshClassDefinition.cs:3268](src/Tosh.Language/ToshClassDefinition.cs#L3268) |
+| `tosh.runtime.super_initializer_must_be_first` | '$super(...)' must be the first executable statement in a constructor. | [src/Tosh.Language/ToshClassDefinition.cs:2170](src/Tosh.Language/ToshClassDefinition.cs#L2170) |
+| `tosh.runtime.super_without_base_class` | Class '{Name}' cannot call '$super(...)' because it has no base class. | [src/Tosh.Language/ToshClassDefinition.cs:3296](src/Tosh.Language/ToshClassDefinition.cs#L3296) |
 | `tosh.runtime.systemctl_command_failed` | _(see source)_ | [src/Tosh.Stdlib/Sys/SystemctlCommand.cs:130](src/Tosh.Stdlib/Sys/SystemctlCommand.cs#L130) |
 | `tosh.runtime.systemctl_command_missing` | The system 'systemctl' command was not found. | [src/Tosh.Stdlib/Sys/SystemctlCommand.cs:232](src/Tosh.Stdlib/Sys/SystemctlCommand.cs#L232) |
 | `tosh.runtime.systemctl_command_start_failed` | Failed to start the system 'systemctl' command. | [src/Tosh.Stdlib/Sys/SystemctlCommand.cs:634](src/Tosh.Stdlib/Sys/SystemctlCommand.cs#L634) |
 | `tosh.runtime.systemctl_json_parse_failed` | Could not parse structured 'systemctl list-units' output. {exception.Message} | [src/Tosh.Stdlib/Sys/SystemctlCommand.cs:152](src/Tosh.Stdlib/Sys/SystemctlCommand.cs#L152) |
 | `tosh.runtime.systemctl_show_parse_failed` | Could not parse structured 'systemctl show' output. {exception.Message} | [src/Tosh.Stdlib/Sys/SystemctlCommand.cs:201](src/Tosh.Stdlib/Sys/SystemctlCommand.cs#L201) |
-| `tosh.runtime.throw` | _(see source)_ | [src/Tosh.Language/ToshEngine.cs:18265](src/Tosh.Language/ToshEngine.cs#L18265) |
+| `tosh.runtime.throw` | _(see source)_ | [src/Tosh.Language/ToshEngine.Diagnostics.cs:466](src/Tosh.Language/ToshEngine.Diagnostics.cs#L466) |
 | `tosh.runtime.time_invalid_target` | 'time' requires a block, callable, or command as its first argument. | [src/Tosh.Stdlib/Time/TimeCommand.cs:151](src/Tosh.Stdlib/Time/TimeCommand.cs#L151) |
 | `tosh.runtime.time_requires_argument` | 'time' requires a command or block to measure. | [src/Tosh.Stdlib/Time/TimeCommand.cs:28](src/Tosh.Stdlib/Time/TimeCommand.cs#L28) |
 | `tosh.runtime.timeout_elapsed` | Operation timed out after {timeoutDuration.TotalSeconds:0.###} seconds. | [src/Tosh.Stdlib/Concurrency/TimeoutCommand.cs:65](src/Tosh.Stdlib/Concurrency/TimeoutCommand.cs#L65) |
@@ -589,8 +591,8 @@ Raised by the engine while evaluating a script. The bulk of TōSh diagnostics li
 | `tosh.runtime.tree_command_missing` | The system 'tree' command was not found. | [src/Tosh.Stdlib/Filesystem/TreeCommand.cs:112](src/Tosh.Stdlib/Filesystem/TreeCommand.cs#L112) |
 | `tosh.runtime.tree_command_start_failed` | Failed to start the system 'tree' command. | [src/Tosh.Stdlib/Filesystem/TreeCommand.cs:233](src/Tosh.Stdlib/Filesystem/TreeCommand.cs#L233) |
 | `tosh.runtime.tree_json_parse_failed` | Could not parse structured 'tree' output. {exception.Message} | [src/Tosh.Stdlib/Filesystem/TreeCommand.cs:87](src/Tosh.Stdlib/Filesystem/TreeCommand.cs#L87) |
-| `tosh.runtime.tuple_assignment_arity_mismatch` | This destructuring has {targetCount} targets but the tuple has {valueCount} elements. | [src/Tosh.Language/ToshEngine.cs:1080](src/Tosh.Language/ToshEngine.cs#L1080) |
-| `tosh.runtime.type_name_conflict` | {declaredKind} '{name}' conflicts with an existing refinement alias. | [src/Tosh.Language/ToshEngine.cs:12418](src/Tosh.Language/ToshEngine.cs#L12418) |
+| `tosh.runtime.tuple_assignment_arity_mismatch` | This destructuring has {targetCount} targets but the tuple has {valueCount} elements. | [src/Tosh.Language/ToshEngine.Statements.cs:122](src/Tosh.Language/ToshEngine.Statements.cs#L122) |
+| `tosh.runtime.type_name_conflict` | {declaredKind} '{name}' conflicts with an existing refinement alias. | [src/Tosh.Language/ToshEngine.Refinements.cs:284](src/Tosh.Language/ToshEngine.Refinements.cs#L284) |
 | `tosh.runtime.ulimit_getrlimit_failed` | Failed to read current limit for '{resourceName}'. | [src/Tosh.Stdlib/Shell/UlimitCommand.cs:111](src/Tosh.Stdlib/Shell/UlimitCommand.cs#L111) |
 | `tosh.runtime.ulimit_invalid_value` | Invalid limit value '{newValue}'. | [src/Tosh.Stdlib/Shell/UlimitCommand.cs:128](src/Tosh.Stdlib/Shell/UlimitCommand.cs#L128) |
 | `tosh.runtime.ulimit_setrlimit_failed` | Failed to set limit for '{resourceName}' (errno {errno}). | [src/Tosh.Stdlib/Shell/UlimitCommand.cs:146](src/Tosh.Stdlib/Shell/UlimitCommand.cs#L146) |
@@ -598,37 +600,38 @@ Raised by the engine while evaluating a script. The bulk of TōSh diagnostics li
 | `tosh.runtime.ulimit_unsupported` | `ulimit` is not supported on Windows. | [src/Tosh.Stdlib/Shell/UlimitCommand.cs:52](src/Tosh.Stdlib/Shell/UlimitCommand.cs#L52) |
 | `tosh.runtime.umask_invalid` | Invalid umask value '{arg}'. | [src/Tosh.Stdlib/Shell/UmaskCommand.cs:44](src/Tosh.Stdlib/Shell/UmaskCommand.cs#L44) |
 | `tosh.runtime.umask_unsupported` | `umask` is not supported on Windows. | [src/Tosh.Stdlib/Shell/UmaskCommand.cs:25](src/Tosh.Stdlib/Shell/UmaskCommand.cs#L25) |
-| `tosh.runtime.unexpected_exception` | _(see source)_ | [src/Tosh.Language/ToshEngine.cs:9983](src/Tosh.Language/ToshEngine.cs#L9983) |
-| `tosh.runtime.unexpected_interface_type_arguments` | Interface '{ifaceDefinition.Name}' is not generic and does not accept type arguments. | [src/Tosh.Language/ToshEngine.cs:15480](src/Tosh.Language/ToshEngine.cs#L15480) |
-| `tosh.runtime.unexpected_script_argument` | Unexpected {(node.Name is null ?  | [src/Tosh.Language/ToshEngine.Subcommands.cs:344](src/Tosh.Language/ToshEngine.Subcommands.cs#L344) |
+| `tosh.runtime.unexpected_exception` | Function '{commandName}' shadows built-in command '{commandName}'. | [src/Tosh.Language/ToshEngine.Diagnostics.cs:101](src/Tosh.Language/ToshEngine.Diagnostics.cs#L101) |
+| `tosh.runtime.unexpected_interface_type_arguments` | Interface '{ifaceDefinition.Name}' is not generic and does not accept type arguments. | [src/Tosh.Language/ToshEngine.Types.cs:987](src/Tosh.Language/ToshEngine.Types.cs#L987) |
+| `tosh.runtime.unexpected_script_argument` | Unexpected script argument '{FormatScriptArgumentForDiagnostic(unexpected.Value)}'. | [src/Tosh.Language/ToshEngine.Arguments.cs:200](src/Tosh.Language/ToshEngine.Arguments.cs#L200) |
 | `tosh.runtime.unfold_requires_pair_or_null` | 'unfold' callable must return a [value, next-state] pair or null to stop. | [src/Tosh.Stdlib/Functional/UnfoldCommand.cs:63](src/Tosh.Stdlib/Functional/UnfoldCommand.cs#L63) |
 | `tosh.runtime.unfold_requires_seed_and_callable` | 'unfold' requires a seed value and a callable value or block. | [src/Tosh.Stdlib/Functional/UnfoldCommand.cs:21](src/Tosh.Stdlib/Functional/UnfoldCommand.cs#L21) |
-| `tosh.runtime.uninitialized_variable` | Variable '{variableReference.Name}' has been declared but not assigned yet. | [src/Tosh.Language/ToshEngine.cs:8537](src/Tosh.Language/ToshEngine.cs#L8537) |
-| `tosh.runtime.unknown_base_class` | Class '{@class.Name}' extends unknown class '{@class.BaseClassName}'. | [src/Tosh.Language/ToshEngine.cs:4569](src/Tosh.Language/ToshEngine.cs#L4569) |
+| `tosh.runtime.uninitialized_variable` | Variable '{variableReference.Name}' has been declared but not assigned yet. | [src/Tosh.Language/ToshEngine.Arguments.cs:771](src/Tosh.Language/ToshEngine.Arguments.cs#L771) |
+| `tosh.runtime.unknown_base_class` | Class '{@class.Name}' extends unknown class '{@class.BaseClassName}'. | [src/Tosh.Language/ToshEngine.Types.cs:331](src/Tosh.Language/ToshEngine.Types.cs#L331) |
 | `tosh.runtime.unknown_cast_target` | _(see source)_ | [src/Tosh.Stdlib/Clr/CastCommand.cs:71](src/Tosh.Stdlib/Clr/CastCommand.cs#L71) |
-| `tosh.runtime.unknown_command` | Command '{commandSyntax.Name}' was not found. | [src/Tosh.Language/ToshEngine.cs:8203](src/Tosh.Language/ToshEngine.cs#L8203) |
-| `tosh.runtime.unknown_enum_underlying_type` | Enum '{@enum.Name}' uses unknown underlying type '{@enum.UnderlyingTypeName}'. | [src/Tosh.Language/ToshEngine.cs:5097](src/Tosh.Language/ToshEngine.cs#L5097) |
-| `tosh.runtime.unknown_function_reference` | Function '{funcRef.Name}' was not found. | [src/Tosh.Language/ToshEngine.cs:9488](src/Tosh.Language/ToshEngine.cs#L9488) |
-| `tosh.runtime.unknown_interface` | Class '{@class.Name}' fulfills unknown interface '{ifaceName}'. | [src/Tosh.Language/ToshEngine.cs:4593](src/Tosh.Language/ToshEngine.cs#L4593) |
+| `tosh.runtime.unknown_command` | Command '{commandSyntax.Name}' was not found. | [src/Tosh.Language/ToshEngine.cs:3098](src/Tosh.Language/ToshEngine.cs#L3098) |
+| `tosh.runtime.unknown_enum_underlying_type` | Enum '{@enum.Name}' uses unknown underlying type '{@enum.UnderlyingTypeName}'. | [src/Tosh.Language/ToshEngine.Types.cs:650](src/Tosh.Language/ToshEngine.Types.cs#L650) |
+| `tosh.runtime.unknown_function_reference` | Function '{funcRef.Name}' was not found. | [src/Tosh.Language/ToshEngine.Arguments.cs:1796](src/Tosh.Language/ToshEngine.Arguments.cs#L1796) |
+| `tosh.runtime.unknown_implicit_call` | Nothing named '{methodCall.MethodName}' is in scope, and the current item has no such method. | [src/Tosh.Language/ToshEngine.Arguments.cs:602](src/Tosh.Language/ToshEngine.Arguments.cs#L602) |
+| `tosh.runtime.unknown_interface` | Class '{@class.Name}' fulfills unknown interface '{ifaceName}'. | [src/Tosh.Language/ToshEngine.Types.cs:355](src/Tosh.Language/ToshEngine.Types.cs#L355) |
 | `tosh.runtime.unknown_named_argument` | There is no parameter named '{namedArgument.Name}'. | [src/Tosh.Compiler.Runtime/ToshHost.cs:154](src/Tosh.Compiler.Runtime/ToshHost.cs#L154) |
 | `tosh.runtime.unknown_script_flag` | Unknown script flag '--{optionName}'. | [src/Tosh.Language/ToshEngine.Subcommands.cs:421](src/Tosh.Language/ToshEngine.Subcommands.cs#L421) |
-| `tosh.runtime.unknown_static_assignment_target` | '{path}' does not name a static member, because '{head}' names no type. | [src/Tosh.Language/ToshEngine.cs:18679](src/Tosh.Language/ToshEngine.cs#L18679) |
-| `tosh.runtime.unknown_tilde_target` | '~{expansion.Name}' names neither a directory alias nor a user. | [src/Tosh.Language/ToshEngine.cs:7981](src/Tosh.Language/ToshEngine.cs#L7981) |
-| `tosh.runtime.unknown_trait` | Class '{@class.Name}' uses unknown trait '{traitName}'. | [src/Tosh.Language/ToshEngine.cs:4638](src/Tosh.Language/ToshEngine.cs#L4638) |
-| `tosh.runtime.unknown_type` | Type '{name}' was not found. | [src/Tosh.Language/ToshEngine.cs:10225](src/Tosh.Language/ToshEngine.cs#L10225) |
-| `tosh.runtime.unknown_type_argument` | Type '{name}' could not be resolved as a type argument for '{methodName}'. | [src/Tosh.Language/ToshEngine.cs:12219](src/Tosh.Language/ToshEngine.cs#L12219) |
-| `tosh.runtime.unknown_type_name` | Type '{typeName}' could not be resolved for type parameter '{typeParamsForSeed[i]}' of function '{definition.Name}'. | [src/Tosh.Language/ToshEngine.cs:16502](src/Tosh.Language/ToshEngine.cs#L16502) |
-| `tosh.runtime.unknown_variable` | '${variableReference.Name}' is a constructor parameter of  | [src/Tosh.Language/ToshEngine.cs:8563](src/Tosh.Language/ToshEngine.cs#L8563) |
+| `tosh.runtime.unknown_static_assignment_target` | '{path}' does not name a static member, because '{head}' names no type. | [src/Tosh.Language/ToshEngine.Variables.cs:1155](src/Tosh.Language/ToshEngine.Variables.cs#L1155) |
+| `tosh.runtime.unknown_tilde_target` | '~{expansion.Name}' names neither a directory alias nor a user. | [src/Tosh.Language/ToshEngine.Arguments.cs:386](src/Tosh.Language/ToshEngine.Arguments.cs#L386) |
+| `tosh.runtime.unknown_trait` | Class '{@class.Name}' uses unknown trait '{traitName}'. | [src/Tosh.Language/ToshEngine.Types.cs:411](src/Tosh.Language/ToshEngine.Types.cs#L411) |
+| `tosh.runtime.unknown_type` | Type '{name}' was not found. | [src/Tosh.Language/ToshEngine.cs:3647](src/Tosh.Language/ToshEngine.cs#L3647) |
+| `tosh.runtime.unknown_type_argument` | Type '{name}' could not be resolved as a type argument for '{methodName}'. | [src/Tosh.Language/ToshEngine.cs:5037](src/Tosh.Language/ToshEngine.cs#L5037) |
+| `tosh.runtime.unknown_type_name` | Type '{typeName}' could not be resolved for type parameter '{typeParamsForSeed[i]}' of function '{definition.Name}'. | [src/Tosh.Language/ToshEngine.Arguments.cs:2354](src/Tosh.Language/ToshEngine.Arguments.cs#L2354) |
+| `tosh.runtime.unknown_variable` | '${variableReference.Name}' is a constructor parameter of  | [src/Tosh.Language/ToshEngine.Arguments.cs:797](src/Tosh.Language/ToshEngine.Arguments.cs#L797) |
 | `tosh.runtime.unsupported_native_allocation_type` | '{type.FullName ?? type.Name}' is not a supported native allocation type. | [src/Tosh.Runtime/NativeCommandUtilities.cs:19](src/Tosh.Runtime/NativeCommandUtilities.cs#L19) |
 | `tosh.runtime.unsupported_native_byref_string` | By-ref native string parameters need an explicit pointer type. | [src/Tosh.Runtime/NativeTypeLexicon.cs:144](src/Tosh.Runtime/NativeTypeLexicon.cs#L144) |
-| `tosh.runtime.unsupported_native_calling_convention` | Native interop does not support calling convention '{name}'. | [src/Tosh.Language/ToshEngine.cs:17957](src/Tosh.Language/ToshEngine.cs#L17957) |
+| `tosh.runtime.unsupported_native_calling_convention` | Native interop does not support calling convention '{name}'. | [src/Tosh.Language/ToshEngine.Native.cs:650](src/Tosh.Language/ToshEngine.Native.cs#L650) |
 | `tosh.runtime.unsupported_native_command_type` | Native interop does not support '{typeName}'. | [src/Tosh.Runtime/NativeCommandUtilities.cs:76](src/Tosh.Runtime/NativeCommandUtilities.cs#L76) |
-| `tosh.runtime.unsupported_native_interop_type` | Native interop does not currently support '{typeName}'. | [src/Tosh.Language/ToshEngine.cs:17833](src/Tosh.Language/ToshEngine.cs#L17833) |
-| `tosh.runtime.unsupported_native_string_return` | Native string returns need an explicit interop string type. | [src/Tosh.Language/ToshEngine.cs:17932](src/Tosh.Language/ToshEngine.cs#L17932) |
-| `tosh.runtime.using_export_not_supported` | 'using' cannot be exported. | [src/Tosh.Language/ToshEngine.cs:2385](src/Tosh.Language/ToshEngine.cs#L2385) |
-| `tosh.runtime.using_not_supported` | This runtime does not support 'using' statements. | [src/Tosh.Language/ToshEngine.cs:2403](src/Tosh.Language/ToshEngine.cs#L2403) |
-| `tosh.runtime.value_not_callable` | The provided value is not callable. | [src/Tosh.Language/ToshEngine.cs:9110](src/Tosh.Language/ToshEngine.cs#L9110) |
-| `tosh.runtime.variable_reference_requires_dollar` | Variable '{variableName}' exists, but variable references must start with '$'. | [src/Tosh.Language/ToshEngine.cs:8144](src/Tosh.Language/ToshEngine.cs#L8144) |
+| `tosh.runtime.unsupported_native_interop_type` | Native interop does not currently support '{typeName}'. | [src/Tosh.Language/ToshEngine.Native.cs:531](src/Tosh.Language/ToshEngine.Native.cs#L531) |
+| `tosh.runtime.unsupported_native_string_return` | Native string returns need an explicit interop string type. | [src/Tosh.Language/ToshEngine.Native.cs:625](src/Tosh.Language/ToshEngine.Native.cs#L625) |
+| `tosh.runtime.using_export_not_supported` | 'using' cannot be exported. | [src/Tosh.Language/ToshEngine.Statements.cs:446](src/Tosh.Language/ToshEngine.Statements.cs#L446) |
+| `tosh.runtime.using_not_supported` | This runtime does not support 'using' statements. | [src/Tosh.Language/ToshEngine.Statements.cs:464](src/Tosh.Language/ToshEngine.Statements.cs#L464) |
+| `tosh.runtime.value_not_callable` | The provided value is not callable. | [src/Tosh.Language/ToshEngine.Arguments.cs:1363](src/Tosh.Language/ToshEngine.Arguments.cs#L1363) |
+| `tosh.runtime.variable_reference_requires_dollar` | Variable '{variableName}' exists, but variable references must start with '$'. | [src/Tosh.Language/ToshEngine.Variables.cs:1125](src/Tosh.Language/ToshEngine.Variables.cs#L1125) |
 | `tosh.runtime.window_requires_positive_integer` | 'window' requires a positive integer size. | [src/Tosh.Stdlib/Pipeline/WindowCommand.cs:31](src/Tosh.Stdlib/Pipeline/WindowCommand.cs#L31) |
 | `tosh.runtime.window_requires_size` | 'window' requires a size and an optional callable or block. | [src/Tosh.Stdlib/Pipeline/WindowCommand.cs:23](src/Tosh.Stdlib/Pipeline/WindowCommand.cs#L23) |
 | `tosh.runtime.zip_requires_sequence` | 'zip' requires a second sequence and an optional combiner block. | [src/Tosh.Stdlib/Pipeline/ZipCommand.cs:23](src/Tosh.Stdlib/Pipeline/ZipCommand.cs#L23) |
@@ -655,10 +658,10 @@ Raised by the `tui` subsystem (terminal UI widgets, screens, providers).
 | `tosh.type.arity` | Function '{call.Name}' expects {DescribeArity(required, maxAccepted)} but received {positionals.Count}. | [src/Tosh.Language/Binding/TypeChecker.cs:808](src/Tosh.Language/Binding/TypeChecker.cs#L808) |
 | `tosh.type.command_argument` | Command '{call.Name}' argument {i + 1} expects '{expected.DisplayName}' but received '{actual.DisplayName}'. | [src/Tosh.Language/Binding/TypeChecker.cs:921](src/Tosh.Language/Binding/TypeChecker.cs#L921) |
 | `tosh.type.command_arity` | Command '{call.Name}' expects {DescribeArity(required, maxAccepted)} but received {provided}. | [src/Tosh.Language/Binding/TypeChecker.cs:901](src/Tosh.Language/Binding/TypeChecker.cs#L901) |
-| `tosh.type.index` | Dictionary is keyed by '{BoundType.FromClr(keyType).DisplayName}' but received '{indexType.DisplayName}'. | [src/Tosh.Language/Binding/TypeChecker.cs:1614](src/Tosh.Language/Binding/TypeChecker.cs#L1614) |
-| `tosh.type.member_not_found` | Method '{call.MethodName}' was not found on type '{targetType.DisplayName}'. | [src/Tosh.Language/Binding/TypeChecker.cs:1308](src/Tosh.Language/Binding/TypeChecker.cs#L1308) |
+| `tosh.type.index` | Dictionary is keyed by '{BoundType.FromClr(keyType).DisplayName}' but received '{indexType.DisplayName}'. | [src/Tosh.Language/Binding/TypeChecker.cs:1627](src/Tosh.Language/Binding/TypeChecker.cs#L1627) |
+| `tosh.type.member_not_found` | Method '{call.MethodName}' was not found on type '{targetType.DisplayName}'. | [src/Tosh.Language/Binding/TypeChecker.cs:1321](src/Tosh.Language/Binding/TypeChecker.cs#L1321) |
 | `tosh.type.mismatch` | Argument {i + 1} of '{call.Name}' expects '{declared.DisplayName}' but received '{actual.DisplayName}'. | [src/Tosh.Language/Binding/TypeChecker.cs:842](src/Tosh.Language/Binding/TypeChecker.cs#L842) |
-| `tosh.type.operator` | Operator '{op}' is not compatible with operand types '{left.DisplayName}' and '{right.DisplayName}'. | [src/Tosh.Language/Binding/TypeChecker.cs:1690](src/Tosh.Language/Binding/TypeChecker.cs#L1690) |
+| `tosh.type.operator` | Operator '{op}' is not compatible with operand types '{left.DisplayName}' and '{right.DisplayName}'. | [src/Tosh.Language/Binding/TypeChecker.cs:1703](src/Tosh.Language/Binding/TypeChecker.cs#L1703) |
 | `tosh.type.pipeline_input` | Command '{call.Name}' does not accept pipeline input of type '{previousOutput.DisplayName}'. | [src/Tosh.Language/Binding/TypeChecker.cs:1179](src/Tosh.Language/Binding/TypeChecker.cs#L1179) |
 | `tosh.type.unknown_option` | Command '{call.Name}' has no option '{text}'. | [src/Tosh.Language/Binding/TypeChecker.cs:989](src/Tosh.Language/Binding/TypeChecker.cs#L989) |
 
@@ -666,5 +669,5 @@ Raised by the `tui` subsystem (terminal UI widgets, screens, providers).
 
 | Code | Title | First emit site |
 |---|---|---|
-| `tosh.user.type` | _(see source)_ | [src/Tosh.Language/ToshEngine.cs:11313](src/Tosh.Language/ToshEngine.cs#L11313) |
+| `tosh.user.type` | _(see source)_ | [src/Tosh.Language/ToshEngine.Diagnostics.cs:460](src/Tosh.Language/ToshEngine.Diagnostics.cs#L460) |
 

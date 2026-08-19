@@ -770,6 +770,24 @@ single-quoted string with \code{\$'...'} when the old escape processing was
 intentional.
 \end{warnbox}
 
+\subsection{Quotes Inside a Word}
+
+A quote need not begin a word to be quoting.  Quote characters are removed
+wherever they are \emph{balanced within a single word}, and what they enclose is
+protected from splitting and from glob expansion:
+
+\begin{lstlisting}
+/usr/bin/grep --include="*.cs" ...   # grep sees --include=*.cs
+--opt="a"b"c"                        # one argument, --opt=abc
+--opt="a b"                          # one argument, --opt=a b
+x"*"y                                # literal x*y, not expanded
+\end{lstlisting}
+
+An \textbf{unbalanced} quote is an ordinary character and the word still splits at
+whitespace, so \code{don't} and \code{5"} keep their marks.  A literal quote in a
+word is spelled by quoting the whole word, \code{"--opt=\textbackslash"x\textbackslash""},
+or with the other quote character, \code{'"'}.
+
 \subsection{String Interpolation}
 \ikw{interpolation}
 
@@ -783,6 +801,18 @@ echo $"2 + 2 = {2 + 2}"             # Expression
 echo $"Files: {ls | where _.Type == file | count}"  # Pipeline
 echo $"Today is {(date now).DayOfWeek.ToString()}"              # Member access
 \end{lstlisting}
+
+A hole is \textbf{one value} unless it contains a pipeline.  An expression renders
+its value; a pipeline joins its results with a single space:
+
+\begin{lstlisting}
+var xs = [1, 2, 3]
+$"{$xs}"                      # [1, 2, 3]   -- an expression, one value
+$"{$xs | where { $_ > 1 }}"   # 2 3         -- a pipeline, joined
+\end{lstlisting}
+
+The distinction is a \code{|} the reader can see in the source, rather than a
+property of whatever the value turned out to be.
 
 \begin{lstlisting}[title={Multi-line interpolated string}]
 var report = $"""
@@ -834,9 +864,20 @@ $"[{$i,-6}]"              # [42    ]   left-aligned
 $"{$when:yyyy-MM-dd}"     # 2026-08-16
 \end{lstlisting}
 
-The clause is handed to the value's own formatter, so every .NET format string
-works.  A clause a value cannot honour leaves it rendered plainly rather than
-failing.
+The clause selects a rendering other than the value's default, and is applied
+invariantly --- \code{\$"\{3.14159:F2\}"} is \code{3.14} on every machine, not
+\code{3,14} on one whose locale uses a comma.
+
+A clause the value cannot honour is \textbf{an error}.  \code{\$"\{\$name:F2\}"}
+where \code{\$name} is a string reports \code{tosh.runtime.invalid\_format\_clause}
+and names the clause.  A clause is an explicit instruction, and ignoring an
+explicit instruction is worse than refusing it: a silently dropped clause makes a
+program succeed while producing text nobody asked for.
+
+On the \code{dotnet} target a clause outside the portable core reaches the value's
+own formatter, so every .NET format string continues to work.  A program that
+stays inside the core set renders identically on every target; one that goes
+outside it has made a target-specific choice.
 
 Only separators at the top level of the hole are clauses: inside parentheses,
 brackets, braces or a string they belong to the expression.  A conditional's
@@ -1604,6 +1645,119 @@ $t.Alpha                                   # 1 - the refinement still coerces
 longer on the engine's stack.  Resolution against the declaring module is what
 makes the bare name mean what it reads as.  Qualified names
 (\S\ref{sec:module-qualified-types}) work from anywhere and are unaffected.
+
+\section{Value Rendering}
+\label{sec:value-rendering}
+
+\textbf{Rendering} is the operation that turns a value into a string.  It is what
+an interpolation hole produces, what \code{\$x as string} produces, and what a
+value's text is inside a diagnostic or on its way to a redirect target.
+
+Rendering is \textbf{not display}.  Display is how TōSh paints a value on a
+terminal --- tables, colour, column widths, display profiles, themes.  Display may
+call rendering; rendering never calls display and never consults display
+configuration.  A Tōast program therefore produces the same strings in every
+host, on every target, under every configuration: \code{\$"\{x\}"} in a program
+with no shell and no terminal produces exactly what it produces in an interactive
+session.
+
+Rendering is \textbf{total}.  Every value renders, and no value renders as a
+failure --- a diagnostic that could not render the value it is about would be
+worse than an imperfect string.  The one exception is a format clause the value
+cannot honour, which is an error (\S\ref{sec:strings}).
+
+\subsection{Scalars}
+
+\begin{longtable}{L{5.5cm}L{7.5cm}}
+\toprule
+\textbf{Value} & \textbf{Renders as} \\
+\midrule
+\endhead
+\code{null} & \code{null} \\
+\code{true}, \code{false} & \code{true}, \code{false} \\
+integer & decimal digits, \code{-} if negative, no separators, no suffix \\
+floating & the shortest form that round-trips \\
+NaN & \code{NaN} \\
+infinity & \code{Infinity}, \code{-Infinity} \\
+negative zero & \code{-0} \\
+\code{char} & the character, unquoted \\
+\code{date} & \code{yyyy-MM-dd HH:mm:ss} \\
+\bottomrule
+\end{longtable}
+
+Rendering is \textbf{invariant}: a machine whose locale uses a comma decimal
+separator still renders \code{3.14}.  There are no thousands separators --- a
+program that wants \code{1,000,000} asks for it with a format clause.
+
+Negative zero keeps its sign, because \code{-0} and \code{0} are different values
+and a rendering that collapsed them would make output depend on how a zero was
+reached.  A floating \code{3.0} renders \code{3}, which is indistinguishable from
+the integer: the shortest round-tripping form is the useful one, and the type
+distinction is available through a clause when it is wanted.
+
+A \code{date} is rendered with its own clock reading.  No timezone conversion is
+applied to a value that stated no timezone.
+
+\subsection{Strings}
+
+A string renders as its own characters at the top level, and \textbf{quoted and
+escaped when nested inside a container}:
+
+\begin{lstlisting}
+$"{"hi"}"                 # hi
+$"{["a b", "c"]}"         # ["a b", "c"]
+\end{lstlisting}
+
+The asymmetry is deliberate.  At the top level the caller is putting text into a
+sentence; nested, they are looking at a structure, and unquoted elements make it
+ambiguous --- \code{["a b", "c"]} would be indistinguishable from three elements,
+and the string \code{"null"} from the value \code{null}.
+
+\subsection{Containers}
+
+Every container renders in \textbf{its own literal syntax, at every depth}:
+
+\begin{lstlisting}
+[1, 2, 3]                 # list
+[]                        # empty list
+{% "a" => 1 %}            # dictionary
+{: 1, 2 :}                # set
+{| Name = "a", N = 1 |}   # record
+(1, "a")                  # tuple
+1..3                      # range
+\end{lstlisting}
+
+A container renders the same way wherever it sits --- as a whole hole, as an
+element of another container, as a dictionary value, or as a record field.  No
+CLR type name ever appears in a rendering.  A range renders as a range rather
+than as the list it would produce.
+
+Rendering is bounded: beyond a fixed maximum depth a container renders as an
+elision, and a value already being rendered further up the chain renders as an
+elision rather than recursing.  Neither is an error.
+
+\subsection{Named values}
+
+An enum member renders as its member name --- \code{Color.Red} is \code{Red}.  A
+flags value renders the member names its bits cover, comma-separated.
+
+A class or struct renders as its type name followed by its readable state,
+\code{Point \{ X = 1, Y = 2 \}}, which is what distinguishes it from a record.
+
+A type controls its own rendering by implementing the \code{Display} trait:
+
+\begin{lstlisting}
+trait Display { func render() -> string }
+
+class Temperature uses Display {
+    prop Celsius: dec = 0
+    func render() -> string => $"{$this.Celsius}degC"
+}
+\end{lstlisting}
+
+A declared \code{ToString} is honoured as well, so types written before the trait
+existed keep rendering as their authors intended.  \code{Display} is what this
+specification teaches; \code{ToString} is what it tolerates.
 
 \section{Truthiness}
 \label{sec:truthiness}
@@ -4662,6 +4816,40 @@ class Note uses Timestamped {
     prop Text = ""
 }
 \end{lstlisting}
+
+A trait member is written the way a class member is: a return type with
+\code{->}, a default body with \code{=>} or braces, and a required property with
+\code{prop name: Type}.
+
+\begin{lstlisting}
+trait Display {
+    func render() -> string          # required, with a declared result
+    func label() -> string => "?"    # default body
+    prop Name: string                # required property
+}
+\end{lstlisting}
+
+\subsection{What a declared type requires}
+
+A trait's declared types are a \textbf{contract}, checked where the class is
+declared rather than where a member is called.
+
+\begin{itemize}
+  \item A \textbf{return type} is covariant: the class may return the declared
+        type or one derived from it.  Narrowing a result never surprises a caller
+        holding the trait.
+  \item A \textbf{parameter} must name the same type.
+  \item A \textbf{property} must name the same type.  A property is written as
+        well as read, so narrowing it is unsound: code holding the trait could
+        assign the declared type into what the class narrowed.
+  \item An \textbf{undeclared} type on either side agrees with anything.  A trait
+        that says nothing constrains nothing, and a class that says nothing has
+        not contradicted the trait --- it has only declined to repeat it.
+\end{itemize}
+
+An alias and its CLR spelling name one type and agree, so \code{int} satisfies
+\code{Int32}.  Interfaces are checked by the same rules; being method-only, the
+return and parameter rules are the whole of it for them.
 
 \section{Union Definitions}
 \ikw{union}

@@ -1,0 +1,48 @@
+using System
+
+Console.CursorVisible = false
+clear
+
+var width:  int = Console.WindowWidth
+var height: int = Console.WindowHeight
+
+var centerX: int = $width / 2
+var centerY: int = $height / 2
+
+var pinwheelChars = """|/─\"""
+var colors = [
+    ConsoleColor.Red, ConsoleColor.Yellow, ConsoleColor.Green,
+    ConsoleColor.Cyan, ConsoleColor.Blue, ConsoleColor.Magenta
+]
+
+var frame: int = 0
+var maxRadiusY: int = $centerY - 1
+var maxRadiusX: int = Math.Min($centerX * 2, $width - 2)
+
+until (Console.KeyAvailable) {
+    clear
+    for radius in 1..$maxRadiusY {
+        for angle in 0..15..360 {
+            var radians: double = $angle * Math.PI / 180
+
+            var x: int = $centerX + Math.Round(($radius * 2) * Math.Cos($radians), 0)
+            var y: int = $centerY + Math.Round($radius * Math.Sin($radians), 0)
+
+            if (($x < 0) or ($x >= $width) or ($y < 0) or ($y >= $height)) { continue }
+
+            var charIndex: int = ($angle / 90 + $frame) % $pinwheelChars.Length
+            var colorIndex: int = ($radius + $frame) % $colors.Length
+
+            Console.SetCursorPosition($x, $y)
+            Console.ForegroundColor = $colors[$colorIndex]
+            Console.Write($pinwheelChars[$charIndex])
+        }
+    }
+
+    sleep(0.1)
+    $frame = ($frame + 1) % 4
+}
+
+Console.ResetColor()
+clear
+Console.CursorVisible = true

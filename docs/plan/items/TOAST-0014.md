@@ -139,7 +139,7 @@ now are.
 - [x] A portable value-to-text protocol exists in the language, independent of display profiles — `ToastRenderer`, which holds no registry and cannot reach one
 - [x] Interpolation and value-to-text conversion use it; their output does not vary with shell display configuration
 - [x] `ObjectFormatter` keeps display concerns and calls the same protocol underneath
-- [x] The protocol is specified, not merely implemented — `docs/plan/SPEC_DRAFT_value_rendering.md` §3–§8, with `ToastRendererTests` written *from* it; scalars, collections, records, `null`, NaN and signed zero are pinned
+- [x] The protocol is specified, not merely implemented — `docs/spec/toastscript-spec.tex` §Value Rendering as of 2026-08-17, drafted in `docs/plan/SPEC_DRAFT_value_rendering.md` and with `ToastRendererTests` written *from* it; scalars, collections, records, `null`, NaN and signed zero are pinned
 - [ ] ~~Unicode~~ — **not done.** The corpus covers escaping of `"`, `\`, `\n`, `\r` and `\t` and nothing else. What a `str` is made of, what `Length` counts, and how indexing and comparison behave belong to `TOAST-0018`, which carries the eight unfiled Phase A concerns; recorded here rather than ticked, because the box asks for something this did not deliver
 - [x] A test proves interpolation is unaffected by display-profile changes — `Rendering_does_not_change_when_display_configuration_does`
 

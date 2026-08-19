@@ -47,3 +47,34 @@ these acquires an obvious owner.
 Several name an owning item (`TS-P2-14`, `TS-P2-03`, `TS-P2-02`, `TS-P1-14`,
 `TS-P2-10`); check those first, since some may already be resolved and only the prose
 left behind.
+
+## Note — 2026-08-17
+
+None of the twelve above are closed by this, but two neighbouring things were:
+
+**The specification gained a `Value Rendering` section**, and the format-clause paragraph
+was corrected. It had said "every .NET format string works" and that "a clause a value
+cannot honour leaves it rendered plainly rather than failing" — both true when this item was
+filed and both falsified by `TOAST-0014`, which made rendering invariant and made an
+unhonourable clause an error. Quoting inside a word, what an interpolation hole is, and a
+trait's declared member types are documented too. **Every example in the new text was run
+against the binary before it was written down**, which is the discipline the twelve above
+exist because of.
+
+**`buildtosh spec` recovers from a poisoned build.** A LaTeX run that fails leaves a
+truncated `.out` or `.aux`, and the next run dies with "File ended while scanning use of
+\BKM@entry" at `\begin{document}` — naming nothing about the edit that caused it. One
+genuine error therefore made *every* later build fail until someone cleaned by hand. That is
+a documentation-drift cause in its own right: a specification that is painful to rebuild is
+a specification people stop rebuilding.
+
+Measured rather than assumed, over several wrong attempts: it happens with and without
+`-halt-on-error`, so dropping that flag does not fix it, and deleting the `.out` first is
+worse — latexmk then cannot tell a rerun is needed and the *first* build after any edit
+fails. What fixes it is recovering: clean and retry once, and report a second failure as
+real. All three controls pass — a settled build does not warn, a genuine LaTeX error still
+fails, and the build recovers on the run after.
+
+Box 8 above — the absolute path to the cover image — was attempted and **reverted**. A
+guard on the bare filename silently failed, because `\IfFileExists` does not search
+`\graphicspath`, and the cover lost its crest while still building. It remains open.
