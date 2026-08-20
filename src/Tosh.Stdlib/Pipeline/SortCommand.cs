@@ -157,7 +157,12 @@ public sealed class SortCommand : ShellCommand
             ? keyed.OrderByDescending(entry => entry.Key, comparer)
             : keyed.OrderBy(entry => entry.Key, comparer);
 
-        var seen = unique ? new HashSet<object?>(ignoreCase ? ShellEqualityComparer.Instance : ShellEqualityComparer.Ordinal) : null;
+        // `TOAST-0018`. Case-sensitive uniqueness is the shared key relation, so `-u`
+        // and a dictionary agree about which values are the same. `-i` keeps its own
+        // comparer, because folding case is a `sort` option and not a property of a key.
+        var seen = unique
+            ? new HashSet<object?>(ignoreCase ? ShellEqualityComparer.Instance : (IEqualityComparer<object?>)ShellKeyComparer.Instance)
+            : null;
 
         foreach (var entry in ordered)
         {

@@ -28,15 +28,16 @@ public sealed class DistinctCommand : ShellCommand, ICurrentItemMemberPathComman
             memberPath = context.Arguments[0]?.ToString();
         }
 
-        var seen = new HashSet<string>(StringComparer.Ordinal);
+        // `TOAST-0018`. Keyed by the shared key relation rather than by a JSON rendering
+        // of the value. The rendering preserved field order, so `{| a = 1, b = 2 |}` and
+        // `{| b = 2, a = 1 |}` — which `==` calls equal — both survived `distinct`.
+        var seen = new HashSet<object?>(ShellKeyComparer.Instance);
 
         await foreach (var item in ShellIterationUtilities.ReplaySingleInputCollectionAsync(context.Input, context.CancellationToken)
                            .WithCancellation(context.CancellationToken))
         {
             var keyValue = memberPath is null ? item : context.Runtime.ObjectAccessor.GetValue(item, memberPath);
-            var key = ShellDataSerializer.GetStableKey(keyValue);
-
-            if (seen.Add(key))
+            if (seen.Add(keyValue))
             {
                 yield return item;
             }

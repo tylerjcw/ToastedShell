@@ -49,8 +49,9 @@ actually lives.
       and there were **three**, not two: `OperatorEvaluator` for `<`, `SortCommand`'s
       `ShellSortComparer`, and a simplified copy of the latter in `ToshEngine` for the
       fused `sort | first` path. One comparer now lives in `Tosh.Runtime`; see below
-- [ ] **Hashing** given a contract consistent with equality, since there is no central site
-      today and a value model without one cannot back a portable dictionary
+- [x] **Hashing** given a contract consistent with equality — **done 2026-08-20**, and the
+      box's premise turned out to be the finding: there was nothing to be consistent
+      *with*. See below
 - [ ] **Nullability** specified beyond truthiness: what `null` means in comparison,
       arithmetic, member access and collection membership
 - [ ] **Overflow** given a policy — wrap, saturate, or raise — stated per numeric type
@@ -163,14 +164,80 @@ the opposite default from a `record` — a record is a bag of values, a class ha
 
 Suite 5,943 passing.
 
+## Hashing — 2026-08-20
+
+The box asked for "a contract consistent with equality". Measuring found **no hash could
+be**, and that is the result rather than an obstacle to it.
+
+**`==` is coercive, and coercion makes it intransitive:**
+
+```tosh
+("1" == 1)         # true
+(1 == "1.0")       # true
+("1" == "1.0")     # false   — two strings compare exactly
+```
+
+Three values, two of them equal to a third and not to each other. A relation with no
+equivalence classes has nothing for a hash table to bucket, so writing a hash function
+would not have fixed anything.
+
+**The symptom was a dictionary that answered by insertion order.** Two dictionaries built
+from the same two pairs in opposite order returned *different values for the same lookup*,
+because lookup is a linear scan with `==` and stopped at whichever mutually-equal key it
+reached first. The box's own phrase — "cannot back a portable dictionary" — was literally
+true and demonstrable in three lines.
+
+### The decision: two relations
+
+`==` stays coercive, because that is what a shell wants when values arrive from commands
+as text. Containers use **key equality**: same value, no cross-type coercion, therefore
+transitive and hashable. Specified as `§Key Equality`. A value can be `==` to a key it
+does not match *as* a key, and the specification says so plainly.
+
+`ShellKeyComparer` is the one implementation, and six surfaces now share it: dictionary
+lookup, `distinct`, `sort -u`, `frequencies`, `group-by` and set literals. Each had
+improvised its own key before — a JSON rendering in three of them (field-order sensitive,
+so two records `==` called equal survived `distinct` as separate values), CLR
+`GetHashCode` in another, a linear `==` scan in the last.
+
+### Two rules that only measurement produced
+
+**A type that defines its own equality decides, and that check must precede the structural
+one.** A class instance is an `IShellRecordObject` and therefore record-*like*, so the
+structural path folded two distinct instances holding equal properties — when a class
+without a declared `equals` is a key only to itself. Caught by a probe that expected 3 and
+got 2.
+
+**A class declaring `equals` without `hash` now hashes to a constant.** The reference hash
+it had would have put two instances its own `equals` calls equal into different buckets,
+so a container would hold both. One shared bucket is correct — slower within it, never a
+wrong answer — and declaring `hash` restores O(1). Fixed in `ToshClassInstance.GetHashCode`
+so it holds for every consumer, not only this comparer.
+
+### Blast radius, and what that says
+
+**The full suite passed unchanged** after making dictionary lookup non-coercive — which
+means nothing in 5,943 tests covered the coercive behaviour. It was untested, not merely
+unspecified.
+
+**Negative control: 7 of 31 fail** with the routing reverted and `ShellKeyComparer` left in
+place, which isolates the wiring from the comparer. Suite 5,974 passing.
+
+### Not done: lookup is still linear
+
+A dictionary is still scanned, so lookup is O(n) — correct and order-independent now, but
+not fast. Making it O(1) means constructing the underlying dictionary *with* the comparer,
+which is a change to how `{% ... %}` is built rather than to what equality means. Filed as
+the remaining half of this concern rather than done quietly.
+
 ### Still open here
 
-Six concerns remain: hashing, nullability, overflow, Unicode, collection shape and
-exception semantics — plus the backend-neutral corpus that is Phase A's exit.
+Five concerns remain: nullability, overflow, Unicode, collection shape and exception
+semantics — plus the backend-neutral corpus that is Phase A's exit.
 
-**Hashing is next by dependency.** Its box asks for a contract consistent with equality,
-and equality is now specified, so the question is answerable for the first time. It is also
-the concern with no implementation at all today.
+**Nullability is next by dependency.** Equality, ordering and key equality each had to say
+what `null` means and each said it separately — equal only to itself, outside the order,
+its own key. Its box asks for the rest: arithmetic, member access and membership.
 
 ## Notes
 

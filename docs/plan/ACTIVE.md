@@ -17,7 +17,7 @@
 | [`TOAST-0026`](items/TOAST-0026.md) | P3 | open | 0/5 | A decimal literal is parsed as a double first, so its extra precision is lost before the cast |
 | [`TOAST-0020`](items/TOAST-0020.md) | P2 | partial | 7/8 | A trait's declared member types are not enforced on the implementing class |
 | [`TOSH-0003`](items/TOSH-0003.md) | P3 | open | 0/5 | Ship Toast as its own package that TōSh, Tōme and Crumb depend on |
-| [`TOAST-0018`](items/TOAST-0018.md) | P2 | partial | 2/10 | Portable core semantics: the eight Phase A concerns outside formatting and streaming |
+| [`TOAST-0018`](items/TOAST-0018.md) | P2 | partial | 3/10 | Portable core semantics: the eight Phase A concerns outside formatting and streaming |
 | [`TOAST-0022`](items/TOAST-0022.md) | P2 | open | 0/6 | Compiled interpolation drops format clauses and cannot reach a class's Display |
 | [`TOAST-0011`](items/TOAST-0011.md) | P2 | open | 0/6 | A TōSh closure cannot be passed where C wants a function pointer |
 | [`TOAST-0002`](items/TOAST-0002.md) | P2 | partial | 4/8 | Statement dispatch is decided by scattered lookahead predicates that must agree by hand |

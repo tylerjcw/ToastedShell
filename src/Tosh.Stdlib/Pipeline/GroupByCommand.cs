@@ -23,7 +23,9 @@ public sealed class GroupByCommand : ShellCommand, ICurrentItemMemberPathCommand
         }
 
         var selector = context.Arguments[0];
-        var groups = new Dictionary<string, (object? Key, List<object?> Items)>(StringComparer.Ordinal);
+        // `TOAST-0018`. Grouped by the shared key relation; the JSON key this replaced
+        // was field-order sensitive, so equal records fell into separate groups.
+        var groups = new Dictionary<object?, (object? Key, List<object?> Items)>(ShellKeyComparer.Instance);
 
         await foreach (var item in ShellIterationUtilities.ReplaySingleInputCollectionAsync(context.Input, context.CancellationToken)
                            .WithCancellation(context.CancellationToken))
@@ -55,7 +57,7 @@ public sealed class GroupByCommand : ShellCommand, ICurrentItemMemberPathCommand
                 }
             }
 
-            var key = ShellDataSerializer.GetStableKey(keyValue) ?? string.Empty;
+            var key = keyValue;
 
             if (!groups.TryGetValue(key, out var entry))
             {

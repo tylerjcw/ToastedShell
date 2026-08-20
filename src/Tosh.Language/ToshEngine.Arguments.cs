@@ -1138,7 +1138,7 @@ public sealed partial class ToshEngine
 
                 case SetLiteralArgumentSyntax setLiteral:
                     {
-                        var set = new HashSet<object?>();
+                        var set = new HashSet<object?>(ShellKeyComparer.Instance);
 
                         foreach (var element in setLiteral.Items)
                         {
@@ -1164,7 +1164,7 @@ public sealed partial class ToshEngine
 
                 case SetComprehensionArgumentSyntax setComp:
                     {
-                        var set = new HashSet<object?>();
+                        var set = new HashSet<object?>(ShellKeyComparer.Instance);
                         await EvaluateComprehensionClauseAsync(
                             sourceName, sourceText, setComp.Clause,
                             async ct =>

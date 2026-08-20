@@ -25,7 +25,8 @@ public sealed class FrequenciesCommand : ShellCommand, ICurrentItemMemberPathCom
 
         string? memberPath = context.Arguments.Count == 1 ? context.Arguments[0]?.ToString() : null;
 
-        var counts = new Dictionary<object, int>();
+        // `TOAST-0018`. The default comparer counts two equal records separately.
+        var counts = new Dictionary<object, int>(ShellKeyComparer.Instance!);
         var insertionOrder = new List<object>();
 
         await foreach (var item in ShellIterationUtilities.ReplaySingleInputCollectionAsync(context.Input, context.CancellationToken)

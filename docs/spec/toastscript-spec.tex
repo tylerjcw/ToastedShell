@@ -2077,6 +2077,77 @@ This is the opposite default from a \code{record}, and deliberately: a record is
 bag of values and is compared as one, while a class has identity --- two accounts
 holding the same balance are not the same account.
 
+\subsection{Key Equality}
+\label{sec:key-equality}
+
+\code{==} is \emph{coercive}: it converts across types so that \code{1 == "1"} holds,
+which is what a shell wants when a value has come back from a command as text. That
+convenience has a cost, and the cost is why collections do not use it.
+
+\paragraph{Coercion makes \code{==} intransitive.}
+
+\begin{lstlisting}
+echo ("1" == 1)         # true
+echo (1 == "1.0")       # true
+echo ("1" == "1.0")     # false   -- two strings compare exactly
+\end{lstlisting}
+
+Three values, two of which are equal to a third and not to each other. A relation like
+that has no equivalence classes, so there is nothing for a hash table to put in a
+bucket, and a container built on it answers differently depending on the order things
+were put in.
+
+\paragraph{So containers use a second, stricter relation: \emph{key equality}.}
+Dictionary keys, \code{distinct}, \code{sort -u}, set literals, \code{group-by} and
+\code{frequencies} all ask whether two values are \textbf{the same value}, not whether
+one can be converted into the other:
+
+\begin{itemize}
+  \item \textbf{Numbers} are the same key when they are the same number, whatever their
+        width: \code{1}, \code{1 as long} and \code{1.0} are one key. Comparison is
+        exact, by the rule in \S\ref{sec:numeric-equality}.
+  \item \textbf{A string} is a key only to the same string, compared by code point.
+        \code{"1"} and \code{1} are \emph{different keys}, though \code{==} calls them
+        equal.
+  \item \textbf{\code{null}}, \code{true} and \code{false} are each their own key.
+  \item \textbf{An enum member} is a key with the members of its own enum, and not with
+        its backing number.
+  \item \textbf{Records and dictionaries} are the same key when they hold the same names
+        and the same values, in any order --- matching \code{==}.
+  \item \textbf{Collections} are the same key when their elements are, in order.
+  \item \textbf{A class instance} is a key only to itself, unless the class declares
+        \code{equals}; see below.
+\end{itemize}
+
+Key equality is transitive, so a dictionary holds one entry per key, a lookup does not
+depend on insertion order, and \code{distinct} returns the same answer whatever order
+its input arrived in.
+
+\begin{notebox}
+A value can be \code{==} to a key it does not match \emph{as} a key. This is deliberate:
+\code{\$d["1"]} does not find the entry stored under \code{1}. Convert explicitly ---
+\code{\$d["1" as int]} --- when that is what was meant.
+\end{notebox}
+
+\paragraph{A class that declares \code{equals} should declare \code{hash}.}
+Key equality uses a class's own \code{equals} when it has one. A hash has to agree with
+it --- two values that are equal must hash alike --- and the class is the only thing that
+knows how. Declaring \code{hash} alongside \code{equals} is what makes such a class a
+usable key:
+
+\begin{lstlisting}
+class Point(x: int, y: int) {
+    prop X: int = $x
+    prop Y: int = $y
+    func equals(other) -> bool => ($this.X == $other.X and $this.Y == $other.Y)
+    func hash() -> int => ($this.X * 31 + $this.Y)
+}
+\end{lstlisting}
+
+A class declaring \code{equals} and \emph{not} \code{hash} is still correct as a key ---
+every instance simply shares one hash, and the container falls back to comparing them
+one by one. It is correctness at the cost of speed, never a wrong answer.
+
 \subsection{Ordering}
 \label{sec:ordering}
 

@@ -197,7 +197,13 @@ public static class ShellRecordUtilities
     {
         foreach (DictionaryEntry entry in dictionary)
         {
-            if (string.Equals(entry.Key?.ToString(), name, StringComparison.OrdinalIgnoreCase))
+            // `TOAST-0018`. The key must *be* a name, not merely render as one. Matching
+            // `entry.Key?.ToString()` meant an `Int32` key of `1` answered to `"1"`, which
+            // is coercion — and it left `$d["1"]` order-dependent in a dictionary holding
+            // both `1` and `"1"`. Case-insensitivity stays: reaching a field by name is
+            // what this overload is for.
+            if (entry.Key is string keyText &&
+                string.Equals(keyText, name, StringComparison.OrdinalIgnoreCase))
             {
                 value = entry.Value;
                 return true;

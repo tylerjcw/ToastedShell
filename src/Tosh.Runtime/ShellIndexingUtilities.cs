@@ -353,8 +353,18 @@ public static class ShellIndexingUtilities
                         return true;
                     }
                 }
-                else if (OperatorEvaluator.AreEqual(entry.Key, key) ||
-                         (key is string keyText && string.Equals(entry.Key?.ToString(), keyText, StringComparison.OrdinalIgnoreCase)))
+                // `TOAST-0018`. Key equality, not `==`. `==` is coercive and therefore
+                // intransitive, so a dictionary holding both `1` and `"1"` answered
+                // `$d[1]` with whichever key the scan reached first — two dictionaries
+                // built from the same pairs in a different order gave different answers.
+                //
+                // A `ToString` match on a string key used to sit here as well, and it had
+                // to go with the rest: it is coercion by another spelling, and it kept the
+                // scan order-dependent — `$d["1"]` still answered with whichever of `1`
+                // and `"1"` came first. Records are reached through the
+                // `IDictionary<string, object?>` branch below, which matches by name and
+                // is unaffected.
+                else if (ShellKeyComparer.Instance.Equals(entry.Key, key))
                 {
                     value = entry.Value;
                     return true;

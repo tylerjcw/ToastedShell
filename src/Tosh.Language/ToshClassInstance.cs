@@ -328,6 +328,16 @@ public sealed class ToshClassInstance : IShellRecordObject, IShellInvocableObjec
             return value?.GetHashCode() ?? 0;
         }
 
+        // `TOAST-0018`. A class declaring `equals` and no hash cannot use the reference
+        // hash: `Equals` above would call two instances equal while they hashed apart,
+        // and a container would then hold both. One shared bucket is correct instead —
+        // slower within that bucket, never a wrong answer — and declaring `hash` is what
+        // restores O(1).
+        if (Definition.HasInstanceMember(nameof(Equals)))
+        {
+            return 0;
+        }
+
         return RuntimeHelpers.GetHashCode(this);
     }
 
