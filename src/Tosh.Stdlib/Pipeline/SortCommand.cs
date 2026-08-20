@@ -9,11 +9,12 @@ namespace Tosh.Stdlib.Pipeline;
 [CommandOption("-n, --numeric", "Use numeric comparison.")]
 [CommandOption("-u, --unique", "Remove duplicate values after sorting.")]
 [CommandOption("-h, --human-numeric", "Human-numeric sort (understands storage sizes).")]
-[CommandOption("-o, --ordinal", "Compare by code point, case-sensitively.")]
+[CommandOption("-i, --ignore-case", "Order letters without regard to case.")]
+[CommandOption("-o, --ordinal", "Compare by code point, case-sensitively. This is the default; accepted so existing scripts keep working.")]
 [CommandExample("ps | sort Memory", Title = "Sort by property")]
 [CommandExample("ls -la | sort Modified | reverse", Title = "Sort then reverse")]
 [CommandExample("ps | sort func(p) => ($p.Name.Length)", Title = "Lambda sort key")]
-[CommandExample("$codes | sort --ordinal", Title = "Code-point order, for generated output")]
+[CommandExample("$names | sort -i", Title = "Case-insensitive order, for reading")]
 [CommandOutput("The input pipeline objects in sorted order.")]
 [PipelineInput(AcceptsScalar = true, Description = "Collects all pipeline objects, sorts them, then re-emits.")]
 [CommandStreaming(StreamingBehavior.Eager)]
@@ -36,13 +37,25 @@ public sealed class SortCommand : ShellCommand
         var unique = parsed.HasFlag("u", "unique");
         var humanNumeric = parsed.HasFlag("h", "human-numeric");
 
-        // `TS-P2-75`. Default comparison is `OrdinalIgnoreCase`, which is the right
-        // default for a shell — `Apple` and `apple` belong next to each other — but it
-        // has a consequence that surprises: case folding raises lowercase letters above
-        // `_`, so `expected_record_fields` sorts *before* `expected_record_field_default`
-        // while by code point it sorts after. Anything generated and committed wants the
-        // code-point order, and there was no way to ask for it.
-        var ordinal = parsed.HasFlag("o", "ordinal");
+        // `TOAST-0018`. The default was `OrdinalIgnoreCase` — `Apple` and `apple` belong
+        // next to each other when a person is reading — and it is now code point, with
+        // `-i` to ask for the old behaviour. Two reasons, and the second is the decisive
+        // one:
+        //
+        // `TS-P2-75` had already recorded the first: case folding raises lowercase
+        // letters above `_`, so `expected_record_fields` sorted *before*
+        // `expected_record_field_default` while by code point it sorts after. Anything
+        // generated and committed wants code-point order.
+        //
+        // The second is that a case-insensitive order calls `"a"` and `"A"` **equal**,
+        // while `==` calls them different. That is not a preference, it is a broken
+        // trichotomy: two values neither less, nor greater, nor equal. The language's
+        // ordering is by code point (§Ordering), and `sort` no longer contradicts it by
+        // default.
+        //
+        // `-o`/`--ordinal` is still accepted and now names the default, so a script that
+        // asked for code-point order keeps getting exactly what it asked for.
+        var ignoreCase = parsed.HasFlag("i", "ignore-case");
         var selector = parsed.Positionals.Count == 0 ? null : parsed.Positionals[0];
 
         if (parsed.Positionals.Count > 0 &&
@@ -58,7 +71,7 @@ public sealed class SortCommand : ShellCommand
                 label: "this selector is not supported");
         }
 
-        var comparer = new ShellSortComparer(numeric, humanNumeric, ordinal);
+        var comparer = new ShellSortComparer(numeric, humanNumeric, ignoreCase);
 
         async Task<object?> SelectAsync(object? value)
         {
@@ -144,7 +157,7 @@ public sealed class SortCommand : ShellCommand
             ? keyed.OrderByDescending(entry => entry.Key, comparer)
             : keyed.OrderBy(entry => entry.Key, comparer);
 
-        var seen = unique ? new HashSet<object?>(ordinal ? ShellEqualityComparer.Ordinal : ShellEqualityComparer.Instance) : null;
+        var seen = unique ? new HashSet<object?>(ignoreCase ? ShellEqualityComparer.Instance : ShellEqualityComparer.Ordinal) : null;
 
         foreach (var entry in ordered)
         {
@@ -159,110 +172,6 @@ public sealed class SortCommand : ShellCommand
             }
 
             yield return entry.Item;
-        }
-    }
-
-    private sealed class ShellSortComparer : IComparer<object?>
-    {
-        private readonly bool _numeric;
-        private readonly bool _humanNumeric;
-        private readonly StringComparer _strings;
-
-        public ShellSortComparer(bool numeric = false, bool humanNumeric = false, bool ordinal = false)
-        {
-            _numeric = numeric;
-            _humanNumeric = humanNumeric;
-            _strings = ordinal ? StringComparer.Ordinal : StringComparer.OrdinalIgnoreCase;
-        }
-
-        public int Compare(object? x, object? y)
-        {
-            if (ReferenceEquals(x, y))
-            {
-                return 0;
-            }
-
-            if (x is null)
-            {
-                return -1;
-            }
-
-            if (y is null)
-            {
-                return 1;
-            }
-
-            if (_humanNumeric)
-            {
-                var xText = x.ToString() ?? string.Empty;
-                var yText = y.ToString() ?? string.Empty;
-
-                if (StorageSize.TryParse(xText, out var xSize) && StorageSize.TryParse(yText, out var ySize))
-                {
-                    return xSize.Bytes.CompareTo(ySize.Bytes);
-                }
-            }
-
-            if (_numeric)
-            {
-                if (TryGetDouble(x, out var xNum) && TryGetDouble(y, out var yNum))
-                {
-                    return xNum.CompareTo(yNum);
-                }
-            }
-
-            if (x is string leftText && y is string rightText)
-            {
-                return _strings.Compare(leftText, rightText);
-            }
-
-            // Try to convert y to x's type for comparison, but skip the string
-            // target type since TryConvert to string always succeeds via ToString()
-            // and would give misleading ordinal comparisons for non-string types.
-            if (x is IComparable comparable && x is not string &&
-                x.GetType() != typeof(string) &&
-                TypeConversion.TryConvert(y, x.GetType(), out var convertedY))
-            {
-                return comparable.CompareTo(convertedY);
-            }
-
-            if (y is IComparable reverseComparable && y is not string &&
-                y.GetType() != typeof(string) &&
-                TypeConversion.TryConvert(x, y.GetType(), out var convertedX))
-            {
-                return -reverseComparable.CompareTo(convertedX);
-            }
-
-            // When types are incompatible, group by type name first for
-            // a stable and consistent ordering, then compare within groups.
-            var xTypeName = x.GetType().Name;
-            var yTypeName = y.GetType().Name;
-
-            if (!string.Equals(xTypeName, yTypeName, StringComparison.Ordinal))
-            {
-                return string.Compare(xTypeName, yTypeName, StringComparison.Ordinal);
-            }
-
-            var leftString = x.ToString() ?? xTypeName;
-            var rightString = y.ToString() ?? yTypeName;
-            return _strings.Compare(leftString, rightString);
-        }
-
-        private static bool TryGetDouble(object value, out double result)
-        {
-            if (value is double d) { result = d; return true; }
-            if (value is int i) { result = i; return true; }
-            if (value is long l) { result = l; return true; }
-            if (value is float f) { result = f; return true; }
-            if (value is decimal m) { result = (double)m; return true; }
-
-            if (value is string text && double.TryParse(text, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out result))
-            {
-                return true;
-            }
-
-            result = 0;
-            return false;
         }
     }
 

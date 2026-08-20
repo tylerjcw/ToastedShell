@@ -517,6 +517,21 @@ public static class OperatorEvaluator
             return predicate(ShellEnumComparison.CompareUnderlying(actual, expected));
         }
 
+        // `TOAST-0018`. Two strings order by **code point**, explicitly rather than by
+        // falling through to `string.CompareTo` below — which is culture-sensitive, and
+        // therefore not portable: `"z" < "ä"` answers false under an American collation
+        // and true under a Swedish one, so the same program meant different things on
+        // different machines. .NET carries ICU's collation data with it, so this did not
+        // even need the locale to be installed to differ.
+        //
+        // Code point is also the only choice consistent with equality, which compares two
+        // strings exactly. An order disagreeing with `==` about which values are the same
+        // is not an order.
+        if (actual is string leftText && expected is string rightText)
+        {
+            return predicate(string.CompareOrdinal(leftText, rightText));
+        }
+
         // Convert in either direction so the same operand pair behaves
         // identically however it is written: `a < b` and `b > a` must
         // agree instead of one succeeding and the other failing.

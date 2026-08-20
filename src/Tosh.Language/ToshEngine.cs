@@ -2565,13 +2565,19 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
 
         // Comparator mirrors SortCommand's default (no -n, no -h, no key).
         // Forward direction: ascending; reverse: descending.
-        var ascending = SortFirstFusionComparer.Instance;
-        var comparer = fusion.Reverse ? SortFirstFusionComparer.Reversed : ascending;
+        // `TOAST-0018`. The shared comparer, not a local copy of it. The copy this
+        // replaced compared only values of an identical type and otherwise ordered by
+        // type *name*, so `[1, "a", 2.5] | sort` answered `1, 2.5, "a"` while
+        // `| sort | first 3` answered `2.5, 1, "a"` — a fused pipeline disagreeing with
+        // the unfused one it is supposed to be indistinguishable from.
+        IComparer<object?> ascending = ShellSortComparer.Ordinal;
+        IComparer<object?> descending = new ReverseComparer(ascending);
+        var comparer = fusion.Reverse ? descending : ascending;
 
         // Heap orders by the OPPOSITE direction so its top is the
         // candidate to evict. For ascending top-N (N smallest), we keep
         // a max-heap; for reverse (N largest), a min-heap.
-        var evictionComparer = fusion.Reverse ? ascending : SortFirstFusionComparer.Reversed;
+        var evictionComparer = fusion.Reverse ? ascending : descending;
         var heap = new PriorityQueue<object?, object?>(fusion.Count, evictionComparer);
 
         // `TOAST-0025`. The stages this fusion replaced each expanded their input, and
@@ -2612,55 +2618,6 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
         foreach (var item in buffer)
         {
             yield return item;
-        }
-    }
-
-    /// <summary>
-    /// Default ascending comparer used by the fused sort+first path.
-    /// Mirrors the no-flag, no-key behaviour of <c>SortCommand</c>'s
-    /// internal comparer for the common case (uniformly-typed items).
-    /// </summary>
-    private sealed class SortFirstFusionComparer : IComparer<object?>
-    {
-        public static readonly SortFirstFusionComparer Instance = new(reverse: false);
-        public static readonly SortFirstFusionComparer Reversed = new(reverse: true);
-
-        private readonly int _direction;
-
-        private SortFirstFusionComparer(bool reverse)
-        {
-            _direction = reverse ? -1 : 1;
-        }
-
-        public int Compare(object? x, object? y)
-        {
-            int cmp = CompareCore(x, y);
-            return cmp * _direction;
-        }
-
-        private static int CompareCore(object? x, object? y)
-        {
-            if (ReferenceEquals(x, y)) return 0;
-            if (x is null) return -1;
-            if (y is null) return 1;
-
-            if (x is string xs && y is string ys)
-            {
-                return StringComparer.OrdinalIgnoreCase.Compare(xs, ys);
-            }
-
-            if (x is IComparable comparable && x.GetType() == y.GetType())
-            {
-                return comparable.CompareTo(y);
-            }
-
-            // Fallback: type-name then string comparison. Matches
-            // SortCommand's ultimate fallback for incompatible types.
-            var xTypeName = x.GetType().Name;
-            var yTypeName = y.GetType().Name;
-            var typeCmp = string.Compare(xTypeName, yTypeName, StringComparison.Ordinal);
-            if (typeCmp != 0) return typeCmp;
-            return string.Compare(x.ToString(), y.ToString(), StringComparison.Ordinal);
         }
     }
 

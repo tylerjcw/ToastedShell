@@ -2008,10 +2008,66 @@ echo ("ABC" == "abc")      # false (two strings compare exactly)
 echo (E.Low == "Low")      # true  (converting to an enum member is by name)
 echo (E.Low == "LOW")      # false (that conversion is case-sensitive)
 echo (1 == "one")          # false (no coercion is possible)
-echo ("abc" < "def")       # true (lexicographic)
+echo ("abc" < "def")       # true (by code point)
+echo ("a" < "B")           # false ('B' is 66, 'a' is 97)
 echo (10kb > 5kb)          # true (StorageSize comparison, both are literals)
 echo (10kb > 5mb)          # false
 \end{lstlisting}
+
+\subsection{Ordering}
+\label{sec:ordering}
+
+Equality asks whether two values are the same. \emph{Ordering} --- \code{<},
+\code{>}, \code{<=}, \code{>=} --- asks which comes first, and it is a narrower
+question, because not every pair of values has an order.
+
+\paragraph{Strings order by code point.}
+\code{"a" < "B"} is \code{false}, because \code{B} is code point 66 and \code{a} is
+97. This is deliberately \emph{not} the order a person would file the two words
+under, and the reason is portability: culture-aware collation gives different
+answers on different machines --- under a Swedish collation \code{"z" < "ä"} is
+true and under an American one it is false --- so a program's meaning would depend
+on the locale of the machine running it. A shell command that presents values to a
+reader may order them for reading; see \code{sort} (\S\ref{ref:sort}). The
+\emph{language} orders them the one way that is the same everywhere.
+
+Ordering is therefore consistent with equality: two strings that are not
+\code{==} are strictly ordered one way or the other, and only strings that are
+\code{==} compare as neither less nor greater.
+
+\paragraph{Numbers order across widths.}
+\code{1 < 2.5} holds; the operands are converted to a common type first, in either
+direction, so the answer never depends on which side a value was written. A
+\code{StorageSize} orders against another \code{StorageSize} and against a plain
+number, by bytes: \code{1kb < 2000} is \code{true}.
+
+\paragraph{An enum member orders by its backing value}, against another member of
+the same enum and against a plain number. Members of \emph{different} enums are not
+one ordered domain and comparing them raises.
+
+\paragraph{\code{null} is unordered.}
+Every ordered comparison involving \code{null} is \code{false} --- including
+\code{null < null}. \code{null} is not smaller than everything, it is outside the
+order, so \code{$x < $y} being \code{false} does not imply \code{$x >= $y}. Compare
+against \code{null} with \code{==} instead.
+
+\paragraph{Some pairs have no order, and say so.}
+Rather than inventing one, these raise:
+
+\begin{itemize}
+  \item \textbf{Booleans.} \code{true} is not greater than \code{false}. Use
+        \code{==}, or \code{and}/\code{or}.
+  \item \textbf{A string against a non-string.} \code{"10" < 9} would otherwise have
+        to choose silently between lexicographic and numeric order, and either choice
+        is wrong half the time. Convert explicitly --- \code{("10" as int) < 9}.
+  \item \textbf{Members of two different enums}, as above.
+\end{itemize}
+
+\begin{notebox}
+An ordering that raises is doing the same job as one that answers: it reports that
+the question has no answer, at the point it was asked, rather than returning a
+\code{false} that reads as "no" and means "not applicable".
+\end{notebox}
 
 \subsection{Chained Comparison}
 \label{sec:chained-comparison}
