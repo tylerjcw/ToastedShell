@@ -21,6 +21,7 @@
 | [`TOAST-0021`](items/TOAST-0021.md) | P2 | complete | 6/6 | DisplayEngine walks values itself, so a table cell shows an enum's implementation |
 | [`TOAST-0017`](items/TOAST-0017.md) | P2 | complete | 5/5 | A bare interpolation hole shifts an unspecified DateTime by the local offset |
 | [`TOAST-0015`](items/TOAST-0015.md) | P2 | complete | 6/6 | Redirection rebinds the session's writer instead of targeting a Tōast stream handle |
+| [`TOAST-0025`](items/TOAST-0025.md) | P1 | complete | 6/6 | `[1,2,3] | sort | first` returns the unsorted array, because the fusion does not expand a collection the way `sort` does |
 | [`TS-P2-11`](items/TS-P2-11.md) | P2 | complete | 3/3 | Parser expression layers rely on scattered lookahead and special cases |
 | [`TS-P1-44`](items/TS-P1-44.md) | P1 | complete | 3/3 | from xml returns a CLR XDocument instead of shell data, so to xml | from xml does not round-trip |
 | [`TS-P2-117`](items/TS-P2-117.md) | P2 | complete | — | A line beginning with a unary operator is absorbed into the previous line's expression |

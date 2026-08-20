@@ -134,13 +134,99 @@ public sealed class PipelineFusionTests : IClassFixture<ToshRuntimeFixture>
     public async Task Fused_path_handles_strings()
     {
         var engine = new ToshEngine(_runtime);
-        // `each` flattens the list so each string flows through the
-        // pipeline individually. Without the each, the array is a
-        // single pipeline value.
+        // `each` flattens the list so each string flows through the pipeline
+        // individually. This once *had* to be written with the `each`: without it the
+        // fusion received the array as one item and returned it unsorted (`TOAST-0025`).
+        // Kept in that form as a control — the `each` spelling must keep working — with
+        // the bare-literal spelling pinned below.
         var result = await engine.ExecuteToListAsync(
             "[\"banana\", \"apple\", \"cherry\"] | each { $_ } | sort | first 2");
         Assert.Equal(2, result.Count);
         Assert.Equal("apple", result[0]);
         Assert.Equal("banana", result[1]);
+    }
+
+    /// <summary>
+    /// A bare collection literal is a source shape this corpus did not have — and it was
+    /// the one that was broken. `TOAST-0025`.
+    /// </summary>
+    /// <remarks>
+    /// Every case here answered `3, 1, 2` before the fix: the whole array, unsorted, with
+    /// `first` not applied either. The fusion consumed whatever the head yielded, and
+    /// `TS-P2-74` makes a head yield a lone collection as **one value** deliberately —
+    /// "it is each stage that decides whether a collection means itself or its elements".
+    /// The fusion stood in for two stages that had both decided, and decided neither.
+    ///
+    /// Every existing test in this file used `1..100`, `1..10`, or a literal pushed
+    /// through `each`, so all three avoided it.
+    /// </remarks>
+    [Theory]
+    [InlineData("[3,1,2] | sort | first", new object?[] { 1 })]
+    [InlineData("[3,1,2] | sort | first 2", new object?[] { 1, 2 })]
+    [InlineData("[3,1,2] | sort -r | first", new object?[] { 3 })]
+    [InlineData("[3,1,2] | sort -r | first 2", new object?[] { 3, 2 })]
+    [InlineData("[\"c\",\"a\",\"b\"] | sort | first 2", new object?[] { "a", "b" })]
+    public async Task Fused_path_expands_a_collection_literal_source(string source, object?[] expected)
+    {
+        var engine = new ToshEngine(_runtime);
+        Assert.Equal(expected, await engine.ExecuteToListAsync(source));
+    }
+
+    [Fact]
+    public async Task Fused_path_matches_unfused_path_for_a_collection_literal()
+    {
+        const string Source = "[3,1,2] | sort | first 2";
+
+        var engine = new ToshEngine(_runtime);
+        var fused = await engine.ExecuteToListAsync(Source);
+
+        Environment.SetEnvironmentVariable("TOSH_DISABLE_LOWERER", "1");
+        try
+        {
+            var unfused = await new ToshEngine(_runtime).ExecuteToListAsync(Source);
+            Assert.Equal(unfused, fused);
+            Assert.Equal(new object?[] { 1, 2 }, fused);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("TOSH_DISABLE_LOWERER", null);
+        }
+    }
+
+    /// <summary>
+    /// The expansion is the one the pipeline already defines, not a looser one.
+    /// </summary>
+    /// <remarks>
+    /// A string is a collection of characters to the CLR and an atom to the shell, so the
+    /// naive repair — expanding every item — turns `"hello" | sort | first` into `"e"`.
+    /// `ReplaySingleInputCollectionAsync` is used precisely because it already draws this
+    /// line, and `sort` alone draws it the same way.
+    /// </remarks>
+    [Fact]
+    public async Task A_string_source_is_not_expanded_into_characters()
+    {
+        var engine = new ToshEngine(_runtime);
+        Assert.Equal(new object?[] { "hello" }, await engine.ExecuteToListAsync("\"hello\" | sort | first"));
+    }
+
+    /// <summary>
+    /// Only a *lone* collection expands, and only one level.
+    /// </summary>
+    /// <remarks>
+    /// The two halves of the trap the naive repair falls into. A replayed variable is a
+    /// `PreExpandedSequence` (`TS-P2-113`) whose items are already elements, so expanding
+    /// again would turn a stream of arrays into a stream of numbers; and a lone array of
+    /// arrays must yield arrays, not their contents. Both answer `Int32[]`, and both
+    /// answered `Int32[]` before the fix too — which is why they are controls: the repair
+    /// had to leave them alone.
+    /// </remarks>
+    [Theory]
+    [InlineData("var v = [[3,4],[1,2]]\n($v | sort | first).GetType().Name")]
+    [InlineData("([[3,4],[1,2]] | sort | first).GetType().Name")]
+    public async Task A_collection_of_collections_expands_exactly_one_level(string source)
+    {
+        var engine = new ToshEngine(_runtime);
+        var results = await engine.ExecuteToListAsync(source);
+        Assert.Equal("Int32[]", results[^1]);
     }
 }

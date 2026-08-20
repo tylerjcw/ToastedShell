@@ -2574,7 +2574,20 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
         var evictionComparer = fusion.Reverse ? ascending : SortFirstFusionComparer.Reversed;
         var heap = new PriorityQueue<object?, object?>(fusion.Count, evictionComparer);
 
-        await foreach (var item in source.WithCancellation(cancellationToken))
+        // `TOAST-0025`. The stages this fusion replaced each expanded their input, and
+        // the fusion did not — so a pipeline head yielding a lone collection reached the
+        // heap as **one item**, and `[3,1,2] | sort | first` answered `3, 1, 2`: the
+        // whole array, unsorted, with no error. `TS-P2-74` is why the head yields one
+        // value ("it is each stage that decides whether a collection means itself or its
+        // elements"), and this stands in for two stages that had both decided.
+        //
+        // The same helper `FirstCommand` calls, rather than a bare expansion: it honours
+        // `PreExpandedSequence` (`TS-P2-113`), so a replayed variable is not expanded a
+        // second time, and it expands only a *lone* collection, so a stream of several
+        // collections keeps them as items. Both cases are pinned in the corpus.
+        var expanded = ShellIterationUtilities.ReplaySingleInputCollectionAsync(source, cancellationToken);
+
+        await foreach (var item in expanded.WithCancellation(cancellationToken))
         {
             if (heap.Count < fusion.Count)
             {
