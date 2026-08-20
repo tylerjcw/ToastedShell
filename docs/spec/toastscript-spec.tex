@@ -2203,6 +2203,53 @@ the question has no answer, at the point it was asked, rather than returning a
 \code{false} that reads as "no" and means "not applicable".
 \end{notebox}
 
+\subsection{What \code{null} Means}
+\label{sec:nullability}
+
+\code{null} is the absence of a value, and every operator is specified for it rather
+than left to inherit one. The rule throughout is the same: an operation that has no
+sensible answer for a missing value \textbf{reports that}, and the author asks for
+propagation where they want it.
+
+\paragraph{Truthiness.} \code{null} is falsy. \code{if (\$x)} does not run its body,
+\code{not null} is \code{true}, and \code{\$x ?? fallback} yields the fallback.
+
+\paragraph{Comparison.} \code{null == null} is \code{true} and \code{null} equals
+nothing else (\S\ref{sec:numeric-equality}). Ordered comparison is different: \code{null}
+is \emph{outside} the order, so every one of \code{<}, \code{>}, \code{<=}, \code{>=}
+against it is \code{false}, \code{null < null} included (\S\ref{sec:ordering}). As a
+container key, \code{null} is its own key (\S\ref{sec:key-equality}).
+
+\paragraph{Arithmetic raises.} \code{null + 1}, \code{null - 1} and \code{null * 2} all
+report that the operator requires non-null operands. So does \code{null + "a"}: a
+missing value must not turn into empty text and vanish into concatenated output. Write
+\code{(\$x ?? "") + "a"} when that is the intent.
+
+\paragraph{Reaching into \code{null} raises, and \code{?.} is how to ask otherwise.}
+Reading a member, calling a method and indexing all report a null receiver:
+
+\begin{lstlisting}
+var x = null
+$x.Length          # error: Cannot read member 'Length' of null
+$x.ToString()      # error: Cannot invoke an instance method on null
+$x[0]              # error: Cannot index into null
+
+$x?.Length         # null
+\end{lstlisting}
+
+\begin{notebox}
+Member access used to answer \code{null} silently, for \emph{any} member name --- so a
+misspelled member on a null value reported nothing, while the same misspelling on a
+string raised. It also left \code{?.} meaning nothing, since both spellings behaved
+identically.
+\end{notebox}
+
+\paragraph{Membership asks a real question.} \code{null} can be looked for in a
+collection and found: \code{null in [1, null]} is \code{true}, and so is
+\code{[1, null] contains null}. A \emph{string} does not contain it ---
+\code{"abc" contains null} is \code{false} --- because a string contains text, and
+\code{null} is not text.
+
 \subsection{Chained Comparison}
 \label{sec:chained-comparison}
 

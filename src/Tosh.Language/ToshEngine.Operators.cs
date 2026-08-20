@@ -179,6 +179,13 @@ public sealed partial class ToshEngine
             "contains" => await ContainsAsync(left, right, cancellationToken),
             "starts-with" => await StartsWithAsync(left, right, cancellationToken),
             "ends-with" => await EndsWithAsync(left, right, cancellationToken),
+            // `TOAST-0018`. A null operand raises here as it does for every other
+            // arithmetic operator. It used to render as the empty string, so
+            // `null + "a"` was `"a"` while `null + 1` raised — a missing value vanished
+            // silently into concatenated output. Write `($x ?? "") + "a"` to opt in.
+            "+" when (left is string || right is string) && (left is null || right is null) =>
+                throw new InvalidOperationException(
+                    "The '+' operator requires non-null operands. Use '?? \"\"' to treat null as empty text."),
             "+" when left is string => (string)left
                 + await ToOperatorStringAsync(right, cancellationToken),
             "+" when right is string => await ToOperatorStringAsync(left, cancellationToken)

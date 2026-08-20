@@ -52,8 +52,8 @@ actually lives.
 - [x] **Hashing** given a contract consistent with equality — **done 2026-08-20**, and the
       box's premise turned out to be the finding: there was nothing to be consistent
       *with*. See below
-- [ ] **Nullability** specified beyond truthiness: what `null` means in comparison,
-      arithmetic, member access and collection membership
+- [x] **Nullability** specified beyond truthiness: what `null` means in comparison,
+      arithmetic, member access and collection membership — **done 2026-08-20**, see below
 - [ ] **Overflow** given a policy — wrap, saturate, or raise — stated per numeric type
       rather than inherited from whichever CLR operator was reached
 - [ ] **Unicode** specified: what a `str` is made of, what `Length` counts, and how
@@ -230,14 +230,56 @@ not fast. Making it O(1) means constructing the underlying dictionary *with* the
 which is a change to how `{% ... %}` is built rather than to what equality means. Filed as
 the remaining half of this concern rather than done quietly.
 
+## Nullability — 2026-08-20
+
+Specified as `§What null Means`, with `NullSemanticsTests` written from it. The unifying
+rule: **an operation with no sensible answer for a missing value reports that**, and the
+author asks for propagation where they want it.
+
+Comparison was already settled by the three earlier concerns, and the three answers differ
+deliberately — `null` is equal only to itself, *outside* the order entirely (every ordered
+comparison false, `null < null` included), and its own key. A test pins all three together,
+because that is the kind of difference someone tidies into agreement without reading why.
+
+Three behaviours were changed rather than written down:
+
+**Reading a member of `null` answered `null` silently — for any member name.** So
+`$x.Lenght` reported nothing when `$x` was null and raised when it was a string: the same
+typo, silent or loud depending on data. It also left `?.` meaning nothing, since `.` and
+`?.` behaved identically. `.` now joins method calls and indexing, which already raised on
+a null receiver, and `?.` is how propagation is asked for.
+
+Worth recording: the MCP metadata already described `?.` as yielding null "instead of
+failing", which was **false** — `.` did not fail. The implementation caught up with the
+documentation rather than the other way round.
+
+**`null + "a"` was `"a"`** while `null + 1` raised. A missing value turning into empty text
+is how a null reaches a log line, a filename or a command argument with nobody noticing it
+was missing. Both now raise, and `($x ?? "") + "a"` is the opt-in.
+
+**`"abc" contains null` was `true`**, because `null` rendered as `""` and every string
+contains that. Now false: a string contains text, and `null` is not text. Collection
+membership is untouched and still correct — `null in [1, null]` and
+`[1, null] contains null` both hold, because that asks a different question.
+
+`contains` needed fixing in **both** parallel implementations. The engine's copy is the one
+a script reaches — the same shape that let the exact-numeric fix land on the wrong half —
+and a test now asserts the two agree.
+
+**The full suite passed unchanged** after all three changes, which again says the old
+behaviour was untested rather than merely unspecified. The real shell config loads and runs
+normally. **Negative control: 8 of 28 fail** with the source reverted. Suite 6,002 passing.
+
 ### Still open here
 
-Five concerns remain: nullability, overflow, Unicode, collection shape and exception
-semantics — plus the backend-neutral corpus that is Phase A's exit.
+Four concerns remain: overflow, Unicode, collection shape and exception semantics — plus
+the backend-neutral corpus that is Phase A's exit.
 
-**Nullability is next by dependency.** Equality, ordering and key equality each had to say
-what `null` means and each said it separately — equal only to itself, outside the order,
-its own key. Its box asks for the rest: arithmetic, member access and membership.
+**Overflow is next.** It is the last of the arithmetic concerns and the one with a stated
+policy of *none*: `OperatorEvaluator` has no `checked` context, so what happens at
+`int.MaxValue + 1` is whatever the CLR operator reached happened to do. Unlike the three
+concerns closed so far it has no correct answer waiting to be found — wrap, saturate and
+raise are all defensible, and the choice is the specification.
 
 ## Notes
 

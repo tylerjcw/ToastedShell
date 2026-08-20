@@ -2479,6 +2479,15 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
 
         if (actual is string text)
         {
+            // `TOAST-0018`. A string does not contain nothing. `null` rendered as the
+            // empty string, and every string contains that, so `"abc" contains null` was
+            // true. Collection membership is unaffected: `[1, null] contains null` asks a
+            // different question and still answers true.
+            if (expected is null)
+            {
+                return false;
+            }
+
             return text.Contains(
                 await ToOperatorStringAsync(expected, cancellationToken),
                 StringComparison.Ordinal);

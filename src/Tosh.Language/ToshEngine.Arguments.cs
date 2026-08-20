@@ -1254,9 +1254,25 @@ public sealed partial class ToshEngine
                     {
                         var target = await EvaluateArgumentAsync(sourceName, sourceText, memberAccess.Target, cancellationToken);
 
-                        if (memberAccess.NullSafe && target is null)
+                        if (target is null)
                         {
-                            return null;
+                            // `TOAST-0018`. Reading a member of `null` used to answer
+                            // `null` silently — for *any* member name, so `$x.Lenght` on a
+                            // null reported nothing while the same typo on a string
+                            // raised. That also left `?.` meaning nothing: both spellings
+                            // behaved identically, though `?.` is documented as yielding
+                            // null "instead of failing".
+                            //
+                            // Now `.` joins method calls and indexing, which already
+                            // raised on a null receiver, and `?.` is how an author asks
+                            // for propagation.
+                            if (memberAccess.NullSafe)
+                            {
+                                return null;
+                            }
+
+                            throw new InvalidOperationException(
+                                $"Cannot read member '{memberAccess.MemberPath}' of null. Use '?.' to yield null instead.");
                         }
 
                         return await Runtime.ObjectAccessor.GetValueAsync(
