@@ -114,6 +114,60 @@ public sealed class DifferentialExecutionTests : IClassFixture<ToshRuntimeFixtur
             "two-level-inheritance",
             "class DiffA { prop Tag: string = \"a\" }\nclass DiffB extends DiffA { prop Tag: string = \"b\" }\nclass DiffC extends DiffB { prop Tag: string = \"c\" }\nvar x: DiffA = new DiffC()\necho $x.Tag");
 
+        // ── Portable semantics: the eight `TOAST-0018` concerns ───────────
+        //
+        // Phase A's exit asks that the core behaviour be "enforced by a backend-neutral
+        // corpus", and these are what makes the eight specifications claims about the
+        // *language* rather than about the interpreter. Two to four cases each, chosen for
+        // the property the specification turns on rather than for coverage: a backend that
+        // drifts on any of these has stopped implementing the same language.
+
+        // Equality (§the cascade, §Numbers, null and Instances).
+        yield return Case("eq-coercion", "echo (1 == \"1\")");
+        yield return Case("eq-record-field-order", "echo ({| a = 1, b = 2 |} == {| b = 2, a = 1 |})");
+        yield return Case("eq-nan-is-reflexive", "var n = 0.0 / 0.0\necho ($n == $n)");
+        // The exactness rule: 2**53+1 has no exact double, and deciding by conversion made
+        // equality intransitive.
+        yield return Case(
+            "eq-integer-against-float-is-exact",
+            "var a = 9007199254740993 as long\nvar c = 9007199254740992 as long\necho ($a == ($c as double))");
+
+        // Ordering (§Ordering) — by code point, and the same on every machine.
+        yield return Case("ord-code-point", "echo (\"a\" < \"B\")");
+        yield return Case("ord-not-culture", "echo (\"z\" < $'\\u00E4')");
+        yield return Case("ord-null-is-unordered", "echo (null < 1)");
+
+        // Key equality (§Key Equality) — the relation containers use.
+        yield return Case(
+            "key-reordered-records-are-one-key",
+            "echo ([{| a = 1, b = 2 |}, {| b = 2, a = 1 |}, \"z\"] | distinct | count)");
+        yield return Case(
+            "key-number-and-string-are-different-keys",
+            "echo ([1, \"1\", \"z\"] | distinct | count)");
+
+        // Nullability (§What null Means).
+        yield return Case("null-equals-only-null", "echo (null == 0)");
+        yield return Case("null-is-not-text", "echo (\"abc\" contains null)");
+
+        // Overflow (§Overflow) — promotion, not wrapping.
+        yield return Case("ovf-promotes", "var m = 2147483647 as int\necho ($m + 1)");
+        yield return Case("ovf-power-is-exact", "echo (2 ** 62)");
+        yield return Case("ovf-power-narrows", "echo (2 ** 10)");
+        yield return Case("ovf-integer-division-by-zero", "echo (1 / 0)");
+
+        // Unicode (§Text and Unicode) — UTF-16 code units, no normalisation.
+        yield return Case("uni-length-is-code-units", "echo ($'\\uD83D\\uDC4B'.Length)");
+        yield return Case("uni-combining-is-two", "echo ($'e\\u0301'.Length)");
+        yield return Case("uni-comparison-does-not-normalise", "echo ($'e\\u0301' == $'\\u00E9')");
+
+        // Collection shape (§Collection Shape).
+        yield return Case("shape-array-spreads", "echo ([1, 2, 3] | count)");
+        yield return Case("shape-string-is-one-value", "echo (\"abc\" | count)");
+
+        // Errors (§Errors and catch).
+        yield return Case("err-any-value-is-catchable", "try { throw \"oops\" } catch (e) { echo $e }");
+        yield return Case("err-finally-runs", "try { echo \"body\" } finally { echo \"after\" }");
+
         // ── Rebinding: the TS-P2-87 family ────────────────────────────────
         yield return Case(
             "rebound-variable-still-reads-back",
@@ -168,7 +222,42 @@ public sealed class DifferentialExecutionTests : IClassFixture<ToshRuntimeFixtur
             "TOAST-0022", "render-format-clause",
             "echo $\"{42:X} {3.14159:F2}\"");
 
+        // ── `TOAST-0018`'s specified semantics, not yet implemented compiled ──
+        //
+        // Found by running the eight concerns' corpora across both backends, which is
+        // what Phase A's exit asks for. Each is the compiled side failing to implement
+        // something `docs/spec/` now states, so each is a claim about the *language* that
+        // only one backend currently honours. `TOAST-0030` carries them.
 
+        // A dictionary is one value, not a sequence of its pairs (§Collection Shape).
+        // Interpreted 1, compiled 2.
+        yield return Divergence(
+            "TOAST-0030", "dictionary-is-one-value",
+            "echo ({% \"a\" => 1, \"b\" => 2 %} | count)");
+
+        // A declared error type is an `Error` (§Errors and catch). The compiled backend
+        // does not accept the declaration at all: "Command 'class' was not found".
+        yield return Divergence(
+            "TOAST-0030", "declared-error-type-is-an-error",
+            "class DiffErr extends Error { }\necho ((new DiffErr()) is Error)");
+
+        // `is Error` distinguishes a raised error from a thrown value (§Errors and catch).
+        // Interpreted true, compiled false.
+        yield return Divergence(
+            "TOAST-0030", "caught-error-is-an-error",
+            "try { throw new Error(\"x\") } catch (e) { echo ($e is Error) }");
+
+        // Reaching a member of `null` reports it (§What null Means). The compiled side
+        // raises a bare NullReferenceException with a different message.
+        yield return Divergence(
+            "TOAST-0030", "member-of-null-reports-it",
+            "var x = null\necho $x.Length");
+
+        // `null + "a"` raises, and says how to opt in. The compiled side raises with the
+        // older message and no guidance.
+        yield return Divergence(
+            "TOAST-0030", "null-concatenation-explains-itself",
+            "echo (null + \"a\")");
     }
 
     private static object[] Divergence(string boardItem, string name, string source) =>
@@ -188,8 +277,13 @@ public sealed class DifferentialExecutionTests : IClassFixture<ToshRuntimeFixtur
     [MemberData(nameof(Corpus))]
     public void Interpreted_and_compiled_agree(string name, string source)
     {
-        var interpreted = RunInterpreted(source);
-        var compiled = RunCompiled(source);
+        // `TOAST-0018`. Through `Attempt`, as the divergence test already was. Two
+        // backends raising the same error is agreement, and it is agreement the
+        // specification asks for — `§Overflow` requires integer division by zero to raise,
+        // and a corpus that cannot express "both raise, identically" cannot check that.
+        // A message that differs is still a divergence, because the message is compared.
+        var interpreted = Attempt(() => RunInterpreted(source));
+        var compiled = Attempt(() => RunCompiled(source));
 
         Assert.True(
             interpreted == compiled,
@@ -253,7 +347,13 @@ public sealed class DifferentialExecutionTests : IClassFixture<ToshRuntimeFixtur
         var engine = new ToshEngine(_runtime);
         var results = engine.ExecuteToListAsync(source).GetAwaiter().GetResult();
 
-        return Canonicalize(results.Select(value => value?.ToString()));
+        // `TOAST-0018`. Rendered, not `ToString`d. The compiled side is captured *stdout*,
+        // which is rendered, so comparing `ToString` against it measured two different
+        // things: every boolean read `True` interpreted and `true` compiled, and a probe of
+        // the eight portable-semantics concerns reported fifteen divergences of which ten
+        // were this. `ToastRenderer` is the contract both backends are supposed to meet, so
+        // it is what both sides are reduced to.
+        return Canonicalize(results.Select(ToastRenderer.Render));
     }
 
     private string RunCompiled(string source)

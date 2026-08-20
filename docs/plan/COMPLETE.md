@@ -18,6 +18,7 @@
 | [`TOAST-0001`](items/TOAST-0001.md) | P1 | complete | 5/5 | A free function called inside a closure resolves as an instance method on the pipeline item |
 | [`TOAST-0019`](items/TOAST-0019.md) | P2 | complete | 6/6 | A trait member is not written the way a class member is |
 | [`TOAST-0005`](items/TOAST-0005.md) | P2 | complete | 6/6 | Split ToshEngine.cs and ToshParser.cs into partial classes by concern |
+| [`TOAST-0018`](items/TOAST-0018.md) | P2 | complete | 10/10 | Portable core semantics: the eight Phase A concerns outside formatting and streaming |
 | [`TOAST-0021`](items/TOAST-0021.md) | P2 | complete | 6/6 | DisplayEngine walks values itself, so a table cell shows an enum's implementation |
 | [`TOAST-0017`](items/TOAST-0017.md) | P2 | complete | 5/5 | A bare interpolation hole shifts an unspecified DateTime by the local offset |
 | [`TOAST-0015`](items/TOAST-0015.md) | P2 | complete | 6/6 | Redirection rebinds the session's writer instead of targeting a Tōast stream handle |

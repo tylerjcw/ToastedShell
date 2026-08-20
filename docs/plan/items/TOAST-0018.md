@@ -1,10 +1,11 @@
 ---
 id: TOAST-0018
 title: "Portable core semantics: the eight Phase A concerns outside formatting and streaming"
-status: partial
+status: complete
 area: toast
 priority: 2
 opened: 2026-08-17
+closed: 2026-08-20
 supersedes: TS-P3-16
 ---
 
@@ -63,12 +64,12 @@ actually lives.
       decided and filed as `TOAST-0028`. See below
 - [x] **Exception semantics** specified: what is catchable, what a thrown non-error value
       means — **done 2026-08-20**. The `no_clr` half is `TOAST-0029`; see below
-- [ ] Each of the eight lands in `docs/spec/` as prose *before* implementation, and in the
-      backend-neutral corpus after — **prose half complete for all eight**, and the
-      discipline held: the Unicode section was *wrong* when written and the corpus caught
-      it before the commit. The corpus half is the box below, and is what is left
-- [ ] The corpus extends `DifferentialExecutionTests`' pattern — one program, interpreted
-      and compiled, asserted equal — rather than starting a second harness
+- [x] Each of the eight lands in `docs/spec/` as prose *before* implementation, and in the
+      backend-neutral corpus after — **done 2026-08-20.** The discipline held: the Unicode
+      section was *wrong* when written and its corpus caught it before the commit
+- [x] The corpus extends `DifferentialExecutionTests`' pattern — one program, interpreted
+      and compiled, asserted equal — rather than starting a second harness — **done
+      2026-08-20**, and it found five divergences on first use. See below
 
 ## Ordering — 2026-08-19
 
@@ -451,21 +452,63 @@ specified: `string` implements `IEnumerable<char>`, so pure CLR assignability wo
 `"abc" is IEnumerable` true while `§Collection Shape` says a string is an atom. That needs
 a decision and an exception list, not a one-line change.
 
-### Still open here
+## The backend-neutral corpus — 2026-08-20
 
-**All eight concerns are specified.** What remains is the two boxes below — prose before
-implementation, and the corpus — and the latter is Phase A's actual exit criterion.
+Phase A's exit: "core behaviour is specified in Tōast terms and enforced by a
+backend-neutral corpus". `DifferentialExecutionTests` gained a representative subset of all
+eight concerns — twenty-two cases, two to four each, chosen for the property each
+specification turns on rather than for coverage.
 
-Six concerns are specified *and* pinned by a corpus written from the prose: equality,
-ordering, hashing (as key equality), nullability, overflow, Unicode, collection shape and
-exception semantics. Three carried behavioural fixes with negative controls; two are
-specified with their known defects filed and deliberately pinned as defects
-(`TOAST-0028`, `TOAST-0029`).
+**It found five divergences on first use**, filed as `TOAST-0030`: a dictionary counts as 1
+interpreted and 2 compiled; `class E extends Error` does not compile at all; `is Error` is
+false compiled; and the two null messages differ. Three of those are semantic — a program
+that runs correctly interpreted gives a different *answer* compiled.
 
-The remaining work is **the corpus itself**: the existing files run one implementation.
-Phase A's exit asks for one that runs a program interpreted *and* compiled and asserts they
-agree, extending `DifferentialExecutionTests` rather than starting a second harness. That
-is what would catch the interpreted/compiled divergence `TOAST-0022` records.
+The finding that matters more than the five is that they existed. Eight concerns were
+specified and given a corpus, and every one of those corpora ran a **single backend** — so
+the specifications described the interpreter, and only running them across both showed
+where that was not the same thing as describing the language.
+
+### The harness was measuring two different things
+
+`RunInterpreted` compared `value.ToString()` against the compiled side's captured *stdout*,
+which is rendered. So every boolean read `True` interpreted and `true` compiled: a probe of
+the eight concerns reported **fifteen** divergences, of which **ten were the harness**.
+
+The interpreted side is now reduced through `ToastRenderer` — the contract `TOAST-0014`
+established for exactly this purpose, and the one both backends are supposed to meet. The
+existing corpus never noticed because its cases all produce strings from interpolation,
+where `ToString` and the rendering coincide.
+
+`Interpreted_and_compiled_agree` also folds a failure into the compared value, as the
+divergence test already did. Two backends raising the same error is agreement, and it is
+agreement the specification asks for — `§Overflow` requires integer division by zero to
+raise, and a corpus that cannot express "both raise, identically" cannot check it. A
+differing message is still a divergence, because the message is compared.
+
+### What was handed on
+
+All eight concerns are specified in `docs/spec/`, each with a corpus written from the
+prose, and a representative subset of all eight runs on both backends.
+
+Five of the eight carried behavioural fixes, each with a negative control: ordering became
+portable and gained one implementation in place of three; equality became transitive;
+containers gained a relation they can hash; reaching into `null` reports it; and `**`
+promotes with its neighbours. Two are specified with their defects deliberately pinned *as*
+defects, so the tests fail when someone fixes them — `TOAST-0028` (collection shape depends
+on cardinality) and `TOAST-0029` (`is` matches a CLR value's exact name only).
+
+Four items were filed on the way and are the honest remainder of this work:
+
+- `TOAST-0028` — the producer should decide collection shape, not the consumer
+- `TOAST-0029` — `is` should mean the same thing for a CLR value as for a declared class
+- `TOAST-0030` — five specified semantics the compiled backend does not implement
+- `TOAST-0026`, `TOAST-0027` — a decimal literal's precision, and a silently-kept escape
+
+**Phase A's exit is met**: core behaviour is specified in Tōast terms and enforced by a
+backend-neutral corpus. What that corpus immediately showed is that the specifications had
+been describing the interpreter — which is the reason the criterion is written the way it
+is.
 
 ## Notes
 
