@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Numerics;
 
 namespace Tosh.Runtime;
 
@@ -200,9 +201,11 @@ public sealed class ShellKeyComparer : IEqualityComparer<object?>
         // hashes as an integer whatever width it arrived in.
         if (TryAsNumber(value, out var number))
         {
-            return number.IsIntegral
-                ? number.Integer.GetHashCode()
-                : number.Floating.GetHashCode();
+            return number.Big is { } big
+                ? big.GetHashCode()
+                : number.IsIntegral
+                    ? number.Integer.GetHashCode()
+                    : number.Floating.GetHashCode();
         }
 
         if (value is string text)
@@ -271,7 +274,14 @@ public sealed class ShellKeyComparer : IEqualityComparer<object?>
     private static bool DeclaresOwnEquality(Type type) =>
         type.GetMethod(nameof(Equals), [typeof(object)])?.DeclaringType != typeof(object);
 
-    private readonly record struct NumericKey(bool IsIntegral, long Integer, double Floating);
+    /// <summary>
+    /// A number reduced to what decides its identity. <see cref="Big"/> is set only for an
+    /// integer too large for <see cref="long"/>, which no other numeric type can equal.
+    /// </summary>
+    private readonly record struct NumericKey(bool IsIntegral, long Integer, double Floating)
+    {
+        public BigInteger? Big { get; init; }
+    }
 
     private static bool TryAsNumber(object value, out NumericKey number)
     {
@@ -285,6 +295,18 @@ public sealed class ShellKeyComparer : IEqualityComparer<object?>
             case uint v: number = new(true, v, v); return true;
             case long v: number = new(true, v, v); return true;
             case ulong v when v <= long.MaxValue: number = new(true, (long)v, v); return true;
+
+            // `TOAST-0018`. Integer arithmetic promotes to `BigInteger` on overflow, so a
+            // promoted value has to key with the ordinary integer it equals: `==` calls
+            // them the same number, and a key relation that disagreed would put one value
+            // in two buckets. Normalising to `long` where it fits is what keeps the hash
+            // consistent — a `BigInteger`'s own hash is not a `long`'s.
+            case BigInteger v when v >= long.MinValue && v <= long.MaxValue:
+                number = new(true, (long)v, (double)v);
+                return true;
+            case BigInteger v:
+                number = new(false, 0, (double)v) { Big = v };
+                return true;
 
             case float v: return TryFromDouble(v, out number);
             case double v: return TryFromDouble(v, out number);
@@ -316,6 +338,16 @@ public sealed class ShellKeyComparer : IEqualityComparer<object?>
 
     private static bool NumbersAreSame(NumericKey left, NumericKey right)
     {
+        if (left.Big is { } leftBig)
+        {
+            return right.Big is { } rightBig && leftBig == rightBig;
+        }
+
+        if (right.Big is not null)
+        {
+            return false;
+        }
+
         if (left.IsIntegral != right.IsIntegral)
         {
             return false;

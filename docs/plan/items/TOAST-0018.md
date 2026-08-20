@@ -54,8 +54,8 @@ actually lives.
       *with*. See below
 - [x] **Nullability** specified beyond truthiness: what `null` means in comparison,
       arithmetic, member access and collection membership — **done 2026-08-20**, see below
-- [ ] **Overflow** given a policy — wrap, saturate, or raise — stated per numeric type
-      rather than inherited from whichever CLR operator was reached
+- [x] **Overflow** given a policy — **done 2026-08-20**, and the policy turned out to be a
+      fourth option the box did not list: integer arithmetic *promotes*. See below
 - [ ] **Unicode** specified: what a `str` is made of, what `Length` counts, and how
       indexing, slicing and comparison behave
 - [ ] **Collection shape** resolved with `TS-P3-04`, including the recorded asymmetry that
@@ -270,16 +270,59 @@ and a test now asserts the two agree.
 behaviour was untested rather than merely unspecified. The real shell config loads and runs
 normally. **Negative control: 8 of 28 fail** with the source reverted. Suite 6,002 passing.
 
+## Overflow — 2026-08-20
+
+The box offered wrap, saturate or raise. Measuring found a fourth policy already in place
+and better than all three: **integer arithmetic promotes to arbitrary precision.**
+`int.MaxValue + 1` is `2147483648`, not `-2147483648`. Wrapping is what most languages
+inherit from the machine, and it turns a number that was merely large into one that is
+merely wrong — usually negative, usually far from where the mistake happened.
+
+So `+`, `-` and `*` needed no decision, only writing down. The rest of the picture is
+coherent with it and now specified: a variable with a declared type is still bounded, so
+the *expression* `$x + 1` is exact while assigning it back into an `int` raises; `as`
+refuses an out-of-range conversion rather than truncating; floating point follows IEEE,
+with overflow giving an infinity; and integer division by zero raises, because there is no
+integer answer to give.
+
+**`**` was the exception and is fixed.** It computed through `Math.Pow` and dropped to
+`double` as soon as the result left `int` range, so `2 ** 62` lost its low bits although
+the exact value fits a `long` and `2 * 2 * …` would have promoted. Raising to a power is
+repeated multiplication and had no business losing precision where multiplying would not.
+A fractional or negative exponent is a different operation and still gives a `double`, and
+an exponent past a million falls back to floating point — a memory bound rather than a
+preference, since `BigInteger.Pow` allocates in proportion to the exponent.
+
+### A hole this session opened, found by surveying
+
+Key equality reduces a number to what decides its identity, and `BigInteger` was not in
+that switch — so a *promoted* `2147483647` was `==` to the ordinary one and a **different
+key**. One value, two dictionary entries. The old JSON-string key had folded them by
+accident, so this was a regression introduced by the hashing commit and caught two commits
+later only because overflow promotes into exactly that type.
+
+A `BigInteger` inside `long` range now normalises to `long`, which is what keeps the hash
+consistent; nothing else can equal one outside that range.
+
+### Noticed while writing the corpus
+
+The narrowing in `Power` was written `cond ? (int)exact : exact`, and C# made the
+conditional's common type `BigInteger` — `int` converts to it implicitly — so the cast was
+undone on the way out and `2 ** 10` answered a `BigInteger`. Only measuring the *type*
+rather than the value showed it.
+
+**Negative control: 4 of 24 fail** with both source files reverted. Suite 6,026 passing.
+
 ### Still open here
 
-Four concerns remain: overflow, Unicode, collection shape and exception semantics — plus
-the backend-neutral corpus that is Phase A's exit.
+Three concerns remain: Unicode, collection shape and exception semantics — plus the
+backend-neutral corpus that is Phase A's exit.
 
-**Overflow is next.** It is the last of the arithmetic concerns and the one with a stated
-policy of *none*: `OperatorEvaluator` has no `checked` context, so what happens at
-`int.MaxValue + 1` is whatever the CLR operator reached happened to do. Unlike the three
-concerns closed so far it has no correct answer waiting to be found — wrap, saturate and
-raise are all defensible, and the choice is the specification.
+**Unicode is next**, and it is the one `TOAST-0014` explicitly deferred here: what a `str`
+is made of, what `Length` counts, and how indexing, slicing and comparison behave. Ordering
+already settled comparison as by code point, so the question is what a code point *is* —
+whether a `str` is UTF-16 code units, scalar values, or grapheme clusters, and which of
+those `Length` reports.
 
 ## Notes
 

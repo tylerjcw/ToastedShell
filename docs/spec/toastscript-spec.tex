@@ -2203,6 +2203,53 @@ the question has no answer, at the point it was asked, rather than returning a
 \code{false} that reads as "no" and means "not applicable".
 \end{notebox}
 
+\subsection{Overflow}
+\label{sec:overflow}
+
+\paragraph{Integer arithmetic does not overflow.}
+It \emph{promotes}. When a result leaves the range of the types that produced it, the
+value widens to an arbitrary-precision integer rather than wrapping into a wrong
+answer:
+
+\begin{lstlisting}
+var m = 2147483647 as int   # int.MaxValue
+echo ($m + 1)               # 2147483648   -- exact, not -2147483648
+echo ($m * 2)               # 4294967294
+echo (2 ** 62)              # 4611686018427387904
+\end{lstlisting}
+
+Wrapping is the behaviour most languages inherit from the machine, and it turns a
+number that was merely large into a number that is merely wrong --- usually negative,
+usually far from where the mistake happened. There is no \code{checked} spelling here
+because there is nothing to check for.
+
+\code{**} follows the same rule when both operands are integers and the exponent is not
+negative, because raising to a power is repeated multiplication and has no business
+losing precision where multiplying would not. A fractional or negative exponent is a
+different operation and gives a \code{double}. Very large exponents are the one bound:
+past a million, the result is floating point, because an exact answer would be a number
+whose \emph{digits} do not fit in memory.
+
+\paragraph{A declared type is still a promise.}
+The promotion is a property of the arithmetic, not a licence to store anything anywhere.
+A variable annotated \code{int} holds an \code{int}, and a result that will not fit is
+reported at the assignment:
+
+\begin{lstlisting}
+var x: int = 2147483647
+echo ($x + 1)               # 2147483648 -- the expression is exact
+$x = $x + 1                 # error: the value does not fit 'int'
+\end{lstlisting}
+
+Conversion is the same: \code{300 as byte} raises rather than silently keeping
+\code{44}.
+
+\paragraph{Floating point follows IEEE~754.}
+Overflow gives an infinity rather than an error, \code{1.0 / 0.0} is \code{Infinity},
+and \code{0.0 / 0.0} is \code{NaN} --- which is equal to itself here
+(\S\ref{sec:numeric-equality}). \emph{Integer} division by zero raises, because there is
+no integer answer to give.
+
 \subsection{What \code{null} Means}
 \label{sec:nullability}
 

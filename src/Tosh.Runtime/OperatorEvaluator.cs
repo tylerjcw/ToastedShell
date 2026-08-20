@@ -1645,6 +1645,30 @@ public static class OperatorEvaluator
 
         var lhs = ToDouble(left);
         var rhs = ToDouble(right);
+
+        // `TOAST-0018`. An integer raised to a non-negative integer power is computed
+        // exactly, and promotes the way `*` does — `**` is repeated multiplication and
+        // had no business losing precision where multiplying would not. `2 ** 62` used to
+        // answer a `Double` that had dropped its low bits, though the exact value fits a
+        // `long`; anything past `int` now promotes to `BigInteger`, matching `+`, `-`
+        // and `*`.
+        //
+        // A fractional or negative exponent is a different operation and stays floating
+        // point, as does a `Complex` operand above.
+        if (IsIntegral(left) && IsIntegral(right) && rhs >= 0 &&
+            rhs <= MaximumExactExponent &&
+            TryAsBigInteger(left, out var exactBase))
+        {
+            var exact = BigInteger.Pow(exactBase, (int)rhs);
+
+            // Cast to `object` explicitly: the conditional's common type would otherwise
+            // be `BigInteger`, since `int` converts to it implicitly — so the narrowing
+            // was undone on the way out and `2 ** 10` answered a `BigInteger`.
+            return exact >= int.MinValue && exact <= int.MaxValue
+                ? (object)(int)exact
+                : exact;
+        }
+
         var result = Math.Pow(lhs, rhs);
 
         // Return int when the result is a whole number and both operands were integral
@@ -1654,6 +1678,35 @@ public static class OperatorEvaluator
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// The largest exponent computed exactly, past which `**` returns a `double`.
+    /// </summary>
+    /// <remarks>
+    /// A bound rather than a preference: `BigInteger.Pow` allocates a result proportional
+    /// to the exponent, so `2 ** 4000000000` would try to build a gigabyte-scale integer
+    /// from a line that looks cheap. A million-bit result is already far past anything a
+    /// shell has a use for, and beyond it the floating answer — usually infinity — is the
+    /// honest one.
+    /// </remarks>
+    private const int MaximumExactExponent = 1_000_000;
+
+    private static bool TryAsBigInteger(object value, out BigInteger integer)
+    {
+        switch (value)
+        {
+            case sbyte v: integer = v; return true;
+            case byte v: integer = v; return true;
+            case short v: integer = v; return true;
+            case ushort v: integer = v; return true;
+            case int v: integer = v; return true;
+            case uint v: integer = v; return true;
+            case long v: integer = v; return true;
+            case ulong v: integer = v; return true;
+            case BigInteger v: integer = v; return true;
+            default: integer = default; return false;
+        }
     }
 
     public static bool ToBoolean(object? value) => ToshTruthiness.IsTruthy(value);
