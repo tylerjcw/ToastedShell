@@ -494,31 +494,54 @@ public sealed class ToshClassInstance : IShellRecordObject, IShellInvocableObjec
                     return true;
             }
 
+            // `TOAST-0018`. At *each* level, not only the instance's own definition. A CLR
+            // base is recorded on the class that names it, so for
+            // `class E2 extends E1`, `class E1 extends Error` the CLR base lives on `E1`
+            // and `E2.ClrBaseType` is null — and this check used to run once, after the
+            // loop, against the instance's definition. Two levels of inheritance from a
+            // built-in therefore matched nothing: `is Error`, `is ToshError` and
+            // `is Exception` were all false for `E2`.
+            if (current.ClrBaseType is { } clrBase && MatchesClrType(clrBase, typeName))
+                return true;
+
             current = current.BaseClass;
         }
 
-        // Check CLR base type if present
-        if (Definition.ClrBaseType is { } clrBase)
+        return false;
+    }
+
+    /// <summary>
+    /// Whether <paramref name="typeName"/> names <paramref name="clrBase"/> or something it
+    /// derives from — by alias, by name, or through an interface.
+    /// </summary>
+    private static bool MatchesClrType(Type clrBase, string typeName)
+    {
+        // `TOAST-0018`. The alias first. `Error` resolves to `ToshError`, so a class
+        // declared `extends Error` matched `is ToshError` and `is Exception` while
+        // `is Error` — the spelling it was declared with — was false. A user-defined error
+        // was therefore indistinguishable from a thrown string, because
+        // `catch (e) { if ($e is Error) ... }` put both in the same bucket.
+        //
+        // `DotNetTypeResolver` records the alias for exactly this purpose; the comment
+        // beside its `error` entry already claimed `$e is NativeError` worked.
+        if (DotNetTypeResolver.BuiltInAliases.TryGetValue(typeName.ToLowerInvariant(), out var aliased) &&
+            aliased.IsAssignableFrom(clrBase))
         {
-            if (string.Equals(clrBase.Name, typeName, StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(clrBase.FullName, typeName, StringComparison.OrdinalIgnoreCase))
+            return true;
+        }
+
+        for (var clrType = clrBase; clrType is not null; clrType = clrType.BaseType)
+        {
+            if (string.Equals(clrType.Name, typeName, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(clrType.FullName, typeName, StringComparison.OrdinalIgnoreCase))
                 return true;
+        }
 
-            // Walk CLR base type hierarchy
-            for (var clrType = clrBase.BaseType; clrType is not null; clrType = clrType.BaseType)
-            {
-                if (string.Equals(clrType.Name, typeName, StringComparison.OrdinalIgnoreCase) ||
-                    string.Equals(clrType.FullName, typeName, StringComparison.OrdinalIgnoreCase))
-                    return true;
-            }
-
-            // Check CLR interfaces
-            foreach (var clrIface in clrBase.GetInterfaces())
-            {
-                if (string.Equals(clrIface.Name, typeName, StringComparison.OrdinalIgnoreCase) ||
-                    string.Equals(clrIface.FullName, typeName, StringComparison.OrdinalIgnoreCase))
-                    return true;
-            }
+        foreach (var clrIface in clrBase.GetInterfaces())
+        {
+            if (string.Equals(clrIface.Name, typeName, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(clrIface.FullName, typeName, StringComparison.OrdinalIgnoreCase))
+                return true;
         }
 
         return false;

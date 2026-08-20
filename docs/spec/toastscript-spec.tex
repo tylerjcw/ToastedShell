@@ -2297,6 +2297,61 @@ collection and found: \code{null in [1, null]} is \code{true}, and so is
 \code{"abc" contains null} is \code{false} --- because a string contains text, and
 \code{null} is not text.
 
+\subsection{Errors and \code{catch}}
+\label{sec:exception-semantics}
+
+\paragraph{Anything can be thrown, and arrives unchanged.}
+\code{throw} takes a value, not only an error, and \code{catch} binds whatever was
+thrown:
+
+\begin{lstlisting}
+try { throw "a plain string" } catch (e) { ... }   # $e is that string
+try { throw 42 }               catch (e) { ... }   # $e is 42
+try { throw new Error("boom") } catch (e) { ... }  # $e.Message is "boom"
+\end{lstlisting}
+
+There is no typed \code{catch}: one \code{catch} receives everything, and a handler
+distinguishes what it got with \code{is}.
+
+\paragraph{\code{Error} is the base for declared error types.}
+A class declared \code{extends Error} is an \code{Error}, at any depth of inheritance,
+which is what lets a handler tell a raised error from an arbitrary thrown value:
+
+\begin{lstlisting}
+class AppError extends Error { }
+
+try { ... } catch (e) {
+    if ($e is Error) { ... }   # true for AppError, false for a thrown string
+}
+\end{lstlisting}
+
+\paragraph{A raised runtime error is a diagnostic.}
+Dividing by zero, indexing out of range, or reaching a member of \code{null} raises a
+\emph{diagnostic} rather than an \code{Error}. It carries a message and is catchable, and
+it is \textbf{not} \code{is Error}:
+
+\begin{lstlisting}
+try { (1 / 0) } catch (e) {
+    echo ($e is Error)     # false -- a diagnostic, not a declared error
+    echo ($e.Message)      # "Division by zero."
+}
+\end{lstlisting}
+
+\begin{notebox}
+The distinction is real --- one is the language reporting that an operation had no answer,
+the other is a program raising something deliberately --- but the \emph{spelling} of it is
+not yet portable: a diagnostic answers to the implementation type name it happens to have.
+A target without the CLR has nothing to call it. Recorded as \code{TOAST-0029}.
+\end{notebox}
+
+\paragraph{\code{finally} always runs, and \code{throw} re-raises.}
+A \code{finally} block runs whether its body completed, raised, or was caught further out,
+and an inner \code{finally} runs before an outer \code{catch} sees the error. Re-raising is
+\code{throw \$e} with the caught value.
+
+\code{try} is a statement, not an expression: a value is carried out of it by assigning to
+a variable declared before it.
+
 \subsection{Collection Shape}
 \label{sec:collection-shape}
 

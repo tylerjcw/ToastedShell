@@ -61,10 +61,12 @@ actually lives.
 - [x] **Collection shape** resolved with `TS-P3-04` — **specified 2026-08-20**; the
       asymmetry it names is the half worth keeping, and the half that is a defect is
       decided and filed as `TOAST-0028`. See below
-- [ ] **Exception semantics** specified: what is catchable, what a thrown non-error value
-      means, and how a `no_clr` target represents one
+- [x] **Exception semantics** specified: what is catchable, what a thrown non-error value
+      means — **done 2026-08-20**. The `no_clr` half is `TOAST-0029`; see below
 - [ ] Each of the eight lands in `docs/spec/` as prose *before* implementation, and in the
-      backend-neutral corpus after
+      backend-neutral corpus after — **prose half complete for all eight**, and the
+      discipline held: the Unicode section was *wrong* when written and the corpus caught
+      it before the commit. The corpus half is the box below, and is what is left
 - [ ] The corpus extends `DifferentialExecutionTests`' pattern — one program, interpreted
       and compiled, asserted equal — rather than starting a second harness
 
@@ -403,14 +405,67 @@ of a known defect is one the next reader silently "fixes". When `TOAST-0028` lan
 The specification names `TOAST-0028` in the section, so prose and defect cannot drift
 apart. Suite 6,053 passing.
 
+## Exception semantics — 2026-08-20
+
+Specified as `§Errors and catch`, with `ErrorSemanticsTests` from the prose. Anything can
+be thrown and arrives unchanged; there is no typed `catch`, so one handler receives
+everything and discriminates with `is`; `finally` always runs, inner before an outer
+`catch`; `throw $e` re-raises; `try` is a statement, not an expression.
+
+### Two defects, both found by one probe
+
+**A class declared `extends Error` was not `is Error`.** The CLR base was matched by *name*,
+and `Error` is the alias for `ToshError` — so the spelling a class was declared with was
+the one spelling that did not match. The consequence was not cosmetic: `is Error` is the
+only way to tell a raised error from an arbitrary thrown value, so a user-defined error
+landed in the same bucket as a thrown string.
+
+`DotNetTypeResolver` already records the alias for exactly this purpose, and the comment
+beside its `error` entry *already claimed* `catch (e) { $e is NativeError }` worked.
+
+**And the CLR base was consulted only on the instance's own definition**, after the
+declared-class walk rather than at each level of it. So two levels of inheritance from a
+built-in matched nothing at all: `E2 extends E1 extends Error` was not `is Error`,
+`is ToshError` **or** `is Exception`. That one was pre-existing and invisible while the
+first bug hid it — fixing the alias at depth 1 is what made the depth-2 hole measurable.
+
+**Negative control: 5 of 15 fail** with the fix reverted. Suite 6,068 passing.
+
+### The `no_clr` half is filed, not answered
+
+A raised runtime error — division by zero, an index out of range, a member of `null` — is a
+*diagnostic* rather than an `Error`, and that distinction is intended: one is the language
+reporting an operation had no answer, the other is a program raising something on purpose.
+What is not settled is the **spelling**. A diagnostic answers only to the implementation
+type name it happens to have, so `$e is ToshDiagnosticException` is true and
+`$e is Exception` is false, and a target without the CLR has nothing to call it.
+
+That sits inside a wider defect in `is` itself, filed as `TOAST-0029`: for a CLR value `is`
+matches the exact type name and nothing else, so `[1,2] is IEnumerable` and
+`$ex is Exception` are always false, while a *declared* class instance walks its bases,
+interfaces and traits correctly. The two halves of one operator disagree about what it
+means.
+
+It is filed rather than fixed because the obvious repair contradicts a rule already
+specified: `string` implements `IEnumerable<char>`, so pure CLR assignability would make
+`"abc" is IEnumerable` true while `§Collection Shape` says a string is an atom. That needs
+a decision and an exception list, not a one-line change.
+
 ### Still open here
 
-One concern remains — **exception semantics** — plus the backend-neutral corpus that is
-Phase A's exit.
+**All eight concerns are specified.** What remains is the two boxes below — prose before
+implementation, and the corpus — and the latter is Phase A's actual exit criterion.
 
-Its box asks what is catchable, what a thrown non-error value means, and how a `no_clr`
-target represents one. `ToshError.cs` is 73 lines over .NET exceptions, so the question is
-how much of the CLR exception model has leaked into the language's own.
+Six concerns are specified *and* pinned by a corpus written from the prose: equality,
+ordering, hashing (as key equality), nullability, overflow, Unicode, collection shape and
+exception semantics. Three carried behavioural fixes with negative controls; two are
+specified with their known defects filed and deliberately pinned as defects
+(`TOAST-0028`, `TOAST-0029`).
+
+The remaining work is **the corpus itself**: the existing files run one implementation.
+Phase A's exit asks for one that runs a program interpreted *and* compiled and asserts they
+agree, extending `DifferentialExecutionTests` rather than starting a second harness. That
+is what would catch the interpreted/compiled divergence `TOAST-0022` records.
 
 ## Notes
 
