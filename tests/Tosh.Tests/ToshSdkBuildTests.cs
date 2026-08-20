@@ -134,12 +134,30 @@ public sealed class ToshSdkBuildTests
     /// OOM kills and no allocation failures in the log.
     /// </para>
     /// <para>
-    /// Skipped rather than deleted because the cause is not understood, and skipped
-    /// rather than serialised because this exercises the compiled backend that Phase 0
-    /// of `TOAST_SEPARATION_PLAN.md` freezes out of the solution. Spending the
-    /// investigation on a component that is leaving the build is the wrong trade; if
-    /// the compiler is ever revived, this is a real defect waiting in it, and that is
-    /// why the symptom is written down here rather than in a commit message.
+    /// It was skipped for two reasons, and **one of them has expired**: the cause was not
+    /// understood, and it exercised "the compiled backend that Phase 0 freezes out of the
+    /// solution". That freeze was reversed on 2026-08-17 — the compiler is a target, not a
+    /// component leaving the build — so the trade that justified skipping no longer holds.
+    /// </para>
+    /// <para>
+    /// **Re-enabled 2026-08-17 on measurement, not on a fix.** 26 full-suite runs at
+    /// 8-way parallelism produced **one** failure, and 17 consecutive clean runs followed
+    /// it. The one failure was not captured by name, so it is not known whether it was
+    /// this test or `TtyCaptureTests.An_interpolation_hole_does_not_yet_capture`, which
+    /// this item also records as flaking under load. That gap is the reason `PLAN-0002`
+    /// stays open rather than closing.
+    /// </para>
+    /// <para>
+    /// A hypothesis worth recording, not a conclusion: the symptom was exit **134**
+    /// (SIGABRT), which is what an `AccessViolationException` produces — and `TOSH-0007`
+    /// fixed a `struct statvfs` declared 24 bytes short, corrupting memory past the buffer
+    /// on every call. Under parallel load, where the bytes after a buffer are more likely
+    /// to be live, that is exactly the shape of a rare abort. Nothing proves the link.
+    /// </para>
+    /// <para>
+    /// Enabled rather than left skipped because a skip is a permanent blind spot: if this
+    /// still flakes, the suite will now say so and name it, which is what closing the item
+    /// actually needs.
     /// </para>
     /// <para>
     /// The sibling tests in this file still run and still cover the SDK path, including
@@ -148,7 +166,7 @@ public sealed class ToshSdkBuildTests
     /// route untested.
     /// </para>
     /// </remarks>
-    [Fact(Skip = "PLAN-0002: run step exits 134 under parallel load; passes alone. Compiled backend is being frozen — see remarks.")]
+    [Fact]
     public async Task Dotnet_build_packaged_sdk_project_compiles_with_packaged_sdk()
     {
         using var tempDirectory = new TemporaryDirectory("tosh packaged sdk tests");
