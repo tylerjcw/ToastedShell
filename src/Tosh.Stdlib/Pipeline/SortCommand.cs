@@ -21,7 +21,7 @@ namespace Tosh.Stdlib.Pipeline;
 public sealed class SortCommand : ShellCommand
 {
     public SortCommand(string name = "sort")
-        : base(name, "Sorts the current pipeline objects.", $"{name} [-r|--reverse] [-n|--numeric] [-u|--unique] [-h|--human-numeric] [-o|--ordinal] [member-path|callable|block]") { }
+        : base(name, "Sorts the current pipeline objects.", $"{name} [-r|--reverse] [-n|--numeric] [-u|--unique] [-h|--human-numeric] [-i|--ignore-case] [-o|--ordinal] [member-path|callable|block]") { }
 
     public override async IAsyncEnumerable<object?> ExecuteAsync(CommandContext context)
     {

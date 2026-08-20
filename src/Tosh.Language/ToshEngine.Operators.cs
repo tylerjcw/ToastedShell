@@ -367,6 +367,16 @@ public sealed partial class ToshEngine
             return true;
         }
 
+        // `TOAST-0018`. Delegated, not reimplemented — the same reason `TryCompareByName`
+        // above is. The first attempt at *this* fix landed only on `OperatorEvaluator`
+        // and changed nothing observable, because `==` comes through here: exactly the
+        // failure this file's header records for `TS-P1-14`, repeated.
+        if (actual is not null && expected is not null &&
+            OperatorEvaluator.TryCompareIntegerWithFloat(actual, expected, out var exactNumeric))
+        {
+            return exactNumeric;
+        }
+
         // TS-P1-26: both directions are attempted, and equality holds if either
         // matches. See OperatorEvaluator.AreEqual for why returning on the first
         // successful *conversion* rather than the first successful *equality*

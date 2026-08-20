@@ -1977,6 +1977,10 @@ Equality is decided by the first of these that applies:
   \item \textbf{Two non-string sequences} compare element-wise, in order.
   \item \textbf{An enum member} equals another member of the same enum, and equals its
         own backing value, so \code{E.Mid == 1} holds for a numeric-backed enum.
+  \item \textbf{An integer against a floating value} compares \emph{exactly}: they are
+        equal when the floating value is finite, has no fractional part, and is the same
+        number. It is never decided by converting the integer to a float, because that
+        conversion can lose digits --- see \S\ref{sec:numeric-equality}.
   \item \textbf{Conversion.} One operand is converted to the other's type. Both
         directions are attempted, so the answer never depends on which operand was
         written first, and a conversion that succeeds decides the result even when the
@@ -2014,6 +2018,65 @@ echo (10kb > 5kb)          # true (StorageSize comparison, both are literals)
 echo (10kb > 5mb)          # false
 \end{lstlisting}
 
+\subsection{Numbers, \code{null} and Instances}
+\label{sec:numeric-equality}
+
+\paragraph{Numbers compare by value, across widths.}
+\code{1 == 1.0} holds, and so does \code{(1 as long) == (1 as int)}: a number's width
+is not part of what it is. Where the two operands are an integer and a floating
+value, the comparison is \emph{exact} --- and this is the one place the rule has to
+be stated rather than left to the conversion step, because a 64-bit integer above
+$2^{53}$ has no exact \code{double}:
+
+\begin{lstlisting}
+var a = 9007199254740993 as long   # 2 ** 53 + 1
+var c = 9007199254740992 as long   # 2 ** 53
+echo ($a == ($c as double))        # false -- they are different numbers
+echo ($c == ($c as double))        # true
+\end{lstlisting}
+
+Deciding this by conversion would make \code{==} intransitive: \code{\$a} and
+\code{\$c} would each equal the same \code{double} while differing from each other,
+and a relation where \code{\$x == \$y} and \code{\$y == \$z} do not give \code{\$x == \$z} cannot
+back a dictionary, a \code{distinct}, or a cache.
+
+\paragraph{\code{NaN} equals itself.}
+\code{\$n == \$n} is \code{true} for a \code{NaN}, which is deliberately \emph{not}
+IEEE~754's rule for \code{==}. Equality here is the relation collections are built
+on, and it has to be reflexive: under the IEEE rule a \code{NaN} placed in a
+dictionary could never be found again, not even with the identical value. Signed
+zeroes go the other way and follow IEEE: \code{0.0 == -0.0} is \code{true}, though
+the two render differently (\S\ref{sec:value-rendering}).
+
+\paragraph{\code{null} equals only \code{null}.}
+\code{null == null} is \code{true}, and \code{null} equals nothing else --- not
+\code{0}, not \code{""}, not \code{false}. This is the one place \code{null} is
+better behaved than in ordering, where it is outside the relation entirely
+(\S\ref{sec:ordering}).
+
+\paragraph{A class instance is equal only to itself, unless the class says otherwise.}
+Two instances with identical property values are \emph{not} equal:
+
+\begin{lstlisting}
+class P(x: int) { prop X: int = $x }
+echo ((new P(1)) == (new P(1)))    # false -- two distinct objects
+\end{lstlisting}
+
+A class that wants value equality declares it, and the declaration is what \code{==}
+then uses:
+
+\begin{lstlisting}
+class Q(x: int) {
+    prop X: int = $x
+    func equals(other) -> bool => ($this.X == $other.X)
+}
+echo ((new Q(1)) == (new Q(1)))    # true
+\end{lstlisting}
+
+This is the opposite default from a \code{record}, and deliberately: a record is a
+bag of values and is compared as one, while a class has identity --- two accounts
+holding the same balance are not the same account.
+
 \subsection{Ordering}
 \label{sec:ordering}
 
@@ -2048,7 +2111,7 @@ one ordered domain and comparing them raises.
 \paragraph{\code{null} is unordered.}
 Every ordered comparison involving \code{null} is \code{false} --- including
 \code{null < null}. \code{null} is not smaller than everything, it is outside the
-order, so \code{$x < $y} being \code{false} does not imply \code{$x >= $y}. Compare
+order, so \code{\$x < \$y} being \code{false} does not imply \code{\$x >= \$y}. Compare
 against \code{null} with \code{==} instead.
 
 \paragraph{Some pairs have no order, and say so.}

@@ -42,8 +42,9 @@ actually lives.
 
 ## Acceptance
 
-- [ ] **Equality** specified in Tōast terms: which values are equal, across numeric widths,
-      `null`, records, collections and class instances — not "whatever `AreEqual` does"
+- [x] **Equality** specified in Tōast terms: which values are equal, across numeric widths,
+      `null`, records, collections and class instances — not "whatever `AreEqual` does" —
+      **done 2026-08-20**, see below
 - [x] **Ordering** specified, and the implementations reconciled — **done 2026-08-19**,
       and there were **three**, not two: `OperatorEvaluator` for `<`, `SortCommand`'s
       `ShellSortComparer`, and a simplified copy of the latter in `ToshEngine` for the
@@ -114,11 +115,62 @@ the opposite complaint, that case folding put `expected_record_fields` before
 **Negative control: 14 of 44 fail** with the three source changes reverted and the tests
 kept. Suite 5,904 passing.
 
+## Equality — 2026-08-20
+
+`TOAST-0003` had already rewritten the cascade; this added what the cascade named nowhere —
+numeric widths, `null`, class instances and the float specials — as
+`§Numbers, null and Instances`, with `ValueEqualityTests` written from it.
+
+**Equality was not transitive.** An integer compared against a floating value was decided
+by conversion, and a 64-bit integer above 2^53 has no exact `double`:
+
+```tosh
+var a = 9007199254740993 as long
+var c = 9007199254740992 as long
+var b = ($c as double)
+($a == $b)   # was true
+($c == $b)   # true
+($a == $c)   # false
+```
+
+A relation where `x == y` and `y == z` do not give `x == z` cannot back a dictionary, a
+`distinct`, or a cache — so this is a defect in the value model rather than a rounding
+wart. An integer now equals a floating value only when that value is finite, integral and
+the same number. Converting the *float to the integer* is what makes it exact: an integral
+double inside `long`'s range converts with nothing lost.
+
+**The fix landed on the wrong implementation first, exactly as the file predicted.**
+`OperatorEvaluator.AreEqual` and `ToshEngine.AreEqualAsync` are structurally parallel, and
+`ToshEngine.Operators.cs` opens by recording that `TS-P1-14`'s fix "landed only on the
+synchronous side — `==` goes through here, so the defect survived a change that looked
+complete". Adding the rule to the evaluator changed nothing observable, the suite stayed
+green, and only measuring `==` against the binary showed it. The engine now **delegates**
+to the shared rule, the way it already delegates `TryCompareByName`.
+
+`Both_paths_agree` is the guard that makes this fail rather than pass silently, and it
+needed a case above 2^53 to have any force — with only ordinary values it passes while one
+implementation carries the rule and the other does not. **Negative control, engine side
+only reverted: it fails on exactly that pair.** Both sides reverted: 3 of 39 fail.
+
+### Decisions recorded rather than inherited
+
+**`NaN` equals itself**, which is deliberately not IEEE 754's `==`. Equality is the relation
+collections are built on and has to be reflexive; under the IEEE rule a `NaN` in a
+dictionary could never be found again. Signed zeroes follow IEEE and compare equal.
+
+**A class instance is equal only to itself** unless the class declares `equals`, which is
+the opposite default from a `record` — a record is a bag of values, a class has identity.
+
+Suite 5,943 passing.
+
 ### Still open here
 
-Seven concerns remain. **Equality** is partly covered already — `TOAST-0003` rewrote the
-cascade in the specification as five ordered steps, verified against the binary — but its
-box asks for numeric widths and class instances too, which that rewrite did not cover.
+Six concerns remain: hashing, nullability, overflow, Unicode, collection shape and
+exception semantics — plus the backend-neutral corpus that is Phase A's exit.
+
+**Hashing is next by dependency.** Its box asks for a contract consistent with equality,
+and equality is now specified, so the question is answerable for the first time. It is also
+the concern with no implementation at all today.
 
 ## Notes
 

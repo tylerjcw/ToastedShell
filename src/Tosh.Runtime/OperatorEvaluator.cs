@@ -385,6 +385,22 @@ public static class OperatorEvaluator
             return true;
         }
 
+        // `TOAST-0018`. An integer against a floating value is decided exactly, before
+        // the conversion below can decide it approximately. Converting the integer to a
+        // double loses digits above 2^53, and that made `==` **intransitive**:
+        // `9007199254740993` and `9007199254740992` each equalled the same double while
+        // differing from each other. A relation where `x == y` and `y == z` do not give
+        // `x == z` cannot back a dictionary, a `distinct`, or a cache.
+        //
+        // Converting the other way is what makes this exact rather than merely
+        // narrower: a floating value with no fractional part, inside the integer's
+        // range, converts to that integer with nothing lost, so the comparison is
+        // between two integers and answers the mathematical question.
+        if (TryCompareIntegerWithFloat(actual, expected, out var exact))
+        {
+            return exact;
+        }
+
         // TS-P1-26: both directions are attempted, and equality holds if either
         // matches. Returning on the first *conversion* that succeeded — rather
         // than the first that produced equal values — made equality asymmetric:
@@ -425,6 +441,80 @@ public static class OperatorEvaluator
         // shared representation are simply unequal; compare a value's
         // text form explicitly when that is the intent.
         return ObjectEquals(actual, expected);
+    }
+
+    /// <summary>
+    /// Compares an integer against a floating value exactly — `TOAST-0018`.
+    /// </summary>
+    /// <remarks>
+    /// Answers <see langword="false"/> from the <c>out</c> parameter only when the pair
+    /// *is* an integer and a float and they differ; returns <see langword="false"/>
+    /// itself when the pair is something else entirely, leaving the cascade to continue.
+    /// </remarks>
+    internal static bool TryCompareIntegerWithFloat(object actual, object expected, out bool equal)
+    {
+        equal = false;
+
+        if (TryAsInteger(actual, out var integer) && TryAsFloat(expected, out var floating))
+        {
+            equal = IntegerEqualsFloat(integer, floating);
+            return true;
+        }
+
+        if (TryAsInteger(expected, out integer) && TryAsFloat(actual, out floating))
+        {
+            equal = IntegerEqualsFloat(integer, floating);
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool IntegerEqualsFloat(long integer, double floating)
+    {
+        // A NaN or an infinity is no integer, and neither is a value with a fraction.
+        if (double.IsNaN(floating) || double.IsInfinity(floating) ||
+            Math.Floor(floating) != floating)
+        {
+            return false;
+        }
+
+        // Outside `long`'s range the cast is undefined, and no `long` can equal it.
+        if (floating < -9.2233720368547758E18 || floating >= 9.2233720368547758E18)
+        {
+            return false;
+        }
+
+        // Integral and in range, so this direction of the conversion is exact.
+        return (long)floating == integer;
+    }
+
+    private static bool TryAsInteger(object value, out long integer)
+    {
+        switch (value)
+        {
+            case sbyte v: integer = v; return true;
+            case byte v: integer = v; return true;
+            case short v: integer = v; return true;
+            case ushort v: integer = v; return true;
+            case int v: integer = v; return true;
+            case uint v: integer = v; return true;
+            case long v: integer = v; return true;
+            // `ulong` above `long.MaxValue` cannot be carried here without changing the
+            // answer, so it is left to the ordinary path rather than truncated into one.
+            case ulong v when v <= long.MaxValue: integer = (long)v; return true;
+            default: integer = 0; return false;
+        }
+    }
+
+    private static bool TryAsFloat(object value, out double floating)
+    {
+        switch (value)
+        {
+            case float v: floating = v; return true;
+            case double v: floating = v; return true;
+            default: floating = 0; return false;
+        }
     }
 
     private static bool ObjectEquals(object? actual, object? expected)
