@@ -771,7 +771,7 @@ public static class HelpCatalog
                     "2 ** 10",
                     "1..5",
                 ],
-                Notes: "Arithmetic: +, -, *, /, %, ** (power). Comparison: ==, !=, <, <=, >, >= (string equality is case-insensitive). Regex: =~, !~. Logical: and, or, not. Membership: in, not in. Type: is, is not, as. String: contains, starts-with, ends-with. Null-coalescing: ??. Safe-navigation: ?. (use `expr ?. Member`). Range: .. (use `start..end` or `start..step..end`). Ternary: `condition ? then : else`. See individual topics for details."),
+                Notes: "Arithmetic: +, -, *, /, %, ** (power). Comparison: ==, !=, <, <=, >, >= (two strings compare exactly; a non-string operand is converted first). Regex: =~, !~. Logical: and, or, not. Membership: in, not in. Type: is, is not, as. String: contains, starts-with, ends-with. Null-coalescing: ??. Safe-navigation: ?. (use `expr ?. Member`). Range: .. (use `start..end` or `start..step..end`). Ternary: `condition ? then : else`. See individual topics for details."),
             ["is"] = new(
                 Category: "Operators",
                 Description: "Type-check operator. Returns true if the value is an instance of the named type.",

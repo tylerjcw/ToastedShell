@@ -274,7 +274,7 @@ public sealed class ToshMcpServer
             new { kind = "binary", name = "**", description = "Exponentiation.", example = "2 ** 8" },
 
             // Equality / regex
-            new { kind = "binary", name = "==", description = "Equality. Case-insensitive for strings.", example = "\"Hello\" == \"hello\"" },
+            new { kind = "binary", name = "==", description = "Equality. Two strings compare exactly; when the operands differ in type the value is converted first, so `1 == \"1\"` is true.", example = "1 == \"1\"" },
             new { kind = "binary", name = "!=", description = "Inequality.", example = "1 != 2" },
             new { kind = "binary", name = "=~", description = "Regex match. Returns `true` if the left string matches the regex pattern on the right.", example = "\"hello\" =~ \"^h\"" },
             new { kind = "binary", name = "!~", description = "Negated regex match.", example = "\"world\" !~ \"^h\"" },

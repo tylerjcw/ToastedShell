@@ -470,6 +470,24 @@ static async Task PrintUsageAsync()
     await Console.Out.WriteLineAsync("  --diagnostics=MODE    Override diagnostic output mode (text|plain|json)");
     await Console.Out.WriteLineAsync("  --               Stop flag parsing for the next argument");
     await Console.Out.WriteLineAsync(string.Empty);
+    // `TOAST-0003`. These modes existed and were undiscoverable: the build uses
+    // `--export-command-metadata --latex` to generate part of the specification, and
+    // nothing in `--help` said so.
+    await Console.Out.WriteLineAsync("Compilation:");
+    await Console.Out.WriteLineAsync("  --compile FILE...     Compile scripts to an assembly. The output path is");
+    await Console.Out.WriteLineAsync("                        derived from the first input unless -o is given");
+    await Console.Out.WriteLineAsync("  -o, --output PATH     Write the compiled assembly here");
+    await Console.Out.WriteLineAsync("  --no-apphost          Emit only the assembly, without a native launcher");
+    await Console.Out.WriteLineAsync("  --publish-single-file Emit a self-contained single-file executable");
+    await Console.Out.WriteLineAsync("  --emit-refasm         Emit a reference assembly beside the output");
+    await Console.Out.WriteLineAsync("  --compile-allow-dynamic  Permit dynamic fallbacks the compiler would refuse");
+    await Console.Out.WriteLineAsync(string.Empty);
+    await Console.Out.WriteLineAsync("Metadata export:");
+    await Console.Out.WriteLineAsync("  --export-command-metadata  Write command metadata and exit");
+    await Console.Out.WriteLineAsync("  --json | --latex | --vscode  Format for the export (default: json)");
+    await Console.Out.WriteLineAsync("  --surface             Export the language surface registry");
+    await Console.Out.WriteLineAsync("  --dump-builtins       List built-in commands and exit");
+    await Console.Out.WriteLineAsync(string.Empty);
     await Console.Out.WriteLineAsync("Examples:");
     await Console.Out.WriteLineAsync("  tosh 'help'");
     await Console.Out.WriteLineAsync("  tosh -c 'help search json'");

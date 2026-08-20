@@ -756,9 +756,9 @@ tosh                              # interactive REPL
 tosh -c "command"                 # execute command string
 tosh script.tosh                  # execute script file
 tosh --login                      # login shell mode
-tosh --no-startup                 # skip config.tosh
-tosh --no-profile                 # skip profile.tosh and autoload/
-tosh --safe                       # skip all startup files
+tosh --no-startup                 # skip config.tosh, profile.tosh, and autoload/
+tosh --no-profile                 # skip profile.tosh only (config.tosh and autoload/ still load)
+tosh --safe                       # skip all startup files, and say so on stderr
 tosh --version                    # print version
 tosh --help                       # print help
 tosh --profile-startup            # print phase-by-phase startup timing

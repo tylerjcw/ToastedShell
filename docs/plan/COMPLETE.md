@@ -5,6 +5,7 @@
 | ID | Priority | Status | Progress | Title |
 |---|---|---|---|---|
 | [`TOSH-0006`](items/TOSH-0006.md) | P2 | complete | 5/5 | A DateTime cell shifts an unspecified value by the local offset |
+| [`TOAST-0003`](items/TOAST-0003.md) | P2 | complete | 12/12 | Documentation disagrees with the implementation in twelve recorded places |
 | [`TS-P2-120`](items/TS-P2-120.md) | P2 | complete | — | A nullable annotation on a built-in type alias will not parse in a `var` declaration |
 | [`TS-P2-104`](items/TS-P2-104.md) | P2 | complete | 1/1 | A splat argument is rejected wherever it would be useful |
 | [`TS-P2-94`](items/TS-P2-94.md) | P2 | complete | 1/1 | `&` cannot reference a method or a module-qualified function |

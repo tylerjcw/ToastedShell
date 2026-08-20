@@ -1,10 +1,11 @@
 ---
 id: TOAST-0003
 title: "Documentation disagrees with the implementation in twelve recorded places"
-status: open
+status: complete
 area: toast
 priority: 2
 opened: 2026-08-16
+closed: 2026-08-19
 ---
 
 ## Problem
@@ -21,17 +22,53 @@ something that is finished only when the last one is done.
 ## Acceptance
 
 - [x] The specification says a failed `as` returns `null`; runtime help and the implementation throw — **fixed 2026-08-17.** Verified first: `"abc" as int` reports *Cannot convert 'String' to 'int'* and `"hello" \| cast int` reports *Could not cast 'hello' to System.Int32*. The table entry, the example and a new paragraph now say it raises, and say why — a silent `null` turns a wrong assumption into a wrong value carried onwards, reported somewhere else entirely
-- [ ] Storage-size suffixes are documented as literals but behave as strings when both operands are suffix forms
-- [ ] Storage-size suffixes are worse than that in value position — treated as an unknown command, and comparisons silently return wrong booleans (`TS-P2-14`)
-- [ ] The operator-precedence table disagrees with the implementation four ways: ternary versus `??`, the folded comparison/type-test/membership levels, range binding (`TS-P2-03`), and `**` versus unary minus (`TS-P2-02`) — regenerate it from the `TS-P2-10` surface registry rather than editing it. **Measured 2026-08-17 so the next attempt need not re-measure:** `-2 ** 2` is **4**, so unary minus binds *tighter* than `**` while the table places `**` above it. The other three were probed and did not reproduce as simple expressions — `null ?? 1 ? "a" : "b"` answers `a`, `1 + 1 .. 4` yields `2,3,4`, and `1 == 1 is bool` is `true` — so each needs a case that actually distinguishes the two groupings before the table is rewritten
-- [ ] The equality cascade omits the `TypeConversion` coercion (`1 == "1"` is true) and the case-insensitive `ToString` fallback for mixed types (`TS-P1-14`)
-- [ ] The comprehension chapter pipes `$myDict \| entries`, and no `entries` command exists — implement it or fix the example
-- [ ] Operator help and MCP metadata misstate case sensitivity and which operators are supported
-- [ ] The LaTeX build depends on an absolute personal path for the cover image (`/data/pic/Colby Family/Colby-Crest.png`) — ship the asset under `docs/spec/` or guard it with `\IfFileExists`
-- [ ] CLI help omits the compilation and metadata-export modes *(shell-side)*
-- [ ] Compile output is documented as requiring `-o` though it can be derived *(shell-side)*
-- [ ] Startup documentation disagrees with itself about whether `--no-profile` skips autoload *(shell-side)*
-- [ ] A guard exists so the precedence table cannot drift again — it is generated, not written
+- [x] Storage-size suffixes are documented as literals but behave as strings when both operands are suffix forms — **stale, verified 2026-08-19.** They are a real `StorageSize` type: `1kb + 1kb` is `2 kB`, `(10kb).Bytes` is `10,000`, `(1kib).Bytes` is `1,024`. Every claim in the specification's notebox was run: SI versus binary factors, case-insensitive matching (`10KB`), `echo 10kb` staying a `String` in raw-argument position, and an overflowing suffix raising rather than falling back to a string. The prose is accurate and needed no change
+- [x] Storage-size suffixes are worse than that in value position (`TS-P2-14`) — **stale, verified 2026-08-19.** `2mb > 1mb`, `1gb > 1mb` and `10kb > 5mb` all answer correctly, and `ls | where Size > 1b` filters (8 of 19 entries here) rather than silently matching everything
+- [x] The operator-precedence table disagrees with the implementation four ways — **three did, one did not, fixed 2026-08-19.** Real: comparison, type testing and membership are **one** left-associative level, not three (`true == 1 is int` is `false`, which only fits `(true == 1) is int`); and `??` binds *tighter* than the ternary, which the table had backwards (`"x" ?? "y" ? "a" : "b"` answers `a`, not `x`). Not real: `**` against unary minus. `-2 ** 2` is `4` because **`-2` lexes as a negative literal**, not because unary minus binds tighter — `-$x ** 2` with `$x` of `2` is `-4`, exactly as the table always said. Range binding did not reproduce either: `1 + 1 .. 4` is `2,3,4` and `1 .. 3 == 3` is `false`, both as documented. The table is now 16 levels rather than 18
+- [x] The equality cascade omits the `TypeConversion` coercion and the case-insensitive `ToString` fallback (`TS-P1-14`) — **fixed 2026-08-19, and the first attempt at it was wrong.** The cascade is now given as five ordered steps, each one run first: records and dictionaries by name and value, two non-string sequences element-wise, enum members against their own enum and backing value, conversion in *both* directions (`TS-P1-26`), then `Equals`. There is **no** textual fallback — `TS-P1-14` removed it — so the earlier repair's parenthetical "mixed types compare case-insensitively" was itself drift, generalising a bool-parsing quirk into a language rule. `true == "TRUE"` is true because parsing a bool ignores case; `E.Low == "LOW"` is **false** because converting to an enum member is by name and case-sensitive. Both are now in the specification as the pair that tells the two explanations apart
+- [x] The comprehension chapter pipes `$myDict | entries` — **fixed 2026-08-19, and the first attempt at that was wrong too.** The replacement example was written down without being run, and it does not run: `$myDict.Keys` fails on a `{| ... |}` record, which is an `ExpandoObject`. A dictionary is `{% "a" => 1 %}`, and the example now declares one, shows its output, and says which literal is which
+- [x] Operator help and MCP metadata misstate case sensitivity and which operators are supported — **fixed 2026-08-19.** Both said string equality is case-insensitive, and the MCP entry's example was `"Hello" == "hello"`, which is `false`. Both now say two strings compare exactly and a differing type is converted first. On "which operators are supported": all 53 entries in the MCP table were executed, and the only two that failed did so because the example names an enum the harness had not declared — with `flags enum InitFlag` present, `InitFlag.Video bor InitFlag.Audio` renders `Video, Audio` and `has` answers correctly, so the table is accurate
+- [x] The LaTeX build depends on an absolute personal path for the cover image — **fixed 2026-08-19 by shipping the asset**, since the `\IfFileExists` guard tried earlier cannot work (it does not search `\graphicspath`). `docs/spec/assets/Colby-Crest.png` is now in the repository and `\graphicspath` is relative. The rebuilt PDF is 3,021,140 bytes — the crest is embedded; the build without it was 1.46 MB. **This adds a 1.49 MB binary**, the first under `docs/spec/`, and the original is shipped unmodified rather than downscaled
+- [x] CLI help omits the compilation and metadata-export modes — **fixed 2026-08-19.** `--help` gained a *Compilation* section (`--compile`, `-o`, `--no-apphost`, `--publish-single-file`, `--emit-refasm`, `--compile-allow-dynamic`) and a *Metadata export* one (`--export-command-metadata`, `--json`/`--latex`/`--vscode`, `--surface`, `--dump-builtins`). Each was run before being written down. The build itself uses `--export-command-metadata --latex` to generate part of this specification, and nothing in `--help` said so
+- [x] Compile output is documented as requiring `-o` though it can be derived — **fixed 2026-08-19.** `tosh --compile greet.tosh` writes `greet.dll` beside the source. The flag row said "Required", and its second claim was misleading too: the extension does not merely "not have to be `.dll`", it is *replaced* with `.dll` — `-o foo.exe` emits `foo.dll` plus an apphost named `foo`
+- [x] Startup documentation disagrees with itself about whether `--no-profile` skips autoload — **fixed 2026-08-19.** The CLI help was right and `AGENTS.md` was wrong. Measured with `--profile-startup`, which names every file it loads: `--no-profile` loads `config.tosh` and `autoload/` and skips only `profile.tosh`; `--no-startup` and `--safe` skip all three. The specification's startup section said only that `--no-startup` exists and now describes all three
+- [x] A guard exists so the precedence table cannot drift again — **done 2026-08-19**, as `tests/Tosh.Tests/OperatorPrecedenceTableTests.cs`, 22 tests
+
+## The guard, and why it is not generated
+
+The item asked for the table to be **generated from the `TS-P2-10` surface registry**.
+It cannot be, and that is worth recording rather than deferring again: the registry
+maps an operator to a *category* — `--export-command-metadata --surface` gives
+`"!=": "Comparison"` — and carries **no precedence at all**. Generating from it would
+have to invent the exact thing the four boxes disputed.
+
+What the guard does instead needs no new data. Each adjacent pair of levels is pinned
+by an expression whose **answer differs** depending on how it groups, executed through
+the engine; then the LaTeX table is parsed and required to match the same list. The
+parser cannot drift from the tests because they run it, and the table cannot drift from
+the parser because the last test reads it.
+
+Three of the sixteen pairs took a second attempt, and each failure is the reason the
+first eleven boxes existed:
+
+- `1 == 1 and 2` **pins nothing**. `and` yields a bool rather than its operand, and
+  `1 == true` is true by conversion, so both groupings answer `True`. It reads like a
+  test and asserts nothing. `false == false and false` distinguishes them.
+- `null ?? 1 ? "a" : "b"` is `a` under both readings — which is why the earlier attempt
+  at this item recorded ternary-versus-`??` as not reproducing, and stopped there. The
+  grouping is visible only when the `??` has a non-null left operand.
+- The LaTeX row scanner read the `and` level as `[and]`, silently dropping `&&`,
+  because `(.*?)&` stops inside `\code{\&\&}`. A guard that quietly sees less than is
+  there is worse than none.
+
+**Negative control:** putting the ternary back above `??` in the specification fails the
+guard with `level 14 reads [?, :] but is pinned as [??]`.
+
+## Found on the way, filed separately
+
+`TOAST-0024` — a range's *right* operand does not parse the bitwise levels, so
+`1 .. 2 bor 4` fails while `1 bor 2 .. 4` works. Not a precedence defect: the
+documented order is what the parser implements wherever the expression parses at all.
 
 ## Notes
 

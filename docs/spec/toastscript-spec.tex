@@ -48,7 +48,12 @@
 
 % ─── Graphics & Diagrams ─────────────────────────────────────────────────────
 \usepackage{graphicx}
-\graphicspath{{/data/pic/Colby Family/}}
+% `TOAST-0003`. The crest used to be read from an absolute personal path, so the
+% document built only on one machine. A `\IfFileExists` guard on the bare filename
+% was tried first and silently failed --- that command does not search
+% `\graphicspath` --- and the cover lost its crest while still building. Shipping the
+% asset is what actually fixes it.
+\graphicspath{{assets/}}
 \usepackage{tikz}
 \usetikzlibrary{shapes.geometric,arrows.meta,positioning,calc,fit,backgrounds}
 
@@ -1963,13 +1968,46 @@ echo ($now - (timespan 7d))   # One week ago
 
 \medskip
 
-Equality cascades through: \code{object.Equals}, \code{IComparable},
-structural equality for records, and finally reference equality. Comparison
-operators attempt \code{IComparable} first, then fall back to string
+Equality is decided by the first of these that applies:
+
+\begin{enumerate}
+  \item \textbf{Records and dictionaries} compare by name and value. Insertion order
+        is not part of a record's identity, so \code{\{| a = 1, b = 2 |\}} equals
+        \code{\{| b = 2, a = 1 |\}}.
+  \item \textbf{Two non-string sequences} compare element-wise, in order.
+  \item \textbf{An enum member} equals another member of the same enum, and equals its
+        own backing value, so \code{E.Mid == 1} holds for a numeric-backed enum.
+  \item \textbf{Conversion.} One operand is converted to the other's type. Both
+        directions are attempted, so the answer never depends on which operand was
+        written first, and a conversion that succeeds decides the result even when the
+        converted values differ.
+  \item \textbf{Otherwise} the values are compared with \code{Equals} --- a compiled
+        \code{Equals} method, then record fields, then \code{object.Equals}.
+\end{enumerate}
+
+Comparison operators attempt \code{IComparable} first, then fall back to string
 comparison.
 
+The conversion step is the one that surprises: \code{1 == "1"} is \code{true}. It
+applies only across \emph{different} types --- two strings compare exactly, so
+\code{"ABC" == "abc"} is \code{false}. Where a conversion is itself indifferent to
+case the equality inherits that, which is the whole reason \code{true == "TRUE"}
+holds: parsing a bool ignores case. There is no textual fallback behind it, and the
+difference is visible on an enum, whose conversion is by member name and \emph{is}
+case-sensitive --- \code{E.Low == "Low"} is \code{true} while \code{E.Low == "LOW"}
+is \code{false}.
+
 \begin{lstlisting}
+enum E { Low, High }
+
 echo (1 == 1)              # true
+echo (1 == "1")            # true  (a string operand is coerced)
+echo (1.0 == "1")          # true
+echo (true == "TRUE")      # true  (converting "TRUE" to bool ignores case)
+echo ("ABC" == "abc")      # false (two strings compare exactly)
+echo (E.Low == "Low")      # true  (converting to an enum member is by name)
+echo (E.Low == "LOW")      # false (that conversion is case-sensitive)
+echo (1 == "one")          # false (no coercion is possible)
 echo ("abc" < "def")       # true (lexicographic)
 echo (10kb > 5kb)          # true (StorageSize comparison, both are literals)
 echo (10kb > 5mb)          # false
@@ -2201,6 +2239,13 @@ unlike C, so \code{flags band Mask == 0} groups as \code{(flags band Mask) == 0}
 --- the way the line reads. Their order relative to one another follows C, which
 is not the part that surprises people.
 
+Comparison, type testing and membership share one level and associate to the
+left, so \code{true == 1 is int} groups as \code{(true == 1) is int} rather than
+\code{true == (1 is int)} --- the two give different answers. Note also that
+\code{-2} is a negative \emph{literal} rather than a negation applied to \code{2}:
+\code{-2 ** 2} is \code{4}, while \code{-\$x ** 2} with \code{\$x} of \code{2} is
+\code{-4}, because \code{**} binds tighter than the unary minus.
+
 \begin{longtable}{C{1.2cm} L{7.5cm} L{4.8cm}}
 \toprule
 \textbf{Level} & \textbf{Operators} & \textbf{Description} \\
@@ -2216,14 +2261,12 @@ is not the part that surprises people.
 8 & \code{bxor} & Bitwise XOR \\
 9 & \code{bor} & Bitwise OR \\
 10 & \code{..} & Range \\
-11 & \code{==}, \code{!=}, \code{<}, \code{>}, \code{<=}, \code{>=}, \code{=\textasciitilde}, \code{!\textasciitilde} & Comparison \& regex \\
-12 & \code{is}, \code{is not} & Type testing \\
-13 & \code{in}, \code{not in}, \code{is in}, \code{is not in}, \code{contains}, \code{starts-with}, \code{ends-with}, \code{has} & Membership \& flag testing \\
-14 & \code{and} / \code{\&\&} & Logical AND \\
-15 & \code{or} / \code{||} & Logical OR \\
-16 & \code{?}, \code{:} & Ternary conditional \\
-17 & \code{??} & Null coalescing \\
-18 & \code{=}, \code{+=}, \code{-=}, \code{*=}, \code{**=}, \code{/=}, \code{//=}, \code{\%=}, \code{??=} & Assignment \\
+11 & \code{==}, \code{!=}, \code{<}, \code{>}, \code{<=}, \code{>=}, \code{=\textasciitilde}, \code{!\textasciitilde}, \code{is}, \code{is not}, \code{in}, \code{not in}, \code{is in}, \code{is not in}, \code{contains}, \code{starts-with}, \code{ends-with}, \code{has} & Comparison, regex, type testing, membership and flag testing --- \emph{one} left-associative level \\
+12 & \code{and} / \code{\&\&} & Logical AND \\
+13 & \code{or} / \code{||} & Logical OR \\
+14 & \code{??} & Null coalescing \\
+15 & \code{?}, \code{:} & Ternary conditional \\
+16 & \code{=}, \code{+=}, \code{-=}, \code{*=}, \code{**=}, \code{/=}, \code{//=}, \code{\%=}, \code{??=} & Assignment \\
 \bottomrule
 \caption{Operator precedence (highest to lowest)}
 \label{tab:precedence}
@@ -5303,8 +5346,13 @@ bind each element to its own variable:
 [$a + $b + $c <| for (a, b, c) in [(1, 2, 3), (4, 5, 6)]]
 # [6, 15]
 
-# Pairs produced by 'entries' work too:
-{% $k => $v * 2 <| for (k, v) in ($myDict | entries) %}
+# A dictionary is rebuilt by iterating its keys and indexing back into it;
+# there is no `entries` command, and piping a dictionary yields the dictionary
+# itself rather than its pairs. Note the literal: a dictionary is {% k => v %},
+# and the {| ... |} form is a record, which has no `Keys`.
+var myDict = {% "a" => 1, "b" => 2 %}
+{% $k => ($myDict[$k] * 2) <| for k in $myDict.Keys %}
+# {% "a" => 2, "b" => 4 %}
 \end{lstlisting}
 
 All four forms compose with \code{where}/\code{let} modifiers and work in
@@ -5715,7 +5763,11 @@ The configuration directory is resolved in order:
         lexically).
 \end{enumerate}
 
-Skip all startup files with \code{tosh --no-startup}.
+Three flags control how much of this runs. \code{--no-startup} and \code{--safe}
+skip all three phases; \code{--safe} additionally says so on standard error.
+\code{--no-profile} skips \emph{only} \code{profile.tosh} --- \code{config.tosh} and
+the autoload directory still load, because \code{config.tosh} is where the startup
+paths themselves are configured.
 
 \section{config.tosh}
 
@@ -6124,6 +6176,9 @@ tosh greet.tosh
 # Compile a script to a managed assembly.
 tosh --compile greet.tosh -o greet.dll
 tosh -C greet.tosh -o greet.dll
+
+# The output path may be left out: this writes greet.dll beside greet.tosh.
+tosh --compile greet.tosh
 \end{lstlisting}
 
 \section{Flags}
@@ -6133,7 +6188,7 @@ tosh -C greet.tosh -o greet.dll
 \toprule
 \textbf{Flag} & \textbf{Effect} \\
 \midrule
-\code{-o PATH}, \code{--output PATH} & Output assembly path. Required; the file extension does not have to be \code{.dll}. \\
+\code{-o PATH}, \code{--output PATH} & Output assembly path. Optional: when it is omitted the assembly is written beside the first input with its extension changed to \code{.dll}. The stem is kept as the assembly name, but the extension is always \emph{replaced} with \code{.dll} --- \code{-o cli} and \code{-o cli.exe} both emit \code{cli.dll} --- because \code{dotnet <file>} recognises no other extension. The native launcher beside it takes the bare stem. \\
 \code{--profile NAME} & Compile profile (\code{permissive}, \code{runtime}, or \code{pure}). Default \code{permissive}. May also be written \code{--profile=NAME}. \\
 \code{--compile-allow-dynamic}, \code{--allow-dynamic} & Suppress \code{tosh.compile.implicit\_dynamic} diagnostics. Equivalent to opting out of strict-mode for variables whose type the inferrer cannot pin down. \\
 \code{--emit-refasm} & Also emit a sibling \code{*.ref.dll} stamped with \code{[ReferenceAssembly]} so C\# / F\# / Roslyn consumers can target the public surface without dragging in private members. \\
