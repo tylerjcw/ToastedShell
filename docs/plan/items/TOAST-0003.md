@@ -20,10 +20,10 @@ something that is finished only when the last one is done.
 
 ## Acceptance
 
-- [ ] The specification says a failed `as` returns `null`; runtime help and the implementation throw
+- [x] The specification says a failed `as` returns `null`; runtime help and the implementation throw — **fixed 2026-08-17.** Verified first: `"abc" as int` reports *Cannot convert 'String' to 'int'* and `"hello" \| cast int` reports *Could not cast 'hello' to System.Int32*. The table entry, the example and a new paragraph now say it raises, and say why — a silent `null` turns a wrong assumption into a wrong value carried onwards, reported somewhere else entirely
 - [ ] Storage-size suffixes are documented as literals but behave as strings when both operands are suffix forms
 - [ ] Storage-size suffixes are worse than that in value position — treated as an unknown command, and comparisons silently return wrong booleans (`TS-P2-14`)
-- [ ] The operator-precedence table disagrees with the implementation four ways: ternary versus `??`, the folded comparison/type-test/membership levels, range binding (`TS-P2-03`), and `**` versus unary minus (`TS-P2-02`) — regenerate it from the `TS-P2-10` surface registry rather than editing it
+- [ ] The operator-precedence table disagrees with the implementation four ways: ternary versus `??`, the folded comparison/type-test/membership levels, range binding (`TS-P2-03`), and `**` versus unary minus (`TS-P2-02`) — regenerate it from the `TS-P2-10` surface registry rather than editing it. **Measured 2026-08-17 so the next attempt need not re-measure:** `-2 ** 2` is **4**, so unary minus binds *tighter* than `**` while the table places `**` above it. The other three were probed and did not reproduce as simple expressions — `null ?? 1 ? "a" : "b"` answers `a`, `1 + 1 .. 4` yields `2,3,4`, and `1 == 1 is bool` is `true` — so each needs a case that actually distinguishes the two groupings before the table is rewritten
 - [ ] The equality cascade omits the `TypeConversion` coercion (`1 == "1"` is true) and the case-insensitive `ToString` fallback for mixed types (`TS-P1-14`)
 - [ ] The comprehension chapter pipes `$myDict \| entries`, and no `entries` command exists — implement it or fix the example
 - [ ] Operator help and MCP metadata misstate case sensitivity and which operators are supported
@@ -78,3 +78,30 @@ fails, and the build recovers on the run after.
 Box 8 above — the absolute path to the cover image — was attempted and **reverted**. A
 guard on the bare filename silently failed, because `\IfFileExists` does not search
 `\graphicspath`, and the cover lost its crest while still building. It remains open.
+
+## The specification builds clean — 2026-08-17
+
+`docs/spec/toastscript-spec.tex` now produces **zero** overfull boxes, underfull boxes,
+LaTeX warnings, package warnings and font warnings. It had ten overfull boxes.
+
+They were all one cause in different clothes: a fixed-width column narrower than a word that
+cannot break. `durationquantity` in a 2.4cm column, `System.Collections.Generic.List<object>`
+in a 6.0cm one, `not in / is not in / not-in / is-not-in` in an unwrapped `c` column, BNF
+productions in an unwrapped `l`, and long SDK task names at 0.32 of the line.
+
+Two things worth keeping from doing it:
+
+**Widening one column narrows another.** The first attempt widened column 1 of the type
+table and pushed the overflow straight into column 2 — the count went from ten to five and
+the *rows* changed. The table only used 12.6cm of a 15.5cm text block, so the real answer was
+that it had been over-constrained all along.
+
+**Column widths must leave room for `\tabcolsep`.** The next attempt sized three columns to
+15.0cm against a 15.5cm block and still overflowed by 21.77pt, because six column edges add
+about 1.3cm of padding. That is the difference between sizing the content and sizing the
+table.
+
+The *generated* fragments were checked too. `CommandLatexEmitter` uses wrapping columns, and
+`extract-diagnostic-codes.tosh` already renders each code as a `description` item with
+`style=nextline` — chosen, its comment says, to avoid exactly the column overlap long codes
+caused in an older longtable. So regeneration cannot reintroduce these.

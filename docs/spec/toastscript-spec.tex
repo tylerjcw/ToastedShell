@@ -993,7 +993,7 @@ TōSh provides over 40 short aliases for common CLR types. Use these in type
 annotations, casts, and \code{new} expressions.
 
 {\small
-\begin{longtable}{L{2.4cm}L{7.2cm}L{3.0cm}}
+\begin{longtable}{L{3.4cm}L{7.2cm}L{3.6cm}}
 \toprule
 \textbf{Alias} & \textbf{CLR Type} & \textbf{Notes} \\
 \midrule
@@ -1287,7 +1287,7 @@ sign is the one adjacency shorthand and does not require a backtick.
 \subsubsection{Syntax}
 
 \begin{center}
-\begin{tabular}{rcl}
+\begin{tabular}{r c L{10.5cm}}
 $\langle$quantity-literal$\rangle$ & ::= & $\langle$decimal-real$\rangle$\textasciigrave{}$\langle$unit-expr$\rangle$ $|$ $\langle$decimal-real$\rangle$\textdegree{}$\langle$angle-tail$\rangle$? $|$ $\langle$decimal-real$\rangle$\textdegree{}(\texttt{C}$|$\texttt{F}$|$\texttt{R}) \\
 $\langle$unit-expr$\rangle$ & ::= & $\langle$unit-term$\rangle$\,((\texttt{*}$|$\texttt{/})\,$\langle$unit-term$\rangle$)$^{*}$ $|$ \texttt{1/}$\langle$unit-term$\rangle$\,((\texttt{*}$|$\texttt{/})\,$\langle$unit-term$\rangle$)$^{*}$ \\
 $\langle$unit-term$\rangle$ & ::= & $\langle$unit$\rangle$\,(\texttt{\^{}}\,$\langle$int$\rangle$)? \\
@@ -2062,7 +2062,7 @@ and \code{!\textasciitilde}.
 \section{Membership Operators}
 \iop{in}\iop{not in}\iop{not-in}\iop{is in}\iop{is-in}\iop{is not in}\iop{is-not-in}\iop{contains}\iop{starts-with}\iop{ends-with}
 
-\begin{tabular}{cl}
+\begin{tabular}{L{5.4cm}L{9.0cm}}
 \toprule
 \textbf{Operator} & \textbf{Meaning} \\
 \midrule
@@ -2109,7 +2109,7 @@ of \code{value in collection}.
 \midrule
 \code{is} & Type check (returns \code{bool}) \\
 \code{is not} & Negated type check \\
-\code{as} & Type cast (returns converted value or \code{null} on failure) \\
+\code{as} & Type cast (raises on failure) \\
 \bottomrule
 \end{tabular}
 
@@ -2119,11 +2119,18 @@ echo ("hi" is not int)      # true
 
 # Type casting with 'as'
 var n = "42" as int          # 42
-var x = "hello" as int       # null (conversion failed)
+var x = "hello" as int       # error: Cannot convert 'String' to 'int'
 
 # Pipeline cast (equivalent)
 echo "42" | cast int         # 42
+echo "hello" | cast int      # error: Could not cast 'hello' to System.Int32
 \end{lstlisting}
+
+A conversion that cannot be performed is \textbf{an error}, not a \code{null}.  A cast
+is a statement that the value is of that type; a silent \code{null} would turn a
+wrong assumption into a wrong value carried onwards, and the failure would then be
+reported somewhere else entirely.  Use \code{is} to ask whether a conversion would
+succeed.
 
 \section{Null Coalescing}
 \iop{??}\iop{?.}
@@ -6010,7 +6017,7 @@ tosh myscript.tosh git commit --help
 
 \section{Diagnostics}
 
-\begin{tabular}{L{7.6cm}L{5.6cm}}
+\begin{tabular}{L{8.4cm}L{4.8cm}}
 \toprule
 \textbf{Code} & \textbf{Trigger} \\
 \midrule
@@ -6623,7 +6630,7 @@ exposes.
 \label{sec:compile-sdk-tasks}
 
 {\sloppy
-\begin{tabular}{>{\raggedright\arraybackslash}p{0.32\linewidth} >{\raggedright\arraybackslash}p{0.62\linewidth}}
+\begin{tabular}{>{\raggedright\arraybackslash}p{0.52\linewidth} >{\raggedright\arraybackslash}p{0.42\linewidth}}
 \toprule
 \textbf{Task} & \textbf{Purpose} \\
 \midrule
@@ -6801,7 +6808,7 @@ included here because they are reachable only through compiled code paths
 (\code{IShellCallable.InvokeAsync}, \code{CompiledLambdaCallable},
 \code{CompiledMethodReferenceValue}).
 
-\begin{tabular}{>{\raggedright\arraybackslash\ttfamily\small}p{0.62\linewidth} >{\raggedright\arraybackslash}p{0.3\linewidth}}
+\begin{tabular}{>{\raggedright\arraybackslash\ttfamily\small}p{0.66\linewidth} >{\raggedright\arraybackslash}p{0.28\linewidth}}
 \toprule
 \textbf{Code} & \textbf{Meaning} \\
 \midrule
