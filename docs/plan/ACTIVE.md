@@ -9,6 +9,7 @@
 | [`PLAN-0002`](items/PLAN-0002.md) | P2 | open | 4/7 | Suite reliability on a clean checkout: the Debug-CLI race is fixed, one parallel flake remains |
 | [`PLAN-0001`](items/PLAN-0001.md) | P3 | open | 6/10 | Triage the remaining documentation: date what is stale, mark what is frozen, rewrite only what the split will not move |
 | [`TOAST-0016`](items/TOAST-0016.md) | P2 | partial | 4/5 | `extend` matches only CLR type names, so `extend int` silently never applies |
+| [`TOAST-0027`](items/TOAST-0027.md) | P2 | open | 0/5 | An unrecognised escape in a double-quoted string is kept as text instead of being reported |
 | [`TOAST-0007`](items/TOAST-0007.md) | P2 | open | 0/4 | Split Tosh.Stdlib into language-level and shell-level commands |
 | [`CRUMB-0001`](items/CRUMB-0001.md) | P3 | partial | 4/11 | Crumb polish: config file, conflict-resolution UX, and four optional features |
 | [`TOAST-0008`](items/TOAST-0008.md) | P3 | open | 0/7 | Rename the language surface from Tosh to Toast, keeping every existing spelling working |
@@ -17,7 +18,7 @@
 | [`TOAST-0026`](items/TOAST-0026.md) | P3 | open | 0/5 | A decimal literal is parsed as a double first, so its extra precision is lost before the cast |
 | [`TOAST-0020`](items/TOAST-0020.md) | P2 | partial | 7/8 | A trait's declared member types are not enforced on the implementing class |
 | [`TOSH-0003`](items/TOSH-0003.md) | P3 | open | 0/5 | Ship Toast as its own package that TōSh, Tōme and Crumb depend on |
-| [`TOAST-0018`](items/TOAST-0018.md) | P2 | partial | 5/10 | Portable core semantics: the eight Phase A concerns outside formatting and streaming |
+| [`TOAST-0018`](items/TOAST-0018.md) | P2 | partial | 6/10 | Portable core semantics: the eight Phase A concerns outside formatting and streaming |
 | [`TOAST-0022`](items/TOAST-0022.md) | P2 | open | 0/6 | Compiled interpolation drops format clauses and cannot reach a class's Display |
 | [`TOAST-0011`](items/TOAST-0011.md) | P2 | open | 0/6 | A TōSh closure cannot be passed where C wants a function pointer |
 | [`TOAST-0002`](items/TOAST-0002.md) | P2 | partial | 4/8 | Statement dispatch is decided by scattered lookahead predicates that must agree by hand |

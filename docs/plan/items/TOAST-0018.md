@@ -56,8 +56,8 @@ actually lives.
       arithmetic, member access and collection membership — **done 2026-08-20**, see below
 - [x] **Overflow** given a policy — **done 2026-08-20**, and the policy turned out to be a
       fourth option the box did not list: integer arithmetic *promotes*. See below
-- [ ] **Unicode** specified: what a `str` is made of, what `Length` counts, and how
-      indexing, slicing and comparison behave
+- [x] **Unicode** specified: what a `str` is made of, what `Length` counts, and how
+      indexing, slicing and comparison behave — **done 2026-08-20**, see below
 - [ ] **Collection shape** resolved with `TS-P3-04`, including the recorded asymmetry that
       `[1,2,3] | count` is 3 while a piped dictionary counts as 1
 - [ ] **Exception semantics** specified: what is catchable, what a thrown non-error value
@@ -313,16 +313,61 @@ rather than the value showed it.
 
 **Negative control: 4 of 24 fail** with both source files reverted. Suite 6,026 passing.
 
+## Unicode — 2026-08-20
+
+Decided: a `str` is a sequence of **UTF-16 code units**, and comparison does **not**
+normalise. Both keep what the runtime already did, so this concern changed no behaviour —
+`UnicodeSemanticsTests` is what makes "unchanged" into something a backend can be held to.
+
+`Length` counts code units, so a waving hand is 2 and a three-person family is 8.
+**Indexing can therefore return half a character**, and the specification says so rather
+than leaving it to be discovered: `$w[1]` on `a👋b` is an unpaired high surrogate — a valid
+`Char` that is not valid text.
+
+The alternatives were weighed and are recorded in the notebox. Scalar values would make
+indexing whole at the cost of O(n) and a `Length` disagreeing with every .NET API the same
+string is passed to. **Grapheme clusters** — what a person means by a character — were
+rejected for a reason this phase has already used once: segmentation depends on the Unicode
+version, so two implementations built against different ICU releases would disagree about
+the length of one emoji. That is the same defect that made culture-sensitive collation
+unacceptable for ordering, and worse in a length than in a comparison.
+
+Normalisation stays explicit (`Normalize`, `IsNormalized`, both already reachable). The
+trap that leaves is documented rather than smoothed over: macOS hands out filenames
+decomposed and Linux composed, so the *same filename* from two machines compares unequal,
+sorts apart and counts as two distinct values.
+
+### The specification was wrong before the corpus was run
+
+It said `"\uHHHH"` writes a code unit. It does not. There are **two escape tables** —
+`ReadEscapeSequence` for `"..."` and `ReadAnsiCEscapeSequence` for `$'...'` — and only the
+second knows `\u` and `\x`. In a double-quoted string, `"\u00E9"` is six characters, kept
+silently.
+
+**Every probe had gone through `tosh -c`, and the command line does its own shell-level
+escape processing**, so `tosh -c 'echo ("\u00E9".Length)'` answers `1` while the identical
+line in a script answers `6`. The measure-first discipline was followed and still produced
+a false claim, because the instrument was not the language. Corrected throughout; every
+example now uses `$'...'` and was run from a **file** before being written down.
+
+Filed as `TOAST-0027`, including the sharper half: `-c` and a script file disagree about
+what a string literal means.
+
+### No negative control, and why
+
+Nothing was changed, so there is no fix to revert. The corpus's value is as a guard against
+future drift — and it demonstrated it can find drift before it was even committed, by
+catching the escape claim. Suite 6,041 passing.
+
 ### Still open here
 
-Three concerns remain: Unicode, collection shape and exception semantics — plus the
-backend-neutral corpus that is Phase A's exit.
+Two concerns remain: collection shape and exception semantics — plus the backend-neutral
+corpus that is Phase A's exit.
 
-**Unicode is next**, and it is the one `TOAST-0014` explicitly deferred here: what a `str`
-is made of, what `Length` counts, and how indexing, slicing and comparison behave. Ordering
-already settled comparison as by code point, so the question is what a code point *is* —
-whether a `str` is UTF-16 code units, scalar values, or grapheme clusters, and which of
-those `Length` reports.
+**Collection shape is next**, and its box already names the case to start from: `[1,2,3] |
+count` is 3 while a piped dictionary counts as 1. It is entangled with `TS-P3-04`, which is
+still filed as *research* with a one-line acceptance, so the first task is deciding what
+that item is actually asking.
 
 ## Notes
 
