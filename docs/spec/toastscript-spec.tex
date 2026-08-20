@@ -2297,6 +2297,60 @@ collection and found: \code{null in [1, null]} is \code{true}, and so is
 \code{"abc" contains null} is \code{false} --- because a string contains text, and
 \code{null} is not text.
 
+\subsection{Collection Shape}
+\label{sec:collection-shape}
+
+A pipeline carries \emph{items}. Whether a collection is one item or many is decided by
+two rules.
+
+\paragraph{Which values are sequences.}
+An array, a set and a range are sequences: piping one sends its elements. A dictionary, a
+record and a string are single values: piping one sends the value itself.
+
+\begin{lstlisting}
+echo ([1, 2, 3] | count)              # 3  -- three items
+echo ({: 1, 2, 3 :} | count)          # 3
+echo (1..3 | count)                   # 3
+echo ({% "a" => 1, "b" => 2 %} | count)  # 1  -- one value
+echo ({| a = 1, b = 2 |} | count)     # 1
+echo ("abc" | count)                  # 1
+\end{lstlisting}
+
+A dictionary and a record are values with named parts rather than sequences of them,
+which is why they count as one. Their parts are reached by name, or by iterating
+\code{.Keys}.
+
+\paragraph{Which \emph{position} a collection is in.}
+A sequence reaching a stage as the \textbf{only} item is expanded into its elements.
+Several collections are left as items:
+
+\begin{lstlisting}
+echo ([[1, 2], [3]] | count)          # 2  -- two items, each an array
+\end{lstlisting}
+
+\begin{notebox}[A known defect]
+The second rule means a collection's meaning depends on \emph{how many} of them there
+are, so producing more data can change what the existing data means:
+
+\begin{lstlisting}
+func a() { yield [1, 2, 3] }
+func b() { yield [1, 2, 3]; yield [4] }
+
+echo (a | count)      # 3   -- the elements
+echo (b | count)      # 2   -- the arrays
+echo (a | first)      # 1
+echo (b | first)      # [1, 2, 3]
+\end{lstlisting}
+
+Deciding this also requires reading one item further than the consumer asked for, so a
+generator is advanced once more than necessary and any side effect of that step happens
+for an item nobody requested.
+
+This is recorded as a defect rather than a design: shape should be decided where a value
+is produced, not by counting what arrives. The replacement is specified in
+\code{docs/plan/items/TOAST-0028.md}, and this section moves with it.
+\end{notebox}
+
 \subsection{Text and Unicode}
 \label{sec:unicode}
 

@@ -58,8 +58,9 @@ actually lives.
       fourth option the box did not list: integer arithmetic *promotes*. See below
 - [x] **Unicode** specified: what a `str` is made of, what `Length` counts, and how
       indexing, slicing and comparison behave — **done 2026-08-20**, see below
-- [ ] **Collection shape** resolved with `TS-P3-04`, including the recorded asymmetry that
-      `[1,2,3] | count` is 3 while a piped dictionary counts as 1
+- [x] **Collection shape** resolved with `TS-P3-04` — **specified 2026-08-20**; the
+      asymmetry it names is the half worth keeping, and the half that is a defect is
+      decided and filed as `TOAST-0028`. See below
 - [ ] **Exception semantics** specified: what is catchable, what a thrown non-error value
       means, and how a `no_clr` target represents one
 - [ ] Each of the eight lands in `docs/spec/` as prose *before* implementation, and in the
@@ -359,15 +360,57 @@ Nothing was changed, so there is no fix to revert. The corpus's value is as a gu
 future drift — and it demonstrated it can find drift before it was even committed, by
 catching the escape claim. Suite 6,041 passing.
 
+## Collection shape — 2026-08-20
+
+`TS-P3-04` was one line: "remove cardinality lookahead while preserving object-valued
+pipelines and a reasonable migration path", with `[1,2,3] | count` being 3 while a piped
+dictionary counts as 1. Measuring split that into two rules, one settled and one broken.
+
+**Which values are sequences is settled, and the asymmetry is right.** An array, a set and
+a range spread; a dictionary, a record and a string are single values. A dictionary is a
+value with named parts rather than a sequence of them, so counting it as 1 is correct
+rather than an inconsistency to be removed. Specified as `§Collection Shape`.
+
+**Which position a collection is in is the defect.** A sequence arriving *alone* expands;
+several are left as items. So producing more data changes what the earlier data meant:
+
+```tosh
+func a() { yield [1, 2, 3] }
+func b() { yield [1, 2, 3]; yield [4] }
+a | count    # 3 — the elements        a | first    # 1
+b | count    # 2 — the arrays          b | first    # [1, 2, 3]
+```
+
+And deciding it requires reading one item further than the consumer asked for. Measured: a
+generator behind `first 1` runs **two** steps, so any side effect of the second happens for
+an item nobody requested.
+
+**Decision: the producer decides shape, not the consumer** — a literal or variable spreads,
+a command or generator yields its collection as a value. Filed as `TOAST-0028` rather than
+done here, because it changes how every stage receives input and needs its own corpus.
+`TS-P2-74` records why the obvious version fails: spreading every list-valued head made
+`[] | to json` send nothing downstream, and eight tests said so. The mechanism that can
+carry it already exists unused — `PipelineInputAttribute`'s `AcceptsList`, and
+`PreExpandedSequence` as the inverse marker.
+
+### Two tests assert the defect deliberately
+
+`CollectionShapeTests` pins the wrong behaviour *and says so*, because an unlabelled test
+of a known defect is one the next reader silently "fixes". When `TOAST-0028` lands,
+`Producing_more_data_changes_what_the_earlier_data_meant` is the one that must flip. The
+`[] | to json` case is kept beside them as a control so the fix cannot regress it.
+
+The specification names `TOAST-0028` in the section, so prose and defect cannot drift
+apart. Suite 6,053 passing.
+
 ### Still open here
 
-Two concerns remain: collection shape and exception semantics — plus the backend-neutral
-corpus that is Phase A's exit.
+One concern remains — **exception semantics** — plus the backend-neutral corpus that is
+Phase A's exit.
 
-**Collection shape is next**, and its box already names the case to start from: `[1,2,3] |
-count` is 3 while a piped dictionary counts as 1. It is entangled with `TS-P3-04`, which is
-still filed as *research* with a one-line acceptance, so the first task is deciding what
-that item is actually asking.
+Its box asks what is catchable, what a thrown non-error value means, and how a `no_clr`
+target represents one. `ToshError.cs` is 73 lines over .NET exceptions, so the question is
+how much of the CLR exception model has leaked into the language's own.
 
 ## Notes
 
