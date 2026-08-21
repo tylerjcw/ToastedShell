@@ -63,12 +63,36 @@ public sealed class TypeCheckerTests : IClassFixture<ToshRuntimeFixture>
         Assert.Equal("tosh.type.mismatch", diags[0].Code);
     }
 
+    /// <summary>
+    /// A value whose type genuinely cannot be known is not second-guessed.
+    /// </summary>
+    /// <remarks>
+    /// This used `(ls)` as the unknowable value, which stopped being unknowable in
+    /// `TOAST-0034`: `ls` declares `[CommandOutput]`, and parentheses now keep the type of
+    /// what they group instead of erasing it. A function with no declared return is
+    /// unknowable for a reason that will not quietly go away.
+    /// </remarks>
     [Fact]
     public void No_diagnostics_when_value_type_unknown()
     {
-        // ls returns dynamic — checker stays silent.
-        var diags = Check("var x: int = (ls)");
+        var diags = Check("func g() => 7\nvar x: int = (g)");
         Assert.Empty(diags);
+    }
+
+    /// <summary>
+    /// And a value whose type *is* known is checked, even through parentheses.
+    /// </summary>
+    /// <remarks>
+    /// The other half of the case above, and the reason it had to change. `ls` produces a
+    /// stream of entries; assigning one to an `int` is a mismatch, and saying so is the
+    /// improvement — silence here used to be a limitation wearing the name of a rule.
+    /// </remarks>
+    [Fact]
+    public void A_parenthesised_value_is_still_checked()
+    {
+        var diags = Check("var x: int = (ls)");
+        Assert.Single(diags);
+        Assert.Equal("tosh.type.mismatch", diags[0].Code);
     }
 
     [Fact]
@@ -283,10 +307,16 @@ public sealed class TypeCheckerTests : IClassFixture<ToshRuntimeFixture>
         Assert.Empty(diags);
     }
 
+    /// <remarks>
+    /// `(ls)` used to be the example of an un-inferrable value and no longer is —
+    /// `TOAST-0034`. A call to a function that declares no return type still is.
+    /// </remarks>
     [Fact]
     public void Compile_audit_flags_implicit_dynamic_var()
     {
-        var diags = CheckCompile("var x = (ls)", allowDynamic: false);
+        // `-> dynamic` so the function itself is not also flagged: the audit reports a
+        // missing return annotation separately, and this case is about the *variable*.
+        var diags = CheckCompile("func g() -> dynamic => 7\nvar x = (g)", allowDynamic: false);
         Assert.Single(diags);
         Assert.Equal("tosh.compile.implicit_dynamic", diags[0].Code);
     }

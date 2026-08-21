@@ -371,6 +371,51 @@ public sealed partial class ToshEngine
     private static ToshDiagnosticException? DescribeAnnotationFailure(object? converted) =>
         converted is AnnotationRefinementError refinementError ? refinementError.Exception : null;
 
+    /// <summary>
+    /// A collection annotation whose single type argument names a tōast-declared type.
+    /// </summary>
+    /// <remarks>
+    /// Returns false for anything else — a non-generic name, more than one argument, a
+    /// non-collection head, an element type the CLR can represent (`list&lt;int&gt;` keeps
+    /// its existing conversion), or a value that is not a sequence. Every element must
+    /// satisfy the element type; one that does not means the annotation does not hold, and
+    /// saying so is the point.
+    /// </remarks>
+    private bool TryConvertUserElementCollection(string typeName, object? value, out object? converted)
+    {
+        converted = null;
+
+        if (value is null || value is string) { return false; }
+
+        var lt = typeName.IndexOf('<');
+        if (lt <= 0 || !typeName.EndsWith(">", StringComparison.Ordinal)) { return false; }
+
+        var head = typeName[..lt].Trim().ToLowerInvariant();
+        if (head is not ("list" or "array" or "seq" or "ienumerable" or "icollection"
+            or "ireadonlylist" or "ireadonlycollection"))
+        {
+            return false;
+        }
+
+        var element = typeName[(lt + 1)..^1].Trim();
+        if (element.Length == 0 || element.Contains(',')) { return false; }
+
+        // Only when the element type is one this program declared. A CLR element type
+        // already has a working conversion and must keep it.
+        if (!TryGetNamedType(element, out _)) { return false; }
+
+        if (value is not System.Collections.IEnumerable sequence) { return false; }
+
+        foreach (var item in sequence)
+        {
+            if (item is null) { continue; }
+            if (!OperatorEvaluator.IsInstanceOfShellType(item, element)) { return false; }
+        }
+
+        converted = value;
+        return true;
+    }
+
     internal bool TryConvertAnnotatedValue(string typeName, object? value, out object? converted)
         => TryConvertAnnotatedValue(typeName, value, out converted, new HashSet<string>(StringComparer.OrdinalIgnoreCase));
 
@@ -527,6 +572,25 @@ public sealed partial class ToshEngine
             // would choke on the angle-bracketed name anyway).
             converted = null;
             return false;
+        }
+
+        // `TOAST-0038`. A collection whose element type is declared in tōast — `list<Token>`,
+        // `array<Node>`.
+        //
+        // These could not be written at all. `list<int>` works because `List<int>` is a real
+        // CLR type to convert to; a tōast class is a `ToshClassInstance`, so there is no
+        // `List<Token>` for the conversion to target and every such annotation failed with
+        // "could not be converted". A lexer returning `list<Token>` and a parser returning
+        // `list<Node>` are the ordinary shapes of compiler-shaped code, which is how the
+        // readiness probe found this.
+        //
+        // The elements are checked rather than converted, and the collection is handed back
+        // as it is: `is` already answers "is this value that type" for a declared class, so
+        // the annotation means what a reader would expect and no new rule is introduced.
+        if (TryConvertUserElementCollection(normalizedTypeName, value, out var elementChecked))
+        {
+            converted = elementChecked;
+            return true;
         }
 
         var resolvedType = ResolveTypeName(normalizedTypeName);

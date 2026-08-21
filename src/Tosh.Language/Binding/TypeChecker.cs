@@ -316,6 +316,22 @@ public static class TypeChecker
         public Dictionary<string, BoundFunctionDefinition> UserFunctions { get; } =
             new(StringComparer.Ordinal);
         public BoundType? CurrentReturnType { get; set; }
+
+        /// <summary>
+        /// Resolves member type names against this unit's own declarations — `TOAST-0038`.
+        /// </summary>
+        /// <remarks>
+        /// Built lazily and once. Without the unit's types a name like `Node` resolves
+        /// through the platform index to whatever CLR type shares it, and every annotation
+        /// naming a user type reports a mismatch against itself.
+        /// </remarks>
+        public TypeNameResolver MemberTypeResolver => _memberTypeResolver ??= new TypeNameResolver(
+            userTypes: Unit.ParseResult is ParseResult parsed
+                ? Lowerer.BuildUserTypeRegistry(parsed.Statement)
+                : null);
+
+        private TypeNameResolver? _memberTypeResolver;
+
         public string? SourceName => (Unit.ParseResult as ParseResult)?.SourceName;
         public string? SourceText => (Unit.ParseResult as ParseResult)?.SourceText;
 
@@ -1274,7 +1290,7 @@ public static class TypeChecker
 
         if (!UserTypeMembers.TryGetProperty(targetType, segments[0], out var property)) return;
 
-        var declared = MemberTypeResolver.Resolve(property.TypeName);
+        var declared = ResolverFor(ctx).Resolve(property.TypeName);
         if (declared.IsDynamic) return;
 
         var actual = TypeInferrer.InferPipelineValue(assignment.Value);
@@ -1414,7 +1430,7 @@ public static class TypeChecker
 
             foreach (var parameters in arityMatch)
             {
-                var declared = MemberTypeResolver.Resolve(parameters[index].TypeName);
+                var declared = ResolverFor(ctx).Resolve(parameters[index].TypeName);
 
                 if (declared.IsDynamic || IsAssignable(actual, declared, out _))
                 {
@@ -1756,7 +1772,23 @@ public static class TypeChecker
     /// bounds what this check covers, and is why the item's remaining positions are filed
     /// rather than half-done.
     /// </remarks>
-    private static readonly TypeNameResolver MemberTypeResolver = new(userTypes: null);
+    /// <summary>
+    /// Resolves a member's declared type name, seeded with the unit's own declarations —
+    /// `TOAST-0038`.
+    /// </summary>
+    /// <remarks>
+    /// This used to be a single static resolver built with <c>userTypes: null</c>, which
+    /// was harmless only while a name it could not resolve became <c>dynamic</c> and the
+    /// check bowed out. `TOAST-0034` gave <see cref="TypeNameResolver"/> the platform index,
+    /// and a resolver with no user types then answered a *user* type name with whatever CLR
+    /// type happens to share it — so `prop Operand: Node = $operand` reported "Cannot assign
+    /// value of type 'Node' to property 'Operand' of type 'Node'", the two `Node`s being
+    /// different types with one name.
+    ///
+    /// Seeding it is the fix rather than removing the index: the resolver checks user types
+    /// *before* the index, so a program's own declarations win as soon as it has them.
+    /// </remarks>
+    private static TypeNameResolver ResolverFor(CheckContext ctx) => ctx.MemberTypeResolver;
 
     /// <summary>
     /// A class or struct property's annotation is checked against its initializer, with
@@ -1773,7 +1805,7 @@ public static class TypeChecker
     {
         if (prop.Initializer is null) return;
 
-        var declared = MemberTypeResolver.Resolve(prop.TypeName);
+        var declared = ResolverFor(ctx).Resolve(prop.TypeName);
         if (declared.IsDynamic) return;
 
         var actual = TypeInferrer.InferPipelineValue(prop.Initializer);

@@ -85,7 +85,23 @@ public static class BoundUnitEmitter
     {
         using var emitter = new EmitterImpl(unit, assemblyName, profile, referenceAssembly, compilationSources);
         emitter.Run();
-        emitter.SerializeTo(output);
+
+        // `TOAST-0038`. Nothing is serialized once a shape has been refused.
+        //
+        // A refusal happens part-way through a method, so the IL it leaves behind is
+        // incomplete by construction — a branch whose target was never marked, a stack that
+        // never balanced. Serializing that raised `InvalidOperationException: Label 5 has
+        // not been marked` from deep inside `PersistedAssemblyBuilder`, which is both a
+        // crash and a lie: the emitter had already recorded exactly what it could not
+        // handle, and that diagnostic was thrown away with the stack trace on top of it.
+        //
+        // Every caller already checks `IsClean` before touching the stream, so refusing to
+        // write is what they expect. What changes is that they now get the reason.
+        if (emitter.Diagnostics.Count == 0)
+        {
+            emitter.SerializeTo(output);
+        }
+
         return new EmitResult(emitter.Diagnostics);
     }
 }

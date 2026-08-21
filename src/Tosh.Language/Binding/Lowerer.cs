@@ -51,7 +51,7 @@ public static class Lowerer
     /// information is filled in by the runtime when the declaration
     /// actually executes.
     /// </summary>
-    private static IReadOnlyDictionary<string, BoundType> BuildUserTypeRegistry(StatementSyntax root)
+    internal static IReadOnlyDictionary<string, BoundType> BuildUserTypeRegistry(StatementSyntax root)
     {
         var registry = new Dictionary<string, BoundType>(StringComparer.Ordinal);
         Visit(root);
@@ -941,6 +941,29 @@ public static class Lowerer
             : BoundType.Dynamic;
     }
 
+    /// <summary>
+    /// Parentheses group; they do not erase — `TOAST-0034`.
+    /// </summary>
+    /// <remarks>
+    /// A subexpression's type was always dynamic, so wrapping anything in parentheses threw
+    /// away what was known about it. That is invisible until something reads the type of a
+    /// *target*: `(new Lexer($source)).Tokenize()` could not infer, while the identical code
+    /// written over two lines could — the parentheses were the difference, and nothing said
+    /// so.
+    ///
+    /// Only a single-stage pipeline is answered. More than one stage is a pipeline whose
+    /// value is whatever the last stage produced, which is a different question.
+    /// </remarks>
+    private static BoundSubexpression BuildSubexpression(SubexpressionArgumentSyntax subexpr, LowerContext ctx)
+    {
+        var pipeline = LowerPipeline(subexpr.Pipeline, ctx);
+
+        return new BoundSubexpression(
+            Pipeline: pipeline,
+            Span: subexpr.Span,
+            Type: TypeInferrer.InferPipelineValue(pipeline));
+    }
+
     private static BoundType InferMemberType(BoundType targetType, string memberPath, LowerContext ctx)
     {
         if (string.IsNullOrEmpty(memberPath) || memberPath.Contains('.')) return BoundType.Dynamic;
@@ -1157,10 +1180,7 @@ public static class Lowerer
                 Type: BoundType.Dynamic),
 
         SubexpressionArgumentSyntax subexpr =>
-            new BoundSubexpression(
-                Pipeline: LowerPipeline(subexpr.Pipeline, ctx),
-                Span: subexpr.Span,
-                Type: BoundType.Dynamic),
+            BuildSubexpression(subexpr, ctx),
 
         CommandSubstitutionArgumentSyntax cmdSub =>
             new BoundCommandSubstitution(

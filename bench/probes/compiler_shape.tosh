@@ -37,8 +37,8 @@ export class LexError(message: string, pos: int) extends Error {
     prop Help: string            = "The probe language accepts digits, identifiers, ( ) + - * / and '='."
 }
 
-export class ParseError(message: string, token) extends Error {
-    prop Token = $token
+export class ParseError(message: string, token: Token) extends Error {
+    prop Token: Token = $token
 
     prop Code: string            = "probe.parse.unexpected"
     prop DiagnosticTitle: string = "Unexpected token"
@@ -98,7 +98,9 @@ export class Lexer(source: string) {
     }
 
     ## @summary Produces the full token list, ending with an `eof` token.
-    func Tokenize() {
+    func Tokenize() -> list<Token> {
+        # Unannotated on purpose: an array literal already infers, and annotating it as
+        # `list<Token>` made `$tokens = $tokens + [...]` fail to convert back — `TOAST-0038`.
         var tokens = []
 
         while (not $this.AtEnd) {
@@ -150,37 +152,37 @@ export class VarNode(name: string) extends Node {
     prop Name: string = $name
 }
 
-export class UnaryNode(op: string, operand) extends Node {
+export class UnaryNode(op: string, operand: Node) extends Node {
     prop Kind: string = "unary"
     prop Op: string = $op
-    prop Operand = $operand
+    prop Operand: Node = $operand
 }
 
-export class BinaryNode(op: string, left, right) extends Node {
+export class BinaryNode(op: string, left: Node, right: Node) extends Node {
     prop Kind: string = "binary"
     prop Op: string = $op
-    prop Left = $left
-    prop Right = $right
+    prop Left: Node = $left
+    prop Right: Node = $right
 }
 
-export class LetNode(name: string, value, body) extends Node {
+export class LetNode(name: string, value: Node, body: Node) extends Node {
     prop Kind: string = "let"
     prop Name: string = $name
-    prop Value = $value
-    prop Body = $body
+    prop Value: Node = $value
+    prop Body: Node = $body
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Parser — recursive descent with precedence levels
 # ─────────────────────────────────────────────────────────────────────────────
 
-export class Parser(tokens) {
-    prop Tokens = $tokens
+export class Parser(tokens: list<Token>) {
+    prop Tokens: list<Token> = $tokens
     shy prop index_: int = 0
 
-    shy func Current() => $this.Tokens[$this.index_]
+    shy func Current() -> Token => $this.Tokens[$this.index_]
 
-    shy func Advance() {
+    shy func Advance() -> Token {
         var token = $this.Current()
         $this.index_ = $this.index_ + 1
         return $token
@@ -191,7 +193,7 @@ export class Parser(tokens) {
         return ($token.Kind == $kind) and ($token.Text == $text)
     }
 
-    shy func Expect(kind: string, text: string) {
+    shy func Expect(kind: string, text: string) -> Token {
         if (not $this.Matches($kind, $text)) {
             throw new ParseError($"expected '{$text}'", $this.Current())
         }
@@ -200,7 +202,7 @@ export class Parser(tokens) {
     }
 
     ## @summary expr := 'let' IDENT '=' expr 'in' expr | sum
-    func ParseExpr() {
+    func ParseExpr() -> Node {
         if ($this.Matches("keyword", "let")) {
             $this.Advance() | ignore
 
@@ -219,7 +221,7 @@ export class Parser(tokens) {
         return $this.ParseSum()
     }
 
-    shy func ParseSum() {
+    shy func ParseSum() -> Node {
         var left = $this.ParseProduct()
 
         while ($this.Matches("punct", "+") or $this.Matches("punct", "-")) {
@@ -231,7 +233,7 @@ export class Parser(tokens) {
         return $left
     }
 
-    shy func ParseProduct() {
+    shy func ParseProduct() -> Node {
         var left = $this.ParseUnary()
 
         while ($this.Matches("punct", "*") or $this.Matches("punct", "/")) {
@@ -243,7 +245,7 @@ export class Parser(tokens) {
         return $left
     }
 
-    shy func ParseUnary() {
+    shy func ParseUnary() -> Node {
         if ($this.Matches("punct", "-")) {
             $this.Advance() | ignore
             return new UnaryNode("-", $this.ParseUnary())
@@ -252,7 +254,7 @@ export class Parser(tokens) {
         return $this.ParseAtom()
     }
 
-    shy func ParseAtom() {
+    shy func ParseAtom() -> Node {
         var token = $this.Current()
 
         if ($token.Kind == "number") {
@@ -282,7 +284,7 @@ export class Parser(tokens) {
 
 ## @summary Folds the tree to a value, carrying an environment.
 export class Evaluator {
-    func Visit(node, scope) => match ($node) {
+    func Visit(node: Node, scope: Hashtable) -> double => match ($node) {
         _ is NumberNode => $node.Value
         _ is VarNode    => $this.LookUp($node.Name, $scope)
         _ is UnaryNode  => 0.0 - $this.Visit($node.Operand, $scope)
@@ -291,12 +293,12 @@ export class Evaluator {
         default         => throw new Error($"unhandled node kind '{$node.Kind}'")
     }
 
-    shy func LookUp(name: string, scope) {
+    shy func LookUp(name: string, scope: Hashtable) -> double {
         if (not $scope.ContainsKey($name)) { throw new Error($"undefined name '{$name}'") }
         return $scope[$name]
     }
 
-    shy func VisitLet(node, scope) {
+    shy func VisitLet(node: LetNode, scope: Hashtable) -> double {
         var inner = new System.Collections.Hashtable($scope)
         $inner[$node.Name] = $this.Visit($node.Value, $scope)
         return $this.Visit($node.Body, $inner)
@@ -313,7 +315,7 @@ export class Evaluator {
 
 ## @summary Renders the tree back to fully parenthesised source.
 export class Printer {
-    func Visit(node) => match ($node) {
+    func Visit(node: Node) -> string => match ($node) {
         _ is NumberNode => $"{$node.Value}"
         _ is VarNode    => $node.Name
         _ is UnaryNode  => $"(-{$this.Visit($node.Operand)})"
@@ -325,7 +327,7 @@ export class Printer {
 
 ## @summary Counts nodes by walking the tree — a trivial analysis pass.
 export class Counter {
-    func Visit(node) => match ($node) {
+    func Visit(node: Node) -> int => match ($node) {
         _ is NumberNode => 1
         _ is VarNode    => 1
         _ is UnaryNode  => 1 + $this.Visit($node.Operand)
@@ -339,7 +341,7 @@ export class Counter {
 # Driver
 # ─────────────────────────────────────────────────────────────────────────────
 
-export func Compile(source: string, scope) {
+export func Compile(source: string, scope: Hashtable) -> record {
     var tokens = (new Lexer($source)).Tokenize()
     var ast = (new Parser($tokens)).ParseExpr()
 

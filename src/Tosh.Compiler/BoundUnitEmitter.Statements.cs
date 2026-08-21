@@ -1639,6 +1639,20 @@ internal sealed partial class EmitterImpl
             _il.Emit(OpCodes.Stloc, resultLocal);
             return true;
         }
+
+        // `TOAST-0038`. `default => throw …` is the ordinary way to say an arm cannot
+        // happen, and it was refused here — which then abandoned the match's end label and
+        // crashed the assembly writer rather than reporting anything.
+        //
+        // A throw produces no value, so `resultLocal` is left as it was. The `br endLabel`
+        // the caller emits after this is unreachable, which is legal IL and simpler than
+        // teaching the caller about arms that do not return.
+        if (arm.Body.Statements.Count == 1
+            && arm.Body.Statements[0] is BoundThrowStatement throwStmt)
+        {
+            EmitThrowStatement(throwStmt);
+            return true;
+        }
         Diagnostics.Add(
             "match arm: only single-pipeline expression bodies are "
             + "supported in value context");

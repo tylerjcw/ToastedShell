@@ -1,7 +1,7 @@
 ---
 id: TOAST-0038
 title: "The readiness probe is untyped and does not compile, and it is Phase B's exit"
-status: open
+status: partial
 area: toast
 priority: 2
 opened: 2026-08-21
@@ -59,16 +59,74 @@ messages.
 would satisfy the compiler and defeat the point, since the probe exists to find out which
 parts of ToastScript fight back when you write compiler-shaped code.
 
+## Progress — 2026-08-21
+
+**The probe compiles.** Strict, no flags, from six errors to none. That is the first half of
+Phase B's exit sentence; the second half — running through the IL path — is blocked by
+`TOAST-0043`.
+
+Annotating it end to end found **five** things, four of which are now fixed. None had been
+reported by anyone; the probe exists to be written against, and this is what it caught.
+
+### 1. A collection could not be annotated with a declared element type
+
+`list<Token>`, `array<Token>` and `Token[]` all failed with "could not be converted";
+`list<int>` and `array<int>` worked. `List<int>` is a real CLR type to convert to, and a
+tōast class is a `ToshClassInstance`, so `List<Token>` does not exist for the conversion to
+target.
+
+Elements are now checked rather than converted, using the same `is` that answers "is this
+value that type" everywhere else. A lexer returning `list<Token>` is the ordinary shape of
+compiler-shaped code, so this was a hard stop.
+
+### 2. A property annotated with its own type reported a mismatch against itself
+
+`prop Operand: Node = $operand` → *"Cannot assign value of type 'Node' to property 'Operand'
+of type 'Node'."* Two different types with one name: the checker resolved member
+annotations with a resolver built `userTypes: null`, and once `TOAST-0034` gave resolution
+the platform index, a user type name found whatever CLR type shared it.
+
+**A regression introduced by `TOAST-0034` and caught by this item within the hour**, which
+is a fair argument for doing them adjacently.
+
+### 3. A refused shape crashed the assembly writer instead of reporting
+
+The emitter serialized unconditionally. A shape it had already declined leaves incomplete
+IL — a branch whose target was never marked — so `PersistedAssemblyBuilder` threw
+`InvalidOperationException: Label 5 has not been marked`, and the diagnostic naming the
+actual problem was discarded with a stack trace on top of it.
+
+Nothing is serialized after a refusal now. Every caller already checked `IsClean`; what
+changes is that they get the reason.
+
+### 4. A `match` arm could not throw
+
+`default => throw …` is how an arm says it cannot happen, and it was refused in value
+context — which is what produced the crash above.
+
+### 5. Filed, not fixed — `TOAST-0043`
+
+A compiled `match` arm reads a member off the *declared* type rather than the narrowed one,
+so `_ is Leaf => $n.V` gives `null` compiled and `3` interpreted where `$n: N`. That is the
+visitor pattern, and it is what a tree-walking pass is made of.
+
+### One local left unannotated, on purpose
+
+`var tokens = []` inside `Tokenize`. An array literal already infers, and annotating it
+`list<Token>` made the very next line — `$tokens = $tokens + [...]` — fail to convert back,
+because `+` over collections does not preserve the element type. The reason is in the
+source rather than only here.
+
 ## Acceptance
 
-- [ ] Every function, method, parameter and return in the probe is annotated concretely —
-      no `dynamic`, and the reason recorded wherever one is unavoidable
-- [ ] `tosh --compile` accepts it with no flags
-- [ ] The compiled probe produces the same output as the interpreted probe, asserted rather
-      than eyeballed
+- [x] Every function, method, parameter and return in the probe is annotated concretely —
+      no `dynamic`. One *local* is deliberately unannotated, with the reason in the source
+- [x] `tosh --compile` accepts it with no flags
+- [ ] The compiled probe produces the same output as the interpreted probe — **blocked by
+      `TOAST-0043`**
 - [ ] It runs without an interpreter dependency — the Phase B exit sentence, checked
       explicitly rather than assumed from a successful compile
-- [ ] Whatever fights back is filed, not worked around
+- [x] Whatever fights back is filed, not worked around — four fixed, one filed
 - [ ] A negative control
 
 ## Notes
