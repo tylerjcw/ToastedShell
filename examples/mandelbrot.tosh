@@ -1,0 +1,80 @@
+type PosInt = int where _ > 0 coerce (_ == 0 ? 1 : Math.abs(_))
+
+arg width        : PosInt = 80
+arg height       : PosInt = 40
+arg frames       : PosInt = 100
+arg maxIterations: PosInt = 100
+
+double targetX = -0.7436447860
+double targetY =  0.1318252536
+
+# Initial view coordinates
+double xMin = -2.0
+double xMax =  1.0
+double yMin = -1.0
+double yMax =  1.0
+
+double zoomFactor = 0.9
+
+for frame in 0..$frames {
+    clear
+
+    # Calculate actual zoom level compared to original view
+    double originalRangeX  = 3.0 # -2.0 to 1.0
+    double originalRangeY  = 2.0 # -1.0 to 1.0
+    double currentRangeX   = $xMax - $xMin;
+    double currentRangeY   = $yMax - $yMin;
+    double actualZoomLevel = $originalRangeX / $currentRangeX;
+    var tF = $frames
+
+    writeline $"Frame {($frame + 1) / $tF} - Zoom Level: {$actualZoomLevel:F2}% - Max Iterations: {$maxIterations}"
+
+    # Draw the current frame
+    for row in 0..$height {
+        for col in 0..$width {
+            double x0 = $xMin + ($xMax - $xMin) * $col / $width
+            double y0 = $yMin + ($yMax - $yMin) * $row / $height
+            
+            double x = 0
+            double y = 0
+            int iteration = 0
+
+            while (($x * $x + $y * $y < 4) and ($iteration < $maxIterations)) {
+                double xTemp = $x * $x - $y * $y + $x0
+                $y = 2 * $x * $y + $y0
+                $x = $xTemp
+                $iteration += 1
+            }
+
+            char displayChar = match ($iteration) {
+                _ == $maxIterations        => '#'
+                _ >  ($maxIterations * 0.75) => '@'
+                _ >  ($maxIterations * 0.50) => '*'
+                _ >  ($maxIterations * 0.25) => ' '
+                _ >  ($maxIterations * 0.10) => ' '
+                default => ' '
+            }
+
+            write $displayChar
+        }
+
+        writeline ""
+    }
+
+    # Adjust the boundaries to zoom in toward target
+    double rangeX = $xMax - $xMin
+    double rangeY = $yMax - $yMin
+
+    $xMin = $targetX - ($rangeX * $zoomFactor) / 2
+    $xMax = $targetX + ($rangeX * $zoomFactor) / 2
+    $yMin = $targetY - ($rangeY * $zoomFactor) / 2
+    $yMax = $targetY + ($rangeY * $zoomFactor) / 2
+
+    sleep 0.1
+
+    # Increase max iterations slightly as we zoom in to reveal more detail
+    int initialMaxIterations = $maxIterations;
+    if (($frame % 10 == 0) and ($maxIterations < $initialMaxIterations * 5)) {
+        $maxIterations += $initialMaxIterations / 10;
+    }
+}

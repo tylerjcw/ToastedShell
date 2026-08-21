@@ -113,7 +113,10 @@ struct WorkspaceSnapshot(root, files, options, now) {
         var root = $this.root
         var pattern = $this.options.todo_pattern
         var current_script = $tosh.Script.Path
-        var candidates = ($this.code_files()
+        # `TOAST-0039`: a collection returned by a call is one value, so it is bound
+        # before being piped — a variable head is a sequence.
+        var code = $this.code_files()
+        var candidates = ($code
             | where _.FullName != $current_script
             | where _.Size <= 1mb
             | sort Modified
@@ -163,7 +166,8 @@ class SummarySection uses ReportSection {
     func render(snapshot) {
         writeline $"Root: {$snapshot.root}"
         writeline $"Files scanned: {$snapshot.files.Length}"
-        writeline $"Code-like files: {($snapshot.code_files() | count)}"
+        var code_files = $snapshot.code_files()
+        writeline $"Code-like files: {($code_files | count)}"
         writeline $"Total size: {$snapshot.total_size()}"
         writeline $"Recent window: {$snapshot.options.recent_window}"
         writeline $"Large-file threshold: {$snapshot.options.large_threshold}"

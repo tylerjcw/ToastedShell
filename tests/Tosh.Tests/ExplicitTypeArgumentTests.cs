@@ -37,11 +37,11 @@ public sealed class ExplicitTypeArgumentTests : IClassFixture<ToshRuntimeFixture
     }
 
     [Theory]
-    [InlineData("Array.Empty<int>() | count", "0")]
-    [InlineData("Enumerable.Empty<string>() | count", "0")]
+    [InlineData("echo ...(Array.Empty<int>()) | count", "0")]
+    [InlineData("echo ...(Enumerable.Empty<string>()) | count", "0")]
     [InlineData("Task.FromResult<int>(7) | await", "7")]
     [InlineData("Tuple.Create<int, int>(1, 2) | get Item2", "2")]
-    [InlineData("System.Array.Empty<string>() | count", "0")]
+    [InlineData("echo ...(System.Array.Empty<string>()) | count", "0")]
     public async Task A_static_call_takes_explicit_type_arguments(string script, string expected)
     {
         Assert.Equal(expected, (await EvalAsync(script))?.ToString());
@@ -64,7 +64,7 @@ public sealed class ExplicitTypeArgumentTests : IClassFixture<ToshRuntimeFixture
     [InlineData("var A = 3\nvar b = 5\n($A < $b)", "True")]
     [InlineData("Task.FromResult(7) | await", "7")]
     [InlineData("Math.Max(1, 2)", "2")]
-    [InlineData("Enumerable.Range(1, 3) | count", "3")]
+    [InlineData("echo ...(Enumerable.Range(1, 3)) | count", "3")]
     public async Task Neighbouring_forms_are_unaffected(string script, string expected)
     {
         Assert.Equal(expected, (await EvalAsync(script))?.ToString());

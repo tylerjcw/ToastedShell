@@ -1,10 +1,11 @@
 ---
 id: TOAST-0039
 title: "A function and a method returning the same collection have different pipeline shapes"
-status: open
+status: complete
 area: toast
 priority: 2
 opened: 2026-08-21
+closed: 2026-08-21
 ---
 
 ## Problem
@@ -66,13 +67,51 @@ knowing how the head parsed.
 
 ## Acceptance
 
-- [ ] The four head forms give answers that can be stated in one sentence
-- [ ] `docs/spec/` §Collection Shape says which, with the examples above
-- [ ] Every `.tosh` in the repository is *run*, not `--help`ed, before and after
-- [ ] A negative control
+- [x] The four head forms give answers that can be stated in one sentence
+- [x] `docs/spec/` §Collection Shape says which, with the examples above
+- [x] Every `.tosh` in the repository is *run*, not `--help`ed, before and after
+- [x] A negative control
 
 ## Notes
 
 Filed against `TOAST-0028`'s own work rather than discovered later, and the trigger was
 `scripts/plan.tosh index` failing immediately after the five Phase B items were written —
 the board tooling was the first real program to hit it.
+
+## Resolution — 2026-08-21
+
+**A collection written as an expression is a sequence; a collection returned by a call is a
+value.** One sentence, no exceptions that depend on how the head parsed.
+
+`new` is deliberately on the *written* side. Treating construction as a call was tried
+first, and it made `new array(1, 2, 3) | count` answer 1 while the identical
+`[1, 2, 3] | count` answered 3 — this item's own defect, reintroduced one spelling over. A
+property read is on the written side for the same reason: `$c.Items` *is* the collection in
+the way a variable is one, and it is the calling that produces a new value.
+
+### Cost
+
+Six tests, all probing type-argument resolution rather than shape, where `| count` was
+counting the results of a static call: `Enumerable.Range(1, 3) | count` and its kin. They
+say `echo ...(Enumerable.Range(1, 3)) | count` now, which says what they meant.
+
+One example needed migrating — `examples/common_tasks/06_workspace_brief.tosh` called
+`$this.code_files()` straight into a pipeline twice. Both bind to a variable first.
+
+### The verification, and what it nearly missed
+
+Every runnable `.tosh` was run before and after, not `--help`ed. That found the example —
+**and the error count did not.** `06` reported no diagnostic at all: it printed
+`Code-like files: 1` where it had printed 1457, and carried on. A sweep that counts errors
+would have called that a pass.
+
+The output diff had its own flaw worth recording: rebuilding between the two captures
+changes the filesystem these scripts measure, so file counts and timestamps differ for
+reasons that have nothing to do with the change. What discriminated was checking the
+shape-sensitive values directly — a count that collapses to 1 is the signature of this
+defect, and nothing else in the output looks like it.
+
+## Notes
+
+Filed against `TOAST-0028`'s own work and fixed the same day. The rule it shipped was
+syntactic; this made it semantic.

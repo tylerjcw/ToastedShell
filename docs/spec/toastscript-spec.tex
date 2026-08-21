@@ -2506,17 +2506,37 @@ which is why they count as one. Their parts are reached by name, or by iterating
 \code{.Keys}.
 
 \paragraph{Who decides that a collection is a sequence.}
-The \textbf{producer} does. A collection written as an expression at the head of a
-pipeline --- a literal, a variable holding one, a range --- is a sequence, and its
-elements are sent. A collection \emph{yielded} by a command or a generator is a value,
-and it is sent as one item:
+The \textbf{producer} does, and the rule is one sentence: a collection \textbf{written} as
+an expression is a sequence, and a collection \textbf{returned by a call} is a value.
+
+Written --- a literal, a variable holding one, a range, a property read, a
+constructor --- so its elements are sent:
 
 \begin{lstlisting}
+echo ([1, 2, 3] | count)              # 3
+echo (1..3 | count)                   # 3
+echo (new array(1, 2, 3) | count)     # 3  -- constructing writes a value
 echo ([[1, 2], [3]] | count)          # 2  -- two items, each an array
-echo (echo [1, 2, 3] | count)         # 1  -- `echo` yields one value
-func a() { yield [1, 2, 3] }
-echo (a | count)                      # 1  -- so does a generator
 \end{lstlisting}
+
+Returned by a call --- a command, a function, a method, a generator --- so it is sent as
+one item, however the call is spelled:
+
+\begin{lstlisting}
+func a() { yield [1, 2, 3] }
+func f() { return [1, 2, 3] }
+class C { func m() { return [1, 2, 3] } }
+var c = new C()
+
+echo (echo [1, 2, 3] | count)         # 1  -- a command
+echo (a | count)                      # 1  -- a generator
+echo (f() | count)                    # 1  -- a function
+echo ($c.m() | count)                 # 1  -- a method
+\end{lstlisting}
+
+A \emph{property} read is on the written side, not the called side: \code{\$c.Items} is
+the collection in the way a variable is one, and it is the calling that produces a new
+value.
 
 The consequence worth stating is what \emph{cannot} happen: the shape of a value does not
 depend on how much data follows it. A generator yielding one array and the same generator
@@ -2542,6 +2562,12 @@ It also cost an item. Deciding ``is this the only one?'' requires reading one it
 than the consumer asked for, so a generator was advanced once more than necessary and any
 side effect of that step happened for an item nobody requested. A mark placed by the
 producer needs no lookahead to read.
+
+The first version of this rule was \emph{syntactic} rather than semantic: every expression
+head was a sequence. That made \code{f() | count} answer 1 and \code{\$c.m() | count}
+answer 3 for a function and a method returning the identical collection --- a difference
+the author could not see, because it came from how the head parsed rather than from
+anything written. \code{TOAST-0039} replaced it with the sentence above.
 
 Changing this was affordable only once \code{...} existed to spell the old meaning, which
 is why \S\ref{sec:pipeline-spread} came first.

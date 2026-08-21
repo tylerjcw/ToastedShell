@@ -191,4 +191,70 @@ public sealed class CollectionShapeTests
     [InlineData("sort")]
     public async Task An_empty_stream_survives_the_peek_path(string stage)
         => Assert.Equal("0", await RunAsync($"([] | {stage} | count)"));
+
+    /// <summary>
+    /// A collection returned by a call is a value, however the call is spelled —
+    /// `TOAST-0039`.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// `TOAST-0028` made the producer decide shape and implemented that rule *syntactically*:
+    /// every expression head was a sequence. So a function returning a collection answered 1,
+    /// because a bare name parses as a command, while a method returning the identical
+    /// collection answered 3, because `$c.m()` parses as an expression. Nothing about the
+    /// author's intent differed — only the parse did.
+    /// </para>
+    /// <para>
+    /// The rule is now one sentence: a collection **written** as an expression is a
+    /// sequence, and a collection **returned by a call** is a value.
+    /// </para>
+    /// </remarks>
+    [Theory]
+    // Every way of calling something agrees.
+    [InlineData("fn", "1")]
+    [InlineData("fn()", "1")]
+    [InlineData("$c.m()", "1")]
+    public async Task A_collection_returned_by_a_call_is_one_value(string head, string expected)
+        => Assert.Equal(expected, await RunAsync(Callables + $"({head} | count)"));
+
+    /// <summary>
+    /// A collection *written* as an expression is still a sequence.
+    /// </summary>
+    /// <remarks>
+    /// The control, and it is doing real work: making every call yield a value could have
+    /// been implemented by marking nothing at all, which would satisfy the theory above and
+    /// break every literal pipeline in the language.
+    ///
+    /// A property read belongs on this side rather than with the calls. `$c.Items` *is* the
+    /// collection in the way a variable is one; it is the calling that produces a new value.
+    /// </remarks>
+    [Theory]
+    [InlineData("[1, 2, 3]", "3")]
+    [InlineData("$v", "3")]
+    [InlineData("1..3", "3")]
+    [InlineData("$c.Items", "3")]
+    // `new` constructs a value the way a literal writes one. Treating it as a call would
+    // make `new array(1, 2, 3)` answer 1 while the identical `[1, 2, 3]` answers 3 — the
+    // very defect this item removes, reintroduced one spelling over.
+    [InlineData("new array(1, 2, 3)", "3")]
+    public async Task A_collection_written_as_an_expression_is_a_sequence(string head, string expected)
+        => Assert.Equal(expected, await RunAsync(Callables + $"({head} | count)"));
+
+    /// <summary>`...` still says the other meaning, for any of them.</summary>
+    [Theory]
+    [InlineData("echo ...($c.m()) | count", "3")]
+    [InlineData("echo ...(fn()) | count", "3")]
+    public async Task A_call_can_be_spread(string source, string expected)
+        => Assert.Equal(expected, await RunAsync(Callables + $"({source})"));
+
+    private const string Callables = """
+        func fn() { return [1, 2, 3] }
+        class ShapeC {
+            prop Items: object = [1, 2, 3]
+            func m() { return [1, 2, 3] }
+        }
+        var c = new ShapeC()
+        var v = [1, 2, 3]
+
+        """;
 }

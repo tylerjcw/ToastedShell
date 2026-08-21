@@ -41,7 +41,7 @@ public sealed class GenericInferenceTests : IClassFixture<ToshRuntimeFixture>
     [InlineData("Task.FromResult(\"a\") | await", "a")]
     [InlineData("Tuple.Create(1, 2) | get Item2", "2")]
     [InlineData("Tuple.Create(1, \"a\") | get Item2", "a")]
-    [InlineData("Enumerable.Repeat(5, 3) | count", "3")]
+    [InlineData("echo ...(Enumerable.Repeat(5, 3)) | count", "3")]
     public async Task A_generic_static_infers_its_type_argument(string script, string expected)
     {
         Assert.Equal(expected, (await EvalAsync(script))?.ToString());
@@ -103,7 +103,7 @@ public sealed class GenericInferenceTests : IClassFixture<ToshRuntimeFixture>
 
     [Theory]
     [InlineData("Math.Max(1, 2)", "2")]
-    [InlineData("Enumerable.Range(1, 3) | count", "3")]
+    [InlineData("echo ...(Enumerable.Range(1, 3)) | count", "3")]
     [InlineData("String.Join(\",\", [\"a\",\"b\"])", "a,b")]
     [InlineData("Path.GetFileName(\"/etc/hostname\")", "hostname")]
     public async Task Non_generic_resolution_is_unaffected(string script, string expected)

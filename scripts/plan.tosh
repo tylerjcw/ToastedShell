@@ -230,7 +230,7 @@ subcommand check {
 subcommand index {
     var items = load()
     for board in $BOARDS {
-        var rows = ($items | where { $_["board"] == $board } | collect)
+        var rows = (...$items | where { $_["board"] == $board } | collect)
         var out = [
             $"# {$board.Substring(0, 1)}{$board.Substring(1).ToLower()}",
             "",

@@ -2659,13 +2659,40 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
         // them is what `[1, 2, 3] | where { … }` has always meant. Marking says so at the
         // producer, which is the point of the change; downstream no longer has to guess it
         // from how many items happen to arrive.
-        //
-        // Deliberately the whole stage rather than the collection-valued cases: every head
-        // that already yielded elements (a range, the namespace replay) keeps behaving as
-        // it does today, because the marked path *is* the behaviour it has today.
-        return new SpreadableSequence(
-            ExecuteExpressionStageCoreAsync(sourceName, sourceText, expressionStage, cancellationToken));
+        var core = ExecuteExpressionStageCoreAsync(sourceName, sourceText, expressionStage, cancellationToken);
+
+        return HeadIsACall(expressionStage.Expression) ? core : new SpreadableSequence(core);
     }
+
+    /// <summary>
+    /// Whether a pipeline head <em>calls</em> something — `TOAST-0039`.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// `TOAST-0028` marked every expression head as a sequence, which made the rule
+    /// syntactic in a way authors could not see. A function returning a collection answered
+    /// 1 because a bare name parses as a command; a method returning the identical
+    /// collection answered 3 because `$c.m()` parses as an expression. Nothing about the
+    /// author's intent differed.
+    /// </para>
+    /// <para>
+    /// The rule is now one sentence: a collection <em>written</em> as an expression is a
+    /// sequence, and a collection <em>returned by a call</em> is a value. A property read
+    /// stays a sequence, because `$obj.Items` <em>is</em> the collection in the same way a
+    /// variable is — it is the calling that produces one.
+    /// </para>
+    /// </remarks>
+    private static bool HeadIsACall(ArgumentSyntax expression) => expression switch
+    {
+        MethodCallArgumentSyntax => true,
+        StaticMethodCallArgumentSyntax => true,
+        CallableInvocationArgumentSyntax => true,
+        // `new` is deliberately **not** a call here. It constructs a value the way a
+        // literal writes one, and treating it as a call would make `new array(1, 2, 3)`
+        // answer 1 while the identical `[1, 2, 3]` answers 3 — the same defect this item
+        // exists to remove, reintroduced one spelling over.
+        _ => false,
+    };
 
     private static async IAsyncEnumerable<object?> ReplayBindingAsync(
         IEnumerable source,
