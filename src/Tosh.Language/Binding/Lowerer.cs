@@ -833,6 +833,15 @@ public static class Lowerer
         VariableReferenceArgumentSyntax varRef =>
             BuildVariableReference(varRef, ctx),
 
+        // `TOAST-0040`. `...value` as a pipeline stage. A spread inside an array literal is
+        // `BoundArrayLiteralItem.IsSpread` and argument position is a splat; this is the
+        // stage form `TOAST-0032` added and nothing lowered.
+        SpreadElementArgumentSyntax spreadElement =>
+            new BoundSpreadElement(
+                LowerExpression(spreadElement.Value, ctx),
+                spreadElement.Span,
+                BoundType.Dynamic),
+
         MemberAccessArgumentSyntax member =>
             new BoundMemberAccess(
                 Target: LowerExpression(member.Target, ctx),
@@ -1697,6 +1706,16 @@ public static class Lowerer
 
             case ClassEventMemberSyntax ev:
                 return new BoundClassEventMember(ev.Name, ev.PayloadTypeName, ev.IsShy, ev.Span);
+
+            // `TOAST-0040`. A `bind` block inside a class. `LowerBindStatement` already
+            // existed and was reachable for a top-level `bind`; only the class-member
+            // wrapper was never routed to it, so the lowerer threw and produced no IR for
+            // the entire file.
+            case ClassBindMemberSyntax bindMember:
+                return new BoundClassBindMember(
+                    LowerBindStatement(bindMember.Bind),
+                    bindMember.IsShy,
+                    bindMember.Span);
 
             default:
                 throw new InvalidOperationException($"Unknown class member kind: {member.GetType().Name}");

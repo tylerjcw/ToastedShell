@@ -651,6 +651,49 @@ public sealed record BoundRuneDefinition(
 public abstract record BoundClassMember(TextSpan Span) : BoundNode(Span);
 
 /// <summary>
+/// A native <c>bind</c> block declared inside a class — `TOAST-0040`.
+/// </summary>
+/// <remarks>
+/// The bind block itself already had a bound form; what was missing was the wrapper saying
+/// it appeared as a class member. Without it the lowerer threw
+/// <c>Unknown class member kind: ClassBindMemberSyntax</c> and produced no IR for the whole
+/// file, so every library that binds a native surface — SDL, OpenGL, GTK — was invisible to
+/// anything reading the tree.
+///
+/// Emitting one is still out of scope (`bind` blocks are not CLR-emittable and stay
+/// Tier 3). Lowering and emitting are different questions, and only the second was
+/// deliberately unanswered.
+/// </remarks>
+/// <summary>
+/// `...value` in pipeline-stage position — `TOAST-0040`.
+/// </summary>
+/// <remarks>
+/// `TOAST-0032` added `...` as a pipeline stage and taught the interpreter to run it. The
+/// lowerer was never taught, so a head spread became a dynamic expression and the emitter
+/// refused the whole unit — "dynamic argument expressions (SpreadElementArgumentSyntax)
+/// are not yet emitted", no output written.
+///
+/// That mattered more than an ordinary gap, because `...` is the migration spelling
+/// `TOAST-0028` and `TOAST-0039` tell people to write. Code migrated onto the new
+/// collection-shape rule could not be compiled at all.
+///
+/// A spread inside an array literal is a different node — `BoundArrayLiteralItem` carries
+/// an `IsSpread` flag — and argument position is `SplatArgumentSyntax`. Only the stage form
+/// was missing.
+/// </remarks>
+public sealed record BoundSpreadElement(
+    BoundExpression Value,
+    TextSpan Span,
+    BoundType Type)
+    : BoundExpression(Span, Type);
+
+public sealed record BoundClassBindMember(
+    BoundBindStatement Bind,
+    bool IsShy,
+    TextSpan Span)
+    : BoundClassMember(Span);
+
+/// <summary>
 /// One property/field of a class or struct: <c>prop X = init</c>.
 /// Initializer + optional getter/setter bodies are bound. Visibility
 /// flags are surfaced verbatim so the IL emitter can stamp them.

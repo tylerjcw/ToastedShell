@@ -2567,7 +2567,8 @@ The first version of this rule was \emph{syntactic} rather than semantic: every 
 head was a sequence. That made \code{f() | count} answer 1 and \code{\$c.m() | count}
 answer 3 for a function and a method returning the identical collection --- a difference
 the author could not see, because it came from how the head parsed rather than from
-anything written. \code{TOAST-0039} replaced it with the sentence above.
+anything written. The sentence above replaced it, and the distinction it draws is between
+writing a collection and calling for one.
 
 Changing this was affordable only once \code{...} existed to spell the old meaning, which
 is why \S\ref{sec:pipeline-spread} came first.

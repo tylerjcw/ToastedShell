@@ -251,6 +251,16 @@ internal sealed partial class EmitterImpl
                 _il.Emit(OpCodes.Call, s_hostRunStage);
                 break;
 
+            // `TOAST-0040`. `...value` as the head. Must precede the general expression
+            // stage below, because a spread is not a value to seed from — the author has
+            // already said the elements are what they mean.
+            case BoundExpressionStage { Value: BoundSpreadElement spreadHead }:
+                var spreadType = EmitExpression(spreadHead.Value);
+                if (spreadType is null) return null;
+                BoxIfValueType(spreadType);
+                _il.Emit(OpCodes.Call, s_hostSeedFromSpread);
+                break;
+
             case BoundExpressionStage exprStage:
                 // SeedFromValue(<expr>) — boxes the value (if needed)
                 // and turns it into IAsyncEnumerable<object?>.

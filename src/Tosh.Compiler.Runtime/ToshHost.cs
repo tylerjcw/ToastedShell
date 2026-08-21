@@ -1522,6 +1522,18 @@ public static class ToshHost
         return new SpreadableSequence(SingletonAsync(value));
     }
 
+    /// <summary>
+    /// Seeds a pipeline from `...value` — `TOAST-0040`.
+    /// </summary>
+    /// <remarks>
+    /// The counterpart to <see cref="SeedFromValue"/>. That one says "this is one value and
+    /// the language decides its shape"; this one is the author having already said it, so
+    /// the elements are sent and nothing is inferred.
+    /// </remarks>
+    public static IAsyncEnumerable<object?> SeedFromSpread(object? value)
+        => new PreExpandedSequence(
+            SyncToAsync(ShellIterationUtilities.ExpandIterationItems(value)));
+
     private static async IAsyncEnumerable<object?> SingletonAsync(object? item)
     {
         yield return item;

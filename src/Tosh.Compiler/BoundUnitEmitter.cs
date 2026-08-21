@@ -569,6 +569,10 @@ internal sealed partial class EmitterImpl : IDisposable
     private static readonly MethodInfo s_hostMakeBlock =
         s_toshHost.GetMethod(nameof(global::Tosh.Compiler.Runtime.ToshHost.MakeBlock),
             new[] { typeof(int), typeof(int), typeof(Dictionary<string, object?>) })!;
+    private static readonly MethodInfo s_hostSeedFromSpread =
+        s_toshHost.GetMethod(nameof(global::Tosh.Compiler.Runtime.ToshHost.SeedFromSpread),
+            BindingFlags.Public | BindingFlags.Static)!;
+
     private static readonly MethodInfo s_hostSeedFromValue =
         s_toshHost.GetMethod(nameof(global::Tosh.Compiler.Runtime.ToshHost.SeedFromValue),
             new[] { typeof(object) })!;
