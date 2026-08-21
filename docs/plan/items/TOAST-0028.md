@@ -169,23 +169,96 @@ sequence.
 
 That does not decide anything below. It removes the reason the decision was unaffordable.
 
-## Scope, restated after two attempts
+## Design — 2026-08-21
 
-The engine mechanism is settled and small: a `SpreadableSequence` marker set by the
-producer, and `ReplaySingleInputCollectionAsync` reading it instead of counting. What is
-not settled is everything around it:
+Written after two attempts, before a third. No code changed.
 
-1. **Every expansion path must be found.** At least two exist —
-   `ReplaySingleInputCollectionAsync` (41 commands) and `PeekForTreeAsync` (5) — and they
-   respond differently to the same stream. Any others need finding before starting.
-2. **Commands that yield a whole collection meaning a sequence must yield elements.**
-   `from csv` is done in principle; the rest are unknown until the first item is resolved.
-3. **`echo`, `cast` and their kin need a decided answer**, because
-   `echo [1,2,3] | count` and `cast list<int> | count` change from 3 to 1 and both are
-   idiomatic.
+### Every path that expands, and which ones decide shape
 
-That is a piece of work with its own design phase, not a change that can be made while
-passing through.
+Four things expand a collection, and only **two** of them make a *shape decision*. That
+distinction is what the earlier attempts lacked.
+
+| Path | Callers | Decides shape? |
+|---|---:|---|
+| `ReplaySingleInputCollectionAsync` | 43 | **yes** — expands a lone collection |
+| `PeekForTreeAsync` | 4 | **yes** — same rule, written separately |
+| `ExpandIterationItems` / `…Async` | 15 sites | no — unconditional iteration of a *value* |
+| Head expansion in `ExecuteExpressionStageCoreAsync` | 1 | partly — ranges, and the variable replay |
+
+The third group is `for`, comprehensions, `join`, `chain`, `cartesian-product` — commands
+iterating a collection given as an **argument**. They take a value and walk it. No
+cardinality is consulted and nothing about this item touches them.
+
+### The correction that makes this tractable
+
+Attempt two reported that `count` and `where` "disagree about the same input". **They do
+not disagree today.** `PeekForTreeAsync` ends with:
+
+```csharp
+// Not a tree. Replay as single-collection expansion.
+var hasMore = await enumerator.MoveNextAsync();
+if (!hasMore) return (null, ExpandIterationItemsAsync(first, cancellationToken));
+```
+
+— the same lone-collection rule, with the same lookahead. The two are **two copies of one
+rule**, and the disagreement appeared only because the attempt changed one copy.
+
+So this is not "find and reconcile several competing rules". It is: one rule, written
+twice, that needs changing once.
+
+### The plan, in stages that each end green
+
+1. **Unify.** Give `PeekForTreeAsync` its tree-detection job only, and have it obtain items
+   through `ReplaySingleInputCollectionAsync`. Behaviour identical; the suite must pass
+   unchanged. This is the step that makes the rest a one-place change, and it can be
+   committed on its own.
+2. **Mark the producer.** `SpreadableSequence` set by an expression stage, and the unified
+   helper reading the mark instead of counting. Attempt two showed this works and costs two
+   files.
+3. **Fix the producers that mean a sequence.** `from csv` is done in principle — one row
+   per item rather than the whole table, which also restores streaming. The rest are found
+   by reading the failures, not by grepping; attempt two's 16 remaining failures came from
+   about four causes.
+4. **Update the tests that pin the old rule.** Roughly eleven — `EngineTests`'
+   `*_expands_single_collection_input` family, `ShortCircuitPullTests`, and the two in
+   `CollectionShapeTests` that assert the defect deliberately and are *supposed* to flip.
+
+### The `echo` and `cast` question, and a recommended answer
+
+Both change from 3 to 1:
+
+```tosh
+echo [1, 2, 3] | count               # 3 today, 1 after
+echo [1,2,3] | cast list<int> | count   # 3 today, 1 after — a documented example
+```
+
+**Recommended: let them change, and spell the old meaning `...`.**
+
+- `cast list<int>` producing *one list* and `| count` answering **1** is not a regression,
+  it is the honest answer: a cast to a list type makes a list. Getting 3 required the
+  pipeline to undo the cast's whole point.
+- `echo` emitting one value for one argument is consistent with every other command; what
+  made it look different was the consumer guessing.
+- `...` now exists, so `echo ...$xs | count` and `...(cast list<int> $xs) | count` say the
+  old meaning explicitly. That spelling did not exist during either attempt, which is why
+  both had to treat this as breakage rather than migration.
+
+This wants confirming before stage 3, because it is the only part of the change a user
+would notice in a session they had already written.
+
+### What is already known about the cost
+
+From attempt two, measured rather than estimated: 39 failures, of which 24 were `from csv`
+alone, about 11 were tests pinning the old rule, and the rest were `echo`/`cast` and their
+kin. Nothing in that set was mysterious once named.
+
+## Scope, restated after two attempts — superseded by the design above
+
+This section said the expansion paths "respond differently to the same stream" and that
+finding them all was the open question. **Both claims were wrong**, and the design pass
+above corrects them: the two shape-deciding paths implement the *same* rule, and they were
+found by reading `PeekForTreeAsync` to the end rather than by a search. Kept because the
+wrong version is what two attempts were planned against.
 
 ## Acceptance
 
