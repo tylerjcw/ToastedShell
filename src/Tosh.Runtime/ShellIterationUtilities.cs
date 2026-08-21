@@ -56,7 +56,16 @@ public static class ShellIterationUtilities
     /// Kept beside the expansion it mirrors, because the two disagreeing would put the
     /// lookahead back for values that do not need it or remove it for values that do.
     /// </remarks>
-    private static bool IsExpandableForIteration(object? value)
+    /// <summary>
+    /// Whether the language treats this value as a sequence rather than an atom.
+    /// </summary>
+    /// <remarks>
+    /// Public since `TOAST-0029`, so `is` answers the same question the pipeline does: a
+    /// `str`, a record and a dictionary are single values (`§Collection Shape`), and a
+    /// bare `is IEnumerable` has to agree with that or the two would contradict each other
+    /// about what a string is. Sharing the predicate is what keeps them in step.
+    /// </remarks>
+    public static bool IsExpandableForIteration(object? value)
     {
         if (value is IShellEnumerableObject)
         {

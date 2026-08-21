@@ -1,10 +1,11 @@
 ---
 id: TOAST-0029
 title: "`is` matches a CLR value's exact type name only, so `$x is IEnumerable` and `$e is Exception` are always false"
-status: open
+status: complete
 area: toast
 priority: 2
 opened: 2026-08-20
+closed: 2026-08-21
 ---
 
 ## Problem
@@ -55,15 +56,56 @@ a list nobody has written yet.
 
 ## Acceptance
 
-- [ ] `is` agrees with itself: a declared class instance and a CLR value answer the same
+- [x] `is` agrees with itself: a declared class instance and a CLR value answer the same
       kind of question
-- [ ] `$ex is Exception` is true for a CLR exception
-- [ ] Whatever is decided about `"abc" is IEnumerable`, it agrees with `§Collection Shape`
-      and both say so
-- [ ] A caught runtime diagnostic can be identified by a **portable** spelling, not by the
-      implementation type name it happens to have
-- [ ] `is` against a declared class, interface and trait is unchanged, pinned as controls
-- [ ] A negative control
+- [x] `$ex is Exception` is true for a CLR exception
+- [x] Whatever is decided about `"abc" is IEnumerable`, it agrees with `§Collection Shape`
+      and both say so — and they share one predicate rather than two lists
+- [x] A caught runtime diagnostic can be identified by a **portable** spelling — **the
+      defect half is done and the design half is `TOAST-0031`.** `$e is Exception` now
+      works where only `$e is ToshDiagnosticException` did, so a handler can tell a
+      diagnostic from a declared error from a plain thrown value. `Exception` is still a
+      CLR name, and giving the category a Tōast one is a naming decision this item was not
+      scoped to make — split out rather than left hanging here
+- [x] `is` against a declared class, interface and trait is unchanged, pinned as controls
+- [x] A negative control — 9 of 24
+
+## Resolution — 2026-08-21
+
+**The defect was name resolution, not assignability.** `IsType` already used
+`IsInstanceOfType` at three points; it simply could not turn a bare name into a type,
+because its only general fallback was `Type.GetType`, which needs an assembly qualifier. A
+bare name now resolves against the same platform index an import consults, so a name means
+one thing wherever it is written.
+
+That measurement changed the item's framing entirely: the options as filed argued about
+what `is` should *mean*, when the operator already meant the right thing and could not
+find the type.
+
+### The fork the decision did not cover
+
+The options assumed `"abc" is IEnumerable` was false and asked whether to keep it so.
+Measuring found the **qualified** spelling was already `true`:
+
+```tosh
+("abc" is System.Collections.IEnumerable)   # true, before any change
+```
+
+So "exclude the language's atoms" had to say *which spellings* it applied to, which the
+decision as taken could not. Asked and answered: a **bare** name asks about the language's
+value model and answers per `§Collection Shape`; a **namespace-qualified** name asks about
+the host type graph and is answered literally, because answering it any other way would
+mislead code written to bridge to .NET.
+
+### One predicate, not two lists
+
+The acceptance asked for the exception list to be "kept in step with the shape rules". It
+is kept in step by not existing: `is` consults
+`ShellIterationUtilities.IsExpandableForIteration`, the same predicate the pipeline uses to
+decide what spreads. A test asserts the two agree per value rather than trusting them to.
+
+The rule fires only for a *sequence* question — a target that is an interface assignable
+from `IEnumerable` — so `is string` and `is IComparable` are untouched.
 
 ## Notes
 

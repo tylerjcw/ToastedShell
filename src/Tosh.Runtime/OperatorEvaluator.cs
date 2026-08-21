@@ -1211,7 +1211,51 @@ public static class OperatorEvaluator
             _ => Type.GetType(typeName, throwOnError: false),
         };
 
-        return resolved is not null && resolved.IsInstanceOfType(value);
+        if (resolved is not null)
+        {
+            return resolved.IsInstanceOfType(value);
+        }
+
+        // `TOAST-0029`. A bare CLR name, which `Type.GetType` above cannot resolve without
+        // an assembly qualifier — so `$e is Exception` and `[1,2] is IEnumerable` were
+        // false while `$e is System.Exception` and the qualified `IEnumerable` were true.
+        // The same index an import consults answers it, so a name means one thing.
+        if (DotNetTypeResolver.TryResolveKnownType(typeName, out var byName) && byName is not null)
+        {
+            return MatchesBareTypeName(value, byName);
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Assignability, except that the language's atoms are not sequences — `TOAST-0029`.
+    /// </summary>
+    /// <remarks>
+    /// A <em>bare</em> name asks a question about the language's value model, and
+    /// `§Collection Shape` says a `str`, a record and a dictionary are single values. So
+    /// `"abc" is IEnumerable` is false even though `string` implements it, and the
+    /// predicate consulted is the pipeline's own — the two cannot drift apart about what a
+    /// string is.
+    ///
+    /// A <em>namespace-qualified</em> name is a different question: it asks about the host
+    /// type graph explicitly, and is answered by plain assignability above. So
+    /// `"abc" is System.Collections.IEnumerable` remains true. Two spellings, two
+    /// questions, and the specification says so.
+    /// </remarks>
+    private static bool MatchesBareTypeName(object value, Type target)
+    {
+        if (!target.IsInstanceOfType(value))
+        {
+            return false;
+        }
+
+        // Only a *sequence* interface triggers the atom rule. `is string` and
+        // `is IComparable` are unaffected, because neither asks whether the value is a
+        // sequence.
+        var asksAboutSequences = target.IsInterface && typeof(IEnumerable).IsAssignableFrom(target);
+
+        return !asksAboutSequences || ShellIterationUtilities.IsExpandableForIteration(value);
     }
 
     private static object? Add(object? left, object? right)

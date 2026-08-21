@@ -292,6 +292,19 @@ public sealed class DotNetTypeResolver : IImportingTypeResolver
 
     public static IReadOnlyCollection<Type> GetKnownTypes() => PlatformTypes.Value.Types;
 
+    /// <summary>
+    /// Resolves a type name against the platform index — `TOAST-0029`.
+    /// </summary>
+    /// <remarks>
+    /// Exposed so `is` can answer a bare name. It had only `Type.GetType`, which needs an
+    /// assembly qualifier, so `$e is Exception` and `[1,2] is IEnumerable` were always
+    /// false while the fully-qualified spellings of both were true. The index is the same
+    /// one `Resolve` consults, so the operator and an import cannot come to disagree about
+    /// what a name means.
+    /// </remarks>
+    public static bool TryResolveKnownType(string name, out Type? type) =>
+        PlatformTypes.Value.TryGet(name, out type);
+
     public IReadOnlyCollection<string> GetImports() => _imports.ToArray();
 
     public IReadOnlyDictionary<string, string> GetAliases() =>

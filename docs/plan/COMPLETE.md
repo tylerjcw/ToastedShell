@@ -10,6 +10,7 @@
 | [`TOAST-0016`](items/TOAST-0016.md) | P2 | complete | 5/5 | `extend` matches only CLR type names, so `extend int` silently never applies |
 | [`TOAST-0027`](items/TOAST-0027.md) | P2 | complete | 5/5 | An unrecognised escape in a double-quoted string is kept as text instead of being reported |
 | [`TS-P2-104`](items/TS-P2-104.md) | P2 | complete | 1/1 | A splat argument is rejected wherever it would be useful |
+| [`TOAST-0029`](items/TOAST-0029.md) | P2 | complete | 6/6 | `is` matches a CLR value's exact type name only, so `$x is IEnumerable` and `$e is Exception` are always false |
 | [`TS-P2-94`](items/TS-P2-94.md) | P2 | complete | 1/1 | `&` cannot reference a method or a module-qualified function |
 | [`TOAST-0004`](items/TOAST-0004.md) | P1 | complete | 5/5 | Invert the ExternalProcessCommand coupling so Tosh.Language no longer depends on the shell's command library |
 | [`TOSH-0001`](items/TOSH-0001.md) | P1 | complete | 6/6 | Quotes inside an argument are passed through to external commands instead of being stripped |

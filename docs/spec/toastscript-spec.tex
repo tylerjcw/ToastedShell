@@ -2373,6 +2373,39 @@ and an inner \code{finally} runs before an outer \code{catch} sees the error. Re
 \code{try} is a statement, not an expression: a value is carried out of it by assigning to
 a variable declared before it.
 
+\subsection{Type Tests}
+\label{sec:type-tests}
+
+\code{\$x is T} asks whether a value is a \code{T}, and it walks the type graph: a
+declared class matches its own name, its bases, its interfaces and its traits, and a CLR
+value matches its type, the types it derives from, and the interfaces it implements.
+
+\begin{lstlisting}
+class Base { }
+class Leaf extends Base { }
+echo ((new Leaf()) is Base)     # true
+echo (5 is ValueType)           # true
+echo ([1, 2] is IEnumerable)    # true
+\end{lstlisting}
+
+\paragraph{A bare name asks about \emph{this} language; a qualified one asks about the host.}
+This is the one place the two differ, and it is deliberate. A \code{str}, a record and a
+dictionary are single values rather than sequences (\S\ref{sec:collection-shape}), so a
+bare sequence test answers accordingly --- even though a \code{string} does implement
+\code{IEnumerable} underneath:
+
+\begin{lstlisting}
+echo ("abc" is IEnumerable)                        # false -- a str is one value
+echo ("abc" is System.Collections.IEnumerable)     # true  -- asking about the host
+echo ("abc" | count)                               # 1     -- and the pipeline agrees
+\end{lstlisting}
+
+A namespace-qualified name is an explicit question about the .NET type graph, and
+answering it any way but literally would mislead code written to bridge to it. The rule
+applies only to \emph{sequence} tests: \code{"abc" is string} and
+\code{"abc" is IComparable} are unaffected, because neither asks whether the value is a
+sequence.
+
 \subsection{Collection Shape}
 \label{sec:collection-shape}
 
