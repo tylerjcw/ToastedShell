@@ -41,6 +41,9 @@ the case moves up into `Corpus()`.
 - [ ] Reaching a member of `null` reports it with the same message on both backends
 - [ ] `null + "a"` raises with the same message on both backends
 - [ ] Each case moves from `KnownDivergences()` into `Corpus()` as it is fixed
+- [ ] Once a class compiles, the corpus gains a `Failure` / `Error` / `Diagnostic` case —
+      moved here from `TOAST-0031`, which could not add one while `class E extends Error`
+      does not compile at all
 - [ ] A negative control
 
 ## Notes

@@ -2419,12 +2419,27 @@ try { (1 / 0) } catch (e) {
 The distinction is intended: one is the language reporting that an operation had no
 answer, the other is a program raising something deliberately.
 
-\begin{defectbox}
-A diagnostic has no name of its own. It can be identified --- \code{\$e is Exception} is
-true for one and false for a thrown string --- but \code{Exception} is a name borrowed
-from the host, so a target without the CLR has nothing to call it. Giving the category a
-Tōast name is \code{docs/plan/items/TOAST-0031.md}.
-\end{defectbox}
+\paragraph{\code{Failure} is either of them.}
+Three names describe what a \code{catch} caught, and none of them borrows from the host:
+
+\begin{lstlisting}
+try { ... } catch (e) {
+    echo ($e is Failure)      # anything the language raised
+    echo ($e is Error)        # a program raised it
+    echo ($e is Diagnostic)   # the language raised it
+}
+\end{lstlisting}
+
+\code{Error} and \code{Diagnostic} are the two kinds of \code{Failure}, and nothing is
+both. A value that was merely \code{throw}n --- a string, a number --- is \emph{none} of
+the three, which is what keeps \code{Failure} meaning "something went wrong" rather than
+"something was thrown".
+
+\begin{notebox}
+Catch broadly with \code{\$e is Failure}; ask the narrower question only where the answer
+changes what the handler does. A handler that means "any failure" and writes
+\code{\$e is Error} will silently ignore every division by zero.
+\end{notebox}
 
 \paragraph{\code{finally} always runs, and \code{throw} re-raises.}
 A \code{finally} block runs whether its body completed, raised, or was caught further out,

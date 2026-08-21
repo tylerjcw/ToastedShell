@@ -110,6 +110,66 @@ public sealed class ErrorSemanticsTests
             await RunAsync($"try {{ {body} }} catch (e) {{ echo $\"{{$e.Message}}\" }}"));
     }
 
+    /// <summary>
+    /// `Failure` names anything the language raised, with `Error` and `Diagnostic` beneath
+    /// it — `TOAST-0031`.
+    /// </summary>
+    /// <remarks>
+    /// Before this there was no word for "either". The distinction between a program
+    /// raising something and the language reporting that an operation had no answer is
+    /// real and specified, but a handler that wanted both had to ask `$e is Exception` —
+    /// a name borrowed from the host, which a target without the CLR does not have.
+    ///
+    /// A thrown value that is neither is none of the three, which is what keeps `Failure`
+    /// meaningful: it says something went wrong, not merely that something was thrown.
+    /// </remarks>
+    [Theory]
+    // Lower case, because these are read through interpolation — the rendering the
+    // language specifies (§Value Rendering) rather than the host's `ToString`.
+    //
+    // A plain thrown value is not a failure at all.
+    [InlineData("throw \"oops\"", "false", "false", "false")]
+    [InlineData("throw 42", "false", "false", "false")]
+    // A program raised it.
+    [InlineData("throw new Error(\"x\")", "true", "true", "false")]
+    public async Task Failure_names_anything_the_language_raised(
+        string thrown,
+        string isFailure,
+        string isError,
+        string isDiagnostic)
+    {
+        var probe = $"try {{ {thrown} }} catch (e) {{ echo $\"{{($e is Failure)}} {{($e is Error)}} {{($e is Diagnostic)}}\" }}";
+
+        Assert.Equal($"{isFailure} {isError} {isDiagnostic}", await RunAsync(probe));
+    }
+
+    /// <summary>A declared error type is a `Failure` and an `Error`, at any depth.</summary>
+    [Theory]
+    [InlineData("class F1 extends Error { }\n((new F1()) is Failure)", "True")]
+    [InlineData("class F1 extends Error { }\nclass F2 extends F1 { }\n((new F2()) is Failure)", "True")]
+    [InlineData("class F1 extends Error { }\n((new F1()) is Diagnostic)", "False")]
+    public async Task A_declared_error_type_is_a_failure(string source, string expected)
+        => Assert.Equal(expected, await RunAsync(source));
+
+    /// <summary>
+    /// A runtime diagnostic is a `Failure` and a `Diagnostic`, and deliberately not an
+    /// `Error`.
+    /// </summary>
+    /// <remarks>
+    /// The three-way answer the exception-semantics box wanted, now sayable without
+    /// naming a CLR type. `is Exception` still works and still means the same thing; it is
+    /// simply no longer the only way to ask.
+    /// </remarks>
+    [Theory]
+    [InlineData("(1 / 0)")]
+    [InlineData("var x = null\n$x.Length")]
+    public async Task A_runtime_diagnostic_is_a_failure_but_not_an_error(string body)
+    {
+        Assert.Equal("True", await RunAsync($"try {{ {body} }} catch (e) {{ ($e is Failure) }}"));
+        Assert.Equal("True", await RunAsync($"try {{ {body} }} catch (e) {{ ($e is Diagnostic) }}"));
+        Assert.Equal("False", await RunAsync($"try {{ {body} }} catch (e) {{ ($e is Error) }}"));
+    }
+
     /// <summary>`finally` runs, and an inner one runs before an outer `catch`.</summary>
     [Fact]
     public async Task Finally_runs_and_ordering_is_inside_out()

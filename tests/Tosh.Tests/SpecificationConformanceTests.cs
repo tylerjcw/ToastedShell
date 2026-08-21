@@ -56,10 +56,11 @@ public sealed class SpecificationConformanceTests
         Assert.Contains(@"\newtcolorbox{defectbox}", spec, StringComparison.Ordinal);
         Assert.Contains("Known defect --- not normative", spec, StringComparison.Ordinal);
 
-        // And it is used, or the definition is decoration.
-        Assert.True(
-            Regex.Matches(spec, @"\\begin\{defectbox\}").Count >= 2,
-            "the specification records known defects; they belong in a defectbox");
+        // Deliberately no assertion about *how many* exist. A first version required at
+        // least two and failed the moment one was fixed — `TOAST-0031` gave diagnostics a
+        // Tōast name and removed its box, so a guard about the legend failed because the
+        // language got better. The count is supposed to fall to zero; what matters is that
+        // the boxes which do exist are well formed, which the next test checks.
     }
 
     /// <summary>

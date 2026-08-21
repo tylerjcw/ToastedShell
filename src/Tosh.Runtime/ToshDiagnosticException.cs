@@ -1,6 +1,6 @@
 namespace Tosh.Runtime;
 
-public sealed class ToshDiagnosticException : Exception
+public sealed class ToshDiagnosticException : Exception, IToshFailure
 {
     public ToshDiagnosticException(IReadOnlyList<ToshDiagnostic> diagnostics)
         : this(diagnostics, innerException: null)

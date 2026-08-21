@@ -86,6 +86,13 @@ public sealed class DotNetTypeResolver : IImportingTypeResolver
         // error types declared in tosh. Exposed case-insensitively
         // so `extends Error`, `error`, and `ERROR` all resolve.
         ["error"] = typeof(ToshError),
+        // `TOAST-0031`. `Failure` is anything the language raised — a declared error or a
+        // diagnostic — so a handler can catch broadly without naming a CLR type.
+        // `Diagnostic` is the language reporting that an operation had no answer, which
+        // had no Tōast name at all: `$e is Exception` was the only way to ask, and that is
+        // a word a target without the CLR does not have.
+        ["failure"] = typeof(IToshFailure),
+        ["diagnostic"] = typeof(ToshDiagnosticException),
         // Raised when a native call fails its declared success contract, so
         // `catch (e) { $e is NativeError }` and `extends NativeError` both work.
         ["nativeerror"] = typeof(NativeError),

@@ -25,7 +25,7 @@ namespace Tosh.Runtime;
 /// non-exception throw). This is part of the public CLR ABI v1.
 /// </para>
 /// </summary>
-public class ToshError : Exception
+public class ToshError : Exception, IToshFailure
 {
     public ToshError()
         : base("An error was raised.")

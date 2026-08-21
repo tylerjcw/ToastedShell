@@ -6,6 +6,7 @@
 |---|---|---|---|---|
 | [`TOSH-0006`](items/TOSH-0006.md) | P2 | complete | 5/5 | A DateTime cell shifts an unspecified value by the local offset |
 | [`TOAST-0003`](items/TOAST-0003.md) | P2 | complete | 12/12 | Documentation disagrees with the implementation in twelve recorded places |
+| [`TOAST-0031`](items/TOAST-0031.md) | P2 | complete | 6/6 | A runtime diagnostic has no Tōast name, so catching one is written against a CLR type |
 | [`TS-P2-120`](items/TS-P2-120.md) | P2 | complete | — | A nullable annotation on a built-in type alias will not parse in a `var` declaration |
 | [`TOAST-0016`](items/TOAST-0016.md) | P2 | complete | 5/5 | `extend` matches only CLR type names, so `extend int` silently never applies |
 | [`TOAST-0027`](items/TOAST-0027.md) | P2 | complete | 5/5 | An unrecognised escape in a double-quoted string is kept as text instead of being reported |
