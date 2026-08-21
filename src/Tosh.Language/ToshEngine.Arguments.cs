@@ -1272,7 +1272,7 @@ public sealed partial class ToshEngine
                             }
 
                             throw new InvalidOperationException(
-                                $"Cannot read member '{memberAccess.MemberPath}' of null. Use '?.' to yield null instead.");
+                                Tosh.Runtime.ToastMessages.MemberOfNull(memberAccess.MemberPath));
                         }
 
                         return await Runtime.ObjectAccessor.GetValueAsync(

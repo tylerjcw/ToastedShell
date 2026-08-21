@@ -1277,7 +1277,14 @@ public static class OperatorEvaluator
     {
         if (left is null || right is null)
         {
-            throw new InvalidOperationException("The '+' operator requires non-null operands.");
+            // `TOAST-0030` cause C. The guidance belongs here rather than only on the
+            // interpreter's string-concatenation arm: the compiled path reaches *this*
+            // method, so it was raising the bare sentence and losing the remedy that makes
+            // raising reasonable in the first place.
+            throw new InvalidOperationException(
+                left is string || right is string
+                    ? ToastMessages.NullStringConcatenation
+                    : ToastMessages.NullOperand("+"));
         }
 
         // Vector arithmetic

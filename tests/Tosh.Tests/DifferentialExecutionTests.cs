@@ -152,6 +152,47 @@ public sealed class DifferentialExecutionTests : IClassFixture<ToshRuntimeFixtur
             "is-unrelated-class-is-false",
             "class DiffIsF { }\nclass DiffIsG { }\necho ((new DiffIsG()) is DiffIsF)");
 
+        // ── `TOAST-0030` cause C, fixed 2026-08-21 ───────────────────────
+        //
+        // A message is part of the behaviour, not decoration on it. `§What null Means` says
+        // reaching a member of `null` reports it *and* says how to opt out, so a backend
+        // raising `NullReferenceException: member access 'Length' on null target` had not
+        // implemented that sentence. Both texts now come from `ToastMessages`.
+        yield return Case("member-of-null-reports-it", "var x = null\necho $x.Length");
+
+        // And the *kind* matters as much as the words: the compiled side raised a host
+        // exception, which `catch (e) { $e is Diagnostic }` cannot see as the language
+        // defines it. Asserted here rather than assumed, because comparing rendered output
+        // alone would have accepted two different exception types with matching text.
+        yield return Case(
+            "member-of-null-is-a-diagnostic",
+            "try { var x = null\necho $x.Length } catch (e) { echo ($e is Diagnostic) }");
+
+        yield return Case("null-concatenation-explains-itself", "echo (null + \"a\")");
+
+        // ── `TOAST-0030` cause B, fixed 2026-08-21 ───────────────────────
+        //
+        // The compiled head had its own answer to "which values are sequences?", and it
+        // was not the language's. `SeedFromValue` walked any `IEnumerable` and
+        // special-cased `string`; §Collection Shape says a dictionary and a record are
+        // values with named parts, and that a range is a sequence. So dictionaries and
+        // records spread and ranges did not — wrong in both directions at once.
+        //
+        // Only the dictionary was recorded. The rest were found by probing, which is the
+        // argument for fixing causes rather than symptoms.
+        yield return Case("dictionary-is-one-value", "echo ({% \"a\" => 1, \"b\" => 2 %} | count)");
+        yield return Case("record-is-one-value", "echo ({| a = 1, b = 2 |} | count)");
+        yield return Case("record-arrives-whole", "echo $\"{({| a = 1 |} | first)}\"");
+        yield return Case("dictionary-arrives-whole", "echo $\"{({% \"a\" => 1 %} | first)}\"");
+        yield return Case("a-range-is-a-sequence", "echo (1..3 | count)");
+
+        // Controls: the values that were already right must stay right. Getting shape from
+        // one predicate could have been done by making everything a single value.
+        yield return Case("array-is-still-a-sequence", "echo ([1, 2, 3] | count)");
+        yield return Case("nested-arrays-are-items", "echo ([[1, 2], [3]] | count)");
+        yield return Case("a-string-is-one-value", "echo (\"abc\" | count)");
+        yield return Case("a-set-is-a-sequence", "echo ({: 1, 2, 3 :} | count)");
+
         // ── Portable semantics: the eight `TOAST-0018` concerns ───────────
         //
         // Phase A's exit asks that the core behaviour be "enforced by a backend-neutral
@@ -267,29 +308,12 @@ public sealed class DifferentialExecutionTests : IClassFixture<ToshRuntimeFixtur
         // something `docs/spec/` now states, so each is a claim about the *language* that
         // only one backend currently honours. `TOAST-0030` carries them.
 
-        // A dictionary is one value, not a sequence of its pairs (§Collection Shape).
-        // Interpreted 1, compiled 2.
-        yield return Divergence(
-            "TOAST-0030", "dictionary-is-one-value",
-            "echo ({% \"a\" => 1, \"b\" => 2 %} | count)");
-
         // A declared error type is an `Error` (§Errors and catch). The compiled backend
         // does not accept the declaration at all: "Command 'class' was not found".
         yield return Divergence(
             "TOAST-0030", "declared-error-type-is-an-error",
             "class DiffErr extends Error { }\necho ((new DiffErr()) is Error)");
 
-        // Reaching a member of `null` reports it (§What null Means). The compiled side
-        // raises a bare NullReferenceException with a different message.
-        yield return Divergence(
-            "TOAST-0030", "member-of-null-reports-it",
-            "var x = null\necho $x.Length");
-
-        // `null + "a"` raises, and says how to opt in. The compiled side raises with the
-        // older message and no guidance.
-        yield return Divergence(
-            "TOAST-0030", "null-concatenation-explains-itself",
-            "echo (null + \"a\")");
     }
 
     private static object[] Divergence(string boardItem, string name, string source) =>

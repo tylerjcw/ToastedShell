@@ -266,8 +266,20 @@ public static class ToshHost
 
     public static object? GetMember(object? target, string memberPath, bool nullSafe)
     {
-        if (target is null) return nullSafe ? null : throw new NullReferenceException(
-            $"member access '{memberPath}' on null target");
+        // `TOAST-0030` cause C. A bare `NullReferenceException` was both the wrong words
+        // and the wrong kind: the interpreter reports this as a Tōast diagnostic, which is
+        // what `catch (e) { $e is Diagnostic }` is written against, so a host exception
+        // here is not catchable in the terms the language defines.
+        if (target is null)
+        {
+            return nullSafe
+                ? null
+                : throw ToshDiagnosticException.Create(new ToshDiagnostic(
+                    Code: "tosh.runtime.expression_failed",
+                    Title: ToastMessages.MemberOfNull(memberPath),
+                    Label: "while evaluating this expression"));
+        }
+
         return Runtime.ObjectAccessor.GetValue(target, memberPath);
     }
 
@@ -1493,9 +1505,21 @@ public static class ToshHost
     {
         if (value is null) return EmptyAsync();
         if (value is IAsyncEnumerable<object?> asyncSeq) return asyncSeq;
-        if (value is string) return SingletonAsync(value);
-        if (value is System.Collections.IEnumerable seq) return SyncToAsync(seq);
-        return SingletonAsync(value);
+
+        // `TOAST-0030` cause B. One value, marked as a sequence — exactly what an
+        // expression head does interpreted, so the two cannot disagree about shape.
+        //
+        // This used to walk any `IEnumerable` element-by-element and special-case `string`,
+        // which is a second opinion about which values are sequences. It differed from the
+        // language's: a dictionary and a record are values with named parts, so
+        // `{% "a" => 1, "b" => 2 %} | count` answered 2 compiled against 1 interpreted, and
+        // `{| a = 1 |} | first` yielded a `KeyValuePair` rather than the record. A range
+        // went the other way and never expanded at all.
+        //
+        // Nothing decides here now. `ShellIterationUtilities` answers "is this a sequence?"
+        // for both backends, and `SpreadableSequence` (`TOAST-0028`) is how a producer says
+        // the collection it yielded is one.
+        return new SpreadableSequence(SingletonAsync(value));
     }
 
     private static async IAsyncEnumerable<object?> SingletonAsync(object? item)
@@ -1592,17 +1616,24 @@ public static class ToshHost
             }
         }
 
+        // `TOAST-0030` cause B. Through the shared helper, because a stage that walks its
+        // input directly is deciding shape by not deciding it — and it used to get away
+        // with that only because `SeedFromValue` pre-expanded every collection. The same
+        // unification `TOAST-0028` did for `PeekForTreeAsync` interpreted.
+        var items = ShellIterationUtilities.ReplaySingleInputCollectionAsync(
+            input, CancellationToken.None);
+
         var effectiveArgCount = positional.Count + (named?.Count ?? 0);
         if (paramCount == effectiveArgCount)
         {
-            await foreach (var _ in input) { /* drain & discard */ }
+            await foreach (var _ in items) { /* drain & discard */ }
             var slot = BuildSlot(ps, positional, named, leadingInputSlot: false, inputValue: null);
             yield return InvokeUserFunc(fn, slot);
             yield break;
         }
         if (paramCount == effectiveArgCount + 1)
         {
-            await foreach (var item in input)
+            await foreach (var item in items)
             {
                 var slot = BuildSlot(ps, positional, named, leadingInputSlot: true, inputValue: item);
                 yield return InvokeUserFunc(fn, slot);

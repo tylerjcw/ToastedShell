@@ -184,8 +184,7 @@ public sealed partial class ToshEngine
             // `null + "a"` was `"a"` while `null + 1` raised — a missing value vanished
             // silently into concatenated output. Write `($x ?? "") + "a"` to opt in.
             "+" when (left is string || right is string) && (left is null || right is null) =>
-                throw new InvalidOperationException(
-                    "The '+' operator requires non-null operands. Use '?? \"\"' to treat null as empty text."),
+                throw new InvalidOperationException(Tosh.Runtime.ToastMessages.NullStringConcatenation),
             "+" when left is string => (string)left
                 + await ToOperatorStringAsync(right, cancellationToken),
             "+" when right is string => await ToOperatorStringAsync(left, cancellationToken)

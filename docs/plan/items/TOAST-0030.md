@@ -92,6 +92,37 @@ added there.
 Six cases moved into `Corpus()`. The negative control fails exactly five of them and
 leaves `is-unrelated-class-is-false` passing, which is how a control earns its place.
 
+### Causes B and C done
+
+**Cause C** was two messages and one exception *kind*. `ToastMessages` in `Tosh.Runtime`
+now holds the wording, and the compiled member-of-null raises a `ToshDiagnosticException`
+rather than a `NullReferenceException` — because `catch (e) { $e is Diagnostic }` is
+written against the language's failure model, and a host exception is not visible in those
+terms. Asserted separately from the message, since comparing rendered text alone would
+have accepted two different exception types with matching words.
+
+The `+` guidance moved *down* into `OperatorEvaluator.Add` rather than being copied. The
+interpreter has a string-concatenation arm that fires before `Add`; the compiled path
+reaches `Add` directly, so the portable method was raising the bare sentence and losing the
+remedy that makes raising reasonable at all.
+
+**Cause B** was one function with its own opinion. `ToshHost.SeedFromValue` walked any
+`IEnumerable` and special-cased `string` — a second answer to "which values are sequences?"
+that disagreed with the language's in *both directions*: dictionaries and records spread
+when they are single values, and ranges did not spread when they are sequences.
+
+It now yields one value marked `SpreadableSequence`, which is exactly what an expression
+head does interpreted, and decides nothing itself.
+
+That exposed the same defect `TOAST-0028` stage 1 found interpreted: `RunUserFuncStage`
+walked its input directly, and got away with it only because the head pre-expanded
+everything. Three tests failed the moment the head stopped. It goes through
+`ReplaySingleInputCollectionAsync` now, like every other consumer.
+
+Nine cases added, four of them controls — an array, nested arrays, a string and a set —
+because getting a dictionary to count 1 could equally have been done by making everything a
+single value. The negative control fails eight and leaves all four controls passing.
+
 ### Cause A, second half: `class E extends Error` is source replay
 
 Still divergent, and it is a bigger piece than the first half.
@@ -115,8 +146,8 @@ the case moves up into `Corpus()`.
 
 - [~] **Cause A** (half) — `new Error(…)`, `class E extends Error`, `is Error`, `is Failure` and
       `is Diagnostic` behave identically on both backends
-- [ ] **Cause B** — a dictionary, a record and a range have the same shape on both backends
-- [ ] **Cause C** — the member-of-null and `null + "a"` messages come from one place
+- [x] **Cause B** — a dictionary, a record and a range have the same shape on both backends
+- [x] **Cause C** — the member-of-null and `null + "a"` messages come from one place
 - [x] **Cause D** — `is` against a declared base is true at any depth, compiled, and
       `TS-P1-47`'s base-annotated variable accepts a subclass
 - [ ] Every rule fixed lives in `Tosh.Runtime` and is called by both backends, rather than
