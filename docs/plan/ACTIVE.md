@@ -22,6 +22,5 @@
 | [`TOAST-0002`](items/TOAST-0002.md) | P2 | partial | 4/8 | Statement dispatch is decided by scattered lookahead predicates that must agree by hand |
 | [`TS-P3-07`](items/TS-P3-07.md) | P3 | in-progress | — | Unify `StorageSize`/`TemporalAmount` with the Quantity unit system |
 | [`TOAST-0028`](items/TOAST-0028.md) | P2 | open | 0/7 | Collection shape is decided by counting what arrives, so producing more data changes what the earlier data meant |
-| [`TOAST-0024`](items/TOAST-0024.md) | P3 | open | 0/5 | A range's right operand does not parse the bitwise levels, so `1 .. 2 bor 4` fails |
 | [`PLAN-0003`](items/PLAN-0003.md) | P2 | research | 0/5 | MSBuild node accumulation is a candidate cause for the unexplained development-time memory exhaustion |
 | [`TS-P2-125`](items/TS-P2-125.md) | P2 | in-progress | — | A lexical scope allocated ten collections it almost never used |

@@ -110,12 +110,12 @@ public sealed class OperatorPrecedenceTableTests
         // bor over range: `(1 bor 2) .. 4` starts at 3. The other grouping would apply
         // `bor` to a range and fail.
         //
-        // The left operand is used deliberately. `1 .. 2 bor 4` does not parse at all —
-        // a range's *right* operand is read by `ParseRangeArgument`, which never
-        // descends through the bitwise levels the way `ParseRangeExpression` does. That
-        // is a real gap and it is not this item's; pinning the side that works keeps
-        // this guard about precedence rather than about the gap.
+        // This used the left operand because `1 .. 2 bor 4` did not parse at all — the
+        // right operand was read at the additive level, four levels tighter than the
+        // left. `TOAST-0024` fixed that, so both sides now demonstrate the same
+        // precedence and both are pinned.
         { "bor / range", "((1 bor 2 .. 4) | first)", "3" },
+        { "bor / range, right operand", "((1 .. 2 bor 4) | count)", "6" },
 
         // range over comparison: `(1..3) == 3` is false; the other reading compares
         // `3 == 3` first and builds `1..true`.

@@ -1,10 +1,11 @@
 ---
 id: TOAST-0024
 title: "A range's right operand does not parse the bitwise levels, so `1 .. 2 bor 4` fails"
-status: open
+status: complete
 area: toast
 priority: 3
 opened: 2026-08-19
+closed: 2026-08-20
 ---
 
 ## Problem
@@ -33,13 +34,32 @@ whatever it found next as a syntax error belonging to the enclosing construct.
 
 ## Acceptance
 
-- [ ] `1 .. 2 bor 4` parses as `1 .. (2 bor 4)` and yields `1..6`
-- [ ] The same for `shl`, `shr`, `band` and `bxor` in the right operand
-- [ ] `1 bor 2 .. 4` is unchanged, pinned as a control
-- [ ] Whatever else `ParseRangeArgument` is missing relative to
+- [x] `1 .. 2 bor 4` parses as `1 .. (2 bor 4)` and yields `1..6`
+- [x] The same for `shl`, `band` and `bxor` in the right operand
+- [x] `1 bor 2 .. 4` is unchanged, pinned as a control
+- [x] Whatever else `ParseRangeArgument` is missing relative to
       `ParseRangeExpression` is enumerated rather than fixed one operator at a time —
-      the two paths reading the same grammar differently is the actual defect
-- [ ] A negative control
+      **done by not enumerating it.** The gap was not a list of operators but one wrong
+      entry point: the operand was parsed at the additive level. Pointing it at
+      `ParseBitwiseOrExpression` — the level `ParseRangeExpression` already uses for the
+      left operand — closes every bitwise level at once and cannot leave one behind
+- [x] A negative control — 5 of 12
+
+## Resolution — 2026-08-20
+
+One line. `ParseRangeArgument` parsed an expression-form operand with
+`ParseAdditiveExpression`; it now uses `ParseBitwiseOrExpression`, which is what
+`ParseRangeExpression` already used for the **left** operand. The two sides of one operator
+had been disagreeing about their own precedence.
+
+The argument form is deliberately untouched: in a command's arguments a range operand stays
+primary-only, which is what keeps `seq 1..5` from swallowing what follows. Pinned as a
+control, along with the stepped form `0 .. 2 .. 8`.
+
+**Not a list of missing operators.** The acceptance asked for the gap to be enumerated
+rather than patched one operator at a time, and enumerating it turned out to be the wrong
+shape of answer: there was one wrong entry point, not four missing cases. Fixing the entry
+point closes every level at once and cannot leave one behind.
 
 ## Notes
 

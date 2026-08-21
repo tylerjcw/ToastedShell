@@ -1110,8 +1110,18 @@ public static partial class ToshParser
             bool implicitCurrentItem,
             bool operandsAreExpressions = false)
         {
+            // `TOAST-0024`. `ParseBitwiseOrExpression`, not `ParseAdditiveExpression`: the
+            // range's *left* operand comes from the former — `ParseRangeExpression` calls
+            // it — so parsing the right one at the additive level made the two sides
+            // disagree about their own precedence. `1 bor 2 .. 4` parsed and
+            // `1 .. 2 bor 4` did not, reporting an unclosed expression at the `bor`.
+            //
+            // The chain places `..` immediately looser than `bor`, so the operands belong
+            // at exactly that level. The argument form is untouched: in a command's
+            // arguments a range operand is primary-only, which is what keeps `seq 1..5`
+            // from swallowing what follows.
             ArgumentSyntax? ParseOperand() => operandsAreExpressions
-                ? ParseAdditiveExpression(Current.Span.Start, implicitCurrentItem)
+                ? ParseBitwiseOrExpression(Current.Span.Start, implicitCurrentItem)
                 : ParsePrimaryArgument(implicitCurrentItem: implicitCurrentItem);
 
             NextToken(); // consume first ..

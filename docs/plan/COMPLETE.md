@@ -30,5 +30,6 @@
 | [`TS-P1-44`](items/TS-P1-44.md) | P1 | complete | 3/3 | from xml returns a CLR XDocument instead of shell data, so to xml | from xml does not round-trip |
 | [`TS-P2-117`](items/TS-P2-117.md) | P2 | complete | — | A line beginning with a unary operator is absorbed into the previous line's expression |
 | [`TS-P2-101`](items/TS-P2-101.md) | P2 | complete | 1/1 | Class and member doc comments never reach `help` |
+| [`TOAST-0024`](items/TOAST-0024.md) | P3 | complete | 5/5 | A range's right operand does not parse the bitwise levels, so `1 .. 2 bor 4` fails |
 
 Items closed under the old stabilization board are frozen in [legacy/COMPLETE.md](legacy/COMPLETE.md).
