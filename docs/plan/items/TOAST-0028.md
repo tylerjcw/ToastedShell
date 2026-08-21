@@ -71,6 +71,42 @@ What changes and what does not:
 The generator row is the whole behavioural change, and it is the row that stops depending
 on how much data arrives.
 
+## Attempted 2026-08-21, reverted to green — what measuring showed
+
+**The engine change is small and it works.** Two files: a `SpreadableSequence` marker, the
+counterpart to `PreExpandedSequence`, set by an expression stage; and
+`ReplaySingleInputCollectionAsync` reading the mark instead of looking ahead. Every
+intended row of the table above came out right, `a | first` and `b | first` agreed for the
+first time, and the over-pull went from 2 batches to 1.
+
+**`TS-P2-74`'s constraint turned out not to apply.** It defeated an attempt that made the
+*head spread*; this design does not. `ToCommand` reads `context.Input` directly and never
+calls the expansion helper, so `[] | to json` is `[]` and `[1] | to json` is `[1]`,
+unchanged. Confirmed rather than assumed.
+
+**The cost lands somewhere else: commands that yield a whole collection meaning a
+sequence.** 39 tests fail across 8 classes, and 24 of them are one cause —
+`from csv` yields its rows as a single `ExpandoObject[]` and relies on a downstream stage
+expanding it, so `from csv | select n` becomes "Member 'n' was not found on
+`ExpandoObject[]`". Under a rule where the producer decides, such a command is the producer
+and has to yield elements.
+
+That is arguably a defect in those commands rather than a cost of this one — collecting a
+whole table into one value also defeats streaming — but it is a **semantic judgement per
+command**, and there are at least six distinct causes behind the 39 failures.
+
+### The narrower variant, and why it was not taken unilaterally
+
+A command's output could be marked spreadable too, leaving only *user-defined generators*
+unmarked. That fixes the defect exactly as filed — the example is a generator — with no
+command changes and a green suite. It is also an inconsistency of its own: a builtin
+command's collection would spread and a user function's would not, with no principle
+separating them beyond where the code lives.
+
+Choosing between "fix the commands" and "narrow the rule" is a decision, not an
+implementation detail, so the work stopped here with the tree green and the experiment
+recorded.
+
 ## The constraint that sank the first attempt
 
 `TS-P2-74` records that spreading every list-valued head **was tried and is wrong**:
