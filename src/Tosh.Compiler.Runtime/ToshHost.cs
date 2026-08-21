@@ -2626,8 +2626,21 @@ public static class ToshHost
             case "string" or "String" or "System.String":
                 return value?.ToString() ?? "";
             default:
-                // For other types, return value as-is and let runtime handle it.
-                return value;
+                // `TOAST-0042`. Everything else went through **unconverted** — the four
+                // cases above were the whole of it, so `arg n: double`, an enum, or a
+                // refinement alias arrived as the raw `string` the command line supplied.
+                //
+                // The failure that follows is never about the argument. `examples/mandelbrot.tosh`
+                // declares `arg frames: PosInt` and then divides by it, so the compiled
+                // program reported "Operator operands 'System.Int32' and 'System.String'
+                // are not compatible" from a line of arithmetic — while the interpreted one
+                // ran, because the interpreter converts through the annotation machinery
+                // that resolves aliases and applies their `coerce` clause.
+                //
+                // `CheckType` is that machinery, and this file already bridges to it for
+                // `var x: T = …`. Script arguments are the same question and now ask it the
+                // same way.
+                return CheckType(value, typeName, spanStart: 0, spanLength: 0, owner: "script argument");
         }
     }
 

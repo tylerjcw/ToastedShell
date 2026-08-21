@@ -793,21 +793,38 @@ static async Task<int> CompileScriptAsync(CliInvocationPlan plan, ToshRuntime ru
     // failure at runtime, same as before the staging existed.
     StageCompilerRuntime(outputPath);
     var depsJsonPath = ToshPublisher.WriteDepsJson(outputPath);
+
+    // `TOAST-0042`. The runnable artifact is named **last**, and named as runnable.
+    //
+    // These lines used to end with the managed assembly, because that is the order the
+    // files happen to be produced in. A reader takes the last line as the result, so the
+    // final word was an `.dll` — which is a PE file, so on Linux `binfmt_misc` hands it to
+    // Wine, and the error that comes back is "Wine Mono is not installed". Nothing in that
+    // sequence mentions the executable that was also written, three lines earlier.
+    await Console.Error.WriteLineAsync($"toshc: wrote {outputPath}");
     await Console.Error.WriteLineAsync($"toshc: wrote {depsJsonPath}");
 
     var outputDir = Path.GetDirectoryName(outputPath) ?? ".";
+    string? runnablePath = null;
     if (plan.EmitAppHost || plan.PublishSingleFile)
     {
         var appHostPath = ToshPublisher.CreateAppHost(outputPath, outputDir);
         await Console.Error.WriteLineAsync($"toshc: wrote {appHostPath}");
+        runnablePath = appHostPath;
         if (plan.PublishSingleFile)
         {
             appHostPath = ToshPublisher.CreateSingleFileBundle(outputPath, outputDir);
             await Console.Error.WriteLineAsync($"toshc: wrote single-file bundle {appHostPath}");
+            runnablePath = appHostPath;
         }
     }
 
-    await Console.Error.WriteLineAsync($"toshc: wrote {outputPath}");
+    // How to run it. The assembly is not it: `./out.dll` is a PE file that Linux will try
+    // to run under Wine, and `dotnet out.dll` needs the SDK on the path.
+    await Console.Error.WriteLineAsync(
+        runnablePath is not null
+            ? $"toshc: run it with {FormatRunHint(runnablePath)}"
+            : $"toshc: run it with 'dotnet {Path.GetFileName(outputPath)}'");
 
     if (plan.EmitRefasm)
     {
@@ -852,6 +869,24 @@ static async Task<int> CompileScriptAsync(CliInvocationPlan plan, ToshRuntime ru
 /// <c>bin/Debug/net10.0</c>). Files only get overwritten when the
 /// source is strictly newer to keep repeated compiles cheap.
 /// </summary>
+/// <summary>
+/// How a reader would actually type the path — `TOAST-0042`.
+/// </summary>
+/// <remarks>
+/// A bare name is not runnable on a shell without <c>.</c> on its path, so the hint says
+/// <c>./name</c> when the file is in the working directory. Anywhere else the full path is
+/// what the reader needs.
+/// </remarks>
+static string FormatRunHint(string path)
+{
+    var full = Path.GetFullPath(path);
+    var cwd = Path.GetFullPath(Directory.GetCurrentDirectory());
+
+    return string.Equals(Path.GetDirectoryName(full), cwd, StringComparison.Ordinal)
+        ? $"'./{Path.GetFileName(full)}'"
+        : $"'{full}'";
+}
+
 static void StageCompilerRuntime(string outputPath)
 {
     var outDir = Path.GetDirectoryName(Path.GetFullPath(outputPath));
