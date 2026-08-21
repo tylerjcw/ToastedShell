@@ -114,6 +114,44 @@ public sealed class DifferentialExecutionTests : IClassFixture<ToshRuntimeFixtur
             "two-level-inheritance",
             "class DiffA { prop Tag: string = \"a\" }\nclass DiffB extends DiffA { prop Tag: string = \"b\" }\nclass DiffC extends DiffB { prop Tag: string = \"c\" }\nvar x: DiffA = new DiffC()\necho $x.Tag");
 
+        // ── `TOAST-0030` cause A and D, fixed 2026-08-21 ──────────────────
+        //
+        // Moved up from `KnownDivergences`. Both were one missing lookup each, and both
+        // lookups now live in `Tosh.Runtime` where the two backends already meet.
+
+        // `new` resolves Tōast's own type names, not only CLR ones. The compiled side had
+        // `Type.GetType`, which needs an assembly qualifier, so every bare name failed.
+        yield return Case("new-error-resolves", "echo ((new Error(\"x\")).Message)");
+
+        // And the failure was throwable, which is what made it two divergences: a
+        // `try`/`catch` around `new Error` caught the *resolution error* and then reported
+        // that the caught value was not an `Error` — true of an InvalidOperationException.
+        yield return Case(
+            "caught-error-is-an-error",
+            "try { throw new Error(\"x\") } catch (e) { echo ($e is Error) }");
+
+        yield return Case(
+            "caught-error-is-a-failure",
+            "try { throw new Error(\"x\") } catch (e) { echo ($e is Failure) }");
+
+        // `is` against a declared base, at one and two levels. A compiled class is a real
+        // emitted CLR type with real inheritance; what it does not have is
+        // `IShellTypeCheckable`, which is how the interpreter's instances walk themselves.
+        // So the walk moved into the shared operator instead.
+        yield return Case(
+            "is-declared-base-one-level",
+            "class DiffIsA { }\nclass DiffIsB extends DiffIsA { }\necho ((new DiffIsB()) is DiffIsA)");
+
+        yield return Case(
+            "is-declared-base-two-levels",
+            "class DiffIsC { }\nclass DiffIsD extends DiffIsC { }\nclass DiffIsE extends DiffIsD { }\n"
+            + "echo ((new DiffIsE()) is DiffIsC)");
+
+        // The control that keeps the walk honest: an unrelated class is still not a match.
+        yield return Case(
+            "is-unrelated-class-is-false",
+            "class DiffIsF { }\nclass DiffIsG { }\necho ((new DiffIsG()) is DiffIsF)");
+
         // ── Portable semantics: the eight `TOAST-0018` concerns ───────────
         //
         // Phase A's exit asks that the core behaviour be "enforced by a backend-neutral
@@ -240,12 +278,6 @@ public sealed class DifferentialExecutionTests : IClassFixture<ToshRuntimeFixtur
         yield return Divergence(
             "TOAST-0030", "declared-error-type-is-an-error",
             "class DiffErr extends Error { }\necho ((new DiffErr()) is Error)");
-
-        // `is Error` distinguishes a raised error from a thrown value (§Errors and catch).
-        // Interpreted true, compiled false.
-        yield return Divergence(
-            "TOAST-0030", "caught-error-is-an-error",
-            "try { throw new Error(\"x\") } catch (e) { echo ($e is Error) }");
 
         // Reaching a member of `null` reports it (§What null Means). The compiled side
         // raises a bare NullReferenceException with a different message.

@@ -1179,11 +1179,26 @@ public static class OperatorEvaluator
             return true;
         }
 
-        // Check simple name match (e.g. "String", "Int32", "FileSystemEntry")
-        if (string.Equals(actualType.Name, typeName, StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(actualType.FullName, typeName, StringComparison.OrdinalIgnoreCase))
+        // Check simple name match (e.g. "String", "Int32", "FileSystemEntry"), walking the
+        // base chain — `TOAST-0030` cause D.
+        //
+        // This used to compare `actualType` alone, and a declared hierarchy only answered
+        // correctly because the *interpreter's* instances are `ToshClassInstance`, which
+        // implements `IShellTypeCheckable` above and walks itself. A compiled class is a
+        // real emitted CLR type with real inheritance and no such interface, so
+        // `class D extends B` gave `(new D()) is B` false compiled and true interpreted —
+        // while inherited and overridden properties were both correct, which is what made
+        // it look like a type-test bug rather than an inheritance one.
+        //
+        // Walking here rather than in the emitter is the point: one rule, in the portable
+        // runtime, that both backends already call.
+        for (var candidate = actualType; candidate is not null; candidate = candidate.BaseType)
         {
-            return true;
+            if (string.Equals(candidate.Name, typeName, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(candidate.FullName, typeName, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
         }
 
         // Resolve via the built-in type alias table (int, string, uint, etc.)

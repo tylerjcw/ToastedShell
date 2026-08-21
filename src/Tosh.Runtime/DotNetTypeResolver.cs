@@ -312,6 +312,41 @@ public sealed class DotNetTypeResolver : IImportingTypeResolver
     public static bool TryResolveKnownType(string name, out Type? type) =>
         PlatformTypes.Value.TryGet(name, out type);
 
+    /// <summary>
+    /// Resolves a type name the way Tōast means it — `TOAST-0030`.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The language's own names come first, then the platform index. Both are needed and
+    /// the order matters: `Error` is a Tōast name for <see cref="ToshError"/> and resolves
+    /// to nothing at all in the CLR, while `Exception` is a CLR name the index answers.
+    /// </para>
+    /// <para>
+    /// This exists because the two backends had drifted about which names are real. The
+    /// compiled `new` consulted user-declared types and then <c>Type.GetType</c>, which
+    /// needs an assembly qualifier, so <c>new Error("x")</c> failed with "unknown type
+    /// 'Error'" while the interpreter built one. That single failure produced two of the
+    /// recorded divergences, because <c>try { throw new Error("x") } catch (e) { $e is
+    /// Error }</c> then caught the *resolution failure* and answered false about an
+    /// <see cref="InvalidOperationException"/>.
+    /// </para>
+    /// <para>
+    /// It lives here, in the portable runtime, rather than on the engine: a backend that
+    /// asked the interpreter what a name means would be depending on the interpreter,
+    /// which is what Phase B exists to remove.
+    /// </para>
+    /// </remarks>
+    public static bool TryResolveToastTypeName(string name, out Type? type)
+    {
+        if (!string.IsNullOrWhiteSpace(name) && Aliases.TryGetValue(name, out var aliased))
+        {
+            type = aliased;
+            return true;
+        }
+
+        return TryResolveKnownType(name, out type);
+    }
+
     public IReadOnlyCollection<string> GetImports() => _imports.ToArray();
 
     public IReadOnlyDictionary<string, string> GetAliases() =>

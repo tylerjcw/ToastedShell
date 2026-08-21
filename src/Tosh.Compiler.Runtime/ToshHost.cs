@@ -2934,6 +2934,19 @@ public static class ToshHost
         {
             return Runtime.Invoker.CreateInstance(clrType, argList);
         }
+
+        // `TOAST-0030` cause A. `Type.GetType` needs an assembly qualifier, so every bare
+        // name reached here unresolved — including Tōast's own, which have no CLR spelling
+        // at all. `new Error("x")` failed with "unknown type 'Error'" while the interpreter
+        // built one, and because the failure is itself throwable, a `try`/`catch` around it
+        // caught the *resolution error* and reported that a caught value was not an
+        // `Error`. One missing lookup, two recorded divergences.
+        if (DotNetTypeResolver.TryResolveToastTypeName(typeName, out var toastType) &&
+            toastType is not null)
+        {
+            return Runtime.Invoker.CreateInstance(toastType, argList);
+        }
+
         throw new InvalidOperationException(
             $"unknown type '{typeName}' in `new` expression");
     }
