@@ -144,9 +144,28 @@ public static class ShellIterationUtilities
         var remainder = ReplayFromAsync(first, enumerator, cancellationToken);
 
         return (null, ReplaySingleInputCollectionAsync(
-            input is PreExpandedSequence ? new PreExpandedSequence(remainder) : remainder,
+            CarryShapeMarker(input, remainder),
             cancellationToken));
     }
+
+    /// <summary>
+    /// Re-applies whichever shape marker <paramref name="original"/> carried.
+    /// </summary>
+    /// <remarks>
+    /// Wrapping a stream in another iterator erases its type, and the type is the whole
+    /// signal. Every place that hands a marked stream onward has to put the mark back or
+    /// the producer's decision is lost in transit — which is exactly how `PeekForTreeAsync`
+    /// came to disagree with the helper it was copied from.
+    /// </remarks>
+    public static IAsyncEnumerable<object?> CarryShapeMarker(
+        IAsyncEnumerable<object?> original,
+        IAsyncEnumerable<object?> rewrapped)
+        => original switch
+        {
+            PreExpandedSequence => new PreExpandedSequence(rewrapped),
+            SpreadableSequence => new SpreadableSequence(rewrapped),
+            _ => rewrapped,
+        };
 
     /// <summary>Yields an item already taken from an enumerator, then the rest of it.</summary>
     private static async IAsyncEnumerable<object?> ReplayFromAsync(
@@ -202,6 +221,30 @@ public static class ShellIterationUtilities
         // it must not be expanded a second time: the lone item it carries is the
         // item, not a container to spread.
         if (input is PreExpandedSequence)
+        {
+            await foreach (var value in input.WithCancellation(cancellationToken))
+            {
+                yield return value;
+            }
+
+            yield break;
+        }
+
+        // `TOAST-0028`. The producer decides, and an unmarked producer has decided that
+        // the collection it yielded is a *value*.
+        //
+        // This is the rule that used to be inferred by counting: a collection arriving
+        // alone was spread and a collection arriving beside others was not, so a generator
+        // yielding one array and the same generator yielding two handed downstream
+        // different shapes for the same first value. Adding a second batch changed what the
+        // first batch meant, and nothing at the call site could say which was intended.
+        //
+        // Expression heads — a literal, a variable, a range — are marked
+        // `SpreadableSequence` and keep the old behaviour exactly. What changes is a
+        // command or a user generator yielding a collection: it is now one item, however
+        // many follow it. `...` is the spelling for the other meaning (`TOAST-0032`), and
+        // it is why this could be a migration rather than a cliff.
+        if (input is not SpreadableSequence)
         {
             await foreach (var value in input.WithCancellation(cancellationToken))
             {

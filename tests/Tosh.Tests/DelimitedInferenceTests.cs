@@ -123,7 +123,9 @@ public sealed class DelimitedInferenceTests
         var results = await engine.ExecuteToListAsync(
             "echo \"n,m\\n1,a\\n,b\\n3,c\" | from csv");
 
-        var rows = Assert.IsAssignableFrom<IEnumerable<object?>>(Assert.Single(results))
+        // `TOAST-0028`. The rows arrive as items now rather than as one array that a
+        // downstream stage would have spread, so they are read straight off the result.
+        var rows = results
             .Select(row => Assert.IsAssignableFrom<IDictionary<string, object?>>(row))
             .ToArray();
 

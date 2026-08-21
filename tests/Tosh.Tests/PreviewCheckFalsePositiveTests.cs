@@ -52,7 +52,9 @@ public sealed class PreviewCheckFalsePositiveTests : IClassFixture<ToshRuntimeFi
     [InlineData("[\"a\",\"b\"] | where { $_ == \"a\" } | count", "1")]
     // A list literal types as the non-generic IList; `-> object[]` is a concrete CLR array, which
     // the structured rule missed.
-    [InlineData("func f() -> object[] { return [1,2] }\nf | count", "2")]
+    // `TOAST-0028`: `f` yields its array as one value, so one item. The point here is that
+    // the code *runs* rather than what it counts to.
+    [InlineData("func f() -> object[] { return [1,2] }\nf | count", "1")]
     // A bare word in command position is text the annotation converts.
     [InlineData("func bigFiles(minSize: StorageSize) { return $minSize }\nbigFiles 512b", "512 B")]
     public async Task Code_that_runs_is_not_reported(string source, string expected)

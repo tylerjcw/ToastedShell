@@ -604,7 +604,7 @@ public sealed partial class ToshEngine
         // whole pipeline — `for` among them — expands it a second time.
         var finalized = FinalizePipelineExitCodeAsync(current, pipelineExitStatusTracker, ownsTracker, cancellationToken);
 
-        return current is PreExpandedSequence ? new PreExpandedSequence(finalized) : finalized;
+        return ShellIterationUtilities.CarryShapeMarker(current, finalized);
     }
 
     private async IAsyncEnumerable<object?> FinalizePipelineExitCodeAsync(

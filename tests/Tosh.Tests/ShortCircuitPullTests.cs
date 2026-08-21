@@ -83,27 +83,32 @@ public sealed class ShortCircuitPullTests
     }
 
     [Theory]
-    // A lone collection still expands element-wise — the whole reason for the lookahead.
-    [InlineData("echo [1, 2, 3] | first 2 | join \",\"", "1,2")]
+    // A sequence expands element-wise. `TOAST-0028` changed *which* streams are sequences,
+    // not what happens to one: an expression head is a sequence, and `...` makes any value
+    // into one. What no longer qualifies is a collection that merely arrived alone.
+    [InlineData("echo ...[1, 2, 3] | first 2 | join \",\"", "1,2")]
     [InlineData("[1, 2, 3] | first 2 | join \",\"", "1,2")]
     [InlineData("echo a b c | first 2 | join \",\"", "a,b")]
-    public async Task A_lone_collection_still_expands(string source, string expected)
+    public async Task A_sequence_expands_element_wise(string source, string expected)
     {
         Assert.Equal(expected, await EvaluateAsync(source));
     }
 
     [Theory]
-    [InlineData("echo [1, 2, 3] | count", 3)]
-    // Two collections are two items, not six: the expansion applies to a *lone* input.
+    // `TOAST-0028`. The producer decides, and `echo` yields its argument as a value — so
+    // one collection argument is one item. This case read 3 until 2026-08-21, and it read 3
+    // by *counting*: the collection was alone, so the consumer spread it.
+    [InlineData("echo [1, 2, 3] | count", 1)]
+    // Which is why two collections were already two items rather than six. That answer is
+    // unchanged; what changed is that it no longer disagrees with the line above.
     [InlineData("echo [1,2] [3,4] | count", 2)]
     // Records and strings are atoms, not sequences of fields or characters.
     [InlineData("echo {| a = 1 |} | count", 1)]
     [InlineData("echo \"abc\" | count", 1)]
-    public async Task Expansion_applies_only_to_a_lone_collection(string source, int expected)
+    public async Task A_collection_yielded_by_a_command_is_one_item(string source, int expected)
     {
         Assert.Equal(expected, await EvaluateAsync(source));
     }
-
     [Fact]
     public async Task An_infinite_generator_still_short_circuits()
     {

@@ -43,7 +43,13 @@ public sealed class StructuredDataCommandTests
         var typeResults = await engine.ExecuteToListAsync("echo \"name,size\" \"alpha,1\" \"beta,2\" | from csv | type-of | get Name");
         var expandedResults = await engine.ExecuteToListAsync("echo \"name,size\" \"alpha,1\" \"beta,2\" | from csv | each { _ } | get name");
 
-        Assert.Collection(typeResults, item => Assert.Equal("array<record>", item));
+        // `TOAST-0028`. One row per item, so one `record` per row. This read a single
+        // `array<record>` until 2026-08-21, because `from csv` collected the whole table
+        // into one value and relied on a downstream stage spreading it — which meant
+        // `from csv | select name` was reaching into an `ExpandoObject[]` and being rescued.
+        // Yielding rows is the honest shape and restores streaming for every consumer that
+        // does not need the column-type inference's whole-column view.
+        Assert.Equal(["record", "record"], typeResults);
         Assert.Equal(["alpha", "beta"], expandedResults);
     }
 

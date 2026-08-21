@@ -61,7 +61,11 @@ public sealed class GenericInferenceTests : IClassFixture<ToshRuntimeFixture>
             Enumerable.Range(1, count).Select(i => $"var t{i} = Task.FromResult({i})"));
         var arguments = string.Join(", ", Enumerable.Range(1, count).Select(i => $"$t{i}"));
 
-        var value = await EvalAsync($"{declarations}\nTask.WhenAll({arguments}) | await | count");
+        // `TOAST-0028`: `await` yields the awaited `int[]` as one value, so the spread is
+        // what keeps this counting *results* — which is what discriminates the generic
+        // overload from the non-generic sibling that awaits to nothing and reports zero.
+        var value = await EvalAsync(
+            $"{declarations}\necho ...(Task.WhenAll({arguments}) | await) | count");
 
         Assert.Equal(count, Convert.ToInt32(value));
     }

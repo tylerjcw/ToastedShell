@@ -2213,12 +2213,12 @@ public sealed class EngineTests
     }
 
     [Fact]
-    public async Task First_replays_single_collection_values_as_pipeline_items()
+    public async Task First_reads_a_spread_collection_as_pipeline_items()
     {
         var engine = new ToshEngine();
 
-        var singleArray = await engine.ExecuteToListAsync("echo [1, 2, 3] | first");
-        var nestedArray = await engine.ExecuteToListAsync("echo [[1, 2], [3, 4]] | first");
+        var singleArray = await engine.ExecuteToListAsync("echo ...[1, 2, 3] | first");
+        var nestedArray = await engine.ExecuteToListAsync("echo ...[[1, 2], [3, 4]] | first");
         var multipleRows = await engine.ExecuteToListAsync("echo [1, 2] [3, 4] | first");
 
         Assert.Collection(singleArray, item => Assert.Equal(1, item));
@@ -2233,11 +2233,11 @@ public sealed class EngineTests
     }
 
     [Fact]
-    public async Task Get_index_replays_single_collection_values_as_pipeline_items()
+    public async Task Get_index_reads_a_spread_collection_as_pipeline_items()
     {
         var engine = new ToshEngine();
 
-        var indexResult = await engine.ExecuteToListAsync("echo [1, 2, 3] | get 0");
+        var indexResult = await engine.ExecuteToListAsync("echo ...[1, 2, 3] | get 0");
         var firstPipelineRow = await engine.ExecuteToListAsync("echo [1, 2] [3, 4] | get 0");
 
         Assert.Collection(indexResult, item => Assert.Equal(1, item));
@@ -2248,13 +2248,13 @@ public sealed class EngineTests
     }
 
     [Fact]
-    public async Task Row_oriented_commands_replay_single_collection_values_as_pipeline_items()
+    public async Task Row_oriented_commands_read_a_spread_collection_as_pipeline_items()
     {
         var engine = new ToshEngine();
 
-        var filtered = await engine.ExecuteToListAsync("echo [1, 2, 3] | where { _ > 1 }");
-        var sorted = await engine.ExecuteToListAsync("echo [3, 1, 2] | sort");
-        var counted = await engine.ExecuteToListAsync("echo [1, 2, 3] | count");
+        var filtered = await engine.ExecuteToListAsync("echo ...[1, 2, 3] | where { _ > 1 }");
+        var sorted = await engine.ExecuteToListAsync("echo ...[3, 1, 2] | sort");
+        var counted = await engine.ExecuteToListAsync("echo ...[1, 2, 3] | count");
 
         Assert.Equal(new object?[] { 2, 3 }, filtered.ToArray());
         Assert.Equal(new object?[] { 1, 2, 3 }, sorted.ToArray());
@@ -5692,42 +5692,42 @@ $output");
     // ──────────────────────────────────────────────────────────────────────
 
     [Fact]
-    public async Task Distinct_expands_single_collection_input()
+    public async Task Distinct_expands_a_spread_collection()
     {
         var engine = new ToshEngine();
 
-        var results = await engine.ExecuteToListAsync("echo [3,1,4,1,5,9] | distinct | count");
+        var results = await engine.ExecuteToListAsync("echo ...[3,1,4,1,5,9] | distinct | count");
 
         Assert.Collection(results, item => Assert.Equal(5, item));
     }
 
     [Fact]
-    public async Task Reverse_expands_single_collection_input()
+    public async Task Reverse_expands_a_spread_collection()
     {
         var engine = new ToshEngine();
 
-        var results = await engine.ExecuteToListAsync("echo [1,2,3] | reverse");
+        var results = await engine.ExecuteToListAsync("echo ...[1,2,3] | reverse");
 
         Assert.Equal(new object[] { 3, 2, 1 }, results.ToArray());
     }
 
     [Fact]
-    public async Task Skip_expands_single_collection_input()
+    public async Task Skip_expands_a_spread_collection()
     {
         var engine = new ToshEngine();
 
-        var results = await engine.ExecuteToListAsync("echo [10,20,30,40] | skip 2");
+        var results = await engine.ExecuteToListAsync("echo ...[10,20,30,40] | skip 2");
 
         Assert.Equal(new object[] { 30, 40 }, results.ToArray());
     }
 
     [Fact]
-    public async Task Each_agrees_with_count_on_single_collection_item_count()
+    public async Task Each_agrees_with_count_on_a_spread_collection()
     {
         var engine = new ToshEngine();
 
-        var eachCount = await engine.ExecuteToListAsync("echo [1,2,3] | each { echo ITEM } | count");
-        var directCount = await engine.ExecuteToListAsync("echo [1,2,3] | count");
+        var eachCount = await engine.ExecuteToListAsync("echo ...[1,2,3] | each { echo ITEM } | count");
+        var directCount = await engine.ExecuteToListAsync("echo ...[1,2,3] | count");
 
         Assert.Collection(eachCount, item => Assert.Equal(3, item));
         Assert.Collection(directCount, item => Assert.Equal(3, item));

@@ -35,9 +35,11 @@ public sealed class DelimitedDataFormat : IDataFormat
             throw new InvalidOperationException($"Could not parse delimited input. {exception.Message}");
         }
 
+        // `TOAST-0028`. No rows means no items. This used to yield one empty array and
+        // rely on a downstream stage expanding it away; under a rule where the producer
+        // decides shape, an empty table is emptiness rather than a value that looks empty.
         if (records.Count == 0)
         {
-            yield return Array.Empty<System.Dynamic.ExpandoObject>();
             yield break;
         }
 
@@ -51,11 +53,20 @@ public sealed class DelimitedDataFormat : IDataFormat
             ? null
             : DelimitedValueInference.InferColumns(headers.Count, dataRecords);
 
-        var rows = dataRecords
-            .Select(record => CreateRow(headers, record, converters))
-            .ToArray();
-
-        yield return rows;
+        // `TOAST-0028`. One row per item, not the whole table as one value.
+        //
+        // Yielding the table worked only because the consumer expanded a lone collection,
+        // which meant `from csv | select name` was reaching into an `ExpandoObject[]` and
+        // being rescued downstream. Under a rule where the producer decides, this command
+        // *is* the producer of a sequence of rows, and it says so.
+        //
+        // It is also the honest shape on its own merits: a table is rows, and the previous
+        // form gave up streaming for every consumer rather than only for the column-type
+        // inference that genuinely needs the rows in hand.
+        foreach (var record in dataRecords)
+        {
+            yield return CreateRow(headers, record, converters);
+        }
     }
 
     public async IAsyncEnumerable<object?> SerializeAsync(IReadOnlyList<object?> values, IReadOnlyList<object?> arguments)

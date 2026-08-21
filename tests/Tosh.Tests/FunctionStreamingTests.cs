@@ -153,7 +153,23 @@ public sealed class FunctionStreamingTests
             gen | collect | count
             """);
 
-        Assert.Equal(2, Convert.ToInt32(Assert.Single(results)));
+        // `TOAST-0028`. `collect` exists to gather a stream into one collection, so
+        // counting its output is 1 — the same answer `cast list<int> | count` gives, and
+        // for the same reason. Counting the *items* is `gen | count`, which is 2 and needs
+        // no intermediary. This read 2 until 2026-08-21, because the collection arrived
+        // alone and the consumer undid the collecting.
+        Assert.Equal(1, Convert.ToInt32(Assert.Single(results)));
+
+        var spread = await RunAsync(
+            """
+            func gen() {
+                yield 1
+                yield 2
+            }
+            echo ...(gen | collect) | count
+            """);
+
+        Assert.Equal(2, Convert.ToInt32(Assert.Single(spread)));
     }
 
     [Fact]

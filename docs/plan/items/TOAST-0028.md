@@ -1,10 +1,11 @@
 ---
 id: TOAST-0028
 title: "Collection shape is decided by counting what arrives, so producing more data changes what the earlier data meant"
-status: open
+status: complete
 area: toast
 priority: 2
 opened: 2026-08-20
+closed: 2026-08-21
 supersedes: TS-P3-04
 ---
 
@@ -297,20 +298,89 @@ above corrects them: the two shape-deciding paths implement the *same* rule, and
 found by reading `PeekForTreeAsync` to the end rather than by a search. Kept because the
 wrong version is what two attempts were planned against.
 
+## Resolution — 2026-08-21
+
+**The producer decides, and it says so with a mark.** `SpreadableSequence` is the
+counterpart to `PreExpandedSequence`: one says "already spread, do not spread again", the
+other says "this is a sequence, spreading it is what was meant". An expression head is
+marked; a command or generator is not.
+
+| | before | after |
+|---|---:|---:|
+| `[1,2,3] \| count`, `$x \| count`, `1..3 \| count` | 3 | 3 |
+| `[[1,2],[3]] \| count` | 2 | 2 |
+| generator yielding one array | 3 | **1** |
+| generator yielding two arrays | 2 | 2 |
+| `echo [1,2,3] \| count` | 3 | **1** |
+| `echo [1,2,3] \| cast list<int> \| count` | 3 | **1** |
+| generator steps run by `gen \| first 1` | 2 | **1** |
+
+`a | first` and `b | first` now agree, which is the property the item was filed for, and
+the over-pull is gone because reading a mark requires looking at nothing.
+
+### The `echo` / `cast` change was confirmed, not assumed
+
+The user confirmed on 2026-08-21 that `echo [1,2,3] | count` and `cast list<int> | count`
+may change from 3 to 1 with `...` as the explicit spelling for the old meaning. It is the
+only part a reader would notice in a session already written, and it was the one part not
+decidable from the defect alone.
+
+### Stages, and what each cost
+
+1. **Unify** — committed separately (`8e40ee4`). Meant as a no-op refactor; it was not,
+   because the two copies had drifted. See that commit.
+2. **Mark the producer** — three files, exactly as the second attempt predicted. 42
+   failures.
+3. **`from csv` yields rows** — 42 → 18. It collected the whole table into one value and
+   relied on a consumer spreading it, so `from csv | select name` was reaching into an
+   `ExpandoObject[]` and being rescued downstream. Rows are the honest shape and restore
+   streaming for every consumer that does not need the column-inference's whole-column view.
+4. **Migrate the tests** — 18 → 0. Eleven were the `echo [...]` spelling and became
+   `echo ...[...]`; four were commands yielding a collection (`collect`, `await`, a
+   function returning `object[]`); two were the defect pins written to flip; one was the
+   `cast` documented example.
+
+### What the negative control showed about the migration
+
+Reverting the source fails **8** tests, not 18. The other ten migrated to `...` spellings
+that pass under *both* rules — which is the evidence that this was a rename rather than a
+break. `TOAST-0032` is why: with no spelling for "spread this", every one of those ten
+would have had to be rewritten or deleted instead.
+
+### A gap found while migrating, not closed here
+
+`...` works as a bare pipeline head only for a variable or a literal: `...$xs | count` is
+3, but `...(gen) | count` fails with "Command '...' was not found". In argument position
+it is fine — `echo ...(gen) | count` is 3 — which is what the migrations use, so nothing
+is unreachable. `LooksLikeSpreadElement` requires the `...` token to carry its target,
+and `...` followed by `(` is a separate token.
+
+Deliberately not fixed in this change: it is a parser asymmetry rather than a shape
+question, and changing spread's own grammar in the commit that changes pipeline shape
+would make two risky changes hard to tell apart if either regressed.
+
+### Verified beyond the suite
+
+Ten example scripts were run before and after and their output diffed. Every difference
+was nondeterminism — timestamps, a GUID, the live process list, and one
+`new System.Random | call Next 1 100`. The real `~/.config/tosh` profile loads clean,
+which matters because TōSh is a login shell here.
+
 ## Acceptance
 
-- [ ] A generator yielding one collection and one yielding several agree about what a
+- [x] A generator yielding one collection and one yielding several agree about what a
       collection is: `a | first` and `b | first` both yield the collection
-- [ ] No item is read further than the consumer asked for — the `$produced` probe above
+- [x] No item is read further than the consumer asked for — the `$produced` probe above
       answers 1
-- [ ] `[1,2,3] | count`, `$x | count`, `1..3 | count` and `[[1,2],[3]] | count` are
+- [x] `[1,2,3] | count`, `$x | count`, `1..3 | count` and `[[1,2],[3]] | count` are
       unchanged, pinned as controls
-- [ ] `[] | to json` still serialises the empty array, and the other seven cases
-      `TS-P2-74` names are enumerated and pinned before the change
-- [ ] Dictionaries, records and strings remain single values
-- [ ] `docs/spec/` §Collection Shape is rewritten with the change, and its "known defect"
-      notebox removed
-- [ ] A negative control
+- [x] `[] | to json` still serialises the empty array, and the other seven cases
+      `TS-P2-74` names are enumerated and pinned — the existing `CollectionShapeTests`
+      control covers them and never failed at any point in the change
+- [x] Dictionaries, records and strings remain single values
+- [x] `docs/spec/` §Collection Shape is rewritten with the change, and its "known defect"
+      notebox removed — the document now has **no** defect boxes at all
+- [x] A negative control — reverting the source fails 8 tests across 7 classes
 
 ## Notes
 

@@ -246,7 +246,12 @@ public sealed class CastToDeclaredTypeTests
     [InlineData("cast int \"42\"", "42")]
     [InlineData("cast string 42", "42")]
     [InlineData("cast double \"1.5\"", "1.5")]
-    [InlineData("echo [1, 2, 3] | cast list<int> | count", "3")]
+    // `TOAST-0028`. One list, so one item. This read 3 until 2026-08-21, and getting 3
+    // required the pipeline to undo the cast's whole point: `cast list<int>` makes a list,
+    // and the consumer spread it again because it happened to arrive alone.
+    [InlineData("echo [1, 2, 3] | cast list<int> | count", "1")]
+    // The old meaning, said rather than inferred (`TOAST-0032`).
+    [InlineData("echo ...[1, 2, 3] | cast int | count", "3")]
     public async Task The_clr_casts_are_unchanged(string source, string expected)
     {
         // `cast list<int>` is the command's own first documented example, and resolving declared

@@ -9,15 +9,16 @@ namespace Tosh.Tests;
 /// <remarks>
 /// <para>
 /// Two rules decide whether a collection is one item or many: which values are sequences
-/// at all, and whether a sequence arrives alone. The first is settled and specified. The
-/// second is a **known defect** — it makes a collection's meaning depend on how many of
-/// them there are — and its replacement is `TOAST-0028`.
+/// at all, and who decides that a given collection is one. Both are settled and specified.
 /// </para>
 /// <para>
-/// The defect is pinned here rather than left unstated. A test that asserts the wrong
-/// behaviour on purpose has to say so, or the next reader will "fix" the test; when
-/// `TOAST-0028` lands, `Producing_more_data_changes_what_the_earlier_data_meant` is the
-/// one that must flip, and its failure is the signal that it did.
+/// The second used to be a known defect, and two tests here asserted it deliberately.
+/// Shape was decided by *counting* — a collection arriving alone was expanded and a
+/// collection arriving beside others was not — so producing more data changed what the
+/// existing data meant. `TOAST-0028` made the producer decide instead, and those two tests
+/// flipped on 2026-08-21 as they were written to. Their previous expectations are recorded
+/// in their own remarks rather than deleted, because "this answered 3 until the rule
+/// changed" is the part a reader needs to trust the current number.
 /// </para>
 /// </remarks>
 public sealed class CollectionShapeTests
@@ -59,38 +60,48 @@ public sealed class CollectionShapeTests
     /// **This asserts a defect on purpose.** `TOAST-0028` flips it.
     /// </summary>
     /// <remarks>
-    /// A collection reaching a stage alone is expanded; several are left as items. So
-    /// producing a second batch changes what the first batch meant — `count` falls from 3
-    /// to 2 as data is *added*, and `first` changes from an element to the whole array.
-    ///
-    /// When the producer decides shape instead, both rows answer the collection.
+    /// <para>
+    /// Until 2026-08-21 this asserted the defect. A collection reaching a stage alone was
+    /// expanded and several were left as items, so producing a second batch changed what
+    /// the first batch meant: `count` *fell* from 3 to 2 as data was added, and `first`
+    /// changed from an element to the whole array.
+    /// </para>
+    /// <para>
+    /// The producer decides now, so both rows answer the collection. `a` and `b` yield the
+    /// same first value and it means the same thing in both, which is the property the
+    /// whole item exists for.
+    /// </para>
     /// </remarks>
     [Fact]
-    public async Task Producing_more_data_changes_what_the_earlier_data_meant()
+    public async Task Producing_more_data_does_not_change_what_the_earlier_data_meant()
     {
         const string One = "func a() { yield [1, 2, 3] }\n";
         const string Two = "func b() { yield [1, 2, 3]; yield [4] }\n";
 
-        Assert.Equal("3", await RunAsync(One + "(a | count)"));
+        Assert.Equal("1", await RunAsync(One + "(a | count)"));
         Assert.Equal("2", await RunAsync(Two + "(b | count)"));
 
         // Rendered rather than `ToString`d: an array's `ToString` is `System.Int32[]`,
         // which would pin the host's formatting instead of the value.
-        Assert.Equal("1", await RunAsync(One + "echo $\"{(a | first)}\""));
+        Assert.Equal("[1, 2, 3]", await RunAsync(One + "echo $\"{(a | first)}\""));
         Assert.Equal("[1, 2, 3]", await RunAsync(Two + "echo $\"{(b | first)}\""));
     }
 
     /// <summary>
-    /// **This asserts a defect on purpose too.** The consumer reads one item further than
-    /// it was asked for, so a generator runs a step nobody requested.
+    /// A generator is advanced exactly as far as the consumer asked.
     /// </summary>
     /// <remarks>
-    /// Deciding "is this the only item?" cannot be done without looking. `TS-P1-08`
-    /// removed the half of this lookahead that fires when the first item is not a
-    /// collection; the remaining half needs the rule itself to change.
+    /// This asserted a defect on purpose until 2026-08-21. Deciding "is this the only
+    /// item?" could not be done without looking, so a consumer read one item further than
+    /// it was asked for and a generator ran a step nobody requested — a real extra unit of
+    /// work for an expensive producer, and a real error if the surplus step raised.
+    ///
+    /// `TS-P1-08` removed the half of the lookahead that fires when the first item is not a
+    /// collection. The remaining half needed the rule itself to change, and a mark does not
+    /// need looking at anything to be read.
     /// </remarks>
     [Fact]
-    public async Task A_generator_is_advanced_further_than_the_consumer_asked()
+    public async Task A_generator_is_advanced_no_further_than_the_consumer_asked()
     {
         const string Source = """
             var produced = 0
@@ -104,8 +115,8 @@ public sealed class CollectionShapeTests
             $produced
             """;
 
-        // One batch was asked for; two were produced.
-        Assert.Equal("2", await RunAsync(Source));
+        // One batch was asked for, and exactly one is produced.
+        Assert.Equal("1", await RunAsync(Source));
     }
 
     /// <summary>

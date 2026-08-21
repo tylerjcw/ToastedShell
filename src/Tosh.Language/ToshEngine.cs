@@ -2654,7 +2654,17 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
             return new PreExpandedSequence(ReplayBindingAsync(enumerable, cancellationToken));
         }
 
-        return ExecuteExpressionStageCoreAsync(sourceName, sourceText, expressionStage, cancellationToken);
+        // `TOAST-0028`. An expression head is where a collection *literal* — or a variable
+        // holding one, or a range — reaches a pipeline, and those are sequences: spreading
+        // them is what `[1, 2, 3] | where { … }` has always meant. Marking says so at the
+        // producer, which is the point of the change; downstream no longer has to guess it
+        // from how many items happen to arrive.
+        //
+        // Deliberately the whole stage rather than the collection-valued cases: every head
+        // that already yielded elements (a range, the namespace replay) keeps behaving as
+        // it does today, because the marked path *is* the behaviour it has today.
+        return new SpreadableSequence(
+            ExecuteExpressionStageCoreAsync(sourceName, sourceText, expressionStage, cancellationToken));
     }
 
     private static async IAsyncEnumerable<object?> ReplayBindingAsync(
