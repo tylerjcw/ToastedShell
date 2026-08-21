@@ -8,14 +8,11 @@
 | [`TOAST-0006`](items/TOAST-0006.md) | P2 | open | 2/5 | Divide the assemblies along the language/shell boundary |
 | [`PLAN-0002`](items/PLAN-0002.md) | P2 | open | 4/7 | Suite reliability on a clean checkout: the Debug-CLI race is fixed, one parallel flake remains |
 | [`PLAN-0001`](items/PLAN-0001.md) | P3 | open | 6/10 | Triage the remaining documentation: date what is stale, mark what is frozen, rewrite only what the split will not move |
-| [`TOAST-0016`](items/TOAST-0016.md) | P2 | partial | 4/5 | `extend` matches only CLR type names, so `extend int` silently never applies |
-| [`TOAST-0027`](items/TOAST-0027.md) | P2 | open | 0/5 | An unrecognised escape in a double-quoted string is kept as text instead of being reported |
 | [`TOAST-0029`](items/TOAST-0029.md) | P2 | open | 0/6 | `is` matches a CLR value's exact type name only, so `$x is IEnumerable` and `$e is Exception` are always false |
 | [`TOAST-0007`](items/TOAST-0007.md) | P2 | open | 0/4 | Split Tosh.Stdlib into language-level and shell-level commands |
 | [`CRUMB-0001`](items/CRUMB-0001.md) | P3 | partial | 4/11 | Crumb polish: config file, conflict-resolution UX, and four optional features |
 | [`TOAST-0008`](items/TOAST-0008.md) | P3 | open | 0/7 | Rename the language surface from Tosh to Toast, keeping every existing spelling working |
 | [`TOAST-0030`](items/TOAST-0030.md) | P2 | open | 0/7 | The compiled backend does not implement five of the semantics `docs/spec/` now states |
-| [`TOAST-0014`](items/TOAST-0014.md) | P2 | partial | 5/6 | String interpolation renders through the display stack, so its output depends on shell configuration |
 | [`TS-P3-12`](items/TS-P3-12.md) | P3 | in-progress | — | Type highlighting misses real contexts, differently per surface |
 | [`TOAST-0026`](items/TOAST-0026.md) | P3 | open | 0/5 | A decimal literal is parsed as a double first, so its extra precision is lost before the cast |
 | [`TOAST-0020`](items/TOAST-0020.md) | P2 | partial | 7/8 | A trait's declared member types are not enforced on the implementing class |

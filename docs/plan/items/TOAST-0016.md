@@ -1,10 +1,11 @@
 ---
 id: TOAST-0016
 title: "`extend` matches only CLR type names, so `extend int` silently never applies"
-status: partial
+status: complete
 area: toast
 priority: 2
 opened: 2026-08-17
+closed: 2026-08-20
 ---
 
 ## Problem
@@ -50,7 +51,11 @@ exists to resolve it.
 - [x] `extend Int32` keeps working, pinned as a control
 - [x] resolution goes through the one alias table — `ResolveTypeName`, the same resolver an
       annotation uses, not a second list of pairs
-- [ ] ~~an `extend` naming a type that resolves to nothing is reported at declaration~~ —
+- [x] ~~an `extend` naming a type that resolves to nothing is reported at declaration~~ —
+      **withdrawn, not outstanding.** A forward reference is legal, so at the moment an
+      `extend` runs there is no way to tell an unresolvable name from one declared three
+      lines later. Recorded 2026-08-17 and unchanged since; the item is closed on the
+      four boxes that were met and this one being retired rather than met —
       **not done, and not doable as written.** See below.
 - [x] a negative control: 4 of 10 fail with the registration reverted
 

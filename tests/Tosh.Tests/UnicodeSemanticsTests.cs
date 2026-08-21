@@ -20,11 +20,14 @@ namespace Tosh.Tests;
 /// `lstlisting` blocks can typeset.
 /// </para>
 /// <para>
-/// **The escapes must be in `$'...'` strings.** A double-quoted string takes `\n`, `\t`
-/// and the other control escapes but *not* `\uHHHH` — it keeps those six characters as
-/// text, silently. The specification said otherwise until this corpus was run against it:
-/// the `-c` command line had been doing shell-level escape processing, so every probe
-/// through `tosh -c` appeared to prove an escape the language does not have.
+/// The escapes originally had to be written in `$'...'` strings: a double-quoted string
+/// kept `\uHHHH` as six characters, silently. The specification said otherwise until this
+/// corpus was run against it. The reason first recorded — that `tosh -c` performs its own
+/// escape processing — was itself wrong: identical bytes answer the same through `-c` and
+/// through a file. The probes had simply *typed* the literal character where they meant
+/// the escape, which proves nothing about escapes. `TOAST-0027` then gave both string
+/// kinds the same escapes, and these cases use the double-quoted spelling with one ANSI-C
+/// case kept as a control that they agree.
 /// </para>
 /// </remarks>
 public sealed class UnicodeSemanticsTests
@@ -44,10 +47,12 @@ public sealed class UnicodeSemanticsTests
     /// </remarks>
     [Theory]
     [InlineData("\"abc\"", "3")]
-    [InlineData("$'\\u00E9'", "1")]                                       // precomposed
-    [InlineData("$'e\\u0301'", "2")]                                      // e + combining acute
-    [InlineData("$'\\uD83D\\uDC4B'", "2")]                                // waving hand
-    [InlineData("$'\\uD83D\\uDC68\\u200D\\uD83D\\uDC69\\u200D\\uD83D\\uDC67'", "8")]  // family
+    [InlineData("\"\\u00E9\"", "1")]                                       // precomposed
+    [InlineData("\"e\\u0301\"", "2")]                                      // e + combining acute
+    [InlineData("\"\\uD83D\\uDC4B\"", "2")]                                // waving hand
+    [InlineData("\"\\uD83D\\uDC68\\u200D\\uD83D\\uDC69\\u200D\\uD83D\\uDC67\"", "8")]
+    // The ANSI-C spelling agrees, which is what `TOAST-0027` made true.
+    [InlineData("$'\\uD83D\\uDC4B'", "2")]  // family
     public async Task Length_counts_code_units(string literal, string expected)
         => Assert.Equal(expected, await RunAsync($"({literal}.Length)"));
 
@@ -62,7 +67,7 @@ public sealed class UnicodeSemanticsTests
     [Fact]
     public async Task Indexing_can_return_half_a_character()
     {
-        const string Setup = "var w = $'a\\uD83D\\uDC4Bb'\n";
+        const string Setup = "var w = \"a\\uD83D\\uDC4Bb\"\n";
 
         Assert.Equal("4", await RunAsync(Setup + "($w.Length)"));
         Assert.Equal("a", await RunAsync(Setup + "($w[0])"));
@@ -85,21 +90,21 @@ public sealed class UnicodeSemanticsTests
     [Fact]
     public async Task Canonically_equivalent_strings_are_not_equal()
     {
-        Assert.Equal("False", await RunAsync("($'e\\u0301' == $'\\u00E9')"));
+        Assert.Equal("False", await RunAsync("(\"e\\u0301\" == \"\\u00E9\")"));
 
         // Nor the same key, so a `distinct` keeps both. The sentinel keeps `count`
         // measuring items rather than the survivor's contents.
-        Assert.Equal("3", await RunAsync("[$'e\\u0301', $'\\u00E9', \"z\"] | distinct | count"));
+        Assert.Equal("3", await RunAsync("[\"e\\u0301\", \"\\u00E9\", \"z\"] | distinct | count"));
 
         Assert.False(ShellKeyComparer.Instance.Equals("e\u0301", "\u00E9"));
     }
 
     /// <summary>Normalisation is available, and explicit.</summary>
     [Theory]
-    [InlineData("($'e\\u0301'.Normalize() == $'\\u00E9'.Normalize())", "True")]
-    [InlineData("($'e\\u0301'.Normalize().Length)", "1")]
-    [InlineData("($'\\u00E9'.IsNormalized())", "True")]
-    [InlineData("($'e\\u0301'.IsNormalized())", "False")]
+    [InlineData("(\"e\\u0301\".Normalize() == \"\\u00E9\".Normalize())", "True")]
+    [InlineData("(\"e\\u0301\".Normalize().Length)", "1")]
+    [InlineData("(\"\\u00E9\".IsNormalized())", "True")]
+    [InlineData("(\"e\\u0301\".IsNormalized())", "False")]
     public async Task Normalisation_is_available_explicitly(string source, string expected)
         => Assert.Equal(expected, await RunAsync(source));
 
@@ -112,8 +117,8 @@ public sealed class UnicodeSemanticsTests
     /// by code point it is true everywhere, because `z` is U+007A and `ä` is U+00E4.
     /// </remarks>
     [Theory]
-    [InlineData("(\"z\" < $'\\u00E4')", "True")]
-    [InlineData("($'\\u00E4' < \"z\")", "False")]
+    [InlineData("(\"z\" < \"\\u00E4\")", "True")]
+    [InlineData("(\"\\u00E4\" < \"z\")", "False")]
     [InlineData("(\"a\" < \"B\")", "False")]
     public async Task String_ordering_is_by_code_unit(string source, string expected)
         => Assert.Equal(expected, await RunAsync(source));
@@ -129,7 +134,7 @@ public sealed class UnicodeSemanticsTests
     [Fact]
     public async Task A_string_is_not_taken_apart_by_the_pipeline()
     {
-        const string Astral = "$'a\\uD83D\\uDC4Bb'";
+        const string Astral = "\"a\\uD83D\\uDC4Bb\"";
 
         Assert.Equal("a\uD83D\uDC4Bb", await RunAsync($"{Astral} | reverse"));
         Assert.Equal("a\uD83D\uDC4Bb", await RunAsync($"{Astral} | sort"));

@@ -2412,28 +2412,33 @@ is produced, not by counting what arrives. The replacement is specified in
 A \code{str} is a sequence of \textbf{UTF-16 code units}. Everything else in this
 section follows from that one sentence, including the parts that surprise.
 
-A code unit is written with \code{\textbackslash uHHHH}, four hex digits, inside an
-\textbf{ANSI-C string} --- \code{\$'...'}. An ordinary double-quoted string takes
-\code{\textbackslash n}, \code{\textbackslash t}, \code{\textbackslash e} and the other
-control escapes, but \emph{not} \code{\textbackslash u}: it keeps those six characters
-as text. A character outside the Basic Multilingual Plane is written as the
-\emph{surrogate pair} it is made of, which is the model made visible --- the waving-hand
-character U+1F44B is \code{\$'\textbackslash uD83D\textbackslash uDC4B'}.
+A code unit is written with \code{\textbackslash uHHHH}, four hex digits, and a byte with
+\code{\textbackslash xHH}. Both work in an ordinary double-quoted string and in an
+ANSI-C string (\code{\"..."}) alike. A character outside the Basic Multilingual Plane is
+written as the \emph{surrogate pair} it is made of, which is the model made visible ---
+the waving-hand character U+1F44B is
+\code{"\textbackslash uD83D\textbackslash uDC4B"}.
+
+A backslash before a letter that names no escape is kept as written, so
+\code{"\textbackslash q"} is two characters. Note that \code{\textbackslash t},
+\code{\textbackslash n} and the rest \emph{do} resolve in a double-quoted string, so a
+Windows path written with single backslashes does not survive one:
+\code{"C:\textbackslash path\textbackslash to"} contains a tab.
 
 \paragraph{\code{Length} counts code units, not characters.}
 
 \begin{lstlisting}
 echo ("abc".Length)                        # 3
-echo ($'\u00E9'.Length)                     # 1  -- precomposed e-acute
-echo ($'\uD83D\uDC4B'.Length)               # 2  -- one character, two code units
-echo ($'\uD83D\uDC68\u200D\uD83D\uDC69'.Length)
+echo ("\u00E9".Length)                     # 1  -- precomposed e-acute
+echo ("\uD83D\uDC4B".Length)               # 2  -- one character, two code units
+echo ("\uD83D\uDC68\u200D\uD83D\uDC69".Length)
                                            # 5  -- two people and a joiner
 \end{lstlisting}
 
 \paragraph{Indexing can therefore yield half a character.}
 
 \begin{lstlisting}
-var w = $'a\uD83D\uDC4Bb'
+var w = "a\uD83D\uDC4Bb"
 echo ($w.Length)             # 4
 echo ($w[0])                 # a
 echo ($w[1])                 # an unpaired surrogate -- not valid text
@@ -2455,13 +2460,13 @@ numbers.
 \end{notebox}
 
 \paragraph{Comparison is exact, and does not normalise.}
-Unicode can spell the same character more than one way: \code{\$'\textbackslash u00E9'} is one code point, and \code{e} followed by a combining acute
+Unicode can spell the same character more than one way: \code{\"\textbackslash u00E9"} is one code point, and \code{e} followed by a combining acute
 (\code{\textbackslash u0301}) is two. They render identically and they are \emph{not}
 equal:
 
 \begin{lstlisting}
-var combined = $'e\u0301'
-echo ($combined == $'\u00E9')   # false
+var combined = "e\u0301"
+echo ($combined == "\u00E9")   # false
 echo ($combined.Length)        # 2
 \end{lstlisting}
 
@@ -2469,7 +2474,7 @@ Normalisation is available and explicit --- \code{\$s.Normalize()} for NFC,
 \code{\$s.Normalize(form)} for another form, \code{\$s.IsNormalized()} to ask:
 
 \begin{lstlisting}
-echo ($combined.Normalize() == $'\u00E9'.Normalize())   # true
+echo ($combined.Normalize() == "\u00E9".Normalize())   # true
 echo ($combined.Normalize().Length)                    # 1
 \end{lstlisting}
 

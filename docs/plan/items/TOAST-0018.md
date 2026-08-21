@@ -348,14 +348,19 @@ It said `"\uHHHH"` writes a code unit. It does not. There are **two escape table
 second knows `\u` and `\x`. In a double-quoted string, `"\u00E9"` is six characters, kept
 silently.
 
-**Every probe had gone through `tosh -c`, and the command line does its own shell-level
-escape processing**, so `tosh -c 'echo ("\u00E9".Length)'` answers `1` while the identical
-line in a script answers `6`. The measure-first discipline was followed and still produced
-a false claim, because the instrument was not the language. Corrected throughout; every
-example now uses `$'...'` and was run from a **file** before being written down.
+**The reason recorded here at the time was wrong**, and correcting it matters more than the
+original error. It said `tosh -c` performs shell-level escape processing. It does not:
+running identical bytes through `-c` and through a script file, against the pre-fix lexer,
+answers `6` both ways. What differed was what had been *typed* — the `-c` probes contained
+the literal character `é` and the script file contained the escape `\u00E9`. Two different
+programs, and the instrument took the blame.
 
-Filed as `TOAST-0027`, including the sharper half: `-c` and a script file disagree about
-what a string literal means.
+The lesson is smaller and sharper: a probe that types a character where it means an escape
+proves nothing about escapes. The corpus caught it because a corpus repeats one source
+verbatim, which a hand-typed probe does not. `TOAST-0027` since gave both string kinds the
+same escapes, so the double-quoted spelling now works and the examples use it.
+
+Filed as `TOAST-0027`, and since fixed: both string kinds take the same escapes.
 
 ### No negative control, and why
 

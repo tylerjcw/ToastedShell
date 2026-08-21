@@ -1,10 +1,11 @@
 ---
 id: TOAST-0014
 title: "String interpolation renders through the display stack, so its output depends on shell configuration"
-status: partial
+status: complete
 area: toast
 priority: 2
 opened: 2026-08-17
+closed: 2026-08-20
 ---
 
 ## Problem
@@ -140,7 +141,8 @@ now are.
 - [x] Interpolation and value-to-text conversion use it; their output does not vary with shell display configuration
 - [x] `ObjectFormatter` keeps display concerns and calls the same protocol underneath
 - [x] The protocol is specified, not merely implemented — `docs/spec/toastscript-spec.tex` §Value Rendering as of 2026-08-17, drafted in `docs/plan/SPEC_DRAFT_value_rendering.md` and with `ToastRendererTests` written *from* it; scalars, collections, records, `null`, NaN and signed zero are pinned
-- [ ] ~~Unicode~~ — **not done.** The corpus covers escaping of `"`, `\`, `\n`, `\r` and `\t` and nothing else. What a `str` is made of, what `Length` counts, and how indexing and comparison behave belong to `TOAST-0018`, which carries the eight unfiled Phase A concerns; recorded here rather than ticked, because the box asks for something this did not deliver
+- [x] Unicode — **done by `TOAST-0018` on 2026-08-20**, as this box said it would be: a `str` is a sequence of UTF-16 code units, `Length` counts them, indexing can return half a character, and comparison does not normalise. `§Text and Unicode`, with `UnicodeSemanticsTests`. The original wording is kept below because it is what the deferral promised.
+- [x] ~~Unicode~~ — *(original wording)* **not done at the time.** The corpus covers escaping of `"`, `\`, `\n`, `\r` and `\t` and nothing else. What a `str` is made of, what `Length` counts, and how indexing and comparison behave belong to `TOAST-0018`, which carries the eight unfiled Phase A concerns; recorded here rather than ticked, because the box asks for something this did not deliver
 - [x] A test proves interpolation is unaffected by display-profile changes — `Rendering_does_not_change_when_display_configuration_does`
 
 ## Notes

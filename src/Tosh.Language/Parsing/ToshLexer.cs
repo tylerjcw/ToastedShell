@@ -714,6 +714,17 @@ public sealed class ToshLexer
         var escaped = Current;
         _position++;
 
+        // `TOAST-0027`. `\xHH` and `\uHHHH` resolve here as they do in an ANSI-C string.
+        // They used to be kept as text — silently — so `"\u00E9"` was six characters while
+        // `$'\u00E9'` was one, and nothing said which table a string was being read with.
+        // The specification claimed the double-quoted spelling worked, and was wrong.
+        //
+        // This does not make a backslash newly dangerous: `\t`, `\n` and the rest already
+        // resolved here, so `"C:\path\to"` already contained a tab. A backslash before any
+        // *other* letter is still kept, which is what leaves `"\q"` alone.
+        if (escaped is 'x') return ReadHexEscape(maximumDigits: 2, fallback: "\\x");
+        if (escaped is 'u') return ReadHexEscape(maximumDigits: 4, fallback: "\\u");
+
         return escaped switch
         {
             '\\' => "\\",
@@ -730,6 +741,28 @@ public sealed class ToshLexer
             '0' => "\0",
             _ => $"\\{escaped}",
         };
+    }
+
+    /// <summary>
+    /// Reads up to <paramref name="maximumDigits"/> hex digits as one code unit, or gives
+    /// back <paramref name="fallback"/> when there are none — `TOAST-0027`.
+    /// </summary>
+    /// <remarks>
+    /// One implementation for both string kinds. They had a copy each, which is how they
+    /// came to differ about whether `\u` was an escape at all.
+    /// </remarks>
+    private string ReadHexEscape(int maximumDigits, string fallback)
+    {
+        var value = 0;
+        var digits = 0;
+
+        for (; digits < maximumDigits && !IsAtEnd && IsHexDigit(Current); digits++)
+        {
+            value = (value * 16) + HexValue(Current);
+            _position++;
+        }
+
+        return digits == 0 ? fallback : ((char)value).ToString();
     }
 
     private SyntaxToken ReadInterpolatedString()
@@ -880,30 +913,9 @@ public sealed class ToshLexer
                     }
                     return ((char)value).ToString();
                 }
-            case 'x':
-                {
-                    // Hex: \xHH (up to 2 hex digits)
-                    var value = 0;
-                    var digits = 0;
-                    for (; digits < 2 && !IsAtEnd && IsHexDigit(Current); digits++)
-                    {
-                        value = (value * 16) + HexValue(Current);
-                        _position++;
-                    }
-                    return digits == 0 ? "\\x" : ((char)value).ToString();
-                }
-            case 'u':
-                {
-                    // Unicode: \uHHHH (up to 4 hex digits)
-                    var value = 0;
-                    var digits = 0;
-                    for (; digits < 4 && !IsAtEnd && IsHexDigit(Current); digits++)
-                    {
-                        value = (value * 16) + HexValue(Current);
-                        _position++;
-                    }
-                    return digits == 0 ? "\\u" : ((char)value).ToString();
-                }
+            // `TOAST-0027`. Shared with `ReadEscapeSequence`, which used to lack both.
+            case 'x': return ReadHexEscape(maximumDigits: 2, fallback: "\\x");
+            case 'u': return ReadHexEscape(maximumDigits: 4, fallback: "\\u");
             default:
                 return $"\\{escaped}";
         }
