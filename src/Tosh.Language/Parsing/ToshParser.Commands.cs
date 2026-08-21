@@ -654,6 +654,16 @@ public static partial class ToshParser
                     TextSpan.FromBounds(hereStringToken.Span.Start, argument.Span.End));
             }
 
+            // `TOAST-0032`. `...$xs` in stage position spreads into the pipeline. Without
+            // this the token reached command position and was reported as an unknown
+            // command — `...` worked in an array literal, a record literal and an argument
+            // list, and stopped at the one place a shell needs it most.
+            if (LooksLikeSpreadElement())
+            {
+                var spread = ParseSpreadElement();
+                return new ExpressionPipelineStageSyntax(spread, spread.Span);
+            }
+
             if (allowExpressionStage && LooksLikeExpressionStage())
             {
                 var expression = HasTopLevelOperatorBeforeStageBoundary(stopAtCloseParen, stopAtCloseBrace, stopAtSemicolon)

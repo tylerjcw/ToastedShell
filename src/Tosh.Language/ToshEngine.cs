@@ -2711,6 +2711,23 @@ public sealed partial class ToshEngine : IShellEvaluator, IShellNamedTypeView, I
             yield break;
         }
 
+        // `TOAST-0032`. `...$xs` sends the collection's elements, one item each, and says
+        // so at the point it is written. Everything else here decides shape by inspecting
+        // the value; this is the one form where the author has already said what they
+        // meant, so nothing is inferred.
+        if (effective is SpreadElementArgumentSyntax spread)
+        {
+            var spreadValue = await EvaluateArgumentAsync(sourceName, sourceText, spread.Value, cancellationToken);
+
+            foreach (var item in ShellIterationUtilities.ExpandIterationItems(spreadValue))
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                yield return item;
+            }
+
+            yield break;
+        }
+
         object? value;
 
         try

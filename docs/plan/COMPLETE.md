@@ -21,6 +21,7 @@
 | [`TOAST-0023`](items/TOAST-0023.md) | P2 | complete | 5/5 | An interpolation hole spreads a variable holding a collection |
 | [`TOAST-0001`](items/TOAST-0001.md) | P1 | complete | 5/5 | A free function called inside a closure resolves as an instance method on the pipeline item |
 | [`TOAST-0026`](items/TOAST-0026.md) | P3 | complete | 5/5 | A decimal literal is parsed as a double first, so its extra precision is lost before the cast |
+| [`TOAST-0032`](items/TOAST-0032.md) | P2 | complete | 5/5 | `...` spreads into a pipeline, so a collection's shape can be stated rather than inferred |
 | [`TOAST-0019`](items/TOAST-0019.md) | P2 | complete | 6/6 | A trait member is not written the way a class member is |
 | [`TOAST-0005`](items/TOAST-0005.md) | P2 | complete | 6/6 | Split ToshEngine.cs and ToshParser.cs into partial classes by concern |
 | [`TOAST-0018`](items/TOAST-0018.md) | P2 | complete | 10/10 | Portable core semantics: the eight Phase A concerns outside formatting and streaming |

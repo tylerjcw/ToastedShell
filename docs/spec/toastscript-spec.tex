@@ -3009,6 +3009,29 @@ var args = [1, 2, 3]
 some-function ...$args     # Equivalent to some-function 1 2 3
 \end{lstlisting}
 
+\subsection{Pipeline Spread}
+\label{sec:pipeline-spread}
+
+A spread in pipeline position sends a collection's elements as separate items:
+
+\begin{lstlisting}
+var xs = [1, 2, 3]
+echo (...$xs | count)              # 3
+echo (...$xs | where $_ > 1 | count)   # 2
+\end{lstlisting}
+
+It spreads one level, and only what the language calls a sequence
+(\S\ref{sec:collection-shape}) --- a record, a dictionary and a string are single values,
+so spreading one yields it unchanged rather than taking it apart.
+
+\begin{notebox}
+This is the only form in a pipeline where shape is not inferred from the value. Everywhere
+else a stage decides whether a collection means itself or its elements; here the author has
+said so, at the point of writing. That makes it the spelling to reach for when the default
+is not what was meant --- and the reason it is worth having is that a default can be
+argued about, while \code{...} cannot be misread.
+\end{notebox}
+
 \section{Computed Properties}
 \label{sec:computed}
 

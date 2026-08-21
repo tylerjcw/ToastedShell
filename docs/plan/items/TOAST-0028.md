@@ -155,6 +155,20 @@ producer's declared output shape meet, which is exactly what `TS-P3-04` meant by
 carrying elements, marked so nothing expands it again. The inverse marker — a stream
 carrying values that must not be spread — is what is missing.
 
+## The missing prerequisite, now built — `TOAST-0032`
+
+`TS-P3-04`'s one-line ask included "a reasonable migration path", and that clause was the
+one nobody had built. Both attempts here failed the same way: with no spelling for "spread
+this", changing the default was all-or-nothing across the whole standard library, and every
+regression had to be absorbed rather than migrated.
+
+`...` now works in pipeline position — `...$xs | count` is 3 — so there *is* something to
+write instead. `echo [1,2,3] | count` changing from 3 to 1 stops being a cliff and becomes
+a rename, and the same is true of every command that yields a collection meaning a
+sequence.
+
+That does not decide anything below. It removes the reason the decision was unaffordable.
+
 ## Scope, restated after two attempts
 
 The engine mechanism is settled and small: a `SpreadableSequence` marker set by the
