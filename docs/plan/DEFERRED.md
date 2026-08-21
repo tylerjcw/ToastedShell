@@ -9,4 +9,3 @@
 | [`TS-P1-46`](items/TS-P1-46.md) | P1 | deferred | — | An array literal is a real array interpreted and a `List<object>` compiled |
 | [`TS-P1-40`](items/TS-P1-40.md) | P1 | deferred | — | Index assignment has two live implementations on different surfaces |
 | [`TOSH-0005`](items/TOSH-0005.md) | P2 | deferred | 0/5 | External-program I/O compact: M5 polish, and TSSP rendering for interactive children |
-| [`TS-P1-47`](items/TS-P1-47.md) | P1 | deferred | — | A variable annotated with a base class rejects a subclass value when compiled |

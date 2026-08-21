@@ -347,6 +347,17 @@ that pass under *both* rules — which is the evidence that this was a rename ra
 break. `TOAST-0032` is why: with no spelling for "spread this", every one of those ten
 would have had to be rewritten or deleted instead.
 
+### A wrinkle this rule creates — `TOAST-0039`
+
+The rule is syntactic: an *expression* head is a sequence, a *command* stage is not. So
+`fn | count` and `fn() | count` answer 1 while `$c.m() | count` answers 3, for functions
+and methods returning the identical collection.
+
+Found the same day, when `scripts/plan.tosh index` failed — `load() | where { $_["board"] … }`
+began handing `where` a single `Object[]`. The verification here covered `examples/` and
+the user's profile and not `scripts/`, which is the lesson worth carrying: a shape change is
+not verified by running whichever programs happen to be in front of you.
+
 ### A gap found while migrating, not closed here
 
 `...` works as a bare pipeline head only for a variable or a literal: `...$xs | count` is

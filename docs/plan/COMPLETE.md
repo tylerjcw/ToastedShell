@@ -16,6 +16,7 @@
 | [`TOAST-0004`](items/TOAST-0004.md) | P1 | complete | 5/5 | Invert the ExternalProcessCommand coupling so Tosh.Language no longer depends on the shell's command library |
 | [`TOSH-0001`](items/TOSH-0001.md) | P1 | complete | 6/6 | Quotes inside an argument are passed through to external commands instead of being stripped |
 | [`TS-P2-118`](items/TS-P2-118.md) | P2 | complete | — | Calling a callable held in a property warns `member_not_found`, then works |
+| [`TOAST-0030`](items/TOAST-0030.md) | P2 | complete | 9/9 | The compiled backend does not implement the semantics `docs/spec/` states, in four distinct ways |
 | [`TOSH-0007`](items/TOSH-0007.md) | P1 | complete | 4/4 | The marshalled struct statvfs was 24 bytes short, corrupting memory on every call |
 | [`TOAST-0014`](items/TOAST-0014.md) | P2 | complete | 7/7 | String interpolation renders through the display stack, so its output depends on shell configuration |
 | [`TS-P3-16`](items/TS-P3-16.md) | P3 | withdrawn | — | ToastScript-owned core types and their conformance corpus |
@@ -34,7 +35,9 @@
 | [`TS-P1-44`](items/TS-P1-44.md) | P1 | complete | 3/3 | from xml returns a CLR XDocument instead of shell data, so to xml | from xml does not round-trip |
 | [`TOAST-0033`](items/TOAST-0033.md) | P2 | complete | 6/6 | The specification does not say which of its sentences are requirements |
 | [`TS-P2-117`](items/TS-P2-117.md) | P2 | complete | — | A line beginning with a unary operator is absorbed into the previous line's expression |
+| [`TOAST-0028`](items/TOAST-0028.md) | P2 | complete | 7/7 | Collection shape is decided by counting what arrives, so producing more data changes what the earlier data meant |
 | [`TS-P2-101`](items/TS-P2-101.md) | P2 | complete | 1/1 | Class and member doc comments never reach `help` |
 | [`TOAST-0024`](items/TOAST-0024.md) | P3 | complete | 5/5 | A range's right operand does not parse the bitwise levels, so `1 .. 2 bor 4` fails |
+| [`TS-P1-47`](items/TS-P1-47.md) | P1 | complete | — | A variable annotated with a base class rejects a subclass value when compiled |
 
 Items closed under the old stabilization board are frozen in [legacy/COMPLETE.md](legacy/COMPLETE.md).

@@ -135,7 +135,8 @@ subcommand list {
     ## @summary ACTIVE, PROPOSED, DEFERRED, or COMPLETE (case insensitive)
     arg status: string = "ACTIVE"
     $status = $status.ToUpper()
-    var items = (load() | where { $_["board"] == $status } | collect)
+    var all = load()
+    var items = ($all | where { $_["board"] == $status } | collect)
     for it in $items {
         var id = $it["id"]
         var status = $it["status"]
@@ -154,7 +155,8 @@ subcommand list {
 subcommand show {
     ## @summary The id of the item in question
     arg id: string
-    var hits = (load() | where { $_["id"] == $id } | collect)
+    var all = load()
+    var hits = ($all | where { $_["id"] == $id } | collect)
     if (($hits | count) == 0) { echo $"no such item: {$id}" }
     for it in $hits { read-file $it["path"] }
 }
@@ -228,7 +230,7 @@ subcommand check {
 subcommand index {
     var items = load()
     for board in $BOARDS {
-        var rows = (load() | where { $_["board"] == $board } | collect)
+        var rows = ($items | where { $_["board"] == $board } | collect)
         var out = [
             $"# {$board.Substring(0, 1)}{$board.Substring(1).ToLower()}",
             "",

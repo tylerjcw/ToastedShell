@@ -775,15 +775,31 @@ backend-neutral corpus.
 
 ### Phase B — Make compiler-shaped code production-ready
 
-- Complete type-system support needed by compiler data structures.
-- Remove compiler-subset source replay and implicit dynamic fallbacks.
+- Complete type-system support needed by compiler data structures —
+  [`TOAST-0034`](plan/items/TOAST-0034.md).
+- Remove compiler-subset source replay and implicit dynamic fallbacks —
+  [`TOAST-0035`](plan/items/TOAST-0035.md).
 - Make higher-order calls, interfaces, unions, narrowing, generics, and method
-  references reliable.
-- Define compiler diagnostics and performance budgets.
-- Establish the typed portable readiness probe.
+  references reliable — [`TOAST-0036`](plan/items/TOAST-0036.md).
+- Define compiler diagnostics and performance budgets —
+  [`TOAST-0037`](plan/items/TOAST-0037.md).
+- Establish the typed portable readiness probe —
+  [`TOAST-0038`](plan/items/TOAST-0038.md).
 
 **Exit:** the probe compiles and runs through the normal IL path without an
 interpreter dependency.
+
+Each bullet was **measured before it was filed**, on 2026-08-21, and two came back
+materially different from their wording. The first is not "incomplete type-system
+support" but a declared type going unused: `func f() -> int` followed by
+`var f_result = f()` reports that the type could not be pinned down. The third
+implied six unreliable features, and four of the six already compile — what is
+missing is a concrete function type, so no higher-order value can be annotated at
+all.
+
+Compiled-backend semantics were separately corrected under
+[`TOAST-0030`](plan/items/TOAST-0030.md), which took the differential corpus from
+nine recorded divergences to three.
 
 ### Phase C — Establish backend-neutral compilation
 
