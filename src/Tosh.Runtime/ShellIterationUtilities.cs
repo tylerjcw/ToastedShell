@@ -127,17 +127,47 @@ public static class ShellIterationUtilities
             return (null, items);
         }
 
-        // Not a tree. Replay as single-collection expansion.
-        var hasMore = await enumerator.MoveNextAsync();
+        // `TOAST-0028` stage 1. Not a tree, so the shape question belongs to the one place
+        // that answers it. This used to repeat `ReplaySingleInputCollectionAsync`'s rule
+        // inline — pull a second item, expand a lone collection, otherwise replay — which
+        // made one rule exist twice.
+        //
+        // Copying it also copied it incompletely: `TS-P2-113` taught the *other* copy to
+        // honour `PreExpandedSequence`, and this one never learned. So for
+        // `var r = [[1, 2, 3]]`, `$r | count` answered 1 while `$r | where true | count`
+        // answered 3 — the same stream, two answers, because the marker saying "already
+        // expanded" was read by one path and not the other.
+        //
+        // The marker is carried across the replay deliberately: what was consumed to look
+        // for a tree has to be handed back *as the same kind of stream*, or delegating
+        // would lose the very thing being fixed.
+        var remainder = ReplayFromAsync(first, enumerator, cancellationToken);
 
-        if (!hasMore)
+        return (null, ReplaySingleInputCollectionAsync(
+            input is PreExpandedSequence ? new PreExpandedSequence(remainder) : remainder,
+            cancellationToken));
+    }
+
+    /// <summary>Yields an item already taken from an enumerator, then the rest of it.</summary>
+    private static async IAsyncEnumerable<object?> ReplayFromAsync(
+        object? first,
+        IAsyncEnumerator<object?> remaining,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        yield return first;
+
+        try
         {
-            await enumerator.DisposeAsync();
-            return (null, ExpandIterationItemsAsync(first, cancellationToken));
+            while (await remaining.MoveNextAsync())
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                yield return remaining.Current;
+            }
         }
-
-        var replayed = ReplayAsync(first, enumerator.Current, enumerator, cancellationToken);
-        return (null, replayed);
+        finally
+        {
+            await remaining.DisposeAsync();
+        }
     }
 
     private static async IAsyncEnumerable<object?> EmptyAsync()

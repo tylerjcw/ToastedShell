@@ -122,4 +122,62 @@ public sealed class CollectionShapeTests
     [InlineData("[1] | to json", "[\n  1\n]")]
     public async Task A_collection_consumed_as_a_value_arrives_whole(string source, string expected)
         => Assert.Equal(expected, await RunAsync(source));
+
+    /// <summary>
+    /// Every command that decides shape reads the "already expanded" marker — `TOAST-0028`
+    /// stage 1.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// `TS-P2-113` established that a stream whose producer already enumerated a collection
+    /// into it must not be expanded again: the lone item it carries is the item, not a
+    /// container to spread. That rule was taught to `ReplaySingleInputCollectionAsync` and
+    /// **not** to `PeekForTreeAsync`, which carried its own copy of the surrounding logic.
+    /// </para>
+    /// <para>
+    /// So the same stream got two answers depending on which command read it. For
+    /// `var r = [[1, 2, 3]]`, `$r | first` gave the inner array while `$r | where true`
+    /// gave three integers — and `$r | where true` in a subexpression failed outright with
+    /// "requires exactly one object", because it had silently become three.
+    /// </para>
+    /// <para>
+    /// The two copies are now one. These cases are the ones that told them apart.
+    /// </para>
+    /// </remarks>
+    [Theory]
+    // The peek path: `where`, `sort`, `filter` and `get` all read through it.
+    [InlineData("where true")]
+    [InlineData("sort")]
+    [InlineData("filter { true }")]
+    public async Task A_command_that_peeks_for_a_tree_still_honours_the_expanded_marker(string stage)
+    {
+        // One item, and that item is the inner array — not three integers. `.Length`
+        // rather than `| count`, because a trailing pipeline stage would apply the
+        // lone-collection rule again and re-expand what arrives unmarked.
+        Assert.Equal(
+            "3",
+            await RunAsync($"var r = [[1, 2, 3]]\nvar w = ($r | {stage})\necho $\"{{$w.Length}}\""));
+    }
+
+    /// <summary>
+    /// The marker changes nothing for a stream that never carried it.
+    /// </summary>
+    /// <remarks>
+    /// The negative control for the fix above. Unifying the two copies could have been done
+    /// by making the peek path stop expanding at all, which would pass every assertion in
+    /// the theory above and break the ordinary case completely.
+    /// </remarks>
+    [Theory]
+    [InlineData("where true", "3")]
+    [InlineData("sort", "3")]
+    [InlineData("filter { true }", "3")]
+    public async Task A_lone_collection_with_no_marker_still_expands(string stage, string expected)
+        => Assert.Equal(expected, await RunAsync($"([1, 2, 3] | {stage} | count)"));
+
+    /// <summary>An empty stream stays empty through the peek path.</summary>
+    [Theory]
+    [InlineData("where true")]
+    [InlineData("sort")]
+    public async Task An_empty_stream_survives_the_peek_path(string stage)
+        => Assert.Equal("0", await RunAsync($"([] | {stage} | count)"));
 }

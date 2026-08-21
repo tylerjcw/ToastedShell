@@ -252,6 +252,43 @@ From attempt two, measured rather than estimated: 39 failures, of which 24 were 
 alone, about 11 were tests pinning the old rule, and the rest were `echo`/`cast` and their
 kin. Nothing in that set was mysterious once named.
 
+## Stage 1 done — 2026-08-21
+
+Unifying the two copies was supposed to be a behaviour-preserving refactor. It was not:
+the copies had **drifted**, and merging them fixed a live bug.
+
+`TS-P2-113` established that a stream whose producer already enumerated a collection into
+it must not be expanded again, and taught `ReplaySingleInputCollectionAsync` to read a
+`PreExpandedSequence` marker. `PeekForTreeAsync` carried its own copy of the surrounding
+logic and never learned the rule. So for `var r = [[1, 2, 3]]`:
+
+| | before | after |
+|---|---|---|
+| `$r \| first` | the inner array | unchanged |
+| `$r \| where true` | **three integers** | the inner array |
+| `$r \| sort` | **three integers** | the inner array |
+
+`var w = ($r | where true)` failed outright with "requires exactly one object", because a
+one-item stream had silently become three.
+
+### What the measurement had to survive
+
+The obvious probe is wrong. `$r | where true | count` answers 3 both before and after,
+because the *trailing* `count` applies the lone-collection rule to a stream that arrives
+unmarked — a second, legitimate expansion at the stage boundary. `for item in (...)` and
+rendering are equally ambiguous, each expanding in their own right. What discriminated was
+binding the result and asking for `.Length`, where "one array" and "three integers" cannot
+look alike.
+
+That is worth writing down because it is how the drift survived: every casual way of
+looking at it shows the same number.
+
+### Not the whole item
+
+Stage 1 makes the rule exist once. It does not change the rule — a lone collection with no
+marker still expands, which the negative control pins. Stages 2–4 remain, and the
+`echo`/`cast` question is still the thing to confirm before stage 3.
+
 ## Scope, restated after two attempts — superseded by the design above
 
 This section said the expansion paths "respond differently to the same stream" and that
